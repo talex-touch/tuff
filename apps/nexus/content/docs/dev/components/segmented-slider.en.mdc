@@ -8,9 +8,8 @@ tags: [segmented, slider, form]
 syncStatus: reviewed
 verified: true
 ---
-# SegmentedSlider
 
-## Basic Usage
+## Usage
 
 ### SegmentedSlider
 :::TuffDemoWrapper{demo="SegmentedSliderSegmentedSliderDemo" code-lang="vue"}
@@ -40,6 +39,43 @@ code: |
   </template>
 ---
 :::
+
+### Best Practices
+
+- Use three to seven stable segments; long or dynamic option lists should use `TxSelect` or `TxSearchSelect` instead.
+- Keep segment values primitive and unique. Duplicate values make selection state ambiguous.
+- Disable labels only when nearby copy already names each stop; otherwise labels are the user's map of the discrete choices.
+- Prefer `TxSlider` for continuous values and `TxSegmentedSlider` for ordinal policy states.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` | `number \| string \| null` | `0` | Currently selected segment value; passing `null` auto-selects the first segment on mount. |
+| `segments` | `SegmentedSliderSegment[]` | `[]` | Ordered segment definitions rendered along the track. |
+| `disabled` | `boolean` | `false` | Prevents click and keyboard selection changes. |
+| `showLabels` | `boolean` | `true` | Shows each segment label when a label is provided. |
+| `vertical` | `boolean` | `false` | Renders a vertical track with bottom-to-top progress. |
+
+### SegmentedSliderSegment
+
+| Prop | Type | Description |
+|------|------|------|
+| `value` | `number \| string` | Value emitted when the segment is selected. |
+| `label` | `string` | Optional text rendered next to the segment marker. |
+
+### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `update:modelValue` | `(value: number \| string)` | Emitted when an enabled segment requests a new value. |
+| `change` | `(value: number \| string)` | Emitted with the same selected value for change listeners. |
+
+### Slots
+
+`TxSegmentedSlider` does not expose public slots. Labels come from `segments[].label` so keyboard, pointer, and vertical rendering stay deterministic.
 
 ## Custom Options
 
@@ -150,7 +186,7 @@ code: |
 ---
 ::
 
-## Interaction Contract
+## Overview
 
 - The row is one `radiogroup` and each stop a `radio`, so a screen reader announces it as a set of mutually exclusive choices rather than a row of toggles.
 - Roving tabindex: Tab reaches the row once and lands on the current stop. Arrow keys move and clamp at both ends, Home and End jump to them. The vertical layout stacks bottom-to-top, so Up advances there.
@@ -158,50 +194,11 @@ code: |
 - The track is tinted from the text colour, the pair that actually inverts between themes, so it stays visible on a dark surface.
 - The focus ring is keyboard-only; hover previews an unselected stop by growing it slightly. Both stop under `prefers-reduced-motion`.
 
-## API
-
-### Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `modelValue` | `number \| string \| null` | `0` | Currently selected segment value; passing `null` auto-selects the first segment on mount. |
-| `segments` | `SegmentedSliderSegment[]` | `[]` | Ordered segment definitions rendered along the track. |
-| `disabled` | `boolean` | `false` | Prevents click and keyboard selection changes. |
-| `showLabels` | `boolean` | `true` | Shows each segment label when a label is provided. |
-| `vertical` | `boolean` | `false` | Renders a vertical track with bottom-to-top progress. |
-
-### SegmentedSliderSegment
-
-| Prop | Type | Description |
-|------|------|------|
-| `value` | `number \| string` | Value emitted when the segment is selected. |
-| `label` | `string` | Optional text rendered next to the segment marker. |
-
-### Events
-
-| Event | Params | Description |
-|------|------|------|
-| `update:modelValue` | `(value: number \| string)` | Emitted when an enabled segment requests a new value. |
-| `change` | `(value: number \| string)` | Emitted with the same selected value for change listeners. |
-
-### Slots
-
-`TxSegmentedSlider` does not expose public slots. Labels come from `segments[].label` so keyboard, pointer, and vertical rendering stay deterministic.
-
-## Best Practices
-
-- Use three to seven stable segments; long or dynamic option lists should use `TxSelect` or `TxSearchSelect` instead.
-- Keep segment values primitive and unique. Duplicate values make selection state ambiguous.
-- Disable labels only when nearby copy already names each stop; otherwise labels are the user's map of the discrete choices.
-- Prefer `TxSlider` for continuous values and `TxSegmentedSlider` for ordinal policy states.
-
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`.
 - Screenshot: `.codex-screenshots/nexus-segmented-slider-release-policy-demo-playwright-2026-05-28.png`.
 - Recommendation: use it only when values are naturally discrete and stable; risk tiers, plan tiers, and release gates are better fits than continuous numeric tuning.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue`.
 - Types: `packages/tuffex/packages/components/src/segmented-slider/src/types.ts`.

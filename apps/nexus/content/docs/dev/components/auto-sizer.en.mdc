@@ -8,11 +8,10 @@ tags: [auto-size, layout, animation]
 syncStatus: reviewed
 verified: true
 ---
-# AutoSizer
 
 > Built on `ResizeObserver`. When images/async rendering change size, it re-measures automatically.
 
-## Basic Usage
+## Usage
 
 ### Height Only (Recommended for Tabs/Accordion)
 
@@ -272,7 +271,16 @@ code: |
 ---
 :::
 
-## API
+### Best Practices
+
+- Use `height=true` and `width=false` for tab panels, accordions, and dropdown bodies where the surrounding layout should keep its width.
+- Use `width=true` and `height=false` for buttons, inline labels, and number transitions; this mode becomes shrink-to-content by default.
+- Keep `outerClass="overflow-hidden"` when content animates with blur, scale, or FLIP so intermediate frames do not bleed outside the wrapper.
+- Wrap explicit state mutations in `action()` or `flip()` instead of toggling state and calling `refresh()` manually; this preserves the before/after snapshot used by the transition.
+- Set `observeTarget="both"` only when both wrapper and content can resize independently; observing only `inner` avoids unnecessary refresh work for ordinary content changes.
+- Use `rounding="ceil"` for text and button labels to avoid clipped sub-pixel content; switch to `floor` only when a parent layout requires tighter bounds.
+
+## API Reference
 
 ### Props
 
@@ -313,7 +321,7 @@ code: |
 | `focus()` | `() => void` | Focuses the outer wrapper when it is focusable. |
 | `outerEl` | `HTMLElement \| null` | Outer wrapper element for advanced integration. |
 
-## Interaction Contract
+## Overview
 
 - The outer wrapper receives forwarded attrs, merged class/style, and auto-resize styles; the inner wrapper owns the measured content with `display: flow-root`.
 - Width-only mode uses inline layout automatically unless `inline=false` is set explicitly.
@@ -321,22 +329,11 @@ code: |
 - `action(fn, options?)` snapshots the selected target before and after mutation and returns detected change keys.
 - `observeTarget`, `rounding`, `immediate`, `rafBatch`, `durationMs`, and `easing` are forwarded to the underlying resize/FLIP utilities.
 
-## Best Practices
-
-- Use `height=true` and `width=false` for tab panels, accordions, and dropdown bodies where the surrounding layout should keep its width.
-- Use `width=true` and `height=false` for buttons, inline labels, and number transitions; this mode becomes shrink-to-content by default.
-- Keep `outerClass="overflow-hidden"` when content animates with blur, scale, or FLIP so intermediate frames do not bleed outside the wrapper.
-- Wrap explicit state mutations in `action()` or `flip()` instead of toggling state and calling `refresh()` manually; this preserves the before/after snapshot used by the transition.
-- Set `observeTarget="both"` only when both wrapper and content can resize independently; observing only `inner` avoids unnecessary refresh work for ordinary content changes.
-- Use `rounding="ceil"` for text and button labels to avoid clipped sub-pixel content; switch to `floor` only when a parent layout requires tighter bounds.
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/auto-sizer/src/types.ts`, `TxAutoSizer.vue`, and `auto-sizer.test.ts`.
 - The public contract is mostly exposed methods, not emitted events; docs should keep examples focused on `action()` / `flip()` coordination.
 - `observeTarget="both"` is intentionally advanced; ordinary content transitions should observe `inner` only.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/auto-sizer/src/TxAutoSizer.vue`.
 - Types: `packages/tuffex/packages/components/src/auto-sizer/src/types.ts`.

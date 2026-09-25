@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# FlipOverlay
-
-## Basic Usage
+## Usage
 
 :::TuffDemoWrapper{demo="FlipOverlayFlipOverlayDemo" code-lang="vue"}
 ---
@@ -42,7 +40,15 @@ code: |
 ---
 :::
 
-## API
+### Best Practices
+
+- Pass the real trigger element or its `DOMRect` as `source`; `null` falls back to the centered card without origin continuity.
+- Keep `duration` near the default for stacked overlays so shared mask and card motion stay synchronized.
+- Use `cardStyle` for size constraints such as `width` and `maxHeight`; use `cardClass` for reusable visual variants.
+- Prefer `surface="mask"` for normal cards, `glass` / `refraction` only when the backdrop remains readable, and `pure` for fully custom card styling.
+- Use `#header-display`, `#header-actions`, or `#header-close` before replacing the whole header; full `#header` opts out of built-in close layout.
+
+## API Reference
 
 ### Props
 
@@ -109,7 +115,7 @@ code: |
 |--------|------|-------------|
 | `close()` | `() => void` | Runs the full close animation and emits `update:modelValue(false)`; the parent must own open state via `v-model`. |
 
-## Interaction Contract
+## Overview
 
 - `modelValue=true` mounts the overlay, resolves the `source` rectangle, emits `open`, then emits `opened` after the card animation completes.
 - The overlay teleports to `<body>`. Its mask and card are `position: fixed`, and rendered in place they would be laid out against the nearest ancestor with a `transform`, `filter`, `contain` or `content-visibility` instead of the viewport. Non-prop attributes still land on the mask.
@@ -121,23 +127,13 @@ code: |
 - `preventAccidentalClose=true` blocks mask close and page exit attempts, then flashes the warning state instead of silently closing.
 - Accessibility: the card is `role="dialog"` with `aria-modal="true"` and `tabindex="-1"`. When the built-in header renders, `headerTitle` wires `aria-labelledby` and `headerDesc` wires `aria-describedby`. Focus moves into the card on open and is restored to the previously focused element on close.
 
-## Best Practices
-
-- Pass the real trigger element or its `DOMRect` as `source`; `null` falls back to the centered card without origin continuity.
-- Keep `duration` near the default for stacked overlays so shared mask and card motion stay synchronized.
-- Use `cardStyle` for size constraints such as `width` and `maxHeight`; use `cardClass` for reusable visual variants.
-- Prefer `surface="mask"` for normal cards, `glass` / `refraction` only when the backdrop remains readable, and `pure` for fully custom card styling.
-- Use `#header-display`, `#header-actions`, or `#header-close` before replacing the whole header; full `#header` opts out of built-in close layout.
-
-## Review Notes
+## Technologies
 
 - **State contract:** `TxFlipOverlay` owns the mount/animation lifecycle but only emits `update:modelValue(false)` when it closes itself; consumers must still sync `v-model` after built-in close, slot `close()`, or mask close.
 - **Mount contract:** the overlay used to render in place. A docs page's article body is `content-visibility: auto`, so the "fixed" card centred itself on the whole article, focusing it scrolled the page about 870px, and the trigger it flips from left the screen. It now teleports the way `TxModal` and `TxCommandPalette` do; the `FlipDialog` wrappers that already put it inside `<Teleport to="body">` are unaffected.
 - **Stacking contract:** `globalMask=true` shares the visual backdrop across open overlays while only the top overlay keeps an interactive mask; size-similar overlays receive capped displacement and deeper overlays fade out.
 - **Safety contract:** `preventAccidentalClose` blocks mask close and page-exit attempts, then flashes the warning state; it is a guardrail, not a persistence or autosave feature.
 - **Verified coverage:** `flip-overlay.test.ts` covers defaults, header slot priority, close ordering, dialog semantics (`role`/`aria-modal`/`aria-labelledby`) with Escape close, card style forwarding, stacked masks, layered displacement, and blocked-close behavior.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`.
 - Motion implementation: `packages/tuffex/packages/components/src/flip-overlay/src/flip-overlay-motion.ts`.

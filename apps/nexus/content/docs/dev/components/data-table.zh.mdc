@@ -8,9 +8,8 @@ tags: [table, data, list]
 syncStatus: reviewed
 verified: true
 ---
-# DataTable 数据表格
 
-## 基础用法
+## 用法
 
 ::TuffDemoWrapper{demo="DataTableDataTableDemo" code-lang="vue"}
 ---
@@ -34,6 +33,130 @@ code: |
   </template>
 ---
 ::
+
+### 行展开
+
+`expandable` 增加前置展开列，每行可以在其下展开一条 `#expanded` 详情行。
+
+::TuffDemoWrapper{demo="DataTableExpandableRowsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const expandedKeys = ref([1])
+  </script>
+
+  <template>
+    <TxDataTable
+      v-model:expanded-keys="expandedKeys"
+      :columns="columns"
+      :data="data"
+      row-key="id"
+      expandable
+      :row-expandable="row => Boolean(row.note)"
+    >
+      <template #expanded="{ row }">
+        {{ row.note }}
+      </template>
+    </TxDataTable>
+  </template>
+---
+::
+
+### 最佳实践
+
+- 业务列表必须传稳定 `rowKey`；需要跨页保留选择时，用业务 id 驱动 `selectedKeys`，不要依赖默认 index。
+- 可排序列支持点击、Enter 与 Space；远程排序时设置 `sortOnClient=false` 并监听 `sortChange`。
+- `tableLayout="fixed"` 配合显式 `width` / `minWidth`，能避免运维表格在加载或排序时宽度跳动。
+- 固定列优先使用数值 px 的 `width` 或 `minWidth`；sticky 偏移会根据这些值计算。
+- 横向滚动二选一：开 `scrollX` 让组件自己成为滚动容器，或者维持默认、把表格包进外层 `overflow-x: auto` 容器。两种方式都能给 sticky 列提供可滚动的参照，但不要两层都滚。
+- 需要吸顶表头或吸底汇总行时必须给 `maxHeight`（或确保外层已有滚动祖先），否则没有可吸附的对象；滚动容器不能是 transform 位移式的（如默认模式的 `TxScroll`），那会让 sticky 整体失效。
+- 排序请基于时间戳、序号这类可比较字段，不要对格式化后的相对时间文本排序。
+- 自定义单元格要保留可读文本或状态徽标文本，因为可排序表头会通过 `aria-sort` 暴露状态。
+- 外壳按圆角裁切，因此组件会去掉表格最后一段末行的下边框；带汇总 `tfoot` 时，分隔正文与汇总的那条线仍然保留。自定义单元格边框时请一并处理，否则表格底部会多出一条横线。
+- `expandedKeys` 和 `selectedKeys` 一样属于业务状态：需要跨刷新保留时用 `v-model:expanded-keys` 驱动，只是某行默认展开时用 `defaultExpandedKeys`。
+- 没有详情可展示的行用 `rowExpandable` 收起按钮，前置单元格仍会保留，列不会错位；展开按钮会阻止自身点击冒泡，所以展开不会触发 `rowClick`。
+- 左侧固定列的 sticky 偏移会把前置的展开列与选择列算进去，固定列不会压住它们。
+
+## API 参考
+
+### TxDataTable Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|------|------|
+| `columns` | `DataTableColumn[]` | `[]` | 列配置 |
+| `data` | `any[]` | `[]` | 数据源 |
+| `rowKey` | `keyof T \| (row: T, index: number) => string \| number` | `index` | 行唯一标识 |
+| `loading` | `boolean` | `false` | 加载状态 |
+| `emptyText` | `string` | `'No data'` | 空数据提示 |
+| `striped` | `boolean` | `false` | 斑马纹 |
+| `bordered` | `boolean` | `false` | 表格边框 |
+| `hover` | `boolean` | `true` | 悬浮高亮 |
+| `interactiveRows` | `boolean` | `false` | 让整行可聚焦（`tabindex="0"`）并支持 Enter/Space 触发 `rowClick`；绑定了 `rowClick` 监听时会自动开启 |
+| `selectable` | `boolean` | `false` | 是否可选择 |
+| `selectedKeys` | `Array<string \| number>` | `[]` | 选中 key 列表 |
+| `expandable` | `boolean` | `false` | 增加前置展开列，展开行会在其下方渲染一条详情行。默认关闭，既有表格渲染完全不变 |
+| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | 非受控模式的初始展开行，之后由组件自己持有。与 `expandedKeys` 互斥，同时传时后者优先 |
+| `expandedKeys` | `Array<string \| number>` | - | 受控展开行。传了它（包括传 `[]`）组件就不再持有自身状态，只通过 `update:expandedKeys` / `expand` 上报用户操作，并渲染父级回传的值 |
+| `rowExpandable` | `(row, index) => boolean` | - | 按行控制是否显示展开按钮；被拒绝的行保留空白前置单元格，列不会错位，也不可展开 |
+| `expandLabel` | `string` | `'Expand row'` | 收起状态下展开按钮的可访问名称 |
+| `collapseLabel` | `string` | `'Collapse row'` | 展开状态下展开按钮的可访问名称 |
+| `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | 非受控模式的初始排序，之后由组件自己持有。与 `sort` 互斥，二选一 |
+| `sort` | `{ key: string; order: 'asc' \| 'desc' \| null } \| null` | - | 受控排序。传了它（包括传 `null` 表示未排序）组件就不再持有自身状态，只通过 `update:sort` 上报用户意图，并渲染父级回传的值。完全不传则走 `defaultSort` 的非受控模式 |
+| `sortOnClient` | `boolean` | `true` | 是否前端排序 |
+| `sortCycle` | `'tri' \| 'bi'` | `'tri'` | 表头点击循环：`tri` 为升序→降序→取消排序，`bi` 为升序→降序→升序（永不取消） |
+| `tableLayout` | `'auto' \| 'fixed'` | `'auto'` | 原生 table-layout 模式；列宽需要稳定时使用 `fixed` |
+| `nowrap` | `boolean` | `false` | 全局禁止表头与单元格内容换行 |
+| `maxHeight` | `string \| number` | - | 限制表格高度并让组件自己成为纵向滚动容器。除非外层已有滚动祖先，否则 `stickyHeader` / `stickyFooter` 需要它才有吸附对象 |
+| `scrollX` | `boolean` | `false` | 让表格在组件内部横向滚动，宽表配固定列时需要 |
+| `stickyHeader` | `boolean` | `false` | 表头吸顶 |
+| `stickyFooter` | `boolean` | `false` | 汇总行吸底 |
+| `rowClass` | `(row, index) => string \| string[] \| Record<string, boolean>` | - | 按行追加 class，例如按状态给整行上色 |
+| `highlightSelected` | `boolean` | `false` | 给选中行加底色。默认关闭，既有表格的选中态仍只由复选框表达 |
+
+### DataTableColumn
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `key` | `string` | 列 key |
+| `title` | `string` | 表头文本 |
+| `dataIndex` | `string` | 数据字段名 |
+| `width` | `string \| number` | 列宽 |
+| `minWidth` | `string \| number` | 列最小宽度 |
+| `maxWidth` | `string \| number` | 列最大宽度 |
+| `auto` | `boolean` | 强制列宽为 `auto` |
+| `fixed` | `boolean \| 'left' \| 'right'` | 固定列方向；`true` 等价于 `'left'`。未开启 `scrollX` / `maxHeight` 时，存在固定列会让根元素从 `overflow: hidden` 切到 `overflow: visible`，横向滚动需由外层容器提供，否则 sticky 偏移无处附着；开启 `scrollX` 后由组件自己承担这个滚动容器。 |
+| `nowrap` | `boolean` | 禁止当前列换行 |
+| `align` | `'left' \| 'center' \| 'right'` | 对齐方式 |
+| `sortable` | `boolean` | 是否可排序 |
+| `sorter` | `(a, b) => number` | 自定义排序器 |
+| `format` | `(value, row, index) => string` | 默认文本格式化 |
+| `headerClass` | `string` | 表头 class |
+| `cellClass` | `string` | 单元格 class |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:selectedKeys` | `(keys)` | 选中变化 |
+| `selectionChange` | `(keys)` | 选中变化 |
+| `update:expandedKeys` | `(keys)` | 展开变化；受控与非受控模式都会触发，配合 `expandedKeys` 使用 |
+| `expand` | `({ row, index, expanded })` | 某行被展开或收起 |
+| `sortChange` | `(sort)` | 排序变化 |
+| `update:sort` | `(sort)` | 排序变化；受控与非受控模式都会触发，配合 `sort` 使用 |
+| `rowClick` | `({ row, index })` | 行点击 |
+
+### Slots
+
+| 名称 | 说明 |
+|------|------|
+| `header-<columnKey>` | 自定义表头；接收 `{ column, sorted, order, toggle }`。`sorted` 表示该列是否为当前排序列，`order` 为方向（非当前列时为 `null`），`toggle` 按配置的循环推进该列 |
+| `cell-<columnKey>` | 自定义单元格；接收 `{ row, column, value, index }` |
+| `expanded` | 展开行的详情内容；接收 `{ row, index }`。渲染在所属行正下方、横跨全部列的单元格里 |
+| `footer` | 汇总行的整行内容，由使用方自己提供 `<td>`，因此可以跨列合并。提供任一 footer 插槽才会渲染 `<tfoot>` |
+| `footer-<columnKey>` | 按列填充汇总单元格；接收 `{ column, data }`。与 `footer` 同时存在时以 `footer` 为准 |
+| `empty` | 无展示行且 `loading=false` 时渲染的空状态 |
 
 ## 行选择
 
@@ -150,95 +273,11 @@ code: |
 }
 ```
 
-## API
-
-### TxDataTable Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|------|------|
-| `columns` | `DataTableColumn[]` | `[]` | 列配置 |
-| `data` | `any[]` | `[]` | 数据源 |
-| `rowKey` | `keyof T \| (row: T, index: number) => string \| number` | `index` | 行唯一标识 |
-| `loading` | `boolean` | `false` | 加载状态 |
-| `emptyText` | `string` | `'No data'` | 空数据提示 |
-| `striped` | `boolean` | `false` | 斑马纹 |
-| `bordered` | `boolean` | `false` | 表格边框 |
-| `hover` | `boolean` | `true` | 悬浮高亮 |
-| `interactiveRows` | `boolean` | `false` | 让整行可聚焦（`tabindex="0"`）并支持 Enter/Space 触发 `rowClick`；绑定了 `rowClick` 监听时会自动开启 |
-| `selectable` | `boolean` | `false` | 是否可选择 |
-| `selectedKeys` | `Array<string \| number>` | `[]` | 选中 key 列表 |
-| `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | 非受控模式的初始排序，之后由组件自己持有。与 `sort` 互斥，二选一 |
-| `sort` | `{ key: string; order: 'asc' \| 'desc' \| null } \| null` | - | 受控排序。传了它（包括传 `null` 表示未排序）组件就不再持有自身状态，只通过 `update:sort` 上报用户意图，并渲染父级回传的值。完全不传则走 `defaultSort` 的非受控模式 |
-| `sortOnClient` | `boolean` | `true` | 是否前端排序 |
-| `sortCycle` | `'tri' \| 'bi'` | `'tri'` | 表头点击循环：`tri` 为升序→降序→取消排序，`bi` 为升序→降序→升序（永不取消） |
-| `tableLayout` | `'auto' \| 'fixed'` | `'auto'` | 原生 table-layout 模式；列宽需要稳定时使用 `fixed` |
-| `nowrap` | `boolean` | `false` | 全局禁止表头与单元格内容换行 |
-| `maxHeight` | `string \| number` | - | 限制表格高度并让组件自己成为纵向滚动容器。除非外层已有滚动祖先，否则 `stickyHeader` / `stickyFooter` 需要它才有吸附对象 |
-| `scrollX` | `boolean` | `false` | 让表格在组件内部横向滚动，宽表配固定列时需要 |
-| `stickyHeader` | `boolean` | `false` | 表头吸顶 |
-| `stickyFooter` | `boolean` | `false` | 汇总行吸底 |
-| `rowClass` | `(row, index) => string \| string[] \| Record<string, boolean>` | - | 按行追加 class，例如按状态给整行上色 |
-| `highlightSelected` | `boolean` | `false` | 给选中行加底色。默认关闭，既有表格的选中态仍只由复选框表达 |
-
-### DataTableColumn
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `key` | `string` | 列 key |
-| `title` | `string` | 表头文本 |
-| `dataIndex` | `string` | 数据字段名 |
-| `width` | `string \| number` | 列宽 |
-| `minWidth` | `string \| number` | 列最小宽度 |
-| `maxWidth` | `string \| number` | 列最大宽度 |
-| `auto` | `boolean` | 强制列宽为 `auto` |
-| `fixed` | `boolean \| 'left' \| 'right'` | 固定列方向；`true` 等价于 `'left'`。未开启 `scrollX` / `maxHeight` 时，存在固定列会让根元素从 `overflow: hidden` 切到 `overflow: visible`，横向滚动需由外层容器提供，否则 sticky 偏移无处附着；开启 `scrollX` 后由组件自己承担这个滚动容器。 |
-| `nowrap` | `boolean` | 禁止当前列换行 |
-| `align` | `'left' \| 'center' \| 'right'` | 对齐方式 |
-| `sortable` | `boolean` | 是否可排序 |
-| `sorter` | `(a, b) => number` | 自定义排序器 |
-| `format` | `(value, row, index) => string` | 默认文本格式化 |
-| `headerClass` | `string` | 表头 class |
-| `cellClass` | `string` | 单元格 class |
-
-### Events
-
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:selectedKeys` | `(keys)` | 选中变化 |
-| `selectionChange` | `(keys)` | 选中变化 |
-| `sortChange` | `(sort)` | 排序变化 |
-| `update:sort` | `(sort)` | 排序变化；受控与非受控模式都会触发，配合 `sort` 使用 |
-| `rowClick` | `({ row, index })` | 行点击 |
-
-### Slots
-
-| 名称 | 说明 |
-|------|------|
-| `header-<columnKey>` | 自定义表头；接收 `{ column, sorted, order, toggle }`。`sorted` 表示该列是否为当前排序列，`order` 为方向（非当前列时为 `null`），`toggle` 按配置的循环推进该列 |
-| `cell-<columnKey>` | 自定义单元格；接收 `{ row, column, value, index }` |
-| `footer` | 汇总行的整行内容，由使用方自己提供 `<td>`，因此可以跨列合并。提供任一 footer 插槽才会渲染 `<tfoot>` |
-| `footer-<columnKey>` | 按列填充汇总单元格；接收 `{ column, data }`。与 `footer` 同时存在时以 `footer` 为准 |
-| `empty` | 无展示行且 `loading=false` 时渲染的空状态 |
-
-## 最佳实践
-
-- 业务列表必须传稳定 `rowKey`；需要跨页保留选择时，用业务 id 驱动 `selectedKeys`，不要依赖默认 index。
-- 可排序列支持点击、Enter 与 Space；远程排序时设置 `sortOnClient=false` 并监听 `sortChange`。
-- `tableLayout="fixed"` 配合显式 `width` / `minWidth`，能避免运维表格在加载或排序时宽度跳动。
-- 固定列优先使用数值 px 的 `width` 或 `minWidth`；sticky 偏移会根据这些值计算。
-- 横向滚动二选一：开 `scrollX` 让组件自己成为滚动容器，或者维持默认、把表格包进外层 `overflow-x: auto` 容器。两种方式都能给 sticky 列提供可滚动的参照，但不要两层都滚。
-- 需要吸顶表头或吸底汇总行时必须给 `maxHeight`（或确保外层已有滚动祖先），否则没有可吸附的对象；滚动容器不能是 transform 位移式的（如默认模式的 `TxScroll`），那会让 sticky 整体失效。
-- 排序请基于时间戳、序号这类可比较字段，不要对格式化后的相对时间文本排序。
-- 自定义单元格要保留可读文本或状态徽标文本，因为可排序表头会通过 `aria-sort` 暴露状态。
-- 外壳按圆角裁切，因此组件会去掉表格最后一段末行的下边框；带汇总 `tfoot` 时，分隔正文与汇总的那条线仍然保留。自定义单元格边框时请一并处理，否则表格底部会多出一条横线。
-
-## 审阅说明
+## 技术实现
 
 - **可访问性说明：**`TxDataTable` 渲染原生表格；可排序表头使用 `scope="col"`、`aria-sort`、键盘焦点，以及 Enter/Space 处理器。
 - **类型：**`rowKey` 声明为 `keyof T` 或返回字符串/数字的回调；`sortChange` 可触发 `DataTableSortState` 或 `null`。
 - **实测覆盖:** 组件测试覆盖表头和行渲染、指针排序与键盘 `aria-sort` 状态切换、选择事件，以及 layout/nowrap/auto/固定列样式；末行分隔线的重置直接针对 SFC 源码断言，因为 vitest 不会执行 `<style>` 块。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue`。
 - Type contracts: `packages/tuffex/packages/components/src/data-table/src/types.ts` 导出 `DataTableProps`、`DataTableColumn`、排序状态、行 key 与 emit 类型。

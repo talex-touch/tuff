@@ -8,9 +8,8 @@ tags: [empty, state, error, feedback]
 syncStatus: reviewed
 verified: true
 ---
-# ErrorState 错误状态
 
-## 基础用法
+## 用法
 
 使用默认标题、描述与内置错误插画（应用窗口 + 右下角危险色角标），搭配操作按钮。
 
@@ -26,8 +25,6 @@ code: |
   </template>
 ---
 :::
-
-## 自定义内容
 
 通过 props 覆盖默认标题、描述，配合 `surface="card"` 呈现卡片风格。
 
@@ -46,26 +43,15 @@ code: |
 ---
 :::
 
-## 后台恢复状态
+### 最佳实践
 
-错误态应与加载态、空态共用一个数据容器，并提供明确恢复动作，避免只展示红色报错。
+- `title` 应写明失败对象，例如“规则加载失败”，不要只写“出错了”。
+- 始终提供恢复路径：重试、返回上级、打开日志或联系支持。
+- 错误态替换一个数据面板时使用 `surface="card"`；已经位于卡片容器中时保持默认 plain surface。
+- 技术细节放进日志或可展开诊断区域；默认描述应告诉用户下一步能做什么。
+- 只有生成的 `primaryAction` / `secondaryAction` 无法表达恢复流程时，才使用 `actions` 插槽。
 
-:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="后台恢复状态" description="错误态与加载/空态共用容器的 Dashboard 组合。"}
----
-code: |
-  <template>
-    <TxErrorState
-      title="规则加载失败"
-      description="服务暂时不可用，请重试或检查后台日志。"
-      surface="card"
-      :primary-action="{ label: '重试', type: 'primary', icon: 'i-carbon-renew' }"
-      :secondary-action="{ label: '查看教程', icon: 'i-carbon-help' }"
-    />
-  </template>
----
-:::
-
-## API
+## API 参考
 
 `TxErrorState` 继承 `TxEmptyState` 除 `variant` 之外的全部 props；`variant` 始终强制为 `error`。完整基础组件契约见 [EmptyState](./empty-state.zh.mdc)。
 
@@ -93,6 +79,25 @@ code: |
 | `primary` | - | 点击生成的主按钮时由 `TxEmptyState` 透传。 |
 | `secondary` | - | 点击生成的次按钮时由 `TxEmptyState` 透传。 |
 
+## 后台恢复状态
+
+错误态应与加载态、空态共用一个数据容器，并提供明确恢复动作，避免只展示红色报错。
+
+:::TuffDemoWrapper{demo="ComponentsRecoveryStatesDemo" code-lang="vue" title="后台恢复状态" description="错误态与加载/空态共用容器的 Dashboard 组合。"}
+---
+code: |
+  <template>
+    <TxErrorState
+      title="规则加载失败"
+      description="服务暂时不可用，请重试或检查后台日志。"
+      surface="card"
+      :primary-action="{ label: '重试', type: 'primary', icon: 'i-carbon-renew' }"
+      :secondary-action="{ label: '查看教程', icon: 'i-carbon-help' }"
+    />
+  </template>
+---
+:::
+
 ## Slots
 
 | 插槽 | 参数 | 说明 |
@@ -102,22 +107,14 @@ code: |
 | `description` | - | 替换 `description` prop 的渲染。 |
 | `actions` | - | 替换自动生成的主/次操作按钮。 |
 
-## 交互契约
+## 概述
 
 - `TxErrorState` 始终向 `TxEmptyState` 透传 `variant="error"`。
 - `icon` 未设置（或为空字符串）、没有 `icon` 插槽且 `loading` 不为 `true` 时，`TxEmptyState` 渲染内置 error 插画：应用窗口 + 右下角危险色角标，两圈波纹从角标交替扩散；`prefers-reduced-motion: reduce` 时波纹停止并保持隐藏，静止帧是窗口 + 角标。插画细节见 [EmptyState](./empty-state.zh.mdc)。
 - 组件不额外改写 `title`、`description`、`surface`、action 配置或插槽；显式 props 和 slots 会原样透传。
 - 组件不持有重试逻辑。它只透传继承的 action 事件，或渲染自定义 `actions` 插槽，业务逻辑由宿主处理。
 
-## 最佳实践
-
-- `title` 应写明失败对象，例如“规则加载失败”，不要只写“出错了”。
-- 始终提供恢复路径：重试、返回上级、打开日志或联系支持。
-- 错误态替换一个数据面板时使用 `surface="card"`；已经位于卡片容器中时保持默认 plain surface。
-- 技术细节放进日志或可展开诊断区域；默认描述应告诉用户下一步能做什么。
-- 只有生成的 `primaryAction` / `secondaryAction` 无法表达恢复流程时，才使用 `actions` 插槽。
-
-## 审阅说明
+## 技术实现
 
 - 组件源码：`packages/tuffex/packages/components/src/error-state/src/TxErrorState.vue` 确认组件只把 props 绑定给 `TxEmptyState`，并强制 `variant="error"`。
 - 类型契约：`packages/tuffex/packages/components/src/error-state/src/types.ts` 定义 `ErrorStateProps = Omit<EmptyStateProps, 'variant'>`。
@@ -125,6 +122,4 @@ code: |
 - 插画：error 插画由 `TxEmptyState` 绘制，`TxErrorState` 不参与（2026-09-23 重画）。角标用 `-light-9` 浅底配危险色墨，因为白字压实心危险色在本库属于不支持的配对；波纹在 reduced-motion 下停止并隐藏。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/error-state/__tests__/error-state.test.ts` 覆盖强制 error variant、props 透传、具名插槽透传和 install 注册。
 
-## Source
 <TuffDocSourceLink />
-

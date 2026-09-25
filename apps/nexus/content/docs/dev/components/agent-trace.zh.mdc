@@ -8,9 +8,8 @@ tags: [ai, agent, trace, disclosure]
 syncStatus: reviewed
 verified: true
 ---
-# AgentTrace 智能体轨迹
 
-## 基础用法
+## 用法
 
 ### 步骤轨迹
 
@@ -63,13 +62,16 @@ code: |
 ---
 :::
 
-## 展开状态的归属
+### 最佳实践
 
-展开状态有三层，从高到低：`userOpen`（宿主持有）→ 组件内部的点击覆盖 → `defaultOpen` → `working`。
+- 组件是受控原语：把时间轴留在宿主，`rows` 增长、`working` 翻转即可，别把播放脚本塞进组件。
+- `search` 场景务必接 `@open`，否则点击没有任何效果。
+- 长轨迹配 `moreLabel` 收口，不要把几十行全铺出来。
+- `reasoning` 用于成段散文，它会换行且不截断；单行标签用 `steps`。
+- 流式界面把 `toggle` 存到宿主再喂回 `userOpen`，避免重建时丢掉读者的展开选择。
+- 组件宽度自适应，上游的 380px 容器由宿主决定。
 
-只用组件本身时，轨迹会跟着 `working` 自动开合，用户点一次之后就由用户说了算。但流式宿主每个增量都在重渲染，分支对齐还可能重建实例——只存在实例里的覆盖会随之消失，表现为「点了没反应」。把 `toggle` 收上去再喂回 `userOpen`，读者的选择就能跨重建存活。
-
-## API
+## API 参考
 
 ### Props
 
@@ -106,7 +108,13 @@ code: |
 | `label` | `{ working }` | 替换头部文案。 |
 | `row` | `{ row, index }` | 整行内容替换，保留行容器与入场动画。 |
 
-## 交互契约
+## 展开状态的归属
+
+展开状态有三层，从高到低：`userOpen`（宿主持有）→ 组件内部的点击覆盖 → `defaultOpen` → `working`。
+
+只用组件本身时，轨迹会跟着 `working` 自动开合，用户点一次之后就由用户说了算。但流式宿主每个增量都在重渲染，分支对齐还可能重建实例——只存在实例里的覆盖会随之消失，表现为「点了没反应」。把 `toggle` 收上去再喂回 `userOpen`，读者的选择就能跨重建存活。
+
+## 概述
 
 - **链接不自行导航。** `search` 行仍渲染真实 `href`（可复制、可中键），但点击会 `preventDefault` 并派发 `open`，由宿主决定怎么打开。这在 Electron 渲染进程里是必须的。
 - 折叠区收起时带 `inert`：`0fr` 网格仍会把里面的行留在 Tab 序列里，必须一并移出。
@@ -117,16 +125,7 @@ code: |
 - 每行的入场延迟走 CSS 变量 `--tx-bui-agent-trace-index`，不是内联样式——减弱动效才能一条规则全部关掉。
 - 导轨是纯 CSS `::before`。上游用布局副作用测出行高再补间 500ms，这里省掉测量，折叠动画本身已经在裁剪它。
 
-## 最佳实践
-
-- 组件是受控原语：把时间轴留在宿主，`rows` 增长、`working` 翻转即可，别把播放脚本塞进组件。
-- `search` 场景务必接 `@open`，否则点击没有任何效果。
-- 长轨迹配 `moreLabel` 收口，不要把几十行全铺出来。
-- `reasoning` 用于成段散文，它会换行且不截断；单行标签用 `steps`。
-- 流式界面把 `toggle` 存到宿主再喂回 `userOpen`，避免重建时丢掉读者的展开选择。
-- 组件宽度自适应，上游的 380px 容器由宿主决定。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/agent-trace/src/TxAgentTrace.vue`。
 - Types: `packages/tuffex/packages/components/src/agent-trace/src/types.ts`。
@@ -134,8 +133,6 @@ code: |
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **与既有披露组件的分工:** `TxChainOfThought` 是带 markdown 正文的思考链，`TxReasoningDisclosure` 是单段推理，`TxSources` 是来源列表。本组件是紧凑的单行轨迹，带链接、差分与工具选中——数据形状不同，不要互相替代。
 - **可访问性:** 收起态加 `inert` 是有意超出上游的修正；上游的折叠区会把链接留在 Tab 序列里。

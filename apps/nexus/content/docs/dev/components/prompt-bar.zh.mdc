@@ -8,9 +8,8 @@ tags: [ai, composer, prompt, mention, command]
 syncStatus: reviewed
 verified: true
 ---
-# PromptBar 提示条
 
-## 基础用法
+## 用法
 
 ### 完整输入条
 
@@ -60,27 +59,16 @@ code: |
 ---
 :::
 
-## 令牌菜单单独使用
+### 最佳实践
 
-`@` / `/` 的解析与菜单状态机是纯逻辑，作为 `useTokenMenu` 单独导出——想给自己的输入框加提及、又不想换掉整条输入条时用它。它不碰 DOM，也不产生副作用。
+- 附件是受控的：`send` 之后组件只清文本，附件请在宿主里一并清空。
+- 听写只呈现状态，识别与转写留在宿主；拿到结果用 `insert()` 或直接写 `v-model` 落回草稿。
+- 品牌图标走 `#source-icon` 插槽，不要把第三方 SVG 塞进组件——那是产品资产，不是组件资产。
+- 菜单是相对输入条绝对定位的，会被祖先的 `overflow: hidden` 裁掉，也不会在贴近视口边缘时翻转。把输入条放在会裁剪的滚动容器之外。
+- 只要块状输入框（多行草稿 + 下方按钮行）而不需要菜单时，用 `TxChatComposer`；两者并存，不是替代关系。
+- 中文界面记得覆盖文案 props，默认值全部是英文。
 
-```ts
-import { parseToken, useTokenMenu } from '@talex-touch/tuffex/prompt-bar'
-
-const draft = ref('')
-const { menu, rows, activeIndex, engaged, move, engage, dismiss, insert } = useTokenMenu({
-  draft,
-  sources,
-  commands,
-})
-
-// 选中一行：把待定令牌替换成插入文本，返回新的草稿
-draft.value = insert(`@${row.name}`)
-```
-
-匹配策略两边不同：数据源按名称**子串**匹配，命令剥掉前导斜杠后按**前缀**匹配（输入 `/comp` 只留 `/compare`）。`parseToken` 也单独导出，只认词边界后的行尾令牌——`you@host` 不会被当成提及。
-
-## API
+## API 参考
 
 ### Props
 
@@ -143,7 +131,27 @@ draft.value = insert(`@${row.name}`)
 | `closeMenus` | `() => void` | 关掉 + 与模型两个菜单。 |
 | `menuOpen` | `boolean` | 是否有菜单展开。实例代理会解包 ref，读到的是布尔值。 |
 
-## 交互契约
+## 令牌菜单单独使用
+
+`@` / `/` 的解析与菜单状态机是纯逻辑，作为 `useTokenMenu` 单独导出——想给自己的输入框加提及、又不想换掉整条输入条时用它。它不碰 DOM，也不产生副作用。
+
+```ts
+import { parseToken, useTokenMenu } from '@talex-touch/tuffex/prompt-bar'
+
+const draft = ref('')
+const { menu, rows, activeIndex, engaged, move, engage, dismiss, insert } = useTokenMenu({
+  draft,
+  sources,
+  commands,
+})
+
+// 选中一行：把待定令牌替换成插入文本，返回新的草稿
+draft.value = insert(`@${row.name}`)
+```
+
+匹配策略两边不同：数据源按名称**子串**匹配，命令剥掉前导斜杠后按**前缀**匹配（输入 `/comp` 只留 `/compare`）。`parseToken` 也单独导出，只认词边界后的行尾令牌——`you@host` 不会被当成提及。
+
+## 概述
 
 - **组合式输入优先。** Enter 在 IME 组字期间只用于确认候选词，既不发送也不选中菜单行——`isComposing`、`keyCode === 229` 与 `compositionstart/end` 三重判断。
 - 菜单行按 combobox 范式实现：输入框带 `role="combobox"`、`aria-autocomplete="list"`、`aria-controls` 与 `aria-activedescendant`，菜单是 `listbox`，行是 `option`。**没有可提及内容时不会声称自己是 combobox**，退化成普通多行文本框。
@@ -155,16 +163,7 @@ draft.value = insert(`@${row.name}`)
 - 发送键的底色是墨色而不是主题强调色：这是这套设计语言的签名，强调色留给听写激活与 Connect 链接。
 - 减弱动效下弹入与按压都停掉，但听写的三根条只是定格而不是消失——它是「正在听」的唯一可见信号。
 
-## 最佳实践
-
-- 附件是受控的：`send` 之后组件只清文本，附件请在宿主里一并清空。
-- 听写只呈现状态，识别与转写留在宿主；拿到结果用 `insert()` 或直接写 `v-model` 落回草稿。
-- 品牌图标走 `#source-icon` 插槽，不要把第三方 SVG 塞进组件——那是产品资产，不是组件资产。
-- 菜单是相对输入条绝对定位的，会被祖先的 `overflow: hidden` 裁掉，也不会在贴近视口边缘时翻转。把输入条放在会裁剪的滚动容器之外。
-- 只要块状输入框（多行草稿 + 下方按钮行）而不需要菜单时，用 `TxChatComposer`；两者并存，不是替代关系。
-- 中文界面记得覆盖文案 props，默认值全部是英文。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/prompt-bar/src/TxPromptBar.vue`。
 - Types: `packages/tuffex/packages/components/src/prompt-bar/src/types.ts`。
@@ -173,8 +172,6 @@ draft.value = insert(`@${row.name}`)
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **与 `TxChatComposer` 的分工:** 后者是块状 composer（多行输入、下方图标操作行，可挂上下文托盘），契约已定稿；本组件是控件内联进输入框的紧凑条，带 `@` / `/` 菜单、模型与听写。并行组件而非变体，是这个仓库既有的做法（`input` / `flat-input`、`select` / `flat-select`）。
 - **未移植:** 上游选中旗舰模型时的 WebGL 彩虹扫光彩蛋。它依赖 React-only 的 `glimm`，为一个一次性庆祝动画引入着色器管线，代价与收益不成比例。

@@ -8,9 +8,8 @@ tags: [version, release, download, history]
 syncStatus: reviewed
 verified: true
 ---
-# VersionCapsule
 
-## Basic Usage
+## Usage
 
 ### VersionCapsule
 :::TuffDemoWrapper{demo="VersionCapsuleVersionCapsuleDemo" code-lang="vue"}
@@ -50,42 +49,17 @@ code: |
 ---
 :::
 
-## Channel Tones
+### Best Practices
 
-The capsule always names its channel and colours it by `tone`, so it never competes with a page's primary stable-download CTA. History rows resolve tone per entry, keeping a stable release distinct inside a list of previews.
+- Always name the channel (`BETA` / `STABLE` / `NIGHTLY`) instead of "LATEST" so the capsule never competes with a page's primary stable-download CTA.
+- Pair the capsule *with*, not in place of, a primary certified-release button: the button ships the stable build, the capsule owns the preview channel (download + history).
+- Put pre-release caveats in the download panel's `notice` with tone `warning` so users read them on the way to the file; use tone `success` for certified builds.
+- Provide `href` on builds so rows download directly as `<a download>`; reserve the `<button>` fallback for flows that resolve the URL on `select`.
+- Mark exactly one build `recommended` (the visitor's platform) — additional recommended builds are ignored for highlighting.
+- Use the history panel's `latest` for the featured card and `entries` for older rows; set `note` only where a one-line changelog helps, since it renders on the featured card only.
+- Match each entry's `tone` to its channel so stable and preview releases stay distinguishable in the same list.
 
-:::TuffDemoWrapper{demo="VersionCapsuleChannelTonesDemo" code-lang="vue" title="Channel tones" description="stable / preview / nightly / neutral, each with a matching status dot and channel colour."}
----
-code: |
-  <script setup lang="ts">
-  const capsules = [
-    { key: 'stable', tone: 'stable', version: 'v2.4.12', channel: 'STABLE', historyTitle: 'Version history', latest: { id: 's1', tag: 'v2.4.12', channel: 'RELEASE', tone: 'stable', date: 'Jun 23', note: 'Certified build with signing and regression complete.' } },
-    { key: 'preview', tone: 'preview', version: 'v2.4.13-beta.19', channel: 'BETA', historyTitle: 'Version history', latest: { id: 'p1', tag: 'v2.4.13-beta.19', channel: 'BETA', tone: 'preview', date: 'Jul 21', note: 'Preview channel for early adopters.' } },
-    { key: 'nightly', tone: 'nightly', version: 'v2.4.14-nightly.5', channel: 'NIGHTLY', historyTitle: 'Version history', latest: { id: 'n1', tag: 'v2.4.14-nightly.5', channel: 'NIGHTLY', tone: 'nightly', date: 'Today', note: 'Automated build, may be unstable.' } },
-    { key: 'neutral', tone: 'neutral', version: 'v1.9.8', channel: 'ARCHIVED', historyTitle: 'Version history', latest: { id: 'a1', tag: 'v1.9.8', channel: 'LEGACY', tone: 'neutral', date: '2024', note: 'Legacy build, no longer maintained.' } },
-  ]
-  </script>
-
-  <template>
-    <div style="display: flex; flex-direction: column; gap: 14px; align-items: flex-start;">
-      <TxVersionCapsule
-        v-for="item in capsules"
-        :key="item.key"
-        :version="item.version"
-        :channel="item.channel"
-        :tone="item.tone"
-        history-label="History"
-      >
-        <template #history="{ close }">
-          <TxVersionHistoryPanel :title="item.historyTitle" :latest="item.latest" @select="close" />
-        </template>
-      </TxVersionCapsule>
-    </div>
-  </template>
----
-:::
-
-## API
+## API Reference
 
 ### TxVersionCapsule Props
 
@@ -179,6 +153,41 @@ code: |
 |------|------|------|
 | `select` | `(entry: TxVersionHistoryEntry)` | Emitted with the entry when a release row or the featured card is chosen. |
 
+## Channel Tones
+
+The capsule always names its channel and colours it by `tone`, so it never competes with a page's primary stable-download CTA. History rows resolve tone per entry, keeping a stable release distinct inside a list of previews.
+
+:::TuffDemoWrapper{demo="VersionCapsuleChannelTonesDemo" code-lang="vue" title="Channel tones" description="stable / preview / nightly / neutral, each with a matching status dot and channel colour."}
+---
+code: |
+  <script setup lang="ts">
+  const capsules = [
+    { key: 'stable', tone: 'stable', version: 'v2.4.12', channel: 'STABLE', historyTitle: 'Version history', latest: { id: 's1', tag: 'v2.4.12', channel: 'RELEASE', tone: 'stable', date: 'Jun 23', note: 'Certified build with signing and regression complete.' } },
+    { key: 'preview', tone: 'preview', version: 'v2.4.13-beta.19', channel: 'BETA', historyTitle: 'Version history', latest: { id: 'p1', tag: 'v2.4.13-beta.19', channel: 'BETA', tone: 'preview', date: 'Jul 21', note: 'Preview channel for early adopters.' } },
+    { key: 'nightly', tone: 'nightly', version: 'v2.4.14-nightly.5', channel: 'NIGHTLY', historyTitle: 'Version history', latest: { id: 'n1', tag: 'v2.4.14-nightly.5', channel: 'NIGHTLY', tone: 'nightly', date: 'Today', note: 'Automated build, may be unstable.' } },
+    { key: 'neutral', tone: 'neutral', version: 'v1.9.8', channel: 'ARCHIVED', historyTitle: 'Version history', latest: { id: 'a1', tag: 'v1.9.8', channel: 'LEGACY', tone: 'neutral', date: '2024', note: 'Legacy build, no longer maintained.' } },
+  ]
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 14px; align-items: flex-start;">
+      <TxVersionCapsule
+        v-for="item in capsules"
+        :key="item.key"
+        :version="item.version"
+        :channel="item.channel"
+        :tone="item.tone"
+        history-label="History"
+      >
+        <template #history="{ close }">
+          <TxVersionHistoryPanel :title="item.historyTitle" :latest="item.latest" @select="close" />
+        </template>
+      </TxVersionCapsule>
+    </div>
+  </template>
+---
+:::
+
 ## Slots
 
 ### TxVersionCapsule
@@ -215,7 +224,7 @@ opens a full-screen release-history overlay instead.
 | `downloadRef` | `Ref<HTMLButtonElement \| null>` | The left (download) segment button element. |
 | `historyRef` | `Ref<HTMLButtonElement \| null>` | The right (history) segment button element. |
 
-## Interaction Contract
+## Overview
 
 - The two segments are **separate affordances for separate jobs**: the left downloads the build, the right opens history. They are independent click targets — do not wrap the whole capsule in one action.
 - Only one panel is open at a time. Clicking the other segment swaps panels; clicking the active segment again closes it.
@@ -227,17 +236,7 @@ opens a full-screen release-history overlay instead.
 - The download panel highlights only the first `recommended` build with the labelled button, so the platform-detected choice reads as the default rather than one of several equal actions.
 - History tone is resolved per row, so a stable release stays visually distinct inside a list of previews.
 
-## Best Practices
-
-- Always name the channel (`BETA` / `STABLE` / `NIGHTLY`) instead of "LATEST" so the capsule never competes with a page's primary stable-download CTA.
-- Pair the capsule *with*, not in place of, a primary certified-release button: the button ships the stable build, the capsule owns the preview channel (download + history).
-- Put pre-release caveats in the download panel's `notice` with tone `warning` so users read them on the way to the file; use tone `success` for certified builds.
-- Provide `href` on builds so rows download directly as `<a download>`; reserve the `<button>` fallback for flows that resolve the URL on `select`.
-- Mark exactly one build `recommended` (the visitor's platform) — additional recommended builds are ignored for highlighting.
-- Use the history panel's `latest` for the featured card and `entries` for older rows; set `note` only where a one-line changelog helps, since it renders on the featured card only.
-- Match each entry's `tone` to its channel so stable and preview releases stay distinguishable in the same list.
-
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/version-capsule/src/TxVersionCapsule.vue` confirms the split segments, controlled/uncontrolled `panel`, outside-click / Escape dismissal, `close()` focus return, and the `download` / `history` slots.
 - Source: `packages/tuffex/packages/components/src/version-capsule/src/TxVersionDownloadPanel.vue` confirms notice tones, first-`recommended` highlighting, and link-vs-button build rows.
@@ -245,5 +244,4 @@ opens a full-screen release-history overlay instead.
 - Type contracts: `packages/tuffex/packages/components/src/version-capsule/src/types.ts` exports `TxVersionCapsuleProps`, `TxVersionDownloadPanelProps`, `TxVersionHistoryPanelProps`, `TxVersionBuild`, `TxVersionNotice`, `TxVersionHistoryEntry`, and `TxVersionChannelTone`.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/version-capsule/__tests__/version-capsule.test.ts` covers panel open/swap/toggle, Escape and outside-pointer dismissal, controlled `panel`, disabled behaviour, first-`recommended`-only button, link-vs-button rows, `select` payloads, and per-row tone classes.
 
-## Source
 <TuffDocSourceLink />

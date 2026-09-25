@@ -9,15 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Scenario
-
-The analytics board a launcher team keeps open. The top shows how daily actives, CoreBox searches, AI requests and plugin installs are moving; below that sit search share by platform, backend service health, this month's AI usage and the most-installed plugins. Every figure follows one time range, so changing the range, picking dates or brushing the chart recomputes the whole page.
-
-It fits any operations back office that shows the big picture first and then lets people dig in: a SaaS console, a plugin-market admin, an internal metrics page.
-
-The second style, Ops wall, is the screen left on the wall on launch day: nothing to filter, figures rolling in real time, dark all the time.
-
-## Template
+## Usage
 
 ### Tuff Pulse board
 
@@ -173,7 +165,33 @@ code: |
 ---
 :::
 
-## Anatomy
+## Overview
+
+The analytics board a launcher team keeps open. The top shows how daily actives, CoreBox searches, AI requests and plugin installs are moving; below that sit search share by platform, backend service health, this month's AI usage and the most-installed plugins. Every figure follows one time range, so changing the range, picking dates or brushing the chart recomputes the whole page.
+
+It fits any operations back office that shows the big picture first and then lets people dig in: a SaaS console, a plugin-market admin, an internal metrics page.
+
+The second style, Ops wall, is the screen left on the wall on launch day: nothing to filter, figures rolling in real time, dark all the time.
+
+- Switch between 7, 30 and 90 days, or pick a span in the date picker: the KPI figures roll to their new values, and each change is measured against the period of the same length just before. Up to seven days is drawn by the hour, anything longer by the day.
+- Drag across the trend chart to zoom into that span. The KPI cards, legend, share bar and plugin table then count only those days; the "Zoomed" pill beside the title restores the full range.
+- Click a legend item to hide or show a platform, and hover one to fade the other two lines. With the pointer inside Platform share, the chart singles out the selected platform; clicking another segment switches it.
+- Sort the plugin table by installs or crash-free rate from the header. The trend column always holds 24 samples, so a range change morphs the lines instead of redrawing them.
+- The charts start drawing once the template scrolls into view, so the entrance animation is actually seen. This is an interactive template; nothing plays by itself.
+- Wide (≥ 960px) adds the crash-rate card, a large legend with values and the insight cards. Narrow (< 640px) puts the KPI cards in two columns, drops the side rail under the chart and trims the table to plugin, installs and trend.
+- Ops wall: it goes live once it scrolls into view. KPIs roll every 2 seconds, an event streams in every 3, cities update every 4, the focus card turns every 8 and the sankey moves to a new window every 12. At 18 seconds cloud sync in Tokyo degrades (the map bubble and the health light turn orange and the top bar reads 6/7) and at 30 it recovers. Scroll the template away or switch tabs and it stops updating.
+- Ops wall: click Live to pause every update and again to resume; resting the pointer on the focus card, the sankey or the event list holds that part. Page the focus card with ‹ › and the rotation leaves it to you; click Shanghai or Hangzhou on the map to jump to East China. With reduced motion the wall shows one still snapshot and starts no timer.
+- Ops wall: the whole screen is dark whether the site is light or dark. In the docs column it fills the stage exactly with no scrolling; wide (≥ 960px) shows six KPIs and taller map and sankey, with values on the nodes; narrow (< 640px) is one scrolling column with the KPIs in two.
+
+## Customization
+
+- Swap the data source: replace `daily()`, which generates the sample history, with the per-day series from your API. `total()`, `average()` and `previousWindow()` already handle a day still in progress and the same-length comparison, so the roll-ups stay as they are.
+- Keep rates such as crash rate or success rate out of TxTimeseriesChart: its y axis always includes 0, so a line near 100% sits flat along the top. Chart the counts instead, or use TxSparkChart with a `domain`.
+- Pixel props such as a chart height or a table `maxHeight` are out of reach of container queries; compute them from the stage size as the template does, or from a ResizeObserver of your own.
+- To drill into a row, add `@row-click` to TxDataTable, swap the trend chart's data for that plugin's installs and add a pill that returns to all platforms.
+- Ops wall: a local dark scope takes only `data-theme="dark"` and `color-scheme: dark` on the root, plus redeclaring the few tokens `:root` derives with `var()` that the dark blocks never rewrite (the three disabled colours, the chart grid line, the skeleton base). Overlays that teleport (tooltips, popovers, dialogs) leave that scope and render in the page theme, so keep them off the wall.
+
+## Related components
 
 | Region | Components | Role |
 |---|---|---|
@@ -189,23 +207,3 @@ code: |
 | Focus rotation (Ops wall) | [TxInsightCards](/docs/dev/components/insight-cards), [TxAllocationBar](/docs/dev/components/allocation-bar) | East China at peak, on-device AI share and plugin momentum, one page every 8 seconds |
 | Search flow (Ops wall) | [TxSankeyChart](/docs/dev/components/sankey-chart) | Input → plugin → action, every middle node passing on exactly what it receives; the tooltip is localized through its slot |
 | Health and events (Ops wall) | [TxDotIndicator](/docs/dev/components/dot-indicator), [TxSignalMeter](/docs/dev/components/signal-meter), [TxTransition](/docs/dev/components/transition) | A dot, latency and signal bars for seven services; new events slide in at the top while the oldest makes way |
-
-## Interactions
-
-- Switch between 7, 30 and 90 days, or pick a span in the date picker: the KPI figures roll to their new values, and each change is measured against the period of the same length just before. Up to seven days is drawn by the hour, anything longer by the day.
-- Drag across the trend chart to zoom into that span. The KPI cards, legend, share bar and plugin table then count only those days; the "Zoomed" pill beside the title restores the full range.
-- Click a legend item to hide or show a platform, and hover one to fade the other two lines. With the pointer inside Platform share, the chart singles out the selected platform; clicking another segment switches it.
-- Sort the plugin table by installs or crash-free rate from the header. The trend column always holds 24 samples, so a range change morphs the lines instead of redrawing them.
-- The charts start drawing once the template scrolls into view, so the entrance animation is actually seen. This is an interactive template; nothing plays by itself.
-- Wide (≥ 960px) adds the crash-rate card, a large legend with values and the insight cards. Narrow (< 640px) puts the KPI cards in two columns, drops the side rail under the chart and trims the table to plugin, installs and trend.
-- Ops wall: it goes live once it scrolls into view. KPIs roll every 2 seconds, an event streams in every 3, cities update every 4, the focus card turns every 8 and the sankey moves to a new window every 12. At 18 seconds cloud sync in Tokyo degrades (the map bubble and the health light turn orange and the top bar reads 6/7) and at 30 it recovers. Scroll the template away or switch tabs and it stops updating.
-- Ops wall: click Live to pause every update and again to resume; resting the pointer on the focus card, the sankey or the event list holds that part. Page the focus card with ‹ › and the rotation leaves it to you; click Shanghai or Hangzhou on the map to jump to East China. With reduced motion the wall shows one still snapshot and starts no timer.
-- Ops wall: the whole screen is dark whether the site is light or dark. In the docs column it fills the stage exactly with no scrolling; wide (≥ 960px) shows six KPIs and taller map and sankey, with values on the nodes; narrow (< 640px) is one scrolling column with the KPIs in two.
-
-## Adapting it
-
-- Swap the data source: replace `daily()`, which generates the sample history, with the per-day series from your API. `total()`, `average()` and `previousWindow()` already handle a day still in progress and the same-length comparison, so the roll-ups stay as they are.
-- Keep rates such as crash rate or success rate out of TxTimeseriesChart: its y axis always includes 0, so a line near 100% sits flat along the top. Chart the counts instead, or use TxSparkChart with a `domain`.
-- Pixel props such as a chart height or a table `maxHeight` are out of reach of container queries; compute them from the stage size as the template does, or from a ResizeObserver of your own.
-- To drill into a row, add `@row-click` to TxDataTable, swap the trend chart's data for that plugin's installs and add a pill that returns to all platforms.
-- Ops wall: a local dark scope takes only `data-theme="dark"` and `color-scheme: dark` on the root, plus redeclaring the few tokens `:root` derives with `var()` that the dark blocks never rewrite (the three disabled colours, the chart grid line, the skeleton base). Overlays that teleport (tooltips, popovers, dialogs) leave that scope and render in the page theme, so keep them off the wall.

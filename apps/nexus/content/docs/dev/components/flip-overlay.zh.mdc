@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# FlipOverlay 翻转遮罩
-
-## 基础用法
+## 用法
 
 :::TuffDemoWrapper{demo="FlipOverlayFlipOverlayDemo" code-lang="vue"}
 ---
@@ -42,7 +40,15 @@ code: |
 ---
 :::
 
-## API
+### 最佳实践
+
+- 将真实触发元素或它的 `DOMRect` 传给 `source`；`null` 会退化为居中卡片，缺少来源连续性。
+- 堆叠 overlay 尽量保持接近默认 `duration`，让共享遮罩和卡片动效同步。
+- 用 `cardStyle` 传尺寸约束（如 `width`、`maxHeight`），用 `cardClass` 复用视觉变体。
+- 常规卡片优先使用 `surface="mask"`；仅在背景仍可读时使用 `glass` / `refraction`，完全自定义卡片时使用 `pure`。
+- 优先使用 `#header-display`、`#header-actions` 或 `#header-close`；全量 `#header` 会退出内置关闭布局。
+
+## API 参考
 
 ### Props
 
@@ -109,7 +115,7 @@ code: |
 |------|------|------|
 | `close()` | `() => void` | 运行完整关闭动画并 emit `update:modelValue(false)`；父级需通过 `v-model` 拥有开合状态。 |
 
-## 交互契约
+## 概述
 
 - `modelValue=true` 会挂载 overlay、解析 `source` 矩形、触发 `open`，并在卡片动画完成后触发 `opened`。
 - overlay 会 Teleport 到 `<body>`。遮罩和卡片都是 `position: fixed`，原地渲染时会以最近一个带 `transform`、`filter`、`contain` 或 `content-visibility` 的祖先为定位基准，而不是视口。非 prop 属性仍落在遮罩上。
@@ -121,23 +127,13 @@ code: |
 - `preventAccidentalClose=true` 会阻止遮罩关闭和页面退出，并用警示状态反馈误操作，而不是静默关闭。
 - 可访问性：卡片是 `role="dialog"`，带 `aria-modal="true"` 和 `tabindex="-1"`。渲染内置 header 时，`headerTitle` 关联 `aria-labelledby`，`headerDesc` 关联 `aria-describedby`。打开时焦点移入卡片，关闭时恢复到打开前聚焦的元素。
 
-## 最佳实践
-
-- 将真实触发元素或它的 `DOMRect` 传给 `source`；`null` 会退化为居中卡片，缺少来源连续性。
-- 堆叠 overlay 尽量保持接近默认 `duration`，让共享遮罩和卡片动效同步。
-- 用 `cardStyle` 传尺寸约束（如 `width`、`maxHeight`），用 `cardClass` 复用视觉变体。
-- 常规卡片优先使用 `surface="mask"`；仅在背景仍可读时使用 `glass` / `refraction`，完全自定义卡片时使用 `pure`。
-- 优先使用 `#header-display`、`#header-actions` 或 `#header-close`；全量 `#header` 会退出内置关闭布局。
-
-## 审阅说明
+## 技术实现
 
 - **状态契约：** `TxFlipOverlay` 管理挂载与动画生命周期，但只有组件自行关闭时才触发 `update:modelValue(false)`；使用内置关闭、插槽 `close()` 或遮罩关闭后，调用方仍需同步 `v-model`。
 - **挂载契约：** overlay 过去原地渲染。docs 页面的正文容器是 `content-visibility: auto`，于是"固定定位"的卡片以整篇正文为基准居中，聚焦卡片时页面被滚动约 870px，翻转起点的触发按钮也被滚出屏幕。现在它与 `TxModal`、`TxCommandPalette` 一样 Teleport 到 body；原本已在外层包了 `<Teleport to="body">` 的 `FlipDialog` 不受影响。
 - **叠层契约：** `globalMask=true` 会让多个 overlay 共享视觉遮罩，但只有顶层保留可交互遮罩；尺寸接近的相邻层才应用有限位移，更深层按透明度渐隐。
 - **防误触契约：** `preventAccidentalClose` 会阻止遮罩关闭和页面退出，并闪烁警示状态；它只是交互防护，不是持久化或自动保存能力。
 - **实测覆盖:** `flip-overlay.test.ts` 覆盖默认值、header 插槽优先级、关闭顺序、dialog 语义（`role`/`aria-modal`/`aria-labelledby`）与 Escape 关闭、card style 透传、叠层遮罩、层级位移和防误关闭行为。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`.
 - Motion implementation: `packages/tuffex/packages/components/src/flip-overlay/src/flip-overlay-motion.ts`.

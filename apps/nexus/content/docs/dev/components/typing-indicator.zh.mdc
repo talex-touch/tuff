@@ -8,10 +8,8 @@ tags: [typing, loading, chat]
 syncStatus: reviewed
 verified: true
 ---
-# TypingIndicator 打字中
 
 ### TypingIndicator
-
 :::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorDemo" code-lang="vue"}
 ---
 code: |
@@ -21,7 +19,7 @@ code: |
 ---
 :::
 
-## 变体
+## 用法
 
 ### TypingIndicator variants
 :::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorVariantsDemo" code-lang="vue"}
@@ -77,7 +75,15 @@ code: |
 ---
 :::
 
-## API
+### 最佳实践
+
+- 内联聊天行和紧凑 assistant 占位优先使用默认 `dots` 变体。
+- 需要品牌化生成状态且空间充足时使用 `ai`。
+- 工具栏、消息元信息行或骨架屏旁的加载状态可使用 `pure`、`ring`、`circle-dash` 或 `bars`。
+- 除非其它可见标签已经描述等待操作，否则保持 `showText=true`。
+- 数字尺寸 prop 都按 px 调整；同一聊天 transcript 中避免混用过多变体。
+
+## API 参考
 
 ### Props
 
@@ -112,21 +118,11 @@ code: |
 
 `TxTypingIndicator` 不暴露插槽。可访问状态文案使用 `text`；只有相邻 UI 已经说明等待状态时才使用 `showText=false`。
 
-## 最佳实践
-
-- 内联聊天行和紧凑 assistant 占位优先使用默认 `dots` 变体。
-- 需要品牌化生成状态且空间充足时使用 `ai`。
-- 工具栏、消息元信息行或骨架屏旁的加载状态可使用 `pure`、`ring`、`circle-dash` 或 `bars`。
-- 除非其它可见标签已经描述等待操作，否则保持 `showText=true`。
-- 数字尺寸 prop 都按 px 调整；同一聊天 transcript 中避免混用过多变体。
-
-## 审阅说明
+## 技术实现
 
 - 组件源码:`packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue` 确认 `role="status"`、`aria-live="polite"`、装饰性 loader 的 `aria-hidden`、变体 CSS 变量、AI mask 作用域 id 和可选文本渲染。
 - 类型契约:`packages/tuffex/packages/components/src/chat/src/types.ts` 定义 `TypingIndicatorProps` 和所有变体尺寸 prop。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/chat/__tests__/typing-indicator.test.ts` 覆盖状态语义、dot 尺寸、隐藏文本、AI mask 尺寸、spinner 变体和 bars 渲染。
 - 导出入口:`packages/tuffex/packages/components/src/chat/index.ts` 导出 `TypingIndicator`、`TxTypingIndicator` 和 `TypingIndicatorProps`。
-
-## Source
 
 <TuffDocSourceLink path="packages/tuffex/packages/components/src/chat/index.ts" />

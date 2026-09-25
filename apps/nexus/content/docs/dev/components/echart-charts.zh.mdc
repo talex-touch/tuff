@@ -8,9 +8,8 @@ tags: [chart, echarts, line, bar, pie, funnel, radar, gauge, scatter, heatmap, t
 syncStatus: reviewed
 verified: true
 ---
-# ECharts 图表家族
 
-## 安装与引入
+## 安装
 
 `echarts` 是可选 peer 依赖：宿主装了它，这一族就点亮；不装，Tuffex 其它部分毫无变化。它永远不会被打进主包——组件在挂载时动态引入，因此第一次渲染才单独出一块 chunk。
 
@@ -22,11 +21,45 @@ pnpm add echarts @talex-touch/tuffex
 import { TxEChart, TxLineChart } from '@talex-touch/tuffex/charts'
 ```
 
-## 何时用哪一族
+## 用法
 
-原生 SVG 家族（`TxChart`、`TxTimeseriesChart`、`TxSankeyChart`、`TxChoroplethMap`、`TxSparkChart`、`TxAllocationBar`）仍是默认选择：体积更小、走 CSS token 主题化、形状贴合产品真实要画的东西。当你需要原生家族没有的图表类型，或者想直接用 ECharts 自己的配置面——dataZoom、visualMap、自定义 series、逐点样式——就用 `TxEChart` 及其类型化封装。
+### 最佳实践
 
-两族读同一套颜色 token，所以把 ECharts 图放在原生图旁边，两种主题下都自动对齐，一个样式 prop 都不用传。
+- 给宿主一个确定的高度。高度为 0 的容器画不出任何东西。
+- 优先用类型化封装；只有长尾类型（candlestick、graph、boxplot、sunburst）才落到带原始 option 的 `TxEChart`。
+- 传 `aria-label`：它让 canvas 图表对辅助技术可读。
+- 传数据而不是像素：封装负责把数据映射成 option，主题色与坐标轴质感才能保持一致。
+- 在宿主应用里安装 `echarts`；缺少 peer 时容器内会给出提示，而不是静默空白。
+
+## API 参考
+
+这一族每张图都接受下列公共 props，外加各自的data props，并且都转发一份原始 `option` 覆盖在生成的 option 之上——`series` 数组整体替换，其余键深度合并。
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `option` | `EChartsOption` | — | 覆盖在生成 option 之上：每张图的自定义出口。 |
+| `height` | `number \| string` | `320` | 图表高度：px 或任意 CSS 长度。 |
+| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` 跟随周围主题。 |
+| `ariaLabel` | `string` | — | 无障碍名称；同时在宿主上加 `role="img"`。 |
+| `loading` | `boolean` | `false` | 数据到达前的主题化 loading 遮罩。 |
+
+`update` 只存在于 `TxEChart`：`'replace'`（默认）整体替换series数组，被移除的series立即停止绘制；`'merge'` 保留 ECharts 自身的合并语义。
+
+### Per-chart props
+
+| 图表 | Props |
+|------|------|
+| `TxLineChart` | `series`（`name`、`data`、`color?`、`area?`、`smooth?`、`stack?`、`dashed?`）、`categories?`、`xAxisName?`、`yAxisName?`、`showLegend?`、`grid?` |
+| `TxBarChart` | `series`（`name`、`data`、`color?`、`stack?`）、`categories?`、`xAxisName?`、`yAxisName?`、`showLegend?`、`grid?`、`stacked?`、`horizontal?`、`barWidth?`、`showLabel?` |
+| `TxPieChart` | `data`（`name`、`value`、`color?`）、`donut?`、`roseType?`、`showLegend?`、`labelPosition?`、`centerLabel?`、`unit?` |
+| `TxFunnelChart` | `data`（`name`、`value`、`color?`）、`sort?`、`gap?`、`minSize?`、`maxSize?`、`labelPosition?`、`showLabel?`、`showLegend?`、`unit?` |
+| `TxRadarChart` | `indicators`（`name`、`max`、`min?`）、`series`（`name`、`data`、`color?`、`area?`）、`shape?`、`splitNumber?`、`showLegend?`、`showAxisName?` |
+| `TxGaugeChart` | `value`、`min?`、`max?`、`name?`、`unit?`、`precision?`、`progress?`、`segments?`、`color?` |
+| `TxScatterChart` | `series`（`name`、`data`、`color?`、`symbolSize?`）、`xAxisName?`、`yAxisName?`、`symbolSize?`、`showLegend?`、`grid?`、`xMin?`、`xMax?`、`yMin?`、`yMax?` |
+| `TxHeatmapChart` | `values`、`rows`、`columns`、`xAxisName?`、`yAxisName?`、`visualMap?`、`min?`、`max?`、`showLabel?`、`unit?` |
+| `TxTreemapChart` | `data`（`name`、`value?`、`color?`、`children?`）、`maxDepth?`、`showBreadcrumb?`、`showLabel?`、`unit?`、`roam?` |
+
+构造器本身也是公开 API——`buildBarChartOption`、`buildLineChartOption` 等都返回一份普通 `EChartsOption`。需要在一张图里混用图形类型时，用它们先各自生成再合并，然后把结果交给 `TxEChart`。
 
 ## 主题化宿主
 
@@ -250,36 +283,6 @@ code: |
 ---
 :::
 
-## API
-
-这一族每张图都接受下列公共 props，外加各自的data props，并且都转发一份原始 `option` 覆盖在生成的 option 之上——`series` 数组整体替换，其余键深度合并。
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `option` | `EChartsOption` | — | 覆盖在生成 option 之上：每张图的自定义出口。 |
-| `height` | `number \| string` | `320` | 图表高度：px 或任意 CSS 长度。 |
-| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` 跟随周围主题。 |
-| `ariaLabel` | `string` | — | 无障碍名称；同时在宿主上加 `role="img"`。 |
-| `loading` | `boolean` | `false` | 数据到达前的主题化 loading 遮罩。 |
-
-`update` 只存在于 `TxEChart`：`'replace'`（默认）整体替换series数组，被移除的series立即停止绘制；`'merge'` 保留 ECharts 自身的合并语义。
-
-### Per-chart props
-
-| 图表 | Props |
-|------|------|
-| `TxLineChart` | `series`（`name`、`data`、`color?`、`area?`、`smooth?`、`stack?`、`dashed?`）、`categories?`、`xAxisName?`、`yAxisName?`、`showLegend?`、`grid?` |
-| `TxBarChart` | `series`（`name`、`data`、`color?`、`stack?`）、`categories?`、`xAxisName?`、`yAxisName?`、`showLegend?`、`grid?`、`stacked?`、`horizontal?`、`barWidth?`、`showLabel?` |
-| `TxPieChart` | `data`（`name`、`value`、`color?`）、`donut?`、`roseType?`、`showLegend?`、`labelPosition?`、`centerLabel?`、`unit?` |
-| `TxFunnelChart` | `data`（`name`、`value`、`color?`）、`sort?`、`gap?`、`minSize?`、`maxSize?`、`labelPosition?`、`showLabel?`、`showLegend?`、`unit?` |
-| `TxRadarChart` | `indicators`（`name`、`max`、`min?`）、`series`（`name`、`data`、`color?`、`area?`）、`shape?`、`splitNumber?`、`showLegend?`、`showAxisName?` |
-| `TxGaugeChart` | `value`、`min?`、`max?`、`name?`、`unit?`、`precision?`、`progress?`、`segments?`、`color?` |
-| `TxScatterChart` | `series`（`name`、`data`、`color?`、`symbolSize?`）、`xAxisName?`、`yAxisName?`、`symbolSize?`、`showLegend?`、`grid?`、`xMin?`、`xMax?`、`yMin?`、`yMax?` |
-| `TxHeatmapChart` | `values`、`rows`、`columns`、`xAxisName?`、`yAxisName?`、`visualMap?`、`min?`、`max?`、`showLabel?`、`unit?` |
-| `TxTreemapChart` | `data`（`name`、`value?`、`color?`、`children?`）、`maxDepth?`、`showBreadcrumb?`、`showLabel?`、`unit?`、`roam?` |
-
-构造器本身也是公开 API——`buildBarChartOption`、`buildLineChartOption` 等都返回一份普通 `EChartsOption`。需要在一张图里混用图形类型时，用它们先各自生成再合并，然后把结果交给 `TxEChart`。
-
 ## Events
 
 | Event | Payload | Description |
@@ -290,15 +293,7 @@ code: |
 | `legendselectchanged` | `(params: EChartEventParams)` | 图例项被切换。 |
 | `datazoom` | `(params: EChartEventParams)` | dataZoom 区间变化。 |
 
-## 最佳实践
-
-- 给宿主一个确定的高度。高度为 0 的容器画不出任何东西。
-- 优先用类型化封装；只有长尾类型（candlestick、graph、boxplot、sunburst）才落到带原始 option 的 `TxEChart`。
-- 传 `aria-label`：它让 canvas 图表对辅助技术可读。
-- 传数据而不是像素：封装负责把数据映射成 option，主题色与坐标轴质感才能保持一致。
-- 在宿主应用里安装 `echarts`；缺少 peer 时容器内会给出提示，而不是静默空白。
-
-## 源码
+## 技术实现
 
 - 组件源码：`packages/tuffex/packages/components/src/charts/src/echart/src/`。
 - option 构造器：`packages/tuffex/packages/components/src/charts/src/echart/src/options/`。
@@ -306,3 +301,9 @@ code: |
 - 改编自 Cloudflare kumo (https://github.com/cloudflare/kumo)，© Cloudflare, Inc.，MIT —— `EChart.tsx`。
 
 <TuffDocSourceLink />
+
+## 使用场景
+
+原生 SVG 家族（`TxChart`、`TxTimeseriesChart`、`TxSankeyChart`、`TxChoroplethMap`、`TxSparkChart`、`TxAllocationBar`）仍是默认选择：体积更小、走 CSS token 主题化、形状贴合产品真实要画的东西。当你需要原生家族没有的图表类型，或者想直接用 ECharts 自己的配置面——dataZoom、visualMap、自定义 series、逐点样式——就用 `TxEChart` 及其类型化封装。
+
+两族读同一套颜色 token，所以把 ECharts 图放在原生图旁边，两种主题下都自动对齐，一个样式 prop 都不用传。

@@ -8,9 +8,8 @@ tags: [stat, metric, dashboard]
 syncStatus: reviewed
 verified: true
 ---
-# StatCard
 
-## Basic Usage
+## Usage
 
 ### Default Variant
 
@@ -206,7 +205,16 @@ code: |
 ---
 ::
 
-## API
+### Best Practices
+
+- Use numeric `value` for count metrics so the default formatter can insert separators. Use the `value` slot when the unit or animated number needs custom layout.
+- Use `insight.type="delta"` for absolute changes and `insight.type="percent"` for relative changes; the default precision is `0` for deltas and `1` for percentages.
+- Sign, number, and unit sit flush as one figure. When the unit needs a space, put it in `suffix` (for example `' pts'`) instead of spacing it with outside styles.
+- Reserve `variant="progress"` for bounded health, capacity, quota, or completion values. Do not use it for unbounded totals.
+- `clickable` only changes visual affordance. Wrap the card in an interactive parent or add a surrounding button/link when it must navigate.
+- Use a color class in `iconClass` to mark a metric's category (for example `i-carbon-task text-[var(--tx-color-success)]`); it tints both the watermark and the glow. An icon without a color class gets no glow, which suits the one card in a row that should stay quiet. Size classes such as `text-6xl` are no longer needed.
+
+## API Reference
 
 ### Props
 
@@ -233,7 +241,6 @@ code: |
 | `suffix` | `string` | - | Overrides the suffix (default `%` for percent). It sits flush against the number; put a leading space in it when you want one, for example `' pts'`. |
 | `precision` | `number` | - | Decimal precision. |
 
-
 ### Slots
 
 | Slot | Description |
@@ -250,23 +257,14 @@ code: |
 | `--tx-stat-card-icon-opacity-hover` | Component default `0.26`; override through the component's `style` | Opacity of the corner icon on hover. |
 | `--tx-stat-card-icon-color` | Written by the component (the icon's computed color) | Written to the root only for a tinted icon and removed for a grey one; the glow's `--tx-stat-card-glow-color` / `--tx-stat-card-glow-color-soft` are mixed from it at 34% / 12% with `color-mix`. The component owns it; do not bind it through `:style`. |
 
-## Interaction Contract
+## Overview
 
 - Decorative icon: the default and insight layouts render `iconClass` as an 88px watermark with no blur at a resting opacity of `0.16`, overflowing the bottom-right corner and clipped by the card's radius; the progress layout draws the icon at 22px in the center of the ring, colored with the ring, and renders no watermark or glow. The component owns the watermark size — its selector outranks host utilities such as `text-6xl`, so size classes have no effect — while a color class in `iconClass` still tints it; an untinted icon inherits the secondary text color.
 - The glow follows a tinted icon only: on mount and whenever `iconClass` or `variant` changes, the component reads the icon's computed color. When it has a hue, the color is written to the root as `--tx-stat-card-icon-color`, `tx-stat-card--tinted` is added, and a radial glow of that color fades in under the corner. A grey icon (RGB channel spread < 24) gets no glow: it has no hue to glow with, and mixing it in only leaves a smudge of fog behind the number.
 - Hover applies to every card: the border switches to `--tx-border-color` at once (color never transitions), the corner icon drifts 4px inward and brightens to `0.26`, and the glow warms. `clickable` only adds the pointer cursor.
 - Insight pill: sign, number, and unit render flush as one figure (`+16.7%`) on a 12% mix of the insight color. The default trend glyph is inline SVG, so it does not depend on the host scanning an icon class; an explicit `insight.iconClass` still renders as an `<i>` icon. The value and the insight both use tabular numerals, so they hold still while updating.
 
-## Best Practices
-
-- Use numeric `value` for count metrics so the default formatter can insert separators. Use the `value` slot when the unit or animated number needs custom layout.
-- Use `insight.type="delta"` for absolute changes and `insight.type="percent"` for relative changes; the default precision is `0` for deltas and `1` for percentages.
-- Sign, number, and unit sit flush as one figure. When the unit needs a space, put it in `suffix` (for example `' pts'`) instead of spacing it with outside styles.
-- Reserve `variant="progress"` for bounded health, capacity, quota, or completion values. Do not use it for unbounded totals.
-- `clickable` only changes visual affordance. Wrap the card in an interactive parent or add a surrounding button/link when it must navigate.
-- Use a color class in `iconClass` to mark a metric's category (for example `i-carbon-task text-[var(--tx-color-success)]`); it tints both the watermark and the glow. An icon without a color class gets no glow, which suits the one card in a row that should stay quiet. Size classes such as `text-6xl` are no longer needed.
-
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`
 - Recommendation: use the default variant for plain metrics, `insight` for deltas, and `variant="progress"` for bounded health or capacity values.
@@ -275,8 +273,6 @@ code: |
 - Progress ring fix (2026-09-24): `--tx-stat-card-progress` is registered with `@property` and bound on `.tx-stat-card__progress`, but the ring that draws the arc is its child. It was registered with `inherits: false`, so the ring only ever read the 0% initial value and the arc was never drawn — in these docs and in CoreApp's storage usage card alike. It now inherits. The disc inside the ring is now always a 16% tint of the ring color; an `@supports (color: color-mix(…))` override used to mix it into `rgba(0, 0, 0, 0.45)` instead, which read as a dark lens on the dark theme and a grey blot on the light one.
 - Accessibility: the root renders `role="group"`; provide nearby heading/context in dashboards so users are not left with bare numbers.
 - Motion fallback: the glow fades in over 0.6s on mount, the icon's hover drift and brightening transition over 0.35s, and the progress arc eases to a new value over 0.6s. Under `prefers-reduced-motion: reduce` all of those transitions are off (the arc jumps to its value) and the icon no longer drifts on hover; the brightening, the border, and the warmer glow apply at once.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`.
 - Type contracts: `packages/tuffex/packages/components/src/stat-card/src/types.ts` exports `StatCardProps`, `StatCardInsight`, and variant types.

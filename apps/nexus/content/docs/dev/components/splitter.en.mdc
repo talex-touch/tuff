@@ -8,9 +8,8 @@ tags: [layout, resize, panels]
 syncStatus: reviewed
 verified: true
 ---
-# Splitter
 
-## Basic Usage
+## Usage
 
 Give the splitter a real width and height through its parent. The component fills the available box and writes the current ratio into CSS grid variables.
 
@@ -38,7 +37,15 @@ code: |
 ---
 ::::
 
-## API
+### Best Practices
+
+- Always wrap `TxSplitter` in a container with explicit height. Without a bounded box the panes cannot resize predictably.
+- Keep `min` and `max` far enough apart for both panes to remain usable; avoid letting one pane collapse to unreadable content.
+- Use `snap` for inspector/sidebar layouts where stable ratios matter; leave it `0` for free-form editing canvases.
+- Put scroll containers inside pane slots, not around the splitter root, so resizing does not fight page scroll.
+- Disable the splitter while modal interactions or drag-and-drop flows are active to avoid competing pointer capture.
+
+## API Reference
 
 ### Props
 
@@ -68,7 +75,7 @@ code: |
 | `drag-start` | `()` | Emitted when pointer resizing starts. |
 | `drag-end` | `()` | Emitted when pointer resizing ends or is cancelled by disabling/unmounting. |
 
-## Interaction Contract
+## Overview
 
 - Pointer drag reads the splitter root bounding box: horizontal uses `clientX / width`, vertical uses `clientY / height`.
 - Keyboard resizing uses ArrowLeft / ArrowRight in horizontal mode and ArrowUp / ArrowDown in vertical mode, stepping by `0.02` before clamp / snap.
@@ -76,21 +83,11 @@ code: |
 - When disabled, the separator uses `tabindex="-1"`, pointer/keyboard changes are ignored, and active dragging is ended.
 - The component does not persist layout. Store the `v-model` ratio in the caller if users should keep their pane size.
 
-## Best Practices
-
-- Always wrap `TxSplitter` in a container with explicit height. Without a bounded box the panes cannot resize predictably.
-- Keep `min` and `max` far enough apart for both panes to remain usable; avoid letting one pane collapse to unreadable content.
-- Use `snap` for inspector/sidebar layouts where stable ratios matter; leave it `0` for free-form editing canvases.
-- Put scroll containers inside pane slots, not around the splitter root, so resizing does not fight page scroll.
-- Disable the splitter while modal interactions or drag-and-drop flows are active to avoid competing pointer capture.
-
-## Review Notes
+## Technologies
 
 - **Accessibility note:** The separator is keyboard-focusable with `role="separator"`, `aria-label="Resize"`, and arrow-key resizing, and it exposes `aria-valuenow` / `aria-valuemin` / `aria-valuemax` as integer percentages (the current ratio and the `min`/`max` bounds scaled to `0..100`) so assistive tech can announce the split position. Visible ratio/size feedback is still helpful when precision matters.
 - **Layout note:** Rendered ratios are clamped to `0..1`, while emitted pointer/keyboard changes are clamped by `min`/`max` and then snapped. Keep `min <= max` in caller code; the component does not normalize inverted bounds.
 - **Verified coverage:** `splitter.test.ts` checks horizontal and vertical rendering, separator orientation, `aria-valuenow`/`aria-valuemin`/`aria-valuemax`, slot content, ratio/bar CSS variables, pointer drag with clamp/snap, vertical pointer math, keyboard resizing, disabled blocking, and drag-end emission when disabled mid-drag.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/splitter/src/TxSplitter.vue`.
 - Types: `packages/tuffex/packages/components/src/splitter/src/types.ts` exports `SplitterProps`, `SplitterEmits`, and `SplitterDirection`.

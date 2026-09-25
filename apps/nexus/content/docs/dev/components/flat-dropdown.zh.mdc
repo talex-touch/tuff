@@ -8,9 +8,8 @@ tags: [dropdown, flat, navigation, floating, menu]
 syncStatus: migrated
 verified: false
 ---
-# FlatDropdown 扁平下拉
 
-## 基础用法
+## 用法
 
 悬停触发器即可展开。指针离开后面板会保留 `closeDelay` 毫秒，方便你把指针移进去。`close-on-content-click` 让面板在内部任意点击后关闭。
 
@@ -37,42 +36,16 @@ code: |
 ---
 :::
 
-## 触发方式
+### 最佳实践
 
-`trigger` 决定面板如何被唤起：
+- 破坏性或会改变状态的菜单优先用 `trigger="click"` —— 悬停展开在触控板上很容易误触。
+- `hover` 模式下 `closeDelay` 要留足（默认 `600`）；太短会让指针斜向移入面板变得非常难受。
+- 当下拉位于自带层叠或裁剪上下文的容器内、且需要继承该上下文时，设 `teleport="false"`。注意就地渲染会重新暴露在祖先的 `overflow: hidden` 之下。
+- 用 `side` 插槽参数翻转你自己的装饰元素（箭头、阴影），以配合面板翻转到触发器上方的情况。
+- 不要假设面板在展开后就已完成定位 —— 位置是响应式异步写回的，若需读取绝对几何请放到 `requestAnimationFrame` 中测量。
+- 触发器包装元素会通过 `aria-haspopup`、`aria-expanded` 与 `aria-controls`（指向面板生成的 id）声明面板，插槽里的 `<button>` 触发器会自动获得展开语义。
 
-- `hover`（默认）—— 指针进入或获得焦点时展开，离开后延迟 `closeDelay` 关闭。
-- `click` —— 点击切换，不应用 `closeDelay`。
-- `manual` —— 组件永不自行展开，完全由 `v-model` 驱动。
-
-当面板需要跟随应用状态而非指针意图时（例如由快捷键唤起的下拉），使用 `manual`。
-
-## 受控与非受控
-
-不绑定 `v-model` 时组件自行维护开合状态。绑定后则由你接管 —— 组件仍会发出 `open` / `close` 事件，但除非交互被允许，否则不会自行改变该值。
-
-`disabled` 会阻断所有展开路径，包括通过触发器插槽的 `show()` 进行的程序化调用。
-
-## 尺寸控制
-
-面板默认由内容撑开。两个逃生舱：
-
-- `match-trigger-width` —— 将面板 `min-width` 设为实测的触发器宽度，适合选择器类菜单。
-- `width` —— 固定宽度（px 数值或任意 CSS 长度），优先级高于 `match-trigger-width`。
-
-## 关闭契约
-
-三条互相独立、可分别开关的关闭路径：
-
-| 属性 | 默认值 | 触发关闭的条件 |
-|---|---|---|
-| `closeOnClickOutside` | `true` | 点击落在触发器与面板之外 |
-| `closeOnEsc` | `true` | 按下 `Escape` |
-| `closeOnContentClick` | `false` | 面板内部发生任意点击 |
-
-`closeOnClickOutside` 仅对 `click` 与 `hover` 生效 —— `manual` 下关闭逻辑完全由宿主掌控。
-
-## API
+## API 参考
 
 ### TxFlatDropdown
 
@@ -111,16 +84,42 @@ code: |
 | `trigger` | `{ open, toggle, show, hide }` | 锚点元素。 |
 | `default` | `{ open, close, side }` | 面板内容，`side` 为翻转后的实际方向。 |
 
-## 最佳实践
+## 触发方式
 
-- 破坏性或会改变状态的菜单优先用 `trigger="click"` —— 悬停展开在触控板上很容易误触。
-- `hover` 模式下 `closeDelay` 要留足（默认 `600`）；太短会让指针斜向移入面板变得非常难受。
-- 当下拉位于自带层叠或裁剪上下文的容器内、且需要继承该上下文时，设 `teleport="false"`。注意就地渲染会重新暴露在祖先的 `overflow: hidden` 之下。
-- 用 `side` 插槽参数翻转你自己的装饰元素（箭头、阴影），以配合面板翻转到触发器上方的情况。
-- 不要假设面板在展开后就已完成定位 —— 位置是响应式异步写回的，若需读取绝对几何请放到 `requestAnimationFrame` 中测量。
-- 触发器包装元素会通过 `aria-haspopup`、`aria-expanded` 与 `aria-controls`（指向面板生成的 id）声明面板，插槽里的 `<button>` 触发器会自动获得展开语义。
+`trigger` 决定面板如何被唤起：
 
-## 源码
+- `hover`（默认）—— 指针进入或获得焦点时展开，离开后延迟 `closeDelay` 关闭。
+- `click` —— 点击切换，不应用 `closeDelay`。
+- `manual` —— 组件永不自行展开，完全由 `v-model` 驱动。
+
+当面板需要跟随应用状态而非指针意图时（例如由快捷键唤起的下拉），使用 `manual`。
+
+## 受控与非受控
+
+不绑定 `v-model` 时组件自行维护开合状态。绑定后则由你接管 —— 组件仍会发出 `open` / `close` 事件，但除非交互被允许，否则不会自行改变该值。
+
+`disabled` 会阻断所有展开路径，包括通过触发器插槽的 `show()` 进行的程序化调用。
+
+## 尺寸控制
+
+面板默认由内容撑开。两个逃生舱：
+
+- `match-trigger-width` —— 将面板 `min-width` 设为实测的触发器宽度，适合选择器类菜单。
+- `width` —— 固定宽度（px 数值或任意 CSS 长度），优先级高于 `match-trigger-width`。
+
+## 关闭契约
+
+三条互相独立、可分别开关的关闭路径：
+
+| 属性 | 默认值 | 触发关闭的条件 |
+|---|---|---|
+| `closeOnClickOutside` | `true` | 点击落在触发器与面板之外 |
+| `closeOnEsc` | `true` | 按下 `Escape` |
+| `closeOnContentClick` | `false` | 面板内部发生任意点击 |
+
+`closeOnClickOutside` 仅对 `click` 与 `hover` 生效 —— `manual` 下关闭逻辑完全由宿主掌控。
+
+## 技术实现
 
 - 组件：`packages/tuffex/packages/components/src/flat-dropdown/src/TxFlatDropdown.vue`
 - 类型：`packages/tuffex/packages/components/src/flat-dropdown/src/types.ts`

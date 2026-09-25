@@ -8,21 +8,18 @@ tags: [chat, composer, input, tray]
 syncStatus: reviewed
 verified: true
 ---
-# ChatComposer
 
 <script setup lang="ts">
 import { ref } from 'vue'
-
 const text = ref('')
 const sent = ref<string[]>([])
-
 function onSend(payload: { text: string }) {
   sent.value.unshift(payload.text)
   text.value = ''
 }
 </script>
 
-## Basic Usage
+## Usage
 
 ### ChatComposer
 :::TuffDemoWrapper{demo="ChatComposerChatComposerDemo" code-lang="vue"}
@@ -80,7 +77,19 @@ code: |
 ---
 :::
 
-## API
+### Best Practices
+
+- Keep `modelValue` controlled in the host and clear it only after the send handler accepts the payload.
+- Treat `send` as an intent event, not a delivery guarantee; failed API calls should keep enough host state to retry.
+- Use `submitting` to prevent duplicate sends while a request is in flight.
+- Prefer Meta/Ctrl+Enter for dense chat inputs where Enter should remain available for line breaks.
+- Use `attachments` for status chips only; upload progress, removal, and retry behavior should stay in the host or a custom `attachments` slot.
+- Keep tray content to one line, and keep the top and bottom trays the same height, so a swap does not resize the outer box.
+- Use a muted `TxModeChip`, or a button with the same ink-only hover, for tray actions. Do not add a plate.
+- Let context drive the tray's side ("Connect apps" becoming "Select a project"). Do not loop the swap as decoration.
+- Hosts that styled `.tx-chat-composer` as the card should retarget those rules to `.tx-chat-composer__card`.
+
+## API Reference
 
 ### Props
 
@@ -133,7 +142,7 @@ code: |
 |----------|---------|-------------|
 | `--tx-chat-composer-radius` | `18px` | Corner radius shared by the shell and the card |
 
-## Interaction Contract
+## Overview
 
 - `send` trims text before emitting the payload.
 - Empty text blocks sending unless `allowEmptySend=true` and attachments exist.
@@ -152,19 +161,7 @@ code: |
 - Under `prefers-reduced-motion: reduce`, or where the Web Animations API is missing, the swap lands on the final layout at once.
 - The attachment and send controls are native `<button>`s. The `+` changes only its ink on hover, instantly, with no plate; the send button keeps its solid fill and does not change on hover. The only transition on either is the press scale.
 
-## Best Practices
-
-- Keep `modelValue` controlled in the host and clear it only after the send handler accepts the payload.
-- Treat `send` as an intent event, not a delivery guarantee; failed API calls should keep enough host state to retry.
-- Use `submitting` to prevent duplicate sends while a request is in flight.
-- Prefer Meta/Ctrl+Enter for dense chat inputs where Enter should remain available for line breaks.
-- Use `attachments` for status chips only; upload progress, removal, and retry behavior should stay in the host or a custom `attachments` slot.
-- Keep tray content to one line, and keep the top and bottom trays the same height, so a swap does not resize the outer box.
-- Use a muted `TxModeChip`, or a button with the same ink-only hover, for tray actions. Do not add a plate.
-- Let context drive the tray's side ("Connect apps" becoming "Select a project"). Do not loop the swap as decoration.
-- Hosts that styled `.tx-chat-composer` as the card should retarget those rules to `.tx-chat-composer__card`.
-
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue` confirms:
   - controlled textarea updates, trimmed send payloads, the attachment-only guard and attachment-button gating;
@@ -183,7 +180,5 @@ code: |
   - `chat-composer-tray.test.ts` covers tray placement and labelling, the runtime props, textarea reuse, the slide and resize, interruption, focus handoff, reduced motion, no-WAAPI, and SSR;
   - `chat-composer-style.test.ts` pins the compiled style: no colour transitions, no hover plate, the out-of-flow leaving tray, no entrance styles for the incoming tray, reduced motion, ring plus one elevation step, an opaque card, and an inherited font.
 - Export: `packages/tuffex/packages/components/src/chat/index.ts` exports `ChatComposer`, `TxChatComposer`, and public composer types.
-
-## Source
 
 <TuffDocSourceLink />

@@ -8,9 +8,8 @@ tags: [flex, layout]
 syncStatus: reviewed
 verified: true
 ---
-# Flex 弹性布局
 
-## 基础用法
+## 用法
 
 :::TuffDemoWrapper{demo="FlexFlexDemo" code-lang="vue"}
 ---
@@ -25,8 +24,6 @@ code: |
   </template>
 ---
 :::
-
-## 组合示例
 
 ### 可换行工具栏
 
@@ -53,16 +50,15 @@ code: |
 </template>
 ```
 
-## 交互契约
+### 最佳实践
 
-- 根节点是 `div`，默认 `display: flex`。
-- `direction`、`wrap`、`align`、`justify` 会直接透传到 Flexbox CSS 变量。
-- 数字 `gap` 会转成 px；字符串会原样保留。
-- `inline=true` 会把 display 从 `flex` 切换为 `inline-flex`。
-- `align`、`justify`、`direction`、`wrap` 为空值时，会在计算阶段回退到组件默认值。
-- 根节点设置 `min-width: 0`，确保子元素可以在受限卡片内收缩。
+- 需要精确 Flexbox 语义时使用 `TxFlex`；常见横向/纵向节奏优先用 `TxStack`。
+- 工具栏和筛选行需要适配窄容器时使用 `wrap="wrap"`。
+- 间距交给 `gap`，避免在子组件上写 margin hack。
+- `TxFlex` 内部仍应放语义化子控件（`TxButton`、链接、表单控件等）；容器本身不添加角色或键盘行为。
+- 重复卡片的网格布局应使用 `TxGridLayout`，不要用多层 flex row 模拟。
 
-## API
+## API 参考
 
 ### Props
 
@@ -100,21 +96,20 @@ code: |
 | `--tx-flex-wrap` | `wrap` | `flex-wrap`。 |
 | `--tx-flex-display` | `inline` | `flex` 或 `inline-flex`。 |
 
-## 最佳实践
+## 概述
 
-- 需要精确 Flexbox 语义时使用 `TxFlex`；常见横向/纵向节奏优先用 `TxStack`。
-- 工具栏和筛选行需要适配窄容器时使用 `wrap="wrap"`。
-- 间距交给 `gap`，避免在子组件上写 margin hack。
-- `TxFlex` 内部仍应放语义化子控件（`TxButton`、链接、表单控件等）；容器本身不添加角色或键盘行为。
-- 重复卡片的网格布局应使用 `TxGridLayout`，不要用多层 flex row 模拟。
+- 根节点是 `div`，默认 `display: flex`。
+- `direction`、`wrap`、`align`、`justify` 会直接透传到 Flexbox CSS 变量。
+- 数字 `gap` 会转成 px；字符串会原样保留。
+- `inline=true` 会把 display 从 `flex` 切换为 `inline-flex`。
+- `align`、`justify`、`direction`、`wrap` 为空值时，会在计算阶段回退到组件默认值。
+- 根节点设置 `min-width: 0`，确保子元素可以在受限卡片内收缩。
 
-## 审阅说明
+## 技术实现
 
 - 已人工核对 `packages/tuffex/packages/components/src/flex/src/types.ts`、`TxFlex.vue` 与 `flex.test.ts`。
 - `TxFlex` 刻意保持无行为：除插槽子元素外，不添加 role、事件或焦点处理。
 - 数字 `gap` 会归一化为 px；字符串 gap 保持为调用方提供的 CSS。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/flex/src/TxFlex.vue`。
 - Types: `packages/tuffex/packages/components/src/flex/src/types.ts`。

@@ -8,9 +8,8 @@ tags: [rag, context, chunk, source, retrieval]
 syncStatus: reviewed
 verified: true
 ---
-# ContextCards
 
-## Basic Usage
+## Usage
 
 ### ContextCards
 :::TuffDemoWrapper{demo="ContextCardsContextCardsDemo" code-lang="vue" title="Chunks and their sources" description="Cards fade up in sequence; the source chips resolve in a beat later. Replayable."}
@@ -38,30 +37,15 @@ code: |
 ---
 :::
 
-## A Single Card: TxContextChunk
+### Best Practices
 
-`TxContextChunk` is exported separately for hosts that lay out their own list — a RAG debugging pane, an inline citation drawer. It renders the whole card; the parent only owns the header and the choreography:
+- Pass the corpus size as `total` and the actual hits as `chunks`, so "2 selected out of 32" is visible at a glance.
+- Format `chars` host-side, thousands separators included; the component does no number localisation.
+- Set `appear` to `false` for long lists: past a dozen cards, sequenced entrances read as sluggish rather than rhythmic.
+- Use `TxContextChunk` directly for a single card instead of wrapping one in `TxContextCards` and hiding the header.
+- Map `tone` to file format consistently across the app (red for PDF, green for CSV) rather than cycling it by card order.
 
-```vue
-<TxContextChunk :chunk="chunk" :appear="false" @open="openSource" />
-```
-
-`enterDelay` and `chipDelay` are absolute milliseconds supplied by the caller; `TxContextCards` simply converts `staggerStep` / `chipStaggerStep` into them. Standalone use usually sets `appear` to `false` and renders the settled state directly.
-
-The child's slots are `title` / `body` / `source`; forwarded from the parent they are `chunk-title` / `chunk-body` / `chunk-source`.
-
-## Entrance Choreography and Reduced Motion
-
-The timeline belongs to the **host**, not the component: `staggerStep` (between cards), `chipDelay` (when the first source chip starts) and `chipStaggerStep` (between chips) are all adjustable, defaulting to upstream's cadence (100 / 700 / 80 ms). The gap is deliberate — the chunk lands first, its provenance resolves a beat later.
-
-Two behaviours differ from upstream:
-
-- **Reduced motion zeroes the delays** rather than only squashing durations toward zero. Upstream relies on a global rule that compresses `animation-duration` while leaving `transition-delay` intact, so the source chip still sits blank for 700ms. Here the delay goes with the animation and the chip is visible immediately.
-- **Chunks that arrive after mount are not staggered.** Otherwise a chunk streamed in at position 6 would inherit its index's 500ms delay and sit blank for half a second. Only the batch that is on screen at mount reads as one arrival, so only it fades up in sequence.
-
-A CSS entrance only plays when the element is created, so replaying it means remounting (the demo bumps a `:key`).
-
-## API
+## API Reference
 
 ### TxContextCards Props
 
@@ -107,22 +91,37 @@ A CSS entrance only plays when the element is created, so replaying it means rem
 |------|------|------|
 | `open` | `ContextChunkOpenPayload` | The source row was activated. Opening the target is the host's job. |
 
-## Interaction Contract
+## A Single Card: TxContextChunk
+
+`TxContextChunk` is exported separately for hosts that lay out their own list — a RAG debugging pane, an inline citation drawer. It renders the whole card; the parent only owns the header and the choreography:
+
+```vue
+<TxContextChunk :chunk="chunk" :appear="false" @open="openSource" />
+```
+
+`enterDelay` and `chipDelay` are absolute milliseconds supplied by the caller; `TxContextCards` simply converts `staggerStep` / `chipStaggerStep` into them. Standalone use usually sets `appear` to `false` and renders the settled state directly.
+
+The child's slots are `title` / `body` / `source`; forwarded from the parent they are `chunk-title` / `chunk-body` / `chunk-source`.
+
+## Entrance Choreography and Reduced Motion
+
+The timeline belongs to the **host**, not the component: `staggerStep` (between cards), `chipDelay` (when the first source chip starts) and `chipStaggerStep` (between chips) are all adjustable, defaulting to upstream's cadence (100 / 700 / 80 ms). The gap is deliberate — the chunk lands first, its provenance resolves a beat later.
+
+Two behaviours differ from upstream:
+
+- **Reduced motion zeroes the delays** rather than only squashing durations toward zero. Upstream relies on a global rule that compresses `animation-duration` while leaving `transition-delay` intact, so the source chip still sits blank for 700ms. Here the delay goes with the animation and the chip is visible immediately.
+- **Chunks that arrive after mount are not staggered.** Otherwise a chunk streamed in at position 6 would inherit its index's 500ms delay and sit blank for half a second. Only the batch that is on screen at mount reads as one arrival, so only it fades up in sequence.
+
+A CSS entrance only plays when the element is created, so replaying it means remounting (the demo bumps a `:key`).
+
+## Overview
 
 - **Source links never navigate on their own.** With an `href` the row renders as an `<a>` and keeps the `href` (for hover previews and copy-link), but the click calls `preventDefault` and emits `open`, matching `TxSources`. An Electron renderer in particular must not follow it in place.
 - **Only activatable sources get hover feedback.** A source without an `href` renders as a static `<span>` with no hover fill — upstream paints every row, which makes non-clickable rows read as clickable.
 - `total` is unrelated to `chunks.length`; neither derives from the other.
 - The card's outer edge is a hairline ring shadow, not a `border`. The line between the header bar and the body is an internal divider, not a ring.
 
-## Best Practices
-
-- Pass the corpus size as `total` and the actual hits as `chunks`, so "2 selected out of 32" is visible at a glance.
-- Format `chars` host-side, thousands separators included; the component does no number localisation.
-- Set `appear` to `false` for long lists: past a dozen cards, sequenced entrances read as sluggish rather than rhythmic.
-- Use `TxContextChunk` directly for a single card instead of wrapping one in `TxContextCards` and hiding the header.
-- Map `tone` to file format consistently across the app (red for PDF, green for CSV) rather than cycling it by card order.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/context-cards/src/TxContextCards.vue`, `TxContextChunk.vue`.
 - Types: `packages/tuffex/packages/components/src/context-cards/src/types.ts`.
@@ -130,8 +129,6 @@ A CSS entrance only plays when the element is created, so replaying it means rem
 - Adapted from [Beautiful UI](https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **Independent types:** The chunk types are new to this directory. They neither reuse nor pollute `ai-elements`' `AiSourceItem` — a retrieved chunk carries body text and a character count, which a URL citation does not.
 - **Export naming:** The child exports only as `TxContextChunk`, with no unprefixed alias, so it cannot shadow the same-named `ContextChunk` data type at the package root.

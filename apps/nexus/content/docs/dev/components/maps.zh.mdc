@@ -8,9 +8,8 @@ tags: [chart, map, geo, d3-geo]
 syncStatus: reviewed
 verified: true
 ---
-# Maps 地图
 
-## 基础用法
+## 用法
 
 两个地图组件都吃一份 `FeatureCollection` GeoJSON（包不内置地理数据，调用方自带），默认投影是纬度钳制在 ±85.05° 的 Mercator，显示窗裁掉两极空白让陆地铺满容器。容器高度默认按投影窗口的宽高比自适应，传 `height` 可固定像素高。数据用 accessor 模式取值：key 或 `(row) => value` 都行。
 
@@ -52,24 +51,7 @@ code: |
 ---
 :::
 
-## 投影与缩放
-
-`projection` 接 d3-geo 投影实例（如 `geoNaturalEarth1()`），`null` 退化为裸经纬度（equirectangular）。实例会被原地 `fitExtent`，务必传稳定引用。`zoom`（默认 1.25）是自适应缩放的倍率；`roam` 开启滚轮缩放 + 拖拽平移，缩放范围被限制在 `[min(1, zoom), zoom × 8]`，气泡与描边在缩放下保持恒定像素尺寸。
-
-## 分级色阶
-
-分级填色是**连续**插值：值归一化后落在 `--tx-chart-map-scale-1..5` 相邻两档之间，用 CSS `color-mix(in oklab, …)` 混合——明暗主题切换时色阶自动翻转，JS 不做任何颜色解析。`colorRange` 可换整套色阶，`min`/`max` 可固定标尺范围。
-
-## 交互与动画
-
-地图沿用 ECharts 的 `emphasis` / `blur` 与 `stateAnimation`，默认值按 kumo 原样复刻：
-
-- 气泡基础不透明度 0.8；悬停的气泡放大到 1.2 倍、不透明度升到 1，切换走 300ms `cubicOut`。首帧入场时气泡从自身中心放大、从 0 淡入，时长 1000ms `cubicInOut`；数据超过 2000 条时跳过入场，直接落终帧。
-- 分级填色悬停时保留该地区自己的色阶颜色，其余地区按 `blur.itemStyle.opacity` 降到 0.45，同样 300ms `cubicOut`；无数据地区不参与高亮。
-- 与 ECharts 的地图一致，两个组件都**没有几何动画**（`animationDurationUpdate: 0`）：缩放平移只改 SVG `transform`，不补间路径与坐标。
-- `prefers-reduced-motion: reduce` 下补间直接落终帧：气泡以最终尺寸与不透明度出现，高亮瞬时切换。
-
-## API
+## API 参考
 
 ### 共同 Props（两个组件）
 
@@ -110,6 +92,23 @@ BubbleMap 事件：`bubble-hover(row \| undefined)`、`bubble-click(row)`；插�
 | `showLegend` | `boolean` | `false` | 渐变图例条。 |
 
 ChoroplethMap 事件：`region-hover(row \| undefined)`、`region-click(row)`（都只对有数据的地区触发）；插槽 `tooltip`（作用域 `{ row, regionName, value }`）。
+
+## 投影与缩放
+
+`projection` 接 d3-geo 投影实例（如 `geoNaturalEarth1()`），`null` 退化为裸经纬度（equirectangular）。实例会被原地 `fitExtent`，务必传稳定引用。`zoom`（默认 1.25）是自适应缩放的倍率；`roam` 开启滚轮缩放 + 拖拽平移，缩放范围被限制在 `[min(1, zoom), zoom × 8]`，气泡与描边在缩放下保持恒定像素尺寸。
+
+## 分级色阶
+
+分级填色是**连续**插值：值归一化后落在 `--tx-chart-map-scale-1..5` 相邻两档之间，用 CSS `color-mix(in oklab, …)` 混合——明暗主题切换时色阶自动翻转，JS 不做任何颜色解析。`colorRange` 可换整套色阶，`min`/`max` 可固定标尺范围。
+
+## 交互与动画
+
+地图沿用 ECharts 的 `emphasis` / `blur` 与 `stateAnimation`，默认值按 kumo 原样复刻：
+
+- 气泡基础不透明度 0.8；悬停的气泡放大到 1.2 倍、不透明度升到 1，切换走 300ms `cubicOut`。首帧入场时气泡从自身中心放大、从 0 淡入，时长 1000ms `cubicInOut`；数据超过 2000 条时跳过入场，直接落终帧。
+- 分级填色悬停时保留该地区自己的色阶颜色，其余地区按 `blur.itemStyle.opacity` 降到 0.45，同样 300ms `cubicOut`；无数据地区不参与高亮。
+- 与 ECharts 的地图一致，两个组件都**没有几何动画**（`animationDurationUpdate: 0`）：缩放平移只改 SVG `transform`，不补间路径与坐标。
+- `prefers-reduced-motion: reduce` 下补间直接落终帧：气泡以最终尺寸与不透明度出现，高亮瞬时切换。
 
 ## 与 kumo 的差异
 

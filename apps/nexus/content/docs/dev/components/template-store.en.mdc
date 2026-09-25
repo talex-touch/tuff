@@ -9,13 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Scenario
-
-The plugin store inside the Tuff client: browse, search, read the details, then install, update, disable or uninstall. Plugin ids, versions, channels, triggers, required and optional permissions and the reason for each come from the repo’s `plugins/*/manifest.json`; permission names and risk levels come from the permission registry, and the install, update and uninstall wording is the client’s own. Ratings, install counts, reviews, release notes and package sizes are sample data, and the three community plugins are fictional. Every plugin installs directly: there is no price, plan or checkout anywhere.
-
-It fits an in-app extension marketplace, a theme or template store, an integrations directory — anywhere people switch between Discover and Installed, and permissions have to be explained before anything is installed.
-
-## Template
+## Usage
 
 ### Plugin store
 
@@ -86,7 +80,28 @@ code: |
 ---
 :::
 
-## Anatomy
+## Overview
+
+The plugin store inside the Tuff client: browse, search, read the details, then install, update, disable or uninstall. Plugin ids, versions, channels, triggers, required and optional permissions and the reason for each come from the repo’s `plugins/*/manifest.json`; permission names and risk levels come from the permission registry, and the install, update and uninstall wording is the client’s own. Ratings, install counts, reviews, release notes and package sizes are sample data, and the three community plugins are fictional. Every plugin installs directly: there is no price, plan or checkout anywhere.
+
+It fits an in-app extension marketplace, a theme or template store, an integrations directory — anywhere people switch between Discover and Installed, and permissions have to be explained before anything is installed.
+
+- Installing, updating, granting and uninstalling only ever start from your click. The script does two things: the carousel turns every 5 seconds and stops after one lap, and after about 1.5 seconds it reports that 2 plugins have updates — that toast closes by itself after a few seconds (a pointer or focus on it holds it open), while the “plugins have new versions” banner stays. With reduced motion the carousel stays put, the update notice is simply there, and no toast appears.
+- The carousel art is dark on both the light and the dark docs page, so the whole carousel renders in the dark theme and its buttons look the same either way.
+- The real client downloads and verifies the signature before it asks for permissions; the template asks when you press Install, so the dialog never appears after you have scrolled away. The three choices use the client’s wording — Always allow, Allow this session, Reject install — and a community plugin adds “comes from an unofficial source. Proceed with installation?” at the top.
+- A download can be cancelled. The community plugin Unit Converter times out on its first download; Retry downloads again without asking for permissions a second time.
+- In the column, details replace the list, and Back or Esc returns to the same scroll position and to the card that opened them; expanded, details are a side panel that follows the selected plugin. They are not a TxDrawer: the drawer takes Tab and Esc on the whole document, so a screenshot lightbox or confirmation opened from it would have focus dragged back to the drawer, and one Esc would close both.
+- The carousel is a region with `aria-roledescription="carousel"`, and slides that are not showing are `inert`; announcements are off while it plays and polite once you step through it. With focus inside it, ← / → change slides — bound to the carousel only, never to the page.
+- Risk colours and icons always come with words; the read-only stars are hidden from screen readers, which hear a sentence such as “Rated 4.8, 1,240 reviews” instead.
+
+## Customization
+
+- With a real store, read plugins, channels, permissions and reasons straight from the plugin manifests and the store API, and swap the grouping for the store’s own `category` (the template assigns its groups by hand; most manifests say `utilities`).
+- The install table is keyed by plugin id. For real installs, replace the timers with the phases the client reports — queued, downloading, verifying, awaiting confirmation, installing — and every action slot follows along.
+- Put ratings and reviews through moderation: show a submission as Pending first, and count it in the average only once it is approved.
+- For suggestions with icons, swap TxSearchSelect for TxSearchInput with a hand-built list, at the cost of writing the combobox keyboard and screen-reader behaviour yourself.
+
+## Related components
 
 | Region | Components | Role |
 |---|---|---|
@@ -102,20 +117,3 @@ code: |
 | Installed | [TxCardItem](/docs/dev/components/card-item), [TxSwitch](/docs/dev/components/switch), [TxEmptyState](/docs/dev/components/empty-state) | One row per plugin: the action shows only for an update or work in progress, beside an enable switch and a menu; an empty state once everything is uninstalled |
 | Confirmations | [TxModal](/docs/dev/components/modal) | Permission request, update confirmation (new permissions listed on their own) and uninstall |
 | Empty results and feedback | [TxSearchEmpty](/docs/dev/components/search-empty), [TxToastPanel](/docs/dev/components/toast-panel) | Clear search when nothing matches; install, update and uninstall results stay inside the template, some with Open, Retry or Reinstall |
-
-## Interactions
-
-- Installing, updating, granting and uninstalling only ever start from your click. The script does two things: the carousel turns every 5 seconds and stops after one lap, and after about 1.5 seconds it reports that 2 plugins have updates — that toast closes by itself after a few seconds (a pointer or focus on it holds it open), while the “plugins have new versions” banner stays. With reduced motion the carousel stays put, the update notice is simply there, and no toast appears.
-- The carousel art is dark on both the light and the dark docs page, so the whole carousel renders in the dark theme and its buttons look the same either way.
-- The real client downloads and verifies the signature before it asks for permissions; the template asks when you press Install, so the dialog never appears after you have scrolled away. The three choices use the client’s wording — Always allow, Allow this session, Reject install — and a community plugin adds “comes from an unofficial source. Proceed with installation?” at the top.
-- A download can be cancelled. The community plugin Unit Converter times out on its first download; Retry downloads again without asking for permissions a second time.
-- In the column, details replace the list, and Back or Esc returns to the same scroll position and to the card that opened them; expanded, details are a side panel that follows the selected plugin. They are not a TxDrawer: the drawer takes Tab and Esc on the whole document, so a screenshot lightbox or confirmation opened from it would have focus dragged back to the drawer, and one Esc would close both.
-- The carousel is a region with `aria-roledescription="carousel"`, and slides that are not showing are `inert`; announcements are off while it plays and polite once you step through it. With focus inside it, ← / → change slides — bound to the carousel only, never to the page.
-- Risk colours and icons always come with words; the read-only stars are hidden from screen readers, which hear a sentence such as “Rated 4.8, 1,240 reviews” instead.
-
-## Adapting it
-
-- With a real store, read plugins, channels, permissions and reasons straight from the plugin manifests and the store API, and swap the grouping for the store’s own `category` (the template assigns its groups by hand; most manifests say `utilities`).
-- The install table is keyed by plugin id. For real installs, replace the timers with the phases the client reports — queued, downloading, verifying, awaiting confirmation, installing — and every action slot follows along.
-- Put ratings and reviews through moderation: show a submission as Pending first, and count it in the average only once it is approved.
-- For suggestions with icons, swap TxSearchSelect for TxSearchInput with a hand-built list, at the cost of writing the combobox keyboard and screen-reader behaviour yourself.

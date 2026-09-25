@@ -8,9 +8,8 @@ tags: [modal, dialog, overlay]
 syncStatus: reviewed
 verified: true
 ---
-# Modal
 
-## Basic Usage
+## Usage
 
 Open the dialog from a button, keep the body concise, and close it by updating the bound model.
 
@@ -39,7 +38,15 @@ code: |
 ---
 ::::
 
-## API
+### Best Practices
+
+- Keep modal work narrow: confirmation, one-step input, or a short decision. Use a drawer/page when content needs navigation, filtering, or long forms.
+- Prefer the default `title` header for accessible labeling. If you replace `header`, keep the title visible and avoid passing a stale `title` that no longer matches the custom header markup.
+- Put destructive or final actions in the `footer`; keep secondary actions visually quieter than the primary action.
+- Use responsive `width` values for docs and app surfaces because the content panel also has internal padding.
+- Do not store long-running async state only inside modal content. If closing cancels work, model that cancellation in the parent.
+
+## API Reference
 
 ### Props
 
@@ -64,7 +71,7 @@ code: |
 | `header` | - | Replaces the generated title area while keeping the built-in close button. |
 | `footer` | - | Footer action row. Hidden when omitted. |
 
-## Interaction Contract
+## Overview
 
 - The overlay is mounted under `body`, receives a fresh z-index from the shared z-index manager on open, and is removed with `v-if` when closed.
 - The overlay exposes `role="dialog"`, `aria-modal="true"`, and `tabindex="-1"`.
@@ -74,20 +81,10 @@ code: |
 - Backdrop click, Escape, and the close button all emit `update:modelValue(false)` followed by `close`.
 - `TModal` forwards props, attrs, `update:modelValue`, `close`, and `default/header/footer` slots to `TxModal`.
 
-## Best Practices
-
-- Keep modal work narrow: confirmation, one-step input, or a short decision. Use a drawer/page when content needs navigation, filtering, or long forms.
-- Prefer the default `title` header for accessible labeling. If you replace `header`, keep the title visible and avoid passing a stale `title` that no longer matches the custom header markup.
-- Put destructive or final actions in the `footer`; keep secondary actions visually quieter than the primary action.
-- Use responsive `width` values for docs and app surfaces because the content panel also has internal padding.
-- Do not store long-running async state only inside modal content. If closing cancels work, model that cancellation in the parent.
-
-## Review Notes
+## Technologies
 
 - **Accessibility note:** `aria-labelledby` is generated only from the default `title` heading. If you provide a custom `header`, keep `title` empty unless that slot also renders an element with the generated id; otherwise the dialog can point at a missing label.
 - **Verified coverage:** `modal.test.ts` checks dialog semantics, title linkage, inline width, body/footer slots, focus restore on close/unmount, backdrop/Escape/close-button dismissal, custom header without title linkage, and `TModal` title forwarding.
-
-## Source
 
 - Component sources: `packages/tuffex/packages/components/src/modal/src/TxModal.vue` and `TModal.vue`.
 - Export alias: `packages/tuffex/packages/components/src/modal/index.ts` exports installable `TxModal` and `TModal`; default export is `TxModal`.

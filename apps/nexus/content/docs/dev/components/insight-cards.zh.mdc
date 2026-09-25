@@ -8,9 +8,8 @@ tags: [ai, insight, pager, data]
 syncStatus: reviewed
 verified: true
 ---
-# InsightCards 洞察卡
 
-## 基础用法
+## 用法
 
 ### 完整案例
 
@@ -37,41 +36,14 @@ code: |
 ---
 :::
 
-## 壳与内容的边界
+### 最佳实践
 
-这个组件只负责壳：标题与页数、前后翻页按钮、结论段落、卡片插槽、追问 pill。**卡片内容一律由宿主给**——上游那三张卡分别是双序列折线、带指标切换的异常图和占比条，在 tuffex 里对应 `TxSparkChart` / `TxChartScrubber` / `TxAllocationBar`，通过默认插槽组合，而不是写死在壳里。
+- 一页只讲一件事：一句结论 + 一个证据卡 + 一个可执行的追问。
+- 结论段落里的实体提及、行内数字这类富文本走 `prose` 插槽，`page.prose` 只收纯文本。
+- 卡片内容自己控高（上游是 278px 下限），否则翻页时页面会随内容高度跳动。
+- 追问 pill 的文案写成用户会问的原话，而不是「了解更多」。
 
-`activeIndex` 不传时组件自己翻页，传了就完全听宿主的；越界的下标会被夹回有效范围而不是把内容清空。
-
-翻页是**硬切**，没有过渡。上游注释里写了「blurred crossfade」，但那段内联样式是常量、`duration-250` 也不是有效的 Tailwind 档位——它从未生效过。同理，注释提到的自动播放在上游源码里根本不存在（没有任何定时器），这里也不提供。需要过渡的话，把默认插槽的内容包进宿主自己的 `<Transition>` 即可。
-
-## InsightMetric 指标块
-
-`TxInsightMetric` 是这些卡片里的数字块：一行带色点的标签 + 一个带符号的大数 + 一行等宽小字。同目录导出，可单独使用。
-
-`value` 走默认格式化时，负号用 **U+2212（`−`）** 而不是 ASCII 连字符：整列数字都在 `tabular-nums` 下对齐，连字符更窄、位置也偏高。`tone` 缺省由数值符号推导（正=绿、负=红、零=中性），也可以显式覆盖；`detail` 原样输出，负号由宿主自己写成 `−`。
-
-:::TuffDemoWrapper{demo="InsightCardsInsightMetricDemo" code-lang="vue" title="指标块" description="正负两个方向的读数与副行。"}
----
-code: |
-  <template>
-    <TxInsightMetric
-      label="薄荷脆片"
-      color="var(--tx-bui-orange)"
-      :value="-4.41"
-      detail="−$2,377.66"
-    />
-    <TxInsightMetric
-      label="开心果"
-      color="var(--tx-bui-accent)"
-      :value="1.15"
-      detail="+$617.22"
-    />
-  </template>
----
-:::
-
-## API
+## API 参考
 
 ### InsightCards Props
 
@@ -120,7 +92,41 @@ code: |
 | `tone` | `'positive' \| 'negative' \| 'neutral'` | — | 覆盖由符号推导的色调。 |
 | `formatter` | `(value: number) => string` | — | 完全接管数字格式化。 |
 
-## 交互契约
+## 壳与内容的边界
+
+这个组件只负责壳：标题与页数、前后翻页按钮、结论段落、卡片插槽、追问 pill。**卡片内容一律由宿主给**——上游那三张卡分别是双序列折线、带指标切换的异常图和占比条，在 tuffex 里对应 `TxSparkChart` / `TxChartScrubber` / `TxAllocationBar`，通过默认插槽组合，而不是写死在壳里。
+
+`activeIndex` 不传时组件自己翻页，传了就完全听宿主的；越界的下标会被夹回有效范围而不是把内容清空。
+
+翻页是**硬切**，没有过渡。上游注释里写了「blurred crossfade」，但那段内联样式是常量、`duration-250` 也不是有效的 Tailwind 档位——它从未生效过。同理，注释提到的自动播放在上游源码里根本不存在（没有任何定时器），这里也不提供。需要过渡的话，把默认插槽的内容包进宿主自己的 `<Transition>` 即可。
+
+## InsightMetric 指标块
+
+`TxInsightMetric` 是这些卡片里的数字块：一行带色点的标签 + 一个带符号的大数 + 一行等宽小字。同目录导出，可单独使用。
+
+`value` 走默认格式化时，负号用 **U+2212（`−`）** 而不是 ASCII 连字符：整列数字都在 `tabular-nums` 下对齐，连字符更窄、位置也偏高。`tone` 缺省由数值符号推导（正=绿、负=红、零=中性），也可以显式覆盖；`detail` 原样输出，负号由宿主自己写成 `−`。
+
+:::TuffDemoWrapper{demo="InsightCardsInsightMetricDemo" code-lang="vue" title="指标块" description="正负两个方向的读数与副行。"}
+---
+code: |
+  <template>
+    <TxInsightMetric
+      label="薄荷脆片"
+      color="var(--tx-bui-orange)"
+      :value="-4.41"
+      detail="−$2,377.66"
+    />
+    <TxInsightMetric
+      label="开心果"
+      color="var(--tx-bui-accent)"
+      :value="1.15"
+      detail="+$617.22"
+    />
+  </template>
+---
+:::
+
+## 概述
 
 - 两个翻页按钮都有 `aria-label`；`loop` 关掉时端点按钮带 `disabled`，不是只做视觉变灰。
 - `pages` 为空时只渲染头部，两个按钮都禁用，不会渲染出空白卡片。
@@ -128,14 +134,7 @@ code: |
 - 内容切换靠 `page.key`：宿主在插槽里给卡片带上 `:key`，翻页时才会真正重建（图表需要重绘时尤其重要）。
 - 大数与页数都是 `tabular-nums`，翻页与刷新时数字宽度不跳。
 
-## 最佳实践
-
-- 一页只讲一件事：一句结论 + 一个证据卡 + 一个可执行的追问。
-- 结论段落里的实体提及、行内数字这类富文本走 `prose` 插槽，`page.prose` 只收纯文本。
-- 卡片内容自己控高（上游是 278px 下限），否则翻页时页面会随内容高度跳动。
-- 追问 pill 的文案写成用户会问的原话，而不是「了解更多」。
-
-## Source
+## 技术实现
 
 - 组件源码：`packages/tuffex/packages/components/src/insight-cards/src/TxInsightCards.vue`、`TxInsightMetric.vue`。
 - 类型：`packages/tuffex/packages/components/src/insight-cards/src/types.ts`。
@@ -143,8 +142,6 @@ code: |
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **图表区域没有上游视觉基准:** 上游截图的图表位置显示的是「No data to display」。卡片外框、指标块、追问 pill 的截图仍然有效，图表按规格实现，详见 `SparkChart` 的审阅说明。
 - **两个「文档里有、源码里没有」的功能:** 自动播放与翻页模糊淡入在上游都只存在于注释中（前者没有任何定时器，后者的内联样式是常量）。这里不把它们当作「还原」来实现。

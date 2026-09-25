@@ -133,7 +133,7 @@ describe('dialog components', () => {
       attachTo: document.body,
     })
 
-    const buttons = document.body.querySelectorAll<HTMLButtonElement>('.tx-bottom-dialog__btn')
+    const buttons = document.body.querySelectorAll<HTMLButtonElement>('.tx-bottom-dialog__row')
     buttons[0]?.click()
     await vi.advanceTimersByTimeAsync(200)
     expect(close).not.toHaveBeenCalled()
@@ -141,6 +141,53 @@ describe('dialog components', () => {
     buttons[1]?.click()
     await vi.advanceTimersByTimeAsync(350)
     expect(close).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('closes BottomDialog from the close control without firing any row action', async () => {
+    const close = vi.fn()
+    const onClick = vi.fn(() => false)
+    const wrapper = mount(TxBottomDialog, {
+      props: {
+        title: 'Confirm',
+        close,
+        btns: [{ content: 'Stay', onClick }],
+      },
+      attachTo: document.body,
+    })
+
+    const closeControl = document.body.querySelector<HTMLButtonElement>('.tx-bottom-dialog__close')
+    expect(closeControl?.tagName).toBe('BUTTON')
+    expect(closeControl?.getAttribute('type')).toBe('button')
+    expect(closeControl?.getAttribute('aria-label')).toBe('Close')
+
+    closeControl?.click()
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(onClick).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('marks only the destructive BottomDialog row with is-danger', () => {
+    const close = vi.fn()
+    const wrapper = mount(TxBottomDialog, {
+      props: {
+        title: 'Confirm',
+        close,
+        btns: [
+          { content: 'Info', type: 'info', onClick: () => true },
+          { content: 'Remove', type: 'error', onClick: () => true },
+        ],
+      },
+      attachTo: document.body,
+    })
+
+    const rows = document.body.querySelectorAll<HTMLButtonElement>('.tx-bottom-dialog__row')
+    expect(rows.length).toBe(2)
+    expect(rows[0]?.classList.contains('is-danger')).toBe(false)
+    expect(rows[1]?.classList.contains('is-danger')).toBe(true)
+
     wrapper.unmount()
   })
 

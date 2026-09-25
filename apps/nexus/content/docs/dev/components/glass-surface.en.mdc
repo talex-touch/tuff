@@ -8,9 +8,8 @@ tags: [glass, blur, refraction]
 syncStatus: reviewed
 verified: true
 ---
-# GlassSurface
 
-## Basic Usage
+## Usage
 
 ### GlassSurface
 :::TuffDemoWrapper{demo="GlassSurfaceGlassSurfaceDemo" code-lang="vue"}
@@ -47,45 +46,16 @@ code: |
 ---
 :::
 
-## Parameter Tuning (Slider)
+### Best Practices
 
-### GlassSurface Parameter Tuning
-:::TuffDemoWrapper{demo="GlassSurfaceGlassSurface2Demo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
+- Use this component only when the surrounding artwork benefits from visible refraction. For regular cards, prefer `TxBaseSurface` or `TxCard` so the UI keeps predictable contrast.
+- Keep `width`, `height`, and `borderRadius` explicit when the glass layer sits above scrollable or image-heavy content; the displacement map is regenerated from the measured container bounds.
+- Tune `blur`, `backgroundOpacity`, and `saturation` against the actual background. Heavy blur on low-contrast content can make text behind the panel unreadable.
+- Treat `distortionScale` and RGB offsets as art-direction controls. Large negative values or wide channel offsets should be reserved for hero / preview surfaces, not dense forms.
+- Account for the fallback paths in Safari, Firefox, SSR, tests, and other environments without `CSS.supports`; those paths preserve layout and readability but remove RGB refraction.
+- Keep important controls inside the default slot; the generated SVG is decorative, non-interactive, and sits behind `.tx-glass-surface__content`.
 
-  // Bind each optical prop to a TxSlider; only a few are shown here.
-  // The full control panel (14 sliders + xChannel / yChannel / mixBlendMode selects) lives in the demo source.
-  const blur = ref(10)
-  const displace = ref(0.6)
-  const distortionScale = ref(-180)
-  </script>
-
-  <template>
-    <div style="display: flex; flex-direction: column; gap: 16px;">
-      <TxGlassSurface
-        :width="360"
-        :height="160"
-        :blur="blur"
-        :displace="displace"
-        :distortion-scale="distortionScale"
-      >
-        <div style="padding: 18px 20px; font-weight: 600; color: rgba(0, 0, 0, 0.68);">
-          GlassSurface
-        </div>
-      </TxGlassSurface>
-
-      <TxSlider v-model="blur" :min="0" :max="24" :step="1" show-value />
-      <TxSlider v-model="displace" :min="0" :max="6" :step="0.1" show-value />
-      <TxSlider v-model="distortionScale" :min="-600" :max="0" :step="10" show-value />
-    </div>
-  </template>
----
-:::
-
-## API
+## API Reference
 
 ### Props
 
@@ -173,6 +143,44 @@ rows:
 |------|-------|-------------|
 | `default` | - | Panel content rendered above the generated SVG filter layer and centered by `.tx-glass-surface__content`. |
 
+## Parameter Tuning (Slider)
+
+### GlassSurface Parameter Tuning
+:::TuffDemoWrapper{demo="GlassSurfaceGlassSurface2Demo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  // Bind each optical prop to a TxSlider; only a few are shown here.
+  // The full control panel (14 sliders + xChannel / yChannel / mixBlendMode selects) lives in the demo source.
+  const blur = ref(10)
+  const displace = ref(0.6)
+  const distortionScale = ref(-180)
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      <TxGlassSurface
+        :width="360"
+        :height="160"
+        :blur="blur"
+        :displace="displace"
+        :distortion-scale="distortionScale"
+      >
+        <div style="padding: 18px 20px; font-weight: 600; color: rgba(0, 0, 0, 0.68);">
+          GlassSurface
+        </div>
+      </TxGlassSurface>
+
+      <TxSlider v-model="blur" :min="0" :max="24" :step="1" show-value />
+      <TxSlider v-model="displace" :min="0" :max="6" :step="0.1" show-value />
+      <TxSlider v-model="distortionScale" :min="-600" :max="0" :step="10" show-value />
+    </div>
+  </template>
+---
+:::
+
 ## Fallback degradation
 
 `TxGlassSurface` selects the rendering path in this order:
@@ -183,23 +191,12 @@ rows:
 
 Safari and Firefox currently skip the SVG filter refraction path and enter the latter fallback paths first.
 
-## Best Practices
-
-- Use this component only when the surrounding artwork benefits from visible refraction. For regular cards, prefer `TxBaseSurface` or `TxCard` so the UI keeps predictable contrast.
-- Keep `width`, `height`, and `borderRadius` explicit when the glass layer sits above scrollable or image-heavy content; the displacement map is regenerated from the measured container bounds.
-- Tune `blur`, `backgroundOpacity`, and `saturation` against the actual background. Heavy blur on low-contrast content can make text behind the panel unreadable.
-- Treat `distortionScale` and RGB offsets as art-direction controls. Large negative values or wide channel offsets should be reserved for hero / preview surfaces, not dense forms.
-- Account for the fallback paths in Safari, Firefox, SSR, tests, and other environments without `CSS.supports`; those paths preserve layout and readability but remove RGB refraction.
-- Keep important controls inside the default slot; the generated SVG is decorative, non-interactive, and sits behind `.tx-glass-surface__content`.
-
-## Review Notes
+## Technologies
 
 - **Rendering contract:** numeric `width` / `height` become px strings, string dimensions pass through, and measured bounds feed the generated displacement map.
 - **Fallback contract:** SVG displacement is the high-fidelity path; unsupported browsers fall back to native `backdrop-filter`, then to a solid translucent surface that preserves layout and readability but drops RGB refraction.
 - **Interaction contract:** the generated SVG/filter layers are decorative. Interactive controls belong in the default slot above `.tx-glass-surface__content`.
 - **Verified coverage:** `glass-surface.test.ts` covers dimension normalization, slot rendering, solid fallback styling, and RGB displacement channel forwarding.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/glass-surface/src/TxGlassSurface.vue`.
 - Types: `packages/tuffex/packages/components/src/glass-surface/index.ts` exports `GlassSurfaceProps` and `TxGlassSurfaceInstance`.

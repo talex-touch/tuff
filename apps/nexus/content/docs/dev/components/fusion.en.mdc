@@ -8,9 +8,8 @@ tags: [fusion, gooey, motion]
 syncStatus: reviewed
 verified: true
 ---
-# Fusion
 
-## Basic Usage
+## Usage
 
 ### Fusion
 :::TuffDemoWrapper{demo="FusionFusionDemo" code-lang="vue"}
@@ -35,6 +34,50 @@ code: |
   </template>
 ---
 :::
+
+### Best Practices
+
+- Use `TxFusion` for decorative motion moments, paired chips, compact action affordances, and status accents; avoid using it as the only way to expose critical state.
+- Prefer `trigger="manual"` when a parent state machine, form, route state, or analytics flow needs deterministic control.
+- Keep the two slotted shapes similar enough in scale for the SVG filter to read as a merge instead of a collision.
+- Tune `gap`, `blur`, `alpha`, and `alphaOffset` together; large gaps usually need higher blur / alpha and a calmer duration.
+- Avoid fast motion around dense text or form controls. Respect reduced-motion preferences by driving `disabled` or a manual inactive state from the host.
+- If slot content is interactive, ensure the root trigger mode does not conflict with child button or link behavior.
+
+## API Reference
+
+### TxFusion Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` | `boolean \| undefined` | `undefined` | Controlled active state. When omitted, the component stores its own active state. |
+| `disabled` | `boolean` | `false` | Disables pointer-triggered state changes and applies the disabled visual state. |
+| `trigger` | `'hover' \| 'click' \| 'manual'` | `'hover'` | Interaction mode. `manual` ignores pointer events and expects external `v-model` control. |
+| `direction` | `'x' \| 'y'` | `'x'` | Axis used to separate the two blobs before they fuse. |
+| `gap` | `number` | `40` | Distance in px between the two blobs while inactive. |
+| `duration` | `number` | `260` | Transition duration in ms; negative values are clamped to `0ms`. |
+| `easing` | `string` | `'cubic-bezier(0.2, 0.8, 0.2, 1)'` | CSS easing used by the blob transform transition. |
+| `blur` | `number` | `19` | SVG `feGaussianBlur.stdDeviation` used by the gooey filter. |
+| `alpha` | `number` | `29` | Alpha multiplier in the SVG color matrix; larger values make the blobs feel stickier. |
+| `alphaOffset` | `number` | `-10` | Alpha offset in the SVG color matrix. |
+
+### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `change` | `(v: boolean)` | Emitted whenever a non-disabled trigger requests a new active state. |
+| `update:modelValue` | `(v: boolean)` | Emitted for `v-model` updates; controlled consumers must write the value back. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `a` | - | First blob layer. It starts at the negative side of the configured `direction` while inactive. |
+| `b` | - | Second blob layer. It starts at the positive side of the configured `direction` while inactive. |
+
+### Exposed Methods
+
+No public instance methods are exposed.
 
 ## Real-world Scenarios
 
@@ -108,42 +151,7 @@ code: |
 ---
 :::
 
-## API
-
-### TxFusion Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `modelValue` | `boolean \| undefined` | `undefined` | Controlled active state. When omitted, the component stores its own active state. |
-| `disabled` | `boolean` | `false` | Disables pointer-triggered state changes and applies the disabled visual state. |
-| `trigger` | `'hover' \| 'click' \| 'manual'` | `'hover'` | Interaction mode. `manual` ignores pointer events and expects external `v-model` control. |
-| `direction` | `'x' \| 'y'` | `'x'` | Axis used to separate the two blobs before they fuse. |
-| `gap` | `number` | `40` | Distance in px between the two blobs while inactive. |
-| `duration` | `number` | `260` | Transition duration in ms; negative values are clamped to `0ms`. |
-| `easing` | `string` | `'cubic-bezier(0.2, 0.8, 0.2, 1)'` | CSS easing used by the blob transform transition. |
-| `blur` | `number` | `19` | SVG `feGaussianBlur.stdDeviation` used by the gooey filter. |
-| `alpha` | `number` | `29` | Alpha multiplier in the SVG color matrix; larger values make the blobs feel stickier. |
-| `alphaOffset` | `number` | `-10` | Alpha offset in the SVG color matrix. |
-
-### Events
-
-| Event | Params | Description |
-|------|------|------|
-| `change` | `(v: boolean)` | Emitted whenever a non-disabled trigger requests a new active state. |
-| `update:modelValue` | `(v: boolean)` | Emitted for `v-model` updates; controlled consumers must write the value back. |
-
-### Slots
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `a` | - | First blob layer. It starts at the negative side of the configured `direction` while inactive. |
-| `b` | - | Second blob layer. It starts at the positive side of the configured `direction` while inactive. |
-
-### Exposed Methods
-
-No public instance methods are exposed.
-
-## Interaction Contract
+## Overview
 
 - `modelValue` makes the component controlled when it is a boolean. When omitted, `TxFusion` stores internal active state.
 - `trigger="hover"` sets active on mouse enter and inactive on mouse leave.
@@ -154,23 +162,12 @@ No public instance methods are exposed.
 - Non-finite `alpha` and `alphaOffset` fall back to safe color-matrix values before rendering the SVG filter.
 - Slots render inside a filtered SVG gooey layer; slotted controls remain responsible for their own labels, focus states, and keyboard semantics.
 
-## Best Practices
-
-- Use `TxFusion` for decorative motion moments, paired chips, compact action affordances, and status accents; avoid using it as the only way to expose critical state.
-- Prefer `trigger="manual"` when a parent state machine, form, route state, or analytics flow needs deterministic control.
-- Keep the two slotted shapes similar enough in scale for the SVG filter to read as a merge instead of a collision.
-- Tune `gap`, `blur`, `alpha`, and `alphaOffset` together; large gaps usually need higher blur / alpha and a calmer duration.
-- Avoid fast motion around dense text or form controls. Respect reduced-motion preferences by driving `disabled` or a manual inactive state from the host.
-- If slot content is interactive, ensure the root trigger mode does not conflict with child button or link behavior.
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/fusion/src/types.ts`, `TxFusion.vue`, and `fusion.test.ts`.
 - The component emits from the computed setter even in uncontrolled mode, so docs should describe both `change` and `update:modelValue` as state requests.
 - `manual` is event-free by design; examples that use an external toggle should prefer it when hover / click should not also mutate state.
 - The root is a `div` with click / hover listeners, so semantic interactivity belongs in the slotted controls or surrounding UI, not the Fusion root itself.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/fusion/src/TxFusion.vue`.
 - Types: `packages/tuffex/packages/components/src/fusion/src/types.ts`.

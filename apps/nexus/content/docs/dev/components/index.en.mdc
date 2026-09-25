@@ -9,7 +9,9 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Concepts Overview
+## Installation
+
+Three import shapes — per component, per suite barrel, or the root entry — plus the stylesheet each one needs. Start at [Installation](./installation.en.mdc).
 
 ## Tuffex Components
 
@@ -17,10 +19,6 @@ Tuffex (`@talex-touch/tuffex`) is the Vue 3 component family powering the Talex 
 
 - Live specimens: every suite page opens with a preview grid — [Basics](./base-suite.en.mdc), [Pro](./pro-suite.en.mdc), [AI](./ai-suite.en.mdc), [Data](./data-suite.en.mdc), [Flow](./flow-suite.en.mdc) — where each cell is a real, interactive component; click its name to open the docs.
 - Per-suite imports: the `@talex-touch/tuffex/base`, `/pro` and `/ai` entries load on demand; the chart family ships behind the `@talex-touch/tuffex/charts` subpath of the same package.
-
-## Installation
-
-Three import shapes — per component, per suite barrel, or the root entry — plus the stylesheet each one needs. Start at [Installation](./installation.en.mdc).
 
 ## Design Foundations
 
@@ -33,10 +31,6 @@ Where Foundations lists the tokens, [Theming](./theming.en.mdc) is how you overr
 ## Icons
 
 `TxIcon` decides what an icon string is rather than making the caller declare it — an Iconify class, one of seven builtin glyphs, an emoji, or an explicit URL / file source. [Icons](./icons.en.mdc) covers that resolution order and how an app teaches the component to load icons from its own storage.
-
-## Accessibility
-
-Focus rings on `:focus-visible`, `prefers-reduced-motion` handling, the high-contrast palette, and the ARIA conventions the components share — along with a plain account of where coverage stops. See [Accessibility](./accessibility.en.mdc).
 
 ## Utils
 
@@ -358,7 +352,7 @@ Workflow orchestration: nodes, branches and connectors on a dotted canvas. It im
 
 - [Flowchart](./flowchart.en.mdc)
 
-## Review Notes
+## Technologies
 
 - Hub scope: this page is the Concepts suite overview and the component documentation index; per-component API / props / best-practice details live in the linked component pages.
 - Source registry: `packages/tuffex/packages/components/src/components.ts` defines the exported component slug set used by docs coverage.
@@ -366,3 +360,6 @@ Workflow orchestration: nodes, branches and connectors on a dotted canvas. It im
 - Preview grid: `apps/nexus/app/components/docs/DocsComponentsGallery.vue` renders the live "Preview" grid on each suite page; it takes a required `suite` prop and renders that band only.
 - **Verified coverage:** Coverage: `apps/nexus/test/docs/tuffex-component-docs-coverage.test.ts` verifies exported components have English and Chinese docs, localized hubs link documented components, and all demo references resolve to registered Vue files.
 
+## Accessibility
+
+Focus rings on `:focus-visible`, `prefers-reduced-motion` handling, the high-contrast palette, and the ARIA conventions the components share — along with a plain account of where coverage stops. See [Accessibility](./accessibility.en.mdc).

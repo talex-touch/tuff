@@ -8,9 +8,8 @@ tags: [text, svg, animation]
 syncStatus: reviewed
 verified: true
 ---
-# KeyframeStrokeText
 
-## Basic Usage
+## Usage
 
 Use short text and tune stroke/fill colors through props. Numeric `fontSize` values become pixels.
 
@@ -35,28 +34,15 @@ code: |
 ---
 ::::
 
-## Multilingual Text
+### Best Practices
 
-The component measures the rendered SVG text, so CJK copy and mixed-language labels can use the same API.
+- Use it for short phrases. Long sentences become hard to read and make SVG measurement/animation visually heavy.
+- Keep the surrounding layout width predictable. The SVG height follows `fontSize`, while the viewBox width follows measured text length.
+- Prefer semantic page headings outside the component when the animated text is decorative; use `text` for the visual label itself.
+- Avoid re-rendering the component on every keystroke in large lists. Each typography/text change schedules a measurement pass.
+- Test custom web fonts in the target surface; font loading can change measured width after the first paint.
 
-::::TuffDemoWrapper{demo="KeyframeStrokeTextChineseDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxKeyframeStrokeText
-      text="关键帧描边动画"
-      stroke-color="#16a34a"
-      fill-color="#14532d"
-      :duration-ms="2600"
-      :stroke-width="1.6"
-      :font-size="40"
-      :font-weight="700"
-    />
-  </template>
----
-::::
-
-## API
+## API Reference
 
 ### Props
 
@@ -79,7 +65,28 @@ No events are emitted.
 
 No slots are exposed. Text must come from the `text` prop so measurement and accessibility stay deterministic.
 
-## Interaction Contract
+## Multilingual Text
+
+The component measures the rendered SVG text, so CJK copy and mixed-language labels can use the same API.
+
+::::TuffDemoWrapper{demo="KeyframeStrokeTextChineseDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxKeyframeStrokeText
+      text="关键帧描边动画"
+      stroke-color="#16a34a"
+      fill-color="#14532d"
+      :duration-ms="2600"
+      :stroke-width="1.6"
+      :font-size="40"
+      :font-weight="700"
+    />
+  </template>
+---
+::::
+
+## Overview
 
 - The root is an SVG with `role="img"`.
 - Non-empty `text` is mirrored to `aria-label`; empty `text` omits `aria-label` and renders a non-breaking-space fallback to keep measurement stable.
@@ -89,21 +96,11 @@ No slots are exposed. Text must come from the `text` prop so measurement and acc
 - `strokeColor`, `fillColor`, `durationMs`, `strokeWidth`, measured stroke length, font size, font weight, and font family are applied through CSS variables.
 - The component respects `prefers-reduced-motion: reduce` by disabling the animations and showing the final state.
 
-## Best Practices
-
-- Use it for short phrases. Long sentences become hard to read and make SVG measurement/animation visually heavy.
-- Keep the surrounding layout width predictable. The SVG height follows `fontSize`, while the viewBox width follows measured text length.
-- Prefer semantic page headings outside the component when the animated text is decorative; use `text` for the visual label itself.
-- Avoid re-rendering the component on every keystroke in large lists. Each typography/text change schedules a measurement pass.
-- Test custom web fonts in the target surface; font loading can change measured width after the first paint.
-
-## Review Notes
+## Technologies
 
 - **Accessibility note:** The source always renders an SVG with `role="img"`; non-empty `text` becomes the accessible name, but there is no prop for `aria-hidden`. Keep semantic headings or labels outside the component when the animation is decorative.
 - **Measurement:** the measuring layer used to take the same offset as the painted layers, so each pass after the first read back its own offset and cancelled it. Once `document.fonts.ready` re-measured, the glyphs sat at x=0, y≈0 — above the viewBox and against its left edge — on every docs demo as well as the gallery. The unit test mocks `getBBox()` with a constant, which is why it never showed.
 - **Verified coverage:** `keyframe-stroke-text.test.ts` checks the accessible SVG/text layers, CSS variable mapping, empty-text fallback, metric updates after prop changes, and install registration.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/keyframe-stroke-text/src/TxKeyframeStrokeText.vue`.
 - Types: `packages/tuffex/packages/components/src/keyframe-stroke-text/src/types.ts` exports `KeyframeStrokeTextProps`.

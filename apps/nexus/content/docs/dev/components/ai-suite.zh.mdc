@@ -9,16 +9,16 @@ syncStatus: reviewed
 verified: true
 ---
 
-## 套件分组
-
-AI 套件在组件侧边栏分为四组：**对话**（Chat、ChatComposer、PromptBar、AttachmentTray、ModeChip、MessageActions、SuggestionChips、TypingIndicator、ConversationStream）、**智能体**（Agents、AgentTrace、AgentScreen、TaskRows、ToolCallCard、ToolChips、ToolConfirmation、ApprovalCard、WorkingIndicator）、**推理与生成**（AiElements、ChainOfThought、ReasoningDisclosure、ThinkingOrb、StreamMarkdown、CodeStream、InlineCitation、Sources）、**上下文与洞察**（ContextCards、ContextIndicator、InsightCards、RecommendationCard、FineTuneCard）。全部组件可经 `@talex-touch/tuffex/ai` 分类入口按套件引入。
-
-## 组件预览
+## 用法
 
 每个格子都是可交互的真实组件，点击左上角名称进入对应组件文档。
 
 ::DocsComponentsGallery{suite="ai"}
 ::
+
+## 套件分组
+
+AI 套件在组件侧边栏分为四组：**对话**（Chat、ChatComposer、PromptBar、AttachmentTray、ModeChip、MessageActions、SuggestionChips、TypingIndicator、ConversationStream）、**智能体**（Agents、AgentTrace、AgentScreen、TaskRows、ToolCallCard、ToolChips、ToolConfirmation、ApprovalCard、WorkingIndicator）、**推理与生成**（AiElements、ChainOfThought、ReasoningDisclosure、ThinkingOrb、StreamMarkdown、CodeStream、InlineCitation、Sources）、**上下文与洞察**（ContextCards、ContextIndicator、InsightCards、RecommendationCard、FineTuneCard）。全部组件可经 `@talex-touch/tuffex/ai` 分类入口按套件引入。
 
 ## 分组一览
 
@@ -330,7 +330,7 @@ code: |
 
 共享原语：[TxIconChip](/docs/dev/components/icon-chip)（10/14/17/19 共用图标角标）。
 
-## 审阅说明
+## 技术实现
 
 - 上游为自驱动 demo（内容硬编码 + 定时器时间轴）；移植后组件全部受控，时间轴仅存在于本页各 demo 内。
 - reduced-motion 逐组件显式实现：只砍补间不砍状态机，延迟一并归零（相对上游全局 `*` 规则的有意偏离）。

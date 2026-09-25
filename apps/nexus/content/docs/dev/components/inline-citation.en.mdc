@@ -8,9 +8,8 @@ tags: [ai, citation, source, inline]
 syncStatus: reviewed
 verified: true
 ---
-# InlineCitation
 
-## Basic Usage
+## Usage
 
 ### Inline Citation
 
@@ -58,7 +57,15 @@ code: |
 ---
 :::
 
-## API
+### Best Practices
+
+- Listen for `open`, or clicking a citation does nothing at all.
+- Keep it to two or three citations per paragraph. Chips are visually heavier than words, and a dense run reads as a list rather than a sentence.
+- Leaving `label` empty is usually better: the hostname fallback tells the reader where a claim came from, and a custom label tends to hide that.
+- Use stable `source.id` values in streaming surfaces. The failed-icon record is per instance, so stable data is what stops a bad favicon being retried as nodes are reused.
+- When you want the source list at the end of an answer rather than a reference inside it, reach for `TxSources`. The two are complementary and often appear together.
+
+## API Reference
 
 ### Props
 
@@ -83,7 +90,7 @@ When `url` cannot be parsed by `URL`, the fallback chain ends at the raw `url` s
 | `default` | `{ source, label }` | Replaces the chip text, rich content included. |
 | `icon` | `{ source }` | Replaces the leading favicon — a hand-drawn category mark, for instance. |
 
-## Interaction Contract
+## Overview
 
 - **The link never navigates on its own.** It renders a real `<a href>`, but a click calls `preventDefault()` and emits `open`. This is mandatory inside an Electron renderer — walking the whole app away is the last thing a citation in body text should do.
 - The `href` stays in the DOM, so the browser's own "open in new tab" and "copy link address" menus keep working.
@@ -92,15 +99,7 @@ When `url` cannot be parsed by `URL`, the fallback chain ends at the raw `url` s
 - The chip sits in the text flow with `vertical-align: middle` plus a 1px lift. Line height belongs to the surrounding paragraph — the component sets none of its own.
 - The entrance plays once, on mount. `appear` is a render-time decision; flipping it later does not replay anything.
 
-## Best Practices
-
-- Listen for `open`, or clicking a citation does nothing at all.
-- Keep it to two or three citations per paragraph. Chips are visually heavier than words, and a dense run reads as a list rather than a sentence.
-- Leaving `label` empty is usually better: the hostname fallback tells the reader where a claim came from, and a custom label tends to hide that.
-- Use stable `source.id` values in streaming surfaces. The failed-icon record is per instance, so stable data is what stops a bad favicon being retried as nodes are reused.
-- When you want the source list at the end of an answer rather than a reference inside it, reach for `TxSources`. The two are complementary and often appear together.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/inline-citation/src/TxInlineCitation.vue`.
 - Types: `packages/tuffex/packages/components/src/inline-citation/src/types.ts`.
@@ -108,8 +107,6 @@ When `url` cannot be parsed by `URL`, the fallback chain ends at the raw `url` s
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **Division of labour with `TxSources`:** `TxSources` is the collapsible source list at the end of an answer; this is a single reference inside the prose. They share the `AiSourceItem` type, so one array can feed both.
 - **Known deviation:** upstream's inline chip always reads element 0 of the source array regardless of where it sits — demo shorthand. Here `source` is required, so every chip points at its own reference.

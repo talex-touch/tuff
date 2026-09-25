@@ -8,9 +8,8 @@ tags: [floating, parallax, motion]
 syncStatus: reviewed
 verified: true
 ---
-# Floating
 
-## Basic Usage
+## Usage
 
 ::::TuffDemoWrapper{demo="FloatingFloatingDemo" code-lang="vue"}
 ---
@@ -25,8 +24,6 @@ code: |
   </template>
 ---
 ::::
-
-## Composition Examples
 
 ### Disable Motion
 
@@ -55,24 +52,16 @@ When `disabled` becomes true, event listeners and the animation frame stop and r
 
 Negative `depth` moves in the opposite direction from positive `depth`.
 
-## Interaction Contract
+### Best Practices
 
-- `TxFloating` provides a registration context consumed by child `TxFloatingElement` components.
-- The container renders a relative `div` with classes `tx-floating` and optional `className`.
-- `TxFloatingElement` renders an absolute `div` with classes `tx-floating-element` and optional `className`.
-- On mount, `TxFloating` starts passive `mousemove` and `touchmove` window listeners unless disabled.
-- Pointer coordinates are measured relative to the floating container's center.
-- Each animation frame moves registered elements toward `pointerPosition * (depth * sensitivity / 20)` using `easingFactor`.
-- `disabled=true` stops listeners, cancels the current RAF, and resets transforms to `translate3d(0px, 0px, 0)`.
-- `disabled=false` restarts listeners and RAF.
-- `TxFloatingElement` registers on mount, re-registers when `depth` changes, and unregisters on unmount.
-- If an element is used outside `TxFloating`, it renders but does not animate.
-- All parallax motion stops when the user requests `prefers-reduced-motion: reduce`.
-- An `IntersectionObserver` parks the RAF loop while the container is off-screen and resumes it on re-entry.
-- The container listens for window `scroll` and `resize` in the capture phase so the origin is re-measured after page scroll or viewport changes.
-- The implementation guards browser APIs with `hasWindow()` for SSR safety.
+- Use it for decorative parallax, guide cards, or background accents. Do not make critical layout depend on pointer movement.
+- Respect reduced-motion settings by binding them to `disabled`.
+- Keep layer counts small; every registered layer updates on every animation frame.
+- Use low `depth` values for subtle motion. Large values quickly feel detached from the interface.
+- Provide real static layout positions through CSS classes; the component only adds transform offsets.
+- Avoid interactive controls inside fast-moving layers unless the movement is very subtle.
 
-## API
+## API Reference
 
 ### TxFloating Props
 
@@ -105,22 +94,28 @@ No public events are emitted.
 
 No public instance methods are exposed.
 
-## Best Practices
+## Overview
 
-- Use it for decorative parallax, guide cards, or background accents. Do not make critical layout depend on pointer movement.
-- Respect reduced-motion settings by binding them to `disabled`.
-- Keep layer counts small; every registered layer updates on every animation frame.
-- Use low `depth` values for subtle motion. Large values quickly feel detached from the interface.
-- Provide real static layout positions through CSS classes; the component only adds transform offsets.
-- Avoid interactive controls inside fast-moving layers unless the movement is very subtle.
+- `TxFloating` provides a registration context consumed by child `TxFloatingElement` components.
+- The container renders a relative `div` with classes `tx-floating` and optional `className`.
+- `TxFloatingElement` renders an absolute `div` with classes `tx-floating-element` and optional `className`.
+- On mount, `TxFloating` starts passive `mousemove` and `touchmove` window listeners unless disabled.
+- Pointer coordinates are measured relative to the floating container's center.
+- Each animation frame moves registered elements toward `pointerPosition * (depth * sensitivity / 20)` using `easingFactor`.
+- `disabled=true` stops listeners, cancels the current RAF, and resets transforms to `translate3d(0px, 0px, 0)`.
+- `disabled=false` restarts listeners and RAF.
+- `TxFloatingElement` registers on mount, re-registers when `depth` changes, and unregisters on unmount.
+- If an element is used outside `TxFloating`, it renders but does not animate.
+- All parallax motion stops when the user requests `prefers-reduced-motion: reduce`.
+- An `IntersectionObserver` parks the RAF loop while the container is off-screen and resumes it on re-entry.
+- The container listens for window `scroll` and `resize` in the capture phase so the origin is re-measured after page scroll or viewport changes.
+- The implementation guards browser APIs with `hasWindow()` for SSR safety.
 
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/floating/src/types.ts`, `context.ts`, `TxFloating.vue`, `TxFloatingElement.vue`, and `floating.test.ts`.
 - Browser listeners and animation frames are guarded for SSR; movement only exists after client mount.
 - `disabled` is not just a visual flag: it stops listeners, cancels RAF work, and resets registered transforms.
-
-## Source
 
 - Component sources: `packages/tuffex/packages/components/src/floating/src/TxFloating.vue`, `TxFloatingElement.vue`, and `context.ts`.
 - Types: `packages/tuffex/packages/components/src/floating/src/types.ts`.

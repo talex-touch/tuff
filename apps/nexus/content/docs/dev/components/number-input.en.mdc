@@ -8,9 +8,8 @@ tags: [number, input, form]
 syncStatus: reviewed
 verified: true
 ---
-# NumberInput
 
-## Basic Usage
+## Usage
 
 ### NumberInput
 ::::TuffDemoWrapper{demo="NumberInputNumberInputDemo" code-lang="vue"}
@@ -28,16 +27,14 @@ code: |
 ---
 ::::
 
-## Interaction Contract
+### Best Practices
 
-- Empty input normalizes to `null`.
-- Non-finite input falls back to the previous value, or `null` when no value exists.
-- `min` / `max` clamp typed values and step button results.
-- `precision` applies `Number(value.toFixed(precision))` after clamping.
-- `controls=false` hides both step buttons and keeps the native numeric field.
-- `readonly` and `disabled` block step buttons; `disabled` also disables the input.
+- Prefer explicit `min`, `max`, and `step` for percentages, quotas, and pagination controls.
+- Use `precision` for decimals rather than rounding in the consumer after every event.
+- Hide controls for dense table filters where keyboard entry is faster.
+- Treat `null` as the unset state in validation and API payload mapping.
 
-## API
+## API Reference
 
 ### Props
 
@@ -74,18 +71,19 @@ code: |
 
 `TxNumberInput` does not expose slots. Use adjacent form help text or wrapper layout for labels, prefixes, suffixes, and validation copy.
 
-## Best Practices
+## Overview
 
-- Prefer explicit `min`, `max`, and `step` for percentages, quotas, and pagination controls.
-- Use `precision` for decimals rather than rounding in the consumer after every event.
-- Hide controls for dense table filters where keyboard entry is faster.
-- Treat `null` as the unset state in validation and API payload mapping.
+- Empty input normalizes to `null`.
+- Non-finite input falls back to the previous value, or `null` when no value exists.
+- `min` / `max` clamp typed values and step button results.
+- `precision` applies `Number(value.toFixed(precision))` after clamping.
+- `controls=false` hides both step buttons and keeps the native numeric field.
+- `readonly` and `disabled` block step buttons; `disabled` also disables the input.
 
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/number-input/src/TxNumberInput.vue` confirms normalization, clamping, precision handling, attr forwarding, step controls, focus state, and exposed helpers.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/number-input/__tests__/number-input.test.ts` covers numeric attrs, normalized input, clamped step controls, hidden controls, and focus helper exposure.
 - Export: `packages/tuffex/packages/components/src/number-input/index.ts` wraps the component with `withInstall` and exports `TxNumberInputInstance`.
 
-## Source
 <TuffDocSourceLink />

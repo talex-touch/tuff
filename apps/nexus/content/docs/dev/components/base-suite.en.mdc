@@ -9,11 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Positioning
-
-The Basics suite is the body of everyday interfaces. Its seven groups unfold from atoms to full paths: **General** (buttons, icons, avatars, badges), **Form** (inputs, selects, dates, switches, uploads), **Layout** (containers, grids, cards), **Navigation** (tabs, breadcrumbs, menus), **Data Display** (tables, trees, timelines), **Feedback** (dialogs, drawers, progress) and **Status & Empty** (empty states, errors, skeletons). Everything imports on demand through the `@talex-touch/tuffex/base` entry.
-
-## Preview
+## Usage
 
 Every cell is a live, interactive component; click the name in the top-left corner to open its documentation.
 
@@ -27,3 +23,6 @@ Every component in the suite, grouped by category. The list is read from each do
 ::DocsSuiteCatalog{suite="base"}
 ::
 
+## Overview
+
+The Basics suite is the body of everyday interfaces. Its seven groups unfold from atoms to full paths: **General** (buttons, icons, avatars, badges), **Form** (inputs, selects, dates, switches, uploads), **Layout** (containers, grids, cards), **Navigation** (tabs, breadcrumbs, menus), **Data Display** (tables, trees, timelines), **Feedback** (dialogs, drawers, progress) and **Status & Empty** (empty states, errors, skeletons). Everything imports on demand through the `@talex-touch/tuffex/base` entry.

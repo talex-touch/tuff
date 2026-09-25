@@ -8,9 +8,8 @@ tags: [permission, state, access]
 syncStatus: reviewed
 verified: true
 ---
-# PermissionState 权限不足
 
-## 基础用法
+## 用法
 
 ### PermissionState
 :::TuffDemoWrapper{demo="PermissionStatePermissionStateDemo" code-lang="vue"}
@@ -27,14 +26,14 @@ code: |
 ---
 :::
 
-## 交互契约
+### 最佳实践
 
-- 始终向 `TxEmptyState` 透传 `variant="permission"`。
-- 不覆盖显式传入的 `title`、`description`、`surface`、`layout`、`align`、`size`、`icon` 或 action props。
-- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
-- 生成按钮触发的 `primary` / `secondary` 事件来自内部 `TxEmptyState`。
+- 只在宿主已经确认访问被拒绝后使用；组件本身不做权限判断。
+- 说明哪个资源受限，以及谁可以授权。
+- 有申请流程时优先提供“申请权限”主操作；否则指向切换工作区或帮助文档。
+- 用户未授权时，不要在标题或描述里泄露敏感资源细节。
 
-## API
+## API 参考
 
 ### Props
 
@@ -71,20 +70,18 @@ code: |
 | `description` | - | 替换解析后的描述。 |
 | `actions` | - | 替换生成的主/次操作按钮。 |
 
-## 最佳实践
+## 概述
 
-- 只在宿主已经确认访问被拒绝后使用；组件本身不做权限判断。
-- 说明哪个资源受限，以及谁可以授权。
-- 有申请流程时优先提供“申请权限”主操作；否则指向切换工作区或帮助文档。
-- 用户未授权时，不要在标题或描述里泄露敏感资源细节。
+- 始终向 `TxEmptyState` 透传 `variant="permission"`。
+- 不覆盖显式传入的 `title`、`description`、`surface`、`layout`、`align`、`size`、`icon` 或 action props。
+- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
+- 生成按钮触发的 `primary` / `secondary` 事件来自内部 `TxEmptyState`。
 
-## 审阅说明 / Review Notes
+## 技术实现
 
 - **Wrapper contract:** `TxPermissionState` 锁定 `variant="permission"`，并透传其它 empty-state props 与 slot；它本身不执行权限判断。
 - **安全说明:** 宿主必须先完成授权判定再渲染该组件。文案应足够泛化，避免泄露受限资源细节。
 - **实测覆盖:** `permission-state.test.ts` 验证 variant 锁定、action prop 透传、slot 透传与 install 注册。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/permission-state/src/TxPermissionState.vue`。
 - Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`。

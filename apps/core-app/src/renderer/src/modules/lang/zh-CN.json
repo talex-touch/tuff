@@ -165,9 +165,7 @@
     "groupTitle": "语言设置",
     "groupDesc": "选择您喜欢的应用程序语言。",
     "followSystem": "跟随系统语言",
-    "followSystemDesc": "自动匹配系统语言设置。",
-    "chooseLanguage": "选择语言",
-    "chooseLanguageDesc": "手动选择您喜欢的显示语言。"
+    "chooseLanguage": "选择语言"
   },
   "beginner": {
     "language": {
@@ -821,7 +819,6 @@
     "nexusBaseUrlErrorSave": "保存失败，请重试",
     "logout": "登出",
     "noAccount": "无账户",
-    "noAccountDesc": "当前无法访问账户。",
     "login": "登录",
     "loggingIn": "登录中...",
     "loginBrowserPending": "等待浏览器登录",
@@ -922,7 +919,6 @@
     "title": "AI 积分",
     "description": "查看 Nexus AI credits 的个人剩余、已用和额度。",
     "notice": "Nexus 官方能力按能力自身的计价单位扣费：文本按 1K tokens、图片按张、语音转写按「音频秒」与「转写单位（transcript unit）」两个基准计费，结算时取较高者（长静音偏音频秒，密集语音偏转写单位）。调用前会先占用一笔预留额度，结算后自动退回多占部分。",
-    "loginRequired": "登录后可查看 credits 剩余和消耗。",
     "loading": "正在获取 credits 信息。",
     "empty": "暂无 credits 信息。",
     "month": "计费月份：{month}",
@@ -933,7 +929,6 @@
     "personalQuota": "个人总额",
     "teamRemaining": "团队池剩余",
     "loginTitle": "需要登录",
-    "loginDescription": "请先登录 Tuff 账户以读取 Nexus credits summary。",
     "errorTitle": "Credits 信息不可用",
     "retry": "重试",
     "billingNoticeTitle": "计费提示"
@@ -6302,6 +6297,23 @@
         "title": "视频",
         "subtitle": "打开视频文件夹"
       }
+    }
+  },
+  "shortcuts": {
+    "palette": "快捷命令",
+    "legendSelect": "切换",
+    "legendRun": "执行",
+    "legendClose": "关闭",
+    "group": {
+      "conversation": "对话",
+      "navigate": "导航",
+      "view": "视图"
+    },
+    "commands": {
+      "openCoreBox": "打开快捷搜索",
+      "toggleSidebar": "切换侧边栏",
+      "togglePanel": "切换预览面板",
+      "focusComposer": "聚焦输入框"
     }
   }
 }

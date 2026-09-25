@@ -8,9 +8,8 @@ tags: [ai, agent, trace, disclosure]
 syncStatus: reviewed
 verified: true
 ---
-# AgentTrace
 
-## Basic Usage
+## Usage
 
 ### Step Trace
 
@@ -63,13 +62,16 @@ code: |
 ---
 :::
 
-## Ownership of the Open State
+### Best Practices
 
-Open resolves through three layers, highest first: `userOpen` (host-held) → the component's own click override → `defaultOpen` → `working`.
+- Treat it as a controlled primitive: keep the timeline in the host, grow `rows` and flip `working`, and leave playback scripts out of the component.
+- Always handle `@open` in search surfaces, or clicking a source does nothing at all.
+- Cap long traces with `moreLabel` instead of laying out dozens of rows.
+- Use `reasoning` for paragraph prose — it wraps and never truncates. Use `steps` for single-line labels.
+- In streaming UIs, store `toggle` in the host and feed it back through `userOpen` so a rebuild does not discard the reader's choice.
+- The component sizes to its container; upstream's 380px frame is the host's decision.
 
-Used standalone, the trace opens and folds with `working`, and the reader's first click takes over from then on. But a streaming host re-renders on every delta, and a branch realignment can recreate the instance — an override kept only in instance state dies with it, which reads as "clicking does nothing". Lift `toggle` into the host and feed it back through `userOpen` to make the reader's choice survive any rebuild.
-
-## API
+## API Reference
 
 ### Props
 
@@ -106,7 +108,13 @@ Per-variant default copy: `steps` and `reasoning` use `Thinking` / `Thought`, `s
 | `label` | `{ working }` | Replaces the header text. |
 | `row` | `{ row, index }` | Replaces the row content, keeping the row container and entrance. |
 
-## Interaction Contract
+## Ownership of the Open State
+
+Open resolves through three layers, highest first: `userOpen` (host-held) → the component's own click override → `defaultOpen` → `working`.
+
+Used standalone, the trace opens and folds with `working`, and the reader's first click takes over from then on. But a streaming host re-renders on every delta, and a branch realignment can recreate the instance — an override kept only in instance state dies with it, which reads as "clicking does nothing". Lift `toggle` into the host and feed it back through `userOpen` to make the reader's choice survive any rebuild.
+
+## Overview
 
 - **Links never navigate on their own.** A `search` row still renders a real `href` (copyable, middle-clickable), but a click calls `preventDefault` and emits `open` so the host decides how to open it. This is required inside an Electron renderer.
 - The collapse carries `inert` while closed: a `0fr` grid still leaves its rows in the tab order, so they have to be taken out of it too.
@@ -117,16 +125,7 @@ Per-variant default copy: `steps` and `reasoning` use `Thinking` / `Thought`, `s
 - Per-row entrance delay runs through the `--tx-bui-agent-trace-index` CSS variable rather than inline styles, so one rule turns it all off under reduced motion.
 - The rail is a pure CSS `::before`. Upstream measures the row stack in a layout effect and tweens its height over 500ms; dropping the measurement is safe because the collapse is already clipping it.
 
-## Best Practices
-
-- Treat it as a controlled primitive: keep the timeline in the host, grow `rows` and flip `working`, and leave playback scripts out of the component.
-- Always handle `@open` in search surfaces, or clicking a source does nothing at all.
-- Cap long traces with `moreLabel` instead of laying out dozens of rows.
-- Use `reasoning` for paragraph prose — it wraps and never truncates. Use `steps` for single-line labels.
-- In streaming UIs, store `toggle` in the host and feed it back through `userOpen` so a rebuild does not discard the reader's choice.
-- The component sizes to its container; upstream's 380px frame is the host's decision.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/agent-trace/src/TxAgentTrace.vue`.
 - Types: `packages/tuffex/packages/components/src/agent-trace/src/types.ts`.
@@ -134,8 +133,6 @@ Per-variant default copy: `steps` and `reasoning` use `Thinking` / `Thought`, `s
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **How it divides from the existing disclosures:** `TxChainOfThought` is a thinking chain with markdown bodies, `TxReasoningDisclosure` is a single reasoning passage, and `TxSources` is a source list. This component is a compact single-line trace carrying links, diffs, and tool selection — different data shapes, not interchangeable.
 - **Accessibility:** the `inert` collapse is a deliberate improvement over upstream, whose collapsed region leaves links in the tab order.

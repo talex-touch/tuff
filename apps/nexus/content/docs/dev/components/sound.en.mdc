@@ -8,7 +8,18 @@ tags: [sound, audio, feedback, utils]
 syncStatus: reviewed
 verified: true
 ---
-# Sound
+
+## API Reference
+
+| Name | Description |
+|---|---|
+| `configureSound({ enabled, volume })` | Toggle and master volume (0–1, clamped). Returns the resulting config |
+| `getSoundConfig()` | A copy of the current config |
+| `playSound(type \| preset)` | Plays. Returns whether it actually did |
+| `sound.click()` / `.key()` / `.toggle()` / `.success()` / `.error()` / `.open()` / `.close()` | Shorthands |
+| `isSoundSupported()` | Whether the browser has Web Audio |
+| `disposeSound()` | Closes the graph; the next play rebuilds it |
+| `SOUND_PRESETS` | The preset table — read the parameters, or start a custom cue from one |
 
 ## It Is Off by Default
 
@@ -65,18 +76,6 @@ playSound({
 ```
 
 Two values in `freq` make a glide; `delay` offsets the second voice so the pair reads as a figure rather than a chord.
-
-## API
-
-| Name | Description |
-|---|---|
-| `configureSound({ enabled, volume })` | Toggle and master volume (0–1, clamped). Returns the resulting config |
-| `getSoundConfig()` | A copy of the current config |
-| `playSound(type \| preset)` | Plays. Returns whether it actually did |
-| `sound.click()` / `.key()` / `.toggle()` / `.success()` / `.error()` / `.open()` / `.close()` | Shorthands |
-| `isSoundSupported()` | Whether the browser has Web Audio |
-| `disposeSound()` | Closes the graph; the next play rebuilds it |
-| `SOUND_PRESETS` | The preset table — read the parameters, or start a custom cue from one |
 
 ## Contract
 

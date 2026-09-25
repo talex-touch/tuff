@@ -8,9 +8,8 @@ tags: [select, flat, form, combobox]
 syncStatus: reviewed
 verified: true
 ---
-# FlatSelect 平铺下拉选择器
 
-## 基础用法
+## 用法
 
 点击触发器，下拉列表从选中项位置向上下展开，选中项带勾选图标。
 
@@ -33,8 +32,6 @@ code: |
   </template>
 ---
 :::
-
-## 禁用状态
 
 支持整组禁用和单项禁用。
 
@@ -64,6 +61,56 @@ code: |
   </template>
 ---
 :::
+
+### 最佳实践
+
+- 短且稳定的选项集优先使用 `TxFlatSelect`，尤其是希望展开时让当前选中项保持视觉锚点的场景。
+- 选项文案保持简短。触发器和选项都使用单行截断，长文案应改用 `TxSelect` 或自定义 popover。
+- 建议控制在 3–6 个选项。需要搜索、远程数据、分组、虚拟滚动或复杂选项元数据时使用 `TxSelect`。
+- 每个 `TxFlatSelectItem` 的 `value` 必须稳定且唯一。父组件注册表按 `value` 匹配，重复值会让选中标签和键盘导航产生歧义。
+- 不要在 `TxFlatSelectItem` 内放置其它交互控件；选项本身已经是带 `role="option"` 的 button。
+- 选项不可用时保留 disabled prop，不要直接过滤掉；键盘导航会按设计跳过 disabled 项。
+
+## API 参考
+
+### TxFlatSelect
+
+#### Props
+
+| 属性名 | 说明 | 类型 | 默认值 |
+|--------|------|------|--------|
+| modelValue / v-model | 当前选中值；与某个 `TxFlatSelectItem` 的 `value` 匹配，未选中时显示占位。 | `string \| number` | `''` |
+| placeholder | 未选中时触发器显示的文本。 | `string` | `''` |
+| disabled | 整组禁用：触发器变为 disabled button，下拉不再展开，键盘导航同时失效。 | `boolean` | `false` |
+
+#### Events
+
+| 事件名 | 说明 | 回调参数 |
+|--------|------|----------|
+| update:modelValue | 提交新值时触发，用于 v-model。 | `(value: string \| number) => void` |
+| change | 与 `update:modelValue` 同时触发（含 ArrowUp/ArrowDown 键盘导航提交）；两者当前语义一致，选其一监听即可。 | `(value: string \| number) => void` |
+
+#### Slots
+
+| 插槽名 | 说明 |
+|--------|------|
+| default | `TxFlatSelectItem` 子组件 |
+
+### TxFlatSelectItem
+
+#### Props
+
+| 属性名 | 说明 | 类型 | 默认值 |
+|--------|------|------|--------|
+| value | 选项值；必须稳定且唯一，父级注册表按它匹配选中项。 | `string \| number` | - |
+| label | 触发器与选项显示的文本；用 default 插槽可覆盖。 | `string` | - |
+| disabled | 禁用单个选项：不可选，键盘导航会跳过。 | `boolean` | `false` |
+
+#### Slots
+
+| 插槽名 | 说明 |
+|--------|------|
+| default | 自定义内容（覆盖 label） |
 
 ## 发布策略配置
 
@@ -121,12 +168,6 @@ code: |
 ---
 ::
 
-## 交互契约
-
-- 关闭时面板收拢回触发器，并在同样的 200ms 内淡出自身装饰：底色、边框、阴影和选中行的强调色一起消失。此前这些是在面板隐藏的那一帧被直接丢掉的，标签归位时就会闪一下。
-
-`TxFlatSelect` 会将触发器暴露为 combobox，将下拉面板暴露为 listbox。选项会暴露 option 选中状态；禁用选项不可选择；下拉打开时 ArrowUp/ArrowDown 会跳过禁用选项。
-
 ## 与 TxSelect 的对比
 
 | 特性 | TxSelect | TxFlatSelect |
@@ -138,64 +179,18 @@ code: |
 | 适用场景 | 通用表单、复杂场景 | 设置页、简单下拉 |
 | 触发器 | 输入框风格 | 按钮风格 + 箭头 |
 
-## API
+## 概述
 
-### TxFlatSelect
+- 关闭时面板收拢回触发器，并在同样的 200ms 内淡出自身装饰：底色、边框、阴影和选中行的强调色一起消失。此前这些是在面板隐藏的那一帧被直接丢掉的，标签归位时就会闪一下。
 
-#### Props
+`TxFlatSelect` 会将触发器暴露为 combobox，将下拉面板暴露为 listbox。选项会暴露 option 选中状态；禁用选项不可选择；下拉打开时 ArrowUp/ArrowDown 会跳过禁用选项。
 
-| 属性名 | 说明 | 类型 | 默认值 |
-|--------|------|------|--------|
-| modelValue / v-model | 当前选中值；与某个 `TxFlatSelectItem` 的 `value` 匹配，未选中时显示占位。 | `string \| number` | `''` |
-| placeholder | 未选中时触发器显示的文本。 | `string` | `''` |
-| disabled | 整组禁用：触发器变为 disabled button，下拉不再展开，键盘导航同时失效。 | `boolean` | `false` |
-
-#### Events
-
-| 事件名 | 说明 | 回调参数 |
-|--------|------|----------|
-| update:modelValue | 提交新值时触发，用于 v-model。 | `(value: string \| number) => void` |
-| change | 与 `update:modelValue` 同时触发（含 ArrowUp/ArrowDown 键盘导航提交）；两者当前语义一致，选其一监听即可。 | `(value: string \| number) => void` |
-
-#### Slots
-
-| 插槽名 | 说明 |
-|--------|------|
-| default | `TxFlatSelectItem` 子组件 |
-
-### TxFlatSelectItem
-
-#### Props
-
-| 属性名 | 说明 | 类型 | 默认值 |
-|--------|------|------|--------|
-| value | 选项值；必须稳定且唯一，父级注册表按它匹配选中项。 | `string \| number` | - |
-| label | 触发器与选项显示的文本；用 default 插槽可覆盖。 | `string` | - |
-| disabled | 禁用单个选项：不可选，键盘导航会跳过。 | `boolean` | `false` |
-
-#### Slots
-
-| 插槽名 | 说明 |
-|--------|------|
-| default | 自定义内容（覆盖 label） |
-
-## 最佳实践
-
-- 短且稳定的选项集优先使用 `TxFlatSelect`，尤其是希望展开时让当前选中项保持视觉锚点的场景。
-- 选项文案保持简短。触发器和选项都使用单行截断，长文案应改用 `TxSelect` 或自定义 popover。
-- 建议控制在 3–6 个选项。需要搜索、远程数据、分组、虚拟滚动或复杂选项元数据时使用 `TxSelect`。
-- 每个 `TxFlatSelectItem` 的 `value` 必须稳定且唯一。父组件注册表按 `value` 匹配，重复值会让选中标签和键盘导航产生歧义。
-- 不要在 `TxFlatSelectItem` 内放置其它交互控件；选项本身已经是带 `role="option"` 的 button。
-- 选项不可用时保留 disabled prop，不要直接过滤掉；键盘导航会按设计跳过 disabled 项。
-
-## 审阅说明
+## 技术实现
 
 - 已对照 `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`、`TxFlatSelectItem.vue`、`types.ts` 与 `flat-select.test.ts` 核对。
 - **实测覆盖:** placeholder 展示、选中标签同步、启用项选择、整组/单项禁用阻断、ArrowUp/ArrowDown 跳过 disabled 项，以及 combobox/listbox ARIA 状态。
 - 截图：`.codex-screenshots/nexus-flat-select-release-policy-demo-playwright-2026-05-28.png`。
 - 建议：`TxFlatSelect` 适合 3–6 个简单选项；需要搜索、远程数据或复杂选项渲染时仍优先使用 `TxSelect`。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`.
 - Item source: `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelectItem.vue`.

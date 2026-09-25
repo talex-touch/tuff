@@ -8,17 +8,14 @@ tags: [chip, mode, toggle, morph, ai]
 syncStatus: reviewed
 verified: true
 ---
-# ModeChip 模式芯片
 
 `TxModeChip` 是一个原生按钮，用来显示输入框或工具栏当前所处的模式，比如"请求批准"和"无限制访问"。模式变化时它原地变身：
-
 - 图标先在固定大小的方框里缩放互换；
 - 50ms 后文字模糊交叉；
 - 底色和墨色随色调过渡，宽度平滑跟上新文字。
-
 悬停只改颜色，而且立即切换。
 
-## 基础用法
+## 用法
 
 ### ModeChip
 
@@ -60,7 +57,15 @@ code: |
 
 放进输入框的用法见 [ChatComposer 消息输入](/docs/dev/components/chat-composer) 的"搭配模式芯片"和"托盘换位"两节。
 
-## API
+### 最佳实践
+
+- 用它表示"现在处于哪种模式"。文字本身就说明了状态，所以文字随模式变化的芯片不要加 `aria-pressed`：切换按钮的名称在两种状态下必须一致（WAI-ARIA APG），否则读屏会把正在生效的"请求批准"读成"未按下"。`aria-pressed` 留给文字固定、只负责开关某个模式的芯片（比如"联网搜索"）；点击打开模式菜单时加 `aria-haspopup`。
+- 用色调表示风险：默认或安全的模式用 `muted`，放开了保护的模式（比如无限制访问）用 `danger`。文字和图标本身也要说清状态，不能只靠颜色。
+- 文字控制在两到四个词，变身时宽度变化才自然。
+- 放进 `TxChatComposer` 时，工具栏用 `toolbar-left` 插槽，托盘里用 `muted` 色调。
+- 不要高频自动切换。每次切换都是一次动效，只在用户操作或语境真的变化时切。
+
+## API 参考
 
 ### Props
 
@@ -88,7 +93,7 @@ code: |
 | `--tx-mode-chip-fill` | 底色 |
 | `--tx-mode-chip-fill-hover` | 悬停时的底色 |
 
-## 交互契约
+## 概述
 
 - 渲染为原生 `<button type="button">`，高 28px、13px 字、圆角 8px。`label` 是按钮的可访问名，图标不参与命名。
 - `label`、`icon`、`tone` 中任意一个变化都会触发变身：
@@ -103,15 +108,7 @@ code: |
 - 没有 Web Animations API 的环境里，宽度直接落到新值。
 - 禁用时半透明、光标为 `not-allowed`，也没有悬停变化。
 
-## 最佳实践
-
-- 用它表示"现在处于哪种模式"。文字本身就说明了状态，所以文字随模式变化的芯片不要加 `aria-pressed`：切换按钮的名称在两种状态下必须一致（WAI-ARIA APG），否则读屏会把正在生效的"请求批准"读成"未按下"。`aria-pressed` 留给文字固定、只负责开关某个模式的芯片（比如"联网搜索"）；点击打开模式菜单时加 `aria-haspopup`。
-- 用色调表示风险：默认或安全的模式用 `muted`，放开了保护的模式（比如无限制访问）用 `danger`。文字和图标本身也要说清状态，不能只靠颜色。
-- 文字控制在两到四个词，变身时宽度变化才自然。
-- 放进 `TxChatComposer` 时，工具栏用 `toolbar-left` 插槽，托盘里用 `muted` 色调。
-- 不要高频自动切换。每次切换都是一次动效，只在用户操作或语境真的变化时切。
-
-## 审阅说明
+## 技术实现
 
 - 组件源码：`packages/tuffex/packages/components/src/mode-chip/src/TxModeChip.vue`。
 - 动效参考：[@flohoeller 的 Chatbox 组件视频](https://x.com/flohoeller/status/2102660458658582913) 里的芯片变身，逐帧实测约 370ms：
@@ -130,7 +127,5 @@ code: |
   - `mode-chip/__tests__/mode-chip.test.ts` 覆盖原生按钮与属性透传、可访问名、走 fade 而非 morph 引擎、默认色调、无图标不占位、SSR；
   - 同一文件还覆盖图标 keyed 互换、文字延后 50ms、`.is-morphing` 的时长与重新计时、宽度过渡与出现图标时的宽度过渡、无 WAAPI、卸载清理、reduced-motion；
   - `mode-chip-motion.test.ts` 用编译后的样式守住：颜色过渡只在变身期间、文字层不过渡颜色、悬停无过渡、每个动效都有 reduced-motion 退路、色调填充与文字配方、每个 `var()` 都有兜底值。
-
-## Source
 
 <TuffDocSourceLink />

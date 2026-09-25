@@ -54,7 +54,7 @@ Roughly nine in ten components set an explicit `role` or ARIA attributes. The re
 
 If you find a gap, the component's own doc page links to its source — a fix there lands for every consumer at once.
 
-## Source
+## Technologies
 
 - Focus and contrast tokens: `packages/tuffex/packages/components/style/variables.scss`.
 - Theme and contrast selectors: [Theming](./theming.en.mdc).

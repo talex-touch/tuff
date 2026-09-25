@@ -8,9 +8,8 @@ tags: [form, validation, input]
 syncStatus: reviewed
 verified: true
 ---
-# Form
 
-## Basic Usage
+## Usage
 
 :::TuffDemoWrapper{demo="FormFormDemo" code-lang="vue"}
 ---
@@ -51,18 +50,15 @@ code: |
 ---
 :::
 
-## Interaction Contract
+### Best Practices
 
-- `TxForm` renders a native `<form>` and prevents default submit behavior.
-- `TxFormItem` registers on mount and unregisters before unmount, so parent `validate()`, `resetFields()`, and `clearValidate()` only affect live fields.
-- Form-level rules are looked up by `prop`; item-level `rules` override the form-level rule for the same field.
-- Required validation treats `null`, `undefined`, `''`, and empty arrays as empty.
-- A custom validator may return `true`, `false`, an error string, or a Promise of those values.
-- `resetFields()` restores each registered field to its mounted initial value and clears its validation message.
-- `required` on `TxFormItem` controls the required visual marker and augments validation when a rule is present. Use a required rule when the field must fail validation on empty input.
-- `disabled` and `size` are provided through form context for descendants; slotted controls should still receive their own disabled/size props when the input component requires them.
+- Keep `model` stable and reactive; replacing it after mount can make reset semantics surprising.
+- Prefer form-level `rules` for shared validation and item-level `rules` only for one-off overrides.
+- Put async availability checks in `validator`, and return a string for the precise user-facing error.
+- Pass `disabled` to both `TxForm` and the slotted controls when the whole form is locked.
+- Call `clearValidate()` when switching between records without resetting user-entered values.
 
-## API
+## API Reference
 
 ### TxForm Props
 
@@ -121,20 +117,21 @@ code: |
 | `TxForm` | `default` | - | Form item and action content. |
 | `TxFormItem` | `default` | `{ id, ariaInvalid, ariaDescribedby }` | Field control content. Spread these onto the slotted control to wire the label `for`/`id` link and the error `aria-describedby`. |
 
-## Best Practices
+## Overview
 
-- Keep `model` stable and reactive; replacing it after mount can make reset semantics surprising.
-- Prefer form-level `rules` for shared validation and item-level `rules` only for one-off overrides.
-- Put async availability checks in `validator`, and return a string for the precise user-facing error.
-- Pass `disabled` to both `TxForm` and the slotted controls when the whole form is locked.
-- Call `clearValidate()` when switching between records without resetting user-entered values.
+- `TxForm` renders a native `<form>` and prevents default submit behavior.
+- `TxFormItem` registers on mount and unregisters before unmount, so parent `validate()`, `resetFields()`, and `clearValidate()` only affect live fields.
+- Form-level rules are looked up by `prop`; item-level `rules` override the form-level rule for the same field.
+- Required validation treats `null`, `undefined`, `''`, and empty arrays as empty.
+- A custom validator may return `true`, `false`, an error string, or a Promise of those values.
+- `resetFields()` restores each registered field to its mounted initial value and clears its validation message.
+- `required` on `TxFormItem` controls the required visual marker and augments validation when a rule is present. Use a required rule when the field must fail validation on empty input.
+- `disabled` and `size` are provided through form context for descendants; slotted controls should still receive their own disabled/size props when the input component requires them.
 
-## Review Notes
+## Technologies
 
 - **Accessibility note:** `TxFormItem` renders a visible `<label>` whose `for` targets a generated field id, and exposes that id plus `ariaInvalid` / `ariaDescribedby` through the default slot (`#default="{ id, ariaInvalid, ariaDescribedby }"`). Spread them onto the slotted control to complete the label association and link the `role="alert"` error message; the association is inert until the control consumes `id`.
 - **Verified coverage:** `form.test.ts` exercises required-rule validation, error message rendering, label/control/error linkage (`for`/`id`, `aria-invalid`, `role="alert"`, `aria-describedby`), successful revalidation after model updates, and `resetFields()` restoring the mounted initial value.
-
-## Source
 
 - Component sources: `packages/tuffex/packages/components/src/form/src/TxForm.vue`, `TxFormItem.vue`, and `context.ts`.
 - Types: `packages/tuffex/packages/components/src/form/src/types.ts` exports form props, item props, emits, rules, size, and label position contracts.

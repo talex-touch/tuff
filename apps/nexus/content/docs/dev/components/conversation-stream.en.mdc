@@ -8,9 +8,8 @@ tags: [ai, conversation, virtual-scroll]
 syncStatus: reviewed
 verified: true
 ---
-# Conversation Stream
 
-## Basic Usage
+## Usage
 
 ### Conversation Stream
 ::::TuffDemoWrapper{demo="ConversationStreamConversationStreamDemo" code-lang="vue"}
@@ -43,19 +42,15 @@ code: |
 ---
 ::::
 
-## Interaction Contract
+### Best Practices
 
-- The component is generic over `T`, so the element type of `items` flows through to the `item` slot's scope with no casting on your side.
-- `itemKey` is required. Virtualization caches positions by key, and an array index shifts every position when a message is prepended.
-- `estimatedItemHeight` seeds the first layout only; real heights are measured and corrected afterwards.
-- Sticking to the bottom is conditional. New content follows while the user is at the bottom; once they scroll up it stops yanking them back and shows a scroll-to-bottom affordance instead.
-- `streaming` only drives that affordance's "new content" state — it does not decide whether the view sticks.
-- `loadOlder` is called near the top, and the contract is that **the consumer prepends into `items`** and then resolves `{ hasMore }`. The component never owns the array.
-- The viewport anchor is preserved across a prepend, so users are not thrown to a different position.
-- `hasMoreInitial` defaults to an explicit `undefined` rather than `false`. That opts out of Vue's absent-Boolean-prop coercion so "not asked yet" stays distinguishable from "there is no history". Pass `false` explicitly when you know there is none.
-- A throwing `loadOlder` emits `load-error` and renders the `top-error` slot, whose scope carries `retry`.
+- Key by the message's own id, never by index. This is a correctness requirement for virtualization, not an optimization.
+- Prepend inside `loadOlder`. Resolving without touching `items` leaves the component believing history is still pending.
+- Pass `hasMoreInitial: false` explicitly when you know there is no history — the default `undefined` means "unknown", not "none".
+- Keep `estimatedItemHeight` close to the real average; a large mismatch makes the scrollbar jump noticeably on first paint.
+- Use the exposed `scrollToBottom` / `scrollToIndex` for programmatic movement instead of driving the scroll container yourself, which fights the stick-to-bottom logic.
 
-## API
+## API Reference
 
 ### Props
 
@@ -95,10 +90,14 @@ code: |
 | `top-done` | — | Shown when there is no more history. |
 | `scroll-to-bottom` | `{ streaming: boolean }` | Replaces the scroll-to-bottom affordance. |
 
-## Best Practices
+## Overview
 
-- Key by the message's own id, never by index. This is a correctness requirement for virtualization, not an optimization.
-- Prepend inside `loadOlder`. Resolving without touching `items` leaves the component believing history is still pending.
-- Pass `hasMoreInitial: false` explicitly when you know there is no history — the default `undefined` means "unknown", not "none".
-- Keep `estimatedItemHeight` close to the real average; a large mismatch makes the scrollbar jump noticeably on first paint.
-- Use the exposed `scrollToBottom` / `scrollToIndex` for programmatic movement instead of driving the scroll container yourself, which fights the stick-to-bottom logic.
+- The component is generic over `T`, so the element type of `items` flows through to the `item` slot's scope with no casting on your side.
+- `itemKey` is required. Virtualization caches positions by key, and an array index shifts every position when a message is prepended.
+- `estimatedItemHeight` seeds the first layout only; real heights are measured and corrected afterwards.
+- Sticking to the bottom is conditional. New content follows while the user is at the bottom; once they scroll up it stops yanking them back and shows a scroll-to-bottom affordance instead.
+- `streaming` only drives that affordance's "new content" state — it does not decide whether the view sticks.
+- `loadOlder` is called near the top, and the contract is that **the consumer prepends into `items`** and then resolves `{ hasMore }`. The component never owns the array.
+- The viewport anchor is preserved across a prepend, so users are not thrown to a different position.
+- `hasMoreInitial` defaults to an explicit `undefined` rather than `false`. That opts out of Vue's absent-Boolean-prop coercion so "not asked yet" stays distinguishable from "there is no history". Pass `false` explicitly when you know there is none.
+- A throwing `loadOlder` emits `load-error` and renders the `top-error` slot, whose scope carries `retry`.

@@ -8,9 +8,8 @@ tags: [select, flat, form, selection, inline]
 syncStatus: reviewed
 verified: true
 ---
-# FlatRadio 平铺选择器
 
-## 基础用法
+## 用法
 
 最简单的平铺选择器，适合少量选项的场景。
 
@@ -33,6 +32,91 @@ code: |
   </template>
 ---
 :::
+
+支持整组禁用和单项禁用。
+
+### FlatRadio (disabled)
+:::TuffDemoWrapper{demo="FlatRadioDisabledDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('a')
+  </script>
+
+  <template>
+    <!-- 单项禁用 -->
+    <TxFlatRadio v-model="value">
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" disabled />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+
+    <!-- 整组禁用 -->
+    <TxFlatRadio v-model="value" disabled>
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- FlatRadio 适合 2 到 5 个短选项，且用户需要直接比较选项的场景；更长列表使用 `TxSelect`。
+- 标签尽量保持单行；item 布局有意使用 `white-space: nowrap`。
+- 在紧凑 `sm` 尺寸中避免混用过长自定义插槽内容和图标。
+- 设置页、落地页里这个控件是当前屏幕的主选择时用 `xl`；行内和工具栏仍然用默认的 `md`。
+- 不要在自定义插槽内容里恢复"仅选中时加粗"的写法 —— 那会把组件刚修掉的重排又带回来。
+- 只有当多个值是彼此独立的开关项时才使用 `multiple`；否则用独立开关或复选框表达更清晰。
+- `value` 应在渲染间保持稳定，因为父级会按 value 注册 item DOM，用于指示器和键盘顺序。
+
+## API 参考
+
+### TxFlatRadio
+
+#### Props
+
+| 属性名 | 说明 | 类型 | 默认值 |
+|--------|------|------|--------|
+| `modelValue` / `v-model` | 单选时为单值，多选时为值数组。 | `string \| number \| (string \| number)[]` | *必填* |
+| `multiple` | 启用类似复选框的多选行为；开启后隐藏单选滑动指示器。 | `boolean` | `false` |
+| `disabled` | 禁用整组，移除容器焦点并阻止点击/键盘变化。 | `boolean` | `false` |
+| `size` | 尺寸变体。 | `'sm' \| 'md' \| 'lg' \| 'xl'` | `'md'` |
+| `bordered` | 为选择器添加外边框。 | `boolean` | `false` |
+
+#### Events
+
+| 事件名 | 说明 | 回调参数 |
+|--------|------|----------|
+| `update:modelValue` | 以新的单选值或多选值数组触发。 | `(value: string \| number \| (string \| number)[]) => void` |
+| `change` | 选择变化后以相同载荷触发。 | `(value: string \| number \| (string \| number)[]) => void` |
+
+#### Slots
+
+| 插槽名 | 说明 |
+|--------|------|
+| `default` | `TxFlatRadioItem` 子组件。 |
+
+### TxFlatRadioItem
+
+#### Props
+
+| 属性名 | 说明 | 类型 | 默认值 |
+|--------|------|------|--------|
+| `value` | 注册到父选择器的当前项值。 | `string \| number` | *必填* |
+| `label` | 未提供默认插槽时的可见文本。 | `string` | - |
+| `icon` | 未提供 `icon` 插槽时使用的图标 CSS class。 | `string` | - |
+| `disabled` | 禁用当前项，并在键盘导航中跳过。 | `boolean` | `false` |
+
+#### Slots
+
+| 插槽名 | 说明 |
+|--------|------|
+| `default` | 自定义可见内容，替代 `label`。 |
+| `icon` | 自定义图标内容，替代 `icon` class。 |
 
 ## 尺寸
 
@@ -98,38 +182,6 @@ code: |
       <TxFlatRadioItem value="grid" icon="i-carbon-grid" label="Grid" />
       <TxFlatRadioItem value="list" icon="i-carbon-list" label="List" />
       <TxFlatRadioItem value="kanban" icon="i-carbon-column" label="Kanban" />
-    </TxFlatRadio>
-  </template>
----
-:::
-
-## 禁用状态
-
-支持整组禁用和单项禁用。
-
-### FlatRadio (disabled)
-:::TuffDemoWrapper{demo="FlatRadioDisabledDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const value = ref('a')
-  </script>
-
-  <template>
-    <!-- 单项禁用 -->
-    <TxFlatRadio v-model="value">
-      <TxFlatRadioItem value="a" label="Option A" />
-      <TxFlatRadioItem value="b" label="Option B" disabled />
-      <TxFlatRadioItem value="c" label="Option C" />
-    </TxFlatRadio>
-
-    <!-- 整组禁用 -->
-    <TxFlatRadio v-model="value" disabled>
-      <TxFlatRadioItem value="a" label="Option A" />
-      <TxFlatRadioItem value="b" label="Option B" />
-      <TxFlatRadioItem value="c" label="Option C" />
     </TxFlatRadio>
   </template>
 ---
@@ -223,52 +275,7 @@ code: |
 | `End` | 选中最后一个非禁用项 |
 | `Enter` / `Space` | 多选模式下切换当前聚焦项 |
 
-## API
-
-### TxFlatRadio
-
-#### Props
-
-| 属性名 | 说明 | 类型 | 默认值 |
-|--------|------|------|--------|
-| `modelValue` / `v-model` | 单选时为单值，多选时为值数组。 | `string \| number \| (string \| number)[]` | *必填* |
-| `multiple` | 启用类似复选框的多选行为；开启后隐藏单选滑动指示器。 | `boolean` | `false` |
-| `disabled` | 禁用整组，移除容器焦点并阻止点击/键盘变化。 | `boolean` | `false` |
-| `size` | 尺寸变体。 | `'sm' \| 'md' \| 'lg' \| 'xl'` | `'md'` |
-| `bordered` | 为选择器添加外边框。 | `boolean` | `false` |
-
-#### Events
-
-| 事件名 | 说明 | 回调参数 |
-|--------|------|----------|
-| `update:modelValue` | 以新的单选值或多选值数组触发。 | `(value: string \| number \| (string \| number)[]) => void` |
-| `change` | 选择变化后以相同载荷触发。 | `(value: string \| number \| (string \| number)[]) => void` |
-
-#### Slots
-
-| 插槽名 | 说明 |
-|--------|------|
-| `default` | `TxFlatRadioItem` 子组件。 |
-
-### TxFlatRadioItem
-
-#### Props
-
-| 属性名 | 说明 | 类型 | 默认值 |
-|--------|------|------|--------|
-| `value` | 注册到父选择器的当前项值。 | `string \| number` | *必填* |
-| `label` | 未提供默认插槽时的可见文本。 | `string` | - |
-| `icon` | 未提供 `icon` 插槽时使用的图标 CSS class。 | `string` | - |
-| `disabled` | 禁用当前项，并在键盘导航中跳过。 | `boolean` | `false` |
-
-#### Slots
-
-| 插槽名 | 说明 |
-|--------|------|
-| `default` | 自定义可见内容，替代 `label`。 |
-| `icon` | 自定义图标内容，替代 `icon` class。 |
-
-## 交互契约
+## 概述
 
 - 滑块与多选态 chip 的底色都取自 `--tx-surface-raised`，而它是相对 `--tx-fill-color`（也就是轨道本身）定义的。两次以页面为锚点的尝试都失败了：只用 `--tx-bg-color-overlay` 时浅色下是白色、深色下却比轨道更暗；把文字色混进去之后，滑块在明暗两种主题下都落在距轨道四个色阶以内。
 - `--tx-flat-radio-track-bg`、`--tx-flat-radio-indicator-bg`、`--tx-flat-radio-indicator-shadow` 可分别覆写这三项，宿主不必再去压 scoped 样式的特异度。
@@ -286,27 +293,14 @@ code: |
 - 多选模式下方向键移动当前聚焦值，Enter / Space 切换该值；单选模式下方向键会立即选中下一个值。
 - 整组 `disabled` 会把容器 `tabindex` 设为 `-1`，让所有 item 进入禁用态，并阻止点击/键盘变化。
 
-## 最佳实践
-
-- FlatRadio 适合 2 到 5 个短选项，且用户需要直接比较选项的场景；更长列表使用 `TxSelect`。
-- 标签尽量保持单行；item 布局有意使用 `white-space: nowrap`。
-- 在紧凑 `sm` 尺寸中避免混用过长自定义插槽内容和图标。
-- 设置页、落地页里这个控件是当前屏幕的主选择时用 `xl`；行内和工具栏仍然用默认的 `md`。
-- 不要在自定义插槽内容里恢复"仅选中时加粗"的写法 —— 那会把组件刚修掉的重排又带回来。
-- 只有当多个值是彼此独立的开关项时才使用 `multiple`；否则用独立开关或复选框表达更清晰。
-- `value` 应在渲染间保持稳定，因为父级会按 value 注册 item DOM，用于指示器和键盘顺序。
-
-## 审阅说明
+## 技术实现
 
 - **可访问性说明：** 整组只有容器进入 Tab 顺序；item 按钮保持 `tabindex="-1"`，从而集中处理方向键。需要用邻近字段文案或外部 label 为整组命名。
 - **动效说明：** 先试过用隐藏的加粗副本撑住选中宽度，被否掉了：它只对 `label` prop 有效，而真正要紧的调用点传的是插槽内容；为撑宽度把插槽渲染两遍则会让用户内容挂载两次。
 - **实测覆盖:** `flat-radio.test.ts` 覆盖单选 `radiogroup`/`radio` 语义、item 禁用态、禁用整组时移除焦点、方向键循环并跳过禁用项、Home/End 选择、`multiple` 模式下 Enter/Space 切换，以及共享过渡曲线、选中无关的选项宽度、小数级滑块几何、减弱动效路径和 `sm`/`md`/`lg`/`xl` 尺寸梯度。
-
-## Source
 
 - Component sources: `packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadio.vue` and `TxFlatRadioItem.vue`.
 - Types: `packages/tuffex/packages/components/src/flat-radio/src/types.ts`.
 - Coverage: `packages/tuffex/packages/components/src/flat-radio/__tests__/flat-radio.test.ts` verifies ARIA roles, disabled behavior, arrow-key wrapping, Home / End, and Enter / Space toggles in multiple mode.
 
 <TuffDocSourceLink />
-

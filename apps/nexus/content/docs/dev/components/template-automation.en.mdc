@@ -9,13 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Scenario
-
-Tuff's screenshot OCR is exactly this flow: when an image is copied, the system's own OCR reads it first, an AI model re-reads it only when the native engine is not confident enough, the text is translated, and the translation goes back on the clipboard with a notification. This template draws it as an automation you can edit and run: the flow canvas in the middle, node settings and the current run on the right, and in the wide layout a run history and a resizable log pane.
-
-It fits workflow editors in the Zapier / n8n mould, CI pipelines, approval flows, and any screen where people set up a chain of steps and then watch it run.
-
-## Template
+## Usage
 
 ### Clipboard OCR → Translate
 
@@ -87,7 +81,27 @@ code: |
 ---
 :::
 
-## Anatomy
+## Overview
+
+Tuff's screenshot OCR is exactly this flow: when an image is copied, the system's own OCR reads it first, an AI model re-reads it only when the native engine is not confident enough, the text is translated, and the translation goes back on the clipboard with a notification. This template draws it as an automation you can edit and run: the flow canvas in the middle, node settings and the current run on the right, and in the wide layout a run history and a resizable log pane.
+
+It fits workflow editors in the Zapier / n8n mould, CI pipelines, approval flows, and any screen where people set up a chain of steps and then watch it run.
+
+- The first time the template scrolls into view it runs once, in about 3.3 seconds: nodes go running, then done, and the edges the data travels along move; the side panel switches to This run and the log fills in line by line. With reduced motion the finished run is shown straight away and no timer starts.
+- Click a node to edit it; changes apply to the next run. Apple Vision reads the sample screenshot at 93% confidence, so set Native OCR's minimum confidence to 94% or more and press Run: this time the run detours through the AI re-read on the right. Otherwise that node shows Skipped.
+- Turn on Simulate rate limit (429) on the Translate node: in the next run translation fails first, retries after 600ms and succeeds, and the history records it as retried.
+- Stop a run while it is going: the step in progress is marked cancelled and the log gains a `cancelled by user` line.
+- Nodes can be dragged and snap to the dot grid. The layout is recomputed from the canvas size and a drag is kept as an offset, so it survives going full screen.
+- Wide (≥ 960px) shows the run history, the four-step progress and the log pane. In the column and on narrow screens, Node and This run become tabs in the side panel, and narrow stacks that panel under the canvas.
+
+## Customization
+
+- Use your own flow: nodes and edges are plain arrays, and `flowNodes()` only turns the canvas size into coordinates. TxFlowchart always connects the bottom of one node to the top of the next, so a branch node has to sit to the side, letting the edge that skips it run straight past.
+- Wire it to a real runner: replace the timed steps `buildPlan()` lays out with events pushed from the backend (SSE or WebSocket). Each event calls `setNode()` once and appends a log line; the rest of the screen is derived from those states.
+- TxFlowchart has no per-edge styling API. The template borrows `dashed` to mean "in flight" and puts the colour and the motion in its own CSS, inside `prefers-reduced-motion: no-preference`.
+- TxFlatSelect and the fine-tune card's type menu do not teleport. Keep them where no `overflow: hidden` ancestor can clip them and well away from the container's bottom edge.
+
+## Related components
 
 | Region | Components | Role |
 |---|---|---|
@@ -98,19 +112,3 @@ code: |
 | Run history (wide) | [TxTimeline](/docs/dev/components/timeline) | Outcome and duration of recent runs, newest first |
 | Log pane (wide) | [TxSplitter](/docs/dev/components/splitter) | Drag the divider to trade canvas height for log height; the nodes re-space to fit |
 | Completion | [TxToastPanel](/docs/dev/components/toast-panel) | A result card hanging from the Run button, gone after four seconds |
-
-## Interactions
-
-- The first time the template scrolls into view it runs once, in about 3.3 seconds: nodes go running, then done, and the edges the data travels along move; the side panel switches to This run and the log fills in line by line. With reduced motion the finished run is shown straight away and no timer starts.
-- Click a node to edit it; changes apply to the next run. Apple Vision reads the sample screenshot at 93% confidence, so set Native OCR's minimum confidence to 94% or more and press Run: this time the run detours through the AI re-read on the right. Otherwise that node shows Skipped.
-- Turn on Simulate rate limit (429) on the Translate node: in the next run translation fails first, retries after 600ms and succeeds, and the history records it as retried.
-- Stop a run while it is going: the step in progress is marked cancelled and the log gains a `cancelled by user` line.
-- Nodes can be dragged and snap to the dot grid. The layout is recomputed from the canvas size and a drag is kept as an offset, so it survives going full screen.
-- Wide (≥ 960px) shows the run history, the four-step progress and the log pane. In the column and on narrow screens, Node and This run become tabs in the side panel, and narrow stacks that panel under the canvas.
-
-## Adapting it
-
-- Use your own flow: nodes and edges are plain arrays, and `flowNodes()` only turns the canvas size into coordinates. TxFlowchart always connects the bottom of one node to the top of the next, so a branch node has to sit to the side, letting the edge that skips it run straight past.
-- Wire it to a real runner: replace the timed steps `buildPlan()` lays out with events pushed from the backend (SSE or WebSocket). Each event calls `setNode()` once and appends a log line; the rest of the screen is derived from those states.
-- TxFlowchart has no per-edge styling API. The template borrows `dashed` to mean "in flight" and puts the colour and the motion in its own CSS, inside `prefers-reduced-motion: no-preference`.
-- TxFlatSelect and the fine-tune card's type menu do not teleport. Keep them where no `overflow: hidden` ancestor can clip them and well away from the container's bottom edge.

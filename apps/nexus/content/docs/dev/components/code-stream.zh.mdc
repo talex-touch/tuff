@@ -8,9 +8,8 @@ tags: [ai, code, streaming, highlight]
 syncStatus: reviewed
 verified: true
 ---
-# CodeStream 流式代码块
 
-## 基础用法
+## 用法
 
 ### 逐行显现
 
@@ -80,15 +79,15 @@ code: |
 ---
 :::
 
-## 高亮与主题
+### 最佳实践
 
-高亮走仓库已有的 shiki 运行时（与 `TxCodeBlock` 同一个懒加载单例），是纯异步增强：纯文本渲染永远是对的，颜色到了再叠上去。不传 `lang` 就不高亮，也不会去加载 shiki。
+- 让宿主按数据到达节奏推进 `revealedLines`，不要在组件里放定时器。
+- 语言不确定时宁可不传 `lang`：纯文本渲染永远正确，错误的语言 id 只会白跑一次高亮。
+- 长代码建议配合外层滚动容器；代码区自身横向可滚，但纵向由内容决定。
+- 需要与 `TxStreamMarkdown` 的围栏统一观感时用 `TxCodeBlock`；需要文件名头部、行号与逐行显现时用本组件。
+- 非英文界面记得一起覆盖 `copyLabel` 与 `copiedLabel`，只改一个会中英混排。
 
-`theme` 默认 `'auto'`，跟着文档根的 `data-theme` 或 `.dark` 走。上游是单主题 demo，把默认写死成 light 会让暗色宿主里出现浅底深字。
-
-组件把 shiki 的输出按行拆开，再逐行配上行号与显现动画。**拆分前会核对行数**：如果高亮结果的行数与源码不一致，整体回退到纯文本，而不是让行号整体错位一行。
-
-## API
+## API 参考
 
 ### Props
 
@@ -130,7 +129,15 @@ code: |
 | `header` | — | 替换文件名与语言标签这一对。 |
 | `actions` | — | 在复制按钮之前插入自定义控件。 |
 
-## 交互契约
+## 高亮与主题
+
+高亮走仓库已有的 shiki 运行时（与 `TxCodeBlock` 同一个懒加载单例），是纯异步增强：纯文本渲染永远是对的，颜色到了再叠上去。不传 `lang` 就不高亮，也不会去加载 shiki。
+
+`theme` 默认 `'auto'`，跟着文档根的 `data-theme` 或 `.dark` 走。上游是单主题 demo，把默认写死成 light 会让暗色宿主里出现浅底深字。
+
+组件把 shiki 的输出按行拆开，再逐行配上行号与显现动画。**拆分前会核对行数**：如果高亮结果的行数与源码不一致，整体回退到纯文本，而不是让行号整体错位一行。
+
+## 概述
 
 - `revealedLines` 会被夹到 `[0, 总行数]`，越界不会报错。
 - 光标只在**正在显现**时出现（`0 < revealedLines < 总行数`），画在最后一行末尾。它是**静止**的：上游把闪烁光标留给流式散文，代码光标只是位置标记。
@@ -141,15 +148,7 @@ code: |
 - 代码区是 `<div>` 而不是 `<pre>`：Vue 编译器会保留 `<pre>` 内的模板缩进，标记自身的缩进会被当成代码渲染出来。逐行的 `white-space: pre` 表达同一件事。
 - 减弱动效下逐行入场动画停止，显现进度本身照常。
 
-## 最佳实践
-
-- 让宿主按数据到达节奏推进 `revealedLines`，不要在组件里放定时器。
-- 语言不确定时宁可不传 `lang`：纯文本渲染永远正确，错误的语言 id 只会白跑一次高亮。
-- 长代码建议配合外层滚动容器；代码区自身横向可滚，但纵向由内容决定。
-- 需要与 `TxStreamMarkdown` 的围栏统一观感时用 `TxCodeBlock`；需要文件名头部、行号与逐行显现时用本组件。
-- 非英文界面记得一起覆盖 `copyLabel` 与 `copiedLabel`，只改一个会中英混排。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/code-stream/src/TxCodeStream.vue`。
 - Types: `packages/tuffex/packages/components/src/code-stream/src/types.ts`。
@@ -158,8 +157,6 @@ code: |
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **与 `TxCodeBlock` 的分工:** `TxCodeBlock` 是 `TxStreamMarkdown` 渲染每个围栏的内部件，负责 markdown 场景；本组件是独立的「智能体在写代码」展示，多出文件名头部、行号、逐行显现与光标。
 - **已知偏差（视觉）:** 上游手写了一套五色 token 映射（`kw → --accent-ink`、`str → --green`、`dim → --ink-3`），这里换成 shiki，因此配色与截图基准不逐像素一致。这是 design.md §8.2 预先接受的取舍——手写模型要求每个宿主自己分词，不能作为公共 API。需要贴近时，可给 shiki 配自定义主题把那五个 scope 映到 `--tx-bui-*`。

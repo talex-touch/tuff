@@ -8,9 +8,8 @@ tags: [grid, layout, responsive]
 syncStatus: reviewed
 verified: true
 ---
-# GridLayout 网格布局
 
-## 基础用法
+## 用法
 
 :::TuffDemoWrapper{demo="GridLayoutGridLayoutDemo" code-lang="vue"}
 ---
@@ -24,8 +23,6 @@ code: |
   </template>
 ---
 :::
-
-## 组合示例
 
 ### 卡片网格
 
@@ -54,18 +51,15 @@ code: |
 </template>
 ```
 
-## 交互契约
+### 最佳实践
 
-- 根节点是 block `div`，使用 CSS Grid 布局。
-- 默认列模板为 `repeat(auto-fit, minmax(minItemWidth, 1fr))`。
-- 视口宽度 `>= 1400px` 时，列模板切换为 `repeat(maxColumns, 1fr)`。
-- `gap`、`minItemWidth`、`maxColumns` 会写入根节点 CSS 变量。
-- 光斑效果只作用于带 `.tx-grid-layout__item` class 的后代。
-- `interactive=true` 时，鼠标移动会给每个 `.tx-grid-layout__item` 更新 `--tx-grid-op`、`--tx-grid-x`、`--tx-grid-y` inline 变量。
-- 鼠标离开时会把 `--tx-grid-op` 设回 `0`。
-- `interactive=false` 时，鼠标移动与离开处理器会直接返回，不改写子节点样式。
+- `TxGridLayout` 用于重复的同级卡片；一维对齐使用 `TxFlex` 或 `TxStack`。
+- 只有需要内置背景、圆角、cursor 和光斑样式时才给子节点添加 `.tx-grid-layout__item`。
+- 超大网格建议关闭 `interactive`，避免每次鼠标移动都批量更新子节点样式。
+- `minItemWidth` 应对应卡片真实可读最小宽度，不要把它当成间距 hack。
+- 避免把交互网格嵌套进其它高频指针交互区域。
 
-## API
+## API 参考
 
 ### Props
 
@@ -100,21 +94,22 @@ code: |
 | `--tx-grid-op` | 鼠标状态 | 每个 item 的光斑透明度。 |
 | `--tx-grid-x` / `--tx-grid-y` | 鼠标状态 | 鼠标相对每个 item 的位置。 |
 
-## 最佳实践
+## 概述
 
-- `TxGridLayout` 用于重复的同级卡片；一维对齐使用 `TxFlex` 或 `TxStack`。
-- 只有需要内置背景、圆角、cursor 和光斑样式时才给子节点添加 `.tx-grid-layout__item`。
-- 超大网格建议关闭 `interactive`，避免每次鼠标移动都批量更新子节点样式。
-- `minItemWidth` 应对应卡片真实可读最小宽度，不要把它当成间距 hack。
-- 避免把交互网格嵌套进其它高频指针交互区域。
+- 根节点是 block `div`，使用 CSS Grid 布局。
+- 默认列模板为 `repeat(auto-fit, minmax(minItemWidth, 1fr))`。
+- 视口宽度 `>= 1400px` 时，列模板切换为 `repeat(maxColumns, 1fr)`。
+- `gap`、`minItemWidth`、`maxColumns` 会写入根节点 CSS 变量。
+- 光斑效果只作用于带 `.tx-grid-layout__item` class 的后代。
+- `interactive=true` 时，鼠标移动会给每个 `.tx-grid-layout__item` 更新 `--tx-grid-op`、`--tx-grid-x`、`--tx-grid-y` inline 变量。
+- 鼠标离开时会把 `--tx-grid-op` 设回 `0`。
+- `interactive=false` 时，鼠标移动与离开处理器会直接返回，不改写子节点样式。
 
-## 审阅说明
+## 技术实现
 
 - 已人工核对 `packages/tuffex/packages/components/src/grid-layout/index.ts`、`TxGridLayout.vue` 与 `grid-layout.test.ts`。
 - 光斑变量只写入带 `.tx-grid-layout__item` 的后代；普通插槽子节点不会被改写。
 - `interactive=false` 会阻止指针处理器改动子节点 inline style，这对大列表或虚拟网格很重要。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/grid-layout/src/TxGridLayout.vue`。
 - Types: `packages/tuffex/packages/components/src/grid-layout/index.ts`。

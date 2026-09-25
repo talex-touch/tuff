@@ -8,9 +8,8 @@ tags: [version, release, download, history]
 syncStatus: reviewed
 verified: true
 ---
-# VersionCapsule 版本胶囊
 
-## 基础用法
+## 用法
 
 ### VersionCapsule
 :::TuffDemoWrapper{demo="VersionCapsuleVersionCapsuleDemo" code-lang="vue"}
@@ -50,42 +49,17 @@ code: |
 ---
 :::
 
-## 通道色调
+### 最佳实践
 
-胶囊始终标注自身通道，并按 `tone` 着色，因此不会和页面主稳定版下载 CTA 抢焦点。历史行按条目单独解析色调，让稳定版即使置于一串预览版中也能保持辨识度。
+- 始终标注通道（`BETA` / `STABLE` / `NIGHTLY`）而非"LATEST"，使胶囊永不与页面主稳定版下载 CTA 抢焦点。
+- 让胶囊**配合**而非取代主认证版按钮：按钮交付稳定构建，胶囊承载预览通道（下载 + 历史）。
+- 把预发布注意事项放进下载面板的 `notice`（tone `warning`），让用户在通往文件的路上读到；已认证构建用 tone `success`。
+- 给构建设置 `href`，让行以 `<a download>` 直接下载；仅在需要于 `select` 时再解析地址的流程里使用 `<button>` 回退。
+- 只标记一个构建 `recommended`（访客平台）——多余的推荐构建在高亮时会被忽略。
+- 历史面板用 `latest` 承载精选卡片、`entries` 承载历史行；仅在单行摘要有帮助时设置 `note`，因为它只在精选卡片上渲染。
+- 让每个条目的 `tone` 匹配其通道，使稳定版与预览版在同一列表中保持可区分。
 
-:::TuffDemoWrapper{demo="VersionCapsuleChannelTonesDemo" code-lang="vue" title="通道色调" description="stable / preview / nightly / neutral，各自带匹配的状态点与通道颜色。"}
----
-code: |
-  <script setup lang="ts">
-  const capsules = [
-    { key: 'stable', tone: 'stable', version: 'v2.4.12', channel: '稳定版', historyTitle: '版本历史', latest: { id: 's1', tag: 'v2.4.12', channel: '稳定版', tone: 'stable', date: '6 月 23 日', note: '已完成签名与回归验证的正式构建。' } },
-    { key: 'preview', tone: 'preview', version: 'v2.4.13-beta.19', channel: '测试版', historyTitle: '版本历史', latest: { id: 'p1', tag: 'v2.4.13-beta.19', channel: '测试版', tone: 'preview', date: '7 月 21 日', note: '面向尝鲜用户的预发布通道。' } },
-    { key: 'nightly', tone: 'nightly', version: 'v2.4.14-nightly.5', channel: '每日构建', historyTitle: '版本历史', latest: { id: 'n1', tag: 'v2.4.14-nightly.5', channel: '每日构建', tone: 'nightly', date: '今天', note: '自动构建，可能不稳定。' } },
-    { key: 'neutral', tone: 'neutral', version: 'v1.9.8', channel: '已归档', historyTitle: '版本历史', latest: { id: 'a1', tag: 'v1.9.8', channel: '已归档', tone: 'neutral', date: '2024', note: '不再维护的历史版本。' } },
-  ]
-  </script>
-
-  <template>
-    <div style="display: flex; flex-direction: column; gap: 14px; align-items: flex-start;">
-      <TxVersionCapsule
-        v-for="item in capsules"
-        :key="item.key"
-        :version="item.version"
-        :channel="item.channel"
-        :tone="item.tone"
-        history-label="历史版本"
-      >
-        <template #history="{ close }">
-          <TxVersionHistoryPanel :title="item.historyTitle" :latest="item.latest" @select="close" />
-        </template>
-      </TxVersionCapsule>
-    </div>
-  </template>
----
-:::
-
-## API
+## API 参考
 
 ### TxVersionCapsule Props
 
@@ -179,6 +153,41 @@ code: |
 |------|------|------|
 | `select` | `(entry: TxVersionHistoryEntry)` | 选择某历史行或精选卡片时，带该条目触发。 |
 
+## 通道色调
+
+胶囊始终标注自身通道，并按 `tone` 着色，因此不会和页面主稳定版下载 CTA 抢焦点。历史行按条目单独解析色调，让稳定版即使置于一串预览版中也能保持辨识度。
+
+:::TuffDemoWrapper{demo="VersionCapsuleChannelTonesDemo" code-lang="vue" title="通道色调" description="stable / preview / nightly / neutral，各自带匹配的状态点与通道颜色。"}
+---
+code: |
+  <script setup lang="ts">
+  const capsules = [
+    { key: 'stable', tone: 'stable', version: 'v2.4.12', channel: '稳定版', historyTitle: '版本历史', latest: { id: 's1', tag: 'v2.4.12', channel: '稳定版', tone: 'stable', date: '6 月 23 日', note: '已完成签名与回归验证的正式构建。' } },
+    { key: 'preview', tone: 'preview', version: 'v2.4.13-beta.19', channel: '测试版', historyTitle: '版本历史', latest: { id: 'p1', tag: 'v2.4.13-beta.19', channel: '测试版', tone: 'preview', date: '7 月 21 日', note: '面向尝鲜用户的预发布通道。' } },
+    { key: 'nightly', tone: 'nightly', version: 'v2.4.14-nightly.5', channel: '每日构建', historyTitle: '版本历史', latest: { id: 'n1', tag: 'v2.4.14-nightly.5', channel: '每日构建', tone: 'nightly', date: '今天', note: '自动构建，可能不稳定。' } },
+    { key: 'neutral', tone: 'neutral', version: 'v1.9.8', channel: '已归档', historyTitle: '版本历史', latest: { id: 'a1', tag: 'v1.9.8', channel: '已归档', tone: 'neutral', date: '2024', note: '不再维护的历史版本。' } },
+  ]
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 14px; align-items: flex-start;">
+      <TxVersionCapsule
+        v-for="item in capsules"
+        :key="item.key"
+        :version="item.version"
+        :channel="item.channel"
+        :tone="item.tone"
+        history-label="历史版本"
+      >
+        <template #history="{ close }">
+          <TxVersionHistoryPanel :title="item.historyTitle" :latest="item.latest" @select="close" />
+        </template>
+      </TxVersionCapsule>
+    </div>
+  </template>
+---
+:::
+
 ## Slots
 
 ### TxVersionCapsule
@@ -214,7 +223,7 @@ code: |
 | `downloadRef` | `Ref<HTMLButtonElement \| null>` | 左侧（下载）分段按钮元素。 |
 | `historyRef` | `Ref<HTMLButtonElement \| null>` | 右侧（历史）分段按钮元素。 |
 
-## 交互契约
+## 概述
 
 - 两个分段是**面向不同任务的独立触点**：左半下载构建，右半打开历史。它们是各自独立的点击目标——不要再把整个胶囊做成一个动作。
 - 同一时刻只打开一个面板。点击另一个分段会切换面板；再次点击当前分段则关闭。
@@ -226,17 +235,7 @@ code: |
 - 下载面板只把带文案的按钮给到第一个 `recommended` 构建，让平台识别出的选择读起来像默认项，而不是若干等权动作之一。
 - 历史色调按行解析，因此稳定版即使在一串预览版中也能保持视觉区分。
 
-## 最佳实践
-
-- 始终标注通道（`BETA` / `STABLE` / `NIGHTLY`）而非"LATEST"，使胶囊永不与页面主稳定版下载 CTA 抢焦点。
-- 让胶囊**配合**而非取代主认证版按钮：按钮交付稳定构建，胶囊承载预览通道（下载 + 历史）。
-- 把预发布注意事项放进下载面板的 `notice`（tone `warning`），让用户在通往文件的路上读到；已认证构建用 tone `success`。
-- 给构建设置 `href`，让行以 `<a download>` 直接下载；仅在需要于 `select` 时再解析地址的流程里使用 `<button>` 回退。
-- 只标记一个构建 `recommended`（访客平台）——多余的推荐构建在高亮时会被忽略。
-- 历史面板用 `latest` 承载精选卡片、`entries` 承载历史行；仅在单行摘要有帮助时设置 `note`，因为它只在精选卡片上渲染。
-- 让每个条目的 `tone` 匹配其通道，使稳定版与预览版在同一列表中保持可区分。
-
-## 审阅说明
+## 技术实现
 
 - 组件源码：`packages/tuffex/packages/components/src/version-capsule/src/TxVersionCapsule.vue` 确认分段结构、受控/非受控 `panel`、外部点击 / Escape 关闭、`close()` 焦点交还，以及 `download` / `history` 插槽。
 - 组件源码：`packages/tuffex/packages/components/src/version-capsule/src/TxVersionDownloadPanel.vue` 确认 notice 色调、首个 `recommended` 高亮，以及链接与按钮两种构建行。
@@ -244,5 +243,4 @@ code: |
 - 类型契约：`packages/tuffex/packages/components/src/version-capsule/src/types.ts` 导出 `TxVersionCapsuleProps`、`TxVersionDownloadPanelProps`、`TxVersionHistoryPanelProps`、`TxVersionBuild`、`TxVersionNotice`、`TxVersionHistoryEntry` 和 `TxVersionChannelTone`。
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/version-capsule/__tests__/version-capsule.test.ts` 覆盖面板打开/切换/开合、Escape 与外部指针关闭、受控 `panel`、禁用行为、仅首个 `recommended` 的按钮、链接与按钮行、`select` 载荷，以及按行色调 class。
 
-## Source
 <TuffDocSourceLink />

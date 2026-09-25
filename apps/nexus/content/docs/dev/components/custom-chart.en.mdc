@@ -8,9 +8,8 @@ tags: [chart, custom, composable, primitives]
 syncStatus: reviewed
 verified: true
 ---
-# Custom Chart
 
-## Basic Usage
+## Usage
 
 kumo's escape hatch pipes raw echarts options into a low-level `Chart`; here that job belongs to the [ECharts Family](/docs/dev/components/echart-charts) (`TxEChart` plus typed wrappers), and this page is the **composition** hatch: `TxChart` establishes the coordinate system (measures the container, derives scales, allocates palette slots) and axes/grid/series mount as children in its default slot. Series read data through accessors (a key or `(d, i) => v`); without `color` they take categorical slots in mount order. The x/y domains derive from the union of all series data, and `xDomain`/`yDomain` override explicitly.
 
@@ -64,16 +63,6 @@ code: |
 ---
 :::
 
-## Composition Rules
-
-- Series/axes/grid must be descendants of `<TxChart>` — they read scales from the injected chart context and throw when used standalone.
-- Multiple `TxBarSeries`: without `stack` they lay out side by side; sharing a `stack` key stacks them, and the y domain covers stacked totals automatically.
-- `TxArcSeries` needs no coordinate system and works in an axis-free `TxChart`.
-- The `#overlay` slot is a DOM layer above the SVG (`pointer-events: none`) for tooltips and annotations.
-- For deep customization, call `useChartContext()` in your own layer, or read scales from the `context` exposed on the `TxChart` instance.
-
-## Animation
-
 A custom layer does not animate on its own: `TxChart` only supplies the coordinate system, and the exported primitives the series share do the motion. Use `useEnterProgress()` for the first render (a 0 → 1 `Ref<number>`), `useTweenedNumbers(source)` for data updates (tweens a number array towards its latest values), and `tween()` with `easings` / `cubicBezier()` when you need your own cadence. Durations and the threshold are exported too: `ENTER_DURATION` (1000), `UPDATE_DURATION` (500), `STATE_DURATION` (300), `ANIMATION_THRESHOLD` (2000). Series above the threshold do not animate, and under `prefers-reduced-motion: reduce` every tween lands on its final frame.
 
 ```vue
@@ -106,7 +95,7 @@ const enterWidth = computed(() => plot.value.width * enter.value)
 </template>
 ```
 
-## API
+## API Reference
 
 ### Chart Props
 
@@ -143,3 +132,11 @@ const enterWidth = computed(() => plot.value.width * enter.value)
 | `title` / `rows` / `hiddenCount` | — | — | Default content; the slot replaces it entirely. |
 
 The tooltip keeps ECharts' cadence as well: it waits out a 100ms `hideDelay` before the 200ms fade-out and DOM removal, so a brief pointer excursion does not flicker it; movement is handed to the browser as a 400ms `transform: translate3d()` transition; and pointer tracking is throttled to 50ms, sampling once on entry and once on exit.
+
+## Composition Rules
+
+- Series/axes/grid must be descendants of `<TxChart>` — they read scales from the injected chart context and throw when used standalone.
+- Multiple `TxBarSeries`: without `stack` they lay out side by side; sharing a `stack` key stacks them, and the y domain covers stacked totals automatically.
+- `TxArcSeries` needs no coordinate system and works in an axis-free `TxChart`.
+- The `#overlay` slot is a DOM layer above the SVG (`pointer-events: none`) for tooltips and annotations.
+- For deep customization, call `useChartContext()` in your own layer, or read scales from the `context` exposed on the `TxChart` instance.

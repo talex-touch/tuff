@@ -21,7 +21,6 @@ const { followSystem, selectedLanguage, supportedLanguages } = useLanguageSettin
     <TuffBlockSwitch
       v-model="followSystem"
       :title="t('settingLanguage.followSystem')"
-      :description="t('settingLanguage.followSystemDesc')"
       default-icon="i-carbon-virtual-machine"
       active-icon="i-carbon-virtual-machine"
     />
@@ -29,7 +28,6 @@ const { followSystem, selectedLanguage, supportedLanguages } = useLanguageSettin
       v-model="selectedLanguage"
       :disabled="followSystem"
       :title="t('settingLanguage.chooseLanguage')"
-      :description="t('settingLanguage.chooseLanguageDesc')"
       default-icon="i-carbon-language"
       active-icon="i-carbon-language"
     >

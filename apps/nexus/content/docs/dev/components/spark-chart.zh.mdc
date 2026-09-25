@@ -8,9 +8,8 @@ tags: [ai, chart, canvas, data]
 syncStatus: reviewed
 verified: true
 ---
-# SparkChart 迷你折线图
 
-## 基础用法
+## 用法
 
 ### SparkChart + ChartScrubber
 
@@ -49,21 +48,16 @@ code: |
 ---
 ::::
 
-## 尺寸与主题
+### 最佳实践
 
-图表填满容器，尺寸从**容器**量出来而不是靠宽高 prop 指定。外层必须有确定高度。`ResizeObserver` 会在尺寸变化后重绘；位图按 `devicePixelRatio`（上限 2）放大，绘制计算仍使用 CSS 像素。
+- 给舞台确定高度，否则零高度容器无法绘制。
+- 传入 `aria-label` 与 `SparkSeries.label`，悬停数值就不会只存在于视觉提示框里。
+- 默认 monotone 配合均匀且足够密集的采样点。稀疏数据仍然稀疏，平滑不应凭空发明数据。
+- 同时使用两个组件时，把同一个 `activeIndex` 绑定到 `TxChartScrubber` 与 `TxSparkChart`。
+- 两者都按**绘图区**（而非整个舞台）换算指针位置，十字线才会落在它所报告的采样点上。图表把自己留出的横向边距以 `--tx-bui-plot-left` / `--tx-bui-plot-right` 写在根节点上，擦洗层从被包裹的元素读取，无需手工同步。
+- 提示框居中跟随指针，只有将要越出舞台时才被拉回。提示框宽度需小于舞台，否则它就没有可移动的空间。
 
-`theme` 默认 `'auto'`，跟随 `<html>` 与 `<body>` 上的 `data-theme` 或 `.dark`。canvas 不能继承 CSS 变量，因此主题切换会用当前 token 色重绘。
-
-## 曲线、坐标轴与悬停
-
-默认 `curve="monotone"` 使用与完整 `@talex-touch/tuffex/charts` 折线系列相同的 d3 曲线工厂：它消除折角而不会越过局部极值。只有编码确实需要时才选择 `linear`、`natural` 或 `step`。
-
-`xAxis` 与 `yAxis` 在 canvas 内画紧凑的基线和刻度，并自动预留边距。原始时间或数值不适合阅读时，传入 `xTickFormat` 与 `yTickFormat`。
-
-`interactive` 让独立图表拥有指针/键盘十字线：方向键、Home、End 与 Escape 移动或清除活动采样点。受控 `activeIndex` 让外层 `TxChartScrubber` 持有提示框，而 canvas 仍绘制高亮点。图表与擦洗层都会通过 polite live region 宣读当前值。
-
-## API
+## API 参考
 
 ### SparkChart Props
 
@@ -117,23 +111,28 @@ code: |
 | `leave` | — | 指针离开、抬起或被取消。 |
 | `update:activeIndex` | `(index: number \| null)` | 受控写回。 |
 
-## 交互契约
+## 尺寸与主题
+
+图表填满容器，尺寸从**容器**量出来而不是靠宽高 prop 指定。外层必须有确定高度。`ResizeObserver` 会在尺寸变化后重绘；位图按 `devicePixelRatio`（上限 2）放大，绘制计算仍使用 CSS 像素。
+
+`theme` 默认 `'auto'`，跟随 `<html>` 与 `<body>` 上的 `data-theme` 或 `.dark`。canvas 不能继承 CSS 变量，因此主题切换会用当前 token 色重绘。
+
+## 曲线、坐标轴与悬停
+
+默认 `curve="monotone"` 使用与完整 `@talex-touch/tuffex/charts` 折线系列相同的 d3 曲线工厂：它消除折角而不会越过局部极值。只有编码确实需要时才选择 `linear`、`natural` 或 `step`。
+
+`xAxis` 与 `yAxis` 在 canvas 内画紧凑的基线和刻度，并自动预留边距。原始时间或数值不适合阅读时，传入 `xTickFormat` 与 `yTickFormat`。
+
+`interactive` 让独立图表拥有指针/键盘十字线：方向键、Home、End 与 Escape 移动或清除活动采样点。受控 `activeIndex` 让外层 `TxChartScrubber` 持有提示框，而 canvas 仍绘制高亮点。图表与擦洗层都会通过 polite live region 宣读当前值。
+
+## 概述
 
 - 所有序列共用一套纵轴范围；横轴按 `time` 折算，时间全部相同则按下标均分。单点居中并由圆头线帽画成点。
 - 存在受控下标时，活动十字线与点使用该下标。外层擦洗层可以持有 DOM 提示框而不丢失 canvas 反馈。
 - 数据为空、容器尺寸为 0 或宿主没有 2D 上下文时什么都不画，也不会抛错。
 - 进入动效为 1000ms `cubicInOut`；数据更新为 500ms `cubicInOut`；超过 2000 点或 `prefers-reduced-motion: reduce` 时两者都跳过。
 
-## 最佳实践
-
-- 给舞台确定高度，否则零高度容器无法绘制。
-- 传入 `aria-label` 与 `SparkSeries.label`，悬停数值就不会只存在于视觉提示框里。
-- 默认 monotone 配合均匀且足够密集的采样点。稀疏数据仍然稀疏，平滑不应凭空发明数据。
-- 同时使用两个组件时，把同一个 `activeIndex` 绑定到 `TxChartScrubber` 与 `TxSparkChart`。
-- 两者都按**绘图区**（而非整个舞台）换算指针位置，十字线才会落在它所报告的采样点上。图表把自己留出的横向边距以 `--tx-bui-plot-left` / `--tx-bui-plot-right` 写在根节点上，擦洗层从被包裹的元素读取，无需手工同步。
-- 提示框居中跟随指针，只有将要越出舞台时才被拉回。提示框宽度需小于舞台，否则它就没有可移动的空间。
-
-## Source
+## 技术实现
 
 - 组件源码：`packages/tuffex/packages/components/src/spark-chart/src/TxSparkChart.vue`、`TxChartScrubber.vue`。
 - 投影与绘制：`packages/tuffex/packages/components/src/spark-chart/src/geometry.ts`、`draw.ts`。
@@ -142,8 +141,6 @@ code: |
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - 图表刻意以 canvas 为先：即使 jsdom 没有 2D 上下文，绘制调用面仍可测试。
 - 完整图表族已位于 `@talex-touch/tuffex/charts`；SparkChart 仍是根 TuffEx 入口里的紧凑卡片原语。

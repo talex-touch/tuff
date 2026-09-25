@@ -8,9 +8,8 @@ tags: [table, diff, review, data]
 syncStatus: reviewed
 verified: true
 ---
-# DiffTable 变更表格
 
-## 基础用法
+## 用法
 
 ### DiffTable
 :::TuffDemoWrapper{demo="DiffTableDiffTableDemo" code-lang="vue" title="提议的菜单精简" description="挂载后自动播放一次，停在完成态；重新播放按钮走 reset() + play()。"}
@@ -44,19 +43,15 @@ code: |
 ---
 :::
 
-## 阶段与播放模式
+### 最佳实践
 
-`stageDelays` 是三段时长 `[停顿, 标红, 展开]`，默认 `[800, 1000, 1000]`。**第一段是刻意的阅读停顿**：在它和第二段走完之前（默认 1.8 秒）表格完全不动，让人先读清原始数据，再看到改动。
+- 用 `change` 表达语义，不要靠自定义 class 硬涂颜色；配色、删除线与折叠都跟着它走。
+- 徽标、彩色 chip 所在列设 `tintText: false`，否则会被变更色整体重涂。
+- 列宽用百分比或固定 px，避免展开新增行时列错位。
+- 文档站、快照测试与不需要动画的场景用 `play="settled"`，可以直接拿到完成态。
+- 需要按钮触发时用 `play="manual"` 配合 `reset()` + `play()`，不要靠 `:key` 重挂整个组件。
 
-| 阶段 | 画面 |
-|------|------|
-| 0–1 | 全部行保持原样 |
-| 2 | `removed` / `modified` 行染色、变色、加删除线 |
-| 3（终态） | `added` 行以 `0fr → 1fr` 展开 |
-
-`play` 决定谁来推进：`auto` 挂载即播一次并停在终态；`manual` 保持原样直到调用 `play()`；`settled` 直接渲染完成态且不注册任何定时器（文档站与测试用）。
-
-## API
+## API 参考
 
 ### Props
 
@@ -134,7 +129,19 @@ code: |
 | `settle()` | 直接跳到完成态 |
 | `stage` | 当前阶段序号；完成态等于 `stageDelays.length` |
 
-## 交互契约
+## 阶段与播放模式
+
+`stageDelays` 是三段时长 `[停顿, 标红, 展开]`，默认 `[800, 1000, 1000]`。**第一段是刻意的阅读停顿**：在它和第二段走完之前（默认 1.8 秒）表格完全不动，让人先读清原始数据，再看到改动。
+
+| 阶段 | 画面 |
+|------|------|
+| 0–1 | 全部行保持原样 |
+| 2 | `removed` / `modified` 行染色、变色、加删除线 |
+| 3（终态） | `added` 行以 `0fr → 1fr` 展开 |
+
+`play` 决定谁来推进：`auto` 挂载即播一次并停在终态；`manual` 保持原样直到调用 `play()`；`settled` 直接渲染完成态且不注册任何定时器（文档站与测试用）。
+
+## 概述
 
 - 阶段机是这个组件的语义本体，不是 demo 编排；宿主用 `play` 与 expose 控制节奏，用 `rows[].change` 描述改动。
 - 定时器在 `onBeforeUnmount` 清理；`play="settled"` 不注册任何定时器。
@@ -143,15 +150,7 @@ code: |
 - 新增行折叠时带 `aria-hidden` 与 `inert`，不会被朗读，也不在 Tab 序列里。
 - 新增行的内层网格与 `<colgroup>` 都由 `columns` 推导，只有一份真相。
 
-## 最佳实践
-
-- 用 `change` 表达语义，不要靠自定义 class 硬涂颜色；配色、删除线与折叠都跟着它走。
-- 徽标、彩色 chip 所在列设 `tintText: false`，否则会被变更色整体重涂。
-- 列宽用百分比或固定 px，避免展开新增行时列错位。
-- 文档站、快照测试与不需要动画的场景用 `play="settled"`，可以直接拿到完成态。
-- 需要按钮触发时用 `play="manual"` 配合 `reset()` + `play()`，不要靠 `:key` 重挂整个组件。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/diff-table/src/TxDiffTable.vue`。
 - Types: `packages/tuffex/packages/components/src/diff-table/src/types.ts` 导出 `DiffTableProps`、`DiffTableColumn`、`DiffTableRow`、`DiffChangeKind`、`DiffTablePlay`、`DiffTableEmits`。
@@ -159,8 +158,6 @@ code: |
 - **实测覆盖:** `packages/tuffex/packages/components/src/diff-table/__tests__/diff-table.test.ts` 共 15 例，用假定时器覆盖三段阶段时序、`stageChange` / `settled` 发射、三种播放模式、expose 三方法、逐列染色与删除线、网格与 colgroup 同源、折叠行的 `aria-hidden` / `inert`、卸载清理与 `play` 切换。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **来源：** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT。
 - **与上游的差异：** 新增行按其在 `rows` 中的位置渲染，而不是上游写死的「永远在最后」，因此顺序得以保留且支持多条新增行；`modified` 是本移植新增的变更类型，上游没有。

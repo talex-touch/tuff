@@ -8,9 +8,8 @@ tags: [markdown, sanitize, theme]
 syncStatus: reviewed
 verified: true
 ---
-# MarkdownView Markdown 渲染
 
-## 基础用法
+## 用法
 
 `content` 是唯一输入源字符串。组件内部已启用 GFM 与软换行。
 
@@ -26,6 +25,31 @@ code: |
   </template>
 ---
 ::::
+
+### 最佳实践
+
+- 用户生成、远程加载或插件提供的内容保持默认 `sanitize=true`。
+- 传入短且已经标准化的 Markdown 字符串；除非明确需要 Markdown HTML，否则不要混入半转义 HTML。
+- 在预览、卡片或亮/暗并排展示中显式设置 `theme`，避免被页面全局主题误导。
+- `TxMarkdownView` 只负责展示；需要编辑能力时，在外部组合编辑器或 textarea。
+
+## API 参考
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `content` | `string` | 必填 | 渲染到 `.markdown-body` 容器中的 Markdown 源字符串。 |
+| `sanitize` | `boolean` | `true` | 使用 DOMPurify 清洗生成的 HTML；DOMPurify 加载期间不会输出已解析 HTML。 |
+| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` 根据 document 的 `data-theme` / 主题 class 推导，无法识别时回退到 `light`。 |
+
+### Slots
+
+无插槽。渲染结果完全由 `content` 派生。
+
+### Events
+
+无组件事件。
 
 ## 丰富 Markdown
 
@@ -88,25 +112,7 @@ code: |
 ---
 ::::
 
-## API
-
-### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `content` | `string` | 必填 | 渲染到 `.markdown-body` 容器中的 Markdown 源字符串。 |
-| `sanitize` | `boolean` | `true` | 使用 DOMPurify 清洗生成的 HTML；DOMPurify 加载期间不会输出已解析 HTML。 |
-| `theme` | `'auto' \| 'light' \| 'dark'` | `'auto'` | `auto` 根据 document 的 `data-theme` / 主题 class 推导，无法识别时回退到 `light`。 |
-
-### Slots
-
-无插槽。渲染结果完全由 `content` 派生。
-
-### Events
-
-无组件事件。
-
-## 交互契约
+## 概述
 
 - Markdown 通过 `marked` 解析，并启用 `gfm: true` 与 `breaks: true`。
 - `sanitize=true` 时，DOMPurify 就绪前不会提前渲染原始 HTML。
@@ -115,20 +121,11 @@ code: |
 - 外层容器会带上解析后的 `light` 或 `dark` class，以及同值的 `data-theme` 属性。
 - 随组件打包的 GitHub-Markdown 样式表是 *全局* 引入的，因此其中每条规则都被限定在 `:where(.tx-markdown-view, .tx-stream-md)` 下。`.markdown-body` 是一个非常通用的类名——加限定之前，只要引入本组件，宿主页面自己用该类名承载的正文也会被重新设置样式。`:where()` 不增加特异度，所以这层限定只收窄作用范围，不改变这些规则彼此之间的优先级关系。
 
-## 最佳实践
-
-- 用户生成、远程加载或插件提供的内容保持默认 `sanitize=true`。
-- 传入短且已经标准化的 Markdown 字符串；除非明确需要 Markdown HTML，否则不要混入半转义 HTML。
-- 在预览、卡片或亮/暗并排展示中显式设置 `theme`，避免被页面全局主题误导。
-- `TxMarkdownView` 只负责展示；需要编辑能力时，在外部组合编辑器或 textarea。
-
-## 审阅说明
+## 技术实现
 
 - **安全说明:** `sanitize=true` 会等待 DOMPurify；如果 sanitizer 动态导入失败，会渲染空内容。插件、远程或用户输入 Markdown 除非已在上游可信并标准化，否则不要关闭 sanitize。
 - **主题说明:** `theme="auto"` 初次会读取 `html` 与 `body` 的主题标记，但 MutationObserver 只监听 `html` 的 class 与 `data-theme`。不跟随 document root 的内嵌预览建议显式传 `theme`。
 - **实测覆盖:** `markdown-view.test.ts` 覆盖 sanitizer 就绪前不渲染、清洗后渲染、`sanitize=false` 原样渲染、显式 light/dark 主题、从 document 标记推导 auto 主题、observer 更新，以及 light fallback。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/markdown-view/src/TxMarkdownView.vue`。
 - Types: `packages/tuffex/packages/components/src/markdown-view/src/types.ts` 导出 `MarkdownViewProps`。

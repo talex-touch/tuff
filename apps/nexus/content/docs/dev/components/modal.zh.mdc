@@ -8,9 +8,8 @@ tags: [modal, dialog, overlay]
 syncStatus: reviewed
 verified: true
 ---
-# Modal 模态框
 
-## 基础用法
+## 用法
 
 从按钮打开对话框，正文保持简短，并通过更新绑定的 model 关闭。
 
@@ -39,7 +38,15 @@ code: |
 ---
 ::::
 
-## API
+### 最佳实践
+
+- 把模态框限制在确认、单步输入或短决策内；需要导航、筛选或长表单时改用抽屉或页面。
+- 优先使用默认 `title` 头部以获得自动可访问性关联。替换 `header` 时保持可见标题，并避免传入与自定义头部不匹配的旧 `title`。
+- 破坏性或最终操作放在 `footer`；次要操作的视觉权重应低于主操作。
+- 文档和应用界面都建议使用响应式 `width`，因为内容面板本身还有内边距。
+- 不要把长耗时异步状态只保存在模态框内容里；如果关闭会取消任务，应由父级显式建模取消逻辑。
+
+## API 参考
 
 ### Props
 
@@ -64,7 +71,7 @@ code: |
 | `header` | - | 替换生成的标题区域，同时保留内置关闭按钮。 |
 | `footer` | - | 底部操作区；未提供时不渲染。 |
 
-## 交互契约
+## 概述
 
 - 遮罩挂载在 `body` 下，打开时从共享 z-index 管理器获取新的层级，关闭时通过 `v-if` 移除。
 - 遮罩暴露 `role="dialog"`、`aria-modal="true"` 和 `tabindex="-1"`。
@@ -74,20 +81,10 @@ code: |
 - 点击遮罩空白、按 Escape、点击关闭按钮都会依次触发 `update:modelValue(false)` 和 `close`。
 - `TModal` 会把 props、attrs、`update:modelValue`、`close` 与 `default/header/footer` 插槽转发给 `TxModal`。
 
-## 最佳实践
-
-- 把模态框限制在确认、单步输入或短决策内；需要导航、筛选或长表单时改用抽屉或页面。
-- 优先使用默认 `title` 头部以获得自动可访问性关联。替换 `header` 时保持可见标题，并避免传入与自定义头部不匹配的旧 `title`。
-- 破坏性或最终操作放在 `footer`；次要操作的视觉权重应低于主操作。
-- 文档和应用界面都建议使用响应式 `width`，因为内容面板本身还有内边距。
-- 不要把长耗时异步状态只保存在模态框内容里；如果关闭会取消任务，应由父级显式建模取消逻辑。
-
-## 审阅说明
+## 技术实现
 
 - **可访问性说明:** `aria-labelledby` 只会根据默认 `title` 标题生成。提供自定义 `header` 时，除非插槽内也渲染带生成 id 的元素，否则应保持 `title` 为空，避免对话框指向不存在的标签。
 - **实测覆盖:** `modal.test.ts` 覆盖对话框语义、标题关联、内联宽度、正文/底部插槽、关闭/卸载后的焦点恢复、遮罩/Escape/关闭按钮关闭、自定义 header 无标题关联，以及 `TModal` 标题转发。
-
-## Source
 
 - Component sources: `packages/tuffex/packages/components/src/modal/src/TxModal.vue` 与 `TModal.vue`。
 - Export alias: `packages/tuffex/packages/components/src/modal/index.ts` 导出可安装的 `TxModal` 与 `TModal`；默认导出为 `TxModal`。

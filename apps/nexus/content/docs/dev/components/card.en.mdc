@@ -8,9 +8,8 @@ tags: [card, surface, layout]
 syncStatus: reviewed
 verified: true
 ---
-# Card
 
-## Basic Usage
+## Usage
 
 ### Basic
 :::TuffDemoWrapper{demo="CardBasicDemo" code-lang="vue"}
@@ -302,7 +301,53 @@ code: |
 ---
 :::
 
-## API
+### Best Practices
+
+### Usage Tips
+
+1. **Content structure**: use header/body/footer sections appropriately
+2. **Visual hierarchy**: use card variants to create hierarchy
+3. **Interaction feedback**: provide clear feedback for clickable cards
+4. **Responsive design**: ensure good behavior across screen sizes
+
+### Layout Examples
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <div class="card-grid">
+      <TxCard 
+        v-for="item in items" 
+        :key="item.id"
+        clickable
+        @click="handleItemClick(item)"
+      >
+        <template #header>
+          <h3>{{ item.title }}</h3>
+        </template>
+
+        <p>{{ item.description }}</p>
+
+        <template #footer>
+          <div class="card-actions">
+            <TxButton size="sm" variant="text">Edit</TxButton>
+            <TxButton size="sm" variant="text">Delete</TxButton>
+          </div>
+        </template>
+      </TxCard>
+    </div>
+  </template>
+---
+:::
+
+### Selection Guide (TxBaseSurface vs TxCard)
+
+- Prefer `TxCard` for higher-level, production-oriented usage. It already bundles `variant/shadow/slots/loading/inertial` and pointer-light + spring interactions.
+- Use `TxBaseSurface` when you need low-level material tuning, especially refraction/filter parameters (`displace`, `distortionScale`, `redOffset/greenOffset/blueOffset`, `filterSaturation/filterContrast/filterBrightness`, `refractionHaloOpacity`).
+- Convention: keep `TxCard` as a stable, out-of-the-box API; do material experiments and brand-level rendering in `TxBaseSurface`.
+
+## API Reference
 
 ### Props
 
@@ -387,7 +432,7 @@ code: |
 - Use `variant`, `shadow`, `size`, `radius`, `padding`, and surface props for supported customization.
 - Override global TuffEx tokens such as `--tx-bg-color-overlay`, `--tx-border-color-light`, and `--tx-color-primary` when the card should follow an app-wide theme.
 
-## Interaction Contract
+## Overview
 
 - The root is a non-semantic `div`. Use `clickable` only for card-level selection/navigation patterns and keep real buttons or links inside slots when the action needs native semantics.
 - `click` emits only when `clickable=true` and `disabled=false`; disabled cards keep visual content rendered but block click emission and pointer-driven motion updates.
@@ -397,55 +442,7 @@ code: |
 - `refractionStrength`, light-follow intensity, spring stiffness, spring damping, and inertial rebound are clamped before being used for derived visual state.
 - `inertial=true` writes pointer-follow transform variables and schedules RAF until motion settles; disabling inertial resets motion state.
 
-
-## Best Practices
-
-### Usage Tips
-
-1. **Content structure**: use header/body/footer sections appropriately
-2. **Visual hierarchy**: use card variants to create hierarchy
-3. **Interaction feedback**: provide clear feedback for clickable cards
-4. **Responsive design**: ensure good behavior across screen sizes
-
-### Layout Examples
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <div class="card-grid">
-      <TxCard 
-        v-for="item in items" 
-        :key="item.id"
-        clickable
-        @click="handleItemClick(item)"
-      >
-        <template #header>
-          <h3>{{ item.title }}</h3>
-        </template>
-
-        <p>{{ item.description }}</p>
-
-        <template #footer>
-          <div class="card-actions">
-            <TxButton size="sm" variant="text">Edit</TxButton>
-            <TxButton size="sm" variant="text">Delete</TxButton>
-          </div>
-        </template>
-      </TxCard>
-    </div>
-  </template>
----
-:::
-
-### Selection Guide (TxBaseSurface vs TxCard)
-
-- Prefer `TxCard` for higher-level, production-oriented usage. It already bundles `variant/shadow/slots/loading/inertial` and pointer-light + spring interactions.
-- Use `TxBaseSurface` when you need low-level material tuning, especially refraction/filter parameters (`displace`, `distortionScale`, `redOffset/greenOffset/blueOffset`, `filterSaturation/filterContrast/filterBrightness`, `refractionHaloOpacity`).
-- Convention: keep `TxCard` as a stable, out-of-the-box API; do material experiments and brand-level rendering in `TxBaseSurface`.
-
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/card/src/types.ts`, `TxCard.vue`, and `card.test.ts`.
 - Props table includes all source props, including `maskOpacity` and `surfaceMoving` which were previously missing from the docs.
@@ -453,8 +450,6 @@ code: |
 - Verified behavior from tests: default mode is `pure`, size-derived padding is `10/12/16`, clicks emit only for enabled clickable cards, loading renders a spinner overlay, and disabled cards block pointer-driven updates.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/card/__tests__/card.test.ts` covers default classes/surface props, structural slots, clickable gating, loading overlay, mask/glass mapping, and refraction light-follow mapping.
 - The `TxBaseSurface` comparison is intentional: low-level refraction and filter controls remain on `TxBaseSurface`, while `TxCard` exposes the stable container API.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/card/src/TxCard.vue`
 - Types: `packages/tuffex/packages/components/src/card/src/types.ts`

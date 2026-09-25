@@ -3,6 +3,7 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import type { ConversationTurnMeta } from '~/modules/conversation/useHomeConversation'
 import { TxIcon } from '@talex-touch/tuffex/icon'
 import { useI18n } from 'vue-i18n'
+import MetaHintBadge from '~/components/shell/MetaHintBadge.vue'
 import HomeModelMenu from './HomeModelMenu.vue'
 import HomeTurnInfoMenu from './HomeTurnInfoMenu.vue'
 
@@ -85,6 +86,9 @@ const { t } = useI18n()
       >
         <!-- Remix has no `panel-right-open`; `layout-right` is its equivalent right-panel glyph. -->
         <span class="i-ri-layout-right-line" />
+        <!-- Inside the button, not beside it: an absolutely positioned chip anchors to its
+             parent, so a sibling would hang off whatever positioned ancestor is further up. -->
+        <MetaHintBadge command="toggle-panel" placement="below" />
       </button>
       <!-- The bar is a drag region; the button and the panel it opens must stay clickable. -->
       <div class="HomeTopBar-MenuSlot">
@@ -246,6 +250,8 @@ const { t } = useI18n()
 
 .HomeTopBar-IconBtn {
   display: inline-flex;
+  // The panel toggle's hint chip anchors under the button, not under the bar.
+  position: relative;
   align-items: center;
   justify-content: center;
   width: 28px;

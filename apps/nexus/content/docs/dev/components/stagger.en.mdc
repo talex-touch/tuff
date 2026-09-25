@@ -8,9 +8,8 @@ tags: [transition, animation, stagger]
 syncStatus: reviewed
 verified: true
 ---
-# Stagger
 
-## Basic Usage
+## Usage
 
 :::TuffDemoWrapper{demo="StaggerStaggerDemo" code-lang="vue"}
 ---
@@ -32,8 +31,6 @@ code: |
   </template>
 ---
 :::
-
-## Composition Examples
 
 ### List Transition
 
@@ -67,18 +64,15 @@ code: |
 }
 ```
 
-## Interaction Contract
+### Best Practices
 
-- The component renders Vue `TransitionGroup` with class `tx-stagger` and root tag from `tag`.
-- Default slot VNodes are filtered to remove comment nodes before index assignment.
-- Each rendered child is cloned with its existing style plus `--tx-stagger-index: <index>`.
-- Timing props are written on the root as `--tx-stagger-duration`, `--tx-stagger-delay-step`, `--tx-stagger-delay-base`, and `--tx-stagger-easing`.
-- Built-in CSS uses opacity and `translateY(6px)` for enter/leave transitions.
-- `name` and `appear` are passed to TransitionGroup on the first render — TransitionGroup only runs its appear transition on initial mount and consumes both as props (not fallthrough attrs), so deferring them would permanently skip appear.
-- Child nodes must have stable Vue keys for `TransitionGroup` move/enter/leave behavior.
-- Existing child inline styles are preserved when the stagger index style is added.
+- Always provide stable keys for children. Staggered transitions without stable keys are unpredictable.
+- Keep `delayStep` small for long lists; large delays make later items feel broken.
+- Use `tag="ul"` / `li` for semantic lists instead of styling a generic `div` as a list.
+- Avoid wrapping virtualized rows with `TxStagger`; virtual list DOM churn and staggered transitions fight each other.
+- Use a custom `name` only when you also provide matching transition CSS.
 
-## API
+## API Reference
 
 ### Props
 
@@ -114,23 +108,23 @@ code: |
 | `--tx-stagger-delay-base` | `delayBase` | Base delay. |
 | `--tx-stagger-easing` | `easing` | Timing function. |
 
-## Best Practices
+## Overview
 
-- Always provide stable keys for children. Staggered transitions without stable keys are unpredictable.
-- Keep `delayStep` small for long lists; large delays make later items feel broken.
-- Use `tag="ul"` / `li` for semantic lists instead of styling a generic `div` as a list.
-- Avoid wrapping virtualized rows with `TxStagger`; virtual list DOM churn and staggered transitions fight each other.
-- Use a custom `name` only when you also provide matching transition CSS.
+- The component renders Vue `TransitionGroup` with class `tx-stagger` and root tag from `tag`.
+- Default slot VNodes are filtered to remove comment nodes before index assignment.
+- Each rendered child is cloned with its existing style plus `--tx-stagger-index: <index>`.
+- Timing props are written on the root as `--tx-stagger-duration`, `--tx-stagger-delay-step`, `--tx-stagger-delay-base`, and `--tx-stagger-easing`.
+- Built-in CSS uses opacity and `translateY(6px)` for enter/leave transitions.
+- `name` and `appear` are passed to TransitionGroup on the first render — TransitionGroup only runs its appear transition on initial mount and consumes both as props (not fallthrough attrs), so deferring them would permanently skip appear.
+- Child nodes must have stable Vue keys for `TransitionGroup` move/enter/leave behavior.
+- Existing child inline styles are preserved when the stagger index style is added.
 
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/stagger/src/TxStagger.vue`, `types.ts`, and `stagger.test.ts`.
 - Existing tests cover root tag passthrough, slot rendering, timing CSS variables, transition prop leakage prevention, comment filtering, and child stagger index assignment.
 - Rendering note: `name` and `appear` are supplied as TransitionGroup props from the first render, so the initial-mount appear transition runs as expected.
 - Accessibility note: `TxStagger` adds no semantic role. Choose `tag` and child elements that preserve list, grid, or feed semantics before styling transitions.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/stagger/src/TxStagger.vue`.
 - Types: `packages/tuffex/packages/components/src/stagger/src/types.ts` exports `StaggerProps` and `StaggerEasing`.

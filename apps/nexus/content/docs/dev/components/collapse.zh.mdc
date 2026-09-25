@@ -8,9 +8,8 @@ tags: [collapse, disclosure, layout]
 syncStatus: reviewed
 verified: true
 ---
-# Collapse 折叠面板
 
-## 基础用法
+## 用法
 
 ::::TuffDemoWrapper{demo="CollapseBasicDemo" code-lang="vue"}
 ---
@@ -33,8 +32,6 @@ code: |
   </template>
 ---
 ::::
-
-## 组合示例
 
 ### 手风琴模式
 
@@ -72,21 +69,16 @@ code: |
 </template>
 ```
 
-## 交互契约
+### 最佳实践
 
-- `TxCollapse` 通过 Vue provide/inject 向 item 提供展开状态和点击处理。
-- `modelValue` 接受字符串或字符串数组；内部会归一化为 `string[]`。
-- 普通模式下，切换面板会发出展开名称数组。
-- 手风琴模式下，切换到其它面板会发出该面板名称字符串。
-- 手风琴模式下，再次点击已展开面板会发出 `[]`。
-- `TxCollapseItem` 用 `name` 作为身份，回退到 `title`，再回退到 `''`。
-- 面板标题是原生 `button type="button"`，带有 `aria-expanded` 和 `aria-controls`。
-- 禁用面板标题会设置原生 `disabled`，添加禁用类，并忽略切换。
-- `arrowIcon` 控制标题后置的 `TxIcon`；展开时箭头会旋转。
-- 内容保留在 DOM 中并通过 `v-show` 隐藏；过渡类负责高度动画。
-- item 放在 `TxCollapse` 外部时仍会渲染，但点击标题不会生效。
+- 提供明确稳定的 `name`。依赖 `title` 回退会在文案本地化或改名时破坏状态。
+- 普通模式使用数组 `v-model`，手风琴模式使用字符串 `v-model`。
+- 不要把主要危险操作放在标题中；整个标题按钮都会切换面板。
+- 禁用面板用于不可用区块，而不是用于当前已展开区块。
+- 面板正文保持适中；内容很长时在正文内部增加结构，不要层层嵌套折叠面板。
+- 内容通过 `v-show` 保持挂载，因此不要在未展开面板里直接放昂贵的常驻任务。
 
-## API
+## API 参考
 
 ### TxCollapse Props
 
@@ -119,23 +111,25 @@ code: |
 | `TxCollapseItem` | `title` | 无 | 箭头图标之前的自定义标题内容。 |
 | `TxCollapseItem` | `default` | 无 | 面板正文内容。 |
 
-## 最佳实践
+## 概述
 
-- 提供明确稳定的 `name`。依赖 `title` 回退会在文案本地化或改名时破坏状态。
-- 普通模式使用数组 `v-model`，手风琴模式使用字符串 `v-model`。
-- 不要把主要危险操作放在标题中；整个标题按钮都会切换面板。
-- 禁用面板用于不可用区块，而不是用于当前已展开区块。
-- 面板正文保持适中；内容很长时在正文内部增加结构，不要层层嵌套折叠面板。
-- 内容通过 `v-show` 保持挂载，因此不要在未展开面板里直接放昂贵的常驻任务。
+- `TxCollapse` 通过 Vue provide/inject 向 item 提供展开状态和点击处理。
+- `modelValue` 接受字符串或字符串数组；内部会归一化为 `string[]`。
+- 普通模式下，切换面板会发出展开名称数组。
+- 手风琴模式下，切换到其它面板会发出该面板名称字符串。
+- 手风琴模式下，再次点击已展开面板会发出 `[]`。
+- `TxCollapseItem` 用 `name` 作为身份，回退到 `title`，再回退到 `''`。
+- 面板标题是原生 `button type="button"`，带有 `aria-expanded` 和 `aria-controls`。
+- 禁用面板标题会设置原生 `disabled`，添加禁用类，并忽略切换。
+- `arrowIcon` 控制标题后置的 `TxIcon`；展开时箭头会旋转。
+- 内容保留在 DOM 中并通过 `v-show` 隐藏；过渡类负责高度动画。
+- item 放在 `TxCollapse` 外部时仍会渲染，但点击标题不会生效。
 
-
-## 审阅说明
+## 技术实现
 
 - 已核对 `packages/tuffex/packages/components/src/collapse/src/types.ts`、`TxCollapse.vue`、`TxCollapseItem.vue` 与 `collapse.test.ts`。
 - 现有测试覆盖原生按钮语义、`aria-expanded` / `aria-controls`、多面板数组事件、手风琴字符串事件、手风琴关闭时发出 `[]`、以及禁用项阻断。
 - 可访问性说明:面板标题是原生按钮,不是自定义 role;标题内容应短且可描述,复杂控件应放入面板正文,不要塞进切换标题。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/collapse/src/TxCollapse.vue` 与 `TxCollapseItem.vue`。
 - Types: `packages/tuffex/packages/components/src/collapse/src/types.ts` 导出 `CollapseProps`、`CollapseEmits`、`CollapseItemProps` 与 `CollapseContext`。

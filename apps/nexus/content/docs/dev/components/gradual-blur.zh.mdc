@@ -8,9 +8,8 @@ tags: [blur, edge-fade, overlay, backdrop-filter]
 syncStatus: reviewed
 verified: true
 ---
-# GradualBlur 渐变模糊
 
-## 基础用法
+## 用法
 
 ### GradualBlur
 :::TuffDemoWrapper{demo="GradualBlurGradualBlurDemo" code-lang="vue"}
@@ -314,7 +313,15 @@ code: |
 ---
 :::
 
-## API
+### 最佳实践
+
+- 卡片内边缘渐隐应让父容器保持 `position: relative` 与 `overflow: hidden`；固定页面 chrome 才使用 `target="page"`。
+- 需要更顺滑的渐变时先增加 `divCount`，再调 `strength`；过高的层数会增加 backdrop-filter 成本。
+- 常见页眉/页脚优先使用 preset，再覆盖少量 props，避免重复维护整套参数。
+- 默认覆盖层不接收 pointer events；除非需要 hover 强度，不要把交互控件放在覆盖层下方。
+- 两套主题都要检查对比度，因为 `backdrop-filter` 的实际效果取决于后方内容。
+
+## API 参考
 
 ### Props
 
@@ -357,7 +364,7 @@ code: |
 
 不派发 Vue 事件；`animated="scroll"` 需要完成回调时使用 `onAnimationComplete`。
 
-## 交互契约
+## 概述
 
 - 先合并 preset，再用显式传入的 props 覆盖预设值。
 - `position` 同时控制挂载边缘与 mask 渐变方向；垂直边缘使用 `height`，水平边缘优先使用 `width`，否则回退到 `height`。
@@ -368,20 +375,10 @@ code: |
 - `responsive` 会安装防抖 resize 监听，并按 viewport 宽度应用 mobile/tablet/desktop 尺寸（`<=480`、`<=768`、`<=1024`）。
 - `style` 在生成的定位样式之后合并，因此页面可以有意覆盖坐标。
 
-## 最佳实践
-
-- 卡片内边缘渐隐应让父容器保持 `position: relative` 与 `overflow: hidden`；固定页面 chrome 才使用 `target="page"`。
-- 需要更顺滑的渐变时先增加 `divCount`，再调 `strength`；过高的层数会增加 backdrop-filter 成本。
-- 常见页眉/页脚优先使用 preset，再覆盖少量 props，避免重复维护整套参数。
-- 默认覆盖层不接收 pointer events；除非需要 hover 强度，不要把交互控件放在覆盖层下方。
-- 两套主题都要检查对比度，因为 `backdrop-filter` 的实际效果取决于后方内容。
-
-## 审阅说明
+## 技术实现
 
 - **可访问性说明：** 模糊根节点默认只是装饰层且不接收 pointer events。启用 `hoverIntensity` 会打开 pointer events，除非确实需要 hover 强度增强，否则不要覆盖可聚焦控件。
 - **实测覆盖:** `gradual-blur.test.ts` 覆盖配置化 layer 渲染、插槽内容、page target 定位与 z-index 偏移、GPU 样式、preset 合并和 `divCount` 下限、hover 强度变化，以及响应式尺寸。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/gradual-blur/src/TxGradualBlur.vue`。
 - Types: `packages/tuffex/packages/components/src/gradual-blur/src/types.ts` 导出 `GradualBlurProps` 以及 position、curve、animated、target 联合类型。

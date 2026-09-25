@@ -8,9 +8,8 @@ tags: [ai, sources, citation]
 syncStatus: reviewed
 verified: true
 ---
-# Sources
 
-## Basic Usage
+## Usage
 
 ### Sources
 ::::TuffDemoWrapper{demo="SourcesSourcesDemo" code-lang="vue"}
@@ -51,20 +50,14 @@ code: |
 ---
 :::
 
-## Interaction Contract
+### Best Practices
 
-- `variant="stack"` draws at most the first three sources **that can actually render a head**, and falls back to the globe when none can rather than leaving a gap. A favicon that fails to load drops out of the stack and the next source takes its place.
-- The ring around each head comes from `--tx-sources-stack-ring`, defaulting to the page background. Its job is to punch a gap where the discs overlap, so repoint it when the header sits on anything other than the page colour.
-- **Links never navigate on their own.** A click calls `preventDefault()` and emits `open`; whether and where to open it is the host's decision. That is deliberate for sandboxed surfaces such as an Electron renderer.
-- The `href` is still present on the `<a>`, so the browser's own "open in new tab" and "copy link address" affordances keep working.
-- Open state is owned by the component and seeded from `defaultOpen`. It is uncontrolled — changing `defaultOpen` later has no effect.
-- The collapsed header defaults to `Used N source(s)` and pluralizes itself. `labelFormatter` replaces it entirely.
-- Titles fall back to the domain: an empty `title` shows the URL's hostname with a leading `www.` stripped, and a URL that `URL` cannot parse is shown verbatim.
-- A favicon that fails to load is recorded permanently for that source, so a broken image is not re-requested.
-- Favicons carry `alt=""` and `aria-hidden`; the accessible name comes from the title and domain text.
-- The list is an `<ol>` and the ordinals come from render order rather than a data field, so reordering `sources` renumbers them.
+- Handle `open` — without a listener, clicking a citation does nothing at all.
+- On desktop, open in the external browser and pass `noopener` rather than navigating the app window away.
+- Use stable ids: the failed-favicon record is keyed by `id`, so a changing id makes broken images retry.
+- Override `labelFormatter` for non-English surfaces; the default carries English pluralization.
 
-## API
+## API Reference
 
 ### Props
 
@@ -85,9 +78,15 @@ code: |
 
 `TxSources` exposes no slots. Each row is a fixed composition of ordinal, favicon, title and domain.
 
-## Best Practices
+## Overview
 
-- Handle `open` — without a listener, clicking a citation does nothing at all.
-- On desktop, open in the external browser and pass `noopener` rather than navigating the app window away.
-- Use stable ids: the failed-favicon record is keyed by `id`, so a changing id makes broken images retry.
-- Override `labelFormatter` for non-English surfaces; the default carries English pluralization.
+- `variant="stack"` draws at most the first three sources **that can actually render a head**, and falls back to the globe when none can rather than leaving a gap. A favicon that fails to load drops out of the stack and the next source takes its place.
+- The ring around each head comes from `--tx-sources-stack-ring`, defaulting to the page background. Its job is to punch a gap where the discs overlap, so repoint it when the header sits on anything other than the page colour.
+- **Links never navigate on their own.** A click calls `preventDefault()` and emits `open`; whether and where to open it is the host's decision. That is deliberate for sandboxed surfaces such as an Electron renderer.
+- The `href` is still present on the `<a>`, so the browser's own "open in new tab" and "copy link address" affordances keep working.
+- Open state is owned by the component and seeded from `defaultOpen`. It is uncontrolled — changing `defaultOpen` later has no effect.
+- The collapsed header defaults to `Used N source(s)` and pluralizes itself. `labelFormatter` replaces it entirely.
+- Titles fall back to the domain: an empty `title` shows the URL's hostname with a leading `www.` stripped, and a URL that `URL` cannot parse is shown verbatim.
+- A favicon that fails to load is recorded permanently for that source, so a broken image is not re-requested.
+- Favicons carry `alt=""` and `aria-hidden`; the accessible name comes from the title and domain text.
+- The list is an `<ol>` and the ordinals come from render order rather than a data field, so reordering `sources` renumbers them.

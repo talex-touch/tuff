@@ -8,9 +8,8 @@ tags: [offline, network, state]
 syncStatus: reviewed
 verified: true
 ---
-# OfflineState 离线
 
-## 基础用法
+## 用法
 
 ### OfflineState
 :::TuffDemoWrapper{demo="OfflineStateOfflineStateDemo" code-lang="vue"}
@@ -27,14 +26,14 @@ code: |
 ---
 :::
 
-## 交互契约
+### 最佳实践
 
-- 始终向 `TxEmptyState` 透传 `variant="offline"`。
-- 不覆盖显式传入的 `title`、`description`、`surface`、`layout`、`align`、`size`、`icon` 或 action props。
-- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
-- 生成按钮触发的 `primary` / `secondary` 事件来自内部 `TxEmptyState`。
+- 可恢复的网络或离线状态使用它；非网络相关的服务端失败应使用错误状态或业务专用错误组件。
+- 告知用户本地草稿、队列操作或缓存数据是否仍然安全。
+- 主操作应聚焦重试，避免在离线空态里放破坏性操作。
+- 面板内建议使用 `surface="card"`，让网络状态与加载后的内容使用同一个视觉容器。
 
-## API
+## API 参考
 
 ### Props
 
@@ -71,20 +70,18 @@ code: |
 | `description` | - | 替换解析后的描述。 |
 | `actions` | - | 替换生成的主/次操作按钮。 |
 
-## 最佳实践
+## 概述
 
-- 可恢复的网络或离线状态使用它；非网络相关的服务端失败应使用错误状态或业务专用错误组件。
-- 告知用户本地草稿、队列操作或缓存数据是否仍然安全。
-- 主操作应聚焦重试，避免在离线空态里放破坏性操作。
-- 面板内建议使用 `surface="card"`，让网络状态与加载后的内容使用同一个视觉容器。
+- 始终向 `TxEmptyState` 透传 `variant="offline"`。
+- 不覆盖显式传入的 `title`、`description`、`surface`、`layout`、`align`、`size`、`icon` 或 action props。
+- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
+- 生成按钮触发的 `primary` / `secondary` 事件来自内部 `TxEmptyState`。
 
-## 审阅说明 / Review Notes
+## 技术实现
 
 - **Wrapper contract:** `TxOfflineState` 在 `TxEmptyState` 上锁定 `variant="offline"`；标题、描述、surface、actions、icon 与 slot 仍由宿主控制。
 - **状态选择:** 适用于可恢复的本地网络/离线状态。非连接原因导致的服务端失败应使用 error-state 模式。
 - **实测覆盖:** `offline-state.test.ts` 覆盖固定 variant 透传、props/actions、具名 slot 与 install 注册。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/offline-state/src/TxOfflineState.vue`。
 - Base source: `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`。

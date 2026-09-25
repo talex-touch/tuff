@@ -8,11 +8,10 @@ tags: [icon, morph, vector, animation, spring, svg, 图标, 动效]
 syncStatus: reviewed
 verified: true
 ---
-# IconMorph 图标形变
 
 > 通用线条矢量图标变形组件。利用 2D Procrustes 旋转探测、极坐标自然空间插值与物理阻尼弹簧，旋转与路径演化自然呈现，无需手工编写关键帧。
 
-## 基础用法
+## 用法
 
 ### IconMorph
 :::TuffDemoWrapper{demo="IconMorphIconMorphDemo" code-lang="vue"}
@@ -33,17 +32,14 @@ code: |
 ---
 :::
 
-## 受控进度模式
+### 最佳实践
 
-传入 `from`、`to` 与 `progress` 即可将变形进度直接绑定到手势拖拽、页面滚动或自定义过渡流程上，此时冻结弹簧动画。
+- 适用于有状态切换的交互按钮（播放/暂停、汉堡菜单/关闭、搜索/清除、加号/完成勾选等）。
+- 点击反馈建议选用 `spring="snappy"` 带来干脆利落的触觉反馈；宏观场景切换可选用 `spring="smooth"`。
+- 绑定滑动手势、下拉或拖拽百分比时，使用受控模式 `:progress`。
+- 最适合 Lucide、Tabler、Feather 等描边（outline / stroke）风格图标；填充实心图标请使用传统渐隐交叉淡入。
 
-```vue
-<template>
-  <TxIconMorph from="menu" to="close" :progress="dragProgress" :size="24" />
-</template>
-```
-
-## API
+## API 参考
 
 ### TxIconMorph 属性
 
@@ -69,14 +65,17 @@ code: |
 | `animation-start` | - | 图标变形动画开始时触发。 |
 | `animation-complete` | - | 图标变形动画完成且稳定停靠时触发。 |
 
-## 最佳实践
+## 受控进度模式
 
-- 适用于有状态切换的交互按钮（播放/暂停、汉堡菜单/关闭、搜索/清除、加号/完成勾选等）。
-- 点击反馈建议选用 `spring="snappy"` 带来干脆利落的触觉反馈；宏观场景切换可选用 `spring="smooth"`。
-- 绑定滑动手势、下拉或拖拽百分比时，使用受控模式 `:progress`。
-- 最适合 Lucide、Tabler、Feather 等描边（outline / stroke）风格图标；填充实心图标请使用传统渐隐交叉淡入。
+传入 `from`、`to` 与 `progress` 即可将变形进度直接绑定到手势拖拽、页面滚动或自定义过渡流程上，此时冻结弹簧动画。
 
-## 源码
+```vue
+<template>
+  <TxIconMorph from="menu" to="close" :progress="dragProgress" :size="24" />
+</template>
+```
+
+## 技术实现
 
 - 组件源码：`packages/tuffex/packages/components/src/icon-morph/src/TxIconMorph.vue`。
 - 核心引擎：`packages/tuffex/packages/components/src/icon-morph/src/engine/`。

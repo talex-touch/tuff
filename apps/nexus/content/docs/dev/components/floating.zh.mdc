@@ -8,9 +8,8 @@ tags: [floating, parallax, motion]
 syncStatus: reviewed
 verified: true
 ---
-# Floating 浮动层
 
-## 基础用法
+## 用法
 
 ::::TuffDemoWrapper{demo="FloatingFloatingDemo" code-lang="vue"}
 ---
@@ -25,8 +24,6 @@ code: |
   </template>
 ---
 ::::
-
-## 组合示例
 
 ### 禁用动效
 
@@ -55,24 +52,16 @@ code: |
 
 负数 `depth` 会朝正数 `depth` 的反方向移动。
 
-## 交互契约
+### 最佳实践
 
-- `TxFloating` 提供注册上下文，供子级 `TxFloatingElement` 消费。
-- 容器渲染相对定位 `div`，类名包含 `tx-floating` 和可选 `className`。
-- `TxFloatingElement` 渲染绝对定位 `div`，类名包含 `tx-floating-element` 和可选 `className`。
-- `TxFloating` 挂载时会启动 passive `mousemove` 与 `touchmove` window 监听，除非已禁用。
-- 指针坐标以 floating 容器中心为原点。
-- 每帧会让已注册元素按 `easingFactor` 靠近 `pointerPosition * (depth * sensitivity / 20)`。
-- `disabled=true` 会停止监听、取消当前 RAF，并把 transform 重置为 `translate3d(0px, 0px, 0)`。
-- `disabled=false` 会重新启动监听与 RAF。
-- `TxFloatingElement` 挂载时注册，`depth` 变化时重新注册，卸载时注销。
-- 元素在 `TxFloating` 外部使用时仍会渲染，但不会动画。
-- 用户开启 `prefers-reduced-motion: reduce` 时组件停止全部视差运动。
-- `IntersectionObserver` 在容器移出视口时暂停 RAF 循环，重新进入时恢复。
-- 容器在 capture 阶段监听 window `scroll` 与 `resize`，以在页面滚动/缩放后重新测量原点。
-- 实现通过 `hasWindow()` 保护浏览器 API，避免 SSR 问题。
+- 用于装饰性视差、引导卡片或背景点缀。不要让关键布局依赖指针移动。
+- 尊重 reduced-motion 设置，并把它绑定到 `disabled`。
+- 图层数量保持少量；每个已注册图层都会在每帧更新。
+- 使用较低 `depth` 保持动效克制。数值过大很快会让界面显得脱节。
+- 通过 CSS 类提供真实静态布局位置；组件只添加 transform 偏移。
+- 避免在快速移动图层中放交互控件，除非动效非常轻微。
 
-## API
+## API 参考
 
 ### TxFloating Props
 
@@ -105,22 +94,28 @@ code: |
 
 不暴露公开实例方法。
 
-## 最佳实践
+## 概述
 
-- 用于装饰性视差、引导卡片或背景点缀。不要让关键布局依赖指针移动。
-- 尊重 reduced-motion 设置，并把它绑定到 `disabled`。
-- 图层数量保持少量；每个已注册图层都会在每帧更新。
-- 使用较低 `depth` 保持动效克制。数值过大很快会让界面显得脱节。
-- 通过 CSS 类提供真实静态布局位置；组件只添加 transform 偏移。
-- 避免在快速移动图层中放交互控件，除非动效非常轻微。
+- `TxFloating` 提供注册上下文，供子级 `TxFloatingElement` 消费。
+- 容器渲染相对定位 `div`，类名包含 `tx-floating` 和可选 `className`。
+- `TxFloatingElement` 渲染绝对定位 `div`，类名包含 `tx-floating-element` 和可选 `className`。
+- `TxFloating` 挂载时会启动 passive `mousemove` 与 `touchmove` window 监听，除非已禁用。
+- 指针坐标以 floating 容器中心为原点。
+- 每帧会让已注册元素按 `easingFactor` 靠近 `pointerPosition * (depth * sensitivity / 20)`。
+- `disabled=true` 会停止监听、取消当前 RAF，并把 transform 重置为 `translate3d(0px, 0px, 0)`。
+- `disabled=false` 会重新启动监听与 RAF。
+- `TxFloatingElement` 挂载时注册，`depth` 变化时重新注册，卸载时注销。
+- 元素在 `TxFloating` 外部使用时仍会渲染，但不会动画。
+- 用户开启 `prefers-reduced-motion: reduce` 时组件停止全部视差运动。
+- `IntersectionObserver` 在容器移出视口时暂停 RAF 循环，重新进入时恢复。
+- 容器在 capture 阶段监听 window `scroll` 与 `resize`，以在页面滚动/缩放后重新测量原点。
+- 实现通过 `hasWindow()` 保护浏览器 API，避免 SSR 问题。
 
-## 审阅说明
+## 技术实现
 
 - 已人工核对 `packages/tuffex/packages/components/src/floating/src/types.ts`、`context.ts`、`TxFloating.vue`、`TxFloatingElement.vue` 与 `floating.test.ts`。
 - 浏览器监听和动画帧都经过 SSR 防护；位移动效只会在客户端挂载后存在。
 - `disabled` 不只是视觉状态：它会停止监听、取消 RAF，并重置已注册元素 transform。
-
-## Source
 
 - Component sources: `packages/tuffex/packages/components/src/floating/src/TxFloating.vue`、`TxFloatingElement.vue` 与 `context.ts`。
 - Types: `packages/tuffex/packages/components/src/floating/src/types.ts`。

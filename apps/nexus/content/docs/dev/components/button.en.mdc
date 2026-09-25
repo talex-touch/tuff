@@ -9,7 +9,23 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Button
+## Installation
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxButton, TxSplitButton, TxIconButton, TxCopyButton } from '@talex-touch/tuffex/button'
+  import '@talex-touch/tuffex/button/style.css'
+  import '@talex-touch/tuffex/base.css' // tokens + resets, once per app
+---
+:::
 
 ## Usage
 
@@ -18,8 +34,6 @@ Buttons trigger explicit actions. Keep a clear hierarchy in the interface:
 - Keep a single primary button per view to avoid hierarchy conflicts
 - Use `variant` and `size` to convey action priority
 - Async actions should show `loading` to avoid repeated triggers
-
-## Variants
 
 ### Appearance
 
@@ -150,7 +164,129 @@ code: |
 ---
 :::
 
-## API
+### Split Button
+
+A combined button for "primary action + more actions" (e.g., RUN + …).
+
+::TuffDemoWrapper{demo="ButtonSplitDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const loading = ref(false)
+
+  async function handleRun() {
+    if (loading.value)
+      return
+    loading.value = true
+    await new Promise(resolve => setTimeout(resolve, 1200))
+    loading.value = false
+  }
+  </script>
+
+  <template>
+    <TxSplitButton
+      variant="primary"
+      size="sm"
+      icon="i-ri-play-fill"
+      :loading="loading"
+      @click="handleRun"
+    >
+      RUN
+      <template #menu="{ close }">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <TxButton size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
+            Settings
+          </TxButton>
+          <TxButton size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
+            Open Folder
+          </TxButton>
+        </div>
+      </template>
+    </TxSplitButton>
+  </template>
+---
+::
+
+### Primary + Ghost
+
+Pair primary with ghost for clear hierarchy.
+
+::TuffDemoWrapper{demo="ButtonPrimaryGhostDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton icon="i-ri-add-line">Create Project</TxButton>
+    <TxButton variant="ghost">Secondary action</TxButton>
+  </template>
+---
+::
+
+### Icon Button
+
+An icon-only action button: `label` supplies the accessible name, `pressed` carries a persistent toggle, and `status` adds semantic tones.
+
+::::TuffDemoWrapper{demo="IconButtonIconButtonDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const pinned = ref(false)
+  </script>
+
+  <template>
+    <div class="flex flex-wrap items-center gap-3">
+      <TxIconButton
+        icon="i-carbon-star"
+        label="Pin workspace"
+        shape="circle"
+        :pressed="pinned"
+        @click="pinned = !pinned"
+      />
+      <TxIconButton icon="i-carbon-edit" label="Edit item" shape="square" status="info" />
+      <TxIconButton icon="i-carbon-add" label="Add item" shape="pill" size="lg" status="success" />
+      <TxIconButton icon="i-carbon-warning" label="Action needs attention" status="warning" />
+      <TxIconButton icon="i-carbon-trash-can" label="Delete item" status="danger" disabled />
+    </div>
+  </template>
+---
+::::
+
+### Copy Button
+
+A clipboard button with copied feedback and error events.
+
+::::TuffDemoWrapper{demo="CopyButtonCopyButtonDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const installCommand = 'pnpm add @talex-touch/tuffex'
+  </script>
+
+  <template>
+    <TxCopyButton
+      :text="installCommand"
+      copy-label="Copy install command"
+      copied-label="Copied"
+    />
+  </template>
+---
+::::
+
+### Best Practices
+
+- Keep one primary action per view or card. Pair `primary` with `ghost` or `secondary` for lower-priority actions.
+- Use `nativeType="submit"` only inside forms; the default `button` prevents accidental form submission.
+- Use `loading` for every async action and clear it on success and failure paths so the button cannot get stuck disabled.
+- Prefer `circle` only for icon-only actions; when `block` and `circle` are combined, the component intentionally keeps regular label layout.
+- Use `loadingVariant="bar"` for full-width submit bars and keep spinner loading for compact or icon buttons.
+- Keep menu actions in `TxSplitButton` responsible for calling the provided `close()` callback after a selection.
+- For `TxIconButton`, always set `label` unless visible text is supplied through the slot; use `pressed` only for persistent toggles and normal click buttons for one-shot actions.
+- Give `TxCopyButton` a `copyLabel` that names the target; handle `error` when the copied value is critical, since browsers can reject clipboard writes outside trusted gestures.
+
+## API Reference
 
 ### Props
 
@@ -342,7 +478,7 @@ rows:
 |------|------|-------------|
 | `default` | `{ copied, copying }` | Custom button label/content. |
 
-## Types
+### Types
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
@@ -356,120 +492,7 @@ code: |
 ---
 :::
 
-## Composition Notes
-
-### Split Button
-
-A combined button for "primary action + more actions" (e.g., RUN + …).
-
-::TuffDemoWrapper{demo="ButtonSplitDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const loading = ref(false)
-
-  async function handleRun() {
-    if (loading.value)
-      return
-    loading.value = true
-    await new Promise(resolve => setTimeout(resolve, 1200))
-    loading.value = false
-  }
-  </script>
-
-  <template>
-    <TxSplitButton
-      variant="primary"
-      size="sm"
-      icon="i-ri-play-fill"
-      :loading="loading"
-      @click="handleRun"
-    >
-      RUN
-      <template #menu="{ close }">
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <TxButton size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
-            Settings
-          </TxButton>
-          <TxButton size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
-            Open Folder
-          </TxButton>
-        </div>
-      </template>
-    </TxSplitButton>
-  </template>
----
-::
-
-### Primary + Ghost
-
-Pair primary with ghost for clear hierarchy.
-
-::TuffDemoWrapper{demo="ButtonPrimaryGhostDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxButton icon="i-ri-add-line">Create Project</TxButton>
-    <TxButton variant="ghost">Secondary action</TxButton>
-  </template>
----
-::
-
-### Icon Button
-
-An icon-only action button: `label` supplies the accessible name, `pressed` carries a persistent toggle, and `status` adds semantic tones.
-
-::::TuffDemoWrapper{demo="IconButtonIconButtonDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const pinned = ref(false)
-  </script>
-
-  <template>
-    <div class="flex flex-wrap items-center gap-3">
-      <TxIconButton
-        icon="i-carbon-star"
-        label="Pin workspace"
-        shape="circle"
-        :pressed="pinned"
-        @click="pinned = !pinned"
-      />
-      <TxIconButton icon="i-carbon-edit" label="Edit item" shape="square" status="info" />
-      <TxIconButton icon="i-carbon-add" label="Add item" shape="pill" size="lg" status="success" />
-      <TxIconButton icon="i-carbon-warning" label="Action needs attention" status="warning" />
-      <TxIconButton icon="i-carbon-trash-can" label="Delete item" status="danger" disabled />
-    </div>
-  </template>
----
-::::
-
-### Copy Button
-
-A clipboard button with copied feedback and error events.
-
-::::TuffDemoWrapper{demo="CopyButtonCopyButtonDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  const installCommand = 'pnpm add @talex-touch/tuffex'
-  </script>
-
-  <template>
-    <TxCopyButton
-      :text="installCommand"
-      copy-label="Copy install command"
-      copied-label="Copied"
-    />
-  </template>
----
-::::
-
-## Interaction Contract
+## Overview
 
 - `variant` wins over semantic `type`; when `variant` is absent, `type="text"` maps to the `ghost` variant and other semantic types map to their matching variants.
 - Size has exactly three tiers: `sm`, `md`, `lg`. The older spellings `large`, `small` and `mini` are gone from the type but are still normalized at runtime (`large` → `lg`, `small` / `mini` → `sm`), because consumers of published builds pass them from plain JS.
@@ -481,30 +504,24 @@ code: |
 - `TxIconButton` maps `label` to `aria-label` — provide it for icon-only controls; boolean `pressed` emits `aria-pressed` with active styling; the default slot receives `{ hover, pressed }`.
 - `TxCopyButton` ignores clicks while `disabled` or copying; `copy` fires only after a successful clipboard write, `error` fires when both clipboard strategies fail, and `copiedLabel` shows for `timeout` milliseconds after success.
 
-## Best Practices
+## Technologies
 
-- Keep one primary action per view or card. Pair `primary` with `ghost` or `secondary` for lower-priority actions.
-- Use `nativeType="submit"` only inside forms; the default `button` prevents accidental form submission.
-- Use `loading` for every async action and clear it on success and failure paths so the button cannot get stuck disabled.
-- Prefer `circle` only for icon-only actions; when `block` and `circle` are combined, the component intentionally keeps regular label layout.
-- Use `loadingVariant="bar"` for full-width submit bars and keep spinner loading for compact or icon buttons.
-- Keep menu actions in `TxSplitButton` responsible for calling the provided `close()` callback after a selection.
-- For `TxIconButton`, always set `label` unless visible text is supplied through the slot; use `pressed` only for persistent toggles and normal click buttons for one-shot actions.
-- Give `TxCopyButton` a `copyLabel` that names the target; handle `error` when the copied value is critical, since browsers can reject clipboard writes outside trusted gestures.
-
-
-## Review Notes
-
-- Reviewed against `packages/tuffex/packages/components/src/button/src/button.vue`, `split-button.vue`, `types.ts`, `split-button.ts`, and both button test files.
-- **Verified coverage:** `button.test.ts` covers label rendering, semantic type mapping, variant precedence, each size tier plus the runtime normalization of published spellings and the unknown-value fallback, disabled/loading click suppression, loading bar behavior, icons, shape classes, borderless mode, and native type; `split-button.test.ts` covers menu rendering, primary click, disabled/loading suppression, and `menuOpenChange`.
-- **Verified coverage (IconButton / CopyButton):** `packages/tuffex/packages/components/src/button/__tests__/icon-button.test.ts` covers accessible-name warnings and semantic status classes; `copy-button.test.ts` covers clipboard success, copied visual state, disabled no-op, and error emission.
-- Accessibility note: the native button handles base keyboard activation. For icon-only or `circle` buttons, provide an external accessible label through surrounding markup or attrs where the visual icon is not self-explanatory.
-
-## Source
-
-- Component source: `packages/tuffex/packages/components/src/button/src/button.vue` and `packages/tuffex/packages/components/src/button/src/split-button.vue`.
-- Types: `packages/tuffex/packages/components/src/button/src/types.ts` and `packages/tuffex/packages/components/src/button/src/split-button.ts`.
-- IconButton / CopyButton: `packages/tuffex/packages/components/src/button/src/icon-button.vue`, `copy-button.vue`, and the `icon-button.ts` types file; `button/index.ts` exports installable `TxIconButton` / `TxCopyButton` with instance types.
-- Coverage: `packages/tuffex/packages/components/src/button/__tests__/button.test.ts` verifies variants, semantic type mapping, loading/disabled click suppression, icons, shapes, borderless mode, native type, and loading bar behavior. `split-button.test.ts` verifies primary click, disabled suppression, loading state, menu rendering, and `menuOpenChange`.
+- Source: `packages/tuffex/packages/components/src/button/src/{button,split-button,icon-button,copy-button}.vue`, plus `types.ts` and `split-button.ts`.
+- Coverage: `button.test.ts`, `split-button.test.ts`, `icon-button.test.ts`, `copy-button.test.ts` under `packages/tuffex/packages/components/src/button/__tests__/` — variants and type precedence, every size tier plus the runtime normalization of published spellings, disabled/loading click suppression, the loading bar, icons, shapes, borderless mode, native type, clipboard success/error, accessible-name warnings.
+- Non-block buttons animate loading width changes through a size FLIP transition; the haptic shake is skipped under `prefers-reduced-motion: reduce`.
 
 <TuffDocSourceLink label="View source" />
+
+## Use cases
+
+- Page and card actions with one primary per view; pair `primary` with `ghost` or `secondary`.
+- Form submits (`nativeType="submit"`) and drawer footers (`block`).
+- Async actions that must show `loading` and stay disabled until they settle.
+- Table rows and toolbars (`size="sm"`), icon-only controls (`circle` + `label`).
+- One action with a menu of variants (`TxSplitButton`), copy-to-clipboard (`TxCopyButton`).
+
+## Accessibility
+
+- The native `<button>` supplies keyboard activation; `disabled` and `loading` set the native state and suppress `click`.
+- Icon-only controls need an accessible name: `label` on `TxIconButton`, or surrounding markup/attrs on `TxButton`.
+- `pressed` is forwarded to `aria-pressed`; the `TxIconButton` default slot receives `{ hover, pressed }` for a visible state.

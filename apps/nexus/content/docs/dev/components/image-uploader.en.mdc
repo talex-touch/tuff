@@ -8,9 +8,8 @@ tags: [image, upload, form]
 syncStatus: reviewed
 verified: true
 ---
-# ImageUploader
 
-## Basic Usage
+## Usage
 
 ::::TuffDemoWrapper{demo="ImageUploaderImageUploaderDemo" code-lang="vue"}
 ---
@@ -26,8 +25,6 @@ code: |
   </template>
 ---
 ::::
-
-## Composition Examples
 
 ### Upload Newly Selected Images
 
@@ -63,22 +60,16 @@ const images = ref([
 
 Remote items without `file` are rendered and removable, but their URLs are not revoked by the component.
 
-## Interaction Contract
+### Best Practices
 
-- The hidden native input uses `type="file"`, `multiple`, `accept`, and `disabled` from props.
-- The add tile is a native `button type="button"` and opens the input unless disabled or maxed out.
-- The add tile is disabled when `value.length >= max`.
-- Input changes are ignored when there are no files or no remaining capacity.
-- New files are capped by remaining capacity and converted to `{ id, url, name, file }` records.
-- New local previews use `URL.createObjectURL(file)`.
-- The native input value is cleared after each change so the same file can be selected again.
-- Adding files emits `update:modelValue`, then `change` with the full next list.
-- Removing is blocked while disabled.
-- Removing a local owned object URL revokes it, emits `update:modelValue`, then `remove`, then `change`.
-- On unmount, all object URLs created by this component instance are revoked.
-- Preview images use `name` as alt text and empty alt text when unnamed.
+- Use `ImageUploader` for image-only previews. Use `FileUploader` when you need generic files, drag/drop, file sizes, or an `add` event.
+- Treat `accept` as a browser hint only; validate MIME, dimensions, file size, and content on the server.
+- Keep remote image records stable with durable ids; generated local ids are UI-session only.
+- Do not manually revoke URLs owned by this component; it revokes object URLs it creates.
+- Store uploaded image URLs after successful upload and replace local object URL records with remote records in your app state.
+- Keep `max` aligned with backend limits so users cannot select more images than can be stored.
 
-## API
+## API Reference
 
 ### Props
 
@@ -115,27 +106,30 @@ Remote items without `file` are rendered and removable, but their URLs are not r
 |------|------|------|
 | - | - | `TxImageUploader` does not expose slots. Use controlled `modelValue` records for custom remote images; choose `FileUploader` when the upload row or metadata layout needs custom rendering. |
 
-## Best Practices
+## Overview
 
-- Use `ImageUploader` for image-only previews. Use `FileUploader` when you need generic files, drag/drop, file sizes, or an `add` event.
-- Treat `accept` as a browser hint only; validate MIME, dimensions, file size, and content on the server.
-- Keep remote image records stable with durable ids; generated local ids are UI-session only.
-- Do not manually revoke URLs owned by this component; it revokes object URLs it creates.
-- Store uploaded image URLs after successful upload and replace local object URL records with remote records in your app state.
-- Keep `max` aligned with backend limits so users cannot select more images than can be stored.
+- The hidden native input uses `type="file"`, `multiple`, `accept`, and `disabled` from props.
+- The add tile is a native `button type="button"` and opens the input unless disabled or maxed out.
+- The add tile is disabled when `value.length >= max`.
+- Input changes are ignored when there are no files or no remaining capacity.
+- New files are capped by remaining capacity and converted to `{ id, url, name, file }` records.
+- New local previews use `URL.createObjectURL(file)`.
+- The native input value is cleared after each change so the same file can be selected again.
+- Adding files emits `update:modelValue`, then `change` with the full next list.
+- Removing is blocked while disabled.
+- Removing a local owned object URL revokes it, emits `update:modelValue`, then `remove`, then `change`.
+- On unmount, all object URLs created by this component instance are revoked.
+- Preview images use `name` as alt text and empty alt text when unnamed.
 
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/image-uploader/src/types.ts`, `TxImageUploader.vue`, and `image-uploader.test.ts`.
 - **Verified coverage:** input attributes, existing remote previews, max-count truncation, disabled add/remove blocking, input reset behavior, object-URL creation, remove/change emission, and unmount cleanup.
 - Lifecycle note: the component revokes only object URLs it created. Remote URLs or parent-owned blob URLs remain the caller's responsibility.
 - API note: `ImageUploader` intentionally has no `add` event; use `change` and filter records with `file` for newly selected local images.
 
-## Source
-
 - Component source: `packages/tuffex/packages/components/src/image-uploader/src/TxImageUploader.vue`.
 - Types: `packages/tuffex/packages/components/src/image-uploader/src/types.ts`.
 - Coverage: `packages/tuffex/packages/components/src/image-uploader/__tests__/image-uploader.test.ts`.
 
 <TuffDocSourceLink />
-

@@ -8,9 +8,8 @@ tags: [empty, onboarding, first-run]
 syncStatus: reviewed
 verified: true
 ---
-# BlankSlate 空白页
 
-## 基础用法
+## 用法
 
 ### BlankSlate
 :::TuffDemoWrapper{demo="BlankSlateBlankSlateDemo" code-lang="vue"}
@@ -27,15 +26,14 @@ code: |
 ---
 :::
 
-## 交互契约
+### 最佳实践
 
-- 始终向 `TxEmptyState` 透传 `variant="blank-slate"`。
-- 默认值面向首次引导场景：`size="large"`、`layout="vertical"`、`surface="plain"`。
-- 显式传入 `size`、`layout`、`surface` 时会覆盖这些默认值。
-- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
-- 生成按钮触发的 `primary` / `secondary` 事件来自内部 `TxEmptyState`。
+- 首次使用或 onboarding 空态使用它；重复出现的空查询结果用 `TxNoData`。
+- 文案要解释第一步的价值，不只是说明“这里没有内容”。
+- 主操作保持单一且直接；次操作可用于查看指南、导入或跳过。
+- 全页面空白页一般保持 `surface="plain"`，除非外层布局已经统一使用卡片容器。
 
-## API
+## API 参考
 
 ### Props
 
@@ -72,21 +70,19 @@ code: |
 | `description` | - | 替换解析后的描述。 |
 | `actions` | - | 替换生成的主/次操作按钮。 |
 
-## 最佳实践
+## 概述
 
-- 首次使用或 onboarding 空态使用它；重复出现的空查询结果用 `TxNoData`。
-- 文案要解释第一步的价值，不只是说明“这里没有内容”。
-- 主操作保持单一且直接；次操作可用于查看指南、导入或跳过。
-- 全页面空白页一般保持 `surface="plain"`，除非外层布局已经统一使用卡片容器。
+- 始终向 `TxEmptyState` 透传 `variant="blank-slate"`。
+- 默认值面向首次引导场景：`size="large"`、`layout="vertical"`、`surface="plain"`。
+- 显式传入 `size`、`layout`、`surface` 时会覆盖这些默认值。
+- `icon`、`title`、`description`、`actions` 插槽会原样转发给 `TxEmptyState`。
+- 生成按钮触发的 `primary` / `secondary` 事件来自内部 `TxEmptyState`。
 
-
-## 审阅说明
+## 技术实现
 
 - 已核对 `packages/tuffex/packages/components/src/blank-slate/src/TxBlankSlate.vue`、`types.ts` 与 `blank-slate.test.ts`。
 - **实测覆盖:** `blank-slate.test.ts` 覆盖固定 `variant="blank-slate"`、首次引导默认值、显式布局覆盖、命名插槽转发与 install 注册。
 - 可访问性说明：`TxBlankSlate` 将语义交给 `TxEmptyState`；第一步文案应具体，`actions` 中不要放入多个互相竞争的主操作。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/blank-slate/src/TxBlankSlate.vue`.
 - Types: `packages/tuffex/packages/components/src/blank-slate/src/types.ts` exports `BlankSlateProps` as `Omit<EmptyStateProps, 'variant'>`.

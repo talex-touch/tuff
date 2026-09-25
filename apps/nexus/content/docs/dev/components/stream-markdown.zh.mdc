@@ -8,9 +8,8 @@ tags: [ai, markdown, streaming]
 syncStatus: reviewed
 verified: true
 ---
-# Stream Markdown
 
-## 基础用法
+## 用法
 
 ### Stream Markdown
 ::::TuffDemoWrapper{demo="StreamMarkdownStreamMarkdownDemo" code-lang="vue"}
@@ -32,20 +31,15 @@ code: |
 ---
 ::::
 
-## 交互契约
+### 最佳实践
 
-- 文档被切成块逐块渲染，因此追加文本不会导致整篇重排——这是流式场景下的关键性质。
-- `streaming` 为真时尾部显示光标，且**尚未闭合的尾部围栏会推迟渲染**：半截的代码块不会先以错误的形态闪现，等闭合后再交给渲染器。
-- `fenceClosed` 只对流式文档的尾部围栏为 `false`；缩进代码没有围栏，也报 `false`，组件把任何非尾部块都视作已完成。
-- `sanitize` 默认开启，通过动态 `import('dompurify')` 加载。**请保持开启**——内容来自模型输出。
-- dompurify 加载失败时 `sanitizer` 置空，组件不会因此崩溃；这意味着净化是尽力而为，不能替代服务端的信任边界。
-- 每个实例持有自己的 `Marked`（开启 `gfm` 与 `breaks`），不会修改全局单例——否则会影响应用内其他所有使用方。
-- `renderers` 按围栏语言（首个单词、转小写）匹配；未注册的语言走默认代码块渲染。
-- 注册的渲染器组件会收到 `StreamMarkdownBlockContext` 作为 props，其中包含 `fenceClosed`，可据此在未闭合时显示占位。
-- `theme` 支持 `light` / `dark` / `auto`，`auto` 跟随环境主题。
-- 随组件打包的 GitHub-Markdown 样式表是 *全局* 引入的，因此其中每条规则都被限定在 `:where(.tx-markdown-view, .tx-stream-md)` 下。`.markdown-body` 是一个非常通用的类名——加限定之前，只要引入本组件，宿主页面自己用该类名承载的正文也会被重新设置样式。`:where()` 不增加特异度，所以这层限定只收窄作用范围，不改变这些规则彼此之间的优先级关系。
+- 不要关闭 `sanitize`。模型输出属于不可信内容，而这里是它变成 DOM 的地方。
+- 流式期间保持 `streaming` 为真，结束后再置假；一直为真会让光标永远留在末尾。
+- 自定义渲染器要处理 `fenceClosed` 为 `false` 的情况，给出加载态而不是尝试解析半截内容。
+- `renderers` 的 key 用小写语言名，与围栏首个单词一致（` ```mermaid ` → `mermaid`）。
+- 需要非流式的静态 Markdown 时用 `TxMarkdownView`，不必为它开这套分块与光标机制。
 
-## API
+## API 参考
 
 ### Props
 
@@ -65,10 +59,15 @@ code: |
 
 `TxStreamMarkdown` 不暴露插槽。要自定义某类内容的渲染，请通过 `renderers` 按语言注册组件。
 
-## 最佳实践
+## 概述
 
-- 不要关闭 `sanitize`。模型输出属于不可信内容，而这里是它变成 DOM 的地方。
-- 流式期间保持 `streaming` 为真，结束后再置假；一直为真会让光标永远留在末尾。
-- 自定义渲染器要处理 `fenceClosed` 为 `false` 的情况，给出加载态而不是尝试解析半截内容。
-- `renderers` 的 key 用小写语言名，与围栏首个单词一致（` ```mermaid ` → `mermaid`）。
-- 需要非流式的静态 Markdown 时用 `TxMarkdownView`，不必为它开这套分块与光标机制。
+- 文档被切成块逐块渲染，因此追加文本不会导致整篇重排——这是流式场景下的关键性质。
+- `streaming` 为真时尾部显示光标，且**尚未闭合的尾部围栏会推迟渲染**：半截的代码块不会先以错误的形态闪现，等闭合后再交给渲染器。
+- `fenceClosed` 只对流式文档的尾部围栏为 `false`；缩进代码没有围栏，也报 `false`，组件把任何非尾部块都视作已完成。
+- `sanitize` 默认开启，通过动态 `import('dompurify')` 加载。**请保持开启**——内容来自模型输出。
+- dompurify 加载失败时 `sanitizer` 置空，组件不会因此崩溃；这意味着净化是尽力而为，不能替代服务端的信任边界。
+- 每个实例持有自己的 `Marked`（开启 `gfm` 与 `breaks`），不会修改全局单例——否则会影响应用内其他所有使用方。
+- `renderers` 按围栏语言（首个单词、转小写）匹配；未注册的语言走默认代码块渲染。
+- 注册的渲染器组件会收到 `StreamMarkdownBlockContext` 作为 props，其中包含 `fenceClosed`，可据此在未闭合时显示占位。
+- `theme` 支持 `light` / `dark` / `auto`，`auto` 跟随环境主题。
+- 随组件打包的 GitHub-Markdown 样式表是 *全局* 引入的，因此其中每条规则都被限定在 `:where(.tx-markdown-view, .tx-stream-md)` 下。`.markdown-body` 是一个非常通用的类名——加限定之前，只要引入本组件，宿主页面自己用该类名承载的正文也会被重新设置样式。`:where()` 不增加特异度，所以这层限定只收窄作用范围，不改变这些规则彼此之间的优先级关系。

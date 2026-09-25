@@ -8,9 +8,8 @@ tags: [form, number, drag, inspector]
 syncStatus: reviewed
 verified: true
 ---
-# ScrubField 拖拽数值域
 
-## 基础用法
+## 用法
 
 ### ScrubField
 
@@ -31,17 +30,14 @@ code: |
 ---
 :::
 
-## 三条输入路径
+### 最佳实践
 
-**拖动**：指针按在标签上横向移动，每 `pixelsPerStep`（默认 2）像素走一个 `step`。位移是相对起点算的，不是按轨道位置映射——所以它没有轨道，也不受控件宽度限制，可以一直拖下去直到边界。
+- 标签要短（`W`、`H`、`Radius`）：它是手柄，太长的标签会让拖动区域喧宾夺主。
+- `active` 交给宿主判断——通常是「当前值 ≠ 预设值」，比较对象应该跟着数据走，不要写死常量。
+- 输入频繁的表单用 `clampOn="blur"`，检查器这类即时预览场景用默认的 `'input'`。
+- 需要「按轨道位置取值」的场景请用 `TxSlider`：那是位置映射，这是位移累加，两者不能互换。
 
-**键盘**：手柄是 `role="slider"` 且可聚焦。↑ → 加、↓ ← 减，按住 Shift 走 `shiftMultiplier`（默认 10）倍，Home / End 直达两端。
-
-**键入**：右侧是真实的 `<input>`。`clampOn` 决定何时收敛：默认 `'input'` 每次按键都夹取（与上游一致），`'blur'` 则保留输入中的文本，避免「想输 50，刚打完 5 就被改写成 5」。
-
-拖动过程中按 **Esc 放弃这次手势**，值回到按下时的样子——不是回到指针路过的最后一个值。
-
-## API
+## API 参考
 
 ### Props
 
@@ -75,7 +71,17 @@ code: |
 | `focus()` | 聚焦拖拽手柄。 |
 | `focusInput()` | 聚焦数值输入框。 |
 
-## 交互契约
+## 三条输入路径
+
+**拖动**：指针按在标签上横向移动，每 `pixelsPerStep`（默认 2）像素走一个 `step`。位移是相对起点算的，不是按轨道位置映射——所以它没有轨道，也不受控件宽度限制，可以一直拖下去直到边界。
+
+**键盘**：手柄是 `role="slider"` 且可聚焦。↑ → 加、↓ ← 减，按住 Shift 走 `shiftMultiplier`（默认 10）倍，Home / End 直达两端。
+
+**键入**：右侧是真实的 `<input>`。`clampOn` 决定何时收敛：默认 `'input'` 每次按键都夹取（与上游一致），`'blur'` 则保留输入中的文本，避免「想输 50，刚打完 5 就被改写成 5」。
+
+拖动过程中按 **Esc 放弃这次手势**，值回到按下时的样子——不是回到指针路过的最后一个值。
+
+## 概述
 
 - 芯片左右都留了内边距，把手字符和数值都不再贴着边缘；贴边时字段看起来像被裁掉，而不是紧凑。
 
@@ -87,14 +93,7 @@ code: |
 - 外层是 `<label>`，但手柄会阻止 label 的默认转发并让自己拿到焦点——否则每次点手柄，焦点都会被交给输入框。
 - 组件内没有 JS 动画，只有一条状态过渡（底色与描边），已在减弱动效下关闭。
 
-## 最佳实践
-
-- 标签要短（`W`、`H`、`Radius`）：它是手柄，太长的标签会让拖动区域喧宾夺主。
-- `active` 交给宿主判断——通常是「当前值 ≠ 预设值」，比较对象应该跟着数据走，不要写死常量。
-- 输入频繁的表单用 `clampOn="blur"`，检查器这类即时预览场景用默认的 `'input'`。
-- 需要「按轨道位置取值」的场景请用 `TxSlider`：那是位置映射，这是位移累加，两者不能互换。
-
-## Source
+## 技术实现
 
 - 组件源码：`packages/tuffex/packages/components/src/scrub-field/src/TxScrubField.vue`。
 - 类型：`packages/tuffex/packages/components/src/scrub-field/src/types.ts`。
@@ -102,8 +101,6 @@ code: |
 - 移植自 Beautiful UI（https://www.beautifului.dev），© 2026 Shane Levine，MIT。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - **为什么不是 `TxSlider` 的变体:** 滑杆把指针**位置**映射到轨道上的值，这里把指针**位移**累加成步数，且没有轨道。两者的数学与 DOM 都不相容。`TxNumberInput` 也不合适：它是 34px 高、带加减按钮的表单控件，收敛时机也不同。
 - **相对上游的修正:** 补了 `pointercancel` / `lostpointercapture`（否则会留下悬空拖拽态）、Esc 取消、Home/End、`aria-orientation`，并把值的取整改成位移量化。

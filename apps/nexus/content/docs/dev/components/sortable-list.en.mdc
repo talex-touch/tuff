@@ -8,9 +8,8 @@ tags: [sortable, drag-drop, list]
 syncStatus: reviewed
 verified: true
 ---
-# SortableList
 
-## Basic Usage
+## Usage
 
 :::TuffDemoWrapper{demo="SortableListSortableListDemo" code-lang="vue"}
 ---
@@ -36,8 +35,6 @@ code: |
   </template>
 ---
 :::
-
-## Composition Examples
 
 ### Drag Handle Mode
 
@@ -74,29 +71,16 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 </template>
 ```
 
-## Interaction Contract
+### Best Practices
 
-- The root renders `role="list"`; each item renders `role="listitem"`.
-- Each item must have a stable string `id`; `id` is used for Vue keys and drag bookkeeping.
-- Items are draggable unless `disabled=true`. Disabled mode also blocks drag start, drag over, drop reordering, and emitted reorder events.
-- `handle=false` allows drag start from anywhere inside the item.
-- `handle=true` requires the drag event target or one of its ancestors to match `[data-tx-sort-handle="true"]`.
-- Drag start stores the item id in `dataTransfer` and marks the item as dragging.
-- **The list reorders as the pointer crosses, not on drop.** Each `dragover` over a different row moves the dragged row there and emits `update:modelValue`. That preview *is* the drag feedback: before it, the only thing that changed on screen for the whole drag was a 0.65 opacity on the source row.
-- The preview is held inside the component, so the rows move whether or not the host writes `modelValue` back. Ownership returns to the host the moment the interaction ends.
-- `reorder` fires **once**, when the drag ends, with the original index and the final one — not once per row crossed.
-- A drop outside the list still counts. `dragend` settles whatever the preview last showed rather than snapping the rows back to an order the user watched change.
-- `dragend` and `drop` both clear drag state; whichever runs first reports the move.
-- Reordering uses shallow array copies; item objects are preserved.
+- Use stable persisted ids; never use array indexes as ids for reorderable data.
+- Update the bound array from `v-model` and persist from `reorder` when server order matters.
+- Use `handle` for rows that contain buttons, links, inputs, or selectable text.
+- Keep list sizes modest. For very long lists, combine a different drag strategy with virtualization instead of rendering every row draggable.
+- Rows show a `grab` cursor and lift while dragging; in `handle` mode the cursor affordance moves to the grip. A custom slot should still make its grip look like one.
+- Pass `itemLabel` whenever ids are not human-readable, or the live region will announce "plugin-a1b3" to a screen reader.
 
-### Keyboard
-
-- The list is one tab stop. Tab lands on the last focused row, or the first; the arrow keys move between rows.
-- Space or Enter picks a row up; the arrows then move the row itself, Space or Enter puts it down, and Escape abandons the reorder and restores the order it started from.
-- Blurring a held row puts it down rather than stranding it.
-- Every step is announced through a visually hidden `role="status"` live region. `labels` supplies the templates (`{item}`, `{position}`, `{size}`) and `itemLabel` supplies the item's name, which otherwise falls back to its `id`.
-
-## API
+## API Reference
 
 ### Props
 
@@ -128,22 +112,33 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 |------|------|-------------|
 | `item` | `{ item, dragging, grabbed, index, handleAttrs }` | Custom renderer for each item. Falls back to a row with the item `id` (and a grip when `handle` is set). Spread `handleAttrs` onto the element that should start a drag. |
 
-## Best Practices
+## Overview
 
-- Use stable persisted ids; never use array indexes as ids for reorderable data.
-- Update the bound array from `v-model` and persist from `reorder` when server order matters.
-- Use `handle` for rows that contain buttons, links, inputs, or selectable text.
-- Keep list sizes modest. For very long lists, combine a different drag strategy with virtualization instead of rendering every row draggable.
-- Rows show a `grab` cursor and lift while dragging; in `handle` mode the cursor affordance moves to the grip. A custom slot should still make its grip look like one.
-- Pass `itemLabel` whenever ids are not human-readable, or the live region will announce "plugin-a1b3" to a screen reader.
+- The root renders `role="list"`; each item renders `role="listitem"`.
+- Each item must have a stable string `id`; `id` is used for Vue keys and drag bookkeeping.
+- Items are draggable unless `disabled=true`. Disabled mode also blocks drag start, drag over, drop reordering, and emitted reorder events.
+- `handle=false` allows drag start from anywhere inside the item.
+- `handle=true` requires the drag event target or one of its ancestors to match `[data-tx-sort-handle="true"]`.
+- Drag start stores the item id in `dataTransfer` and marks the item as dragging.
+- **The list reorders as the pointer crosses, not on drop.** Each `dragover` over a different row moves the dragged row there and emits `update:modelValue`. That preview *is* the drag feedback: before it, the only thing that changed on screen for the whole drag was a 0.65 opacity on the source row.
+- The preview is held inside the component, so the rows move whether or not the host writes `modelValue` back. Ownership returns to the host the moment the interaction ends.
+- `reorder` fires **once**, when the drag ends, with the original index and the final one — not once per row crossed.
+- A drop outside the list still counts. `dragend` settles whatever the preview last showed rather than snapping the rows back to an order the user watched change.
+- `dragend` and `drop` both clear drag state; whichever runs first reports the move.
+- Reordering uses shallow array copies; item objects are preserved.
 
-## Review Notes
+### Keyboard
+
+- The list is one tab stop. Tab lands on the last focused row, or the first; the arrow keys move between rows.
+- Space or Enter picks a row up; the arrows then move the row itself, Space or Enter puts it down, and Escape abandons the reorder and restores the order it started from.
+- Blurring a held row puts it down rather than stranding it.
+- Every step is announced through a visually hidden `role="status"` live region. `labels` supplies the templates (`{item}`, `{position}`, `{size}`) and `itemLabel` supplies the item's name, which otherwise falls back to its `id`.
+
+## Technologies
 
 - **Accessibility note:** Reordering is available from the keyboard — one tab stop, Space to pick up, arrows to move, Escape to cancel — and every step goes through a polite live region. Native drag-and-drop remains pointer-only and is the secondary path, not the only one.
 - **Data note:** Reorder emits a shallow copied array and preserves item object references. Persist by stable `id`, not by index or object identity.
 - **Verified coverage:** `sortable-list.test.ts` checks list semantics, slot props, fallback item ids, reorder emits, same-item drop suppression, disabled blocking, handle-only drag start, dragend state cleanup, the live preview during `dragover` (and that `reorder` does not fire per row crossed), a drag that ends outside the list, the built-in grip and the `handleAttrs` a slot receives, and the whole keyboard path: grab, move, drop, Escape, both list ends, focus movement without a grab, the single tab stop, announcements, `labels` overrides, and disabled.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/sortable-list/src/TxSortableList.vue`.
 - Types: `packages/tuffex/packages/components/src/sortable-list/src/types.ts` exports `SortableListItem`, `SortableListProps`, `SortableListLabels`, and `SortableListEmits`.

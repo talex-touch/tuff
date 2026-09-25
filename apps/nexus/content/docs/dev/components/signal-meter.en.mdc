@@ -8,9 +8,8 @@ tags: [ai, confidence, meter]
 syncStatus: reviewed
 verified: true
 ---
-# SignalMeter
 
-## Basic Usage
+## Usage
 
 ### Four Levels
 
@@ -28,13 +27,14 @@ code: |
 ---
 :::
 
-## Where It Fits
+### Best Practices
 
-- The confidence footer and alternatives list of a suggestion card — `TxRecommendationCard` uses it internally.
-- Relevance on retrieval results: three segments scan across a column faster than a percentage.
-- Any discrete strong / medium / weak / none quantity. Use `TxProgressBar` for continuous ones.
+- Colour is never the only carrier of state: put a text label beside the meter (`High confidence` / `Needs review`) and pass that same text as `label`.
+- Keep `max` consistent within a screen, or "two of three" and "two of five" read as the same strength.
+- When the parent already shows a visible label, leave `label` off so a screen reader announces it once.
+- Map a semantic value such as `confidence` to `value` + `tone` in the host rather than scattering magic numbers through templates.
 
-## API
+## API Reference
 
 ### Props
 
@@ -55,7 +55,13 @@ The component has no interaction and emits nothing.
 
 The component has no slots.
 
-## Interaction Contract
+## Where It Fits
+
+- The confidence footer and alternatives list of a suggestion card — `TxRecommendationCard` uses it internally.
+- Relevance on retrieval results: three segments scan across a column faster than a percentage.
+- Any discrete strong / medium / weak / none quantity. Use `TxProgressBar` for continuous ones.
+
+## Overview
 
 - A presentation-only primitive: no events, no internal state, repaints when `value` changes.
 - **`label` decides the accessibility semantics.** Supply it and the meter renders `role="img"` with `aria-label`; omit it and the whole meter is `aria-hidden="true"`. The latter is deliberate — three empty `span`s announced one at a time are noise, and in real layouts the meter always sits beside its own visible text.
@@ -63,14 +69,7 @@ The component has no slots.
 - `tone` takes a raw CSS colour string and **does not follow the theme**. Pass a variable such as `var(--tx-color-success)` rather than a hex literal if you want it to.
 - The fill transition runs 300ms; `prefers-reduced-motion: reduce` drops the transition and keeps the final colour.
 
-## Best Practices
-
-- Colour is never the only carrier of state: put a text label beside the meter (`High confidence` / `Needs review`) and pass that same text as `label`.
-- Keep `max` consistent within a screen, or "two of three" and "two of five" read as the same strength.
-- When the parent already shows a visible label, leave `label` off so a screen reader announces it once.
-- Map a semantic value such as `confidence` to `value` + `tone` in the host rather than scattering magic numbers through templates.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/signal-meter/src/TxSignalMeter.vue`.
 - Types: `packages/tuffex/packages/components/src/signal-meter/src/types.ts`.
@@ -78,8 +77,6 @@ The component has no slots.
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **How it divides from the existing badges:** `TxStatusBadge` is a bordered badge over five semantic tones and `TxProgressBar` is continuous progress. This component is bare discrete segments that accept any colour, with no border and no icon — the three are not interchangeable.
 - **Upstream deviation:** upstream keeps the meter inside the recommendation card, fixed at three segments with hardcoded colours. It is extracted here and the count exposed as `max`, because the same shape is useful for retrieval relevance.

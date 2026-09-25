@@ -8,9 +8,8 @@ tags: [search, input, form]
 syncStatus: reviewed
 verified: true
 ---
-# SearchInput
 
-## Basic Usage
+## Usage
 
 ### SearchInput
 :::TuffDemoWrapper{demo="SearchInputSearchInputDemo" code-lang="vue"}
@@ -44,8 +43,6 @@ code: |
   </template>
 ---
 :::
-
-## Remote Search
 
 ### SearchInput (remote)
 :::TuffDemoWrapper{demo="SearchInputSearchInputRemoteDemo" code-lang="vue"}
@@ -120,6 +117,51 @@ code: |
 ---
 :::
 
+### Best Practices
+
+- Use `TxSearchInput` for keyword and Enter workflows; prefer `TxSearchSelect` when results need a dropdown panel or selected-value refill.
+- `remote` emits `search` after `searchDebounce` on input changes, while Enter emits `search` immediately. Keep API callers idempotent because both paths can produce the same query.
+- Do not rely on placeholder text as the only business label; provide an external label, section heading, or surrounding context in dense toolbars.
+- Set `searchDebounce` to `0` only for local or fully cached searches. Network-backed search should keep a debounce to avoid request storms.
+
+## API Reference
+
+### TxSearchInput Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` | `string` | `''` | Input value used by `v-model`. |
+| `placeholder` | `string` | `'Search'` | Placeholder text shown when the input is empty. |
+| `disabled` | `boolean` | `false` | Disables typing, clearing, and remote search emission. |
+| `clearable` | `boolean` | `true` | Shows the clear control when the input has a value. |
+| `remote` | `boolean` | `false` | Emits debounced `search` events while typing. |
+| `searchDebounce` | `number` | `200` | Delay in milliseconds before emitting remote search. |
+
+### Events
+
+| Event | Params | Description |
+|------|------|------|
+| `update:modelValue` | `(v: string)` | Emitted when the input value changes. |
+| `input` | `(v: string)` | Mirrors native input changes with the normalized string value. |
+| `focus` | `(e: FocusEvent)` | Emitted when the inner input receives focus. |
+| `blur` | `(e: FocusEvent)` | Emitted when the inner input loses focus. |
+| `clear` | - | Emitted after the clear control resets the value. |
+| `search` | `(v: string)` | Emitted on Enter, or after debounce when `remote` is enabled. |
+
+### Expose
+
+| Name | Type | Description |
+|------|------|------|
+| `focus()` | `() => void` | Focuses the inner input. |
+| `blur()` | `() => void` | Blurs the inner input. |
+| `clear()` | `() => void` | Clears the current value and emits `clear`. |
+| `setValue(v)` | `(v: string) => void` | Sets the current input value. |
+| `getValue()` | `() => string` | Returns the current input value. |
+
+### Slots
+
+`TxSearchInput` does not expose public slots. The prefix search icon is owned by the component; use `TuffInput` directly when a custom prefix or suffix is required.
+
 ## Dashboard Filter Toolbar
 
 Use `TxSearchInput` for the keyword field. When a list also needs scope/type filtering, combine it with `TxSearchSelect` and `TxSearchEmpty` so filtering, matching, and recovery states stay in one path.
@@ -177,59 +219,12 @@ code: |
 ---
 :::
 
-## API
-
-### TxSearchInput Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `modelValue` | `string` | `''` | Input value used by `v-model`. |
-| `placeholder` | `string` | `'Search'` | Placeholder text shown when the input is empty. |
-| `disabled` | `boolean` | `false` | Disables typing, clearing, and remote search emission. |
-| `clearable` | `boolean` | `true` | Shows the clear control when the input has a value. |
-| `remote` | `boolean` | `false` | Emits debounced `search` events while typing. |
-| `searchDebounce` | `number` | `200` | Delay in milliseconds before emitting remote search. |
-
-### Events
-
-| Event | Params | Description |
-|------|------|------|
-| `update:modelValue` | `(v: string)` | Emitted when the input value changes. |
-| `input` | `(v: string)` | Mirrors native input changes with the normalized string value. |
-| `focus` | `(e: FocusEvent)` | Emitted when the inner input receives focus. |
-| `blur` | `(e: FocusEvent)` | Emitted when the inner input loses focus. |
-| `clear` | - | Emitted after the clear control resets the value. |
-| `search` | `(v: string)` | Emitted on Enter, or after debounce when `remote` is enabled. |
-
-### Expose
-
-| Name | Type | Description |
-|------|------|------|
-| `focus()` | `() => void` | Focuses the inner input. |
-| `blur()` | `() => void` | Blurs the inner input. |
-| `clear()` | `() => void` | Clears the current value and emits `clear`. |
-| `setValue(v)` | `(v: string) => void` | Sets the current input value. |
-| `getValue()` | `() => string` | Returns the current input value. |
-
-### Slots
-
-`TxSearchInput` does not expose public slots. The prefix search icon is owned by the component; use `TuffInput` directly when a custom prefix or suffix is required.
-
-## Best Practices
-
-- Use `TxSearchInput` for keyword and Enter workflows; prefer `TxSearchSelect` when results need a dropdown panel or selected-value refill.
-- `remote` emits `search` after `searchDebounce` on input changes, while Enter emits `search` immediately. Keep API callers idempotent because both paths can produce the same query.
-- Do not rely on placeholder text as the only business label; provide an external label, section heading, or surrounding context in dense toolbars.
-- Set `searchDebounce` to `0` only for local or fully cached searches. Network-backed search should keep a debounce to avoid request storms.
-
-## Review Notes
+## Technologies
 
 - **Search contract:** Enter emits `search` immediately. `remote=true` also emits debounced `search` on input changes, unless the component is disabled.
 - **Clear contract:** the component forwards `TuffInput` clear behavior, emits `clear`, and exposes the same focus/blur/value helpers for wrapper-level integrations.
 - **Composition contract:** the search icon is owned by `TxSearchInput`; use `TuffInput` directly when the field needs custom prefix/suffix slots.
 - **Verified coverage:** `search-input.test.ts` covers input/search emits, remote debounce, disabled remote blocking, clear forwarding, and `getValue()` / `setValue()` helper exposure.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/search-input/src/TxSearchInput.vue`.
 - Types: `packages/tuffex/packages/components/src/search-input/src/types.ts` exports `SearchInputProps` and `SearchInputEmits`.

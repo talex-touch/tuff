@@ -8,9 +8,8 @@ tags: [steps, progress, workflow]
 syncStatus: reviewed
 verified: true
 ---
-# Steps
 
-## Basic Usage
+## Usage
 
 The common case uses numeric steps. Completed states are inferred when both `active` and step keys are numbers.
 
@@ -35,7 +34,15 @@ code: |
 ---
 ::::
 
-## API
+### Best Practices
+
+- Use numeric keys for linear forms and onboarding flows where completion can be inferred.
+- Use string keys for named workflows, but set `status` explicitly for completed or error states.
+- Disable future steps when users must complete prerequisites before jumping ahead.
+- Treat `TxSteps` as progress/navigation affordance, not as the source of truth for a router or form state. Keep the authoritative workflow state in the parent.
+- Avoid putting long descriptions into every step; use step details below the component when content needs paragraphs or controls.
+
+## API Reference
 
 ### TxSteps Props
 
@@ -69,7 +76,7 @@ code: |
 
 No events are emitted. Clickable steps update only the internal active step stored by `TxSteps`.
 
-## Interaction Contract
+## Overview
 
 - `TxSteps` renders `role="list"`; each `TxStep` renders `role="listitem"`.
 - Clickable step heads are native `button type="button"` elements. Non-clickable heads render as `div`.
@@ -79,21 +86,11 @@ No events are emitted. Clickable steps update only the internal active step stor
 - Numeric steps before a numeric active step are treated as completed. String-keyed flows need explicit `status="completed"` when you want completion styling.
 - Clicks update the internal active step but do not emit a change event or update the parent automatically.
 
-## Best Practices
-
-- Use numeric keys for linear forms and onboarding flows where completion can be inferred.
-- Use string keys for named workflows, but set `status` explicitly for completed or error states.
-- Disable future steps when users must complete prerequisites before jumping ahead.
-- Treat `TxSteps` as progress/navigation affordance, not as the source of truth for a router or form state. Keep the authoritative workflow state in the parent.
-- Avoid putting long descriptions into every step; use step details below the component when content needs paragraphs or controls.
-
-## Review Notes
+## Technologies
 
 - **State contract:** `TxSteps` owns an internal `activeStep` and watches the `active` prop. Clicking a step changes only that internal value; no `update:active` or `change` event is emitted.
 - **Ordering note:** Steps register by component uid and child order. Numeric steps infer completed state from `effectiveStep < activeStep`; string-valued flows need explicit `status="completed"` when completion should be shown.
 - **Verified coverage:** `steps.test.ts` covers list/listitem semantics, automatic numeric completion, connector omission on the last item, explicit string steps, click-driven internal active state, and disabled/non-clickable blocking.
-
-## Source
 
 - Component sources: `packages/tuffex/packages/components/src/steps/src/TxSteps.vue` and `TxStep.vue`.
 - Types: `packages/tuffex/packages/components/src/steps/src/types.ts` exports `StepsProps`, `StepProps`, `StepsDirection`, `StepsSize`, and `StepStatus`.

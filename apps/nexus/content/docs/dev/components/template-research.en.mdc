@@ -9,13 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Scenario
-
-The research copilot answers an engineering question: which local engine should power Tuff's screenshot OCR. It shows its process first (search, read, benchmark a sample set, weigh the trade-offs), then gives a conclusion with numbered citations, a comparison table, pageable insights and a recommendation card. Clicking a citation in the conclusion switches the evidence rail on the right to the matching source or retrieved chunk and highlights it.
-
-It fits answer engines, knowledge-base Q&A, technology selection and competitive research: anywhere a conclusion has to be traceable. Accuracy, speed and size claims about third-party engines in this template are qualitative or sample data, not measurements.
-
-## Template
+## Usage
 
 ### Cited research report
 
@@ -96,7 +90,26 @@ code: |
 ---
 :::
 
-## Anatomy
+## Overview
+
+The research copilot answers an engineering question: which local engine should power Tuff's screenshot OCR. It shows its process first (search, read, benchmark a sample set, weigh the trade-offs), then gives a conclusion with numbered citations, a comparison table, pageable insights and a recommendation card. Clicking a citation in the conclusion switches the evidence rail on the right to the matching source or retrieved chunk and highlights it.
+
+It fits answer engines, knowledge-base Q&A, technology selection and competitive research: anywhere a conclusion has to be traceable. Accuracy, speed and size claims about third-party engines in this template are qualitative or sample data, not measurements.
+
+- Research starts once the template scrolls into view and takes about 10 seconds: the research process, the conclusion word by word, the streamed comparison table, then insights, the recommendation and follow-ups. The window's Reset button or Research again in the header replays it.
+- Click a numbered citation in the conclusion and the rail switches to the matching tab, scrolls only inside itself and rings the entry: citations with a retrieved chunk land on the chunk, the rest on the source. Clicking a source or a chunk's origin only shows "The host would open …" above the input; the page never navigates.
+- The insight cards page through; the recommendation card opens its alternatives, and Save plan writes the draft into the Notes tab.
+- A follow-up, or the follow-up pill inside an insight card, appends a question and a streamed answer with an expandable reasoning note; anything typed into the input gets a canned answer.
+- While an answer streams, the answer column follows to the bottom; scroll up and it stops following, and the page itself never moves. In the docs column (640–959px) the rail uses tabs, from 960px it widens, and from 1200px the insights get a column of their own. Narrow (< 640px) hides the rail and puts the sources as stacked icons under the conclusion. With reduced motion the finished answer renders at once and reading starts from the top.
+
+## Customization
+
+- Wire a real service by mapping research steps onto TxChainOfThought's `steps` (keep exactly one `active` at a time), appending the conclusion token by token, and handing block content such as tables to TxStreamMarkdown.
+- Clickable citations cannot live inside markdown: TxStreamMarkdown renders through `v-html`, which cannot hold components. Render the cited paragraph on its own, and keep links out of the markdown too, or they navigate the host.
+- Scroll the evidence rail with its scroller's `scrollTo`, never `scrollIntoView`, which drags the whole page along.
+- For claims about third-party products, write qualitative conclusions or label the numbers as sample data unless you measured them; give the recommendation's confidence a text label and use colour only to support it.
+
+## Related components
 
 | Region | Components | Role |
 |---|---|---|
@@ -109,18 +122,3 @@ code: |
 | Evidence rail | [TxTabs](/docs/dev/components/tabs), [TxSources](/docs/dev/components/sources), [TxContextCards](/docs/dev/components/context-cards), [TxSignalMeter](/docs/dev/components/signal-meter), [TxSkeleton](/docs/dev/components/skeleton) | Sources / Chunks / Notes tabs; skeletons until the sources arrive; chunks rated for relevance |
 | Notes | [TxMarkdownView](/docs/dev/components/markdown-view), [TxMessageActions](/docs/dev/components/message-actions) | The plan draft written once a recommendation is adopted, with copy |
 | Input | [TxPromptBar](/docs/dev/components/prompt-bar) | Follow-up input; `@` to cite sources, `/` for commands, a research-mode picker |
-
-## Interactions
-
-- Research starts once the template scrolls into view and takes about 10 seconds: the research process, the conclusion word by word, the streamed comparison table, then insights, the recommendation and follow-ups. The window's Reset button or Research again in the header replays it.
-- Click a numbered citation in the conclusion and the rail switches to the matching tab, scrolls only inside itself and rings the entry: citations with a retrieved chunk land on the chunk, the rest on the source. Clicking a source or a chunk's origin only shows "The host would open …" above the input; the page never navigates.
-- The insight cards page through; the recommendation card opens its alternatives, and Save plan writes the draft into the Notes tab.
-- A follow-up, or the follow-up pill inside an insight card, appends a question and a streamed answer with an expandable reasoning note; anything typed into the input gets a canned answer.
-- While an answer streams, the answer column follows to the bottom; scroll up and it stops following, and the page itself never moves. In the docs column (640–959px) the rail uses tabs, from 960px it widens, and from 1200px the insights get a column of their own. Narrow (< 640px) hides the rail and puts the sources as stacked icons under the conclusion. With reduced motion the finished answer renders at once and reading starts from the top.
-
-## Adapting it
-
-- Wire a real service by mapping research steps onto TxChainOfThought's `steps` (keep exactly one `active` at a time), appending the conclusion token by token, and handing block content such as tables to TxStreamMarkdown.
-- Clickable citations cannot live inside markdown: TxStreamMarkdown renders through `v-html`, which cannot hold components. Render the cited paragraph on its own, and keep links out of the markdown too, or they navigate the host.
-- Scroll the evidence rail with its scroller's `scrollTo`, never `scrollIntoView`, which drags the whole page along.
-- For claims about third-party products, write qualitative conclusions or label the numbers as sample data unless you measured them; give the recommendation's confidence a text label and use colour only to support it.

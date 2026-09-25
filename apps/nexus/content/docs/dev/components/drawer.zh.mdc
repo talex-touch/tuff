@@ -9,9 +9,7 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Drawer 抽屉
-
-## 基础用法
+## 用法
 
 ### Basic Drawer
 最常见的抽屉用法。
@@ -27,6 +25,128 @@ code: |
   </template>
 ---
 :::
+
+### 最佳实践
+
+- Drawer 适合长表单、审计明细、权限矩阵，以及需要 Footer 操作区的流程。
+- 即使 `showHeader=false` 也要提供有意义的 `title`；它会作为 dialog 的无障碍兜底标签。
+- 优先使用 `size` 和 `full`；`width` 只为尚未迁移的旧调用点保留。
+- 只有在小屏上保持侧向进入比 bottom sheet 手感更重要时，才设置 `mobileAdapt=false`。
+
+## API 参考
+
+### 属性
+
+::TuffPropsTable
+---
+rows:
+  - name: visible
+    description: '控制抽屉可见性。配合 `v-model:visible` 双向绑定；关闭时组件仍留在 DOM 中（见交互契约）。'
+    type: 'boolean'
+    default: '*必填*'
+  - name: title
+    description: '头部显示的标题。留空则不渲染标题行，可改用 `header` 插槽自定义。'
+    type: 'string'
+    default: "'Drawer'"
+  - name: size
+    description: '当前轴尺寸；left/right 为宽度，top/bottom 为高度；number 按 px 处理，full 映射为 100%'
+    type: "number | string | 'full'"
+    default: "'60%'"
+  - name: full
+    description: '当前方向全屏打开，等价于 size="full"'
+    type: 'boolean'
+    default: 'false'
+  - name: width
+    description: '旧版兼容项，建议改用 size'
+    type: "number | string | 'full'"
+    default: '-'
+  - name: direction
+    description: '抽屉出现的方向'
+    type: "'left' | 'right' | 'top' | 'bottom'"
+    default: "'right'"
+  - name: showHeader
+    description: '是否渲染 Header 区域'
+    type: 'boolean'
+    default: 'true'
+  - name: showFooter
+    description: '是否渲染 Footer 插槽区域'
+    type: 'boolean'
+    default: 'true'
+  - name: showClose
+    description: '是否显示关闭按钮'
+    type: 'boolean'
+    default: 'true'
+  - name: closeOnClickMask
+    description: '点击遮罩时关闭'
+    type: 'boolean'
+    default: 'true'
+  - name: closeOnPressEscape
+    description: '按 Escape 键时关闭'
+    type: 'boolean'
+    default: 'true'
+  - name: maskEffect
+    description: '遮罩视觉效果'
+    type: "'blur' | 'opacity' | 'transparent'"
+    default: "'blur'"
+  - name: panelTransparent
+    description: '面板是否半透明并透出背部内容'
+    type: 'boolean'
+    default: 'false'
+  - name: mobileAdapt
+    description: '移动端是否强制从底部弹出'
+    type: 'boolean'
+    default: 'true'
+  - name: zIndex
+    description: '自定义 z-index。不传时由运行时 z-index 管理器分配（种子 `10000`，逐个抽屉递增）；仅在需要与外部固定层级共存时手动指定。'
+    type: 'number'
+    default: '-'
+  - name: lazy
+    description: '首次打开前不渲染插槽内容。面板本身仍然挂载，滑出动画不受影响；首次打开后内容会保留，重复开关不会重新执行子组件 setup。需要子组件提前挂载时设为 `false`。'
+    type: 'boolean'
+    default: 'true'
+---
+::
+
+### 事件
+
+::TuffPropsTable
+---
+rows:
+  - name: update:visible
+    description: '可见性变化时触发'
+    type: '(visible: boolean) => void'
+    default: '-'
+  - name: open
+    description: '抽屉打开时触发'
+    type: '() => void'
+    default: '-'
+  - name: close
+    description: '抽屉关闭时触发'
+    type: '() => void'
+    default: '-'
+---
+::
+
+### 插槽
+
+::TuffPropsTable
+---
+rows:
+  - name: default
+    description: '抽屉主内容'
+    type: '-'
+    default: '-'
+  - name: header
+    description: '自定义 Header；slot props: { close, title, titleId }'
+    type: '-'
+    default: '-'
+  - name: footer
+    description: '底部内容区域；slot props: { close }'
+    type: '-'
+    default: '-'
+---
+::
+
 ## 方向
 
 抽屉支持 `left`、`right`、`top`、`bottom` 四个方向。移动端默认会自动改为 `bottom`，可以通过 `mobile-adapt="false"` 关闭。
@@ -56,6 +176,7 @@ code: |
   </template>
 ---
 :::
+
 ## 尺寸与全屏
 
 ### Size and Fullscreen
@@ -83,6 +204,7 @@ code: |
   </template>
 ---
 :::
+
 ## Header / Footer 插槽与遮罩
 
 使用 `header` / `footer` 插槽自定义头尾区域，也可以用 `show-header` / `show-footer` 关闭。Drawer 内置 Header/Footer 分割线复用 `TxDivider`；`mask-effect` 支持 `blur`、`opacity`、`transparent`，`panel-transparent` 可让面板透出背部内容。
@@ -223,121 +345,7 @@ code: |
 ---
 :::
 
-## API
-
-### 属性
-
-::TuffPropsTable
----
-rows:
-  - name: visible
-    description: '控制抽屉可见性。配合 `v-model:visible` 双向绑定；关闭时组件仍留在 DOM 中（见交互契约）。'
-    type: 'boolean'
-    default: '*必填*'
-  - name: title
-    description: '头部显示的标题。留空则不渲染标题行，可改用 `header` 插槽自定义。'
-    type: 'string'
-    default: "'Drawer'"
-  - name: size
-    description: '当前轴尺寸；left/right 为宽度，top/bottom 为高度；number 按 px 处理，full 映射为 100%'
-    type: "number | string | 'full'"
-    default: "'60%'"
-  - name: full
-    description: '当前方向全屏打开，等价于 size="full"'
-    type: 'boolean'
-    default: 'false'
-  - name: width
-    description: '旧版兼容项，建议改用 size'
-    type: "number | string | 'full'"
-    default: '-'
-  - name: direction
-    description: '抽屉出现的方向'
-    type: "'left' | 'right' | 'top' | 'bottom'"
-    default: "'right'"
-  - name: showHeader
-    description: '是否渲染 Header 区域'
-    type: 'boolean'
-    default: 'true'
-  - name: showFooter
-    description: '是否渲染 Footer 插槽区域'
-    type: 'boolean'
-    default: 'true'
-  - name: showClose
-    description: '是否显示关闭按钮'
-    type: 'boolean'
-    default: 'true'
-  - name: closeOnClickMask
-    description: '点击遮罩时关闭'
-    type: 'boolean'
-    default: 'true'
-  - name: closeOnPressEscape
-    description: '按 Escape 键时关闭'
-    type: 'boolean'
-    default: 'true'
-  - name: maskEffect
-    description: '遮罩视觉效果'
-    type: "'blur' | 'opacity' | 'transparent'"
-    default: "'blur'"
-  - name: panelTransparent
-    description: '面板是否半透明并透出背部内容'
-    type: 'boolean'
-    default: 'false'
-  - name: mobileAdapt
-    description: '移动端是否强制从底部弹出'
-    type: 'boolean'
-    default: 'true'
-  - name: zIndex
-    description: '自定义 z-index。不传时由运行时 z-index 管理器分配（种子 `10000`，逐个抽屉递增）；仅在需要与外部固定层级共存时手动指定。'
-    type: 'number'
-    default: '-'
-  - name: lazy
-    description: '首次打开前不渲染插槽内容。面板本身仍然挂载，滑出动画不受影响；首次打开后内容会保留，重复开关不会重新执行子组件 setup。需要子组件提前挂载时设为 `false`。'
-    type: 'boolean'
-    default: 'true'
----
-::
-
-### 事件
-
-::TuffPropsTable
----
-rows:
-  - name: update:visible
-    description: '可见性变化时触发'
-    type: '(visible: boolean) => void'
-    default: '-'
-  - name: open
-    description: '抽屉打开时触发'
-    type: '() => void'
-    default: '-'
-  - name: close
-    description: '抽屉关闭时触发'
-    type: '() => void'
-    default: '-'
----
-::
-
-### 插槽
-
-::TuffPropsTable
----
-rows:
-  - name: default
-    description: '抽屉主内容'
-    type: '-'
-    default: '-'
-  - name: header
-    description: '自定义 Header；slot props: { close, title, titleId }'
-    type: '-'
-    default: '-'
-  - name: footer
-    description: '底部内容区域；slot props: { close }'
-    type: '-'
-    default: '-'
----
-::
-
-## 交互契约
+## 概述
 
 - Drawer 根节点暴露 `role="dialog"`、`aria-modal="true"`；有 Header 时通过实例级 `aria-labelledby` 关联标题，关闭 Header 时用 `title` 作为 `aria-label` 兜底。
 - 打开时聚焦抽屉根节点；隐藏或卸载时恢复到打开前的焦点元素。
@@ -345,22 +353,13 @@ rows:
 - `showClose=false` 会移除默认关闭按钮，但不影响遮罩和 Escape 的配置化关闭能力。
 - `mobileAdapt=true` 时移动端会强制从底部弹出；需要保持原方向时设置 `:mobile-adapt="false"`。
 
-## 最佳实践
-
-- Drawer 适合长表单、审计明细、权限矩阵，以及需要 Footer 操作区的流程。
-- 即使 `showHeader=false` 也要提供有意义的 `title`；它会作为 dialog 的无障碍兜底标签。
-- 优先使用 `size` 和 `full`；`width` 只为尚未迁移的旧调用点保留。
-- 只有在小屏上保持侧向进入比 bottom sheet 手感更重要时，才设置 `mobileAdapt=false`。
-
-## Source
+## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/drawer/src/TxDrawer.vue`.
 - Types: `packages/tuffex/packages/components/src/drawer/src/types.ts`.
 - **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/drawer/__tests__/drawer.test.ts` 校验 visibility 事件、焦点恢复、ARIA 标签、关闭控制、尺寸解析、移动端适配和分隔线渲染。
 
 <TuffDocSourceLink />
-
-## 审阅说明
 
 - Drawer 根节点已经提供 `role="dialog"` / `aria-modal="true"` 和标题关联，正文中仍需为表单字段提供明确 label。
 - 打开时会记录之前的焦点元素，隐藏或卸载后恢复焦点；不要在外层手动抢焦点造成冲突。

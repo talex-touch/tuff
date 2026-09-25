@@ -8,9 +8,8 @@ tags: [upload, file, form]
 syncStatus: reviewed
 verified: true
 ---
-# FileUploader
 
-## Basic Usage
+## Usage
 
 ::::TuffDemoWrapper{demo="FileUploaderFileUploaderDemo" code-lang="vue"}
 ---
@@ -26,8 +25,6 @@ code: |
   </template>
 ---
 ::::
-
-## Composition Examples
 
 ### Upload After Selection
 
@@ -65,22 +62,16 @@ const uploader = ref<{ pick: () => void }>()
 
 `pick()` respects `disabled=true` and will not open the input when disabled.
 
-## Interaction Contract
+### Best Practices
 
-- The hidden native input uses `type="file"`, `multiple`, `accept`, and `disabled` from props.
-- The visible drop zone is a native `button type="button"`; clicking it calls `pick()`.
-- `pick()` does nothing when disabled; otherwise it clicks the hidden file input.
-- File input changes are converted into `FileUploaderFile` records with generated ids.
-- After each input change, the native input value is cleared so the same file can be selected again.
-- Added files are capped by remaining capacity: `max - modelValue.length`.
-- When no capacity remains, no events are emitted.
-- Valid additions emit `add`, then `update:modelValue`, then `change`.
-- Removing an existing file emits `remove` with `{ id, value }`, then `update:modelValue`, then `change`.
-- `allowDrop=false` or `disabled=true` blocks drag-over and drop handling.
-- Drag-over calls `preventDefault()` only when drop is allowed and sets `is-dragging`; drop clears that state.
-- File sizes render as `B`, `KB`, or `MB` when `showSize=true`.
+- Treat `FileUploaderFile.file` as the upload payload and keep metadata in `modelValue` for UI state.
+- Enforce server-side file size, MIME, and content validation. The `accept` prop is only a browser hint.
+- Use `max` to limit UI selection count, but still validate limits before upload.
+- Listen to `add` for upload side effects; listen to `change` when you need the full list.
+- Store generated ids only for the current UI session. Do not persist them as durable file ids.
+- Keep `allowDrop=false` for compact forms where accidental drag/drop would be surprising.
 
-## API
+## API Reference
 
 ### Props
 
@@ -128,27 +119,30 @@ const uploader = ref<{ pick: () => void }>()
 |------|-----------|-------------|
 | `pick` | `() => void` | Opens the native file picker unless disabled. |
 
-## Best Practices
+## Overview
 
-- Treat `FileUploaderFile.file` as the upload payload and keep metadata in `modelValue` for UI state.
-- Enforce server-side file size, MIME, and content validation. The `accept` prop is only a browser hint.
-- Use `max` to limit UI selection count, but still validate limits before upload.
-- Listen to `add` for upload side effects; listen to `change` when you need the full list.
-- Store generated ids only for the current UI session. Do not persist them as durable file ids.
-- Keep `allowDrop=false` for compact forms where accidental drag/drop would be surprising.
+- The hidden native input uses `type="file"`, `multiple`, `accept`, and `disabled` from props.
+- The visible drop zone is a native `button type="button"`; clicking it calls `pick()`.
+- `pick()` does nothing when disabled; otherwise it clicks the hidden file input.
+- File input changes are converted into `FileUploaderFile` records with generated ids.
+- After each input change, the native input value is cleared so the same file can be selected again.
+- Added files are capped by remaining capacity: `max - modelValue.length`.
+- When no capacity remains, no events are emitted.
+- Valid additions emit `add`, then `update:modelValue`, then `change`.
+- Removing an existing file emits `remove` with `{ id, value }`, then `update:modelValue`, then `change`.
+- `allowDrop=false` or `disabled=true` blocks drag-over and drop handling.
+- Drag-over calls `preventDefault()` only when drop is allowed and sets `is-dragging`; drop clears that state.
+- File sizes render as `B`, `KB`, or `MB` when `showSize=true`.
 
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/file-uploader/src/types.ts`, `TxFileUploader.vue`, and `file-uploader.test.ts`.
 - **Verified coverage:** native button semantics, disabled browse blocking, file additions, and remove event emission.
 - API note: `remove` is not blocked inside the method, but the generated remove button is disabled by prop state; custom wrappers should preserve that disabled guard.
 - Validation note: `accept` and `max` are UI constraints only. Backends must revalidate file count, MIME, size, and content.
 
-## Source
-
 - Component source: `packages/tuffex/packages/components/src/file-uploader/src/TxFileUploader.vue`.
 - Types: `packages/tuffex/packages/components/src/file-uploader/src/types.ts`.
 - Coverage: `packages/tuffex/packages/components/src/file-uploader/__tests__/file-uploader.test.ts`.
 
 <TuffDocSourceLink />
-

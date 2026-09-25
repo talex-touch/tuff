@@ -8,9 +8,8 @@ tags: [chart, svg, d3, overview]
 syncStatus: reviewed
 verified: true
 ---
-# Charts
 
-## Install & Import
+## Installation
 
 The chart family ships inside Tuffex behind its own subpath, `@talex-touch/tuffex/charts`. Its API surface mirrors Cloudflare kumo's chart family, but the renderer is Vue-emitted SVG — no echarts and no chart framework; math comes from tree-shakeable d3 micro-modules only (`d3-scale` / `d3-shape` / `d3-sankey` / `d3-geo`). For chart types this family does not cover — and for ECharts' own option surface — use the [ECharts Family](/docs/dev/components/echart-charts), which shares these colour tokens and ships as an optional `echarts` peer.
 
@@ -22,6 +21,34 @@ pnpm add @talex-touch/tuffex
 import { TxTimeseriesChart } from '@talex-touch/tuffex/charts'
 import '@talex-touch/tuffex/charts/style.css'
 ```
+
+## Usage
+
+Every chart follows ECharts' default timing: first render animates in over 1000ms `cubicInOut`, a data update morphs geometry over 500ms `cubicInOut`, and hover/focus state transitions run 300ms `cubicOut`. Above 2000 points in one series the animation is skipped and the final frame renders directly. Lines and areas are the exception on first render — they take the ECharts line-series default and reveal left to right with `linear`.
+
+The values are copied from the `echarts ^6.0.0` that kumo pins (`src/model/globalDefault.ts`, with separate defaults for the line series and the tooltip). This package ships no ECharts runtime, so they are frozen as exported constants: `ENTER_DURATION` (1000), `UPDATE_DURATION` (500), `STATE_DURATION` (300), `ANIMATION_THRESHOLD` (2000). When the host sets `prefers-reduced-motion: reduce` every animation lands on its final frame, and all CSS transitions sit inside `@media (prefers-reduced-motion: no-preference)`.
+
+What each chart does with that timing (bars growing from the base axis, scatter scaling in, arcs expanding by angle, tooltip movement and collision boundary, Sankey and maps having no geometry animation) lives on the corresponding chart page (Timeseries, Maps, Sankey, Custom Chart) and is not repeated here.
+
+### Best Practices
+
+- Choose the dedicated chart wrapper (`TxTimeseriesChart`, `TxBubbleMap`, `TxChoroplethMap`, `TxSankeyChart`, `TxSparkChart`, or `TxEChart`) for standard metrics before assembling custom series primitives.
+- Rely on CSS variables for palette tokens (`--tx-chart-*`) and theme switching instead of hard-coding theme conditionals or HEX colors.
+- Keep series counts within readability limits (typically 3–7 series per visual surface) and supply accessible legend items or tooltips for every data point.
+
+## API Reference
+
+### ChartLegendItem Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `variant` | `'small' \| 'large'` | `'small'` | Inline row, or a stacked metric sized to sit in a dashboard metric row. |
+| `name` | `string` | — | Series name. Optional while `loading`. |
+| `color` | `string` | — | Indicator dot color; any CSS color including `var()`. |
+| `value` | `string` | — | Pre-formatted value text. |
+| `unit` | `string` | — | Unit label after the value (`large` only). |
+| `inactive` | `boolean` | `false` | Renders at half opacity for a deselected state. |
+| `loading` | `boolean` | `false` | Skeleton placeholders (`aria-hidden`, not focusable). |
 
 ## Available Charts
 
@@ -107,36 +134,8 @@ code: |
 ---
 :::
 
-## Animation
-
-Every chart follows ECharts' default timing: first render animates in over 1000ms `cubicInOut`, a data update morphs geometry over 500ms `cubicInOut`, and hover/focus state transitions run 300ms `cubicOut`. Above 2000 points in one series the animation is skipped and the final frame renders directly. Lines and areas are the exception on first render — they take the ECharts line-series default and reveal left to right with `linear`.
-
-The values are copied from the `echarts ^6.0.0` that kumo pins (`src/model/globalDefault.ts`, with separate defaults for the line series and the tooltip). This package ships no ECharts runtime, so they are frozen as exported constants: `ENTER_DURATION` (1000), `UPDATE_DURATION` (500), `STATE_DURATION` (300), `ANIMATION_THRESHOLD` (2000). When the host sets `prefers-reduced-motion: reduce` every animation lands on its final frame, and all CSS transitions sit inside `@media (prefers-reduced-motion: no-preference)`.
-
-What each chart does with that timing (bars growing from the base axis, scatter scaling in, arcs expanding by angle, tooltip movement and collision boundary, Sankey and maps having no geometry animation) lives on the corresponding chart page (Timeseries, Maps, Sankey, Custom Chart) and is not repeated here.
-
-## API
-
-### ChartLegendItem Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `variant` | `'small' \| 'large'` | `'small'` | Inline row, or a stacked metric sized to sit in a dashboard metric row. |
-| `name` | `string` | — | Series name. Optional while `loading`. |
-| `color` | `string` | — | Indicator dot color; any CSS color including `var()`. |
-| `value` | `string` | — | Pre-formatted value text. |
-| `unit` | `string` | — | Unit label after the value (`large` only). |
-| `inactive` | `boolean` | `false` | Renders at half opacity for a deselected state. |
-| `loading` | `boolean` | `false` | Skeleton placeholders (`aria-hidden`, not focusable). |
-
 ## Differences from kumo
 
 - No `echarts` instance prop — the renderer is built in; consumers neither need nor can pass echarts.
 - No `isDarkMode` prop — every color reads `--tx-chart-*` CSS variables and follows the host's `.dark` / `[data-theme='dark']` automatically.
 - Every HTML-string formatter became a slot (VNodes), so there is no XSS-escaping surface.
-
-## Best Practices
-
-- Choose the dedicated chart wrapper (`TxTimeseriesChart`, `TxBubbleMap`, `TxChoroplethMap`, `TxSankeyChart`, `TxSparkChart`, or `TxEChart`) for standard metrics before assembling custom series primitives.
-- Rely on CSS variables for palette tokens (`--tx-chart-*`) and theme switching instead of hard-coding theme conditionals or HEX colors.
-- Keep series counts within readability limits (typically 3–7 series per visual surface) and supply accessible legend items or tooltips for every data point.

@@ -9,13 +9,7 @@ syncStatus: reviewed
 verified: false
 ---
 
-## Scenario
-
-One release of the Tuff desktop app. CI builds, signs, notarizes and stages it, then stops and waits for a person before rolling it out to a small share of beta users. The console puts the pipeline, the artifacts for five platforms, the build log, the release notes, the rollout share, the guardrails and this release's history on one screen. The pipeline runs by itself; anything that ships to users (the first rollout, a promotion, a halt, a resume) waits for your click.
-
-It fits any screen where the machine prepares and a person lets it through: staged mobile or desktop releases, gradual feature-flag rollouts, database migrations, config pushes. The version, checksums, signatures and notarization results on the page are sample data; the version carries a `-demo` tag and there is no download link anywhere.
-
-## Template
+## Usage
 
 ### Staged rollout
 
@@ -100,7 +94,27 @@ code: |
 ---
 :::
 
-## Anatomy
+## Overview
+
+One release of the Tuff desktop app. CI builds, signs, notarizes and stages it, then stops and waits for a person before rolling it out to a small share of beta users. The console puts the pipeline, the artifacts for five platforms, the build log, the release notes, the rollout share, the guardrails and this release's history on one screen. The pipeline runs by itself; anything that ships to users (the first rollout, a promotion, a halt, a resume) waits for your click.
+
+It fits any screen where the machine prepares and a person lets it through: staged mobile or desktop releases, gradual feature-flag rollouts, database migrations, config pushes. The version, checksums, signatures and notarization results on the page are sample data; the version carries a `-demo` tag and there is no download link anywhere.
+
+- Once the template scrolls into view, the pipeline runs through signing, notarization and staging in about four seconds: the log fills in line by line, and the two macOS rows show Notarizing before they turn notarized. It then stops at the approval gate for the first rollout with no timer running, next to a note that nothing ships on its own. With reduced motion the template renders everything up to the gate at once.
+- Start rollout rolls the share from 0 to 5% and fills in the three guardrails one by one; only then can you promote. Not yet stages the release without shipping it to anyone, and you can ask again at any time. The gate's checkbox reads "Pause automatically if a guardrail fails": the one automatic action on the page, and it only ever moves in the safe direction.
+- Pick a target on the segmented slider, then Promote to 25%: the confirmation lists the guardrail checks. While guardrail data is still coming in, while one fails, or while the target is not above the current share, the button is disabled and says why.
+- Halt rollout in the header and Resume rollout in the rollout card both ask for a second click in a dialog. Turn on "Simulate a crash-rate dip" and crash-free sessions fall below 99.50%: with automatic pausing checked, the rollout halts at once and the history records it; without it, promotion is blocked.
+- Any build in the version capsule's download panel only says it is a sample with no download; pick an older version in the history panel and Notes switches to its release notes. Escape inside an open panel closes the panel, not the full-screen view. Copying a sha256 yields text with a `SAMPLE-` prefix.
+- Wide (≥ 960px) puts the pipeline in a left column, the artifact table above the log and notes side by side in the middle, and rollout, guardrail trend and history on the right; once the table has the room, signing and notarization get columns of their own and the file name sits under the platform. The docs column (640–959px) switches between Log, Artifacts and Notes; narrow (< 640px) makes Rollout the first tab and trims the table to platform and status, with the sha256 inside the platform cell.
+
+## Customization
+
+- Wire real CI by replacing the timed steps in `pipelinePlan()` with events from your build system; each event updates one step's state and appends a log line, and everything else on screen follows from that state.
+- Keep approvals with a person: use TxToolConfirmation for actions like the first rollout and let it wait indefinitely. Its "remember" checkbox cannot be hidden, so give it a meaning that points the safe way, such as pausing on a failed guardrail, never "promote automatically from now on".
+- TxSteps lets its `active` index override a step's own `status`. To show an error state such as a halt, pass `:active="-1"` and control every step's status yourself.
+- Make sample data obvious at a glance: a pre-release tag that never ships, checksums and signatures labelled as samples, and no `href` on TxVersionDownloadPanel builds (with one, a build renders as a download link).
+
+## Related components
 
 | Region | Components | Role |
 |---|---|---|
@@ -114,19 +128,3 @@ code: |
 | Guardrails | [TxSignalMeter](/docs/dev/components/signal-meter), [TxSwitch](/docs/dev/components/switch), [TxSparkChart](/docs/dev/components/spark-chart) | Crash-free sessions, update failures and rollback requests, each marked pass or fail in words too; a "Simulate a crash-rate dip" switch; a trend line when wide |
 | This release | [TxTimeline](/docs/dev/components/timeline) | What has happened to this release, newest first |
 | Confirmation and feedback | [TxModal](/docs/dev/components/modal), [TxToastPanel](/docs/dev/components/toast-panel) | A second click before promoting, halting or resuming; the outcome, shown inside the stage |
-
-## Interactions
-
-- Once the template scrolls into view, the pipeline runs through signing, notarization and staging in about four seconds: the log fills in line by line, and the two macOS rows show Notarizing before they turn notarized. It then stops at the approval gate for the first rollout with no timer running, next to a note that nothing ships on its own. With reduced motion the template renders everything up to the gate at once.
-- Start rollout rolls the share from 0 to 5% and fills in the three guardrails one by one; only then can you promote. Not yet stages the release without shipping it to anyone, and you can ask again at any time. The gate's checkbox reads "Pause automatically if a guardrail fails": the one automatic action on the page, and it only ever moves in the safe direction.
-- Pick a target on the segmented slider, then Promote to 25%: the confirmation lists the guardrail checks. While guardrail data is still coming in, while one fails, or while the target is not above the current share, the button is disabled and says why.
-- Halt rollout in the header and Resume rollout in the rollout card both ask for a second click in a dialog. Turn on "Simulate a crash-rate dip" and crash-free sessions fall below 99.50%: with automatic pausing checked, the rollout halts at once and the history records it; without it, promotion is blocked.
-- Any build in the version capsule's download panel only says it is a sample with no download; pick an older version in the history panel and Notes switches to its release notes. Escape inside an open panel closes the panel, not the full-screen view. Copying a sha256 yields text with a `SAMPLE-` prefix.
-- Wide (≥ 960px) puts the pipeline in a left column, the artifact table above the log and notes side by side in the middle, and rollout, guardrail trend and history on the right; once the table has the room, signing and notarization get columns of their own and the file name sits under the platform. The docs column (640–959px) switches between Log, Artifacts and Notes; narrow (< 640px) makes Rollout the first tab and trims the table to platform and status, with the sha256 inside the platform cell.
-
-## Adapting it
-
-- Wire real CI by replacing the timed steps in `pipelinePlan()` with events from your build system; each event updates one step's state and appends a log line, and everything else on screen follows from that state.
-- Keep approvals with a person: use TxToolConfirmation for actions like the first rollout and let it wait indefinitely. Its "remember" checkbox cannot be hidden, so give it a meaning that points the safe way, such as pausing on a failed guardrail, never "promote automatically from now on".
-- TxSteps lets its `active` index override a step's own `status`. To show an error state such as a halt, pass `:active="-1"` and control every step's status yourself.
-- Make sample data obvious at a glance: a pre-release tag that never ships, checksums and signatures labelled as samples, and no `href` on TxVersionDownloadPanel builds (with one, a build renders as a download link).

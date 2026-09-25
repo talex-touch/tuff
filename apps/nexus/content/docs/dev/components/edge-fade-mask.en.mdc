@@ -8,7 +8,39 @@ tags: [scroll, mask, fade]
 syncStatus: reviewed
 verified: true
 ---
-# EdgeFadeMask
+
+## Usage
+
+### Best Practices
+
+- Put visual frame styles such as border, radius, and background on the parent wrapper so the mask only affects scroll content.
+- Use `width: max-content` or fixed item widths for horizontal strips; otherwise no hidden overflow exists and no fade appears.
+- Keep `threshold` small. It is for boundary rounding differences, not for hiding large amounts of content.
+- Disable the mask for print/export surfaces where CSS masks may not render consistently.
+- Avoid relying on the fade as the only cue that content continues; pair it with visible scroll position, clipped items, or copy when discovery matters.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `as` | `string` | `'div'` | Root element tag rendered by the outer component. |
+| `axis` | `'vertical' \| 'horizontal'` | `'vertical'` | Scroll and fade direction. |
+| `size` | `string \| number` | `24` | Fade distance on each edge. Numbers are converted to px; strings are used as-is. |
+| `threshold` | `number` | `1` | Pixel threshold used to decide whether the viewport is at a scroll boundary. Negative values are clamped to `0`. |
+| `disabled` | `boolean` | `false` | Disables scroll-state masking. |
+| `observeResize` | `boolean` | `true` | Watches the viewport and first child with `ResizeObserver` when available. |
+
+### Events
+
+No events are emitted.
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Scrollable content rendered inside the internal viewport. |
 
 ## Vertical Fade
 
@@ -48,30 +80,7 @@ code: |
 ---
 ::::
 
-## API
-
-### Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `as` | `string` | `'div'` | Root element tag rendered by the outer component. |
-| `axis` | `'vertical' \| 'horizontal'` | `'vertical'` | Scroll and fade direction. |
-| `size` | `string \| number` | `24` | Fade distance on each edge. Numbers are converted to px; strings are used as-is. |
-| `threshold` | `number` | `1` | Pixel threshold used to decide whether the viewport is at a scroll boundary. Negative values are clamped to `0`. |
-| `disabled` | `boolean` | `false` | Disables scroll-state masking. |
-| `observeResize` | `boolean` | `true` | Watches the viewport and first child with `ResizeObserver` when available. |
-
-### Events
-
-No events are emitted.
-
-### Slots
-
-| Slot | Props | Description |
-|------|-------|-------------|
-| `default` | - | Scrollable content rendered inside the internal viewport. |
-
-## Interaction Contract
+## Overview
 
 - The root renders the configured `as` tag and one viewport element inside it.
 - Vertical mode sets `overflow-y: auto` and hides horizontal overflow; horizontal mode sets `overflow-x: auto` and hides vertical overflow.
@@ -80,21 +89,11 @@ No events are emitted.
 - The generated mask uses `linear-gradient(to bottom, ...)` for vertical mode and `linear-gradient(to right, ...)` for horizontal mode.
 - With `observeResize=true`, the component observes the viewport and first child; it disconnects observers when the prop changes or the component unmounts.
 
-## Best Practices
-
-- Put visual frame styles such as border, radius, and background on the parent wrapper so the mask only affects scroll content.
-- Use `width: max-content` or fixed item widths for horizontal strips; otherwise no hidden overflow exists and no fade appears.
-- Keep `threshold` small. It is for boundary rounding differences, not for hiding large amounts of content.
-- Disable the mask for print/export surfaces where CSS masks may not render consistently.
-- Avoid relying on the fade as the only cue that content continues; pair it with visible scroll position, clipped items, or copy when discovery matters.
-
-## Review Notes
+## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/edge-fade-mask/src/TxEdgeFadeMask.vue`, `types.ts`, and `edge-fade-mask.test.ts`.
 - **Verified coverage:** configured root-tag rendering, axis class and slot content, no-mask behavior when content cannot scroll, vertical boundary mask stops, horizontal string fade size, disabled mask removal/restoration, and `ResizeObserver` setup/disconnect behavior.
 - Accessibility note: the component adds only a neutral scroll viewport and CSS mask; keep semantic landmarks/headings in the slotted content and do not use the fade as the only indication that content continues.
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/edge-fade-mask/src/TxEdgeFadeMask.vue`.
 - Types: `packages/tuffex/packages/components/src/edge-fade-mask/src/types.ts` exports `EdgeFadeMaskProps` and `EdgeFadeMaskAxis`.

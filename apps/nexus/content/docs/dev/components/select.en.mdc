@@ -8,7 +8,97 @@ tags: [select, form, dropdown]
 syncStatus: reviewed
 verified: true
 ---
-# Select
+
+## Usage
+
+### Best Practices
+
+- Prefer `options` for data-driven lists and `TuffSelectItem` for small static templates that need custom inline markup.
+- Do not mix `options` and slot items for the same option set; `options` mode owns rendering while slot items only register when no prop options exist.
+- Keep remote search requests in the host and use `searchDebounce` to limit request volume.
+- Persist `create` results into your own options store before relying on the created value appearing in future dropdown opens.
+- Keep `modelValue` type aligned with `multiple`; use a scalar in single mode and an array in multiple mode.
+
+## API Reference
+
+### TuffSelect Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `modelValue` / `v-model` | `string \| number \| Array<string \| number>` | `''` | Selected value; array in `multiple` mode. |
+| `placeholder` | `string` | `'Please select'` | Placeholder shown in the trigger input when no label is selected. |
+| `disabled` | `boolean` | `false` | Disables the trigger, closes the dropdown, and blocks option selection. |
+| `multiple` | `boolean` | `false` | Enables multi-select tag mode. |
+| `status` | `'default' \| 'error' \| 'warning'` | `'default'` | Validation border state. |
+| `eager` | `boolean` | `true` | Eagerly mounts the Popover panel for stable slot option registration. |
+| `options` | `TxSelectOptionLike[]` | `[]` | Plain or grouped option data. |
+| `maxTagCount` | `number` | - | Maximum visible selected tags; extra tags render as `+ N ...`. |
+| `maxTagTextLength` | `number` | - | Maximum visible tag label length before truncation. |
+| `searchable` | `boolean` | `false` | Shows an internal search input for local option filtering when the select is not editable. |
+| `searchPlaceholder` | `string` | `'Search'` | Placeholder for the internal local search input. |
+| `editable` | `boolean` | `false` | Uses the trigger input as editable search text and opens on focus. |
+| `remote` | `boolean` | `false` | Enables editable remote mode and emits `search` while the dropdown is open. |
+| `allowCreate` | `boolean` | `false` | Allows creating a new option from the current input. |
+| `createText` | `string` | `'Add item'` | Default create action label. |
+| `loading` | `boolean` | `false` | Shows the loading state. |
+| `loadingText` | `string` | `'Loading...'` | Default loading text. |
+| `emptyText` | `string` | `'No results'` | Default empty text. |
+| `searchDebounce` | `number` | `0` | Remote search debounce in milliseconds. |
+| `dropdownMaxHeight` | `number` | `280` | Maximum dropdown list height in pixels. |
+| `dropdownOffset` | `number` | `6` | Popover offset from the trigger. |
+| `contentPadding` | `number` | `8` | Inner dropdown content spacing. |
+| `optionPadding` | `number` | `0` | Horizontal option inset compensation. |
+| `animation` | `BaseAnchorAnimationOptions` | - | Animation configuration forwarded to Popover / BaseAnchor. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Popover panel surface variant. |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Popover panel background style. |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Popover panel shadow strength. |
+| `panelRadius` | `number` | `18` | Popover panel corner radius. |
+| `panelPadding` | `number` | `0` | Popover panel inner padding. |
+| `panelCard` | `BaseAnchorPanelCardProps` | - | Optional panel card overrides forwarded to the Popover panel. |
+
+### TuffSelect Events
+
+| Event | Params | Description |
+|------|------|------|
+| `update:modelValue` | `(value: string \| number \| Array<string \| number>)` | Emitted with the selected value; array in `multiple` mode. |
+| `change` | `(value: string \| number \| Array<string \| number>)` | Emitted with the same value after enabled selection or clear. |
+| `search` | `(query: string)` | Emitted in remote mode while the dropdown is open and editable text changes. |
+| `create` | `(option: TxSelectOption)` | Emitted when `allowCreate` creates an option from input. |
+
+### Slots
+
+#### TuffSelect Slots
+
+| Slot | Props | Description |
+|------|------|------|
+| `default` | - | Legacy `TuffSelectItem` option declarations. |
+| `option` | `{ option, selected }` | Custom option content in `options` mode. |
+| `tag` | `{ option, remove }` | Custom selected tag content. |
+| `group` | `{ group }` | Custom group heading content. |
+| `loading` | - | Custom loading state. |
+| `empty` | - | Custom empty state. |
+| `footer` | `{ query, canCreate, create }` | Custom dropdown footer content. |
+
+#### TuffSelectItem Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `value` | `string \| number` | - | Primitive option value written to the parent select when picked. |
+| `label` | `string` | - | Fallback visible label and registered selected-label text. Slot text is used when omitted. |
+| `disabled` | `boolean` | `false` | Prevents picking this option while leaving it visible in the dropdown. |
+| `icon` | `string` | - | Icon class for the leading option icon, resolved by the host app's styles. |
+| `description` | `string` | - | Secondary description text rendered under the label. |
+
+#### Exposed Methods
+
+| Method | Description |
+|------|------|
+| `open()` | Opens the dropdown. |
+| `close()` | Closes the dropdown. |
+| `toggle()` | Toggles the dropdown. |
+| `focus()` | Focuses the trigger input. |
+| `blur()` | Blurs the trigger input. |
+| `clear()` | Clears the value and selected label; emits `''` in single mode and `[]` in multiple mode. |
 
 ## Basic Selection
 
@@ -339,7 +429,7 @@ code: |
 ---
 :::
 
-## Interaction Contract
+## Overview
 
 - `TuffSelect` owns a single primitive `string | number` value by default. Empty state is represented by `''`.
 - In `multiple` mode, `TuffSelect` owns `Array<string | number>`, renders selected values as tags, toggles options on click, and keeps the dropdown open.
@@ -355,96 +445,7 @@ code: |
 - When a value is provided before items mount, the select resolves the display label after options register. Numeric strings and numbers compare by numeric value when both are finite.
 - Accessibility roles: the trigger is a `combobox` with `aria-haspopup="listbox"` and `aria-expanded` bound to open state; the dropdown list is a `listbox` (adding `aria-multiselectable` in `multiple` mode); each option is an `option` whose `aria-selected` reflects selection.
 
-## API
-
-### TuffSelect Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `modelValue` / `v-model` | `string \| number \| Array<string \| number>` | `''` | Selected value; array in `multiple` mode. |
-| `placeholder` | `string` | `'Please select'` | Placeholder shown in the trigger input when no label is selected. |
-| `disabled` | `boolean` | `false` | Disables the trigger, closes the dropdown, and blocks option selection. |
-| `multiple` | `boolean` | `false` | Enables multi-select tag mode. |
-| `status` | `'default' \| 'error' \| 'warning'` | `'default'` | Validation border state. |
-| `eager` | `boolean` | `true` | Eagerly mounts the Popover panel for stable slot option registration. |
-| `options` | `TxSelectOptionLike[]` | `[]` | Plain or grouped option data. |
-| `maxTagCount` | `number` | - | Maximum visible selected tags; extra tags render as `+ N ...`. |
-| `maxTagTextLength` | `number` | - | Maximum visible tag label length before truncation. |
-| `searchable` | `boolean` | `false` | Shows an internal search input for local option filtering when the select is not editable. |
-| `searchPlaceholder` | `string` | `'Search'` | Placeholder for the internal local search input. |
-| `editable` | `boolean` | `false` | Uses the trigger input as editable search text and opens on focus. |
-| `remote` | `boolean` | `false` | Enables editable remote mode and emits `search` while the dropdown is open. |
-| `allowCreate` | `boolean` | `false` | Allows creating a new option from the current input. |
-| `createText` | `string` | `'Add item'` | Default create action label. |
-| `loading` | `boolean` | `false` | Shows the loading state. |
-| `loadingText` | `string` | `'Loading...'` | Default loading text. |
-| `emptyText` | `string` | `'No results'` | Default empty text. |
-| `searchDebounce` | `number` | `0` | Remote search debounce in milliseconds. |
-| `dropdownMaxHeight` | `number` | `280` | Maximum dropdown list height in pixels. |
-| `dropdownOffset` | `number` | `6` | Popover offset from the trigger. |
-| `contentPadding` | `number` | `8` | Inner dropdown content spacing. |
-| `optionPadding` | `number` | `0` | Horizontal option inset compensation. |
-| `animation` | `BaseAnchorAnimationOptions` | - | Animation configuration forwarded to Popover / BaseAnchor. |
-| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Popover panel surface variant. |
-| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Popover panel background style. |
-| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Popover panel shadow strength. |
-| `panelRadius` | `number` | `18` | Popover panel corner radius. |
-| `panelPadding` | `number` | `0` | Popover panel inner padding. |
-| `panelCard` | `BaseAnchorPanelCardProps` | - | Optional panel card overrides forwarded to the Popover panel. |
-
-### TuffSelect Events
-
-| Event | Params | Description |
-|------|------|------|
-| `update:modelValue` | `(value: string \| number \| Array<string \| number>)` | Emitted with the selected value; array in `multiple` mode. |
-| `change` | `(value: string \| number \| Array<string \| number>)` | Emitted with the same value after enabled selection or clear. |
-| `search` | `(query: string)` | Emitted in remote mode while the dropdown is open and editable text changes. |
-| `create` | `(option: TxSelectOption)` | Emitted when `allowCreate` creates an option from input. |
-
-### Slots
-
-#### TuffSelect Slots
-
-| Slot | Props | Description |
-|------|------|------|
-| `default` | - | Legacy `TuffSelectItem` option declarations. |
-| `option` | `{ option, selected }` | Custom option content in `options` mode. |
-| `tag` | `{ option, remove }` | Custom selected tag content. |
-| `group` | `{ group }` | Custom group heading content. |
-| `loading` | - | Custom loading state. |
-| `empty` | - | Custom empty state. |
-| `footer` | `{ query, canCreate, create }` | Custom dropdown footer content. |
-
-#### TuffSelectItem Props
-
-| Prop | Type | Default | Description |
-|------|------|---------|------|
-| `value` | `string \| number` | - | Primitive option value written to the parent select when picked. |
-| `label` | `string` | - | Fallback visible label and registered selected-label text. Slot text is used when omitted. |
-| `disabled` | `boolean` | `false` | Prevents picking this option while leaving it visible in the dropdown. |
-| `icon` | `string` | - | Icon class for the leading option icon, resolved by the host app's styles. |
-| `description` | `string` | - | Secondary description text rendered under the label. |
-
-#### Exposed Methods
-
-| Method | Description |
-|------|------|
-| `open()` | Opens the dropdown. |
-| `close()` | Closes the dropdown. |
-| `toggle()` | Toggles the dropdown. |
-| `focus()` | Focuses the trigger input. |
-| `blur()` | Blurs the trigger input. |
-| `clear()` | Clears the value and selected label; emits `''` in single mode and `[]` in multiple mode. |
-
-## Best Practices
-
-- Prefer `options` for data-driven lists and `TuffSelectItem` for small static templates that need custom inline markup.
-- Do not mix `options` and slot items for the same option set; `options` mode owns rendering while slot items only register when no prop options exist.
-- Keep remote search requests in the host and use `searchDebounce` to limit request volume.
-- Persist `create` results into your own options store before relying on the created value appearing in future dropdown opens.
-- Keep `modelValue` type aligned with `multiple`; use a scalar in single mode and an array in multiple mode.
-
-## Review Notes
+## Technologies
 
 - Source: `packages/tuffex/packages/components/src/select/src/TxSelect.vue` confirms Popover-backed rendering, prop/slot option registration, single and multiple value paths, local and remote search, creation, grouped options, loading/empty/footer slots, exposed methods, and selected-label synchronization.
 - Item source: `packages/tuffex/packages/components/src/select/src/TxSelectItem.vue` confirms injected registration, slot-text label fallback, local filtering visibility, and disabled click suppression.
@@ -452,5 +453,4 @@ code: |
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/select/__tests__/select.test.ts` covers enabled/disabled selection, listbox/option/combobox semantics, local filtering, remote search, selected-label resolution, numeric string matching, loading/empty states, multiple tags, creation, grouped options, footer slot, status classes, and option icon/description/check-mark rendering.
 - Export: `packages/tuffex/packages/components/src/select/index.ts` exports `TuffSelect`, `TuffSelectItem`, `TxSelect`, `TxSelectItem`, public types, context key, and instances.
 
-## Source
 <TuffDocSourceLink />

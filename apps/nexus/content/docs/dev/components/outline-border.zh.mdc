@@ -8,9 +8,8 @@ tags: [border, ring, clip, mask]
 syncStatus: reviewed
 verified: true
 ---
-# OutlineBorder 描边容器
 
-## 基础用法
+## 用法
 
 头像类描边优先使用 `ring-offset`；希望描边参与布局尺寸时使用 `border`。
 
@@ -29,28 +28,14 @@ code: |
 ---
 ::::
 
-## Mask 裁切
+### 最佳实践
 
-六边形这类无法仅靠圆角表达的形状，使用 `clip-mode="mask"` 更稳定。
+- 圆形或圆角头像优先使用 `overflow`，性能更低成本，也更容易排查。
+- 内容表面和描边需要视觉间隔时使用 `ring-offset`。
+- 为 slot 内容设置明确宽高，避免 mask 和 ring 的几何结果随内容变化。
+- 只有在行内上下文中使用 `as="span"`；卡片、缩略图和列表媒体保持块级包裹更稳。
 
-::::TuffDemoWrapper{demo="OutlineBorderMaskClipDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxOutlineBorder
-      variant="ring"
-      :ring-width="2"
-      ring-color="var(--tx-color-primary)"
-      clip-mode="mask"
-      clip-shape="hexagon"
-    >
-      <div class="hex-avatar">AI</div>
-    </TxOutlineBorder>
-  </template>
----
-::::
-
-## API
+## API 参考
 
 ### Props
 
@@ -81,7 +66,28 @@ code: |
 
 无组件事件。
 
-## 交互契约
+## Mask 裁切
+
+六边形这类无法仅靠圆角表达的形状，使用 `clip-mode="mask"` 更稳定。
+
+::::TuffDemoWrapper{demo="OutlineBorderMaskClipDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxOutlineBorder
+      variant="ring"
+      :ring-width="2"
+      ring-color="var(--tx-color-primary)"
+      clip-mode="mask"
+      clip-shape="hexagon"
+    >
+      <div class="hex-avatar">AI</div>
+    </TxOutlineBorder>
+  </template>
+---
+::::
+
+## 概述
 
 - `borderRadius`、`borderWidth`、`ringWidth`、`offset`、`padding` 的数字值都会转换为 px。
 - `variant="border"` 写入真实 CSS border；ring 系列使用 `box-shadow`，不改变布局尺寸。
@@ -90,20 +96,11 @@ code: |
 - `ring`/`border` 描边由 `box-shadow`/CSS border 绘制，只跟随 `border-radius`；`clipShape` 只作用于内容层，因此描边不会贴合 `hexagon`/`squircle` 等异形（需要异形描边时请改用异形 `drop-shadow` 滤镜）。
 - 组件没有内置尺寸；最终盒子大小由 slot 内容决定。
 
-## 最佳实践
-
-- 圆形或圆角头像优先使用 `overflow`，性能更低成本，也更容易排查。
-- 内容表面和描边需要视觉间隔时使用 `ring-offset`。
-- 为 slot 内容设置明确宽高，避免 mask 和 ring 的几何结果随内容变化。
-- 只有在行内上下文中使用 `as="span"`；卡片、缩略图和列表媒体保持块级包裹更稳。
-
-## 审阅说明
+## 技术实现
 
 - **可访问性说明:** `TxOutlineBorder` 只是视觉包裹器；不会添加 role、label 或图片语义。alt 文本、标签、焦点行为和点击目标应放在 slot 内容或调用方传入的根节点属性上。
 - **Mask 说明:** `clipMode="mask"` 只会为 `circle`、`hexagon` 和 `squircle` 输出 mask；矩形/圆角形状应使用 `overflow` 或 `clipPath`。
 - **实测覆盖:** `outline-border.test.ts` 覆盖动态根节点、slot 渲染、border 样式映射、数字单位转换、默认 ring-offset 阴影、ring/inset 变体、默认 overflow 裁切、clip-path/mask 模式，以及关闭裁切。
-
-## Source
 
 - Component source: `packages/tuffex/packages/components/src/outline-border/src/TxOutlineBorder.vue`。
 - Types: `packages/tuffex/packages/components/src/outline-border/src/types.ts` 导出 `OutlineBorderProps`、variant、shape、clip-mode 与 clip-shape 联合类型。

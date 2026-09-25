@@ -8,9 +8,8 @@ tags: [icon, badge, chip, avatar]
 syncStatus: reviewed
 verified: true
 ---
-# IconChip
 
-## Basic Usage
+## Usage
 
 ### IconChip
 :::TuffDemoWrapper{demo="IconChipIconChipDemo" code-lang="vue" title="Size ladder and tones" description="14px file badges, 18px tinted plates, the 32px initial plate, and the circle shape."}
@@ -28,16 +27,14 @@ code: |
 ---
 :::
 
-## How Size Derives Radius and Type
+### Best Practices
 
-Neither `radius` nor `fontSize` has to be passed — both derive from `size`:
+- Keep file-type badges at 14px and let `tone` carry the format (red for PDF, green for CSV), consistently across the app.
+- Use 32px with `tone="ink"` for initial plates — it inverts correctly across light and dark, so do not hard-code a colour.
+- Reach for `TxDotIndicator` when you need a status dot; do not shrink `TxIconChip` to 6px to fake one.
+- Avoid overriding `radius` without a design reason: the derived ladder is the visual language itself.
 
-- Radius is `round(size / 4)`: 14→4, 18→5, 32→8, matching all three real Beautiful UI usages.
-- Font size is `max(7, round(size * 0.4))`: 14→7 (three uppercase letters must fit) and 32→13.
-
-Pass `radius` / `fontSize` explicitly to override. `shape="circle"` ignores `radius` rather than fighting it.
-
-## API
+## API Reference
 
 ### Props
 
@@ -62,20 +59,22 @@ Pass `radius` / `fontSize` explicitly to override. `shape="circle"` ignores `rad
 
 `TxIconChip` is a presentational leaf and emits nothing.
 
-## Interaction Contract
+## How Size Derives Radius and Type
+
+Neither `radius` nor `fontSize` has to be passed — both derive from `size`:
+
+- Radius is `round(size / 4)`: 14→4, 18→5, 32→8, matching all three real Beautiful UI usages.
+- Font size is `max(7, round(size * 0.4))`: 14→7 (three uppercase letters must fit) and 32→13.
+
+Pass `radius` / `fontSize` explicitly to override. `shape="circle"` ignores `radius` rather than fighting it.
+
+## Overview
 
 - The chip is `aria-hidden="true"` by default: it nearly always duplicates adjacent text (a `PDF` badge beside `report.pdf`). Pass `ariaLabel` only when the chip is the sole carrier of the information.
 - The `soft` hairline ring is a `box-shadow`, not a `border`, so it takes no layout space and the chip's box always equals `size`.
 - `neutral` looks the same under both variants (`inset` fill plus hairline ring); it was never a fill colour.
 
-## Best Practices
-
-- Keep file-type badges at 14px and let `tone` carry the format (red for PDF, green for CSV), consistently across the app.
-- Use 32px with `tone="ink"` for initial plates — it inverts correctly across light and dark, so do not hard-code a colour.
-- Reach for `TxDotIndicator` when you need a status dot; do not shrink `TxIconChip` to 6px to fake one.
-- Avoid overriding `radius` without a design reason: the derived ladder is the visual language itself.
-
-## Source
+## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/icon-chip/src/TxIconChip.vue`.
 - Types: `packages/tuffex/packages/components/src/icon-chip/src/types.ts`.
@@ -83,8 +82,6 @@ Pass `radius` / `fontSize` explicitly to override. `shape="circle"` ignores `rad
 - Adapted from [Beautiful UI](https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />
-
-## Review Notes
 
 - **Shared primitive:** ContextCards (file badges) and SidebarNav (workspace plate) both consume it, so changing the size derivation moves both.
 - **Divergence from upstream:** `variant="soft"` is an addition. The 18px upstream glyph plate is a tint with a 30% ring rather than a fill, which `solid` alone cannot express.

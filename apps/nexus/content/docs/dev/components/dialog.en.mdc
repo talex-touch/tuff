@@ -9,7 +9,95 @@ syncStatus: reviewed
 verified: true
 ---
 
-# Dialog
+## Usage
+
+### Best Practices
+
+- Use `TxBottomDialog` for mobile-style bottom confirmations and destructive flow checkpoints.
+- Keep at most one destructive row, drive it with `type: 'error'`, and word it unambiguously — the tile is additive to the label, never the carrier of the meaning.
+- Pass `icon` as an icon class the host's icon pipeline generates statically (`i-carbon-trash-can`). A name assembled at runtime is never scanned into the stylesheet, so the row renders an empty box.
+- Use `TxBlowDialog` sparingly for high-emphasis announcements; its background transform is intentionally dramatic.
+- Use `TxPopperDialog` for compact centered prompts that still need modal semantics.
+- Use `TxTouchTip` for touch-first guidance with multiple action buttons.
+- Keep `messageHtml` out of user-generated content paths unless a caller has explicitly sanitized and branded it as trusted.
+
+## API Reference
+
+`message` is rendered as plain text and preserves line breaks through component styles. Use `messageHtml` only for trusted, sanitized internal content.
+
+### TxBottomDialog Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Dialog title |
+| `message` | `string` | `''` | Dialog message |
+| `stay` | `number` | `0` | Reserved auto-close duration prop; current runtime does not start a timer from `stay` alone. |
+| `close` | `() => void` | *required* | Close callback |
+| `btns` | `DialogButton[]` | `[]` | Button configs |
+| `icon` | `string` | `''` | Legacy icon class prop; not rendered by the current template. |
+| `index` | `number` | `0` | z-index offset |
+
+### DialogButton interface
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface DialogButton {
+    content: string
+    type?: 'info' | 'warning' | 'error' | 'success'
+    icon?: string
+    time?: number
+    onClick: () => Promise<boolean> | boolean
+    loading?: (done: () => void) => void
+  }
+---
+:::
+
+### TxBlowDialog Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Dialog title |
+| `message` | `string` | `''` | Plain-text message |
+| `messageHtml` | `DialogMessageHtml` | `''` | Trusted HTML message for sanitized internal call sites |
+| `confirmText` | `string` | `'Confirm'` | Confirm button text |
+| `close` | `() => void` | *required* | Close callback |
+| `comp` | `Component` | `undefined` | Custom component |
+| `render` | `() => VNode` | `undefined` | Render function |
+
+### TxPopperDialog Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Dialog title |
+| `message` | `string` | `''` | Plain-text message |
+| `messageHtml` | `DialogMessageHtml` | `''` | Trusted HTML message for sanitized internal call sites |
+| `confirmText` | `string` | `'Confirm'` | Confirm button text |
+| `close` | `() => void` | *required* | Close callback |
+| `comp` | `Component` | `undefined` | Custom component |
+| `render` | `() => VNode` | `undefined` | Render function |
+
+### TxTouchTip Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Title |
+| `message` | `string` | `''` | Message text |
+| `messageHtml` | `DialogMessageHtml` | `''` | Trusted HTML message for sanitized internal call sites |
+| `buttons` | `TouchTipButton[]` | `[]` | Button configs |
+| `close` | `() => void` | *required* | Close callback |
+
+### Events
+
+| Event | Payload | Description |
+|------|---------|-------------|
+| - | - | Dialog variants do not emit Vue events; they close through the required `close` prop callback. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| - | - | Dialog variants do not expose slots. Use `comp` or `render` for custom `TxBlowDialog` / `TxPopperDialog` content. |
 
 ## BottomDialog
 
@@ -35,16 +123,38 @@ code: |
   </template>
 ---
 :::
+### Action rows and icons
+
+Every button renders as a full-width row. An `icon` becomes its leading glyph, and `type: 'error'` is the only tone that repaints the row.
+:::TuffDemoWrapper{demo="DialogBottomDialogRowsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="rowsOpen = true">Show action rows</TxButton>
+    <TxBottomDialog
+      v-if="rowsOpen"
+      title="Wallet settings"
+      :btns="[
+        { content: 'View private key', icon: 'i-carbon-password', onClick: () => false },
+        { content: 'View recovery phrase', icon: 'i-carbon-list', onClick: () => false },
+        { content: 'Remove wallet', icon: 'i-carbon-warning-alt', type: 'error', onClick: () => false },
+      ]"
+      :close="() => (rowsOpen = false)"
+    />
+  </template>
+---
+:::
 ### Button types
+
+`type` selects the row's tone, and only `error` repaints it. `info`, `warning` and `success` all render the neutral row, so the sheet carries a single destructive colour to read.
 
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
   const btns = [
-    { content: 'Info', type: 'info', onClick: () => true },
-    { content: 'Warning', type: 'warning', onClick: () => true },
-    { content: 'Error', type: 'error', onClick: () => true },
-    { content: 'Success', type: 'success', onClick: () => true },
+    { content: 'Neutral row', type: 'info', onClick: () => true },
+    { content: 'Also neutral', type: 'success', onClick: () => true },
+    { content: 'Destructive row', type: 'error', onClick: () => true },
   ]
 ---
 :::
@@ -104,6 +214,7 @@ code: |
   </template>
 ---
 :::
+
 ## PopperDialog
 
 ### PopperDialog
@@ -123,6 +234,7 @@ code: |
   </template>
 ---
 :::
+
 ## TouchTip
 
 ### TouchTip
@@ -145,6 +257,7 @@ code: |
   </template>
 ---
 :::
+
 ## Custom components
 
 :::TuffCodeBlock{lang="ts"}
@@ -178,108 +291,24 @@ code: |
 ---
 :::
 
-## API
-
-`message` is rendered as plain text and preserves line breaks through component styles. Use `messageHtml` only for trusted, sanitized internal content.
-
-### TxBottomDialog Props
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `title` | `string` | `''` | Dialog title |
-| `message` | `string` | `''` | Dialog message |
-| `stay` | `number` | `0` | Reserved auto-close duration prop; current runtime does not start a timer from `stay` alone. |
-| `close` | `() => void` | *required* | Close callback |
-| `btns` | `DialogButton[]` | `[]` | Button configs |
-| `icon` | `string` | `''` | Legacy icon class prop; not rendered by the current template. |
-| `index` | `number` | `0` | z-index offset |
-
-### DialogButton interface
-
-:::TuffCodeBlock{lang="ts"}
----
-code: |
-  interface DialogButton {
-    content: string
-    type?: 'info' | 'warning' | 'error' | 'success'
-    time?: number
-    onClick: () => Promise<boolean> | boolean
-    loading?: (done: () => void) => void
-  }
----
-:::
-
-### TxBlowDialog Props
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `title` | `string` | `''` | Dialog title |
-| `message` | `string` | `''` | Plain-text message |
-| `messageHtml` | `DialogMessageHtml` | `''` | Trusted HTML message for sanitized internal call sites |
-| `confirmText` | `string` | `'Confirm'` | Confirm button text |
-| `close` | `() => void` | *required* | Close callback |
-| `comp` | `Component` | `undefined` | Custom component |
-| `render` | `() => VNode` | `undefined` | Render function |
-
-### TxPopperDialog Props
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `title` | `string` | `''` | Dialog title |
-| `message` | `string` | `''` | Plain-text message |
-| `messageHtml` | `DialogMessageHtml` | `''` | Trusted HTML message for sanitized internal call sites |
-| `confirmText` | `string` | `'Confirm'` | Confirm button text |
-| `close` | `() => void` | *required* | Close callback |
-| `comp` | `Component` | `undefined` | Custom component |
-| `render` | `() => VNode` | `undefined` | Render function |
-
-### TxTouchTip Props
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `title` | `string` | `''` | Title |
-| `message` | `string` | `''` | Message text |
-| `messageHtml` | `DialogMessageHtml` | `''` | Trusted HTML message for sanitized internal call sites |
-| `buttons` | `TouchTipButton[]` | `[]` | Button configs |
-| `close` | `() => void` | *required* | Close callback |
-
-### Events
-
-| Event | Payload | Description |
-|------|---------|-------------|
-| - | - | Dialog variants do not emit Vue events; they close through the required `close` prop callback. |
-
-### Slots
-
-| Slot | Props | Description |
-|------|------|-------------|
-| - | - | Dialog variants do not expose slots. Use `comp` or `render` for custom `TxBlowDialog` / `TxPopperDialog` content. |
-
-## Interaction Contract
+## Overview
 
 - All dialog variants teleport to `body`, assign z-index through the shared z-index manager, and close through the required `close()` callback.
+- `TxBottomDialog` renders a bottom-anchored sheet: an opaque `--tx-bg-color` panel with `24px` corners, a header holding the title and a circular close control, then one full-width action row per entry in `btns`. The close control cancels — it calls `close()` after the same leave animation Escape uses, and commits nothing.
+- Only `type: 'error'` repaints a row (`--tx-color-danger-light-9` fill, the danger hue mixed 55% toward the primary ink). The measured label contrast is 5.10:1 in the light theme, 6.92:1 dark, 9.41:1 and 12.77:1 in the two high-contrast themes — every one clears the 4.5:1 that 14px text needs. Row glyphs and the close icon sit on `--tx-text-color-regular`, because `secondary` measures 2.75:1 on the row fill in the light theme, under the 3:1 an icon-only glyph needs.
+- A row's `loading` callback — and the internal 200ms click window — disables that row and shows a spinner inside it, so a slow `onClick` cannot be submitted twice.
 - Escape closes the active dialog after its leave animation; `TxBottomDialog`, `TxBlowDialog`, `TxPopperDialog`, and `TxTouchTip` restore the previously focused element on unmount.
 - `TxBottomDialog`, `TxTouchTip`, and `TxBlowDialog` all derive instance-level title/description ids via `useId()`; `TxPopperDialog` uses stable internal ids for its default title/content regions.
 - Plain `message` renders as text and preserves line breaks. Use `messageHtml` only with `asTrustedDialogHtml()` after sanitizing internal content.
 - Every variant's body sets `overflow-wrap: anywhere`. A hash, an id or a URL offers no break opportunity, so a vertical scroll cannot rescue it — the token runs past the panel, which clips it. `anywhere` rather than `break-word` because only `anywhere` lets the token shrink the content's min-content width, so a long value stops widening the panel as well.
-- Every variant's body caps its own height and scrolls. The panels are `overflow: hidden`, so a body without a cap of its own is cut rather than scrolled: `TxBottomDialog` caps at `46vh` and `TxTouchTip` scrolls inside its fixed height, matching the `300px` that `TxBlowDialog` and `TxPopperDialog` already used.
+- Every variant's body caps its own height and scrolls. The panels are `overflow: hidden`, so a body without a cap of its own is cut rather than scrolled: `TxBottomDialog` caps its message and its action list at `46vh` each and scrolls them independently, and caps the sheet itself at `100vh - 48px`, so a tall combination shrinks the two bodies instead of pushing the header off the top edge; `TxTouchTip` scrolls inside its fixed height, matching the `300px` that `TxBlowDialog` and `TxPopperDialog` already used.
 - `DialogButton.onClick()` / `TouchTipButton.onClick()` closes when it resolves `true` and keeps the dialog open when it resolves `false`.
 
-## Best Practices
-
-- Use `TxBottomDialog` for mobile-style bottom confirmations and destructive flow checkpoints.
-- Use `TxBlowDialog` sparingly for high-emphasis announcements; its background transform is intentionally dramatic.
-- Use `TxPopperDialog` for compact centered prompts that still need modal semantics.
-- Use `TxTouchTip` for touch-first guidance with multiple action buttons.
-- Keep `messageHtml` out of user-generated content paths unless a caller has explicitly sanitized and branded it as trusted.
-
-## Review Notes
+## Technologies
 
 - Sources: `packages/tuffex/packages/components/src/dialog/src/TxBottomDialog.vue`, `TxBlowDialog.vue`, `TxPopperDialog.vue`, and `TxTouchTip.vue` confirm teleport-to-body rendering, z-index allocation, Escape close behavior, focus restore, button return semantics, text-vs-trusted-HTML paths, and component/render content hooks.
 - Type contracts: `packages/tuffex/packages/components/src/dialog/src/types.ts` defines trusted HTML branding, `asTrustedDialogHtml`, button interfaces, dialog props, and exported instance types.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/dialog/__tests__/dialog.test.ts` verifies ARIA wiring, Escape close, focus restore, text-vs-trusted-HTML rendering, and button return semantics.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/dialog/__tests__/dialog.test.ts` verifies ARIA wiring, Escape close, focus restore, the close control cancelling without dispatching a row action, the destructive row tone, text-vs-trusted-HTML rendering, and button return semantics.
 - Export: `packages/tuffex/packages/components/src/dialog/index.ts` wraps each dialog with `withInstall`, exports all variants, exports `asTrustedDialogHtml`, and exposes public types.
-
-## Source
 
 <TuffDocSourceLink />
