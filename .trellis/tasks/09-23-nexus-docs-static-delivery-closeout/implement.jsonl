@@ -1,4 +1,0 @@
-{"file": ".trellis/spec/frontend/nexus-docs-static-delivery.md", "reason": "The contract this task corrects: <route>.html layout, _headers windows, _routes.json patterns, early hints; every change here must keep its guards green"}
-{"file": ".trellis/spec/frontend/nexus-docs-rendering-contract.md", "reason": "404.html prerender must not disturb the body-in-HTML contract or the payload key"}
-{"file": ".trellis/spec/frontend/nexus-preview-secret-deployment.md", "reason": "Deployment evidence conventions (output/evidence naming, what counts as deployed evidence) for the edge-cache probe"}
-{"file": ".trellis/tasks/09-23-nexus-docs-perf-cms-remediation/research/audit-2026-09-23.md", "reason": "Sections 1-3 and 6: production headers, soft-404 proof, Nitro/Pages behaviour anchors and the check-worker-bundle baseline"}
