@@ -6,9 +6,11 @@ import type {
 } from '@talex-touch/tuff-voice'
 
 import type { VoiceProviderDescriptorV1 } from '@talex-touch/utils/i18n'
+import { DEFAULT_PROVIDERS } from '@talex-touch/tuff-intelligence'
 import { CATALOG_CLIENT_SDKAPI, CATALOG_ERROR_CODES } from '@talex-touch/utils/i18n'
 import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeProviderForRuntime } from '../ai/provider-runtime'
 import { getConfiguredAsrProvider, getRecognitionStatus } from './voice-provider-runtime'
 
 const runtime = vi.hoisted(() => ({
@@ -257,6 +259,22 @@ function nexusPackChannel(options: { models?: string[] } = {}) {
 
 function nexusPackBinding(models: string[] = [PACK_MODEL]) {
   return { providerId: PACK_PROVIDER_ID, enabled: true, priority: 1, models }
+}
+
+/**
+ * The shipped Nexus channel as the loader hands it to the resolver.
+ *
+ * `DEFAULT_PROVIDERS`' own `tuff-nexus-default` declares the buffered `audio.stt` capability and no
+ * `audio.asr`; only the runtime projection adds the realtime entry. `enabled` is the one field the
+ * user owns — `ensureNexusAsrRoute` only binds a channel that is switched on, so that is the shape
+ * a bound route actually resolves against.
+ */
+function nexusRuntimeChannel() {
+  const shipped = DEFAULT_PROVIDERS.find((provider) => provider.id === 'tuff-nexus-default')
+  if (!shipped) throw new Error('DEFAULT_PROVIDERS no longer ships tuff-nexus-default')
+  // Spread into a plain object: the harness consumes the config shape, not the interface.
+  const config = { ...normalizeProviderForRuntime({ ...structuredClone(shipped), enabled: true }) }
+  return { getConfig: () => config }
 }
 
 /** Pack failures carry the stable code on the error, not in its human-readable message. */
@@ -765,6 +783,29 @@ describe('capability-bound voice ASR provider resolution', () => {
     expect(options.timeout).toBe(descriptor.limits.timeoutMs)
     expect(payload).toMatchObject({ format: 'wav' })
     expect(payload.audio).toMatch(/^data:audio\/wav;base64,/)
+  })
+
+  it('resolves the signed pack through the shipped Nexus channel once the runtime projection declares audio.asr', () => {
+    const descriptor = catalogDescriptor({ id: 'tuff-nexus-default' })
+    configure(
+      { 'tuff-nexus-default': nexusRuntimeChannel() },
+      {
+        'audio.asr': [
+          { providerId: 'tuff-nexus-default', enabled: true, priority: 2, models: [PACK_MODEL] }
+        ]
+      }
+    )
+    catalog.registry = activeRegistry(descriptor)
+    catalog.status = { lastErrorCode: null }
+
+    // The persisted channel declares audio.stt and no audio.asr, so routing only keeps it if the
+    // runtime projection supplied the realtime entry; the descriptor then makes the answer a
+    // buffered pack upload rather than a realtime socket.
+    expect(getRecognitionStatus().asr).toEqual({ ready: true, mode: 'buffered' })
+
+    const configured = getConfiguredAsrProvider()
+    expect(configured.mode).toBe('buffered')
+    expect(configured.model).toBe(PACK_MODEL)
   })
 
   it.each([

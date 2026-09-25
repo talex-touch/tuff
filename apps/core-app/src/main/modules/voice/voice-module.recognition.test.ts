@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   getRecognitionStatus: vi.fn(),
   getSpeechModelProgress: vi.fn(),
   installSpeechModel: vi.fn(),
+  projectSpeechCatalogApiError: vi.fn(),
   // A machine with nothing installed: the module's route adoption then has nothing to do, which is
   // what this suite is not about.
   installedSpeechModels: vi.fn(async () => []),
@@ -89,6 +90,7 @@ vi.mock('./speech-model-service', () => ({
   getSpeechModelProgress: mocks.getSpeechModelProgress,
   installSpeechModel: mocks.installSpeechModel,
   installedSpeechModels: mocks.installedSpeechModels,
+  projectSpeechCatalogApiError: mocks.projectSpeechCatalogApiError,
   speechModelCatalogView: mocks.speechModelCatalogView,
   uninstallSpeechModel: mocks.uninstallSpeechModel
 }))

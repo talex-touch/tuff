@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import type {
-  VoiceInstalledSpeechModel,
-  VoiceSpeechModelCatalog,
-  VoiceSpeechModelEntry
+import type { VoiceAsrSource } from '@talex-touch/utils/common/storage/entity/app-settings'
+import {
+  VOICE_SPEECH_CATALOG_ERROR_CODES,
+  VoiceApiError,
+  type VoiceInstalledSpeechModel,
+  type VoiceSpeechModelCatalog,
+  type VoiceSpeechModelEntry
 } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -19,9 +22,14 @@ vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({})
 }))
 
-vi.mock('@talex-touch/utils/transport/sdk/domains/voice', () => ({
-  createVoiceSdk: () => voiceSdk
-}))
+// The SDK's error vocabulary is part of the contract, not something to fake: the component has to
+// tell a projected `VoiceApiError` apart from a bare message and only trust codes from the closed
+// published set. So the real class and code set stay in place and only the transport-bound factory
+// is replaced.
+vi.mock('@talex-touch/utils/transport/sdk/domains/voice', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return { ...actual, createVoiceSdk: () => voiceSdk }
+})
 
 vi.mock('@talex-touch/tuffex/button', () => ({
   TxButton: {
@@ -77,6 +85,13 @@ const EXPAND_HINT_KEY = 'settingSpeechRecognition.models.expandHint'
 const COLLAPSE_HINT_KEY = 'settingSpeechRecognition.models.collapseHint'
 const RECOMMENDED_BADGE = 'settingSpeechRecognition.models.recommended'
 const INSTALLED_BADGE = 'settingSpeechRecognition.models.installed'
+
+const CLOUD_IMPACT_KEY = 'settingSpeechRecognition.models.catalogImpact.cloud'
+
+/** The rendered title key a projected speech-catalog code must resolve to. */
+function catalogTitle(name: string): string {
+  return `settingSpeechRecognition.models.catalogErrors.${name}`
+}
 
 const RECOMMENDED_ID = 'sense-voice-small'
 const HIDDEN_ID = 'tuff-asr-zh-tiny'
@@ -142,8 +157,8 @@ function countIn(text: string): number {
   return Number(match![1])
 }
 
-async function mountSettings(): Promise<VueWrapper> {
-  const wrapper = mount(SpeechModelSettings)
+async function mountSettings(props: { source?: VoiceAsrSource } = {}): Promise<VueWrapper> {
+  const wrapper = mount(SpeechModelSettings, { props })
   await flushPromises()
   return wrapper
 }
@@ -292,6 +307,169 @@ describe('SpeechModelSettings', () => {
 
     // Nothing is withheld, so there is nothing to disclose.
     expect(wrapper.find(MORE).exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * A catalog failure is one of five different facts, not one generic shrug: no session, no
+   * answer in time, an upstream that is down, a payload that failed its checks, or an
+   * unclassified transport fault. Collapsing them leaves the reader unable to decide whether to
+   * sign in, wait, or simply retry — so each projected code owns a distinct title, and the human
+   * message never gets to pick one.
+   */
+  it.each([
+    {
+      name: 'an account with no session',
+      code: VOICE_SPEECH_CATALOG_ERROR_CODES.authRequired,
+      title: catalogTitle('authRequired')
+    },
+    {
+      name: 'a request that timed out',
+      code: VOICE_SPEECH_CATALOG_ERROR_CODES.timeout,
+      title: catalogTitle('timeout')
+    },
+    {
+      name: 'an upstream outage',
+      code: VOICE_SPEECH_CATALOG_ERROR_CODES.upstreamUnavailable,
+      title: catalogTitle('upstreamUnavailable')
+    },
+    {
+      name: 'a payload that failed validation',
+      code: VOICE_SPEECH_CATALOG_ERROR_CODES.invalid,
+      title: catalogTitle('invalid')
+    },
+    {
+      name: 'an unclassified transport failure',
+      code: VOICE_SPEECH_CATALOG_ERROR_CODES.unavailable,
+      title: catalogTitle('unavailable')
+    }
+  ])('names $name with its own catalog title', async ({ code, title }) => {
+    voiceSdk.getSpeechModelCatalog.mockRejectedValue(
+      new VoiceApiError('The cloud model catalog could not be read.', code, true)
+    )
+
+    const wrapper = await mountSettings({ source: 'cloud' })
+
+    const error = wrapper.get(ERROR)
+    expect(error.text()).toContain(title)
+    // Cloud dictation never touches the on-device catalog, so every failure has to say it is safe.
+    expect(error.text()).toContain(CLOUD_IMPACT_KEY)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * Messages are prose; only a projected code is evidence. A bare Error whose text happens to name
+   * the auth code is the legacy shape this build has to survive — it carries no code, so it is not
+   * proof the user is signed out, and it must degrade to the generic title.
+   */
+  it('does not read a bare message as a projected catalog code', async () => {
+    voiceSdk.getSpeechModelCatalog.mockRejectedValue(
+      new Error('SPEECH_CATALOG_AUTH_REQUIRED: no Nexus session')
+    )
+
+    const wrapper = await mountSettings({ source: 'cloud' })
+
+    const error = wrapper.get(ERROR)
+    expect(error.text()).toContain(catalogTitle('unavailable'))
+    expect(error.text()).not.toContain(catalogTitle('authRequired'))
+
+    wrapper.unmount()
+  })
+
+  /**
+   * When the code and the message disagree, the code came from main and the text did not. Following
+   * the text would let any upstream copy that mentions a code silently re-route every failure.
+   */
+  it('follows the projected code, not the message text, when the two disagree', async () => {
+    voiceSdk.getSpeechModelCatalog.mockRejectedValue(
+      new VoiceApiError(
+        'SPEECH_CATALOG_AUTH_REQUIRED',
+        VOICE_SPEECH_CATALOG_ERROR_CODES.timeout,
+        true
+      )
+    )
+
+    const wrapper = await mountSettings({ source: 'cloud' })
+
+    const error = wrapper.get(ERROR)
+    expect(error.text()).toContain(catalogTitle('timeout'))
+    expect(error.text()).not.toContain(catalogTitle('authRequired'))
+
+    wrapper.unmount()
+  })
+
+  /**
+   * Only the five codes are agreed vocabulary. A future or internal token — a digest mismatch, the
+   * one main deliberately keeps private — has no user copy, so it degrades to the generic title
+   * instead of leaking the raw token into the interface.
+   */
+  it('declines a code outside the published set and shows the generic title', async () => {
+    voiceSdk.getSpeechModelCatalog.mockRejectedValue(
+      new VoiceApiError(
+        'The cloud model catalog failed its integrity checks.',
+        'SPEECH_CATALOG_DIGEST_MISMATCH',
+        false
+      )
+    )
+
+    const wrapper = await mountSettings({ source: 'cloud' })
+
+    const error = wrapper.get(ERROR)
+    expect(error.text()).toContain(catalogTitle('unavailable'))
+    expect(error.text()).not.toContain('SPEECH_CATALOG_DIGEST_MISMATCH')
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The impact line is about the reader's own dictation choice, not about the catalog: someone who
+   * picked local-only has no cloud fallback to lean on, so the sentence has to change with the
+   * source instead of repeating the cloud reassurance.
+   */
+  it.each(['local', 'hybrid'] as const)(
+    'describes what a catalog failure means for %s dictation',
+    async (source) => {
+      voiceSdk.getSpeechModelCatalog.mockRejectedValue(
+        new VoiceApiError(
+          'The cloud model catalog could not be read.',
+          VOICE_SPEECH_CATALOG_ERROR_CODES.unavailable,
+          true
+        )
+      )
+
+      const wrapper = await mountSettings({ source })
+
+      expect(wrapper.get(ERROR).text()).toContain(
+        `settingSpeechRecognition.models.catalogImpact.${source}`
+      )
+
+      wrapper.unmount()
+    }
+  )
+
+  /**
+   * A sign-out or a dead network changes what the cloud can offer; it does not change what is
+   * already on disk. The installed rows and their remove controls stay put under a coded catalog
+   * failure too, so the one action that still works offline is never taken away by a catalog the
+   * user cannot read.
+   */
+  it('keeps installed rows and their remove controls when the catalog fails with a code', async () => {
+    voiceSdk.getSpeechModelCatalog.mockRejectedValue(
+      new VoiceApiError(
+        'Sign in to access the on-device speech model catalog.',
+        VOICE_SPEECH_CATALOG_ERROR_CODES.authRequired,
+        false
+      )
+    )
+
+    const wrapper = await mountSettings({ source: 'hybrid' })
+
+    expect(wrapper.get(ERROR).text()).toContain(catalogTitle('authRequired'))
+    expect(wrapper.findAll(row('tuff-asr-zh'))).toHaveLength(2)
+    expect(wrapper.findAll(removeButton('tuff-asr-zh'))).toHaveLength(2)
+    expect(wrapper.findAll(removeButton('whisper-base'))).toHaveLength(1)
 
     wrapper.unmount()
   })

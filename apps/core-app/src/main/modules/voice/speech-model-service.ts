@@ -20,6 +20,12 @@
  */
 
 import { createHash } from 'node:crypto'
+import { isTimeoutLikeError, isTransportFailureError } from '@talex-touch/utils/network'
+import type { NexusResponsePayload } from '@talex-touch/utils/transport/events/auth'
+import {
+  VOICE_SPEECH_CATALOG_ERROR_CODES,
+  type VoiceSpeechCatalogErrorCode
+} from '@talex-touch/utils/transport/sdk/domains/voice'
 import { installSpeechBundle, removeSpeechBundle } from '@talex-touch/tuff-voice'
 import {
   catalogEntryToItem,
@@ -39,6 +45,41 @@ import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { createLogger } from '../../utils/logger'
 
 const speechModelLog = createLogger('SpeechModelCatalog')
+const SPEECH_CATALOG_CLIENT_TIMEOUT_MS = 25_000
+
+const SPEECH_CATALOG_PUBLIC_MESSAGES: Record<VoiceSpeechCatalogErrorCode, string> = {
+  [VOICE_SPEECH_CATALOG_ERROR_CODES.authRequired]:
+    'Sign in to access the on-device speech model catalog.',
+  [VOICE_SPEECH_CATALOG_ERROR_CODES.timeout]: 'The speech model catalog request timed out.',
+  [VOICE_SPEECH_CATALOG_ERROR_CODES.upstreamUnavailable]:
+    'The speech model catalog service is temporarily unavailable.',
+  [VOICE_SPEECH_CATALOG_ERROR_CODES.invalid]:
+    'The speech model catalog failed its integrity checks.',
+  [VOICE_SPEECH_CATALOG_ERROR_CODES.unavailable]: 'The speech model catalog could not be loaded.'
+}
+
+class SpeechCatalogClientError extends Error {
+  constructor(
+    readonly code: VoiceSpeechCatalogErrorCode,
+    readonly retryable: boolean,
+    detail: string,
+    options?: { cause?: unknown }
+  ) {
+    super(detail, options)
+    this.name = 'SpeechCatalogClientError'
+  }
+}
+
+export function projectSpeechCatalogApiError(
+  error: unknown
+): { error: string; code: VoiceSpeechCatalogErrorCode; retryable: boolean } | undefined {
+  if (!(error instanceof SpeechCatalogClientError)) return undefined
+  return {
+    error: SPEECH_CATALOG_PUBLIC_MESSAGES[error.code],
+    code: error.code,
+    retryable: error.retryable
+  }
+}
 
 /** Host tag the cloud catalog is matched against, e.g. `darwin-arm64`. */
 export { currentPlatformTag }
@@ -87,7 +128,8 @@ export function getSpeechModelProgress(): SpeechModelInstallProgress | null {
 
 /** Digest the served catalog claimed for itself, kept for the integrity check below. */
 function verifyServedDigest(body: string, header: string | undefined): void {
-  if (!header || !/^[a-f0-9]{64}$/.test(header)) return
+  if (!header || !/^[a-f0-9]{64}$/.test(header))
+    throw new Error('SPEECH_CATALOG_DIGEST_MISSING_OR_INVALID')
   const actual = createHash('sha256').update(Buffer.from(body, 'utf8')).digest('hex')
   if (actual !== header)
     throw new Error(
@@ -97,19 +139,88 @@ function verifyServedDigest(body: string, header: string | undefined): void {
 
 export async function fetchSpeechCatalog(): Promise<ParsedSpeechModelCatalog> {
   const baseUrl = getRuntimeNexusBaseUrl()
-  const response = await performNexusRequestWithAuth(
-    {
-      url: `${baseUrl.replace(/\/+$/, '')}/api/v1/speech/models`,
-      method: 'GET',
-      context: 'voice.speech-models.catalog'
-    },
-    { timeoutMs: 20_000, rejectRedirects: true }
-  )
-  if (!response) throw new Error('SPEECH_CATALOG_AUTH_REQUIRED')
-  if (response.status < 200 || response.status >= 300)
-    throw new Error(`SPEECH_CATALOG_UNAVAILABLE: Nexus answered HTTP ${response.status}`)
-  verifyServedDigest(response.body, response.headers['x-content-sha256'])
-  return parseSpeechModelCatalog(JSON.parse(response.body))
+  let response: NexusResponsePayload | null
+  try {
+    response = await performNexusRequestWithAuth(
+      {
+        url: `${baseUrl.replace(/\/+$/, '')}/api/v1/speech/models`,
+        method: 'GET',
+        context: 'voice.speech-models.catalog'
+      },
+      { timeoutMs: SPEECH_CATALOG_CLIENT_TIMEOUT_MS, rejectRedirects: true }
+    )
+  } catch (error) {
+    const code =
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      typeof error.code === 'string'
+        ? error.code
+        : ''
+    if (isTimeoutLikeError(error) || code === 'NETWORK_ABORTED') {
+      throw new SpeechCatalogClientError(
+        VOICE_SPEECH_CATALOG_ERROR_CODES.timeout,
+        true,
+        'Speech model catalog request exceeded its deadline.',
+        { cause: error }
+      )
+    }
+    if (isTransportFailureError(error)) {
+      throw new SpeechCatalogClientError(
+        VOICE_SPEECH_CATALOG_ERROR_CODES.upstreamUnavailable,
+        true,
+        'Speech model catalog transport failed.',
+        { cause: error }
+      )
+    }
+    throw new SpeechCatalogClientError(
+      VOICE_SPEECH_CATALOG_ERROR_CODES.unavailable,
+      true,
+      'Speech model catalog request failed.',
+      { cause: error }
+    )
+  }
+
+  if (!response) {
+    throw new SpeechCatalogClientError(
+      VOICE_SPEECH_CATALOG_ERROR_CODES.authRequired,
+      false,
+      'Speech model catalog requires an authenticated Nexus session.'
+    )
+  }
+  if (response.status === 401 || response.status === 403) {
+    throw new SpeechCatalogClientError(
+      VOICE_SPEECH_CATALOG_ERROR_CODES.authRequired,
+      false,
+      `Speech model catalog authorization failed with HTTP ${response.status}.`
+    )
+  }
+  if (response.status === 502 || response.status === 503 || response.status === 504) {
+    throw new SpeechCatalogClientError(
+      VOICE_SPEECH_CATALOG_ERROR_CODES.upstreamUnavailable,
+      true,
+      `Speech model catalog upstream failed with HTTP ${response.status}.`
+    )
+  }
+  if (response.status < 200 || response.status >= 300) {
+    throw new SpeechCatalogClientError(
+      VOICE_SPEECH_CATALOG_ERROR_CODES.unavailable,
+      true,
+      `Speech model catalog request failed with HTTP ${response.status}.`
+    )
+  }
+
+  try {
+    verifyServedDigest(response.body, response.headers['x-content-sha256'])
+    return parseSpeechModelCatalog(JSON.parse(response.body))
+  } catch (error) {
+    throw new SpeechCatalogClientError(
+      VOICE_SPEECH_CATALOG_ERROR_CODES.invalid,
+      false,
+      'Speech model catalog response failed digest, JSON, or schema validation.',
+      { cause: error }
+    )
+  }
 }
 
 async function runtimeForBundle(
