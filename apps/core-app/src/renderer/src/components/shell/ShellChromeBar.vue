@@ -7,7 +7,6 @@ import { useHistoryNavigation } from '~/modules/layout/useHistoryNavigation'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
 import { SIDEBAR_BRAND_LABEL_MIN, SIDEBAR_HISTORY_MIN } from '~/modules/layout/shell-sidebar-state'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
-import { toggleMainWindowPalette } from '~/modules/shortcuts/main-window-shortcuts'
 
 /**
  * The single row of window chrome, living at the top of the sidebar.
@@ -63,20 +62,6 @@ const showHistory = computed(() => !collapsed.value && width.value >= SIDEBAR_HI
       <span class="i-ri-side-bar-line" />
     </button>
     <MetaHintBadge command="toggle-sidebar" />
-
-    <!-- ⌘/ is the way in to every command, so it needs a control to point at: a chord nobody has
-         been told about is not discoverable, and the bar has the one piece of chrome that is. -->
-    <button
-      class="ShellChromeBar-Button ShellChromeBar-Shortcuts"
-      type="button"
-      :aria-label="t('shortcuts.palette')"
-      :title="t('shortcuts.palette')"
-      aria-haspopup="dialog"
-      @click="toggleMainWindowPalette"
-    >
-      <span class="i-ri-keyboard-line" />
-    </button>
-    <MetaHintBadge command="open-palette" placement="inline" />
 
     <div class="ShellChromeBar-Spacer" />
 
@@ -264,11 +249,10 @@ const showHistory = computed(() => !collapsed.value && width.value >= SIDEBAR_HI
   }
 
   /**
-   * The rail sheds the command window's button with the wordmark: the chord still opens it, and a
-   * 24px glyph sitting next to the collapse toggle is one more thing to mis-click. The hint chips
-   * go with it — there is no room beside a 60px column for a key cap.
+   * The rail sheds the hint chips: there is no room beside a 60px column for a key cap, and a
+   * 24px glyph sitting next to the collapse toggle is one more thing to mis-click. The chords
+   * still work.
    */
-  .ShellChromeBar-Shortcuts,
   .MetaHintBadge {
     display: none;
   }
