@@ -27,12 +27,16 @@ tuffex 的 AI 套件里加一个「选项卡片」：一张卡，顶部是问题
 
 ## Acceptance Criteria
 
-- [ ] 单测：单步不渲染分页；多步时箭头启用状态正确、`v-model:step` 双向生效；点选项发出带 `step` 与 `option` 的 `select`；禁用项不发事件；方向键 / Home / End 焦点移动；`loading` 渲染骨架且不渲染选项按钮。
-- [ ] 样式契约：hover 不过渡颜色、所有过渡有减少动态效果出口、只用 `--tx-*` token。
-- [ ] tuffex 包内测试、`suite-barrels.test.ts`、类型检查、`audit:readme` 通过。
-- [ ] nexus 四个文档 gate 通过；ego-browser 实测文档页亮 / 暗主题，截图核对与 miko 参考的信息层级一致（标题 → 选项标题 → 说明）。
+- [x] 单测：单步不渲染分页；多步时箭头启用状态正确、`v-model:step` 双向生效；点选项发出带 `step` 与 `option` 的 `select`；禁用项不发事件；方向键 / Home / End 焦点移动；`loading` 渲染骨架且不渲染选项按钮。
+- [x] 样式契约：hover 不过渡颜色、所有过渡有减少动态效果出口、只用 `--tx-*` token。
+- [x] tuffex 包内测试、`suite-barrels.test.ts`、类型检查、`audit:readme` 通过。
+- [x] nexus 四个文档 gate 通过；ego-browser 实测文档页亮 / 暗主题，截图核对与 miko 参考的信息层级一致（标题 → 选项标题 → 说明）。
 
 ## 不做
 
 - 不做多选、不做选项里的输入框（那是表单）。
 - 不负责「选完之后做什么」，组件只报告选择。
+
+## 落地记录
+
+- 2026-09-26 提交 `792aa7c8e`。实现偏差见 design.md「实现偏差」；检查阶段把样式表从 5.1 KiB 压到 3.9 KiB（渲染逐像素一致），按需 CSS 闸门在不计另一会话未提交的 prism-glow 时为 619.0/620。浏览器实测（ego-browser，亮 / 暗、分步翻页、键盘）通过。
