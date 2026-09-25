@@ -28,9 +28,13 @@ const notice = computed(() =>
     'Nexus 官方能力按能力自身的计价单位扣费：文本按 1K tokens、图片按张、语音转写按音频秒（长静音与密集语音取较高者）。调用前会先占用一笔预留额度，结算后自动退回多占部分。'
   )
 )
+/**
+ * Live status only. Signed out, the row says nothing: the dedicated "需要登录" row below it is the
+ * whole message, and a hint repeating it is a second opaque line under the same icon.
+ */
 const statusDescription = computed(() => {
   if (!credits.isLoggedIn.value) {
-    return t('creditsSummary.loginRequired', '登录后可查看 credits 剩余和消耗。')
+    return ''
   }
   if (credits.error.value) {
     return credits.error.value
@@ -161,9 +165,6 @@ onUnmounted(() => {
     <TuffBlockSlot
       v-if="!credits.isLoggedIn.value"
       :title="t('creditsSummary.loginTitle', '需要登录')"
-      :description="
-        t('creditsSummary.loginDescription', '请先登录 Tuff 账户以读取 Nexus credits summary。')
-      "
       default-icon="i-carbon-login"
       active-icon="i-carbon-login"
     />

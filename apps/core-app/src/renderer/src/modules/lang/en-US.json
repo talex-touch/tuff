@@ -165,9 +165,7 @@
     "groupTitle": "Language Settings",
     "groupDesc": "Select your preferred language for the application.",
     "followSystem": "Follow System Language",
-    "followSystemDesc": "Automatically match the system language setting.",
-    "chooseLanguage": "Choose Language",
-    "chooseLanguageDesc": "Manually select your preferred display language."
+    "chooseLanguage": "Choose Language"
   },
   "beginner": {
     "language": {
@@ -821,7 +819,6 @@
     "nexusBaseUrlErrorSave": "Saving failed, please try again",
     "logout": "Logout",
     "noAccount": "No Account",
-    "noAccountDesc": "Account access is currently unavailable.",
     "login": "Login",
     "loggingIn": "Logging in...",
     "loginBrowserPending": "Waiting for browser sign-in",
@@ -922,7 +919,6 @@
     "title": "AI Credits",
     "description": "View personal remaining, used, and quota for Nexus AI credits.",
     "notice": "Nexus bills each capability in its own unit: text by 1K tokens, images per picture, and transcription against two bases at once — audio seconds and transcript units — settling on whichever is higher (long silence leans on audio seconds, dense speech on transcript units). Each call holds a reservation up front and returns the unused part after settlement.",
-    "loginRequired": "Sign in to view remaining credits and usage.",
     "loading": "Loading credits information.",
     "empty": "No credits information yet.",
     "month": "Billing month: {month}",
@@ -933,7 +929,6 @@
     "personalQuota": "Personal total",
     "teamRemaining": "Team pool remaining",
     "loginTitle": "Sign-in required",
-    "loginDescription": "Sign in to your Tuff account to read the Nexus credits summary.",
     "errorTitle": "Credits unavailable",
     "retry": "Retry",
     "billingNoticeTitle": "Billing notice"

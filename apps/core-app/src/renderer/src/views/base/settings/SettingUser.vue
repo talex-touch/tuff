@@ -387,7 +387,6 @@ function openProfileEditor() {
     <TuffBlockSlot
       v-else
       :title="t('settingUser.noAccount')"
-      :description="t('settingUser.noAccountDesc')"
       default-icon="i-carbon-face-satisfied"
       active-icon="i-carbon-face-satisfied"
     >
