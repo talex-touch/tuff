@@ -259,7 +259,7 @@ export async function readSpeechCatalog(
   if (cached && now - cached.at < SPEECH_CATALOG_CACHE_MS) return cached
 
   const activeBuild = catalogBuilds.get(source)
-  if (activeBuild) return activeBuild
+  if (activeBuild) return await activeBuild
 
   const build = (async (): Promise<CachedSpeechCatalog> => {
     const payload = await buildSpeechCatalog(source)
