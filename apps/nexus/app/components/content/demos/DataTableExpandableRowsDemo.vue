@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { StatusTone } from '@talex-touch/tuffex/status-badge'
 import { computed, ref } from 'vue'
 
 interface RowData {
@@ -101,7 +102,7 @@ const data = computed<RowData[]>(() => (isZh.value
 
 const total = computed(() => data.value.reduce((sum, row) => sum + row.amount, 0))
 
-const statusTone: Record<RowData['status'], string> = {
+const statusTone: Record<RowData['status'], StatusTone> = {
   paid: 'success',
   pending: 'warning',
   failed: 'danger',
@@ -145,7 +146,7 @@ function rowExpandable(row: RowData) {
         </div>
       </template>
 
-      <template #cell-status="{ row }">
+      <template #cell-status="{ row }: { row: RowData }">
         <TxStatusBadge :status="statusTone[row.status]" :text="labels.statuses[row.status]" size="sm" />
       </template>
 
