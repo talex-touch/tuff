@@ -51,19 +51,28 @@
 
 ## Acceptance Criteria
 
-- [ ] 单测（`ShellConversationList.test.ts` 更新 + 新增）：
+- [x] 单测（`ShellConversationList.test.ts` 更新 + 新增）：
   - 历史对话 / 项目空白对话 / 非项目空白对话三种路由状态下，高亮的恰好是对话行 / 项目行 / 「新建对话」之一；
   - 点项目名进入项目新对话（`pendingProjectId` 与 `push('/home')` 断言沿用现有写法）；点开关只切换展开、不导航；
   - 默认折叠；`activeProjectId` 变化自动展开；手动切换写入 `appSetting.shell` 并在重新挂载后恢复；不存在的项目 id 被清理；
   - 分区顺序为 项目 → 对话 → 已归档；没有项目时「项目」分区标题与新建入口仍在；
   - 「新建项目」`+` 走 `enterPickedProjectConversation`（取消选择时不导航，沿用现有两条用例）；rail 模式下图标栏里仍有「新建项目」。
-- [ ] 真实应用走查（CDP 截图，亮 / 暗两种主题）：老板截图同款状态（`hi` 一条非项目对话 + `talex-touch` 项目里一条对话 + 当前在 talex-touch 的空白新对话）下，只有 talex-touch 行高亮、它自动展开、「对话」分区里是 `hi`；切到 `hi`、切到「助手身份介绍」各截一张。
-- [ ] 侧边栏宽度拉到最窄（195px）与最宽（360px）时，项目行名称省略号正常、`⋯` 不与名称重叠；收成 rail 时图标栏正常。
-- [ ] 键盘：Tab 能依次到达开关、名称、`⋯`；开关的 `aria-expanded` 随状态变化。
-- [ ] core-app 包内 eslint、prettier、`vue-tsc -p tsconfig.web.json --composite false` 通过。
+- [x] 真实应用走查（CDP 截图，亮 / 暗两种主题）：老板截图同款状态（`hi` 一条非项目对话 + `talex-touch` 项目里一条对话 + 当前在 talex-touch 的空白新对话）下，只有 talex-touch 行高亮、它自动展开、「对话」分区里是 `hi`；切到 `hi`、切到「助手身份介绍」各截一张。
+- [x] 侧边栏宽度拉到最窄（195px）与最宽（360px）时，项目行名称省略号正常、`⋯` 不与名称重叠；收成 rail 时图标栏正常。
+- [x] 键盘：Tab 能依次到达开关、名称、`⋯`；开关的 `aria-expanded` 随状态变化。
+- [x] core-app 包内 eslint、prettier、`vue-tsc -p tsconfig.web.json --composite false` 通过。
 
 ## 不做
 
 - 不改项目 / 对话的数据模型与主进程接口（展开状态只是渲染层偏好）。
 - 不做对话按时间分组（今天 / 昨天…）、不做拖拽排序。
 - 设置页上下文里的侧边栏（设置分类导航）不动。
+
+## Notes
+
+- **已知限制（本任务不修）：展开状态会被云同步覆盖。** `appSetting` 整份参与云同步，`shell.expandedProjectIds` 跟着一起推送、拉取；但里面是本机项目的 id（`randomUUID()`，项目本身不跨设备同步），换到另一台设备毫无意义。拉取到另一台设备的设置时，本机的展开状态可能被对方的 id 顶掉，本机文件夹全部收起；下次项目列表刷新时 prune 把这些外来 id 清成 `[]` 写回，这个空列表又会同步出去，把对方的文件夹也收起。修法是在主进程同步投影里排除这个字段、拉取时保留本机值（参照 `modules/sync/index.ts` 对 `omitMainOwnedAuthSettings` / `preserveMainOwnedAuthSettings` 的用法），属于主进程改动，超出本任务「展开状态只是渲染层偏好、不改主进程接口」的范围。
+
+## 落地记录
+
+- 2026-09-26 CDP 实机走查（运行中的 dev，隐藏窗口里用注入 `transition:none` 与截图强制出帧）：五种路由状态单一高亮（深 / 浅）、悬停箭头与 ⋯、开关只折叠不导航且重载后保持、195 / 260 / 360px 对齐（图标列 x=20、文字列 x=46、行高 33.5px）、rail 保留新建项目、Tab 顺序与 ⋯ 键盘可见、改名框输入法组字守护与自动聚焦全选、骨架行与加载后行逐行同顶同高（32 / 68 / 103）。
+- 已知小差异：「暂无对话」提示行用 12px 字，行高 32px，比导航行矮 1.5px（文字列仍对齐），未改。
