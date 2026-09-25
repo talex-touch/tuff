@@ -2317,54 +2317,88 @@ export class SearchEngineCore
           'Destroying SearchEngineCore and aborting live search sessions'
         )
       }
-      await this.sessionRegistry.destroy()
-      this.usageSummaryService?.stop()
-      this.stopMaintenance()
-      await this.indexedSourceEventRouter.unsubscribe()
       const drainFailures: Error[] = []
       const recordDrainFailure = (message: string, error: unknown): void => {
         searchEngineLog.error(message, { error })
         drainFailures.push(error instanceof Error ? error : new Error(String(error)))
       }
-      const appProducerDrain = appProvider.prepareForSearchIndexShutdown()
-      const initialAppScanDrain = this.initialAppScanPromise
+      // Rejection handlers attach the moment a drain starts, not when its turn comes up in the
+      // sequence: these drains run concurrently and a later one can reject while an earlier await
+      // is still pending, which would surface as an unhandled rejection first.
+      const trackDrain = (
+        drain: Promise<void> | null | undefined,
+        message: string
+      ): Promise<void> =>
+        drain
+          ? drain.then(
+              () => undefined,
+              (error) => {
+                recordDrainFailure(message, error)
+              }
+            )
+          : Promise.resolve()
+      // Cancellation and producer shutdown all start here, synchronously, before this method
+      // awaits anything. A coalesced watcher delta already being routed holds the per-source
+      // mutation gate that an in-flight scan owns, so awaiting the router drain (or search session
+      // destruction) first would wait on a gate only the aborts below can release — a cycle that
+      // otherwise stands until the outer quit timer fires.
+      const appProducerDrain = trackDrain(
+        appProvider.prepareForSearchIndexShutdown(),
+        'Failed to stop AppProvider producers before writer shutdown'
+      )
+      const initialAppScanDrain = trackDrain(
+        this.initialAppScanPromise,
+        'Failed to drain initial AppProvider scan retry'
+      )
       this.initialAppScanController?.abort(new Error('SEARCH_CORE_DESTROYED'))
-      const appRuntimeDrain = runtime?.abortAndDrainSourceScans(APP_INDEXED_SOURCE_ID)
-      const fileRuntimeDrain = runtime?.abortAndDrainSourceScans(FILE_INDEXED_SOURCE_ID)
-      const fileDrain = fileProvider.prepareForSearchIndexShutdown()
-      const admittedTaskDrain = runtime?.drainAdmittedTasks()
-      await appProducerDrain.catch((error) => {
-        recordDrainFailure('Failed to stop AppProvider producers before writer shutdown', error)
-      })
-      await appRuntimeDrain?.catch((error) => {
-        recordDrainFailure('Failed to drain active Runtime AppProvider scans', error)
-      })
-      await initialAppScanDrain?.catch((error) => {
-        recordDrainFailure('Failed to drain initial AppProvider scan retry', error)
-      })
-      await fileRuntimeDrain?.catch((error) => {
-        recordDrainFailure('Failed to drain active Runtime FileProvider scans', error)
-      })
-      await admittedTaskDrain?.catch((error) => {
-        recordDrainFailure('Failed to drain admitted Runtime indexing tasks', error)
-      })
-      await fileDrain.catch((error) => {
-        recordDrainFailure('Failed to drain FileProvider before writer shutdown', error)
-      })
-      const appMutationDrain = runtime?.drainSourceMutations(APP_INDEXED_SOURCE_ID)
-      const fileMutationDrain = runtime?.drainSourceMutations(FILE_INDEXED_SOURCE_ID)
-      await appMutationDrain?.catch((error) => {
-        recordDrainFailure(
-          'Failed to drain AppProvider Runtime mutations before writer shutdown',
-          error
-        )
-      })
-      await fileMutationDrain?.catch((error) => {
-        recordDrainFailure(
-          'Failed to drain FileProvider Runtime mutations before writer shutdown',
-          error
-        )
-      })
+      const appRuntimeDrain = trackDrain(
+        runtime?.abortAndDrainSourceScans(APP_INDEXED_SOURCE_ID),
+        'Failed to drain active Runtime AppProvider scans'
+      )
+      const fileRuntimeDrain = trackDrain(
+        runtime?.abortAndDrainSourceScans(FILE_INDEXED_SOURCE_ID),
+        'Failed to drain active Runtime FileProvider scans'
+      )
+      const fileDrain = trackDrain(
+        fileProvider.prepareForSearchIndexShutdown(),
+        'Failed to drain FileProvider before writer shutdown'
+      )
+      const admittedTaskDrain = trackDrain(
+        runtime?.drainAdmittedTasks(),
+        'Failed to drain admitted Runtime indexing tasks'
+      )
+      this.usageSummaryService?.stop()
+      this.stopMaintenance()
+      // Both of these wait on work the aborts above are already cancelling: search sessions settle
+      // against Runtime tasks, and the router drain routes coalesced watcher deltas through the
+      // same per-source mutation gate.
+      const sessionDrain = trackDrain(
+        this.sessionRegistry.destroy(),
+        'Failed to destroy active search sessions'
+      )
+      const eventRouterDrain = trackDrain(
+        this.indexedSourceEventRouter.unsubscribe(),
+        'Failed to drain coalesced indexed-source watcher events'
+      )
+      await Promise.all([
+        appProducerDrain,
+        appRuntimeDrain,
+        initialAppScanDrain,
+        fileRuntimeDrain,
+        admittedTaskDrain,
+        fileDrain,
+        sessionDrain,
+        eventRouterDrain
+      ])
+      const appMutationDrain = trackDrain(
+        runtime?.drainSourceMutations(APP_INDEXED_SOURCE_ID),
+        'Failed to drain AppProvider Runtime mutations before writer shutdown'
+      )
+      const fileMutationDrain = trackDrain(
+        runtime?.drainSourceMutations(FILE_INDEXED_SOURCE_ID),
+        'Failed to drain FileProvider Runtime mutations before writer shutdown'
+      )
+      await Promise.all([appMutationDrain, fileMutationDrain])
       if (drainFailures.length > 0) {
         throw new AggregateError(drainFailures, 'SEARCH_CORE_INDEX_DRAIN_FAILED')
       }

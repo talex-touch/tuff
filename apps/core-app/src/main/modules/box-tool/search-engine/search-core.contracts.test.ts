@@ -1511,6 +1511,88 @@ describe('SearchEngineCore facade contracts', () => {
     expect(lifecycle.slice(-2)).toEqual(['runtime-cleared', 'writer-shut-down'])
   })
 
+  it('initiates source-scan cancellation before awaiting session destruction so a blocked session drain cannot deadlock destroy', async () => {
+    const lifecycle: string[] = []
+    const sessionDestroyStarted = Promise.withResolvers<void>()
+    const scanCancellationInitiated = Promise.withResolvers<void>()
+    const harness = core as unknown as {
+      sessionRegistry: { destroy: () => Promise<void> }
+    }
+    // A live search session's drain can only settle once the active index scan it depends on is
+    // aborted (the coalesced watcher route parked on the mutation gate the scan holds). Awaiting
+    // session destruction before cancelling the scan therefore deadlocks the whole quit path.
+    const sessionDestroy = vi
+      .spyOn(harness.sessionRegistry, 'destroy')
+      .mockImplementationOnce(async () => {
+        lifecycle.push('session-destroy-wait')
+        sessionDestroyStarted.resolve()
+        await scanCancellationInitiated.promise
+        lifecycle.push('session-destroyed')
+      })
+    state.appRuntimeAbortAndDrain.mockImplementation(async (sourceId: string) => {
+      lifecycle.push(`scan-abort-initiated:${sourceId}`)
+      scanCancellationInitiated.resolve()
+    })
+    state.clearIndexingRuntime.mockImplementation(() => {
+      lifecycle.push('runtime-cleared')
+    })
+    state.writerShutdown.mockImplementation(async () => {
+      lifecycle.push('writer-shut-down')
+    })
+
+    try {
+      const destroy = core.destroy()
+      await sessionDestroyStarted.promise
+
+      // Both source scans must already be cancelled, and the producer stop initiated, while destroy
+      // is parked on the session drain — not after it.
+      expect(state.appProviderPrepareForShutdown).toHaveBeenCalledTimes(1)
+      expect(state.appRuntimeAbortAndDrain).toHaveBeenNthCalledWith(1, 'app-provider')
+      expect(state.appRuntimeAbortAndDrain).toHaveBeenNthCalledWith(2, 'file-provider')
+
+      await destroy
+
+      expect(lifecycle.indexOf('scan-abort-initiated:app-provider')).toBeLessThan(
+        lifecycle.indexOf('session-destroyed')
+      )
+      // The writer still closes only after every started drain (session included) has settled.
+      expect(lifecycle.slice(-2)).toEqual(['runtime-cleared', 'writer-shut-down'])
+    } finally {
+      state.appRuntimeAbortAndDrain.mockImplementation(async () => undefined)
+      state.clearIndexingRuntime.mockImplementation(() => undefined)
+      state.writerShutdown.mockImplementation(async () => undefined)
+      sessionDestroy.mockRestore()
+    }
+  })
+
+  it('fails closed when the coalesced event-router drain rejects, and completes teardown on retry', async () => {
+    const coreHarness = core as unknown as {
+      indexedSourceEventRouter: { unsubscribe: () => Promise<void> }
+      providerRegistry: { destroy: () => Promise<void> }
+    }
+    const providerRegistryDestroy = vi.spyOn(coreHarness.providerRegistry, 'destroy')
+    const unsubscribe = vi
+      .spyOn(coreHarness.indexedSourceEventRouter, 'unsubscribe')
+      .mockRejectedValueOnce(new Error('event router drain failed'))
+
+    try {
+      await expect(core.destroy()).rejects.toThrow('SEARCH_CORE_INDEX_DRAIN_FAILED')
+
+      expect(providerRegistryDestroy).not.toHaveBeenCalled()
+      expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
+      expect(state.writerShutdown).not.toHaveBeenCalled()
+
+      await expect(core.destroy()).resolves.toBeUndefined()
+
+      expect(providerRegistryDestroy).toHaveBeenCalledTimes(1)
+      expect(state.clearIndexingRuntime).toHaveBeenCalledTimes(1)
+      expect(state.writerShutdown).toHaveBeenCalledTimes(1)
+    } finally {
+      unsubscribe.mockRestore()
+      providerRegistryDestroy.mockRestore()
+    }
+  })
+
   it('rethrows a writer shutdown failure and retries the terminal teardown', async () => {
     state.writerShutdown.mockRejectedValueOnce(new Error('writer shutdown failed'))
 
