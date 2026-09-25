@@ -81,6 +81,7 @@ const storageMocks = vi.hoisted(() => {
     },
     /** The user's own write: the channels page persists through this same storage path. */
     writeFromChannelsPage(mutate: (config: StoredConfig) => void): void {
+      if (!snapshot) throw new Error('writeFromChannelsPage called before seed()')
       const next = clone(snapshot)
       mutate(next)
       layer.commit(next)
