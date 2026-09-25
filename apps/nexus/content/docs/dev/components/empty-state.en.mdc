@@ -183,6 +183,7 @@ All preset components render `TxEmptyState` with a fixed `variant` and forward t
 - Preset `variant` values resolve title, description, and illustration before explicit props or slots are applied.
 - Slot content wins over generated content for the same region. An `actions` slot replaces both generated action buttons.
 - `icon=null` hides the entire icon region. `loading=true` shows `TxSpinner` only when there is no icon slot and no non-empty `icon` prop.
+- The built-in `variant="error"` illustration is an app window (a title bar with three dots and two content lines) with a danger badge (a circle and an exclamation mark) on its bottom-right corner — the same object-plus-badge shape as `blank-slate`. The badge sits on `--tx-color-danger-light-9` with `--tx-color-danger` ink rather than white ink on a solid danger fill. Two rings ripple out of the badge half a cycle apart (2.4s per cycle); under `prefers-reduced-motion: reduce` the rings stop and stay hidden, leaving the window and badge as the complete still frame.
 - Generated actions render secondary before primary; disabled generated buttons do not emit their event.
 - `surface="card"` adds visual containment only. It does not change semantics or button behavior.
 - Wrapper components forward props and slots to `TxEmptyState`; they only fix `variant`, except `TxBlankSlate` also supplies large blank-slate defaults.
@@ -199,9 +200,10 @@ All preset components render `TxEmptyState` with a fixed `variant` and forward t
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/empty-state/src/TxEmptyState.vue`, `types.ts`, preset wrapper components, and empty-state tests.
-- **Verified coverage:** variant defaults, layout classes, explicit title/description overrides, slot replacement, generated action events, disabled action suppression, spinner precedence, `icon=null`, and SSR wrapper slot forwarding.
 - Recommendation: use `variant` for data-container states; override `title`, `description`, or `icon` only when business context needs specific copy.
 - Accessibility: titles should explain the current user situation, and action labels should describe the next step. Avoid vague “empty” copy.
+- Motion fallback: under `prefers-reduced-motion: reduce` every illustration stops on a complete still frame (added for all variants 2026-09-24). Loops rest on their resting pose; the parts the animation itself draws or places — the no-data line with its end dot and cross marks, the offline slash, the search bubble — are set to the frame their animation ends on, since their resting styles are not a finished frame (a full dash offset or opacity 0 hides them; the bubble sits unshifted over the magnifier); particles that only exist in motion (the box dust, the error rings) stay hidden. Before 2026-09-23 the error illustration was a triangle with an exclamation mark plus two `__error-pulse` circles that had no styles at all, so they drew as two static rings straight through the triangle.
+- **Verified coverage:** variant defaults, layout classes, explicit title/description overrides, slot replacement, generated action events, disabled action suppression, spinner precedence, the error illustration's structure (window, danger badge, two staggered ripple rings), a reduced-motion stop for every illustration animation (a source guard that fails when a new `animation: tx-empty-state-*` has none) with the drawn parts resting on their final frame, `icon=null`, and SSR wrapper slot forwarding.
 
 ## Source
 

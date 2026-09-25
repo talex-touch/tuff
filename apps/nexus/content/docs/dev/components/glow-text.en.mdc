@@ -126,8 +126,8 @@ code: |
 | `repeat` | `boolean` | `true` | Runs the sweep once when set to `false`. |
 | `durationMs` | `number` | `2000` | Sweep animation duration in milliseconds. |
 | `delayMs` | `number` | `0` | Delay before the sweep animation starts. |
-| `angle` | `number` | `20` | Gradient angle in degrees. |
-| `bandSize` | `number` | `38` | Highlight band width as a percentage of the gradient. |
+| `angle` | `number` | `20` | Band tilt from vertical, in degrees; `0` is an upright band, positive values lean it like `/`. |
+| `bandSize` | `number` | `38` | Highlight band width as a percentage of the element's width. |
 | `color` | `string` | `rgba(255, 255, 255, 0.9)` | Highlight color used in the sweep gradient. |
 | `opacity` | `number` | `0.75` | Overlay opacity during the visible part of the sweep. |
 | `blendMode` | `string` | - | Optional CSS `mix-blend-mode` override for the shine overlay. |
@@ -153,6 +153,7 @@ code: |
 - `repeat=false` runs the animation once and keeps the final frame; combine it with `delayMs` for one-shot announcement badges.
 - `mode="adaptive"` blends with `screen` (`plus-lighter` where supported), which is lighten-only. On a light surface a light `color` therefore changes nothing at all — the component renders, animates, and stays invisible, with no error to go on. Adaptive is for dark cards, images and thumbnails; text on a light page wants `text-clip`, and a light card wants `blendMode="soft-light"` with a darker `color`.
 - `mode="text-clip"` reads the rendered slot text after mount and on text mutations; it is best for simple text nodes, not large nested interactive content.
+- Both sweeps draw the same band. `angle` tilts it away from vertical and `bandSize` is a share of the element's width; the band enters centred half an element before the left edge and leaves half an element past the right. In `adaptive` mode the backdrop filter is masked to the band, so only what the band crosses is lifted.
 - The band travels at a constant speed and then waits off-stage: both sweeps are `linear` and finish their travel at 65% of the cycle, holding still for the rest. Easing the travel instead made the band decelerate just before it left and then restart instantly, which reads as a hesitation rather than a pass. `--tx-glow-ease` still overrides it.
 - `opacity` holds for the whole travel rather than fading in and out along it. Both endpoints already sit outside the root, which is `overflow: hidden`, so there is nothing to fade — the old mid-travel fade dissolved the band while it was still over the element and it never appeared to leave. Opacity only hides the layer during the off-stage hold.
 - Reduced-motion users get a static highlight because the component disables sweep animation under `prefers-reduced-motion: reduce`.
@@ -168,6 +169,7 @@ code: |
 ## Review Notes
 
 - **Accessibility note:** Both shine layers are `aria-hidden`; in `text-clip` mode the mirrored text is decorative, so keep the real readable text in the default slot.
+- **Band geometry:** `angle` used to be the gradient's own direction, so the default 20° laid the band nearly flat — thicker than a short card is tall — and a pass washed the whole card light grey instead of crossing it. The adaptive layer was also unmasked: its backdrop filter brightened a strip three element-widths wide, whose edge crossed the element as a hard vertical seam.
 - **Verified coverage:** `glow-text.test.ts` verifies default adaptive rendering, `aria-hidden` shine layers, custom root tags and CSS variables, inactive/one-shot classes, text-clip mirror text, and cleanup when switching back to adaptive mode.
 
 ## Source

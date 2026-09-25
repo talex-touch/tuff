@@ -112,6 +112,7 @@ code: |
 ## 交互契约
 
 - `modelValue=true` 会挂载 overlay、解析 `source` 矩形、触发 `open`，并在卡片动画完成后触发 `opened`。
+- overlay 会 Teleport 到 `<body>`。遮罩和卡片都是 `position: fixed`，原地渲染时会以最近一个带 `transform`、`filter`、`contain` 或 `content-visibility` 的祖先为定位基准，而不是视口。非 prop 属性仍落在遮罩上。
 - 内置关闭按钮、插槽 `close()`、遮罩点击和 Escape 都会进入关闭流程。遮罩点击和 Escape 共用 `handleMaskClick`，因此 `maskClosable=false` 会同时阻止两者，`preventAccidentalClose` 则改为闪烁警示；关闭按钮和 `close()` 不受这两个开关限制。
 - 组件内部关闭顺序为 `close`、`update:modelValue(false)`、`closed`。父级必须同步更新 `v-model`，受控 overlay 才会完全关闭。
 - Header 渲染优先级：提供 `#header` 时完全覆盖内置 header；否则 `header=false` 不渲染、`header=true` 使用内置 header（可用 `#header-display` / `#header-actions` / `#header-close` 局部定制）。`closable=false` 时整个关闭区（含 `#header-close`）不渲染。
@@ -131,6 +132,7 @@ code: |
 ## 审阅说明
 
 - **状态契约：** `TxFlipOverlay` 管理挂载与动画生命周期，但只有组件自行关闭时才触发 `update:modelValue(false)`；使用内置关闭、插槽 `close()` 或遮罩关闭后，调用方仍需同步 `v-model`。
+- **挂载契约：** overlay 过去原地渲染。docs 页面的正文容器是 `content-visibility: auto`，于是"固定定位"的卡片以整篇正文为基准居中，聚焦卡片时页面被滚动约 870px，翻转起点的触发按钮也被滚出屏幕。现在它与 `TxModal`、`TxCommandPalette` 一样 Teleport 到 body；原本已在外层包了 `<Teleport to="body">` 的 `FlipDialog` 不受影响。
 - **叠层契约：** `globalMask=true` 会让多个 overlay 共享视觉遮罩，但只有顶层保留可交互遮罩；尺寸接近的相邻层才应用有限位移，更深层按透明度渐隐。
 - **防误触契约：** `preventAccidentalClose` 会阻止遮罩关闭和页面退出，并闪烁警示状态；它只是交互防护，不是持久化或自动保存能力。
 - **实测覆盖:** `flip-overlay.test.ts` 覆盖默认值、header 插槽优先级、关闭顺序、dialog 语义（`role`/`aria-modal`/`aria-labelledby`）与 Escape 关闭、card style 透传、叠层遮罩、层级位移和防误关闭行为。

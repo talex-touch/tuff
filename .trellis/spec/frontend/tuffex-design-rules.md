@@ -104,6 +104,8 @@ A hex literal or bare `rgba()` in a component is a bug: it survives the `.dark` 
 
 Semantic hues are `--tx-color-{primary,success,warning,danger,info}` with their `-light-3/5/7/9` ramps. Ink is `--tx-text-color-{primary,regular,secondary,placeholder,disabled}`. Surfaces are `--tx-bg-color*` / `--tx-fill-color*`. Lines are `--tx-border-color*`.
 
+> **Dark fills: `-light-8` / `-light-9` only** (danger has no `-light-8` in any theme — use `--tx-color-danger-light-9`, hand-picked `#4f2020` in dark). In the normal dark block (`[data-theme="dark"], .dark` in `variables.scss`) the fill tints mix toward the dark surface — primary's are hand-picked (`#18222c` is primary 10% over `#141414`), and since 2026-09-24 `--tx-color-primary-light-8` and success / warning / info `-light-8` / `-light-9` follow the same rule as `color-mix(in srgb, var(--tx-color-<hue>) 10%|20%, var(--tx-bg-color, #141414))` (they had been copied from the light theme as mixes toward white, so every soft badge, banner or selected row on them was a light tile on the dark page; `src/__tests__/dark-fill-tints.test.ts` guards it). The formula-derived lighter steps (success `-5 / -7`, warning `-3 / -5 / -7`, info `-3 / -6 / -7`, danger `-3`) still mix toward white in dark: core-app reads `--tx-color-warning-light-7` as ink on coloured fills, so turning that ladder needs its own audit. Do not build a dark-mode fill on those steps; use `-light-9` or `color-mix(in srgb, var(--tx-color-<hue>) 14%, transparent)`.
+
 ### Semantic colour is never the sole carrier of state
 
 Colour is additive to a text label or an icon. A user who cannot distinguish the hue must still be able to read the state.
@@ -171,6 +173,8 @@ Guard it with a compiled-style contract: sass-compile the SFC style, then assert
 
 Non-negotiable for any declared transition or animation. Keyframe animations additionally must keep the *final* state visible when motion is dropped — a skeleton keeps its placeholder, a fade-in keeps its content.
 
+Worked example: `TxEmptyState`'s illustrations (all variants since 2026-09-24). An element whose resting style is not a finished frame of its animation — a stroke at a full dash offset or a dot at opacity 0 (the hidden start), a bubble not yet shifted into place — must be set to the frame its animation ends on inside the reduced-motion block, not merely have `animation: none`; otherwise the still frame is missing that part or shows it out of place. `empty-state.test.ts` fails when any `animation: tx-empty-state-*` selector has no reduced-motion stop.
+
 ### Collapsing content keeps its size while it closes
 
 A collapse that shrinks its content box during the close animation makes the text reflow on the way out, which reads as a glitch rather than a transition. Animate the container; leave the content at its measured size until the animation ends. See `bui-disclosure-collapse` in `style/mixins.scss`.
@@ -193,6 +197,14 @@ A collapse that shrinks its content box during the close animation makes the tex
 ```
 
 The `v-if` goes **inside** `Transition`, never around it.
+
+### A full-viewport overlay teleports itself to `<body>`
+
+`position: fixed` is relative to the viewport only until an ancestor has a `transform`, `filter`, `contain` or `content-visibility` — then that ancestor is the containing block. The component cannot know its host, so it teleports rather than relying on every caller to. TxModal, TxCommandPalette and (since 2026-09-23) TxFlipOverlay do; FlipOverlay used to render in place, and inside the Nexus docs article (`content-visibility: auto`) its card centred on the whole article and `focus()` scrolled the page 870px to reach it.
+
+A Teleport root cannot take fallthrough attributes. Set `inheritAttrs: false` and bind `$attrs` on the element that used to receive them, so existing callers' classes and listeners land where they did.
+
+Tests that `wrapper.find()` inside the overlay stub it: `config.global.stubs = { ...originalStubs, teleport: true }` in `beforeAll`, restored in `afterAll`.
 
 ### Interactive elements are semantic
 

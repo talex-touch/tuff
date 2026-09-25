@@ -170,6 +170,13 @@
   height: 100%;
 }
 
+/* The Container specimen's lines. Matches the rows' 8px gutter so the grid
+   reads as one even lattice instead of columns spaced and lines touching. */
+.docs-gallery__rows {
+  display: grid;
+  gap: 8px;
+}
+
 .docs-gallery__splitter {
   height: 96px;
 }
@@ -232,12 +239,62 @@
   width: 38%;
 }
 
-/* The rows are the specimen for a drag control, so the cell shows the grip the
-   component now grows rather than the bare labels it had. */
+/* The rows are the specimen for a drag control, so each one reads as a real
+   launcher entry — grip, tinted glyph, name, shortcut — rather than a bare
+   label. The row draws no edge of its own: TxSortableList's item already has
+   the rounded outline, and a second line here doubled it. */
 .docs-gallery__sort-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 7px 10px 7px 8px;
+  font-size: 13px;
+  color: var(--docs-ink);
+}
+
+.docs-gallery__sort-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+/* A translucent tint rather than the `-light-9` step: under the normal dark
+   theme the success and warning `-light-9` tokens still mix toward white, so
+   two of the three badges came out as light tiles on the dark page. */
+.docs-gallery__sort-icon[data-tone='primary'] {
+  color: var(--tx-color-primary);
+  background: color-mix(in srgb, var(--tx-color-primary) 14%, transparent);
+}
+
+.docs-gallery__sort-icon[data-tone='success'] {
+  color: var(--tx-color-success);
+  background: color-mix(in srgb, var(--tx-color-success) 14%, transparent);
+}
+
+.docs-gallery__sort-icon[data-tone='warning'] {
+  color: var(--tx-color-warning);
+  background: color-mix(in srgb, var(--tx-color-warning) 14%, transparent);
+}
+
+.docs-gallery__sort-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.docs-gallery__sort-keys {
+  display: inline-flex;
+  gap: 3px;
+}
+
+/* StatCard's decorative icon takes its colour from the icon class; this is the
+   tint the card's glow is derived from. */
+.docs-gallery__stat-icon {
+  color: var(--tx-color-primary);
 }
 
 .docs-gallery__grip {
@@ -285,6 +342,69 @@
   padding: 0;
 }
 
+/* MarkdownView sits in a file frame so it reads as a rendered document rather
+   than loose prose. The reset above is the one thing a markdown list must not
+   get — its bullets hung outside the text — so the list indent comes back here.
+   Four classes: the component's own `.tx-markdown-view.dark .markdown-body x`
+   rules are three, and its bundled github sheet sets the body to 16px. Only
+   size and rhythm are tuned for the cell; colours stay the component's. */
+.docs-gallery__doc {
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px var(--docs-gallery-line);
+  background: var(--docs-inline-code-bg);
+}
+
+.docs-gallery__doc-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--docs-gallery-line);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--docs-muted);
+}
+
+.docs-gallery .docs-gallery__doc .tx-markdown-view {
+  padding: 12px 14px 14px;
+}
+
+.docs-gallery .docs-gallery__doc .tx-markdown-view .markdown-body {
+  font-size: 13px;
+  line-height: 1.6;
+  background: transparent;
+}
+
+.docs-gallery .docs-gallery__doc .tx-markdown-view .markdown-body h4 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.docs-gallery .docs-gallery__doc .tx-markdown-view .markdown-body p,
+.docs-gallery .docs-gallery__doc .tx-markdown-view .markdown-body ul {
+  margin: 0 0 8px;
+}
+
+.docs-gallery .docs-gallery__doc .tx-markdown-view .markdown-body ul {
+  padding-left: 1.25em;
+}
+
+.docs-gallery .docs-gallery__doc .tx-markdown-view .markdown-body li {
+  margin: 2px 0;
+}
+
+.docs-gallery .docs-gallery__doc .tx-markdown-view .markdown-body blockquote {
+  margin: 0;
+  padding: 6px 10px;
+}
+
+/* LayoutSkeleton fills its box; without a height it grew to its natural size
+   and stretched its row of cells past every neighbour. */
+.docs-gallery__layout-skel {
+  height: 200px;
+}
+
 .docs-gallery__context-target {
   min-height: 64px;
   width: 100%;
@@ -305,23 +425,14 @@
   border-radius: 10px;
 }
 
-/* Deliberately overflows its container — that overflow is what the edge-fade
-   and gradual-blur specimens exist to show. */
-.docs-gallery__fade-row {
-  display: flex;
-  gap: 8px;
-}
-
-.docs-gallery__blur-stage {
-  position: relative;
-  overflow: hidden;
-  height: 88px;
-}
-
+/* The FlipOverlay card teleports to <body>, outside `.docs-root`, so nothing
+   in it can read a `--docs-*` token: the tuffex ink is the one that resolves. */
 .docs-gallery__flip-body {
   margin: 0;
-  padding: 20px;
-  max-width: 260px;
+  padding: 4px 20px 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--tx-text-color-secondary);
 }
 
 .docs-gallery__autosizer {
@@ -580,4 +691,531 @@
    gap left by the dismissed one. */
 .docs-gallery-alert-move {
   transition: transform 0.26s cubic-bezier(0.32, 0.72, 0.35, 1);
+}
+
+/* Replay. DocsGallerySpecimen renders it into every stage: pointing at a cell,
+   or tabbing into it, reveals it in the corner opposite the label, and a click
+   remounts the specimen so its entrance can be watched again. Anchored to the
+   cell (the stage is not positioned), so it never shifts the specimen. */
+.docs-gallery__replay {
+  position: absolute;
+  top: 11px;
+  right: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--docs-gallery-line);
+  border-radius: 8px;
+  background: var(--tx-bg-color, transparent);
+  color: var(--docs-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.docs-gallery__cell:hover .docs-gallery__replay,
+.docs-gallery__cell:focus-within .docs-gallery__replay {
+  opacity: 1;
+}
+
+.docs-gallery__replay:hover {
+  border-color: color-mix(in srgb, var(--docs-accent) 45%, transparent);
+  color: var(--docs-accent);
+}
+
+.docs-gallery__replay:focus-visible {
+  outline: 2px solid var(--docs-accent);
+  outline-offset: 2px;
+}
+
+.docs-gallery__replay-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* No hover to reveal it on touch screens, so it simply stays up. */
+@media (hover: none) {
+  .docs-gallery__replay {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-gallery__replay {
+    transition: none;
+  }
+}
+
+/* ── Pro band specimens ── */
+
+/* CodeEditor at its natural height: the three 160px floors inside it are what
+   the old 128px frame cropped, bottom edge and all. */
+.docs-gallery__editor .tx-code-editor,
+.docs-gallery__editor .tx-code-editor__view,
+.docs-gallery__editor .cm-content {
+  min-height: 0;
+}
+
+/* MarkdownEditor's cell: the draft's source, with the editor one click away. */
+.docs-gallery__md-card .docs-gallery__doc-bar {
+  padding-block: 5px;
+}
+
+.docs-gallery__md-source {
+  margin: 0;
+  padding: 12px 14px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  color: var(--docs-ink);
+  background: none;
+}
+
+/* VirtualList. Each row is a flex item of the component's row box, so it has
+   to grow into it — without `flex: 1` it was as wide as its text. */
+.docs-gallery__vlist .tx-virtual-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--docs-gallery-line) transparent;
+}
+
+.docs-gallery__vlist-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.docs-gallery__vrow {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--docs-gallery-line);
+  font-size: 12px;
+  color: var(--docs-ink);
+}
+
+.docs-gallery__vrow-index,
+.docs-gallery__vrow-meta {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--docs-muted);
+}
+
+.docs-gallery__vrow-index {
+  width: 40px;
+}
+
+.docs-gallery__vrow-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* CornerOverlay. The overlays pop in one corner after another; `scale` is its
+   own property, so it leaves the inline inset that places each one alone. */
+.docs-gallery__corner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+
+.docs-gallery__corner figcaption {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--docs-muted);
+}
+
+.docs-gallery__corner-thumb {
+  display: block;
+  width: 60px;
+  height: 46px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.docs-gallery__corner-ring {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--tx-bg-color, #fff);
+}
+
+.docs-gallery__corner-check {
+  color: var(--tx-color-success);
+  font-size: 16px;
+}
+
+.docs-gallery__corner .tx-corner-overlay__overlay {
+  animation: docs-gallery-corner-pop 460ms cubic-bezier(0.34, 1.36, 0.64, 1) both;
+  animation-delay: calc(var(--i, 0) * 90ms + 160ms);
+}
+
+@keyframes docs-gallery-corner-pop {
+  from {
+    opacity: 0;
+    scale: 0.2;
+  }
+}
+
+/* EdgeFadeMask marquee. The segment carries its trailing gap, so one segment
+   is exactly one period and the loop has no seam. */
+.docs-gallery__marquee .tx-edge-fade-mask__viewport {
+  scrollbar-width: none;
+}
+
+.docs-gallery__marquee .tx-edge-fade-mask__viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.docs-gallery__marquee-track {
+  display: flex;
+  width: max-content;
+  padding-block: 4px;
+}
+
+.docs-gallery__marquee-segment {
+  display: flex;
+  gap: 8px;
+  padding-right: 8px;
+}
+
+.docs-gallery__marquee-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--docs-inline-code-bg);
+  box-shadow: inset 0 0 0 1px var(--docs-gallery-line);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--docs-ink);
+}
+
+/* Fusion: solid shapes only. The goo filter blurs whatever is in the slots,
+   so text or an icon inside would smear. */
+.docs-gallery__blob {
+  display: block;
+  border-radius: 999px;
+}
+
+.docs-gallery__blob--a {
+  width: 64px;
+  height: 64px;
+  background: var(--tx-color-primary);
+}
+
+.docs-gallery__blob--b {
+  width: 40px;
+  height: 40px;
+  background: color-mix(in srgb, var(--tx-color-primary) 45%, var(--tx-color-success));
+}
+
+/* GlassSurface over a scene: a fine grid and a few drifting orbs. Refraction
+   shows where straight lines bend, so the grid is what makes the glass read;
+   the orbs give its edge band colour to split. The ring sits on ::after,
+   above the scene, or the orbs would paint over it. */
+.docs-gallery__glass-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 140px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.docs-gallery__glass-stage::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--docs-gallery-line);
+  pointer-events: none;
+}
+
+.docs-gallery__glass-scene {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--docs-muted) 24%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--docs-muted) 24%, transparent) 1px, transparent 1px);
+  background-position: center;
+  background-size: 20px 20px;
+}
+
+.docs-gallery__glass-orb {
+  position: absolute;
+  width: 76px;
+  height: 76px;
+  border-radius: 999px;
+  opacity: 0.85;
+  background: var(--tx-color-primary);
+  animation: docs-gallery-glass-float 7s ease-in-out infinite alternate;
+}
+
+.docs-gallery__glass-orb:nth-child(1) {
+  top: 12%;
+  left: 10%;
+}
+
+.docs-gallery__glass-orb:nth-child(2) {
+  top: 40%;
+  left: 60%;
+  width: 88px;
+  height: 88px;
+  background: var(--tx-color-success);
+  animation-delay: -2.5s;
+}
+
+.docs-gallery__glass-orb:nth-child(3) {
+  top: -18%;
+  left: 38%;
+  width: 60px;
+  height: 60px;
+  background: var(--tx-color-warning);
+  animation-delay: -4s;
+}
+
+.docs-gallery__glass-orb:nth-child(4) {
+  top: -10%;
+  left: 80%;
+  width: 52px;
+  height: 52px;
+  background: var(--tx-color-danger);
+  animation-delay: -1s;
+}
+
+.docs-gallery__glass-orb:nth-child(5) {
+  top: 62%;
+  left: 26%;
+  width: 64px;
+  height: 64px;
+  background: color-mix(in srgb, var(--tx-color-primary) 50%, var(--tx-color-danger));
+  animation-delay: -5.5s;
+}
+
+@keyframes docs-gallery-glass-float {
+  from {
+    translate: -16px -6px;
+  }
+
+  to {
+    translate: 16px 8px;
+  }
+}
+
+.docs-gallery__glass-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tx-text-color-primary);
+}
+
+/* GradientBorder's inner card: 14px inside a 16px ring with a 2px gap. */
+.docs-gallery__gb-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--tx-bg-color, #fff);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--docs-muted);
+}
+
+.docs-gallery__gb-card strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--docs-ink);
+}
+
+/* GradualBlur: a feed that scrolls through the blur band and back. The ring
+   is on ::after so it sits above the blur layers. */
+.docs-gallery__blur-card {
+  position: relative;
+  height: 140px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--docs-inline-code-bg);
+}
+
+.docs-gallery__blur-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--docs-gallery-line);
+  pointer-events: none;
+}
+
+.docs-gallery__blur-feed {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 8px;
+  padding: 8px;
+  animation: docs-gallery-blur-feed 9s ease-in-out infinite alternate;
+}
+
+@keyframes docs-gallery-blur-feed {
+  to {
+    translate: 0 calc(-100% + 140px);
+  }
+}
+
+.docs-gallery__blur-shot {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.docs-gallery__blur-shot img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.docs-gallery__blur-shot figcaption {
+  font-size: 11px;
+  color: var(--docs-muted);
+}
+
+/* Liquid menu. The buttons stay transparent: the liquid under them is the
+   surface. Three classes to outrank the button's own `.tx-button.circle`. */
+.docs-gallery__liquid {
+  width: 220px;
+  height: 132px;
+}
+
+.docs-gallery__liquid-slot {
+  position: absolute;
+  bottom: 10px;
+  left: calc(50% - 20px);
+}
+
+.docs-gallery .docs-gallery__liquid-btn.tx-button {
+  width: 40px;
+  height: 40px;
+}
+
+.docs-gallery__liquid-main {
+  transition: rotate 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.docs-gallery__liquid-main.is-open {
+  rotate: 45deg;
+}
+
+/* Tucked under the transparent main button, the items' glyphs showed through
+   it. Only the glyph fades — the liquid under each item still merges. */
+.docs-gallery__liquid-item {
+  transition: opacity 200ms ease;
+}
+
+.docs-gallery__liquid-item.is-tucked {
+  opacity: 0;
+}
+
+/* Stagger: the component's own variables drive a longer rise than its
+   built-in 6px, so the cascade reads at gallery size. */
+.docs-gallery__stagger {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: min(320px, 100%);
+}
+
+.docs-gallery__stagger-item {
+  gap: 6px;
+  color: var(--docs-ink);
+}
+
+.docs-gallery-stagger-enter-active {
+  transition:
+    opacity var(--tx-stagger-duration) var(--tx-stagger-easing),
+    transform var(--tx-stagger-duration) var(--tx-stagger-easing);
+  transition-delay: calc(var(--tx-stagger-delay-base) + var(--tx-stagger-index) * var(--tx-stagger-delay-step));
+}
+
+.docs-gallery-stagger-enter-from {
+  opacity: 0;
+  transform: translateY(14px) scale(0.96);
+}
+
+/* TextTransformer: both modes on one grid column, so a longer stage never
+   pushes its label. */
+.docs-gallery__morph {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px 14px;
+  min-width: 220px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--docs-ink);
+}
+
+.docs-gallery__morph code {
+  padding: 0;
+  background: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--docs-muted);
+}
+
+/* Transition lanes hold a fixed box through `out-in`, when the wrapper is
+   briefly empty. */
+.docs-gallery__lane {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 40px;
+}
+
+.docs-gallery__lane-tile {
+  gap: 6px;
+  white-space: nowrap;
+  color: var(--docs-ink);
+}
+
+.docs-gallery__lane-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+}
+
+.docs-gallery__lane-dot.is-ok {
+  background: var(--tx-color-success);
+}
+
+.docs-gallery__lane-dot.is-busy {
+  background: var(--tx-color-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-gallery__corner .tx-corner-overlay__overlay,
+  .docs-gallery__glass-orb,
+  .docs-gallery__blur-feed {
+    animation: none;
+  }
+
+  .docs-gallery__liquid-main,
+  .docs-gallery__liquid-item,
+  .docs-gallery-stagger-enter-active {
+    transition: none;
+  }
 }

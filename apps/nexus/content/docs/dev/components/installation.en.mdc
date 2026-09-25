@@ -67,7 +67,7 @@ code: |
 
 ### Suite barrel
 
-The `base`, `pro` and `ai` entries mirror the suite tabs in this sidebar. They **partition the library exactly**: every component belongs to one barrel and no barrel overlaps another — a rule the `suite-barrels` test enforces on every run, so a component can never silently drop out of its entry.
+The `base`, `pro` and `ai` entries mirror the Basics, Pro and AI suites in this sidebar's suite switcher (Data and Flow are docs-level splits that import through `pro` and `ai`). They **partition the library exactly**: every component belongs to one barrel and no barrel overlaps another — a rule the `suite-barrels` test enforces on every run, so a component can never silently drop out of its entry.
 
 :::TuffCodeBlock{lang="typescript"}
 ---

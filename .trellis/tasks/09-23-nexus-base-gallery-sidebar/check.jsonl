@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "verify no colour transitions on hover, tokens only, reduced-motion escapes, shadow light source, 13-14px content text"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "verify docs parity for every changed tuffex component, demo registry, nexus check-* gates"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "forbidden patterns and verification commands before reporting completion"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "confirm only this task's hunks changed in shared files"}

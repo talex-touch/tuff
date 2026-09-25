@@ -85,6 +85,7 @@ code: |
 - 非空 `text` 会同步为 `aria-label`；空文本不输出 `aria-label`，并使用 non-breaking-space 保持测量稳定。
 - 挂载后，以及文本、字体或描边宽度输入变化后，组件会调用 `getBBox()` 和 `getComputedTextLength()` 重新测量。
 - 浏览器提供 Font Loading API 时，`document.fonts.ready` 会触发额外一次测量。
+- 用于测量的 `<text>` 始终留在原点，只有两个绘制层带上计算出的偏移，因此每次测量读到的都是同一个框，重复测量结果一致。
 - `strokeColor`、`fillColor`、`durationMs`、`strokeWidth`、测量出的描边长度、字号、字重和字体族都通过 CSS 变量应用。
 - 在 `prefers-reduced-motion: reduce` 下会禁用动画并显示最终状态。
 
@@ -99,6 +100,7 @@ code: |
 ## 审阅说明
 
 - **可访问性说明:** 源码始终渲染 `role="img"` 的 SVG；非空 `text` 会成为可访问名称，但没有 `aria-hidden` prop。如果动画只是装饰，语义标题或标签仍应放在组件外。
+- **测量：** 过去测量层和绘制层带着同样的偏移，第一次之后的每次测量都会读回自己的偏移并把它抵消。`document.fonts.ready` 重新测量之后，字形落在 x=0、y≈0——在 viewBox 上方、贴着左缘——文档 demo 与画廊都是如此。单测把 `getBBox()` mock 成常量，所以一直没有暴露。
 - **实测覆盖:** `keyframe-stroke-text.test.ts` 覆盖可访问 SVG/文本层、CSS 变量映射、空文本 fallback、prop 变化后的重新测量，以及 install 注册。
 
 ## Source

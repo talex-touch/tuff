@@ -67,8 +67,9 @@ code: |
 - 组件会在默认插槽外包一层 `.tx-gradient-border__inner`。
 - `borderWidth`、`borderRadius`、`padding` 支持数字或字符串。数字会转为 px，字符串原样透传。
 - `animationDuration` 是以秒为单位的数字，并会带 `s` 后缀写入 `--tx-gradient-duration`。
-- 渐变层是带 `pointer-events: none` 的伪元素；真实交互由插槽内容负责。
-- 包装器使用 `overflow: hidden`，子元素焦点环或阴影超出圆角时可能被裁剪。
+- 渐变环绘制在独立的 `aria-hidden` 层 `.tx-gradient-border__ring` 上，带 `pointer-events: none`；真实交互由插槽内容负责。
+- 渐变环由实心盒抠出，因此跟随 `borderRadius`；它的模糊不会被裁剪，光晕向包装器边缘内外两侧扩散。
+- `.tx-gradient-border__inner` 使用同样圆角的 `overflow: hidden`，子元素焦点环或阴影超出它时可能被裁剪。
 
 ## API
 
@@ -119,7 +120,8 @@ code: |
 
 - 已人工核对 `packages/tuffex/packages/components/src/gradient-border/index.ts`、`TxGradientBorder.vue` 与 `gradient-border.test.ts`。
 - Props 定义在 `index.ts` 中；该组件没有单独的 `src/types.ts`。
-- 动态渐变是非交互伪元素。插槽内容仍负责所有交互和 focus 样式。
+- 动态渐变是非交互图层。插槽内容仍负责所有交互和 focus 样式。
+- **渐变环绘制：** 过去渐变环是 `overflow: hidden` 根元素里一个带模糊的 `::before` `border-image`。`border-image` 不受 `border-radius` 影响，画出的是直角框，圆角裁切又把四个角切掉；同一个裁切还把模糊的外半圈削平。现在模糊放在独立的一层、环形放在它的子元素上，因为同一元素上 `filter` 先于 `mask` 执行。
 
 ## Source
 

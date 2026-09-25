@@ -39,6 +39,7 @@ code: |
 - `sanitize` defaults to `true`; disable it only for already trusted content.
 - Source mode writes directly to Markdown. WYSIWYG mode serializes edited DOM back to Markdown on input.
 - Toolbar actions are shared across modes, but preview mode disables editing actions.
+- Toolbar and mode buttons draw Carbon icons (`i-carbon-*`) by class name, so the host's UnoCSS has to generate them. `src/toolbar-icons.ts` lists them as `MARKDOWN_EDITOR_ICON_CLASSES` for a host that does not scan tuffex sources to safelist, the way Nexus does.
 - The mode switcher is a toggle-button group: the container is `role="group"` labeled "Markdown editor mode", and each mode button reflects the active mode through `aria-pressed` (not `role="tab"`, since there are no associated tabpanels).
 - `theme="auto"` watches `documentElement` class / `data-theme` and falls back to light.
 
@@ -101,9 +102,10 @@ No public slots are exposed; toolbar buttons, editing surfaces, and preview outp
 
 ## Review Notes
 
-- Reviewed against `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`, `TxMarkdownEditor.vue`, `markdown-serializer.ts`, and `markdown-editor.test.ts`.
+- Reviewed against `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`, `TxMarkdownEditor.vue`, `toolbar-icons.ts`, `markdown-serializer.ts`, and `markdown-editor.test.ts`.
 - Sanitization is enabled by default through DOMPurify; `sanitize=false` should remain a trusted-content escape hatch only.
 - `linkPrompt` is the extension point for product-specific URL collection, keeping dialogs outside the component contract.
+- The toolbar icons used to be Remix (`i-ri-*`). Nexus keeps `ri` out of its dependencies on purpose, so every docs demo drew fourteen grey squares; Carbon is installed by both hosts.
 
 ## Source
 

@@ -165,5 +165,5 @@ code: |
 - **来源：** Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT。
 - **与上游的差异：** 新增行按其在 `rows` 中的位置渲染，而不是上游写死的「永远在最后」，因此顺序得以保留且支持多条新增行；`modified` 是本移植新增的变更类型，上游没有。
 - **修正的上游缺陷：** 上游用内联 `style.background` 给标红行上色，其优先级压过自身的 hover 规则，导致最该被检视的那几行反而没有悬停反馈；本组件改为 class 驱动。
-- **暗色适配：** 红/绿底色取 `--tx-bui-*-tint`（半透明叠加），不能用 `--tx-color-success-light-9` —— 后者在暗色下仍然混白。
+- **暗色适配：** 红/绿底色取 `--tx-bui-*-tint`（半透明叠加），而不是不透明的 `--tx-color-success-light-9` 一族——半透明叠加放在任何底色上观感都一致。
 - **已知限制：** 高对比主题（`html[data-tx-contrast='high']`）下 `--tx-bui-*` 保持 BUI 原值，不参与高对比 ramp。

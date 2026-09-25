@@ -39,6 +39,7 @@ code: |
 - `sanitize` 默认是 `true`；只有内容已经可信时才关闭。
 - Source 模式直接编辑 Markdown；WYSIWYG 模式会在输入时把 DOM 序列化回 Markdown。
 - 工具栏动作在各模式复用，但 preview 模式会禁用编辑动作。
+- 工具栏和模式按钮按类名绘制 Carbon 图标（`i-carbon-*`），宿主的 UnoCSS 必须生成这些类。`src/toolbar-icons.ts` 以 `MARKDOWN_EDITOR_ICON_CLASSES` 列出它们，不扫描 tuffex 源码的宿主可以直接加入 safelist，Nexus 就是这样做的。
 - 模式切换器是一个切换按钮组：容器是 `role="group"`（标注 "Markdown editor mode"），每个模式按钮通过 `aria-pressed` 反映当前模式（不是 `role="tab"`，因为没有对应的 tabpanel）。
 - `theme="auto"` 监听 `documentElement` 的 class / `data-theme`，无法判断时回退到 light。
 
@@ -101,9 +102,10 @@ code: |
 
 ## 审阅说明
 
-- 已人工核对 `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`、`TxMarkdownEditor.vue`、`markdown-serializer.ts` 与 `markdown-editor.test.ts`。
+- 已人工核对 `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`、`TxMarkdownEditor.vue`、`toolbar-icons.ts`、`markdown-serializer.ts` 与 `markdown-editor.test.ts`。
 - 默认通过 DOMPurify 开启净化；`sanitize=false` 只应作为可信内容的逃生口。
 - `linkPrompt` 是收集业务 URL 的扩展点，让弹窗留在组件契约之外。
+- 工具栏图标原先是 Remix（`i-ri-*`）。Nexus 刻意不依赖 `ri`，文档里每个 demo 都画出十四个灰色方块；Carbon 则是两个宿主都安装了的图标集。
 
 ## Source
 

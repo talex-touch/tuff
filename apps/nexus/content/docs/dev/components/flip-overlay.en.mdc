@@ -112,6 +112,7 @@ code: |
 ## Interaction Contract
 
 - `modelValue=true` mounts the overlay, resolves the `source` rectangle, emits `open`, then emits `opened` after the card animation completes.
+- The overlay teleports to `<body>`. Its mask and card are `position: fixed`, and rendered in place they would be laid out against the nearest ancestor with a `transform`, `filter`, `contain` or `content-visibility` instead of the viewport. Non-prop attributes still land on the mask.
 - Built-in close button, slot `close()`, mask click, and Escape all start the close path. Mask click and Escape share `handleMaskClick`, so `maskClosable=false` blocks both and `preventAccidentalClose` flashes the warning instead; the close button and `close()` bypass those gates.
 - Internal close emits `close`, then `update:modelValue(false)`, then `closed`. Parent code must update `v-model` to fully close controlled overlays.
 - Header render priority: `#header` fully overrides the built-in header; otherwise `header=false` hides it and `header=true` renders the built-in header (customizable via `#header-display` / `#header-actions` / `#header-close`). `closable=false` hides the entire close area, including `#header-close`.
@@ -131,6 +132,7 @@ code: |
 ## Review Notes
 
 - **State contract:** `TxFlipOverlay` owns the mount/animation lifecycle but only emits `update:modelValue(false)` when it closes itself; consumers must still sync `v-model` after built-in close, slot `close()`, or mask close.
+- **Mount contract:** the overlay used to render in place. A docs page's article body is `content-visibility: auto`, so the "fixed" card centred itself on the whole article, focusing it scrolled the page about 870px, and the trigger it flips from left the screen. It now teleports the way `TxModal` and `TxCommandPalette` do; the `FlipDialog` wrappers that already put it inside `<Teleport to="body">` are unaffected.
 - **Stacking contract:** `globalMask=true` shares the visual backdrop across open overlays while only the top overlay keeps an interactive mask; size-similar overlays receive capped displacement and deeper overlays fade out.
 - **Safety contract:** `preventAccidentalClose` blocks mask close and page-exit attempts, then flashes the warning state; it is a guardrail, not a persistence or autosave feature.
 - **Verified coverage:** `flip-overlay.test.ts` covers defaults, header slot priority, close ordering, dialog semantics (`role`/`aria-modal`/`aria-labelledby`) with Escape close, card style forwarding, stacked masks, layered displacement, and blocked-close behavior.

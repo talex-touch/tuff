@@ -72,15 +72,17 @@ function handleToggle() {
 </template>
 
 <style scoped>
+/* Group spacing is what makes the list scannable: rows inside a group sit 1px
+   apart, groups sit 12px apart, so the grouping reads without rules or boxes. */
 .DocSection {
-  gap: 4px;
-  margin-block: 8px;
+  gap: 2px;
+  margin-block: 12px 0;
   transition: gap 0.2s ease, margin 0.2s ease;
 }
 
 .DocSection.is-collapsed {
   gap: 0;
-  margin-block: 4px;
+  margin-block: 6px 0;
 }
 
 /* Standalone page links sit tight like ordinary nav items regardless of the
@@ -90,6 +92,7 @@ function handleToggle() {
 }
 
 .DocSection-Header {
+  position: relative;
   display: flex;
   width: 100%;
   min-height: 28px;
@@ -97,8 +100,8 @@ function handleToggle() {
   gap: 4px;
   justify-content: flex-start;
   border: 0;
-  padding: 4px 2px;
-  border-radius: 0;
+  padding: 4px 8px 4px 10px;
+  border-radius: 7px;
   color: inherit;
   cursor: pointer;
   font: inherit;
@@ -107,10 +110,14 @@ function handleToggle() {
   text-decoration: none;
 }
 
-/* Click focus otherwise leaves the UA blue focus ring on the header. */
-.DocSection-Header:focus,
-.DocSection-Header:focus-visible {
+/* A click leaves no UA ring on the header; keyboard focus still shows one. */
+.DocSection-Header:focus:not(:focus-visible) {
   outline: none;
+}
+
+.DocSection-Header:focus-visible {
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: -2px;
 }
 
 /* Group headers read as small uppercase muted labels (reference: Tailwind-docs
@@ -120,33 +127,50 @@ function handleToggle() {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.4);
+  color: var(--docs-nav-label, var(--tx-text-color-secondary, #909399));
 }
 
 .DocSection-Header--group:hover {
-  color: rgba(15, 23, 42, 0.62);
+  color: var(--tx-text-color-primary, #303133);
 }
 
-/* Standalone page links are ordinary nav items, not labels. */
+/* Standalone page links are ordinary nav items, not labels: same height,
+   inset, ink, fills and accent bar as `.docs-nav-link` in DocsSidebar, whose
+   `--docs-nav-*` variables they inherit. */
 .DocSection-Header--page {
-  font-size: 13px;
+  min-height: 30px;
   padding-block: 5px;
-  color: rgba(15, 23, 42, 0.6);
-  transition: color 0.2s ease;
+  font-size: 13px;
+  color: var(--docs-nav-ink, var(--tx-text-color-regular, #606266));
 }
 
 .DocSection-Header--page:hover {
-  color: rgba(15, 23, 42, 0.88);
+  color: var(--tx-text-color-primary, #303133);
+  background: var(--docs-nav-hover, var(--tx-fill-color-light, #f5f7fa));
 }
 
 .DocSection-Header--page.is-active {
-  color: rgba(15, 23, 42, 0.96);
-  font-weight: 600;
+  color: var(--tx-text-color-primary, #303133);
+  font-weight: 500;
+  background: var(--docs-nav-active, var(--tx-fill-color, #f0f2f5));
+}
+
+.DocSection-Header--page.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--tx-color-primary, #409eff);
+  transform: translateY(-50%);
 }
 
 .DocSection-Indicator {
   margin-left: auto;
   font-size: 12px;
+  color: var(--tx-text-color-secondary, #909399);
   opacity: 0;
   transform: rotate(-90deg);
   transition: opacity 0.2s ease, transform 0.2s ease;
@@ -176,33 +200,11 @@ function handleToggle() {
   overflow: hidden;
 }
 
-:global(.dark .DocSection-Header--group),
-:global([data-theme='dark'] .DocSection-Header--group) {
-  color: rgba(226, 232, 240, 0.4);
-}
-
-:global(.dark .DocSection-Header--group:hover),
-:global([data-theme='dark'] .DocSection-Header--group:hover) {
-  color: rgba(226, 232, 240, 0.62);
-}
-
-:global(.dark .DocSection-Header--page),
-:global([data-theme='dark'] .DocSection-Header--page) {
-  color: rgba(226, 232, 240, 0.58);
-}
-
-:global(.dark .DocSection-Header--page:hover),
-:global([data-theme='dark'] .DocSection-Header--page:hover) {
-  color: rgba(226, 232, 240, 0.85);
-}
-
-:global(.dark .DocSection-Header--page.is-active),
-:global([data-theme='dark'] .DocSection-Header--page.is-active) {
-  color: rgba(248, 250, 252, 0.96);
-}
-
-:global(.dark .DocSection-Indicator),
-:global([data-theme='dark'] .DocSection-Indicator) {
-  color: rgba(226, 232, 240, 0.78);
+@media (prefers-reduced-motion: reduce) {
+  .DocSection,
+  .DocSection-Indicator,
+  .DocSection-Body {
+    transition: none;
+  }
 }
 </style>
