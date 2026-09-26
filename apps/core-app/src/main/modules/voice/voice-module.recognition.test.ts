@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   projectSpeechCatalogApiError: vi.fn(),
   // A machine with nothing installed: the module's route adoption then has nothing to do, which is
   // what this suite is not about.
-  installedSpeechModels: vi.fn(async () => []),
+  installedSpeechModels: vi.fn<() => Promise<Array<{ id: string }>>>(async () => []),
   speechModelCatalogView: vi.fn(),
   uninstallSpeechModel: vi.fn(),
   ensureLocalAsrRoute: vi.fn(),
