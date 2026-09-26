@@ -29,7 +29,8 @@
     "09-26-composer-controls-redesign",
     "09-26-docs-selfclosing-component-fix",
     "09-26-composer-paste-anywhere",
-    "09-26-capability-prompt-corruption"
+    "09-26-capability-prompt-corruption",
+    "09-26-reasoning-effort"
   ],
   "parent": null,
   "relatedFiles": [],
