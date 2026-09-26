@@ -39,6 +39,7 @@ const rootStyle = computed<CSSProperties>(() => {
 // `--tx-pg-*` is the private prefix; the documented knobs keep `--tx-prism-glow-*`.
 const coneStyles: CSSProperties[] = PRISM_GLOW_CONES.map((cone, slot) => ({
   '--tx-pg-hue': cone.hue,
+  '--tx-pg-hue-light': cone.lightHue,
   '--tx-pg-shift': cone.shift,
   '--tx-pg-period': cone.period,
   '--tx-pg-phase': cone.phase,
@@ -227,10 +228,12 @@ onBeforeUnmount(() => observer?.disconnect())
   position: relative;
 }
 
-// Light surfaces are the default. On a near-white page additive light is invisible and
-// a near-white core reads as a grey smudge, so light mode keeps the core coloured and
-// blends normally. High chroma at low alpha keeps three overlapping cones clean instead
-// of greying them (`multiply` was tried: it mixes blue and yellow into olive).
+// Light surfaces are the default. A near-white core reads as a grey smudge on a near-white
+// page, so light mode keeps the core coloured. Overlaps cannot add up towards white there:
+// `plus-lighter` only makes them denser and `multiply` turns blue and yellow olive, so the
+// cones blend normally, and a normal overlap is the average of the two colours. What keeps
+// it clean is the light hue order in `cones.ts`: cones that set off together get
+// neighbouring hues, since two hues more than about 120° apart average to grey.
 .tx-prism-glow {
   --tx-prism-glow-l: 0.76;
   --tx-prism-glow-c: 0.19;
@@ -318,7 +321,8 @@ onBeforeUnmount(() => observer?.disconnect())
 .tx-prism-glow__cone {
   // One colour per cone. Every layer below derives from it through relative colour, so
   // a palette only has to set this: the spectrum gives the hue angle, the theme the rest.
-  --tx-pg-tint: oklch(var(--tx-prism-glow-l) var(--tx-prism-glow-c) var(--tx-pg-hue));
+  // Light surfaces take the light hue order from `cones.ts`.
+  --tx-pg-tint: oklch(var(--tx-prism-glow-l) var(--tx-prism-glow-c) var(--tx-pg-hue-light));
 
   position: absolute;
   bottom: 0;
@@ -332,6 +336,12 @@ onBeforeUnmount(() => observer?.disconnect())
       calc(var(--tx-prism-glow-duration, 6s) * var(--tx-pg-phase)) infinite,
     tx-prism-glow-life calc(var(--tx-prism-glow-duration, 6s) * var(--tx-pg-period)) linear
       calc(var(--tx-prism-glow-duration, 6s) * var(--tx-pg-phase)) infinite;
+}
+
+// Dark surfaces add overlaps up towards white, where any two hues merge cleanly, so they
+// keep the spectrum's own order.
+:is([data-theme='dark'], .dark) .tx-prism-glow--spectrum .tx-prism-glow__cone {
+  --tx-pg-tint: oklch(var(--tx-prism-glow-l) var(--tx-prism-glow-c) var(--tx-pg-hue));
 }
 
 // Accent: the primary's hue turned by each cone's shift; lightness and chroma stay the theme's.
