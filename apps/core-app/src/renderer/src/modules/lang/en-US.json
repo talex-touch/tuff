@@ -1195,7 +1195,9 @@
       "week": "Previous 7 days",
       "earlier": "Earlier",
       "untitled": "New chat",
-      "delete": "Delete conversation"
+      "delete": "Delete conversation",
+      "deleteConfirm": "Delete?",
+      "deleteConfirmLabel": "Delete “{title}”?"
     },
     "projects": {
       "section": "Projects",
@@ -1207,6 +1209,17 @@
       "expand": "Expand {name}",
       "collapse": "Collapse {name}",
       "runLocalAgent": "Run Local Agent",
+      "groupLocalAgents": "Local Agents",
+      "groupProject": "Project",
+      "openInLocalAgent": "Open in Local Agent",
+      "agentsLoading": "Detecting local agents…",
+      "agentsFailed": "Couldn't detect local agents",
+      "agentsNone": "No local agents available",
+      "agentNotInstalled": "Not installed",
+      "agentTurnedOff": "Off in Settings",
+      "agentUnavailable": "Unavailable",
+      "adoptSessions": "Adopt Local Sessions",
+      "adoptSessionsHint": "Find the sessions local agents left in this project's folder and add them to the sidebar to continue",
       "discoverSessions": "Discover Local Sessions",
       "discoveringSessions": "Discovering Sessions…",
       "discoveryComplete": "Adopted {count} local session(s).",

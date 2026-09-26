@@ -1,5 +1,8 @@
 <script lang="ts" name="ShellConversationList" setup>
-import type { LocalAiCliSessionSummary } from '@talex-touch/utils/transport/events/local-ai-cli'
+import type {
+  LocalAiCliProviderId,
+  LocalAiCliSessionSummary
+} from '@talex-touch/utils/transport/events/local-ai-cli'
 import type { ProjectRecord } from '@talex-touch/utils/transport/sdk/domains/project'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -77,11 +80,12 @@ async function removeConversation(id: string): Promise<void> {
   if (wasActive) await router.push('/home')
 }
 
-async function openProjectAgent(projectId: string): Promise<void> {
+/** Opens the project in the omni panel's local agent view with the agent the menu picked chosen. */
+async function openProjectAgent(projectId: string, provider: LocalAiCliProviderId): Promise<void> {
   await transport.send(omniPanelShowEvent, {
     captureSelection: false,
     source: 'project-local-ai',
-    localAi: { projectId }
+    localAi: { projectId, provider }
   })
 }
 
@@ -220,7 +224,7 @@ async function forgetSession(sessionRef: string): Promise<void> {
             :discovering-project-id="discoveringProjectId"
             @toggle="folders.toggle(group.project.id)"
             @enter="enterConversation(group.project.id)"
-            @run-agent="openProjectAgent(group.project.id)"
+            @run-agent="openProjectAgent(group.project.id, $event)"
             @discover="discoverSessions(group.project)"
             @begin-rename="beginRename(group.project)"
             @rename="saveRename(group.project, $event)"
@@ -254,6 +258,17 @@ async function forgetSession(sessionRef: string): Promise<void> {
       >
         <div class="ShellConversationList-SectionHeader">
           <span class="ShellConversationList-SectionTitle">{{ t('shell.projects.chats') }}</span>
+          <MetaHintBadge command="new-chat" />
+          <!-- The Projects title's + in the same place, for a new chat outside every project. -->
+          <button
+            class="ShellConversationList-SectionAction ShellConversationList-SectionAction--reveal"
+            type="button"
+            :title="t('shell.newChat')"
+            :aria-label="t('shell.newChat')"
+            @click="enterConversation(null)"
+          >
+            <span class="i-ri-add-line" />
+          </button>
         </div>
         <ShellProjectRows
           :rows="groups.home.rows"
@@ -372,6 +387,25 @@ async function forgetSession(sessionRef: string): Promise<void> {
   &:hover {
     color: var(--shell-text-regular);
     background: var(--shell-surface-2);
+  }
+}
+
+/**
+ * The Chats title's +, out of sight until it can be wanted: the pointer over the title, the button
+ * focused from the keyboard, or the command key held, so its ⌘N badge has a button to label. It
+ * keeps its box while hidden, so showing it moves nothing.
+ */
+.ShellConversationList-SectionAction--reveal {
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease,
+    background-color 0.15s ease;
+
+  .ShellConversationList-SectionHeader:hover &,
+  .ShellConversationList-SectionHeader:has(.MetaHintBadge) &,
+  &:focus-visible {
+    opacity: 1;
   }
 }
 

@@ -230,3 +230,58 @@ describe('shell conversation list skeleton geometry', () => {
     expect(rail?.declarations.get('display')).toBe('none')
   })
 })
+
+/**
+ * Visibility and motion that only CSS decides. jsdom resolves neither `:hover` nor transitions, so
+ * the contract is read from the compiled rules; the real window shows the result.
+ */
+describe('shell list action styles', () => {
+  it('shows the Chats title + under the pointer, on keyboard focus, and while ⌘ hints show', () => {
+    const reveal = 'ShellConversationList-SectionAction--reveal'
+    const own = rules.filter(({ selector }) => selector === `.${reveal}`)
+    expect(own.map(({ declarations }) => declarations.get('opacity'))).toEqual(['0'])
+
+    const shownBy = rules
+      .filter(
+        ({ selector, declarations }) =>
+          subjectClasses(selector).includes(reveal) && declarations.get('opacity') === '1'
+      )
+      .map(({ selector }) => selector)
+      .sort()
+    expect(shownBy).toEqual(
+      [
+        `.${reveal}:focus-visible`,
+        `.ShellConversationList-SectionHeader:has(.MetaHintBadge) .${reveal}`,
+        `.ShellConversationList-SectionHeader:hover .${reveal}`
+      ].sort()
+    )
+    // Hidden by opacity alone: it keeps its box and stays reachable by Tab.
+    for (const property of ['display', 'visibility']) {
+      expect(values(reveal, property), property).toEqual([])
+    }
+  })
+
+  it('runs the armed delete from the icon slot to the label, and not under reduced motion', () => {
+    const css = compileStyles('./ShellProjectRows.vue')
+    const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?\})\s*\}/.exec(css)
+    expect(reduced, 'reduced-motion block').not.toBeNull()
+    const reducedRules = parseRules(reduced![1]!)
+    const outside = parseRules(css.replace(reduced![0], ''))
+
+    const base = outside.find(({ selector }) => selector === '.ShellProjectRows-Delete')
+    expect(base?.declarations.get('interpolate-size')).toBe('allow-keywords')
+    expect(base?.declarations.get('transition')).toMatch(/\bwidth\b/)
+
+    const armed = outside.find(({ selector }) => selector === '.ShellProjectRows-Delete.is-armed')
+    expect(armed?.declarations.get('width')).toBe('auto')
+    // Same slot height as the icon it replaces, so the row does not grow.
+    for (const property of ['height', 'min-height', 'line-height', 'margin']) {
+      expect(armed?.declarations.has(property), property).toBe(false)
+    }
+    expect(declared('ShellProjectRows-Action', 'height')).toBe('24px')
+
+    const calm = reducedRules.find(({ selector }) => selector === '.ShellProjectRows-Delete')
+    expect(calm?.declarations.get('transition')).toBeDefined()
+    expect(calm?.declarations.get('transition')).not.toMatch(/\b(width|padding)\b/)
+  })
+})

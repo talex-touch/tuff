@@ -1195,7 +1195,9 @@
       "week": "近 7 天",
       "earlier": "更早",
       "untitled": "新对话",
-      "delete": "删除对话"
+      "delete": "删除对话",
+      "deleteConfirm": "确认？",
+      "deleteConfirmLabel": "确认删除「{title}」？"
     },
     "projects": {
       "section": "项目",
@@ -1207,6 +1209,17 @@
       "expand": "展开 {name}",
       "collapse": "收起 {name}",
       "runLocalAgent": "运行本机代理",
+      "groupLocalAgents": "本机代理",
+      "groupProject": "项目",
+      "openInLocalAgent": "在本机代理中打开",
+      "agentsLoading": "正在检测本机代理…",
+      "agentsFailed": "无法检测本机代理",
+      "agentsNone": "没有可用的本机代理",
+      "agentNotInstalled": "未安装",
+      "agentTurnedOff": "设置中已关闭",
+      "agentUnavailable": "不可用",
+      "adoptSessions": "接管本机会话",
+      "adoptSessionsHint": "查找本机代理在此项目目录中留下的会话，加入侧边栏以便继续",
       "discoverSessions": "发现本机会话",
       "discoveringSessions": "正在发现会话…",
       "discoveryComplete": "已接管 {count} 个本机会话。",

@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 /* eslint-disable vue/one-component-per-file */
 
-import type { LocalAiCliSessionSummary } from '@talex-touch/utils/transport/events/local-ai-cli'
+import type {
+  LocalAiCliProviderId,
+  LocalAiCliProviderStatus,
+  LocalAiCliSessionSummary,
+  LocalAiCliStatus
+} from '@talex-touch/utils/transport/events/local-ai-cli'
 import type { ConversationRecord } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import type { ProjectRecord } from '@talex-touch/utils/transport/sdk/domains/project'
 import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
@@ -45,7 +50,12 @@ const listState = vi.hoisted(() => ({
   picked: null as ProjectRecord | null,
   discoveryResult: { discovered: 0, skipped: 0, incomplete: false },
   discoveryError: null as Error | null,
-  discoveryRows: [] as LocalAiCliSessionSummary[]
+  discoveryRows: [] as LocalAiCliSessionSummary[],
+  /** What `status.get` answers: a status, `undefined` (a channel error reply) or a rejection. */
+  agentStatus: undefined as LocalAiCliStatus | undefined,
+  agentStatusError: null as Error | null,
+  /** When set, `status.get` waits on this before answering, to hold a read in flight. */
+  agentStatusGate: null as Promise<void> | null
 }))
 
 const toastMock = vi.hoisted(() => ({
@@ -155,8 +165,35 @@ vi.mock('@talex-touch/tuffex/dropdown-menu', () => {
                 close?.()
               }
             },
-            slots.default?.()
+            [slots.default?.(), slots.right?.()]
           )
+      }
+    }),
+    /**
+     * The nested panel is rendered eagerly too, under its trigger row. Its items inject the root
+     * menu's close, as TxDropdownSubmenu's do, so choosing one closes the whole menu.
+     */
+    TxDropdownSubmenu: defineComponent({
+      name: 'TxDropdownSubmenu',
+      props: {
+        disabled: { type: Boolean, default: false },
+        minWidth: { type: Number, default: undefined }
+      },
+      setup(props, { slots }) {
+        return () =>
+          h('div', { class: 'tx-dropdown-submenu' }, [
+            h(
+              'button',
+              {
+                type: 'button',
+                class: 'tx-dropdown-submenu__trigger',
+                'aria-haspopup': 'menu',
+                disabled: props.disabled
+              },
+              slots.default?.()
+            ),
+            h('div', { class: 'tx-dropdown-submenu__panel', role: 'menu' }, slots.menu?.())
+          ])
       }
     })
   }
@@ -276,6 +313,36 @@ function settings(): Record<string, unknown> {
   return settingsHolder.appSetting!
 }
 
+/** One CLI as the main process reports it: installed, switched on, able to run a task. */
+function agent(
+  id: LocalAiCliProviderId,
+  overrides: Partial<LocalAiCliProviderStatus> = {}
+): LocalAiCliProviderStatus {
+  return {
+    id,
+    label: id,
+    enabled: true,
+    installed: true,
+    version: '1.0.0',
+    capabilities: {
+      taskRead: true,
+      taskWriteApproval: true,
+      terminalRead: true,
+      terminalWriteApproval: false,
+      taskResume: true,
+      terminalResume: true
+    },
+    ...overrides
+  }
+}
+
+function agentStatus(
+  providers: LocalAiCliProviderStatus[],
+  overrides: Partial<LocalAiCliStatus> = {}
+): LocalAiCliStatus {
+  return { betaAvailable: true, enabled: true, defaultProvider: null, providers, ...overrides }
+}
+
 /** Opens folders the way a previous session would have left them. */
 function seedExpanded(...projectIds: string[]): void {
   settings().shell = { sidebarWidth: 260, sidebarCollapsed: false, expandedProjectIds: projectIds }
@@ -344,8 +411,8 @@ function sentCalls(event: unknown) {
 function discoverItem(wrapper: VueWrapper) {
   const item = wrapper
     .findAll('.tx-dropdown-item')
-    .find((candidate) => candidate.text() === 'shell.projects.discoverSessions')
-  if (!item) throw new Error('Missing Discover Local Sessions action')
+    .find((candidate) => candidate.text() === 'shell.projects.adoptSessions')
+  if (!item) throw new Error('Missing Adopt Local Sessions action')
   return item
 }
 
@@ -380,6 +447,9 @@ beforeEach(() => {
   listState.discoveryResult = { discovered: 0, skipped: 0, incomplete: false }
   listState.discoveryError = null
   listState.discoveryRows = []
+  listState.agentStatus = agentStatus([agent('pi'), agent('codex')])
+  listState.agentStatusError = null
+  listState.agentStatusGate = null
   toastMock.success.mockReset()
   toastMock.warning.mockReset()
   toastMock.error.mockReset()
@@ -409,6 +479,11 @@ beforeEach(() => {
       return listState.discoveryResult
     }
     if (event === LocalAiCliEvents.session.forget) return { forgotten: true }
+    if (event === LocalAiCliEvents.status.get) {
+      if (listState.agentStatusGate) await listState.agentStatusGate
+      if (listState.agentStatusError) throw listState.agentStatusError
+      return listState.agentStatus
+    }
     if (event === omniPanelShowEvent) return undefined
     throw new Error('Unexpected transport event from the shell sidebar')
   })
@@ -551,20 +626,66 @@ describe('shellConversationList project folders', () => {
       .filter((item) => item.text() === '')
       .map((item) => item.classes()[0])
     expect(iconButtons).toEqual(['ShellProjectFolder-Toggle', 'ShellProjectFolder-More'])
-    expect(row.findAll('.tx-dropdown-item').map((item) => item.text())).toEqual([
-      'shell.projects.newChat',
-      'shell.projects.runLocalAgent',
-      'shell.projects.discoverSessions',
-      'shell.projects.rename',
-      'shell.projects.pin',
-      'shell.projects.archive'
-    ])
 
-    await row.findAll('.tx-dropdown-item')[0]!.trigger('click')
+    await menuItem(row, 'shell.projects.newChat').trigger('click')
     await flushPromises()
 
     expect(store.pendingProjectId).toBe('p1')
     expect(pushMock).toHaveBeenCalledWith('/home')
+  })
+
+  it('sorts the ⋯ menu into Chats, Local Agents and Project, each under its own heading', async () => {
+    listState.projects = [project({ id: 'p1' })]
+    const wrapper = await mountList()
+    const row = wrapper.find('.ShellProjectFolder-Row')
+
+    // The menu body, in order, after its trigger: three groups with a divider between each pair.
+    const menu = row.find('.tx-dropdown').element
+    expect(Array.from(menu.children, (child) => child.className).slice(1)).toEqual([
+      'ShellProjectFolder-MenuGroup',
+      'ShellProjectFolder-MenuDivider',
+      'ShellProjectFolder-MenuGroup',
+      'ShellProjectFolder-MenuDivider',
+      'ShellProjectFolder-MenuGroup'
+    ])
+    expect(
+      row.findAll('.ShellProjectFolder-MenuDivider').map((item) => item.attributes('role'))
+    ).toEqual(['separator', 'separator'])
+
+    const groups = row.findAll('.ShellProjectFolder-MenuGroup')
+    const headings = [
+      'shell.projects.chats',
+      'shell.projects.groupLocalAgents',
+      'shell.projects.groupProject'
+    ]
+    expect(groups.map((group) => group.attributes('role'))).toEqual(['group', 'group', 'group'])
+    expect(groups.map((group) => group.attributes('aria-label'))).toEqual(headings)
+    // Visible, but kept out of the accessibility tree: the group's label already announces it.
+    expect(groups.map((group) => group.find('.ShellProjectFolder-MenuLabel').text())).toEqual(
+      headings
+    )
+    expect(
+      groups.map((group) => group.find('.ShellProjectFolder-MenuLabel').attributes('aria-hidden'))
+    ).toEqual(['true', 'true', 'true'])
+
+    const actions = groups.map((group) =>
+      group
+        .findAll('.tx-dropdown-item, .tx-dropdown-submenu__trigger')
+        .filter((item) => !item.element.closest('.tx-dropdown-submenu__panel'))
+        .map((item) => item.text())
+    )
+    expect(actions).toEqual([
+      ['shell.projects.newChat'],
+      ['shell.projects.openInLocalAgent', 'shell.projects.adoptSessions'],
+      ['shell.projects.rename', 'shell.projects.pin', 'shell.projects.archive']
+    ])
+    // The retired flat labels are gone; adopting says what it does in its hint, which sits on the
+    // label because the real item's root takes `title` as a prop and would swallow it.
+    expect(row.text()).not.toContain('shell.projects.runLocalAgent')
+    expect(row.text()).not.toContain('shell.projects.discoverSessions')
+    const adopt = menuItem(row, 'shell.projects.adoptSessions')
+    expect(adopt.attributes('title')).toBeUndefined()
+    expect(adopt.find('span[title]').attributes('title')).toBe('shell.projects.adoptSessionsHint')
   })
 
   it('shows a muted line, not a button, inside an open project with nothing in it', async () => {
@@ -829,8 +950,9 @@ describe('shellConversationList archived projects', () => {
       'shell.projects.unarchive'
     ])
     const bodyActions = body.findAll('.tx-dropdown-item').map((item) => item.text())
-    expect(bodyActions).not.toContain('shell.projects.runLocalAgent')
     expect(bodyActions).not.toContain('shell.projects.newChat')
+    expect(body.find('.tx-dropdown-submenu').exists()).toBe(false)
+    expect(body.text()).not.toContain('shell.projects.openInLocalAgent')
 
     const archivedSession = body.find('.ShellProjectRows-Session')
     expect(archivedSession.attributes('disabled')).toBeDefined()
@@ -1035,5 +1157,284 @@ describe('shellConversationList session discovery', () => {
     expect(toastMock.error).toHaveBeenCalledWith('shell.projects.discoveryFailed')
     expect(wrapper.find('.ShellProjectFolder-Children').exists()).toBe(true)
     expect(wrapper.findAll('.ShellProjectRows-Session')).toHaveLength(0)
+  })
+})
+
+describe('shellConversationList open in local agent', () => {
+  /** The agent submenu of a folder: its rows, and the note it shows while it has none. */
+  function agentPanel(folder: DOMWrapper<Element>) {
+    const panel = folder.find('.tx-dropdown-submenu__panel')
+    return {
+      rows: () => panel.findAll('.tx-dropdown-item'),
+      note: () => panel.find('.ShellProjectFolder-MenuNote')
+    }
+  }
+
+  function rowNamed(folder: DOMWrapper<Element>, label: string): DOMWrapper<Element> {
+    const row = agentPanel(folder)
+      .rows()
+      .find((item) => item.find('.ShellProjectFolder-Agent').text() === label)
+    if (!row) throw new Error(`Missing agent row: ${label}`)
+    return row
+  }
+
+  async function openMenu(folder: DOMWrapper<Element>): Promise<void> {
+    await folder.find('.ShellProjectFolder-More').trigger('click')
+    await flushPromises()
+  }
+
+  function shownPayloads(): unknown[] {
+    return sentCalls(omniPanelShowEvent).map(([, payload]) => payload)
+  }
+
+  it('asks once at mount whether the build has agents, and reads them afresh when the menu opens', async () => {
+    listState.projects = [project({ id: 'p1' })]
+    const wrapper = await mountList()
+    const folder = folderNamed(wrapper, 'p1')
+
+    // One read up front, so the menu knows whether to offer the group before it opens.
+    expect(sentCalls(LocalAiCliEvents.status.get)).toHaveLength(1)
+
+    await openMenu(folder)
+
+    expect(sentCalls(LocalAiCliEvents.status.get)).toHaveLength(2)
+    expect(agentPanel(folder).note().exists()).toBe(false)
+    expect(agentPanel(folder).rows()).toHaveLength(2)
+  })
+
+  it('lists every agent with its mark, and disables the ones that cannot run with the reason', async () => {
+    listState.projects = [project({ id: 'p1' })]
+    listState.agentStatus = agentStatus([
+      agent('pi', { label: 'Pi', installed: false }),
+      agent('codex', { label: 'Codex' }),
+      agent('claude', { label: 'Claude Code' }),
+      agent('oh-my-pi', { label: 'OMP', enabled: false })
+    ])
+    const wrapper = await mountList()
+    const folder = folderNamed(wrapper, 'p1')
+    await openMenu(folder)
+
+    const rows = agentPanel(folder).rows()
+    expect(rows.map((row) => row.find('.ShellProjectFolder-Agent').text())).toEqual([
+      'Pi',
+      'Codex',
+      'Claude Code',
+      'OMP'
+    ])
+    expect(
+      rows.map((row) => {
+        const icon = row.find('.ShellProjectFolder-AgentIcon')
+        return [
+          icon.classes().find((name) => name.startsWith('i-')),
+          icon.attributes('aria-hidden')
+        ]
+      })
+    ).toEqual([
+      ['i-simple-icons-pi', 'true'],
+      ['i-simple-icons-openai', 'true'],
+      ['i-simple-icons-claude', 'true'],
+      ['i-simple-icons-pi', 'true']
+    ])
+    expect(rows.map((row) => row.attributes('disabled') !== undefined)).toEqual([
+      true,
+      false,
+      false,
+      true
+    ])
+    expect(
+      rows.map((row) => {
+        const note = row.find('.ShellProjectFolder-AgentNote')
+        return note.exists() ? note.text() : null
+      })
+    ).toEqual(['shell.projects.agentNotInstalled', null, null, 'shell.projects.agentTurnedOff'])
+  })
+
+  it('opens the omni panel on this project with the chosen agent, and nothing for a blocked one', async () => {
+    listState.projects = [project({ id: 'p1' }), project({ id: 'p2' })]
+    listState.agentStatus = agentStatus([
+      agent('pi', { label: 'Pi', installed: false }),
+      agent('claude', { label: 'Claude Code' })
+    ])
+    const wrapper = await mountList()
+    const folder = folderNamed(wrapper, 'p2')
+    await openMenu(folder)
+
+    await rowNamed(folder, 'Pi').trigger('click')
+    await flushPromises()
+    expect(shownPayloads()).toEqual([])
+
+    await rowNamed(folder, 'Claude Code').trigger('click')
+    await flushPromises()
+
+    // Strict: exactly the fields the panel reads, nothing else riding along.
+    expect(shownPayloads()).toStrictEqual([
+      {
+        captureSelection: false,
+        source: 'project-local-ai',
+        localAi: { projectId: 'p2', provider: 'claude' }
+      }
+    ])
+  })
+
+  it('reads the agents afresh on every open, and one read serves menus opened while it runs', async () => {
+    listState.projects = [project({ id: 'p1' }), project({ id: 'p2' })]
+    let release = (): void => {}
+    listState.agentStatusGate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const wrapper = await mountList()
+
+    await openMenu(folderNamed(wrapper, 'p1'))
+    await openMenu(folderNamed(wrapper, 'p2'))
+    expect(sentCalls(LocalAiCliEvents.status.get)).toHaveLength(1)
+
+    release()
+    await flushPromises()
+    listState.agentStatusGate = null
+    // Both folders read the one shared list.
+    expect(agentPanel(folderNamed(wrapper, 'p1')).rows()).toHaveLength(2)
+    expect(agentPanel(folderNamed(wrapper, 'p2')).rows()).toHaveLength(2)
+
+    // Closed, then opened again: a CLI may have been installed or switched off meanwhile.
+    listState.agentStatus = agentStatus([agent('pi'), agent('codex', { installed: false })])
+    await openMenu(folderNamed(wrapper, 'p1'))
+    await openMenu(folderNamed(wrapper, 'p1'))
+
+    expect(sentCalls(LocalAiCliEvents.status.get)).toHaveLength(2)
+    expect(
+      agentPanel(folderNamed(wrapper, 'p1'))
+        .rows()
+        .map((row) => row.attributes('disabled') !== undefined)
+    ).toEqual([false, true])
+  })
+
+  it('says so when the agents cannot be read, and keeps a list it already has', async () => {
+    listState.projects = [project({ id: 'p1' })]
+    listState.agentStatusError = new Error('probe failed')
+    const wrapper = await mountList()
+    const folder = folderNamed(wrapper, 'p1')
+
+    await openMenu(folder)
+    expect(agentPanel(folder).note().text()).toBe('shell.projects.agentsFailed')
+    expect(agentPanel(folder).rows()).toHaveLength(0)
+
+    // A channel error reply resolves as `undefined` rather than rejecting; same outcome.
+    listState.agentStatusError = null
+    listState.agentStatus = undefined
+    await openMenu(folder)
+    await openMenu(folder)
+    expect(agentPanel(folder).note().text()).toBe('shell.projects.agentsFailed')
+
+    listState.agentStatus = agentStatus([agent('codex')])
+    await openMenu(folder)
+    await openMenu(folder)
+    expect(agentPanel(folder).rows()).toHaveLength(1)
+
+    // One failed read later says nothing new about what is installed.
+    listState.agentStatusError = new Error('probe failed again')
+    await openMenu(folder)
+    await openMenu(folder)
+    expect(agentPanel(folder).rows()).toHaveLength(1)
+    expect(agentPanel(folder).note().exists()).toBe(false)
+  })
+
+  it('leaves the whole local-agent group out in a build without the beta', async () => {
+    listState.projects = [project({ id: 'p1' })]
+    listState.agentStatus = agentStatus(
+      [agent('pi', { installed: false }), agent('codex', { installed: false })],
+      { betaAvailable: false, enabled: false }
+    )
+    const wrapper = await mountList()
+    const folder = folderNamed(wrapper, 'p1')
+    await openMenu(folder)
+
+    expect(folder.find('.tx-dropdown-submenu__panel').exists()).toBe(false)
+    expect(folder.text()).not.toContain('shell.projects.openInLocalAgent')
+    expect(folder.text()).not.toContain('shell.projects.adoptSessions')
+    // Known to be off, the menu stops asking.
+    expect(sentCalls(LocalAiCliEvents.status.get)).toHaveLength(1)
+  })
+
+  it('never probes for agents from an archived project, whose menu can only unarchive', async () => {
+    listState.projects = [project({ id: 'filed', archived: true })]
+    historyHolder.conversations!.value = [conversation({ id: 'c-filed', projectId: 'filed' })]
+    const wrapper = await mountList()
+
+    await wrapper.find('.ShellConversationList-ArchivedToggle').trigger('click')
+    await openMenu(folderNamed(wrapper, 'filed'))
+
+    expect(sentCalls(LocalAiCliEvents.status.get)).toEqual([])
+  })
+})
+
+describe('shellConversationList chats section', () => {
+  it('puts a New Chat + on the Chats title, where the Projects title keeps its own', async () => {
+    listState.projects = [project({ id: 'p1' })]
+    historyHolder.conversations!.value = [conversation({ id: 'hi' })]
+    const wrapper = await mountList()
+
+    const header = wrapper.find(
+      '.ShellConversationList-Section--chats .ShellConversationList-SectionHeader'
+    )
+    const add = header.find('.ShellConversationList-SectionAction')
+    expect(add.element.tagName).toBe('BUTTON')
+    expect(add.attributes('type')).toBe('button')
+    expect(add.attributes('aria-label')).toBe('shell.newChat')
+    expect(add.attributes('title')).toBe('shell.newChat')
+    // Hidden by opacity only, so Tab still reaches it and focus is what shows it.
+    expect(add.attributes('tabindex')).toBeUndefined()
+    expect(add.classes()).toContain('ShellConversationList-SectionAction--reveal')
+    expect(add.find('.i-ri-add-line').exists()).toBe(true)
+
+    // The Projects + is the same control, left always visible.
+    const projectsAdd = wrapper.find(
+      '.ShellConversationList-Section--projects .ShellConversationList-SectionAction'
+    )
+    expect(projectsAdd.classes()).not.toContain('ShellConversationList-SectionAction--reveal')
+  })
+
+  it('starts a blank conversation outside every project, as the sidebar New Chat does', async () => {
+    listState.projects = [project({ id: 'p1' })]
+    historyHolder.conversations!.value = [conversation({ id: 'hi' })]
+    const wrapper = await mountList()
+    const store = useProjectStore()
+    store.setActiveProjectId('p1')
+
+    await wrapper
+      .find('.ShellConversationList-Section--chats .ShellConversationList-SectionAction')
+      .trigger('click')
+    await flushPromises()
+
+    expect(store.pendingProjectId).toBeNull()
+    expect(store.activeProjectId).toBeNull()
+    expect(pushMock).toHaveBeenCalledWith('/home')
+  })
+})
+
+describe('shellConversationList conversation delete', () => {
+  it('deletes a conversation on the second press of its trash can, not the first', async () => {
+    listState.projects = [project({ id: 'p1' })]
+    historyHolder.conversations!.value = [
+      conversation({ id: 'loose' }),
+      conversation({ id: 'filed', projectId: 'p1' })
+    ]
+    seedExpanded('p1')
+    const wrapper = await mountList()
+
+    for (const [scope, id] of [
+      ['.ShellProjectFolder-Children', 'filed'],
+      ['.ShellConversationList-Section--chats', 'loose']
+    ] as const) {
+      const button = wrapper.find(`${scope} .ShellProjectRows-Delete`)
+      await button.trigger('click')
+      await flushPromises()
+      expect(historyRemoveMock).not.toHaveBeenCalled()
+      expect(button.classes()).toContain('is-armed')
+
+      await button.trigger('click')
+      await flushPromises()
+      expect(historyRemoveMock).toHaveBeenCalledWith(id)
+      historyRemoveMock.mockClear()
+    }
   })
 })

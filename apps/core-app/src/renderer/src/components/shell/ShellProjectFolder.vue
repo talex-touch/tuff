@@ -1,10 +1,20 @@
 <script lang="ts" name="ShellProjectFolder" setup>
-import type { LocalAiCliSessionSummary } from '@talex-touch/utils/transport/events/local-ai-cli'
+import type {
+  LocalAiCliProviderId,
+  LocalAiCliSessionSummary
+} from '@talex-touch/utils/transport/events/local-ai-cli'
 import type { ProjectRecord } from '@talex-touch/utils/transport/sdk/domains/project'
 import type { ConversationProjectRow } from '~/modules/conversation/conversation-project-groups'
-import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
-import { nextTick, ref, watch } from 'vue'
+import type { LocalAiAgentBlocker } from '~/modules/conversation/local-ai-agents'
+import {
+  TxDropdownItem,
+  TxDropdownMenu,
+  TxDropdownSubmenu
+} from '@talex-touch/tuffex/dropdown-menu'
+import { storeToRefs } from 'pinia'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useProjectStore } from '~/stores/projects'
 import ShellProjectRows from './ShellProjectRows.vue'
 
 /**
@@ -13,7 +23,8 @@ import ShellProjectRows from './ShellProjectRows.vue'
  *
  * Every action leaves as an event. The list keeps the single copy of each behaviour — rename, pin,
  * archive, discovery and the lock that runs discovery one project at a time — and the rows of the
- * Chats section share the list's row handlers too, so nothing here duplicates them.
+ * Chats section share the list's row handlers too, so nothing here duplicates them. The one thing
+ * read here is what the agent submenu lists, from the project store, which every folder shares.
  */
 const props = withDefaults(
   defineProps<{
@@ -45,7 +56,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   toggle: []
   enter: []
-  runAgent: []
+  /** Open the project in the omni panel's local agent view, with this agent already chosen. */
+  runAgent: [provider: LocalAiCliProviderId]
   discover: []
   beginRename: []
   rename: [name: string]
@@ -58,10 +70,72 @@ const emit = defineEmits<{
   forgetSession: [sessionRef: string]
 }>()
 
+/**
+ * Brand marks for the agent submenu, keyed by the CLI's provider id. Written in this SFC rather
+ * than in `local-ai-agents.ts`: UnoCSS generates the classes it finds in templates and SFCs, and a
+ * class named only in a `.ts` table renders as an empty box (see `uno.config.ts`). pi and omp share
+ * pi's mark, as they do in `modules/intelligence/provider-icons.ts`.
+ */
+const AGENT_ICONS = {
+  pi: 'i-simple-icons-pi',
+  'oh-my-pi': 'i-simple-icons-pi',
+  codex: 'i-simple-icons-openai',
+  claude: 'i-simple-icons-claude'
+} satisfies Record<LocalAiCliProviderId, string>
+/** For a CLI the main process lists before this table learns its mark. */
+const AGENT_FALLBACK_ICON = 'i-ri-terminal-box-line'
+
 const { t } = useI18n()
+const projectStore = useProjectStore()
+const { localAiAgents, localAiAgentsPhase, localAiBetaAvailable } = storeToRefs(projectStore)
 const menuOpen = ref(false)
 const draft = ref('')
 const renameInputRef = ref<HTMLInputElement | null>(null)
+
+/** What the agent submenu says in place of the agents while it has none to offer. */
+const agentsNote = computed(() => {
+  switch (localAiAgentsPhase.value) {
+    case 'loading':
+      return t('shell.projects.agentsLoading')
+    case 'failed':
+      return t('shell.projects.agentsFailed')
+    default:
+      return t('shell.projects.agentsNone')
+  }
+})
+
+/**
+ * The agents are read afresh whenever this menu opens, not when the submenu does: the version
+ * probes behind the list are then already running by the time the pointer reaches the submenu.
+ */
+watch(menuOpen, (open) => {
+  if (open && !props.archived && localAiBetaAvailable.value !== false) {
+    void projectStore.refreshLocalAiAgents()
+  }
+})
+
+// Known before the menu opens, so the 「本机代理」 group never appears and then vanishes. An
+// archived project's menu only unarchives, so it never asks.
+onMounted(() => {
+  if (!props.archived) projectStore.ensureLocalAiStatus()
+})
+
+function agentIcon(id: string): string {
+  return Object.hasOwn(AGENT_ICONS, id)
+    ? AGENT_ICONS[id as LocalAiCliProviderId]
+    : AGENT_FALLBACK_ICON
+}
+
+function agentBlockerLabel(blocker: LocalAiAgentBlocker): string {
+  switch (blocker) {
+    case 'not-installed':
+      return t('shell.projects.agentNotInstalled')
+    case 'turned-off':
+      return t('shell.projects.agentTurnedOff')
+    case 'unsupported':
+      return t('shell.projects.agentUnavailable')
+  }
+}
 
 watch(
   () => props.renaming,
@@ -190,29 +264,101 @@ function onRenameKeydown(event: KeyboardEvent): void {
         <TxDropdownItem v-if="archived" @select="emit('toggleArchived')">
           {{ t('shell.projects.unarchive') }}
         </TxDropdownItem>
+        <!--
+          Three groups, each under a small heading: what starts a conversation, what reaches for a
+          local agent CLI, and what changes the project itself. Each is a `group` so its heading is
+          announced; the heading row is `aria-hidden` so the name is not read twice, and it takes no
+          focus, so arrow keys go item to item.
+        -->
         <template v-else>
-          <TxDropdownItem @select="emit('enter')">
-            {{ t('shell.projects.newChat') }}
-          </TxDropdownItem>
-          <TxDropdownItem @select="emit('runAgent')">
-            {{ t('shell.projects.runLocalAgent') }}
-          </TxDropdownItem>
-          <TxDropdownItem :disabled="discoveringProjectId !== null" @select="emit('discover')">
-            {{
-              discoveringProjectId === project.id
-                ? t('shell.projects.discoveringSessions')
-                : t('shell.projects.discoverSessions')
-            }}
-          </TxDropdownItem>
-          <TxDropdownItem @select="emit('beginRename')">
-            {{ t('shell.projects.rename') }}
-          </TxDropdownItem>
-          <TxDropdownItem @select="emit('togglePinned')">
-            {{ project.pinned ? t('shell.projects.unpin') : t('shell.projects.pin') }}
-          </TxDropdownItem>
-          <TxDropdownItem @select="emit('toggleArchived')">
-            {{ t('shell.projects.archive') }}
-          </TxDropdownItem>
+          <div
+            class="ShellProjectFolder-MenuGroup"
+            role="group"
+            :aria-label="t('shell.projects.chats')"
+          >
+            <div class="ShellProjectFolder-MenuLabel" aria-hidden="true">
+              {{ t('shell.projects.chats') }}
+            </div>
+            <TxDropdownItem @select="emit('enter')">
+              {{ t('shell.projects.newChat') }}
+            </TxDropdownItem>
+          </div>
+          <!-- Local agents are a macOS beta: a build known to lack it leaves the whole group out
+               rather than offering actions that cannot run. Unknown (a read that failed) still
+               shows it, with the submenu saying why it has nothing. -->
+          <template v-if="localAiBetaAvailable !== false">
+            <div class="ShellProjectFolder-MenuDivider" role="separator" />
+            <div
+              class="ShellProjectFolder-MenuGroup"
+              role="group"
+              :aria-label="t('shell.projects.groupLocalAgents')"
+            >
+              <div class="ShellProjectFolder-MenuLabel" aria-hidden="true">
+                {{ t('shell.projects.groupLocalAgents') }}
+              </div>
+              <TxDropdownSubmenu :min-width="200">
+                {{ t('shell.projects.openInLocalAgent') }}
+                <template #menu>
+                  <template v-if="localAiAgentsPhase === 'ready'">
+                    <!-- Every CLI Tuff knows, in the main process's order; a blocked one says why. -->
+                    <TxDropdownItem
+                      v-for="agent in localAiAgents"
+                      :key="agent.id"
+                      :disabled="agent.blocker !== null"
+                      @select="emit('runAgent', agent.id)"
+                    >
+                      <span class="ShellProjectFolder-Agent">
+                        <span
+                          class="ShellProjectFolder-AgentIcon"
+                          :class="agentIcon(agent.id)"
+                          aria-hidden="true"
+                        />
+                        {{ agent.label }}
+                      </span>
+                      <template v-if="agent.blocker" #right>
+                        <span class="ShellProjectFolder-AgentNote">
+                          {{ agentBlockerLabel(agent.blocker) }}
+                        </span>
+                      </template>
+                    </TxDropdownItem>
+                  </template>
+                  <div v-else class="ShellProjectFolder-MenuNote" role="none">
+                    {{ agentsNote }}
+                  </div>
+                </template>
+              </TxDropdownSubmenu>
+              <!-- The hint sits on the label, not the item: TxDropdownItem's root is TxCardItem,
+                   which takes `title` as a prop, so on the item it would never reach the DOM. -->
+              <TxDropdownItem :disabled="discoveringProjectId !== null" @select="emit('discover')">
+                <span :title="t('shell.projects.adoptSessionsHint')">
+                  {{
+                    discoveringProjectId === project.id
+                      ? t('shell.projects.discoveringSessions')
+                      : t('shell.projects.adoptSessions')
+                  }}
+                </span>
+              </TxDropdownItem>
+            </div>
+          </template>
+          <div class="ShellProjectFolder-MenuDivider" role="separator" />
+          <div
+            class="ShellProjectFolder-MenuGroup"
+            role="group"
+            :aria-label="t('shell.projects.groupProject')"
+          >
+            <div class="ShellProjectFolder-MenuLabel" aria-hidden="true">
+              {{ t('shell.projects.groupProject') }}
+            </div>
+            <TxDropdownItem @select="emit('beginRename')">
+              {{ t('shell.projects.rename') }}
+            </TxDropdownItem>
+            <TxDropdownItem @select="emit('togglePinned')">
+              {{ project.pinned ? t('shell.projects.unpin') : t('shell.projects.pin') }}
+            </TxDropdownItem>
+            <TxDropdownItem @select="emit('toggleArchived')">
+              {{ t('shell.projects.archive') }}
+            </TxDropdownItem>
+          </div>
         </template>
       </TxDropdownMenu>
     </div>
@@ -434,6 +580,55 @@ function onRenameKeydown(event: KeyboardEvent): void {
   padding: var(--shell-row-pad-y) var(--shell-row-pad-x) var(--shell-row-pad-y)
     calc(var(--shell-row-pad-x) + var(--shell-rows-indent));
   border: 1px solid transparent;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-sm);
+}
+
+/**
+ * The menu's own furniture. Its panels are teleported out of this row, so these are standalone
+ * selectors; they still carry this component's scope id because this template renders them. The
+ * group keeps the panel's own 4px rhythm, and headings and notes start where an item's text does.
+ */
+.ShellProjectFolder-MenuGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ShellProjectFolder-MenuLabel {
+  padding: 4px 10px 0;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+}
+
+.ShellProjectFolder-MenuDivider {
+  margin: 0 6px;
+  border-top: 1px solid var(--shell-border);
+}
+
+/** Inline-flex so the mark is a flex item: an icon class sizes itself but sets no `display`. */
+.ShellProjectFolder-Agent {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.ShellProjectFolder-AgentIcon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
+}
+
+.ShellProjectFolder-AgentNote {
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+}
+
+.ShellProjectFolder-MenuNote {
+  padding: 8px 10px;
   color: var(--shell-text-muted);
   font-size: var(--shell-fs-sm);
 }
