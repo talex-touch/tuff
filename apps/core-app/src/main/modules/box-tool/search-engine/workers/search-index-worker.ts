@@ -56,6 +56,7 @@ import {
 } from '../file-index-persistence-repository'
 import { noopSearchIndexRuntimeLogger, SearchIndexService } from '../search-index-service'
 import { serializeSearchIndexWorkerError } from './search-index-worker-error'
+import { getWorkerMemorySnapshot } from '../../addon/files/workers/worker-status'
 
 const searchIndexWorkerLog = createLogger('SearchIndex').child('Worker')
 
@@ -530,13 +531,7 @@ function respondMetrics(request: WorkerMetricsRequest): void {
   const cpu = process.cpuUsage()
   const metrics: WorkerMetricsPayload = {
     timestamp: Date.now(),
-    memory: {
-      rss: mem.rss,
-      heapUsed: mem.heapUsed,
-      heapTotal: mem.heapTotal,
-      external: mem.external,
-      arrayBuffers: mem.arrayBuffers
-    },
+    memory: getWorkerMemorySnapshot(mem),
     cpuUsage: {
       user: cpu.user,
       system: cpu.system

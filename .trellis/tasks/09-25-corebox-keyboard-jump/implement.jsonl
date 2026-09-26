@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Ready results must not wait for reveal motion; CoreBox result-switch regression expectations"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Composable lifecycle and watcher flush rules for useSearch / CoreBox watchers"}
+{"file": ".trellis/spec/main-process/search-hotpath-contracts.md", "reason": "Streaming search contracts (debounce, ranking independent of transport) the fix must not break"}

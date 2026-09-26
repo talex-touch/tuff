@@ -28,6 +28,7 @@ const state = vi.hoisted(() => {
     fileProviderPersistencePort: vi.fn(),
     fileProviderPrepareForShutdown: vi.fn(async () => undefined),
     fileProviderResetDelegate: vi.fn(),
+    fileProviderIndexingStatus: vi.fn(() => ({ isInitializing: false })),
     forceFlushUsageQueue: vi.fn(async () => undefined),
     getAllPinnedItems: vi.fn<() => Promise<PinnedItem[]>>(async () => []),
     getUsageStatsBatch: vi.fn<() => Promise<ItemUsageStat[]>>(async () => []),
@@ -178,6 +179,7 @@ vi.mock('../addon/files/everything-provider', () => ({
 vi.mock('../addon/files/file-provider', () => ({
   fileProvider: {
     buildStartupDegradedNotice: vi.fn(() => null),
+    getIndexingStatus: state.fileProviderIndexingStatus,
     hasSearchFilters: vi.fn(() => false),
     id: 'file-provider',
     onSearch: vi.fn(),
@@ -367,6 +369,10 @@ vi.mock('talex-mica-electron', () => ({
 }))
 
 import type { SearchEngineCore } from './search-core'
+import {
+  INDEX_COMMIT_NOTIFY_BULK_WINDOW_MS,
+  INDEX_COMMIT_NOTIFY_WINDOW_MS
+} from './search-index-commit-coalescer'
 
 let core: SearchEngineCore
 let searchIndexCommitHub: typeof import('./search-index-commit-hub').searchIndexCommitHub
@@ -461,33 +467,39 @@ describe('SearchEngineCore facade contracts', () => {
     )
   })
 
-  it('routes the App runtime presentation-refresh delegate to subscribed CoreBox streams', () => {
-    const emit = vi.fn()
-    const abort = new AbortController()
-    core.registerIndexCommitStream({
-      emit,
-      end: vi.fn(),
-      error: vi.fn(),
-      isCancelled: () => abort.signal.aborted,
-      signal: abort.signal
-    } as never)
-    const revision = searchIndexCommitHub.getRevision()
-    const delegate = state.appProviderRuntimeDelegate.mock.calls.at(-1)?.[0] as
-      | { invalidateRecommendations?: () => void }
-      | undefined
+  it('routes the App runtime presentation-refresh delegate to subscribed CoreBox streams', async () => {
+    vi.useFakeTimers()
+    try {
+      const emit = vi.fn()
+      const abort = new AbortController()
+      core.registerIndexCommitStream({
+        emit,
+        end: vi.fn(),
+        error: vi.fn(),
+        isCancelled: () => abort.signal.aborted,
+        signal: abort.signal
+      } as never)
+      const revision = searchIndexCommitHub.getRevision()
+      const delegate = state.appProviderRuntimeDelegate.mock.calls.at(-1)?.[0] as
+        | { invalidateRecommendations?: () => void }
+        | undefined
 
-    delegate?.invalidateRecommendations?.()
+      delegate?.invalidateRecommendations?.()
+      await vi.advanceTimersByTimeAsync(INDEX_COMMIT_NOTIFY_WINDOW_MS)
 
-    expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
-    expect(emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        recommendationsInvalidated: true,
-        revision
-      })
-    )
-    expect(searchIndexCommitHub.getRevision()).toBe(revision)
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
+      expect(emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recommendationsInvalidated: true,
+          revision
+        })
+      )
+      expect(searchIndexCommitHub.getRevision()).toBe(revision)
 
-    abort.abort()
+      abort.abort()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('deduplicates activations and limits the public provider pool to active providers', () => {
@@ -1059,87 +1071,201 @@ describe('SearchEngineCore facade contracts', () => {
     expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
   })
 
-  it('notifies open CoreBox streams about hydrated app-icon presentation without mutating the index', () => {
-    const emit = vi.fn()
-    const abort = new AbortController()
-    core.registerIndexCommitStream({
-      emit,
-      end: vi.fn(),
-      error: vi.fn(),
-      isCancelled: () => abort.signal.aborted,
-      signal: abort.signal
-    } as never)
-    const revision = searchIndexCommitHub.getRevision()
+  it('notifies open CoreBox streams about hydrated app-icon presentation without mutating the index', async () => {
+    vi.useFakeTimers()
+    try {
+      const emit = vi.fn()
+      const abort = new AbortController()
+      core.registerIndexCommitStream({
+        emit,
+        end: vi.fn(),
+        error: vi.fn(),
+        isCancelled: () => abort.signal.aborted,
+        signal: abort.signal
+      } as never)
+      const revision = searchIndexCommitHub.getRevision()
 
-    core.invalidateAppRecommendationPresentation()
+      core.invalidateAppRecommendationPresentation()
+      await vi.advanceTimersByTimeAsync(INDEX_COMMIT_NOTIFY_WINDOW_MS)
 
-    expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
-    expect(emit).toHaveBeenCalledTimes(1)
-    expect(emit).toHaveBeenCalledWith({
-      revision,
-      providerIds: [],
-      sourceGenerations: {},
-      committedAt: expect.any(Number),
-      recommendationsInvalidated: true
-    })
-    expect(searchIndexCommitHub.getRevision()).toBe(revision)
+      expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
+      expect(emit).toHaveBeenCalledTimes(1)
+      expect(emit).toHaveBeenCalledWith({
+        revision,
+        providerIds: [],
+        sourceGenerations: {},
+        committedAt: expect.any(Number),
+        recommendationsInvalidated: true
+      })
+      expect(searchIndexCommitHub.getRevision()).toBe(revision)
 
-    abort.abort()
+      abort.abort()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  it('flags the first file commit for renderers and stays quiet for the rest', () => {
-    const emit = vi.fn()
-    const abort = new AbortController()
-    core.registerIndexCommitStream({
-      emit,
-      end: vi.fn(),
-      error: vi.fn(),
-      isCancelled: () => abort.signal.aborted,
-      signal: abort.signal
-    } as never)
+  it('flags the first file commit for renderers and stays quiet for the rest', async () => {
+    vi.useFakeTimers()
+    try {
+      const emit = vi.fn()
+      const abort = new AbortController()
+      core.registerIndexCommitStream({
+        emit,
+        end: vi.fn(),
+        error: vi.fn(),
+        isCancelled: () => abort.signal.aborted,
+        signal: abort.signal
+      } as never)
 
-    searchIndexCommitHub.markCommitted(['file-provider'])
-    expect(emit).toHaveBeenLastCalledWith(
-      expect.objectContaining({ recommendationsInvalidated: true })
-    )
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      await vi.advanceTimersByTimeAsync(INDEX_COMMIT_NOTIFY_WINDOW_MS)
+      expect(emit).toHaveBeenLastCalledWith(
+        expect.objectContaining({ recommendationsInvalidated: true })
+      )
 
-    searchIndexCommitHub.markCommitted(['file-provider'])
-    expect(emit).toHaveBeenLastCalledWith(
-      expect.objectContaining({ recommendationsInvalidated: false })
-    )
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      await vi.advanceTimersByTimeAsync(INDEX_COMMIT_NOTIFY_WINDOW_MS)
+      expect(emit).toHaveBeenCalledTimes(2)
+      expect(emit).toHaveBeenLastCalledWith(
+        expect.objectContaining({ recommendationsInvalidated: false })
+      )
 
-    abort.abort()
+      abort.abort()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  it('tells subscribed renderers which commits changed the recommendation grid', () => {
+  it('tells subscribed renderers which commits changed the recommendation grid', async () => {
     // Dropping the cache is invisible to an already-open CoreBox: the renderer's index-commit
     // refresh skips the empty query unless it is told the grid actually changed. Deriving that
     // renderer-side from providerIds would either miss it or re-query on every file commit.
-    const emit = vi.fn()
-    const abort = new AbortController()
-    core.registerIndexCommitStream({
-      emit,
-      end: vi.fn(),
-      error: vi.fn(),
-      isCancelled: () => abort.signal.aborted,
-      signal: abort.signal
-    } as never)
+    vi.useFakeTimers()
+    try {
+      const emit = vi.fn()
+      const abort = new AbortController()
+      core.registerIndexCommitStream({
+        emit,
+        end: vi.fn(),
+        error: vi.fn(),
+        isCancelled: () => abort.signal.aborted,
+        signal: abort.signal
+      } as never)
 
-    searchIndexCommitHub.markCommitted(['app-provider'])
-    expect(emit).toHaveBeenLastCalledWith(
-      expect.objectContaining({ recommendationsInvalidated: true })
-    )
+      searchIndexCommitHub.markCommitted(['app-provider'])
+      await vi.advanceTimersByTimeAsync(INDEX_COMMIT_NOTIFY_WINDOW_MS)
+      expect(emit).toHaveBeenLastCalledWith(
+        expect.objectContaining({ recommendationsInvalidated: true })
+      )
 
-    // The original payload fields must survive the enrichment.
-    expect(emit).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        providerIds: ['app-provider'],
-        revision: expect.any(Number),
-        committedAt: expect.any(Number)
-      })
-    )
+      // The original payload fields must survive the enrichment.
+      expect(emit).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          providerIds: ['app-provider'],
+          revision: expect.any(Number),
+          committedAt: expect.any(Number)
+        })
+      )
 
-    abort.abort()
+      abort.abort()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  /**
+   * The refresh storm (2026-09-26): a non-empty CoreBox query reruns in full on every notification,
+   * and a scan commits every ~100-300ms, so the list re-searched back-to-back while it ran. The
+   * hub revision is what keeps cached results honest, so it must still move on every commit; only
+   * what reaches the renderer is paced.
+   */
+  it('folds a commit storm into a bounded number of stream notifications while the revision moves on every commit', async () => {
+    vi.useFakeTimers()
+    try {
+      const emit = vi.fn()
+      const abort = new AbortController()
+      core.registerIndexCommitStream({
+        emit,
+        end: vi.fn(),
+        error: vi.fn(),
+        isCancelled: () => abort.signal.aborted,
+        signal: abort.signal
+      } as never)
+      const startRevision = searchIndexCommitHub.getRevision()
+
+      for (let index = 1; index <= 100; index += 1) {
+        searchIndexCommitHub.markCommitted(['file-provider'])
+        expect(searchIndexCommitHub.getRevision()).toBe(startRevision + index)
+        await vi.advanceTimersByTimeAsync(100)
+      }
+      await vi.advanceTimersByTimeAsync(INDEX_COMMIT_NOTIFY_BULK_WINDOW_MS)
+
+      expect(emit.mock.calls.length).toBeGreaterThanOrEqual(1)
+      expect(emit.mock.calls.length).toBeLessThanOrEqual(4)
+      // The last notification covers the newest commit, so nothing committed is left unannounced.
+      expect(emit).toHaveBeenLastCalledWith(
+        expect.objectContaining({ revision: startRevision + 100, bulk: true })
+      )
+
+      abort.abort()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('widens the very first window while a full file scan is running', async () => {
+    vi.useFakeTimers()
+    state.fileProviderIndexingStatus.mockReturnValue({ isInitializing: true })
+    try {
+      const emit = vi.fn()
+      const abort = new AbortController()
+      core.registerIndexCommitStream({
+        emit,
+        end: vi.fn(),
+        error: vi.fn(),
+        isCancelled: () => abort.signal.aborted,
+        signal: abort.signal
+      } as never)
+
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      await vi.advanceTimersByTimeAsync(INDEX_COMMIT_NOTIFY_WINDOW_MS)
+      expect(emit).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(
+        INDEX_COMMIT_NOTIFY_BULK_WINDOW_MS - INDEX_COMMIT_NOTIFY_WINDOW_MS
+      )
+      expect(emit).toHaveBeenCalledTimes(1)
+      expect(emit).toHaveBeenLastCalledWith(expect.objectContaining({ bulk: true }))
+
+      abort.abort()
+    } finally {
+      state.fileProviderIndexingStatus.mockReturnValue({ isInitializing: false })
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops the pending notification of a stream the renderer closed', async () => {
+    vi.useFakeTimers()
+    try {
+      const emit = vi.fn()
+      const abort = new AbortController()
+      core.registerIndexCommitStream({
+        emit,
+        end: vi.fn(),
+        error: vi.fn(),
+        isCancelled: () => abort.signal.aborted,
+        signal: abort.signal
+      } as never)
+
+      searchIndexCommitHub.markCommitted(['file-provider'])
+      abort.abort()
+      await vi.advanceTimersByTimeAsync(INDEX_COMMIT_NOTIFY_BULK_WINDOW_MS)
+
+      expect(emit).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('cleans initialized index and provider resources when the facade is destroyed', async () => {

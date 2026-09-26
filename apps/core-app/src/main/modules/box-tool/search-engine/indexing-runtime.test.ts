@@ -397,6 +397,101 @@ describe('indexingRuntime', () => {
     })
   })
 
+  it('decides root ownership before reading health or writing task state for a scoped watch event', async () => {
+    // The app source's health read is a full FTS count on the single read worker. Every file event
+    // used to buy one — plus a task-history write — before the root check turned it away, which
+    // a single tuffex build (~2,700 dist paths) turned into ~14 minutes of a saturated worker.
+    const getHealth = vi.fn(async () => readyHealth)
+    const getRoots = vi.fn(
+      async (): Promise<IndexedSourceRoot[]> => [
+        { sourceId: 'apps', path: '/Applications', permissionState: 'not-required' }
+      ]
+    )
+    const handleWatchEvent = vi.fn(async (event: { path: string }) => [
+      { sourceId: 'apps', action: 'change' as const, path: event.path }
+    ])
+    const taskStateStore = {
+      load: vi.fn(async () => undefined),
+      save: vi.fn(async () => undefined),
+      delete: vi.fn(async () => undefined),
+      clear: vi.fn(async () => undefined)
+    }
+    runtime = new IndexingRuntime({ store: store, taskStateStore: taskStateStore as never })
+    runtime.registerSource(
+      buildSource({
+        descriptor: { ...descriptor, id: 'apps', kind: 'app' },
+        getHealth,
+        getRoots,
+        handleWatchEvent
+      })
+    )
+
+    const outside = await runtime.routeWatchEventWithResult({
+      sourceId: 'apps',
+      action: 'change',
+      path: '/Users/demo/Workspace/tuffex/dist/index.mjs',
+      occurredAt: 1700000000000
+    })
+
+    // Same answer the full route gives for a path outside the roots...
+    expect(outside).toEqual({
+      deltas: [],
+      matchedSources: 1,
+      handledSources: 0,
+      failedSources: 0,
+      skippedSources: 1,
+      appliedDeltas: 0,
+      failedDeltas: 0,
+      skippedDeltas: 0,
+      errors: [],
+      skipped: [{ sourceId: 'apps', reason: 'source-watch-filtered' }],
+      deltaSummaries: []
+    })
+    // ...reached from the current roots alone.
+    expect(getRoots).toHaveBeenCalledTimes(1)
+    expect(getHealth).not.toHaveBeenCalled()
+    expect(handleWatchEvent).not.toHaveBeenCalled()
+    expect(taskStateStore.save).not.toHaveBeenCalled()
+
+    // An event inside the root still reads current health and records its outcome, which also
+    // shows the task-state spy above can observe a write.
+    await runtime.routeWatchEventWithResult({
+      sourceId: 'apps',
+      action: 'change',
+      path: '/Applications/Probe.app',
+      occurredAt: 1700000000001
+    })
+
+    expect(getHealth).toHaveBeenCalledTimes(1)
+    expect(handleWatchEvent).toHaveBeenCalledTimes(1)
+    expect(taskStateStore.save).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls through to the full route when the roots cannot be read', async () => {
+    const getHealth = vi.fn(async () => readyHealth)
+    runtime.registerSource(
+      buildSource({
+        getHealth,
+        getRoots: async () => {
+          throw new Error('roots unavailable')
+        },
+        handleWatchEvent: vi.fn(async () => [])
+      })
+    )
+
+    const result = await runtime.routeWatchEventWithResult({
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/a.txt',
+      occurredAt: 1700000000000
+    })
+
+    // The diagnostic path owns the failure: it reads health and reports the event as filtered,
+    // exactly as before the root pre-check existed.
+    expect(getHealth).toHaveBeenCalledTimes(1)
+    expect(result.skipped).toEqual([{ sourceId: 'test-source', reason: 'source-watch-filtered' }])
+  })
+
   it('skips watch routing for disabled or admission-invalid sources', async () => {
     const handleWatchEvent = vi.fn(async () => [
       {
@@ -3993,6 +4088,142 @@ describe('indexingRuntime', () => {
     await exclusive
 
     expect(order).toEqual(['writer-apply', 'source-drain', 'exclusive'])
+  })
+
+  it('holds the recovery lease through delayed publication while a queued scan and reset wait', async () => {
+    const gate = new IndexingSourceMutationGate()
+    runtime = new IndexingRuntime({ store, sourceMutationGate: gate })
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'test-source',
+      records: [
+        {
+          sourceId: 'test-source',
+          recordId: 'recovered-record',
+          stableKey: 'recovered-record',
+          kind: 'file',
+          title: 'Recovered record'
+        }
+      ],
+      done: false
+    }
+    const order: string[] = []
+    const recoveryStarted = Promise.withResolvers<string>()
+    const persistenceReleased = Promise.withResolvers<void>()
+    const publicationSettled = Promise.withResolvers<void>()
+    let resetSettled = false
+    const scan = vi.fn(async function* () {
+      order.push('scan:source')
+      yield { sourceId: 'test-source', records: [], done: true }
+    })
+    runtime.registerSource(buildSource({ scan }))
+
+    const recovery = runtime.withSourceMutationLease('test-source', async (leaseId) => {
+      order.push('recovery:start')
+      recoveryStarted.resolve(leaseId)
+      // Standing in for the page's delayed persistence: the lease is still held here.
+      await persistenceReleased.promise
+      await runtime.applySourceBatch({ ...batch, mutationLeaseId: leaseId })
+      order.push('recovery:published')
+      publicationSettled.resolve()
+      return leaseId
+    })
+    const leaseId = await recoveryStarted.promise
+
+    const scanRun = runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
+    const resetRun = runtime
+      .resetSourceRuntimeState('test-source', { reason: IndexedSourceResetReasons.HealthRepair })
+      .then((result) => {
+        resetSettled = true
+        return result
+      })
+    // Let the queued scan and reset reach the recovery lease and stop there.
+    for (let index = 0; index < 8; index += 1) await Promise.resolve()
+
+    // Neither a scan's source work nor an exclusive reset may start under the recovery lease;
+    // waiting for that lease must never admit parser/scan work early.
+    expect(order).toEqual(['recovery:start'])
+    expect(scan).not.toHaveBeenCalled()
+    expect(resetSettled).toBe(false)
+
+    // The page's own publication must complete on the held lease rather than queue behind the
+    // successor scan (the deadlock the lease-per-page change removes).
+    persistenceReleased.resolve()
+    await publicationSettled.promise
+    expect(store.applyBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ ...batch, mutationLeaseId: leaseId })
+    )
+    expect(order).toEqual(['recovery:start', 'recovery:published'])
+
+    await expect(recovery).resolves.toBe(leaseId)
+    await scanRun
+    await expect(resetRun).resolves.toMatchObject({
+      sourceId: 'test-source',
+      error: 'reset-not-supported'
+    })
+
+    expect(order).toEqual(['recovery:start', 'recovery:published', 'scan:source'])
+    expect(resetSettled).toBe(true)
+  })
+
+  it('releases the recovery lease and drains proven mutations when its callback fails', async () => {
+    const gate = new IndexingSourceMutationGate()
+    runtime = new IndexingRuntime({ store, sourceMutationGate: gate })
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'test-source',
+      records: [
+        {
+          sourceId: 'test-source',
+          recordId: 'recovered-record',
+          stableKey: 'recovered-record',
+          kind: 'file',
+          title: 'Recovered record'
+        }
+      ],
+      done: false
+    }
+    const drainMutations = vi.fn(async () => undefined)
+    runtime.registerSource(buildSource({ drainMutations }))
+    const failure = new Error('enrichment publication failed')
+    let leaseId: string | undefined
+
+    const recovery = runtime.withSourceMutationLease('test-source', async (lease) => {
+      leaseId = lease
+      await runtime.applySourceBatch({ ...batch, mutationLeaseId: lease })
+      throw failure
+    })
+
+    await expect(recovery).rejects.toBe(failure)
+    expect(drainMutations).toHaveBeenCalledWith({ leaseId, reason: 'mutation' })
+    // A failed callback must not leak the gate: the next owner takes the same source lease.
+    await expect(
+      runtime.withSourceMutationLease('test-source', async () => 'recovered')
+    ).resolves.toBe('recovered')
+  })
+
+  it('rejects a deferred publication that carries an expired recovery lease', async () => {
+    const gate = new IndexingSourceMutationGate()
+    runtime = new IndexingRuntime({ store, sourceMutationGate: gate })
+    runtime.registerSource(buildSource())
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'test-source',
+      records: [],
+      done: false
+    }
+
+    const expiredLeaseId = await runtime.withSourceMutationLease(
+      'test-source',
+      async (lease) => lease
+    )
+    const currentLeaseId = await runtime.withSourceMutationLease(
+      'test-source',
+      async (lease) => lease
+    )
+
+    expect(currentLeaseId).not.toBe(expiredLeaseId)
+    await expect(
+      runtime.applySourceBatch({ ...batch, mutationLeaseId: expiredLeaseId })
+    ).rejects.toThrow('INDEXING_SOURCE_MUTATION_LEASE_INVALID:test-source')
+    expect(store.applyBatch).not.toHaveBeenCalled()
   })
 
   it('drains applied reconcile mutations before releasing the lease after source failure', async () => {

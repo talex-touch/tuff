@@ -18,7 +18,11 @@ export interface AppSdk {
   getSecureStoreHealth: () => Promise<SecureStoreHealthResponse>
 
   openExternal: (url: string) => Promise<void>
-  showInFolder: (path: string) => Promise<void>
+  /**
+   * Opens a plain directory, and selects anything else in its parent. `reveal` selects even a
+   * directory: "Show in Finder" must never open a folder or launch an `.app`.
+   */
+  showInFolder: (path: string, options?: { reveal?: boolean }) => Promise<void>
   openApp: (options: { appName?: string, path?: string }) => Promise<void>
   openPromptsFolder: () => Promise<void>
   executeCommand: (options: { command: string }) => Promise<unknown>
@@ -42,7 +46,11 @@ export function createAppSdk(transport: ITuffTransport): AppSdk {
     getSecureStoreHealth: () => transport.send(AppEvents.system.getSecureStoreHealth),
 
     openExternal: url => transport.send(AppEvents.system.openExternal, { url }),
-    showInFolder: path => transport.send(AppEvents.system.showInFolder, { path }),
+    showInFolder: (path, options) =>
+      transport.send(
+        AppEvents.system.showInFolder,
+        options?.reveal === true ? { path, reveal: true } : { path },
+      ),
     openApp: options => transport.send(AppEvents.system.openApp, options),
     openPromptsFolder: () => transport.send(AppEvents.system.openPromptsFolder),
     executeCommand: options => transport.send(AppEvents.system.executeCommand, options as any),

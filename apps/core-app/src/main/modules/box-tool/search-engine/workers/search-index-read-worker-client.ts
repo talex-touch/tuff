@@ -13,6 +13,8 @@ import { createLogger } from '../../../../utils/logger'
 
 const DEFAULT_QUERY_TIMEOUT_MS = 15_000
 const DEFAULT_MAX_QUEUE_DEPTH = 64
+/** The lane every reader belonged to before fast providers got their own; keeps old log shapes. */
+const DEFAULT_LANE = 'deferred'
 const sqliteDialect = new SQLiteSyncDialect()
 
 /**
@@ -37,6 +39,11 @@ export interface SearchIndexReadWorkerClientOptions {
   workerPath?: string
   timeoutMs?: number
   maxQueueDepth?: number
+  /**
+   * Diagnostic label for this reader. Two lanes share one worker script and one database, so the
+   * request ids and the retire log carry the lane name to tell them apart in a session log.
+   */
+  lane?: string
 }
 
 export class SearchIndexReadWorkerCancelledError extends Error {
@@ -162,6 +169,7 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
   private readonly workerPath: string
   private readonly timeoutMs: number
   private readonly maxQueueDepth: number
+  readonly lane: string
 
   constructor(
     private readonly databasePath: string,
@@ -170,6 +178,7 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
     this.workerPath = options.workerPath ?? resolveSearchIndexReadWorkerPath()
     this.timeoutMs = positiveInteger(options.timeoutMs, DEFAULT_QUERY_TIMEOUT_MS)
     this.maxQueueDepth = positiveInteger(options.maxQueueDepth, DEFAULT_MAX_QUEUE_DEPTH)
+    this.lane = options.lane?.trim() || DEFAULT_LANE
   }
 
   all<T>(query: SQL, signal?: AbortSignal): Promise<T[]> {
@@ -199,7 +208,7 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
       const pending: PendingRead = {
         request: {
           type: 'query',
-          requestId: `search-index-read-${++this.sequence}`,
+          requestId: `search-index-read-${this.lane}-${++this.sequence}`,
           sql: compiled.sql,
           args: compiled.params
         },
@@ -357,6 +366,7 @@ export class SearchIndexReadWorkerClient implements SearchIndexReadExecutor {
       readWorkerLog.warn('Search index read worker retired', {
         error,
         meta: {
+          lane: this.lane,
           consecutiveFailures: this.consecutiveFailures,
           willRebuild: this.consecutiveFailures < FAILURE_COOLDOWN_THRESHOLD,
           cooldownMs:

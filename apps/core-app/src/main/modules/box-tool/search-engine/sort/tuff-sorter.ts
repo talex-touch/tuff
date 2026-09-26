@@ -40,6 +40,74 @@ const LOW_CONFIDENCE_APP_FUZZY_MATCH_CAP = 160
 const LOW_CONFIDENCE_FEATURE_FREQUENCY_CAP = 18
 const LOW_CONFIDENCE_FEATURE_RECENCY_CAP = 1
 
+/**
+ * Match scores for file rows, on their own ladder below app / feature title matches.
+ *
+ * The index recalls a file for its extension keyword ("md", "pdf", "ts"), and the generic title
+ * path splits the title on "." — so README.md scored "md" as a word-prefix hit (500), the same
+ * as an app whose name starts with the query, and fifty such files per query buried every app
+ * that only matched as a substring, alias or typo. Files therefore match on their stem (the name
+ * without its extension): a stem equal to the query sits between an app title prefix (500 +
+ * APP_TITLE_PREFIX_INTENT_BONUS) and an app title substring (300 + APP_TITLE_SUBSTRING_INTENT_BONUS),
+ * a stem prefix stays under that substring but above a typo-tolerant app hit
+ * (LOW_CONFIDENCE_APP_FUZZY_MATCH_CAP), and an extension-only hit is a type-browse signal that
+ * ranks under every visible name match. Typing the full file name is still an exact title match.
+ */
+const FILE_STEM_EXACT_MATCH_SCORE = 420
+const FILE_STEM_PREFIX_MATCH_SCORE = 250
+const FILE_STEM_SUBSTRING_MATCH_SCORE = 150
+const FILE_EXTENSION_ONLY_MATCH_SCORE = 40
+
+function isFileItem(item: TuffItem): boolean {
+  return item.kind === 'file' || item.kind === 'folder' || item.source?.type === 'file'
+}
+
+function getFileExtension(item: TuffItem, titleLower: string): string {
+  const declared = item.meta?.file?.extension
+  if (typeof declared === 'string' && declared.trim()) {
+    return declared.trim().replace(/^\./, '').toLowerCase()
+  }
+  const dotIndex = titleLower.lastIndexOf('.')
+  if (dotIndex <= 0 || dotIndex === titleLower.length - 1) return ''
+  return titleLower.slice(dotIndex + 1)
+}
+
+function calculateFileMatchScore(
+  item: TuffItem,
+  titleLower: string,
+  normalizedKey: string
+): number {
+  if (!titleLower) return 0
+
+  const extension = getFileExtension(item, titleLower)
+  const stem =
+    extension && titleLower.endsWith(`.${extension}`)
+      ? titleLower.slice(0, -(extension.length + 1))
+      : titleLower
+
+  // "notes.md" typed against notes-2024.md: the extension belongs to the query, so the stems match.
+  const keyDotIndex = normalizedKey.lastIndexOf('.')
+  const stemKey =
+    keyDotIndex > 0 && extension && normalizedKey.slice(keyDotIndex + 1) === extension
+      ? normalizedKey.slice(0, keyDotIndex)
+      : normalizedKey
+
+  if (stem === stemKey) return FILE_STEM_EXACT_MATCH_SCORE
+  if (stem.includes(stemKey)) {
+    if (stem.startsWith(stemKey) || hasTitleWordPrefixMatch(stem, stemKey)) {
+      return FILE_STEM_PREFIX_MATCH_SCORE
+    }
+    return FILE_STEM_SUBSTRING_MATCH_SCORE
+  }
+
+  const extensionKey = normalizedKey.replace(/^\./, '')
+  if (extension && extensionKey && extension.startsWith(extensionKey)) {
+    return FILE_EXTENSION_ONLY_MATCH_SCORE
+  }
+
+  return 0
+}
+
 function getKindBias(item: TuffItem): number {
   const kind = item.kind || 'unknown'
   const baseBias = DEFAULT_KIND_BIAS[kind] || 0
@@ -201,6 +269,10 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
   // application searches from being displaced by plugin feature aliases.
   if (titleLower === normalizedKey) return 1000
 
+  if (isFileItem(item)) {
+    return calculateFileMatchScore(item, titleLower, normalizedKey)
+  }
+
   const matchRanges = item.meta?.extension?.matchResult as
     | { start: number; end: number }[]
     | undefined
@@ -361,10 +433,12 @@ export const tuffSorter: ISortMiddleware = {
       return b.score - a.score
     })
 
-    // Undecorate: publish the rank score and the pin partition on the item so a
-    // later batch can be ranked against this one by whoever holds both (renderer
-    // merge, completion cache). Items are shallow-copied because providers reuse
-    // the objects they hand in across queries.
+    // Undecorate: publish the rank score and the pin partition on the item. The
+    // renderer orders the rows of a later batch among themselves by this score
+    // before appending them below what is already on screen (it never re-ranks
+    // rendered rows), and the completion cache reads it too. Items are
+    // shallow-copied because providers reuse the objects they hand in across
+    // queries.
     return decoratedItems.map((decorated) => ({
       ...decorated.item,
       scoring: {

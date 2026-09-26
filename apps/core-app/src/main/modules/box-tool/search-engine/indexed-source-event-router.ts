@@ -4,7 +4,10 @@ import type {
   IndexingWatchDeltaAction,
   IndexingWatchDeltaBasePayload
 } from '@talex-touch/utils/search'
-import { IndexedSourceReconcileReasons } from '@talex-touch/utils/search/indexing-source'
+import {
+  IndexedSourceReconcileReasons,
+  isIndexedSourcePathInsideRoot
+} from '@talex-touch/utils/search/indexing-source'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import { APP_INDEXED_SOURCE_ID } from './app-indexed-source'
@@ -30,33 +33,57 @@ type RuntimeAccessor = () => IndexingRuntime | null
 
 type WatchDeltaPayload = IndexingWatchDeltaBasePayload<IndexingWatchDeltaAction>
 
+export interface IndexedSourceEventRouterOptions {
+  /**
+   * The app source's own watch roots (`/Applications` and `~/Applications` on darwin). Only paths
+   * under one of them enter the app queue.
+   *
+   * Every watcher event used to be queued for the app source too, and each one bought a health
+   * read — a full count of the FTS table on the single read worker — before the runtime found the
+   * path was not under `/Applications`. A tuffex build releases ~2,700 `dist/` paths, which kept that
+   * serial queue saturated for ~14 minutes while CoreBox queries waited behind it on the same
+   * worker. The roots are read on every event rather than cached: the lookup is a constant array,
+   * and only root ownership is decided here — health and permission stay with the runtime.
+   *
+   * Omitted, the queue accepts everything, which is the behaviour before this gate existed.
+   */
+  getAppWatchRoots?: () => readonly string[]
+}
+
 /** Routes filesystem watcher events to indexed sources without coupling to the search facade. */
 export class IndexedSourceEventRouter {
   private subscribed = false
+  private appRootsFailureLogged = false
   private readonly appQueue: IndexingWatchDeltaQueueService<WatchDeltaPayload>
   private readonly fileQueue: IndexingWatchDeltaQueueService<WatchDeltaPayload>
 
-  constructor(private readonly getRuntime: RuntimeAccessor) {
+  constructor(
+    private readonly getRuntime: RuntimeAccessor,
+    private readonly options: IndexedSourceEventRouterOptions = {}
+  ) {
     this.appQueue = this.createQueue(
       APP_INDEXED_SOURCE_ID,
       APP_WATCH_COALESCE_WINDOW_MS,
-      (rawPath) => this.normalizeAppKey(rawPath)
+      (rawPath) => this.normalizeAppKey(rawPath),
+      (rawPath) => this.isWithinAppWatchRoots(rawPath)
     )
     this.fileQueue = this.createQueue(
       FILE_INDEXED_SOURCE_ID,
       FILE_WATCH_COALESCE_WINDOW_MS,
-      (rawPath) => rawPath
+      (rawPath) => rawPath,
+      () => true
     )
   }
 
   private createQueue(
     sourceId: string,
     debounceMs: number,
-    normalizeKey: (rawPath: string) => string
+    normalizeKey: (rawPath: string) => string,
+    shouldAccept: (rawPath: string) => boolean
   ): IndexingWatchDeltaQueueService<WatchDeltaPayload> {
     return new IndexingWatchDeltaQueueService<WatchDeltaPayload>({
       normalizeKey,
-      shouldAccept: () => true,
+      shouldAccept,
       // The source itself decides what is in scope; a missing runtime means the same drop as
       // before this queue existed, so nothing accumulates while the engine is not up.
       prepareFlush: async () => true,
@@ -85,6 +112,36 @@ export class IndexedSourceEventRouter {
     const bundleIndex = rawPath.indexOf(`${MACOS_BUNDLE_SUFFIX}/`)
     if (bundleIndex < 0) return rawPath
     return rawPath.slice(0, bundleIndex + MACOS_BUNDLE_SUFFIX.length)
+  }
+
+  /**
+   * Same containment rule the runtime applies to the source's roots, so the queue cannot admit a
+   * path the runtime would route, nor drop one it would accept.
+   */
+  private isWithinAppWatchRoots(rawPath: string): boolean {
+    const getRoots = this.options.getAppWatchRoots
+    if (!getRoots) return true
+
+    let roots: readonly string[]
+    try {
+      roots = getRoots()
+    } catch (error) {
+      // Unknown roots fall back to routing: the runtime re-checks root ownership before it reads
+      // health, so an open gate costs a cheap check per event, where a closed one would lose app
+      // installs until the next reconcile.
+      if (!this.appRootsFailureLogged) {
+        this.appRootsFailureLogged = true
+        log.warn('App watch roots unavailable; routing app events unfiltered', { error })
+      }
+      return true
+    }
+
+    return roots.some(
+      (root) =>
+        typeof root === 'string' &&
+        root.length > 0 &&
+        isIndexedSourcePathInsideRoot(rawPath, root, { platform: process.platform })
+    )
   }
 
   subscribe(): void {

@@ -46,6 +46,21 @@ const FILES_TABLE_DDL = `
   )
 `
 
+// updateFileMetadata marks the file's enrichment pending inside the same transaction (#1964), so
+// the fixture needs the progress table the production search file carries.
+const FILE_INDEX_PROGRESS_DDL = `
+  CREATE TABLE file_index_progress (
+    file_id INTEGER NOT NULL PRIMARY KEY REFERENCES files(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending',
+    progress INTEGER NOT NULL DEFAULT 0,
+    processed_bytes INTEGER,
+    total_bytes INTEGER,
+    last_error TEXT,
+    started_at INTEGER,
+    updated_at INTEGER NOT NULL DEFAULT 0
+  )
+`
+
 const SYNTHETIC_PATH = '/synthetic/canary-lock.txt'
 
 function metadataRecord(
@@ -81,9 +96,14 @@ async function createLockFixture(): Promise<LockFixture> {
   await writerClient.execute('PRAGMA journal_mode = WAL')
   await writerClient.execute('PRAGMA busy_timeout = 200')
   await writerClient.execute(FILES_TABLE_DDL)
+  await writerClient.execute(FILE_INDEX_PROGRESS_DDL)
   await writerClient.execute(`
     INSERT INTO files (id, path, name, extension, size, mtime, ctime, last_indexed_at, is_dir, type)
     VALUES (1, '${SYNTHETIC_PATH}', 'canary-lock.txt', '.txt', 16, 1, 1, 1, 0, 'file')
+  `)
+  await writerClient.execute(`
+    INSERT INTO file_index_progress (file_id, status, progress, updated_at)
+    VALUES (1, 'completed', 100, 1)
   `)
 
   const lockClient = createClient({ url })
@@ -171,6 +191,11 @@ describe('file metadata update under a real second-connection writer lock', () =
       size: 64,
       type: 'file'
     })
+    // The changed file owes enrichment again, and that marker committed with the metadata.
+    const progress = await writerClient.execute(
+      'SELECT status, progress FROM file_index_progress WHERE file_id = 1'
+    )
+    expect(progress.rows[0]).toMatchObject({ status: 'pending', progress: 0 })
 
     // Idempotent: re-applying the same record updates in place, no duplicates.
     await expect(fixture.repository.updateFileMetadata([metadataRecord()])).resolves.toEqual({
