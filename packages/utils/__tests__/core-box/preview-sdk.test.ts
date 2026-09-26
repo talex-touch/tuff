@@ -796,3 +796,126 @@ describe("PreviewSDK", () => {
     ]);
   });
 });
+
+/* Regression: keyword detection used to be a plain `includes()` substring match,
+ * so `blender` (contains `len`), `countdown` (contains `count`) and
+ * `wordpress` (contains `word`) produced a bogus "文本统计" card that the
+ * preview-priority sorter pinned above real search results. A tag now only
+ * counts at the start/end of the query, and its trailing form is stripped
+ * before counting. */
+describe("PreviewSDK text stats tag boundaries", () => {
+  function createTextStatsSdk() {
+    return createPreviewSdk({ abilities: [new TextStatsAbility()] });
+  }
+
+  it("rejects queries that merely contain a tag keyword as a substring", async () => {
+    const sdk = createTextStatsSdk();
+    const queries = [
+      "blender",
+      "blender 3d",
+      "countdown",
+      "charlie",
+      "wordpress",
+      // prefix/suffix neighbours that must not shadow a real app entry either
+      "lengthy",
+      "blend",
+    ];
+
+    for (const text of queries) {
+      const output = await sdk.resolveWithDiagnostics({
+        query: { text, inputs: [] },
+        signal: signal(),
+      });
+
+      expect(output.result, `query: ${text}`).toBeNull();
+      expect(output.diagnostics.status, `query: ${text}`).toBe("no-match");
+    }
+  });
+
+  it("counts only the text around a leading/trailing tag", async () => {
+    const sdk = createTextStatsSdk();
+    const cases: Array<{
+      name: string;
+      query: string;
+      title: string;
+      characters: string;
+      words: string;
+    }> = [
+      {
+        name: "leading tag",
+        query: "len hello world",
+        title: "hello world",
+        characters: "11",
+        words: "2",
+      },
+      {
+        name: "trailing tag",
+        query: "hello world len",
+        title: "hello world",
+        characters: "11",
+        words: "2",
+      },
+      {
+        name: "leading colon separator",
+        query: "len: hello",
+        title: "hello",
+        characters: "5",
+        words: "1",
+      },
+      {
+        name: "trailing colon separator",
+        query: "hello: len",
+        title: "hello",
+        characters: "5",
+        words: "1",
+      },
+      {
+        name: "chinese trailing tag",
+        query: "你好世界 长度",
+        title: "你好世界",
+        characters: "4",
+        words: "1",
+      },
+      {
+        name: "chinese leading tag",
+        query: "长度 你好世界",
+        title: "你好世界",
+        characters: "4",
+        words: "1",
+      },
+      {
+        name: "english leading tag, chinese text",
+        query: "length 你好世界",
+        title: "你好世界",
+        characters: "4",
+        words: "1",
+      },
+      {
+        name: "chinese trailing tag, english text",
+        query: "hello 字数",
+        title: "hello",
+        characters: "5",
+        words: "1",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const output = await sdk.resolveWithDiagnostics({
+        query: { text: testCase.query, inputs: [] },
+        signal: signal(),
+      });
+
+      expect(output.result?.abilityId, testCase.name).toBe(
+        "preview.textstats",
+      );
+      expect(output.result?.payload.title, testCase.name).toBe(testCase.title);
+      expect(output.result?.payload.primaryValue, testCase.name).toBe(
+        testCase.characters,
+      );
+      expect(output.result?.payload.secondaryValue, testCase.name).toBe(
+        testCase.words,
+      );
+    }
+  });
+});
+

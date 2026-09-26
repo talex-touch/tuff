@@ -19,8 +19,30 @@ const TAG_KEYWORDS = [
   "词数",
 ];
 
-const KEYWORD_PREFIX = new RegExp(
-  `^(${TAG_KEYWORDS.join("|")})(?:[:：\\s]+)`,
+// Longest first so `length` is preferred over `len` and `chars` over `char`
+// once the tag is stripped with an optional separator.
+const KEYWORD_ALTERNATION = [...TAG_KEYWORDS]
+  .sort((a, b) => b.length - a.length)
+  .join("|");
+
+// A keyword only tags the query when it sits at the start or at the end of it,
+// separated by `:`/`：`/whitespace (or nothing, when it is the whole query).
+// Substring matching used to hijack ordinary searches: `blender` contains
+// `len`, `countdown` contains `count`, `wordpress` contains `word`.
+const LEADING_TAG = new RegExp(
+  `^(?:${KEYWORD_ALTERNATION})(?=$|[:：\\s])`,
+  "i",
+);
+const TRAILING_TAG = new RegExp(
+  `(?:^|[:：\\s])(?:${KEYWORD_ALTERNATION})$`,
+  "i",
+);
+const LEADING_TAG_STRIP = new RegExp(
+  `^(?:${KEYWORD_ALTERNATION})[:：\\s]*`,
+  "i",
+);
+const TRAILING_TAG_STRIP = new RegExp(
+  `[:：\\s]*(?:${KEYWORD_ALTERNATION})$`,
   "i",
 );
 
@@ -37,10 +59,18 @@ function cleanQuotes(input: string): string {
 }
 
 function containsKeyword(input: string): boolean {
-  const lower = input.toLowerCase();
-  return TAG_KEYWORDS.some(
-    (keyword) => lower.includes(keyword) || input.includes(keyword),
-  );
+  const trimmed = input.trim();
+  if (!trimmed) return false;
+  return LEADING_TAG.test(trimmed) || TRAILING_TAG.test(trimmed);
+}
+
+/** Drops the leading/trailing tag plus its separator from the counted text. */
+function stripKeyword(input: string): string {
+  return input
+    .trim()
+    .replace(LEADING_TAG_STRIP, "")
+    .replace(TRAILING_TAG_STRIP, "")
+    .trim();
 }
 
 export class TextStatsAbility extends BasePreviewAbility {
@@ -51,7 +81,7 @@ export class TextStatsAbility extends BasePreviewAbility {
     input: {
       maxLength: 500,
       syntax:
-        "text prefixed or tagged with words/chars/len/count/长度/字数/词数",
+        "text prefixed or suffixed with words/word/chars/char/len/length/count/长度/字数/词数",
       notes: "String counting only; no parser side effects.",
     },
     dependencies: ["parser"],
@@ -74,7 +104,7 @@ export class TextStatsAbility extends BasePreviewAbility {
     if (!containsKeyword(text) || !this.isInputWithinLimit(context))
       return null;
 
-    let contentRaw = text.replace(KEYWORD_PREFIX, "").trim();
+    let contentRaw = stripKeyword(text);
     const contentMatch = contentRaw.match(/["'`].+["'`]/);
     if (contentMatch) {
       contentRaw = contentMatch[0];
