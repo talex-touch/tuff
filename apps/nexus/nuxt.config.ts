@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
@@ -6,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { config as loadEnv } from 'dotenv'
 import { pwa } from './app/config/pwa'
 import { appDescription } from './app/constants/index'
+import { remarkCloseComponentTags } from './app/utils/remark-close-component-tags'
 import { remarkMermaid } from './app/utils/remark-mermaid'
 import { resolveTuffexDevMode } from './build/tuffex-dev-mode'
 import { nexusPageMetaFastPathPlugin } from './build/nexus-page-meta-fast-path'
@@ -154,6 +156,11 @@ function isEnvFlagEnabled(value?: string) {
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
 }
 
+/** Short content hash of a file, for a cache key that has to change whenever the file does. */
+function fileRevision(path: string) {
+  return createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 12)
+}
+
 /**
  * The two client plugins `@sentry/nuxt` registers: a template that `await import`s
  * `sentry.client.config.ts`, and the integrations plugin that depends on it. Both run before
@@ -269,6 +276,18 @@ export default defineNuxtConfig({
           'remark-mermaid': {
             src: resolve(currentDir, './app/utils/remark-mermaid'),
             instance: remarkMermaid,
+          },
+          // `<TuffDocSourceLink />` stays open in the HTML parse and swallows every section after
+          // it; this closes such tags first (see the plugin). A remark plugin rather than a
+          // `content:file:beforeParse` hook on purpose: @nuxt/content keys its parse cache on these
+          // markdown options plus the file, so a hook would never reach a page that was already
+          // cached. The key sees a function only by its own source text, so `revision` hashes the
+          // whole plugin file: an edit anywhere in it re-parses every page on the next start.
+          // `src` also hands the plugin to MDC's runtime `parseMarkdown`, which a hook never sees.
+          'remark-close-component-tags': {
+            src: resolve(currentDir, './app/utils/remark-close-component-tags'),
+            instance: remarkCloseComponentTags,
+            options: { revision: fileRevision(resolve(currentDir, './app/utils/remark-close-component-tags.ts')) },
           },
         },
         highlight: false,
