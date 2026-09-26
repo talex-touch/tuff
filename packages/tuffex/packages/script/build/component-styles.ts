@@ -44,6 +44,20 @@ const emptyStateStyleAliases = new Set([
   'search-empty',
 ])
 
+/**
+ * Components whose stylesheet deliberately lives in a sibling's, with no copy of their own.
+ *
+ * `stream-markdown` renders `.markdown-body` too, so it needs the vendored GitHub sheet that
+ * `markdown-view` owns. Importing that CSS from its own entry made the per-entry CSS split emit a
+ * second full copy of the sheet into `stream-markdown/style.css` — 37.9 KiB, the largest single
+ * item the on-demand budget counts — while both roots carry `.tx-md` and every rule in the sheet
+ * is scoped under it, so the borrowed sheet styles both. The edge below is what the on-demand
+ * plugin walks to load it.
+ */
+const borrowedStyleDeps: Record<string, string[]> = {
+  'stream-markdown': ['markdown-view'],
+}
+
 const externalDeps = Array.from(
   new Set([
     ...Object.keys(packageJson.dependencies ?? {}),
@@ -265,7 +279,10 @@ export async function buildComponentStyles() {
   const styleDeps: Record<string, string[]> = {}
   for (const componentName of Object.keys(entries).sort()) {
     const parts = entryCss.get(componentName) ?? { own: [], deps: [] }
-    const deps = emptyStateStyleAliases.has(componentName) ? ['empty-state'] : parts.deps
+    const borrowed = borrowedStyleDeps[componentName] ?? []
+    const deps = emptyStateStyleAliases.has(componentName)
+      ? ['empty-state']
+      : [...new Set([...parts.deps, ...borrowed])].sort()
     if (deps.length > 0)
       styleDeps[componentName] = deps
   }
