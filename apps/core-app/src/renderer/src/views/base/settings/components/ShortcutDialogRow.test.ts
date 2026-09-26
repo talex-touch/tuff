@@ -5,17 +5,22 @@ import { describe, expect, it } from 'vitest'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
+/** The row's own stylesheet, comments stripped. */
+function rowStylesheet(): string {
+  const source = readFileSync(resolve(here, 'ShortcutDialogRow.vue'), 'utf8')
+  return [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
+    .map((match) => match[1] ?? '')
+    .join('\n')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+}
+
 /**
  * The declarations of each rule in the row's own stylesheet, by selector, with multi-line values
  * collapsed onto one line. jsdom applies no SFC styles, so what a class resolves to is read from
  * the source it is declared in.
  */
 function statusRules(): Map<string, Map<string, string>> {
-  const source = readFileSync(resolve(here, 'ShortcutDialogRow.vue'), 'utf8')
-  const css = [...source.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
-    .map((match) => match[1] ?? '')
-    .join('\n')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
+  const css = rowStylesheet()
   const rules = new Map<string, Map<string, string>>()
   for (const [, selectors, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const declarations = new Map<string, string>()
@@ -45,8 +50,8 @@ function statusColors(): Map<string, string> {
   return colors
 }
 
-/** Hex from the `:root` (light) or `.dark` block of the tuffex tokens. */
-function themeToken(block: ':root' | '.dark', token: string): string {
+/** The `:root` (light) or `.dark` block of the tuffex tokens. */
+function themeBlock(block: ':root' | '.dark'): string {
   const scss = readFileSync(
     resolve(
       here,
@@ -55,13 +60,27 @@ function themeToken(block: ':root' | '.dark', token: string): string {
     'utf8'
   )
   const start = scss.indexOf(`\n${block} {`)
-  const end = scss.indexOf('\n}', start)
-  const value = new RegExp(`${token}:\\s*(#[0-9a-f]{6});`, 'i').exec(scss.slice(start, end))?.[1]
+  return scss.slice(start, scss.indexOf('\n}', start))
+}
+
+/** Hex from the `:root` (light) or `.dark` block of the tuffex tokens. */
+function themeToken(block: ':root' | '.dark', token: string): string {
+  const value = new RegExp(`${token}:\\s*(#[0-9a-f]{6});`, 'i').exec(themeBlock(block))?.[1]
   if (!value) throw new Error(`${token} not found in ${block}`)
   return value
 }
 
+/** A space-separated `--tx-color-*-rgb` triplet from the same blocks. */
+function themeTriplet(block: ':root' | '.dark', token: string): Rgb {
+  const value = new RegExp(`${token}:\\s*(\\d+) (\\d+) (\\d+);`).exec(themeBlock(block))
+  if (!value) throw new Error(`${token} not found in ${block}`)
+  return [Number(value[1]), Number(value[2]), Number(value[3])]
+}
+
 type Rgb = [number, number, number]
+/** `rgb(color / alpha)` painted over `base`, in the gamma-encoded channels browsers blend in. */
+const over = (color: Rgb, alpha: number, base: Rgb): Rgb =>
+  color.map((channel, i) => channel * alpha + base[i]! * (1 - alpha)) as Rgb
 const rgb = (hex: string): Rgb =>
   hex
     .slice(1)
@@ -161,4 +180,71 @@ describe('ShortcutDialogRow status ink contrast', () => {
       ).toBeGreaterThanOrEqual(4.5)
     }
   })
+})
+
+/**
+ * A save result tints its row: 8% green after a save, 16% red after a failure. The
+ * `--tx-color-*-rgb` tokens are space-separated triplets (`103 194 58`), so only
+ * `rgb(var(--…-rgb) / alpha)` survives substitution. The comma form `rgba(var(--…-rgb), alpha)`
+ * computes to transparent in Chromium, which is why the tint never showed. The status text sits in
+ * the sticky cell, which keeps its opaque base under the same single tint and has to clear 4.5:1
+ * on it.
+ */
+describe('ShortcutDialogRow save-result tint', () => {
+  /** A row state's `--shortcut-row-tint`, parsed; throws on any form but `rgb(var(…) / a)`. */
+  function rowTint(state: 'is-success' | 'is-error'): { token: string; alpha: number } {
+    const value = statusRules().get(`.ShortcutDialog-Row.${state}`)?.get('--shortcut-row-tint')
+    const match = /^rgb\(var\((--[\w-]+-rgb)\) \/ (\d*\.?\d+)\)$/.exec(value ?? '')
+    if (!match) throw new Error(`${state} tint is not rgb(var(--…-rgb) / alpha): ${value}`)
+    return { token: match[1]!, alpha: Number(match[2]) }
+  }
+
+  it('writes each tint in the one form an rgb triplet parses in', () => {
+    // `rgba(var(--x-rgb), a)` substitutes to `rgba(103 194 58, a)`, which no browser accepts.
+    expect(rowStylesheet()).not.toMatch(/rgba?\(\s*var\(--[\w-]+-rgb\)\s*,/)
+    expect(rowTint('is-success')).toEqual({ token: '--tx-color-success-rgb', alpha: 0.08 })
+    expect(rowTint('is-error')).toEqual({ token: '--tx-color-danger-rgb', alpha: 0.16 })
+  })
+
+  it('tints the row, and lays the same single tint over the sticky cell’s opaque base', () => {
+    const rules = statusRules()
+
+    for (const state of ['is-success', 'is-error']) {
+      expect(rules.get(`.ShortcutDialog-Row.${state}`)?.get('background-color'), state).toBe(
+        'var(--shortcut-row-tint)'
+      )
+      // Inheriting the row's translucent tint would stack it twice under the status text.
+      expect(
+        rules.get(`.ShortcutDialog-Row.${state} .ShortcutDialog-EnabledCell`)?.get('background'),
+        state
+      ).toBe(
+        'linear-gradient(var(--shortcut-row-tint), var(--shortcut-row-tint)), var(--tx-bg-color-overlay)'
+      )
+    }
+  })
+
+  it.each([':root', '.dark'] as const)(
+    'keeps the status text at 4.5:1 on the tinted cell in %s',
+    (block) => {
+      const cell = rgb(themeToken(block, '--tx-bg-color-overlay'))
+      const hue = (token: string) => rgb(themeToken(block, token))
+      // Light themes mix the hue toward the primary ink (the recipes above); dark keeps it plain.
+      const ink =
+        block === ':root'
+          ? {
+              success: mix(hue('--tx-color-success'), hue('--tx-text-color-primary'), 0.45),
+              danger: mix(hue('--tx-color-danger'), hue('--tx-text-color-primary'), 0.55)
+            }
+          : { success: hue('--tx-color-success'), danger: hue('--tx-color-danger') }
+
+      for (const [state, text] of [
+        ['is-success', ink.success],
+        ['is-error', ink.danger]
+      ] as const) {
+        const { token, alpha } = rowTint(state)
+        const tinted = over(themeTriplet(block, token), alpha, cell)
+        expect(contrast(text, tinted), `${block} ${state}`).toBeGreaterThanOrEqual(4.5)
+      }
+    }
+  )
 })

@@ -492,6 +492,7 @@
       "core_box_toggle": "唤起命令面板",
       "core_omniPanel_toggle": "唤起 OmniPanel",
       "core_omniPanel_mouseLongPress": "OmniPanel 鼠标触发",
+      "local_ai_cli_quick_open": "打开本机 AI 代理",
       "screenshot_tool_start": "截图",
       "voice_dictation_toggle": "全局听写（按一下开始，再按一下停止）",
       "voice_quickEdit": "划词改口（选中文字后按快捷键，说出要改成什么）"
