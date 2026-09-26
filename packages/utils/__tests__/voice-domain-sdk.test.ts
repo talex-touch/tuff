@@ -263,6 +263,41 @@ describe('voice domain sdk', () => {
     expect(transport.send).toHaveBeenCalledWith(voiceApiEvents.recoveryStatus, undefined)
   })
 
+  it('gives installSpeechModel a deadline that outlasts the download it starts', async () => {
+    const transport = createTransportMock(async () => ({
+      ok: true,
+      result: {
+        id: 'sense-voice-small',
+        version: '1.0.0',
+        bytes: 228_000_000,
+        reused: 0,
+        downloaded: 228_000_000,
+      },
+    }))
+    const sdk = createVoiceSdk(transport as unknown as VoiceSdkTransport)
+
+    await sdk.installSpeechModel({ id: 'sense-voice-small', version: '1.0.0' })
+    await sdk.listInstalledSpeechModels()
+
+    // A renderer channel abandons its request after 60s, but the main process keeps provisioning
+    // the engine runtime and pulling the 228MB weights well past that, and the bundle lands on
+    // disk anyway — inheriting the channel default reports channel_timeout for work that finished.
+    expect(transport.send).toHaveBeenCalledWith(
+      voiceApiEvents.installSpeechModel,
+      { id: 'sense-voice-small', version: '1.0.0' },
+      { timeout: 1_800_000 },
+    )
+    // Stated against the value the SDK actually sent, so lowering the deadline back to the
+    // channel default (or below it) reddens here as well as at the call above.
+    const installDeadline = transport.send.mock.calls.find(
+      ([event]) => event === voiceApiEvents.installSpeechModel,
+    )?.[2]?.timeout as number
+    expect(installDeadline).toBeGreaterThan(60_000)
+    // Sibling reads stay short: borrowing the install deadline would make a hung catalogue read
+    // wait half an hour instead of failing fast.
+    expect(transport.send).toHaveBeenCalledWith(voiceApiEvents.listInstalledSpeechModels, undefined)
+  })
+
   it('voice event names resolve to voice:api:<action>', () => {
     expect(voiceApiEvents.dictate.toEventName()).toBe('voice:api:dictate')
     expect(voiceApiEvents.speak.toEventName()).toBe('voice:api:speak')
