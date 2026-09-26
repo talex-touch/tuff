@@ -18,10 +18,10 @@ import type { IncomingHttpHeaders, RequestOptions as NodeHttpRequestOptions } fr
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
-import { request as httpRequest } from 'node:http'
+import { STATUS_CODES, request as httpRequest } from 'node:http'
 import { request as httpsRequest } from 'node:https'
 import { isIP } from 'node:net'
-import { Readable } from 'node:stream'
+import { PassThrough, Readable } from 'node:stream'
 import { StorageList } from '@talex-touch/utils'
 import {
   createNetworkGuard,
@@ -36,7 +36,7 @@ import {
   resolveLocalFilePath,
   toTfileUrl
 } from '@talex-touch/utils/network'
-import { app, session } from 'electron'
+import { app, net, session } from 'electron'
 import { resolveRuntimeRootPath } from '../../utils/app-root-path'
 import { getAllowedLocalFileRoots, isAllowedLocalFilePath } from '../../utils/local-file-policy'
 import { isTfilePreviewGrantAuthorized } from '../file-protocol/tfile-preview-grant'
@@ -263,6 +263,37 @@ function normalizeNodeHeaders(headers: IncomingHttpHeaders): Record<string, stri
     else if (Array.isArray(value)) output[key] = value.join(', ')
   }
   return output
+}
+
+/**
+ * Response headers shaped like the fetch path's, whose `Headers` lowercases every name. Callers
+ * index them directly (`headers['content-length']`), so casing cannot depend on the transport.
+ */
+function normalizeTransportHeaders(headers: IncomingHttpHeaders): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(normalizeNodeHeaders(headers)).map(([key, value]) => [key.toLowerCase(), value])
+  )
+}
+
+/**
+ * Body for the `net.request` transport, which only writes strings and buffers.
+ *
+ * Exotic fetch bodies are refused instead of being stringified into garbage: the manual-redirect
+ * path serves downloads, so a body reaching here is already unusual.
+ */
+function serializeNetRequestBody(
+  method: string,
+  body: unknown,
+  headers: Headers
+): string | Buffer | undefined {
+  const resolved = getBody(method, body, headers)
+  if (resolved === undefined) return undefined
+  if (typeof resolved === 'string') return resolved
+  if (resolved instanceof ArrayBuffer) return Buffer.from(resolved)
+  if (ArrayBuffer.isView(resolved)) {
+    return Buffer.from(resolved.buffer, resolved.byteOffset, resolved.byteLength)
+  }
+  throw new Error('NETWORK_STREAM_BODY_UNSUPPORTED')
 }
 
 function serializePinnedRequestBody(options: NetworkRequestOptions): Buffer | undefined {
@@ -810,19 +841,18 @@ export class NetworkService {
   }
 
   async requestStream(options: NetworkRequestOptions): Promise<NetworkStreamResponse> {
-    return await this.requestStreamWithRedirect(options, 'follow', false)
+    return await this.requestStreamWithRedirect(options, 'follow')
   }
 
   async requestStreamManualRedirect(
     options: NetworkRequestOptions
   ): Promise<NetworkStreamResponse> {
-    return await this.requestStreamWithRedirect(options, 'manual', true)
+    return await this.requestStreamWithRedirect(options, 'manual')
   }
 
   private async requestStreamWithRedirect(
     options: NetworkRequestOptions,
-    redirect: RequestRedirect,
-    allowEmptyBody: boolean
+    redirect: RequestRedirect
   ): Promise<NetworkStreamResponse> {
     const timeoutMode = options.streamTimeoutMode ?? 'deadline'
     if (timeoutMode === 'caller-signal' && !options.signal) {
@@ -839,26 +869,13 @@ export class NetworkService {
         )
         const abortContext = createNetworkAbortContext(options.signal, timeoutMs, timeoutMode)
         try {
-          const response = await this.executeFetch(options, redirect, abortContext)
-          const stream = response.body
-            ? Readable.fromWeb(response.body as unknown as NodeReadableStream)
-            : allowEmptyBody && response.status >= 300 && response.status < 400
-              ? Readable.from([])
-              : null
-          if (!stream) {
-            throw new Error('NETWORK_EMPTY_STREAM_BODY')
-          }
+          const response =
+            redirect === 'manual'
+              ? await this.requestManualRedirectStream(options, abortContext)
+              : await this.requestFollowedStream(options, abortContext)
           successfulAttemptContext = abortContext
 
-          return {
-            status: response.status,
-            statusText: response.statusText,
-            headers: normalizeHeaders(response.headers),
-            url: response.url,
-            stream,
-            complete: (): void => {},
-            cancel: (): void => {}
-          }
+          return response
         } catch (error) {
           abortContext.dispose()
           throw projectNetworkRequestError(error, abortContext)
@@ -916,6 +933,147 @@ export class NetworkService {
         return { ...result, complete, cancel }
       }
     )
+  }
+
+  /** Streams the response of a request whose redirects the transport follows on its own. */
+  private async requestFollowedStream(
+    options: NetworkRequestOptions,
+    abortContext: NetworkAbortContext
+  ): Promise<NetworkStreamResponse> {
+    const response = await this.executeFetch(options, 'follow', abortContext)
+    if (!response.body) {
+      throw new Error('NETWORK_EMPTY_STREAM_BODY')
+    }
+
+    return {
+      status: response.status,
+      statusText: response.statusText,
+      headers: normalizeHeaders(response.headers),
+      url: response.url,
+      stream: Readable.fromWeb(response.body as unknown as NodeReadableStream),
+      complete: (): void => {},
+      cancel: (): void => {}
+    }
+  }
+
+  /**
+   * Acquires one hop without following it, so the caller decides the next request and its headers.
+   *
+   * `session.fetch({ redirect: 'manual' })` cannot serve this contract: Chromium answers a hop that
+   * redirects with `Error: Redirect was cancelled` instead of a 3xx response, so every redirecting
+   * download failed outright. Only `net.request({ redirect: 'manual' })` reports the hop, through
+   * its `redirect` event, before cancelling it.
+   */
+  private async requestManualRedirectStream(
+    options: NetworkRequestOptions,
+    abortContext: NetworkAbortContext
+  ): Promise<NetworkStreamResponse> {
+    const config = this.getConfigFromSettings()
+    const proxyConfig = mergeProxyConfig(config.proxy, options.proxyOverride)
+    const targetUrl = appendQuery(options.url, options.query)
+    const sessionInstance = await this.getSession(proxyConfig)
+    const method = (options.method ?? 'GET').toUpperCase()
+    const headers = new Headers(options.headers ?? {})
+    // Chromium derives the length from the body; an explicit value makes it reject the request.
+    headers.delete('content-length')
+    const body = serializeNetRequestBody(method, options.body, headers)
+
+    return await new Promise<NetworkStreamResponse>((resolve, reject) => {
+      let settled = false
+      // Cookies stay off: `useSessionCookies` would hand this session's jar to every hop host.
+      const request = net.request({
+        session: sessionInstance,
+        method,
+        url: targetUrl,
+        headers: normalizeHeaders(headers),
+        redirect: 'manual'
+      })
+
+      const onAbort = (): void => request.abort()
+      const settle = (operation: () => void): void => {
+        if (settled) return
+        settled = true
+        abortContext.signal.removeEventListener('abort', onAbort)
+        operation()
+      }
+      const fail = (error: unknown): void =>
+        settle(() => reject(projectNetworkRequestError(error, abortContext)))
+
+      request.on('redirect', (statusCode, _redirectMethod, redirectUrl, responseHeaders) => {
+        // Settle before cancelling: aborting the hop can emit `error` for a hop already answered.
+        settle(() =>
+          resolve({
+            status: statusCode,
+            statusText: STATUS_CODES[statusCode] ?? '',
+            // `location` is what the caller resolves next, and Chromium reports it absolute.
+            headers: { ...normalizeTransportHeaders(responseHeaders), location: redirectUrl },
+            url: targetUrl,
+            stream: Readable.from([]),
+            complete: (): void => {},
+            cancel: (): void => {}
+          })
+        )
+        request.abort()
+      })
+
+      request.on('response', (response) => {
+        const status = response.statusCode
+        const responseHeaders = normalizeTransportHeaders(response.headers)
+        if (!isSuccessStatus(status, options.validateStatus)) {
+          settle(() =>
+            reject(new NetworkHttpStatusError(status, response.statusMessage, targetUrl))
+          )
+          request.abort()
+          return
+        }
+        if (responseHeaders['content-length'] === '0') {
+          settle(() => reject(new Error('NETWORK_EMPTY_STREAM_BODY')))
+          request.abort()
+          return
+        }
+
+        // Electron's IncomingMessage is an EventEmitter, not a Node Readable: no `pipe`, no
+        // `destroy`. Download consumers run it through `pipeline`, so bridge it with backpressure.
+        const stream = new PassThrough()
+        let ended = false
+        response.on('end', () => {
+          ended = true
+          stream.end()
+        })
+        response.on('error', (error) => stream.destroy(error))
+        // Electron documents pause/resume on this object; its typings omit them.
+        const flow = response as unknown as { pause: () => void; resume: () => void }
+        response.on('data', (chunk: Buffer) => {
+          if (stream.write(chunk)) return
+          flow.pause()
+          stream.once('drain', () => flow.resume())
+        })
+        stream.once('close', () => {
+          if (!ended) request.abort()
+        })
+
+        settle(() =>
+          resolve({
+            status,
+            statusText: response.statusMessage,
+            headers: responseHeaders,
+            url: targetUrl,
+            stream,
+            complete: (): void => {},
+            cancel: (): void => {}
+          })
+        )
+      })
+
+      request.on('error', (error) => fail(error))
+      if (abortContext.signal.aborted) {
+        settle(() => reject(abortContext.getAbortError() ?? new NetworkAbortError()))
+        return
+      }
+      abortContext.signal.addEventListener('abort', onAbort, { once: true })
+      if (body !== undefined) request.write(body)
+      request.end()
+    })
   }
 
   private async executeWithPolicies<T>(
