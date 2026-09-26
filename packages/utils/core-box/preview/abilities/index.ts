@@ -3,8 +3,10 @@ import { AdvancedExpressionAbility } from "./advanced-expression-ability";
 import { BasicExpressionAbility } from "./basic-expression-ability";
 import { ColorPreviewAbility } from "./color-ability";
 import { CurrencyPreviewAbility } from "./currency-ability";
+import { LineToolsAbility } from "./line-tools-ability";
 import { PercentageAbility } from "./percentage-ability";
 import { QuickOpsDeveloperAbility } from "./quickops-developer-ability";
+import { RadixConversionAbility } from "./radix-ability";
 import { ScientificConstantsAbility } from "./scientific-constants-ability";
 import { TextStatsAbility } from "./text-stats-ability";
 import { TimeDeltaAbility } from "./time-delta-ability";
@@ -23,8 +25,10 @@ export {
   type CurrencyRate,
   type ParsedCurrencyQuery,
 } from "./currency-ability";
+export { LineToolsAbility } from "./line-tools-ability";
 export { PercentageAbility } from "./percentage-ability";
 export { evaluateSafeMathExpression } from "./safe-math-expression";
+export { RadixConversionAbility } from "./radix-ability";
 export {
   hasQuickOpsDeveloperCommand,
   QuickOpsDeveloperAbility,
@@ -59,12 +63,14 @@ export function createDefaultPurePreviewAbilities(): PreviewAbility[] {
     new AdvancedExpressionAbility(),
     new BasicExpressionAbility(),
     new UnitConversionAbility(),
+    new RadixConversionAbility(),
     new ScientificConstantsAbility(),
     new ColorPreviewAbility(),
     new TimeDeltaAbility(),
     new CurrencyPreviewAbility(),
     new QuickOpsDeveloperAbility(),
     new PercentageAbility(),
+    new LineToolsAbility(),
     new TextStatsAbility(),
   ];
 }

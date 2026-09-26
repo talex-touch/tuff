@@ -24,6 +24,8 @@ const MIGRATED_ABILITY_IDS = new Set([
   'preview.textstats',
   'preview.color',
   'preview.unit',
+  'preview.radix',
+  'preview.lines',
   'preview.constants.scientific',
   'preview.time'
 ])
@@ -37,6 +39,8 @@ const ABILITY_FILES: Record<string, string> = {
   'preview.textstats': 'packages/utils/core-box/preview/abilities/text-stats-ability.ts',
   'preview.color': 'packages/utils/core-box/preview/abilities/color-ability.ts',
   'preview.unit': 'packages/utils/core-box/preview/abilities/unit-conversion-ability.ts',
+  'preview.radix': 'packages/utils/core-box/preview/abilities/radix-ability.ts',
+  'preview.lines': 'packages/utils/core-box/preview/abilities/line-tools-ability.ts',
   'preview.constants.scientific':
     'packages/utils/core-box/preview/abilities/scientific-constants-ability.ts',
   'preview.time': 'packages/utils/core-box/preview/abilities/time-delta-ability.ts',

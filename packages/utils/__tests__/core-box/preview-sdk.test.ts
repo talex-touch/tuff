@@ -6,8 +6,10 @@ import {
   BasicExpressionAbility,
   ColorPreviewAbility,
   CurrencyPreviewAbility,
+  LineToolsAbility,
   PercentageAbility,
   QuickOpsDeveloperAbility,
+  RadixConversionAbility,
   ScientificConstantsAbility,
   TextStatsAbility,
   TimeDeltaAbility,
@@ -920,6 +922,200 @@ describe("PreviewSDK text stats tag boundaries", () => {
   });
 });
 
+/* Regression: the radix ability used to reject a signed prefixed literal such as
+ * `-0x1f` (the prefix probe was anchored at `^0x`), and ordinary words were only
+ * kept out by accident. The tag boundary now requires a real separator/digit
+ * boundary, the sign survives both forms, and only values beyond 64 bits warn. */
+describe("PreviewSDK radix conversion", () => {
+  function createRadixSdk() {
+    return createPreviewSdk({ abilities: [new RadixConversionAbility()] });
+  }
+
+  it.each([
+    ["bare hex literal", "0x1f", "31"],
+    ["bare binary literal", "0b1010", "10"],
+    ["bare octal literal", "0o17", "15"],
+    ["signed hex literal", "-0x1f", "-31"],
+    ["zero literal keeps no prefix", "0x0", "0"],
+    ["leading hex tag reads decimal", "hex 255", "0xff"],
+    ["colon hex tag reads decimal", "hex: 255", "0xff"],
+    ["longest hex keyword wins", "hexadecimal 255", "0xff"],
+    ["hex tag falls back to hex digits", "hex ff", "255"],
+    ["hex tag keeps the sign", "hex -255", "-0xff"],
+    ["hex tag over zero", "hex 0", "0"],
+    ["binary tag reads decimal", "bin 12", "0b1100"],
+    ["chinese octal tag reads decimal", "八进制 255", "0o377"],
+    ["decimal tag decodes a prefixed literal", "dec 0xff", "255"],
+    ["trailing to-tag", "255 to hex", "0xff"],
+    ["trailing chinese tag", "255 转 十六进制", "0xff"],
+  ] as const)("converts %s", async (_name, query, expected) => {
+    const sdk = createRadixSdk();
+    const result = await sdk.resolve({
+      query: { text: query, inputs: [] },
+      signal: signal(),
+    });
+
+    expect(result?.abilityId).toBe("preview.radix");
+    expect(result?.payload.primaryValue).toBe(expected);
+  });
+
+  it("warns only once the converted value exceeds 64 bits", async () => {
+    const sdk = createRadixSdk();
+    const at64 = await sdk.resolve({
+      query: { text: "0xffffffffffffffff", inputs: [] },
+      signal: signal(),
+    });
+    const beyond64 = await sdk.resolve({
+      query: { text: "0x1ffffffffffffffff", inputs: [] },
+      signal: signal(),
+    });
+    const taggedBeyond64 = await sdk.resolve({
+      query: { text: "dec 0x1ffffffffffffffff", inputs: [] },
+      signal: signal(),
+    });
+
+    expect(at64?.payload.primaryValue).toBe("18446744073709551615");
+    expect(at64?.payload.warnings).toBeUndefined();
+
+    expect(beyond64?.payload.primaryValue).toBe("36893488147419103231");
+    expect(beyond64?.payload.warnings?.join(" ")).toContain(
+      "超出 64 位整数范围",
+    );
+    expect(
+      beyond64?.payload.sections?.[0]?.rows.find((row) => row.label === "位宽")
+        ?.value,
+    ).toBe("65 bit");
+
+    expect(taggedBeyond64?.payload.primaryValue).toBe("36893488147419103231");
+    expect(taggedBeyond64?.payload.warnings?.length).toBeGreaterThan(0);
+  });
+
+  it("renders all four base chips from the same converted value", async () => {
+    const sdk = createRadixSdk();
+    const result = await sdk.resolve({
+      query: { text: "hex 255", inputs: [] },
+      signal: signal(),
+    });
+
+    expect(
+      Object.fromEntries(
+        (result?.payload.chips ?? []).map((chip) => [chip.label, chip.value]),
+      ),
+    ).toEqual({
+      十六进制: "0xff",
+      二进制: "0b11111111",
+      八进制: "0o377",
+      十进制: "255",
+    });
+  });
+
+  it.each([
+    "blender",
+    "hexes",
+    "photoshop",
+    "photoshop hex",
+    "fox",
+    "0xzz",
+    "hex 12x",
+    "1.5 to hex",
+  ])("rejects %s without a card", async (text) => {
+    const sdk = createRadixSdk();
+    const output = await sdk.resolveWithDiagnostics({
+      query: { text, inputs: [] },
+      signal: signal(),
+    });
+
+    expect(output.result, `query: ${text}`).toBeNull();
+    expect(output.diagnostics.status, `query: ${text}`).toBe("no-match");
+  });
+});
+
+/* Regression: line processing used to match its tag with a plain `includes()`,
+ * so `sorter`/`sorting`/`resort` shadowed real search hits; the tag now has to
+ * land on a boundary, may lead or trail, and the tag-only form falls back to the
+ * first text input. */
+describe("PreviewSDK line tools", () => {
+  function createLineSdk() {
+    return createPreviewSdk({ abilities: [new LineToolsAbility()] });
+  }
+
+  it.each([
+    ["leading sort", "sort\nb\na\nb", "a\nb\nb"],
+    ["trailing dedupe", "b\na\nb 去重", "b\na"],
+    ["leading sort desc", "sort desc\nb\na\nb", "b\nb\na"],
+    ["leading drop empty", "drop empty\nb\n\na", "b\na"],
+    ["leading trim", "trim\n  b  \n a", "b\na"],
+    ["chinese sort tag", "排序\nb\na", "a\nb"],
+    ["crlf input", "sort\r\nb\r\na", "a\nb"],
+  ] as const)("applies %s", async (_name, query, expected) => {
+    const sdk = createLineSdk();
+    const result = await sdk.resolve({
+      query: { text: query, inputs: [] },
+      signal: signal(),
+    });
+
+    expect(result?.abilityId).toBe("preview.lines");
+    expect(result?.payload.primaryValue).toBe(expected);
+  });
+
+  it("falls back to the first text input when the tag has no inline payload", async () => {
+    const sdk = createLineSdk();
+    const result = await sdk.resolve({
+      query: {
+        text: "排序",
+        inputs: [{ type: TuffInputType.Text, content: "b\na" }],
+      },
+      signal: signal(),
+    });
+
+    expect(result?.abilityId).toBe("preview.lines");
+    expect(result?.payload.primaryValue).toBe("a\nb");
+  });
+
+  it("truncates input beyond 200 lines and reports the truncation", async () => {
+    const sdk = createLineSdk();
+    const withinLimit = Array.from(
+      { length: 200 },
+      (_, index) => `l${index}`,
+    ).join("\n");
+    const overLimit = Array.from(
+      { length: 201 },
+      (_, index) => `l${index}`,
+    ).join("\n");
+
+    const exact = await sdk.resolve({
+      query: { text: `sort\n${withinLimit}`, inputs: [] },
+      signal: signal(),
+    });
+    const truncated = await sdk.resolve({
+      query: { text: `sort\n${overLimit}`, inputs: [] },
+      signal: signal(),
+    });
+
+    expect(exact?.payload.warnings).toBeUndefined();
+    expect(exact?.payload.primaryValue?.split("\n")).toHaveLength(200);
+
+    const truncatedLines = truncated?.payload.primaryValue?.split("\n") ?? [];
+    expect(truncatedLines).toHaveLength(200);
+    expect(truncatedLines).not.toContain("l200");
+    expect(truncated?.payload.warnings?.join(" ")).toContain("200");
+  });
+
+  it.each(["sorter", "sorting", "resort", "ordered list"])(
+    "rejects %s without a card",
+    async (text) => {
+      const sdk = createLineSdk();
+      const output = await sdk.resolveWithDiagnostics({
+        query: { text, inputs: [] },
+        signal: signal(),
+      });
+
+      expect(output.result, `query: ${text}`).toBeNull();
+      expect(output.diagnostics.status, `query: ${text}`).toBe("no-match");
+    },
+  );
+});
+
 /* Regression: the constant alias normalizer used to delete Greek letters and `∞`
  * outright, so `ε₀` normalized to `0` and a bare `0` query resolved to a physics
  * constant. Bare `0`/`r` must resolve nothing, while symbols and legacy aliases
@@ -999,3 +1195,33 @@ describe("PreviewSDK new unit lexicon entries", () => {
   });
 });
 
+describe("PreviewSDK default registry wiring", () => {
+  it("keeps the default ability set free of duplicate ids", () => {
+    const ids = createDefaultPurePreviewAbilities().map(
+      (ability) => ability.id,
+    );
+
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("orders the default abilities by priority for dispatch", () => {
+    const ordered = createPreviewSdk({
+      abilities: createDefaultPurePreviewAbilities(),
+    }).listAbilities();
+
+    expect(ordered.map((ability) => ability.id)).toEqual([
+      "preview.expression.basic",
+      "preview.expression.advanced",
+      "preview.color",
+      "preview.constants.scientific",
+      "preview.unit",
+      "preview.radix",
+      "preview.time",
+      "preview.currency",
+      "preview.quickops.developer",
+      "preview.percent",
+      "preview.lines",
+      "preview.textstats",
+    ]);
+  });
+});
