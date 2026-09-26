@@ -155,6 +155,8 @@ import {
   resolveAppToolSourceIds
 } from './app-tool-source-catalog'
 import { isSearchableAppRow, processSearchResults } from './search-processing-service'
+import { AppSearchCatalogService } from './services/app-search-catalog-service'
+import { searchIndexCommitHub } from '../../search-engine/search-index-commit-hub'
 import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
 const SLOW_SEARCH_THRESHOLD_MS = 400
@@ -166,6 +168,11 @@ const APP_INDEX_SCAN_POLL_MS = 75
 
 type DbAppRecord = typeof filesSchema.$inferSelect
 type DbAppWithExtensions = DbAppRecord & { extensions: Record<string, string | null> }
+/**
+ * Kill switch for the in-memory app search path (09-26-app-search-in-memory-match). Off, every
+ * keystroke goes back to the three SQL lookups on the read worker shared with the file provider.
+ */
+const APP_SEARCH_MEMORY_PATH_ENABLED = true
 type AppFileMutationDb = Pick<CoreDatabase, 'insert' | 'update' | 'delete'>
 type AppDbBatchItem = Parameters<CoreDatabase['batch']>[0][number]
 type AppIndexSyncStats = {
@@ -398,7 +405,26 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     getAliases: (app) => this._getAliasesForApp(app),
     resolveToolSourceIds: (app) => this.resolveScannedAppToolSourceIds(app)
   })
-  private readonly userAliases = new AppUserAliasService({ getDbUtils: () => this.dbUtils })
+  private readonly userAliases = new AppUserAliasService({
+    getDbUtils: () => this.dbUtils,
+    onChanged: () => this.searchCatalog.scheduleReload('user-aliases')
+  })
+  /**
+   * The applications as the search path sees them, held in memory. `onSearch` used to issue
+   * three SQL lookups per keystroke on the read worker it shares with the file provider; the FTS
+   * one scanned the whole shared table and took 0.4–0.5s for 156 apps, so apps missed the fast
+   * layer on every keystroke. The catalog reloads from the database (still the source of truth)
+   * on every index commit that names this provider, on alias edits, after icon-pointer repairs,
+   * and when a search finds it stale.
+   */
+  private readonly searchCatalog = new AppSearchCatalogService({
+    providerId: this.id,
+    loadRows: () => this.loadSearchCatalogRows(),
+    toScannedInfo: (row) => this._mapDbAppToScannedInfo(row),
+    generateKeywords: (info) => this._generateKeywordsForApp(info),
+    subscribeCommits: (listener) =>
+      searchIndexCommitHub.subscribe((payload) => listener(payload.providerIds))
+  })
   /**
    * The index manager's API: summaries, aliases, launch shortcuts, launch and usage.
    *
@@ -761,6 +787,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     // empty map at scan time silently drops every user alias from the search index. Awaited
     // because `_scheduleFullSync` below is what publishes those projections.
     await this.userAliases.load()
+    // Not awaited: the SQL path serves a search that lands before the first snapshot, and a
+    // catalog that cannot load must not hold up the provider (it retries on the next commit).
+    void this.searchCatalog.reload('load')
     // Accelerators survive a restart in the shortcut store, but their callbacks cannot be
     // serialized: without this the key is registered with the OS and does nothing.
     await this.entryActions.restoreShortcuts()
@@ -860,6 +889,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   async onDestroy(): Promise<void> {
     logApp('Unloading AppProvider service', LogStyle.process)
+    this.searchCatalog.dispose()
     await this.prepareForSearchIndexShutdown()
     logApp('AppProvider service unloaded', LogStyle.success)
   }
@@ -1438,6 +1468,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       `Repaired ${chalk.green(iconUpserts.length)} cached and cleared ${chalk.yellow(staleIconFileIds.length)} stale app icon pointers`,
       LogStyle.success
     )
+    // Icon pointers change the row without an index delta, so the catalog would not hear of it.
+    this.searchCatalog.scheduleReload('icon-pointers')
   }
 
   private async persistHydratedAppIcons(
@@ -3376,6 +3408,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }))
   }
 
+  /** Every catalog row with its extensions: the in-memory search catalog's load. */
+  private async loadSearchCatalogRows(): Promise<DbAppWithExtensions[]> {
+    // Thrown rather than an empty list: a load that could not read the database must not leave
+    // the catalog ready and empty, answering nothing where the SQL path would still answer.
+    if (!this.dbUtils) throw new Error('APP_SEARCH_CATALOG_DB_UNAVAILABLE')
+    const files = await this.dbUtils
+      .getDb()
+      .select()
+      .from(filesSchema)
+      .where(eq(filesSchema.type, 'app'))
+    return await this.fetchExtensionsForFiles(files)
+  }
+
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item, searchResult } = args
 
@@ -3443,6 +3488,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const rawText = query.text.trim()
     if (!rawText) {
       return new TuffSearchResultBuilder(query).build()
+    }
+
+    if (APP_SEARCH_MEMORY_PATH_ENABLED && this.searchCatalog.isReady()) {
+      return await this.searchViaCatalog(query, rawText, searchStart, signal)
     }
 
     const db = this.dbUtils.getDb()
@@ -3698,6 +3747,65 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (signal?.aborted) {
       return new TuffSearchResultBuilder(query).build()
     }
+    const isFuzzySearch = !preciseMatchedItemIds || preciseMatchedItemIds.size === 0
+    return await this.finishSearch({
+      query,
+      rawText,
+      searchStart,
+      signal,
+      appsWithExtensions,
+      isFuzzySearch,
+      recallSummary: `precise=${chalk.cyan(preciseMatchedItemIds?.size ?? 0)}, fts=${chalk.cyan(
+        ftsMatches.length
+      )}`
+    })
+  }
+
+  /**
+   * The in-memory path: the same recall funnel over the catalog, then the same result pipeline.
+   * No database or read-worker call happens between the keystroke and the result.
+   */
+  private async searchViaCatalog(
+    query: TuffQuery,
+    rawText: string,
+    searchStart: number,
+    signal?: AbortSignal
+  ): Promise<TuffSearchResult> {
+    const recall = this.searchCatalog.recall(query)
+    if (signal?.aborted) {
+      return new TuffSearchResultBuilder(query).build()
+    }
+    if (recall.rows.length === 0) {
+      logApp('No candidates found for query, returning empty result', LogStyle.info)
+      return new TuffSearchResultBuilder(query).build()
+    }
+    const { stats } = recall
+    return await this.finishSearch({
+      query,
+      rawText,
+      searchStart,
+      signal,
+      appsWithExtensions: recall.rows,
+      isFuzzySearch: recall.isFuzzySearch,
+      recallSummary: `memory precise=${chalk.cyan(stats.precise)}, prefix=${chalk.cyan(
+        stats.prefix
+      )}, fts=${chalk.cyan(stats.fts)}, ngram=${chalk.cyan(stats.ngram)}, subseq=${chalk.cyan(
+        stats.subsequence
+      )}`
+    })
+  }
+
+  /** Everything after candidate recall, shared by the memory path and the SQL path. */
+  private async finishSearch(input: {
+    query: TuffQuery
+    rawText: string
+    searchStart: number
+    signal?: AbortSignal
+    appsWithExtensions: DbAppWithExtensions[]
+    isFuzzySearch: boolean
+    recallSummary: string
+  }): Promise<TuffSearchResult> {
+    const { query, rawText, searchStart, signal, appsWithExtensions, isFuzzySearch } = input
     const searchableAppsWithExtensions = appsWithExtensions.filter(isSearchableAppRow)
     const filteredAppsWithExtensions =
       this.isMac && this.appIndexSettings.hideNoisySystemApps
@@ -3726,7 +3834,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             return filtered
           })()
         : searchableAppsWithExtensions
-    const isFuzzySearch = !preciseMatchedItemIds || preciseMatchedItemIds.size === 0
 
     const processedResults = await processSearchResults(
       filteredAppsWithExtensions,
@@ -3755,9 +3862,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           style: 'warning',
           unit: 's',
           precision: 2,
-          suffix: `returned ${chalk.green(sortedItems.length)} results (precise=${chalk.cyan(
-            preciseMatchedItemIds?.size ?? 0
-          )}, fts=${chalk.cyan(ftsMatches.length)})`
+          suffix: `returned ${chalk.green(sortedItems.length)} results (${input.recallSummary})`
         },
         {
           logThresholds: { none: SLOW_SEARCH_THRESHOLD_MS, info: 1000, warn: 2500 },
