@@ -39,6 +39,10 @@ export interface IUseSearch {
   select: Ref<number>
   res: Ref<TuffItem[]> | ComputedRef<TuffItem[]>
   loading: Ref<boolean>
+  /** `loading` with nothing of the current query on screen yet: the searching cue's state. */
+  awaitingFirstResults: ComputedRef<boolean>
+  /** `loading` with the current query's rows on screen while the deferred layer still gathers. */
+  searchSettling: ComputedRef<boolean>
   searchError: Ref<boolean>
   recommendationPending: Ref<boolean>
   activeItem: ComputedRef<TuffItem>

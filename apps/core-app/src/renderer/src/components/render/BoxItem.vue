@@ -150,10 +150,9 @@ const shouldShowNoticeReason = computed(
 
 <template>
   <div
-    class="BoxItem hover:bg-[var(--tx-fill-color-lighter)] group flex items-center gap-2 mx-2 my-1 p-1.5 w-[calc(100%-1rem)] h-44px box-border cursor-pointer overflow-hidden relative rounded-lg transition-colors duration-100"
+    class="BoxItem group flex items-center gap-2 mx-2 my-1 p-1.5 w-[calc(100%-1rem)] h-44px box-border cursor-pointer overflow-hidden relative rounded-lg"
     :class="{
       'is-active': active,
-      '!bg-[var(--tx-bg-color)]': active,
       recommendation,
       'BoxItem--notice': isNoticeItem
     }"
@@ -238,7 +237,7 @@ const shouldShowNoticeReason = computed(
     </div>
 
     <div
-      class="absolute left-0 top-[25%] h-[50%] w-1 rounded-3xl bg-[var(--tx-color-primary)] shadow-[0_0_2px_0_var(--tx-color-primary)] transition-opacity duration-200 opacity-0 group-[.is-active]:opacity-100"
+      class="BoxItem__accent absolute left-0 top-[25%] h-[50%] w-1 rounded-3xl bg-[var(--tx-color-primary)] shadow-[0_0_2px_0_var(--tx-color-primary)] transition-opacity duration-200 opacity-0 group-[.is-active]:opacity-100"
     />
   </div>
 </template>
@@ -248,6 +247,27 @@ const shouldShowNoticeReason = computed(
   border-radius: var(--corebox-result-radius, 16px) !important;
   padding: var(--corebox-result-padding, 6px) !important;
   border-bottom: var(--corebox-result-divider, none);
+}
+
+.BoxItem.is-active {
+  background-color: var(--tx-bg-color);
+}
+
+// Hover colour is immediate, never paints over the selected row, and stays off from a key press
+// until the pointer moves (`data-pointer-idle` on the CoreBox wrapper). A notice row keeps its tint.
+.BoxItem:not(.is-active, .BoxItem--notice, [data-pointer-idle] *):hover {
+  background-color: var(--tx-fill-color-lighter);
+}
+
+// A CoreBox list showing its selection block (`data-selection-block`, useSelectionBlock): the block
+// paints the active background and accent bar and moves between rows; the row's own would double
+// them.
+[data-selection-block] .BoxItem.is-active {
+  background-color: transparent;
+}
+
+[data-selection-block] .BoxItem__accent {
+  display: none;
 }
 
 .BoxItem__content {

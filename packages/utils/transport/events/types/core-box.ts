@@ -287,6 +287,13 @@ export interface CoreBoxSearchIndexCommitPayload {
    * Optional so an older main process (or a fixture) simply never triggers the refresh.
    */
   recommendationsInvalidated?: boolean
+  /**
+   * Set when main coalesced this notification during bulk indexing — a full scan running, or
+   * commits arriving densely — so it may stand for many commits and a wider window (a few
+   * seconds instead of one). Absent for an ordinary commit. Optional so an older main process
+   * (or a fixture) reads as "not bulk".
+   */
+  bulk?: boolean
 }
 
 export interface CoreBoxSearchEndPayload {
@@ -774,6 +781,23 @@ export interface CoreBoxMetaOverlayItemActionPayload {
 
 export interface CoreBoxMetaOverlayFlowTransferPayload {
   item: TuffItem
+}
+
+/**
+ * The ⌘K action panel's state as the CoreBox window hosting it sees it. Main publishes it to that
+ * window's renderer on every change: while main has the window grown for the panel, CoreBox paints
+ * the space the growth added, which otherwise shows the window material — a blur of the desktop
+ * behind CoreBox. Host-only: a main → CoreBox broadcast with no handler and no plugin surface.
+ */
+export interface CoreBoxMetaOverlayPanelStatePayload {
+  /** The panel is on screen. */
+  visible: boolean
+  /**
+   * The window is taller than CoreBox's own layout because of the panel: from just before main
+   * grows it until the height handed back on close has landed. With an animated resize that
+   * outlasts `visible` by up to the animation.
+   */
+  grown: boolean
 }
 
 export interface CoreBoxUiResumePayload {

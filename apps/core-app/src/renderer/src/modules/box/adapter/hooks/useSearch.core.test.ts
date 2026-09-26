@@ -3,8 +3,9 @@ import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import type { IClipboardItem, IClipboardOptions } from './types'
 import { createCoreBoxContextActionsOpenRequest, TuffInputType } from '@talex-touch/utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick, ref } from 'vue'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick, reactive, ref, watch } from 'vue'
+import { setRendererActivity } from '~/modules/telemetry/renderer-activity'
 import { BoxMode } from '..'
 import { useSearch } from './useSearch'
 
@@ -495,8 +496,14 @@ describe('useSearch CoreBox reopen behavior', () => {
     vi.useRealTimers()
   })
 
-  it('returns focus to a selected file when its deferred update lands after an index-commit refresh', async () => {
-    vi.useFakeTimers()
+  /**
+   * D4 (2026-09-26): a re-run of the query already on screen (an index-commit refresh, the re-run
+   * when CoreBox is shown again) merges into the rows on screen, and removes the rows it did not
+   * deliver again only once it completes. Its fast snapshot routinely lacks the files, which only
+   * the deferred layer returns, so replacing the list with it dropped them and inserted them back
+   * on every refresh while an index built.
+   */
+  describe('a same-query refresh reconciles at completion', () => {
     const appItem = {
       id: 'app-row',
       kind: 'app',
@@ -510,18 +517,358 @@ describe('useSearch CoreBox reopen behavior', () => {
       render: { mode: 'default', basic: { title: 'report.md' } },
       meta: { file: { path: '/Users/demo/Workspace/report.md' } }
     } as TuffItem
+    const QUERY = 'commit-file'
+
+    const ids = (items: TuffItem[]): string[] => items.map((item) => item.id)
+    const scored = (item: TuffItem, final: number): TuffItem =>
+      ({ ...item, scoring: { final } }) as TuffItem
+
+    /** The first run of QUERY answers with `runs[0]`, the next with `runs[1]`, and so on. */
+    function serveRuns(runs: TuffItem[][]): void {
+      let served = 0
+      state.searchResultForRequest = (payload) => {
+        const text = getSearchQueryText(payload)
+        const result = createSearchResult(text)
+        if (text !== QUERY) return result
+        const items = runs[Math.min(served, runs.length - 1)]
+        served += 1
+        return { ...result, items }
+      }
+    }
+
+    /** Shows QUERY's results with row `focus` selected, the way a key press leaves it. */
+    async function showQuery(focus: number) {
+      const boxOptions = reactive(createBoxOptions())
+      const hook = useSearch(boxOptions, createClipboardOptions())
+      await flushPromises()
+      hook.searchVal.value = QUERY
+      await nextTick()
+      await flushPromises()
+      boxOptions.focus = focus
+      return { hook, boxOptions }
+    }
+
+    /** Every distinct list the results area renders from here on, as item ids. */
+    function recordFrames(hook: ReturnType<typeof useSearch>): string[][] {
+      const frames: string[][] = []
+      watch(
+        hook.res,
+        (items) => {
+          const frame = ids(items)
+          if (frames.at(-1)?.join('\n') !== frame.join('\n')) frames.push(frame)
+        },
+        { immediate: true }
+      )
+      return frames
+    }
+
+    /** Fires an index commit and lets its refresh land the snapshot; completion is held back. */
+    async function refreshOnCommit() {
+      const commitStream = Array.from(state.streams.entries()).find(([name]) =>
+        name.includes('index-committed')
+      )?.[1]
+      expect(commitStream).toBeDefined()
+      const requestsBefore = state.searchRequests.length
+
+      state.deferCompletion = true
+      commitStream?.onData({ revision: 1, providerIds: ['file-provider'], committedAt: 1 })
+      await vi.advanceTimersByTimeAsync(500)
+      await flushPromises()
+
+      expect(state.searchRequests).toHaveLength(requestsBefore + 1)
+      const refresh = state.searchRequests.at(-1)!
+      const sessionId = `stream-session-${state.searchRequests.length}`
+      return {
+        emit: (chunk: Record<string, unknown>) => refresh.options.onData({ sessionId, ...chunk }),
+        fail: (error: Error) => refresh.options.onError?.(error)
+      }
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      state.releaseCompletion?.()
+      for (const callback of state.beforeUnmountCallbacks) callback()
+      vi.useRealTimers()
+    })
+
+    it('keeps a selected file on screen and selected while the refresh snapshot omits it', async () => {
+      serveRuns([[appItem, fileItem], [appItem]])
+      const { hook, boxOptions } = await showQuery(1)
+      expect(hook.activeItem.value?.id).toBe(fileItem.id)
+      const frames = recordFrames(hook)
+
+      const refresh = await refreshOnCommit()
+
+      // 07-15 expected this snapshot to drop the file, leaving focus on the app row until the
+      // deferred update returned it. D4 moves the removal to completion: the file stays, and so
+      // does the selection.
+      expect(ids(hook.res.value)).toEqual([appItem.id, fileItem.id])
+      expect(hook.activeItem.value?.id).toBe(fileItem.id)
+
+      refresh.emit({ type: 'update', items: [fileItem] })
+      await flushPromises()
+      expect(ids(hook.res.value)).toEqual([appItem.id, fileItem.id])
+      expect(hook.activeItem.value?.id).toBe(fileItem.id)
+
+      state.releaseCompletion?.()
+      await flushPromises()
+
+      // Delivered again, so it stays. No rendered list ever lacked it, which is what keeps its
+      // row, and the row's DOM node, in place.
+      expect(ids(hook.res.value)).toEqual([appItem.id, fileItem.id])
+      expect(boxOptions.focus).toBe(1)
+      expect(frames.every((frame) => frame.includes(fileItem.id))).toBe(true)
+    })
+
+    it('removes a row the refresh did not deliver again once it completes', async () => {
+      serveRuns([[appItem, fileItem], [appItem]])
+      const { hook, boxOptions } = await showQuery(1)
+
+      await refreshOnCommit()
+      expect(ids(hook.res.value)).toEqual([appItem.id, fileItem.id])
+
+      state.releaseCompletion?.()
+      await flushPromises()
+
+      expect(ids(hook.res.value)).toEqual([appItem.id])
+      // The selected row went with it, so the selection falls back to row 0.
+      expect(boxOptions.focus).toBe(0)
+      expect(hook.activeItem.value?.id).toBe(appItem.id)
+    })
+
+    it('keeps the selection on its row when rows above it are removed', async () => {
+      const staleApp = { ...appItem, id: 'stale-app' } as TuffItem
+      serveRuns([[staleApp, appItem, fileItem], [appItem]])
+      const { hook, boxOptions } = await showQuery(2)
+
+      const refresh = await refreshOnCommit()
+      refresh.emit({ type: 'update', items: [fileItem] })
+      await flushPromises()
+      expect(ids(hook.res.value)).toEqual([staleApp.id, appItem.id, fileItem.id])
+
+      state.releaseCompletion?.()
+      await flushPromises()
+
+      expect(ids(hook.res.value)).toEqual([appItem.id, fileItem.id])
+      expect(boxOptions.focus).toBe(1)
+      expect(hook.activeItem.value?.id).toBe(fileItem.id)
+    })
+
+    it('keeps a selection the user made on its row and appends a higher-scoring snapshot row below', async () => {
+      const topApp = { ...appItem, id: 'top-app' } as TuffItem
+      serveRuns([[scored(appItem, 10), scored(fileItem, 5)], [scored(topApp, 20)]])
+      const { hook, boxOptions } = await showQuery(1)
+
+      await refreshOnCommit()
+
+      expect(ids(hook.res.value)).toEqual([appItem.id, fileItem.id, topApp.id])
+      expect(boxOptions.focus).toBe(1)
+      expect(hook.activeItem.value?.id).toBe(fileItem.id)
+    })
+
+    it('leaves an untouched selection on row 0 and appends a higher-scoring snapshot row below', async () => {
+      const topApp = { ...appItem, id: 'top-app' } as TuffItem
+      serveRuns([[scored(appItem, 10), scored(fileItem, 5)], [scored(topApp, 20)]])
+      const { hook, boxOptions } = await showQuery(0)
+
+      await refreshOnCommit()
+
+      expect(ids(hook.res.value)).toEqual([appItem.id, fileItem.id, topApp.id])
+      expect(boxOptions.focus).toBe(0)
+      expect(hook.activeItem.value?.id).toBe(appItem.id)
+    })
+
+    it('reconciles after the main-process search timeout when completion never arrives', async () => {
+      serveRuns([[appItem, fileItem], [appItem]])
+      const { hook, boxOptions } = await showQuery(1)
+      await refreshOnCommit()
+
+      // The deferred layer starts 50ms after the snapshot and gives each provider 3000ms; the
+      // fallback waits that out, with room for ranking and IPC.
+      await vi.advanceTimersByTimeAsync(3_499)
+      expect(ids(hook.res.value)).toEqual([appItem.id, fileItem.id])
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(ids(hook.res.value)).toEqual([appItem.id])
+      expect(boxOptions.focus).toBe(0)
+
+      // A completion that turns up after all only ends the search.
+      state.releaseCompletion?.()
+      await flushPromises()
+      expect(ids(hook.res.value)).toEqual([appItem.id])
+      expect(hook.loading.value).toBe(false)
+    })
+
+    it('resets on a cancelled refresh, as before, and leaves no reconcile behind', async () => {
+      serveRuns([[appItem, fileItem], [appItem]])
+      const { hook } = await showQuery(1)
+      const refresh = await refreshOnCommit()
+
+      refresh.emit({ type: 'complete', cancelled: true })
+      await flushPromises()
+      expect(hook.res.value).toEqual([])
+
+      await vi.advanceTimersByTimeAsync(3_500)
+      expect(hook.res.value).toEqual([])
+    })
+
+    it('keeps what is on screen when the refresh fails after its snapshot', async () => {
+      serveRuns([[appItem, fileItem], [appItem]])
+      const { hook } = await showQuery(1)
+      const refresh = await refreshOnCommit()
+
+      refresh.fail(new Error('search worker crashed'))
+      await flushPromises()
+      expect(hook.searchError.value).toBe(true)
+      expect(hook.loading.value).toBe(false)
+
+      // Nothing says which rows are stale, so none go, not even once the timeout has passed.
+      await vi.advanceTimersByTimeAsync(3_500)
+      expect(ids(hook.res.value)).toEqual([appItem.id, fileItem.id])
+    })
+
+    it('reconciles the re-run when CoreBox is shown again', async () => {
+      serveRuns([[appItem, fileItem], [appItem]])
+      const { hook, boxOptions } = await showQuery(0)
+      const requestsBefore = state.searchRequests.length
+
+      state.deferCompletion = true
+      window.dispatchEvent(new CustomEvent('corebox:shown'))
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(state.searchRequests).toHaveLength(requestsBefore + 1)
+      expect(ids(hook.res.value)).toEqual([appItem.id, fileItem.id])
+      expect(boxOptions.focus).toBe(0)
+
+      state.releaseCompletion?.()
+      await flushPromises()
+      expect(ids(hook.res.value)).toEqual([appItem.id])
+    })
+
+    it('replaces rather than merges into rows another query left on screen', async () => {
+      serveRuns([[appItem, fileItem], [appItem]])
+      const { hook } = await showQuery(0)
+
+      // Clearing the query brings the recommendation grid in over those rows.
+      hook.searchVal.value = ''
+      await nextTick()
+      await flushPromises()
+      expect(ids(hook.res.value)).toEqual(['item-1'])
+
+      // Typing the query again is a new search: the grid's rows are not its to keep.
+      state.deferCompletion = true
+      hook.searchVal.value = QUERY
+      await nextTick()
+      await flushPromises()
+      expect(ids(hook.res.value)).toEqual([appItem.id])
+    })
+
+    /**
+     * Past the render cap, what a plain run keeps depends on which deferred provider answered
+     * first, and the two race on every run. A refresh must still keep every row on screen it
+     * delivered again, the selected one included, rather than swap the tail for the other
+     * provider's rows.
+     */
+    it('keeps every row it delivered again when its deferred providers answer in the other order past the cap', async () => {
+      const deferredRows = (prefix: string, sourceId: string): TuffItem[] =>
+        Array.from(
+          { length: 50 },
+          (_, index) =>
+            ({
+              ...fileItem,
+              id: `${prefix}-${index}`,
+              source: { id: sourceId, type: 'file' },
+              scoring: { final: 1_000 - index }
+            }) as TuffItem
+        )
+      const indexed = deferredRows('indexed', 'file-provider')
+      const spotlight = deferredRows('spotlight', 'macos-spotlight-provider')
+      // The first run is the plain view of a run where the index answered first.
+      serveRuns([[appItem, ...indexed, ...spotlight], [appItem]])
+      const { hook, boxOptions } = await showQuery(0)
+      const onScreen = ids(hook.res.value)
+      expect(onScreen).toHaveLength(80)
+      boxOptions.focus = onScreen.indexOf('indexed-44')
+
+      // This time Spotlight answers first.
+      const refresh = await refreshOnCommit()
+      refresh.emit({ type: 'update', items: spotlight })
+      refresh.emit({ type: 'update', items: indexed })
+      await flushPromises()
+      state.releaseCompletion?.()
+      await flushPromises()
+
+      expect(ids(hook.res.value)).toEqual(onScreen)
+      expect(hook.activeItem.value?.id).toBe('indexed-44')
+    })
+
+    it('leaves rows something else put on screen during the refresh alone', async () => {
+      serveRuns([[appItem, fileItem], [appItem]])
+      const { hook } = await showQuery(0)
+      await refreshOnCommit()
+
+      // A widget activation takes the results over before the refresh completes.
+      const widget = { ...appItem, id: 'widget-row' } as TuffItem
+      hook.replaceSearchResults([widget])
+      state.releaseCompletion?.()
+      await flushPromises()
+      expect(ids(hook.res.value)).toEqual([widget.id])
+
+      await vi.advanceTimersByTimeAsync(3_500)
+      expect(ids(hook.res.value)).toEqual([widget.id])
+    })
+
+    it('leaves rows something else put on screen alone when its fallback fires', async () => {
+      serveRuns([[appItem, fileItem], [appItem]])
+      const { hook } = await showQuery(0)
+      await refreshOnCommit()
+
+      const widget = { ...appItem, id: 'widget-row' } as TuffItem
+      hook.replaceSearchResults([widget])
+      await vi.advanceTimersByTimeAsync(3_500)
+      expect(ids(hook.res.value)).toEqual([widget.id])
+    })
+  })
+
+  it('keeps an untouched selection on row 0 through an index-commit refresh', async () => {
+    // The refresh's deferred batch brings higher-scoring Spotlight rows; they go below what is on
+    // screen, so the top row and the untouched default selection on it stay put.
+    vi.useFakeTimers()
+    const fileRow = (path: string, sourceId: string, final: number): TuffItem =>
+      ({
+        id: path,
+        kind: 'file',
+        source: { id: sourceId, type: 'file' },
+        render: { mode: 'default', basic: { title: path } },
+        scoring: { final }
+      }) as TuffItem
+    const appRow = {
+      id: 'app-acrobat',
+      kind: 'app',
+      source: { id: 'app-provider', type: 'application' },
+      render: { mode: 'default', basic: { title: 'Acrobat' } },
+      scoring: { final: 1 }
+    } as TuffItem
+    const indexedFiles = Array.from({ length: 10 }, (_, index) =>
+      fileRow(`/index/${index}.pdf`, 'file-provider', 100)
+    )
+    const spotlightFiles = Array.from({ length: 10 }, (_, index) =>
+      fileRow(`/spotlight/${index}.pdf`, 'macos-spotlight-provider', 200)
+    )
     let servedInitialSnapshot = false
     state.searchResultForRequest = (payload) => {
       const query = getSearchQueryText(payload)
       const result = createSearchResult(query)
-      if (query !== 'commit-file') return result
-      // The forced refresh's fast-provider snapshot omits the just-indexed file; it only arrives
-      // on the deferred progressive update that follows.
+      if (query !== 'pdf') return result
       if (!servedInitialSnapshot) {
         servedInitialSnapshot = true
-        return { ...result, items: [appItem, fileItem] }
+        return { ...result, items: [...indexedFiles, appRow] }
       }
-      return { ...result, items: [appItem] }
+      // The refresh's fast layer: the files only come back on the deferred update.
+      return { ...result, items: [appRow] }
     }
 
     try {
@@ -529,42 +876,33 @@ describe('useSearch CoreBox reopen behavior', () => {
       const hook = useSearch(boxOptions, createClipboardOptions())
       await flushPromises()
 
-      hook.searchVal.value = 'commit-file'
+      hook.searchVal.value = 'pdf'
       await nextTick()
       await flushPromises()
-
-      expect(hook.res.value.map((item) => item.id)).toEqual([appItem.id, fileItem.id])
-      // The user has selected the file, so its preview is on screen.
-      boxOptions.focus = 1
+      expect(boxOptions.focus).toBe(0)
+      expect(hook.activeItem.value?.id).toBe('/index/0.pdf')
 
       const commitStream = Array.from(state.streams.entries()).find(([name]) =>
         name.includes('index-committed')
       )?.[1]
       expect(commitStream).toBeDefined()
 
-      // The refresh snapshot is the fast-provider view: it omits the not-yet-committed file, which
-      // only arrives on the deferred progressive update. Hold the stream open so that update is
-      // still accepted instead of being ignored after `complete`.
       state.deferCompletion = true
       commitStream?.onData({ revision: 1, providerIds: ['file-provider'], committedAt: 1 })
-
       await vi.advanceTimersByTimeAsync(500)
       await flushPromises()
-
-      // The fast snapshot dropped the file, so focus lands on the app row.
-      expect(hook.activeItem.value?.id).toBe(appItem.id)
 
       state.searchRequests.at(-1)?.options.onData({
         type: 'update',
         sessionId: `stream-session-${state.searchRequests.length}`,
-        items: [fileItem]
+        items: [...spotlightFiles, ...indexedFiles]
       })
       await flushPromises()
 
-      // The deferred row must win the focus back, not leave the app selected.
-      expect(hook.res.value.map((item) => item.id)).toEqual([appItem.id, fileItem.id])
-      expect(hook.activeItem.value?.id).toBe(fileItem.id)
-      expect(boxOptions.focus).toBe(hook.res.value.findIndex((item) => item.id === fileItem.id))
+      expect(hook.res.value.findIndex((item) => item.id === '/index/0.pdf')).toBe(0)
+      expect(hook.res.value.findIndex((item) => item.id === '/spotlight/0.pdf')).toBe(11)
+      expect(boxOptions.focus).toBe(0)
+      expect(hook.activeItem.value?.id).toBe('/index/0.pdf')
 
       state.releaseCompletion?.()
       await flushPromises()
@@ -702,19 +1040,24 @@ describe('useSearch CoreBox reopen behavior', () => {
       expect(state.searchRequests).toHaveLength(requestsBeforeRefresh + 1)
       expect(firstRefresh.resolve).not.toBeNull()
 
+      // Commits keep arriving, so the next refresh waits the 2s step. The first refresh is still in
+      // flight when that step ends, and the trailing one waits it out.
       commitStream?.onData({ revision: 2, providerIds: ['file-provider'], committedAt: 2 })
-      await vi.advanceTimersByTimeAsync(499)
+      await vi.advanceTimersByTimeAsync(2_000)
       expect(state.searchRequests).toHaveLength(requestsBeforeRefresh + 1)
 
       firstRefresh.resolve?.(createSearchResult(queryText, 2))
       firstRefreshResolved = true
       await flushPromises()
 
+      // It checks again at the first step, 500ms, rather than waiting a whole step more.
+      await vi.advanceTimersByTimeAsync(499)
+      expect(state.searchRequests).toHaveLength(requestsBeforeRefresh + 1)
       await vi.advanceTimersByTimeAsync(1)
       await flushPromises()
       expect(state.searchRequests).toHaveLength(requestsBeforeRefresh + 2)
 
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(5_000)
       expect(state.searchRequests).toHaveLength(requestsBeforeRefresh + 2)
     } finally {
       if (!firstRefreshResolved && firstRefresh.resolve) {
@@ -723,6 +1066,180 @@ describe('useSearch CoreBox reopen behavior', () => {
       for (const callback of state.beforeUnmountCallbacks) callback()
       vi.useRealTimers()
     }
+  })
+
+  /**
+   * D-a / D-d (2026-09-26). While an index builds, commits do not stop, and a refresh 500ms after
+   * each one re-ran the whole search back to back for as long as the build ran. The wait now steps
+   * up while commits keep arriving, and a hidden CoreBox keeps them for when it is shown again.
+   */
+  describe('index-commit refreshes back off and wait for a visible CoreBox', () => {
+    const QUERY = 'refresh-backoff'
+    let revision = 0
+
+    async function showQuery() {
+      const hook = useSearch(createBoxOptions(), createClipboardOptions())
+      await flushPromises()
+      hook.searchVal.value = QUERY
+      await nextTick()
+      await flushPromises()
+      return hook
+    }
+
+    function commit(payload: Record<string, unknown> = {}): void {
+      const commitStream = Array.from(state.streams.entries()).find(([name]) =>
+        name.includes('index-committed')
+      )?.[1]
+      expect(commitStream).toBeDefined()
+      revision += 1
+      commitStream?.onData({
+        revision,
+        providerIds: ['file-provider'],
+        committedAt: revision,
+        ...payload
+      })
+    }
+
+    /**
+     * Commits at each of `commitTimes` (ms from now, multiples of 100) and returns when each refresh
+     * started, up to `until`.
+     */
+    async function refreshTimes(
+      commitTimes: number[],
+      until: number,
+      payload: Record<string, unknown> = {}
+    ): Promise<number[]> {
+      const baseline = state.searchRequests.length
+      const started: number[] = []
+      for (let now = 0; now < until; now += 100) {
+        if (commitTimes.includes(now)) commit(payload)
+        await vi.advanceTimersByTimeAsync(100)
+        while (state.searchRequests.length - baseline > started.length) started.push(now + 100)
+      }
+      return started
+    }
+
+    const every = (intervalMs: number, untilMs: number): number[] =>
+      Array.from({ length: Math.ceil(untilMs / intervalMs) }, (_, index) => index * intervalMs)
+
+    beforeEach(() => {
+      vi.useFakeTimers()
+      revision = 0
+    })
+
+    afterEach(() => {
+      for (const callback of state.beforeUnmountCallbacks) callback()
+      setRendererActivity(true)
+      vi.useRealTimers()
+    })
+
+    it('waits 500ms, then 2s, then 5s while commits keep arriving', async () => {
+      await showQuery()
+      // Main coalesces a steady run of commits into one notification a second.
+      expect(await refreshTimes(every(1_000, 15_000), 15_000)).toEqual([500, 3_000, 8_000, 13_000])
+    })
+
+    it('refreshes three times, not sixteen, while commits arrive every 300ms for 10s', async () => {
+      // The cadence probe of research/root-cause.md §1.4, which measured 16 at a flat 500ms.
+      await showQuery()
+      expect(await refreshTimes(every(300, 10_000), 10_000)).toEqual([500, 2_600, 7_700])
+    })
+
+    it('waits from the 2s step when main marks the commits bulk', async () => {
+      // A full scan: main has already folded a few seconds of commits into each notification.
+      await showQuery()
+      expect(await refreshTimes(every(3_000, 12_000), 12_000, { bulk: true })).toEqual([
+        2_000, 8_000
+      ])
+    })
+
+    it('starts again from 500ms when the query changes', async () => {
+      const hook = await showQuery()
+      expect(await refreshTimes([0, 1_000], 3_000)).toEqual([500, 3_000])
+
+      // This commit would wait 5s, but the user types first; their search covers it.
+      commit()
+      hook.searchVal.value = `${QUERY} next`
+      await nextTick()
+      await flushPromises()
+      const typed = state.searchRequests.length
+
+      expect(await refreshTimes([0], 6_000)).toEqual([500])
+      expect(state.searchRequests.length - typed).toBe(1)
+    })
+
+    it('starts again from 500ms when CoreBox is shown again', async () => {
+      await showQuery()
+      expect(await refreshTimes([0, 1_000], 3_000)).toEqual([500, 3_000])
+
+      // This commit would wait 5s; the re-run on show covers it.
+      commit()
+      window.dispatchEvent(new CustomEvent('corebox:shown'))
+      await flushPromises()
+      const shown = state.searchRequests.length
+
+      expect(await refreshTimes([0], 6_000)).toEqual([500])
+      expect(state.searchRequests.length - shown).toBe(1)
+    })
+
+    it('starts again from 500ms once commits have paused for 5s', async () => {
+      await showQuery()
+      expect(await refreshTimes([0, 1_000], 3_000)).toEqual([500, 3_000])
+
+      // The index has stopped building: a lone commit shows within a second again.
+      expect(await refreshTimes([5_000], 6_000)).toEqual([5_500])
+    })
+
+    it('keeps commits while CoreBox is hidden and refreshes once when it is shown', async () => {
+      await showQuery()
+      setRendererActivity(false)
+      expect(await refreshTimes(every(300, 10_000), 10_000)).toEqual([])
+
+      // Main's show push: core-box.ts dispatches `corebox:shown` before useVisibility republishes
+      // the native state as renderer activity.
+      const beforeShow = state.searchRequests.length
+      window.dispatchEvent(new CustomEvent('corebox:shown'))
+      setRendererActivity(true)
+      await flushPromises()
+      expect(state.searchRequests.length - beforeShow).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(state.searchRequests.length - beforeShow).toBe(1)
+    })
+
+    it('refreshes once when the visible state arrives before `corebox:shown`', async () => {
+      await showQuery()
+      setRendererActivity(false)
+      expect(await refreshTimes(every(300, 3_000), 3_000)).toEqual([])
+
+      const beforeShow = state.searchRequests.length
+      setRendererActivity(true)
+      window.dispatchEvent(new CustomEvent('corebox:shown'))
+      await flushPromises()
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(state.searchRequests.length - beforeShow).toBe(1)
+    })
+
+    it('holds a refresh that CoreBox hid before it ran, and runs it once visible again', async () => {
+      await showQuery()
+      const baseline = state.searchRequests.length
+      commit()
+      await vi.advanceTimersByTimeAsync(200)
+      setRendererActivity(false)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(state.searchRequests.length - baseline).toBe(0)
+
+      // Visible again with no re-run of its own: document visibility, before the first native
+      // signal, does not dispatch `corebox:shown`. The held commit refreshes from the first step.
+      setRendererActivity(true)
+      await vi.advanceTimersByTimeAsync(499)
+      expect(state.searchRequests.length - baseline).toBe(0)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(state.searchRequests.length - baseline).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(state.searchRequests.length - baseline).toBe(1)
+    })
   })
 
   it('does not activate expired clipboard input during implicit search refresh', async () => {
@@ -1726,6 +2243,162 @@ describe('useSearch CoreBox reopen behavior', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  /**
+   * Opening CoreBox and clearing the query both take the recommendation path. It used to empty the
+   * results and drop their layout before asking, which unmounted the results area and left the
+   * window's old height blank until the grid came back. Now what is on screen stays until the
+   * snapshot replaces items and layout together; only a missed budget or a failure clears it.
+   */
+  describe('the recommendation path keeps what is on screen until its snapshot lands', () => {
+    function recommendation(sessionId: string, itemIds: string[]): TuffSearchResult {
+      return {
+        items: itemIds.map(
+          (id) =>
+            ({
+              id,
+              kind: 'app',
+              source: { id: 'app-provider', type: 'application' },
+              render: { mode: 'default', basic: { title: id } }
+            }) as TuffItem
+        ),
+        query: { text: '', inputs: [] },
+        duration: 1,
+        sources: [],
+        sessionId,
+        containerLayout: {
+          mode: 'grid',
+          grid: { columns: 6 },
+          sections: [{ id: sessionId, layout: 'grid', itemIds }]
+        }
+      }
+    }
+
+    /** Answers the first empty-query request with `first` and holds every later one. */
+    function serveRecommendations(first: TuffSearchResult): PromiseWithResolvers<TuffSearchResult> {
+      const held = Promise.withResolvers<TuffSearchResult>()
+      let served = 0
+      state.searchResultForRequest = (payload, requestIndex) => {
+        const text = getSearchQueryText(payload)
+        if (text) return createSearchResult(text, requestIndex)
+        served += 1
+        return served === 1 ? first : held.promise
+      }
+      return held
+    }
+
+    /** Each distinct state the results area is rendered in: layout mode, then item ids. */
+    function recordFrames(hook: ReturnType<typeof useSearch>, boxOptions: IBoxOptions): string[] {
+      const frames: string[] = []
+      watch(
+        [hook.res, () => boxOptions.layout],
+        ([items, layout]) => {
+          const frame = `${layout?.mode ?? 'list'}:${items.map((item) => item.id).join(',')}`
+          if (frames.at(-1) !== frame) frames.push(frame)
+        },
+        { immediate: true }
+      )
+      return frames
+    }
+
+    const ids = (items: TuffItem[]): string[] => items.map((item) => item.id)
+
+    it('leaves the grid up while a re-shown CoreBox asks again, then swaps it in one update', async () => {
+      const held = serveRecommendations(recommendation('grid-a', ['app-1', 'app-2']))
+      const boxOptions = reactive(createBoxOptions())
+      const hook = useSearch(boxOptions, createClipboardOptions())
+      await flushPromises()
+      const frames = recordFrames(hook, boxOptions)
+
+      window.dispatchEvent(new CustomEvent('corebox:shown'))
+      await flushPromises()
+
+      expect(hook.recommendationPending.value).toBe(true)
+      expect(ids(hook.res.value)).toEqual(['app-1', 'app-2'])
+      expect(boxOptions.layout?.mode).toBe('grid')
+
+      held.resolve(recommendation('grid-b', ['app-2', 'app-3']))
+      await flushPromises()
+
+      expect(frames).toEqual(['grid:app-1,app-2', 'grid:app-2,app-3'])
+      expect(boxOptions.layout?.sections?.map((section) => section.itemIds)).toEqual([
+        ['app-2', 'app-3']
+      ])
+    })
+
+    it('leaves a cleared query’s results up until the grid replaces them', async () => {
+      const held = serveRecommendations(recommendation('grid-a', ['app-1']))
+      const boxOptions = reactive(createBoxOptions())
+      const hook = useSearch(boxOptions, createClipboardOptions())
+      await flushPromises()
+      hook.searchVal.value = 'report'
+      await nextTick()
+      await flushPromises()
+      const textResults = ids(hook.res.value)
+      expect(boxOptions.layout).toBeUndefined()
+      const frames = recordFrames(hook, boxOptions)
+
+      hook.searchVal.value = ''
+      await nextTick()
+      await flushPromises()
+
+      expect(ids(hook.res.value)).toEqual(textResults)
+
+      held.resolve(recommendation('grid-b', ['app-3']))
+      await flushPromises()
+
+      expect(frames).toEqual([`list:${textResults.join(',')}`, 'grid:app-3'])
+    })
+
+    it('clears what is still on screen once the snapshot misses its 400ms budget', async () => {
+      vi.useFakeTimers()
+      try {
+        const held = serveRecommendations(recommendation('grid-a', ['app-1', 'app-2']))
+        const boxOptions = reactive(createBoxOptions())
+        const hook = useSearch(boxOptions, createClipboardOptions())
+        await flushPromises()
+
+        window.dispatchEvent(new CustomEvent('corebox:shown'))
+        await flushPromises()
+        await vi.advanceTimersByTimeAsync(399)
+        expect(ids(hook.res.value)).toEqual(['app-1', 'app-2'])
+
+        await vi.advanceTimersByTimeAsync(2)
+        expect(hook.res.value).toEqual([])
+        expect(boxOptions.layout).toBeUndefined()
+        expect(hook.recommendationPending.value).toBe(false)
+
+        held.resolve(recommendation('grid-b', ['app-3']))
+        await flushPromises()
+        expect(ids(hook.res.value)).toEqual(['app-3'])
+        expect(boxOptions.layout?.mode).toBe('grid')
+      } finally {
+        for (const callback of state.beforeUnmountCallbacks) callback()
+        vi.useRealTimers()
+      }
+    })
+
+    it('clears what is on screen when the recommendation fails', async () => {
+      let failRecommendation = false
+      state.searchErrorForRequest = (payload) =>
+        failRecommendation && getSearchQueryText(payload) === ''
+          ? new Error('recommendation unavailable')
+          : null
+      serveRecommendations(recommendation('grid-a', ['app-1', 'app-2']))
+      const boxOptions = reactive(createBoxOptions())
+      const hook = useSearch(boxOptions, createClipboardOptions())
+      await flushPromises()
+      expect(ids(hook.res.value)).toEqual(['app-1', 'app-2'])
+
+      failRecommendation = true
+      window.dispatchEvent(new CustomEvent('corebox:shown'))
+      await flushPromises()
+
+      expect(hook.res.value).toEqual([])
+      expect(boxOptions.layout).toBeUndefined()
+      expect(hook.searchError.value).toBe(true)
+    })
   })
 
   /**

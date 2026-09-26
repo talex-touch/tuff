@@ -29,8 +29,10 @@ import {
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { useDebounceFn } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { provideDuplicateFileFolderLabels } from '~/components/render/duplicate-file-names'
 import { useBoxItems } from '~/modules/box/item-sdk'
 import { appSetting } from '~/modules/storage/app-storage'
+import { subscribeRendererActivity } from '~/modules/telemetry/renderer-activity'
 import { devLog } from '~/utils/dev-log'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { BoxMode } from '..'
@@ -62,6 +64,19 @@ interface ExecuteSearchOptions {
   force?: boolean
   preserveSelection?: boolean
   refreshClipboard?: boolean
+}
+
+/** A same-query refresh waiting for its search to complete; see `applySearchSnapshot`. */
+interface RefreshReconcile {
+  /** What the run delivered, merged the way a plain run would have shown it. */
+  items: TuffItem[]
+  /**
+   * Every id the run delivered, before the render cap: the rows on screen that stay. `items` went
+   * through the cap in delivery order, and the deferred providers answer in either order, so past
+   * the cap it can lack a row the run did send again.
+   */
+  deliveredIds: Set<string>
+  timer: ReturnType<typeof setTimeout>
 }
 
 type BoxData = {
@@ -424,6 +439,9 @@ export function useSearch(
     return filterDetachedItems(result).slice(0, MAX_RENDERED_RESULTS)
   })
 
+  // Rows that share a file name show enough of their folder to tell them apart (ItemSubtitle).
+  provideDuplicateFileFolderLabels(res)
+
   watch(boxItems, (items) => {
     activeActivations.value = refreshActiveWidgetFeature(activeActivations.value, [...items])
   })
@@ -431,6 +449,17 @@ export function useSearch(
   const searchResult = ref<TuffSearchResult | null>(null)
   const contextActionRequest = shallowRef<CoreBoxContextActionsOpenRequest | null>(null)
   const loading = ref(false)
+  /**
+   * The current query has at least one row of its own on screen. `loading` alone cannot tell a
+   * query still waiting for its first rows from one whose rows are up while the deferred layer
+   * (the files) keeps gathering: the session completes only after that layer, up to a few seconds
+   * after the apps landed, and a searching cue held that long read as a slow search.
+   */
+  const hasFreshResults = ref(false)
+  /** Loading with nothing of the current query on screen yet: the searching cue belongs here. */
+  const awaitingFirstResults = computed(() => loading.value && !hasFreshResults.value)
+  /** Loading with the current query's rows on screen: the session is still gathering. */
+  const searchSettling = computed(() => loading.value && hasFreshResults.value)
   const searchError = ref(false)
   const recommendationPending = ref(false)
   const activeActivations = ref<IProviderActivate[] | null>(null)
@@ -456,10 +485,10 @@ export function useSearch(
   // score. Every source present in the merged set keeps this many slots.
   const MIN_SLOTS_PER_SOURCE = 6
 
-  // Mirrors the backend's per-update safety cap. An arriving batch is ranked and
-  // quota'd together with what is already on screen, so cutting it to the render
-  // cap here would drop a batch's low-ranked source before it can claim its
-  // floor — exactly the starvation the backend stopped doing.
+  // Mirrors the backend's per-update safety cap. An arriving batch is appended to
+  // and quota'd together with what is already on screen, so cutting it to the
+  // render cap here would drop a batch's low-ranked source before it can claim
+  // its floor — exactly the starvation the backend stopped doing.
   const MAX_INCOMING_BATCH_ITEMS = 200
 
   function limitRenderedItems(items: TuffItem[]): TuffItem[] {
@@ -480,9 +509,14 @@ export function useSearch(
    * Cut a ranked list down to the render cap while guaranteeing each source a
    * floor of slots. The overflow is taken from the tail of the cut, and only
    * from sources that are still above their own floor, so the result stays a
-   * deterministic function of the ranked input.
+   * deterministic function of the ranked input. `keepItemId` (the selected row)
+   * is never evicted: a batch claiming its floor must not pull the highlight
+   * out from under the user.
    */
-  function applyRenderedItemQuota(rankedItems: TuffItem[]): TuffItem[] {
+  function applyRenderedItemQuota(
+    rankedItems: TuffItem[],
+    keepItemId: string | null = null
+  ): TuffItem[] {
     if (rankedItems.length <= MAX_RENDERED_RESULTS) return rankedItems
 
     const selectedIds = new Set<string>()
@@ -506,7 +540,7 @@ export function useSearch(
         const candidate = rankedItems[evictCursor]
         evictCursor -= 1
         if (!candidate || !selectedIds.has(candidate.id)) continue
-        if (candidate.scoring?.pinned === true) continue
+        if (candidate.scoring?.pinned === true || candidate.id === keepItemId) continue
         const sourceId = getSourceId(candidate)
         const selected = sourceSelected.get(sourceId) ?? 0
         if (selected <= Math.min(MIN_SLOTS_PER_SOURCE, sourceTotals.get(sourceId) ?? 0)) continue
@@ -539,46 +573,83 @@ export function useSearch(
   }
 
   /**
-   * Rank by the score the backend ranker wrote onto the item, so a later batch
-   * competes with the earlier ones instead of being appended below them. Ties
-   * keep the order the user is already looking at.
+   * Order the rows of one batch that are new to the screen: pinned first, then
+   * by the score the backend ranker wrote onto the item, then arrival order.
    */
-  function rankRenderedItems(items: TuffItem[], previousOrder: Map<string, number>): TuffItem[] {
+  function rankArrivals(items: TuffItem[]): TuffItem[] {
     return items
       .map((item, index) => ({
         item,
         index,
         pinned: item.scoring?.pinned === true,
-        score: typeof item.scoring?.final === 'number' ? item.scoring.final : 0,
-        previousRank: previousOrder.get(item.id) ?? Number.MAX_SAFE_INTEGER
+        score: typeof item.scoring?.final === 'number' ? item.scoring.final : 0
       }))
       .sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
         if (b.score !== a.score) return b.score - a.score
-        if (a.previousRank !== b.previousRank) return a.previousRank - b.previousRank
         return a.index - b.index
       })
       .map((entry) => entry.item)
   }
 
-  function mergeRenderedItems(current: TuffItem[], incoming: TuffItem[]): TuffItem[] {
-    const previousOrder = new Map<string, number>()
+  /**
+   * Merge a later batch into what is on screen without moving a row the user is
+   * already looking at. A row that is on screen keeps its position and takes the
+   * newer item data; rows new to the screen are ranked among themselves and
+   * appended below everything, so the deferred layer (the files) never
+   * reshuffles the fast results or the selection. Pinned arrivals are the one
+   * exception: they join the pinned block at the top, after the pinned rows
+   * already there.
+   */
+  function mergeRenderedItems(
+    current: TuffItem[],
+    incoming: TuffItem[],
+    keepItemId: string | null = null
+  ): TuffItem[] {
+    const renderedIndexById = new Map<string, number>()
     current.forEach((item, index) => {
-      previousOrder.set(item.id, index)
+      renderedIndexById.set(item.id, index)
     })
 
-    const itemsById = new Map<string, TuffItem>()
-    for (const item of current) {
-      itemsById.set(item.id, item)
-    }
+    const merged = [...current]
+    const arrivals: TuffItem[] = []
+    const arrivalIndexById = new Map<string, number>()
     for (const item of incoming) {
-      itemsById.set(item.id, item)
+      const renderedIndex = renderedIndexById.get(item.id)
+      if (renderedIndex !== undefined) {
+        merged[renderedIndex] = item
+        continue
+      }
+      const arrivalIndex = arrivalIndexById.get(item.id)
+      if (arrivalIndex !== undefined) {
+        arrivals[arrivalIndex] = item
+        continue
+      }
+      arrivalIndexById.set(item.id, arrivals.length)
+      arrivals.push(item)
     }
+    if (arrivals.length === 0) return applyRenderedItemQuota(merged, keepItemId)
 
-    return applyRenderedItemQuota(rankRenderedItems([...itemsById.values()], previousOrder))
+    const ranked = rankArrivals(arrivals)
+    const firstUnpinned = ranked.findIndex((item) => item.scoring?.pinned !== true)
+    const pinnedArrivals = firstUnpinned === -1 ? ranked : ranked.slice(0, firstUnpinned)
+    const unpinnedArrivals = firstUnpinned === -1 ? [] : ranked.slice(firstUnpinned)
+    if (pinnedArrivals.length > 0) {
+      let pinnedEnd = 0
+      while (pinnedEnd < merged.length && merged[pinnedEnd].scoring?.pinned === true) {
+        pinnedEnd += 1
+      }
+      merged.splice(pinnedEnd, 0, ...pinnedArrivals)
+    }
+    merged.push(...unpinnedArrivals)
+
+    return applyRenderedItemQuota(merged, keepItemId)
   }
 
-  /** Selection follows the item across a re-rank, not the row it used to sit in. */
+  /**
+   * Selection follows the item, not the row: a pinned arrival above it or a
+   * quota eviction can still move or drop it.
+   */
   function restoreFocusedItem(itemId: string | null): void {
     if (boxOptions.focus < 0 || !itemId) return
     const nextIndex = res.value.findIndex((item) => item.id === itemId)
@@ -606,14 +677,50 @@ export function useSearch(
   let indexCommitRefreshPending = false
   /** Latched across the debounce window so a plain commit cannot cancel a grid-relevant one. */
   let indexCommitRefreshForRecommendations = false
+  /** The INDEX_COMMIT_REFRESH_STEPS_MS entry the next refresh waits; see noteIndexCommit. */
+  let indexCommitRefreshStep = 0
+  let lastIndexCommitAt: number | null = null
+  /**
+   * Whether the CoreBox window is on screen. useVisibility publishes the native show/hide signal
+   * (document visibility until the first one arrives) as renderer activity.
+   */
+  let coreBoxWindowVisible = true
   let indexCommitStreamDisposed = false
   let indexCommitStreamGeneration = 0
   let indexCommitStreamStartPending = false
   let indexCommitStreamController: { cancel: () => void } | null = null
   let indexCommitStreamRetryTimer: ReturnType<typeof setTimeout> | null = null
+  /**
+   * The text query whose results are on screen, with the array it put there. A later run of that
+   * query reconciles into those rows instead of replacing them. Anything else that replaces
+   * `searchResults` (another query, the recommendation grid, a reset) assigns a different array,
+   * which ends the match, so a run never merges into rows another query left behind.
+   */
+  let renderedTextQuery: { key: string; items: TuffItem[] } | null = null
+  let pendingRefreshReconcile: RefreshReconcile | null = null
 
   const DUPLICATE_QUERY_WINDOW_MS = 200
-  const INDEX_COMMIT_REFRESH_INTERVAL_MS = 500
+  /**
+   * How long an index-commit refresh waits, stepping up while commits keep arriving (D-a,
+   * 2026-09-26). Every refresh is a whole new search, and while an index builds the commits do not
+   * stop: with a flat 500ms CoreBox re-searched back to back for as long as the build ran. A lone
+   * commit still shows within a second; a steady run settles at one refresh every 5s.
+   */
+  const INDEX_COMMIT_REFRESH_STEPS_MS = [500, 2_000, 5_000] as const
+  /** A commit main marks `bulk` (a full scan, or a dense run it coalesced) starts at the 2s step. */
+  const INDEX_COMMIT_BULK_STEP = 1
+  /** A commit arriving this long after the previous one starts again from the first step. */
+  const INDEX_COMMIT_QUIET_MS = 5_000
+  /**
+   * How long a same-query refresh waits for its search to complete before reconciling anyway,
+   * counted from its snapshot. It covers the main process's search budget
+   * (`defaultTuffGatherOptions` in search-gather.ts): the deferred layer starts
+   * `deferredLayerDelayMs` (50ms) after the fast snapshot and gives each provider `taskTimeoutMs`
+   * (3000ms), and the search completes once they have answered or timed out. The rest leaves room
+   * for ranking and IPC. Reconciling before a late answer lands would remove its rows, then append
+   * them again below everything.
+   */
+  const REFRESH_RECONCILE_TIMEOUT_MS = 3_500
   function toActivations(
     state: ActivationState | IProviderActivate[] | null | undefined
   ): IProviderActivate[] | null {
@@ -814,6 +921,8 @@ export function useSearch(
     activeSearchStreamController = null
     cancelPendingSearchSnapshot?.()
     cancelPendingSearchSnapshot = null
+    // A superseded or reset run no longer speaks for what is on screen.
+    discardRefreshReconcile()
   }
 
   function clearRecommendationTimeout(sequence?: number): void {
@@ -935,11 +1044,61 @@ export function useSearch(
       .catch(() => {})
   }
 
+  /**
+   * Replaces what is rendered. While `renderedTextQuery` owns the rows on screen it follows them, so
+   * a later run of that query can still tell they are its own.
+   */
+  function setSearchResults(items: TuffItem[]): void {
+    if (renderedTextQuery?.items === searchResults.value) renderedTextQuery.items = items
+    searchResults.value = items
+  }
+
+  function isRenderedTextQuery(queryKey: string): boolean {
+    return renderedTextQuery?.key === queryKey && renderedTextQuery.items === searchResults.value
+  }
+
+  function discardRefreshReconcile(): void {
+    if (!pendingRefreshReconcile) return
+    clearTimeout(pendingRefreshReconcile.timer)
+    pendingRefreshReconcile = null
+  }
+
+  /**
+   * Ends a same-query refresh: the rows it did not deliver again go, and the rest keep their order
+   * on screen. As with a streamed batch, a row the user moved to stays selected if it survives and
+   * falls back to row 0 if it does not, and an untouched selection stays on row 0.
+   */
+  function settleRefreshReconcile(): void {
+    const reconcile = pendingRefreshReconcile
+    if (!reconcile) return
+    discardRefreshReconcile()
+    // Something else replaced the rows since (a widget activation, an execute): not this query's.
+    if (renderedTextQuery?.items !== searchResults.value) return
+
+    const focusedItemId = boxOptions.focus > 0 ? (res.value[boxOptions.focus]?.id ?? null) : null
+    const current = searchResults.value
+    const next = mergeRenderedItems(
+      current.filter((item) => reconcile.deliveredIds.has(item.id)),
+      reconcile.items,
+      focusedItemId
+    )
+    // While an index builds, most refreshes change nothing; those should not re-render the list.
+    if (next.length === current.length && next.every((item, index) => item === current[index])) {
+      return
+    }
+    setSearchResults(next)
+    restoreFocusedItem(focusedItemId)
+  }
+
   function applySearchSnapshot(
     initialResult: TuffSearchResult,
     options: ExecuteSearchOptions,
-    selectedItemId: string | null
+    selectedItemId: string | null,
+    queryKey: string
   ): void {
+    const sameQuery = isRenderedTextQuery(queryKey)
+    // Read before anything below changes `res`: only a row the user moved to follows its item.
+    const focusedItemId = boxOptions.focus > 0 ? (res.value[boxOptions.focus]?.id ?? null) : null
     // Only when the snapshot actually carries an id. `sessionId` is optional on
     // TuffSearchResult, and the unconditional `|| null` threw away the identity the `session`
     // chunk had already established - after which every later update/no-results/complete chunk
@@ -950,20 +1109,42 @@ export function useSearch(
     // The snapshot arrives ranked, so the quota only decides which of the
     // overflow survives — a cache hit (which carries the whole accumulated
     // set) then shows what the live run ended with instead of a plain top cut.
-    const filteredItems = applyRenderedItemQuota(filterDetachedItems(initialResult.items))
+    const snapshotItems = filterDetachedItems(initialResult.items)
+    const filteredItems = applyRenderedItemQuota(snapshotItems)
     searchResult.value = isDetachedDivisionMode()
       ? { ...initialResult, items: filteredItems }
       : initialResult
 
     activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
 
-    searchResults.value = filteredItems
-    if (options.preserveSelection) {
-      const preservedIndex = selectedItemId
-        ? res.value.findIndex((item) => item.id === selectedItemId)
-        : -1
-      boxOptions.focus = preservedIndex >= 0 ? preservedIndex : res.value.length > 0 ? 0 : -1
+    if (sameQuery) {
+      // A run of the query already on screen: an index-commit refresh, or the re-run when CoreBox
+      // is shown again. Its snapshot carries only the fast layer, so replacing the list with it
+      // dropped every deferred row (the files) until the deferred layer sent them again, then
+      // inserted and re-ranked them back, once per refresh while an index builds. Since D4
+      // (2026-09-26) the snapshot and later updates merge into the rows on screen, which keeps
+      // their DOM nodes, and the rows this run does not deliver again are removed when it
+      // completes, or after REFRESH_RECONCILE_TIMEOUT_MS if it never does. A cancelled run still
+      // resets, and a failed one leaves what is on screen.
+      discardRefreshReconcile()
+      setSearchResults(mergeRenderedItems(searchResults.value, filteredItems, focusedItemId))
+      restoreFocusedItem(focusedItemId)
+      pendingRefreshReconcile = {
+        items: filteredItems,
+        deliveredIds: new Set(snapshotItems.map((item) => item.id)),
+        timer: setTimeout(settleRefreshReconcile, REFRESH_RECONCILE_TIMEOUT_MS)
+      }
+    } else {
+      searchResults.value = filteredItems
+      if (options.preserveSelection) {
+        const preservedIndex = selectedItemId
+          ? res.value.findIndex((item) => item.id === selectedItemId)
+          : -1
+        boxOptions.focus = preservedIndex >= 0 ? preservedIndex : res.value.length > 0 ? 0 : -1
+      }
     }
+    renderedTextQuery = { key: queryKey, items: searchResults.value }
+    hasFreshResults.value = searchResults.value.length > 0
     logDebug('[useSearch] searchResults updated:', searchResults.value.length, 'items')
 
     boxOptions.layout = undefined
@@ -985,6 +1166,9 @@ export function useSearch(
       ? { ...initialResult, items: filteredItems }
       : initialResult
     searchResults.value = filteredItems
+    hasFreshResults.value = searchResults.value.length > 0
+    // Items and layout land in one update: executeSearch left the previous pair on screen, and
+    // swapping only one of them renders a grid's items as a list for a frame.
     boxOptions.layout = layout
 
     activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
@@ -1045,6 +1229,8 @@ export function useSearch(
         rejectBeforeSnapshot(error)
         return
       }
+      // A failed refresh cannot say which rows are stale, so what is on screen stays.
+      discardRefreshReconcile()
       loading.value = false
       recommendationPending.value = false
       searchError.value = true
@@ -1107,7 +1293,11 @@ export function useSearch(
                   if (currentSearchId.value !== chunk.sessionId) return
                   const items = limitIncomingBatchItems(filterDetachedItems(chunk.items))
                   if (items.length === 0) return
-                  const focusedItemId = res.value[boxOptions.focus]?.id ?? null
+                  // Arrivals append below the rows on screen, so a row keeps its index unless a
+                  // pinned arrival lands above it or the quota drops it. Only a row the user
+                  // moved to (focus > 0) follows its item; the untouched default stays on row 0.
+                  const focusedItemId =
+                    boxOptions.focus > 0 ? (res.value[boxOptions.focus]?.id ?? null) : null
                   if (
                     pendingPreferredItemId &&
                     preferredFallbackItemId &&
@@ -1117,7 +1307,16 @@ export function useSearch(
                     // The user moved focus after the refresh snapshot; their newer intent wins.
                     pendingPreferredItemId = null
                   }
-                  searchResults.value = mergeRenderedItems(searchResults.value, items)
+                  setSearchResults(mergeRenderedItems(searchResults.value, items, focusedItemId))
+                  // An empty snapshot keeps the query waiting; the deferred layer's first rows end it.
+                  hasFreshResults.value = searchResults.value.length > 0
+                  if (pendingRefreshReconcile) {
+                    pendingRefreshReconcile.items = mergeRenderedItems(
+                      pendingRefreshReconcile.items,
+                      items
+                    )
+                    for (const item of items) pendingRefreshReconcile.deliveredIds.add(item.id)
+                  }
                   if (
                     pendingPreferredItemId &&
                     res.value.some((item) => item.id === pendingPreferredItemId)
@@ -1198,9 +1397,12 @@ export function useSearch(
     const inputs = buildQueryInputs()
     const queryContext = oneShotQueryContext
     const queryKey = buildQueryKey(searchVal.value, inputs, activeActivations.value)
-    const selectedItemId = options.preserveSelection
-      ? (res.value[boxOptions.focus]?.id ?? null)
-      : null
+    // Same rule as a streamed batch: an index-commit refresh keeps a row the user moved to, and
+    // leaves the untouched default on row 0 instead of chasing the item that used to sit there.
+    const selectedItemId =
+      options.preserveSelection && boxOptions.focus > 0
+        ? (res.value[boxOptions.focus]?.id ?? null)
+        : null
 
     if (isDivisionBoxMode() && !isDetachedDivisionMode()) {
       beginSearchSequence(inputs, options)
@@ -1225,11 +1427,14 @@ export function useSearch(
 
       const currentSequence = beginSearchSequence(inputs, options)
       boxOptions.focus = 0
-      searchResults.value = []
-      searchResult.value = null
+      // What is on screen stays, with its layout, until the recommendation snapshot replaces both
+      // in one update (applyRecommendationResult). Clearing them here would unmount the results
+      // area and leave the window's old height blank until the snapshot lands, on every open and
+      // every cleared query. The timeout and failure paths below still clear.
       currentSearchId.value = null
-      boxOptions.layout = undefined
       loading.value = true
+      // The grid still on screen is an earlier one; the searching cue waits for this snapshot.
+      hasFreshResults.value = false
       recommendationPending.value = true
       // Don't collapse immediately - wait for recommendation to load
       // This prevents the jarring collapse-then-expand animation
@@ -1238,7 +1443,11 @@ export function useSearch(
       recommendationTimeoutSequence = currentSequence
       recommendationTimeoutId = setTimeout(() => {
         if (recommendationTimeoutSequence !== currentSequence) return
-        if (recommendationPending.value && searchResults.value.length === 0) {
+        if (recommendationPending.value) {
+          // Past the budget, what is still on screen belongs to an earlier query or a stale grid.
+          searchResults.value = []
+          searchResult.value = null
+          boxOptions.layout = undefined
           recommendationPending.value = false
           window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
         }
@@ -1315,6 +1524,10 @@ export function useSearch(
       boxOptions.focus = 0
     }
     loading.value = true
+    // A new query waits for its first rows, even with the previous query's still on screen. A
+    // re-run of the query on screen (an index-commit refresh, the re-run on show) already has its
+    // own rows up, so it is settling rather than waiting.
+    hasFreshResults.value = isRenderedTextQuery(queryKey) && searchResults.value.length > 0
     // Don't clear results immediately - this causes UI flicker
     // Results will be replaced when new search completes
 
@@ -1338,7 +1551,7 @@ export function useSearch(
         query,
         currentSequence,
         (result) => {
-          applySearchSnapshot(result, options, selectedItemId)
+          applySearchSnapshot(result, options, selectedItemId, queryKey)
         },
         selectedItemId
       )
@@ -1397,27 +1610,78 @@ export function useSearch(
    * commit would re-query CoreBox continuously while a file index builds; never refreshing it —
    * the behaviour before 2026-09-04 — left an open CoreBox showing a stale grid until the user
    * closed and reopened it, even for a freshly installed app whose cache main had already dropped.
+   *
+   * Visibility decides when, not whether: a commit that arrives while CoreBox is hidden stays
+   * pending until it is shown again (see armIndexCommitRefresh).
    */
   function shouldRefreshForIndexCommit(recommendationsInvalidated: boolean): boolean {
     if (isDivisionBoxMode() || !hasWindow()) return false
-    if (hasDocument() && document.hidden) return false
     if (hasPluginFeatureActivation(activeActivations.value)) return false
 
     return searchVal.value.trim() ? true : recommendationsInvalidated
   }
 
-  function scheduleIndexCommitRefresh(recommendationsInvalidated = false): void {
-    if (!shouldRefreshForIndexCommit(recommendationsInvalidated)) return
+  /**
+   * The native signal is authoritative: a hidden keep-alive window can still report
+   * `document.hidden === false`. The document state only adds a stop.
+   */
+  function isCoreBoxHidden(): boolean {
+    return !coreBoxWindowVisible || (hasDocument() && document.hidden)
+  }
+
+  /**
+   * Tracks whether commits keep arriving. The step climbs only when a refresh runs (see
+   * runIndexCommitRefresh); a quiet gap starts it over, and a bulk commit starts at 2s.
+   */
+  function noteIndexCommit(bulk: boolean): void {
+    const now = performance.now()
+    if (lastIndexCommitAt === null || now - lastIndexCommitAt >= INDEX_COMMIT_QUIET_MS) {
+      indexCommitRefreshStep = 0
+    }
+    lastIndexCommitAt = now
+    if (bulk) indexCommitRefreshStep = Math.max(indexCommitRefreshStep, INDEX_COMMIT_BULK_STEP)
+  }
+
+  function scheduleIndexCommitRefresh(commit: {
+    recommendationsInvalidated: boolean
+    bulk: boolean
+  }): void {
+    noteIndexCommit(commit.bulk)
+    if (!shouldRefreshForIndexCommit(commit.recommendationsInvalidated)) return
     indexCommitRefreshPending = true
     // A commit that only matters to the grid must not be downgraded by a later plain commit
     // arriving inside the debounce window.
-    indexCommitRefreshForRecommendations ||= recommendationsInvalidated
-    if (indexCommitRefreshTimer) return
+    indexCommitRefreshForRecommendations ||= commit.recommendationsInvalidated
+    armIndexCommitRefresh(INDEX_COMMIT_REFRESH_STEPS_MS[indexCommitRefreshStep])
+  }
 
+  /**
+   * One timer at a time, and a later commit never pushes it back. Hidden, nothing is armed: the
+   * refresh stays pending, and the re-run when CoreBox is shown again covers it.
+   */
+  function armIndexCommitRefresh(delayMs: number): void {
+    if (indexCommitRefreshTimer || isCoreBoxHidden()) return
     indexCommitRefreshTimer = setTimeout(() => {
       indexCommitRefreshTimer = null
       void runIndexCommitRefresh()
-    }, INDEX_COMMIT_REFRESH_INTERVAL_MS)
+    }, delayMs)
+  }
+
+  function clearIndexCommitRefreshTimer(): void {
+    if (!indexCommitRefreshTimer) return
+    clearTimeout(indexCommitRefreshTimer)
+    indexCommitRefreshTimer = null
+  }
+
+  /**
+   * Starts the backoff over and drops a waiting refresh. Whatever searches next (the new query, the
+   * re-run of a re-shown CoreBox) reads the index as it is now, which covers every commit so far.
+   */
+  function resetIndexCommitRefresh(): void {
+    indexCommitRefreshStep = 0
+    indexCommitRefreshPending = false
+    indexCommitRefreshForRecommendations = false
+    clearIndexCommitRefreshTimer()
   }
 
   async function runIndexCommitRefresh(): Promise<void> {
@@ -1427,20 +1691,27 @@ export function useSearch(
       indexCommitRefreshForRecommendations = false
       return
     }
+    // Hiding clears the timer, so only the document can have hidden it since: stay pending.
+    if (isCoreBoxHidden()) return
     if (loading.value || inFlightQuery !== null) {
-      scheduleIndexCommitRefresh(indexCommitRefreshForRecommendations)
+      // Poll at the first step until the search in flight ends; the step counts refreshes.
+      armIndexCommitRefresh(INDEX_COMMIT_REFRESH_STEPS_MS[0])
       return
     }
 
     indexCommitRefreshPending = false
     indexCommitRefreshForRecommendations = false
+    indexCommitRefreshStep = Math.min(
+      indexCommitRefreshStep + 1,
+      INDEX_COMMIT_REFRESH_STEPS_MS.length - 1
+    )
     await handleSearchImmediate({
       force: true,
       preserveSelection: true,
       refreshClipboard: false
     })
     if (indexCommitRefreshPending) {
-      scheduleIndexCommitRefresh(indexCommitRefreshForRecommendations)
+      armIndexCommitRefresh(INDEX_COMMIT_REFRESH_STEPS_MS[indexCommitRefreshStep])
     }
   }
 
@@ -1475,7 +1746,10 @@ export function useSearch(
       .stream(CoreBoxEvents.search.indexCommitted, undefined, {
         onData: (payload) => {
           if (generation === indexCommitStreamGeneration && !indexCommitStreamDisposed) {
-            scheduleIndexCommitRefresh(payload?.recommendationsInvalidated === true)
+            scheduleIndexCommitRefresh({
+              recommendationsInvalidated: payload?.recommendationsInvalidated === true,
+              bulk: payload?.bulk === true
+            })
           }
         },
         onError: (error) => {
@@ -1515,16 +1789,26 @@ export function useSearch(
     indexCommitStreamStartPending = false
     indexCommitStreamController?.cancel()
     indexCommitStreamController = null
-    indexCommitRefreshPending = false
-    if (indexCommitRefreshTimer) {
-      clearTimeout(indexCommitRefreshTimer)
-      indexCommitRefreshTimer = null
-    }
+    resetIndexCommitRefresh()
     if (indexCommitStreamRetryTimer) {
       clearTimeout(indexCommitStreamRetryTimer)
       indexCommitStreamRetryTimer = null
     }
   }
+
+  // D-d (2026-09-26): a hidden CoreBox does not refresh on commits; they wait for it to be shown.
+  const unsubscribeRendererActivity = subscribeRendererActivity((visible) => {
+    if (visible === coreBoxWindowVisible) return
+    coreBoxWindowVisible = visible
+    if (!visible) {
+      clearIndexCommitRefreshTimer()
+      return
+    }
+    // `corebox:shown` normally re-runs the query first and so clears what is pending. Anything
+    // still pending gets its one refresh here, from the first step.
+    indexCommitRefreshStep = 0
+    if (indexCommitRefreshPending) armIndexCommitRefresh(INDEX_COMMIT_REFRESH_STEPS_MS[0])
+  })
 
   async function handleExecute(item?: TuffItem): Promise<void> {
     const itemToExecute = item || activeItem.value
@@ -1681,6 +1965,8 @@ export function useSearch(
     }
 
     loading.value = true
+    // The rows were cleared above: an execute in flight is waiting, never "still searching more".
+    hasFreshResults.value = false
 
     let pluginFeatureActivated = false
 
@@ -1863,6 +2149,8 @@ export function useSearch(
   })
 
   watch(searchVal, (val) => {
+    // A new query reads the index as it is now; the commit backoff starts over with it.
+    resetIndexCommitRefresh()
     if (programmaticQueryValue !== null) {
       const shouldSkipReactiveSearch = val === programmaticQueryValue
       programmaticQueryValue = null
@@ -1947,6 +2235,9 @@ export function useSearch(
 
     if (!isDivisionBoxMode()) {
       coreBoxShownHandler = () => {
+        // The re-run below is the one refresh for every commit missed while hidden, and the
+        // backoff starts over from it.
+        resetIndexCommitRefresh()
         if (
           !hasPluginFeatureActivation(activeActivations.value) &&
           (searchVal.value || !activeActivations.value?.length)
@@ -1964,6 +2255,7 @@ export function useSearch(
     cancelable.cancel?.()
     cancelActiveSearchStream()
     stopIndexCommitStream()
+    unsubscribeRendererActivity()
     unregContextActionsOpen()
     unregSetQuery()
     unregItemClear()
@@ -1984,6 +2276,7 @@ export function useSearch(
       return
     }
 
+    settleRefreshReconcile()
     const nextActivationState = mergePluginFeatureActivationState(
       data.activate || null,
       activeActivations.value
@@ -2020,6 +2313,8 @@ export function useSearch(
     select,
     res,
     loading,
+    awaitingFirstResults,
+    searchSettling,
     searchError,
     recommendationPending,
     activeItem,

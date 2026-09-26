@@ -27,6 +27,14 @@ const mocks = vi.hoisted(() => {
     updatePosition: vi.fn(),
     setHeight: vi.fn(),
     markExpanded: vi.fn(),
+    // Mirrors MetaOverlayManager.holdLayoutUpdate: holds while a panel is open, keeping the latest.
+    metaOverlayVisible: false,
+    heldLayoutReplay: null as null | (() => void),
+    holdLayoutUpdate: vi.fn((replay: () => void): boolean => {
+      if (!mocks.metaOverlayVisible) return false
+      mocks.heldLayoutReplay = replay
+      return true
+    }),
     stopAppSettingSubscription: vi.fn(),
     currentWindow: null as null | {
       window: {
@@ -168,6 +176,12 @@ vi.mock('./manager', () => ({
   }
 }))
 
+vi.mock('./meta-overlay', () => ({
+  metaOverlayManager: {
+    holdLayoutUpdate: mocks.holdLayoutUpdate
+  }
+}))
+
 vi.mock('./window', () => ({
   COREBOX_MIN_HEIGHT: 56,
   windowManager: {
@@ -197,6 +211,8 @@ describe('CoreBoxModule', () => {
     mocks.isCollapsed = false
     mocks.currentWindow = null
     mocks.windows = []
+    mocks.metaOverlayVisible = false
+    mocks.heldLayoutReplay = null
     mocks.getMainConfig.mockReturnValue({ beginner: { init: true } })
     vi.clearAllMocks()
   })
@@ -258,10 +274,36 @@ describe('CoreBoxModule', () => {
     expect(mocks.registerMainShortcut).toHaveBeenCalledTimes(1)
     expect(mocks.registerMainShortcut).toHaveBeenCalledWith(
       'core.box.toggle',
-      'CommandOrControl+E',
+      'Alt+Space',
       expect.any(Function),
       expect.objectContaining({ enabled: true })
     )
+  })
+
+  it('moves the old ⌘E default to ⌥Space, and asks for a notice rather than a stand-in', async () => {
+    const module = new CoreBoxModule()
+
+    await module.onInit({
+      app: {},
+      manager: { loadModule: vi.fn(async () => undefined) }
+    } as unknown as Parameters<CoreBoxModule['onInit']>[0])
+
+    const options = mocks.registerMainShortcut.mock.calls[0]?.[3] as Record<string, unknown>
+    // ⌘E survives only as the old default to move away from.
+    expect(options.legacyDefaultAccelerators).toEqual(['CommandOrControl+E'])
+    // When ⌥Space cannot be had, CoreBox has no key and the user is told why; nothing stands in.
+    expect(options.unavailableNotice).toEqual({
+      titleKey: 'notifications.coreBoxShortcutUnavailableTitle',
+      refusedBodyKey: 'notifications.coreBoxShortcutRefusedBody',
+      conflictBodyKey: 'notifications.coreBoxShortcutConflictBody',
+      conflictNamedBodyKey: 'notifications.coreBoxShortcutConflictNamedBody'
+    })
+    expect(Object.keys(options).sort()).toEqual([
+      'enabled',
+      'legacyDefaultAccelerators',
+      'owner',
+      'unavailableNotice'
+    ])
   })
 
   it('registers the CoreBox IPC handlers during init', async () => {
@@ -513,6 +555,57 @@ describe('CoreBoxModule', () => {
     )
 
     expect(mocks.setHeight).toHaveBeenCalledWith(196, senderWindow)
+  })
+
+  it('holds layout updates while the action panel is open and applies the latest on release', async () => {
+    const visibleWindow = {
+      window: {
+        isDestroyed: () => false,
+        isVisible: () => true,
+        isFocused: () => true,
+        webContents: { id: 10 }
+      }
+    }
+    mocks.currentWindow = visibleWindow
+    mocks.windows = [visibleWindow]
+    mocks.metaOverlayVisible = true
+
+    const module = new CoreBoxModule()
+    await module.onInit({
+      app: {},
+      manager: { loadModule: vi.fn(async () => undefined) }
+    } as unknown as Parameters<CoreBoxModule['onInit']>[0])
+    const applyLayoutUpdate = (
+      module as unknown as {
+        applyLayoutUpdate: (payload: {
+          height: number
+          resultCount: number
+          loading: boolean
+          recommendationPending: boolean
+          activationCount: number
+        }) => void
+      }
+    ).applyLayoutUpdate.bind(module)
+    const layout = (height: number) => ({
+      height,
+      resultCount: 3,
+      loading: false,
+      recommendationPending: false,
+      activationCount: 0
+    })
+
+    // A stream finishing under the open panel would shrink the window and clip the panel.
+    applyLayoutUpdate(layout(240))
+    applyLayoutUpdate(layout(260))
+
+    expect(mocks.setHeight).not.toHaveBeenCalled()
+    expect(mocks.holdLayoutUpdate).toHaveBeenCalledTimes(2)
+
+    // The panel closes: the manager replays only the latest held update.
+    mocks.metaOverlayVisible = false
+    mocks.heldLayoutReplay?.()
+
+    expect(mocks.setHeight).toHaveBeenCalledExactlyOnceWith(260, visibleWindow)
   })
 
   it('cleans up shortcuts and disposers before clearing runtime registration', async () => {

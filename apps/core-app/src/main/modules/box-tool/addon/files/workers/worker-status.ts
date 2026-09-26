@@ -1,9 +1,14 @@
+import process from 'node:process'
+import { getHeapStatistics } from 'node:v8'
+
 export interface WorkerMetricsPayload {
   timestamp: number
   memory: {
     rss: number
     heapUsed: number
     heapTotal: number
+    /** This isolate's V8 limit; RSS above belongs to the entire process. */
+    heapLimit?: number
     external: number
     arrayBuffers: number
   }
@@ -55,4 +60,17 @@ export interface WorkerStatusSnapshot {
     }
     eventLoop: WorkerMetricsPayload['eventLoop']
   } | null
+}
+
+export function getWorkerMemorySnapshot(
+  memory = process.memoryUsage()
+): WorkerMetricsPayload['memory'] {
+  return {
+    rss: memory.rss,
+    heapUsed: memory.heapUsed,
+    heapTotal: memory.heapTotal,
+    heapLimit: getHeapStatistics().heap_size_limit,
+    external: memory.external,
+    arrayBuffers: memory.arrayBuffers ?? 0
+  }
 }

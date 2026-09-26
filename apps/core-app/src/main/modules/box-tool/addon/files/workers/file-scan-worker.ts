@@ -8,6 +8,7 @@ import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
 import { scanDirectoryBatches } from '@talex-touch/utils/common/file-scan-utils'
+import { getWorkerMemorySnapshot } from './worker-status'
 
 interface FileScanRequest {
   type: 'scan'
@@ -58,13 +59,7 @@ function buildMetricsPayload(): WorkerMetricsPayload {
       : null
   return {
     timestamp: Date.now(),
-    memory: {
-      rss: memory.rss,
-      heapUsed: memory.heapUsed,
-      heapTotal: memory.heapTotal,
-      external: memory.external,
-      arrayBuffers: memory.arrayBuffers ?? 0
-    },
+    memory: getWorkerMemorySnapshot(memory),
     cpuUsage: process.cpuUsage(),
     eventLoop: eventLoop
       ? {

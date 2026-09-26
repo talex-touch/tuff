@@ -22,6 +22,10 @@ import {
   normalizeExtension
 } from './thumbnail-config'
 import { isServableLocalFilePath } from '../../../../utils/local-file-policy'
+import {
+  FILE_ICON_META_EXTENSION_KEY,
+  type FileIconCacheMeta
+} from './services/file-provider-icon-cache-service'
 
 const DIRECT_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'gif', 'bmp', 'webp', 'ico'])
 
@@ -53,25 +57,40 @@ export function isIndexableFile(
 
   return true
 }
+/**
+ * One level of the file index's directory rule: the directory's own name, judged with its parent's
+ * entries as project context when the name is one of the ordinary words (`dist`, `out`, `build`,
+ * ...) that only mean build output beside a project marker (#1727). Other names are judged as
+ * walked top-down (present-but-empty context), which is how the scan saw them.
+ */
+export async function getDirectoryLevelExclusionReason(
+  directoryPath: string,
+  readdir: (directoryPath: string) => Promise<string[]> = (target) => fs.readdir(target),
+  options?: FileScanOptions
+): Promise<FileFilterReason | null> {
+  const directoryName = path.basename(directoryPath).toLowerCase()
+  let siblingNames: string[] | undefined = []
+  if (CONTEXT_DEPENDENT_BLACKLISTED_DIRS.has(directoryName)) {
+    try {
+      siblingNames = await readdir(path.dirname(directoryPath))
+    } catch {
+      // Unknown project context keeps the stricter historical exclusion instead of admitting
+      // a build/cache subtree that the snapshot scanner could not classify either.
+      siblingNames = undefined
+    }
+  }
+  return fileFilterService.getTraversalExclusionReason(directoryPath, options, {
+    siblingNames
+  })
+}
+
 export async function getFileTraversalExclusionReason(
-  filePath: string
+  filePath: string,
+  readdir?: (directoryPath: string) => Promise<string[]>
 ): Promise<FileFilterReason | null> {
   let directoryPath = path.dirname(filePath)
   while (true) {
-    const directoryName = path.basename(directoryPath).toLowerCase()
-    let siblingNames: string[] | undefined = []
-    if (CONTEXT_DEPENDENT_BLACKLISTED_DIRS.has(directoryName)) {
-      try {
-        siblingNames = await fs.readdir(path.dirname(directoryPath))
-      } catch {
-        // Unknown project context keeps the stricter historical exclusion instead of admitting
-        // a build/cache subtree that the snapshot scanner could not classify either.
-        siblingNames = undefined
-      }
-    }
-    const reason = fileFilterService.getTraversalExclusionReason(directoryPath, undefined, {
-      siblingNames
-    })
+    const reason = await getDirectoryLevelExclusionReason(directoryPath, readdir)
     if (reason) return reason
 
     const parent = path.dirname(directoryPath)
@@ -187,6 +206,20 @@ export function mapFileToTuffItem(
   onMissingThumbnail?: (file: typeof filesSchema.$inferSelect) => void
 ): TuffItem {
   const extension = normalizeExtension(file.extension || path.extname(file.name) || '')
+  let cachedIcon = _extensions.icon
+  const rawIconMeta = _extensions[FILE_ICON_META_EXTENSION_KEY]
+  if (cachedIcon && rawIconMeta) {
+    try {
+      if (rawIconMeta.length > 1024) cachedIcon = ''
+      else {
+        const meta = JSON.parse(rawIconMeta) as FileIconCacheMeta
+        if (meta.mtime !== file.mtime.getTime() || meta.size !== (file.size ?? null))
+          cachedIcon = ''
+      }
+    } catch {
+      cachedIcon = ''
+    }
+  }
 
   let icon: { type: 'file' | 'url' | 'class' | 'emoji'; value: string }
 
@@ -213,10 +246,10 @@ export function mapFileToTuffItem(
       type: 'file',
       value: file.path
     }
-  } else if (_extensions.icon) {
+  } else if (cachedIcon) {
     icon = {
       type: 'url',
-      value: _extensions.icon.startsWith('data:') ? _extensions.icon : toTfileUrl(_extensions.icon)
+      value: cachedIcon.startsWith('data:') ? cachedIcon : toTfileUrl(cachedIcon)
     }
   } else {
     // Trigger lazy load if callback provided

@@ -85,6 +85,16 @@ export class WindowBoundsController {
     return this.lastSetBounds?.height ?? browserWindow.getBounds().height
   }
 
+  /** The height the window is settling at: an in-flight animation's target, else its height. */
+  public getTargetHeight(browserWindow: Electron.BrowserWindow): number {
+    return this.currentAnimationTarget?.height ?? this.getCurrentHeight(browserWindow)
+  }
+
+  /** Whether an animated resize is still carrying the window to its target. */
+  public isAnimating(): boolean {
+    return this.currentAnimationTarget !== null
+  }
+
   public setBounds(browserWindow: Electron.BrowserWindow, bounds: Electron.Rectangle): void {
     browserWindow.setBounds(bounds, false)
     this.lastSetBounds = { height: bounds.height, y: bounds.y }

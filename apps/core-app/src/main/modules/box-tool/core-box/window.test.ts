@@ -402,6 +402,38 @@ describe('WindowManager CoreBox compact bounds', () => {
     )
   })
 
+  // The ⌘K panel keeps CoreBox painting the space it added until a height handed back has landed.
+  it('reports a resize as in flight only while an animated one is on its way', () => {
+    const manager = new WindowManager()
+    const browserWindow = {
+      isDestroyed: vi.fn(() => false),
+      isVisible: vi.fn(() => true),
+      isResizable: vi.fn(() => false),
+      setResizable: vi.fn(),
+      getBounds: vi.fn(() => ({ x: 600, y: 260, width: COREBOX_WIDTH, height: 300 })),
+      setMinimumSize: vi.fn(),
+      setBounds: vi.fn(),
+      getMinimumSize: vi.fn(() => [COREBOX_WIDTH, COREBOX_MIN_HEIGHT])
+    }
+    manager.windows = [{ window: browserWindow } as unknown as WindowManager['windows'][number]]
+    expect(manager.isResizing()).toBe(false)
+
+    // Animated: the polling service (mocked, never ticking) carries the window there.
+    mocks.getMainConfig.mockReturnValue({ animation: { coreBoxResize: true } })
+    manager.setHeight(416)
+    expect(manager.isResizing()).toBe(true)
+    expect(manager.getSettledHeight()).toBe(416)
+
+    // Without the animation a resize lands at once, and takes over from the one in flight.
+    mocks.getMainConfig.mockReturnValue({})
+    manager.setHeight(360)
+    expect(manager.isResizing()).toBe(false)
+    expect(browserWindow.setBounds).toHaveBeenLastCalledWith(
+      expect.objectContaining({ height: 360 }),
+      false
+    )
+  })
+
   it('shows the box on macOS without activating the application', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })

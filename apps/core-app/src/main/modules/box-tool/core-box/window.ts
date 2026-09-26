@@ -584,6 +584,26 @@ export class WindowManager {
   }
 
   /**
+   * The height a CoreBox window is settling at: an in-flight resize animation's target, else its
+   * current height. `null` when there is no live window.
+   */
+  public getSettledHeight(targetWindow?: TouchWindow): number | null {
+    const currentWindow = targetWindow ?? this.current
+    if (!currentWindow || currentWindow.window.isDestroyed()) return null
+    return this.boundsController.getTargetHeight(currentWindow.window)
+  }
+
+  /**
+   * Whether a CoreBox window is still resizing: an animated `setHeight` (`animation.coreBoxResize`)
+   * has not reached its target yet. A resize without the animation lands at once, so it never is.
+   */
+  public isResizing(targetWindow?: TouchWindow): boolean {
+    const currentWindow = targetWindow ?? this.current
+    if (!currentWindow || currentWindow.window.isDestroyed()) return false
+    return this.boundsController.isAnimating()
+  }
+
+  /**
    * Set CoreBox to a specific height (called from frontend)
    */
   public setHeight(height: number, targetWindow?: TouchWindow): void {

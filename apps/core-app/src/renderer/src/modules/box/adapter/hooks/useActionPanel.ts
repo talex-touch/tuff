@@ -1,10 +1,12 @@
 import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
+import type { CoreBoxMetaActionEventDetail } from '../../meta-actions/meta-action-model'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { toast } from 'vue-sonner'
+import { showCoreBoxFooterFeedback } from '../../meta-actions/footer-feedback'
+import { COREBOX_META_ACTION_EVENT } from '../../meta-actions/meta-action-model'
 import {
   COREBOX_PRIMARY_ACTION_ID,
   COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
@@ -16,6 +18,15 @@ import {
   resolveClipboardHistoryRecordId
 } from './clipboard-history-item'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
+
+const actionPanelLog = createRendererLogger('CoreBoxActionPanel')
+
+/** A stable code the failure carries, such as a permission denial's; never its message. */
+function resolveErrorCode(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null | undefined)?.code
+  return typeof code === 'string' ? code : undefined
+}
 
 function getActionPayloadString(payload: unknown, key: string): string {
   if (!payload || typeof payload !== 'object') return ''
@@ -57,7 +68,9 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
       })
       if (response?.success) {
         const pinned = response.isPinned
-        toast.success(pinned ? t('corebox.pinned', '已固定') : t('corebox.unpinned', '已取消固定'))
+        showCoreBoxFooterFeedback(
+          pinned ? t('corebox.pinned', '已固定') : t('corebox.unpinned', '已取消固定')
+        )
         if (targetItem.meta) {
           targetItem.meta.pinned = pinned ? { isPinned: true, pinnedAt: Date.now() } : undefined
         }
@@ -68,7 +81,7 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
       }
     } catch (error) {
       devLog('[useActionPanel] Failed to toggle pin:', error)
-      toast.error(t('corebox.pinFailed', '固定失败'))
+      showCoreBoxFooterFeedback(t('corebox.pinFailed', '固定失败'), 'error')
     }
   }
 
@@ -88,15 +101,18 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
     try {
       const result = await transport.send(ClipboardEvents.apply, { id: recordId, autoPaste })
       if (result?.success === false) {
-        toast.error(result.message || t('corebox.actionUnsupported', '暂不支持该操作'))
+        showCoreBoxFooterFeedback(
+          result.message || t('corebox.actionUnsupported', '暂不支持该操作'),
+          'error'
+        )
         return true
       }
       if (!autoPaste) {
-        toast.success(t('corebox.copied', '已复制'))
+        showCoreBoxFooterFeedback(t('corebox.copied', '已复制'))
       }
     } catch (error) {
       devLog('[useActionPanel] Clipboard apply failed:', error)
-      toast.error(t('corebox.actionUnsupported', '暂不支持该操作'))
+      showCoreBoxFooterFeedback(t('corebox.actionUnsupported', '暂不支持该操作'), 'error')
     }
     return true
   }
@@ -130,12 +146,13 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
             type: 'text',
             value: targetItem.render.basic.title
           })
-          toast.success(t('corebox.copied', '已复制'))
+          showCoreBoxFooterFeedback(t('corebox.copied', '已复制'))
         }
         break
       case 'reveal-in-finder': {
         const path = targetItem.meta?.app?.path || targetItem.meta?.file?.path
-        if (path) await appSdk.showInFolder(path)
+        // Select it, never open it: opening a directory would launch an .app or open a folder.
+        if (path) await appSdk.showInFolder(path, { reveal: true })
         break
       }
       case 'flow-transfer':
@@ -147,9 +164,12 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
           targetLang: 'zh'
         })
         if (response?.success) {
-          toast.success(t('corebox.imageTranslated', '图片翻译已写入剪贴板'))
+          showCoreBoxFooterFeedback(t('corebox.imageTranslated', '图片翻译已写入剪贴板'))
         } else {
-          toast.error(response?.error || t('corebox.imageTranslateFailed', '图片翻译失败'))
+          showCoreBoxFooterFeedback(
+            response?.error || t('corebox.imageTranslateFailed', '图片翻译失败'),
+            'error'
+          )
         }
         break
       }
@@ -160,9 +180,12 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
           openPinWindow: true
         })
         if (response?.success) {
-          toast.success(t('corebox.imageTranslatePinned', '图片翻译已置顶'))
+          showCoreBoxFooterFeedback(t('corebox.imageTranslatePinned', '图片翻译已置顶'))
         } else {
-          toast.error(response?.error || t('corebox.imageTranslateFailed', '图片翻译失败'))
+          showCoreBoxFooterFeedback(
+            response?.error || t('corebox.imageTranslateFailed', '图片翻译失败'),
+            'error'
+          )
         }
         break
       }
@@ -185,7 +208,7 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
               type: 'text',
               value
             })
-            toast.success(t('corebox.copied', '已复制'))
+            showCoreBoxFooterFeedback(t('corebox.copied', '已复制'))
             return
           }
         }
@@ -222,7 +245,7 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
           applyActivationState(activationState)
         } catch (error) {
           devLog('[useActionPanel] Fallback execute failed:', error)
-          toast.error(t('corebox.actionUnsupported', '暂不支持该操作'))
+          showCoreBoxFooterFeedback(t('corebox.actionUnsupported', '暂不支持该操作'), 'error')
         }
         break
     }
@@ -269,19 +292,41 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
     return activations.length > 0 ? activations : null
   }
 
+  /**
+   * Runs an action nothing awaits: one chosen in the ⌘K panel (relayed by main) or a result-list
+   * shortcut. A failure the action does not report itself would otherwise surface as an unhandled
+   * rejection with nothing on screen, so it is logged and the footer says the action failed.
+   */
+  function runUnawaitedAction(actionId: string, targetItem: TuffItem): void {
+    void executeAction(actionId, targetItem).catch((error: unknown) => {
+      // The action id and a projected code only: a raw error can carry the item's path.
+      actionPanelLog.error('Action failed', { actionId, code: resolveErrorCode(error) })
+      showCoreBoxFooterFeedback(t('corebox.actions.failed', '操作失败'), 'error')
+    })
+  }
+
   // MetaOverlay (⌘K) routes built-in and item actions back to the CoreBox
   // renderer through this channel.
   const metaOverlayActionHandler = (data: { actionId?: string; item?: TuffItem }) => {
     if (!data?.item || !data.actionId) return
-    void executeAction(data.actionId, data.item)
+    runUnawaitedAction(data.actionId, data.item)
   }
   const unregMetaOverlayAction = transport.on(
     CoreBoxEvents.metaOverlay.itemAction,
     metaOverlayActionHandler
   )
 
+  // The same actions, from a shortcut pressed in the result list with the panel closed.
+  const resultListActionHandler = (event: Event): void => {
+    const detail = (event as CustomEvent<CoreBoxMetaActionEventDetail>).detail
+    if (!detail?.item || !detail.actionId) return
+    runUnawaitedAction(detail.actionId, detail.item)
+  }
+  window.addEventListener(COREBOX_META_ACTION_EVENT, resultListActionHandler)
+
   onBeforeUnmount(() => {
     unregMetaOverlayAction()
+    window.removeEventListener(COREBOX_META_ACTION_EVENT, resultListActionHandler)
   })
 
   return {

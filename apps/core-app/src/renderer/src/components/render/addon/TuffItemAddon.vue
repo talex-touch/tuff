@@ -30,6 +30,11 @@ const emit = defineEmits<{
 // The width switches in one layout pass and the pane slides in on the compositor. Transitioning
 // the width re-laid out the results column and repainted the preview image on every frame, and
 // the collapse stuttered for it.
+//
+// The slide is transform-only: the pane's content is ready when it opens, so it is never faded in
+// from transparent. It plays when `.show` is added, i.e. when the pane opens, not when it switches
+// to another file. Reduced motion drops it here; low battery drops it through the global
+// `html[data-low-battery-motion]` rule.
 .TuffItemAddon {
   z-index: 1;
   position: relative;
@@ -51,13 +56,17 @@ const emit = defineEmits<{
 
 @keyframes addon-slide-in {
   from {
-    opacity: 0;
     transform: translateX(16px);
   }
 
   to {
-    opacity: 1;
     transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .TuffItemAddon.show {
+    animation: none;
   }
 }
 </style>

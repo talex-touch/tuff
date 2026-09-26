@@ -4,9 +4,17 @@ import type {
   WorkerMetricsRequest,
   WorkerMetricsResponse
 } from './worker-status'
+import { randomUUID } from 'node:crypto'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
+import {
+  FILE_ICON_MAX_BYTES,
+  readFileIconPngDimensions
+} from '../../../../../service/file-icon-artifact'
+import { getWorkerMemorySnapshot } from './worker-status'
 
 type ExtractFileIcon = (filePath: string, size?: number) => Buffer | null
 
@@ -14,13 +22,14 @@ interface IconRequest {
   type: 'extract'
   taskId: string
   filePath: string
+  outputPath: string
   size?: number
 }
 
 interface IconResultMessage {
   type: 'done'
   taskId: string
-  buffer: Buffer | null
+  path: string | null
 }
 
 interface IconErrorMessage {
@@ -37,13 +46,7 @@ function buildMetricsPayload(): WorkerMetricsPayload {
       : null
   return {
     timestamp: Date.now(),
-    memory: {
-      rss: memory.rss,
-      heapUsed: memory.heapUsed,
-      heapTotal: memory.heapTotal,
-      external: memory.external,
-      arrayBuffers: memory.arrayBuffers ?? 0
-    },
+    memory: getWorkerMemorySnapshot(memory),
     cpuUsage: process.cpuUsage(),
     eventLoop: eventLoop
       ? {
@@ -65,6 +68,8 @@ async function loadExtractFileIcon(): Promise<ExtractFileIcon | null> {
   }
 
   try {
+    // Runtime-selected: `extract-file-icon` is an optional native dependency that is absent on some
+    // platforms, so a static import would fail the whole worker bundle instead of degrading.
     const loaded = await import('extract-file-icon')
     extractFileIcon = (loaded.default || loaded) as ExtractFileIcon
   } catch {
@@ -72,6 +77,47 @@ async function loadExtractFileIcon(): Promise<ExtractFileIcon | null> {
   }
 
   return extractFileIcon
+}
+
+/**
+ * Writes the extracted PNG to the caller-provided staging path atomically. Image bytes never leave
+ * the worker: the parent only receives a path after the bounded bytes are already on disk.
+ */
+async function writeIconPngAtomically(outputPath: string, bytes: Uint8Array): Promise<void> {
+  const temporaryPath = `${outputPath}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    await fs.writeFile(temporaryPath, bytes)
+    await fs.rename(temporaryPath, outputPath)
+  } catch (error) {
+    await fs.rm(temporaryPath, { force: true }).catch(() => undefined)
+    throw error
+  }
+}
+
+async function extractIconToFile(request: IconRequest): Promise<string | null> {
+  // AppKit extraction is main-thread-only; the IconService owns that path and never sends it here.
+  if (process.platform === 'darwin') {
+    return null
+  }
+  if (!request.outputPath || !path.isAbsolute(request.outputPath)) {
+    return null
+  }
+
+  const extractor = await loadExtractFileIcon()
+  if (!extractor) {
+    return null
+  }
+
+  const buffer = extractor(request.filePath, request.size)
+  if (!buffer || buffer.length === 0 || buffer.length > FILE_ICON_MAX_BYTES) {
+    return null
+  }
+  if (!readFileIconPngDimensions(buffer)) {
+    return null
+  }
+
+  await writeIconPngAtomically(request.outputPath, buffer)
+  return request.outputPath
 }
 
 async function processQueue(): Promise<void> {
@@ -85,12 +131,11 @@ async function processQueue(): Promise<void> {
   running = true
 
   try {
-    const extractor = await loadExtractFileIcon()
-    const buffer = extractor ? extractor(next.filePath, next.size) : null
+    const writtenPath = await extractIconToFile(next)
     parentPort?.postMessage({
       type: 'done',
       taskId: next.taskId,
-      buffer: buffer && buffer.length > 0 ? buffer : null
+      path: writtenPath
     } satisfies IconResultMessage)
   } catch (error) {
     parentPort?.postMessage({

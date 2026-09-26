@@ -55,6 +55,8 @@ const mocks = vi.hoisted(() => ({
   isPinned: vi.fn(() => false),
   executeMetaOverlayAction: vi.fn(),
   ownsMetaOverlayRenderer: vi.fn((_senderId: number) => false),
+  showMetaOverlay: vi.fn(),
+  getMetaOverlayPluginActions: vi.fn((): unknown[] => []),
   isCollapsed: false,
   currentWindow: null as null | {
     isDestroyed: () => boolean
@@ -166,8 +168,8 @@ vi.mock('./manager', () => ({
 
 vi.mock('./meta-overlay', () => ({
   metaOverlayManager: {
-    getPluginActions: vi.fn(() => []),
-    show: vi.fn(),
+    getPluginActions: mocks.getMetaOverlayPluginActions,
+    show: mocks.showMetaOverlay,
     hide: vi.fn(),
     getVisible: vi.fn(() => false),
     ownsRenderer: mocks.ownsMetaOverlayRenderer,
@@ -226,6 +228,7 @@ describe('CoreBox IPC hide transport', () => {
     mocks.streamHandlers.clear()
     mocks.isPinned.mockReturnValue(false)
     mocks.ownsMetaOverlayRenderer.mockReturnValue(false)
+    mocks.getMetaOverlayPluginActions.mockReturnValue([])
     mocks.isCollapsed = false
     mocks.currentWindow = null
     mocks.detachUIViewToDivisionBox.mockResolvedValue({
@@ -594,6 +597,52 @@ describe('CoreBox IPC hide transport', () => {
 
     expect(mocks.expand).toHaveBeenCalledWith({ forceMax: true })
     expect(mocks.shrink).not.toHaveBeenCalled()
+  })
+
+  it('shows the action panel without forcing CoreBox to its maximum height', () => {
+    const handler = soleHandler(MetaOverlayEvents.ui.show)
+    const request = {
+      item: { id: 'item-1', kind: 'app' },
+      builtinActions: [],
+      itemActions: [],
+      anchor: 'footer',
+      desiredPanelHeight: 300
+    }
+
+    expect(handler?.(request)).toEqual({ accepted: true })
+
+    // The manager grows the window only when the panel does not fit; an unconditional forceMax
+    // here is what left an empty 600px window under a short result list.
+    expect(mocks.expand).not.toHaveBeenCalled()
+    expect(mocks.showMetaOverlay).toHaveBeenCalledExactlyOnceWith({
+      ...request,
+      pluginActions: []
+    })
+  })
+
+  it('adds the enabled registered plugin actions to the panel height the renderer asked for', () => {
+    const pluginAction = (id: string, disabled = false) => ({
+      id,
+      render: { basic: { title: id }, disabled }
+    })
+    mocks.getMetaOverlayPluginActions.mockReturnValue([
+      pluginAction('share-a'),
+      pluginAction('share-b'),
+      pluginAction('share-c', true)
+    ])
+    const handler = soleHandler(MetaOverlayEvents.ui.show)
+
+    handler?.({
+      item: { id: 'item-1', kind: 'app' },
+      builtinActions: [],
+      anchor: 'corner',
+      desiredPanelHeight: 200
+    })
+
+    // Section gap (4) + section title (24) + two enabled rows (2 × 32).
+    expect(mocks.showMetaOverlay).toHaveBeenCalledWith(
+      expect.objectContaining({ desiredPanelHeight: 292 })
+    )
   })
 
   it('executes overlay actions only for the active MetaOverlay renderer', async () => {
