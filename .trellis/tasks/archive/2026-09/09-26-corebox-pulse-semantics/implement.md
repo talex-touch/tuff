@@ -21,3 +21,13 @@
 ## Rollback
 
 - 还原 `CoreBox.vue` 两处绑定即可恢复旧行为。
+
+## 归档说明（2026-09-26）
+
+- 由 CoreBox UX 会话（talex-touch-40）在自己负责的代码区域实现，已提交到本地 master（`6994723e0`）。
+- 与本规格的三处偏离已获规格方 talex-touch-31 确认，并有老板决定：
+  - settling 文案默认只给读屏，降级时才可见；
+  - 同查询重跑仍算「已有结果」；
+  - `handleExecute` 会清零 `hasFreshResults`。
+- 另外改为常驻播报区，避免「带内容插入的 live region」不被读屏播报。
+- 契约见 `.trellis/spec/frontend/corebox-results-contracts.md` 的搜索提示一节。

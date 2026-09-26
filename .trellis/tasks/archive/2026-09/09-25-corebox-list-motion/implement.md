@@ -66,3 +66,11 @@ git diff --check -- <each changed file>
 ## Rollback
 
 每个阶段的改动都能独立回退。提交时只暂存本任务的行；共享文件用 HEAD blob 锚点编辑的方式处理。
+
+## 归档说明（2026-09-26）
+
+- 阶段 1–3 已完成、检查通过，已提交到本地 master（`6994723e0` 等）。
+- **老板决定暂不做、随归档关闭**：
+  - 阶段 4：R-F 预览卡片的稳定 key 与合成器描边；R-P2 的历史面板、高度测量、预览占位。
+  - 列表 FLIP（G）的 CDP Performance 帧率测量：G 仍挂在 `animation.resultTransition` 开关下，默认关闭；老板本人开着。
+- **待真机验证**：开着 FLIP 时，在上方插入或删除行（配合 `overflow-anchor: none`）；插件模式下头部显示执行反馈；VoiceOver 播报。

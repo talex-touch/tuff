@@ -95,3 +95,10 @@ CoreBox 的默认呼出快捷键从 `⌘E`（Win/Linux 为 `Ctrl+E`）改为 `�
 - [x] 托盘截图项显示实际生效的截图快捷键（R7）；Windows 上录制 Win 键存为 `Super`，不再是 `Command`（R8）。
 - [x] 设置页状态文字在浅色主题下对比度 ≥4.5:1（R9：实测 5.49–6.11）；截图快捷键一行显示中文 / 英文名称（R10）；Windows 上旧的 `Command+…` 启动后变成 `Super+…`（R11，单测覆盖；Windows 真机上能否正常注册待验）。
 - [x] 相关测试（global-shortcon、core-box index、tray、FlatKeyInput）更新并通过；core-app 类型检查与 eslint 通过。最后一轮聚焦集为 72 个文件、835 条，39 个变异全部被抓到。
+
+## 归档说明（2026-09-26）
+
+- 按老板最终决定（永远不兜底，只用 ⌥Space）完成并检查通过，已提交到本地 master（`dc6c52bdc`、`86e394974`）。契约见 `.trellis/spec/main-process/global-shortcut-contracts.md`。
+- 真机：侧边栏、主窗口命令面板读到的生效绑定都是 `Alt+Space`；老板的 ⌘E 已迁移。
+- **待真机验证**：Windows 上 R11 迁移后能否正常注册；「⌥Space 用不了」的通知（macOS 上 ⌥Space 总能注册成功，本机无法触发，由单测和变异覆盖）。
+- 追加小修 `238aa466d`：设置页保存结果的整行底色，把无效的逗号写法 `rgba(var(--*-rgb), a)` 改为 `rgb(... / a)`，状态格改为不透明底；本机 AI 快捷键补上名称。
