@@ -6,7 +6,7 @@
 apps/core-app/src/renderer/src/modules/home-push/
   signals.ts          # 纯函数：从对话历史 / 项目 / 本机会话 / 剪贴板条目 / 当前项目 → HomeSignals
   summary.ts          # 纯函数：HomeSignals → 发给模型的摘要文本（只含标题、名称、计数）+ 摘要指纹
-  opening.ts          # 开场白状态机：skeleton → streaming → done | fallback；10 分钟同指纹复用
+  opening.ts          # 开场白状态机：skeleton → streaming → done | interim（模板顶着）→ done | fallback；10 分钟同指纹复用
   guide.ts            # 引导卡两步的数据（类别 → 起手任务，带本地名字）；导出 HOME_PUSH_ICON_CLASSES
   feed.ts             # 「为你准备」推送项（优先级、上限 4、动作描述）
   useHomePush.ts      # 组合：进入空白新对话时采集信号、启动开场白、给出 mode / steps / items / actions
@@ -21,12 +21,14 @@ apps/core-app/src/renderer/src/modules/home-push/
 ```
 idle ──enter blank──▶ pending(skeleton)
 pending ──first token──▶ streaming ──end──▶ done
-pending ──2.5s / no provider / error──▶ fallback（模板，取消调用）
-streaming ──error──▶ done（保留已到的文字；空则 fallback）
-任意 ──leave blank / send while pending|streaming──▶ cancelled（不并入对话）
+pending ──2.5s──▶ interim（模板顶着，调用继续、不显示）
+interim ──模型开场白写完整──▶ done（整段替换模板：旧字淡出、新字淡入）
+pending | interim ──30s / no provider / error──▶ fallback（模板为最终结果，取消调用）
+streaming ──30s / error──▶ done（保留已到的文字；空则 fallback）
+任意 ──leave blank / send while pending|interim|streaming──▶ cancelled（不并入对话）
 ```
 
-- 调用：`sdk.stream('text.chat', { messages: [system(prompt), user(summary)], temperature: 0.7, maxTokens: 160 }, handlers, { timeout: 8000, metadata: { operation: INTELLIGENCE_HOME_OPENING_OPERATION } })`；`stream` 抛错且无任何活动时不做非流式回退（开场白不值得第二次计费），直接模板。
+- 调用：`sdk.stream('text.chat', { messages: [system(prompt), user(summary)], temperature: 0.7, maxTokens: 320 }, handlers, { preferredProviderId?, modelPreference?, timeout: 30000, metadata: { operation: INTELLIGENCE_HOME_OPENING_OPERATION } })`：走输入框的路由（与聊天同一条，2026-09-26 拍板），不带推理强度、不带 home surface；开场白在进入空白态后等模型列表加载（`routingReady`，与本地读取共用 800ms 上限），固定的模型才赶得上第一句。`maxTokens` 是显示上限 160 字的两倍，只作成本上限（中文一个字 1–2 个 token，按 token 截断会绕过句末清洗）。`stream` 抛错且无任何活动时不做非流式回退（开场白不值得第二次计费），直接模板。
 - 复用：模块级缓存 `{ fingerprint, text, at }`，同指纹 10 分钟内直接进入 `done`。
 - 输出清洗：去掉首尾引号、限制最多 3 句 / 160 个字符，超出截断到句末；清洗后为空走模板。
 - 模板：由信号决定用哪一句（有未完成对话 / 有本机会话 / 什么都没有），全部来自语言包插值。
