@@ -2,22 +2,22 @@
 /**
  * Branch and tag policy guard -- the mechanical half of `.trellis/spec/guides/branch-and-release.md`.
  *
- * Two branches are long-lived. `master` is production, `stage` is the beta channel, and every other
- * branch is `task/<type>/<slug>`, deleted on merge. Everything below follows from one sentence: a
- * release only ever *fast-forwards* `master` to `stage`, so `stage ⊇ master` holds at all times.
+ * Two branches are long-lived. `master` is the production line, `stage` is the beta channel, and
+ * every other branch is `task/<type>/<slug>`, deleted on merge.
  *
- * Why that needs a check rather than a note. The invariant is silently destroyed by any release
- * shape that writes a commit to `master` alone, and the damage is deferred:
+ * One sentence is load-bearing: **a beta is cut from a `stage` that already contains `master`**.
+ * `stage` is what testers are handed, so a stage trailing master publishes a beta that is missing
+ * work already on master -- usually the fix the beta was cut to test. Nothing errors; the gap only
+ * surfaces as a tester reporting a stale bug against a build labelled new. The direction of the
+ * check is the opposite of ibuki-main's ADR-0007 guard (`main ⊇ stage` there): here the beta channel
+ * is the one that has to contain production.
  *
- *   - a squash merge puts the released content on `master` and not on `stage`, so the *next*
- *     fast-forward release reverts it -- a published release disappears with no error anywhere;
- *   - a rebase merge rewrites the SHAs, so `stage` stops containing what shipped;
- *   - a commit pushed straight to `master` (a hotfix, a "small" fix) is the same hole.
- *
- * None of those are visible locally, and all of them are cheap to detect from the graph, which is
- * the whole argument for this script. The direction of the check is the opposite of ibuki-main's
- * ADR-0007 guard (`main ⊇ stage` there): this repo promotes *into* `master`, so the containment to
- * protect is `stage ⊇ master`.
+ * Why it is judged only when a beta is published. `master` is the integration branch -- pull
+ * requests land on it, so it runs ahead of `stage` for most of the time between betas. Failing every
+ * one of those runs would be noise, and a guard people learn to ignore is worse than no guard. So
+ * the containment is a FAIL in exactly the two moments a beta is published (a push to `stage`, and a
+ * `-beta.` tag), and a warning everywhere else: a PR run, a push to `master`, a stable tag, a local
+ * run on a feature branch. Warnings never move the exit code, so none of those become red builds.
  *
  *   node scripts/check-branch-policy.mjs                  # current branch, plus every decidable invariant
  *   node scripts/check-branch-policy.mjs --tag v2.4.15    # release time: also check the tag's landing branch
@@ -144,9 +144,15 @@ export function evaluate(state) {
     out.push(entry('OK', 'I3', `branch name ${state.branch} (${branch.kind})`))
   else out.push(entry('FAIL', 'I3', `branch name ${state.branch}: ${branch.reason}`))
 
-  // I1 -- stage ⊇ master. The one invariant every release shape is judged by.
+  // I1 -- stage ⊇ master, judged hard only when a beta is published: a push to the beta channel
+  // (`stage`) or a `-beta.` tag. Everywhere else -- a PR run, a push to master, a stable tag, a local
+  // run -- master leading stage is the integration branch doing its job, so the gap is reported and
+  // never blocks. A guard that fails routine work is a guard people route around.
+  const current = classifyTag(state.tag)
+  const publishesBeta = state.branch === 'stage' || current.kind === 'beta'
+  const i1Level = publishesBeta ? 'FAIL' : 'WARN'
   if (!state.masterPresent) {
-    out.push(entry('FAIL', 'I1', 'stage ⊇ master: cannot resolve origin/master (no origin, or offline)'))
+    out.push(entry(i1Level, 'I1', 'stage ⊇ master: cannot resolve origin/master (no origin, or offline)'))
   }
   else if (!state.stagePresent) {
     out.push(entry('SKIP', 'I1', 'stage ⊇ master: no origin/stage yet (the beta channel is not enabled)'))
@@ -158,18 +164,22 @@ export function evaluate(state) {
     out.push(entry('OK', 'I1', 'stage ⊇ master'))
   }
   else if (state.masterContainedInStage === null) {
-    out.push(entry('FAIL', 'I1', 'stage ⊇ master: undecidable -- origin/master or origin/stage object is missing'))
+    out.push(entry(i1Level, 'I1', 'stage ⊇ master: undecidable -- origin/master or origin/stage object is missing'))
+  }
+  else if (publishesBeta) {
+    const why = state.branch === 'stage' ? 'this run pushes to stage' : `this run publishes ${state.tag}`
+    out.push(entry('FAIL', 'I1', `stage ⊇ master: master has commits stage does not, and ${why}. Fast-forward the beta channel first `
+    + '(`git switch stage && git merge --ff-only origin/master`) -- a beta cut from a stage that trails master is missing '
+    + 'work testers are being asked to validate'))
   }
   else {
-    out.push(entry('FAIL', 'I1', 'stage ⊇ master: master has commits stage does not. Either `git merge origin/master` into stage, '
-    + 'or the commit reached master without going through stage -- which is the shape that makes the '
-    + 'next fast-forward release revert it (squash/rebase merge, or a direct push)'))
+    out.push(entry('WARN', 'I1', 'stage ⊇ master: master has commits stage does not. Routine while master is the integration branch; '
+    + '`git switch stage && git merge --ff-only origin/master` closes it, and it must be closed before the next beta'))
   }
 
   // I2 -- the landing branch of the tag this run is about. Judged before anything else about the
   // tag: on a shallow clone `merge-base --is-ancestor` answers "no" for a tag that is on the branch,
   // so the verdict would be a false failure dressed as a real one.
-  const current = classifyTag(state.tag)
   if (!state.tag) {
     out.push(entry('SKIP', 'I2', 'tag landing branch: no tag in this run (pass --tag <tag> before a release)'))
   }
@@ -513,7 +523,17 @@ function selfTest() {
   const text = (state, id) => evaluate({ ...base, ...state }).find(r => r.id === id)?.text ?? ''
 
   check('I1 holds', levels({}).includes('I1:OK'), true)
-  check('I1 broken fails', levels({ masterContainedInStage: false }).includes('I1:FAIL'), true)
+  // The gap is routine while master is the integration branch, and fatal in the two moments a beta
+  // is published. Both halves matter: a rule that never fails protects nothing, and a rule that
+  // always fails gets routed around.
+  check('I1 broken warns on a feature run', levels({ masterContainedInStage: false }).includes('I1:WARN'), true)
+  check('I1 broken warns on a push to master', levels({ branch: 'master', masterContainedInStage: false }).includes('I1:WARN'), true)
+  check('I1 broken warns for a stable tag', levels({ tag: 'v2.4.15', masterContainedInStage: false }).includes('I1:WARN'), true)
+  check('I1 broken fails on a push to stage', levels({ branch: 'stage', masterContainedInStage: false }).includes('I1:FAIL'), true)
+  check('I1 broken fails when a beta tag is published', levels({ branch: '', tag: 'v2.4.15-beta.1', masterContainedInStage: false }).includes('I1:FAIL'), true)
+  check('the beta-time failure names the fast-forward remedy', text({ branch: 'stage', masterContainedInStage: false }, 'I1').includes('merge --ff-only'), true)
+  check('the beta-time failure names what is being published', text({ branch: '', tag: 'v2.4.15-beta.1', masterContainedInStage: false }, 'I1').includes('v2.4.15-beta.1'), true)
+  check('the routine warning says when it must be closed', text({ masterContainedInStage: false }, 'I1').includes('before the next beta'), true)
   // History integrity reports on its own line, so a SKIP elsewhere cannot hide it.
   check('I0 reports a complete history', levels({}).includes('I0:OK'), true)
   check('a shallow clone fails on I0', levels({ historyComplete: false, masterContainedInStage: null }).includes('I0:FAIL'), true)
@@ -526,8 +546,8 @@ function selfTest() {
   check('the stale-ref failure names both oids', text({ tag: 'v2.4.15', tagRefMismatch: { local: 'a'.repeat(40), remote: 'b'.repeat(40) } }, 'I2').includes('aaaaaaa'), true)
   check('a matching tag ref is judged normally', levels({ tag: 'v2.4.15', tagRelativeToMaster: true, tagRefMismatch: null }).includes('I2:OK'), true)
   check('I1 skipped without stage', levels({ stagePresent: false, masterContainedInStage: null }).includes('I1:SKIP'), true)
-  check('I1 fails without origin/master', levels({ masterPresent: false, masterContainedInStage: null }).includes('I1:FAIL'), true)
-  check('I1 failure names both causes', text({ masterContainedInStage: false }, 'I1').includes('squash'), true)
+  check('I1 fails without origin/master while a beta is cut', levels({ branch: 'stage', masterPresent: false, masterContainedInStage: null }).includes('I1:FAIL'), true)
+  check('an unresolvable origin/master only warns otherwise', levels({ masterPresent: false, masterContainedInStage: null }).includes('I1:WARN'), true)
 
   check('stable tag on master ok', levels({ tag: 'v2.4.15', tagRelativeToMaster: true }).includes('I2:OK'), true)
   check('stable tag off master fails', levels({ tag: 'v2.4.15', tagRelativeToMaster: false }).includes('I2:FAIL'), true)

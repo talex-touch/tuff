@@ -70,10 +70,10 @@ These guides help you **ask the right questions before coding**.
 
 ### When Branching, Tagging, or Releasing
 
-- [ ] You're about to `git switch -c` — the name is `task/<type>/<slug>`, cut from `stage`
-- [ ] You're about to merge into `master` — it is a fast-forward from `stage`, never a merge commit or a squash
+- [ ] You're about to `git switch -c` — the name is `task/<type>/<slug>`, cut from `master`
+- [ ] You're about to cut a beta — `stage` must already contain `master` (`git switch stage && git merge --ff-only origin/master`); a push to `stage` or a `-beta.` tag fails without it
 - [ ] You're about to tag — `vX.Y.Z` on `master`, `vX.Y.Z-beta.<n>` on `stage`, and pushed last
-- [ ] You found a commit on `master` that `stage` does not have — that is the shape that reverts a release later
+- [ ] You hit an `I1` failure — read *where* it ran: on a push to `stage` or a `-beta.` tag it is fatal and the tag must not ship before `stage` catches up; on a `master` push or PR it is the routine gap, and it has to be closed before the next beta
 - [ ] You're tempted to rename or restructure branches — two names for one role is what the guard exists to catch
 
 → Read [Branch and Release Policy](./branch-and-release.md)
