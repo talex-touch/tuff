@@ -7,7 +7,7 @@ import type {
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import { getNetworkService } from '../../network'
 import { createProviderLogger } from './logger'
-import { downloadToTempFile, ensureRiskAccepted } from './utils'
+import { downloadToTempFile, ensureRiskAccepted, resolvePackageDownloadTimeout } from './utils'
 
 interface ParsedNpmSource {
   name: string
@@ -17,6 +17,8 @@ interface ParsedNpmSource {
 interface NpmVersionMetadata {
   dist?: {
     tarball?: string
+    /** Registry-reported size, used to scale the download deadline. Absent on some publishes. */
+    unpackedSize?: number
   }
 }
 
@@ -144,7 +146,10 @@ export class NpmPluginProvider implements PluginProvider {
       this.log.debug('即将下载 NPM tarball', {
         meta: { tarballUrl }
       })
-      const filePath = await downloadToTempFile(tarballUrl, '.tgz', context?.downloadOptions)
+      const filePath = await downloadToTempFile(tarballUrl, '.tgz', {
+        timeout: resolvePackageDownloadTimeout(versionMeta.dist?.unpackedSize),
+        ...context?.downloadOptions
+      })
 
       this.log.success('NPM 插件下载完成', {
         meta: { filePath, package: parsed.name, version }

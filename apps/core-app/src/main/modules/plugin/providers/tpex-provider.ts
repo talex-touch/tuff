@@ -15,7 +15,12 @@ import { getEnabledApiSources } from '../../../service/store-api.service'
 import { getNetworkService } from '../../network'
 import { getRuntimeNexusBaseUrl } from '../../nexus/runtime-base'
 import { createProviderLogger } from './logger'
-import { downloadToTempFile, mergeHeadersCaseInsensitive, stripAuthorizationHeader } from './utils'
+import {
+  downloadToTempFile,
+  mergeHeadersCaseInsensitive,
+  resolvePackageDownloadTimeout,
+  stripAuthorizationHeader
+} from './utils'
 
 const tpexProviderLog = createProviderLogger(PluginProviderType.TPEX)
 
@@ -308,6 +313,7 @@ export class TpexPluginProvider implements PluginProvider {
 
     // Use Node.js stream download instead of fetch + arrayBuffer
     const filePath = await downloadToTempFile(downloadUrl, '.tpex', {
+      timeout: resolvePackageDownloadTimeout(targetVersion.packageSize),
       ...context?.downloadOptions,
       headers: downloadHeaders,
       resolveHeadersForUrl: (requestUrl, headers) => this.resolveRequestHeaders(requestUrl, headers)
