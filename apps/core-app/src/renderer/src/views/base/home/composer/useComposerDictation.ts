@@ -219,8 +219,12 @@ export function useComposerDictation(
       }
       // A segment made out of silence (`。。。`, a subtitle credit) never reaches the draft, not
       // even for the moment a partial stays up; a session of nothing else ends as `empty`.
+      // Each partial is the provider's whole hypothesis for the utterance so far — main keeps it
+      // the same way (`lastPartialText`) — so it replaces the last one. Merged instead, a revised
+      // hypothesis (a word corrected, a trailing 。 turned into ，) read as new words and was
+      // appended, and a session that ended without a final left every revision in the draft.
       case 'partial':
-        current.partial = mergeTranscript(current.partial, spokenSegment(event.text))
+        current.partial = spokenSegment(event.text)
         write(current)
         return
       case 'final':

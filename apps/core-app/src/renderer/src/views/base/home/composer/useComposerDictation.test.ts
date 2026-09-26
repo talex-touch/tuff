@@ -142,7 +142,13 @@ describe('useComposerDictation', () => {
 
     emit(stream, { type: 'partial', text: '订' })
     expect(draft.value).toBe('请帮我订，谢谢')
-    // The next version of the partial replaces it rather than stacking on it.
+    // The next version of the partial replaces it rather than stacking on it — also when the
+    // provider revised it (a real capture: the trailing 。 turned into ， and a word changed).
+    emit(stream, { type: 'partial', text: '订一张' })
+    expect(draft.value).toBe('请帮我订一张，谢谢')
+    emit(stream, { type: 'partial', text: '订一张明早的。' })
+    emit(stream, { type: 'partial', text: '订一张明早的，去杭州' })
+    expect(draft.value).toBe('请帮我订一张明早的，去杭州，谢谢')
     emit(stream, { type: 'partial', text: '订一张' })
     expect(draft.value).toBe('请帮我订一张，谢谢')
     emit(stream, { type: 'final', text: '订一张票' })
