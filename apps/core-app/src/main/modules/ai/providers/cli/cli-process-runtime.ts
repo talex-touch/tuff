@@ -22,6 +22,15 @@ import { spillAttachments } from '../attachment-spill'
  * Pulled out of the pi provider unchanged in behaviour; its tests are the oracle for this file.
  */
 
+/**
+ * A run that ended without an answer, carrying what the CLI itself said about it (`providerDetail`)
+ * apart from our wording: that is the part the app may show the user (`intelligence-error-normalizer`
+ * redacts it and keeps it from plugins).
+ */
+function cliFailure(message: string, providerDetail: string): Error & { providerDetail: string } {
+  return Object.assign(new Error(message), { providerDetail })
+}
+
 /** Enough stderr to identify a failure without letting a chatty run grow unbounded in memory. */
 const STDERR_TAIL_LIMIT = 4_000
 const CHILD_TERMINATION_GRACE_MS = 150
@@ -308,16 +317,18 @@ export async function* runCliChat(
     // committed does not rescue the run: it belongs to an attempt the CLI discarded, which is
     // exactly the case that used to surface as an unexplained empty bubble.
     if (!committedLength && isFailedStopReason(state.stopReason)) {
-      throw new Error(
-        `${spec.errorPrefix} ${spec.name} ended the run without an answer: ${noAnswer}`
+      throw cliFailure(
+        `${spec.errorPrefix} ${spec.name} ended the run without an answer: ${noAnswer}`,
+        noAnswer
       )
     }
 
     // Deltas already reached the user, so a late non-zero exit must not discard them; the stream
     // closes on what did arrive instead of turning a partial answer into an error.
     if (code !== 0 && !streamedLength) {
-      throw new Error(
-        `${spec.errorPrefix} ${spec.name} exited with code ${code}${stderrTail.trim() ? `: ${stderrTail.trim()}` : ''}`
+      throw cliFailure(
+        `${spec.errorPrefix} ${spec.name} exited with code ${code}${stderrTail.trim() ? `: ${stderrTail.trim()}` : ''}`,
+        stderrTail.trim() || `exited with code ${code}`
       )
     }
 
@@ -325,8 +336,9 @@ export async function* runCliChat(
     // this vocabulary exists to prevent: the run produced nothing, so the only explanation left is
     // what the CLI said, whatever it last wrote to stderr, or the exit code.
     if (!streamedLength && !sawEvent) {
-      throw new Error(
-        `${spec.errorPrefix} ${spec.name} ended the run without an answer: ${noAnswer}`
+      throw cliFailure(
+        `${spec.errorPrefix} ${spec.name} ended the run without an answer: ${noAnswer}`,
+        noAnswer
       )
     }
 

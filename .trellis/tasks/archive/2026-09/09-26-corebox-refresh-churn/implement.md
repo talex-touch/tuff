@@ -62,3 +62,8 @@ git diff --check -- <each changed file>
   - 富化 resume 的轮次频率不超过冷却设定；
   - CoreBox 开着查询时，每分钟的重搜次数明显下降。
 - 不动数据库文件，不跑 `pnpm run` / `pnpm install`。dev Electron 是共享的，只读查看日志。
+
+## 归档说明（2026-09-26）
+
+- 主进程与渲染层全部完成、检查通过，已提交到本地 master（`043405928`、`6994723e0` 等）。契约见 `.trellis/spec/main-process/index-commit-refresh-contracts.md`。
+- M3 / M4 同时出现在两处：talex-touch-31 的 PR #1965（`cc7c3fdb6`）和本地提交 `b3edffef1`（18:33 的整体提交）。合并 PR 或推送本地 master 时注意重复与冲突。

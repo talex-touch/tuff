@@ -1,3 +1,4 @@
+import type { PrismGlowCone } from '../src/cones'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -31,6 +32,7 @@ describe('txPrismGlow', () => {
       const expected = PRISM_GLOW_CONES[slot]!
       expect(style.getPropertyValue('--tx-pg-slot')).toBe(String(slot))
       expect(style.getPropertyValue('--tx-pg-hue')).toBe(String(expected.hue))
+      expect(style.getPropertyValue('--tx-pg-hue-light')).toBe(String(expected.lightHue))
       expect(style.getPropertyValue('--tx-pg-period')).toBe(String(expected.period))
       expect(cone.findAll('.tx-prism-glow__beam')).toHaveLength(1)
       expect(cone.findAll('.tx-prism-glow__rays')).toHaveLength(1)
@@ -512,5 +514,67 @@ describe('txPrismGlow style contract', () => {
     expect(stripped.match(/#[0-9a-f]{3,8}\b/gi) ?? []).toEqual([])
     expect(stripped.match(/\b(?:rgba?|hsla?|hwb)\(/gi) ?? []).toEqual([])
     expect(stripped.match(/\b(?:white|black|gr[ae]y)\b/gi) ?? []).toEqual([])
+  })
+})
+
+/** Degrees between two hue angles, the short way round. */
+function hueGap(a: number, b: number): number {
+  const gap = Math.abs(a - b) % 360
+  return Math.min(gap, 360 - gap)
+}
+
+// A light surface blends the cones `normal`, so an overlap is the average of the two colours,
+// and two hues more than 120° apart average to grey: in the dark order, blue over yellow read
+// olive-grey through every CoreBox search. Cones that set off together must be hue neighbours.
+describe('txPrismGlow light hue order', () => {
+  const MAX_GAP = 120
+  /** The opening stretch in multiples of `duration`: 2.4s at the default 6s, a whole CoreBox search. */
+  const OPENING = 0.4
+  /** Two cones' halos (fading out 15.6cqw either side of the centre) meet once the centres are about 31cqw apart. */
+  const CLEAR = 30
+
+  /** The closest approach, in cqw, of two cones more than MAX_GAP apart in hue during the opening stretch. */
+  function closestClash(hueOf: (cone: PrismGlowCone) => number): number {
+    const width = Number.parseFloat(outside.find(rule => rule.selectors.includes('.tx-prism-glow__cone'))!.declarations.get('width')!)
+    const stop = (at: string) => Number.parseFloat(
+      keyframeRules.find(rule => rule.atRule === '@keyframes tx-prism-glow-travel' && rule.selectors.includes(at))!.declarations.get('translate')!,
+    )
+    const from = stop('from')
+    const to = stop('to')
+    // `tau` is time over duration; the negative phase is the animation delay.
+    const progress = (cone: PrismGlowCone, tau: number): number => ((((tau - cone.phase) / cone.period) % 1) + 1) % 1
+    const centre = (cone: PrismGlowCone, tau: number): number => from + (to - from) * progress(cone, tau) + width / 2
+
+    let closest = Number.POSITIVE_INFINITY
+    for (let tau = 0; tau <= OPENING; tau += 0.002) {
+      PRISM_GLOW_CONES.forEach((a, i) => {
+        for (const b of PRISM_GLOW_CONES.slice(i + 1)) {
+          if (hueGap(hueOf(a), hueOf(b)) > MAX_GAP)
+            closest = Math.min(closest, Math.abs(centre(a, tau) - centre(b, tau)))
+        }
+      })
+    }
+    return closest
+  }
+
+  it('keeps all six spectrum hues on a light surface, in another order', () => {
+    const sorted = (hues: number[]) => [...hues].sort((a, b) => a - b)
+    expect(sorted(PRISM_GLOW_CONES.map(cone => cone.lightHue))).toEqual(sorted(PRISM_GLOW_CONES.map(cone => cone.hue)))
+  })
+
+  it('never sets off together two cones whose light hues would average to grey', () => {
+    // Positive control: in the dark order, blue catches yellow during the opening stretch.
+    expect(closestClash(cone => cone.hue)).toBeLessThan(CLEAR)
+    expect(closestClash(cone => cone.lightHue)).toBeGreaterThanOrEqual(CLEAR)
+  })
+
+  it('tints from the light order by default and from the spectrum order on a dark surface', () => {
+    const tint = (match: (selector: string) => boolean) =>
+      outside.find(rule => rule.selectors.some(match))?.declarations.get('--tx-pg-tint')
+    expect(tint(selector => selector === '.tx-prism-glow__cone')).toContain('var(--tx-pg-hue-light)')
+    // Scoped to the spectrum palette, so the accent palette keeps its own tint on a dark surface.
+    const dark = tint(selector => selector.includes('.dark') && selector.endsWith('.tx-prism-glow--spectrum .tx-prism-glow__cone'))
+    expect(dark).toContain('var(--tx-pg-hue)')
+    expect(tint(selector => selector === '.tx-prism-glow--accent .tx-prism-glow__cone')).toContain('var(--tx-color-primary')
   })
 })

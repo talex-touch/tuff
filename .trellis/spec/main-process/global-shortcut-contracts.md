@@ -637,7 +637,8 @@ acceleratorMatchesEvent(parsed, event): boolean              // KeyboardEvent.co
   - Main passes `process.platform`; the renderer passes `useRendererPlatform().platform`.
 - **Settings name every built-in row (R10).** `getShortcutLabel(id)` reads
   `settingTools.shortcutLabels.<id with . : - replaced by _>`, falling back to the raw id.
-  `screenshot_tool_start` is "截图" / "Take a screenshot".
+  `screenshot_tool_start` is "截图" / "Take a screenshot", and `local_ai_cli_quick_open` is
+  "打开本机 AI 代理" / "Open local AI agent".
 - **Static pages cannot read the binding (R5).** The Nexus quick start, the landing hero and
   `CLAUDE.md` name the default (`⌥Space` / `Alt+Space`) and say it can be changed in settings. The
   quick start also carries the conflict sentence (R6). None of them mentions a stand-in key.
@@ -716,8 +717,8 @@ acceleratorMatchesEvent(parsed, event): boolean              // KeyboardEvent.co
   - an unparseable accelerator passes through;
   - `acceleratorMatchesEvent` and `acceleratorsMatch`.
 - `renderer/modules/lang/shortcut-labels.test.ts`: both locales name `core.box.toggle`,
-  `core.omniPanel.toggle`, `core.omniPanel.mouseLongPress`, `screenshot.tool.start`,
-  `voice.dictation.toggle` and `voice.quickEdit`.
+  `core.omniPanel.toggle`, `core.omniPanel.mouseLongPress`, `local-ai-cli.quick-open`,
+  `screenshot.tool.start`, `voice.dictation.toggle` and `voice.quickEdit`.
 
 ### 7. Wrong vs Correct
 
@@ -962,9 +963,41 @@ contrast", which parses the SFC `<style>`:
   `packages/tuffex/packages/components/style/variables.scss`;
 - each recipe's `var()` fallback equals the light token it stands for.
 
-Not covered here: the `.is-success` / `.is-error` row tints use `rgba(var(--tx-color-*-rgb), …)`
-over a space-separated triplet, so they do not render. If someone fixes them, the light inks still
-read 5.26 (green) and 4.78 (red) on those tints.
+### The save-result row tint
+
+A save result tints its row, and the status line sits on that tint:
+
+```css
+.ShortcutDialog-Row.is-success { --shortcut-row-tint: rgb(var(--tx-color-success-rgb) / 0.08); }
+.ShortcutDialog-Row.is-error   { --shortcut-row-tint: rgb(var(--tx-color-danger-rgb) / 0.16); }
+.ShortcutDialog-Row.is-success, .ShortcutDialog-Row.is-error { background-color: var(--shortcut-row-tint); }
+/* the sticky status cell of those rows */
+background: linear-gradient(var(--shortcut-row-tint), var(--shortcut-row-tint)), var(--tx-bg-color-overlay);
+```
+
+- **Only the slash form parses.** Every `--tx-color-*-rgb` token in tuffex is a space-separated
+  triplet (`103 194 58`). `rgba(var(--…-rgb), alpha)` substitutes to `rgba(103 194 58, 0.08)`,
+  which is invalid at computed-value time, so the declaration drops. Probed in the dev app's
+  Electron renderer: the comma form computes to `rgba(0, 0, 0, 0)`, the slash form to the tint.
+  Until 2026-09-26 the row never showed a tint for that reason.
+- **The sticky cell keeps its opaque base and carries one tint.** It used `background: inherit`,
+  which, once the tint rendered, would have laid the translucent tint a second time over the row's.
+  Red on the doubled tint reads 4.15 on light and 3.68 on dark, under 4.5. The gradient layer
+  gives the cell the row's single tint over `--tx-bg-color-overlay`, and it stays opaque, so
+  columns scrolled under it never show through. `.is-saving` rows are untinted, and their cell
+  still inherits.
+- **Contrast on the tint**, green / red, computed from the tokens (sRGB compositing, WCAG 2):
+  5.26 / 4.78 light, 11.05 / 8.78 light high contrast, 8.18 / 4.73 dark, 10.61 / 6.83 dark high
+  contrast. The SFC comment carries the same numbers.
+
+Pinned by `ShortcutDialogRow.test.ts` › "save-result tint":
+
+- the stylesheet has no `rgba(var(--…-rgb),` form, and each state's tint parses as
+  `rgb(var(--tx-color-*-rgb) / alpha)` with 0.08 and 0.16;
+- each state's row uses `var(--shortcut-row-tint)`, and its cell uses the gradient-over-overlay
+  value above;
+- in `:root` and `.dark`, the success and danger inks clear 4.5:1 on the overlay under the tint,
+  taking the triplet and the alpha from the stylesheet, so a stronger tint fails it.
 
 ## Known remaining instances
 
@@ -978,6 +1011,14 @@ read 5.26 (green) and 4.78 (red) on those tints.
 - **The settings Spotlight hint may never appear.** `getSpotlightHint` waits for a macOS
   `register-failed` / `register-error` on an accelerator containing `Command` and `Space`. On
   macOS 27, `register('Command+Space')` succeeded with Spotlight's ⌘Space enabled.
+- **34 more `rgba(var(--tx-…-rgb), alpha)` declarations drop the same way** (2026-09-26), in 11
+  renderer files outside the shortcut work: `PluginOverview.vue` (8), `IntelligencePromptsPage.vue`
+  (7), `PluginItem.vue` (4), `PluginPerfStatusBar.vue` (3), `IntelligenceMemoryReview.vue` (3),
+  `StoreInstallButton.vue` (2), `PluginPerfCharts.vue` (2), `IntelligenceAuditLogs.vue` (2),
+  `StoreCategoryList.vue`, `StoreIcon.vue` and `PluginNew.vue` (1 each). Each renders as if the
+  declaration were absent. Rewrite each as `rgb(var(--…-rgb) / alpha)` when its owner next touches
+  it, and look at what it sits under first: the save-result tint above had a stacking bug hiding
+  behind it. Count them with `rg -c "rgba\(var\(--tx-[a-z0-9-]+-rgb\)\s*," apps/core-app/src/renderer`.
 
 ## Verification
 
@@ -998,7 +1039,8 @@ npx vitest run src/main/modules/global-shortcon.test.ts src/main/modules/box-too
 npm run typecheck:node
 ```
 
-The suite is 17 files and 155 tests (2026-09-26, after the stand-in was removed).
+The suite is 17 files and 159 tests (2026-09-26, after the stand-in was removed and the row tint
+fixed).
 
 `npm run typecheck:web` rebuilds tuffex first. While a Nexus dev server is running, run
 `npx vue-tsc --noEmit -p tsconfig.web.json --composite false` directly instead; see
@@ -1022,3 +1064,8 @@ untouched). Each one was applied once and failed at least one test listed here. 
   onboarding, composable, recorder, rename, grouping, status ink and labels.
 
 The stand-in's own reversions were retired with it.
+
+Seven more were added with the row-tint fix and the local AI label, and each fails a test listed
+here: the pre-fix stylesheet from HEAD (all four tint tests fail on it), the comma form put back, the
+cell inheriting the tint, the row left untinted, the danger tint raised to 0.3 (the contrast tests
+fail: red reads 4.12 on light), and the local AI label removed from each locale.

@@ -43,3 +43,9 @@ git diff --check -- <each changed file>
 
 - 真机：窗口高度分别为 56 / 300 / 600 时打开 ⌘K，并覆盖插件 UI 模式、中英文、快捷键。dev Electron 是共享的，先协调，或者交给老板手动验证。
 - 不跑 `pnpm run` / `pnpm install`；不动 `CoreBox.vue` / `useSearch.ts`，它们正在被 list-motion 修改，如确有需要先协调。
+
+## 归档说明（2026-09-26）
+
+- 重做和全部后续都已完成、检查通过，已提交到本地 master（`822e97291`、`6994723e0`、`86e394974` 等）。契约见 `.trellis/spec/main-process/corebox-meta-overlay-contracts.md`。
+- 真机已看过：面板右下锚定的布局；不需要撑高时不铺底色；关闭后回放布局，522 → 190px。
+- **待真机验证**：结果很少、窗口需要撑高时的铺底色（两次尝试都没触发撑高）；Windows / Linux 上的 Ctrl+Shift+. 和「在文件管理器中显示」。
