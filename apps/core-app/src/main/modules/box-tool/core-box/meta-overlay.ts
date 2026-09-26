@@ -8,6 +8,7 @@
  */
 
 import type { TuffItem } from '@talex-touch/utils/core-box'
+import type { CoreBoxMetaOverlayPanelStatePayload } from '@talex-touch/utils/transport/events/types'
 import type {
   MetaAction,
   MetaShowRequest
@@ -25,9 +26,10 @@ import { maybeGetRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { buildWindowWebPreferences } from '../../../core/window-security-profile'
 import { useAliveTarget, useAliveWebContents } from '../../../hooks/use-electron-guard'
 import { createLogger } from '../../../utils/logger'
-import { getCoreBoxWindow } from './window'
+import { getCoreBoxWindow, windowManager } from './window'
 import { installAppViewNavigationPolicy } from '../../../core/app-view-navigation-policy'
 import { getCoreBoxRendererUrl } from '../../../utils/renderer-url'
+import { resolveMetaOverlayWindowHeight } from '../../../../shared/meta-overlay-geometry'
 
 const metaOverlayLog = createLogger('CoreBox').child('MetaOverlay')
 const resolveKeyManager = (channel: unknown): unknown =>
@@ -41,6 +43,10 @@ const getCoreBoxRuntimeOrNull = () => maybeGetRegisteredMainRuntime('core-box')
 export class MetaOverlayManager {
   private static instance: MetaOverlayManager
   private static readonly HEIGHT_SYNC_DELAY_MS = 220
+  /** How often a closed panel checks whether the height it handed back has landed. */
+  private static readonly HAND_BACK_POLL_MS = 32
+  /** Longest CoreBox keeps painting for a hand-back; an animated resize takes at most 220ms. */
+  private static readonly HAND_BACK_MAX_WAIT_MS = 1_000
   private metaView: WebContentsView | null = null
   private parentWindow: BrowserWindow | null = null
   private isVisible = false
@@ -49,6 +55,19 @@ export class MetaOverlayManager {
   private heightSyncTimer: NodeJS.Timeout | null = null
   private pendingShowRequest: MetaShowRequest | null = null
   private rendererReadyWebContentsId: number | null = null
+  /** CoreBox height before the panel grew the window, restored when the panel closes. */
+  private restoreHeight: number | null = null
+  /** The latest CoreBox layout update that arrived while the panel was open. */
+  private heldLayoutReplay: (() => void) | null = null
+  private detachParentHideListener: (() => void) | null = null
+  /** The panel closed, and the window it grew is still animating back (see `watchHandBack`). */
+  private handBackPending = false
+  private handBackTimer: NodeJS.Timeout | null = null
+  /** What the CoreBox renderer was last told about the panel (see `publishPanelState`). */
+  private publishedPanelState: CoreBoxMetaOverlayPanelStatePayload = {
+    visible: false,
+    grown: false
+  }
 
   private getAliveMetaWebContents(): Electron.WebContents | null {
     return useAliveWebContents(this.metaView)
@@ -140,13 +159,27 @@ export class MetaOverlayManager {
       this.destroyRenderer()
     })
 
-    // Handle ESC key to close MetaOverlay
+    // Handle ESC key to close MetaOverlay. Not while an IME composes: its Esc cancels the
+    // composition, and the renderer closes the panel on the next plain Esc.
     this.metaView.webContents.on('before-input-event', (event, input) => {
-      if (input.type === 'keyDown' && input.key === 'Escape' && this.isVisible) {
+      if (
+        input.type === 'keyDown' &&
+        input.key === 'Escape' &&
+        !input.isComposing &&
+        this.isVisible
+      ) {
         this.hide()
         event.preventDefault()
       }
     })
+
+    // CoreBox can hide under an open panel (blur, the toggle shortcut). The panel goes with it;
+    // otherwise its layout hold would outlive it and the next show would reveal a stale panel.
+    const onParentHidden = (): void => {
+      if (this.parentWindow === parentWindow) this.dismissWithHost()
+    }
+    parentWindow.on('hide', onParentHidden)
+    this.detachParentHideListener = () => parentWindow.removeListener('hide', onParentHidden)
 
     // Add to window (but keep hidden initially)
     // Note: addChildView order determines z-index (last = top)
@@ -258,6 +291,14 @@ export class MetaOverlayManager {
       return
     }
 
+    // The panel draws inside CoreBox. A ⌘K from a detached DivisionBox reaches here while CoreBox
+    // is hidden: that panel could never be seen, and left "open" it would surface stale on the
+    // next CoreBox show and hold CoreBox's layout until then.
+    if (!this.parentWindow.isVisible()) {
+      metaOverlayLog.debug('Skip MetaOverlay show: CoreBox window is hidden')
+      return
+    }
+
     this.pendingShowRequest = request
     this.currentItem = request.item
 
@@ -313,6 +354,10 @@ export class MetaOverlayManager {
     }
 
     this.pendingShowRequest = null
+    this.isVisible = true
+    // Grow before revealing, so the first frame already has room for the panel. setBounds syncs
+    // this view to the new window size on the way.
+    this.fitParentToPanel(request)
     const tx = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
     void tx
       .sendTo(metaWebContents, MetaOverlayEvents.ui.show, request)
@@ -322,7 +367,8 @@ export class MetaOverlayManager {
 
     const bounds = parentWindow.getBounds()
     metaView.setVisible(true)
-    this.isVisible = true
+    // A panel that grew the window has said so already; this covers one that fits as it is.
+    this.publishPanelState()
     this.scheduleHeightSync()
 
     const actionCount =
@@ -338,6 +384,64 @@ export class MetaOverlayManager {
       focusTarget.focus()
       metaOverlayLog.debug('MetaOverlay focused')
     }
+  }
+
+  private findHostWindow(): (typeof windowManager.windows)[number] | undefined {
+    const parentWindow = this.getAliveParentWindow()
+    if (!parentWindow) return undefined
+    return windowManager.windows.find((candidate) => candidate.window === parentWindow)
+  }
+
+  /**
+   * Grows CoreBox only when the panel does not fit at its current height, and remembers the height
+   * to return to. A window tall enough already is left exactly as it is.
+   *
+   * CoreBox hears about the growth before it happens: its first frame at the new size then
+   * already paints the added space, which would otherwise show the desktop behind the window.
+   */
+  private fitParentToPanel(request: MetaShowRequest): void {
+    const requiredHeight = resolveMetaOverlayWindowHeight(request)
+    const hostWindow = this.findHostWindow()
+    if (requiredHeight === null || !hostWindow) return
+
+    const currentHeight = windowManager.getSettledHeight(hostWindow)
+    if (currentHeight === null || currentHeight >= requiredHeight) return
+
+    if (this.restoreHeight === null) this.restoreHeight = currentHeight
+    this.publishPanelState()
+    windowManager.setHeight(requiredHeight, hostWindow)
+  }
+
+  /**
+   * Hands the window's height back when the panel closes. A layout update held while the panel
+   * was open wins over the pre-open height: the results may have changed underneath the panel.
+   */
+  private releaseHostLayout(): void {
+    const replay = this.heldLayoutReplay
+    const restoreHeight = this.restoreHeight
+    this.heldLayoutReplay = null
+    this.restoreHeight = null
+
+    if (replay) {
+      replay()
+      return
+    }
+    const hostWindow = this.findHostWindow()
+    if (restoreHeight !== null && hostWindow) {
+      windowManager.setHeight(restoreHeight, hostWindow)
+    }
+  }
+
+  /**
+   * Holds a CoreBox layout update while the panel is on screen, keeping only the latest one.
+   * Applying it would resize the window under the panel and clip it; it is replayed on close.
+   *
+   * @returns `true` when the update was held and must not be applied now.
+   */
+  public holdLayoutUpdate(replay: () => void): boolean {
+    if (!this.isVisible) return false
+    this.heldLayoutReplay = replay
+    return true
   }
 
   private scheduleHeightSync(): void {
@@ -383,8 +487,73 @@ export class MetaOverlayManager {
     }
     this.isVisible = false
     this.currentItem = null
+    const grewWindow = this.restoreHeight !== null
+    this.releaseHostLayout()
+    if (grewWindow) this.watchHandBack()
+    this.publishPanelState()
     useAliveWebContents(parentWindow)?.focus()
     metaOverlayLog.debug('MetaOverlay hidden, renderer retained')
+  }
+
+  /**
+   * Closes the panel because CoreBox itself hid. The window's height is not handed back: CoreBox
+   * resets its size on the next show and its renderer re-sends a fresh layout then, so a restore
+   * or a replay here would only resize a hidden window. Focus is not moved either.
+   */
+  private dismissWithHost(): void {
+    this.clearHeightSyncTimer()
+    this.clearHandBackWatch()
+    this.pendingShowRequest = null
+    this.heldLayoutReplay = null
+    this.restoreHeight = null
+    if (this.isVisible) {
+      const metaWebContents = this.getAliveMetaWebContents()
+      if (this.metaView && metaWebContents) {
+        this.metaView.setVisible(false)
+        this.dispatchHideToRenderer(metaWebContents)
+      }
+      this.isVisible = false
+      this.currentItem = null
+      metaOverlayLog.debug('MetaOverlay dismissed with its CoreBox window')
+    }
+    // Also ends a hand-back still landing: the next show must not open on a painted window.
+    this.publishPanelState()
+  }
+
+  /**
+   * Keeps CoreBox painting the space the panel added while the window animates back to its
+   * height (`animation.coreBoxResize`, up to 220ms): dropping the paint at close would show the
+   * desktop through the shrinking strip. A resize without the animation has landed already.
+   */
+  private watchHandBack(): void {
+    this.clearHandBackWatch()
+    if (!this.isHostResizing()) return
+
+    this.handBackPending = true
+    const deadline = Date.now() + MetaOverlayManager.HAND_BACK_MAX_WAIT_MS
+    const check = (): void => {
+      if (this.isHostResizing() && Date.now() < deadline) {
+        this.handBackTimer = setTimeout(check, MetaOverlayManager.HAND_BACK_POLL_MS)
+        return
+      }
+      this.handBackTimer = null
+      this.handBackPending = false
+      this.publishPanelState()
+    }
+    this.handBackTimer = setTimeout(check, MetaOverlayManager.HAND_BACK_POLL_MS)
+  }
+
+  private clearHandBackWatch(): void {
+    if (this.handBackTimer) {
+      clearTimeout(this.handBackTimer)
+      this.handBackTimer = null
+    }
+    this.handBackPending = false
+  }
+
+  private isHostResizing(): boolean {
+    const hostWindow = this.findHostWindow()
+    return hostWindow ? windowManager.isResizing(hostWindow) : false
   }
 
   private dispatchHideToRenderer(metaWebContents: Electron.WebContents): void {
@@ -400,6 +569,36 @@ export class MetaOverlayManager {
       .catch((error) =>
         metaOverlayLog.error('Failed to deliver MetaOverlay hide request', { error })
       )
+  }
+
+  /**
+   * Tells the CoreBox renderer whether the panel is open and whether the window is taller than its
+   * own layout because of it. CoreBox paints the grown space while it is; otherwise that space
+   * shows the window material, a blur of the desktop behind CoreBox. `grown` rises before the
+   * window grows and, with an animated restore, falls only once the height handed back has landed.
+   *
+   * Fire-and-forget and only on change: the renderer answers nothing, and closing a panel that
+   * never opened tells it nothing new.
+   */
+  private publishPanelState(): void {
+    const next: CoreBoxMetaOverlayPanelStatePayload = {
+      visible: this.isVisible,
+      grown: (this.isVisible && this.restoreHeight !== null) || this.handBackPending
+    }
+    const last = this.publishedPanelState
+    if (last.visible === next.visible && last.grown === next.grown) return
+
+    const parentWindow = this.getAliveParentWindow()
+    const runtime = getCoreBoxRuntimeOrNull()
+    if (!parentWindow || !runtime) return
+
+    this.publishedPanelState = next
+    const tx = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
+    try {
+      tx.broadcastToWindow(parentWindow.id, CoreBoxEvents.metaOverlay.panelState, next)
+    } catch (error) {
+      metaOverlayLog.warn('Failed to publish the panel state to CoreBox', { error })
+    }
   }
 
   /**
@@ -574,8 +773,20 @@ export class MetaOverlayManager {
    */
   private destroyRenderer(): void {
     this.clearHeightSyncTimer()
+    this.clearHandBackWatch()
     this.pendingShowRequest = null
     this.rendererReadyWebContentsId = null
+    // A renderer lost under an open panel still owes CoreBox its height back.
+    const wasVisible = this.isVisible
+    this.isVisible = false
+    if (wasVisible) this.releaseHostLayout()
+    this.heldLayoutReplay = null
+    this.restoreHeight = null
+    this.publishPanelState()
+    // Whatever that reached, the next parent's renderer starts from a closed panel.
+    this.publishedPanelState = { visible: false, grown: false }
+    this.detachParentHideListener?.()
+    this.detachParentHideListener = null
     const parentWindow = this.getAliveParentWindow()
     if (this.metaView) {
       const metaWebContents = this.getAliveMetaWebContents()

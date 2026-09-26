@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Code standards and verification"}
+{"file": ".trellis/spec/main-process/channel-transport-contracts.md", "reason": "Verify the overlay handshake and ui.show/ui.hide contract are unchanged"}

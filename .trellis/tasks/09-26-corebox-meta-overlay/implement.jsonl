@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/main-process/channel-transport-contracts.md", "reason": "ui.show / ui.hide request-response and ready handshake contract that must stay intact"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Shell tokens, a11y (status/labels), motion rules for the redesigned panel"}
+{"file": ".trellis/spec/frontend/anchor-overlay-chain.md", "reason": "Overlay/anchor focus pitfalls (panels hidden until positioned, focus timing)"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Forbidden patterns and verification"}

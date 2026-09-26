@@ -1,5 +1,6 @@
 import type { TuffItem } from '@talex-touch/utils/core-box'
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MetaShowRequest } from '@talex-touch/utils/transport/events/types/meta-overlay'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   sendTo: vi.fn(async (_target: unknown, _event: unknown, _payload: unknown) => undefined),
@@ -32,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   parentWindow: {
     id: 4711,
     isDestroyed: vi.fn(() => false),
+    isVisible: vi.fn(() => true),
     getBounds: vi.fn(() => ({ x: 0, y: 0, width: 720, height: 480 })),
     contentView: {
       addChildView: vi.fn(),
@@ -41,11 +43,31 @@ const mocks = vi.hoisted(() => ({
     webContents: {
       isDestroyed: vi.fn(() => false),
       focus: vi.fn()
-    }
+    },
+    // The BrowserWindow 'hide' listeners the manager registers, so a test can hide CoreBox.
+    hideListeners: new Set<() => void>(),
+    on: vi.fn((event: string, listener: () => void) => {
+      if (event === 'hide') mocks.parentWindow.hideListeners.add(listener)
+    }),
+    removeListener: vi.fn((event: string, listener: () => void) => {
+      if (event === 'hide') mocks.parentWindow.hideListeners.delete(listener)
+    })
   },
+  // The CoreBox window height the manager reads and writes through WindowManager.
+  windowHeight: 480,
+  getSettledHeight: vi.fn((): number | null => mocks.windowHeight),
+  setHeight: vi.fn((height: number) => {
+    mocks.windowHeight = height
+  }),
+  // Whether an animated resize is still in flight; a resize without the animation lands at once.
+  isResizing: vi.fn((): boolean => false),
   // Each WebContentsView the manager builds registers its own renderer here, so the readiness
   // tests can address the current meta webContents and prove an id from a destroyed one is stale.
   createdMetaWebContents: [] as Array<{ id: number }>,
+  createdMetaViews: [] as Array<{
+    webContents: { on: ReturnType<typeof vi.fn> }
+    setVisible: ReturnType<typeof vi.fn>
+  }>,
   nextMetaWebContentsId: 7301
 }))
 
@@ -81,7 +103,15 @@ vi.mock('../../../utils/logger', () => ({
 }))
 
 vi.mock('./window', () => ({
-  getCoreBoxWindow: vi.fn(() => mocks.coreBoxWindow)
+  getCoreBoxWindow: vi.fn(() => mocks.coreBoxWindow),
+  windowManager: {
+    get windows() {
+      return [{ window: mocks.parentWindow }]
+    },
+    getSettledHeight: mocks.getSettledHeight,
+    setHeight: mocks.setHeight,
+    isResizing: mocks.isResizing
+  }
 }))
 
 vi.mock('../../../config/default', () => ({
@@ -115,6 +145,7 @@ vi.mock('electron', () => ({
 
     constructor() {
       mocks.createdMetaWebContents.push(this.webContents)
+      mocks.createdMetaViews.push(this)
     }
 
     setBounds = vi.fn()
@@ -423,5 +454,430 @@ describe('MetaOverlayManager renderer readiness handshake', () => {
     expect(metaOverlayManager.markRendererReady(currentMetaWebContents().id)).toBe(true)
     expect(showDispatches()).toHaveLength(0)
     expect(metaOverlayManager.getVisible()).toBe(false)
+  })
+})
+
+/**
+ * The panel lives inside the CoreBox window, so the window has to hold it. It grows only when the
+ * panel would not fit (R3), hands its height back when the panel closes, and does not resize under
+ * an open panel: a layout update that arrives meanwhile is held and replayed on close.
+ */
+describe('MetaOverlayManager window height around the panel', () => {
+  beforeEach(() => {
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173/')
+    // Destroy first: a panel a previous case left open hands its height back on the way out.
+    metaOverlayManager.destroy()
+    vi.clearAllMocks()
+    mocks.createdMetaWebContents.length = 0
+    mocks.createdMetaViews.length = 0
+    mocks.windowHeight = 300
+    metaOverlayManager.init(mocks.parentWindow as never)
+    // A warm renderer: the show below is revealed at once rather than queued.
+    expect(metaOverlayManager.markRendererReady(mocks.createdMetaWebContents.at(-1)!.id)).toBe(true)
+  })
+
+  function request(overrides: Partial<MetaShowRequest> = {}): MetaShowRequest {
+    return { item, builtinActions: [], itemActions: [], pluginActions: [], ...overrides }
+  }
+
+  const hostWindow = expect.objectContaining({ window: mocks.parentWindow })
+
+  it('grows a window the panel does not fit to exactly what it needs, and restores it on close', () => {
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+
+    // Search header + gap (64), the panel (300), the footer + gap it sits above (52).
+    expect(mocks.setHeight).toHaveBeenCalledExactlyOnceWith(416, hostWindow)
+    expect(metaOverlayManager.getVisible()).toBe(true)
+
+    metaOverlayManager.hide()
+
+    expect(mocks.setHeight).toHaveBeenCalledTimes(2)
+    expect(mocks.setHeight).toHaveBeenLastCalledWith(300, hostWindow)
+    expect(mocks.windowHeight).toBe(300)
+  })
+
+  it('uses the smaller corner inset when there is no footer to sit above', () => {
+    mocks.windowHeight = 56
+    metaOverlayManager.show(request({ anchor: 'corner', desiredPanelHeight: 300 }))
+
+    expect(mocks.setHeight).toHaveBeenCalledExactlyOnceWith(376, hostWindow)
+  })
+
+  it('leaves a window that already fits the panel alone, open and closed', () => {
+    mocks.windowHeight = 480
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    metaOverlayManager.hide()
+
+    // The old forceMax pushed every open to 600, leaving an empty strip of window under short
+    // result lists.
+    expect(mocks.setHeight).not.toHaveBeenCalled()
+  })
+
+  it('caps the panel at its maximum, so the window never grows past what that needs', () => {
+    mocks.windowHeight = 56
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 5_000 }))
+
+    expect(mocks.setHeight).toHaveBeenCalledExactlyOnceWith(536, hostWindow)
+  })
+
+  it('leaves the window alone when the request carries no panel height', () => {
+    metaOverlayManager.show(request())
+    metaOverlayManager.hide()
+
+    expect(mocks.setHeight).not.toHaveBeenCalled()
+  })
+
+  it('holds layout updates while the panel is open and replays the latest one instead of restoring', () => {
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    const stale = vi.fn()
+    const latest = vi.fn()
+
+    expect(metaOverlayManager.holdLayoutUpdate(stale)).toBe(true)
+    expect(metaOverlayManager.holdLayoutUpdate(latest)).toBe(true)
+    mocks.setHeight.mockClear()
+
+    metaOverlayManager.hide()
+
+    expect(stale).not.toHaveBeenCalled()
+    expect(latest).toHaveBeenCalledTimes(1)
+    // The replayed update sizes the window for the results as they are now; restoring the
+    // pre-open height on top of it would undo that.
+    expect(mocks.setHeight).not.toHaveBeenCalled()
+    expect(metaOverlayManager.holdLayoutUpdate(vi.fn())).toBe(false)
+  })
+
+  it('does not hold layout updates while no panel is on screen', () => {
+    expect(metaOverlayManager.holdLayoutUpdate(vi.fn())).toBe(false)
+
+    metaOverlayManager.show(request())
+    metaOverlayManager.hide()
+
+    expect(metaOverlayManager.holdLayoutUpdate(vi.fn())).toBe(false)
+  })
+
+  it('closes with CoreBox without resizing the hidden window, replaying, or moving focus', () => {
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    const replay = vi.fn()
+    metaOverlayManager.holdLayoutUpdate(replay)
+    mocks.setHeight.mockClear()
+    mocks.sendTo.mockClear()
+
+    expect(mocks.parentWindow.hideListeners.size).toBe(1)
+    for (const listener of mocks.parentWindow.hideListeners) listener()
+
+    expect(metaOverlayManager.getVisible()).toBe(false)
+    expect(mocks.createdMetaViews.at(-1)!.setVisible).toHaveBeenLastCalledWith(false)
+    // The retained renderer still has to reset, or the next open shows the dismissed state.
+    expect(mocks.sendTo.mock.calls.map(([, event]) => event)).toEqual([MetaOverlayEvents.ui.hide])
+    expect(replay).not.toHaveBeenCalled()
+    expect(mocks.setHeight).not.toHaveBeenCalled()
+    expect(mocks.parentWindow.webContents.focus).not.toHaveBeenCalled()
+    // No hold survives it: CoreBox resizes freely after its next show.
+    expect(metaOverlayManager.holdLayoutUpdate(vi.fn())).toBe(false)
+  })
+
+  it('does not open a panel on a hidden CoreBox window', () => {
+    // A ⌘K from a detached DivisionBox: CoreBox is hidden, so the panel could never be seen.
+    mocks.parentWindow.isVisible.mockReturnValueOnce(false)
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+
+    expect(metaOverlayManager.getVisible()).toBe(false)
+    expect(mocks.sendTo).not.toHaveBeenCalled()
+    expect(mocks.setHeight).not.toHaveBeenCalled()
+    // Nothing is left open to surface on the next show or to hold CoreBox's layout.
+    expect(metaOverlayManager.holdLayoutUpdate(vi.fn())).toBe(false)
+  })
+
+  it('stops listening to the CoreBox window when the overlay is destroyed', () => {
+    expect(mocks.parentWindow.hideListeners.size).toBe(1)
+
+    metaOverlayManager.destroy()
+
+    expect(mocks.parentWindow.hideListeners.size).toBe(0)
+  })
+
+  it('leaves Esc to the IME while it composes', () => {
+    metaOverlayManager.show(request())
+    const beforeInput = mocks.createdMetaViews
+      .at(-1)!
+      .webContents.on.mock.calls.find(([event]) => event === 'before-input-event')?.[1] as (
+      event: { preventDefault: () => void },
+      input: { type: string; key: string; isComposing: boolean }
+    ) => void
+    expect(beforeInput).toBeTypeOf('function')
+
+    const composing = { preventDefault: vi.fn() }
+    beforeInput(composing, { type: 'keyDown', key: 'Escape', isComposing: true })
+    expect(composing.preventDefault).not.toHaveBeenCalled()
+    expect(metaOverlayManager.getVisible()).toBe(true)
+
+    const plain = { preventDefault: vi.fn() }
+    beforeInput(plain, { type: 'keyDown', key: 'Escape', isComposing: false })
+    expect(plain.preventDefault).toHaveBeenCalledTimes(1)
+    expect(metaOverlayManager.getVisible()).toBe(false)
+  })
+})
+
+/**
+ * CoreBox paints the space a grown window adds under the panel; otherwise that space shows the
+ * window material, a blur of the desktop behind CoreBox. Main is the only one that knows whether
+ * it grew the window, so it tells the CoreBox renderer on every change, fire-and-forget.
+ */
+describe('MetaOverlayManager panel state for the CoreBox renderer', () => {
+  beforeEach(() => {
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173/')
+    // Destroy first: a panel a previous case left open is closed on the way out.
+    metaOverlayManager.destroy()
+    vi.clearAllMocks()
+    mocks.createdMetaWebContents.length = 0
+    mocks.createdMetaViews.length = 0
+    mocks.windowHeight = 300
+    metaOverlayManager.init(mocks.parentWindow as never)
+  })
+
+  function markReady(): void {
+    expect(metaOverlayManager.markRendererReady(mocks.createdMetaWebContents.at(-1)!.id)).toBe(true)
+  }
+
+  function request(overrides: Partial<MetaShowRequest> = {}): MetaShowRequest {
+    return { item, builtinActions: [], itemActions: [], pluginActions: [], ...overrides }
+  }
+
+  function published(): unknown[] {
+    return mocks.broadcastToWindow.mock.calls
+      .filter(([, event]) => event === CoreBoxEvents.metaOverlay.panelState)
+      .map(([windowId, , payload]) => {
+        expect(windowId).toBe(mocks.parentWindow.id)
+        return payload
+      })
+  }
+
+  it('says the panel grew the window, and that it closed', () => {
+    markReady()
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+
+    expect(published()).toEqual([{ visible: true, grown: true }])
+    // Never a request: nothing in the renderer answers it (channel-transport-contracts).
+    expect(
+      mocks.sendTo.mock.calls.some(([, event]) => event === CoreBoxEvents.metaOverlay.panelState)
+    ).toBe(false)
+
+    metaOverlayManager.hide()
+
+    expect(published()).toEqual([
+      { visible: true, grown: true },
+      { visible: false, grown: false }
+    ])
+  })
+
+  it('says the panel is open but did not grow a window that already fit it', () => {
+    mocks.windowHeight = 480
+    markReady()
+
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+
+    expect(published()).toEqual([{ visible: true, grown: false }])
+  })
+
+  it('publishes changes only', () => {
+    markReady()
+    // Closing a panel that never opened tells CoreBox nothing new.
+    metaOverlayManager.hide()
+    expect(published()).toEqual([])
+
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    metaOverlayManager.hide()
+    metaOverlayManager.hide()
+
+    expect(published()).toEqual([
+      { visible: true, grown: true },
+      { visible: false, grown: false }
+    ])
+  })
+
+  it('publishes nothing for a queued show until the renderer takes it', () => {
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    expect(published()).toEqual([])
+
+    markReady()
+
+    expect(published()).toEqual([{ visible: true, grown: true }])
+  })
+
+  it('clears the state when CoreBox hides under the panel', () => {
+    markReady()
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+
+    for (const listener of mocks.parentWindow.hideListeners) listener()
+
+    expect(published().at(-1)).toEqual({ visible: false, grown: false })
+  })
+
+  it('clears the state when the overlay goes away under the panel, and starts over after', () => {
+    markReady()
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+
+    metaOverlayManager.destroy()
+    expect(published().at(-1)).toEqual({ visible: false, grown: false })
+
+    // A rebuilt overlay for the same CoreBox: the next grown open is news again.
+    mocks.broadcastToWindow.mockClear()
+    mocks.windowHeight = 300
+    metaOverlayManager.init(mocks.parentWindow as never)
+    markReady()
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+
+    expect(published()).toEqual([{ visible: true, grown: true }])
+  })
+
+  it('tells CoreBox the window grew before growing it', () => {
+    markReady()
+    let publishedWhenGrowing: unknown[] = []
+    mocks.setHeight.mockImplementationOnce((height: number) => {
+      publishedWhenGrowing = published()
+      mocks.windowHeight = height
+    })
+
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+
+    // CoreBox's first frame at the new size then already paints the space the growth adds.
+    expect(mocks.setHeight).toHaveBeenCalledOnce()
+    expect(publishedWhenGrowing).toEqual([{ visible: true, grown: true }])
+    expect(published()).toEqual([{ visible: true, grown: true }])
+  })
+})
+
+/**
+ * With `animation.coreBoxResize` on, the height handed back on close takes up to 220ms to land,
+ * and until then the window still has the space the panel added. CoreBox keeps painting it: the
+ * paint dropping at close showed the desktop through the shrinking strip.
+ */
+describe('MetaOverlayManager panel state while the window animates back', () => {
+  const hostWindow = expect.objectContaining({ window: mocks.parentWindow })
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173/')
+    metaOverlayManager.destroy()
+    vi.clearAllMocks()
+    mocks.createdMetaWebContents.length = 0
+    mocks.createdMetaViews.length = 0
+    mocks.windowHeight = 300
+    mocks.isResizing.mockReturnValue(false)
+    metaOverlayManager.init(mocks.parentWindow as never)
+    expect(metaOverlayManager.markRendererReady(mocks.createdMetaWebContents.at(-1)!.id)).toBe(true)
+  })
+
+  afterEach(() => {
+    metaOverlayManager.destroy()
+    mocks.isResizing.mockReturnValue(false)
+    vi.useRealTimers()
+  })
+
+  function request(overrides: Partial<MetaShowRequest> = {}): MetaShowRequest {
+    return { item, builtinActions: [], itemActions: [], pluginActions: [], ...overrides }
+  }
+
+  function published(): unknown[] {
+    return mocks.broadcastToWindow.mock.calls
+      .filter(([, event]) => event === CoreBoxEvents.metaOverlay.panelState)
+      .map(([, , payload]) => payload)
+  }
+
+  /** Opens a panel that grows the window from 300 to 416, then closes it mid-animation. */
+  function closeWhileRestoreAnimates(): void {
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    mocks.isResizing.mockReturnValue(true)
+    metaOverlayManager.hide()
+  }
+
+  it('keeps the space painted until the restore has landed', () => {
+    closeWhileRestoreAnimates()
+
+    expect(mocks.setHeight).toHaveBeenLastCalledWith(300, hostWindow)
+    expect(published()).toEqual([
+      { visible: true, grown: true },
+      { visible: false, grown: true }
+    ])
+
+    vi.advanceTimersByTime(160)
+    expect(published()).toHaveLength(2)
+
+    mocks.isResizing.mockReturnValue(false)
+    vi.advanceTimersByTime(40)
+
+    expect(published()).toEqual([
+      { visible: true, grown: true },
+      { visible: false, grown: true },
+      { visible: false, grown: false }
+    ])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('does not wait on a window the panel never grew', () => {
+    mocks.windowHeight = 480
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    // Something else animates the window, a held layout update for one: not the panel's doing.
+    mocks.isResizing.mockReturnValue(true)
+    metaOverlayManager.hide()
+
+    expect(published()).toEqual([
+      { visible: true, grown: false },
+      { visible: false, grown: false }
+    ])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('stops at a second, so a window that never settles cannot keep the paint', () => {
+    closeWhileRestoreAnimates()
+
+    vi.advanceTimersByTime(900)
+    expect(published().at(-1)).toEqual({ visible: false, grown: true })
+
+    vi.advanceTimersByTime(200)
+    expect(published().at(-1)).toEqual({ visible: false, grown: false })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('stops when CoreBox hides, so its next show does not open painted', () => {
+    closeWhileRestoreAnimates()
+
+    for (const listener of mocks.parentWindow.hideListeners) listener()
+
+    expect(published().at(-1)).toEqual({ visible: false, grown: false })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps painting through a reopen that grows the window again', () => {
+    closeWhileRestoreAnimates()
+
+    // Reopened before the restore landed: the window heads back up from where it was going.
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    expect(mocks.setHeight).toHaveBeenLastCalledWith(416, hostWindow)
+    mocks.isResizing.mockReturnValue(false)
+    vi.advanceTimersByTime(100)
+
+    expect(published()).toEqual([
+      { visible: true, grown: true },
+      { visible: false, grown: true },
+      { visible: true, grown: true }
+    ])
+
+    metaOverlayManager.hide()
+    expect(published().at(-1)).toEqual({ visible: false, grown: false })
+  })
+
+  it('keeps painting through a reopen that fits, only until the window is back', () => {
+    closeWhileRestoreAnimates()
+
+    // 64 + 150 + 52 = 266 fits the 300 the window is heading back to: no second growth.
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 150 }))
+    expect(published().at(-1)).toEqual({ visible: true, grown: true })
+
+    mocks.isResizing.mockReturnValue(false)
+    vi.advanceTimersByTime(40)
+
+    expect(published().at(-1)).toEqual({ visible: true, grown: false })
   })
 })
