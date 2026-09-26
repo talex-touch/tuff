@@ -14,7 +14,7 @@
   - 越过目标时按速度记"冲击"（`reversalSpeed` / `reversalImpactScale`），冲击按帧衰减；
   - emerge（起步放大）/ sink（落地轻压）两个相位与 `activeScale`（1.06 / 1.03 / held 1.08）；
   - 拖拽：按住放大、跟手、撞边冲击、松手带速度回弹；
-  - 停稳回调（Radio 在此提交 `updateOnSettled` 的待定值）。
+  - 停稳回调（Radio 在此提交 `updateOnSettled` 的暂存值）。
 - 测量方式各组件不同：Radio 自己 `querySelector('.tx-radio.is-checked')`（padding-box 原点）；TabBar / SidebarNav 用 `utils/use-indicator-box.ts`；FlatRadio 自带 `readGeometry`；Tabs 在 `applyPointerFor` 里自己算（含 nav 滚动偏移）。
 
 ## Requirements
