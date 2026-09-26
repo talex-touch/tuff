@@ -11,12 +11,15 @@ import type {
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import type { MessageSegment } from '~/modules/conversation/chain-steps'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
+import type { HomeOpeningPhase, HomeOpeningSource } from '~/modules/home-push/opening'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
+import { TxChoiceCard } from '@talex-touch/tuffex/choice-card'
 import { TxIcon } from '@talex-touch/tuffex/icon'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import { TxModal } from '@talex-touch/tuffex/modal'
+import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { TxConversationStream } from '@talex-touch/tuffex/conversation-stream'
 import { resetRemoteImagePolicy } from '@talex-touch/tuffex/stream-markdown'
@@ -28,7 +31,16 @@ import {
   FORM_RESULT_PREFIX,
   WIDGET_RESULT_PREFIX
 } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  shallowRef,
+  watch
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { createRollbackSync } from '~/utils/rollback-sync'
@@ -49,6 +61,7 @@ import {
 } from '~/composables/useSendChoreography'
 import {
   deriveRestoredTitle,
+  findTitleExchange,
   generateConversationTitle,
   shouldGenerateTitle
 } from '~/modules/conversation/conversation-title'
@@ -64,6 +77,9 @@ import {
 } from '~/modules/conversation/useConversationHistory'
 import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
+import { HOME_FEED_MAX_ITEMS } from '~/modules/home-push/feed'
+import { createOpeningLeadNote } from '~/modules/home-push/opening'
+import { useHomePush } from '~/modules/home-push/useHomePush'
 import { modelFamilyIconFor } from '~/modules/intelligence/model-family-icons'
 import { providerIconForId } from '~/modules/intelligence/provider-icons'
 import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
@@ -92,7 +108,7 @@ const inputRef = ref<HTMLTextAreaElement | null>(null)
 /** Scroll behaviour (stick-to-bottom, follow, back-to-bottom pill) lives inside the stream now. */
 const streamRef = ref<TxConversationStreamInstance | null>(null)
 const composerRef = ref<HTMLElement | null>(null)
-/** The FLIP animates this — composer *and* quick pills travel as one body. */
+/** The FLIP animates this — the composer *and* the push card under it travel as one body. */
 const composerGroupRef = ref<HTMLElement | null>(null)
 /** Measured before a send so the leaving greeting can be pinned in place. */
 const headRef = ref<HTMLElement | null>(null)
@@ -144,7 +160,10 @@ const conversation = useHomeConversation({
     const id = conversationId.value
     if (!id) throw new Error('HOME_CONVERSATION_ID_MISSING')
     return { conversationId: id, projectId: projectId.value }
-  }
+  },
+  // The Home opening, once it is the thread's first message, reaches the model on every turn as
+  // this system note (`toProviderMessages`), worded in the reader's locale.
+  leadNote: createOpeningLeadNote(t)
 })
 const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
 
@@ -529,13 +548,6 @@ const payloadJson = computed(() => {
  */
 const chainOpen = reactive(new Map<string, boolean>())
 
-const quickPills = [
-  { icon: 'i-ri-file-search-line', key: 'searchFiles' },
-  { icon: 'i-ri-translate-2', key: 'translateClipboard' },
-  { icon: 'i-ri-folder-line', key: 'tidyDownloads' },
-  { icon: 'i-ri-terminal-box-line', key: 'runScript' }
-] as const
-
 /** Grows the composer with its content up to a cap, then scrolls — the usual chat affordance. */
 function autoGrow(): void {
   const input = inputRef.value
@@ -567,13 +579,6 @@ function collapseDraft(animate: boolean): void {
 function bubbleMaxWidth(): number {
   const lane = composerGroupRef.value?.querySelector<HTMLElement>('.HomePage-ComposerBeam')
   return (lane?.getBoundingClientRect().width ?? 0) * 0.78
-}
-
-async function applyPill(key: string): Promise<void> {
-  draft.value = t(`home.pill.${key}`)
-  await nextTick()
-  autoGrow()
-  inputRef.value?.focus()
 }
 
 /** The greeting as it stood before the stage flips to a conversation; `null` when there is none. */
@@ -616,6 +621,19 @@ async function submit(): Promise<void> {
   const input = inputRef.value
   // The conversation's first message: its lift and the dock take their time (LIFT_SCORE).
   const opening = isEmpty.value
+  // The Home opening above the composer becomes this thread's first message — a finished one only:
+  // one still being written is dropped here and never joins (`takeLead`). Taken before anything
+  // awaits, so no opening can start or land between the press and the append. The greeting keeps
+  // showing what it showed until it has left (`openingHold`).
+  let lead: string | undefined
+  if (opening) {
+    openingHold.value = {
+      phase: openingPhase.value,
+      text: openingText.value,
+      source: openingSource.value
+    }
+    lead = push.takeLead() ?? undefined
+  }
   const liftable = !attachments && !!input && !prefersReducedMotion()
   let lift: SendLift | null = null
   if (liftable && input) {
@@ -653,7 +671,10 @@ async function submit(): Promise<void> {
   const first = composerEl?.getBoundingClientRect()
   const head = measureLeavingHead()
 
-  const turn = conversation.send(text, attachments)
+  const turn = conversation.send(text, attachments, { lead })
+  // Appended in the same flush as the user's message, as the thread's first row.
+  const firstRow = messages.value[0]
+  const leadId = lead && firstRow?.role === 'assistant' ? firstRow.id : undefined
   // Sending from a scrolled-up position still lands you on your own message —
   // the stream only auto-follows readers already at the bottom.
   await nextTick()
@@ -663,6 +684,8 @@ async function submit(): Promise<void> {
   // next batch's entrance. Clearing after the flush is free in the normal
   // path — the watcher already consumed it.
   choreographedSend = false
+  // The greeting left in that flush, keeping the opening it showed; nothing is left to hold.
+  openingHold.value = null
 
   pinLeavingHead(head)
 
@@ -698,6 +721,11 @@ async function submit(): Promise<void> {
   }
 
   void streamRef.value?.tweenToBottom(SCROLL_TWEEN_MS)
+  // The opening the reader already read above the composer takes its place at the head of the
+  // thread as the greeting leaves, before the lifted message lands under it. The append watcher
+  // hid it with the rest of the claimed batch, and the send score below reveals only the message
+  // and the placeholder. No knock: nothing sits above the first row.
+  if (leadId) choreography.playEntrance(leadId, 0)
   let flight: SendFlightHandle | null = null
   if (lift) {
     if (sentId) flight = lift.fly(sentId)
@@ -1035,6 +1063,113 @@ watch(
   }
 )
 
+// ============================================================================
+// Home push: the opening line and the card under the composer
+// ============================================================================
+
+/**
+ * The blank conversation's personal-assistant push (`modules/home-push`): a model-written opening
+ * under the greeting, and a card under the composer — the two-page guide, or 「为你准备」 once there
+ * is history.
+ *
+ * Set up after the thread watchers above: its immediate watcher reads `conversationId` (declared any
+ * earlier it would hit the TDZ), and by now the route watcher has claimed the blank conversation's
+ * project, so the first entry is already the right one. Only plain `/home` counts — `/home/c/:id` is
+ * empty too while its thread loads, and must not pay for an opening it is about to replace.
+ */
+const push = useHomePush({
+  active: () => route.path === '/home' && isEmpty.value && conversationId.value === null,
+  projectId: () => projectId.value,
+  // The opening takes the route the chat turns take — a local CLI there answers in ten-odd seconds,
+  // so the template stands in meanwhile (`modules/home-push/opening.ts`).
+  routing: () => modelRouting.value,
+  // The pinned model resolves only once the model list has loaded (the mount-time load above), and
+  // `modelRouting` reads as auto until then: the first opening after a launch waits for it.
+  routingReady: () => ensureModelOptionsLoaded(),
+  composer: {
+    // The clipboard row: written and focused, never sent — the reader sees what would go out first.
+    prefill: async (text) => {
+      draft.value = text
+      await nextTick()
+      autoGrow()
+      inputRef.value?.focus()
+    },
+    // A starter task: the ordinary send, lift included. Focused first, so the lift leaves from a
+    // composer on screen and the keyboard stays where the conversation continues.
+    send: async (text) => {
+      draft.value = text
+      await nextTick()
+      autoGrow()
+      inputRef.value?.focus()
+      await submit()
+    },
+    // 「我自己说」
+    focus: () => inputRef.value?.focus()
+  }
+})
+const {
+  mode: pushMode,
+  steps: pushSteps,
+  step: pushStep,
+  selected: pushSelected,
+  loading: pushLoading,
+  loadingRows: pushLoadingRows,
+  labels: pushLabels,
+  choose: choosePush
+} = push
+
+/**
+ * The opening as the greeting shows it. `submit` pins it for the one flush between taking the lead
+ * and the greeting's leave: `takeLead` drops an opening still being written, and the greeting should
+ * fade out with the words the reader saw rather than lose them a frame before it goes.
+ */
+const openingHold = shallowRef<{
+  phase: HomeOpeningPhase
+  text: string
+  source: HomeOpeningSource | null
+} | null>(null)
+const openingPhase = computed(() => openingHold.value?.phase ?? push.opening.phase.value)
+const openingText = computed(() => openingHold.value?.text ?? push.opening.text.value)
+/** Keys the text: the model's opening taking the template's place is a swap, not an edit. */
+const openingSource = computed(() =>
+  openingHold.value ? openingHold.value.source : push.opening.source.value
+)
+/**
+ * A screen reader waits out the skeleton and the stream, then reads what shows once it is whole:
+ * the template as it stands in, and the model's opening again if it takes the template's place.
+ */
+const openingBusy = computed(
+  () => openingPhase.value === 'pending' || openingPhase.value === 'streaming'
+)
+
+/**
+ * The card's skeleton, held back and held on (`useDeferredLoading`): local reads that land inside
+ * its delay never show one. Until they land the card stays out of sight rather than show rows that
+ * are not final yet — on a cold start that is the guide, about to become 「为你准备」. Its slot keeps
+ * the room either way.
+ */
+const pushSkeleton = useDeferredLoading(pushLoading)
+const pushSettling = computed(() => pushLoading.value && !pushSkeleton.value)
+
+/**
+ * How many option rows the card's slot holds in the current mode: the guide's longest page, or a
+ * full 「为你准备」. Paging the guide, the clipboard row arriving and rows replacing their skeleton
+ * then never resize the slot — and the stage is centred on its whole height, so any of them would
+ * otherwise move the composer. One- and two-column counts both, for `.HomePage-PushSlot`'s
+ * container query to pick from.
+ */
+const pushSlotStyle = computed(() => {
+  const options =
+    pushMode.value === 'feed'
+      ? HOME_FEED_MAX_ITEMS
+      : Math.max(0, ...pushSteps.value.map((step) => step.options.length))
+  return {
+    '--home-push-rows-1': options,
+    '--home-push-rows-2': Math.ceil(options / 2),
+    '--home-push-pager': pushSteps.value.length > 1 ? 1 : 0
+  }
+})
+
 /**
  * Fire-and-forget: the settled-turn persist above already wrote the working title, so the thread is
  * durable before the summary call even starts, and a second persist upgrades the label when the
@@ -1042,9 +1177,9 @@ watch(
  * instead of stamping it onto the wrong conversation.
  */
 function maybeGenerateTitle(): void {
-  const firstAssistant = messages.value.find(
-    (message) => message.role === 'assistant' && message.status === 'complete'
-  )?.content
+  // The first reply to the user — never the Home opening a thread can start with, which would
+  // title the conversation after the greeting instead of what was asked.
+  const firstAssistant = findTitleExchange(messages.value).firstAssistantContent
   const idAtStart = conversationId.value
   if (!idAtStart) return
   if (
@@ -1190,6 +1325,24 @@ onBeforeUnmount(disposeCommands)
               <h1 class="HomePage-Greeting">
                 {{ t('home.greeting') }}
               </h1>
+              <!-- The assistant speaks first. Three lines tall whatever it holds — skeleton, a
+                   stream, or nothing — so the composer and the card below never move for it. -->
+              <div class="HomePage-Opening" role="status" :aria-busy="openingBusy || undefined">
+                <template v-if="openingPhase === 'pending'">
+                  <span class="sr-only">{{ pushLabels.openingLoading }}</span>
+                  <div class="HomePage-OpeningSkeleton" aria-hidden="true">
+                    <TxSkeleton class="HomePage-OpeningBar" :height="10" :radius="5" />
+                    <TxSkeleton class="HomePage-OpeningBar is-short" :height="10" :radius="5" />
+                  </div>
+                </template>
+                <!-- The template stands in while a slow route writes; the model's opening
+                     replaces it whole, the old words fading out first. -->
+                <Transition v-else name="home-opening-swap" mode="out-in">
+                  <p v-if="openingText" :key="openingSource ?? ''" class="HomePage-OpeningText">
+                    {{ openingText }}
+                  </p>
+                </Transition>
+              </div>
             </div>
           </Transition>
 
@@ -1593,20 +1746,32 @@ onBeforeUnmount(disposeCommands)
               </div>
             </TxBorderBeam>
 
-            <!-- Explicit duration: the pills stagger via child animations, so
-                 the root has no transition of its own for Vue to time against. -->
-            <Transition name="home-pills" appear :duration="{ enter: 1150, leave: 240 }">
-              <div v-if="isEmpty" class="HomePage-Pills">
-                <button
-                  v-for="pill in quickPills"
-                  :key="pill.key"
-                  class="HomePage-QuickPill"
-                  type="button"
-                  @click="applyPill(pill.key)"
-                >
-                  <span :class="pill.icon" />
-                  <span>{{ t(`home.pill.${pill.key}`) }}</span>
-                </button>
+            <!-- The push card: the guide, or 「为你准备」. It enters once the composer has landed
+                 and leaves with the greeting, pinned under the box and dissolving on its back as it
+                 docks. The slot reserves the mode's tallest page (`pushSlotStyle`). -->
+            <Transition
+              name="home-card"
+              appear
+              appear-from-class="home-card-appear-from"
+              appear-active-class="home-card-appear-active"
+            >
+              <div v-if="isEmpty" class="HomePage-Push">
+                <div class="HomePage-PushSlot" :style="pushSlotStyle">
+                  <TxChoiceCard
+                    v-model:step="pushStep"
+                    class="HomePage-PushCard"
+                    :class="{ 'is-settling': pushSettling }"
+                    :steps="pushSteps"
+                    :selected="pushSelected"
+                    :loading="pushSkeleton"
+                    :loading-rows="pushLoadingRows"
+                    :columns="2"
+                    :appear="false"
+                    :prev-label="pushLabels.prev"
+                    :next-label="pushLabels.next"
+                    @select="choosePush"
+                  />
+                </div>
               </div>
             </Transition>
           </div>
@@ -1693,6 +1858,16 @@ onBeforeUnmount(disposeCommands)
   height: 100%;
   // The top bar is pinned, so the page itself never scrolls — the body below it owns the overflow.
   overflow: hidden;
+
+  // The bridge above folds tuffex's four fills onto the shell's two surfaces, so `--tx-fill-color`
+  // and `--tx-fill-color-light` are one colour — and the push card rests its options on the second
+  // and hovers them onto the first: a hover with nothing to change to. Inside the card the ramp
+  // runs a step further instead. The hover takes the shell's second surface, and the skeleton bars
+  // the card draws on a resting row (`--tx-fill-color-darker`) a step past that, where they read.
+  .HomePage-Push {
+    --tx-fill-color: var(--shell-surface-2);
+    --tx-fill-color-darker: var(--shell-border);
+  }
 }
 
 /** Splits the area under the top bar between the conversation and the optional right panel. */
@@ -1752,12 +1927,14 @@ onBeforeUnmount(disposeCommands)
 .HomePage-Center {
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  gap: 20px;
   align-items: center;
   justify-content: center;
   min-height: 100%;
-  // Artboard lifts the block above true centre rather than bottom-weighting it like Codex.
-  padding-bottom: 52px;
+  // Artboard lifts the block above true centre rather than bottom-weighting it like Codex. The lift
+  // gives way in a short window before the stage has to scroll: at 600px the hero — greeting,
+  // opening, composer and the guide's tallest page — takes all the height under the top bar.
+  padding-bottom: clamp(0px, calc(100vh - 620px), 52px);
   box-sizing: border-box;
   // Anchors the floating composer in conversation, and the dissolving stream
   // while it leaves — the anchor must not vanish with the `conversing` class
@@ -1804,8 +1981,12 @@ onBeforeUnmount(disposeCommands)
 .HomePage-Head {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 8px;
   align-items: center;
+  // The chat lane, like the composer under it: the opening wraps at this width. A centred flex item
+  // would otherwise shrink to its content, and the opening's content is one long line.
+  width: var(--home-chat-lane-width);
+  min-width: 0;
 
   /* Pinned out of flow by `submit`, which measures the offsets; the layer is
      the scale's, so the greeting dissolves under the returning composer. */
@@ -1814,9 +1995,11 @@ onBeforeUnmount(disposeCommands)
   }
 }
 
+/* 48px rather than the artboard's 64: the hero now carries the opening too, and has to fit a 600px
+   window with the guide under the composer. */
 .HomePage-Mark {
-  width: 64px;
-  height: 64px;
+  width: 48px;
+  height: 48px;
 }
 
 .HomePage-Greeting {
@@ -1824,6 +2007,84 @@ onBeforeUnmount(disposeCommands)
   color: var(--shell-text-primary);
   font-size: var(--shell-fs-display);
   font-weight: 600;
+  // One display line, set tight for the same room.
+  line-height: 1.2;
+}
+
+/**
+ * The assistant's opening, under the greeting. Three lines tall whatever it holds — the skeleton, a
+ * stream, the finished text or nothing — so text arriving never moves the composer or the card.
+ *
+ * 13px on a 20px line fits the longest opening the model may write (160 characters,
+ * `sanitizeOpeningText`) in three lines of a full-width lane. A narrower lane clamps it with an
+ * ellipsis rather than push the stage down; the whole text still joins the thread when sent.
+ */
+.HomePage-Opening {
+  --home-opening-line: 20px;
+
+  width: 100%;
+  height: calc(3 * var(--home-opening-line));
+  color: var(--shell-text-regular);
+  font-size: var(--shell-fs-body);
+  line-height: var(--home-opening-line);
+  text-align: center;
+}
+
+.HomePage-OpeningText {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+/* Bars where the opening's first two lines will be — most openings run to two. */
+.HomePage-OpeningSkeleton {
+  // On the page background the skeleton's own default, the lightest fill, disappears.
+  --tx-skeleton-base-color: var(--shell-surface-2);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* A line box each, its bar centred in it (TxSkeleton's root is a flex column). */
+.HomePage-OpeningBar {
+  justify-content: center;
+  width: 78%;
+  height: var(--home-opening-line);
+
+  &.is-short {
+    width: 52%;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The words surface where the skeleton stood — streamed, replayed or the template alike. */
+  .HomePage-OpeningText {
+    animation: home-opening-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes home-opening-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The template leaves before the model's opening surfaces where it stood. */
+  .HomePage-OpeningText.home-opening-swap-leave-active {
+    animation: home-opening-out 0.16s ease-in both;
+  }
+}
+
+@keyframes home-opening-out {
+  to {
+    opacity: 0;
+  }
 }
 
 /** The stream component owns the scroll; this box only claims the flex space. */
@@ -2110,9 +2371,12 @@ onBeforeUnmount(disposeCommands)
 }
 
 .HomePage-ComposerGroup {
+  // Between the composer and the push card on the empty stage; the card's leave pins it there.
+  --home-card-gap: 12px;
+
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--home-card-gap);
   align-items: center;
   width: 100%;
   min-width: 0;
@@ -2133,6 +2397,7 @@ onBeforeUnmount(disposeCommands)
     right: 0;
     bottom: 20px;
     left: 0;
+    gap: 18px;
     pointer-events: none;
   }
 }
@@ -2450,17 +2715,57 @@ textarea.HomePage-Input:focus-visible {
   }
 }
 
-.HomePage-Pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
+/**
+ * The push card's lane, and a query container: its slot reserves rows for the columns the card
+ * actually lays out. The card's own sizes are compacted here — TxChoiceCard reads them from any
+ * ancestor — so the guide's tallest page still fits a 600px window under the composer.
+ */
+.HomePage-Push {
+  --tx-choice-card-pad: 6px;
+  --tx-choice-card-label-line: 18px;
+  --tx-choice-card-desc-line: 16px;
+
+  container: home-push / inline-size;
+  width: var(--home-chat-lane-width);
+  min-width: 0;
+}
+
+/**
+ * Holds the mode's tallest page (`pushSlotStyle`), so the card can shrink inside it — a shorter
+ * page, fewer rows, rows replacing their skeleton — without the centred stage moving the composer.
+ *
+ * The arithmetic is TxChoiceCard's own box: 10px of block padding and a 2px gap in each option, 6px
+ * between rows, and a head of 6px + a 20px title line + 10px, with a 24px pager and a 4px gap above
+ * the title when there are pages to turn. Only the two text lines and the inset are variables; the
+ * rest is restated here, so a change to the card's spacing shows up as a slot that no longer fits.
+ */
+.HomePage-PushSlot {
+  --home-push-row: calc(
+    20px + var(--tx-choice-card-label-line) + 2px + var(--tx-choice-card-desc-line)
+  );
+  --home-push-rows: var(--home-push-rows-1);
+  --home-push-head: calc(36px + var(--home-push-pager) * 28px);
+  --home-push-list: calc(var(--home-push-rows) * (var(--home-push-row) + 6px) - 6px);
+
+  min-height: calc(2 * var(--tx-choice-card-pad) + var(--home-push-head) + var(--home-push-list));
+}
+
+/* TxChoiceCard turns to two columns at 480px of its content box, inside its two 6px insets. */
+@container home-push (width >= 492px) {
+  .HomePage-PushSlot {
+    --home-push-rows: var(--home-push-rows-2);
+  }
+}
+
+/* Rows that are not final, before the skeleton is due (`pushSettling`). */
+.HomePage-PushCard.is-settling {
+  visibility: hidden;
 }
 
 /* The greeting bows out as the first message lands, and — once the composer
    has sprung back to centre — materialises again out of a blur when a new
    conversation resets the stage. The enter delays are the sequencing: the box
-   lands first (~0.42s in), then the logo resolves, then the pills beneath. */
+   lands first (~0.42s in), then the logo resolves, then the card beneath. */
 .home-head-leave-active {
   transition:
     opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
@@ -2485,61 +2790,48 @@ textarea.HomePage-Input:focus-visible {
   filter: blur(8px);
 }
 
-/* The quick pills dissolve on the composer's back as it docks, and return one
-   by one — each pops in on its own beat rather than the row fading as a slab.
-   The stagger lives on the children (the root wrapper has nothing to animate),
-   which is why the Transition above carries an explicit duration. A fresh
-   page starts almost immediately; the return after 「新建对话」 waits for the
-   composer to land first. */
-/* Out of flow the moment the leave starts: the group is bottom-anchored, and
-   pills that kept their flow height would hold the composer ~50px high, then
-   drop it in one visible snap when they unmount mid-glide. Pinned to their
-   old spot below the box instead, dissolving on its back. */
-.home-pills-leave-active {
+/* The card returns a beat after the greeting once the composer has landed, and on a fresh page
+   almost at once. One motion for the whole card — its rows are in place from the first frame, and
+   its own rise-in stagger is off (`appear`), or it would run out of sight during the delay. */
+.home-card-enter-active,
+.home-card-appear-active {
+  transition:
+    opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.home-card-enter-active {
+  transition-delay: 0.45s;
+}
+
+.home-card-appear-active {
+  transition-delay: 0.08s;
+}
+
+.home-card-enter-from,
+.home-card-appear-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* Out of flow the moment the leave starts: the group is bottom-anchored, and a
+   card that kept its flow height would hold the composer high, then drop it in
+   one visible snap when it unmounts mid-glide. Pinned to its old spot below the
+   box instead, dissolving on its back as the box docks. Opacity and a nudge
+   only: a blur this size would re-raster the whole card every frame of the send. */
+.home-card-leave-active {
   position: absolute;
-  top: calc(100% + 18px);
+  top: calc(100% + var(--home-card-gap));
   left: 50%;
-  width: max-content;
   transform: translateX(-50%);
   transition:
     opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.22s cubic-bezier(0.4, 0, 0.2, 1),
-    filter 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.home-pills-leave-to {
+.home-card-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(8px);
-  filter: blur(6px);
-}
-
-.home-pills-enter-active .HomePage-QuickPill,
-.home-pills-appear-active .HomePage-QuickPill {
-  animation: home-pill-in 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-
-@for $i from 1 through 4 {
-  .home-pills-enter-active .HomePage-QuickPill:nth-child(#{$i}) {
-    animation-delay: #{0.45 + $i * 0.07}s;
-  }
-
-  .home-pills-appear-active .HomePage-QuickPill:nth-child(#{$i}) {
-    animation-delay: #{0.05 + $i * 0.07}s;
-  }
-}
-
-@keyframes home-pill-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.94);
-    filter: blur(6px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
-  }
 }
 
 /* @property is what lets these interpolate — same trick as IntelligenceHeader. */
@@ -2613,16 +2905,12 @@ textarea.HomePage-Input:focus-visible {
 
   .home-head-leave-active,
   .home-head-enter-active,
-  .home-pills-leave-active,
-  .home-pills-enter-active,
+  .home-card-leave-active,
+  .home-card-enter-active,
+  .home-card-appear-active,
   .home-stream-leave-active,
   .home-stream-enter-active {
     transition: none;
-  }
-
-  .home-pills-enter-active .HomePage-QuickPill,
-  .home-pills-appear-active .HomePage-QuickPill {
-    animation: none;
   }
 
   /* The light holds still but stays on — the running state must survive. */
@@ -2633,34 +2921,6 @@ textarea.HomePage-Input:focus-visible {
 
   .HomePage-Compacting {
     animation: none;
-  }
-}
-
-.HomePage-QuickPill {
-  display: inline-flex;
-  gap: 7px;
-  align-items: center;
-  padding: 7px 12px;
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-full);
-  background: transparent;
-  color: var(--shell-text-regular);
-  font-family: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition:
-    border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &:hover {
-    border-color: var(--shell-border-strong);
-    transform: translateY(-1px);
-    box-shadow: 0 3px 10px var(--shell-shadow);
-  }
-
-  &:active {
-    transform: translateY(0);
   }
 }
 </style>

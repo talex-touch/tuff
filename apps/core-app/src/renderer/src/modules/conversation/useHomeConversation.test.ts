@@ -1241,3 +1241,149 @@ describe('withdrawn attempts', () => {
     })
   })
 })
+
+describe('opening lead', () => {
+  const LEAD = '你好，我是塔芙。要先推进哪件事？'
+  const note = (lead: string): string => `NOTE[${lead}]`
+
+  it('opens an empty thread with the lead as a settled reply ahead of the user message', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk, leadNote: note })
+
+    void conversation.send('整理下载目录', undefined, { lead: `  ${LEAD}  ` })
+    await flush()
+
+    expect(
+      conversation.messages.value.map(({ role, content, status }) => ({ role, content, status }))
+    ).toEqual([
+      { role: 'assistant', content: LEAD, status: 'complete' },
+      { role: 'user', content: '整理下载目录', status: 'complete' },
+      { role: 'assistant', content: '', status: 'streaming' }
+    ])
+  })
+
+  it('never inserts a lead into a thread that has started', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk, leadNote: note })
+
+    const first = conversation.send('first')
+    await flush()
+    double.emit().onDelta?.('answer', { type: 'delta', capabilityId: 'text.chat' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await first
+
+    void conversation.send('second', undefined, { lead: LEAD })
+    await flush()
+
+    expect(conversation.messages.value.map((message) => message.content)).toEqual([
+      'first',
+      'answer',
+      'second',
+      ''
+    ])
+  })
+
+  /**
+   * Anthropic rejects a conversation that opens with the assistant, and the pi CLI folds system
+   * messages into its system prompt on every turn — so the opening travels as one system note and
+   * the wire always starts with the user.
+   */
+  it('sends the lead as one system note in the injected wording, then the user', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk, leadNote: note })
+
+    const turn = conversation.send('整理下载目录', undefined, { lead: LEAD })
+    await flush()
+    double.emit().onDelta?.('好的', { type: 'delta', capabilityId: 'text.chat' })
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await turn
+
+    expect(double.streamPayloads[0]?.messages).toEqual([
+      { role: 'system', content: `NOTE[${LEAD}]` },
+      { role: 'user', content: '整理下载目录' }
+    ])
+
+    const next = conversation.send('再细一点')
+    await flush()
+    expect(double.streamPayloads[1]?.messages).toEqual([
+      { role: 'system', content: `NOTE[${LEAD}]` },
+      { role: 'user', content: '整理下载目录' },
+      { role: 'assistant', content: '好的' },
+      { role: 'user', content: '再细一点' }
+    ])
+    double.emit().onEnd?.({ type: 'end', capabilityId: 'text.chat' })
+    await next
+  })
+
+  it('converts a reloaded thread by position alone, merging leading replies into one note', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk, leadNote: note })
+
+    conversation.restore([
+      { id: 'a0', role: 'assistant', content: '早。', status: 'complete' },
+      { id: 'a1', role: 'assistant', content: LEAD, status: 'complete' },
+      { id: 'u1', role: 'user', content: '整理下载目录', status: 'complete' },
+      { id: 'a2', role: 'assistant', content: '好的', status: 'complete' }
+    ])
+    void conversation.send('继续')
+    await flush()
+
+    expect(double.streamPayloads[0]?.messages).toEqual([
+      { role: 'system', content: `NOTE[早。\n\n${LEAD}]` },
+      { role: 'user', content: '整理下载目录' },
+      { role: 'assistant', content: '好的' },
+      { role: 'user', content: '继续' }
+    ])
+  })
+
+  it('keeps the note when the first reply is retried', async () => {
+    const double = createSdkDouble({
+      chat: () => Promise.reject(new Error('[PROVIDER_UNAVAILABLE:text.chat] No enabled providers'))
+    })
+    const conversation = useHomeConversation({ sdk: double.sdk, leadNote: note })
+
+    const turn = conversation.send('整理下载目录', undefined, { lead: LEAD })
+    await flush()
+    double.emit().onError?.(new Error('[PROVIDER_UNAVAILABLE:text.chat] No enabled providers'))
+    await turn
+
+    void conversation.retry()
+    await flush()
+    expect(double.streamPayloads.at(-1)?.messages).toEqual([
+      { role: 'system', content: `NOTE[${LEAD}]` },
+      { role: 'user', content: '整理下载目录' }
+    ])
+  })
+
+  it('still opens the wire with the user when no wording was injected', async () => {
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk })
+
+    void conversation.send('hi', undefined, { lead: 'Hello there.' })
+    await flush()
+
+    const [system, user] = double.streamPayloads[0]?.messages ?? []
+    expect(system?.role).toBe('system')
+    expect(system?.content).toContain('Hello there.')
+    expect(user).toEqual({ role: 'user', content: 'hi' })
+  })
+
+  it('carries the images of the turn being answered behind the note', async () => {
+    const PNG_DATA_URL = 'data:image/png;base64,iVBORw0KGgo='
+    const image: AiAttachment = { kind: 'image', id: 'att-9', url: PNG_DATA_URL, name: 'shot.png' }
+    const double = createSdkDouble()
+    const conversation = useHomeConversation({ sdk: double.sdk, leadNote: note })
+
+    void conversation.send('what is this', [image], { lead: LEAD })
+    await flush()
+
+    expect(double.streamPayloads[0]?.messages).toEqual([
+      { role: 'system', content: `NOTE[${LEAD}]` },
+      {
+        role: 'user',
+        content: 'what is this',
+        attachments: [{ type: 'image', dataUrl: PNG_DATA_URL, name: 'shot.png' }]
+      }
+    ])
+  })
+})

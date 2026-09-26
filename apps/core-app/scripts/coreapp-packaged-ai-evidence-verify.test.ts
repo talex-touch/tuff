@@ -443,6 +443,7 @@ function createProviderReport(hash = DEFAULT_HASH): Record<string, unknown> {
         invalidOperationRows: 0,
         homeConversationRequests: 2,
         conversationTitleRequests: 2,
+        homeOpeningRequests: 0,
         uniqueTraceCount: 4,
         expectedSuccessfulRequests: 4,
         expectedHomeConversationRequests: 2,
@@ -1097,6 +1098,39 @@ describe('packaged AI evidence verifier', () => {
       () => verifyPackagedAiEvidence(createVerificationInput({ providerReport: usage })),
       'PROVIDER_REPORT_INVALID'
     )
+
+    // An opening counted beside the window instead of in it would let an unaccounted row through.
+    const opening = createProviderReport()
+    asRecord(asRecord(opening.checks).audit).homeOpeningRequests = 1
+    expectCode(
+      () => verifyPackagedAiEvidence(createVerificationInput({ providerReport: opening })),
+      'PROVIDER_REPORT_INVALID'
+    )
+  })
+
+  it('accepts a Provider window that also reconciled a blank Home opening', () => {
+    const provider = createProviderReport()
+    const checks = asRecord(provider.checks)
+    Object.assign(asRecord(checks.audit), {
+      matched: 5,
+      success: 5,
+      uniqueTraceCount: 5,
+      homeOpeningRequests: 1,
+      promptTokens: 264,
+      completionTokens: 84,
+      totalTokens: 348
+    })
+    Object.assign(asRecord(checks.usage), {
+      requestCount: 5,
+      successCount: 5,
+      promptTokens: 264,
+      completionTokens: 84,
+      totalTokens: 348
+    })
+
+    expect(() =>
+      verifyPackagedAiEvidence(createVerificationInput({ providerReport: provider }))
+    ).not.toThrow()
   })
 
   it('binds all reports to one stable physical version and hash', () => {

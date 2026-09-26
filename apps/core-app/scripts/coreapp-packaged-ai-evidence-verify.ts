@@ -937,6 +937,7 @@ function verifyProviderAudit(value: unknown): {
     'invalidOperationRows',
     'homeConversationRequests',
     'conversationTitleRequests',
+    'homeOpeningRequests',
     'expectedSuccessfulRequests',
     'expectedHomeConversationRequests',
     'expectedConversationTitleRequests'
@@ -949,16 +950,19 @@ function verifyProviderAudit(value: unknown): {
   ) {
     fail(code)
   }
+  // Blank Home openings are reconciled rows but never expected ones: the window holds exactly the
+  // expected requests plus whatever openings finished, every one of them a unique success.
   if (
     value.expectedHomeConversationRequests !== 2 ||
     (value.expectedConversationTitleRequests !== 1 &&
       value.expectedConversationTitleRequests !== 2) ||
     value.expectedSuccessfulRequests !==
       value.expectedHomeConversationRequests + value.expectedConversationTitleRequests ||
-    value.matched !== value.expectedSuccessfulRequests ||
-    value.success !== value.expectedSuccessfulRequests ||
+    typeof value.homeOpeningRequests !== 'number' ||
+    value.matched !== value.expectedSuccessfulRequests + value.homeOpeningRequests ||
+    value.success !== value.matched ||
     value.failure !== 0 ||
-    value.uniqueTraceCount !== value.expectedSuccessfulRequests ||
+    value.uniqueTraceCount !== value.matched ||
     value.homeConversationRequests !== value.expectedHomeConversationRequests ||
     value.conversationTitleRequests !== value.expectedConversationTitleRequests ||
     value.invalidNumericRows !== 0 ||

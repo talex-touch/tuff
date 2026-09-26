@@ -1541,11 +1541,116 @@
       "empty": "The model returned nothing",
       "generic": "This reply failed"
     },
-    "pill": {
-      "searchFiles": "Search files in plain language",
-      "translateClipboard": "Translate the clipboard",
-      "tidyDownloads": "Tidy the downloads folder",
-      "runScript": "Run a workspace script"
+    "opening": {
+      "prompt": "You are Tuff, a personal assistant on the user's computer. The user has just opened a new conversation and hasn't said anything yet. The next message is a summary of their local activity compiled by Tuff — not something the user wrote. Speak first: in one sentence, say what you can help with — finding and reading files, sorting through material, writing and translating, analyzing data, working alongside local agents in their projects — then mention one or two concrete things from the summary and ask which they want to move forward first. Rules: at most 3 sentences; conversational, like a colleague who knows them; mention only names that appear in the summary, never invent any; no lists, no Markdown, don't wrap the reply in quotes; if the summary has nothing specific, just briefly say what you can do.",
+      "loading": "Preparing a greeting",
+      "leadNote": "At the start of this conversation you said to the user: “{text}”",
+      "summary": {
+        "currentProject": "Current project: {name}",
+        "recentConversations": "Recent conversations: {titles}",
+        "projects": "Projects: {names}",
+        "localSessions": "Local AI sessions: {count}",
+        "localSessionsIn": "Local AI sessions: {count}, in {names}",
+        "empty": "No local activity yet",
+        "separator": ", ",
+        "quote": "“{text}”"
+      },
+      "template": {
+        "projectConversation": "We're back in {project}. Last time we talked about “{title}” — pick it up, or start something new?",
+        "project": "We're in {project}. Want to review where things stand, or dive straight into something?",
+        "conversation": "Welcome back. Last time we talked about “{title}” — carry on, or start something new?",
+        "sessionInProject": "There's a {provider} session waiting in {project}. Want to push it forward, or tell me something new?",
+        "session": "There's a {provider} session you haven't finished. Want to push it forward, or tell me something new?",
+        "default": "I'm Tuff. I can find files, sort through material, write and translate, and work alongside local agents in your projects. What should we start with?"
+      }
+    },
+    "push": {
+      "card": {
+        "prev": "Previous",
+        "next": "Next"
+      },
+      "guide": {
+        "title": "Where should we start?",
+        "startersTitle": "{category}: which one first?",
+        "self": "I'll say it myself",
+        "selfDesc": "Type it in the box above",
+        "category": {
+          "work": "Work & projects",
+          "workDesc": "Review progress, plan the next step",
+          "files": "Files & tidying",
+          "filesDesc": "Find files, sort folders, read contents",
+          "writing": "Writing & translation",
+          "writingDesc": "Draft, polish, translate",
+          "research": "Research & analysis",
+          "researchDesc": "Summarize documents, analyze data",
+          "automation": "Automation",
+          "automationDesc": "Hand scripts and repetitive work to me"
+        },
+        "work": {
+          "progress": "Review recent progress in {project}",
+          "progressDesc": "See where things stand and list next steps",
+          "enterProject": "Start in {project}",
+          "enterProjectDesc": "Work inside the project's folder",
+          "breakdown": "Break a big goal into small steps",
+          "breakdownDesc": "Work back to a first step you can start now",
+          "plan": "Plan what to push this week",
+          "planDesc": "Put what's on your plate in order",
+          "notes": "Turn meeting notes into to-dos",
+          "notesDesc": "Paste the notes, get action items"
+        },
+        "files": {
+          "find": "Find a file in plain language",
+          "findDesc": "Describe what you remember about it",
+          "downloads": "Tidy the downloads folder",
+          "downloadsDesc": "Sort it by type and date",
+          "projectTour": "Walk me through {project}",
+          "projectTourDesc": "What lives in each folder",
+          "summarize": "Read a file and tell me what it says",
+          "summarizeDesc": "The gist of a long document first"
+        },
+        "writing": {
+          "email": "Draft an email",
+          "emailDesc": "Just say who it's for and why",
+          "polish": "Polish a piece of writing",
+          "polishDesc": "Smoother, still in your voice",
+          "translate": "Translate a passage",
+          "translateDesc": "Chinese and English, formatting kept"
+        },
+        "research": {
+          "summarize": "Summarize a document",
+          "summarizeDesc": "Conclusions and key numbers",
+          "chart": "Chart a set of numbers",
+          "chartDesc": "Paste the data, pick the right chart",
+          "projectStructure": "Explain how {project} is structured",
+          "projectStructureDesc": "From the entry point to the main modules",
+          "compare": "Compare a few options",
+          "compareDesc": "Lay out the trade-offs and recommend one"
+        },
+        "automation": {
+          "script": "Run a workspace script",
+          "scriptDesc": "Pick one of your usual scripts",
+          "rename": "Write a batch-rename script",
+          "renameDesc": "Describe the naming rule, get a script you can run",
+          "repeat": "Turn a repetitive task into a script",
+          "repeatDesc": "Tell me what you keep doing by hand"
+        }
+      },
+      "feed": {
+        "title": "Picked for you",
+        "continueConversation": "Continue “{title}”",
+        "untitledConversation": "Untitled conversation",
+        "conversationDesc": "Pick up where you left off",
+        "conversationInProject": "A conversation in {project}",
+        "continueSession": "Continue {provider} session “{title}”",
+        "continueUntitledSession": "Continue the {provider} session",
+        "sessionDesc": "Local agent session",
+        "sessionInProject": "Local agent session in {project}",
+        "clipboard": "Work with what you just copied",
+        "clipboardExcerpt": "“{excerpt}”",
+        "enterProject": "Start in {project}",
+        "projectDesc": "A new conversation in this project",
+        "pinnedProjectDesc": "Pinned project"
+      }
     }
   },
   "settingsNav": {

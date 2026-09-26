@@ -119,6 +119,24 @@ export function shouldGenerateTitle(args: {
 }
 
 /**
+ * The exchange a title is written from: the first user message and the first settled assistant
+ * reply *after* it.
+ *
+ * "After" is the point. A thread opened from Home can start with the assistant's opening line, and a
+ * title summarised from that greeting would name the greeting instead of what the user asked.
+ */
+export function findTitleExchange(
+  messages: ReadonlyArray<{ role: string; content: string; status: string }>
+): { firstUserContent: string | undefined; firstAssistantContent: string | undefined } {
+  const userIndex = messages.findIndex((message) => message.role === 'user')
+  if (userIndex === -1) return { firstUserContent: undefined, firstAssistantContent: undefined }
+  const reply = messages
+    .slice(userIndex + 1)
+    .find((message) => message.role === 'assistant' && message.status === 'complete')
+  return { firstUserContent: messages[userIndex]?.content, firstAssistantContent: reply?.content }
+}
+
+/**
  * The stored title, when it is a real one.
  *
  * `history.load` hands back whatever `persist` wrote. Before a title was ever generated that is the

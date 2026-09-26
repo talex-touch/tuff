@@ -38,16 +38,24 @@ function numberFrom(...candidates: unknown[]): number {
   return 0
 }
 
+/**
+ * Anthropic takes one system prompt, and LangChain's adapter throws on any system message that is
+ * not the first ("System messages are only permitted as the first passed message"). Callers stack
+ * several legitimately — a prompt-template binding ahead of the caller's own system part, a plugin's
+ * several — so they are folded, in order, into one leading prompt: what the pi CLI does with the
+ * same messages. (Main already folds Home's skills/rules into a Home thread's opening note.)
+ */
 function toLangChainMessages(messages: IntelligenceMessage[]): BaseMessage[] {
-  return messages.map((message) => {
-    if (message.role === 'system') {
-      return new SystemMessage(message.content)
-    }
-    if (message.role === 'assistant') {
-      return new AIMessage(message.content)
-    }
-    return new HumanMessage(message.content)
-  })
+  const system = messages.filter((message) => message.role === 'system')
+  const turns = messages
+    .filter((message) => message.role !== 'system')
+    .map((message) =>
+      message.role === 'assistant'
+        ? new AIMessage(message.content)
+        : new HumanMessage(message.content)
+    )
+  if (system.length === 0) return turns
+  return [new SystemMessage(system.map((message) => message.content).join('\n\n')), ...turns]
 }
 
 function normalizeAnthropicBaseUrl(baseUrl: string): string {

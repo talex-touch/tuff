@@ -447,6 +447,17 @@ export const INTELLIGENCE_HOME_SURFACE = 'home-conversation' as const
 /** Audit operation emitted by the low-stakes conversation title request. */
 export const INTELLIGENCE_CONVERSATION_TITLE_OPERATION = 'conversation-title' as const
 
+/**
+ * Audit operation emitted by the Home opening line: the few sentences the assistant says on a
+ * blank new conversation before the user has typed anything.
+ *
+ * Same family as the title request — a low-stakes `text.chat` call that carries no home surface,
+ * so main injects no skills and opens no native CLI session for it. Unlike the title request it
+ * takes the composer's route (the pinned provider and model, or auto), but never its reasoning
+ * effort.
+ */
+export const INTELLIGENCE_HOME_OPENING_OPERATION = 'home-opening' as const
+
 /** `IntelligenceInvokeOptions.metadata` shape the home conversation sends. */
 export interface IntelligenceHomeSurfaceMetadata {
   surface: typeof INTELLIGENCE_HOME_SURFACE

@@ -58,11 +58,22 @@ export async function applyHomeConversationInjection(
   if (!injection) return payload
 
   homeInjectionLog.info(`Injected ${injection.length} chars of imported skills and rules`)
+  // Leading, so a system part the caller supplied itself still reads as the more specific
+  // instruction. Providers that take a single system prompt (the pi CLI) concatenate the system
+  // messages in order, so position here is the position in the final prompt.
+  const [first, ...rest] = payload.messages
+  if (first?.role === 'system') {
+    // Folded into the caller's own leading system message — a Home thread that opens with the
+    // assistant's greeting carries one — rather than stacked ahead of it: backends that accept one
+    // system prompt (Anthropic behind Tuff Nexus, chat templates that allow a single initial system
+    // message) reject a second. Same order, same text a concatenating provider would build.
+    return {
+      ...payload,
+      messages: [{ ...first, content: `${injection}\n\n${first.content}` }, ...rest]
+    }
+  }
   return {
     ...payload,
-    // Leading, so a system part the caller supplied itself still reads as the more specific
-    // instruction. Providers that take a single system prompt (the pi CLI) concatenate the system
-    // messages in order, so position here is the position in the final prompt.
     messages: [{ role: 'system' as const, content: injection }, ...payload.messages]
   }
 }

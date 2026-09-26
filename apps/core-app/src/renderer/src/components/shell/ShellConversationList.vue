@@ -13,6 +13,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { omniPanelShowEvent } from '../../../../shared/events/omni-panel'
 import { projectConversationGroups } from '~/modules/conversation/conversation-project-groups'
+import { continueLocalAiSession } from '~/modules/conversation/local-ai-session-entry'
 import { useConversationEntry } from '~/modules/conversation/useConversationEntry'
 import { useConversationHistory } from '~/modules/conversation/useConversationHistory'
 import { blankConversationOwner, useProjectFolders } from '~/modules/layout/useProjectFolders'
@@ -89,17 +90,9 @@ async function openProjectAgent(projectId: string, provider: LocalAiCliProviderI
   })
 }
 
+/** Shared with Home's 「为你准备」 card, which resumes the same sessions from the blank state. */
 async function continueSession(session: LocalAiCliSessionSummary): Promise<void> {
-  if (session.state !== 'available') return
-  await transport.send(omniPanelShowEvent, {
-    captureSelection: false,
-    source: 'project-local-ai',
-    localAi: {
-      projectId: session.projectId ?? undefined,
-      sessionRef: session.sessionRef,
-      provider: session.provider
-    }
-  })
+  await continueLocalAiSession(transport, session)
 }
 
 function beginRename(project: ProjectRecord): void {

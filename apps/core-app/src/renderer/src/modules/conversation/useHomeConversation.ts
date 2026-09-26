@@ -32,6 +32,15 @@ import {
  */
 const CHAT_CAPABILITY_ID = 'text.chat'
 
+/**
+ * Used only when the caller supplies no `leadNote`. HomePage injects the catalog wording, so this
+ * never reaches a model in the shipped app; it exists so a caller that forgets still sends a
+ * conversation that opens with the user rather than one a provider rejects.
+ */
+function defaultLeadNote(lead: string): string {
+  return `At the start of this conversation you said to the user: "${lead}"`
+}
+
 export type ConversationRole = 'user' | 'assistant'
 export type ConversationMessageStatus = 'complete' | 'streaming' | 'failed'
 
@@ -116,6 +125,21 @@ export interface UseHomeConversationOptions {
   autoContext?: () => boolean
   /** Live Home thread identity, allocated before the first send and never inferred from UI state. */
   identity?: () => { conversationId: string; projectId: string | null }
+  /**
+   * Wording of the system note that carries assistant messages sent before the user's first
+   * message — the Home opening — on every turn. Model-facing text is locale text, so HomePage
+   * supplies it from the catalog; the default only keeps the payload well-formed without it.
+   */
+  leadNote?: (lead: string) => string
+}
+
+export interface ConversationSendOptions {
+  /**
+   * An assistant message to open the thread with, ahead of the user's: the Home opening the reader
+   * saw above the composer. Taken only when the thread is still empty, and stored like any other
+   * settled reply.
+   */
+  lead?: string
 }
 
 export interface UseHomeConversationReturn {
@@ -126,7 +150,11 @@ export interface UseHomeConversationReturn {
   isCompacting: ComputedRef<boolean>
   /** Metadata of the most recent settled assistant turn, for the side panel. */
   lastTurn: ComputedRef<ConversationTurnMeta | undefined>
-  send: (text: string, attachments?: AiAttachment[]) => Promise<void>
+  send: (
+    text: string,
+    attachments?: AiAttachment[],
+    options?: ConversationSendOptions
+  ) => Promise<void>
   stop: () => void
   retry: () => Promise<void>
   /** Drops the thread and cancels any turn in flight — used when navigating to a blank `/home`. */
@@ -182,10 +210,23 @@ export function useHomeConversation(
    * Only settled turns are context. A `streaming` placeholder is empty by definition and a `failed`
    * one never carried an answer, so sending either would teach the model that blanks are valid
    * replies.
+   *
+   * Assistant messages ahead of the first user message — the Home opening — travel as one system
+   * note instead of as turns. Anthropic rejects a conversation that does not open with the user, and
+   * the note rides into the pi CLI's system prompt on every turn, native continuation included, where
+   * a transcript line would be dropped. Position is the whole test: only an opening can precede the
+   * user, so a reloaded thread converts the same way without a stored marker.
    */
   function toProviderMessages(): IntelligenceMessage[] {
     const settled = messages.value.filter((message) => message.status === 'complete')
-    return settled.map((message, index) => {
+    const firstUser = settled.findIndex((message) => message.role === 'user')
+    const leadCount = firstUser === -1 ? settled.length : firstUser
+    const lead = settled
+      .slice(0, leadCount)
+      .map((message) => message.content.trim())
+      .filter(Boolean)
+    const turns = settled.slice(leadCount)
+    const provider = turns.map((message, index) => {
       const base: IntelligenceMessage = { role: message.role, content: message.content }
       // Only the turn being answered carries its images. Re-sending the ones from earlier turns
       // would spill and re-upload them on every message that follows, for a model that has already
@@ -194,9 +235,12 @@ export function useHomeConversation(
       //
       // `toRaw`: read off a reactive message this is a Proxy, and the transport's structuredClone
       // rejects proxies — every turn carrying an image would fail at the IPC boundary.
-      const attachments = index === settled.length - 1 ? toRaw(message.modelAttachments) : undefined
+      const attachments = index === turns.length - 1 ? toRaw(message.modelAttachments) : undefined
       return attachments?.length ? { ...base, attachments } : base
     })
+    if (lead.length === 0) return provider
+    const note = (options.leadNote ?? defaultLeadNote)(lead.join('\n\n'))
+    return [{ role: 'system', content: note }, ...provider]
   }
 
   function dropMessage(target: ConversationMessage): void {
@@ -561,9 +605,20 @@ export function useHomeConversation(
     await finished
   }
 
-  async function send(rawText: string, attachments?: AiAttachment[]): Promise<void> {
+  async function send(
+    rawText: string,
+    attachments?: AiAttachment[],
+    sendOptions: ConversationSendOptions = {}
+  ): Promise<void> {
     const text = rawText.trim()
     if (!text || streaming.value) return
+
+    // Only an unstarted thread takes a lead, and in the same flush as the user message: the lead is
+    // this conversation's first message, never one inserted into a thread that already has history.
+    const lead = sendOptions.lead?.trim()
+    if (lead && messages.value.length === 0) {
+      messages.value.push(createMessage('assistant', lead, 'complete'))
+    }
 
     const user = createMessage('user', text, 'complete')
     if (attachments && attachments.length > 0) user.attachments = attachments

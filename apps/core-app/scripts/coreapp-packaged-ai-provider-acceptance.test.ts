@@ -271,6 +271,98 @@ describe('packaged AI provider acceptance contracts', () => {
     }
   })
 
+  it('reconciles a blank Home opening in the window without expecting one', () => {
+    const startedAt = 1_000
+    const row = (
+      id: number,
+      operation: string,
+      overrides: Partial<AuditRowLike> = {}
+    ): AuditRowLike => ({
+      id,
+      trace_id: `trace-${id}`,
+      timestamp: startedAt + id,
+      capability_id: 'text.chat',
+      provider: ACCEPTANCE_PROVIDER_ID,
+      model: 'smollm2:135m',
+      caller: null,
+      prompt_tokens: 3,
+      completion_tokens: 2,
+      total_tokens: 5,
+      estimated_cost: 0,
+      latency: 10,
+      success: 1,
+      metadata: JSON.stringify({ operation }),
+      ...overrides
+    })
+    const expectation = {
+      minIdExclusive: 10,
+      startedAt,
+      expectedHomeConversationRequests: 1,
+      expectedConversationTitleRequests: 1
+    }
+    // Started when the blank Home was entered, before the send; flushed into the window after it.
+    const opening = row(11, 'home-opening', { timestamp: startedAt - 400 })
+    const turn = [row(12, 'home-conversation'), row(13, 'conversation-title')]
+
+    const audit = summarizeAuditRows([opening, ...turn], expectation)
+    expect(audit).toMatchObject({
+      matched: 3,
+      success: 3,
+      failure: 0,
+      totalTokens: 15,
+      uniqueTraceCount: 3,
+      invalidOperationRows: 0,
+      homeOpeningRequests: 1,
+      homeConversationRequests: 1,
+      conversationTitleRequests: 1,
+      expectedSuccessfulRequests: 2,
+      passed: true
+    })
+    // The common case: the send cancels an opening still in flight, and nothing is written.
+    expect(summarizeAuditRows(turn, expectation)).toMatchObject({
+      homeOpeningRequests: 0,
+      passed: true
+    })
+
+    // Unexpected is not unchecked: it must succeed, be unique and come from the provider.
+    expect(
+      summarizeAuditRows([row(11, 'home-opening', { success: 0 }), ...turn], expectation)
+    ).toMatchObject({ failure: 1, passed: false })
+    expect(
+      summarizeAuditRows([row(11, 'home-opening', { trace_id: 'trace-12' }), ...turn], expectation)
+    ).toMatchObject({ invalidIdentityRows: 1, passed: false })
+    expect(
+      summarizeAuditRows(
+        [row(11, 'home-opening', { provider: 'another-provider' }), ...turn],
+        expectation
+      )
+    ).toMatchObject({ invalidIdentityRows: 1, passed: false })
+    // Only an opening is admitted from before the window; the runner's raw row count catches any
+    // other early row.
+    expect(
+      summarizeAuditRows(
+        [row(11, 'home-conversation', { timestamp: startedAt - 400 }), ...turn],
+        expectation
+      )
+    ).toMatchObject({ matched: 2, homeOpeningRequests: 0 })
+
+    // Usage counts the opening like any other request, so the reconciliation holds with it in.
+    const usage = (periodType: 'day' | 'month'): UsageRowLike => ({
+      caller_id: 'system',
+      caller_type: 'system',
+      period: `${periodType}:2026-09${periodType === 'day' ? '-26' : ''}`,
+      period_type: periodType,
+      request_count: 3,
+      success_count: 3,
+      failure_count: 0,
+      total_tokens: 15,
+      prompt_tokens: 9,
+      completion_tokens: 6,
+      total_cost: 0
+    })
+    expect(summarizeUsageDelta([], [usage('day'), usage('month')], audit).passed).toBe(true)
+  })
+
   it('isolates HOME and removes inherited AI credentials from the packaged runtime', () => {
     const env = buildPackagedProviderLaunchEnv(
       {
@@ -499,6 +591,75 @@ describe('packaged AI provider acceptance contracts', () => {
           ...afterTitleRetry,
           usageRows: [usage('day', 5, 3), usage('month', 5, 3, { total_cost: 0.5 })]
         },
+        expectation
+      ).passed
+    ).toBe(false)
+  })
+
+  it('accounts for the relaunch opening in the cancellation ledger', () => {
+    const startedAt = 10_000
+    // The relaunch lands on a blank Home; its opening finished before the runner navigated away.
+    const opening: AuditRowLike = {
+      id: 15,
+      trace_id: 'trace-15',
+      timestamp: startedAt - 2_000,
+      capability_id: 'text.chat',
+      provider: ACCEPTANCE_PROVIDER_ID,
+      model: 'smollm2:135m',
+      caller: null,
+      prompt_tokens: 30,
+      completion_tokens: 20,
+      total_tokens: 50,
+      estimated_cost: 0,
+      latency: 10,
+      success: 1,
+      metadata: JSON.stringify({ operation: 'home-opening' })
+    }
+    const usage = (
+      periodType: 'day' | 'month',
+      requestCount: number,
+      tokens: { prompt: number; completion: number }
+    ): UsageRowLike => ({
+      caller_id: 'system',
+      caller_type: 'system',
+      period: `${periodType}:2026-09${periodType === 'day' ? '-26' : ''}`,
+      period_type: periodType,
+      request_count: requestCount,
+      success_count: requestCount,
+      failure_count: 0,
+      total_tokens: tokens.prompt + tokens.completion,
+      prompt_tokens: tokens.prompt,
+      completion_tokens: tokens.completion,
+      total_cost: 0
+    })
+    const before = { prompt: 0, completion: 0 }
+    const after = { prompt: 30, completion: 20 }
+    const completed = {
+      auditRowCount: 4,
+      auditMaxId: 14,
+      usageRows: [usage('day', 4, before), usage('month', 4, before)]
+    }
+    const afterOpening = {
+      auditRowCount: 5,
+      auditMaxId: 15,
+      usageRows: [usage('day', 5, after), usage('month', 5, after)]
+    }
+    const expectation = {
+      minIdExclusive: completed.auditMaxId,
+      startedAt,
+      expectedBackgroundTitleRequests: 0
+    }
+
+    expect(
+      summarizeCancellationLedger([opening], completed, afterOpening, expectation)
+    ).toMatchObject({ homeAuditUnchanged: true, backgroundTitleRequests: 0, passed: true })
+    // A ledger row the audit window cannot account for still fails.
+    expect(summarizeCancellationLedger([], completed, afterOpening, expectation).passed).toBe(false)
+    expect(
+      summarizeCancellationLedger(
+        [opening],
+        completed,
+        { ...afterOpening, auditRowCount: 6, auditMaxId: 16 },
         expectation
       ).passed
     ).toBe(false)

@@ -1541,11 +1541,116 @@
       "empty": "模型没有返回任何内容",
       "generic": "这轮回复失败了"
     },
-    "pill": {
-      "searchFiles": "用自然语言搜索文件",
-      "translateClipboard": "翻译剪贴板",
-      "tidyDownloads": "整理下载目录",
-      "runScript": "运行工作区脚本"
+    "opening": {
+      "prompt": "你是塔芙（Tuff），用户电脑上的个人助理。用户刚打开一段新对话，还没开口。下一条消息是 Tuff 整理的本机摘要，不是用户写的话。请你先开口：用一句话说说你能帮忙做什么——找文件和读文件、整理资料、写作与翻译、分析数据、在项目里配合本机代理干活——再点出摘要里一两件具体的事，问用户想先推进哪一件。要求：不超过 3 句；口语化，像熟悉的同事；只提摘要里真实出现的名字，绝不编造；不列清单，不用 Markdown，不给整段话加引号；摘要里没有具体内容时，只简短介绍你能做什么。",
+      "loading": "正在准备开场白",
+      "leadNote": "对话开始时你对用户说过：「{text}」",
+      "summary": {
+        "currentProject": "当前项目：{name}",
+        "recentConversations": "最近对话：{titles}",
+        "projects": "项目：{names}",
+        "localSessions": "本机 AI 会话：{count} 个",
+        "localSessionsIn": "本机 AI 会话：{count} 个，在 {names}",
+        "empty": "暂无本机记录",
+        "separator": "、",
+        "quote": "「{text}」"
+      },
+      "template": {
+        "projectConversation": "我们回到 {project} 了。上次聊到「{title}」，接着做，还是换件事？",
+        "project": "我们在 {project} 里。想先梳理进展，还是直接动手做点什么？",
+        "conversation": "欢迎回来。上次我们聊到「{title}」，要接着做，还是开始新的事？",
+        "sessionInProject": "你在 {project} 里还有一个 {provider} 会话，要接着推进吗？也可以直接告诉我新的想法。",
+        "session": "你还有一个 {provider} 会话没做完，要接着推进吗？也可以直接告诉我新的想法。",
+        "default": "我是塔芙，可以帮你找文件、整理资料、写作翻译，也能在项目里和本机代理一起干活。今天想先做什么？"
+      }
+    },
+    "push": {
+      "card": {
+        "prev": "上一步",
+        "next": "下一步"
+      },
+      "guide": {
+        "title": "我们先从哪件事开始？",
+        "startersTitle": "{category}：先做哪一件？",
+        "self": "我自己说",
+        "selfDesc": "直接在上面的输入框里告诉我",
+        "category": {
+          "work": "工作与项目",
+          "workDesc": "梳理进展，安排下一步",
+          "files": "文件与整理",
+          "filesDesc": "找文件、理目录、读内容",
+          "writing": "写作与翻译",
+          "writingDesc": "起草、润色、翻译",
+          "research": "资料与分析",
+          "researchDesc": "总结文档、分析数据",
+          "automation": "自动化",
+          "automationDesc": "把脚本和重复操作交给我"
+        },
+        "work": {
+          "progress": "梳理 {project} 最近的进展",
+          "progressDesc": "看看最近在做什么，列出下一步",
+          "enterProject": "在 {project} 里开始",
+          "enterProjectDesc": "进入项目，在它的目录里干活",
+          "breakdown": "把一个大目标拆成小步骤",
+          "breakdownDesc": "倒推出马上能开始的第一步",
+          "plan": "排一下这周要推进的事",
+          "planDesc": "把手头的事排出先后",
+          "notes": "把会议记录整理成待办",
+          "notesDesc": "贴上记录，拆成能执行的条目"
+        },
+        "files": {
+          "find": "用自然语言找一个文件",
+          "findDesc": "说说记得的内容、时间或类型",
+          "downloads": "整理下载目录",
+          "downloadsDesc": "按类型和时间归好类",
+          "projectTour": "看看 {project} 里都有什么",
+          "projectTourDesc": "按目录说说每部分放了什么",
+          "summarize": "读一个文件，说说讲了什么",
+          "summarizeDesc": "长文档先看要点"
+        },
+        "writing": {
+          "email": "起草一封邮件",
+          "emailDesc": "说清对象和目的就行",
+          "polish": "润色一段文字",
+          "polishDesc": "更通顺，保留你的语气",
+          "translate": "翻译一段文字",
+          "translateDesc": "中英互译，保留原有格式"
+        },
+        "research": {
+          "summarize": "总结一份文档的要点",
+          "summarizeDesc": "提炼结论和关键数字",
+          "chart": "把一组数据做成图表",
+          "chartDesc": "贴上数据，挑合适的图",
+          "projectStructure": "讲讲 {project} 的项目结构",
+          "projectStructureDesc": "从入口到主要模块",
+          "compare": "对比几个方案的利弊",
+          "compareDesc": "列出取舍，给个建议"
+        },
+        "automation": {
+          "script": "运行一个工作区脚本",
+          "scriptDesc": "从常用脚本里挑一个",
+          "rename": "写一个批量重命名文件的脚本",
+          "renameDesc": "说好命名规则，拿到能直接运行的脚本",
+          "repeat": "把重复的操作写成脚本",
+          "repeatDesc": "说说你每次都在手动做什么"
+        }
+      },
+      "feed": {
+        "title": "为你准备",
+        "continueConversation": "继续「{title}」",
+        "untitledConversation": "未命名对话",
+        "conversationDesc": "回到上次聊到的地方",
+        "conversationInProject": "{project} 里的对话",
+        "continueSession": "继续 {provider} 会话「{title}」",
+        "continueUntitledSession": "继续 {provider} 会话",
+        "sessionDesc": "本机代理会话",
+        "sessionInProject": "{project} 里的本机代理会话",
+        "clipboard": "处理刚复制的内容",
+        "clipboardExcerpt": "「{excerpt}」",
+        "enterProject": "在 {project} 里开始",
+        "projectDesc": "新建一段项目对话",
+        "pinnedProjectDesc": "已置顶的项目"
+      }
     }
   },
   "settingsNav": {
