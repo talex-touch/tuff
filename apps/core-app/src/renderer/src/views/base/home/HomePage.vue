@@ -16,7 +16,6 @@ import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { TxChainOfThought } from '@talex-touch/tuffex/chain-of-thought'
 import { TxChoiceCard } from '@talex-touch/tuffex/choice-card'
-import { TxIcon } from '@talex-touch/tuffex/icon'
 import { TxMessageActions } from '@talex-touch/tuffex/message-actions'
 import { TxModal } from '@talex-touch/tuffex/modal'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
@@ -46,7 +45,6 @@ import { toast } from 'vue-sonner'
 import { createRollbackSync } from '~/utils/rollback-sync'
 import { useRoute, useRouter } from 'vue-router'
 import AppLogo from '~/components/icon/AppLogo.vue'
-import MetaHintBadge from '~/components/shell/MetaHintBadge.vue'
 import ToolChartCard from '~/components/intelligence/ToolChartCard.vue'
 import ToolWidgetCard from '~/components/intelligence/ToolWidgetCard.vue'
 import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
@@ -77,6 +75,8 @@ import {
 } from '~/modules/conversation/useConversationHistory'
 import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
+import { reasoningLevelLabelKey } from '~/modules/conversation/reasoning-effort-display'
+import { useReasoningEffort } from '~/modules/conversation/useReasoningEffort'
 import { HOME_FEED_MAX_ITEMS } from '~/modules/home-push/feed'
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
 import { useHomePush } from '~/modules/home-push/useHomePush'
@@ -86,8 +86,11 @@ import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-wind
 import { appSetting } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { useProjectStore } from '~/stores/projects'
-import HomeModelMenu from './HomeModelMenu.vue'
-import HomePermissionMenu from './HomePermissionMenu.vue'
+import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
+import ComposerToolbar from './composer/ComposerToolbar.vue'
+import { showDictationNotice } from './composer/dictation-notice'
+import { deriveSendState, isAwaitingFirstToken } from './composer/send-state'
+import { useComposerDictation } from './composer/useComposerDictation'
 import HomeSidePanel from './HomeSidePanel.vue'
 import HomeTopBar from './HomeTopBar.vue'
 
@@ -108,6 +111,8 @@ const inputRef = ref<HTMLTextAreaElement | null>(null)
 /** Scroll behaviour (stick-to-bottom, follow, back-to-bottom pill) lives inside the stream now. */
 const streamRef = ref<TxConversationStreamInstance | null>(null)
 const composerRef = ref<HTMLElement | null>(null)
+/** The tool row; `submit()` launches its send key at the press. */
+const toolbarRef = ref<InstanceType<typeof ComposerToolbar> | null>(null)
 /** The FLIP animates this — the composer *and* the push card under it travel as one body. */
 const composerGroupRef = ref<HTMLElement | null>(null)
 /** Measured before a send so the leaving greeting can be pinned in place. */
@@ -144,6 +149,11 @@ const {
   ensureLoaded: ensureModelOptionsLoaded
 } = useModelOptions()
 /**
+ * The reasoning effort: one global setting, read at every send, and the level the composer's model
+ * pill shows for the model the next send pins (`pillLevel`: nothing on auto, D11-a).
+ */
+const { setting: reasoningEffortSetting, pillLevel: reasoningPillLevel } = useReasoningEffort()
+/**
  * Loaded at mount rather than on first menu open, so the persisted selection resolves — and
  * the pill stops saying auto — before the user reaches for it.
  */
@@ -161,6 +171,9 @@ const conversation = useHomeConversation({
     if (!id) throw new Error('HOME_CONVERSATION_ID_MISSING')
     return { conversationId: id, projectId: projectId.value }
   },
+  // Read per send like routing, so a level picked mid-conversation applies to the next message; the
+  // non-streaming fallback carries the same value.
+  reasoningEffort: () => reasoningEffortSetting.value,
   // The Home opening, once it is the thread's first message, reaches the model on every turn as
   // this system note (`toProviderMessages`), worded in the reader's locale.
   leadNote: createOpeningLeadNote(t)
@@ -191,7 +204,63 @@ const modelPill = computed<{ label: string; icon: ITuffIcon | undefined }>(() =>
     : { label: t('home.modelName'), icon: undefined }
 })
 
-const canSend = computed(() => draft.value.trim().length > 0 && !isStreaming.value)
+/** The composer's pill adds the reasoning level the next send runs at; the top bar's does not. */
+const composerModel = computed(() => ({
+  ...modelPill.value,
+  effort: reasoningPillLevel.value ? t(reasoningLevelLabelKey(reasoningPillLevel.value)) : undefined
+}))
+
+/** Only macOS and Windows have a microphone pane to open; elsewhere the notice stands alone. */
+const micSettingsAvailable = (() => {
+  const platform = getCurrentRendererPlatformState()
+  return platform.isMac || platform.isWindows
+})()
+
+/**
+ * The composer's microphone (D10): dictation into the draft at the caret. Not gated by the Voice
+ * Input switch (D10-a) — pressing the button is the consent. Its notices become toasts carrying the
+ * one action that fixes them.
+ */
+const dictation = useComposerDictation({
+  draft,
+  input: () => inputRef.value,
+  language: () => appSetting.voiceInput?.language,
+  onTextChange: autoGrow,
+  onNotice: (kind) =>
+    showDictationNotice(kind, {
+      t,
+      openRecognitionSettings: () => void router.push('/setting/intelligence/capabilities'),
+      openMicrophoneSettings: micSettingsAvailable
+        ? () => void dictation.openMicrophoneSettings()
+        : undefined
+    })
+})
+
+// A plain send waits for dictation to finish; while it runs the send key means 「结束并发送」 (D10-d).
+const canSend = computed(
+  () => draft.value.trim().length > 0 && !isStreaming.value && !dictation.active.value
+)
+
+/** The send key's face (`composer/send-state.ts`), derived from state this page already owns. */
+const sendState = computed(() =>
+  deriveSendState({
+    hasText: draft.value.trim().length > 0,
+    streaming: isStreaming.value,
+    awaitingFirstToken: isAwaitingFirstToken(messages.value.at(-1)),
+    blocked: Boolean(agentTools.pending.value),
+    dictating: dictation.active.value
+  })
+)
+
+// A reply started from anywhere else (a form answer, a retry) ends dictation gracefully: its last
+// words still land in the draft while the microphone yields its slot to the stop capsule. Leaving
+// Home ends it the same way.
+watch(isStreaming, (streaming) => {
+  if (streaming) void dictation.stop()
+})
+watch(isHomeRoute, (visible) => {
+  if (!visible) void dictation.stop()
+})
 
 /**
  * The border beam (TuffEx `TxBorderBeam`) on the composer's own box.
@@ -612,6 +681,9 @@ function pinLeavingHead(head: LeavingHead | null): void {
 
 async function submit(): Promise<void> {
   if (!canSend.value) return
+  // The send key launches with the press — a click, Enter and the shortcut all pass here — so its
+  // arrow leaves with the lifted message and the stop capsule grows as the reply starts.
+  toolbarRef.value?.launch()
 
   const text = draft.value
   const attachments =
@@ -748,11 +820,33 @@ async function submit(): Promise<void> {
   await turn
 }
 
+/**
+ * The send key, Enter and the send shortcut. While dictating they mean 「结束并发送」 (D10-d): the
+ * session stops, and once its last words have landed in the draft they go out as an ordinary send.
+ */
+async function pressSend(): Promise<void> {
+  if (dictation.active.value) {
+    if ((await dictation.stop()) === 'inserted') await submit()
+    return
+  }
+  await submit()
+}
+
 function handleKeydown(event: KeyboardEvent): void {
   // `isComposing` keeps Enter from cutting an IME candidate selection short.
   if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
   event.preventDefault()
-  void submit()
+  void pressSend()
+}
+
+/**
+ * Esc cancels a dictation and puts the draft back as it was before it started — from anywhere in
+ * the composer: a click leaves focus on the microphone key, not in the field.
+ */
+function handleComposerKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !dictation.active.value) return
+  event.preventDefault()
+  dictation.cancel()
 }
 
 function resolveErrorTitle(code: string | undefined): string {
@@ -779,7 +873,6 @@ function openProviderSettings(): void {
 // ============================================================================
 
 const pendingAttachments = ref<AiAttachment[]>([])
-const fileInputRef = ref<HTMLInputElement | null>(null)
 
 /**
  * Object URLs this surface created. Revoked wholesale on unmount rather than
@@ -813,13 +906,6 @@ function removeAttachment(id: string): void {
   const target = pendingAttachments.value.find((attachment) => attachment.id === id)
   if (target?.kind === 'image' && objectUrls.delete(target.url)) URL.revokeObjectURL(target.url)
   pendingAttachments.value = pendingAttachments.value.filter((attachment) => attachment.id !== id)
-}
-
-function onFilePick(event: Event): void {
-  const input = event.target as HTMLInputElement
-  addFiles(Array.from(input.files ?? []))
-  // Clearing lets the same file be picked twice in a row.
-  input.value = ''
 }
 
 /** The files a paste carries — a copied picture arrives as one `image/png` file item. */
@@ -973,6 +1059,12 @@ const markdownLabels = computed(() => ({
  * without asking, and the reader has no way to notice that it happened.
  */
 watch(conversationId, () => resetRemoteImagePolicy())
+
+/**
+ * A dictation belongs to the thread it started in: switching threads abandons it where it stands,
+ * without writing the draft back. (A first send never trips this — it waits for dictation to end.)
+ */
+watch(conversationId, () => dictation.cancel({ restore: false }))
 
 /**
  * Which navigation the watcher is currently serving. Two overlapping restores are not sequenced by
@@ -1284,8 +1376,9 @@ const disposeCommands = registerMainWindowCommandHandlers([
   },
   {
     id: 'send',
-    enabled: () => isHomeRoute.value && canSend.value,
-    run: () => submit()
+    enabled: () =>
+      isHomeRoute.value && (canSend.value || (dictation.active.value && !isStreaming.value)),
+    run: () => pressSend()
   },
   {
     id: 'stop',
@@ -1507,13 +1600,10 @@ onBeforeUnmount(disposeCommands)
                         :streaming="message.status === 'streaming'"
                       />
 
-                      <!-- Pre-first-token wait: a thinking orb, rolled fresh per response. -->
+                      <!-- Pre-first-token wait: a thinking orb, rolled fresh per response. The send
+                           key's `waiting` reads the same predicate, so the two cannot disagree. -->
                       <TxThinkingOrb
-                        v-else-if="
-                          message.status === 'streaming' &&
-                          !message.content &&
-                          !segmentsOf(message).length
-                        "
+                        v-else-if="isAwaitingFirstToken(message)"
                         class="HomePage-Thinking"
                         :size="64"
                         :display-size="28"
@@ -1636,6 +1726,7 @@ onBeforeUnmount(disposeCommands)
                 @dragover="onDragOver"
                 @dragleave="onDragLeave"
                 @drop="onDrop"
+                @keydown="handleComposerKeydown"
               >
                 <TxAttachmentTray
                   v-if="pendingAttachments.length"
@@ -1648,6 +1739,8 @@ onBeforeUnmount(disposeCommands)
                   @remove="removeAttachment"
                 />
 
+                <!-- Read-only while dictating: the words land at the caret, and neither a keystroke
+                     nor an IME can move the range under them. -->
                 <textarea
                   ref="inputRef"
                   v-model="draft"
@@ -1655,88 +1748,30 @@ onBeforeUnmount(disposeCommands)
                   rows="1"
                   :aria-label="t('home.placeholder')"
                   :placeholder="t('home.placeholder')"
+                  :readonly="dictation.active.value"
                   @input="autoGrow"
                   @keydown="handleKeydown"
                   @paste="onPaste"
                 />
 
-                <div class="HomePage-ToolRow">
-                  <div class="HomePage-ToolLeft">
-                    <input
-                      ref="fileInputRef"
-                      type="file"
-                      multiple
-                      class="HomePage-FileInput"
-                      :aria-label="t('home.attach')"
-                      @change="onFilePick"
-                    />
-                    <button
-                      class="HomePage-RoundBtn"
-                      type="button"
-                      :aria-label="t('home.attach')"
-                      @click="fileInputRef?.click()"
-                    >
-                      <span class="i-ri-add-line" />
-                    </button>
-                    <HomePermissionMenu
-                      v-model:mode="agentToolsMode"
-                      @reset="resetRememberedApprovals"
-                    />
-                  </div>
-
-                  <div class="HomePage-ToolRight">
-                    <div class="HomePage-ModelSlot">
-                      <HomeModelMenu placement="top-end">
-                        <template #trigger="{ open }">
-                          <button
-                            class="HomePage-ModelPill"
-                            type="button"
-                            :aria-label="t('home.model')"
-                            :aria-expanded="open"
-                          >
-                            <TxIcon
-                              v-if="modelPill.icon"
-                              class="HomePage-ModelIcon"
-                              :icon="modelPill.icon"
-                              :size="13"
-                            />
-                            <span class="HomePage-ModelName">{{ modelPill.label }}</span>
-                            <span class="HomePage-ModelEffort">{{ t('home.effortHigh') }}</span>
-                            <span class="i-ri-arrow-down-s-line" />
-                          </button>
-                        </template>
-                      </HomeModelMenu>
-                    </div>
-                    <button
-                      class="HomePage-RoundBtn borderless"
-                      type="button"
-                      :aria-label="t('home.voice')"
-                    >
-                      <span class="i-ri-mic-line" />
-                    </button>
-                    <button
-                      v-if="isStreaming"
-                      class="HomePage-SendBtn"
-                      type="button"
-                      :aria-label="t('home.stop')"
-                      @click="conversation.stop()"
-                    >
-                      <span class="i-ri-stop-fill" />
-                      <MetaHintBadge command="stop" placement="above" />
-                    </button>
-                    <button
-                      v-else
-                      class="HomePage-SendBtn"
-                      type="button"
-                      :disabled="!canSend"
-                      :aria-label="t('home.send')"
-                      @click="submit"
-                    >
-                      <span class="i-ri-arrow-up-line" />
-                      <MetaHintBadge command="send" placement="above" />
-                    </button>
-                  </div>
-                </div>
+                <!-- One family of 32px controls (`composer/`); the send key is an island that grows
+                     into 「■ 停止」 and the microphone into the dictation capsule, neither moving a
+                     neighbour. -->
+                <ComposerToolbar
+                  ref="toolbarRef"
+                  v-model:permission-mode="agentToolsMode"
+                  :model="composerModel"
+                  :send-state="sendState"
+                  :mic-state="dictation.state.value"
+                  :mic-levels="dictation.levels.value"
+                  :mic-elapsed-ms="dictation.elapsedMs.value"
+                  :mic-outcome="dictation.outcome.value"
+                  @files="addFiles"
+                  @send="pressSend"
+                  @stop="conversation.stop()"
+                  @mic="dictation.toggle()"
+                  @reset-approvals="resetRememberedApprovals"
+                />
 
                 <!-- A wrapped draft as it sat, fading out while the lifted bubble's own lines fade in
                      (~140ms); empty otherwise. -->
@@ -1829,6 +1864,10 @@ onBeforeUnmount(disposeCommands)
   // composer's surface, so it leaves from above the box rather than from behind it; its fill is
   // transparent while it still overlaps the box, so nothing of the composer is covered.
   --home-z-lift: 3;
+
+  // The TuffIntelligence wheel the running state wears — the composer's live light and the send
+  // key's stop-capsule ring (`composer/ComposerSendIsland.vue`) read the same stops, in oklch.
+  --home-live-stops: #0894ff, #c959dd 27%, #ff2e54 52%, #ff9004 74%, #0894ff;
 
   // ---------------------------------------------------------------------------
   // TuffEx token bridge: every tuffex component under this surface renders in
@@ -2463,14 +2502,7 @@ onBeforeUnmount(disposeCommands)
     inset: -1px;
     border-radius: inherit;
     padding: 1.5px;
-    background: conic-gradient(
-      from var(--home-glow-angle) in oklch,
-      #0894ff,
-      #c959dd 27%,
-      #ff2e54 52%,
-      #ff9004 74%,
-      #0894ff
-    );
+    background: conic-gradient(from var(--home-glow-angle) in oklch, var(--home-live-stops));
     pointer-events: none;
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
@@ -2533,11 +2565,6 @@ onBeforeUnmount(disposeCommands)
   }
 }
 
-/** The picker is reached through the "+" button; the input itself never shows. */
-.HomePage-FileInput {
-  display: none;
-}
-
 .HomePage-Input {
   width: 100%;
   max-height: 200px;
@@ -2593,126 +2620,6 @@ textarea.HomePage-Input:focus-visible {
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: break-word;
-}
-
-.HomePage-ToolRow {
-  container: home-composer-tools / inline-size;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.HomePage-ToolLeft,
-.HomePage-ToolRight {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.HomePage-RoundBtn,
-.HomePage-SendBtn {
-  display: inline-flex;
-  // Its hint chip anchors above the button: this control sits on the window's bottom edge, and the
-  // one thing beside it is the voice button.
-  position: relative;
-  align-items: center;
-  justify-content: center;
-  height: 30px;
-  border: 1px solid var(--shell-border-strong);
-  border-radius: var(--shell-radius-full);
-  background: transparent;
-  color: var(--shell-text-regular);
-  font-family: inherit;
-  cursor: pointer;
-  transition:
-    background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
-    border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.HomePage-RoundBtn {
-  width: 30px;
-
-  &.borderless {
-    border-color: transparent;
-  }
-
-  &:hover {
-    background: var(--shell-surface);
-  }
-}
-
-/** Keeps the composer's model pill from stretching in the tool row. */
-.HomePage-ModelSlot {
-  flex: none;
-}
-
-/**
- * Sits next to send rather than on the left: the model and effort are properties of the message
- * about to be sent, not of the composer's input affordances.
- */
-.HomePage-ModelPill {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  height: 28px;
-  padding: 0 11px;
-  border: 1px solid transparent;
-  border-radius: var(--shell-radius-full);
-  background: var(--shell-surface-2);
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  transition: border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &:hover {
-    border-color: var(--shell-border-strong);
-  }
-
-  .i-ri-arrow-down-s-line {
-    color: var(--shell-text-muted);
-  }
-}
-
-.HomePage-ModelIcon {
-  display: inline-flex;
-  color: var(--shell-text-secondary);
-}
-
-.HomePage-ModelName {
-  color: var(--shell-text-secondary);
-  font-weight: 500;
-}
-
-.HomePage-ModelEffort {
-  color: var(--shell-text-muted);
-}
-
-.HomePage-SendBtn {
-  width: 30px;
-  border-color: transparent;
-  background: var(--shell-primary);
-  color: var(--shell-on-primary);
-  transition:
-    transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1),
-    background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &:hover:not(:disabled) {
-    opacity: 0.92;
-    transform: scale(1.06);
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.94);
-  }
-
-  // Artboard `AHQQk`: an empty composer carries a neutral key, not a faded primary one — a
-  // dimmed accent still reads as "the send button, but broken".
-  &:disabled {
-    background: var(--shell-surface-2);
-    color: var(--shell-text-muted);
-    cursor: not-allowed;
-  }
 }
 
 /**

@@ -3,6 +3,7 @@ import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import ComposerChip from './composer/ComposerChip.vue'
 
 /**
  * The composer's permission pill and the menu behind it. The pill lives inside the component
@@ -41,6 +42,16 @@ let restoreFocusOnClose = false
 
 const pillIcon = computed(
   () => PERMISSION_MODES.find((option) => option.mode === props.mode)?.icon ?? 'i-ri-shield-line'
+)
+
+/**
+ * Tools on and asking first is an ordinary enabled state, so it carries the accent. 「完全允许」 has
+ * to stay visible as a state, not just a label the eye skips: every tool call runs unasked while it
+ * is on. The shell has no warning ramp, and the alarm one is the honest read — it also re-points
+ * under `html.contrast`, which a hand-picked amber would not.
+ */
+const pillTone = computed(() =>
+  props.mode === 'full' ? 'danger' : props.mode === 'review' ? 'info' : 'muted'
 )
 
 /** Queried rather than collected through refs: moving focus is a DOM concern either way. */
@@ -115,19 +126,20 @@ watch(open, (isOpen) => {
     <template #trigger>
       <!-- display: contents — the wrapper exists only so closing can find the pill to refocus. -->
       <span ref="triggerWrapRef" class="HomePermissionMenu-TriggerWrap">
-        <button
+        <!-- The composer's tonal chip: 「自动审阅」 carries the accent, 「完全允许」 the alarm hue, and
+             a mode change blur-replaces the shield and crossfades the value. It folds to the shield
+             alone in a narrow toolbar; the full state stays in the accessible name. -->
+        <ComposerChip
           class="HomePermissionMenu-Pill"
-          :class="{ active: props.mode === 'review', 'is-full': props.mode === 'full' }"
-          type="button"
+          :tone="pillTone"
+          :icon="pillIcon"
+          :prefix="`${t('home.permission')} ·`"
+          :label="t(`home.permissionMode.${props.mode}`)"
+          collapsible
           :aria-expanded="open"
           :aria-label="`${t('home.permission')} · ${t(`home.permissionMode.${props.mode}`)}`"
           :title="t(`home.permissionHint.${props.mode}`)"
-        >
-          <span :class="pillIcon" class="HomePermissionMenu-PillIcon" aria-hidden="true" />
-          <span class="HomePermissionMenu-PillLabel">
-            {{ t('home.permission') }} · {{ t(`home.permissionMode.${props.mode}`) }}
-          </span>
-        </button>
+        />
       </span>
     </template>
 
@@ -210,64 +222,6 @@ watch(open, (isOpen) => {
 <style lang="scss" scoped>
 .HomePermissionMenu-TriggerWrap {
   display: contents;
-}
-
-.HomePermissionMenu-Pill {
-  display: inline-flex;
-  flex: none;
-  gap: 6px;
-  align-items: center;
-  justify-content: center;
-  height: 30px;
-  white-space: nowrap;
-  padding: 0 12px;
-  border: 1px solid var(--shell-border-strong);
-  border-radius: var(--shell-radius-full);
-  background: transparent;
-  color: var(--shell-text-regular);
-  font-family: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition:
-    background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
-    border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &:hover {
-    background: var(--shell-surface);
-  }
-
-  /* Tools on and asking first: an ordinary enabled state, so it carries the accent. */
-  &.active {
-    border-color: var(--shell-primary-border);
-    background: var(--shell-primary-soft);
-    color: var(--shell-primary);
-    font-weight: 500;
-  }
-
-  /* 「完全允许」 has to stay visible as a state, not just as a label the eye skips:
-     every tool call runs unasked while it is on. The shell has no warning ramp, and
-     the alarm one is the honest read here — it also re-points under `html.contrast`,
-     which a hand-picked amber would not. */
-  &.is-full {
-    border-color: var(--shell-danger-border);
-    background: var(--shell-danger-soft);
-    color: var(--shell-danger);
-    font-weight: 500;
-  }
-}
-
-/* The right preview panel and a narrow window both reduce the composer itself. Query that real
-   space instead of the viewport, and keep the current permission state available to assistive
-   technology through the button's aria-label. */
-@container home-composer-tools (max-width: 520px) {
-  .HomePermissionMenu-Pill {
-    width: 30px;
-    padding-inline: 0;
-  }
-
-  .HomePermissionMenu-PillLabel {
-    display: none;
-  }
 }
 
 /* Panel chrome (surface, border, shadow, placement) belongs to the primitive; this is content. */

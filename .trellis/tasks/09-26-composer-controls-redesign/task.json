@@ -1,0 +1,30 @@
+{
+  "id": "composer-controls-redesign",
+  "name": "composer-controls-redesign",
+  "title": "输入框工具栏重做与发送按钮动效（灵动岛式）",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-26",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-25-home-session-polish",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "完成 输入框工具栏重做与发送按钮动效（灵动岛式） 分批提交与主线合并验证。",
+    "blocker": "无阻塞项。",
+    "evidence": "输入框工具栏重做与发送按钮动效（灵动岛式）: - 亮 / 暗各走 T1–T8（普通发送、首条发送各一次）；T3 / T5 期间逐帧采样模型胶囊、权限胶囊、`+` 的矩形，位移 ≤ 0.5px；胶囊宽度峰值与回落。; - 发送 → 停止 → 发送全程焦点不丢；听写一轮（开始、partial、结束、光标位置、听写胶囊盖住模型胶囊且邻居不动）、听写中点发送 = 结束并发送、拒绝权限的提示。; - 切一次推理强度看胶囊后缀与回合信息；开「减少动态效果」再走一遍。"
+  }
+}

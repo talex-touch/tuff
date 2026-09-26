@@ -1,0 +1,12 @@
+{"file": ".trellis/tasks/09-26-composer-controls-redesign/research/proposal.md", "reason": "Design of record: visual family, send island state machine, timings, parameters, component split"}
+{"file": ".trellis/tasks/09-26-composer-controls-redesign/research/dictation.md", "reason": "Dictation session logic via asrStream, levels, cursor splicing, errors"}
+{"file": ".trellis/tasks/09-26-composer-controls-redesign/research/dynamic-island-motion.md", "reason": "Island morph motion references"}
+{"file": ".trellis/tasks/09-26-composer-controls-redesign/research/current-toolbar.md", "reason": "Current toolbar template, state sources, contrast measurements"}
+{"file": ".trellis/tasks/09-26-composer-controls-redesign/research/send-sequence.md", "reason": "Send sequence hooks to align the island with the lift"}
+{"file": ".trellis/tasks/09-26-reasoning-effort/prd.md", "reason": "HomePage hand-off for reasoning effort (three wiring points, pillLevel rules)"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component structure and SFC conventions"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "Hover/press/transition rules, one light source shadows, concentric radii"}
+{"file": ".trellis/spec/frontend/tuffex-text-motion.md", "reason": "Spring curves, linear() compilation, text transformer usage"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Composable conventions, frame-driven motion contract"}
+{"file": ".trellis/spec/main-process/voice-session-contracts.md", "reason": "Voice session contract the dictation composable must honour; D10-a scope note goes here"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "Shared working tree: HomePage.vue and lang JSONs are co-edited"}
