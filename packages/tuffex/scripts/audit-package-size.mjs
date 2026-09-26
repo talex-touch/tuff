@@ -157,7 +157,16 @@ const LIMITS = {
   // `.tx-bottom-dialog*` plus the sibling variant rules that already shared it.
   // Measured 610.1 KiB. Same contract as every note above: actuals plus minimal
   // headroom, growth from here fails.
-  fullCssBytes: 612 * 1024,
+  // 612 -> 618 on 2026-09-26: three components shipped sheets in one round — `prism-glow`
+  // (4.9 KiB), `choice-card` (3.9) and `fusion-surface` (0.7) — and the full bundle went
+  // 610.1 -> 615.9 KiB with them. Checked for the inlining this limit exists to catch: the same
+  // round *removed* one, the vendored GitHub sheet that `stream-markdown` was carrying as a
+  // second copy of `markdown-view`'s (39.0 KiB, the largest single line the on-demand budget
+  // counted); it now borrows that sheet through a declared style dependency
+  // (`borrowedStyleDeps` in packages/script/build/component-styles.ts). So the full bundle grew
+  // by the new components alone while the on-demand set came down. Measured 615.9 KiB. Same
+  // contract as every note above: actuals plus minimal headroom, growth from here fails.
+  fullCssBytes: 618 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
