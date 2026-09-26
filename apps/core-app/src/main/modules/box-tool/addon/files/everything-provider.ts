@@ -1801,9 +1801,13 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           content: null,
           embeddingStatus: 'none' as const
         }
-        const cachedIcon = this.iconCache.get(result.path)
+        const iconSource = { mtimeMs: result.mtime.getTime(), size: result.size }
+        const cachedIcon = this.iconCache.get(result.path, iconSource)
         const extensions: Record<string, string> = { ...(known?.extensions ?? {}) }
-        if (cachedIcon) extensions.icon = cachedIcon
+        if (cachedIcon) {
+          extensions.icon = cachedIcon
+          delete extensions.iconMeta
+        }
 
         const tuffItem = mapFileToTuffItem(
           fileObj,
@@ -1814,7 +1818,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
             ? undefined
             : (file) => {
                 scheduledIconWarmups += 1
-                void this.iconCache.ensure(file.path)
+                void this.iconCache.ensure(file.path, iconSource)
               },
           known && bridge
             ? (file) => {
@@ -1872,7 +1876,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
           this.iconCache.delete(result.path)
           if (!result.isDir && scheduledIconWarmups < EVERYTHING_ICON_WARMUP_LIMIT) {
             scheduledIconWarmups += 1
-            void this.iconCache.ensure(result.path)
+            void this.iconCache.ensure(result.path, iconSource)
           }
         }
         return normalized.item ?? tuffItem

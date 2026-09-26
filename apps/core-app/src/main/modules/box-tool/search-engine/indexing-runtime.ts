@@ -281,6 +281,24 @@ export class IndexingRuntime {
     this.sourceWriterRouter = router
   }
 
+  /** The callback retains its source lease through admission, persistence and publication. */
+  async withSourceMutationLease<T>(
+    sourceId: string,
+    operation: (leaseId: string) => Promise<T>
+  ): Promise<T> {
+    const source = this.requireSource(sourceId)
+    return await this.sourceMutationGate.run(sourceId, async (lease) => {
+      try {
+        return await operation(lease.id)
+      } catch (error) {
+        await source
+          .drainMutations?.({ leaseId: lease.id, reason: 'mutation' })
+          .catch(() => undefined)
+        throw error
+      }
+    })
+  }
+
   async applySourceBatch(
     batch: IndexedSourceRecordBatch
   ): Promise<IndexStoreBatchApplySummary | void> {

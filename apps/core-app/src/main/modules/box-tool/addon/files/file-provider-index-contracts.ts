@@ -45,6 +45,7 @@ export interface FileIndexRunOptions {
 }
 
 export interface FileIndexedSourceRuntimeMutationDelegate {
+  withMutationLease: <T>(operation: (leaseId: string) => Promise<T>) => Promise<T>
   applyBatch: (batch: IndexedSourceRecordBatch) => Promise<unknown>
   applyBatchWithPersistence?: (
     batch: IndexedSourceRecordBatch,

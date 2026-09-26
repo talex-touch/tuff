@@ -8,6 +8,7 @@ import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
 // Direct module path (not the search barrel): the worker must stay small.
 import { quantizeIndexedWriteTimestampToSeconds } from '@talex-touch/utils/search/indexing-write-plan'
+import { getWorkerMemorySnapshot } from './worker-status'
 
 interface ReconcileDiskFile {
   path: string
@@ -58,13 +59,7 @@ function buildMetricsPayload(): WorkerMetricsPayload {
       : null
   return {
     timestamp: Date.now(),
-    memory: {
-      rss: memory.rss,
-      heapUsed: memory.heapUsed,
-      heapTotal: memory.heapTotal,
-      external: memory.external,
-      arrayBuffers: memory.arrayBuffers ?? 0
-    },
+    memory: getWorkerMemorySnapshot(memory),
     cpuUsage: process.cpuUsage(),
     eventLoop: eventLoop
       ? {

@@ -1,94 +1,67 @@
-import { chunkIndexedWriteRecords } from "./indexing-write-plan";
+import { chunkIndexedWriteRecords } from './indexing-write-plan'
 
 export interface IndexedWriteUpdateExecutorQueueOptions {
-  estimatedTaskTimeMs: number;
-  label: string;
+  estimatedTaskTimeMs: number
+  label: string
 }
 
 export interface IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated> {
-  waitBeforeChunk: () => Promise<void>;
-  updateOne?: (record: TUpdate) => Promise<void>;
+  waitBeforeChunk: () => Promise<void>
+  updateOne?: (record: TUpdate) => Promise<void>
   /**
    * Optional chunk-level writer. When provided, it runs once per chunk inside
    * one writer-owned transaction, then refresh/side effects preserve ordering.
    */
-  updateChunk?: (records: TUpdate[]) => Promise<void>;
-  refreshUpdated: (records: TUpdate[]) => Promise<TUpdated[]>;
-  dispatchUpdated: (records: TUpdated[]) => void;
+  updateChunk?: (records: TUpdate[]) => Promise<void>
+  refreshUpdated: (records: TUpdate[]) => Promise<TUpdated[]>
+  dispatchUpdated: (records: TUpdated[]) => void | Promise<void>
   runQueue: (
     chunks: TUpdate[][],
     handler: (chunk: TUpdate[]) => Promise<void>,
     options: IndexedWriteUpdateExecutorQueueOptions,
-  ) => Promise<void>;
-  now: () => number;
-  formatDuration: (durationMs: number) => string;
-  logDebug: (message: string, meta?: Record<string, unknown>) => void;
-  logInterval?: number;
-  estimatedTaskTimeMs?: number;
-  label?: string;
+  ) => Promise<void>
+  now: () => number
+  formatDuration: (durationMs: number) => string
+  logDebug: (message: string, meta?: Record<string, unknown>) => void
+  logInterval?: number
+  estimatedTaskTimeMs?: number
+  label?: string
 }
 
 export interface IndexedWriteUpdateExecutorOptions {
-  dispatchSideEffects?: boolean;
+  dispatchSideEffects?: boolean
 }
 
 export class IndexedWriteUpdateExecutorService<TUpdate, TUpdated> {
-  private readonly waitBeforeChunk: IndexedWriteUpdateExecutorDeps<
-    TUpdate,
-    TUpdated
-  >["waitBeforeChunk"];
-  private readonly updateOne: IndexedWriteUpdateExecutorDeps<
-    TUpdate,
-    TUpdated
-  >["updateOne"];
-  private readonly updateChunk: IndexedWriteUpdateExecutorDeps<
-    TUpdate,
-    TUpdated
-  >["updateChunk"];
-  private readonly refreshUpdated: IndexedWriteUpdateExecutorDeps<
-    TUpdate,
-    TUpdated
-  >["refreshUpdated"];
-  private readonly dispatchUpdated: IndexedWriteUpdateExecutorDeps<
-    TUpdate,
-    TUpdated
-  >["dispatchUpdated"];
-  private readonly runQueue: IndexedWriteUpdateExecutorDeps<
-    TUpdate,
-    TUpdated
-  >["runQueue"];
-  private readonly now: IndexedWriteUpdateExecutorDeps<
-    TUpdate,
-    TUpdated
-  >["now"];
-  private readonly formatDuration: IndexedWriteUpdateExecutorDeps<
-    TUpdate,
-    TUpdated
-  >["formatDuration"];
-  private readonly logDebug: IndexedWriteUpdateExecutorDeps<
-    TUpdate,
-    TUpdated
-  >["logDebug"];
-  private readonly logInterval: number;
-  private readonly estimatedTaskTimeMs: number;
-  private readonly label: string;
+  private readonly waitBeforeChunk: IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated>['waitBeforeChunk']
+  private readonly updateOne: IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated>['updateOne']
+  private readonly updateChunk: IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated>['updateChunk']
+  private readonly refreshUpdated: IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated>['refreshUpdated']
+  private readonly dispatchUpdated: IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated>['dispatchUpdated']
+  private readonly runQueue: IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated>['runQueue']
+  private readonly now: IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated>['now']
+  private readonly formatDuration: IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated>['formatDuration']
+  private readonly logDebug: IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated>['logDebug']
+  private readonly logInterval: number
+  private readonly estimatedTaskTimeMs: number
+  private readonly label: string
 
   constructor(deps: IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated>) {
     if (!deps.updateOne && !deps.updateChunk) {
-      throw new Error("IndexedWriteUpdateExecutor requires updateOne or updateChunk");
+      throw new Error('IndexedWriteUpdateExecutor requires updateOne or updateChunk')
     }
-    this.waitBeforeChunk = deps.waitBeforeChunk;
-    this.updateOne = deps.updateOne;
-    this.updateChunk = deps.updateChunk;
-    this.refreshUpdated = deps.refreshUpdated;
-    this.dispatchUpdated = deps.dispatchUpdated;
-    this.runQueue = deps.runQueue;
-    this.now = deps.now;
-    this.formatDuration = deps.formatDuration;
-    this.logDebug = deps.logDebug;
-    this.logInterval = deps.logInterval ?? 200;
-    this.estimatedTaskTimeMs = deps.estimatedTaskTimeMs ?? 20;
-    this.label = deps.label ?? "IndexedWriteUpdateExecutor";
+    this.waitBeforeChunk = deps.waitBeforeChunk
+    this.updateOne = deps.updateOne
+    this.updateChunk = deps.updateChunk
+    this.refreshUpdated = deps.refreshUpdated
+    this.dispatchUpdated = deps.dispatchUpdated
+    this.runQueue = deps.runQueue
+    this.now = deps.now
+    this.formatDuration = deps.formatDuration
+    this.logDebug = deps.logDebug
+    this.logInterval = deps.logInterval ?? 200
+    this.estimatedTaskTimeMs = deps.estimatedTaskTimeMs ?? 20
+    this.label = deps.label ?? 'IndexedWriteUpdateExecutor'
   }
 
   async execute(
@@ -97,56 +70,51 @@ export class IndexedWriteUpdateExecutorService<TUpdate, TUpdated> {
     options: IndexedWriteUpdateExecutorOptions = {},
   ): Promise<TUpdated[]> {
     if (records.length === 0) {
-      return [];
+      return []
     }
 
-    const updated: TUpdated[] = [];
-    const chunks = chunkIndexedWriteRecords(records, chunkSize);
-    let processedCount = 0;
-    const processStart = this.now();
+    const updated: TUpdated[] = []
+    const chunks = chunkIndexedWriteRecords(records, chunkSize)
+    let processedCount = 0
+    const processStart = this.now()
 
     await this.runQueue(
       chunks,
-      async (chunk) => {
-        await this.waitBeforeChunk();
-        const chunkStart = this.now();
+      async chunk => {
+        await this.waitBeforeChunk()
+        const chunkStart = this.now()
 
         if (this.updateChunk) {
-          await this.updateChunk(chunk);
+          await this.updateChunk(chunk)
         } else {
           for (const record of chunk) {
-            await this.updateOne!(record);
+            await this.updateOne!(record)
           }
         }
 
-        const refreshed = await this.refreshUpdated(chunk);
-        updated.push(...refreshed);
-        if (options.dispatchSideEffects !== false)
-          this.dispatchUpdated(refreshed);
+        const refreshed = await this.refreshUpdated(chunk)
+        updated.push(...refreshed)
+        if (options.dispatchSideEffects !== false) await this.dispatchUpdated(refreshed)
 
-        processedCount += chunk.length;
-        if (
-          processedCount % this.logInterval === 0 ||
-          processedCount === records.length
-        ) {
-          const chunkDuration = this.now() - chunkStart;
-          const totalDuration = this.now() - processStart;
-          const averagePerRecord =
-            processedCount > 0 ? totalDuration / processedCount : totalDuration;
-          this.logDebug("Indexed write update chunk processed", {
+        processedCount += chunk.length
+        if (processedCount % this.logInterval === 0 || processedCount === records.length) {
+          const chunkDuration = this.now() - chunkStart
+          const totalDuration = this.now() - processStart
+          const averagePerRecord = processedCount > 0 ? totalDuration / processedCount : totalDuration
+          this.logDebug('Indexed write update chunk processed', {
             processed: processedCount,
             total: records.length,
             duration: this.formatDuration(chunkDuration),
             averageDuration: this.formatDuration(averagePerRecord),
-          });
+          })
         }
       },
       {
         estimatedTaskTimeMs: this.estimatedTaskTimeMs,
         label: this.label,
       },
-    );
+    )
 
-    return updated;
+    return updated
   }
 }

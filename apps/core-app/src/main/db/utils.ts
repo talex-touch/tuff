@@ -1,5 +1,5 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
-import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, gte, inArray, like, lte, notInArray, sql } from 'drizzle-orm'
 import { resolveCurrentAuxDb, scheduleAuxWrite } from './db-write'
 
 /**
@@ -243,6 +243,75 @@ function createDbUtilsInternal(
           })
       )
     },
+    async getLegacyFileIconPage(afterId: number, limit: number) {
+      // Page only identifiers and lengths; never materialize a page of Base64.
+      return readDb
+        .select({
+          fileId: schema.fileExtensions.fileId,
+          valueLength: sql<number>`length(${schema.fileExtensions.value})`
+        })
+        .from(schema.fileExtensions)
+        .innerJoin(schema.files, eq(schema.files.id, schema.fileExtensions.fileId))
+        .where(
+          and(
+            gt(schema.fileExtensions.fileId, afterId),
+            eq(schema.files.type, 'file'),
+            eq(schema.fileExtensions.key, 'icon'),
+            like(schema.fileExtensions.value, 'data:image/png;base64,%')
+          )
+        )
+        .orderBy(schema.fileExtensions.fileId)
+        .limit(limit)
+    },
+    async getLegacyFileIconValue(fileId: number, maxLength: number): Promise<string | null> {
+      const rows = await readDb
+        .select({ value: schema.fileExtensions.value })
+        .from(schema.fileExtensions)
+        .innerJoin(schema.files, eq(schema.files.id, schema.fileExtensions.fileId))
+        .where(
+          and(
+            eq(schema.fileExtensions.fileId, fileId),
+            eq(schema.files.type, 'file'),
+            eq(schema.fileExtensions.key, 'icon'),
+            like(schema.fileExtensions.value, 'data:image/png;base64,%'),
+            lte(sql`length(${schema.fileExtensions.value})`, maxLength)
+          )
+        )
+        .limit(1)
+      return rows[0]?.value ?? null
+    },
+    async replaceFileIconValue(
+      fileId: number,
+      previousValue: string,
+      iconPath: string
+    ): Promise<boolean> {
+      const result = await runWrite(
+        db
+          .update(schema.fileExtensions)
+          .set({ value: iconPath })
+          .where(
+            and(
+              eq(schema.fileExtensions.fileId, fileId),
+              eq(schema.fileExtensions.key, 'icon'),
+              eq(schema.fileExtensions.value, previousValue),
+              inArray(
+                schema.fileExtensions.fileId,
+                db
+                  .select({ id: schema.files.id })
+                  .from(schema.files)
+                  .where(eq(schema.files.type, 'file'))
+              )
+            )
+          )
+      )
+      const statement = Array.isArray(result) ? result[0] : result
+      return Boolean(
+        statement &&
+        typeof statement === 'object' &&
+        'rowsAffected' in statement &&
+        Number(statement.rowsAffected) > 0
+      )
+    },
     async getFileExtensionsByFileIds(fileIds: number[], keys?: string[]) {
       if (fileIds.length === 0) return []
       const filters = [inArray(schema.fileExtensions.fileId, fileIds)]
@@ -306,6 +375,35 @@ function createDbUtilsInternal(
             }
           })
       )
+    },
+
+    /**
+     * Durably records that these files still owe content enrichment. Existing
+     * rows in any non-pending state are flipped back to pending — including a
+     * stale `processing` row left over from a previous version of a changed
+     * file, so the new version is re-selected by resume. Brand-new files have no
+     * progress row and are already covered by the resume query's `IS NULL`
+     * branch. Split-aware: with the search split on this forwards to the worker
+     * (the sole writer of search-index.db).
+     */
+    async markFileEnrichmentPending(fileIds: number[], updatedAt: Date = new Date()) {
+      const uniqueIds = Array.from(
+        new Set(fileIds.filter((fileId) => Number.isInteger(fileId) && fileId > 0))
+      )
+      if (uniqueIds.length === 0) return
+      for (const chunk of chunkKeys(uniqueIds)) {
+        await runWrite(
+          db
+            .update(schema.fileIndexProgress)
+            .set({ status: 'pending', progress: 0, lastError: null, updatedAt })
+            .where(
+              and(
+                inArray(schema.fileIndexProgress.fileId, chunk),
+                notInArray(schema.fileIndexProgress.status, ['pending'])
+              )
+            )
+        )
+      }
     },
 
     async getFileIndexProgressByFileIds(fileIds: number[]) {

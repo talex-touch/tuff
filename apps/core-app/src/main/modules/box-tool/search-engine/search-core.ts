@@ -122,6 +122,12 @@ const SEARCH_CACHE_ITEM_LIMIT = 200
 // sparse enough that surfacing semantically-related files adds value.
 const DEFERRED_SEMANTIC_MIN_QUERY_LENGTH = 3
 const DEFERRED_SEMANTIC_MAX_BASE_ITEMS = 20
+/**
+ * Fast-lane reads give up at the gather's per-provider budget (`taskTimeoutMs`, 3s) instead of the
+ * reader default of 15s: a fast provider whose read is still pending after 3s has already been
+ * timed out by the gather, so a longer wait would only keep the lane's single slot occupied.
+ */
+const FAST_READ_LANE_TIMEOUT_MS = 3000
 const SEARCH_TRACE_SCHEMA = 'search-trace/v1'
 const SEARCH_TRACE_SLOW_THRESHOLD_MS = 800
 
@@ -191,6 +197,14 @@ export class SearchEngineCore
   private indexWriterRouter: SourceScopedIndexWriterRouter | null = null
   private searchIndexService: SearchIndexService | null = null
   private searchIndexReadWorker: SearchIndexReadWorkerClient | null = null
+  /**
+   * Reader for fast-layer providers. The deferred file queries take 0.5–1.2s each on a large
+   * index and the read worker is a single FIFO slot, so without a lane of their own the fast
+   * providers' 1ms lookups queued behind the previous keystroke's file query and missed the
+   * 80ms fast window. Same worker script, same database, separate queue.
+   */
+  private searchIndexFastService: SearchIndexService | null = null
+  private searchIndexFastReadWorker: SearchIndexReadWorkerClient | null = null
   private usageSummaryService: UsageSummaryService | null = null
   private queryCompletionService: QueryCompletionService | null = null
   private recommendationEngine: RecommendationEngine | null = null
@@ -301,11 +315,17 @@ export class SearchEngineCore
     this.sorter = new Sorter()
     this.providerRegistry = new SearchProviderRegistry({
       getTouchApp: () => this.touchApp,
-      getSearchIndexService: () => this.searchIndexService,
+      getSearchIndexService: (provider) =>
+        provider?.priority === 'fast'
+          ? (this.searchIndexFastService ?? this.searchIndexService)
+          : this.searchIndexService,
       beforeProvidersLoad: async () => {
         await searchIndexWriter.initialize(databaseModule.getSearchDatabaseFilePath())
         await this.searchIndexService?.warmup()
         await this.searchIndexService?.waitUntilReadable()
+        // Spawns the fast lane's worker before the first keystroke needs it; the read itself is
+        // the same one-row probe the deferred lane just answered.
+        await this.searchIndexFastService?.waitUntilReadable()
       },
       onProvidersReady: () => this.startRuntimeServicesOnce(),
       onProviderDeactivated: (key, isPluginFeature, allDeactivated) => {
@@ -2077,6 +2097,18 @@ export class SearchEngineCore
       readExecutor: instance.searchIndexReadWorker
     })
     instance.searchIndexService.preloadPinyin()
+    // The fast lane skips preloadPinyin: pinyin is only used by the write path's prepareDocument,
+    // and the legacy writer plus the commit visibility barrier stay on the deferred instance.
+    instance.searchIndexFastReadWorker = new SearchIndexReadWorkerClient(
+      databaseModule.getSearchDatabaseFilePath(),
+      { lane: 'fast', timeoutMs: FAST_READ_LANE_TIMEOUT_MS }
+    )
+    instance.searchIndexFastService = new SearchIndexService(searchDb, {
+      logger: searchLogger,
+      initializationMode: 'reader',
+      readiness: searchIndexWriter,
+      readExecutor: instance.searchIndexFastReadWorker
+    })
     instance.indexWriterRouter = new SourceScopedIndexWriterRouter({
       runtime: searchIndexWriter,
       legacy: new LegacySearchIndexWriter(instance.searchIndexService),
@@ -2131,6 +2163,8 @@ export class SearchEngineCore
       invalidateRecommendations: () => instance.invalidateAppRecommendationPresentation()
     })
     fileProvider.setIndexedSourceRuntimeMutationDelegate({
+      withMutationLease: async (operation) =>
+        await indexingRuntime.withSourceMutationLease(FILE_INDEXED_SOURCE_ID, operation),
       applyBatch: async (batch) => await indexingRuntime.applySourceBatch(batch),
       applyBatchWithPersistence: async (batch, records) => {
         const result = await indexingRuntime.applySourceBatchWithPersistence(batch, records)
@@ -2432,6 +2466,8 @@ export class SearchEngineCore
     } finally {
       await this.searchIndexReadWorker?.close()
       this.searchIndexReadWorker = null
+      await this.searchIndexFastReadWorker?.close()
+      this.searchIndexFastReadWorker = null
     }
   }
 }

@@ -86,7 +86,6 @@ export class FileReconcileWorkerClient {
   }
 
   async getStatus(): Promise<WorkerStatusSnapshot> {
-    this.idleShutdown.cancel()
     const worker = this.worker
     const pendingCount = this.pending.size
     const metrics = worker ? await this.requestMetrics() : null

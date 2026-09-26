@@ -3995,6 +3995,142 @@ describe('indexingRuntime', () => {
     expect(order).toEqual(['writer-apply', 'source-drain', 'exclusive'])
   })
 
+  it('holds the recovery lease through delayed publication while a queued scan and reset wait', async () => {
+    const gate = new IndexingSourceMutationGate()
+    runtime = new IndexingRuntime({ store, sourceMutationGate: gate })
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'test-source',
+      records: [
+        {
+          sourceId: 'test-source',
+          recordId: 'recovered-record',
+          stableKey: 'recovered-record',
+          kind: 'file',
+          title: 'Recovered record'
+        }
+      ],
+      done: false
+    }
+    const order: string[] = []
+    const recoveryStarted = Promise.withResolvers<string>()
+    const persistenceReleased = Promise.withResolvers<void>()
+    const publicationSettled = Promise.withResolvers<void>()
+    let resetSettled = false
+    const scan = vi.fn(async function* () {
+      order.push('scan:source')
+      yield { sourceId: 'test-source', records: [], done: true }
+    })
+    runtime.registerSource(buildSource({ scan }))
+
+    const recovery = runtime.withSourceMutationLease('test-source', async (leaseId) => {
+      order.push('recovery:start')
+      recoveryStarted.resolve(leaseId)
+      // Standing in for the page's delayed persistence: the lease is still held here.
+      await persistenceReleased.promise
+      await runtime.applySourceBatch({ ...batch, mutationLeaseId: leaseId })
+      order.push('recovery:published')
+      publicationSettled.resolve()
+      return leaseId
+    })
+    const leaseId = await recoveryStarted.promise
+
+    const scanRun = runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
+    const resetRun = runtime
+      .resetSourceRuntimeState('test-source', { reason: IndexedSourceResetReasons.HealthRepair })
+      .then((result) => {
+        resetSettled = true
+        return result
+      })
+    // Let the queued scan and reset reach the recovery lease and stop there.
+    for (let index = 0; index < 8; index += 1) await Promise.resolve()
+
+    // Neither a scan's source work nor an exclusive reset may start under the recovery lease;
+    // waiting for that lease must never admit parser/scan work early.
+    expect(order).toEqual(['recovery:start'])
+    expect(scan).not.toHaveBeenCalled()
+    expect(resetSettled).toBe(false)
+
+    // The page's own publication must complete on the held lease rather than queue behind the
+    // successor scan (the deadlock the lease-per-page change removes).
+    persistenceReleased.resolve()
+    await publicationSettled.promise
+    expect(store.applyBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ ...batch, mutationLeaseId: leaseId })
+    )
+    expect(order).toEqual(['recovery:start', 'recovery:published'])
+
+    await expect(recovery).resolves.toBe(leaseId)
+    await scanRun
+    await expect(resetRun).resolves.toMatchObject({
+      sourceId: 'test-source',
+      error: 'reset-not-supported'
+    })
+
+    expect(order).toEqual(['recovery:start', 'recovery:published', 'scan:source'])
+    expect(resetSettled).toBe(true)
+  })
+
+  it('releases the recovery lease and drains proven mutations when its callback fails', async () => {
+    const gate = new IndexingSourceMutationGate()
+    runtime = new IndexingRuntime({ store, sourceMutationGate: gate })
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'test-source',
+      records: [
+        {
+          sourceId: 'test-source',
+          recordId: 'recovered-record',
+          stableKey: 'recovered-record',
+          kind: 'file',
+          title: 'Recovered record'
+        }
+      ],
+      done: false
+    }
+    const drainMutations = vi.fn(async () => undefined)
+    runtime.registerSource(buildSource({ drainMutations }))
+    const failure = new Error('enrichment publication failed')
+    let leaseId: string | undefined
+
+    const recovery = runtime.withSourceMutationLease('test-source', async (lease) => {
+      leaseId = lease
+      await runtime.applySourceBatch({ ...batch, mutationLeaseId: lease })
+      throw failure
+    })
+
+    await expect(recovery).rejects.toBe(failure)
+    expect(drainMutations).toHaveBeenCalledWith({ leaseId, reason: 'mutation' })
+    // A failed callback must not leak the gate: the next owner takes the same source lease.
+    await expect(
+      runtime.withSourceMutationLease('test-source', async () => 'recovered')
+    ).resolves.toBe('recovered')
+  })
+
+  it('rejects a deferred publication that carries an expired recovery lease', async () => {
+    const gate = new IndexingSourceMutationGate()
+    runtime = new IndexingRuntime({ store, sourceMutationGate: gate })
+    runtime.registerSource(buildSource())
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'test-source',
+      records: [],
+      done: false
+    }
+
+    const expiredLeaseId = await runtime.withSourceMutationLease(
+      'test-source',
+      async (lease) => lease
+    )
+    const currentLeaseId = await runtime.withSourceMutationLease(
+      'test-source',
+      async (lease) => lease
+    )
+
+    expect(currentLeaseId).not.toBe(expiredLeaseId)
+    await expect(
+      runtime.applySourceBatch({ ...batch, mutationLeaseId: expiredLeaseId })
+    ).rejects.toThrow('INDEXING_SOURCE_MUTATION_LEASE_INVALID:test-source')
+    expect(store.applyBatch).not.toHaveBeenCalled()
+  })
+
   it('drains applied reconcile mutations before releasing the lease after source failure', async () => {
     const sourceError = new Error('reconcile source failed')
     const order: string[] = []

@@ -39,7 +39,10 @@ describe('file-provider-cleanup-delete-service', () => {
     })
     const context = { runId: 'cleanup' }
 
-    await expect(service.execute(context)).resolves.toEqual({ deletedCount: 2 })
+    await expect(service.execute(context)).resolves.toEqual({
+      deletedCount: 2,
+      stalePendingCount: 0
+    })
 
     expect(getIndexedFileRecordsPage).toHaveBeenNthCalledWith(1, 0, 500, context)
     expect(getIndexedFileRecordsPage).toHaveBeenNthCalledWith(2, 2, 500, context)
@@ -84,7 +87,10 @@ describe('file-provider-cleanup-delete-service', () => {
       emitDelta
     })
 
-    await expect(service.execute({})).resolves.toEqual({ deletedCount: 0 })
+    await expect(service.execute({})).resolves.toEqual({
+      deletedCount: 0,
+      stalePendingCount: 0
+    })
     expect(deleteRecords).not.toHaveBeenCalled()
     expect(emitDelta).not.toHaveBeenCalled()
   })

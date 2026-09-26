@@ -6,6 +6,8 @@ export interface IdleWorkerShutdownControllerOptions {
 
 export class IdleWorkerShutdownController {
   private timer: ReturnType<typeof setTimeout> | null = null
+  // A metrics request can defer retirement, but must not start a fresh idle window.
+  private deadlineAt: number | null = null
 
   constructor(private readonly options: IdleWorkerShutdownControllerOptions) {}
 
@@ -13,13 +15,18 @@ export class IdleWorkerShutdownController {
     if (this.timer || this.options.timeoutMs <= 0) {
       return
     }
+    this.deadlineAt ??= Date.now() + this.options.timeoutMs
 
-    this.timer = setTimeout(() => {
-      this.timer = null
-      if (this.options.shouldShutdown()) {
-        this.options.shutdown()
-      }
-    }, this.options.timeoutMs)
+    this.timer = setTimeout(
+      () => {
+        this.timer = null
+        if (this.options.shouldShutdown()) {
+          this.deadlineAt = null
+          this.options.shutdown()
+        }
+      },
+      Math.max(0, this.deadlineAt - Date.now())
+    )
 
     if (typeof this.timer === 'object' && 'unref' in this.timer) {
       this.timer.unref()
@@ -27,6 +34,7 @@ export class IdleWorkerShutdownController {
   }
 
   cancel(): void {
+    this.deadlineAt = null
     if (!this.timer) {
       return
     }

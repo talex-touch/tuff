@@ -90,6 +90,21 @@ const HOME_ANCHORED_SYSTEM_DIRS = new Set(
     LOWERCASE_SYSTEM_DIRS.has(name),
   ),
 );
+
+/**
+ * Toolchain caches that sit directly under a home directory without a dot prefix, as lowercase
+ * segment paths relative to the home directory. A rule matches the directory it names and every
+ * directory below it.
+ *
+ * These are not document folders, and they are large: on the 2026-09-26 dev profile `~/go/pkg`
+ * (Go's module cache and build artefacts) held 222,047 of the 276,277 indexed files, and
+ * `~/OrbStack` is a mount of virtual-machine filesystems. Neither is caught by the leaf-name lists
+ * (`go`, `pkg`, `mod`, `orbstack` are ordinary words) nor by the dot-prefix rule.
+ */
+const HOME_ANCHORED_TOOLCHAIN_PATHS: ReadonlyArray<readonly string[]> = [
+  ["go", "pkg"],
+  ["orbstack"],
+];
 const LOWERCASE_SYSTEM_METADATA_NAMES = lowerCaseSet(
   SYSTEM_METADATA_FILE_NAMES,
 );
@@ -158,15 +173,60 @@ function isHomeDirectoryChild(
   normalizedPath: string,
   segments: readonly string[],
 ): boolean {
-  if (segments.length === 3) {
-    return (
-      normalizedPath.startsWith("/") && /^(?:users|home)$/i.test(segments[0] ?? "")
-    );
+  return homeRelativeSegments(normalizedPath, segments)?.length === 1;
+}
+
+/**
+ * The segments below the home directory, or `null` when the path is not inside one.
+ *
+ * Same shape rule as {@link isHomeDirectoryChild}: `/Users/<u>/…` and `/home/<u>/…` on POSIX,
+ * `<drive>:/Users/<u>/…` on Windows. The home directory itself yields an empty array.
+ */
+function homeRelativeSegments(
+  normalizedPath: string,
+  segments: readonly string[],
+): readonly string[] | null {
+  if (
+    normalizedPath.startsWith("/") &&
+    segments.length >= 2 &&
+    /^(?:users|home)$/i.test(segments[0] ?? "")
+  ) {
+    return segments.slice(2);
   }
-  return (
-    segments.length === 4 &&
+  if (
+    segments.length >= 3 &&
     /^[a-z]:$/i.test(segments[0] ?? "") &&
     /^users$/i.test(segments[1] ?? "")
+  ) {
+    return segments.slice(3);
+  }
+  return null;
+}
+
+/** Whether the directory is one of {@link HOME_ANCHORED_TOOLCHAIN_PATHS} or sits below one. */
+function isHomeAnchoredToolchainPath(
+  normalizedPath: string,
+  segments: readonly string[],
+): boolean {
+  const relative = homeRelativeSegments(normalizedPath, segments);
+  if (!relative || relative.length === 0) return false;
+  return HOME_ANCHORED_TOOLCHAIN_PATHS.some(
+    (rule) =>
+      rule.length <= relative.length &&
+      rule.every((segment, index) => relative[index]?.toLowerCase() === segment),
+  );
+}
+
+/** `~/Library/Mobile Documents` and below: iCloud Drive, the one user-document area under Library. */
+function isInsideICloudDrive(
+  normalizedPath: string,
+  segments: readonly string[],
+): boolean {
+  const relative = homeRelativeSegments(normalizedPath, segments);
+  if (!relative || relative.length < 2) return false;
+  return (
+    relative[0]?.toLowerCase() === "library" &&
+    relative[1]?.toLowerCase() === "mobile documents"
   );
 }
 
@@ -310,6 +370,7 @@ export class FileFilterService {
     ) {
       return "system-path";
     }
+    if (isHomeAnchoredToolchainPath(normalized, segments)) return "cache-path";
     if (byLeafName && LOWERCASE_TEMP_DIRS.has(lowerDirectoryName))
       return "cache-path";
 
@@ -454,6 +515,17 @@ export class FileFilterService {
     const extensionReason = getSearchExtensionReason(extension);
     if (extensionReason) return extensionReason;
 
+    // The directory rules the index applies at write time also apply at read time. Rows written
+    // under an older rule set (222k `~/go/pkg/mod` files on the 2026-09-26 dev profile) stay in
+    // the tables until the budgeted cleanup reaches them; without this check they kept appearing
+    // in results for hours. Spotlight and Everything rows pass through the same gate, which is
+    // the agreed behaviour: one exclusion vocabulary for every file source.
+    const containingReason = this.getReadTimeDirectoryExclusionReason(
+      path,
+      target.isDirectory === true,
+    );
+    if (containingReason) return containingReason;
+
     return null;
   }
 
@@ -498,6 +570,59 @@ export class FileFilterService {
       filePath.slice(0, separator),
       options,
     );
+  }
+
+  /**
+   * The directory rules a result row can be judged by without touching the filesystem.
+   *
+   * A walker decides `build`, `dist`, `out` and the other ordinary English words from the folder's
+   * siblings (#1727: a project marker beside them). A result row carries only its path, so those
+   * names are left alone here — `~/Documents/build/2026/report.pdf` stays — and only the rules
+   * that hold regardless of context are applied: unconditional dev names anywhere on the path
+   * (`node_modules`, `.git`, …), home-anchored toolchain caches, and system locations. iCloud
+   * Drive lives under `~/Library/Mobile Documents` and is the user's own documents, so the
+   * `~/Library` system rule is switched off below it (user decision, 2026-09-26).
+   */
+  private getReadTimeDirectoryExclusionReason(
+    filePath: string,
+    isDirectory: boolean,
+  ): FileFilterReason | null {
+    let directoryPath = filePath;
+    if (!isDirectory) {
+      const separator = Math.max(
+        filePath.lastIndexOf("/"),
+        filePath.lastIndexOf("\\"),
+      );
+      if (separator < 0) return null;
+      directoryPath = filePath.slice(0, separator);
+    }
+    if (!directoryPath) return null;
+
+    const segments = pathSegments(directoryPath);
+    for (const segment of segments) {
+      const lower = segment.toLowerCase();
+      if (
+        LOWERCASE_DEV_DIRS.has(lower) &&
+        !LOWERCASE_CONTEXT_DEPENDENT_DIRS.has(lower)
+      ) {
+        return "development-path";
+      }
+    }
+
+    const normalized = normalizePath(directoryPath);
+    const options: FileScanOptions = {
+      ...DEFAULT_SCAN_OPTIONS,
+      enableDevPathFilter: false,
+      enableCachePathFilter: false,
+      enableSystemPathFilter: isInsideICloudDrive(normalized, segments)
+        ? false
+        : DEFAULT_SCAN_OPTIONS.enableSystemPathFilter,
+    };
+    // An empty sibling list marks a caller that cannot see the folder: context-dependent leaf
+    // names stay quiet and the unanchored substring patterns are skipped, as for a walker.
+    return this.getTraversalExclusionReason(directoryPath, options, {
+      siblingNames: [],
+    });
   }
 }
 
