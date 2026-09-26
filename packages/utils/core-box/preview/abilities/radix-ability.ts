@@ -125,14 +125,14 @@ function parseDigits(raw: string, fallbackBase: number): bigint | null {
 }
 
 function formatValue(value: bigint, targetBase: number): string {
-  const negative = value < 0n;
+  const negative = value < BigInt(0);
   const magnitude = negative ? -value : value;
-  const prefix = magnitude === 0n ? "" : RADIX_PREFIX_BY_BASE[targetBase];
+  const prefix = magnitude === BigInt(0) ? "" : RADIX_PREFIX_BY_BASE[targetBase];
   return `${negative ? "-" : ""}${prefix}${magnitude.toString(targetBase)}`;
 }
 
 function formatGrouped(value: bigint): string {
-  const negative = value < 0n;
+  const negative = value < BigInt(0);
   const magnitude = (negative ? -value : value).toString(10);
   return `${negative ? "-" : ""}${magnitude.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
@@ -240,7 +240,7 @@ export class RadixConversionAbility extends BasePreviewAbility {
     const parsed = parseRadixQuery(text);
     if (!parsed) return null;
 
-    const magnitude = parsed.value < 0n ? -parsed.value : parsed.value;
+    const magnitude = parsed.value < BigInt(0) ? -parsed.value : parsed.value;
     const bits = magnitude.toString(2).length;
 
     const payload: PreviewCardPayload = {

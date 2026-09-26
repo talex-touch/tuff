@@ -82,7 +82,7 @@ describe('closeSelfClosingComponentTags', () => {
     for (const html of [
       '<br />',
       '<img src="/logo.svg" alt="" />',
-      '<i class="i-ri-home-line" />',
+      '<i class="i-carbon-home" />',
       '<tuff-doc-source-link />',
       '<my-widget data-x="1" />',
     ])
