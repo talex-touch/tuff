@@ -1,0 +1,30 @@
+{
+  "id": "stat-card-glow-badge",
+  "name": "stat-card-glow-badge",
+  "title": "TxStatCard 发光图标徽章",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-25",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-25-tuffex-jelly-indicator-polish",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "完成 TxStatCard 发光图标徽章 分批提交与主线合并验证。",
+    "blocker": "无阻塞项。",
+    "evidence": "TxStatCard 发光图标徽章: - 读 `tuffex-design-rules.md`（Borders / Colour / Motion）、`tuffex-docs-sync.md`（Demos、Gallery specimens、Gates）、research/stat-card.md §2–§7。; - 实现 agent：徽章 DOM / 样式、模块级主题观察器（`stat-card/src/theme-change.ts`）、槽位变量、容器查询窄态、progress 跟随取色；测试 12 例；文档中英 + demo（四色调）+ 画廊格子；CSS 较 HEAD +1064 B。;"
+  }
+}

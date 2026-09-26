@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "reduced-motion contract and hover rules for the three indicators"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "One writer per CSS custom property (drop :style bindings the engine now writes), preserve public class names"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "tab-bar / flat-radio / sidebar-nav / fine-tune-card zh+en docs, wrapper blast radius (TxFineTuneCard wraps TxFlatRadio)"}
+{"file": ".trellis/spec/frontend/bui-component-family.md", "reason": "TxSidebarNav is a BUI component with an unscoped style block"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "shared worktree, build lock, :3200 restart etiquette"}
+{"file": ".trellis/tasks/09-25-jelly-indicator-engine/design.md", "reason": "useJellyIndicator API"}
+{"file": ".trellis/tasks/09-25-indicator-family-jelly/research/indicator-family.md", "reason": "per-component measurement/paint/transition/tests/consumers/docs inventory"}

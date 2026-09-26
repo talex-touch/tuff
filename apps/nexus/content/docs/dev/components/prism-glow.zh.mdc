@@ -1,0 +1,322 @@
+---
+title: "PrismGlow 棱镜光"
+description: "从元素一条边升起的光谱色光锥，从左往右流动，用于加载与工作中状态"
+category: Effects
+status: beta
+since: 0.6.0
+tags: [glow, prism, loading, effect, spectrum]
+syncStatus: reviewed
+verified: true
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxPrismGlow } from '@talex-touch/tuffex/prism-glow'
+  import '@talex-touch/tuffex/prism-glow/style.css'
+  import '@talex-touch/tuffex/base.css' // 设计令牌与重置样式，全应用引入一次
+---
+:::
+
+## 用法
+
+宿主的一条边上升起六束光谱色光锥，各以不同速度从左往右流动，追上时融合、拉开时分裂，用来表示加载或工作中。
+
+### 卡片
+
+根元素本身就是卡片：背景和圆角写在根元素上，光画在这层背景之上、插槽之下。下面的控件对应前五个属性，另外两个见「变高即收起」。
+
+:::TuffDemoWrapper{demo="PrismGlowShowcaseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref(true)
+  const palette = ref<'spectrum' | 'accent'>('spectrum')
+  </script>
+
+  <template>
+    <TxPrismGlow
+      class="canvas-card"
+      :active="active"
+      :palette="palette"
+      placement="bottom"
+      :intensity="1"
+      :duration="6"
+    >
+      <strong>正在生成画布</strong>
+      <span>根据提示词生成 3 个图层</span>
+    </TxPrismGlow>
+    <TxSwitch v-model="active" aria-label="active" />
+    <TxFlatRadio v-model="palette" size="sm" aria-label="palette">
+      <TxFlatRadioItem value="spectrum" label="spectrum" />
+      <TxFlatRadioItem value="accent" label="accent" />
+    </TxFlatRadio>
+  </template>
+
+  <style scoped>
+  /* 背景和圆角给根元素：光层画在它的背景之上、插槽之下 */
+  .canvas-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 200px;
+    padding: 18px 20px;
+    border-radius: 16px;
+    background: var(--tx-bg-color-overlay);
+  }
+  </style>
+---
+:::
+
+### 变高即收起
+
+光亮着时宿主一变高，光就在约 140ms 内缩回发光的那条边并消失，不走 0.45s 的淡出，免得光拖在刚落下的内容上。收起后保持关闭，直到 `active` 关掉再打开。
+
+点「加载内容」，要点落下、卡片变高，光立即收起；点「重置」，要点收起，`active` 关掉再打开，光重新亮起。
+
+:::TuffDemoWrapper{demo="PrismGlowGrowDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { nextTick, ref } from 'vue'
+
+  const active = ref(true)
+  const loaded = ref(false)
+
+  // 收起会一直保持，直到 active 关掉再打开
+  async function reset() {
+    loaded.value = false
+    active.value = false
+    await nextTick()
+    active.value = true
+  }
+  </script>
+
+  <template>
+    <!-- 默认监听根元素：要点落下、卡片变高，光立即收起 -->
+    <TxPrismGlow class="summary-card" :active="active">
+      <strong>会议摘要</strong>
+      <span role="status">{{ loaded ? '已生成 3 条要点' : '正在生成摘要…' }}</span>
+      <ul v-if="loaded">
+        <li>发布时间改到下周三。</li>
+        <li>设计评审前补齐暗色截图。</li>
+        <li>性能回归指派给了搜索小组。</li>
+      </ul>
+    </TxPrismGlow>
+    <TxButton size="sm" variant="primary" :disabled="loaded" @click="loaded = true">加载内容</TxButton>
+    <TxButton size="sm" variant="secondary" :disabled="!loaded" @click="reset">重置</TxButton>
+  </template>
+
+  <style scoped>
+  /* 不定高度：要点落下时卡片随之变高；min-height 只是给光留出空间 */
+  .summary-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 140px;
+    padding: 18px 20px;
+    border-radius: 16px;
+    background: var(--tx-bg-color-overlay);
+  }
+  </style>
+---
+:::
+
+### 覆盖层
+
+不传插槽时，组件可以铺在任意宿主的内容背后，CoreBox 搜索栏就是这样用的：
+
+- 宿主自己要是层叠上下文（`position: relative; z-index: 0` 或 `isolation: isolate`）；
+- 用一个类把组件根元素设为 `position: absolute; inset: 0; z-index: -1`。
+
+点「搜索」后光亮起约 2.4 秒再淡出，期间输入框照常可用。
+
+:::TuffDemoWrapper{demo="PrismGlowSearchDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { onBeforeUnmount, ref } from 'vue'
+
+  const searching = ref(false)
+  let timer: number | undefined
+
+  function search() {
+    searching.value = true
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => { searching.value = false }, 2400)
+  }
+
+  onBeforeUnmount(() => window.clearTimeout(timer))
+  </script>
+
+  <template>
+    <form class="search-bar" role="search" @submit.prevent="search">
+      <TxPrismGlow class="search-bar__glow" :active="searching" />
+      <input placeholder="搜索应用、文件与命令" aria-label="搜索应用、文件与命令">
+      <TxButton native-type="submit" size="sm" variant="primary">搜索</TxButton>
+      <!-- 组件不播报，状态文字由宿主提供 -->
+      <span class="sr-only" role="status">{{ searching ? '正在搜索' : '' }}</span>
+    </form>
+  </template>
+
+  <style scoped>
+  /* 宿主是层叠上下文：光层的 z-index: -1 落在它的背景之上 */
+  .search-bar {
+    position: relative;
+    z-index: 0;
+    display: flex;
+    align-items: center;
+    height: 56px;
+    border-radius: 14px;
+    background: var(--tx-bg-color-overlay);
+  }
+
+  /* 根元素的 position: relative 特异性为零，这里直接覆盖 */
+  .search-bar__glow {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+  }
+  </style>
+---
+:::
+
+### 最佳实践
+
+- 只在"正在进行"时打开：开始时把 `active` 设为 `true`，结束时设回 `false`。关闭后光层淡出并卸载，不留运行中的动画。不要把它当常驻装饰。
+- 光放在不会变高的部分里时（例如 CoreBox 固定高度的头部），用 `growTarget` 指向会随内容变高的外层容器，否则内容落下时光不会收起。只有宿主在加载期间本来就会改变高度（展开动画、流式输出逐行变高）时，才关掉 `collapseOnGrow`。
+- 由宿主说明状态：组件不渲染文字，也不播报，旁边要有可见的状态文字或 `role="status"` 区域（可以是 sr-only）。
+- 背景给根元素或宿主，不要给插槽：光层在插槽之下，插槽里铺了不透明底色就会把光盖住。
+- 覆盖层用法里，宿主必须是层叠上下文；否则 `z-index: -1` 会让光层落到宿主背景之下，看不见。
+- 主要文字放在远离光源的一侧（`placement="bottom"` 时放上半部）：光铺在文字背后会降低对比度。
+- 一个视图里只放一处：这是强注意力效果。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `active` | `boolean` | `true` | 开 / 关。打开时光层 0.3s 淡入；关闭时 0.45s 淡出，随后卸载。关闭期间不渲染任何光层。亮着时被监听元素变高会让光提前收起，见 `collapseOnGrow` |
+| `palette` | `'spectrum' \| 'accent'` | `'spectrum'` | `spectrum`：色相分布在整个色环上的六种颜色；`accent`：由 `--tx-color-primary` 派生的六个相邻色相 |
+| `placement` | `'bottom' \| 'top'` | `'bottom'` | 光从哪条边升起；两种情况下都从左往右流动 |
+| `intensity` | `number` | `1` | 光层整体不透明度，取值 0–1。超出范围会被钳制，非有限数按 `1` 处理。不影响插槽 |
+| `duration` | `number` | `6` | 以秒计的流速基准，越小越快；每束光锥按自己的倍数（0.9–1.38）换算。不是正的有限数时回退到 `6` |
+| `collapseOnGrow` | `boolean` | `true` | 光亮着或正在淡出时，被监听元素变高超过 8px，光在约 140ms 内缩回发光的那条边并消失，不走 0.45s 的淡出；之后保持关闭，直到 `active` 关掉再打开。变矮不触发 |
+| `growTarget` | `HTMLElement \| null` | `null` | `collapseOnGrow` 监听哪个元素的高度。`null` 表示组件根元素，包裹和覆盖层两种用法里它都等于宿主。光放在不会变高的部分里（例如固定高度的头部）时，指向会变高的外层容器 |
+
+### 插槽
+
+| 插槽 | 说明 |
+|------|------|
+| `default` | 内容，渲染在光层之上。不传时组件可以作为覆盖层铺在宿主背后 |
+
+### CSS 变量
+
+两个变量由属性在每次渲染时写进根元素的内联样式，改值请用属性：
+
+| 变量 | 来源 | 说明 |
+|------|------|------|
+| `--tx-prism-glow-intensity` | `intensity` | 光层不透明度，已钳制到 0–1 |
+| `--tx-prism-glow-duration` | `duration` | 流速基准，带 `s` 单位 |
+
+其余参数在根元素上声明，亮色、暗色各有一套默认值：
+
+| 变量 | 亮色 | 暗色 | 说明 |
+|------|------|------|------|
+| `--tx-prism-glow-l` / `--tx-prism-glow-c` | `0.76` / `0.19` | `0.74` / `0.19` | 光锥颜色的 oklch 亮度与彩度 |
+| `--tx-prism-glow-l-core` / `-c-core` / `-a-core` | `0.78` / `0.18` / `0.5` | `0.95` / `0.05` / `0.78` | 贴边核心的亮度、彩度与不透明度：暗色近白，亮色保持彩色 |
+| `--tx-prism-glow-a-halo` | `0.22` | `0.3` | 光晕的不透明度 |
+| `--tx-prism-glow-a-fringe` | `0.3` | `0.44` | 两侧色散晕边的不透明度 |
+| `--tx-prism-glow-a-ray` | `0.05` | `0.07` | 竖向光柱的不透明度 |
+| `--tx-prism-glow-blend` | `normal` | `plus-lighter` | 光锥之间的混合模式 |
+| `--tx-prism-glow-reach` | `1` | `1` | 光锥高度系数；高对比模式下为 `0.45`，变高收起时离场的光层上为 `0` |
+
+- `accent` 调色板从 `--tx-color-primary` 读取色相。
+- 覆盖这些参数时，选择器要比组件的主题块更具体（亮色块是 `.tx-prism-glow`，暗色块是 `:is([data-theme='dark'], .dark) .tx-prism-glow`），并给暗色单独写一份。
+- `--tx-pg-*` 是内部变量，不属于 API。
+
+## 概述
+
+- 根元素是 `div.tx-prism-glow`，带 `tx-prism-glow--{palette}` 和 `tx-prism-glow--{placement}` 两个修饰类（变高收起期间另带 `is-collapsing`），并设了 `isolation: isolate`，自成层叠上下文。
+- 光层 `.tx-prism-glow__field` 是 `position: absolute; inset: 0; z-index: -1`：
+  - 画在根元素背景之上、插槽之下，不会掉到宿主页面后面；
+  - 按根元素的圆角裁切（`border-radius: inherit` 加 `overflow: hidden`），不参与布局。
+- 光层带 `aria-hidden="true"` 和 `pointer-events: none`，插槽内容照常可点击、可选中文本。
+- 覆盖层用法：根元素的 `position: relative` 写在 `:where(.tx-prism-glow)` 里，特异性为零。无论样式表的加载顺序如何，宿主的类都能把它改成 `position: absolute; inset: 0; z-index: -1`。宿主需要是层叠上下文。CoreBox 搜索栏就是这样用的。
+- `active` 由 `false` 变为 `true`：光层挂载，0.3s 淡入。由 `true` 变为 `false`：光层 0.45s 淡出，结束后卸载，不留光锥，也不留运行中的动画。插槽始终不受影响；组件不发事件。
+- 变高即收起（`collapseOnGrow`，默认开启）：
+  - 光亮着（`active` 为 `true` 且还没收起）时，被监听元素比光亮起以来的最低高度高出 8px 以上，光锥和光柱就在约 140ms 内缩回发光的那条边，光层同时淡出，随后卸载。8px 以内的变化（亚像素取整、网页字体替换带来的重排）和变矮都不触发；
+  - 离场的光层固定在变高之前的根元素高度上，光锥在原处缩回，不跟着宿主拉长；
+  - 收起后保持关闭，宿主变回原来的高度也不会重新亮起；`active` 关掉再打开才恢复，并从那时的高度重新开始量；
+  - `active` 关闭后的 0.45s 淡出期间变高同样会触发：剩下的淡出在约 140ms 内结束，光锥一样缩回。`items = data; loading = false` 写在同一次更新里就是这种情况；
+  - 被监听元素默认是根元素，可以用 `growTarget` 换成别的元素，换了之后重新开始量。
+- 打开后的第一帧就在流动中：每束光锥都有负的动画延迟，不用等第一束光从左边进来。
+- 六束光锥各用 `duration` 的 0.9–1.38 倍横穿一次，周期两两不同，所以会不断追上、融合、再拉开：
+  - 每次横穿的前 16% 从边缘升起，最后 16% 下沉淡出；
+  - 每束光还会来回胀缩，胀或缩一次用 `duration` 的 0.38–0.58 倍。
+- `placement="top"` 把整个光层上下翻转（`scaleY(-1)`）：光从顶边垂下，仍然从左往右流动。
+- 暗色判定看祖先：任一祖先带 `[data-theme='dark']` 或 `.dark` 时用暗色参数（近白核心、`plus-lighter` 叠加），否则用亮色参数（彩色核心、`normal` 叠加）。组件没有主题属性。
+- `prefers-reduced-motion: reduce`：
+  - 所有动画和进出场过渡停止；
+  - 六束光锥停在一帧完整的画面上：全部升起、完全点亮，从左边缘到右边缘均匀排开（间隔 12cqw）；
+  - 光层随 `active` 立即出现、立即消失；变高收起也不做回缩，光层当即消失。
+- 高对比模式（`html.contrast`、`html[data-tx-contrast='high']`，或 `prefers-contrast: more` 且没有 `html[data-tx-contrast='normal']`）：`--tx-prism-glow-reach` 降到 `0.45`，光锥收成贴着边缘的一条带，光柱隐藏，避免在文字背后铺色。
+- 组件不渲染任何文字，也不播报状态；状态文字由宿主提供。
+
+## 技术实现
+
+- 只动合成器属性：
+  - `translate` 负责行进，`scale` 负责升起与胀缩，`opacity` 负责淡入淡出；
+  - 它们分在光锥和光束两层元素上，没有两个动画写同一个属性；
+  - keyframes 里不写 `var()`，动画整个交给合成器，渲染主线程繁忙时（比如搜索进行中）照样流畅；
+  - 没有 JS 帧循环，没有 `filter` / `backdrop-filter`，也没有尺寸或布局动画。
+- 光锥宽度和行进距离用容器单位 `cqw`。光层是 `container-type: size` 的尺寸容器，尺寸由 `inset: 0` 决定，与内容无关。
+- 变高检测：
+  - 一个 ResizeObserver 监听 `growTarget`（默认根元素）的高度，同时按边框盒监听根元素，记下离场时要固定到的高度。光层是 `inset: 0`，占满根元素的内边距盒，所以这个高度是观察到的内容盒高度加上下内边距；收起之后照常更新；
+  - 回调在布局之后、绘制之前执行，收起在同一次刷新里开始离场。`before-leave` 钩子把离场的光层写成 `top: 0; bottom: auto; height: <变高前的根元素高度>`，拉长的那一帧不会画出来。值写在离场元素本身上，因为 `v-if` 正在移除的节点不再接收新的绑定；
+  - 回缩由根元素的 `is-collapsing` 类驱动：离场的光层把 `--tx-prism-glow-reach` 设为 `0`，光束和光柱的 `transform` 与光层的 `opacity` 都在 0.14s 内过渡，仍然只动合成器属性；
+  - 淡出途中变高：正在进行的 `opacity` 过渡通过 Web Animations 的 `playbackRate` 加速，剩下的部分约 140ms 内结束；淡出还没开始（与变高落在同一次更新里）时，由 `is-collapsing` 直接给出 0.14s 的过渡。
+- 混合：
+  - 暗色下光锥之间用 `plus-lighter` 加法混合，重叠处叠加发白，看起来就是两束光融合；
+  - 亮色表面上加法混合看不出来，近白核心还会显得发灰，所以亮色改用 `normal` 混合、核心保持彩色，用高彩度、低不透明度让三束光重叠时依然干净。
+- 颜色：
+  - 每束光锥只有一个色调变量，贴边核心、两侧色散晕边（色相各偏 ±34°）、光晕、贴边 1.5px 亮线和光柱都通过相对颜色 `oklch(from …)` 从它派生；
+  - 光谱调色板只给色相角（350 / 95 / 205 / 300 / 150 / 258），亮度和彩度取主题参数；`accent` 只把色调来源换成 `--tx-color-primary`；
+  - 光柱由 `repeating-conic-gradient` 画出，再用径向遮罩收边；遮罩只读 alpha，用色调本身作不透明色标；
+  - 样式表里除 `var()` 的兜底值外没有颜色字面量。
+- 六束光锥的参数（色相、主题色偏移、周期、相位、胀缩周期、尺寸、降级画面里的位置）定义在 `cones.ts`，以内联自定义属性挂在各自的元素上，样式表对六束光锥只写一条规则。
+- 否决过的方案：
+  - 亮色用 `multiply` 混合：蓝和黄会混出橄榄绿；
+  - WebGL / canvas：帧循环跑在渲染主线程上，宿主越忙越卡，而搜索进行中恰恰是最忙的时候。
+- 观感参考 George Hastings（@soulegit）2026-09-23 发布的 Unicorn Studio「New AI canvas loading state」视频。只借鉴观感，没有代码来源。
+- 源码：`packages/tuffex/packages/components/src/prism-glow/src/TxPrismGlow.vue`；光锥参数在 `cones.ts`，类型在 `types.ts`。
+- **实测覆盖：** `prism-glow/__tests__/prism-glow.test.ts`，共 17 个用例：
+  - 组件：插槽与 `aria-hidden` 光层分开渲染；六束光锥各带自己的参数，周期两两不同；光层只在 `active` 时挂载，先淡出再卸载；调色板与方向的修饰类；`intensity` / `duration` 的绑定、钳制与回退；
+  - 变高即收起（用替身 ResizeObserver 驱动）：第一次测量只定基准，8px 以内的变化（含字体替换的重排）不触发；变高后立即收起，离场的光层固定在变高前的高度；淡出途中变高同样收起，固定在淡出开始时的高度，正在进行的淡出按剩余时长加速到约 140ms 内结束；固定的是根元素的内边距盒高度（内容盒加上下内边距）；收起后继续记录根元素高度，重新亮起后再淡出时固定在变高后的高度；变回原高不会重新亮起，`active` 关掉再打开才恢复，并从那时的高度重新量；基准取光亮起以来的最低高度；`collapseOnGrow` 关闭时不收起；传了 `growTarget` 时只看它变高、根元素变高不算，光层固定在根元素的高度；`growTarget` 改回 `null` 后只监听根元素；
+  - 编译后的样式：keyframes 只动 `translate` / `scale` / `opacity` 且不含 `var()`；每个动画名都对应一个 `tx-prism-glow-*` keyframes；reduced-motion 停掉所有动画与过渡（包括收起的回缩），并给出从左到右铺满的静态终态；光层立即出现、立即消失；`var()` 兜底值之外没有颜色字面量。
+
+## 使用场景
+
+- 卡片、输入框、搜索栏或消息输入框上的加载 / 工作中状态。
+- 较长的 AI 生成（画布、图片、长回答）等待期间。
+- CoreBox 搜索栏的"搜索中"状态，这是它的第一个使用方。
+
+## 相关组件
+
+- [BorderBeam 流光边框](/docs/dev/components/border-beam)：沿边框游走或呼吸的光束，用来强调卡片、按钮与搜索框；画的是边框，不是从边缘升起的光锥。
+- [ThinkingOrb 思考指示球](/docs/dev/components/thinking-orb)：canvas 绘制的独立指示球，自带 `label`。需要单独一个元素表示"正在思考"时用它；要让已有的卡片或输入框本身亮起来，用棱镜光。
+- [GlowText 扫光](/docs/dev/components/glow-text)：在文字或卡片上扫过一道高光。
+
+<!-- 必须是全文最后一个节点：这个组件没有插槽，HTML 解析器不认自闭合写法，写在它后面的内容会变成它的子节点，从页面上消失。 -->
+<TuffDocSourceLink />

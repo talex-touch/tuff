@@ -35,10 +35,10 @@ from `packages/tuffex/packages/components/src/liquid/src/spring.ts`. Upstream to
 its own spring compiler and CSS-easing parser; both were dropped in the port.
 
 This is deliberate, and it is the reason `TxTextMorph` and `TxLiquid` settle on the same curves.
-(`TxSlider`'s thumb left this compiler on 2026-09-06: it and every sliding indicator now integrate
-the jelly spring per frame through `utils/animation/jelly.ts` / `utils/use-jelly-indicator.ts`,
-because their targets move under them; see component-guidelines "Sliding indicators ride
-`useJellyIndicator`".) Do not reintroduce a second spring compiler, and do not "tidy" the
+(`TxSlider`'s thumb left this compiler on 2026-09-06: it and Radio's indicator integrate the jelly
+spring per frame through `utils/animation/jelly.ts` / `utils/use-jelly-indicator.ts`, because their
+targets move under them, and the tabs family's glide integrates through `springSteps` (below); see
+component-guidelines "Sliding indicators ride `useJellyIndicator`".) Do not reintroduce a second spring compiler, and do not "tidy" the
 cross-directory import away — `liquid/src/spring.ts` is a leaf module with no Vue and no CSS,
 so importing it costs nothing.
 
@@ -91,10 +91,11 @@ v += (k * (target - x) - c * v) * dt; x += v * dt
 ;[x, v] = springSteps(x, v, target, 'smooth', dt)
 ```
 
-Carve-out: sliding indicators keep `useJellyIndicator`'s own per-frame integrator (Radio's
-reference feel, extracted unchanged; JELLY 110/12, `dt ≤ 24 ms`). Porting it onto `springSteps`
-would re-tune every indicator's feel, so do not "dedupe" it — see component-guidelines "Sliding
-indicators ride `useJellyIndicator`" → "Relation to springSteps".
+Carve-out: Radio's indicator (the `jelly` material) keeps `useJellyIndicator`'s own per-frame
+integrator (its reference feel, extracted unchanged; JELLY 110/12, `dt ≤ 24 ms`). Porting it onto
+`springSteps` would re-tune Radio, so do not "dedupe" it. The tabs family's `glide` material is no
+exception: it is integrated with `springSteps`, passed in as `integrate` — see component-guidelines
+"Sliding indicators ride `useJellyIndicator`" → "Relation to springSteps".
 
 ## Styles are not scoped, on purpose
 

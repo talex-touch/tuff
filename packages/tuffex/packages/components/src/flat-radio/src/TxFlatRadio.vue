@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import type { JellyIndicatorFrame } from '../../../../utils/use-jelly-indicator'
 import type { TxFlatRadioProps, TxFlatRadioSize, TxFlatRadioValue } from './types'
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, provide, ref, toRefs, watch } from 'vue'
+import { useJellyIndicator } from '../../../../utils/use-jelly-indicator'
+import { springSteps } from '../../liquid/src/spring'
 import { FLAT_RADIO_KEY } from './types'
 
 defineOptions({ name: 'TxFlatRadio' })
@@ -110,12 +113,50 @@ provide(FLAT_RADIO_KEY, {
 
 // --- Indicator (single-select only) ---
 const containerRef = ref<HTMLElement | null>(null)
-const indicatorStyle = ref<Record<string, string>>({
-  opacity: '0',
-  transform: 'translateX(0)',
-  width: '0px',
+const indicatorRef = ref<HTMLElement | null>(null)
+// `no-transition` holds the fade off for layout moves (mount, resize, an item
+// registering), so the thumb appears in place instead of fading up there. It
+// starts on: the first landing is a layout move.
+const indicatorTransition = ref(false)
+
+// The engine writes the thumb's transform, width and opacity itself, every
+// frame, so the template binds none of them (one writer per property) and a
+// trip does not re-render the group. Its top and height stay with the CSS.
+let lastFrame: JellyIndicatorFrame | null = null
+
+function writeIndicator(el: HTMLElement, frame: JellyIndicatorFrame): void {
+  el.style.opacity = frame.visible ? '1' : '0'
+  el.style.width = `${frame.rect.width}px`
+  el.style.transform = `translate3d(${frame.rect.x}px, 0, 0) scale(${frame.scaleX.toFixed(3)}, ${frame.scaleY.toFixed(3)})`
+}
+
+// The glide material, as for the tabs family: the thumb's ends ride their own
+// springs, so it lengthens a little on the way and gathers again; it never
+// scales.
+const engine = useJellyIndicator({
+  axis: 'x',
+  material: 'glide',
+  integrate: springSteps,
+  // The track's ends: nothing the springs do may carry the thumb out of it.
+  bounds: () => {
+    const root = containerRef.value
+    // A track not laid out yet has no extent; a zero-width wall would clamp
+    // the trailing end straight onto the target.
+    return root && root.clientWidth > 0 ? { start: 0, end: root.clientWidth } : null
+  },
+  onFrame(frame) {
+    lastFrame = frame
+    if (indicatorRef.value)
+      writeIndicator(indicatorRef.value, frame)
+  },
 })
-const indicatorTransition = ref(true)
+
+// The thumb is behind `v-if="!multiple"`, so it can mount after the frame it
+// should show.
+watch(indicatorRef, (el) => {
+  if (el && lastFrame)
+    writeIndicator(el, lastFrame)
+}, { flush: 'sync' })
 
 // `offsetLeft` / `offsetWidth` round to whole pixels, so the thumb landed up to
 // 1px off its item and by a different amount per item, which reads as wobble
@@ -125,7 +166,7 @@ function readGeometry(el: HTMLElement, root: HTMLElement): { left: number, width
   const box = root.getBoundingClientRect()
 
   // Rects are visual pixels: an ancestor transform or browser zoom scales them,
-  // while the translateX below is in the container's own coordinate space.
+  // while the translate below is in the container's own coordinate space.
   const ratio = root.offsetWidth > 0 ? box.width / root.offsetWidth : 1
   const scale = Number.isFinite(ratio) && ratio > 0 ? ratio : 1
 
@@ -137,27 +178,29 @@ function readGeometry(el: HTMLElement, root: HTMLElement): { left: number, width
   }
 }
 
+// `animate` is true only for a change of selection: that travels on the
+// spring. Everything else lands in place.
 function updateIndicator(animate: boolean) {
-  if (props.multiple) {
-    indicatorStyle.value = { ...indicatorStyle.value, opacity: '0' }
-    return
-  }
-
-  const current = props.modelValue as TxFlatRadioValue
-  const el = itemMap.get(current)
-  if (!el || !containerRef.value) {
-    indicatorStyle.value = { ...indicatorStyle.value, opacity: '0' }
-    return
-  }
-
-  const { left, width } = readGeometry(el, containerRef.value)
-
   indicatorTransition.value = animate
-  indicatorStyle.value = {
-    opacity: '1',
-    transform: `translateX(${left}px)`,
-    width: `${width}px`,
+
+  const el = props.multiple ? undefined : itemMap.get(props.modelValue as TxFlatRadioValue)
+  const root = containerRef.value
+  if (!el || !root) {
+    engine.moveTo(null)
+    return
   }
+
+  const { left, width } = readGeometry(el, root)
+
+  // y stays 0 because the CSS `top` already sits the thumb inside the track.
+  // The height is the CSS one, read back so the engine carries the shape at
+  // its real size.
+  engine.moveTo({
+    x: left,
+    y: 0,
+    width,
+    height: indicatorRef.value?.offsetHeight ?? 0,
+  }, { animate })
 }
 
 function updateIndicatorNoTransition() {
@@ -322,9 +365,9 @@ const activeDescendantId = computed(() =>
   >
     <span
       v-if="!multiple"
+      ref="indicatorRef"
       class="tx-flat-radio__indicator"
       :class="{ 'no-transition': !indicatorTransition }"
-      :style="indicatorStyle"
       aria-hidden="true"
     />
     <slot />
@@ -388,25 +431,26 @@ const activeDescendantId = computed(() =>
   box-shadow: var(--tx-flat-radio-indicator-shadow, var(--tx-elevation-2, 1px 2px 8px rgba(0, 0, 0, 0.05)));
   pointer-events: none;
   z-index: 0;
+  // Hidden until the engine lands its first frame, so a server render, or any
+  // paint before the first measurement, shows no zero-width sliver of shadow.
+  opacity: 0;
   will-change: transform, width;
 
-  // Travel and resize used to run on two different curves (0.25s overshoot
-  // against a 0.2s ease), so on labels of unequal width the thumb arrived and
-  // *then* finished growing. One duration and one curve for both makes it read
-  // as a single body; the overshoot applies to width on purpose, because the
-  // slight stretch past the target and back is the part that feels physical.
-  transition:
-    transform var(--tx-flat-radio-duration, 0.26s) var(--tx-flat-radio-ease, cubic-bezier(0.32, 1.28, 0.5, 1)),
-    width var(--tx-flat-radio-duration, 0.26s) var(--tx-flat-radio-ease, cubic-bezier(0.32, 1.28, 0.5, 1)),
-    opacity 0.15s ease;
+  // The indicator engine moves and resizes the thumb by writing its transform
+  // and width every frame, so neither may carry a transition — CSS would
+  // re-ease every written frame and the thumb would trail its own springs.
+  // Each end rides its own spring, so between labels of unequal width the
+  // thumb stretches toward the new one and arrives at its width as one body.
+  // The fade is the only transition left.
+  transition: opacity 0.15s ease;
 
   &.no-transition {
     transition: none !important;
   }
 }
 
-// The fade stays so the thumb still resolves rather than popping in; only the
-// travel and the stretch go.
+// Under reduced motion the engine lands every change in place. The fade stays so the thumb still resolves rather than popping
+// in; this holds the CSS side to it whatever the rule above says.
 @media (prefers-reduced-motion: reduce) {
   .tx-flat-radio__indicator {
     transition: opacity 0.15s ease;

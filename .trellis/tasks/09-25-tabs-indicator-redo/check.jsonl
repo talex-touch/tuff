@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "verification standard"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "check variant paint and motion against the rules"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "docs/demo completeness and the three nexus gates"}
+{"file": ".trellis/tasks/09-25-tabs-indicator-redo/research/tabs.md", "reason": "consumer list to regression-check (core-app and nexus TxTabs usages)"}

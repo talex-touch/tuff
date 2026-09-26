@@ -1,6 +1,6 @@
 ---
 title: "SortableList"
-description: "HTML5 drag-and-drop list reordering with stable IDs, optional handles, and reorder events."
+description: "Reorderable list where the carried row follows the pointer, the others spring aside, and it lands with a bounce — with stable IDs, optional handles, keyboard reordering, and a native drag mode for moves between lists."
 category: Data
 status: beta
 since: 1.0.0
@@ -36,6 +36,17 @@ code: |
 ---
 :::
 
+### Drag Modes
+
+The default `dragMode="pointer"` drives the drag from pointer events: the carried row follows the pointer 1:1, the rows it passes spring aside, and on release it drops into the gap with a small bounce. When an item must be able to leave this list — moving cards between the columns of a board, say — switch to `dragMode="native"`: HTML5 drag and drop, with the browser drawing the drag image, so the host can take `dragover` / `drop` elsewhere.
+
+```vue
+<template>
+  <!-- The host catches moves between columns with native DnD -->
+  <TxSortableList v-model="column.cards" drag-mode="native" />
+</template>
+```
+
 ### Drag Handle Mode
 
 When `handle=true`, a drag must start from an element inside `[data-tx-sort-handle="true"]`. The default row rendering grows a grip carrying that attribute, so `handle` works on its own; a custom `item` slot spreads the slot's `handleAttrs` onto whatever it wants to be the grip.
@@ -43,7 +54,6 @@ When `handle=true`, a drag must start from an element inside `[data-tx-sort-hand
 ```vue
 <template>
   <TxSortableList v-model="steps" handle @reorder="saveOrder">
-    <template #item="{ item }">
     <template #item="{ item, handleAttrs }">
       <div class="flex items-center gap-2 p-3">
         <button type="button" v-bind="handleAttrs" aria-label="Drag item">☰</button>
@@ -78,6 +88,8 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 - Use `handle` for rows that contain buttons, links, inputs, or selectable text.
 - Keep list sizes modest. For very long lists, combine a different drag strategy with virtualization instead of rendering every row draggable.
 - Rows show a `grab` cursor and lift while dragging; in `handle` mode the cursor affordance moves to the grip. A custom slot should still make its grip look like one.
+- Keep the default `pointer` for reordering within one list; use `dragMode="native"` when items move between lists (board columns).
+- On touch screens `pointer` mode claims the whole row (`touch-action: none`), so a swipe on a row no longer scrolls the page; in long lists or scrolling containers turn on `handle` so only the grip claims the gesture.
 - Pass `itemLabel` whenever ids are not human-readable, or the live region will announce "plugin-a1b3" to a screen reader.
 
 ## API Reference
@@ -89,6 +101,7 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 | `modelValue` | `SortableListItem[]` | required | Ordered list data. Every item must provide a stable string `id`. |
 | `disabled` | `boolean` | `false` | Disables drag interactions and reorder emits. |
 | `handle` | `boolean` | `false` | Requires drag start from `[data-tx-sort-handle="true"]`. The default row rendering grows one. |
+| `dragMode` | `'pointer' \| 'native'` | `'pointer'` | Drag implementation. `pointer`: the row follows the pointer, the others spring aside, and it lands with a bounce. `native`: HTML5 drag and drop, for a host that lets items leave this list. |
 | `ariaLabel` | `string` | - | Accessible name for the list. |
 | `itemLabel` | `(item) => string` | - | Item name used in announcements. Defaults to the item's `id`. |
 | `labels` | `SortableListLabels` | - | Announcement templates for `grabbed`, `moved`, `dropped`, `cancelled` and the built-in `handle`. `{item}`, `{position}` and `{size}` are substituted. |
@@ -103,7 +116,7 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 
 | Event | Payload | Description |
 |------|---------|-------------|
-| `update:modelValue` | `SortableListItem[]` | Emitted on every step of a reorder — each row a pointer drag crosses, and each keyboard move — so the host can paint the preview. |
+| `update:modelValue` | `SortableListItem[]` | A pointer drag emits it once, on release; a native drag emits it for each row the pointer crosses and the keyboard for each move, so the host can paint the preview. |
 | `reorder` | `{ from: number, to: number, items: SortableListItem[] }` | Emitted once, when the interaction ends, with the index it started at and the index it landed on. |
 
 ### Slots
@@ -116,33 +129,47 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 
 - The root renders `role="list"`; each item renders `role="listitem"`.
 - Each item must have a stable string `id`; `id` is used for Vue keys and drag bookkeeping.
-- Items are draggable unless `disabled=true`. Disabled mode also blocks drag start, drag over, drop reordering, and emitted reorder events.
-- `handle=false` allows drag start from anywhere inside the item.
-- `handle=true` requires the drag event target or one of its ancestors to match `[data-tx-sort-handle="true"]`.
-- Drag start stores the item id in `dataTransfer` and marks the item as dragging.
-- **The list reorders as the pointer crosses, not on drop.** Each `dragover` over a different row moves the dragged row there and emits `update:modelValue`. That preview *is* the drag feedback: before it, the only thing that changed on screen for the whole drag was a 0.65 opacity on the source row.
+- Items are draggable unless `disabled=true`. Disabled mode also blocks both drag modes, keyboard reordering, and emitted reorder events.
+- `handle=false` allows drag start from anywhere inside the item; `handle=true` requires the event target or one of its ancestors to match `[data-tx-sort-handle="true"]`.
 - The preview is held inside the component, so the rows move whether or not the host writes `modelValue` back. Ownership returns to the host the moment the interaction ends.
-- `reorder` fires **once**, when the drag ends, with the original index and the final one — not once per row crossed.
+- `reorder` fires **once**, when the interaction ends, with the original index and the final one — not once per row crossed.
+- Reordering uses shallow array copies; item objects are preserved.
+
+### Pointer Drag
+
+- A press becomes a drag only after 4px of travel, so a click stays a click; the click produced by the release that ends a drag is swallowed. Inputs, text areas, selects and editable regions never start a drag.
+- The carried row follows the pointer 1:1, vertically only (scrolling during the drag is cancelled out), and past either end of the list it follows at 0.3 of the pointer instead of leaving. Picking it up lifts it to 1.02× with a shadow on the `bouncy` spring.
+- The DOM order does not change mid-drag: the rows passed step aside on `translate` by one row height plus the gap, on a spring with a few percent of overshoot. The carried row takes whichever slot it would sit closest to, so it swaps past half-way whatever the row heights, and the last place is reachable without pulling past the end.
+- Release commits once: `update:modelValue` and `reorder` fire, every row FLIPs from where it was drawn to the new layout, and the carried row lands on the `bouncy` spring while its lift settles.
+- Escape or `pointercancel` abandons the drag: nothing is emitted and the rows spring back.
+- The whole row (only the grip in `handle` mode) sets `touch-action: none`, so a touch drag is not taken over as a scroll first.
+
+### Native Drag
+
+- With `dragMode="native"` rows carry `draggable`, and drag start stores the item id in `dataTransfer` and marks the item as dragging.
+- **The list reorders as the pointer crosses, not on drop.** Each `dragover` over a different row moves the dragged row there and emits `update:modelValue`. There is no FLIP here: hit-testing follows transforms, so a row still sliding away would keep catching the pointer and swap straight back.
 - A drop outside the list still counts. `dragend` settles whatever the preview last showed rather than snapping the rows back to an order the user watched change.
 - `dragend` and `drop` both clear drag state; whichever runs first reports the move.
-- Reordering uses shallow array copies; item objects are preserved.
 
 ### Keyboard
 
 - The list is one tab stop. Tab lands on the last focused row, or the first; the arrow keys move between rows.
 - Space or Enter picks a row up; the arrows then move the row itself, Space or Enter puts it down, and Escape abandons the reorder and restores the order it started from.
 - Blurring a held row puts it down rather than stranding it.
+- A held row lifts too; every move and the Escape restore spring the rows to their new places.
 - Every step is announced through a visually hidden `role="status"` live region. `labels` supplies the templates (`{item}`, `{position}`, `{size}`) and `itemLabel` supplies the item's name, which otherwise falls back to its `id`.
 
 ## Technologies
 
-- **Accessibility note:** Reordering is available from the keyboard — one tab stop, Space to pick up, arrows to move, Escape to cancel — and every step goes through a polite live region. Native drag-and-drop remains pointer-only and is the secondary path, not the only one.
+- **Accessibility note:** Reordering is available from the keyboard — one tab stop, Space to pick up, arrows to move, Escape to cancel — and every step goes through a polite live region. Both drag modes remain pointer-only and are the secondary path, not the only one.
+- **Motion note:** Travel and lift are written to the individual `translate` / `scale` properties rather than `transform`: a carried row's translate has no transition while its scale is on a spring, so the two need clocks of their own, and the script writes each row's `transition` for the same reason. The springs are compiled to CSS `linear()` curves by `resolveTransition`: `{ stiffness: 480, damping: 30 }` for rows making room, the `bouncy` preset for the lift and the landing. Under `prefers-reduced-motion: reduce` the springs have zero length and nothing lifts; the carried row still follows the pointer — that is direct manipulation, not animation.
+- **Changelog (2026-09-26):** The default drag moved from HTML5 drag and drop to pointer events. The native drag image is drawn by the browser — translucent, and nothing can make it springy — and the rows swapped instantly under it; review called it "not following the hand, not bouncy". Hosts that need moves between lists switch to `dragMode="native"` and keep the old behaviour, as the Nexus CMS board template does.
 - **Data note:** Reorder emits a shallow copied array and preserves item object references. Persist by stable `id`, not by index or object identity.
-- **Verified coverage:** `sortable-list.test.ts` checks list semantics, slot props, fallback item ids, reorder emits, same-item drop suppression, disabled blocking, handle-only drag start, dragend state cleanup, the live preview during `dragover` (and that `reorder` does not fire per row crossed), a drag that ends outside the list, the built-in grip and the `handleAttrs` a slot receives, and the whole keyboard path: grab, move, drop, Escape, both list ends, focus movement without a grab, the single tab stop, announcements, `labels` overrides, and disabled.
+- **Verified coverage:** `sortable-list.test.ts` checks list semantics, slot props and fallback item ids; for pointer drags the threshold, 1:1 following and rows making room, a single commit on release, the half-way swap and the resistance past the ends, Escape restoring without emitting, swallowing the click a drag ends with but not a plain click, handle-only start, and leaving the pointer alone in native mode and while disabled; for native drags reorder emits, same-item drop suppression, disabled blocking, handle-only drag start, dragend state cleanup, the live preview during `dragover` (and that `reorder` does not fire per row crossed), and a drag that ends outside the list; the built-in grip and the `handleAttrs` a slot receives; and the whole keyboard path: grab (with its lift), move, drop, Escape, both list ends, focus movement without a grab, the single tab stop, announcements, `labels` overrides, and disabled.
 
 - Component source: `packages/tuffex/packages/components/src/sortable-list/src/TxSortableList.vue`.
-- Types: `packages/tuffex/packages/components/src/sortable-list/src/types.ts` exports `SortableListItem`, `SortableListProps`, `SortableListLabels`, and `SortableListEmits`.
+- Types: `packages/tuffex/packages/components/src/sortable-list/src/types.ts` exports `SortableListItem`, `SortableListProps`, `SortableListDragMode`, `SortableListLabels`, and `SortableListEmits`.
 - Export alias: `packages/tuffex/packages/components/src/sortable-list/index.ts` exports `SortableList`, `TxSortableList`, sortable types, and `TxSortableListInstance`.
-- Coverage: `packages/tuffex/packages/components/src/sortable-list/__tests__/sortable-list.test.ts` verifies drag state, handle mode, events, slots, and disabled behavior.
+- Coverage: `packages/tuffex/packages/components/src/sortable-list/__tests__/sortable-list.test.ts` verifies both drag modes, handle mode, events, slots, the keyboard path, and disabled behavior.
 
 <TuffDocSourceLink />

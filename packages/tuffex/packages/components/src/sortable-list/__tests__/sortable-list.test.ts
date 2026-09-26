@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import TxSortableList from '../src/TxSortableList.vue'
 
 const items = [
@@ -45,7 +46,8 @@ describe('txSortableList', () => {
     expect(wrapper.attributes('role')).toBe('list')
     expect(rows).toHaveLength(3)
     expect(rows[0]?.attributes('role')).toBe('listitem')
-    expect(rows[0]?.attributes('draggable')).toBe('true')
+    // Pointer mode is the default and never hands the row to the browser's drag.
+    expect(rows[0]?.attributes('draggable')).toBe('false')
     expect(wrapper.findAll('.row').map(row => row.text())).toEqual([
       'One:false',
       'Two:false',
@@ -71,6 +73,7 @@ describe('txSortableList', () => {
     const wrapper = mount(TxSortableList, {
       props: {
         modelValue: items,
+        dragMode: 'native',
       },
     })
     const rows = wrapper.findAll('.tx-sortable-list__item')
@@ -94,6 +97,7 @@ describe('txSortableList', () => {
     const wrapper = mount(TxSortableList, {
       props: {
         modelValue: items,
+        dragMode: 'native',
       },
     })
     const rows = wrapper.findAll('.tx-sortable-list__item')
@@ -109,6 +113,7 @@ describe('txSortableList', () => {
     const wrapper = mount(TxSortableList, {
       props: {
         modelValue: items,
+        dragMode: 'native',
         disabled: true,
       },
     })
@@ -130,6 +135,7 @@ describe('txSortableList', () => {
     const wrapper = mount(TxSortableList, {
       props: {
         modelValue: items,
+        dragMode: 'native',
         handle: true,
       },
       slots: {
@@ -156,7 +162,7 @@ describe('txSortableList', () => {
   it('previews the move while the pointer crosses, not only on drop', async () => {
     // The whole drag used to be invisible: the source row dimmed to 0.65 and
     // nothing else moved until the pointer was released.
-    const wrapper = mount(TxSortableList, { props: { modelValue: items } })
+    const wrapper = mount(TxSortableList, { props: { modelValue: items, dragMode: 'native' } })
     const rows = () => wrapper.findAll('.tx-sortable-list__item')
 
     await rows()[0]?.element.dispatchEvent(dragEvent('dragstart', rows()[0]?.element))
@@ -170,7 +176,7 @@ describe('txSortableList', () => {
   })
 
   it('keeps a drag that ends outside the list', async () => {
-    const wrapper = mount(TxSortableList, { props: { modelValue: items } })
+    const wrapper = mount(TxSortableList, { props: { modelValue: items, dragMode: 'native' } })
     const rows = () => wrapper.findAll('.tx-sortable-list__item')
 
     await rows()[0]?.element.dispatchEvent(dragEvent('dragstart', rows()[0]?.element))
@@ -319,6 +325,7 @@ describe('txSortableList', () => {
     const wrapper = mount(TxSortableList, {
       props: {
         modelValue: items,
+        dragMode: 'native',
       },
     })
     const row = wrapper.find('.tx-sortable-list__item')
@@ -335,6 +342,7 @@ describe('txSortableList', () => {
     const wrapper = mount(TxSortableList, {
       props: {
         modelValue: items,
+        dragMode: 'native',
       },
     })
     const rows = wrapper.findAll('.tx-sortable-list__item')
@@ -352,5 +360,163 @@ describe('txSortableList', () => {
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
     expect(wrapper.emitted('reorder')).toBeUndefined()
     expect(wrapper.find('.tx-sortable-list__item--dragging').exists()).toBe(false)
+  })
+  describe('pointer drag (the default)', () => {
+    // A drag that ends swallows the click its release produces and stops
+    // listening a macrotask later, as a browser's pointerup → click sequence
+    // allows. Let that task run so one case's listener never eats the next's click.
+    afterEach(() => new Promise(resolve => setTimeout(resolve, 0)))
+
+    function pointer(type: string, clientY: number, target: EventTarget = window): void {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 10, clientY, button: 0 })
+      Object.defineProperties(event, {
+        pointerId: { value: 1 },
+        isPrimary: { value: true },
+      })
+      target.dispatchEvent(event)
+    }
+
+    /** jsdom has no layout: rows 40px tall with an 8px gap, stacked from 0. */
+    function layOut(wrapper: ReturnType<typeof mount>): HTMLElement[] {
+      const rows = wrapper.findAll('.tx-sortable-list__item').map(row => row.element as HTMLElement)
+      rows.forEach((row, i) => {
+        Object.defineProperty(row, 'offsetTop', { configurable: true, value: i * 48 })
+        Object.defineProperty(row, 'offsetHeight', { configurable: true, value: 40 })
+      })
+      return rows
+    }
+
+    it('carries the row under the pointer and commits one move on release', async () => {
+      const wrapper = mount(TxSortableList, { props: { modelValue: items }, attachTo: document.body })
+      const rows = layOut(wrapper)
+
+      pointer('pointerdown', 20, rows[0])
+      pointer('pointermove', 22)
+      await nextTick()
+      // Under the threshold a press is still a click.
+      expect(rows[0]!.classList.contains('tx-sortable-list__item--dragging')).toBe(false)
+
+      pointer('pointermove', 110)
+      await nextTick()
+      expect(rows[0]!.classList.contains('tx-sortable-list__item--dragging')).toBe(true)
+      // 1:1 with the pointer; the rows it passed stepped up by a row and a gap.
+      expect(rows[0]!.style.translate).toBe('0 90px')
+      expect(rows[1]!.style.translate).toBe('0 -48px')
+      expect(rows[2]!.style.translate).toBe('0 -48px')
+      expect(rows[1]!.style.transition).toContain('translate')
+      // Nothing is committed while the row is still in the air.
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+      pointer('pointerup', 110)
+      const expected = [items[1], items[2], items[0]]
+      expect(wrapper.emitted('update:modelValue')).toEqual([[expected]])
+      expect(wrapper.emitted('reorder')).toEqual([[{ from: 0, to: 2, items: expected }]])
+      wrapper.unmount()
+    })
+
+    it('takes a neighbour\'s place past half-way, and resists past the ends', async () => {
+      const wrapper = mount(TxSortableList, { props: { modelValue: items }, attachTo: document.body })
+      const rows = layOut(wrapper)
+
+      pointer('pointerdown', 20, rows[0])
+      pointer('pointermove', 43)
+      expect(rows[1]!.style.translate).toBe('')
+      pointer('pointermove', 45)
+      expect(rows[1]!.style.translate).toBe('0 -48px')
+
+      // 96px is the last slot; the next 10px of pointer travel buys 3px.
+      pointer('pointermove', 126)
+      expect(rows[0]!.style.translate).toBe('0 99px')
+
+      pointer('pointerup', 126)
+      wrapper.unmount()
+    })
+
+    it('puts everything back on escape without emitting', async () => {
+      const wrapper = mount(TxSortableList, { props: { modelValue: items }, attachTo: document.body })
+      const rows = layOut(wrapper)
+
+      pointer('pointerdown', 20, rows[0])
+      pointer('pointermove', 110)
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      await nextTick()
+      await nextTick()
+
+      expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+      expect(wrapper.emitted('reorder')).toBeUndefined()
+      expect(wrapper.find('.tx-sortable-list__item--dragging').exists()).toBe(false)
+      expect(rows.map(row => row.style.translate)).toEqual(['', '', ''])
+      expect(rows[0]!.style.scale).toBe('')
+
+      // The released pointer no longer drives anything.
+      pointer('pointermove', 60)
+      expect(rows[0]!.style.translate).toBe('')
+      wrapper.unmount()
+    })
+
+    it('swallows the click a drag ends with, not a plain click', async () => {
+      const onClick = vi.fn()
+      const wrapper = mount(TxSortableList, { props: { modelValue: items }, attachTo: document.body })
+      const rows = layOut(wrapper)
+      rows[0]!.addEventListener('click', onClick)
+
+      pointer('pointerdown', 20, rows[0])
+      pointer('pointerup', 20)
+      rows[0]!.click()
+      expect(onClick).toHaveBeenCalledTimes(1)
+
+      pointer('pointerdown', 20, rows[0])
+      pointer('pointermove', 60)
+      pointer('pointerup', 60)
+      rows[0]!.click()
+      expect(onClick).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    })
+
+    it('starts only from the grip in handle mode', async () => {
+      const wrapper = mount(TxSortableList, { props: { modelValue: items, handle: true }, attachTo: document.body })
+      const rows = layOut(wrapper)
+
+      pointer('pointerdown', 20, rows[0])
+      pointer('pointermove', 60)
+      await nextTick()
+      expect(wrapper.find('.tx-sortable-list__item--dragging').exists()).toBe(false)
+      pointer('pointerup', 60)
+
+      pointer('pointerdown', 20, wrapper.find('.tx-sortable-list__grip').element)
+      pointer('pointermove', 60)
+      await nextTick()
+      expect(rows[0]!.classList.contains('tx-sortable-list__item--dragging')).toBe(true)
+      pointer('pointerup', 60)
+      wrapper.unmount()
+    })
+
+    it('leaves the pointer alone in native mode and while disabled', async () => {
+      for (const props of [{ dragMode: 'native' as const }, { disabled: true }]) {
+        const wrapper = mount(TxSortableList, { props: { modelValue: items, ...props }, attachTo: document.body })
+        const rows = layOut(wrapper)
+
+        pointer('pointerdown', 20, rows[0])
+        pointer('pointermove', 110)
+        pointer('pointerup', 110)
+        await nextTick()
+
+        expect(rows[0]!.style.translate).toBe('')
+        expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+        wrapper.unmount()
+      }
+    })
+
+    it('lifts a keyboard-held row and sets it down again', async () => {
+      const wrapper = mount(TxSortableList, { props: { modelValue: items } })
+      const row = () => wrapper.findAll('.tx-sortable-list__item')[0]!
+
+      await row().trigger('keydown', { key: ' ' })
+      expect((row().element as HTMLElement).style.scale).toBe('1.02')
+      expect((row().element as HTMLElement).style.transition).toContain('scale')
+
+      await row().trigger('keydown', { key: ' ' })
+      expect((row().element as HTMLElement).style.scale).toBe('')
+    })
   })
 })

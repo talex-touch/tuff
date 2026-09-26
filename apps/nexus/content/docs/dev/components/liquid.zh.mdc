@@ -158,6 +158,7 @@ code: |
 - `x/y/scale` 驱动的条目由组件写 `transform`，消费方不要再对包装器写 transform 或 filter。
 - `morph.shape` 运动期间会对内容写 `filter: blur()`；`dissolve` 会对 `<img>` 写 `mask-image`，不要与自己的同名样式组合。
 - `dissolve` 与 `effect="move"` 组合会被忽略并给出警告；`prefers-reduced-motion: reduce` 下组件驱动的过渡塌缩为瞬移。
+- 入口同时导出 `resolveTransition(transition, reducedMotion?)`：把预设或 `SpringConfig` 编译成 `{ duration, easing }`，`easing` 为 CSS `linear()` 曲线（不支持时回退到 cubic-bezier），组件之外的 WAAPI / CSS 动效可借此用上同一套弹簧。
 
 ## 技术实现
 

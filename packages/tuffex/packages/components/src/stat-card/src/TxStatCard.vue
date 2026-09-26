@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { StatCardProps } from './types.ts'
-import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import { onThemeChange } from './theme-change'
 
 defineOptions({
   name: 'TxStatCard',
@@ -132,8 +133,8 @@ function parseChannels(color: string): [number, number, number] | null {
   return null
 }
 
-// A grey icon has no hue to glow with. Mixed into the glow it reads as a smudge
-// of fog behind the number, which is what an untinted `iconClass` produced.
+// A grey icon has no hue to pull out. Mixed into the aura it reads as a smudge
+// of fog next to the number, so the card stays untinted and draws no aura.
 function isNeutralColor(color: string) {
   const channels = parseChannels(color)
   if (!channels)
@@ -149,13 +150,25 @@ const resetGlowVars = () => {
 const updateGlowVars = () => {
   if (!cardRef.value || !iconRef.value || !props.iconClass)
     return
+  // A tinted card inks the glyph with a mix of this very colour, so the read
+  // lifts that ink first; otherwise every re-read (a theme switch) would mix
+  // the mix again and walk the whole card towards the text colour.
+  cardRef.value.classList.add('tx-stat-card--reading')
   const iconColor = getComputedStyle(iconRef.value).color
-  if (!iconColor || isNeutralColor(iconColor)) {
+  cardRef.value.classList.remove('tx-stat-card--reading')
+  // Empty only while the card is off the document (a KeepAlive cache has no
+  // computed style): keep the last read, `onActivated` reads again on return.
+  if (!iconColor)
+    return
+  // Grey gets no aura, but the ring still draws in the icon's own colour:
+  // dropping it there left a grey icon inside a primary ring.
+  const neutral = isNeutralColor(iconColor)
+  if (neutral && !isProgressVariant.value) {
     resetGlowVars()
     return
   }
   cardRef.value.style.setProperty('--tx-stat-card-icon-color', iconColor)
-  glowTinted.value = true
+  glowTinted.value = !neutral
 }
 
 const triggerGlow = () => {
@@ -183,10 +196,24 @@ const insightDisplayText = computed(() => {
   return formatNumber(insightValue.value)
 })
 
+let stopThemeWatch: (() => void) | null = null
+
 onMounted(() => {
   updateGlowVars()
   triggerGlow()
+  // The colour is stored resolved, so a theme switch that re-points the icon's
+  // token (success, warning and danger differ between light and dark) has to
+  // be read again, or the aura and the ring keep the old theme's hue.
+  stopThemeWatch = onThemeChange(updateGlowVars)
 })
+
+onBeforeUnmount(() => {
+  stopThemeWatch?.()
+  stopThemeWatch = null
+})
+
+// A theme switch made while KeepAlive held the card had nothing to read.
+onActivated(updateGlowVars)
 
 watch(
   () => props.iconClass,
@@ -229,11 +256,13 @@ watch(
     :aria-label="ariaLabel || undefined"
     :aria-labelledby="ariaLabel ? undefined : labelId"
   >
-    <div v-if="iconClass && !isProgressVariant" class="tx-stat-card__decoration" aria-hidden="true">
-      <span class="tx-stat-card__glow" />
+    <div v-if="iconClass" class="tx-stat-card__aura" aria-hidden="true">
+      <span class="tx-stat-card__aura-blob is-a" />
+      <span class="tx-stat-card__aura-blob is-b" />
+      <span class="tx-stat-card__aura-blob is-c" />
     </div>
 
-    <div v-if="iconClass && !isProgressVariant" class="tx-stat-card__icon-layer" aria-hidden="true">
+    <div v-if="iconClass && !isProgressVariant" class="tx-stat-card__glyph" aria-hidden="true">
       <i ref="iconRef" class="tx-stat-card__icon" :class="iconClass" />
     </div>
 
@@ -307,17 +336,25 @@ watch(
   border-radius: 16px;
   box-sizing: border-box;
   overflow: hidden;
+  // The query container for the two `@container` blocks below: the glyph and
+  // the ring move by the card's own width, since four cards abreast are narrow
+  // on any screen. The queries read the content box, so 240px there is a 274px
+  // card at this padding and border. The width has to come from the parent (a
+  // grid cell, a stretched flex item); a shrink-to-fit parent collapses an
+  // inline-size container.
+  container-type: inline-size;
 
   --fake-color: var(--tx-bg-color, #fff);
   --fake-opacity: 0.7;
-  // `updateGlowVars` overwrites this with the icon's computed colour, and only
-  // for a tinted icon; the glow is mixed from it here so any colour syntax the
-  // browser reports (`rgb()`, `color(srgb …)`, `oklch()`) works unparsed.
+  // `updateGlowVars` overwrites this with the icon's computed colour, for a
+  // tinted icon (and in the progress layout for a grey one too); the aura and
+  // the progress ring are mixed from it here so any colour syntax the browser
+  // reports (`rgb()`, `color(srgb …)`, `oklch()`) works unparsed.
   --tx-stat-card-icon-color: var(--tx-color-primary, #409eff);
-  --tx-stat-card-glow-color: color-mix(in srgb, var(--tx-stat-card-icon-color) 34%, transparent);
-  --tx-stat-card-glow-color-soft: color-mix(in srgb, var(--tx-stat-card-icon-color) 12%, transparent);
-  --tx-stat-card-icon-opacity: 0.16;
-  --tx-stat-card-icon-opacity-hover: 0.26;
+  // One slot on the right, shared by the glyph and the progress ring so the
+  // two variants read as one family.
+  --tx-stat-card-slot: 72px;
+  --tx-stat-card-slot-inset: 18px;
 
   background: transparent;
   border: 1px solid var(--tx-border-color-lighter, #eee);
@@ -374,25 +411,26 @@ watch(
 
 /* Only clickable cards signal interactivity: the pointer cursor lives on
    .tx-stat-card--clickable, not the generic hover, so a static card doesn't imply a click.
-   The hover itself is quiet: the edge firms up at once (colour never eases),
-   the corner icon drifts in toward the figures and the glow behind it warms. */
+   The hover is not motion: the edge firms up at once (colour never eases) and
+   nothing on the card lifts, sweeps or glows. */
 .tx-stat-card:hover {
   --fake-opacity: 0.75;
   border-color: var(--tx-border-color, #dcdfe6);
 }
 
-.tx-stat-card:hover .tx-stat-card__icon {
-  opacity: var(--tx-stat-card-icon-opacity-hover);
-  transform: translate(-4px, -4px);
-}
-
-.tx-stat-card--tinted.tx-stat-card--glow-in:hover .tx-stat-card__glow {
-  opacity: 0.85;
-}
-
 .tx-stat-card__content {
   position: relative;
   z-index: 1;
+}
+
+// The glyph and the ring are part of the reading, not a watermark under it, so
+// the column stops 8px short of the slot: slot + inset + 8px, less the 16px the
+// card's own padding already covers. A narrow card moves the slot into the
+// corner instead (see the end of this block), and keeps its full width.
+@container (width >= 240px) {
+  :is(.tx-stat-card__glyph, .tx-stat-card__progress) ~ .tx-stat-card__content {
+    padding-right: calc(var(--tx-stat-card-slot) + var(--tx-stat-card-slot-inset) - 8px);
+  }
 }
 
 .tx-stat-card__value {
@@ -460,21 +498,29 @@ watch(
   white-space: nowrap;
 }
 
+// The shared slot, right-aligned and centred on the card's height. Both sit
+// under the content: the global `.fake-background > *` rule would otherwise
+// lift every child of the card to `relative; z-index: 1`. What sits inside is
+// sized in em off each one's font-size, so the narrow layout changes one number.
+.tx-stat-card__glyph,
 .tx-stat-card__progress {
   position: absolute;
-  right: 18px;
+  z-index: 0;
   top: 50%;
-  width: 72px;
-  height: 72px;
+  right: var(--tx-stat-card-slot-inset);
+  width: var(--tx-stat-card-slot);
+  height: var(--tx-stat-card-slot);
   transform: translateY(-50%);
-  --tx-stat-card-progress-color: var(--tx-color-primary, #409eff);
-  --tx-stat-card-progress-track: rgba(64, 158, 255, 0.24);
 }
 
-@supports (color: color-mix(in srgb, #000 50%, transparent)) {
-  .tx-stat-card__progress {
-    --tx-stat-card-progress-track: color-mix(in srgb, var(--tx-stat-card-progress-color) 22%, transparent);
-  }
+.tx-stat-card__progress {
+  // The ring follows the icon, like the aura: a colour class on `iconClass`
+  // tints the arc, its track and the disc. It used to draw primary whatever the
+  // icon said, and painted the icon primary over its own colour class.
+  --tx-stat-card-progress-color: var(--tx-stat-card-icon-color);
+  --tx-stat-card-progress-track: color-mix(in srgb, var(--tx-stat-card-progress-color) 22%, transparent);
+
+  font-size: 28px;
 }
 
 .tx-stat-card__progress-ring {
@@ -493,92 +539,210 @@ watch(
 
 .tx-stat-card__progress-inner {
   position: absolute;
-  inset: 10px;
+  // 10px in the full 72px slot. A percentage, like the ring's mask, so the gap
+  // between disc and ring stays in proportion when the slot shrinks.
+  inset: 13.9%;
   border-radius: 999px;
   // A tint of the ring colour over whatever the card sits on. An `@supports`
   // override used to mix it into `rgba(0, 0, 0, 0.45)` instead, which reads as a
   // lens on the dark theme and as a grey blot inside the ring on the light one.
   background: color-mix(in srgb, var(--tx-stat-card-progress-color) 16%, transparent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
+  // Default ink for an icon without a colour class. It sits on the parent, never
+  // on the `<i>`, so a colour class on `iconClass` still wins.
+  color: var(--tx-color-primary, #409eff);
 }
 
 .tx-stat-card__progress-icon {
-  font-size: 22px;
-  color: var(--tx-stat-card-progress-color);
+  font-size: 0.786em; // 22px
 }
 
-/* The decorative icon is the card's one flourish: set large, cropped by the
-   bottom-right corner and kept faint, so it reads as a watermark behind the
-   figures rather than a second, competing glyph. Its size is the component's —
-   the selector outranks a host utility such as `text-6xl` — while a colour
-   class on `iconClass` still tints it; an untinted icon inherits the layer's
-   secondary ink. */
-.tx-stat-card__icon-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  border-radius: inherit;
-  pointer-events: none;
-  color: var(--tx-text-color-secondary, #909399);
+/* The glyph: the whole icon, bare in the slot, with no tile, ring or shadow.
+   The default ink sits here rather than on the `<i>`, so a colour class on
+   `iconClass` still wins and an icon without one is primary. */
+.tx-stat-card__glyph {
+  display: grid;
+  place-items: center;
+  color: var(--tx-color-primary, #409eff);
+  font-size: 30px;
 }
 
+// The component owns the glyph's size: this selector outranks a host utility
+// such as `text-6xl`. As a grid item the `<i>` takes the width and height its
+// icon rule sets.
 .tx-stat-card__icon {
-  position: absolute;
-  right: -12px;
-  bottom: -16px;
-  font-size: 88px;
-  line-height: 1;
-  opacity: var(--tx-stat-card-icon-opacity);
-  transition:
-    transform 0.35s cubic-bezier(0.33, 1, 0.68, 1),
-    opacity 0.35s ease;
+  font-size: 1em;
 }
 
-.tx-stat-card__decoration {
+// Over its own aura the icon's colour sits on its own hue and all but
+// vanishes, so a tinted card inks it part-way to the text colour, while the
+// aura is pulled the other way, towards the page: the glyph is always the one
+// that stands out — deeper than a pale light-theme aura, lighter than a deep
+// dark-theme one. This also outranks a colour class on the `<i>` — the class
+// still picks the hue, through the colour read back into
+// `--tx-stat-card-icon-color`, which is read with this rule lifted
+// (`--reading`).
+.tx-stat-card--tinted:not(.tx-stat-card--reading) .tx-stat-card__icon {
+  color: color-mix(in oklab, var(--tx-stat-card-icon-color) 55%, var(--tx-text-color-primary, #303133));
+}
+
+// The aura: the icon's colour drawn out across the right of the card, under the
+// glyph or the ring. Three blurred blobs (the icon's hue, a neighbour turned
+// round the OKLCH wheel, and the pure hue as the field's core) drift on periods
+// that never line up, so together they read as one field slowly changing
+// shape. The two large ones are mixed towards the page colour, so the field is
+// deep on the dark theme and pale on the light one instead of a glare the
+// glyph gets lost in, and all three are kept faint: it is a wash behind the
+// figure, not a second subject beside it. The mask fades it out well before
+// the text.
+.tx-stat-card__aura {
   position: absolute;
   inset: 0;
   z-index: 0;
   overflow: hidden;
   border-radius: inherit;
   pointer-events: none;
-}
-
-/* A soft pool of the icon's own colour under the corner. Only a tinted icon
-   gets one (`tx-stat-card--tinted`): grey has no hue to glow with. */
-.tx-stat-card__glow {
-  position: absolute;
-  right: -56px;
-  bottom: -72px;
-  width: 220px;
-  height: 220px;
-  border-radius: 50%;
-  background:
-    radial-gradient(
-      closest-side,
-      var(--tx-stat-card-glow-color) 0%,
-      var(--tx-stat-card-glow-color-soft) 50%,
-      transparent 100%
-    );
+  -webkit-mask-image: linear-gradient(to left, #000 10%, transparent 62%);
+  mask-image: linear-gradient(to left, #000 10%, transparent 62%);
   opacity: 0;
-  transition: opacity 0.6s ease;
+  transition: opacity 0.8s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
 }
 
-.tx-stat-card--tinted.tx-stat-card--glow-in .tx-stat-card__glow {
-  opacity: 0.6;
+// It fades in on mount once the card is tinted: `--glow-in` is a state change,
+// never a hover.
+.tx-stat-card--tinted.tx-stat-card--glow-in .tx-stat-card__aura {
+  opacity: 1;
 }
 
+// A little grain over the field: fractal noise tiled at 140px and overlaid at
+// 14%, so the blurred wash reads as a surface rather than a smooth digital
+// gradient. It lives inside the aura, so the aura's mask and fade apply to it,
+// and it is static — one raster, nothing for reduced motion to stop.
+.tx-stat-card__aura::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+  opacity: 0.14;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+// A grey icon has no hue to pull out, so an untinted card draws no blobs and
+// runs no animation. The blobs go rather than the layer: the tint and
+// `--glow-in` land before the same frame is styled, and a layer coming out of
+// `display: none` has no opacity for the fade to start from.
+.tx-stat-card:not(.tx-stat-card--tinted) .tx-stat-card__aura-blob {
+  display: none;
+}
+
+// Only `transform` animates: moving a blurred layer is a compositor job, while
+// animating its radius, size or blur would redraw the blur every frame.
+.tx-stat-card__aura-blob {
+  position: absolute;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: blur(34px);
+  will-change: transform;
+}
+
+// The icon's own colour, the largest, over the top-right corner.
+.tx-stat-card__aura-blob.is-a {
+  top: -40%;
+  right: -20%;
+  width: 66%;
+  background: color-mix(in srgb, color-mix(in oklab, var(--tx-stat-card-icon-color) 55%, var(--tx-bg-color, #fff)) 24%, transparent);
+  animation: tx-stat-card-aura-a 17s ease-in-out -6s infinite alternate;
+}
+
+// Its neighbour: the same mix with the hue turned 42°, rising from below the
+// bottom edge.
+.tx-stat-card__aura-blob.is-b {
+  right: 16%;
+  bottom: -52%;
+  width: 50%;
+  background: oklch(from color-mix(in oklab, var(--tx-stat-card-icon-color) 55%, var(--tx-bg-color, #fff)) l c calc(h + 42) / 20%);
+  animation: tx-stat-card-aura-b 21s ease-in-out -13s infinite alternate;
+}
+
+// The pure hue, thin, as the field's core — in the top-right corner rather
+// than behind the glyph, where it would swallow it.
+.tx-stat-card__aura-blob.is-c {
+  top: -26%;
+  right: -8%;
+  width: 30%;
+  background: color-mix(in srgb, var(--tx-stat-card-icon-color) 12%, transparent);
+  animation: tx-stat-card-aura-c 13s ease-in-out -4s infinite alternate;
+}
+
+// Without relative colour the neighbouring hue has nothing to turn, and the
+// declaration above computes to no background at all: a weaker pool of the
+// same page-mixed colour stands in.
+@supports not (color: oklch(from red l c h)) {
+  .tx-stat-card__aura-blob.is-b {
+    background: color-mix(in srgb, color-mix(in oklab, var(--tx-stat-card-icon-color) 55%, var(--tx-bg-color, #fff)) 17%, transparent);
+  }
+}
+
+// Each drift starts from the blob's resting place, which is therefore also the
+// still frame under reduced motion. Rotating ahead of the translate swings the
+// blob round that place instead of spinning it on the spot, and the uneven
+// scale stretches it as it turns.
+@keyframes tx-stat-card-aura-a {
+  to {
+    transform: rotate(40deg) translate(-14%, 12%) scale(1.18, 0.92);
+  }
+}
+
+@keyframes tx-stat-card-aura-b {
+  to {
+    transform: rotate(-50deg) translate(16%, -10%) scale(0.9, 1.12);
+  }
+}
+
+@keyframes tx-stat-card-aura-c {
+  to {
+    transform: rotate(60deg) translate(-18%, -14%) scale(1.2, 0.94);
+  }
+}
+
+// Under 240px of content width there is no room beside the figures (four
+// abreast in CoreApp's plugin storage tab, five in a dashboard row): the slot
+// shrinks to 36px in the empty top-right corner and the column keeps its full
+// width. The default layout keeps its figures at the bottom, so only a
+// top-aligned label (insight, progress) makes room for it. The aura is laid
+// out in percentages of the card and needs no change.
+@container (width < 240px) {
+  .tx-stat-card__glyph,
+  .tx-stat-card__progress {
+    --tx-stat-card-slot: 36px;
+    top: 12px;
+    right: 12px;
+    transform: none;
+    font-size: 18px;
+  }
+
+  :is(.tx-stat-card__glyph, .tx-stat-card__progress) ~ .tx-stat-card__content .tx-stat-card__label--top {
+    padding-right: 44px;
+  }
+}
+
+// Nothing drifts and nothing fades: the blobs keep their resting composition,
+// fully drawn, the aura appears at once and the arc jumps to its value. The
+// blob stops repeat the animated selectors, which outrank a bare
+// `.tx-stat-card__aura-blob`.
 @media (prefers-reduced-motion: reduce) {
-  .tx-stat-card__icon,
-  .tx-stat-card__glow,
+  .tx-stat-card__aura,
   .tx-stat-card__progress-ring {
     transition: none;
   }
 
-  .tx-stat-card:hover .tx-stat-card__icon {
-    transform: none;
+  .tx-stat-card__aura-blob.is-a,
+  .tx-stat-card__aura-blob.is-b,
+  .tx-stat-card__aura-blob.is-c {
+    animation: none;
   }
 }
 </style>

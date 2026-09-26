@@ -1,0 +1,30 @@
+{
+  "id": "indicator-family-jelly",
+  "name": "indicator-family-jelly",
+  "title": "TabBar / FlatRadio / SidebarNav 接入果冻指示器",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-25",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-25-tuffex-jelly-indicator-polish",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "完成 TabBar / FlatRadio / SidebarNav 接入果冻指示器 分批提交与主线合并验证。",
+    "blocker": "无阻塞项。",
+    "evidence": "TabBar / FlatRadio / SidebarNav 接入果冻指示器: - `09-25-jelly-indicator-engine` 已完成且通过其 review gate。; - 读 research/indicator-family.md §2–§4、§7、§9–§10；`component-guidelines.md`（One writer per CSS custom property、State motion）。; - 实现 agent：三个组件接引擎（测量不变、`onFrame` 命令式绘制、模板不再绑定这些属性、晚挂载节点由同步 watcher 补写最近一帧；只有选"
+  }
+}

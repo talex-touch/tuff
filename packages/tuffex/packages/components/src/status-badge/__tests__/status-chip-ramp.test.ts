@@ -96,7 +96,7 @@ describe('status chip ramp (variables.scss)', () => {
     // Distinct, or every assertion below would be reading one block four times.
     expect(new Set(bodies).size).toBe(4)
     // And it really finds the tokens rather than matching empty strings.
-    expect(token(THEMES['light (:root)']!, 'tx-status-chip-success')).toBe('#15803d')
+    expect(token(THEMES['light (:root)']!, 'tx-status-chip-success')).toBe('#16a34a')
   })
 
   for (const [theme, body] of Object.entries(THEMES)) {

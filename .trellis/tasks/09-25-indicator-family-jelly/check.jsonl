@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "verification standard"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "docs completeness incl. fine-tune-card wrapper page"}
+{"file": ".trellis/tasks/09-25-indicator-family-jelly/research/indicator-family.md", "reason": "tests and consumers to regression-check"}

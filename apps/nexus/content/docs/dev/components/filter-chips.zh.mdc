@@ -147,6 +147,6 @@ code: |
 - **补齐的无障碍能力：** 上游只有 `aria-pressed`，没有任何键盘导航；本移植按仓库标准补上了 roving tabindex、方向键、`Home` / `End` 与 `tablist` 语义。
 - **修正的上游缺陷：** 上游把计数写成字面量常量，只是恰好与当时的行数对得上；本组件把 `count` 定义为宿主推导的值，并在文档与 demo 中一致地这么做。
 - **配色：** 悬停用中性的 `--tx-bui-hover`，不是主色调 tint——筛选条是纸面控件，不是强调元素。
-- **被否掉的做法：** 直接搬 `TxTabs` 的 pointer。那是 900 行组件里的内联实现，支持 line/pill/block/dot/outline × stretch/warp/glide/snap/spring 与纵向布局；一条筛选条要的只是「底色挪过去」，一种观感一种运动。
+- **被否掉的做法：** 直接搬 `TxTabs` 的 pointer。写这个移植时，它是 900 行组件里的内联实现，支持 line/pill/block/dot/outline × stretch/warp/glide/snap/spring 与纵向布局；一条筛选条要的只是「底色挪过去」，一种观感一种运动。2026-09-26 起那个 pointer 改由共享的 `useJellyIndicator` 引擎以滑行材质驱动，「体量太大」这条理由已不成立；FilterChips 仍保留自己的 0.24s 补间，不引入滑行的两根弹簧。
 - **props 声明方式：** 用运行时对象而不是 `defineProps<FilterChipsProps>()`。类型式声明在编译时从 `types.ts` 解析，而 dev server 的 Vue 插件在 *那个文件* 变化时不会重新编译本 SFC——`iconOnly` 加进接口后，vitest（冷编译）全绿，运行中的应用却一直把它当未知属性丢掉。运行时对象把声明留在编译器会监听的文件里，`satisfies` 钉住它与接口一致。
 - **实测覆盖：** `filter-chips.test.ts` 断言运行时 props 与 `FilterChipsProps` 的键逐一对应；覆盖滑块取自活动 chip 的盒子并跟随选中变化、无选中项时不绘制、`indicator: false` 时底色留在 chip 上、chip 列表重建走不补间路径；`filter-chips-motion.test.ts` 按 BUI 规则 2 编译样式块，正反两向断言 reduce 下补间被切掉、默认下确实存在补间，且静止态不依赖动画才可见。

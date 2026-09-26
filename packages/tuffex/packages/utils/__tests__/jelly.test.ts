@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { JELLY, jellyScale } from '../animation/jelly'
+import { JELLY, JELLY_REFERENCE_MS, jellyScale, jellySpring } from '../animation/jelly'
 
 /**
  * `jellyScale` is the Radio indicator's `getElasticScale` lifted out verbatim so
@@ -65,5 +65,47 @@ describe('jellyScale', () => {
     const big = jellyScale({ ...atRest, speed: 300, moving: true, dragBoost: 10, baseScale: 2, phaseScale: 2 })
     expect(big.scaleY).toBe(2)
     expect(big.scaleX).toBe(0)
+  })
+
+  it('turns the travel stretch through 90° on a vertical track and leaves x untouched', () => {
+    const moving = { ...atRest, speed: 300, moving: true }
+    const x = jellyScale(moving)
+    expect(jellyScale({ ...moving, travelAxis: 'x' })).toEqual(x)
+
+    const y = jellyScale({ ...moving, travelAxis: 'y' })
+    expect(y.scaleX).toBe(x.scaleY)
+    expect(y.scaleY).toBe(x.scaleX)
+  })
+})
+
+describe('jellySpring', () => {
+  it('is the shipped spring at the reference duration', () => {
+    expect(jellySpring()).toEqual({ stiffness: JELLY.stiffness, damping: JELLY.damping })
+    expect(jellySpring(JELLY_REFERENCE_MS)).toEqual({ stiffness: JELLY.stiffness, damping: JELLY.damping })
+  })
+
+  it('plays the same spring faster or slower without changing how bouncy it is', () => {
+    const half = jellySpring(JELLY_REFERENCE_MS / 2)
+    expect(half.stiffness).toBeCloseTo(JELLY.stiffness * 4, 9)
+    expect(half.damping).toBeCloseTo(JELLY.damping * 2, 9)
+
+    const ratio = ({ stiffness, damping }: { stiffness: number, damping: number }) => damping / (2 * Math.sqrt(stiffness))
+    expect(ratio(jellySpring(220))).toBeCloseTo(ratio(jellySpring()), 9)
+  })
+
+  it('falls back to the reference for a duration that is not a positive number', () => {
+    for (const bad of [0, -100, Number.NaN, Number.POSITIVE_INFINITY])
+      expect(jellySpring(bad)).toEqual({ stiffness: JELLY.stiffness, damping: JELLY.damping })
+  })
+
+  it('never plays faster than one step per frame can integrate', () => {
+    // Semi-implicit Euler holds while k·dt² + 2c·dt < 4; check the stiffest
+    // spring the indicator runs (size, ×sizeStiffnessScale) at the frame cap.
+    const dt = JELLY.maxFrameS
+    for (const durationMs of [100, 60, 20, 1]) {
+      const { stiffness, damping } = jellySpring(durationMs)
+      expect(stiffness * JELLY.sizeStiffnessScale * dt * dt + 2 * damping * dt).toBeLessThan(4)
+    }
+    expect(jellySpring(20)).toEqual(jellySpring(100))
   })
 })

@@ -1,0 +1,30 @@
+{
+  "id": "jelly-indicator-engine",
+  "name": "jelly-indicator-engine",
+  "title": "tuffex 共享果冻指示器引擎（从 Radio 抽出，Radio 迁移）",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-25",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-25-tuffex-jelly-indicator-polish",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "完成 tuffex 共享果冻指示器引擎（从 Radio 抽出，Radio 迁移） 分批提交与主线合并验证。",
+    "blocker": "无阻塞项。",
+    "evidence": "tuffex 共享果冻指示器引擎（从 Radio 抽出，Radio 迁移）: - 读 `.trellis/spec/frontend/hook-guidelines.md`（composable / 生命周期）、`tuffex-design-rules.md` Motion 节、`quality-guidelines.md`。; - 调研：`../09-25-indicator-family-jelly/research/indicator-family.md` 第 6、7 节（Radio 结构与测试、reduced-motion 契约）。; - `JellyScaleInput.travel"
+  }
+}

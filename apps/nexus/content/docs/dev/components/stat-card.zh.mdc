@@ -13,18 +13,35 @@ verified: true
 
 ### 默认样式
 
-基础卡片布局，不包含趋势和进度增强。`iconClass` 渲染成一枚大号淡色水印，裁在卡片右下角；类里的颜色类给它着色，角落随之铺开一层同色柔光。
+基础卡片布局，不包含趋势和进度增强。`iconClass` 以完整、无底板的图标画在卡片右侧、垂直居中，与进度样式的进度环占同一个槽位；图标的颜色被抽离成卡片右侧的一片色光：图标色、相邻色相与提亮浅色三团柔和色斑缓慢漂移，向文字方向渐隐。颜色由 `iconClass` 里的颜色类决定；不带颜色类时图标与色光都是主色，显式的灰色（如 `--tx-color-info`）只留灰色图标、没有色光。本例依次是主色（`clickable`）、success、warning 与中性四种色调。
 
 ::TuffDemoWrapper{demo="StatCardDefaultVariantDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxStatCard
-      :value="2847"
-      label="插件总数"
-      icon-class="i-carbon-download text-[var(--tx-color-primary)]"
-      clickable
-    />
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+      <TxStatCard
+        :value="2847"
+        label="插件总数"
+        icon-class="i-carbon-download text-[var(--tx-color-primary)]"
+        clickable
+      />
+      <TxStatCard
+        :value="2516"
+        label="已启用"
+        icon-class="i-carbon-checkmark-outline text-[var(--tx-color-success)]"
+      />
+      <TxStatCard
+        :value="18"
+        label="待更新"
+        icon-class="i-carbon-renew text-[var(--tx-color-warning)]"
+      />
+      <TxStatCard
+        :value="331"
+        label="已停用"
+        icon-class="i-carbon-power text-[var(--tx-color-info)]"
+      />
+    </div>
   </template>
 ---
 ::
@@ -113,7 +130,7 @@ code: |
 
 ### 进度样式
 
-使用 `progress` 切换为进度卡片，并支持 `Shuffle` 动态刷新。
+使用 `progress` 切换为进度卡片，并支持 `Shuffle` 动态刷新。进度环、环心圆盘与图标跟随 `iconClass` 里的颜色类，进度环背后也铺着与默认样式相同的色光。
 
 ::TuffDemoWrapper{demo="StatCardProgressVariantDemo" code-lang="vue"}
 ---
@@ -212,7 +229,8 @@ code: |
 - 涨幅的符号、数值与单位紧贴成一个整体；单位前需要空格时把空格写进 `suffix`（如 `' pts'`），不要靠外部样式拉开。
 - `variant="progress"` 只用于健康度、容量、配额、完成率等有边界的指标，不用于无限增长的总量。
 - `clickable` 只提供视觉反馈。需要跳转或操作时，应由外层按钮/链接或相邻操作控件承载真实交互。
-- 用 `iconClass` 里的颜色类区分指标类别（如 `i-carbon-task text-[var(--tx-color-success)]`），它同时给水印和柔光着色；不带颜色类的图标不出柔光，适合一排卡片里需要安静的那张。不必再传 `text-6xl` 这类尺寸类。
+- 用 `iconClass` 里的颜色类区分指标类别（如 `i-carbon-task text-[var(--tx-color-success)]`），它同时给图标、色光以及 progress 布局的进度环着色；一排卡片里需要安静的那张给灰色（如 `text-[var(--tx-color-info)]`），只留灰色图标、不画色光。不必再传 `text-6xl` 这类尺寸类。
+- 卡片宽度要来自父级（grid 单元格、被拉伸的 flex 项或定宽容器）：根节点是 inline-size 容器，内容区窄于 240px 时图标与进度环缩小并移到右上角；放进 `inline-block`、`width: fit-content` 这类按内容收缩的父级会让卡片塌陷。
 
 ## API 参考
 
@@ -222,7 +240,7 @@ code: |
 |------|------|---------|------|
 | `value` | `number \| string` | - | 主数值；传入 number 时会使用默认数字格式化 |
 | `label` | `string` | - | 指标标签；在 insight/progress 布局中显示在顶部 |
-| `iconClass` | `string` | `''` | 装饰图标 class（UnoCSS Icones）。默认与 insight 布局中渲染为右下角的 88px 水印，尺寸由组件决定，类里的颜色类负责着色并点亮柔光；progress 布局中画在进度环中心 |
+| `iconClass` | `string` | `''` | 装饰图标 class（UnoCSS Icones）。默认与 insight 布局中以无底板的图标画在右侧、垂直居中（卡片内容区窄于 240px 时移到右上角），尺寸由组件决定；类里的颜色类给图标和它身后抽出的色光着色，不带颜色类时为主色。progress 布局中画在进度环中心，进度环跟随同一颜色，背后铺着同一片色光 |
 | `clickable` | `boolean` | `false` | 只加指针光标；hover 反馈对所有卡片生效，组件不绑定点击行为 |
 | `insight` | `StatCardInsight` | - | 指标变化对象；启用后 label 上移并渲染趋势信息 |
 | `variant` | `StatCardVariant` | `'default'` | 布局变体（`default` \| `progress`） |
@@ -253,15 +271,18 @@ code: |
 
 | 变量 | 来源 | 说明 |
 |------|------|------|
-| `--tx-stat-card-icon-opacity` | 组件默认 `0.16`，可在组件的 `style` 上覆写 | 右下角装饰图标的静止透明度。 |
-| `--tx-stat-card-icon-opacity-hover` | 组件默认 `0.26`，可在组件的 `style` 上覆写 | hover 时装饰图标的透明度。 |
-| `--tx-stat-card-icon-color` | 组件写入（图标计算色） | 只在图标着色时写到根节点，灰色图标会移除它；柔光的 `--tx-stat-card-glow-color` / `--tx-stat-card-glow-color-soft` 由它按 34% / 12% `color-mix` 混出。由组件独占，不要用 `:style` 绑定。 |
+| `--tx-stat-card-slot` | 组件默认 `72px`，可在组件的 `style` 上覆写 | 右侧方形槽位的边长：图标居中其中，progress 的进度环按它的尺寸绘制，宽卡的内容列在右侧让出槽位加 8px。卡片内容区窄于 240px 时组件在图标与进度环上把它改为 `36px`。 |
+| `--tx-stat-card-slot-inset` | 组件默认 `18px`，可在组件的 `style` 上覆写 | 槽位到卡片右边缘的距离。上述窄卡布局中不读取：槽位固定在距上、右各 `12px` 的角落。 |
+| `--tx-stat-card-icon-color` | 组件写入（图标计算色） | 图标着色时写到根节点；灰色图标会移除它，只有 progress 布局保留，让进度环也取这层灰色。色光的三团色斑（该色向页面底色 `--tx-bg-color` 混合后的颜色、它在 OKLCH 中色相转 42° 的邻近色、该色本身）、着色时图标的墨色，以及 progress 的进度弧、轨道与环心圆盘都由它绘制。挂载时、`iconClass` / `variant` 变化时和页面主题切换后重新读取。由组件独占，不要用 `:style` 绑定。 |
 
 ## 概述
 
-- 装饰图标：默认与 insight 布局把 `iconClass` 渲染成 88px、无模糊的水印，静止透明度 `0.16`，从右下角溢出并被卡片圆角裁掉；progress 布局则把图标以 22px 画在进度环中心，颜色跟随进度环，不渲染水印与柔光。水印尺寸由组件决定——选择器优先级高于 `text-6xl` 这类宿主工具类，尺寸类不生效；`iconClass` 里的颜色类仍会着色，未着色的图标继承次要文字色。
-- 柔光只跟随着色图标：挂载时以及 `iconClass` / `variant` 变化时，组件读取图标的计算色；有色相时写入根节点的 `--tx-stat-card-icon-color` 并加上 `tx-stat-card--tinted`，右下角淡入一层同色径向柔光。灰色图标（RGB 通道极差 < 24）不出柔光：它没有色相可发光，混进去只会在数字后面留下一团灰雾。
-- hover 对所有卡片生效：描边立即变为 `--tx-border-color`（颜色不做过渡），角落图标向内位移 4px 并提亮到 `0.26`，柔光增强。`clickable` 只额外加上指针光标。
+- 图标：默认与 insight 布局把 `iconClass` 直接画在右侧——没有底板、描边、投影或光晕——垂直居中于与 progress 进度环相同的 72px 槽位，图标完整显示，不再被卡片边缘裁切；内容列在右侧让出槽位加 8px 的空间。图标尺寸由组件决定（30px）——选择器优先级高于 `text-6xl` 这类宿主工具类，尺寸类不生效；`iconClass` 里的颜色类照常给图标着色，不带颜色类时继承主色。progress 布局把图标以 22px 画在进度环中心，不再单独渲染图标槽。
+- 色光：图标（或进度环）身后，图标的颜色被抽离铺在卡片右侧。三团模糊（34px）色斑——该色与页面底色（`--tx-bg-color`）55:45 混合后取 24%、同一混合色在 OKLCH 中色相转 42° 取 20%、该色本身 12%（细小，作为色场的核心，落在右上角而不是图标身后）——分别以 17s、21s、13s 的周期漂移、旋转、拉伸，叠在一起像一片缓慢形变的色场。遮罩把它限定在右侧：卡片最右 10% 完全可见，到从右往左 62% 处淡尽，数字仍落在素净的卡面上。读到颜色后 0.8s 淡入。两团大色斑向页面底色混合，所以色光在暗色主题下是深色、在亮色主题下是浅色，不会亮成一片把图标吞掉（2026-09-26 评审：暗色下「太亮，图标不显眼」）；同日再次评审「还是比较明显」，三团透明度约减半、遮罩收窄，色光只是数字旁的一层底色，不是和数字抢眼的第二主体；第三次评审要求「继续淡、更模糊、带些许颗粒感」，透明度再降三成、模糊从 22px 加到 34px，并在色光层上叠一层 SVG 分形噪声（`feTurbulence`，140px 平铺，`overlay` 混合 14%）。颗粒在色光层内部，随它的遮罩与淡入一起出现，本身静止。浏览器不支持相对颜色（`oklch(from …)`）时，邻近色回落为同一混合色 17% 的一团。
+- 图标墨色：着色的卡片里，图标颜色向正文色（`--tx-text-color-primary`）偏 45%，与色光往相反方向走——亮色主题下比浅色光更深、暗色主题下比深色光更浅——否则它落在同色相的色光上几乎看不见。`iconClass` 的颜色类仍决定色相：组件读取图标颜色时会先撤掉这层墨色，主题切换后的重读不会在已混过的颜色上再混一次。
+- 窄卡：卡片内容区窄于 240px 时（按卡片自身的容器查询，与视口无关；默认 16px 内边距下约为 274px 宽的卡片），槽位缩成 36px、移到距上、右各 12px 的空白角落，图标缩为 18px，进度环同步缩小；色光按卡片的百分比布局，保持不变。内容列不再让位，只有顶部对齐的标签（insight / progress）右侧留出 44px，默认布局的数字贴底，标签只有一行时位于角落下方。
+- 取色跟随图标：挂载时、`iconClass` / `variant` 变化时以及页面主题切换后（`<html>` 的 `class` / `data-theme` / `data-tx-contrast` 变化，或系统配色、对比度偏好变化；所有卡片共用一个观察器，在下一帧读取，被 `<KeepAlive>` 缓存的卡片重新激活时再读一次），组件读取图标的计算色。有色相时写入根节点的 `--tx-stat-card-icon-color` 并加上 `tx-stat-card--tinted`，色光随之出现；progress 的进度环、轨道与环心圆盘也由它混出。灰色图标（RGB 通道极差 < 24，包括标准亮 / 暗主题下的 `--tx-color-info`）不给卡片着色：图标保持灰色，不画色光（色斑根本不渲染）——灰色没有色相可抽离，混进去只会在数字旁留下一团灰雾。progress 布局里的进度环仍取灰色图标的颜色，不会退回主色。
+- hover 对所有卡片生效，但不带任何动效：描边立即变为 `--tx-border-color`（颜色不做过渡），卡片上没有东西上浮、扫光或发光。`clickable` 只额外加上指针光标。
 - 涨幅胶囊：符号、数值、单位紧贴渲染为一个整体（`+16.7%`），底色是涨幅色的 12% 混色。默认趋势图标是内联 SVG，不依赖宿主扫描图标类；显式 `insight.iconClass` 仍渲染为 `<i>` 图标。数值与涨幅都使用等宽数字，刷新时不抖动。
 
 ## 技术实现
@@ -269,13 +290,15 @@ code: |
 - 源码：`packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`
 - 建议：普通指标使用默认变体，增减趋势使用 `insight`，0-100 边界明确的健康度/容量使用 `variant="progress"`。
 - 视觉契约变更（2026-09-23）：装饰层不再渲染模糊放大的第二个图标 `.tx-stat-card__decoration-icon`，`.tx-stat-card__decoration` 里只剩 `.tx-stat-card__glow`；默认趋势图标从 `i-carbon-growth` / `i-carbon-arrow-down` 图标类改为内联 SVG `.tx-stat-card__insight-icon--trend`；涨幅文本包进 `.tx-stat-card__insight-text`；根节点新增 `tx-stat-card--tinted`。针对旧 class 或旧图标类写的覆盖样式需要迁移。props、slots、events 与 `progress` 变体不变。
-- 被否决的方案：把图标收进右上角的小号着色徽章。CoreApp 插件页（`PluginFeatures` / `PluginStorage`）传入 `icon-class="i-ri-… text-6xl text-<颜色>"`，依赖的正是大号彩色图标的气质，因此保留大图标，改成裁在角落的淡色水印。旧 hover 把装饰层放大到 2.05 倍并模糊、图标层旋转 10°，一并移除。
 - 进度环修复（2026-09-24）：`--tx-stat-card-progress` 用 `@property` 注册、绑定在 `.tx-stat-card__progress` 上，而真正画弧的进度环是它的子元素。它原先注册为 `inherits: false`，进度环永远只读到初始值 0%，弧从未画出——本文档与 CoreApp 存储页的使用率卡片都是如此。现在改为可继承。环内圆盘也统一为进度色的 16% 混色；此前一条 `@supports (color: color-mix(…))` 覆盖把它改混进 `rgba(0, 0, 0, 0.45)`，暗色下像一块深色镜片，亮色下是环心一团灰斑。
+- 视觉契约变更（2026-09-26）：`iconClass` 从右下角水印改为右侧的发光徽章。删除 `.tx-stat-card__icon-layer`、`.tx-stat-card__decoration` 与 `.tx-stat-card__glow`，新结构是 `.tx-stat-card__badge` > `.tx-stat-card__halo` + `.tx-stat-card__badge-body` > `i.tx-stat-card__icon`（`<i>` 的类名不变）；不再读取 `--tx-stat-card-icon-opacity` / `--tx-stat-card-icon-opacity-hover`，柔光用的 `--tx-stat-card-glow-color` / `--tx-stat-card-glow-color-soft` 一并删除，新增 `--tx-stat-card-slot` / `--tx-stat-card-slot-inset`。进度环、轨道、环心圆盘与环心图标改为跟随图标颜色：此前环固定为主色，环心图标上的颜色类也被组件样式压掉，运营面板里 success / warning / danger 三张卡都画成了主色。内容列在右侧为槽位留出空间；根节点成为 inline-size 容器（`container-type: inline-size`）。针对旧 class 或变量写的覆盖样式需要迁移；props、slots、events 不变。
+- 视觉契约变更（2026-09-26，同日稍后）：徽章改为色光。删除 `.tx-stat-card__badge`、`.tx-stat-card__halo` 与 `.tx-stat-card__badge-body`，连同徽章的渐变底板、1px 描边、顶边内高光、1:2 投影、光晕以及 hover 上浮与扫光。图标改为直接放在 `.tx-stat-card__glyph` > `i.tx-stat-card__icon` 里（`<i>` 的类名不变；30px，窄卡 18px）；新增 `.tx-stat-card__aura` > 三个 `.tx-stat-card__aura-blob`（`.is-a` / `.is-b` / `.is-c`），把图标颜色铺在卡片右侧——progress 布局里也有，位于进度环之下。`--tx-stat-card-slot`、`--tx-stat-card-slot-inset` 与 `--tx-stat-card-icon-color` 不变。针对徽章类名写的覆盖样式需要迁移；props、slots、events 不变。
+- 被否决的方案：2026-09-23 先否决了把图标收进右上角小号着色徽章的做法——CoreApp 插件页（`PluginFeatures` / `PluginStorage`）传入 `icon-class="i-ri-… text-6xl text-<颜色>"`，依赖的是大号彩色图标的气质，于是改成裁在右下角的大号淡色水印，旧 hover（装饰层放大到 2.05 倍并模糊、图标层旋转 10°）一并移除。2026-09-26 水印本身也被替换：图标被卡片边缘裁掉一截，0.16 的透明度又撑不起卡片，看起来既残缺又不够醒目。第一个替代方案是发光徽章——它也不是当年那枚右上角小徽章：在右侧垂直居中、占 72px 槽位、本体 56px，带同色渐变、描边、光晕与投影——但同日在评审中被否决：投影、描边和 hover 动效（上浮 2px 加一道扫光）用错了强调方式。要的是从图标颜色抽出、在右侧持续形变的渐变，而且没有 hover 动效。色光就是这个方案，无框的图标保留徽章的槽位，完整而醒目。缩小后放在右上角的形态只是卡片内容区窄于 240px、数字旁放不下槽位时的退路。
 - 可访问性：组件根节点使用 `role="group"`；在 Dashboard 中应给相邻标题或上下文，避免只显示裸数字。
-- 动效降级：柔光挂载时 0.6s 淡入，hover 时图标的位移与提亮是 0.35s 过渡，进度弧变化是 0.6s 过渡；`prefers-reduced-motion: reduce` 下这些过渡全部关闭（进度弧直接跳到新值）、hover 不再位移，提亮、描边与柔光增强即时生效。
+- 动效降级：色光挂载时 0.8s 淡入（`opacity`，由 `--tinted` + `--glow-in` 状态驱动，与 hover 无关）。三团色斑以 17s、21s、13s 的 `ease-in-out` 往返循环漂移，起始相位错开，只动 `transform`（旋转、位移、不等比缩放），模糊后的图层交给合成器移动，不会每帧重新模糊。进度弧变化是 0.6s 过渡。没有任何 hover 动效，也没有过渡涉及颜色。`prefers-reduced-motion: reduce` 下全部停止：色斑停在静止构图（每段漂移的第一帧，完整可见），色光直接出现，进度弧直接跳到新值。
 
 - Component source: `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`。
 - Type contracts: `packages/tuffex/packages/components/src/stat-card/src/types.ts` 导出 `StatCardProps`、`StatCardInsight` 与变体类型。
-- **实测覆盖:** `packages/tuffex/packages/components/src/stat-card/__tests__/stat-card.test.ts` 覆盖默认渲染与 `aria-labelledby` 命名、`ariaLabel` 覆盖、指针光标只挂在 `--clickable` 上（源码断言）、自定义 value 与 label 插槽、百分比与增量 insight（默认内联 SVG 趋势图标、显式 `iconClass`、`+20%` 整体渲染、负值不加 `+`）、柔光只跟随着色图标（`rgb()` 与 `color(srgb …)` 判为着色，灰色不写 `--tx-stat-card-icon-color`）、进度激活与进度环裁剪、进度环读取父元素上绑定的百分比（`@property … inherits: true`，源码断言）且其过渡在 reduced-motion 下关闭、省略 `progress` 时用 ≤100 的数值推断进度，以及自定义 progress meta 插槽。水印尺寸、hover 视觉以及水印与柔光的 reduced-motion 规则只在样式层，vitest 不执行 `<style>`，单测没有断言它们。
+- **实测覆盖:** `packages/tuffex/packages/components/src/stat-card/__tests__/stat-card.test.ts` 覆盖默认渲染与 `aria-labelledby` 命名、色光与图标结构（`.tx-stat-card__aura` 内三个 `.tx-stat-card__aura-blob`，`.tx-stat-card__glyph` > 带图标类的 `.tx-stat-card__icon`，两者都 `aria-hidden`，不再有徽章）、`ariaLabel` 覆盖、指针光标只挂在 `--clickable` 上（源码断言）、自定义 value 与 label 插槽、百分比与增量 insight（默认内联 SVG 趋势图标、显式 `iconClass`、`+20%` 整体渲染、负值不加 `+`）、取色只跟随着色图标（`rgb()` 与 `color(srgb …)` 判为着色，灰色不写 `--tx-stat-card-icon-color`，progress 布局除外、仍由它给进度环着色；灰色卡片渲染色光层，但永远拿不到让它显示的 `--tinted`）、`<html>` 的 `class` 或 `data-tx-contrast` 属性切换后在下一帧重读图标颜色、进度激活与进度环裁剪（progress 布局不渲染 `.tx-stat-card__glyph`，色光在 DOM 中位于进度环之前）、进度环读取父元素上绑定的百分比（`@property … inherits: true`，源码断言）且其过渡在 reduced-motion 下关闭、省略 `progress` 时用 ≤100 的数值推断进度，以及自定义 progress meta 插槽。样式契约用 Sass 编译样式表后断言：色光只在 `--tinted` + `--glow-in` 时显示，未着色的卡片去掉色斑而不是整层；三团色斑是唯一的动画元素，各用一组只动 `transform` 的关键帧；图标与色光都没有投影或底板；hover 规则不移动任何东西，也没有过渡作用于颜色；reduced-motion 下停止所有动画与过渡，且不隐藏任何内容。窄卡容器查询与色光的实际观感没有断言：jsdom 没有布局与绘制。
 
 <TuffDocSourceLink />

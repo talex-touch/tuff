@@ -181,6 +181,27 @@ The inverse form is equally valid and smaller: declare the animation **only** in
 
 A collapse that shrinks its content box during the close animation makes the text reflow on the way out, which reads as a glitch rather than a transition. Animate the container; leave the content at its measured size until the animation ends. See `bui-disclosure-collapse` in `style/mixins.scss`.
 
+### A looping effect runs on the compositor, with its parameters outside the keyframes
+
+A loading or ambient effect plays exactly while the main thread is busy (a search in flight, a model streaming), so no frame of it may need the main thread:
+
+- Animate only `translate`, `scale`, `rotate` and `opacity`, as individual properties. Two animations on one element then never compete for `transform`, and a static `transform` can still hold a base size that the animated `scale` composes with.
+- Keep `var()` out of `@keyframes`. Per-element parameters such as period, phase and hue sit on the element as custom properties and reach the animation through `calc()` in `animation-duration` / `animation-delay`, never through keyframe values.
+- Write the per-instance custom properties inline and keep one rule for every instance, instead of generating a selector per instance.
+
+Additive light only works on dark surfaces. `mix-blend-mode: plus-lighter` is what makes overlapping beams merge towards white on dark. On a near-white page it is invisible, and a white core reads as a grey smudge, so light mode keeps the core coloured and blends `normal`. `multiply` is not the fix: it turns blue over yellow into olive.
+
+Worked example: `TxPrismGlow` (2026-09-26); `prism-glow.test.ts` covers it.
+
+### A loading surface retracts when content lands under it
+
+When results arrive and make the host of a loading effect taller, the effect must not share a frame with the content. Swap the fade-out for a short retract (about 140ms) the moment the host grows, and keep the effect off until the loading flag cycles. `TxPrismGlow`'s `collapseOnGrow` is the reference:
+
+- Watch the height with a `ResizeObserver`. Its callbacks run after layout and before paint, and Vue flushes in the same step, so a frame showing grown content under a lit effect never paints.
+- Ignore growth below about 8px: a late web font reflows the host by a few pixels, and that is not content.
+- Growth during a fade-out counts too, because `items = data; loading = false` in one update is the common case. Speed up the running fade through `animation.playbackRate` rather than restarting it.
+- An `inset: 0` layer stretches with a growing host, so pin the leaving layer to its pre-growth height in the Transition's `@before-leave` hook. A node that `v-if` is removing receives no new bindings; a reactive `:style` cannot pin it.
+
 ---
 
 ## Structure

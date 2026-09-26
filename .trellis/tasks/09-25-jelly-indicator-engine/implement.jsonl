@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useJellyIndicator is a new composable: lifecycle, SSR-safe window access, cleanup rules"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "Motion section: every transition has a reduced-motion escape; the engine owns reduced-motion snapping"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "One writer per CSS custom property / State motion rules that shape the onFrame imperative-write contract"}
+{"file": ".trellis/spec/frontend/tuffex-text-motion.md", "reason": "do-not-add-a-second-spring-compiler rule; the engine extracts Radio's existing rAF integrator, it does not compile springs to CSS"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "moving Radio's scattered magic numbers into the shared JELLY table instead of duplicating them"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "shared worktree: no stash/checkout, tuffex build lock, announce :3200 restarts"}
+{"file": ".trellis/tasks/09-25-indicator-family-jelly/research/indicator-family.md", "reason": "section 5 (Radio indicator structure, integrator, probe numbers, tests that lock it) and section 10 (engine API constraints from all adopters)"}

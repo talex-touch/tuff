@@ -158,6 +158,7 @@ code: |
 - For `x/y/scale`-driven items the component owns the wrapper `transform`; do not write your own transform or filter onto the wrapper.
 - `morph.shape` writes `filter: blur()` onto the content mid-morph; `dissolve` writes `mask-image` onto `<img>` elements — don't combine either with your own.
 - `dissolve` combined with `effect="move"` is ignored with a warning; component-driven transitions collapse to instant snaps under `prefers-reduced-motion: reduce`.
+- `resolveTransition(transition, reducedMotion?)` is exported alongside `liquidTransitionPresets`: it compiles a preset or a `SpringConfig` into `{ duration, easing }`, where `easing` is a CSS `linear()` curve (a cubic-bezier where `linear()` is unsupported), so WAAPI or CSS motion outside the component can ride the same springs.
 
 ## Technologies
 

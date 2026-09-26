@@ -49,6 +49,8 @@ const labels = computed(() => {
       motion: '动效',
       content: '内容',
       indicator: '指示器',
+      on: '开',
+      off: '关',
       auto: '自动',
       next: '下一项',
       active: '当前',
@@ -62,6 +64,8 @@ const labels = computed(() => {
     motion: 'motion',
     content: 'content',
     indicator: 'indicator',
+    on: 'on',
+    off: 'off',
     auto: 'auto',
     next: 'Next',
     active: 'active',
@@ -107,7 +111,7 @@ function next() {
         <label class="tx-demo__row" style="gap: 8px;">
           <span class="tx-demo__label">{{ labels.indicator }}</span>
           <TxButton size="sm" @click="showIndicator = !showIndicator">
-            {{ showIndicator ? 'on' : 'off' }}
+            {{ showIndicator ? labels.on : labels.off }}
           </TxButton>
         </label>
 

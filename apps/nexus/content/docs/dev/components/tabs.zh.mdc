@@ -60,9 +60,12 @@ code: |
 ---
 :::
 
-### Indicator Showcase
+### 指示器展示
 
-#### Indicator variants & motions
+- 激活的 tab 由一个指示器标出，切换时它滑到下一个 tab：两端各走一根弹簧，途中略微拉长、到位时收拢，从不挤压或缩放。`indicatorVariant` 只改变它的画法，`indicatorMotion` 选择弹簧；`pill` 是整项背后的凸起面（2026-09-26 之前是一条粗线）。
+- 下面五行共用一个 `v-model`，在任意一行点击或按「下一项」，五个指示器会同时移动。把指示器切到「关」可以看到回退样式：激活项自己画底色。
+
+#### 指示器变体与动效
 :::TuffDemoWrapper{demo="TabsIndicatorVariantsMotionsDemo" code-lang="vue"}
 ---
 code: |
@@ -539,7 +542,7 @@ code: |
 | `modelValue` | `string` | - | 受控激活 tab 名称。父级更新该值会切换面板，但不会再次触发 `change`。 |
 | `defaultValue` | `string` | - | 非受控初始激活 tab。必须匹配某个 `TxTabItem name`，否则不选中任何 tab。 |
 | `placement` | `'left' \| 'right' \| 'top' \| 'bottom'` | `'left'` | 导航位置；非法值回退为 `left`。 |
-| `offset` | `number` | `0` | `line` / `pill` 指示器沿当前轴线的额外偏移。 |
+| `offset` | `number` | `0` | `line` 指示器沿导航轴线的额外偏移（px）。其它变体忽略它；`pill` 改为凸起面后不再接受它。 |
 | `navMinWidth` | `number` | `220` | 垂直布局下导航区域最小宽度。 |
 | `navMaxWidth` | `number` | `320` | 垂直布局下导航区域最大宽度。 |
 | `contentPadding` | `number` | `12` | 主内容区 padding。 |
@@ -547,14 +550,14 @@ code: |
 | `borderless` | `boolean` | `false` | 移除外层边框和背景，适合嵌入式布局。 |
 | `autoHeight` | `boolean` | `false` | 通过默认 `animation.size` 配置启用 AutoSizer 高度动画。 |
 | `autoWidth` | `boolean` | `false` | 通过默认 `animation.size` 配置启用 AutoSizer 宽度动画。 |
-| `showIndicator` | `boolean` | `true` | 是否渲染活动 tab 指示器；设为 `false` 可得到纯文本导航。 |
-| `indicatorVariant` | `'line' \| 'pill' \| 'block' \| 'dot' \| 'outline'` | `'line'` | 指示器样式；非法值回退为 `line`。 |
-| `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | 指示器动效类型；非法值回退为 `stretch`。 |
-| `indicatorMotionStrength` | `number` | `1` | 控制指示器缩放弹性的非负数；负数会夹到 `0`。 |
+| `showIndicator` | `boolean` | `true` | 是否渲染活动 tab 指示器；显示时它是唯一的选中高亮，激活项不再自己画底色。设为 `false` 可得到纯文本导航，激活项回退为自己的 `--tx-fill-color` 底色。 |
+| `indicatorVariant` | `'line' \| 'pill' \| 'block' \| 'dot' \| 'outline'` | `'line'` | 指示器画法。`line`：从图标到文字的 2px 主色细线，最短 16px，标签更短时居中于标签下方，压在导航与内容的分隔线上（`left` / `right` 时贴导航外侧边）。`pill`：整项背后的凸起面，与 TxTabBar 的 `pill`、TxFlatRadio 的滑块同类（2026-09-26 之前是一条 6px 粗线）。`block`：14% 主色浅染，无阴影。`outline`：向内画的 1.5px 主色 ring。`dot`：6px 主色圆点，距分隔线 4px（`left` / `right` 时距导航外侧边 4px）。`line` 与 `dot` 落定后带一圈柔和的主色光晕，行进中隐去。非法值回退为 `line`。 |
+| `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | 指示器滑行方式的变体（弹簧参数见「技术实现」）：`stretch` 途中略微拉长再收拢，看不出越过落点；`spring` 阻尼更小，越过落点一次再回来；`warp` 拉得更长；`glide` 两端同步，整体平移、从不拉长；`snap` 更快、阻尼更重，最先停稳。非法值回退为 `stretch`。 |
+| `indicatorMotionStrength` | `number` | `1` | 缩放指示器途中拉长的幅度（乘到动效的 lag 上，lag 最大 0.85）；`0` 时按原长度整体平移。负数会夹到 `0`。同时以 `--tx-tabs-indicator-strength` 写在根节点上。 |
 | `animation` | `TabsAnimation` | - | 分别配置 size、nav、indicator、content 动画。 |
 | `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | 从 `autoHeight` / `autoWidth` 推导 | 启用并配置 AutoSizer 尺寸动画；默认使用 `autoHeightDurationMs` / `autoHeightEasing`。 |
 | `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | 启用，`220ms ease` | 配置导航宽度/布局过渡变量。 |
-| `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | 启用，`350ms cubic-bezier(...)` | 配置指示器位置和尺寸过渡。 |
+| `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | 启用，`350ms cubic-bezier(...)` | 指示器的移动。`durationMs` 按时长整体缩放滑行的弹簧（`350` 为基准，小于 `100` 按 `100` 播放）。`easing` 不再影响移动，只写入 `--tx-tabs-indicator-easing`。`false` / `enabled: false` 时每次切换都直接落位。 |
 | `animation.content` | `boolean \| { enabled?; type?; durationMs?; durationRatio?; easing? }` | 启用 `zoom`，`180ms ease` | 配置活动面板入场动画。`type` 支持 `fade`、`slide`、`zoom`、`blur`、`scale`、`none`；`durationRatio` 可从指示器时长推导面板时长。 |
 | `autoHeightDurationMs` | `number` | `250` | `animation.size.durationMs` 未传时的默认尺寸动画时长。 |
 | `autoHeightEasing` | `string` | `ease` | `animation.size.easing` 未传时的默认尺寸动画缓动。 |
@@ -587,7 +590,7 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `name` | `string` | *必填* | 唯一 tab 名称，同时作为激活值和查找 key。 |
-| `iconClass` | `string` | `''` | 导航标签前的可选图标 class。 |
+| `iconClass` | `string` | `''` | 导航标签前的可选图标 class，放在 `inline-flex` 容器里，靠 `width` / `height` 定尺寸的图标 class（如 UnoCSS 图标）在任何宿主中都能显示。 |
 | `disabled` | `boolean` | `false` | 阻止点击激活，并渲染禁用的原生按钮。 |
 | `activation` | `boolean` | `false` | 当 `modelValue` 和 `defaultValue` 都没有选中 tab 时，作为非受控默认项。 |
 | `active` | `boolean` | `false` | 是否处于激活态；由 TxTabs 自动注入，仅独立使用 TxTabItem 时手动传入。 |
@@ -636,8 +639,12 @@ code: |
 - 没有 `modelValue` 时，`defaultValue` 优先于 `activation`。如果 `defaultValue` 不匹配任何 tab，会渲染空状态，而不会回退到 `activation`。
 - 默认插槽只收集 `TxTabItem`、`TxTabItemGroup` 与 `TxTabHeader`；支持 Fragment，但会忽略任意包装组件。
 - `TxTabItemGroup` 只是导航分组标记；真实面板内容仍来自子级 `TxTabItem`。
-- `showIndicator=false` 会移除指示器 DOM 和指示器动画；尺寸动画启用时仍会观察内容与导航区域。
-- 指示器在首屏即可见，激活项来自 `modelValue`、`defaultValue` 或 `activation` 都一样，无需先点击一次才会出现。只有在激活项尚未获得非零尺寸之前才保持 `opacity: 0`，这样它会直接出现在正确位置，而不是从导航边缘滑入；根节点上的 `tx-tabs--indicator-pending` 正对应这段时间。
+- `showIndicator=false` 会移除指示器 DOM 和指示器动画，激活项回退为自己的 `--tx-fill-color` 底色。显示指示器时它是唯一的高亮：激活项不再画底色（hover 时也不画），只改变文字与图标颜色。尺寸动画启用时仍会观察内容与导航区域。
+- 指示器结构为 `.tx-tabs__pointer > .tx-tabs__pointer-inner`，是 tablist 的绝对定位子元素，因此会随溢出滚动的导航行一起滚动。行进中内层带 `.is-moving`，此时 `line` / `dot` 的光晕隐去；光晕是一团主色径向柔光，超出标记 4–5px，不透明度 45%，落定后在 0.4s 内淡回。根节点保留 `tx-tabs--indicator-<variant>`、`tx-tabs--motion-<motion>` 以及 `-hidden` / `-pending` / `-visible` / `-anim` 状态类。
+- 几何按实测计算：`line` 按激活项实际的 padding 内缩，盒状变体取激活项实际的 `border-radius`，宿主改写 `.tx-tab-item` 后指示器仍然贴合。标签窄于 16px 时，`line` 仍为 16px，居中于标签下方。`top` / `bottom` 下 tablist 撑满导航栏高度、项仍垂直居中，所以 `nav-right` 内容或宿主的 `min-height` 把导航栏撑高时，`line` 依然压在分隔线上。
+- 首次测量直接把指示器放到位并淡入，激活项来自 `modelValue`、`defaultValue` 或 `activation` 都一样，无需先点击一次才会出现。激活项尚未获得非零尺寸之前保持 `opacity: 0`，根节点上的 `tx-tabs--indicator-pending` 正对应这段时间。之后激活项若被量成 0×0（例如 Tabs 所在的容器被隐藏），指示器会隐藏，等下一次真实测量再直接落位。
+- 点击、方向键、父级改变 `modelValue`，以及改变 `indicatorVariant` / `placement` / `offset`，都会让指示器滑到新的盒子：朝向目标的一端领先，另一端走一根更慢的弹簧跟上，所以途中略微拉长、落位时收拢；垂直于行进方向的位置与尺寸跟随领先的弹簧，所以换变体时形状在途中变过去。它从不挤压、拉伸或缩放。`left` / `right` 沿竖直轴滑行，两端换成上下两端。
+- 尺寸变化（面板与导航的 `ResizeObserver`）和重新打开 `showIndicator` 都直接落位；行进途中的尺寸变化只更新目标。`animation.indicator: false`（或 `enabled: false`）时每次切换都直接落位，也不淡入。`prefers-reduced-motion: reduce` 下同样直接落位，淡入与光晕的过渡也会去掉。
 - 高度动画会移除内部滚动容器，让 AutoSizer 直接测量面板高度；手动直测布局可使用 `contentScrollable=false`。
 - 未激活 tab 的面板不会挂载。需要跨切换保留的状态应放在面板子树之外。
 
@@ -647,10 +654,19 @@ code: |
 - `indicatorMotionStrength` 是 `TxTabs` 运行时 prop，已同步补入导出的 `TabsProps` 接口。
 - `TxTabItemGroup.vue` 刻意使用空模板；`TxTabs` 读取其子级 `TxTabItem` VNode 并创建分组 DOM。
 - `TxTabs` 会按组件名过滤默认插槽，文档示例不应展示任意包装组件包住 tab item。
+- **指示器引擎：** `useJellyIndicator`（`packages/tuffex/packages/utils/use-jelly-indicator.ts`），从 TxRadioGroup 的按钮指示器中抽出，这里用它的 `glide`（滑行）材质。TxTabs 把 `springSteps`（`packages/tuffex/packages/components/src/liquid/src/spring.ts`，按 1/240 s 分步积分，是库里逐帧驱动的弹簧）作为引擎的 `integrate` 传入，因为 utils 不能从 components 导入。滑行的默认值（`GLIDE`）与 `timeScaleSpring` 在 `packages/tuffex/packages/utils/animation/jelly.ts`，和 Radio 的果冻材质放在一起。TxTabs 只负责测量：在 tablist 自身坐标系里量出激活项（计入滚动偏移，并按祖先 transform 归一化），再把该变体的目标盒子交给 `moveTo()`。`requestAnimationFrame` 循环只在指示器移动时运行。
+- **命令式绘制：** 引擎的 `onFrame` 每帧直接把 `opacity`、`width`、`height` 与 `transform: translate3d(…) scale(…)` 写到 `.tx-tabs__pointer` 上；滑行材质下缩放恒为 `1.000`。渲染函数不读取引擎的任何状态，行进过程不会重渲染 tab 插槽；CSS 也不过渡任何几何属性，只过渡淡入的 `opacity`。
+- **切换时机：** 点击或父级改变 `modelValue` 时，指示器在切换渲染后的下一个 tick 出发，调用放在尺寸动画包装的动作里，而不是等它 resolve 之后。开启 `autoHeight` / `autoWidth` / `animation.size` 时这个包装是 TxAutoSizer 的 FLIP，要一帧或更久才 resolve；原先等它结束，新面板的布局刷新会先以 `animate: false` 调用引擎，而这会直接落位，所以带尺寸动画的 Tabs 是跳过去而不是移过去的。隐藏指示器时调用 `moveTo(null)`，帧循环不会比元素活得更久。
+- **动效映射：** 每个 `indicatorMotion` 对应 `MOTION_GLIDE` 的一行——领先端弹簧的刚度 / 阻尼，再加 lag：`stretch` 420 / 38 / 0.45，`spring` 420 / 24 / 0.3，`warp` 420 / 38 / 0.7，`glide` 380 / 38 / 0，`snap` 720 / 50 / 0.25。落后端走同一根弹簧、以 `1 − lag / 2` 的速度播放（`stretch` 为 0.775 倍），所以先落后、再追上；lag 为 0 时两端走同一根弹簧。`timeScaleSpring(…, durationMs, 350)` 整体放快或放慢这些弹簧、阻尼比不变（短于 100ms 按 100ms 播放），所以 `durationMs` 调大只是同一段滑行放慢；`indicatorMotionStrength` 乘到 lag 上（上限 0.85）。60px 的 `line` 走 100px 的一趟实测：`stretch` 最长约 74px、约 0.45s 停稳，`warp` 约 84px，`spring` 越过落点一次、约 9px，`snap` 最先停稳（约 0.32s），`glide` 始终 60px。tablist 会裁掉溢出，所以引擎还拿到 `bounds`（tablist 沿行进方向的可滚动范围），要离开它的一端停在这道墙上；否则距边缘 8px 的 `spring` pill 会越出边缘 1px。
+- **2026-09-26 变更：** 五个 `tx-tabs-pointer-*` 关键帧动效、指示器几何上的 CSS 过渡和靠定时器切换的光晕类，统一换成共享弹簧。`pill` 从 6px 粗线改为凸起面，`outline` 从 border 改为向内的 ring，`block` 去掉投影，`line` 从项中间 60% 宽的 3px 条改为从图标到文字的 2px 细线，最短 16px。光晕原先模糊地铺在所有变体背后、等定时器触发后用一秒淡入，现在只在 `line` / `dot` 下方，是一团收紧的径向柔光。指示器显示时激活项不再画底色；`iconClass` 图标有了可定尺寸的 `inline-flex` 容器（行内的 `<i>` 会忽略图标 class 的 `width` / `height`，原先量出来是 0×0）。
+- **2026-09-26 同日：果冻 → 滑行。** 指示器先接到 Radio 的果冻材质上，同日在评审中被否决：「不够丝滑、简单」。Tabs 家族（TxTabs、TxTabBar、TxFlatRadio、TxSidebarNav）改用滑行材质，这四个宿主也不再传 `maxGrowth` 与 `deform`；Radio 保留果冻。
+- **同时修复：** 首帧指示器从导航左上角滑入、挂载时还会播一次关键帧；方向键只有在面板的 ResizeObserver 恰好重测时才会带动指示器；五个关键帧里有四个被在 `durationMs` 移除类名的定时器提前截断。
+- **被否掉的做法：** 每种动效保留一段关键帧。`warp`、`snap`、`spring` 是多段 `@keyframes`，每段都带会越界的 bezier，每到关键帧边界速度就反向一次，幅度再小也读作抖动（见 component-guidelines「State motion」）。五个名字改为滑行的变体保留下来。
+- **被否掉的做法：** Tabs 家族沿用 Radio 的果冻。它的阶段是离散的整体缩放——出发时 1.06 × 1.08 ≈ 1.145 的一下弹起、落地时 0.97 的一下下沉——拉伸又随速度饱和（沿行进方向 −21%、垂直方向 +36%），形状在帧与帧之间跳变而不是连续流动，tab 的 pill 在途中变成一枚高高的胶囊。`maxGrowth` 与 `deform` 只能压住幅度，压不住这些跳变。滑行只改变位置和尺寸，而且两者都连续。
 
 - Component sources: `packages/tuffex/packages/components/src/tabs/src/TxTabs.vue`, `TxTabItem.vue`, `TxTabHeader.vue`, and `TxTabItemGroup.vue`.
 - Types: `packages/tuffex/packages/components/src/tabs/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts` 覆盖 activation 渲染、可用与禁用 tab 切换、受控更新、fragment、异步 tab item、分组、内容动效变体、隐藏指示器、视觉 prop 归一化、暴露的 AutoSizer 方法，以及指示器在首次布局时显现、在尚无真实尺寸前保持隐藏。
+- **实测覆盖:** `packages/tuffex/packages/components/src/tabs/__tests__/tabs.test.ts` 共 48 例，覆盖 activation 渲染、可用与禁用 tab 切换、受控更新、fragment、异步 tab item、分组、内容动效变体、隐藏指示器、视觉 prop 归一化、暴露的 AutoSizer 方法、tablist 语义与方向键导航，以及指示器在首次布局时显现、在尚无真实尺寸前保持隐藏。基于滑行材质的用例（fake timers + 打桩布局）覆盖：首次测量直接落在分隔线上；`line`、`dot` 与盒状变体在四种 placement 下的落点；`line` 的 16px 最短长度、`offset`、隔着祖先 transform 的测量；点击后在两个 tab 之间滑行、途中比起止长度都长而从不缩放，并精确停在目标上，包括尺寸动画让切换跨帧时的点击与父级改变 `modelValue`；方向键带动指示器；换变体时途中变形；`.is-moving` 只在行进中出现；`spring` 的越过量正好停在会裁剪的 tablist 边缘；`animation.indicator: false` 与 reduced-motion 下直接落位、不行进；行进中隐藏再显示时直接落位；各 `indicatorMotion` 的特征（`glide` 从不拉长、`warp` 比 `stretch` 拉得更长、只有 `spring` 越过落点且只有一次、`snap` 最先停稳）；`durationMs` 缩放时长而不改变拉长的幅度；`indicatorMotionStrength` 缩放拉长的幅度，为 `0` 时整体平移。源码契约钉住唯一高亮规则、指示器没有关键帧也没有 CSS 缓动的几何，以及图标的 `inline-flex` 容器；编译后的样式表上，每条指示器过渡都有一条重复其完整选择器的 reduced-motion 规则（选择器更短会在优先级上输掉，此前光晕的淡入淡出就因此没被去掉）。
 
 <TuffDocSourceLink />
 
@@ -658,11 +674,13 @@ code: |
 
 | 主题变量 / CSS 变量 | 用途 |
 |----------------------------|----------|
-| `--tx-border-color` | 外层边框和不同 placement 下的导航分隔线。 |
+| `--tx-border-color` | 外层边框和不同 placement 下的导航分隔线；`line` 指示器压在分隔线上。 |
 | `--tx-bg-color` | Tabs 容器背景。 |
-| `--tx-fill-color` / `--tx-fill-color-light` | 活动与 hover 导航项表面。 |
-| `--tx-color-primary` | 指示器渐变、高光、描边和示例强调色。 |
-| `--tx-text-color-primary` / `--tx-text-color-secondary` | Tab 标签、图标、分组标题与空状态文字。 |
-| `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | 由指示器动画 props 生成的运行时变量。 |
+| `--tx-fill-color` / `--tx-fill-color-light` | 非激活项的 hover 表面（`-light`）；激活项自己的底色（`--tx-fill-color`），只在 `showIndicator` 为 `false` 时出现。 |
+| `--tx-color-primary` | `line` / `dot` 的填充及落定后的光晕、`block` 浅染（14%）、`outline` ring（60%）、这四种变体下激活项的图标，以及示例强调色。 |
+| `--tx-surface-raised` / `--tx-elevation-1` / `--tx-border-color-lighter` | `pill` 凸起面（缺省回落到 `--tx-bg-color-overlay`）、它的投影与 1px 内描边。 |
+| `--tx-text-color-primary` / `--tx-text-color-regular` / `--tx-text-color-secondary` | 激活项文字与图标（`primary`，只改颜色、不加粗）、静止文字（`regular`）、静止图标、分组标题与空状态文字（`secondary`）。 |
+| `--tx-tab-item-ink` / `--tx-tab-item-icon-ink` | 文字与图标颜色，设在 `.tx-tab-item` 上。激活态与各指示器变体只切换这两个变量，不直接改写子元素样式，所以宿主用自己的 class 改写 `.tx-tab-item__name` 颜色时仍然生效。 |
+| `--tx-tabs-indicator-duration` / `--tx-tabs-indicator-easing` / `--tx-tabs-indicator-strength` | 仍由指示器相关 props 生成，供宿主读取。TxTabs 自身样式已不再使用：引擎直接读取时长与强度，缓动也不再影响移动。 |
 | `--tx-tabs-content-duration` / `--tx-tabs-content-easing` | 由内容动画 props 生成的运行时变量。 |
 | `--tx-tabs-nav-duration` / `--tx-tabs-nav-easing` | 由导航动画 props 生成的运行时变量。 |
