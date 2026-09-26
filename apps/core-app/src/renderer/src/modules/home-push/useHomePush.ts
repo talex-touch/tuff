@@ -93,6 +93,8 @@ export interface UseHomePushOptions {
    * the first opening after a launch does not go out on auto while the chat turns go to the pin.
    */
   routingReady?: () => Promise<unknown>
+  /** Whether the model writes the opening (`appSetting.tools.homeAiOpening`). Absent is on. */
+  aiOpening?: () => boolean
   composer: HomePushComposer
   t?: Translate
   sdk?: HomeOpeningSdk
@@ -218,6 +220,7 @@ export function useHomePush(options: UseHomePushOptions): UseHomePushReturn {
   const opening = createHomeOpening({
     sdk: options.sdk ?? useIntelligenceSdk(),
     routing: options.routing,
+    enabled: options.aiOpening,
     cache: options.cache,
     now
   })

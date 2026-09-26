@@ -155,6 +155,28 @@ describe('home opening state machine', () => {
     })
   })
 
+  it('writes nothing while the user has not turned it on: the template, and no call', async () => {
+    const double = createStreamDouble()
+    const cache = createHomeOpeningCache()
+    // Even an opening the model wrote before, still inside the reuse window, stays unshown.
+    cache.write({ fingerprint: 'fp-1', text: '上次的开场白。', at: clock })
+    let enabled = false
+    const opening = createHomeOpening({ sdk: double.sdk, enabled: () => enabled, cache, now })
+
+    opening.start(request())
+    await flush()
+    vi.advanceTimersByTime(HOME_OPENING_WAIT_MS)
+    expect(double.calls).toHaveLength(0)
+    expect(opening.phase.value).toBe('fallback')
+    expect(opening.text.value).toBe('TEMPLATE')
+    expect(opening.takeLead()).toBeNull()
+
+    // Read as each opening starts: turned on, the next blank conversation asks again.
+    enabled = true
+    opening.start(request({ fingerprint: 'fp-2' }))
+    expect(double.calls).toHaveLength(1)
+  })
+
   it('stands the template in after 2.5s, then swaps in the whole opening', async () => {
     const double = createStreamDouble()
     const cache = createHomeOpeningCache()

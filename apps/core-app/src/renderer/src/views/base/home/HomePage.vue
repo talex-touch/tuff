@@ -1178,6 +1178,8 @@ const push = useHomePush({
   // The pinned model resolves only once the model list has loaded (the mount-time load above), and
   // `modelRouting` reads as auto until then: the first opening after a launch waits for it.
   routingReady: () => ensureModelOptionsLoaded(),
+  // Off unless the user turned it on in settings: each model-written opening costs their quota.
+  aiOpening: () => appSetting.tools?.homeAiOpening === true,
   composer: {
     // The clipboard row: written and focused, never sent — the reader sees what would go out first.
     prefill: async (text) => {

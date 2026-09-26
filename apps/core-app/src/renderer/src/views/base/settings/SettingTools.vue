@@ -63,6 +63,13 @@ const autoContextEnabled = computed({
     if (appSetting.tools) appSetting.tools.autoContext = value
   }
 })
+/** Home's model-written opening: a model call on every blank Home, so off unless turned on. */
+const homeAiOpeningEnabled = computed({
+  get: () => appSetting.tools?.homeAiOpening === true,
+  set: (value: boolean) => {
+    if (appSetting.tools) appSetting.tools.homeAiOpening = value
+  }
+})
 const saveStateMap = reactive(new Map<string, SaveState>())
 const saveRunIdMap = new Map<string, number>()
 const saveTimers = new Map<string, number>()
@@ -145,6 +152,7 @@ function ensureClipboardPollingSettings(): void {
   if (!appSetting.tools || typeof appSetting.tools !== 'object') {
     appSetting.tools = {
       autoContext: true,
+      homeAiOpening: false,
       // Off by default: a tool call reaches out and touches the user's machine,
       // so it stays something they turned on deliberately.
       agentTools: false,
@@ -700,6 +708,11 @@ onBeforeUnmount(() => {
       v-model="autoContextEnabled"
       :title="t('settingTools.autoContext')"
       :description="t('settingTools.autoContextDesc')"
+    />
+    <TuffBlockSwitch
+      v-model="homeAiOpeningEnabled"
+      :title="t('settingTools.homeAiOpening')"
+      :description="t('settingTools.homeAiOpeningDesc')"
     />
   </TuffGroupBlock>
 

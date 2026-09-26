@@ -33,6 +33,9 @@ import { clipText, singleLine } from './text'
  *
  * A fallback is final: nothing a late stream says replaces the template once the wait is over.
  * Only a `done` opening becomes the conversation's first message ({@link HomeOpening.takeLead}).
+ *
+ * The model writes it only when the user turned it on (`appSetting.tools.homeAiOpening`, off by
+ * default): each one is a call on their quota. Off, every start is the template, with no call.
  */
 
 /** How long the skeleton waits for the first visible token before the template stands in. */
@@ -356,6 +359,8 @@ export interface CreateHomeOpeningOptions {
    * turns read (`useHomeConversation`'s `routing`). Absent or empty is auto.
    */
   routing?: () => ConversationRouting | undefined
+  /** Whether the model may write the opening, read as each one starts. Absent is on. */
+  enabled?: () => boolean
   /** Defaults to the module-wide cache. */
   cache?: HomeOpeningCache
   now?: () => number
@@ -490,6 +495,12 @@ export function createHomeOpening(options: CreateHomeOpeningOptions): HomeOpenin
   function start(request: HomeOpeningRequest, startOptions: HomeOpeningStartOptions = {}): void {
     if (current) release(current)
     leadTaken = false
+
+    // Turned off: the template, and no call — not even a replay of one the model wrote earlier.
+    if (options.enabled?.() === false) {
+      show('fallback', request.fallback, 'template')
+      return
+    }
 
     const cached = cache.read()
     if (cached && cached.fingerprint === request.fingerprint && now() - cached.at < reuseWindowMs) {

@@ -437,6 +437,8 @@
     "autoContextGroupDesc": "Controls which local information the model may reach for during a conversation.",
     "autoContext": "Auto Context",
     "autoContextDesc": "Lets the model pull web results, file search, clipboard and related data on demand instead of picking tools per message. Off means specifying them every time.",
+    "homeAiOpening": "AI opening line",
+    "homeAiOpeningDesc": "When a blank conversation opens, the model writes a greeting from your recent conversations and project names. Each one runs on the model the composer has selected and uses its quota; off shows a local template and sends nothing.",
     "groupTitle": "Utilities",
     "groupDesc": "Practical tools provide a unified fast desktop arbitrary promoter for you to use.",
     "customPlaceholder": "Custom Placeholder",
