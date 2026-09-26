@@ -24,7 +24,12 @@
     "09-25-tuffex-fusion-surface",
     "09-25-send-split-fusion",
     "09-25-home-assistant-push",
-    "09-25-tuffex-choice-card"
+    "09-25-tuffex-choice-card",
+    "09-26-sidebar-actions-polish",
+    "09-26-composer-controls-redesign",
+    "09-26-docs-selfclosing-component-fix",
+    "09-26-composer-paste-anywhere",
+    "09-26-capability-prompt-corruption"
   ],
   "parent": null,
   "relatedFiles": [],
