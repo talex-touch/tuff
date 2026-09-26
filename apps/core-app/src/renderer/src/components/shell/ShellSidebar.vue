@@ -5,9 +5,10 @@ import { useRoute } from 'vue-router'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useConversationEntry } from '~/modules/conversation/useConversationEntry'
+import { blankConversationOwner } from '~/modules/layout/useProjectFolders'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
-import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { groupedSettingNavigation } from '~/modules/settings/categories'
+import { useCoreBoxShortcut } from '~/modules/shortcuts/useCoreBoxShortcut'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { useProjectStore } from '~/stores/projects'
@@ -26,10 +27,10 @@ const { t } = useI18n()
 const route = useRoute()
 const projectStore = useProjectStore()
 const transport = useTuffTransport()
-const { isMac } = useRendererPlatform()
 const { packageJson } = useEnv()
 const { collapsed, isDragging, startDrag } = useShellSidebar()
 const { enterConversation, enterPickedProjectConversation } = useConversationEntry()
+const { effectiveLabel: coreBoxShortcutLabel } = useCoreBoxShortcut()
 
 /**
  * A width transition is off while the grip is held so the edge stays under the pointer. Snapping
@@ -70,7 +71,11 @@ const contextTransition = computed(() =>
   isSettingsContext.value ? 'ShellSidebar-forward' : 'ShellSidebar-back'
 )
 
-const searchKbd = computed(() => (isMac.value ? '⌘E' : 'Ctrl+E'))
+/**
+ * The global key that opens CoreBox, not a written-in one: the user can rebind it, and a key the
+ * OS refused or one that lost an in-app conflict does nothing. No key at all hides the hint.
+ */
+const searchKbd = computed(() => coreBoxShortcutLabel.value ?? undefined)
 const settingGroups = computed(() =>
   groupedSettingNavigation(Boolean(appSetting?.dev?.developerMode))
 )
@@ -87,11 +92,15 @@ onMounted(() => {
 })
 
 /**
- * New Chat is active on Home and on any conversation under it. The row has no `to`: entering a
- * conversation is the store's job before the route's, and two writers to the same navigation is
- * how the pending owner gets claimed twice.
+ * New Chat is current only on a blank conversation that belongs to no project. A stored thread
+ * lights its own row and a project's blank conversation lights that project's folder, so the
+ * sidebar never shows two current rows at once. The row has no `to`: entering a conversation is
+ * the store's job before the route's, and two writers to the same navigation is how the pending
+ * owner gets claimed twice.
  */
-const isHomeActive = computed(() => route.path === '/home' || route.path.startsWith('/home/'))
+const isNewChatActive = computed(
+  () => blankConversationOwner(route.path, projectStore.activeProjectId) === null
+)
 </script>
 
 <template>
@@ -149,12 +158,17 @@ const isHomeActive = computed(() => route.path === '/home' || route.path.startsW
           <ShellNavItem
             icon="i-ri-edit-box-line"
             :label="t('shell.newChat')"
-            :active="isHomeActive"
+            :active="isNewChatActive"
             @select="enterConversation(null)"
           >
             <template #hint><MetaHintBadge command="new-chat" placement="trailing" /></template>
           </ShellNavItem>
+          <!--
+            Expanded, New Project is the + on the Projects section title. The rail hides that whole
+            list, so without this row the action would have no button there at all.
+          -->
           <ShellNavItem
+            v-if="collapsed"
             icon="i-ri-folder-add-line"
             :label="t('shell.newProject')"
             @select="enterPickedProjectConversation"
@@ -224,6 +238,24 @@ const isHomeActive = computed(() => route.path === '/home' || route.path.startsW
   background: transparent;
   --fake-color: var(--shell-surface);
   --fake-radius: 0;
+
+  /**
+   * One set of row metrics for every row in the column. Inside a 1px transparent border, 9px of
+   * inline padding puts the icon column 10px in; the 16px icon and a 10px gap put the text column
+   * 36px in. Nav items, section titles, project folders and conversation rows all read these, so
+   * their icons and text line up instead of each restating the numbers and drifting apart.
+   */
+  --shell-row-pad-x: 9px;
+  --shell-row-pad-y: 6px;
+  --shell-row-icon: 16px;
+  --shell-row-gap: 10px;
+  /**
+   * The icon's share of a row's height: border, padding and the 16px icon. A row without an icon
+   * takes it as a floor, so it is never shorter than a nav row whose icon outgrows its label. It is
+   * not a row's height: a label's line of text is taller than the icon — 19.5px of 13px type at the
+   * page's 1.5 line-height — so rows measure 33.5px, and each gets that from its own label's line.
+   */
+  --shell-row-min-height: calc(var(--shell-row-icon) + 2 * var(--shell-row-pad-y) + 2px);
 }
 
 .ShellSidebar.is-rail {

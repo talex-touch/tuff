@@ -364,14 +364,19 @@ export class DbWriteScheduler {
     const topLabelsSummary = topLabels
       .map(
         (label) =>
-          `${label.label}[q=${label.enqueued},ok=${label.executed},drop=${label.dropped},fail=${label.failed},busy=${label.busyFailed},busyRatio=${label.busyFailedRatio},avg=${label.avgWaitMs},max=${label.maxWaitMs}]`
+          `${label.label}[enqueued=${label.enqueued},ok=${label.executed},drop=${label.dropped},fail=${label.failed},busy=${label.busyFailed},busyRatio=${label.busyFailedRatio},avg=${label.avgWaitMs},max=${label.maxWaitMs}]`
       )
       .join(' | ')
 
     const current = this.getAggregateCurrentTask()
+    let oldestQueuedAt = now
+    for (const lane of this.laneStates()) {
+      for (const task of lane.queue) oldestQueuedAt = Math.min(oldestQueuedAt, task.enqueuedAt)
+    }
     log.info('DB write scheduler label stats', {
       meta: {
         queued: this.getTotalQueued(),
+        oldestQueuedAgeMs: Math.max(0, now - oldestQueuedAt),
         queuedByPriority: JSON.stringify(this.getQueueSummaryByPriority()),
         queuedByLane: JSON.stringify({
           primary: this.lanes.primary.queue.length,

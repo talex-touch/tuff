@@ -1,9 +1,22 @@
+<script lang="ts">
+/**
+ * The one delete waiting for its confirming click, sidebar-wide. Every open folder and the Chats
+ * section render their own copy of this component, so arming a row disarms whichever copy held the
+ * previous one through this hand-off; the pointer and focus rules alone would let two stay armed.
+ */
+let disarmActiveDelete: (() => void) | null = null
+</script>
+
 <script setup lang="ts">
 import type { LocalAiCliSessionSummary } from '@talex-touch/utils/transport/events/local-ai-cli'
+import type { ConversationRecord } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import type { ConversationProjectRow } from '~/modules/conversation/conversation-project-groups'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+/** How long an armed delete waits for its second click before it turns back into the trash can. */
+const DELETE_CONFIRM_WINDOW_MS = 3000
 
 const props = withDefaults(
   defineProps<{
@@ -23,6 +36,9 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const openSessionMenuRef = ref<string | null>(null)
+/** The conversation whose trash can has turned into 「确认？」, if any. */
+const armedId = ref<string | null>(null)
+let disarmTimer: number | null = null
 
 function sessionDisabledReason(session: LocalAiCliSessionSummary): string | undefined {
   if (session.state === 'missing') return t('shell.projects.sessionMissing')
@@ -34,6 +50,69 @@ function sessionDisabledReason(session: LocalAiCliSessionSummary): string | unde
 function setSessionMenu(sessionRef: string, open: boolean): void {
   openSessionMenuRef.value = open ? sessionRef : null
 }
+
+function conversationTitle(conversation: ConversationRecord): string {
+  return conversation.title || t('shell.history.untitled')
+}
+
+function deleteLabel(conversation: ConversationRecord): string {
+  return armedId.value === conversation.id
+    ? t('shell.history.deleteConfirmLabel', { title: conversationTitle(conversation) })
+    : t('shell.history.delete')
+}
+
+function disarm(): void {
+  if (disarmTimer !== null) {
+    window.clearTimeout(disarmTimer)
+    disarmTimer = null
+  }
+  armedId.value = null
+  if (disarmActiveDelete === disarm) disarmActiveDelete = null
+}
+
+function arm(id: string): void {
+  if (disarmActiveDelete !== null && disarmActiveDelete !== disarm) disarmActiveDelete()
+  disarm()
+  armedId.value = id
+  disarmActiveDelete = disarm
+  disarmTimer = window.setTimeout(disarm, DELETE_CONFIRM_WINDOW_MS)
+}
+
+/**
+ * The first press arms, the second deletes. Enter and Space arrive here as clicks, from the native
+ * button, so the keyboard takes the same two steps.
+ */
+function onDelete(id: string): void {
+  if (armedId.value !== id) {
+    arm(id)
+    return
+  }
+  disarm()
+  emit('removeConversation', id)
+}
+
+/** Pointer leaving the row, or focus leaving the button, gives the trash can back. */
+function release(id: string): void {
+  if (armedId.value === id) disarm()
+}
+
+/**
+ * Escape backs out of an armed delete, and is only claimed when there is one to back out of. A held
+ * Enter repeats the button's click, which would arm and delete in one press; only a fresh press may
+ * take the second step.
+ */
+function onDeleteKeydown(event: KeyboardEvent, id: string): void {
+  if (event.key === 'Enter' && event.repeat) {
+    event.preventDefault()
+    return
+  }
+  if (event.key !== 'Escape' || armedId.value !== id) return
+  event.preventDefault()
+  event.stopPropagation()
+  disarm()
+}
+
+onBeforeUnmount(disarm)
 </script>
 
 <template>
@@ -42,24 +121,32 @@ function setSessionMenu(sessionRef: string, open: boolean): void {
       v-if="row.kind === 'conversation'"
       class="ShellProjectRows-Row"
       :class="{ active: row.conversation.id === activeId }"
+      @mouseleave="release(row.conversation.id)"
     >
       <button
         class="ShellProjectRows-Open"
         type="button"
-        :title="row.conversation.title || t('shell.history.untitled')"
+        :title="conversationTitle(row.conversation)"
         :aria-current="row.conversation.id === activeId ? 'page' : undefined"
         @click="emit('openConversation', row.conversation.id)"
       >
-        {{ row.conversation.title || t('shell.history.untitled') }}
+        {{ conversationTitle(row.conversation) }}
       </button>
+      <!-- One button in both states, so focus stays put when the icon turns into 「确认？」. -->
       <button
-        class="ShellProjectRows-Action"
+        class="ShellProjectRows-Action ShellProjectRows-Delete"
+        :class="{ 'is-armed': armedId === row.conversation.id }"
         type="button"
-        :title="t('shell.history.delete')"
-        :aria-label="t('shell.history.delete')"
-        @click.stop="emit('removeConversation', row.conversation.id)"
+        :title="deleteLabel(row.conversation)"
+        :aria-label="deleteLabel(row.conversation)"
+        @click.stop="onDelete(row.conversation.id)"
+        @blur="release(row.conversation.id)"
+        @keydown="onDeleteKeydown($event, row.conversation.id)"
       >
-        <span class="i-ri-delete-bin-6-line" />
+        <span v-if="armedId === row.conversation.id" class="ShellProjectRows-Confirm">
+          {{ t('shell.history.deleteConfirm') }}
+        </span>
+        <span v-else class="i-ri-delete-bin-6-line" aria-hidden="true" />
       </button>
     </div>
 
@@ -103,10 +190,19 @@ function setSessionMenu(sessionRef: string, open: boolean): void {
 </template>
 
 <style scoped lang="scss">
+/**
+ * ShellNavItem's box: a 1px transparent border around the title's line, set in the nav label's type,
+ * which is what gives a nav row its height; the icon's share stands as a floor in case the icon ever
+ * outgrows that line. Rows at the top level start their text in the nav icons' column; a project
+ * folder sets `--shell-rows-indent` so its rows start in the nav labels' column.
+ */
 .ShellProjectRows-Row {
   display: flex;
   align-items: center;
+  box-sizing: border-box;
   width: 100%;
+  min-height: var(--shell-row-min-height);
+  border: 1px solid transparent;
   border-radius: var(--shell-radius-md);
   transition: background-color 0.15s ease;
 
@@ -123,7 +219,8 @@ function setSessionMenu(sessionRef: string, open: boolean): void {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  padding: 6px 9px;
+  padding: var(--shell-row-pad-y) var(--shell-row-pad-x) var(--shell-row-pad-y)
+    calc(var(--shell-row-pad-x) + var(--shell-rows-indent, 0px));
   border: none;
   background: transparent;
   color: var(--shell-text-regular);
@@ -192,6 +289,48 @@ function setSessionMenu(sessionRef: string, open: boolean): void {
 
   &:hover {
     color: var(--shell-danger);
+  }
+}
+
+/**
+ * Armed, the trash can's slot becomes a small danger chip reading 「确认？」: same slot, same 24px
+ * height, so the row keeps its height and the title ellipsizes to make room. `interpolate-size`
+ * is what lets `width` run between the icon's 24px and the label's own width; `auto` does not
+ * interpolate without it. The label is clipped while the slot grows, so it is uncovered rather
+ * than spilling over the title.
+ */
+.ShellProjectRows-Delete {
+  interpolate-size: allow-keywords;
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease,
+    width 0.18s ease,
+    padding 0.18s ease;
+
+  &.is-armed {
+    width: auto;
+    padding: 0 8px;
+    box-shadow: inset 0 0 0 1px var(--shell-danger-border);
+    background: var(--shell-danger-soft);
+    color: var(--shell-danger);
+    opacity: 1;
+  }
+}
+
+.ShellProjectRows-Confirm {
+  font-size: var(--shell-fs-sm);
+  font-weight: 500;
+  line-height: 1;
+}
+
+/** Reduced motion swaps icon and label outright; the fade that reveals the button stays. */
+@media (prefers-reduced-motion: reduce) {
+  .ShellProjectRows-Delete {
+    transition:
+      opacity 0.15s ease,
+      color 0.15s ease;
   }
 }
 </style>

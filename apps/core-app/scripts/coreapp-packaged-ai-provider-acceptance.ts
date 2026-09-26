@@ -23,6 +23,7 @@ import { pathToFileURL } from 'node:url'
 import { readFile as readPlist } from 'simple-plist'
 import {
   INTELLIGENCE_CONVERSATION_TITLE_OPERATION,
+  INTELLIGENCE_HOME_OPENING_OPERATION,
   INTELLIGENCE_HOME_SURFACE
 } from '@talex-touch/utils/types/intelligence'
 import {
@@ -128,6 +129,11 @@ export interface AuditSummary {
   invalidOperationRows: number
   homeConversationRequests: number
   conversationTitleRequests: number
+  /**
+   * Openings of a blank Home, counted and reconciled like every other row but never expected:
+   * whether one finishes before the runner sends or navigates away is a race the product may win.
+   */
+  homeOpeningRequests: number
   expectedSuccessfulRequests: number
   expectedHomeConversationRequests: number
   expectedConversationTitleRequests: number
@@ -246,6 +252,15 @@ interface PreparedProfile {
 type AcceptanceAuditOperation =
   | typeof INTELLIGENCE_HOME_SURFACE
   | typeof INTELLIGENCE_CONVERSATION_TITLE_OPERATION
+  | typeof INTELLIGENCE_HOME_OPENING_OPERATION
+
+function isAcceptanceAuditOperation(value: unknown): value is AcceptanceAuditOperation {
+  return (
+    value === INTELLIGENCE_HOME_SURFACE ||
+    value === INTELLIGENCE_CONVERSATION_TITLE_OPERATION ||
+    value === INTELLIGENCE_HOME_OPENING_OPERATION
+  )
+}
 
 class AcceptanceError extends Error {
   constructor(readonly code: string) {
@@ -486,10 +501,7 @@ function auditOperationOf(value: unknown): AcceptanceAuditOperation | null {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
   const descriptor = Object.getOwnPropertyDescriptor(metadata, 'operation')
   if (!descriptor || !('value' in descriptor)) return null
-  return descriptor.value === INTELLIGENCE_HOME_SURFACE ||
-    descriptor.value === INTELLIGENCE_CONVERSATION_TITLE_OPERATION
-    ? descriptor.value
-    : null
+  return isAcceptanceAuditOperation(descriptor.value) ? descriptor.value : null
 }
 
 export function summarizeAuditRows(
@@ -506,7 +518,11 @@ export function summarizeAuditRows(
       asNonNegativeNumber(row.id) !== null &&
       Number(row.id) > expectation.minIdExclusive &&
       asNonNegativeNumber(row.timestamp) !== null &&
-      Number(row.timestamp) >= expectation.startedAt &&
+      // An opening starts when a blank Home is entered — before the send that opens the window, or
+      // at a relaunch before the runner navigates away — and is flushed into the window later. It
+      // is admitted by id; every other row still has to start inside the window.
+      (Number(row.timestamp) >= expectation.startedAt ||
+        auditOperationOf(row.metadata) === INTELLIGENCE_HOME_OPENING_OPERATION) &&
       row.capability_id === 'text.chat'
   )
   let success = 0
@@ -520,6 +536,7 @@ export function summarizeAuditRows(
   let invalidOperationRows = 0
   let homeConversationRequests = 0
   let conversationTitleRequests = 0
+  let homeOpeningRequests = 0
   const traceIds = new Set<string>()
 
   for (const row of matched) {
@@ -551,7 +568,8 @@ export function summarizeAuditRows(
     if (operation === INTELLIGENCE_HOME_SURFACE) homeConversationRequests += 1
     else if (operation === INTELLIGENCE_CONVERSATION_TITLE_OPERATION) {
       conversationTitleRequests += 1
-    } else invalidOperationRows += 1
+    } else if (operation === INTELLIGENCE_HOME_OPENING_OPERATION) homeOpeningRequests += 1
+    else invalidOperationRows += 1
     promptTokens += values[0]!
     completionTokens += values[1]!
     totalTokens += values[2]!
@@ -562,6 +580,9 @@ export function summarizeAuditRows(
 
   const expectedSuccessfulRequests =
     expectation.expectedHomeConversationRequests + expectation.expectedConversationTitleRequests
+  // Openings join the reconciliation (usage counts them like any other request) without being
+  // expected: every row in the window still has to be a valid, unique, successful request.
+  const accountedRequests = expectedSuccessfulRequests + homeOpeningRequests
   return {
     matched: matched.length,
     success,
@@ -575,20 +596,21 @@ export function summarizeAuditRows(
     invalidOperationRows,
     homeConversationRequests,
     conversationTitleRequests,
+    homeOpeningRequests,
     uniqueTraceCount: traceIds.size,
     expectedSuccessfulRequests,
     expectedHomeConversationRequests: expectation.expectedHomeConversationRequests,
     expectedConversationTitleRequests: expectation.expectedConversationTitleRequests,
     passed:
-      matched.length === expectedSuccessfulRequests &&
-      success === expectedSuccessfulRequests &&
+      matched.length === accountedRequests &&
+      success === accountedRequests &&
       failure === 0 &&
       invalidNumericRows === 0 &&
       invalidIdentityRows === 0 &&
       invalidOperationRows === 0 &&
       homeConversationRequests === expectation.expectedHomeConversationRequests &&
       conversationTitleRequests === expectation.expectedConversationTitleRequests &&
-      traceIds.size === expectedSuccessfulRequests
+      traceIds.size === accountedRequests
   }
 }
 
@@ -762,8 +784,10 @@ export function summarizeCancellationLedger(
     expectedConversationTitleRequests: expectation.expectedBackgroundTitleRequests
   })
   const noLedgerDelta = ledgerSnapshotsEqual(before, after)
+  // The relaunch lands on a blank Home, whose opening may finish before the runner leaves it.
+  const accountedRequests = expectation.expectedBackgroundTitleRequests + audit.homeOpeningRequests
   const usage =
-    expectation.expectedBackgroundTitleRequests === 0
+    accountedRequests === 0
       ? {
           dayRows: 0,
           monthRows: 0,
@@ -792,7 +816,7 @@ export function summarizeCancellationLedger(
       usage.passed &&
       homeAuditUnchanged &&
       backgroundTitleRequests === expectation.expectedBackgroundTitleRequests &&
-      auditRowDelta === expectation.expectedBackgroundTitleRequests
+      auditRowDelta === accountedRequests
   }
 }
 
@@ -1487,8 +1511,8 @@ async function runHomeStream(
         evaluate<boolean>(
           send,
           `(() => {
-            const button = document.querySelector('.HomePage-SendBtn')
-            if (!(button instanceof HTMLButtonElement) || button.disabled) return false
+            const button = document.querySelector('.HomePage .ComposerSendIsland')
+            if (!(button instanceof HTMLButtonElement) || button.dataset.state !== 'ready') return false
             button.click()
             return true
           })()`
@@ -1503,6 +1527,8 @@ async function runHomeStream(
     let busyDeltaSamples = 0
     let previousBusyCharacters = 0
     while (Date.now() - startedAt < 90_000) {
+      // The newest assistant row is the reply. A send from a blank Home can also add the opening
+      // line ahead of the user's message: a settled row that never streamed.
       const state = await evaluate<{
         found: boolean
         busy: boolean
@@ -1514,7 +1540,8 @@ async function runHomeStream(
         `(() => {
             const previous = new Set(${previousIds})
             const message = Array.from(document.querySelectorAll('.HomePage-Message.assistant[data-message-id]'))
-              .find((node) => !previous.has(node.getAttribute('data-message-id')))
+              .filter((node) => !previous.has(node.getAttribute('data-message-id')))
+              .at(-1)
             const reply = message?.querySelector('.HomePage-Reply')
             return {
               found: Boolean(message),
@@ -1557,11 +1584,7 @@ export function isAcceptanceAuditProviderForOperation(
   provider: unknown,
   operation: unknown
 ): boolean {
-  return (
-    (operation === INTELLIGENCE_HOME_SURFACE ||
-      operation === INTELLIGENCE_CONVERSATION_TITLE_OPERATION) &&
-    provider === ACCEPTANCE_PROVIDER_ID
-  )
+  return isAcceptanceAuditOperation(operation) && provider === ACCEPTANCE_PROVIDER_ID
 }
 
 async function waitForConversationRoute(
@@ -1643,8 +1666,8 @@ async function runHomeCancellation(
     const submitted = await evaluate<boolean>(
       send,
       `(() => {
-        const button = document.querySelector('.HomePage-SendBtn')
-        if (!(button instanceof HTMLButtonElement) || button.disabled) return false
+        const button = document.querySelector('.HomePage .ComposerSendIsland')
+        if (!(button instanceof HTMLButtonElement) || button.dataset.state !== 'ready') return false
         button.click()
         return true
       })()`
@@ -1661,7 +1684,7 @@ async function runHomeCancellation(
             const message = Array.from(document.querySelectorAll('.HomePage-Message.assistant[data-message-id]'))
               .find((node) => !previous.has(node.getAttribute('data-message-id')))
             const reply = message?.querySelector('.HomePage-Reply')
-            const stop = document.querySelector('.HomePage-SendBtn .i-ri-stop-fill')?.closest('button')
+            const stop = document.querySelector('.HomePage .ComposerSendIsland:is([data-state="waiting"], [data-state="streaming"], [data-state="blocked"])')
             const failed = Boolean(message?.querySelector('.HomePage-Error'))
             if (
               !failed &&
@@ -1695,7 +1718,7 @@ async function runHomeCancellation(
               busy: message?.getAttribute('aria-busy') === 'true',
               failed: Boolean(message?.querySelector('.HomePage-Error')),
               hasActions: Boolean(message?.querySelector('.HomePage-MsgActions')),
-              stopVisible: Boolean(document.querySelector('.HomePage-SendBtn .i-ri-stop-fill'))
+              stopVisible: Boolean(document.querySelector('.HomePage .ComposerSendIsland:is([data-state="waiting"], [data-state="streaming"], [data-state="blocked"])'))
             }
           })()`
         ),
@@ -2097,9 +2120,6 @@ async function runAcceptance(
     )
     await waitForAuditRowCount(userDataDir, ledgerBeforeHome.auditRowCount + 2)
     const afterFirstTurn = await waitForLedgerQuiet(userDataDir)
-    if (afterFirstTurn.auditRowCount - ledgerBeforeHome.auditRowCount !== 2) {
-      fail('FIRST_TURN_AUDIT_COUNT_MISMATCH')
-    }
     const firstTurnAudit = summarizeAuditRows(
       await queryAcceptanceAuditRows(userDataDir, ledgerBeforeHome.auditMaxId),
       {
@@ -2109,6 +2129,14 @@ async function runAcceptance(
         expectedConversationTitleRequests: 1
       }
     )
+    // An opening of the blank Home the first turn was sent from is queued ahead of that turn, so
+    // it is already flushed once the title row is: its count is final here.
+    if (
+      afterFirstTurn.auditRowCount - ledgerBeforeHome.auditRowCount !==
+      2 + firstTurnAudit.homeOpeningRequests
+    ) {
+      fail('FIRST_TURN_AUDIT_COUNT_MISMATCH')
+    }
     if (!firstTurnAudit.passed) fail('FIRST_TURN_AUDIT_OPERATION_MISMATCH')
     report.checks.titleRequestStabilized = true
 
@@ -2120,15 +2148,11 @@ async function runAcceptance(
     const expectedCompletedAuditRows = 2 + expectedConversationTitleRequests
     await waitForAuditRowCount(
       userDataDir,
-      ledgerBeforeHome.auditRowCount + expectedCompletedAuditRows
+      ledgerBeforeHome.auditRowCount +
+        expectedCompletedAuditRows +
+        firstTurnAudit.homeOpeningRequests
     )
     const afterSecondTurn = await waitForLedgerQuiet(userDataDir)
-    if (
-      afterSecondTurn.auditRowCount - ledgerBeforeHome.auditRowCount !==
-      expectedCompletedAuditRows
-    ) {
-      fail('SECOND_TURN_AUDIT_COUNT_MISMATCH')
-    }
     const secondTurnAudit = summarizeAuditRows(
       await queryAcceptanceAuditRows(userDataDir, ledgerBeforeHome.auditMaxId),
       {
@@ -2138,6 +2162,12 @@ async function runAcceptance(
         expectedConversationTitleRequests
       }
     )
+    if (
+      afterSecondTurn.auditRowCount - ledgerBeforeHome.auditRowCount !==
+      expectedCompletedAuditRows + secondTurnAudit.homeOpeningRequests
+    ) {
+      fail('SECOND_TURN_AUDIT_COUNT_MISMATCH')
+    }
     if (!secondTurnAudit.passed) fail('SECOND_TURN_AUDIT_OPERATION_MISMATCH')
     const afterSecondTitleState = await waitForConversationRoute(
       firstTarget,

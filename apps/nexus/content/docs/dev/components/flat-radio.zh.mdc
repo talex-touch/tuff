@@ -279,11 +279,13 @@ code: |
 
 - 滑块与多选态 chip 的底色都取自 `--tx-surface-raised`，而它是相对 `--tx-fill-color`（也就是轨道本身）定义的。两次以页面为锚点的尝试都失败了：只用 `--tx-bg-color-overlay` 时浅色下是白色、深色下却比轨道更暗；把文字色混进去之后，滑块在明暗两种主题下都落在距轨道四个色阶以内。
 - `--tx-flat-radio-track-bg`、`--tx-flat-radio-indicator-bg`、`--tx-flat-radio-indicator-shadow` 可分别覆写这三项，宿主不必再去压 scoped 样式的特异度。
-- 滑块的位移和改变宽度共用同一个时长和同一条曲线。过去是两条（0.25s 回弹对 0.2s 缓动），标签宽度不等时滑块会先到位、再慢慢补完宽度。
+- 滑块由共享的指示器引擎（`useJellyIndicator`）驱动，用的是 `TxTabs`、`TxTabBar`、`TxSidebarNav` 同样在用的滑行材质（Radio 按钮组保留果冻）。选中新的一项时它滑过去：领先的一边走 `GLIDE` 弹簧，落后的一边走同一根弹簧的慢放版本，所以途中略微拉长、到位时收拢——两个宽度不等的标签之间是 40px、约 54px、再到 50px。宽度就是两边之间的距离，所以滑块到位和变宽是一个整体，而且从不缩放。
+- 挂载、容器尺寸变化、选项注册都让滑块直接落位，不带淡入。它的高度始终是 CSS 给的高度，不会长进轨道的内边距。
+- 到了第一项和最后一项，要离开轨道的那一边停在轨道末端：引擎的墙就是轨道的 padding box 宽度（`clientWidth`）。
 - 选项几何尺寸从带小数的 rect 读取，不再用 `offsetLeft` / `offsetWidth` —— 后者取整到整像素，滑块最多偏 1px，而且每一项偏的量还不一样。
 - 选中字重挂在每一个选项上，所以选中不会改变任何一项的实测宽度。把字重挂在选中态上会让该项重排、挤动兄弟项，并在滑块飞行途中改掉它的目标宽度。
 - 按压缩放的是标签和图标，不是选项盒子 —— 盒子正是滑块用来测量的那个。
-- `prefers-reduced-motion: reduce` 下去掉滑块位移和按压缩放；透明度淡入保留，让它仍然是"显现"而不是"弹出"。
+- `prefers-reduced-motion: reduce` 下滑块直接落位，按压缩放也去掉；透明度淡入保留，让它仍然是"显现"而不是"弹出"。
 - 选项自带键盘焦点环，浏览器默认的 outline 不会再压在滑块上面。
 
 - 单选模式下 `TxFlatRadio` 使用 `role="radiogroup"`，每个 item 使用 `role="radio"`。
@@ -296,11 +298,13 @@ code: |
 ## 技术实现
 
 - **可访问性说明：** 整组只有容器进入 Tab 顺序；item 按钮保持 `tabindex="-1"`，从而集中处理方向键。需要用邻近字段文案或外部 label 为整组命名。
+- **指示器说明：** 引擎每帧直接写滑块的 `transform`、`width` 与 `opacity`，模板不绑定其中任何一项，所以一次移动不会让整组重新渲染；`top` 与 `height` 仍交给 CSS。滑行由 `springSteps`（`packages/tuffex/packages/components/src/liquid/src/spring.ts`，按 1/240 s 分步积分）作为 `integrate` 传入驱动，写出的缩放恒为 `1.000`。transform 与宽度上不挂 CSS transition：它会把引擎写入的每一帧再缓动一遍。
+- **接入引擎之前：** 位移与改变宽度共用一条 CSS 曲线，由 `--tx-flat-radio-duration` / `--tx-flat-radio-ease` 控制，这两个变量现在不再参与移动。更早则是两条（0.25s 回弹对 0.2s 缓动），滑块会先到位、再慢慢补完宽度。
 - **动效说明：** 先试过用隐藏的加粗副本撑住选中宽度，被否掉了：它只对 `label` prop 有效，而真正要紧的调用点传的是插槽内容；为撑宽度把插槽渲染两遍则会让用户内容挂载两次。
-- **实测覆盖:** `flat-radio.test.ts` 覆盖单选 `radiogroup`/`radio` 语义、item 禁用态、禁用整组时移除焦点、方向键循环并跳过禁用项、Home/End 选择、`multiple` 模式下 Enter/Space 切换，以及共享过渡曲线、选中无关的选项宽度、小数级滑块几何、减弱动效路径和 `sm`/`md`/`lg`/`xl` 尺寸梯度。
+- **实测覆盖:** `flat-radio.test.ts` 覆盖单选 `radiogroup`/`radio` 语义、item 禁用态、禁用整组时移除焦点、方向键循环并跳过禁用项、Home/End 选择、`multiple` 模式下 Enter/Space 切换，以及滑块不带会和引擎打架的 transform / 宽度过渡（只留淡入，减弱动效下同样如此）、选中无关的选项宽度、小数级滑块几何、减弱动效路径和 `sm`/`md`/`lg`/`xl` 尺寸梯度。桩化 rect 并使用假计时器后，还验证：首次测量让滑块直接落位，`top` 与高度仍交给 CSS；选中新的一项时在两项之间滑行——途中比两项都长、从不缩放——最终精确停在该项上；在 `xl` 轨道上往返两端时滑块每一帧都在轨道内，高度仍是 CSS 的高度；`prefers-reduced-motion: reduce` 下新的选中项直接落位。
 
 - Component sources: `packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadio.vue` and `TxFlatRadioItem.vue`.
 - Types: `packages/tuffex/packages/components/src/flat-radio/src/types.ts`.
-- Coverage: `packages/tuffex/packages/components/src/flat-radio/__tests__/flat-radio.test.ts` verifies ARIA roles, disabled behavior, arrow-key wrapping, Home / End, and Enter / Space toggles in multiple mode.
+- Coverage: `packages/tuffex/packages/components/src/flat-radio/__tests__/flat-radio.test.ts` verifies ARIA roles, disabled behavior, arrow-key wrapping, Home / End, Enter / Space toggles in multiple mode, and the thumb's travel, landings and containment.
 
 <TuffDocSourceLink />

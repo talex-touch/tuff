@@ -31,6 +31,9 @@ const messages: Record<Locale, TranslationMessages> = {
 let currentLocale: Locale = 'zh-CN'
 const i18nLog = createLogger('I18n')
 
+/** Set once a persisted choice has been adopted, so the OS answer cannot override it later. */
+let persistedLocaleAdopted = false
+
 /**
  * Initialize i18n with system locale and register IPC handler
  */
@@ -38,6 +41,56 @@ export function initI18n(): void {
   const systemLocale = typeof app.getLocale === 'function' ? app.getLocale() : 'zh-CN'
   currentLocale = resolveLocale(systemLocale)
   i18nLog.info(`Initialized with locale: ${currentLocale} (system: ${systemLocale})`)
+
+  /**
+   * This runs at import time, before the app is ready, where `app.getLocale()` answers with an
+   * empty string - so the log above reads `system: ` and every main-process string falls back to
+   * English. Ask the OS again once it can answer; a persisted choice outranks both (see
+   * {@link adoptPersistedLocale}).
+   */
+  if (typeof app?.whenReady === 'function') {
+    void app.whenReady().then(() => {
+      if (persistedLocaleAdopted) {
+        return
+      }
+      const readyLocale = normalizeLocale(
+        typeof app.getLocale === 'function' ? app.getLocale() : ''
+      )
+      if (readyLocale) {
+        setLocale(readyLocale)
+      }
+    })
+  }
+}
+
+/**
+ * Adopt the language the user picked, read straight from the persisted app settings.
+ *
+ * `initI18n` cannot know it: it runs before the app is ready, and the renderer only pushes its
+ * own locale once its storage lands - seconds into a heavy boot. Every main-process string
+ * answered in between (CoreBox destination titles, tray, menu, notifications) rendered English
+ * while the app was set to 简体中文. The choice is on disk from the first millisecond instead,
+ * and `followSystem` explicitly hands the decision to the OS.
+ *
+ * @param setting The persisted `APP_SETTING` record (only its `lang` section is read).
+ * @returns Whether the setting named a locale to adopt.
+ */
+export function adoptPersistedLocale(setting: unknown): boolean {
+  const lang = (setting as { lang?: { locale?: unknown; followSystem?: unknown } } | null)?.lang
+  if (!lang || lang.followSystem === true) {
+    return false
+  }
+
+  const locale = normalizeLocale(typeof lang.locale === 'string' ? lang.locale : '')
+  if (!locale) {
+    return false
+  }
+
+  // Logged before the switch so the reason reads above `setLocale`'s own line.
+  i18nLog.info(`Adopting persisted app language: ${locale}`)
+  persistedLocaleAdopted = true
+  setLocale(locale)
+  return true
 }
 
 /**
@@ -45,6 +98,25 @@ export function initI18n(): void {
  */
 function resolveLocale(locale: string): Locale {
   return normalizeLocale(locale) ?? 'en-US'
+}
+
+/**
+ * Surfaces that bake a translation into a native object — the application menu is the one — cannot
+ * re-read it later, so they subscribe here and rebuild.
+ *
+ * Only real changes are announced: `initI18n` resolves the starting locale, and `setLocale` is a
+ * no-op for the locale already in use, so a subscriber never sees two events for one language.
+ */
+const localeChangeListeners = new Set<(locale: Locale) => void>()
+
+/**
+ * Subscribe to locale changes. Returns the unsubscribe function.
+ */
+export function onLocaleChange(listener: (locale: Locale) => void): () => void {
+  localeChangeListeners.add(listener)
+  return () => {
+    localeChangeListeners.delete(listener)
+  }
 }
 
 /**
@@ -61,6 +133,16 @@ export function setLocale(locale: Locale): void {
 
   currentLocale = locale
   i18nLog.info(`Locale changed to: ${currentLocale}`)
+
+  for (const listener of localeChangeListeners) {
+    try {
+      listener(currentLocale)
+    } catch (error) {
+      // One stale native surface is not worth failing the language switch for: the renderer has
+      // already applied the new locale by the time this runs.
+      i18nLog.warn('Locale change listener failed', { meta: { error: String(error) } })
+    }
+  }
 }
 
 /**

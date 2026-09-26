@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend spec index and pre-development checklist for core-app renderer work"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Shell colour tokens only (no hex/rgba literals), colour never the sole state carrier, reduced-motion and low-battery rules, ready results must not wait on motion"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Placement of the new views/box/SearchPulse.vue next to CoreBox.vue"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Forbidden patterns and verification expectations for the SFC change"}

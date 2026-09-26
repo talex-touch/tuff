@@ -1,6 +1,11 @@
+import type { VueWrapper } from '@vue/test-utils'
 import type { SidebarNavGroup, SidebarNavItem } from '../src/types'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import * as sass from 'sass'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TxSidebarNav from '../src/TxSidebarNav.vue'
 
 // The nav binds a document-level shortcut listener, so a wrapper left mounted
@@ -230,42 +235,193 @@ describe('txSidebarNav', () => {
     expect(after.classes()).toContain('is-revealed')
     expect(after.attributes('style')).toContain('--tx-bui-sidebar-nav-indicator-duration: 220ms')
   })
+})
 
-  it('moves the indicator to the hovered row, then back to the active one', async () => {
-    const wrapper = mountNav()
-    await wrapper.vm.$nextTick()
+/** jsdom lays nothing out: pin a rect on `el`, the full 240px width of the list. */
+function stubRect(el: Element, top: number, height: number): void {
+  el.getBoundingClientRect = () => ({
+    top,
+    left: 0,
+    width: 240,
+    height,
+    right: 240,
+    bottom: top + height,
+    x: 0,
+    y: top,
+    toJSON: () => ({}),
+  }) as DOMRect
+}
 
-    // jsdom returns all-zero rects, so lay out a fake geometry: the body starts
-    // at y=100 and every row is 28px tall.
-    const stubRect = (el: Element, top: number, height: number) => {
-      el.getBoundingClientRect = () => ({
-        top,
-        left: 0,
-        width: 240,
-        height,
-        right: 240,
-        bottom: top + height,
-        x: 0,
-        y: top,
-        toJSON: () => ({}),
-      }) as DOMRect
+function readPlate(wrapper: VueWrapper<any>) {
+  const style = wrapper.find('.tx-bui-sidebar-nav__indicator').attributes('style') ?? ''
+  const move = style.match(/translate3d\(0, ([\d.-]+)px, 0\) scale\(([\d.]+), ([\d.]+)\)/)
+  return {
+    style,
+    y: Number(move?.[1]),
+    scaleX: Number(move?.[2]),
+    scaleY: Number(move?.[3]),
+    height: Number(style.match(/(?:^|;\s*)height: ([\d.]+)px/)?.[1]),
+  }
+}
+
+/**
+ * The body starts at y=100 and every row is 28px tall, stacked without gaps.
+ * The list is as tall as its 200px box: the plate's walls are its
+ * `scrollHeight`, which jsdom reports as 0 and would pin a wall to the target.
+ */
+function layOutRows(wrapper: VueWrapper<any>) {
+  const body = wrapper.find('.tx-bui-sidebar-nav__body').element
+  stubRect(body, 100, 200)
+  Object.defineProperty(body, 'scrollHeight', { configurable: true, value: 200 })
+  const rows = wrapper.findAll('.tx-bui-sidebar-nav__item')
+  rows.forEach((row, index) => stubRect(row.element, 100 + index * 28, 28))
+  return rows
+}
+
+describe('txSidebarNav plate on the glide material', () => {
+  beforeEach(() => {
+    // The engine steps on requestAnimationFrame.
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** Run one trip: whether the plate passed between the rows, and its tallest frame. */
+  function follow(wrapper: VueWrapper<any>, from: number, to: number) {
+    let between = false
+    let tallest = 0
+    for (let frame = 0; frame < 150; frame++) {
+      vi.advanceTimersByTime(16)
+      const { y, height, scaleX, scaleY } = readPlate(wrapper)
+      // Only the box moves and resizes: never a squash, a stretch or a pop.
+      expect([scaleX, scaleY]).toEqual([1, 1])
+      if (y > Math.min(from, to) && y < Math.max(from, to))
+        between = true
+      tallest = Math.max(tallest, height)
     }
-    stubRect(wrapper.find('.tx-bui-sidebar-nav__body').element, 100, 200)
-    const rows = wrapper.findAll('.tx-bui-sidebar-nav__item')
-    rows.forEach((row, index) => stubRect(row.element, 100 + index * 28, 28))
+    return { between, tallest }
+  }
 
-    const indicatorStyle = () => wrapper.find('.tx-bui-sidebar-nav__indicator').attributes('style')
+  it('glides the plate to the hovered row and back to the active one, lengthening on the way', async () => {
+    const wrapper = mountNav()
+    const rows = layOutRows(wrapper)
+
+    // The first measurement lands on the active row 1 in place.
+    await wrapper.vm.$nextTick()
+    expect(readPlate(wrapper).style).toContain('translate3d(0, 28px, 0) scale(1.000, 1.000)')
+    expect(readPlate(wrapper).style).toContain('height: 28px')
 
     // Hovering row 3 pulls the plate off the active row 1 — pointer intent
-    // outranks selection.
+    // outranks selection — and it glides there: the edge facing the row leads,
+    // so the 28px plate runs taller on the way (about 33px) and gathers on it.
     await rows[3]!.trigger('mouseenter')
-    await wrapper.vm.$nextTick()
-    expect(indicatorStyle()).toContain('top: 84px')
-    expect(indicatorStyle()).toContain('height: 28px')
+    const down = follow(wrapper, 28, 84)
+    expect(down.between).toBe(true)
+    expect(down.tallest).toBeGreaterThan(28 + 2)
+    expect(readPlate(wrapper).style).toContain('translate3d(0, 84px, 0) scale(1.000, 1.000)')
+    expect(readPlate(wrapper).style).toContain('height: 28px')
 
-    // Leaving the list hands it back to the active row (index 1).
+    // Leaving the list hands it back to the active row (index 1), top edge first.
     await wrapper.find('.tx-bui-sidebar-nav__body').trigger('mouseleave')
+    const up = follow(wrapper, 84, 28)
+    expect(up.between).toBe(true)
+    expect(up.tallest).toBeGreaterThan(28 + 2)
+    expect(readPlate(wrapper).style).toContain('translate3d(0, 28px, 0) scale(1.000, 1.000)')
+    expect(readPlate(wrapper).style).toContain('height: 28px')
+    // The transform carries the offset; `top` stays the stylesheet's 0.
+    expect(readPlate(wrapper).style).not.toMatch(/(?:^|;\s*)top:/)
+  })
+
+  // The list's ends are the walls: an edge of the plate that would leave the
+  // card stops there. The glide never scales, so the painted box is exactly
+  // the written one, and the full-width plate never swells sideways.
+  it('keeps the plate inside the list at both ends', async () => {
+    const letters = ['a', 'b', 'c', 'd', 'e']
+    const wrapper = mount(TxSidebarNav, {
+      props: { items: letters.map(value => ({ value, label: value.toUpperCase() })), modelValue: 'a' },
+    })
+    // Ungrouped rows lead the list under no header, so the first starts at the
+    // top of the list and the last ends at its bottom.
+    const body = wrapper.find('.tx-bui-sidebar-nav__body').element
+    stubRect(body, 100, 140)
+    Object.defineProperty(body, 'scrollHeight', { configurable: true, value: 140 })
+    const rows = wrapper.findAll('.tx-bui-sidebar-nav__item')
+    rows.forEach((row, index) => stubRect(row.element, 100 + index * 28, 28))
     await wrapper.vm.$nextTick()
-    expect(indicatorStyle()).toContain('top: 28px')
+    const home = readPlate(wrapper).style
+
+    let travelled = false
+    for (const index of [4, 0]) {
+      await rows[index]!.trigger('mouseenter')
+      for (let frame = 0; frame < 150; frame++) {
+        vi.advanceTimersByTime(16)
+        const { y, height, scaleX, scaleY } = readPlate(wrapper)
+        expect([scaleX, scaleY]).toEqual([1, 1])
+        expect(y).toBeGreaterThanOrEqual(0)
+        expect(y + height).toBeLessThanOrEqual(140)
+        if (y > 20 && y < 90)
+          travelled = true
+      }
+    }
+
+    expect(travelled).toBe(true)
+    expect(readPlate(wrapper).style).toBe(home)
+  })
+
+  it('jumps to the hovered row under prefers-reduced-motion', async () => {
+    const original = window.matchMedia
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('reduce'),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia
+
+    try {
+      const wrapper = mountNav()
+      const rows = layOutRows(wrapper)
+      await wrapper.vm.$nextTick()
+
+      await rows[3]!.trigger('mouseenter')
+      expect(readPlate(wrapper).style).toContain('translate3d(0, 84px, 0) scale(1.000, 1.000)')
+    }
+    finally {
+      window.matchMedia = original
+    }
+  })
+})
+
+describe('txSidebarNav plate styles', () => {
+  it('eases only the plate\'s fade, never the geometry the engine writes', () => {
+    // Compiled, so the shared `bui-*` mixins and the reduced-motion block
+    // count. A transition on transform, height or top would re-ease every
+    // frame the engine writes, and the plate would trail its own spring.
+    const path = resolve(dirname(fileURLToPath(import.meta.url)), '../src/TxSidebarNav.vue')
+    const css = [...readFileSync(path, 'utf8').matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
+      .map(([, block = '']) => sass.compileString(block, { url: pathToFileURL(path), syntax: 'scss' }).css)
+      .join('\n')
+
+    const transitioned: string[] = []
+    for (const [, selector = '', body = ''] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!selector.includes('.tx-bui-sidebar-nav__indicator'))
+        continue
+      for (const [, value = ''] of body.matchAll(/transition(?:-property)?\s*:\s*([^;]+)/g)) {
+        // No value here nests a comma inside parentheses.
+        transitioned.push(...value.split(',').map(segment => segment.trim().split(/\s+/)[0] ?? ''))
+      }
+    }
+
+    // The fade on reveal, and the reduced-motion block switching it off.
+    expect(transitioned).toContain('opacity')
+    expect(transitioned).toContain('none')
+    expect(transitioned.filter(property => property !== 'opacity' && property !== 'none')).toEqual([])
   })
 })

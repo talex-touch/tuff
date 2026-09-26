@@ -45,7 +45,7 @@ function withPlatform(platform: NodeJS.Platform): () => void {
   }
 }
 
-async function createRouter() {
+async function createRouter(options: { getAppWatchRoots?: () => readonly string[] } = {}) {
   const routeWatchEventWithResult = vi.fn(async (_event: WatchEvent) => ({
     deltas: [],
     matchedSources: 1,
@@ -66,7 +66,7 @@ async function createRouter() {
   }
   const { IndexedSourceEventRouter, APP_WATCH_COALESCE_WINDOW_MS, FILE_WATCH_COALESCE_WINDOW_MS } =
     await import('./indexed-source-event-router')
-  const router = new IndexedSourceEventRouter(() => runtime as never)
+  const router = new IndexedSourceEventRouter(() => runtime as never, options)
   router.subscribe()
 
   const emit = (eventName: string, filePath: string): void => {
@@ -196,5 +196,113 @@ describe('IndexedSourceEventRouter watch coalescing', () => {
     expect(routeWatchEventWithResult).toHaveBeenCalledWith(
       expect.objectContaining({ path: '/Applications/Probe.app' })
     )
+  })
+})
+
+describe('IndexedSourceEventRouter app root gate', () => {
+  const APP_ROOTS = ['/Applications', '/Users/demo/Applications'] as const
+  let restorePlatform: () => void
+
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    restorePlatform = withPlatform('darwin')
+  })
+
+  afterEach(() => {
+    restorePlatform()
+    vi.useRealTimers()
+  })
+
+  it('keeps build output outside the app roots out of the app queue entirely', async () => {
+    const { emit, routedTo, appWindowMs, fileWindowMs } = await createRouter({
+      getAppWatchRoots: () => APP_ROOTS
+    })
+
+    // What a tuffex build looks like at the watcher: a directory recreated under the workspace and
+    // files re-emitted inside it. None of it can ever be an application.
+    emit('DIRECTORY_ADDED', '/Users/demo/Workspace/tuffex/dist')
+    expect(vi.getTimerCount()).toBe(0)
+    emit('FILE_ADDED', '/Users/demo/Workspace/tuffex/dist/index.mjs')
+    emit('FILE_CHANGED', '/Users/demo/Workspace/tuffex/dist/style.css')
+    emit('FILE_UNLINKED', '/Users/demo/Workspace/tuffex/dist/old.mjs')
+
+    await settleWindows(Math.max(appWindowMs, fileWindowMs))
+
+    expect(routedTo(APP_SOURCE_ID)).toEqual([])
+    // The file source still sees every one of them; only the app queue is gated.
+    expect(
+      routedTo(FILE_SOURCE_ID)
+        .map((event) => event.path)
+        .sort()
+    ).toEqual([
+      '/Users/demo/Workspace/tuffex/dist/index.mjs',
+      '/Users/demo/Workspace/tuffex/dist/old.mjs',
+      '/Users/demo/Workspace/tuffex/dist/style.css'
+    ])
+  })
+
+  it('routes events under either app root', async () => {
+    const { emit, routedTo, appWindowMs } = await createRouter({
+      getAppWatchRoots: () => APP_ROOTS
+    })
+
+    emit('FILE_ADDED', '/Applications/Probe.app/Contents/Info.plist')
+    emit('DIRECTORY_ADDED', '/Users/demo/Applications/Local.app')
+    // Same containment rule as the runtime: case-insensitive on darwin.
+    emit('FILE_UNLINKED', '/applications/Gone.app')
+
+    await settleWindows(appWindowMs)
+
+    expect(
+      routedTo(APP_SOURCE_ID)
+        .map((event) => [event.path, event.action])
+        .sort()
+    ).toEqual([
+      ['/Applications/Probe.app/Contents/Info.plist', 'add'],
+      ['/Users/demo/Applications/Local.app', 'add'],
+      ['/applications/Gone.app', 'delete']
+    ])
+  })
+
+  it('does not treat a sibling that merely shares the root prefix as inside it', async () => {
+    const { emit, routedTo, appWindowMs } = await createRouter({
+      getAppWatchRoots: () => APP_ROOTS
+    })
+
+    emit('DIRECTORY_ADDED', '/Applications Backup/Old.app')
+    await settleWindows(appWindowMs)
+
+    expect(routedTo(APP_SOURCE_ID)).toEqual([])
+  })
+
+  it('reads the roots on every event instead of caching them', async () => {
+    let roots: readonly string[] = ['/Applications']
+    const { emit, routedTo, appWindowMs } = await createRouter({
+      getAppWatchRoots: () => roots
+    })
+
+    emit('DIRECTORY_ADDED', '/Volumes/Apps/Tool.app')
+    roots = ['/Applications', '/Volumes/Apps']
+    emit('DIRECTORY_ADDED', '/Volumes/Apps/Next.app')
+    await settleWindows(appWindowMs)
+
+    expect(routedTo(APP_SOURCE_ID).map((event) => event.path)).toEqual(['/Volumes/Apps/Next.app'])
+  })
+
+  it('routes unfiltered when the roots cannot be read, leaving the decision to the runtime', async () => {
+    const { emit, routedTo, appWindowMs } = await createRouter({
+      getAppWatchRoots: () => {
+        throw new Error('roots unavailable')
+      }
+    })
+
+    emit('DIRECTORY_ADDED', '/Users/demo/Workspace/app/out')
+    await settleWindows(appWindowMs)
+
+    expect(routedTo(APP_SOURCE_ID).map((event) => event.path)).toEqual([
+      '/Users/demo/Workspace/app/out'
+    ])
   })
 })

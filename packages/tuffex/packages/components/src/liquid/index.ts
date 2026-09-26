@@ -10,10 +10,13 @@ export { Liquid, LiquidItem, TxLiquid, TxLiquidItem }
 export type { CornerRadii } from './src/geometry'
 export { EVOLVE_DEFAULTS, MOVE_DEFAULTS } from './src/observer'
 export type { EvolveOptions, MoveOptions } from './src/observer'
-export { presets as liquidTransitionPresets } from './src/spring'
+// `resolveTransition` compiles a preset or a raw spring into `{ duration, easing }` (a CSS
+// `linear()` curve), for callers that play the library's springs through WAAPI or CSS.
+export { presets as liquidTransitionPresets, resolveTransition } from './src/spring'
 // `Transition`/`TransitionPreset` clash with the transition component in the
 // star barrel (export * silently drops duplicated names) — alias them.
 export type {
+  ResolvedTransition,
   SpringConfig,
   Transition as LiquidTransition,
   TransitionPreset as LiquidTransitionPreset,

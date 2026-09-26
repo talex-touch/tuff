@@ -229,7 +229,7 @@ describe('useSearch rendered ranking', () => {
     }
   })
 
-  it('ranks a high-scoring deferred item above the low-scoring fast batch', async () => {
+  it('appends a deferred batch below the rows on screen, whatever its score', async () => {
     const hook = useSearch(createBoxOptions(), createClipboardOptions())
     await flushPromises()
 
@@ -240,21 +240,51 @@ describe('useSearch rendered ranking', () => {
 
     await pushDeferredBatch(stream, [buildItem('file-high', 'file-provider', { final: 500 })])
 
-    expect(hook.res.value.map((item) => item.id)).toEqual(['file-high', 'app-low'])
+    expect(hook.res.value.map((item) => item.id)).toEqual(['app-low', 'file-high'])
+  })
+
+  it('orders the rows of one arriving batch by score before appending them', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    const stream = await runFirstBatch(hook, 'batch order', [
+      buildItem('app-top', 'app-provider', { final: 900 })
+    ])
+    await pushDeferredBatch(stream, [
+      buildItem('file-low', 'file-provider', { final: 10 }),
+      buildItem('file-high', 'file-provider', { final: 300 }),
+      buildItem('file-mid', 'file-provider', { final: 100 })
+    ])
+
+    expect(hook.res.value.map((item) => item.id)).toEqual([
+      'app-top',
+      'file-high',
+      'file-mid',
+      'file-low'
+    ])
+  })
+
+  it('appends each later batch after the previous one', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    const stream = await runFirstBatch(hook, 'two batches', [
+      buildItem('app-a', 'app-provider', { final: 10 })
+    ])
+    await pushDeferredBatch(stream, [buildItem('file-first', 'file-provider', { final: 100 })])
+    await pushDeferredBatch(stream, [
+      buildItem('link-second', 'quicklinks-provider', { final: 1_000 })
+    ])
+
+    expect(hook.res.value.map((item) => item.id)).toEqual(['app-a', 'file-first', 'link-second'])
   })
 
   /**
-   * The question #348 turns on, asked of the renderer rather than assumed.
-   *
-   * That issue says renderer merging is append-only and "a later semantic score cannot reorder
-   * already rendered items". The merge is by id and the rank is by score, so re-sending an item
-   * with a higher score should move it -- but nothing had exercised that, because the backend
-   * excludes already-rendered ids from semantic recall and so never re-sends one.
-   *
-   * If this passes, the renderer needs no contract work and the whole of #348 is one policy line
-   * in `search-core.ts`.
+   * #348 asked whether a later batch could re-send an item with a higher score to move it. It
+   * cannot: what is on screen stays where it is, and a re-send only refreshes the row's data, so
+   * a semantic re-score can never reshuffle a list the user is already reading.
    */
-  it('reorders an already rendered item when a later batch re-sends it with a higher score', async () => {
+  it('keeps an already rendered row in place when a later batch re-sends it with a higher score', async () => {
     const hook = useSearch(createBoxOptions(), createClipboardOptions())
     await flushPromises()
 
@@ -267,7 +297,8 @@ describe('useSearch rendered ranking', () => {
     // The same id, not a new one -- this is what a semantic re-score would look like on the wire.
     await pushDeferredBatch(stream, [buildItem('file-buried', 'file-provider', { final: 950 })])
 
-    expect(hook.res.value.map((item) => item.id)).toEqual(['file-buried', 'app-top'])
+    expect(hook.res.value.map((item) => item.id)).toEqual(['app-top', 'file-buried'])
+    expect(hook.res.value[1]?.scoring?.final).toBe(950)
   })
 
   /** And the item is replaced, not duplicated, when the same id arrives twice. */
@@ -281,6 +312,23 @@ describe('useSearch rendered ranking', () => {
     await pushDeferredBatch(stream, [buildItem('file-once', 'file-provider', { final: 20 })])
 
     expect(hook.res.value.filter((item) => item.id === 'file-once')).toHaveLength(1)
+  })
+
+  it('does not duplicate an item that arrives twice in one batch', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    const stream = await runFirstBatch(hook, 'batch duplicate', [
+      buildItem('app-a', 'app-provider', { final: 10 })
+    ])
+    await pushDeferredBatch(stream, [
+      buildItem('file-twice', 'file-provider', { final: 10 }),
+      buildItem('file-twice', 'file-provider', { final: 20 })
+    ])
+
+    const rows = hook.res.value.filter((item) => item.id === 'file-twice')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.scoring?.final).toBe(20)
   })
 
   it('keeps pinned items on top regardless of score', async () => {
@@ -297,6 +345,28 @@ describe('useSearch rendered ranking', () => {
     ])
 
     expect(hook.res.value.map((item) => item.id)).toEqual(['file-pinned', 'app-top', 'app-mid'])
+  })
+
+  it('places a pinned arrival after the pinned rows already on screen', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    const stream = await runFirstBatch(hook, 'pinned block', [
+      buildItem('app-pinned', 'app-provider', { final: 5, pinned: true }),
+      buildItem('app-top', 'app-provider', { final: 900 })
+    ])
+
+    await pushDeferredBatch(stream, [
+      buildItem('file-plain', 'file-provider', { final: 950 }),
+      buildItem('file-pinned', 'file-provider', { final: 1, pinned: true })
+    ])
+
+    expect(hook.res.value.map((item) => item.id)).toEqual([
+      'app-pinned',
+      'file-pinned',
+      'app-top',
+      'file-plain'
+    ])
   })
 
   it('reserves a per-source floor when the merged set exceeds the render cap', async () => {
@@ -356,7 +426,7 @@ describe('useSearch rendered ranking', () => {
     expect(renderedIds[0]).toBe('app-only')
   })
 
-  it('keeps the selection on the same item across a re-rank', async () => {
+  it('keeps the selection on its row when a higher-scoring batch arrives', async () => {
     const boxOptions = createBoxOptions()
     const hook = useSearch(boxOptions, createClipboardOptions())
     await flushPromises()
@@ -370,8 +440,165 @@ describe('useSearch rendered ranking', () => {
 
     await pushDeferredBatch(stream, [buildItem('file-c', 'file-provider', { final: 200 })])
 
-    expect(hook.res.value.map((item) => item.id)).toEqual(['file-c', 'app-a', 'app-b'])
-    expect(boxOptions.focus).toBe(2)
+    expect(hook.res.value.map((item) => item.id)).toEqual(['app-a', 'app-b', 'file-c'])
+    expect(boxOptions.focus).toBe(1)
     expect(hook.res.value[boxOptions.focus].id).toBe('app-b')
+  })
+
+  /**
+   * An extension query ("pdf") gives every file the same match score, so recency alone orders
+   * them, and the file index carries none while Spotlight does. The later Spotlight batch would
+   * outscore the row the index put on top; it lands below it instead, and the untouched selection
+   * stays on the row the user has been looking at.
+   */
+  it('keeps the top row and an untouched selection when a later batch would outscore it', async () => {
+    const boxOptions = createBoxOptions()
+    const hook = useSearch(boxOptions, createClipboardOptions())
+    await flushPromises()
+
+    const stream = await runFirstBatch(hook, 'pdf', [
+      buildItem('/index/a.pdf', 'file-provider', { final: 100 }),
+      buildItem('/index/b.pdf', 'file-provider', { final: 100 })
+    ])
+    expect(boxOptions.focus).toBe(0)
+
+    await pushDeferredBatch(stream, [
+      buildItem('/spotlight/c.pdf', 'macos-spotlight-provider', { final: 140 }),
+      buildItem('/spotlight/d.pdf', 'macos-spotlight-provider', { final: 120 })
+    ])
+
+    expect(hook.res.value.map((item) => item.id)).toEqual([
+      '/index/a.pdf',
+      '/index/b.pdf',
+      '/spotlight/c.pdf',
+      '/spotlight/d.pdf'
+    ])
+    expect(boxOptions.focus).toBe(0)
+    expect(hook.activeItem.value?.id).toBe('/index/a.pdf')
+  })
+
+  /**
+   * A file query's only fast-layer hit is often a weak keyword match. The file batches that land
+   * afterwards go below it rather than pushing it to the last row, so pressing Enter still runs
+   * the row that was highlighted when the user looked.
+   */
+  it('appends a wide file batch below a weak fast hit and leaves the selection on row 0', async () => {
+    const boxOptions = createBoxOptions()
+    const hook = useSearch(boxOptions, createClipboardOptions())
+    await flushPromises()
+
+    const stream = await runFirstBatch(hook, 'pdf', [
+      buildItem('feature-pdf-tools', 'plugin-features', { final: 10 })
+    ])
+    await pushDeferredBatch(
+      stream,
+      Array.from({ length: 30 }, (_, index) =>
+        buildItem(`/index/${index}.pdf`, 'file-provider', { final: 100 })
+      )
+    )
+
+    expect(hook.res.value).toHaveLength(31)
+    expect(hook.res.value[0]?.id).toBe('feature-pdf-tools')
+    expect(hook.res.value.at(-1)?.id).toBe('/index/29.pdf')
+    expect(boxOptions.focus).toBe(0)
+    expect(hook.activeItem.value?.id).toBe('feature-pdf-tools')
+  })
+
+  it('never evicts the selected row when a later batch claims its floor past the render cap', async () => {
+    const boxOptions = createBoxOptions()
+    const hook = useSearch(boxOptions, createClipboardOptions())
+    await flushPromises()
+
+    const appItems = Array.from({ length: 80 }, (_, index) =>
+      buildItem(`app-${index}`, 'app-provider', { final: 1_000 - index })
+    )
+    const stream = await runFirstBatch(hook, 'selected near the cap', appItems)
+    boxOptions.focus = 78
+    expect(hook.res.value[boxOptions.focus].id).toBe('app-78')
+
+    await pushDeferredBatch(
+      stream,
+      Array.from({ length: 10 }, (_, index) =>
+        buildItem(`file-${index}`, 'file-provider', { final: 10 - index })
+      )
+    )
+
+    const renderedIds = hook.res.value.map((item) => item.id)
+    expect(renderedIds).toHaveLength(80)
+    expect(renderedIds.filter((id) => id.startsWith('file-'))).toHaveLength(MIN_SLOTS_PER_SOURCE)
+    expect(renderedIds).toContain('app-78')
+    expect(renderedIds).not.toContain('app-79')
+    expect(renderedIds).not.toContain('app-77')
+    expect(hook.res.value[boxOptions.focus].id).toBe('app-78')
+  })
+
+  /**
+   * The contract the tests above spell out, run over a hundred random streamed sessions: a fast
+   * snapshot, a row the user moved to, then a few batches that mix new rows with re-sent ones.
+   * Whatever the scores, the rows already on screen keep their order and the highlight keeps its
+   * row and its item. Sessions stay under the render cap so the quota does not take part.
+   */
+  it('holds the rendered order and the selection through 100 random streamed sessions', async () => {
+    const boxOptions = createBoxOptions()
+    const hook = useSearch(boxOptions, createClipboardOptions())
+    await flushPromises()
+
+    // mulberry32: deterministic, so a failing session number reproduces.
+    let seed = 0x5eed_2026
+    const random = (): number => {
+      seed = (seed + 0x6d2b79f5) | 0
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+    const randomInt = (maxExclusive: number): number => Math.floor(random() * maxExclusive)
+    const sources = [
+      'app-provider',
+      'plugin-features',
+      'file-provider',
+      'macos-spotlight-provider',
+      'quicklinks-provider'
+    ]
+    const ids = (): string[] => hook.res.value.map((item) => item.id)
+
+    for (let session = 0; session < 100; session += 1) {
+      const fastCount = 1 + randomInt(20)
+      const fastItems = Array.from({ length: fastCount }, (_, index) =>
+        buildItem(`s${session}-fast-${index}`, sources[randomInt(sources.length)], {
+          final: randomInt(1_000)
+        })
+      )
+      const stream = await runFirstBatch(hook, `session ${session}`, fastItems)
+      expect(ids(), `session ${session} snapshot`).toEqual(fastItems.map((item) => item.id))
+
+      boxOptions.focus = randomInt(fastCount)
+      const focusedId = hook.res.value[boxOptions.focus].id
+      const focusedIndex = boxOptions.focus
+
+      const batchCount = 1 + randomInt(3)
+      for (let batch = 0; batch < batchCount; batch += 1) {
+        const before = ids()
+        const batchSize = 1 + randomInt(20)
+        const batchItems = Array.from({ length: batchSize }, (_, index) => {
+          const resend = before.length > 0 && random() < 0.2
+          const id = resend ? before[randomInt(before.length)] : `s${session}-b${batch}-${index}`
+          return buildItem(id, sources[randomInt(sources.length)], { final: randomInt(1_000) })
+        })
+        await pushDeferredBatch(stream, batchItems)
+
+        const after = ids()
+        const label = `session ${session} batch ${batch}`
+        expect(after.slice(0, before.length), label).toEqual(before)
+        expect(new Set(after).size, label).toBe(after.length)
+        expect(boxOptions.focus, label).toBe(focusedIndex)
+        expect(hook.res.value[boxOptions.focus].id, label).toBe(focusedId)
+        for (const item of hook.res.value) {
+          expect(item.scoring?.final, `${label} data of ${item.id}`).toBe(
+            batchItems.findLast((sent) => sent.id === item.id)?.scoring?.final ??
+              item.scoring?.final
+          )
+        }
+      }
+    }
   })
 })

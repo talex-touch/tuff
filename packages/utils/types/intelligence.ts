@@ -430,6 +430,48 @@ export interface IntelligenceInvokeOptions {
   metadata?: Record<string, any>
   /** Mark as test run. */
   testRun?: boolean
+  /**
+   * Reasoning depth for a `chat` capability. Leaving it out — the composer's "auto" — sends no
+   * reasoning parameter anywhere, so every route keeps its own default. Main resolves it against
+   * each provider it tries (`@talex-touch/utils/intelligence/reasoning-effort`); other capability
+   * types ignore it.
+   */
+  reasoningEffort?: IntelligenceReasoningEffort
+}
+
+/**
+ * A reasoning depth a caller asks for. `max` means "the strongest level this model offers" and is
+ * resolved per route; there is deliberately no `off`, since omitting the field already keeps each
+ * route's own default.
+ */
+export type IntelligenceReasoningEffort = 'low' | 'medium' | 'high' | 'max'
+
+/** A level as some route's wire spells it, weakest first. */
+export type IntelligenceReasoningLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+/**
+ * How a requested effort resolved on the provider that ran.
+ *
+ * - `applied`: sent as asked (for `max`, as the model's strongest level)
+ * - `clamped`: the model lacks the asked level, so the nearest one it has was sent
+ * - `unsupported-model`: the route takes an effort but this model does not; nothing was sent
+ * - `unsupported-provider`: the route takes no effort at all; nothing was sent
+ * - `forwarded`: handed to a backend that maps it per upstream (Tuff Nexus) and has not reported
+ *   back — which is also what an older server that ignores the field looks like
+ */
+export type IntelligenceReasoningEffortStatus =
+  | 'applied'
+  | 'clamped'
+  | 'unsupported-model'
+  | 'unsupported-provider'
+  | 'forwarded'
+
+/** What happened to `reasoningEffort` on one provider attempt. */
+export interface IntelligenceReasoningEffortDecision {
+  requested: IntelligenceReasoningEffort
+  /** The level actually sent; `null` whenever nothing was. */
+  applied: IntelligenceReasoningLevel | null
+  status: IntelligenceReasoningEffortStatus
 }
 
 /** Stable provider id for the built-in local Pi CLI runtime. */
@@ -446,6 +488,17 @@ export const INTELLIGENCE_HOME_SURFACE = 'home-conversation' as const
 
 /** Audit operation emitted by the low-stakes conversation title request. */
 export const INTELLIGENCE_CONVERSATION_TITLE_OPERATION = 'conversation-title' as const
+
+/**
+ * Audit operation emitted by the Home opening line: the few sentences the assistant says on a
+ * blank new conversation before the user has typed anything.
+ *
+ * Same family as the title request — a low-stakes `text.chat` call that carries no home surface,
+ * so main injects no skills and opens no native CLI session for it. Unlike the title request it
+ * takes the composer's route (the pinned provider and model, or auto), but never its reasoning
+ * effort.
+ */
+export const INTELLIGENCE_HOME_OPENING_OPERATION = 'home-opening' as const
 
 /** `IntelligenceInvokeOptions.metadata` shape the home conversation sends. */
 export interface IntelligenceHomeSurfaceMetadata {
@@ -513,6 +566,8 @@ export interface IntelligenceInvokeResult<T = any> {
   provider: string
   /** Optional model reasoning or thinking trace when exposed by the provider. */
   reasoning?: string
+  /** How `reasoningEffort` resolved on the provider that answered; absent when none was asked for. */
+  reasoningEffort?: IntelligenceReasoningEffortDecision
 }
 
 /**
@@ -567,6 +622,11 @@ export interface IntelligenceStreamChunk {
   model?: string
   /** Provider-reported request latency in milliseconds. */
   latency?: number
+  /**
+   * How a routed backend (Tuff Nexus) applied `reasoningEffort` to the upstream it picked. Only
+   * replaces main's own decision when that decision was `forwarded`.
+   */
+  reasoningEffort?: IntelligenceReasoningEffortDecision
 }
 
 export type IntelligenceStreamEventType = 'start' | 'delta' | 'message' | 'usage' | 'metadata' | 'part' | 'end'
@@ -586,6 +646,12 @@ export interface IntelligenceStreamEvent<T = unknown> {
   metadata?: Record<string, unknown>
   /** Present when `type` is "part". */
   partEvent?: IntelligencePartEvent
+  /**
+   * On `start` and `end`, when `reasoningEffort` was requested: how it resolved for this attempt's
+   * provider. `end` is authoritative — a fallback provider's `start` is not re-emitted, and a
+   * routed backend may report its own decision mid-stream.
+   */
+  reasoningEffort?: IntelligenceReasoningEffortDecision
 }
 
 export interface IntelligenceStreamOptions<T = unknown> {

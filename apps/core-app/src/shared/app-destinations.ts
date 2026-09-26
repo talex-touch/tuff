@@ -12,6 +12,10 @@
 export type AppDestinationId =
   | 'main-window'
   | 'home'
+  | 'conversations'
+  | 'store'
+  | 'store-installed'
+  | 'downloads'
   | 'settings-overview'
   | 'settings-general'
   | 'settings-appearance'
@@ -63,6 +67,10 @@ export function normalizeAppDestinationQuery(value: string): string {
  * intentionally absent: they must not steal ordinary app search. Canonical setting titles,
  * their Chinese/English forms, and static full/initial pinyin aliases remain exact matches.
  * Adding a broader alias later requires fresh collision coverage.
+ *
+ * The MainWindow surfaces (`conversations`, `store`, `store-installed`, `downloads`) follow the
+ * same rule: their aliases name the surface (`对话记录`, `插件市场`, `已安装插件`, `下载中心`) rather
+ * than a verb that could apply to anything, and none of them is a bare `打开`/`open`-style word.
  */
 const APP_DESTINATION_LIST: readonly AppDestinationDefinition[] = [
   {
@@ -79,7 +87,9 @@ const APP_DESTINATION_LIST: readonly AppDestinationDefinition[] = [
         'open main window',
         'open tuff',
         'show tuff',
-        'focus tuff'
+        'focus tuff',
+        'back to tuff',
+        'return to tuff'
       ],
       zh: [
         '主窗口',
@@ -89,9 +99,13 @@ const APP_DESTINATION_LIST: readonly AppDestinationDefinition[] = [
         '打开主窗口',
         '回到主窗口',
         '打开 tuff',
-        '显示 tuff'
+        '显示 tuff',
+        '返回 tuff',
+        '回到 tuff',
+        '返回塔芙',
+        '回到塔芙'
       ],
-      pinyin: ['zhuchuangkou', 'zck', 'zhujiemian', 'zjm']
+      pinyin: ['zhuchuangkou', 'zck', 'zhujiemian', 'zjm', 'fanhuitafu', 'fhtf']
     },
     searchable: true,
     advanced: false,
@@ -104,9 +118,132 @@ const APP_DESTINATION_LIST: readonly AppDestinationDefinition[] = [
     subtitleKey: 'corebox.destinations.homeSubtitle',
     icon: 'i-ri-home-line',
     aliases: {
-      en: ['home', 'home page', 'dashboard', 'go home', 'open home'],
-      zh: ['首页', '主页', '回到首页', '打开首页'],
-      pinyin: ['shouye', 'sy', 'zhuye', 'zy']
+      en: ['home', 'home page', 'dashboard', 'go home', 'open home', 'start page', 'tuff home'],
+      zh: ['首页', '主页', '回到首页', '打开首页', '起始页', '塔芙首页'],
+      pinyin: ['shouye', 'sy', 'zhuye', 'zy', 'qishiye', 'qsy', 'tafushouye', 'tfsy']
+    },
+    searchable: true,
+    advanced: false,
+    commonSetting: false
+  },
+  {
+    /**
+     * The thread list itself, not one thread: the sidebar's history lives on the Home surface, and
+     * a query like `对话记录` is asking for that surface rather than for a page of its own. One
+     * thread opens by searching for what it says — see the conversation search provider.
+     */
+    id: 'conversations',
+    route: '/home',
+    titleKey: 'router.homeConversation',
+    subtitleKey: 'corebox.destinations.conversationsSubtitle',
+    icon: 'i-ri-chat-history-line',
+    aliases: {
+      en: [
+        'conversations',
+        'conversation history',
+        'chat history',
+        'recent conversations',
+        'recent chats',
+        'my conversations',
+        'my chats'
+      ],
+      zh: ['对话', '对话记录', '历史对话', '对话历史', '最近对话', '聊天记录', '我的对话'],
+      pinyin: [
+        'duihua',
+        'dh',
+        'duihuajilu',
+        'dhjl',
+        'lishiduihua',
+        'lsdh',
+        'liaotianjilu',
+        'ltjl',
+        'zuijinduihua',
+        'zjdh'
+      ]
+    },
+    searchable: true,
+    advanced: false,
+    commonSetting: false
+  },
+  {
+    id: 'store',
+    route: '/store',
+    titleKey: 'router.pluginStore',
+    subtitleKey: 'corebox.destinations.storeSubtitle',
+    icon: 'i-ri-store-2-line',
+    aliases: {
+      en: [
+        'plugin store',
+        'plugins store',
+        'store',
+        'plugin market',
+        'plugin marketplace',
+        'marketplace',
+        'browse plugins',
+        'get plugins'
+      ],
+      zh: ['插件市场', '插件商店', '商店', '插件中心', '市场', '获取插件', '浏览插件'],
+      pinyin: [
+        'chajianshichang',
+        'cjsc',
+        'chajianshangdian',
+        'cjsd',
+        'shangdian',
+        'sd',
+        'chajianzhongxin',
+        'cjzx'
+      ]
+    },
+    searchable: true,
+    advanced: false,
+    commonSetting: false
+  },
+  {
+    /**
+     * The store's `installed` tab has its own route, so it can be a destination of its own. The
+     * other tabs (publisher, docs, cli) do not: publisher and cli are capability-gated and fall
+     * back to the market tab, and a destination that lands somewhere other than what it named is
+     * worse than no row at all.
+     */
+    id: 'store-installed',
+    route: '/store/installed',
+    titleKey: 'router.installedPlugins',
+    subtitleKey: 'corebox.destinations.storeInstalledSubtitle',
+    icon: 'i-ri-instance-line',
+    aliases: {
+      en: [
+        'installed plugins',
+        'installed extensions',
+        'my plugins',
+        'local plugins',
+        'manage plugins'
+      ],
+      zh: ['已安装插件', '已装插件', '我的插件', '本地插件', '插件管理', '管理插件'],
+      pinyin: [
+        'yianzhuangchajian',
+        'yazcj',
+        'yizhuangchajian',
+        'yzcj',
+        'wodechajian',
+        'wdchajian',
+        'bendichajian',
+        'bdchajian'
+      ]
+    },
+    searchable: true,
+    advanced: false,
+    commonSetting: false
+  },
+  {
+    id: 'downloads',
+    route: '/downloads',
+    titleKey: 'router.downloads',
+    subtitleKey: 'corebox.destinations.downloadsSubtitle',
+    icon: 'i-ri-download-2-line',
+    aliases: {
+      en: ['downloads', 'download center', 'download manager', 'download list', 'transfers'],
+      zh: ['下载中心', '下载管理', '下载列表', '传输列表'],
+      pinyin: ['xiazhaizhongxin', 'xzzx', 'xiazhaiguanli', 'xzgl', 'xiazhailiebiao', 'xzlb']
     },
     searchable: true,
     advanced: false,

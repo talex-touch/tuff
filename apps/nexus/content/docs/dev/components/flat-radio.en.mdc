@@ -279,11 +279,13 @@ When the container is focused:
 
 - The sliding indicator and the multi-select chip both fill from `--tx-surface-raised`, which is defined against `--tx-fill-color` — the track itself. Anchors defined against the page failed twice: `--tx-bg-color-overlay` alone is white on light but darker than the track on dark, and mixing the text colour into it landed the thumb within four RGB steps of the track in both themes.
 - `--tx-flat-radio-track-bg`, `--tx-flat-radio-indicator-bg` and `--tx-flat-radio-indicator-shadow` override the three in turn, so a host does not have to out-specify the scoped styles.
-- The indicator travels and resizes on one duration and one curve. They used to be two (a 0.25s overshoot against a 0.2s ease), so on labels of unequal width the thumb arrived and only then finished growing.
+- The thumb moves on the shared indicator engine (`useJellyIndicator`), on the glide material that `TxTabs`, `TxTabBar` and `TxSidebarNav` also ride (Radio's button group keeps the jelly). A new selection glides: the thumb's leading edge rides the `GLIDE` spring and its trailing edge the same spring played slower, so it lengthens a little on the way and gathers on the item — 40px, about 54px, then 50px between two unequal labels. The width is simply the distance between the two edges, so the thumb arrives and resizes as one body, and it never scales.
+- A mount, a container resize or an item registering lands the thumb in place, without the fade. Its height stays the CSS one throughout, so nothing grows into the track's padding.
+- At the first and last item an edge of the thumb that would leave the track stops at its end: the engine's walls are the track's padding-box width (`clientWidth`).
 - Item geometry is read from fractional rects rather than `offsetLeft` / `offsetWidth`, which rounded to whole pixels and left the thumb up to 1px off its item, by a different amount per item.
 - Every item carries the selected font weight, so selecting one never changes its measured width. Moving the weight on selection reflowed the item, shifted its siblings, and moved the indicator's target mid-flight.
 - Pressing an item scales its label and icon, never the item box: the box is what the indicator measures.
-- Under `prefers-reduced-motion: reduce` the indicator's travel and the press scale are dropped; the opacity fade stays so it still resolves rather than popping in.
+- Under `prefers-reduced-motion: reduce` the thumb lands in place and the press scale is dropped; the opacity fade stays so it still resolves rather than popping in.
 - Items carry their own keyboard focus ring, so the UA's default outline never lands on top of the indicator.
 
 - Single-select mode uses `role="radiogroup"` on `TxFlatRadio` and `role="radio"` on each item.
@@ -296,11 +298,13 @@ When the container is focused:
 ## Technologies
 
 - **Accessibility note:** The group is the only tabbable element; item buttons are kept at `tabindex="-1"` so arrow-key handling stays centralized. Use nearby field text or an external label to name the group.
+- **Indicator note:** the engine writes the thumb's `transform`, `width` and `opacity` every frame and the template binds none of them, so a trip does not re-render the group; `top` and `height` stay with the CSS. The glide is integrated with `springSteps` (`packages/tuffex/packages/components/src/liquid/src/spring.ts`, 1/240 s substeps), passed in as `integrate`, and the scale it writes is always `1.000`. No CSS transition sits on the transform or the width: it would re-ease every written frame.
+- **Before the engine:** travel and resize shared one CSS curve, set by `--tx-flat-radio-duration` / `--tx-flat-radio-ease`, which no longer take part. Before that they ran on two, a 0.25s overshoot against a 0.2s ease, and the thumb arrived and only then finished growing.
 - **Motion note:** A hidden bold sizer reserving the selected width was tried first and rejected: it only works for the `label` prop, and the call sites that matter pass slot content. Duplicating the slot to size it would mount user content twice.
-- **Verified coverage:** `flat-radio.test.ts` covers single-select `radiogroup`/`radio` semantics, item disabled state, disabled group focus removal, arrow-key wrapping while skipping disabled items, Home/End selection, Enter/Space toggling in `multiple` mode, the shared transition curve, selection-independent item width, fractional indicator geometry, the reduced-motion path, and the `sm`/`md`/`lg`/`xl` geometry ladder.
+- **Verified coverage:** `flat-radio.test.ts` covers single-select `radiogroup`/`radio` semantics, item disabled state, disabled group focus removal, arrow-key wrapping while skipping disabled items, Home/End selection, Enter/Space toggling in `multiple` mode, the thumb carrying no transform or width transition for the engine to fight (only the fade, reduced motion included), selection-independent item width, fractional indicator geometry, the reduced-motion path, and the `sm`/`md`/`lg`/`xl` geometry ladder. With stubbed rects and fake timers it checks that the first measurement lands the thumb in place and leaves its top and height to the CSS; that a new selection glides between the items — longer than either on the way, never scaling — and settles exactly on its item; that a round trip to both ends of an `xl` track keeps the thumb on the track at every frame, its height still the CSS one; and that `prefers-reduced-motion: reduce` lands a new selection directly.
 
 - Component sources: `packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadio.vue` and `TxFlatRadioItem.vue`.
 - Types: `packages/tuffex/packages/components/src/flat-radio/src/types.ts`.
-- Coverage: `packages/tuffex/packages/components/src/flat-radio/__tests__/flat-radio.test.ts` verifies ARIA roles, disabled behavior, arrow-key wrapping, Home / End, and Enter / Space toggles in multiple mode.
+- Coverage: `packages/tuffex/packages/components/src/flat-radio/__tests__/flat-radio.test.ts` verifies ARIA roles, disabled behavior, arrow-key wrapping, Home / End, Enter / Space toggles in multiple mode, and the thumb's travel, landings and containment.
 
 <TuffDocSourceLink />

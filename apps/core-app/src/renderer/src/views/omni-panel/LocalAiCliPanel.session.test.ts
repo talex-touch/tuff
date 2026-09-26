@@ -399,3 +399,48 @@ describe('localAiCliPanel native session continuation', () => {
     expect(streamState.requests[2]?.sessionRef).toBeUndefined()
   })
 })
+
+describe('localAiCliPanel agent named by the project menu', () => {
+  function providerSelect(wrapper: VueWrapper) {
+    return wrapper.find<HTMLSelectElement>('select[aria-label="localAiCliPanel.provider"]')
+  }
+
+  it('opens on the agent the sidebar picked, over the configured default, still switchable', async () => {
+    statusState.current = {
+      ...localAiStatus([providerStatus('pi'), providerStatus('codex')]),
+      defaultProvider: 'pi'
+    }
+    const wrapper = await mountPanel()
+
+    await panelApi(wrapper).open({ prompt: '', projectId: 'p1', provider: 'codex' })
+    await flushPromises()
+
+    expect(providerSelect(wrapper).element.value).toBe('codex')
+    // A fresh task, not a resumed session: the choice is a starting point, not a lock.
+    expect(providerSelect(wrapper).attributes('disabled')).toBeUndefined()
+
+    await startTask(wrapper, 'look around')
+    expect(streamState.requests).toEqual([
+      {
+        provider: 'codex',
+        prompt: 'look around',
+        access: 'answer-only',
+        context: [],
+        projectId: 'p1'
+      }
+    ])
+  })
+
+  it('keeps opening on the configured default when no agent is named', async () => {
+    statusState.current = {
+      ...localAiStatus([providerStatus('pi'), providerStatus('codex')]),
+      defaultProvider: 'codex'
+    }
+    const wrapper = await mountPanel()
+
+    await panelApi(wrapper).open({ prompt: '', projectId: 'p1' })
+    await flushPromises()
+
+    expect(providerSelect(wrapper).element.value).toBe('codex')
+  })
+})

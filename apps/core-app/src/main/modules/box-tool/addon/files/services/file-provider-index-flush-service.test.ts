@@ -93,6 +93,34 @@ describe('file-provider-index-flush-service', () => {
     expect(inflight.size).toBe(0)
   })
 
+  it('keeps the newest version when an older-version result arrives for the same file', () => {
+    const pending = new Map<number, IndexWorkerFileResult>()
+    const inflight = new Map<number, IndexWorkerFileResult>()
+    const buffer = new FileProviderIndexFlushBufferService(pending, inflight)
+    const older = { ...createResult(1, 'old-content'), fileVersion: 1_000 }
+    const newer = { ...createResult(1, 'new-content'), fileVersion: 2_000 }
+
+    expect(buffer.enqueue(newer)).toBe(1)
+    // A stale deferred result must not displace the newer version already owned.
+    expect(buffer.enqueue(older)).toBe(1)
+    expect(pending.get(1)?.fileVersion).toBe(2_000)
+    expect(pending.get(1)?.indexItem.content).toBe('new-content')
+
+    // Once the newer result is inflight, an older arrival is still ignored entirely.
+    const batch = buffer.take(1)
+    expect(batch.keys).toEqual([1])
+    expect(buffer.enqueue(older)).toBe(0)
+    expect(buffer.inflightSize).toBe(1)
+    expect(inflight.get(1)?.fileVersion).toBe(2_000)
+
+    // A genuinely newer version does replace the older one.
+    buffer.commit(batch.keys)
+    buffer.enqueue({ ...createResult(1, 'older-content'), fileVersion: 1_500 })
+    buffer.enqueue({ ...createResult(1, 'newest-content'), fileVersion: 3_000 })
+    expect(pending.get(1)?.fileVersion).toBe(3_000)
+    expect(pending.get(1)?.indexItem.content).toBe('newest-content')
+  })
+
   it('flush delay 在 backlog 时切换到更长延迟', () => {
     expect(getIndexWorkerFlushDelay(5)).toBe(250)
     expect(getIndexWorkerFlushDelay(31)).toBe(500)

@@ -20,6 +20,7 @@ import { useAliveTarget } from '../../hooks/use-electron-guard'
 import { t } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { DivisionBoxManager } from '../division-box/manager'
+import { shortcutModule } from '../global-shortcon'
 import { getMainConfig } from '../storage'
 import { TrayIconProvider } from './tray-icon-provider'
 import { TrayMenuBuilder } from './tray-menu-builder'
@@ -422,6 +423,11 @@ export class TrayManager extends BaseModule {
       const updateEvent = event as UpdateAvailableEvent
       this.updateMenu({ hasUpdate: true, updateVersion: updateEvent.version })
     })
+
+    // The Open CoreBox and Capture Now rows print the keys that run them. The tray is built before
+    // either module registers its key, and the keys move later too (a rebind in settings, a key
+    // refused or lost to a conflict).
+    this.eventDisposers.push(shortcutModule.onBindingsChanged(() => this.updateMenu()))
   }
 
   private getHideDockConfig(): boolean {

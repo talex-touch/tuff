@@ -2,7 +2,7 @@
 withDefaults(
   defineProps<{
     placeholder: string
-    /** Keyboard hint rendered on the right, e.g. `⌘E`. Omit to hide. */
+    /** Keyboard hint rendered on the right, e.g. `⌥Space`. Omit to hide. */
     kbd?: string
   }>(),
   { kbd: undefined }

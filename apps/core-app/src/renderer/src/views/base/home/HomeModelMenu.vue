@@ -11,6 +11,7 @@ let closeActiveModelMenu: (() => void) | null = null
 <script lang="ts" name="HomeModelMenu" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
 import type { FilterChipItem } from '@talex-touch/tuffex/filter-chips'
+import type { IntelligenceReasoningLevel } from '@talex-touch/utils/intelligence/reasoning-effort'
 import type { ModelChoice } from '~/modules/conversation/useModelOptions'
 import { TxCardItem } from '@talex-touch/tuffex/card-item'
 import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
@@ -18,11 +19,17 @@ import { TxFilterChips } from '@talex-touch/tuffex/filter-chips'
 import { TxIcon } from '@talex-touch/tuffex/icon'
 import { TxKbd } from '@talex-touch/tuffex/kbd'
 import { TxSearchInput } from '@talex-touch/tuffex/search-input'
+import {
+  normalizeReasoningEffortSetting,
+  REASONING_EFFORT_SETTINGS
+} from '@talex-touch/utils/intelligence/reasoning-effort'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { matchesModelQuery, modelSubtitle } from '~/modules/conversation/model-display'
+import { reasoningLevelLabelKey } from '~/modules/conversation/reasoning-effort-display'
 import { useModelFavorites } from '~/modules/conversation/useModelFavorites'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
+import { useReasoningEffort } from '~/modules/conversation/useReasoningEffort'
 import { modelFamilyIconFor } from '~/modules/intelligence/model-family-icons'
 import {
   modelSourceIconFor,
@@ -50,6 +57,51 @@ const props = withDefaults(defineProps<{ placement?: 'bottom-start' | 'top-end' 
 const { t } = useI18n()
 const { choices, loaded, ensureLoaded, select, isSelected, resolvedChoice } = useModelOptions()
 const { isFavorite, toggle: toggleFavorite } = useModelFavorites()
+const { setting: effortSetting, row: effortRow, select: selectEffort } = useReasoningEffort()
+
+/**
+ * The effort row: 自动 · 低 · 中 · 高 · 极高, one global choice shown against the model the next send
+ * pins. Every level stays pickable on a route that takes one — a model that lacks a level rounds to
+ * its nearest, and the note says to which — and the whole row goes inert, with its reason, on a
+ * route that takes none. Disabled rather than hidden: this menu is where the model changes, and a row
+ * that came and went with the selection would read as a setting that is sometimes lost.
+ */
+const effortChips = computed<FilterChipItem[]>(() =>
+  REASONING_EFFORT_SETTINGS.map((value) => ({
+    value,
+    label: value === 'auto' ? t('home.reasoning.auto') : t(reasoningLevelLabelKey(value))
+  }))
+)
+
+function pickEffort(value: string | number): void {
+  selectEffort(normalizeReasoningEffortSetting(value))
+}
+
+function levelLabel(level: IntelligenceReasoningLevel): string {
+  return t(reasoningLevelLabelKey(level))
+}
+
+const effortNote = computed<string | null>(() => {
+  const note = effortRow.value.note
+  if (!note) return null
+  switch (note.kind) {
+    case 'unsupported-model':
+      return t('home.reasoning.unsupportedModel')
+    case 'unsupported-provider':
+      return t('home.reasoning.unsupportedProvider')
+    case 'clamped':
+      return t('home.reasoning.clamped', {
+        requested: levelLabel(note.requested),
+        applied: levelLabel(note.applied)
+      })
+    case 'auto-route':
+      return t('home.reasoning.autoRoute')
+    case 'cloud':
+      return t('home.reasoning.cloud')
+    default:
+      return null
+  }
+})
 
 /** Read once: the platform does not change under a running renderer. */
 const isMac = getCurrentRendererPlatformState().isMac
@@ -409,6 +461,27 @@ onBeforeUnmount(() => {
          belong inside a group per ARIA menus; the strip and the search field ride along as the
          panel's own controls, reached with Tab (design §4 rejected `tablist` inside a `menu`). -->
     <div class="HomeModelMenu" role="group" :aria-label="t('home.model')" @keydown="onPanelKeydown">
+      <!-- Reasoning effort first, where the panel opens: the model list below scrolls, and a row
+           under it would scroll away with it. The same toolbar-of-toggles as the provider strip,
+           reached with Tab; the note is its one-line explanation when there is something to say. -->
+      <div class="HomeModelMenu-Effort" :class="{ 'is-disabled': effortRow.disabled }">
+        <span class="HomeModelMenu-EffortLabel" aria-hidden="true">
+          {{ t('home.reasoning.label') }}
+        </span>
+        <TxFilterChips
+          class="HomeModelMenu-EffortChips"
+          role="toolbar"
+          :aria-label="t('home.reasoning.label')"
+          :items="effortChips"
+          :model-value="effortSetting"
+          :disabled="effortRow.disabled"
+          @update:model-value="pickEffort"
+        />
+      </div>
+      <p v-if="effortNote" class="HomeModelMenu-EffortNote">{{ effortNote }}</p>
+
+      <div class="HomeModelMenu-Divider" />
+
       <!-- Filters, not tabs: `TxFilterChips` in its toolbar role, so the chips are `aria-pressed`
            toggles and the arrow keys move focus without changing the filter. A `tablist` inside a
            `menu` was rejected in the redesign; this keeps that call. Icon-only: three named chips
@@ -534,15 +607,19 @@ onBeforeUnmount(() => {
  * The chip row draws its own chips; this only points the BUI tokens at the shell's, so a control
  * teleported onto the menu panel does not arrive in the docs site's palette. The row never wraps —
  * it scrolls sideways — which is what holds the panel's height still however many providers load.
+ * The effort strip is the same primitive in the same panel, so it takes the same palette.
  */
-.HomeModelMenu-Filters {
+.HomeModelMenu-Filters,
+.HomeModelMenu-EffortChips {
   --tx-bui-ink: var(--shell-text-primary);
   --tx-bui-ink-2: var(--shell-text-muted);
   --tx-bui-surface: var(--shell-surface-2);
   --tx-bui-hover: var(--shell-surface);
   --tx-bui-accent: var(--shell-primary);
   --tx-bui-shadow-btn: none;
+}
 
+.HomeModelMenu-Filters {
   margin-bottom: 2px;
 
   /* simple-icons' π is drawn edge to edge — the path opens at `M0 0` and fills its whole 24px
@@ -556,6 +633,44 @@ onBeforeUnmount(() => {
 
 .HomeModelMenu-Search {
   padding: 0 2px 2px;
+}
+
+/*
+ * Label on the left, the five levels on the right, one line. The label is in the secondary ink: the
+ * muted one reads at ~3:1 on the light panel, too faint for the name of a control. When the route
+ * takes no effort the chips disable themselves and the label steps back with them; the note under
+ * the row says why.
+ */
+.HomeModelMenu-Effort {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 2px 2px 0 9px;
+}
+
+.HomeModelMenu-EffortLabel {
+  flex: none;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-sm);
+  white-space: nowrap;
+
+  .HomeModelMenu-Effort.is-disabled & {
+    color: var(--shell-text-muted);
+  }
+}
+
+.HomeModelMenu-EffortChips {
+  min-width: 0;
+}
+
+.HomeModelMenu-EffortNote {
+  margin: 0;
+  padding: 0 9px 2px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  line-height: 1.35;
 }
 
 /*

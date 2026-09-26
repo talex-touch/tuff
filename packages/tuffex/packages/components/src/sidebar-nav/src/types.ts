@@ -61,7 +61,11 @@ export interface SidebarNavProps {
   filter?: (items: SidebarNavItem[], query: string) => SidebarNavItem[]
   /** Accessible name for the nav landmark. @default 'Workspace' */
   ariaLabel?: string
-  /** Travel time for the floating highlight, in ms. @default 220 */
+  /**
+   * Speed of the floating highlight, in ms: the shared glide springs played
+   * faster or slower as a whole (the default, 220, is their reference pace).
+   * @default 220
+   */
   indicatorDuration?: number
 }
 

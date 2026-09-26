@@ -755,6 +755,7 @@ export const voiceRecognitionRecords = sqliteTable(
     id: text('id').primaryKey(),
     capturedAt: integer('captured_at').notNull(),
     source: text('source').notNull(),
+    recognitionLocation: text('recognition_location'),
     status: text('status').notNull(),
     audioPath: text('audio_path'),
     audioBytes: integer('audio_bytes'),

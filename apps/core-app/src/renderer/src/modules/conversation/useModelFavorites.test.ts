@@ -100,7 +100,12 @@ describe('useModelFavorites', () => {
     toggle(PI_ASTRA)
     await nextTick()
 
-    expect(appSetting.conversation).toEqual({ model: null, favoriteModels: [PI_ASTRA] })
+    // Created the way the defaults write it, reasoning effort included.
+    expect(appSetting.conversation).toEqual({
+      model: null,
+      favoriteModels: [PI_ASTRA],
+      reasoningEffort: 'auto'
+    })
     expect(favorites.value).toEqual([PI_ASTRA])
   })
 

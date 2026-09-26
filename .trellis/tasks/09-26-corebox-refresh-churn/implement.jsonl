@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/main-process/search-hotpath-contracts.md", "reason": "Search hot-path contracts: debounce, ranking independent of transport, index commit visibility"}
+{"file": ".trellis/spec/main-process/background-task-timeout-contracts.md", "reason": "Background task / enrichment scheduling and timeout contracts for the resume cooldown"}
+{"file": ".trellis/spec/main-process/channel-transport-contracts.md", "reason": "Transport event shape rules when adding optional fields to index commit events"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification and forbidden patterns for the renderer part"}

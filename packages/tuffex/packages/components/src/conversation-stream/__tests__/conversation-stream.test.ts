@@ -1,7 +1,7 @@
 import type { VueWrapper } from '@vue/test-utils'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { h, nextTick } from 'vue'
 import TxConversationStream from '../src/TxConversationStream.vue'
 
 interface Message {
@@ -174,6 +174,48 @@ describe('txConversationStream', () => {
     expect(numbers[0]).toBeGreaterThan(150)
   })
 
+  it('does not re-render the window for scroll frames inside the same rows', async () => {
+    // A glide writes scrollTop on every frame; the rendered window only changes
+    // when the viewport crosses a row boundary. The range used to be a fresh
+    // object per scroll, which re-ran every visible row's slot on every frame.
+    let slotCalls = 0
+    const wrapper = mount(TxConversationStream as any, {
+      props: { items: makeMessages(0, 500), itemKey: 'id', estimatedItemHeight: 96, overscan: 4 },
+      slots: {
+        item: ({ item }: { item: Message }) => {
+          slotCalls += 1
+          return h('div', { class: 'msg' }, item.text)
+        },
+      },
+    })
+    const control = stubScroller(wrapper, { clientHeight: 600, scrollHeight: 500 * 96 })
+    fireResize(control.element, 600)
+    // Let the opening scroll-to-latest settle before repositioning.
+    await nextTick()
+    const scroller = wrapper.find('.tx-conversation-stream__scroller')
+
+    ;(control.element as any).scrollTop = 96 * 200
+    await scroller.trigger('scroll')
+    await nextTick()
+    const settled = slotCalls
+    expect(settled).toBeGreaterThan(0)
+
+    // Twenty 2px frames, all inside row 200 (19200–19296): the window holds.
+    for (let frame = 1; frame <= 20; frame++) {
+      ;(control.element as any).scrollTop = 96 * 200 + frame * 2
+      await scroller.trigger('scroll')
+    }
+    await nextTick()
+    expect(slotCalls).toBe(settled)
+
+    // Crossing into row 201 moves the window, so the counter is live.
+    ;(control.element as any).scrollTop = 96 * 201 + 8
+    await scroller.trigger('scroll')
+    await nextTick()
+    expect(slotCalls).toBeGreaterThan(settled)
+    expect(wrapper.find('.tx-conversation-stream__item .msg').text()).toBe('Message 197')
+  })
+
   it('anchors the viewport across a prepend', async () => {
     const items = makeMessages(100, 300)
     const wrapper = mountStream({ items })
@@ -267,6 +309,23 @@ describe('txConversationStream', () => {
     await pill.trigger('click')
     expect((control.element as any).scrollTop).toBe(3000)
     await nextTick()
+    expect(wrapper.find('.tx-conversation-stream__pill').exists()).toBe(false)
+  })
+
+  it('keeps the pill away while the stream glides to the bottom on its own', async () => {
+    const wrapper = mountStream()
+    const control = stubScroller(wrapper, { clientHeight: 600, scrollHeight: 2000 })
+    fireResize(control.element, 600)
+    await nextTick()
+    // Hold the glide mid-way: its frames never run.
+    vi.stubGlobal('requestAnimationFrame', () => 1)
+    // A send appends a tall row; the stream glides the reader down to it.
+    control.setScrollHeight(3000)
+    void wrapper.vm.tweenToBottom(280)
+    ;(control.element as any).scrollTop = 1600
+    await wrapper.find('.tx-conversation-stream__scroller').trigger('scroll')
+    await nextTick()
+    expect(wrapper.vm.atBottom).toBe(false)
     expect(wrapper.find('.tx-conversation-stream__pill').exists()).toBe(false)
   })
 

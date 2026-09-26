@@ -66,7 +66,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { files } from '../db/schema'
+import { files, keywordMappings, searchIndexMeta } from '../db/schema'
 import { cleanupFileIndex } from './storage-maintenance'
 
 describe('cleanupFileIndex', () => {
@@ -162,5 +162,23 @@ describe('cleanupFileIndex', () => {
     expect(fileRebuildMock).toHaveBeenCalledTimes(1)
     expect(result.success).toBe(false)
     expect(result.error).toContain('app rebuild failed')
+  })
+
+  /**
+   * `search_index_meta` holds one row per indexed document. Wiping `search_index` without it left
+   * rows that claim documents the index no longer has, which the app source's health count reads.
+   */
+  it('clears search_index_meta together with the search index it describes', async () => {
+    await cleanupFileIndex({ clearSearchIndex: true })
+
+    expect(runMock).toHaveBeenCalled()
+    expect(deleteMock).toHaveBeenCalledWith(searchIndexMeta)
+    expect(deleteMock).toHaveBeenCalledWith(keywordMappings)
+  })
+
+  it('leaves search_index_meta alone when the search index is kept', async () => {
+    await cleanupFileIndex({})
+
+    expect(deleteMock).not.toHaveBeenCalledWith(searchIndexMeta)
   })
 })

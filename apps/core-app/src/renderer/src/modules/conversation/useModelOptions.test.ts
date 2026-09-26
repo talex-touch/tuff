@@ -255,7 +255,12 @@ describe('select', () => {
     select(PI_ASTRA)
     await nextTick()
 
-    expect(appSetting.conversation).toEqual({ model: PI_ASTRA, favoriteModels: [] })
+    // Created the way the defaults write it, reasoning effort included.
+    expect(appSetting.conversation).toEqual({
+      model: PI_ASTRA,
+      favoriteModels: [],
+      reasoningEffort: 'auto'
+    })
     expect(isSelected(PI_ASTRA)).toBe(true)
   })
 })

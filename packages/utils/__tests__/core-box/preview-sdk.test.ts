@@ -6,8 +6,10 @@ import {
   BasicExpressionAbility,
   ColorPreviewAbility,
   CurrencyPreviewAbility,
+  LineToolsAbility,
   PercentageAbility,
   QuickOpsDeveloperAbility,
+  RadixConversionAbility,
   ScientificConstantsAbility,
   TextStatsAbility,
   TimeDeltaAbility,
@@ -16,6 +18,7 @@ import {
   createPreviewSdk,
   createStaticPreviewSafetyPolicy,
   evaluateBasicExpression,
+  findScientificConstant,
   hasQuickOpsDeveloperCommand,
   runPreviewSdkBenchmark,
 } from "../../core-box/preview";
@@ -793,6 +796,432 @@ describe("PreviewSDK", () => {
         actualAbilityId: "preview.actual",
         status: "success",
       }),
+    ]);
+  });
+});
+
+/* Regression: keyword detection used to be a plain `includes()` substring match,
+ * so `blender` (contains `len`), `countdown` (contains `count`) and
+ * `wordpress` (contains `word`) produced a bogus "文本统计" card that the
+ * preview-priority sorter pinned above real search results. A tag now only
+ * counts at the start/end of the query, and its trailing form is stripped
+ * before counting. */
+describe("PreviewSDK text stats tag boundaries", () => {
+  function createTextStatsSdk() {
+    return createPreviewSdk({ abilities: [new TextStatsAbility()] });
+  }
+
+  it("rejects queries that merely contain a tag keyword as a substring", async () => {
+    const sdk = createTextStatsSdk();
+    const queries = [
+      "blender",
+      "blender 3d",
+      "countdown",
+      "charlie",
+      "wordpress",
+      // prefix/suffix neighbours that must not shadow a real app entry either
+      "lengthy",
+      "blend",
+    ];
+
+    for (const text of queries) {
+      const output = await sdk.resolveWithDiagnostics({
+        query: { text, inputs: [] },
+        signal: signal(),
+      });
+
+      expect(output.result, `query: ${text}`).toBeNull();
+      expect(output.diagnostics.status, `query: ${text}`).toBe("no-match");
+    }
+  });
+
+  it("counts only the text around a leading/trailing tag", async () => {
+    const sdk = createTextStatsSdk();
+    const cases: Array<{
+      name: string;
+      query: string;
+      title: string;
+      characters: string;
+      words: string;
+    }> = [
+      {
+        name: "leading tag",
+        query: "len hello world",
+        title: "hello world",
+        characters: "11",
+        words: "2",
+      },
+      {
+        name: "trailing tag",
+        query: "hello world len",
+        title: "hello world",
+        characters: "11",
+        words: "2",
+      },
+      {
+        name: "leading colon separator",
+        query: "len: hello",
+        title: "hello",
+        characters: "5",
+        words: "1",
+      },
+      {
+        name: "trailing colon separator",
+        query: "hello: len",
+        title: "hello",
+        characters: "5",
+        words: "1",
+      },
+      {
+        name: "chinese trailing tag",
+        query: "你好世界 长度",
+        title: "你好世界",
+        characters: "4",
+        words: "1",
+      },
+      {
+        name: "chinese leading tag",
+        query: "长度 你好世界",
+        title: "你好世界",
+        characters: "4",
+        words: "1",
+      },
+      {
+        name: "english leading tag, chinese text",
+        query: "length 你好世界",
+        title: "你好世界",
+        characters: "4",
+        words: "1",
+      },
+      {
+        name: "chinese trailing tag, english text",
+        query: "hello 字数",
+        title: "hello",
+        characters: "5",
+        words: "1",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const output = await sdk.resolveWithDiagnostics({
+        query: { text: testCase.query, inputs: [] },
+        signal: signal(),
+      });
+
+      expect(output.result?.abilityId, testCase.name).toBe(
+        "preview.textstats",
+      );
+      expect(output.result?.payload.title, testCase.name).toBe(testCase.title);
+      expect(output.result?.payload.primaryValue, testCase.name).toBe(
+        testCase.characters,
+      );
+      expect(output.result?.payload.secondaryValue, testCase.name).toBe(
+        testCase.words,
+      );
+    }
+  });
+});
+
+/* Regression: the radix ability used to reject a signed prefixed literal such as
+ * `-0x1f` (the prefix probe was anchored at `^0x`), and ordinary words were only
+ * kept out by accident. The tag boundary now requires a real separator/digit
+ * boundary, the sign survives both forms, and only values beyond 64 bits warn. */
+describe("PreviewSDK radix conversion", () => {
+  function createRadixSdk() {
+    return createPreviewSdk({ abilities: [new RadixConversionAbility()] });
+  }
+
+  it.each([
+    ["bare hex literal", "0x1f", "31"],
+    ["bare binary literal", "0b1010", "10"],
+    ["bare octal literal", "0o17", "15"],
+    ["signed hex literal", "-0x1f", "-31"],
+    ["zero literal keeps no prefix", "0x0", "0"],
+    ["leading hex tag reads decimal", "hex 255", "0xff"],
+    ["colon hex tag reads decimal", "hex: 255", "0xff"],
+    ["longest hex keyword wins", "hexadecimal 255", "0xff"],
+    ["hex tag falls back to hex digits", "hex ff", "255"],
+    ["hex tag keeps the sign", "hex -255", "-0xff"],
+    ["hex tag over zero", "hex 0", "0"],
+    ["binary tag reads decimal", "bin 12", "0b1100"],
+    ["chinese octal tag reads decimal", "八进制 255", "0o377"],
+    ["decimal tag decodes a prefixed literal", "dec 0xff", "255"],
+    ["trailing to-tag", "255 to hex", "0xff"],
+    ["trailing chinese tag", "255 转 十六进制", "0xff"],
+  ] as const)("converts %s", async (_name, query, expected) => {
+    const sdk = createRadixSdk();
+    const result = await sdk.resolve({
+      query: { text: query, inputs: [] },
+      signal: signal(),
+    });
+
+    expect(result?.abilityId).toBe("preview.radix");
+    expect(result?.payload.primaryValue).toBe(expected);
+  });
+
+  it("warns only once the converted value exceeds 64 bits", async () => {
+    const sdk = createRadixSdk();
+    const at64 = await sdk.resolve({
+      query: { text: "0xffffffffffffffff", inputs: [] },
+      signal: signal(),
+    });
+    const beyond64 = await sdk.resolve({
+      query: { text: "0x1ffffffffffffffff", inputs: [] },
+      signal: signal(),
+    });
+    const taggedBeyond64 = await sdk.resolve({
+      query: { text: "dec 0x1ffffffffffffffff", inputs: [] },
+      signal: signal(),
+    });
+
+    expect(at64?.payload.primaryValue).toBe("18446744073709551615");
+    expect(at64?.payload.warnings).toBeUndefined();
+
+    expect(beyond64?.payload.primaryValue).toBe("36893488147419103231");
+    expect(beyond64?.payload.warnings?.join(" ")).toContain(
+      "超出 64 位整数范围",
+    );
+    expect(
+      beyond64?.payload.sections?.[0]?.rows.find((row) => row.label === "位宽")
+        ?.value,
+    ).toBe("65 bit");
+
+    expect(taggedBeyond64?.payload.primaryValue).toBe("36893488147419103231");
+    expect(taggedBeyond64?.payload.warnings?.length).toBeGreaterThan(0);
+  });
+
+  it("renders all four base chips from the same converted value", async () => {
+    const sdk = createRadixSdk();
+    const result = await sdk.resolve({
+      query: { text: "hex 255", inputs: [] },
+      signal: signal(),
+    });
+
+    expect(
+      Object.fromEntries(
+        (result?.payload.chips ?? []).map((chip) => [chip.label, chip.value]),
+      ),
+    ).toEqual({
+      十六进制: "0xff",
+      二进制: "0b11111111",
+      八进制: "0o377",
+      十进制: "255",
+    });
+  });
+
+  it.each([
+    "blender",
+    "hexes",
+    "photoshop",
+    "photoshop hex",
+    "fox",
+    "0xzz",
+    "hex 12x",
+    "1.5 to hex",
+  ])("rejects %s without a card", async (text) => {
+    const sdk = createRadixSdk();
+    const output = await sdk.resolveWithDiagnostics({
+      query: { text, inputs: [] },
+      signal: signal(),
+    });
+
+    expect(output.result, `query: ${text}`).toBeNull();
+    expect(output.diagnostics.status, `query: ${text}`).toBe("no-match");
+  });
+});
+
+/* Regression: line processing used to match its tag with a plain `includes()`,
+ * so `sorter`/`sorting`/`resort` shadowed real search hits; the tag now has to
+ * land on a boundary, may lead or trail, and the tag-only form falls back to the
+ * first text input. */
+describe("PreviewSDK line tools", () => {
+  function createLineSdk() {
+    return createPreviewSdk({ abilities: [new LineToolsAbility()] });
+  }
+
+  it.each([
+    ["leading sort", "sort\nb\na\nb", "a\nb\nb"],
+    ["trailing dedupe", "b\na\nb 去重", "b\na"],
+    ["leading sort desc", "sort desc\nb\na\nb", "b\nb\na"],
+    ["leading drop empty", "drop empty\nb\n\na", "b\na"],
+    ["leading trim", "trim\n  b  \n a", "b\na"],
+    ["chinese sort tag", "排序\nb\na", "a\nb"],
+    ["crlf input", "sort\r\nb\r\na", "a\nb"],
+  ] as const)("applies %s", async (_name, query, expected) => {
+    const sdk = createLineSdk();
+    const result = await sdk.resolve({
+      query: { text: query, inputs: [] },
+      signal: signal(),
+    });
+
+    expect(result?.abilityId).toBe("preview.lines");
+    expect(result?.payload.primaryValue).toBe(expected);
+  });
+
+  it("falls back to the first text input when the tag has no inline payload", async () => {
+    const sdk = createLineSdk();
+    const result = await sdk.resolve({
+      query: {
+        text: "排序",
+        inputs: [{ type: TuffInputType.Text, content: "b\na" }],
+      },
+      signal: signal(),
+    });
+
+    expect(result?.abilityId).toBe("preview.lines");
+    expect(result?.payload.primaryValue).toBe("a\nb");
+  });
+
+  it("truncates input beyond 200 lines and reports the truncation", async () => {
+    const sdk = createLineSdk();
+    const withinLimit = Array.from(
+      { length: 200 },
+      (_, index) => `l${index}`,
+    ).join("\n");
+    const overLimit = Array.from(
+      { length: 201 },
+      (_, index) => `l${index}`,
+    ).join("\n");
+
+    const exact = await sdk.resolve({
+      query: { text: `sort\n${withinLimit}`, inputs: [] },
+      signal: signal(),
+    });
+    const truncated = await sdk.resolve({
+      query: { text: `sort\n${overLimit}`, inputs: [] },
+      signal: signal(),
+    });
+
+    expect(exact?.payload.warnings).toBeUndefined();
+    expect(exact?.payload.primaryValue?.split("\n")).toHaveLength(200);
+
+    const truncatedLines = truncated?.payload.primaryValue?.split("\n") ?? [];
+    expect(truncatedLines).toHaveLength(200);
+    expect(truncatedLines).not.toContain("l200");
+    expect(truncated?.payload.warnings?.join(" ")).toContain("200");
+  });
+
+  it.each(["sorter", "sorting", "resort", "ordered list"])(
+    "rejects %s without a card",
+    async (text) => {
+      const sdk = createLineSdk();
+      const output = await sdk.resolveWithDiagnostics({
+        query: { text, inputs: [] },
+        signal: signal(),
+      });
+
+      expect(output.result, `query: ${text}`).toBeNull();
+      expect(output.diagnostics.status, `query: ${text}`).toBe("no-match");
+    },
+  );
+});
+
+/* Regression: the constant alias normalizer used to delete Greek letters and `∞`
+ * outright, so `ε₀` normalized to `0` and a bare `0` query resolved to a physics
+ * constant. Bare `0`/`r` must resolve nothing, while symbols and legacy aliases
+ * still hit their entries. */
+describe("PreviewSDK scientific constants", () => {
+  function createConstantsSdk() {
+    return createPreviewSdk({ abilities: [new ScientificConstantsAbility()] });
+  }
+
+  it.each([
+    ["ε₀", "真空介电常数"],
+    ["ε0", "真空介电常数"],
+    ["μ₀", "真空磁导率"],
+    ["mₑ", "电子质量"],
+    ["a₀", "玻尔半径"],
+    ["R∞", "里德伯常数"],
+    ["介电常数", "真空介电常数"],
+    ["磁导率", "真空磁导率"],
+    ["玻尔半径", "玻尔半径"],
+    ["rydberg constant", "里德伯常数"],
+    ["stefan boltzmann constant", "斯特藩-玻尔兹曼常数"],
+    ["standard atmosphere", "标准大气压"],
+    ["atm", "标准大气压"],
+    ["ħ", "约化普朗克常数"],
+    ["光速", "真空光速"],
+  ] as const)("resolves %s", async (query, expectedName) => {
+    const sdk = createConstantsSdk();
+    const result = await sdk.resolve({
+      query: { text: query, inputs: [] },
+      signal: signal(),
+    });
+
+    expect(result?.abilityId).toBe("preview.constants.scientific");
+    expect(result?.payload.title).toBe(expectedName);
+  });
+
+  it("keeps the ascii zero alias free instead of collapsing ε₀ onto it", () => {
+    expect(findScientificConstant("0")).toBeNull();
+  });
+
+  it.each(["0", "r", "blender"])(
+    "produces no card for bare %s without a constant keyword",
+    async (text) => {
+      const sdk = createConstantsSdk();
+      const output = await sdk.resolveWithDiagnostics({
+        query: { text, inputs: [] },
+        signal: signal(),
+      });
+
+      expect(output.result, `query: ${text}`).toBeNull();
+      expect(output.diagnostics.status, `query: ${text}`).toBe("no-match");
+    },
+  );
+});
+
+describe("PreviewSDK new unit lexicon entries", () => {
+  it.each([
+    ["light year to km", "1 光年 to km", "9460730472580.8"],
+    ["light year alias to km", "1 ly to km", "9460730472580.8"],
+    ["astronomical unit to km", "1 天文单位 to km", "149597870.7"],
+    ["nautical mile to km", "1 海里 to km", "1.852"],
+    ["chinese li to meters", "1 里 to 米", "500"],
+    ["chinese chi to centimeters", "3 尺 to 厘米", "100"],
+    ["chinese zhang to meters", "10 丈 to 米", "33.3333"],
+    ["chinese cun to centimeters", "1 寸 to 厘米", "3.3333"],
+    ["mu to square meters", "1 亩 to 平方米", "666.6667"],
+    ["mu to hectares", "1 亩 to 公顷", "0.06667"],
+  ] as const)("converts %s", async (_name, query, expected) => {
+    const sdk = createPreviewSdk({ abilities: [new UnitConversionAbility()] });
+    const result = await sdk.resolve({
+      query: { text: query, inputs: [] },
+      signal: signal(),
+    });
+
+    expect(result?.abilityId).toBe("preview.unit");
+    expect(result?.payload.primaryValue).toBe(expected);
+  });
+});
+
+describe("PreviewSDK default registry wiring", () => {
+  it("keeps the default ability set free of duplicate ids", () => {
+    const ids = createDefaultPurePreviewAbilities().map(
+      (ability) => ability.id,
+    );
+
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("orders the default abilities by priority for dispatch", () => {
+    const ordered = createPreviewSdk({
+      abilities: createDefaultPurePreviewAbilities(),
+    }).listAbilities();
+
+    expect(ordered.map((ability) => ability.id)).toEqual([
+      "preview.expression.basic",
+      "preview.expression.advanced",
+      "preview.color",
+      "preview.constants.scientific",
+      "preview.unit",
+      "preview.radix",
+      "preview.time",
+      "preview.currency",
+      "preview.quickops.developer",
+      "preview.percent",
+      "preview.lines",
+      "preview.textstats",
     ]);
   });
 });

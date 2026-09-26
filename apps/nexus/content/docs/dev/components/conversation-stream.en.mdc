@@ -101,3 +101,9 @@ code: |
 - The viewport anchor is preserved across a prepend, so users are not thrown to a different position.
 - `hasMoreInitial` defaults to an explicit `undefined` rather than `false`. That opts out of Vue's absent-Boolean-prop coercion so "not asked yet" stays distinguishable from "there is no history". Pass `false` explicitly when you know there is none.
 - A throwing `loadOlder` emits `load-error` and renders the `top-error` slot, whose scope carries `retry`.
+
+## Technologies
+
+- The virtual window takes `{ start, end }` from a position cache (a prefix sum of measured heights, kept by key) at the current scroll offset, and keeps the previous object while both indices stand still: a scroll frame that crosses no row boundary — every frame of a `tweenToBottom` glide included — neither rebuilds the window nor re-invokes the visible rows' `item` slot.
+- The scroll-to-bottom pill is offered only to a reader who left the bottom (not following, and not at the bottom). While the stream glides there on its own — the `tweenToBottom` after a send, a programmatic scroll — it is briefly away from the bottom, and the pill no longer flashes.
+- Coverage: `__tests__/conversation-stream.test.ts` asserts that repeated small scrolls inside one row leave the slot uncalled and that crossing into the next row re-renders, and that no pill shows while a glide to the bottom is under way.

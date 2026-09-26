@@ -3,7 +3,10 @@ import type { AppDestinationId } from '../../../shared/app-destinations'
 import type { AppDestinationRuntime } from './app-destination-navigation'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getAppDestinationNavigationService } from './app-destination-navigation'
+import {
+  getAppDestinationNavigationService,
+  normalizeConversationId
+} from './app-destination-navigation'
 
 const mocks = vi.hoisted(() => ({
   getTuffTransportMain: vi.fn()
@@ -578,4 +581,151 @@ describe('appDestinationNavigationService beforeEffect fence', () => {
     expect(transport.broadcastToWindow).toHaveBeenCalledTimes(1)
     expect(beforeEffect).toHaveBeenCalledTimes(2)
   })
+})
+
+/**
+ * 会话是唯一一个目录表说不出名字的目的地：它来自数据库的一行，所以 id 由调用方带进来。这里是
+ * id 变成路由的唯一闸门，失败方式分两种，都很安静——校验放宽会把一条搜索结果变成任意路由导航；
+ * 校验收紧或分支写错则会让「打开这段对话」什么也不做，而调用方看到的只是一个 status。
+ */
+describe('openConversation route boundary', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('queues the conversation route before readiness without dropping it', () => {
+    const { service, transport, window } = createService()
+
+    expect(service.openConversation('thread-1')).toEqual({
+      status: 'queued',
+      conversationId: 'thread-1'
+    })
+    expect(window.show).toHaveBeenCalledTimes(1)
+    expect(transport.broadcastToWindow).not.toHaveBeenCalled()
+
+    service.markPrimaryRendererReady(PRIMARY_WEB_CONTENTS_ID)
+    expect(transport.broadcastToWindow).toHaveBeenCalledExactlyOnceWith(
+      window.id,
+      AppEvents.window.navigate,
+      { path: '/home/c/thread-1' }
+    )
+  })
+
+  it('delivers the conversation route immediately once the renderer is ready', () => {
+    const { service, transport, window } = createService()
+    service.markPrimaryRendererReady(PRIMARY_WEB_CONTENTS_ID)
+
+    expect(service.openConversation('thread-1')).toEqual({
+      status: 'opened',
+      conversationId: 'thread-1'
+    })
+    expect(transport.broadcastToWindow).toHaveBeenCalledExactlyOnceWith(
+      window.id,
+      AppEvents.window.navigate,
+      { path: '/home/c/thread-1' }
+    )
+  })
+
+  it('percent-encodes the id so it stays one route parameter', () => {
+    const { service, transport, window } = createService()
+    service.markPrimaryRendererReady(PRIMARY_WEB_CONTENTS_ID)
+
+    service.openConversation('local:abc')
+
+    // 未编码的 `:` 会让这段路径被切成别的参数形状；路由参数必须原样还原成 id。
+    expect(transport.broadcastToWindow).toHaveBeenCalledExactlyOnceWith(
+      window.id,
+      AppEvents.window.navigate,
+      { path: '/home/c/local%3Aabc' }
+    )
+  })
+
+  it.each([
+    { label: 'path traversal', id: '../../etc/passwd' },
+    { label: 'slash', id: 'has/slash' },
+    { label: 'space', id: 'has space' },
+    { label: 'empty', id: '' },
+    { label: 'query', id: 'id?x=1' },
+    { label: 'fragment', id: 'id#frag' },
+    { label: 'percent escape', id: 'id%2e%2e' },
+    { label: 'over-long', id: 'a'.repeat(129) },
+    { label: 'non-ascii', id: 'emoji😀' }
+  ])('refuses to reveal the window for a $label id', ({ id }) => {
+    const { service, transport, window } = createService()
+
+    expect(service.openConversation(id)).toEqual({
+      status: 'unavailable',
+      conversationId: id,
+      reason: 'conversation-unavailable'
+    })
+    // 拒绝必须发生在任何原生副作用之前：show/focus 一次就已经把用户从当前界面拽走了。
+    expect(window.restore).not.toHaveBeenCalled()
+    expect(window.show).not.toHaveBeenCalled()
+    expect(window.focus).not.toHaveBeenCalled()
+    expect(transport.broadcastToWindow).not.toHaveBeenCalled()
+  })
+
+  it('keeps the route inside /home/c/ for every accepted id shape', () => {
+    const { service, transport, window } = createService()
+    service.markPrimaryRendererReady(PRIMARY_WEB_CONTENTS_ID)
+
+    service.openConversation('9f1c6a2e-4b7d-4e5f-8a90-1234567890ab')
+    service.openConversation('  trimmed-id  ')
+    service.openConversation('a_b.c-d')
+
+    expect(transport.broadcastToWindow).toHaveBeenNthCalledWith(
+      1,
+      window.id,
+      AppEvents.window.navigate,
+      { path: '/home/c/9f1c6a2e-4b7d-4e5f-8a90-1234567890ab' }
+    )
+    expect(transport.broadcastToWindow).toHaveBeenNthCalledWith(
+      2,
+      window.id,
+      AppEvents.window.navigate,
+      { path: '/home/c/trimmed-id' }
+    )
+    expect(transport.broadcastToWindow).toHaveBeenNthCalledWith(
+      3,
+      window.id,
+      AppEvents.window.navigate,
+      { path: '/home/c/a_b.c-d' }
+    )
+  })
+})
+
+describe('normalizeConversationId', () => {
+  it.each([
+    ['9f1c6a2e-4b7d-4e5f-8a90-1234567890ab', '9f1c6a2e-4b7d-4e5f-8a90-1234567890ab'],
+    ['thread-1', 'thread-1'],
+    ['a_b.c-d', 'a_b.c-d'],
+    ['local:abc', 'local:abc'],
+    ['  padded  ', 'padded'],
+    ['a'.repeat(128), 'a'.repeat(128)]
+  ])('accepts %s', (value, expected) => {
+    expect(normalizeConversationId(value)).toBe(expected)
+  })
+
+  it.each([
+    '../../etc/passwd',
+    'has/slash',
+    'has space',
+    'id?x=1',
+    'id#frag',
+    'id%2e%2e',
+    'back\\slash',
+    'emoji😀',
+    '',
+    '   ',
+    'a'.repeat(129)
+  ])('rejects %s', (value) => {
+    expect(normalizeConversationId(value)).toBeNull()
+  })
+
+  it.each([[undefined], [null], [42], [{ id: 'thread-1' }]])(
+    'rejects the non-string carrier %s',
+    (value) => {
+      expect(normalizeConversationId(value)).toBeNull()
+    }
+  )
 })

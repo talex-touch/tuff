@@ -157,8 +157,9 @@ function rowNames(menu: VueWrapper): string[] {
   return rows(menu).map((row) => row.find('.tx-card-item__title').text())
 }
 
+/** The provider strip's chips; the effort row above it is the same primitive. */
 function filters(menu: VueWrapper) {
-  return menu.findAll('.tx-bui-filter-chips__chip')
+  return menu.findAll('.HomeModelMenu-Filters .tx-bui-filter-chips__chip')
 }
 
 function groupNames(menu: VueWrapper): string[] {
@@ -761,5 +762,120 @@ describe('choosing', () => {
 
     expect(panel(menu).exists()).toBe(false)
     expect(document.activeElement).toBe(menu.find('.pill').element)
+  })
+})
+
+describe('reasoning effort row', () => {
+  const GPT_55 = { providerId: 'openai-default', model: 'gpt-5.5' }
+  const GPT_4O = { providerId: 'openai-default', model: 'gpt-4o' }
+  const V4_PRO = { providerId: 'deepseek-default', model: 'deepseek-v4-pro' }
+
+  function withCloudProviders(): void {
+    mocks.getProviderModelOptions.mockResolvedValue([
+      ...providerOptions(),
+      {
+        providerId: 'openai-default',
+        providerName: 'OpenAI',
+        providerType: 'openai',
+        models: ['gpt-5.5', 'gpt-4o'],
+        available: true
+      },
+      {
+        providerId: 'deepseek-default',
+        providerName: 'DeepSeek',
+        providerType: 'deepseek',
+        models: ['deepseek-v4-pro'],
+        available: true
+      }
+    ])
+  }
+
+  function effortChips(menu: VueWrapper) {
+    return menu.findAll('.HomeModelMenu-EffortChips .tx-bui-filter-chips__chip')
+  }
+
+  function note(menu: VueWrapper): string | null {
+    const line = menu.find('.HomeModelMenu-EffortNote')
+    return line.exists() ? line.text() : null
+  }
+
+  it('offers auto and the four levels, auto pressed on a fresh profile', async () => {
+    const menu = await openMenu()
+
+    const toolbar = menu.find('.HomeModelMenu-EffortChips')
+    expect(toolbar.attributes('role')).toBe('toolbar')
+    expect(toolbar.attributes('aria-label')).toBe('home.reasoning.label')
+    expect(effortChips(menu).map((chip) => chip.text())).toEqual([
+      'home.reasoning.auto',
+      'home.reasoning.level.low',
+      'home.reasoning.level.medium',
+      'home.reasoning.level.high',
+      'home.reasoning.level.max'
+    ])
+    expect(
+      effortChips(menu)
+        .filter((chip) => chip.attributes('aria-pressed') === 'true')
+        .map((chip) => chip.text())
+    ).toEqual(['home.reasoning.auto'])
+    // Nothing pinned and nothing chosen: nothing to explain.
+    expect(note(menu)).toBeNull()
+  })
+
+  it('stores a pick without closing the menu or touching the model', async () => {
+    const menu = await openMenu()
+
+    await effortChips(menu)[3].trigger('click')
+    await nextTick()
+
+    expect(appSetting.conversation).toEqual({
+      model: null,
+      favoriteModels: [],
+      reasoningEffort: 'high'
+    })
+    expect(panel(menu).exists()).toBe(true)
+    // Auto routing: whether it applies depends on the model the turn lands on.
+    expect(note(menu)).toBe('home.reasoning.autoRoute')
+  })
+
+  it('goes inert with its reason on a pinned route that takes no effort', async () => {
+    resetAppSetting({ model: { ...LOCAL_QWEN }, favoriteModels: [], reasoningEffort: 'high' })
+    const menu = await openMenu()
+
+    expect(effortChips(menu).every((chip) => chip.attributes('disabled') !== undefined)).toBe(true)
+    expect(menu.find('.HomeModelMenu-Effort').classes()).toContain('is-disabled')
+    expect(note(menu)).toBe('home.reasoning.unsupportedProvider')
+    // The stored choice survives: it simply is not sent to this model.
+    expect((appSetting.conversation as Record<string, unknown>).reasoningEffort).toBe('high')
+  })
+
+  it('tells a model that takes no effort from a route that takes none', async () => {
+    withCloudProviders()
+    resetAppSetting({ model: { ...GPT_4O }, favoriteModels: [], reasoningEffort: 'max' })
+    const menu = await openMenu()
+
+    expect(note(menu)).toBe('home.reasoning.unsupportedModel')
+    expect(effortChips(menu)[0].attributes('disabled')).toBeDefined()
+  })
+
+  it('stays live on a model that rounds, and says where to', async () => {
+    withCloudProviders()
+    resetAppSetting({ model: { ...V4_PRO }, favoriteModels: [], reasoningEffort: 'low' })
+    const menu = await openMenu()
+
+    expect(effortChips(menu).every((chip) => chip.attributes('disabled') === undefined)).toBe(true)
+    expect(note(menu)).toBe('home.reasoning.clamped')
+  })
+
+  it('says nothing on a model that takes the level as chosen', async () => {
+    withCloudProviders()
+    resetAppSetting({ model: { ...GPT_55 }, favoriteModels: [], reasoningEffort: 'high' })
+    const menu = await openMenu()
+
+    expect(note(menu)).toBeNull()
+    expect(
+      effortChips(menu)
+        .filter((chip) => chip.attributes('aria-pressed') === 'true')
+        .map((chip) => chip.text())
+    ).toEqual(['home.reasoning.level.high'])
   })
 })

@@ -110,8 +110,8 @@ export interface PluginSystemSDK {
    */
   openExternal: (url: string) => Promise<void>
   /**
-   * Reveal a path in the system file manager. Directories open, files are selected
-   * in their parent.
+   * Reveal a path in the system file manager. Directories open; files, and on macOS packages
+   * such as `.app` bundles (which opening would launch), are selected in their parent.
    *
    * Requires the `system.shell` permission. The host resolves and stats the path, so a
    * caller cannot use this to walk the filesystem without holding that permission.

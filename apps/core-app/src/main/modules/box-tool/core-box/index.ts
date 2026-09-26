@@ -18,10 +18,16 @@ import { perfMonitor } from '../../../utils/perf-monitor'
 import { BaseModule } from '../../abstract-base-module'
 import { shortcutModule } from '../../global-shortcon'
 import { getMainConfig, onboardingGate } from '../../storage'
+import {
+  COREBOX_TOGGLE_DEFAULT_ACCELERATOR,
+  COREBOX_TOGGLE_LEGACY_DEFAULT_ACCELERATORS,
+  COREBOX_TOGGLE_SHORTCUT_ID
+} from '../../../../shared/corebox-shortcut'
 import SearchEngineCore from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
 import { ipcManager } from './ipc'
 import { coreBoxManager } from './manager'
+import { metaOverlayManager } from './meta-overlay'
 import { COREBOX_MIN_HEIGHT, windowManager } from './window'
 
 const coreBoxLog = createLogger('CoreBox')
@@ -82,8 +88,8 @@ export class CoreBoxModule extends BaseModule {
     await windowManager.ensureCreated()
 
     shortcutModule.registerMainShortcut(
-      'core.box.toggle',
-      'CommandOrControl+E',
+      COREBOX_TOGGLE_SHORTCUT_ID,
+      COREBOX_TOGGLE_DEFAULT_ACCELERATOR,
       () => {
         const admission = onboardingGate.evaluate()
         if (admission.state !== 'allowed') {
@@ -130,14 +136,28 @@ export class CoreBoxModule extends BaseModule {
           lastScreenId = curScreen.id
         }
       },
-      { enabled: true, owner: COREBOX_SHORTCUT_OWNER }
+      {
+        enabled: true,
+        owner: COREBOX_SHORTCUT_OWNER,
+        // A binding still on the old ⌘E default moves to ⌥Space; one the user changed stays.
+        legacyDefaultAccelerators: COREBOX_TOGGLE_LEGACY_DEFAULT_ACCELERATORS,
+        // No other key stands in when ⌥Space cannot be had: the OS refuses it (Windows does while
+        // another app, e.g. PowerToys Run, holds it), or a built-in shortcut stored before CoreBox
+        // is set to it. CoreBox is left without a key, and the user is told once per launch.
+        unavailableNotice: {
+          titleKey: 'notifications.coreBoxShortcutUnavailableTitle',
+          refusedBodyKey: 'notifications.coreBoxShortcutRefusedBody',
+          conflictBodyKey: 'notifications.coreBoxShortcutConflictBody',
+          conflictNamedBodyKey: 'notifications.coreBoxShortcutConflictNamedBody'
+        }
+      }
     )
 
     coreBoxLog.success('Core-box module initialized')
   }
 
   async onDestroy(): Promise<void> {
-    shortcutModule.unregisterMainShortcut('core.box.toggle')
+    shortcutModule.unregisterMainShortcut(COREBOX_TOGGLE_SHORTCUT_ID)
 
     if (this.disposeLagBurstSubscription) {
       this.disposeLagBurstSubscription()
@@ -269,6 +289,21 @@ export class CoreBoxModule extends BaseModule {
             loading: payload.loading === true,
             recommendationPending: payload.recommendationPending === true,
             activationCount: Number(payload.activationCount),
+            source: String(payload.source ?? '')
+          }
+        })
+      }
+      return
+    }
+
+    // The ⌘K panel is sized to the window it opened in; resizing under it would clip it. The
+    // latest update is replayed when the panel closes, in place of the pre-open height.
+    if (metaOverlayManager.holdLayoutUpdate(() => this.applyLayoutUpdate(payload, context))) {
+      if (logEnabled) {
+        coreBoxLog.info('Layout update held (MetaOverlay open)', {
+          meta: {
+            height: Number(payload.height),
+            resultCount: Number(payload.resultCount),
             source: String(payload.source ?? '')
           }
         })

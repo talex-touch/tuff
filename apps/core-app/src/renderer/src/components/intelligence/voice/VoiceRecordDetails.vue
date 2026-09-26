@@ -70,6 +70,15 @@ function tokenLabel(): string {
   }
   return t('voiceInsights.records.tokensUnavailable')
 }
+function recognitionLocationLabel(): string {
+  if (props.record.recognitionLocation === 'cloud') {
+    return t('voiceInsights.records.locationValues.cloud')
+  }
+  if (props.record.recognitionLocation === 'on-device') {
+    return t('voiceInsights.records.locationValues.onDevice')
+  }
+  return t('voiceInsights.records.locationValues.unknown')
+}
 </script>
 
 <template>
@@ -108,6 +117,14 @@ function tokenLabel(): string {
       <div>
         <dt>{{ t('voiceInsights.records.tokens') }}</dt>
         <dd>{{ tokenLabel() }}</dd>
+      </div>
+      <div>
+        <dt>{{ t('voiceInsights.records.location') }}</dt>
+        <dd>{{ recognitionLocationLabel() }}</dd>
+      </div>
+      <div>
+        <dt>{{ t('voiceInsights.records.model') }}</dt>
+        <dd>{{ record.model || '—' }}</dd>
       </div>
       <div>
         <dt>{{ t('voiceInsights.records.channel') }}</dt>

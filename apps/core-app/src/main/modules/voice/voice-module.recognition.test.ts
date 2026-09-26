@@ -84,7 +84,8 @@ vi.mock('./voice-service', () => ({
   }
 }))
 vi.mock('./voice-provider-runtime', () => ({
-  getRecognitionStatus: mocks.getRecognitionStatus
+  getRecognitionStatus: mocks.getRecognitionStatus,
+  getVoiceRecognitionLocation: vi.fn(() => 'cloud')
 }))
 vi.mock('./speech-model-service', () => ({
   getSpeechModelProgress: mocks.getSpeechModelProgress,

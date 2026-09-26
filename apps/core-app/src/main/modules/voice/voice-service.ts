@@ -16,6 +16,7 @@ import type {
   VoiceDictatePayload,
   VoiceDictateResult,
   VoiceFileTranscriptionEvent,
+  VoiceRecognitionLocation,
   VoiceRecoveryKind,
   VoiceRecoveryStatus,
   VoiceRetryPayload,
@@ -57,7 +58,7 @@ import {
 import { selectVoiceFile } from './voice-file-transcription'
 import { voiceInsightsStore } from './voice-insights-store'
 import { createLiveDelivery } from './voice-live-delivery'
-import { getConfiguredAsrProvider } from './voice-provider-runtime'
+import { getConfiguredAsrProvider, getVoiceRecognitionLocation } from './voice-provider-runtime'
 import { voiceRecognitionStore } from './voice-recognition-store'
 
 function isVoiceHistoryEnabled(): boolean {
@@ -329,12 +330,22 @@ export interface VoiceQuickEditTarget {
 /** The session options the owner understands: the caller's payload plus host-only fields. */
 type VoiceSessionOptions = VoiceSessionPayload & { editTarget?: VoiceQuickEditTarget }
 
-/** One capture's speech-to-text result, normalized. */
+/** One capture's speech-to-text result, normalized with the route that produced it. */
 interface VoiceTranscript {
   text: string
   language?: string
   billing?: VoiceDictateResult['billing']
   latencyMs?: number
+  providerId: string
+  model: string
+  recognitionLocation: VoiceRecognitionLocation
+}
+
+/** Private receipt fields are removed before the public Voice SDK result is returned. */
+interface FinalizedCaptureResult extends VoiceDictateResult {
+  recognitionProviderId?: string
+  recognitionModel?: string
+  recognitionLocation?: VoiceRecognitionLocation
 }
 
 /** One slot in the merged capture/provider queue that feeds `streamViaProvider`'s generator. */
@@ -355,6 +366,8 @@ interface RetryBuffer {
   /** Exact main-owned adapter snapshot from the failed stream; never re-resolved from settings. */
   provider: VoiceProviderAdapter
   model: string
+  recognitionLocation: VoiceRecognitionLocation
+
   requestTimeoutMs: number
   polishStrength: VoicePolishStrength
   cleanup: boolean
@@ -600,6 +613,8 @@ export class VoiceService {
     sampleRate: number,
     provider: VoiceProviderAdapter,
     model: string,
+    recognitionLocation: VoiceRecognitionLocation,
+
     requestTimeoutMs: number,
     polishStrength: VoicePolishStrength,
     cleanup: boolean,
@@ -617,6 +632,8 @@ export class VoiceService {
       sampleRate,
       provider,
       model,
+      recognitionLocation,
+
       requestTimeoutMs,
       polishStrength,
       cleanup,
@@ -687,10 +704,8 @@ export class VoiceService {
     text: string,
     durationMs: number,
     polished: boolean,
-    capturedAt = Date.now(),
-    record: Omit<VoiceRecognitionRecordInput, 'id' | 'capturedAt' | 'status' | 'text'> = {
-      source: 'microphone'
-    }
+    capturedAt: number,
+    record: Omit<VoiceRecognitionRecordInput, 'id' | 'capturedAt' | 'status' | 'text'>
   ): Promise<void> {
     try {
       await voiceInsightsStore.recordSuccess({ captureId, text, durationMs, polished, capturedAt })
@@ -809,7 +824,7 @@ export class VoiceService {
       }
       throw error
     }
-    const result = await this.finalizeCapture(
+    const finalized = await this.finalizeCapture(
       capture,
       {
         cleanup: options.cleanup,
@@ -826,6 +841,7 @@ export class VoiceService {
       record.caller,
       record.polishContext
     )
+    const { recognitionProviderId, recognitionModel, recognitionLocation, ...result } = finalized
     if (record.delivery === 'active-app' && result.text) {
       /*
        * An edit's replacement is not formatted for the application it lands in.
@@ -846,6 +862,10 @@ export class VoiceService {
       'id' | 'capturedAt' | 'status' | 'text'
     > = {
       source: 'microphone',
+      ...(recognitionLocation ? { recognitionLocation } : {}),
+      ...(recognitionProviderId ? { providerId: recognitionProviderId } : {}),
+      ...(recognitionModel ? { model: recognitionModel } : {}),
+      ...(recognitionProviderId ? { channel: recognitionProviderId } : {}),
       audio: capture.audio,
       audioDurationMs: capture.durationMs,
       recognitionDurationMs: Math.max(0, Date.now() - record.startedAt),
@@ -905,7 +925,7 @@ export class VoiceService {
     signal: AbortSignal | undefined,
     caller: string,
     polishContext?: PolishContext
-  ): Promise<VoiceDictateResult> {
+  ): Promise<FinalizedCaptureResult> {
     if (!capture.audio || capture.audio.length === 0) {
       return {
         text: '',
@@ -920,12 +940,20 @@ export class VoiceService {
     const transcript = await this.transcribe(capture.audio, payload.language, signal, caller)
     throwIfCancelled(signal)
     const language = transcript.language ?? payload.language
+    const recognitionReceipt = {
+      recognitionProviderId: transcript.providerId,
+      recognitionModel: transcript.model,
+      recognitionLocation: transcript.recognitionLocation
+    } as const
+
     if (!transcript.text) {
       return {
         text: '',
         raw: '',
         source: 'native-cpal',
         polished: false,
+        ...recognitionReceipt,
+
         ...(language ? { language } : {}),
         ...(transcript.billing ? { billing: transcript.billing } : {}),
         ...(transcript.latencyMs === undefined ? {} : { latencyMs: transcript.latencyMs }),
@@ -961,6 +989,8 @@ export class VoiceService {
       raw: transcript.text,
       source: 'native-cpal',
       polished: polishedText !== null,
+      ...recognitionReceipt,
+
       ...(language ? { language } : {}),
       ...(transcript.billing ? { billing: transcript.billing } : {}),
       ...(transcript.latencyMs === undefined ? {} : { latencyMs: transcript.latencyMs }),
@@ -986,7 +1016,7 @@ export class VoiceService {
     signal: AbortSignal | undefined,
     caller: string,
     polishContext?: PolishContext
-  ): Promise<VoiceDictateResult> {
+  ): Promise<FinalizedCaptureResult> {
     const command = resolveQuickEditCommand(transcript.text)
     let replacement: string | null = null
     let outcome: 'literal' | 'model' | 'cancelled' | 'failed'
@@ -1020,6 +1050,9 @@ export class VoiceService {
       raw: transcript.text,
       source: 'native-cpal',
       polished: outcome === 'model',
+      recognitionProviderId: transcript.providerId,
+      recognitionModel: transcript.model,
+      recognitionLocation: transcript.recognitionLocation,
       ...(transcript.language ? { language: transcript.language } : {}),
       ...(transcript.billing ? { billing: transcript.billing } : {}),
       ...(transcript.latencyMs === undefined ? {} : { latencyMs: transcript.latencyMs }),
@@ -1110,6 +1143,22 @@ export class VoiceService {
     }
   }
 
+  /** Leaves the complete recognized text on the clipboard when active-app delivery cannot finish. */
+  private async copyVoiceTextFallback(text: string, reason: string): Promise<VoiceDeliveryResult> {
+    const value = text.trim()
+    if (!value) return { method: 'none', reason }
+    try {
+      await clipboardModule.write({ type: 'text', value })
+      return { method: 'clipboard', reason }
+    } catch (error) {
+      voiceLog.warn('Voice text could not be copied after delivery failed', {
+        meta: { reason },
+        error
+      })
+      return { method: 'none', reason }
+    }
+  }
+
   private async deliverText(
     text: string,
     targetKey: string | null,
@@ -1130,11 +1179,17 @@ export class VoiceService {
      */
     const staged = allowPaste ? text.trim() : text
     if (!staged) return { method: 'none', reason: 'empty' }
-    if (!targetKey) return { method: 'none', reason: 'target-unavailable' }
+    if (!targetKey) {
+      return allowPaste
+        ? await this.copyVoiceTextFallback(staged, 'target-unavailable')
+        : { method: 'none', reason: 'target-unavailable' }
+    }
 
     const activeApp = await activeAppService.getActiveApp({ forceRefresh: true })
     if (activeAppKey(activeApp) !== targetKey) {
-      return { method: 'none', reason: 'target-changed' }
+      return allowPaste
+        ? await this.copyVoiceTextFallback(staged, 'target-changed')
+        : { method: 'none', reason: 'target-changed' }
     }
 
     /*
@@ -1173,7 +1228,7 @@ export class VoiceService {
 
     const fallback = await clipboardModule.applyVoiceText(outgoing)
     if (fallback.success) return { method: 'autopaste' }
-    return { method: 'none', reason: fallback.code ?? 'autopaste-failed' }
+    return await this.copyVoiceTextFallback(outgoing, fallback.code ?? 'autopaste-failed')
   }
 
   /** One-shot dictation backed by the canonical Voice Session owner. */
@@ -1275,6 +1330,11 @@ export class VoiceService {
       id: nextVoiceSessionId(),
       capturedAt: startedAt,
       source: 'file',
+      recognitionLocation: getVoiceRecognitionLocation(response.provider),
+      providerId: response.provider,
+      model: response.model,
+      channel: response.provider,
+
       status: text ? 'success' : 'empty',
       audio: Buffer.from(selected.audio),
       audioFormat: 'encoded',
@@ -1370,6 +1430,8 @@ export class VoiceService {
       stopSignal,
       caller,
       configured.model,
+      configured.location,
+
       configured.mode === 'buffered' ? BUFFERED_TRANSCRIPTION_TIMEOUT_MS : CAPABILITY_TIMEOUT_MS,
       configured.mode === 'buffered',
       retryGeneration
@@ -1401,6 +1463,8 @@ export class VoiceService {
     stopSignal?: AbortSignal,
     caller = VOICE_CALLER,
     model = provider.defaultStreamModel ?? 'default',
+    recognitionLocation = getVoiceRecognitionLocation(provider.id),
+
     requestTimeoutMs = CAPABILITY_TIMEOUT_MS,
     reuseProviderRequestId = false,
     retryGeneration = this.retryBufferGeneration
@@ -1498,6 +1562,8 @@ export class VoiceService {
       DEFAULT_ASR_SAMPLE_RATE,
       provider,
       model,
+      recognitionLocation,
+
       requestTimeoutMs,
       session.polishStrength,
       cleanup,
@@ -1596,14 +1662,22 @@ export class VoiceService {
           : null
         throwIfCancelled(signal)
         const text = polishedText ?? normalized
-        const delivery = live
+        let delivery = live
           ? await live.finish(normalized)
           : payload.delivery === 'active-app'
             ? await this.deliverText(text, session.targetKey)
             : undefined
+        if (live && delivery?.method === 'none' && payload.delivery === 'active-app') {
+          delivery = await this.copyVoiceTextFallback(
+            text,
+            delivery.reason ?? 'live-delivery-failed'
+          )
+        }
         const details: Omit<VoiceRecognitionRecordInput, 'id' | 'capturedAt' | 'status' | 'text'> =
           {
             source: 'microphone',
+            recognitionLocation,
+
             audioFormat: 'pcm',
             audioSampleRate: 16_000,
             audio: this.snapshotRetryAudio(session.id),
@@ -1722,6 +1796,8 @@ export class VoiceService {
           id: session.id,
           capturedAt: Date.now(),
           source: 'microphone',
+          recognitionLocation,
+
           status: 'empty',
           audioFormat: 'pcm',
           audioSampleRate: 16_000,
@@ -1755,6 +1831,8 @@ export class VoiceService {
         id: session.id,
         capturedAt: Date.now(),
         source: 'microphone',
+        recognitionLocation,
+
         status: cancelled ? 'cancelled' : 'failed',
         audioFormat: 'pcm',
         audioSampleRate: 16_000,
@@ -1915,6 +1993,7 @@ export class VoiceService {
         Date.now(),
         {
           source: 'microphone',
+          recognitionLocation: buffer.recognitionLocation,
           audioFormat: 'pcm',
           audioSampleRate: buffer.sampleRate,
           audio: this.snapshotRetryAudio(buffer.captureId),
@@ -1999,6 +2078,9 @@ export class VoiceService {
     const latencyMs = normalizeLatency(response.latency)
     return {
       text,
+      providerId: response.provider,
+      model: response.model,
+      recognitionLocation: getVoiceRecognitionLocation(response.provider),
       ...(detected ? { language: detected } : {}),
       ...(response.result.billing ? { billing: response.result.billing } : {}),
       ...(latencyMs === undefined ? {} : { latencyMs })

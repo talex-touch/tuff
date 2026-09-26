@@ -1,118 +1,165 @@
 <script setup lang="ts">
-import type { MetaAction } from '@talex-touch/utils/transport/events/types/meta-overlay'
+import type { ITuffIcon } from '@talex-touch/utils'
+import type { MetaActionGlyph } from '~/modules/box/meta-actions/meta-action-model'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
+import { TxKbd } from '@talex-touch/tuffex/kbd'
+import { computed } from 'vue'
+
+/**
+ * One row of the ⌘K panel: glyph, label, an optional disambiguating subtitle, and its keys.
+ *
+ * A listbox option rather than a focusable control: focus stays in the panel's filter field and
+ * `aria-activedescendant` points here, the combobox pattern `TxCommandPalette` also follows.
+ */
+
+/**
+ * Glyph classes, kept in this SFC on purpose. UnoCSS extracts class names from `.vue` sources but
+ * not from `.ts` modules, so the same table moved into the action model would render empty boxes
+ * (see `uno.config.ts`). `MetaActionItem.test.ts` pins every class to the installed icon set.
+ */
+const GLYPH_CLASSES: Readonly<Record<MetaActionGlyph, string>> = {
+  enter: 'i-ri-corner-down-left-line',
+  play: 'i-ri-play-line',
+  external: 'i-ri-external-link-line',
+  paste: 'i-ri-clipboard-line',
+  copy: 'i-ri-file-copy-line',
+  'copy-path': 'i-ri-file-copy-2-line',
+  'copy-name': 'i-ri-text',
+  'copy-link': 'i-ri-link',
+  terminal: 'i-ri-terminal-box-line',
+  finder: 'i-ri-finder-line',
+  'folder-open': 'i-ri-folder-open-line',
+  folder: 'i-ri-folder-line',
+  pin: 'i-ri-pushpin-line',
+  unpin: 'i-ri-unpin-line',
+  flow: 'i-ri-share-forward-line',
+  translate: 'i-ri-translate-2',
+  'translate-pin': 'i-ri-window-line',
+  navigate: 'i-ri-arrow-right-up-line',
+  preview: 'i-ri-eye-line',
+  edit: 'i-ri-edit-line',
+  delete: 'i-ri-delete-bin-line',
+  share: 'i-ri-share-forward-line',
+  plugin: 'i-ri-puzzle-line'
+}
 
 const props = defineProps<{
-  action: MetaAction
+  label: string
+  subtitle?: string
+  glyph?: MetaActionGlyph
+  icon?: ITuffIcon
+  shortcuts: readonly string[]
   active: boolean
+  disabled?: boolean
+  danger?: boolean
 }>()
 
 const emit = defineEmits<{
-  (e: 'click'): void
-  (e: 'mouseenter'): void
+  (e: 'run'): void
+  (e: 'hover'): void
 }>()
 
-const defaultIcon = {
-  type: 'class' as const,
-  value: 'i-ri-checkbox-blank-circle-line',
-  status: 'normal' as const
+const glyphClass = computed(() => (props.glyph ? GLYPH_CLASSES[props.glyph] : null))
+
+function run(): void {
+  if (!props.disabled) emit('run')
 }
 </script>
 
 <template>
-  <div
+  <button
+    type="button"
+    role="option"
+    tabindex="-1"
     class="MetaActionItem"
-    :class="{
-      active: props.active,
-      disabled: props.action.render.disabled,
-      danger: props.action.render.danger
-    }"
-    @click="emit('click')"
-    @mouseenter="emit('mouseenter')"
+    :class="{ 'is-active': active, 'is-disabled': disabled, 'is-danger': danger }"
+    :aria-selected="active"
+    :aria-disabled="disabled || undefined"
+    @click="run"
+    @pointermove="emit('hover')"
   >
-    <TuffIcon :icon="props.action.render.basic.icon || defaultIcon" :size="18" class="ActionIcon" />
-    <div class="ActionContent">
-      <div class="ActionTitle">
-        {{ props.action.render.basic.title }}
-      </div>
-      <div v-if="props.action.render.basic.subtitle" class="ActionSubtitle">
-        {{ props.action.render.basic.subtitle }}
-      </div>
-    </div>
-    <span v-if="props.action.render.shortcut" class="ActionShortcut">
-      {{ props.action.render.shortcut }}
+    <i v-if="glyphClass" class="MetaActionItem-Glyph" :class="glyphClass" aria-hidden="true" />
+    <TuffIcon v-else-if="icon" :icon="icon" :size="16" class="MetaActionItem-Icon" />
+    <span class="MetaActionItem-Label">{{ label }}</span>
+    <span v-if="subtitle" class="MetaActionItem-Subtitle" :title="subtitle">{{ subtitle }}</span>
+    <span v-if="shortcuts.length" class="MetaActionItem-Keys">
+      <TxKbd v-for="shortcut in shortcuts" :key="shortcut">{{ shortcut }}</TxKbd>
     </span>
-  </div>
+  </button>
 </template>
 
 <style scoped lang="scss">
 .MetaActionItem {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s;
-  border: 1px solid transparent;
-
-  &:hover,
-  &.active {
-    background: var(--tx-fill-color);
-    border-color: var(--tx-color-primary-light-7);
-  }
-
-  &.active {
-    background: var(--tx-color-primary-light-9);
-    border-color: var(--tx-color-primary);
-  }
-
-  &.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  &.danger {
-    .ActionTitle {
-      color: var(--tx-color-danger);
-    }
-  }
-}
-
-.ActionIcon {
-  flex-shrink: 0;
-  color: var(--tx-text-color-secondary);
-}
-
-.ActionContent {
-  flex: 1;
-  min-width: 0;
-}
-
-.ActionTitle {
+  gap: 10px;
+  width: 100%;
+  height: var(--meta-row-height, 32px);
+  padding: 0 8px 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tx-text-color-regular);
+  font: inherit;
   font-size: 13px;
-  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+
+  &.is-active {
+    background: var(--tx-fill-color);
+    color: var(--tx-text-color-primary);
+  }
+
+  &.is-disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  &.is-danger {
+    color: var(--tx-color-danger);
+  }
+}
+
+.MetaActionItem-Glyph,
+.MetaActionItem-Icon {
+  flex: none;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+  color: var(--tx-text-color-secondary);
+}
+
+.MetaActionItem.is-active .MetaActionItem-Glyph {
   color: var(--tx-text-color-primary);
-  line-height: 1.4;
 }
 
-.ActionSubtitle {
-  font-size: 11px;
-  color: var(--tx-text-color-secondary);
-  margin-top: 2px;
-  line-height: 1.3;
+.MetaActionItem.is-danger .MetaActionItem-Glyph {
+  color: var(--tx-color-danger);
 }
 
-.ActionShortcut {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--tx-fill-color-dark);
+.MetaActionItem-Label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.MetaActionItem-Subtitle {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
   color: var(--tx-text-color-secondary);
-  font-family:
-    system-ui,
-    -apple-system,
-    sans-serif;
-  flex-shrink: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.MetaActionItem-Keys {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  margin-left: auto;
 }
 </style>

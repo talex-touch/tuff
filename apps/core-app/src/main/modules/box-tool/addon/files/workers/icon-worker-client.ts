@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer'
 import type {
   WorkerMetricsPayload,
   WorkerMetricsResponse,
@@ -11,18 +10,19 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { FILE_WORKER_IDLE_SHUTDOWN_MS, IdleWorkerShutdownController } from './idle-worker-shutdown'
 
 interface PendingIcon {
-  resolve: (value: Buffer | null) => void
+  resolve: (value: string | null) => void
   reject: (error: Error) => void
   startedAt: number
+  outputPath: string
 }
 
 interface PendingMetrics {
   resolve: (value: WorkerMetricsPayload | null) => void
-  timeout: ReturnType<typeof setTimeout>
+  timeout: NodeJS.Timeout
 }
 
 type WorkerMessage =
-  | { type: 'done'; taskId: string; buffer: Buffer | null }
+  | { type: 'done'; taskId: string; path: string | null }
   | { type: 'error'; taskId: string; error: string }
   | WorkerMetricsResponse
 
@@ -43,25 +43,36 @@ export class IconWorkerClient {
     shutdown: () => this.terminateWorker()
   })
 
-  async extract(filePath: string, size?: number): Promise<Buffer | null> {
+  /**
+   * Extracts the platform icon for `filePath` into `outputPath` inside the worker and resolves with
+   * the written path (or null when no icon is available). Image bytes never cross this boundary.
+   */
+  async extractToFile(filePath: string, outputPath: string, size?: number): Promise<string | null> {
+    if (typeof filePath !== 'string' || filePath.length === 0) {
+      throw new TypeError('IconWorkerClient.extractToFile requires a filePath')
+    }
+    if (typeof outputPath !== 'string' || outputPath.length === 0) {
+      throw new TypeError('IconWorkerClient.extractToFile requires an outputPath')
+    }
+
     const taskId = `icon-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const startedAt = Date.now()
     const worker = this.ensureWorker()
+    const { promise, resolve, reject } = Promise.withResolvers<string | null>()
 
-    return new Promise<Buffer | null>((resolve, reject) => {
-      this.pending.set(taskId, { resolve, reject, startedAt })
-
-      worker.postMessage({
-        type: 'extract',
-        taskId,
-        filePath,
-        size
-      })
+    this.pending.set(taskId, { resolve, reject, startedAt, outputPath })
+    worker.postMessage({
+      type: 'extract',
+      taskId,
+      filePath,
+      outputPath,
+      size
     })
+
+    return promise
   }
 
   async getStatus(): Promise<WorkerStatusSnapshot> {
-    this.idleShutdown.cancel()
     const worker = this.worker
     const pendingCount = this.pending.size
     const metrics = worker ? await this.requestMetrics() : null
@@ -124,8 +135,25 @@ export class IconWorkerClient {
 
     if (message.type === 'done') {
       this.pending.delete(message.taskId)
-      const normalized = message.buffer ? Buffer.from(message.buffer) : null
-      pending.resolve(normalized)
+      const returnedPath =
+        typeof message.path === 'string' && message.path.length > 0 ? message.path : null
+
+      if (returnedPath && path.resolve(returnedPath) !== path.resolve(pending.outputPath)) {
+        const error = new Error('IconWorker returned an unexpected output path')
+        this.lastError = error.message
+        this.lastTask = {
+          id: message.taskId,
+          startedAt: new Date(pending.startedAt).toISOString(),
+          finishedAt: new Date().toISOString(),
+          durationMs: Date.now() - pending.startedAt,
+          error: error.message
+        }
+        pending.reject(error)
+        this.scheduleIdleShutdown()
+        return
+      }
+
+      pending.resolve(returnedPath)
       this.lastTask = {
         id: message.taskId,
         startedAt: new Date(pending.startedAt).toISOString(),
@@ -153,24 +181,26 @@ export class IconWorkerClient {
   }
 
   private handleWorkerError(error: Error): void {
-    if (this.pending.size > 0) {
-      for (const [, pending] of this.pending) {
-        pending.reject(error)
-      }
-      this.pending.clear()
-    }
-    if (this.metricsPending.size > 0) {
-      for (const [, pending] of this.metricsPending) {
-        clearTimeout(pending.timeout)
-        pending.resolve(null)
-      }
-      this.metricsPending.clear()
-    }
+    this.settlePending(error)
     this.terminateWorker()
     this.lastError = error.message
     fileProviderLog.warn('[IconWorker] Worker failed, will restart on demand', {
       error
     })
+  }
+
+  /** Every in-flight request settles, whether the worker failed, exited or was shut down. */
+  private settlePending(error: Error): void {
+    for (const [, pending] of this.pending) {
+      pending.reject(error)
+    }
+    this.pending.clear()
+
+    for (const [, pending] of this.metricsPending) {
+      clearTimeout(pending.timeout)
+      pending.resolve(null)
+    }
+    this.metricsPending.clear()
   }
 
   private async requestMetrics(): Promise<WorkerMetricsPayload | null> {
@@ -179,18 +209,18 @@ export class IconWorkerClient {
       return null
     }
     const requestId = `metrics-${Date.now()}-${Math.random().toString(16).slice(2)}`
-    return new Promise((resolve) => {
-      const timeout = setTimeout(() => {
-        this.metricsPending.delete(requestId)
-        resolve(null)
-        this.scheduleIdleShutdown()
-      }, 300)
-      this.metricsPending.set(requestId, { resolve, timeout })
-      worker.postMessage({
-        type: 'metrics',
-        requestId
-      })
+    const { promise, resolve } = Promise.withResolvers<WorkerMetricsPayload | null>()
+    const timeout = setTimeout(() => {
+      this.metricsPending.delete(requestId)
+      resolve(null)
+      this.scheduleIdleShutdown()
+    }, 300)
+    this.metricsPending.set(requestId, { resolve, timeout })
+    worker.postMessage({
+      type: 'metrics',
+      requestId
     })
+    return promise
   }
 
   private toStatusMetrics(metrics: WorkerMetricsPayload | null): WorkerStatusSnapshot['metrics'] {
@@ -237,9 +267,15 @@ export class IconWorkerClient {
 
   private terminateWorker(): void {
     this.idleShutdown.cancel()
-    this.worker?.terminate()
+    const worker = this.worker
     this.worker = null
     this.workerStartedAt = null
     this.lastMetricsSample = null
+
+    if (worker) {
+      void worker.terminate()
+    }
+
+    this.settlePending(new Error('IconWorker terminated'))
   }
 }

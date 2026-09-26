@@ -1,0 +1,30 @@
+{
+  "id": "status-badge-chip-lighter",
+  "name": "status-badge-chip-lighter",
+  "title": "TxStatusBadge 亮色主题圆盘色阶提亮",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-26",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-25-tuffex-jelly-indicator-polish",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "完成 TxStatusBadge 亮色主题圆盘色阶提亮 分批提交与主线合并验证。",
+    "blocker": "无阻塞项。",
+    "evidence": "TxStatusBadge 亮色主题圆盘色阶提亮: ## Goal; ## 现状; ## Requirements"
+  }
+}

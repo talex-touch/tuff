@@ -1,17 +1,21 @@
-import type { IProviderActivate, TuffAction, TuffItem, TuffSection } from '@talex-touch/utils'
+import type { IProviderActivate, TuffItem, TuffSection } from '@talex-touch/utils'
+import type { MetaShowRequest } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import type { ForwardedKeyEvent } from '../transport/key-transport'
-import type { MetaAction } from '@talex-touch/utils/transport/events/types/meta-overlay'
+import type { CoreBoxMetaActionEventDetail } from '../../meta-actions/meta-action-model'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { onBeforeUnmount } from 'vue'
 import { BoxMode } from '..'
 import {
-  COREBOX_PRIMARY_ACTION_ID,
-  COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
-  COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID
-} from '../../../../../../shared/events/corebox-scenes'
+  buildMetaActionModel,
+  buildMetaShowRequest,
+  COREBOX_META_ACTION_EVENT,
+  estimateMetaActionPanelHeight,
+  isImeComposing,
+  resolveMetaActionShortcut
+} from '../../meta-actions/meta-action-model'
 import { createCoreBoxKeyTransport } from '../transport/key-transport'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import { resolveVisibleBoxGridColumnCount } from '~/components/render/box-grid-layout'
@@ -37,16 +41,7 @@ type ClipboardOptions = {
   last?: unknown
 }
 
-type TuffActionLike = TuffAction & {
-  title?: string
-  subtitle?: string
-}
-
 const rendererPlatformState = getCurrentRendererPlatformState()
-const revealInFolderTitle = rendererPlatformState.isMac ? '在 Finder 中显示' : '在文件管理器中显示'
-const revealInFolderSubtitle = rendererPlatformState.isMac
-  ? '在 Finder 中打开'
-  : '在文件管理器中打开'
 const coreBoxKeyboardLog = createRendererLogger('CoreBoxKeyboard')
 
 /** Build section ranges from sections config */
@@ -219,208 +214,30 @@ const INPUT_EDIT_SHORTCUT_KEYS = new Set(['a', 'c', 'v', 'x', 'z', 'y'])
  */
 const COREBOX_DETACH_EVENT = 'corebox:detach-item'
 
-// Helper functions for MetaOverlay
 const isMac = rendererPlatformState.isMac
 
 /**
- * Resolves the label/subtitle/icon for the synthetic "primary" action shown at
- * the top of the MetaOverlay (⌘K) panel. The primary action mirrors what
- * pressing Enter on the item in the main list does, so its wording should match
- * the provider's default execute behavior.
+ * Whether CoreBox is showing its footer. The ⌘K panel sits just above it when it is, and drops to
+ * the window corner when it is not: plugin UI mode, no results, or an item that hides the footer.
  */
-function resolvePrimaryActionMeta(item: TuffItem): {
-  title: string
-  subtitle?: string
-  icon: { type: 'class'; value: string }
-} {
-  const title = item.render?.basic?.title
-  const withTarget = (verb: string): string | undefined =>
-    title ? `${verb} "${title}"` : undefined
-
-  if (item.source?.id === 'clipboard-history') {
-    return {
-      title: '粘贴',
-      subtitle: title ? withTarget('粘贴') : '粘贴到当前应用',
-      icon: { type: 'class', value: 'i-ri-clipboard-line' }
-    }
-  }
-
-  if (item.kind === 'preview') {
-    return {
-      title: '复制结果',
-      subtitle: title,
-      icon: { type: 'class', value: 'i-ri-file-copy-line' }
-    }
-  }
-
-  if (item.kind === 'app') {
-    return {
-      title: '打开',
-      subtitle: withTarget('打开'),
-      icon: { type: 'class', value: 'i-ri-play-line' }
-    }
-  }
-
-  if (item.kind === 'file') {
-    return {
-      title: '打开',
-      subtitle: withTarget('打开'),
-      icon: { type: 'class', value: 'i-ri-external-link-line' }
-    }
-  }
-
-  return {
-    title: '打开',
-    subtitle: title,
-    icon: { type: 'class', value: 'i-ri-corner-down-left-line' }
-  }
+function isCoreBoxFooterShown(): boolean {
+  return Boolean(document.querySelector('.CoreBoxFooter-Sticky.display'))
 }
 
 /**
- * Builds the synthetic primary action injected at the top of the action list.
- * It carries the Enter (↵) shortcut and the highest priority so the panel's
- * Enter target is the item's primary action rather than its first copy action.
+ * The ⌘K show request: the item's actions plus where the panel anchors and how tall it needs to
+ * be, so main grows the window only when the panel would not fit in it.
  */
-function generatePrimaryAction(item: TuffItem): MetaAction {
-  const meta = resolvePrimaryActionMeta(item)
+export function buildCoreBoxMetaShowRequest(
+  item: TuffItem,
+  options: { footerShown: boolean }
+): MetaShowRequest {
+  const request = buildMetaShowRequest(item)
+  const model = buildMetaActionModel(request, { platform: rendererPlatformState.platform })
   return {
-    id: COREBOX_PRIMARY_ACTION_ID,
-    render: {
-      basic: {
-        title: meta.title,
-        subtitle: meta.subtitle,
-        icon: meta.icon
-      },
-      shortcut: isMac ? '↵' : 'Enter',
-      group: '操作'
-    },
-    handler: 'builtin',
-    priority: 1000
-  }
-}
-
-function generateBuiltinActions(item: TuffItem): MetaAction[] {
-  const actions: MetaAction[] = []
-  const isPinned = Boolean(item.meta?.pinned?.isPinned)
-
-  // Primary action (Enter) — mirrors main-list execution, always first.
-  actions.push(generatePrimaryAction(item))
-
-  // Pin/Unpin action
-  actions.push({
-    id: 'toggle-pin',
-    render: {
-      basic: {
-        title: isPinned ? '取消固定' : '固定到推荐',
-        subtitle: isPinned ? '从推荐列表中移除' : '添加到推荐列表顶部',
-        icon: { type: 'class', value: isPinned ? 'i-ri-unpin-line' : 'i-ri-pushpin-line' }
-      },
-      group: '操作'
-    },
-    handler: 'builtin',
-    priority: 0
-  })
-
-  // Copy title action
-  if (item.render?.basic?.title) {
-    actions.push({
-      id: 'copy-title',
-      render: {
-        basic: {
-          title: '复制名称',
-          subtitle: `复制 "${item.render.basic.title}"`,
-          icon: { type: 'class', value: 'i-ri-file-copy-line' }
-        },
-        shortcut: isMac ? '⌘C' : 'Ctrl+C',
-        group: '操作'
-      },
-      handler: 'builtin',
-      priority: 0
-    })
-  }
-
-  // Reveal in Finder (for apps/files)
-  if (item.kind === 'app' || item.kind === 'file') {
-    actions.push({
-      id: 'reveal-in-finder',
-      render: {
-        basic: {
-          title: revealInFolderTitle,
-          subtitle: revealInFolderSubtitle,
-          icon: { type: 'class', value: 'i-ri-folder-open-line' }
-        },
-        shortcut: isMac ? '⌘⇧F' : 'Ctrl+Shift+F',
-        group: '操作'
-      },
-      handler: 'builtin',
-      priority: 0
-    })
-  }
-
-  if (item.kind === 'image') {
-    actions.push({
-      id: COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
-      render: {
-        basic: {
-          title: '翻译图片',
-          subtitle: '通过 Nexus 场景翻译图片内容',
-          icon: { type: 'class', value: 'i-ri-translate-2' }
-        },
-        shortcut: isMac ? '⌘⇧T' : 'Ctrl+Shift+T',
-        group: '操作'
-      },
-      handler: 'builtin',
-      priority: 0
-    })
-    actions.push({
-      id: COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID,
-      render: {
-        basic: {
-          title: '翻译并置顶',
-          subtitle: '通过 Nexus 场景翻译图片并打开置顶窗口',
-          icon: { type: 'class', value: 'i-ri-window-line' }
-        },
-        shortcut: isMac ? '⌘⌥T' : 'Ctrl+Alt+T',
-        group: '操作'
-      },
-      handler: 'builtin',
-      priority: 0
-    })
-  }
-
-  // Flow Transfer
-  actions.push({
-    id: 'flow-transfer',
-    render: {
-      basic: {
-        title: '流转到其他插件',
-        subtitle: '将当前项传递给其他插件处理',
-        icon: { type: 'class', value: 'i-ri-share-forward-line' }
-      },
-      shortcut: isMac ? '⌘⇧D' : 'Ctrl+Shift+D',
-      group: '操作'
-    },
-    handler: 'builtin',
-    priority: 0
-  })
-
-  return actions
-}
-
-function convertTuffActionToMetaAction(tuffAction: TuffActionLike): MetaAction {
-  return {
-    id: tuffAction.id || `item-action-${Date.now()}`,
-    render: {
-      basic: {
-        title: tuffAction.label || tuffAction.title || '操作',
-        subtitle: tuffAction.description || tuffAction.subtitle,
-        icon: tuffAction.icon
-      },
-      shortcut: tuffAction.shortcut,
-      group: tuffAction.group || '操作'
-    },
-    handler: 'item',
-    priority: 50
+    ...request,
+    anchor: options.footerShown ? 'footer' : 'corner',
+    desiredPanelHeight: estimateMetaActionPanelHeight(model)
   }
 }
 
@@ -741,6 +558,73 @@ export function useKeyboard(
   }
 
   /**
+   * Runs an action shortcut on the item the ⌘K panel would open for, with the panel closed.
+   *
+   * The key is resolved against the same action model the panel draws, so a badge in the panel
+   * and the key in the list always name the same action. A key that names nothing this item offers
+   * is left alone (not prevented): it falls through to CoreBox's own handling, which for ⌘↵ is the
+   * ordinary Enter path.
+   *
+   * @returns Whether the event was consumed.
+   */
+  function runResultListActionShortcut(event: KeyboardEvent): boolean {
+    if (!event.metaKey && !event.ctrlKey) return false
+    if (isImeComposing(event)) return false
+    // An in-page layer that owns the keyboard: the calculation history or the Flow picker.
+    if (window.__coreboxHistoryVisible || document.querySelector('.FlowSelector')) return false
+
+    const item = resolveQuickActionsItem(res.value, boxOptions.focus, activeActivations.value)
+    if (!item) return false
+
+    const model = buildMetaActionModel(buildMetaShowRequest(item), {
+      platform: rendererPlatformState.platform
+    })
+    const row = resolveMetaActionShortcut(model, event, { isMac, scope: 'list' })
+    if (!row) return false
+
+    event.preventDefault()
+    // Holding the chord must not copy or pin once per auto-repeat.
+    if (event.repeat) return true
+
+    window.dispatchEvent(
+      new CustomEvent<CoreBoxMetaActionEventDetail>(COREBOX_META_ACTION_EVENT, {
+        detail: { actionId: row.id, item }
+      })
+    )
+    return true
+  }
+
+  /**
+   * Whether this document saw the Enter now held down begin. The ⌘K panel runs a row on its own
+   * Enter, and main hands focus back here while the key may still be down: the auto-repeats that
+   * follow belong to that press and must not also run the selected result (or reach a plugin
+   * view). Only a press that starts here arms Enter; losing or regaining focus forgets it, since
+   * its keyup then lands in another document.
+   */
+  let enterPressSeen = false
+
+  function forgetEnterPress(): void {
+    enterPressSeen = false
+  }
+
+  function onKeyUp(event: KeyboardEvent): void {
+    if (event.key === 'Enter') forgetEnterPress()
+  }
+
+  /** @returns Whether the key is an auto-repeat of an Enter pressed elsewhere, now swallowed. */
+  function swallowForeignEnterRepeat(event: KeyboardEvent): boolean {
+    if (event.key !== 'Enter') return false
+    if (!event.repeat) {
+      enterPressSeen = true
+      return false
+    }
+    if (enterPressSeen) return false
+    event.preventDefault()
+    event.stopPropagation()
+    return true
+  }
+
+  /**
    * Global keyboard event handler for CoreBox window
    * @param event - KeyboardEvent from user interaction
    */
@@ -762,6 +646,11 @@ export function useKeyboard(
     if (isBlockedFunctionKey(event)) {
       event.preventDefault()
       event.stopPropagation()
+      return
+    }
+
+    // Before every Enter consumer below: the result list, a custom widget and a plugin view.
+    if (swallowForeignEnterRepeat(event)) {
       return
     }
 
@@ -788,13 +677,13 @@ export function useKeyboard(
         return
       }
 
-      const builtinActions = generateBuiltinActions(currentItem)
       transport
-        .send(MetaOverlayEvents.ui.show, {
-          item: currentItem,
-          builtinActions,
-          itemActions: currentItem.actions?.map(convertTuffActionToMetaAction) || []
-        })
+        .send(
+          MetaOverlayEvents.ui.show,
+          buildCoreBoxMetaShowRequest(currentItem, {
+            footerShown: !uiMode && isCoreBoxFooterShown()
+          })
+        )
         .catch((error) => {
           coreBoxKeyboardLog.error('Failed to open MetaOverlay:', error)
         })
@@ -852,6 +741,12 @@ export function useKeyboard(
     if (!uiMode && shouldForwardToCustomWidget(event, focusedItem)) {
       publishWidgetHostKeyEvent(focusedItem!.id, serializeKeyEvent(event))
       event.preventDefault()
+      return
+    }
+
+    // Action shortcuts (⌘⇧C, ⌘⌥C, ⌘O, ⌘., ⌘↵ …) run on the selected result without opening the
+    // panel. After the plugin-view and widget forwarding above, so a hosted view keeps its keys.
+    if (!uiMode && !isDivisionBoxHost && runResultListActionShortcut(event)) {
       return
     }
 
@@ -1123,9 +1018,15 @@ export function useKeyboard(
    * 3. Bubble phase (input → document)
    */
   document.addEventListener('keydown', onKeyDown, true)
+  document.addEventListener('keyup', onKeyUp, true)
+  window.addEventListener('blur', forgetEnterPress)
+  window.addEventListener('focus', forgetEnterPress)
 
   onBeforeUnmount(() => {
     document.removeEventListener('keydown', onKeyDown, true)
+    document.removeEventListener('keyup', onKeyUp, true)
+    window.removeEventListener('blur', forgetEnterPress)
+    window.removeEventListener('focus', forgetEnterPress)
   })
 
   return { scrollActiveItemIntoView }

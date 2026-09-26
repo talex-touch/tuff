@@ -30,7 +30,18 @@ export interface SortableListProps<T extends SortableListItem = SortableListItem
   itemLabel?: (item: T) => string
   /** Announcement templates, for localisation. */
   labels?: SortableListLabels
+  /**
+   * `pointer` (default): the row itself follows the pointer, the others spring
+   * aside, and the row lands in its slot with a bounce. `native`: HTML5 drag
+   * and drop — the browser's drag image follows the pointer and the rows swap
+   * instantly underneath — for a host that lets an item leave this list for
+   * another one (it needs the native `dragstart` / `dataTransfer`). Keyboard
+   * moves spring in both modes.
+   */
+  dragMode?: SortableListDragMode
 }
+
+export type SortableListDragMode = 'pointer' | 'native'
 
 export interface SortableListEmits<T extends SortableListItem = SortableListItem> {
   (e: 'update:modelValue', value: T[]): void

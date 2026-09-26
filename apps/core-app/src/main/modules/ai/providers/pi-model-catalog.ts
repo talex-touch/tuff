@@ -115,6 +115,21 @@ export function listOmpCliModels(): string[] {
   return all
 }
 
+/**
+ * The model `codex` runs when it is handed no `-m`: the `model` its own `~/.codex/config.toml`
+ * names, or null when the file or the key is missing.
+ */
+export function readCodexConfiguredModel(): string | null {
+  try {
+    const raw = readFileSync(join(codexDir(), 'config.toml'), 'utf8')
+    const match = /^\s*model\s*=\s*["']([^"']+)["']/m.exec(raw)
+    return match?.[1]?.trim() || null
+  } catch {
+    // Config missing or unreadable
+    return null
+  }
+}
+
 export function listCodexCliModels(): string[] {
   const dir = codexDir()
   const configPath = join(dir, 'config.toml')
@@ -124,16 +139,7 @@ export function listCodexCliModels(): string[] {
     return codexCache.patterns
   }
 
-  let configuredModel: string | null = null
-  try {
-    const raw = readFileSync(configPath, 'utf8')
-    const match = /^\s*model\s*=\s*["']([^"']+)["']/m.exec(raw)
-    if (match?.[1]?.trim()) {
-      configuredModel = match[1].trim()
-    }
-  } catch {
-    // Config missing or unreadable
-  }
+  const configuredModel = readCodexConfiguredModel()
 
   const standardCodexModels = [
     'gpt-5.5',

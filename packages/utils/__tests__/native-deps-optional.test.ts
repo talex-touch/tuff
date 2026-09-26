@@ -12,7 +12,10 @@ import { describe, expect, it } from 'vitest'
  *
  * Moving it costs nothing, which is the part worth pinning: its only consumer already loads it
  * through a dynamic `import()` inside a try/catch and falls back to `null` — a file with no icon —
- * and plugins are *denied* the module outright, so nothing else can depend on it either.
+ * and plugins are *denied* the module outright, so nothing else can depend on it either. That
+ * degradation is behaviour, and it is exercised on the worker itself in
+ * apps/core-app/src/main/modules/box-tool/addon/files/workers/icon-worker-optional-dependency.test.ts
+ * rather than asserted against this file's source text.
  *
  * The rule generalises: if a native module without prebuilds is required rather than optional, one
  * missing compiler stops the entire install.
@@ -47,23 +50,5 @@ describe('native dependencies', () => {
     for (const name of NATIVE) {
       expect(manifest.optionalDependencies, name).toHaveProperty(name)
     }
-  })
-})
-
-describe('the icon worker survives the module being absent', () => {
-  const source = readFileSync(
-    path.join(CORE_APP, 'src/main/modules/box-tool/addon/files/workers/icon-worker.ts'),
-    'utf8'
-  )
-
-  it('loads it dynamically and tolerates the failure', () => {
-    // This is what makes `optional` safe rather than merely convenient. A static import here would
-    // turn a missing optional dependency into a worker that cannot start.
-    expect(source).toContain("await import('extract-file-icon')")
-    expect(source).toMatch(/catch\s*\{\s*\n\s*extractFileIcon = null/)
-  })
-
-  it('degrades to no icon rather than throwing', () => {
-    expect(source).toContain('extractor ? extractor(next.filePath, next.size) : null')
   })
 })

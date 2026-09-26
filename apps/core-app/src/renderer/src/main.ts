@@ -12,9 +12,8 @@ import type { Router } from 'vue-router'
 import { createApp } from 'vue'
 import { TX_ICON_CONFIG_KEY } from '@talex-touch/tuffex/icon'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
-import { appSetting } from '~/modules/storage/app-storage'
 import type { I18nInstance } from '~/modules/lang/i18n'
-import { resolveInitialLanguagePreference, setupI18n, setupLanguageFollow } from '~/modules/lang'
+import { readLanguagePreference, setupI18n, setupLanguageFollow } from '~/modules/lang'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
 import { waitForHydrationSoftTimeout } from '~/modules/startup/hydration-timeout'
 import { announceRendererReadyAfterRouter } from '~/modules/startup/renderer-ready'
@@ -255,12 +254,7 @@ async function waitForInitialAppSettingsHydration(): Promise<void> {
  * Resolve the initial locale using persisted settings or sensible defaults.
  */
 function resolveInitialLanguage() {
-  return resolveInitialLanguagePreference({
-    settingLocale: appSetting?.lang?.locale,
-    settingFollowSystem: appSetting?.lang?.followSystem,
-    browserLanguage: navigator.language,
-    intlLocale: Intl.DateTimeFormat().resolvedOptions().locale
-  }).locale
+  return readLanguagePreference().locale
 }
 
 /**

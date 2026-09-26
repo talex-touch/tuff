@@ -65,7 +65,7 @@ export type VoiceDeliveryMode = 'none' | 'active-app'
 
 /** Result of the main-owned text delivery step. */
 export interface VoiceDeliveryResult {
-  method: 'native' | 'autopaste' | 'none'
+  method: 'native' | 'autopaste' | 'clipboard' | 'none'
   reason?: string
 }
 
@@ -95,11 +95,15 @@ export interface VoiceInsights {
 }
 
 export type VoiceRecognitionRecordStatus = 'success' | 'empty' | 'failed' | 'cancelled'
+export type VoiceRecognitionLocation = 'cloud' | 'on-device'
+
 
 /** Detailed local record shown only in the host Intelligence settings surface. */
 export interface VoiceRecognitionRecord {
   id: string
   capturedAt: number
+  /** Where recognition actually ran for this attempt; independent from the user's hybrid preference. */
+  recognitionLocation?: VoiceRecognitionLocation
   source: 'microphone' | 'file'
   status: VoiceRecognitionRecordStatus
   audioUrl?: string
@@ -131,6 +135,11 @@ export interface VoiceRecognitionRecord {
   errorCode?: string
   deliveryMethod?: VoiceDeliveryResult['method']
 }
+/** Main-owned persistence mutation used to keep the host record drawer current. */
+export type VoiceRecognitionRecordMutation =
+  | { type: 'upsert'; record: VoiceRecognitionRecord }
+  | { type: 'clear' }
+
 
 /** One-shot dictation request: capture mic → STT → optional AI polish. */
 export interface VoiceDictatePayload {
@@ -501,6 +510,11 @@ export const voiceApiEvents = {
     .module('api')
     .event('get-recognition-records')
     .define<void, VoiceApiResponse<VoiceRecognitionRecord[]>>(),
+  /** Host-renderer notification after a recognition record commit or clear. */
+  recognitionRecordsChanged: defineEvent('voice')
+    .module('api')
+    .event('recognition-records-changed')
+    .define<VoiceRecognitionRecordMutation, void>(),
   /** Host-renderer-only deletion of detailed local recognition records. */
   clearRecognitionRecords: defineEvent('voice')
     .module('api')

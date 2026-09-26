@@ -590,7 +590,6 @@ export class SearchIndexWorkerClient {
   }
 
   async getStatus(): Promise<WorkerStatusSnapshot> {
-    this.idleShutdown.cancel()
     const worker = this.worker
     const pendingCount = this.pending.size
     const metrics = worker ? await this.requestMetrics() : null
@@ -603,7 +602,55 @@ export class SearchIndexWorkerClient {
       lastTask: this.lastTask,
       lastError: this.lastError,
       uptimeMs: worker && this.workerStartedAt ? Date.now() - this.workerStartedAt : null,
-      metrics: this.toStatusMetrics(metrics)
+      metrics:
+        this.toStatusMetrics(metrics) ?? (worker ? await this.readHeapStatistics(worker) : null)
+    }
+  }
+
+  /**
+   * Heap figures read from the parent side when the worker cannot answer a metrics message.
+   *
+   * The writer's event loop sits inside synchronous libSQL calls for most of a bulk index, which
+   * is exactly when its heap matters and exactly when the 300ms metrics round-trip times out —
+   * the memory snapshot showed this worker as `null` while the process held gigabytes of V8
+   * pages. `Worker#getHeapStatistics` is served by a V8 interrupt, so it answers regardless.
+   */
+  private async readHeapStatistics(worker: Worker): Promise<WorkerStatusSnapshot['metrics']> {
+    const readHeap = (
+      worker as Worker & {
+        getHeapStatistics?: () => Promise<{
+          total_heap_size: number
+          used_heap_size: number
+          heap_size_limit: number
+          external_memory?: number
+        }>
+      }
+    ).getHeapStatistics
+    if (typeof readHeap !== 'function') return null
+    try {
+      const heap = await Promise.race([
+        readHeap.call(worker),
+        new Promise<null>((resolve) => {
+          const timer = setTimeout(() => resolve(null), 300)
+          timer.unref?.()
+        })
+      ])
+      if (!heap) return null
+      return {
+        capturedAt: Date.now(),
+        memory: {
+          rss: process.memoryUsage().rss,
+          heapUsed: heap.used_heap_size,
+          heapTotal: heap.total_heap_size,
+          heapLimit: heap.heap_size_limit,
+          external: heap.external_memory ?? 0,
+          arrayBuffers: 0
+        },
+        cpu: { user: 0, system: 0, percent: null },
+        eventLoop: null
+      }
+    } catch {
+      return null
     }
   }
 

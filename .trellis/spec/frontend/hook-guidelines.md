@@ -145,6 +145,29 @@ setRendererActivity(visible)
 
 ---
 
+### Frame-driven motion composables (Home send lift, 2026-09-26)
+
+**Scope**: any composable that moves an element per frame against layout it does not own — the Home send lift (`composables/send-lift/`, wired by `useSendChoreography().liftDraft`) is the reference.
+
+**Contracts**
+- **One motion, started on the press.** A send is one spring from where the user's text sat to its row (`LIFT_SCORE.spring`, ζ≈0.84, ~0.40s response; the conversation's first message rides `openingSpring` with a 320ms stiffness ramp so it peels off instead of being shot out). Splitting a send into separately timed beats (sprout, neck, snap, scale, blur, knock, ripple) read as "weird" to the user and was removed.
+- **Text continuity.** The lifted bubble is laid out once exactly like the landed row (same class, `max-width` = lane × 78%) and placed so its lines sit on the draft's (`liftOrigin`, block-centred when the line counts match). Only when the bubble breaks lines differently does the draft cross-fade (140ms).
+- **A frame reads no layout.** It advances springs (`springSteps`, wall-clock dt capped at 0.1s) and writes `transform` / `opacity` only. The row is read at launch (predicted past the stream's glide), once at ~70% of the travel, and at rest before the swap; a moved row is retargeted with velocity kept.
+- **Swap in one frame.** The row is revealed in the frame the overlay clears; the last pose must be within 0.5px of the row (tests assert it). Hooks (`onClear`, `onImpact`, `onLand`) fire exactly once on every exit path; a newer send, a thread switch or unmount lands the lift at once.
+- **Layering.** The lift starts as text lying on the composer, so it sits above it (`--home-z-lift`); its fill stays transparent while it overlaps the box.
+
+**Wrong** — timers and per-frame reads:
+```ts
+requestAnimationFrame(() => { el.style.top = `${row.getBoundingClientRect().top}px` }) // forced layout every frame
+```
+**Correct** — springs toward a target read at fixed beats:
+```ts
+[x, v] = springSteps(x, v, target, LIFT_SCORE.spring, dt) // target from readLanding() at launch / 70% / rest
+ghost.style.transform = `translate(${x}px, ${y}px)`
+```
+
+**Tests required**: fake-clock driver tests for beat order, read count (launch/mid/rest only), landing ≤0.5px, retarget without a jump, every hook exactly once on early finish/timeout; composable tests for glyph alignment and the cross-fade rule. Verify in the real window over CDP with a per-rAF sampler (pose vs row at the swap frame, rAF interval probe + `long-animation-frame` observer).
+
 ## Data Fetching And Host Access
 
 - CoreApp renderer should call existing SDK/domain modules, not raw IPC.

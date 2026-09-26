@@ -4,6 +4,7 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 import { shell } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import process from 'node:process'
 import { withPermission } from '../modules/permission/channel-guard'
 import { validateExternalUrl } from '../utils/external-url-policy'
 import { evaluateInstalledAppPath } from '../utils/installed-app-policy'
@@ -38,6 +39,74 @@ function isWithinAppRoot(target: string, appRoot: string): boolean {
   return resolvedTarget.startsWith(resolvedRoot + path.sep)
 }
 
+/**
+ * Directories macOS presents as a single item. Opening one never shows a folder: it launches an
+ * application, installs a plug-in, mounts an image or hands a document to its app. Finder selects
+ * them like files, and so does `showInFolder`.
+ */
+const MAC_PACKAGE_EXTENSIONS: ReadonlySet<string> = new Set([
+  // Launched, loaded or installed.
+  '.app',
+  '.appex',
+  '.xpc',
+  '.framework',
+  '.bundle',
+  '.plugin',
+  '.kext',
+  '.systemextension',
+  '.dext',
+  '.component',
+  '.vst',
+  '.vst3',
+  '.prefpane',
+  '.saver',
+  '.qlgenerator',
+  '.mdimporter',
+  '.mailbundle',
+  '.pkg',
+  '.mpkg',
+  '.workflow',
+  '.action',
+  '.wdgt',
+  // Mounted, or opened by their application.
+  '.sparsebundle',
+  '.photoslibrary',
+  '.musiclibrary',
+  '.tvlibrary',
+  '.imovielibrary',
+  '.aplibrary',
+  '.theater',
+  '.fcpbundle',
+  '.logicx',
+  '.band',
+  '.rtfd',
+  '.pages',
+  '.numbers',
+  '.key',
+  '.scptd',
+  '.playground',
+  '.xcodeproj',
+  '.xcworkspace',
+  '.xcarchive'
+])
+
+function hasMacPackageExtension(target: string): boolean {
+  return MAC_PACKAGE_EXTENSIONS.has(path.extname(target).toLowerCase())
+}
+
+/**
+ * Whether a directory is a macOS package. The real path is checked too: a symlink with a folder's
+ * name can point at an `.app`, and opening it would launch the app all the same.
+ */
+async function isMacPackageDirectory(target: string): Promise<boolean> {
+  if (hasMacPackageExtension(target)) return true
+  try {
+    return hasMacPackageExtension(await fs.realpath(target))
+  } catch {
+    return false
+  }
+}
+
 export interface SystemShellHandlerOptions {
   configRootPath: () => string | null | undefined
   /** The app's own data root. executeCommand may not open anything outside it. */
@@ -47,6 +116,8 @@ export interface SystemShellHandlerOptions {
     event: TuffEvent<TReq, unknown> & { toEventName: () => string },
     handler: (payload: TReq, context: HandlerContext) => Promise<void | TExtra> | void | TExtra
   ) => () => void
+  /** Platform whose file manager rules apply. Defaults to the running one; tests pin it. */
+  platform?: NodeJS.Platform
 }
 
 /**
@@ -71,6 +142,7 @@ export function registerSystemShellHandlers(
   transport: ITuffTransportMain,
   options: SystemShellHandlerOptions
 ): Array<() => void> {
+  const platform = options.platform ?? process.platform
   return [
     transport.on(
       AppEvents.system.openExternal,
@@ -103,20 +175,26 @@ export function registerSystemShellHandlers(
           throw new Error(SYSTEM_SHELL_PATH_UNAVAILABLE)
         }
 
-        if (stats.isDirectory()) {
-          let error: string
-          try {
-            error = await shell.openPath(target)
-          } catch {
-            throw new Error(SYSTEM_SHELL_OPEN_PATH_FAILED)
-          }
-          if (error) {
-            throw new Error(SYSTEM_SHELL_OPEN_PATH_FAILED)
-          }
+        // Only a plain folder opens. A reveal request, a file and a macOS package are selected in
+        // their parent: opening an .app would launch it, the same hole openApp closed (#908).
+        if (
+          payload?.reveal === true ||
+          !stats.isDirectory() ||
+          (platform === 'darwin' && (await isMacPackageDirectory(target)))
+        ) {
+          shell.showItemInFolder(target)
           return
         }
 
-        shell.showItemInFolder(target)
+        let error: string
+        try {
+          error = await shell.openPath(target)
+        } catch {
+          throw new Error(SYSTEM_SHELL_OPEN_PATH_FAILED)
+        }
+        if (error) {
+          throw new Error(SYSTEM_SHELL_OPEN_PATH_FAILED)
+        }
       })
     ),
     transport.on(AppEvents.system.openApp, (payload) => {

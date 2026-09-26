@@ -7,7 +7,11 @@ import {
 
 export interface FileProviderCleanupDeleteResult {
   deletedCount: number
+  /** Stale rows seen but left for a later pass because the budget ran out. */
+  stalePendingCount: number
 }
+
+const DEFAULT_STALE_DELETE_BUDGET_MS = 8_000
 
 export interface FileProviderCleanupDeleteDeps<TRecord extends IndexedWriteDeleteRecord, TContext> {
   sourceId: string
@@ -17,6 +21,18 @@ export interface FileProviderCleanupDeleteDeps<TRecord extends IndexedWriteDelet
     context: TContext
   ) => Promise<TRecord[]>
   isWithinWatchRoots: (filePath: string) => boolean
+  /**
+   * Rows the traversal rules would refuse today although they were admitted when indexed (a rule
+   * added or anchored after the fact). Optional: without it only root-less rows are removed.
+   */
+  isStaleIndexPath?: (filePath: string) => boolean
+  /**
+   * Wall-clock budget for removing stale rows in one pass. A row's removal walks the FTS table
+   * (its `item_id` column is UNINDEXED), so a backlog of 200k stale rows would hold startup for
+   * hours; past the budget the pass counts what is left and the next boot continues. Root-less
+   * rows are not budgeted: they were always removed in full.
+   */
+  staleDeleteBudgetMs?: number
   yieldAfterRead: () => Promise<void>
   deleteRecords: (records: TRecord[]) => Promise<void>
   emitDelta: (delta: IndexedSourceDelta, context: TContext) => Promise<void> | void
@@ -36,6 +52,11 @@ export class FileProviderCleanupDeleteService<TRecord extends IndexedWriteDelete
     TRecord,
     TContext
   >['isWithinWatchRoots']
+  private readonly isStaleIndexPath: FileProviderCleanupDeleteDeps<
+    TRecord,
+    TContext
+  >['isStaleIndexPath']
+  private readonly staleDeleteBudgetMs: number
   private readonly yieldAfterRead: FileProviderCleanupDeleteDeps<
     TRecord,
     TContext
@@ -54,6 +75,8 @@ export class FileProviderCleanupDeleteService<TRecord extends IndexedWriteDelete
   constructor(deps: FileProviderCleanupDeleteDeps<TRecord, TContext>) {
     this.getIndexedFileRecordsPage = deps.getIndexedFileRecordsPage
     this.isWithinWatchRoots = deps.isWithinWatchRoots
+    this.isStaleIndexPath = deps.isStaleIndexPath
+    this.staleDeleteBudgetMs = deps.staleDeleteBudgetMs ?? DEFAULT_STALE_DELETE_BUDGET_MS
     this.yieldAfterRead = deps.yieldAfterRead
     this.deleteRecords = deps.deleteRecords
     this.emitProgress = deps.emitProgress
@@ -75,15 +98,32 @@ export class FileProviderCleanupDeleteService<TRecord extends IndexedWriteDelete
 
     let afterId = 0
     let deletedCount = 0
+    let stalePendingCount = 0
+    let staleDeleteElapsedMs = 0
     while (true) {
       const page = await this.getIndexedFileRecordsPage(afterId, 500, context)
       if (page.length === 0) break
       afterId = page[page.length - 1].id
-      const filesToDelete = page.filter((file) => !this.isWithinWatchRoots(file.path))
+      const filesToDelete: TRecord[] = []
+      let staleInPage = 0
+      for (const file of page) {
+        if (!this.isWithinWatchRoots(file.path)) {
+          filesToDelete.push(file)
+          continue
+        }
+        if (this.isStaleIndexPath?.(file.path) !== true) continue
+        if (staleDeleteElapsedMs >= this.staleDeleteBudgetMs) {
+          stalePendingCount += 1
+          continue
+        }
+        filesToDelete.push(file)
+        staleInPage += 1
+      }
       if (filesToDelete.length > 0) {
         this.logInfo('Removing stale database entries', {
           removed: filesToDelete.length
         })
+        const deleteStart = this.now()
         const deleteResult = await new IndexedWriteDeleteExecutorService<TRecord>({
           normalizePath: (rawPath) => rawPath,
           findExisting: async () => [],
@@ -91,6 +131,7 @@ export class FileProviderCleanupDeleteService<TRecord extends IndexedWriteDelete
           logDebug: (message, meta) => this.logDebug(message, meta),
           successMessage: 'Cleanup remove completed'
         }).executeExisting(filesToDelete)
+        if (staleInPage > 0) staleDeleteElapsedMs += this.now() - deleteStart
         await this.runtimeEmitter.emitDeleteDeltas(deleteResult.deletedPaths, context)
         deletedCount += filesToDelete.length
       }
@@ -98,10 +139,17 @@ export class FileProviderCleanupDeleteService<TRecord extends IndexedWriteDelete
     }
 
     this.emitProgress(1, 1)
+    if (stalePendingCount > 0) {
+      this.logInfo('Stale index rows left for the next cleanup pass', {
+        pending: stalePendingCount,
+        budgetMs: this.staleDeleteBudgetMs
+      })
+    }
     this.logDebug('Cleanup stage finished', {
       duration: this.formatDuration(this.now() - cleanupStart),
-      removed: deletedCount
+      removed: deletedCount,
+      stalePending: stalePendingCount
     })
-    return { deletedCount }
+    return { deletedCount, stalePendingCount }
   }
 }

@@ -220,8 +220,8 @@ function handleKeydown(event: KeyboardEvent): void {
   // The disc. Its fill comes from `--tx-status-chip-*`, a darker ramp than the
   // label's hue, because a knocked-out glyph on `--tx-color-*` measures
   // 1.67–2.90:1 — under the 3:1 minimum for a graphical object. Against the
-  // chip ramp the worst pairing across all four themes is 3.30:1 (dark success);
-  // light theme runs 5.02–7.73:1. High-contrast dark inverts the pairing rather
+  // chip ramp the worst pairing across all four themes is 3.30:1 (success, which
+  // light and dark share). High-contrast dark inverts the pairing rather
   // than darkening the disc, since its palette is light-on-dark by design.
   &__chip {
     display: inline-flex;

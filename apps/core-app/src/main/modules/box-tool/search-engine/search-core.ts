@@ -37,6 +37,7 @@ import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter
 import { getSentryService } from '../../sentry'
 import { OnboardingGateError, onboardingGate } from '../../storage'
 import { appProvider, setAppExecutionRecorder } from '../addon/apps/app-provider'
+import { conversationProvider } from '../addon/conversations/conversation-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { fileProvider } from '../addon/files/file-provider'
 import { APP_INDEXED_SOURCE_ID } from './app-indexed-source'
@@ -66,6 +67,7 @@ import { gatherAggregator } from './search-gather'
 import { markSearchActivity } from './search-activity'
 import { SearchIndexService } from './search-index-service'
 import { searchIndexCommitHub } from './search-index-commit-hub'
+import { SearchIndexCommitCoalescer } from './search-index-commit-coalescer'
 import {
   LegacySearchIndexWriter,
   SourceScopedIndexWriterRouter,
@@ -113,15 +115,22 @@ interface SearchCacheEntry {
 const SEARCH_CACHE_TTL_MS = 5_000
 const SEARCH_CACHE_MAX_SIZE = 100
 const SEARCH_FRONTEND_ITEM_LIMIT = 80
-// Later batches (deferred file layer) are re-ranked against the earlier ones by
-// the renderer, so cutting them to the visible 80 here would drop items before
-// they can compete. This is a safety cap, not a display cap.
+// Later batches (deferred file layer) are appended below the rows on screen and
+// then quota'd with them by the renderer (each source keeps a floor of slots), so
+// cutting them to the visible 80 here would drop a batch's tail source before it
+// can claim its floor. This is a safety cap, not a display cap.
 const SEARCH_UPDATE_ITEM_LIMIT = 200
 const SEARCH_CACHE_ITEM_LIMIT = 200
 // Deferred semantic recall: only runs for text queries whose primary results are
 // sparse enough that surfacing semantically-related files adds value.
 const DEFERRED_SEMANTIC_MIN_QUERY_LENGTH = 3
 const DEFERRED_SEMANTIC_MAX_BASE_ITEMS = 20
+/**
+ * Fast-lane reads give up at the gather's per-provider budget (`taskTimeoutMs`, 3s) instead of the
+ * reader default of 15s: a fast provider whose read is still pending after 3s has already been
+ * timed out by the gather, so a longer wait would only keep the lane's single slot occupied.
+ */
+const FAST_READ_LANE_TIMEOUT_MS = 3000
 const SEARCH_TRACE_SCHEMA = 'search-trace/v1'
 const SEARCH_TRACE_SLOW_THRESHOLD_MS = 800
 
@@ -191,6 +200,14 @@ export class SearchEngineCore
   private indexWriterRouter: SourceScopedIndexWriterRouter | null = null
   private searchIndexService: SearchIndexService | null = null
   private searchIndexReadWorker: SearchIndexReadWorkerClient | null = null
+  /**
+   * Reader for fast-layer providers. The deferred file queries take 0.5–1.2s each on a large
+   * index and the read worker is a single FIFO slot, so without a lane of their own the fast
+   * providers' 1ms lookups queued behind the previous keystroke's file query and missed the
+   * 80ms fast window. Same worker script, same database, separate queue.
+   */
+  private searchIndexFastService: SearchIndexService | null = null
+  private searchIndexFastReadWorker: SearchIndexReadWorkerClient | null = null
   private usageSummaryService: UsageSummaryService | null = null
   private queryCompletionService: QueryCompletionService | null = null
   private recommendationEngine: RecommendationEngine | null = null
@@ -209,7 +226,11 @@ export class SearchEngineCore
    */
   private readonly cacheTelemetry = new SearchCacheTelemetry()
   private searchFirstResultMetrics = new Map<string, SearchFirstResultMetrics>()
-  private readonly indexCommitStreams = new Set<StreamContext<CoreBoxSearchIndexCommitPayload>>()
+  /** Each open renderer stream and the trailing window that paces what it is told. */
+  private readonly indexCommitStreams = new Map<
+    StreamContext<CoreBoxSearchIndexCommitPayload>,
+    SearchIndexCommitCoalescer
+  >()
   private indexCommitUnsubscribe: (() => void) | null = null
 
   private touchApp: TouchApp | null = null
@@ -301,11 +322,17 @@ export class SearchEngineCore
     this.sorter = new Sorter()
     this.providerRegistry = new SearchProviderRegistry({
       getTouchApp: () => this.touchApp,
-      getSearchIndexService: () => this.searchIndexService,
+      getSearchIndexService: (provider) =>
+        provider?.priority === 'fast'
+          ? (this.searchIndexFastService ?? this.searchIndexService)
+          : this.searchIndexService,
       beforeProvidersLoad: async () => {
         await searchIndexWriter.initialize(databaseModule.getSearchDatabaseFilePath())
         await this.searchIndexService?.warmup()
         await this.searchIndexService?.waitUntilReadable()
+        // Spawns the fast lane's worker before the first keystroke needs it; the read itself is
+        // the same one-row probe the deferred lane just answered.
+        await this.searchIndexFastService?.waitUntilReadable()
       },
       onProvidersReady: () => this.startRuntimeServicesOnce(),
       onProviderDeactivated: (key, isPluginFeature, allDeactivated) => {
@@ -315,7 +342,9 @@ export class SearchEngineCore
         )
       }
     })
-    this.indexedSourceEventRouter = new IndexedSourceEventRouter(() => this.indexingRuntime)
+    this.indexedSourceEventRouter = new IndexedSourceEventRouter(() => this.indexingRuntime, {
+      getAppWatchRoots: () => appProvider.getIndexedSourceRoots().map((root) => root.path)
+    })
     this.queryOrchestrator = new SearchQueryOrchestrator({
       getProviderConfigSignature: () => this.getSearchProviderConfigSignature(),
       getActivations: () => this.providerRegistry.getActivationMap(),
@@ -345,6 +374,7 @@ export class SearchEngineCore
     this.registerProvider(systemActionsProvider)
     this.registerProvider(contextActionsProvider)
     this.registerProvider(appProvider)
+    this.registerProvider(conversationProvider)
 
     // Native providers provide fast first-frame candidates; file-provider remains the index/enrichment layer.
     if (process.platform === 'win32') {
@@ -457,14 +487,34 @@ export class SearchEngineCore
 
   registerIndexCommitStream(context: StreamContext<CoreBoxSearchIndexCommitPayload>): void {
     if (context.signal.aborted) return
-    this.indexCommitStreams.add(context)
+    // Notifications are paced per stream, never the commits themselves: the hub revision still
+    // moves on every commit, so cache correctness does not wait for the window.
+    const coalescer = new SearchIndexCommitCoalescer({
+      emit: (payload) => {
+        if (context.isCancelled()) {
+          this.releaseIndexCommitStream(context)
+          return
+        }
+        context.emit(payload)
+      },
+      isBulkIndexing: () => fileProvider.getIndexingStatus().isInitializing,
+      onEmitError: (error) => {
+        searchEngineLog.warn('Index commit notification failed', { error })
+      }
+    })
+    this.indexCommitStreams.set(context, coalescer)
     context.signal.addEventListener(
       'abort',
       () => {
-        this.indexCommitStreams.delete(context)
+        this.releaseIndexCommitStream(context)
       },
       { once: true }
     )
+  }
+
+  private releaseIndexCommitStream(context: StreamContext<CoreBoxSearchIndexCommitPayload>): void {
+    this.indexCommitStreams.get(context)?.dispose()
+    this.indexCommitStreams.delete(context)
   }
   /**
    * A hydrated app icon changes only presentation: application search-index records, their
@@ -486,12 +536,12 @@ export class SearchEngineCore
   }
 
   private emitIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
-    for (const context of this.indexCommitStreams) {
+    for (const [context, coalescer] of this.indexCommitStreams) {
       if (context.isCancelled()) {
-        this.indexCommitStreams.delete(context)
+        this.releaseIndexCommitStream(context)
         continue
       }
-      context.emit(payload)
+      coalescer.push(payload)
     }
   }
 
@@ -2077,6 +2127,18 @@ export class SearchEngineCore
       readExecutor: instance.searchIndexReadWorker
     })
     instance.searchIndexService.preloadPinyin()
+    // The fast lane skips preloadPinyin: pinyin is only used by the write path's prepareDocument,
+    // and the legacy writer plus the commit visibility barrier stay on the deferred instance.
+    instance.searchIndexFastReadWorker = new SearchIndexReadWorkerClient(
+      databaseModule.getSearchDatabaseFilePath(),
+      { lane: 'fast', timeoutMs: FAST_READ_LANE_TIMEOUT_MS }
+    )
+    instance.searchIndexFastService = new SearchIndexService(searchDb, {
+      logger: searchLogger,
+      initializationMode: 'reader',
+      readiness: searchIndexWriter,
+      readExecutor: instance.searchIndexFastReadWorker
+    })
     instance.indexWriterRouter = new SourceScopedIndexWriterRouter({
       runtime: searchIndexWriter,
       legacy: new LegacySearchIndexWriter(instance.searchIndexService),
@@ -2131,6 +2193,8 @@ export class SearchEngineCore
       invalidateRecommendations: () => instance.invalidateAppRecommendationPresentation()
     })
     fileProvider.setIndexedSourceRuntimeMutationDelegate({
+      withMutationLease: async (operation) =>
+        await indexingRuntime.withSourceMutationLease(FILE_INDEXED_SOURCE_ID, operation),
       applyBatch: async (batch) => await indexingRuntime.applySourceBatch(batch),
       applyBatchWithPersistence: async (batch, records) => {
         const result = await indexingRuntime.applySourceBatchWithPersistence(batch, records)
@@ -2405,7 +2469,8 @@ export class SearchEngineCore
       await this.providerRegistry.destroy()
       this.indexCommitUnsubscribe?.()
       this.indexCommitUnsubscribe = null
-      for (const context of this.indexCommitStreams) {
+      for (const [context, coalescer] of this.indexCommitStreams) {
+        coalescer.dispose()
         if (!context.isCancelled()) {
           context.end()
         }
@@ -2432,6 +2497,8 @@ export class SearchEngineCore
     } finally {
       await this.searchIndexReadWorker?.close()
       this.searchIndexReadWorker = null
+      await this.searchIndexFastReadWorker?.close()
+      this.searchIndexFastReadWorker = null
     }
   }
 }

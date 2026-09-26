@@ -3,9 +3,10 @@ import type { FileType, TuffItem, TuffRender } from '@talex-touch/utils'
 import { getFileTypeFromPath } from '@talex-touch/utils'
 import { displayParentName } from '@talex-touch/utils/common/utils/safe-path'
 import dayjs from 'dayjs'
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
+import { DUPLICATE_FILE_FOLDER_LABELS } from './duplicate-file-names'
 
 const props = defineProps<{
   item: TuffItem
@@ -41,6 +42,14 @@ const fileInfo = computed<FileInfo | null>(() => {
     return null
   }
   return file as FileInfo
+})
+
+const duplicateFolderLabels = inject(DUPLICATE_FILE_FOLDER_LABELS, null)
+
+/** The row's folder; a row that shares its file name with another shows enough to tell them apart. */
+const folderLabel = computed(() => {
+  if (!fileInfo.value) return ''
+  return duplicateFolderLabels?.value.get(props.item.id) ?? displayParentName(fileInfo.value.path)
 })
 
 const FILE_TYPE_META: Record<string, { icon: string; key: string }> = {
@@ -146,7 +155,7 @@ const badgeStyle = computed(() => {
           <span class="opacity-50">&bull;</span>
           <span class="flex flex-1 items-center gap-1">
             <i class="i-carbon-folder" />
-            <span class="w-full truncate">{{ displayParentName(fileInfo.path) }}</span>
+            <span class="w-full truncate">{{ folderLabel }}</span>
           </span>
         </div>
       </template>

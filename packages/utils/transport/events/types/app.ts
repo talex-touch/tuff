@@ -148,6 +148,13 @@ export interface ShowInFolderRequest {
    * Path to the file or folder.
    */
   path: string
+
+  /**
+   * Select the path in its parent folder even when it is a directory, instead of opening it.
+   * Without it a plain directory opens, while a file — and, on macOS, a package such as an `.app`
+   * bundle, which opening would launch — is selected in its parent.
+   */
+  reveal?: boolean
 }
 
 /**

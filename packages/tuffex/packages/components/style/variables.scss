@@ -213,15 +213,18 @@
    * `--tx-color-success #4ade80`.)
    *
    * These are a separate, darker ramp measured against `--tx-status-chip-on`:
-   * success 5.02:1, warning 5.02:1, danger 6.47:1, info 6.70:1, muted 7.73:1.
+   * success 3.30:1, warning 4.16:1, danger 4.83:1, info 5.17:1, muted 4.83:1 —
+   * the same ramp as the dark theme. It used to sit one step deeper (5.02–7.73:1,
+   * success `#15803d`), which left the disc much heavier than the label beside
+   * it (2026-09-26); this is the lightest step whose white glyph still clears 3:1.
    * Solver: `.trellis/tasks/09-21-status-mono-redesign/research/chip-palette.mjs`.
    */
   --tx-status-chip-on: #ffffff;
-  --tx-status-chip-success: #15803d;
-  --tx-status-chip-warning: #b45309;
-  --tx-status-chip-danger: #b91c1c;
-  --tx-status-chip-info: #1d4ed8;
-  --tx-status-chip-muted: #52525b;
+  --tx-status-chip-success: #16a34a;
+  --tx-status-chip-warning: #c2620a;
+  --tx-status-chip-danger: #dc2626;
+  --tx-status-chip-info: #2563eb;
+  --tx-status-chip-muted: #6b7280;
 
   --tx-color-danger-light-5: #fbc4c4;
   --tx-color-danger-light-7: #fcd3d3;
@@ -421,9 +424,8 @@
   --tx-color-warning: #fbbf24;
   --tx-color-danger: #f87171;
 
-  // Status chip discs, one step lighter than the light theme's so they read on
-  // a dark surface. White glyph: success 3.30:1, warning 4.16:1, danger 4.83:1,
-  // info 5.17:1, muted 4.83:1.
+  // Status chip discs, the same ramp as the light theme's. White glyph:
+  // success 3.30:1, warning 4.16:1, danger 4.83:1, info 5.17:1, muted 4.83:1.
   --tx-status-chip-on: #ffffff;
   --tx-status-chip-success: #16a34a;
   --tx-status-chip-warning: #c2620a;

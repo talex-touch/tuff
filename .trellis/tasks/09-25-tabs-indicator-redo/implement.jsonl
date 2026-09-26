@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "variant paint: token-only colour, ring not border, resting ink regular, hover colour immediate, reduced-motion"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "tabs zh+en mdc and demos must describe the new indicator; gallery specimen rules (DocsGallerySpecimen reset, state in gallery refs); dist rebuild traps"}
+{"file": ".trellis/spec/frontend/nexus-docs-structure.md", "reason": "section ownership when rewriting the tabs docs page"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "preserve public class names/events; One writer per CSS property for the imperative pointer writes"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "gallery file is shared with other sessions; region boundaries, build lock"}
+{"file": ".trellis/tasks/09-25-jelly-indicator-engine/design.md", "reason": "useJellyIndicator API and moveTo semantics the Tabs pointer is built on"}
+{"file": ".trellis/tasks/09-25-tabs-indicator-redo/research/tabs.md", "reason": "TxTabs consumers, tests that lock the indicator, docs sections, icon root cause, gallery variant patterns"}

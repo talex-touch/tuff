@@ -1,7 +1,14 @@
 import type { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import type { ITuffTransport } from '@talex-touch/utils/transport/types'
+import type { ShortcutBinding } from '../../../../../shared/events/shortcut-binding'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import {
+  shortconChangedEvent,
+  shortconGetBindingEvent
+} from '../../../../../shared/events/shortcut-binding'
+
+export type { ShortcutBinding }
 
 export type ShortcutWarning = 'permission-missing' | 'sdk-blocked' | 'missing-description'
 
@@ -22,6 +29,10 @@ export type ShortcutWithStatus = Shortcut & { status?: ShortcutStatus }
 
 const shortconEvents = {
   getAll: defineRawEvent<void, ShortcutWithStatus[]>('shortcon:get-all'),
+  // Shared with the main process rather than redefined here, so the two cannot drift apart.
+  getBinding: shortconGetBindingEvent,
+  /** Pushed by the main process after a pass that changed a stored or effective key. */
+  changed: shortconChangedEvent,
   update: defineRawEvent<{ id: string; accelerator?: string; enabled?: boolean }, boolean>(
     'shortcon:update'
   ),
@@ -49,6 +60,18 @@ export class ShortconApi {
 
   getAll(): Promise<ShortcutWithStatus[]> {
     return this.transport.send(shortconEvents.getAll)
+  }
+
+  /** The stored and the effective accelerator of one shortcut. */
+  getBinding(id: string): Promise<ShortcutBinding> {
+    return this.transport.send(shortconEvents.getBinding, { id })
+  }
+
+  /** Runs `handler` whenever a stored or effective key changes; returns the unsubscribe. */
+  onChanged(handler: () => void): () => void {
+    return this.transport.on(shortconEvents.changed, () => {
+      handler()
+    })
   }
 
   update(id: string, accelerator?: string, enabled?: boolean): Promise<boolean> {

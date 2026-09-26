@@ -23,7 +23,7 @@ const polishPromptMocks = vi.hoisted(() => ({
 vi.mock('@talex-touch/tuff-native/audio', () => nativeAudioMock)
 
 vi.mock('../clipboard', () => ({
-  clipboardModule: { applyVoiceText: vi.fn() }
+  clipboardModule: { applyVoiceText: vi.fn(), write: vi.fn() }
 }))
 
 vi.mock('../system/active-app', () => ({
@@ -47,7 +47,8 @@ vi.mock('./voice-insights-store', () => ({
   }
 }))
 vi.mock('./voice-provider-runtime', () => ({
-  getConfiguredAsrProvider: vi.fn()
+  getConfiguredAsrProvider: vi.fn(),
+  getVoiceRecognitionLocation: vi.fn(() => 'cloud')
 }))
 
 vi.mock('./polish-prompt', () => ({
@@ -79,6 +80,8 @@ const isAccessibilityTrusted = (
   nativeAudio as unknown as { isAccessibilityTrusted: ReturnType<typeof vi.fn> }
 ).isAccessibilityTrusted
 const applyVoiceText = clipboardModule.applyVoiceText as unknown as ReturnType<typeof vi.fn>
+const writeClipboard = clipboardModule.write as unknown as ReturnType<typeof vi.fn>
+
 const getActiveApp = activeAppService.getActiveApp as unknown as ReturnType<typeof vi.fn>
 const stt = tuffIntelligence.audio.stt as unknown as ReturnType<typeof vi.fn>
 const invoke = tuffIntelligence.invoke as unknown as ReturnType<typeof vi.fn>
@@ -446,6 +449,8 @@ describe('VoiceService canonical session', () => {
       lastUpdated: Date.now()
     })
     applyVoiceText.mockResolvedValue({ success: true })
+    writeClipboard.mockResolvedValue(undefined)
+
     isAccessibilityTrusted.mockReturnValue(true)
     typeText.mockReturnValue({ ok: true })
   })
@@ -555,7 +560,7 @@ describe('VoiceService canonical session', () => {
     expect(typeText).not.toHaveBeenCalled()
   })
 
-  it('refuses delivery when the active target changes during recognition', async () => {
+  it('copies the complete text when the active target changes during recognition', async () => {
     stt.mockResolvedValue({ result: { text: 'hello' } })
     getActiveApp
       .mockResolvedValueOnce({
@@ -583,7 +588,8 @@ describe('VoiceService canonical session', () => {
     const sessionId = await service.startSession({ delivery: 'active-app' })
     const result = await service.stopSession(sessionId, { cleanup: false })
 
-    expect(result.delivery).toEqual({ method: 'none', reason: 'target-changed' })
+    expect(result.delivery).toEqual({ method: 'clipboard', reason: 'target-changed' })
+    expect(writeClipboard).toHaveBeenCalledWith({ type: 'text', value: 'hello' })
     expect(typeText).not.toHaveBeenCalled()
     expect(applyVoiceText).not.toHaveBeenCalled()
   })

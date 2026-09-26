@@ -3,8 +3,12 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FileIndexProgress as FileIndexProgressPayload } from '@talex-touch/utils/transport/events/types'
-import type { IndexedSourceResetReason } from '@talex-touch/utils/search'
+import type {
+  IndexedSourceResetReason,
+  IndexedWriteFlushSnapshotService
+} from '@talex-touch/utils/search'
 import type { FilePersistencePort } from '../../search-engine/search-index-writer'
+import type { FileProviderRuntimeWriteSnapshot } from './file-provider-index-contracts'
 import { IndexedSourceResetReasons, IndexedSourceScanReasons } from '@talex-touch/utils/search'
 
 const {
@@ -28,36 +32,49 @@ const {
   runtimeCountSource,
   runtimeDrainSource,
   runtimeScanSource,
+  runtimeWithMutationLease,
   fileScanBatches
-} = vi.hoisted(() => ({
-  transportOn: vi.fn(),
-  appTaskWaitForIdle: vi.fn(async () => true),
-  watchServiceInitialize: vi.fn(),
-  watchServiceEnsure: vi.fn(async () => undefined),
-  filePersistenceWaitUntilReady: vi.fn(async () => undefined),
-  filePersistencePersistEntries: vi.fn(async () => ({})),
-  filePersistenceUpsertFiles: vi.fn(async () => []),
-  filePersistenceUpdateFileMetadata: vi.fn(async (records: Array<Record<string, unknown>>) => ({
-    requested: records.length,
-    updated: records.length,
-    missingFileIds: [] as number[]
-  })),
-  filePersistenceUpsertScanProgress: vi.fn(async () => 0),
-  filePersistenceRemoveFile: vi.fn(async () => undefined),
-  filePersistenceRemoveFileExtensions: vi.fn(async () => undefined),
-  filePersistenceGetStatus: vi.fn(async () => null),
-  filePersistenceHasPendingWork: vi.fn(() => false),
-  filePersistenceDrain: vi.fn(async () => undefined),
-  runtimeApplyBatch: vi.fn<() => Promise<{ indexedItemCount?: number } | undefined>>(
-    async () => undefined
-  ),
-  runtimeApplyDelta: vi.fn(async () => undefined),
-  runtimeCleanupSource: vi.fn(async () => 0),
-  runtimeCountSource: vi.fn(async () => 0),
-  runtimeDrainSource: vi.fn(async () => undefined),
-  runtimeScanSource: vi.fn(async () => undefined),
-  fileScanBatches: vi.fn()
-}))
+} = vi.hoisted(() => {
+  // Stands in for IndexingRuntime.withSourceMutationLease: every call owns its
+  // own lease id, so tests can tell which work a runtime-gated job was admitted
+  // under.
+  let fixtureLeaseSequence = 0
+  return {
+    transportOn: vi.fn(),
+    appTaskWaitForIdle: vi.fn(async () => true),
+    watchServiceInitialize: vi.fn(),
+    watchServiceEnsure: vi.fn(async () => undefined),
+    filePersistenceWaitUntilReady: vi.fn(async () => undefined),
+    filePersistencePersistEntries: vi.fn(async () => ({})),
+    filePersistenceUpsertFiles: vi.fn(async () => []),
+    filePersistenceUpdateFileMetadata: vi.fn(async (records: Array<Record<string, unknown>>) => ({
+      requested: records.length,
+      updated: records.length,
+      missingFileIds: [] as number[]
+    })),
+    filePersistenceUpsertScanProgress: vi.fn(async () => 0),
+    filePersistenceRemoveFile: vi.fn(async () => undefined),
+    filePersistenceRemoveFileExtensions: vi.fn(async () => undefined),
+    filePersistenceGetStatus: vi.fn(async () => null),
+    filePersistenceHasPendingWork: vi.fn(() => false),
+    filePersistenceDrain: vi.fn(async () => undefined),
+    runtimeApplyBatch: vi.fn<() => Promise<{ indexedItemCount?: number } | undefined>>(
+      async () => undefined
+    ),
+    runtimeApplyDelta: vi.fn(async () => undefined),
+    runtimeCleanupSource: vi.fn(async () => 0),
+    runtimeCountSource: vi.fn(async () => 0),
+    runtimeDrainSource: vi.fn(async () => undefined),
+    runtimeScanSource: vi.fn(async () => undefined),
+    runtimeWithMutationLease: vi.fn(
+      async (operation: (leaseId: string) => Promise<unknown>): Promise<unknown> => {
+        fixtureLeaseSequence += 1
+        return await operation(`fixture-lease-${fixtureLeaseSequence}`)
+      }
+    ),
+    fileScanBatches: vi.fn()
+  }
+})
 
 vi.mock('electron', () => ({
   app: {
@@ -150,7 +167,9 @@ vi.mock('./services/file-provider-watch-service', () => ({
 
 vi.mock('./services/file-provider-opener-service', () => ({
   FileProviderOpenerService: vi.fn(() => ({
-    getOpenerForExtension: vi.fn(async () => null)
+    getOpenerForExtension: vi.fn(async () => null),
+    // Shutdown drains the opener's own in-flight writes before it resolves; the provider awaits it.
+    close: vi.fn(async () => undefined)
   }))
 }))
 
@@ -187,7 +206,12 @@ vi.mock('./workers/thumbnail-worker-client', () => ({
 
 import { operationalErrorService } from '../../../observability'
 import { FileProviderEnrichmentResumeService } from './services/file-provider-enrichment-resume-service'
+import {
+  FileProviderIndexSchedulerService,
+  type FileProviderIndexSchedulerDeps
+} from './services/file-provider-index-scheduler-service'
 import { fileProvider, resolveFileProviderBaseWatchPaths } from './file-provider'
+import { recordRuntimeWriteSnapshot } from './services/file-provider-runtime-evidence'
 
 interface MutableFileProvider {
   prepareForSearchIndexShutdown: () => Promise<void>
@@ -306,18 +330,9 @@ interface FileProviderIndexingLifecycleTestApi extends MutableFileProvider {
       metadata?: Record<string, unknown>
     }>
   >
-  recordRuntimeWriteSnapshot: (
-    service: unknown,
-    input: {
-      entries: number
-      reason: string
-      metadata?: Record<string, unknown>
-      durationMs?: number
-    }
-  ) => void
-  incrementalPersistSnapshotService: unknown
-  ftsWriteSnapshotService: unknown
-  ftsDeleteSnapshotService: unknown
+  incrementalPersistSnapshotService: IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>
+  ftsWriteSnapshotService: IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>
+  ftsDeleteSnapshotService: IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>
   setIndexedSourceRuntimeResetDelegate: (
     delegate:
       | null
@@ -429,10 +444,28 @@ function createDeferred<T>(): {
 
 type FileProviderLeaseRecoveryTestApi = FileProviderIndexingLifecycleTestApi & {
   drainIndexedSourceMutations: (reason: string, mutationLeaseId?: string) => Promise<void>
+  waitForSearchIndexDrain: (reason: string, mutationLeaseId?: string) => Promise<void>
+  indexRuntimeService: {
+    scheduleFlush: (delayMs: number, reason: string) => void
+  }
+  enqueueContentIndexing: (
+    files: Array<{ id?: number | null; path: string; name: string }>,
+    reason: string,
+    mutationLeaseId?: string
+  ) => Promise<{ accepted: number; deferred: number }>
+  markContentEnrichmentPending: (
+    files: Array<{ id?: number | null; path: string; name: string }>,
+    mutationLeaseId?: string
+  ) => Promise<void>
   publishCommittedWorkerRecords: (entries: unknown[]) => Promise<number>
   indexSchedulerService: {
     drain: (timeoutMs?: number, mutationLeaseId?: string) => Promise<void>
     cancelLease: (mutationLeaseId: string) => void
+    schedule: (
+      files: unknown[],
+      reason: string,
+      mutationLeaseId?: string
+    ) => { accepted: number; deferred: number }
   }
   fileIndexWorker: {
     cancelLease: (mutationLeaseId: string) => number
@@ -504,6 +537,7 @@ function createFilePersistencePort(): FilePersistencePort {
 function installRuntimeDependencies(provider: FileProviderIndexingLifecycleTestApi): void {
   provider.setFilePersistencePort(createFilePersistencePort())
   provider.setIndexedSourceRuntimeMutationDelegate({
+    withMutationLease: runtimeWithMutationLease,
     applyBatch: runtimeApplyBatch,
     applyDelta: runtimeApplyDelta,
     cleanupSource: runtimeCleanupSource,
@@ -522,7 +556,52 @@ function installRuntimeDependencies(provider: FileProviderIndexingLifecycleTestA
   }))
 }
 
+/**
+ * Deferred work that a previous test scheduled on the provider singleton survives
+ * `vi.clearAllMocks()`: the index runtime's flush timer and the asset service's legacy icon
+ * migration timer both live in private fields.
+ *
+ * A leaked flush timer is not merely noise. While one is pending every later `scheduleFlush()`
+ * is ignored, so the batch-completion barrier can never drive its own flush; and once a
+ * fake-timer test has run, the field holds a dead handle from the discarded clock, which keeps
+ * `scheduleFlush()` a no-op for the rest of the file. A leaked migration timer would run a real
+ * startup task during an unrelated later test.
+ */
+function cancelScheduledProviderWork(provider: MutableFileProvider): void {
+  const internals = provider as unknown as {
+    indexRuntimeService?: {
+      flushRuntime?: { flushTimer?: unknown; flushing?: boolean; retryCount?: number }
+      activeFlushes?: number
+      explicitFlushNotBefore?: number
+    }
+    assetService?: { iconMigrationScheduled?: boolean; iconMigrationTimer?: unknown }
+  }
+
+  const flushRuntime = internals.indexRuntimeService?.flushRuntime
+  if (flushRuntime) {
+    if (flushRuntime.flushTimer) clearTimeout(flushRuntime.flushTimer as NodeJS.Timeout)
+    flushRuntime.flushTimer = null
+    flushRuntime.flushing = false
+    flushRuntime.retryCount = 0
+  }
+  if (internals.indexRuntimeService) {
+    internals.indexRuntimeService.activeFlushes = 0
+    internals.indexRuntimeService.explicitFlushNotBefore = 0
+  }
+
+  const assetService = internals.assetService
+  if (assetService) {
+    if (assetService.iconMigrationTimer)
+      clearTimeout(assetService.iconMigrationTimer as NodeJS.Timeout)
+    assetService.iconMigrationTimer = null
+    // The once-per-boot guard must be re-armed, not just cancelled, or only the first startup
+    // test in the file would ever schedule the migration.
+    assetService.iconMigrationScheduled = false
+  }
+}
+
 function resetProviderState(provider: MutableFileProvider): void {
+  cancelScheduledProviderWork(provider)
   provider.backgroundStartupPromise = null
   provider.backgroundStartupReady = false
   provider.backgroundStartupError = null
@@ -1218,7 +1297,7 @@ describe('file-provider startup readiness', () => {
     const originalDbUtils = provider.dbUtils
 
     provider.dbUtils = null
-    provider.recordRuntimeWriteSnapshot(provider.incrementalPersistSnapshotService, {
+    recordRuntimeWriteSnapshot(provider.incrementalPersistSnapshotService, {
       entries: 3,
       reason: 'incremental.add-change',
       durationMs: 12,
@@ -1230,7 +1309,7 @@ describe('file-provider startup readiness', () => {
         storeBoundary: 'incremental-db-persist'
       }
     })
-    provider.recordRuntimeWriteSnapshot(provider.ftsWriteSnapshotService, {
+    recordRuntimeWriteSnapshot(provider.ftsWriteSnapshotService, {
       entries: 4,
       reason: 'full-scan',
       durationMs: 8,
@@ -1240,7 +1319,7 @@ describe('file-provider startup readiness', () => {
         storeBoundary: 'fts-write'
       }
     })
-    provider.recordRuntimeWriteSnapshot(provider.ftsDeleteSnapshotService, {
+    recordRuntimeWriteSnapshot(provider.ftsDeleteSnapshotService, {
       entries: 2,
       reason: 'incremental.delete',
       durationMs: 5,
@@ -1795,7 +1874,7 @@ describe('file-provider startup readiness', () => {
     }
   })
 
-  it('cancels a timed-out lease, waits its active dispatch, and drops its late worker publication', async () => {
+  it('cancels a timed-out lease, waits its active dispatch, and requeues its late publication as pending', async () => {
     const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
     const originalScheduler = provider.indexSchedulerService
     const originalWorker = provider.fileIndexWorker
@@ -1803,6 +1882,7 @@ describe('file-provider startup readiness', () => {
     const originalPending = provider.pendingIndexWorkerResults
     const originalInflight = provider.inflightIndexWorkerResults
     const originalCancelledLeases = provider.cancelledIndexWorkerMutationLeases
+    const originalDbUtils = provider.dbUtils
     const activeDispatchSettled = createDeferred<void>()
     const cancellationBegan = createDeferred<void>()
     const timeout = new Error('file-index-search-drain-timeout:indexed-source.scan')
@@ -1811,6 +1891,7 @@ describe('file-provider startup readiness', () => {
       events.push('reset-progress')
       return { clearedScanProgress: true }
     })
+    const markPending = vi.fn(async () => undefined)
 
     provider.indexSchedulerService = {
       drain: vi
@@ -1843,6 +1924,8 @@ describe('file-provider startup readiness', () => {
       [4, { mutationLeaseId: 'lease-B' }]
     ])
     provider.cancelledIndexWorkerMutationLeases = new Set()
+    // The durable rearm a cancelled publication performs is an observable write.
+    provider.dbUtils = { markFileEnrichmentPending: markPending }
 
     try {
       const drain = provider.drainIndexedSourceMutations('indexed-source.scan', 'lease-A')
@@ -1864,19 +1947,30 @@ describe('file-provider startup readiness', () => {
       ])
       expect(reset).not.toHaveBeenCalled()
       expect(resume).toHaveBeenCalledWith('recovery.indexed-source.scan')
+      // The cancelled lease's queued result was durably re-armed before its map entry was
+      // dropped, so the next resume round can retry it under a fresh lease.
+      expect(markPending).toHaveBeenCalledWith([1])
+      // The cancelled lease's queued results are gone; its inflight payload is still
+      // owned by the running executor, so it stays accounted until that promise settles.
       expect(provider.pendingIndexWorkerResults.has(1)).toBe(false)
-      expect(provider.inflightIndexWorkerResults.has(3)).toBe(false)
+      expect(provider.inflightIndexWorkerResults.get(3)).toEqual({ mutationLeaseId: 'lease-A' })
       expect(provider.pendingIndexWorkerResults.get(2)).toEqual({ mutationLeaseId: 'lease-B' })
       expect(provider.inflightIndexWorkerResults.get(4)).toEqual({ mutationLeaseId: 'lease-B' })
 
+      const rearmCallsBeforeLatePublication = markPending.mock.calls.length
       await expect(
         provider.publishCommittedWorkerRecords([createWorkerResult(1, 'lease-A')])
       ).resolves.toBe(0)
+      // Nothing was published, but the dropped result is not lost: its row is flipped
+      // back to pending again so the next resume round enriches it under a fresh lease.
       expect(runtimeApplyBatch).not.toHaveBeenCalled()
+      expect(markPending.mock.calls.length).toBeGreaterThan(rearmCallsBeforeLatePublication)
+      expect(markPending).toHaveBeenLastCalledWith([1])
     } finally {
       provider.indexSchedulerService = originalScheduler
       provider.fileIndexWorker = originalWorker
       provider.resetIndexedSourceRuntimeState = originalReset
+      provider.dbUtils = originalDbUtils
       resume.mockRestore()
       provider.pendingIndexWorkerResults = originalPending
       provider.inflightIndexWorkerResults = originalInflight
@@ -1904,10 +1998,261 @@ describe('file-provider startup readiness', () => {
     }
   })
 
+  it('returns from a scoped drain that owns no work without entering the source-wide flush', async () => {
+    const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
+    const originalScheduler = provider.indexSchedulerService
+    const originalPending = provider.pendingIndexWorkerResults
+    const originalInflight = provider.inflightIndexWorkerResults
+    const originalShuttingDown = provider.shuttingDown
+    const resume = vi
+      .spyOn(FileProviderEnrichmentResumeService.prototype, 'resume')
+      .mockImplementation(() => undefined)
+    // The other lease still owns the source-wide flush: in issue #1964 the scan's
+    // drain waited here while a background publication waited on the scan.
+    const unscopedDrain = vi.fn(async () => {
+      throw new Error('scoped drain entered the source-wide flush')
+    })
+    const drain = vi.fn(async (_timeoutMs?: number, leaseId?: string) => {
+      await (leaseId === undefined ? unscopedDrain() : Promise.resolve())
+    })
+    const scheduleFlush = vi
+      .spyOn(provider.indexRuntimeService, 'scheduleFlush')
+      .mockImplementation(() => undefined)
+
+    provider.indexSchedulerService = {
+      drain,
+      hasPendingWork: vi.fn((leaseId?: string) => leaseId === undefined),
+      cancelLease: vi.fn(),
+      cancelPending: vi.fn()
+    } as unknown as typeof provider.indexSchedulerService
+    provider.pendingIndexWorkerResults = new Map([[1, { mutationLeaseId: 'lease-foreign' }]])
+    provider.inflightIndexWorkerResults = new Map([[2, { mutationLeaseId: 'lease-foreign' }]])
+    provider.shuttingDown = false
+
+    try {
+      await expect(
+        provider.drainIndexedSourceMutations('indexed-source.scan', 'lease-scoped')
+      ).resolves.toBeUndefined()
+
+      // This lease owns nothing, so the drain neither waits on the global scheduler
+      // flush nor enters the flush loop; the foreign lease's results stay its own.
+      expect(drain.mock.calls.every((call) => call[1] === 'lease-scoped')).toBe(true)
+      expect(unscopedDrain).not.toHaveBeenCalled()
+      expect(scheduleFlush).not.toHaveBeenCalled()
+      expect(provider.pendingIndexWorkerResults.get(1)).toEqual({
+        mutationLeaseId: 'lease-foreign'
+      })
+      expect(provider.inflightIndexWorkerResults.get(2)).toEqual({
+        mutationLeaseId: 'lease-foreign'
+      })
+      expect(resume).toHaveBeenCalledWith('indexed-source.scan')
+    } finally {
+      provider.indexSchedulerService = originalScheduler
+      provider.pendingIndexWorkerResults = originalPending
+      provider.inflightIndexWorkerResults = originalInflight
+      provider.shuttingDown = originalShuttingDown
+      scheduleFlush.mockRestore()
+      resume.mockRestore()
+    }
+  })
+
+  it('keeps a scoped drain waiting while its own lease still owns pending results', async () => {
+    vi.useFakeTimers()
+    const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
+    const originalScheduler = provider.indexSchedulerService
+    const originalPending = provider.pendingIndexWorkerResults
+    const originalInflight = provider.inflightIndexWorkerResults
+    const originalShuttingDown = provider.shuttingDown
+    const resume = vi
+      .spyOn(FileProviderEnrichmentResumeService.prototype, 'resume')
+      .mockImplementation(() => undefined)
+    // The runtime's flush would claim the synthetic owned entry; keep this test on
+    // the ownership boundary the drain itself is responsible for.
+    const scheduleFlush = vi
+      .spyOn(provider.indexRuntimeService, 'scheduleFlush')
+      .mockImplementation(() => undefined)
+    let settled = false
+    const markSettled = (): void => {
+      settled = true
+    }
+
+    provider.indexSchedulerService = {
+      drain: vi.fn(async (_timeoutMs?: number, _leaseId?: string) => undefined),
+      hasPendingWork: vi.fn(() => false),
+      cancelLease: vi.fn(),
+      cancelPending: vi.fn()
+    } as unknown as typeof provider.indexSchedulerService
+    provider.pendingIndexWorkerResults = new Map([[1, { mutationLeaseId: 'lease-owned' }]])
+    provider.inflightIndexWorkerResults = new Map<number, { mutationLeaseId?: string }>()
+    provider.shuttingDown = false
+
+    try {
+      const drain = provider.drainIndexedSourceMutations('indexed-source.scan', 'lease-owned')
+      void drain.then(markSettled, markSettled)
+
+      // Its own result is still unpublished, so the source is not drained yet and
+      // the drain has asked the source-wide flush to make progress before polling.
+      await vi.advanceTimersByTimeAsync(250)
+      expect(scheduleFlush).toHaveBeenCalled()
+      expect(settled).toBe(false)
+
+      provider.pendingIndexWorkerResults.delete(1)
+      await vi.advanceTimersByTimeAsync(60_000)
+      await expect(drain).resolves.toBeUndefined()
+      expect(resume).toHaveBeenCalledWith('indexed-source.scan')
+    } finally {
+      provider.indexSchedulerService = originalScheduler
+      provider.pendingIndexWorkerResults = originalPending
+      provider.inflightIndexWorkerResults = originalInflight
+      provider.shuttingDown = originalShuttingDown
+      scheduleFlush.mockRestore()
+      resume.mockRestore()
+    }
+  })
+
+  it('does not admit content indexing when the durable pending marker cannot be written', async () => {
+    const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
+    const originalMark = provider.markContentEnrichmentPending
+    const originalScheduler = provider.indexSchedulerService
+    const originalShuttingDown = provider.shuttingDown
+    const failure = new Error('file_index_progress write failed')
+    const markPending = vi.fn(async () => {
+      throw failure
+    })
+    const schedule = vi.fn(() => ({ accepted: 1, deferred: 0 }))
+
+    provider.markContentEnrichmentPending = markPending
+    provider.indexSchedulerService = {
+      schedule
+    } as unknown as typeof provider.indexSchedulerService
+    provider.shuttingDown = false
+
+    try {
+      await expect(
+        provider.enqueueContentIndexing([{ id: 7, path: '/tmp/a.txt', name: 'a.txt' }], 'watch')
+      ).rejects.toBe(failure)
+
+      // The durable marker IS the recovery contract: if it cannot be written, admitting the batch
+      // would risk losing it with no file_index_progress row to resume. Nothing may be scheduled.
+      expect(markPending).toHaveBeenCalledTimes(1)
+      expect(schedule).not.toHaveBeenCalled()
+    } finally {
+      provider.markContentEnrichmentPending = originalMark
+      provider.indexSchedulerService = originalScheduler
+      provider.shuttingDown = originalShuttingDown
+    }
+  })
+
+  function dispatchClosureOf(scheduler: unknown): FileProviderIndexSchedulerDeps['indexFiles'] {
+    if (
+      !scheduler ||
+      typeof scheduler !== 'object' ||
+      !('indexFiles' in scheduler) ||
+      typeof scheduler.indexFiles !== 'function'
+    ) {
+      throw new Error('scheduler dispatch closure unavailable')
+    }
+    // The service keeps its dispatch closure in a private field; its signature is fixed by the
+    // deps type the provider constructed the service with.
+    const dispatch = scheduler.indexFiles as FileProviderIndexSchedulerDeps['indexFiles']
+    return dispatch
+  }
+
+  it('never parses the next index batch while the previous results are still unreleased', async () => {
+    const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
+    const originalWorker = provider.fileIndexWorker
+    const originalDbUtils = provider.dbUtils
+    const originalSearchIndex = provider.searchIndex
+    const pendingResults = provider.pendingIndexWorkerResults
+    const pendingSnapshot = new Map(pendingResults)
+    const inflightResults = provider.inflightIndexWorkerResults
+    const inflightSnapshot = new Map(inflightResults)
+    const persistGate = createDeferred<void>()
+    const indexFiles = vi.fn(
+      async (
+        _dbPath: string,
+        _providerId: string,
+        _providerType: string,
+        files: Array<{ id: number; path: string; name: string }>
+      ) => ({ processed: files.length, failed: 0 })
+    )
+    // A shutdown earlier in this file closes the module singleton's scheduler, so drive a fresh
+    // scheduler with the same production dispatch closure the provider hands to its own.
+    const productionIndexFiles = dispatchClosureOf(provider.indexSchedulerService)
+    const scheduler = new FileProviderIndexSchedulerService({
+      getDatabaseFilePath: () => '/tmp/tuff-file-provider-barrier-db',
+      getProviderId: () => 'file-provider',
+      getProviderType: () => 'file',
+      getWatchPaths: () => ['/tmp'],
+      indexFiles: productionIndexFiles,
+      logWarn: vi.fn()
+    })
+
+    provider.dbUtils = { getDb: () => ({}) }
+    provider.searchIndex = {}
+    provider.fileIndexWorker = {
+      indexFiles
+    } as unknown as typeof provider.fileIndexWorker
+    // A previously dispatched batch still owned by the runtime: its persist has not completed.
+    // The runtime's flush buffer captured this exact map instance at construction, so the entry
+    // below is real retained ownership, not a parallel copy the barrier would ignore.
+    pendingResults.set(1, createWorkerResult(1, 'lease-barrier'))
+    filePersistencePersistEntries.mockImplementation(async () => {
+      await persistGate.promise
+      return {}
+    })
+
+    try {
+      const scheduled = scheduler.schedule(
+        [{ id: 1, path: '/tmp/barrier-next.txt', name: 'barrier-next.txt' }],
+        'barrier-test',
+        'lease-barrier'
+      )
+      expect(scheduled.accepted).toBe(1)
+
+      const drain = scheduler.drain(5_000)
+
+      // The owned batch has reached persistence, so the completion barrier is holding the
+      // dispatch: the parser must never be asked for the next batch while results are unreleased.
+      await vi.waitFor(() => expect(filePersistencePersistEntries).toHaveBeenCalled())
+      expect(indexFiles).not.toHaveBeenCalled()
+
+      persistGate.resolve(undefined)
+      await drain
+
+      expect(indexFiles).toHaveBeenCalledTimes(1)
+      expect(indexFiles.mock.calls[0]?.[3]).toEqual([
+        expect.objectContaining({ id: 1, path: '/tmp/barrier-next.txt' })
+      ])
+      // The awaited drain leaves no scheduled work behind for the restored fixture.
+      expect(scheduler.getSnapshot()).toMatchObject({
+        activeBatches: 0,
+        queuedBatches: 0,
+        pendingRecords: 0
+      })
+    } finally {
+      provider.fileIndexWorker = originalWorker
+      provider.dbUtils = originalDbUtils
+      provider.searchIndex = originalSearchIndex
+      pendingResults.clear()
+      for (const [fileId, result] of pendingSnapshot) {
+        pendingResults.set(fileId, result)
+      }
+      inflightResults.clear()
+      for (const [fileId, result] of inflightSnapshot) {
+        inflightResults.set(fileId, result)
+      }
+    }
+  })
+
   it('drops only cancelled worker publication groups while applying healthy leases', async () => {
     const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
     const originalCancelledLeases = provider.cancelledIndexWorkerMutationLeases
+    const originalDbUtils = provider.dbUtils
+    const markPending = vi.fn(async () => undefined)
     provider.cancelledIndexWorkerMutationLeases = new Set(['lease-A'])
+    // The cancelled group's publication performs a durable rearm through this writer.
+    provider.dbUtils = { markFileEnrichmentPending: markPending }
     runtimeApplyBatch.mockResolvedValue({ indexedItemCount: 1 })
 
     try {
@@ -1926,8 +2271,124 @@ describe('file-provider startup readiness', () => {
           records: [expect.objectContaining({ recordId: '/tmp/lease-2.txt' })]
         })
       )
+      // The dropped group is not lost: its row is re-armed for the next resume round.
+      expect(markPending).toHaveBeenCalledWith([1])
     } finally {
       provider.cancelledIndexWorkerMutationLeases = originalCancelledLeases
+      provider.dbUtils = originalDbUtils
+    }
+  })
+
+  it('does not publish worker results for files the worker found missing', async () => {
+    const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
+    const skippedResult = (fileId: number, lastError: string) => {
+      const result = createWorkerResult(fileId, 'lease-publish')
+      return { ...result, progress: { ...result.progress, status: 'skipped', lastError } }
+    }
+    runtimeApplyBatch.mockResolvedValue({ indexedItemCount: 1 })
+
+    await expect(
+      provider.publishCommittedWorkerRecords([
+        skippedResult(1, 'file-missing'),
+        skippedResult(2, 'permission-denied'),
+        createWorkerResult(3, 'lease-publish')
+      ])
+    ).resolves.toBe(1)
+    // The unreadable file still exists and stays searchable by name; only the missing one is
+    // left to the stale-candidate cleanup.
+    expect(runtimeApplyBatch).toHaveBeenCalledTimes(1)
+    expect(runtimeApplyBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mutationLeaseId: 'lease-publish',
+        records: [
+          expect.objectContaining({ recordId: '/tmp/lease-2.txt' }),
+          expect.objectContaining({ recordId: '/tmp/lease-3.txt' })
+        ]
+      })
+    )
+
+    runtimeApplyBatch.mockClear()
+    // A flush of nothing but missing files applies no batch, so it commits nothing.
+    await expect(
+      provider.publishCommittedWorkerRecords([skippedResult(4, 'file-missing')])
+    ).resolves.toBe(0)
+    expect(runtimeApplyBatch).not.toHaveBeenCalled()
+  })
+
+  it('keeps an unscoped content request durably pending and deferred instead of dispatching it', async () => {
+    const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
+    const originalScheduler = provider.indexSchedulerService
+    const originalDbUtils = provider.dbUtils
+    const originalShuttingDown = provider.shuttingDown
+    const markPending = vi.fn(async () => undefined)
+    const schedule = vi.fn(() => ({ accepted: 1, deferred: 0 }))
+    const resume = vi
+      .spyOn(FileProviderEnrichmentResumeService.prototype, 'resume')
+      .mockImplementation(() => undefined)
+
+    provider.dbUtils = { markFileEnrichmentPending: markPending }
+    provider.indexSchedulerService = {
+      schedule,
+      hasPendingWork: vi.fn(() => false)
+    } as unknown as typeof provider.indexSchedulerService
+    provider.shuttingDown = false
+
+    try {
+      await expect(
+        provider.enqueueContentIndexing(
+          [{ id: 7, path: '/tmp/unscoped-pending.txt', name: 'unscoped-pending.txt' }],
+          'watch-event'
+        )
+      ).resolves.toEqual({ accepted: 0, deferred: 1 })
+
+      // Durable first: the row is marked pending so the recovery round can find it.
+      expect(markPending).toHaveBeenCalledWith([7])
+      // Nothing reaches the parser without a lease this batch owns.
+      expect(schedule).not.toHaveBeenCalled()
+      // The deferred work is handed to recovery, which acquires its own lease.
+      expect(resume).toHaveBeenCalledWith('watch-event')
+    } finally {
+      provider.indexSchedulerService = originalScheduler
+      provider.dbUtils = originalDbUtils
+      provider.shuttingDown = originalShuttingDown
+      resume.mockRestore()
+    }
+  })
+
+  it('dispatches content indexing under the lease its owner acquired, without a recovery round', async () => {
+    const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
+    const originalScheduler = provider.indexSchedulerService
+    const originalDbUtils = provider.dbUtils
+    const originalShuttingDown = provider.shuttingDown
+    const files = [{ id: 9, path: '/tmp/scoped-owned.txt', name: 'scoped-owned.txt' }]
+    const markPending = vi.fn(async () => undefined)
+    const schedule = vi.fn(() => ({ accepted: 1, deferred: 0 }))
+    const resume = vi
+      .spyOn(FileProviderEnrichmentResumeService.prototype, 'resume')
+      .mockImplementation(() => undefined)
+
+    provider.dbUtils = { markFileEnrichmentPending: markPending }
+    provider.indexSchedulerService = {
+      schedule,
+      hasPendingWork: vi.fn(() => false)
+    } as unknown as typeof provider.indexSchedulerService
+    provider.shuttingDown = false
+
+    try {
+      await expect(
+        provider.enqueueContentIndexing(files, 'watch-event', 'lease-owner')
+      ).resolves.toEqual({ accepted: 1, deferred: 0 })
+
+      // The owner's lease rides the dispatch, so its results stay fenceable and
+      // its own drain can wait for exactly this work.
+      expect(schedule).toHaveBeenCalledWith(files, 'watch-event', 'lease-owner')
+      expect(markPending).toHaveBeenCalledWith([9])
+      expect(resume).not.toHaveBeenCalled()
+    } finally {
+      provider.indexSchedulerService = originalScheduler
+      provider.dbUtils = originalDbUtils
+      provider.shuttingDown = originalShuttingDown
+      resume.mockRestore()
     }
   })
 

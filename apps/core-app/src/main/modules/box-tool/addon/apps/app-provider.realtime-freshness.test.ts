@@ -397,7 +397,10 @@ describe('app realtime index freshness', () => {
         ...createDbUtils().dbUtils,
         getFilesByType: vi.fn(async () => [{ path: '/Applications/Known.app' }])
       }
-      provider.searchIndex = { countByProvider: vi.fn(async () => 1) }
+      provider.searchIndex = {
+        countByProvider: vi.fn(async () => 1),
+        countByProviderViaMeta: vi.fn(async () => 1)
+      }
       const readdirSpy = vi.spyOn(fs, 'readdir').mockResolvedValue(['Probe.app'] as never)
 
       const health = await provider.getAppSearchIndexHealth()
@@ -405,6 +408,46 @@ describe('app realtime index freshness', () => {
       expect(health.healthy).toBe(true)
       expect(health.unindexedOnDisk).toBeUndefined()
       expect(readdirSpy).not.toHaveBeenCalled()
+    })
+
+    it('answers the routing health from the meta count, never the full FTS count', async () => {
+      // This read runs for app watch events and diagnostics polls, on the read worker CoreBox
+      // queries share. The FTS count walks the whole content table (250-340ms on a large index).
+      restorePlatform = withPlatformScope('darwin')
+      const provider = await loadProvider()
+      getWatchPathsMock.mockReturnValue(['/Applications'])
+      provider.dbUtils = {
+        ...createDbUtils().dbUtils,
+        getFilesByType: vi.fn(async () => [{ path: '/Applications/Known.app' }])
+      }
+      const countByProvider = vi.fn(async () => 1)
+      const countByProviderViaMeta = vi.fn(async () => 0)
+      provider.searchIndex = { countByProvider, countByProviderViaMeta }
+
+      const health = await provider.getAppSearchIndexHealth()
+
+      expect(countByProviderViaMeta).toHaveBeenCalledWith('app-provider')
+      expect(countByProvider).not.toHaveBeenCalled()
+      expect(health).toMatchObject({ healthy: false, indexedItemCount: 0 })
+    })
+
+    it('keeps the exact FTS count for the probed startup decision', async () => {
+      restorePlatform = withPlatformScope('darwin')
+      const provider = await loadProvider()
+      getWatchPathsMock.mockReturnValue(['/Applications'])
+      provider.dbUtils = {
+        ...createDbUtils().dbUtils,
+        getFilesByType: vi.fn(async () => [{ path: '/Applications/Known.app' }])
+      }
+      const countByProvider = vi.fn(async () => 1)
+      const countByProviderViaMeta = vi.fn(async () => 1)
+      provider.searchIndex = { countByProvider, countByProviderViaMeta }
+      vi.spyOn(fs, 'readdir').mockResolvedValue(['Known.app'] as never)
+
+      await provider.getAppSearchIndexHealth({ probeFilesystem: true })
+
+      expect(countByProvider).toHaveBeenCalledWith('app-provider')
+      expect(countByProviderViaMeta).not.toHaveBeenCalled()
     })
 
     it('ignores a directory merely named .app that carries no manifest', async () => {

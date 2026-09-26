@@ -267,7 +267,7 @@ function defaults(): SettingsState {
     theme: 'system',
     opacity: 92,
     launchAtLogin: true,
-    hotkey: ['⌘', 'E'],
+    hotkey: ['⌥', 'Space'],
     recommendations: true,
     autoPaste: '3',
     density: 'cozy',

@@ -14,6 +14,7 @@ import { APP_DESTINATION_ICON_CLASSES } from './src/shared/app-destinations'
 import { MODEL_FAMILY_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-family-icons'
 import { MODEL_SOURCE_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-source-icons'
 import { MAIN_WINDOW_COMMAND_ICON_CLASSES } from './src/renderer/src/modules/shortcuts/main-window-command-catalog'
+import { HOME_PUSH_ICON_CLASSES } from './src/renderer/src/modules/home-push/icons'
 import {
   PROVIDER_ICON_CLASSES,
   PROVIDER_ID_ICON_CLASSES
@@ -76,6 +77,9 @@ const ICON_PICKER_CATALOG_MODULE = fileURLToPath(
 const MAIN_WINDOW_COMMAND_CATALOG_MODULE = fileURLToPath(
   new URL('./src/renderer/src/modules/shortcuts/main-window-command-catalog.ts', import.meta.url)
 )
+const HOME_PUSH_ICONS_MODULE = fileURLToPath(
+  new URL('./src/renderer/src/modules/home-push/icons.ts', import.meta.url)
+)
 
 export default defineConfig({
   // The dev server watches only the config file itself. Without this, a new icon in the table
@@ -86,7 +90,8 @@ export default defineConfig({
     MODEL_SOURCE_ICONS_MODULE,
     APP_DESTINATIONS_MODULE,
     ICON_PICKER_CATALOG_MODULE,
-    MAIN_WINDOW_COMMAND_CATALOG_MODULE
+    MAIN_WINDOW_COMMAND_CATALOG_MODULE,
+    HOME_PUSH_ICONS_MODULE
   ],
   safelist: [
     ...COREBOX_ACTION_ICONS,
@@ -120,7 +125,10 @@ export default defineConfig({
     // rows ⌘/ lists and the badge on each control. A row is rendered by v-for, so no template names
     // its icon; without these the whole palette draws empty boxes. Derived from the catalog so a
     // command added there cannot ship invisible.
-    ...MAIN_WINDOW_COMMAND_ICON_CLASSES
+    ...MAIN_WINDOW_COMMAND_ICON_CLASSES,
+    // Home push cards (`modules/home-push/icons.ts`): the guide's categories and starter tasks and
+    // the 「为你准备」 rows. TxChoiceCard draws them from option data, so no template names a class.
+    ...HOME_PUSH_ICON_CLASSES
   ],
   theme: {
     colors: {

@@ -157,13 +157,20 @@ describe('appDestinationProvider search', () => {
     expect(item.meta?.extension?.matchResult).toEqual([])
   })
 
-  it('keeps the metadata search tokens bounded to the alias list', async () => {
+  it('keeps the metadata search tokens drawn from the alias list, without duplicates', async () => {
     const provider = await createProvider()
     const item = onlyItem(await search(provider, '设置'))
     const tokens = item.meta?.extension?.searchTokens as string[]
+    const settings = getAppDestination('settings-overview')
+    const aliases = [...settings.aliases.en, ...settings.aliases.zh, ...settings.aliases.pinyin]
 
     expect(tokens.length).toBeGreaterThan(0)
-    expect(tokens.length).toBeLessThanOrEqual(16)
+    // Bounded by the declared aliases rather than by a copy of the provider's cap: a token the
+    // catalog never declared is a keyword nobody can review, and the cap itself is an
+    // implementation detail the renderer does not depend on.
+    expect(tokens.length).toBeLessThanOrEqual(aliases.length)
+    expect(tokens.every((token) => aliases.includes(token))).toBe(true)
+    expect(new Set(tokens).size).toBe(tokens.length)
     expect(tokens).toEqual(expect.arrayContaining(['设置', 'settings']))
   })
 

@@ -200,8 +200,15 @@
       "shortcut": {
         "command": "command",
         "ctrl": "ctrl",
+        "control": "control",
+        "option": "option",
+        "alt": "alt",
+        "shift": "shift",
+        "win": "win",
+        "super": "super",
         "hint": "按下 {shortcut} 可快速唤起 Tuff",
-        "changeInSettings": "可在设置中修改快捷键"
+        "changeInSettings": "可在设置中修改快捷键",
+        "conflictHint": "如果按下后打开的是别的应用（例如 Raycast、Alfred、ChatGPT），说明这个键已被占用，去设置里换一个即可。"
       }
     },
     "forbidden": {
@@ -430,6 +437,8 @@
     "autoContextGroupDesc": "控制模型在对话中可以自动取用哪些本机信息。",
     "autoContext": "自动上下文",
     "autoContextDesc": "开启后模型按需自动取用联网、文件检索、剪贴板与关联数据，无需逐条挑选工具；关闭后每次都要手动指定。",
+    "homeAiOpening": "AI 开场白",
+    "homeAiOpeningDesc": "进入空白对话时，由模型根据最近的对话和项目名写一句开场白。每次都会走输入框选择的模型、消耗对应额度；关闭时显示本地模板，不发请求。",
     "groupTitle": "实用工具",
     "groupDesc": "实用工具为您提供统一的快速桌面启动器。",
     "customPlaceholder": "自定义占位文本",
@@ -483,6 +492,7 @@
       "core_box_toggle": "唤起命令面板",
       "core_omniPanel_toggle": "唤起 OmniPanel",
       "core_omniPanel_mouseLongPress": "OmniPanel 鼠标触发",
+      "screenshot_tool_start": "截图",
       "voice_dictation_toggle": "全局听写（按一下开始，再按一下停止）",
       "voice_quickEdit": "划词改口（选中文字后按快捷键，说出要改成什么）"
     },
@@ -663,15 +673,15 @@
       "notConfigured": "没有渠道绑定 audio.asr"
     },
     "models": {
-      "title": "本机语音模型",
-      "description": "用于设备端或混合语音识别；这里的目录状态不代表云端识别状态。",
-      "loading": "正在读取可安装的本机模型目录…",
+      "title": "端侧模型",
+      "description": "用于端侧或混合语音识别；这里的目录状态不代表云端识别状态。",
+      "loading": "正在读取可安装的端侧模型目录…",
       "catalogErrors": {
-        "authRequired": "登录后可查看并安装官方本机语音模型。",
-        "timeout": "本机模型目录请求超时。",
-        "upstreamUnavailable": "本机模型目录服务暂时不可用。",
-        "invalid": "本机模型目录校验失败，为保护安装安全，本次未展示可下载模型。",
-        "unavailable": "无法读取本机模型目录。"
+        "authRequired": "登录后可查看并安装官方端侧模型。",
+        "timeout": "端侧模型目录请求超时。",
+        "upstreamUnavailable": "端侧模型目录服务暂时不可用。",
+        "invalid": "端侧模型目录校验失败，为保护安装安全，本次未展示可下载模型。",
+        "unavailable": "无法读取端侧模型目录。"
       },
       "catalogImpact": {
         "cloud": "这不会影响当前的云端语音输入；已安装模型仍可管理。",
@@ -1206,13 +1216,31 @@
       "week": "近 7 天",
       "earlier": "更早",
       "untitled": "新对话",
-      "delete": "删除对话"
+      "delete": "删除对话",
+      "deleteConfirm": "确认？",
+      "deleteConfirmLabel": "确认删除「{title}」？"
     },
     "projects": {
-      "home": "主页",
+      "section": "项目",
+      "chats": "对话",
       "archived": "已归档项目",
       "newChat": "新建对话",
+      "newFromFolder": "从文件夹新建项目",
+      "empty": "暂无对话",
+      "expand": "展开 {name}",
+      "collapse": "收起 {name}",
       "runLocalAgent": "运行本机代理",
+      "groupLocalAgents": "本机代理",
+      "groupProject": "项目",
+      "openInLocalAgent": "在本机代理中打开",
+      "agentsLoading": "正在检测本机代理…",
+      "agentsFailed": "无法检测本机代理",
+      "agentsNone": "没有可用的本机代理",
+      "agentNotInstalled": "未安装",
+      "agentTurnedOff": "设置中已关闭",
+      "agentUnavailable": "不可用",
+      "adoptSessions": "接管本机会话",
+      "adoptSessionsHint": "查找本机代理在此项目目录中留下的会话，加入侧边栏以便继续",
       "discoverSessions": "发现本机会话",
       "discoveringSessions": "正在发现会话…",
       "discoveryComplete": "已接管 {count} 个本机会话。",
@@ -1356,13 +1384,20 @@
       "finalText": "最终文本",
       "duration": "录音时长",
       "recognitionDuration": "识别耗时",
-      "providerLatency": "服务商耗时",
+      "providerLatency": "云端链路耗时",
       "tokens": "Tokens",
       "tokensValue": "{count}",
       "tokensSplit": "输入 {input} · 输出 {output}",
       "tokensUnavailable": "渠道未返回",
+      "location": "处理位置",
+      "model": "识别模型",
       "channel": "渠道",
       "source": "来源",
+      "locationValues": {
+        "cloud": "云端",
+        "onDevice": "端侧",
+        "unknown": "未记录"
+      },
       "delivery": "投递",
       "sourceValues": {
         "microphone": "麦克风",
@@ -1371,6 +1406,7 @@
       "deliveryValues": {
         "native": "直接写入",
         "autopaste": "自动粘贴",
+        "clipboard": "已复制到剪贴板",
         "none": "未投递"
       },
       "error": "错误",
@@ -1378,7 +1414,7 @@
         "text": "内容",
         "capturedAt": "时间",
         "status": "状态",
-        "model": "模型"
+        "model": "识别模型"
       },
       "status": {
         "success": "成功",
@@ -1491,7 +1527,28 @@
       "userLabel": "用户",
       "assistantLabel": "助手"
     },
-    "effortHigh": "高",
+    "reasoning": {
+      "label": "推理强度",
+      "auto": "自动",
+      "level": {
+        "minimal": "最低",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "超高",
+        "max": "极高"
+      },
+      "unsupportedModel": "该模型不支持推理强度",
+      "unsupportedProvider": "该服务暂不支持推理强度",
+      "clamped": "该模型没有「{requested}」档，将按「{applied}」运行",
+      "autoRoute": "自动选择模型时，落到支持推理强度的模型才会生效",
+      "cloud": "由 Tuff 云端按实际调用的模型应用，不支持时不生效",
+      "turnTop": "{requested}（该模型最高档：{applied}）",
+      "turnClamped": "{applied}（请求「{requested}」，该模型没有此档）",
+      "turnUnsupportedModel": "{requested}（该模型不支持，未应用）",
+      "turnUnsupportedProvider": "{requested}（该服务不支持，未应用）",
+      "turnForwarded": "{requested}（云端未确认是否应用）"
+    },
     "attach": "添加附件",
     "attachRemove": "移除附件",
     "attachCancel": "取消上传",
@@ -1534,11 +1591,125 @@
       "empty": "模型没有返回任何内容",
       "generic": "这轮回复失败了"
     },
-    "pill": {
-      "searchFiles": "用自然语言搜索文件",
-      "translateClipboard": "翻译剪贴板",
-      "tidyDownloads": "整理下载目录",
-      "runScript": "运行工作区脚本"
+    "opening": {
+      "prompt": "你是塔芙（Tuff），用户电脑上的个人助理。用户刚打开一段新对话，还没开口。下一条消息是 Tuff 整理的本机摘要，不是用户写的话。请你先开口：用一句话说说你能帮忙做什么——找文件和读文件、整理资料、写作与翻译、分析数据、在项目里配合本机代理干活——再点出摘要里一两件具体的事，问用户想先推进哪一件。要求：不超过 3 句；口语化，像熟悉的同事；只提摘要里真实出现的名字，绝不编造；不列清单，不用 Markdown，不给整段话加引号；摘要里没有具体内容时，只简短介绍你能做什么。",
+      "loading": "正在准备开场白",
+      "leadNote": "对话开始时你对用户说过：「{text}」",
+      "summary": {
+        "currentProject": "当前项目：{name}",
+        "recentConversations": "最近对话：{titles}",
+        "projects": "项目：{names}",
+        "localSessions": "本机 AI 会话：{count} 个",
+        "localSessionsIn": "本机 AI 会话：{count} 个，在 {names}",
+        "empty": "暂无本机记录",
+        "separator": "、",
+        "quote": "「{text}」"
+      },
+      "template": {
+        "projectConversation": "我们回到 {project} 了。上次聊到「{title}」，接着做，还是换件事？",
+        "project": "我们在 {project} 里。想先梳理进展，还是直接动手做点什么？",
+        "conversation": "欢迎回来。上次我们聊到「{title}」，要接着做，还是开始新的事？",
+        "sessionInProject": "你在 {project} 里还有一个 {provider} 会话，要接着推进吗？也可以直接告诉我新的想法。",
+        "session": "你还有一个 {provider} 会话没做完，要接着推进吗？也可以直接告诉我新的想法。",
+        "default": "我是塔芙，可以帮你找文件、整理资料、写作翻译，也能在项目里和本机代理一起干活。今天想先做什么？"
+      }
+    },
+    "push": {
+      "card": {
+        "prev": "上一步",
+        "next": "下一步"
+      },
+      "guide": {
+        "title": "我们先从哪件事开始？",
+        "startersTitle": "{category}：先做哪一件？",
+        "self": "我自己说",
+        "selfDesc": "直接在上面的输入框里告诉我",
+        "category": {
+          "work": "工作与项目",
+          "workDesc": "梳理进展，安排下一步",
+          "files": "文件与整理",
+          "filesDesc": "找文件、理目录、读内容",
+          "writing": "写作与翻译",
+          "writingDesc": "起草、润色、翻译",
+          "research": "资料与分析",
+          "researchDesc": "总结文档、分析数据",
+          "automation": "自动化",
+          "automationDesc": "把脚本和重复操作交给我"
+        },
+        "work": {
+          "progress": "梳理 {project} 最近的进展",
+          "progressDesc": "看看最近在做什么，列出下一步",
+          "enterProject": "在 {project} 里开始",
+          "enterProjectDesc": "进入项目，在它的目录里干活",
+          "breakdown": "把一个大目标拆成小步骤",
+          "breakdownDesc": "倒推出马上能开始的第一步",
+          "plan": "排一下这周要推进的事",
+          "planDesc": "把手头的事排出先后",
+          "notes": "把会议记录整理成待办",
+          "notesDesc": "贴上记录，拆成能执行的条目"
+        },
+        "files": {
+          "find": "用自然语言找一个文件",
+          "findDesc": "说说记得的内容、时间或类型",
+          "downloads": "整理下载目录",
+          "downloadsDesc": "按类型和时间归好类",
+          "projectTour": "看看 {project} 里都有什么",
+          "projectTourDesc": "按目录说说每部分放了什么",
+          "summarize": "读一个文件，说说讲了什么",
+          "summarizeDesc": "长文档先看要点"
+        },
+        "writing": {
+          "email": "起草一封邮件",
+          "emailDesc": "说清对象和目的就行",
+          "polish": "润色一段文字",
+          "polishDesc": "更通顺，保留你的语气",
+          "translate": "翻译一段文字",
+          "translateDesc": "中英互译，保留原有格式"
+        },
+        "research": {
+          "summarize": "总结一份文档的要点",
+          "summarizeDesc": "提炼结论和关键数字",
+          "chart": "把一组数据做成图表",
+          "chartDesc": "贴上数据，挑合适的图",
+          "projectStructure": "讲讲 {project} 的项目结构",
+          "projectStructureDesc": "从入口到主要模块",
+          "compare": "对比几个方案的利弊",
+          "compareDesc": "列出取舍，给个建议"
+        },
+        "automation": {
+          "script": "运行一个工作区脚本",
+          "scriptDesc": "从常用脚本里挑一个",
+          "rename": "写一个批量重命名文件的脚本",
+          "renameDesc": "说好命名规则，拿到能直接运行的脚本",
+          "repeat": "把重复的操作写成脚本",
+          "repeatDesc": "说说你每次都在手动做什么"
+        }
+      },
+      "feed": {
+        "title": "为你准备",
+        "continueConversation": "继续「{title}」",
+        "untitledConversation": "未命名对话",
+        "conversationDesc": "回到上次聊到的地方",
+        "conversationInProject": "{project} 里的对话",
+        "continueSession": "继续 {provider} 会话「{title}」",
+        "continueUntitledSession": "继续 {provider} 会话",
+        "sessionDesc": "本机代理会话",
+        "sessionInProject": "{project} 里的本机代理会话",
+        "clipboard": "处理刚复制的内容",
+        "clipboardExcerpt": "「{excerpt}」",
+        "enterProject": "在 {project} 里开始",
+        "projectDesc": "新建一段项目对话",
+        "pinnedProjectDesc": "已置顶的项目"
+      }
+    },
+    "composer": {
+      "stop": "停止",
+      "finishAndSend": "结束听写并发送",
+      "dictationStop": "结束听写",
+      "dictationListening": "正在听写",
+      "dictationFinishing": "正在识别",
+      "dictationInserted": "已插入听写的文字",
+      "modelPill": "选择模型与推理强度，当前：{current}"
     }
   },
   "settingsNav": {
@@ -2722,7 +2893,8 @@
       "data": "数据",
       "service": "服务",
       "feature": "功能",
-      "system": "系统"
+      "system": "系统",
+      "history": "对话"
     },
     "resultSignals": {
       "failed": "失败",
@@ -5214,6 +5386,10 @@
     "downloadFailedBody": "{filename}\n{error}",
     "appLaunchFailedTitle": "应用启动失败",
     "appLaunchFailedBody": "未能启动 {name}\n{error}",
+    "coreBoxShortcutUnavailableTitle": "CoreBox 暂无可用快捷键",
+    "coreBoxShortcutRefusedBody": "默认快捷键 {shortcut} 无法注册，CoreBox 暂时不能用快捷键呼出。请在「设置 → 插件与工具 → 快捷方式」中换一个快捷键。",
+    "coreBoxShortcutConflictBody": "默认快捷键 {shortcut} 已设给另一个快捷键，CoreBox 暂时不能用快捷键呼出。请在「设置 → 插件与工具 → 快捷方式」中换一个快捷键。",
+    "coreBoxShortcutConflictNamedBody": "默认快捷键 {shortcut} 已设给「{other}」，CoreBox 暂时不能用快捷键呼出。请在「设置 → 插件与工具 → 快捷方式」中换一个快捷键。",
     "fileIndexRebuildCompleteTitle": "文件索引重建完成",
     "fileIndexRebuildCompleteBody": "手动文件索引重建已完成，搜索结果已更新。",
     "pluginInstallSuccessTitle": "插件已添加",
@@ -5306,7 +5482,8 @@
       "voiceTranscribeEmpty": "未识别到语音内容，请重新录制",
       "voiceListening": "正在聆听…",
       "voiceTranscribeFailed": "语音转写失败",
-      "voiceDeliveryFailed": "未能写入，请先点一下输入框",
+      "voiceDeliveryFailed": "未能写入，也无法复制到剪贴板",
+      "voiceCopiedToClipboard": "写入失败，已复制到剪贴板",
       "submitting": "发送中...",
       "sendToCoreBox": "发送到 CoreBox",
       "translateClipboardImage": "翻译剪贴板图片",
@@ -6109,6 +6286,10 @@
       "settingsTitle": "Tuff 设置",
       "mainWindowSubtitle": "显示并聚焦主窗口",
       "homeSubtitle": "打开塔芙首页",
+      "conversationsSubtitle": "查看主窗口里的历史对话",
+      "storeSubtitle": "浏览并安装插件",
+      "storeInstalledSubtitle": "管理已经装好的插件",
+      "downloadsSubtitle": "查看进行中和已完成的下载",
       "overviewSubtitle": "一览全部设置",
       "generalSubtitle": "启动、语言与应用行为",
       "appearanceSubtitle": "主题、布局与视觉效果",
@@ -6155,6 +6336,7 @@
     "pinFailed": "固定失败",
     "send": "发送",
     "searching": "正在搜索…",
+    "searchingMore": "还在搜索更多…",
     "searchFailed": "搜索失败",
     "retrySearch": "搜索失败，重新搜索",
     "copied": "已复制",
@@ -6237,10 +6419,38 @@
       "pin": "固定到推荐",
       "unpin": "取消固定",
       "copyTitle": "复制名称",
-      "revealInFinder": "在文件管理器中显示",
+      "revealInFinder": "在 Finder 中显示",
+      "revealInExplorer": "在资源管理器中显示",
+      "revealInFileManager": "在文件管理器中显示",
       "translateImage": "翻译图片",
       "translateImagePin": "翻译并置顶",
-      "flowTransfer": "流转到其他插件"
+      "flowTransfer": "流转到其他插件",
+      "open": "打开",
+      "paste": "粘贴",
+      "execute": "执行",
+      "copy": "复制",
+      "copyResult": "复制结果",
+      "copyLink": "复制链接",
+      "copyPath": "复制路径",
+      "copyShellPath": "复制 Shell 路径",
+      "copyFileUrl": "复制文件 URL",
+      "copyWindowsPath": "复制 Windows 路径",
+      "copyWslPath": "复制 WSL 路径",
+      "openFolder": "打开所在文件夹",
+      "navigate": "前往",
+      "preview": "预览",
+      "edit": "编辑",
+      "delete": "删除",
+      "share": "分享",
+      "empty": "没有匹配的操作",
+      "failed": "操作失败",
+      "groups": {
+        "open": "打开",
+        "copy": "复制",
+        "organize": "整理",
+        "flow": "流转",
+        "plugin": "插件"
+      }
     },
     "systemActions": {
       "addDevPluginTitle": "添加 Dev 插件：{name}",
@@ -6318,5 +6528,44 @@
       "togglePanel": "切换预览面板",
       "focusComposer": "聚焦输入框"
     }
+  },
+  "appMenu": {
+    "about": "关于 {app}",
+    "services": "服务",
+    "hide": "隐藏 {app}",
+    "hideOthers": "隐藏其他",
+    "showAll": "全部显示",
+    "quit": "退出 {app}",
+    "file": "文件",
+    "closeWindow": "关闭窗口",
+    "edit": "编辑",
+    "undo": "撤销",
+    "redo": "重做",
+    "cut": "剪切",
+    "copy": "拷贝",
+    "paste": "粘贴",
+    "pasteAndMatchStyle": "粘贴并匹配样式",
+    "delete": "删除",
+    "selectAll": "全选",
+    "substitutions": "替换",
+    "showSubstitutions": "显示替换",
+    "smartQuotes": "智能引号",
+    "smartDashes": "智能破折号",
+    "textReplacement": "文本替换",
+    "speech": "语音",
+    "startSpeaking": "开始朗读",
+    "stopSpeaking": "停止朗读",
+    "view": "显示",
+    "reload": "重新载入",
+    "forceReload": "强制重新载入",
+    "toggleDevTools": "切换开发者工具",
+    "resetZoom": "实际大小",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "toggleFullScreen": "进入/退出全屏",
+    "window": "窗口",
+    "minimize": "最小化",
+    "zoom": "缩放",
+    "bringAllToFront": "全部置于顶层"
   }
 }

@@ -1,0 +1,375 @@
+---
+title: "FusionSurface 融合表面"
+description: "从边上长出凸起、再把凸起拉断成水滴的圆角表面，外形是一条可描边、带阴影的锐利 SVG 路径"
+category: Effects
+status: beta
+since: 0.6.0
+tags: [fusion, surface, split, svg, spring]
+syncStatus: reviewed
+verified: true
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxFusionSurface } from '@talex-touch/tuffex/fusion-surface'
+  import '@talex-touch/tuffex/fusion-surface/style.css'
+  import '@talex-touch/tuffex/base.css' // 设计令牌与重置样式，全应用引入一次
+---
+:::
+
+## 用法
+
+`TxFusionSurface` 是一块圆角矩形，四条边都能长出凸起（托盘、子菜单、气泡），凸起与主体之间以凹圆角相接。把凸起拉得足够远，颈部会收窄、断开，凸起变成一滴独立的水滴飘走。
+
+### 工具栏托盘
+
+工具在工具栏上方长出自己的选项托盘。点另一个带托盘的工具，同一个凸起滑过去；再点一次，托盘在原地收回。
+
+:::TuffDemoWrapper{demo="FusionSurfaceTrayDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { FusionSurfaceBud } from '@talex-touch/tuffex/fusion-surface'
+  import { computed, ref } from 'vue'
+
+  // 各个带托盘的工具在工具栏上的中心位置，从左边缘量起（px）。
+  const TRAYS = { draw: 106, shapes: 146 }
+  const open = ref<keyof typeof TRAYS | null>(null)
+  const shown = ref<keyof typeof TRAYS>('shapes')
+
+  // 一个凸起、一个 id：切换工具只是移动它，所以会滑过去；
+  // 从列表里移除它，它就在原地收回。
+  const buds = computed<FusionSurfaceBud[]>(() => open.value
+    ? [{ id: 'tray', center: TRAYS[open.value], width: 146, height: 44, radius: 14 }]
+    : [])
+
+  function toggle(tool: keyof typeof TRAYS) {
+    open.value = open.value === tool ? null : tool
+    shown.value = tool
+  }
+  </script>
+
+  <template>
+    <TxFusionSurface
+      :buds="buds"
+      :radius="18"
+      stroke="var(--tx-border-color-lighter)"
+      shadow="var(--tx-elevation-4)"
+    >
+      <div class="tools">
+        <!-- …其他工具 -->
+        <button type="button" :aria-expanded="open === 'draw'" @click="toggle('draw')">画笔</button>
+        <button type="button" :aria-expanded="open === 'shapes'" @click="toggle('shapes')">形状</button>
+      </div>
+      <template #bud>
+        <!-- `shown` 的选项：一行 146 × 44，随凸起一起滑出 -->
+      </template>
+    </TxFusionSurface>
+  </template>
+---
+:::
+
+### 分裂成水滴
+
+输入框长出一条消息凸起并拉伸；`detach` 越过断裂点后颈部断开，水滴继续飘进会话，留在输入框上的残留缩回边里。点「重播」重新演示。
+
+:::TuffDemoWrapper{demo="FusionSurfaceSplitDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { FusionSurfaceBud } from '@talex-touch/tuffex/fusion-surface'
+  import { computed, ref } from 'vue'
+
+  const sent = ref(false)
+  const detach = ref(0)
+
+  // 320px 宽的输入框：320 - (圆角 16 + 凹角 12) - 168 / 2 = 208，
+  // 这是凹角仍落在直边上时凸起能到的最右位置。
+  const buds = computed<FusionSurfaceBud[]>(() => sent.value
+    ? [{ id: 'message', center: 208, width: 168, height: 36, radius: 12, detach: detach.value }]
+    : [])
+
+  function send() {
+    sent.value = true                            // 凸起从上边长出
+    setTimeout(() => (detach.value = 22), 420)   // 颈部拉长、收窄
+    setTimeout(() => (detach.value = 44), 940)   // 越过 breakAt：断开，水滴继续上浮
+  }
+  </script>
+
+  <template>
+    <TxFusionSurface :buds="buds" stroke="var(--tx-border-color-lighter)">
+      <span class="draft">今晚就发布</span>
+      <button type="button" aria-label="发送" @click="send" />
+      <template #bud>
+        <span class="bubble">今晚就发布</span>
+      </template>
+    </TxFusionSurface>
+  </template>
+---
+:::
+
+### 四条边同时长出
+
+四条边同时长出凸起。要求贴到拐角的凸起，会停在凹角仍落在直边上的位置；高度不到凹角两倍的凸起，凹角半径取高度的一半。
+
+:::TuffDemoWrapper{demo="FusionSurfaceEdgesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { FusionSurfaceBud } from '@talex-touch/tuffex/fusion-surface'
+  import { computed, ref } from 'vue'
+
+  const position = ref(50) // 在每条边上的百分比位置
+  const height = ref(32)
+
+  // 主体 220 × 132。`center` 在上 / 下边从左量，在左 / 右边从上量；组件负责夹紧。
+  const buds = computed<FusionSurfaceBud[]>(() => [
+    { id: 'top', edge: 'top', center: position.value * 2.2, width: 64, height: height.value, radius: 12 },
+    { id: 'right', edge: 'right', center: position.value * 1.32, width: 40, height: height.value, radius: 12 },
+    { id: 'bottom', edge: 'bottom', center: position.value * 2.2, width: 64, height: height.value, radius: 12 },
+    { id: 'left', edge: 'left', center: position.value * 1.32, width: 40, height: height.value, radius: 12 },
+  ])
+  </script>
+
+  <template>
+    <TxFusionSurface :buds="buds" :radius="18" style="width: 220px; height: 132px" />
+    <TxSlider v-model="position" :min="0" :max="100" aria-label="沿边位置" />
+    <TxSlider v-model="height" :min="4" :max="40" aria-label="凸起高度" />
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 同一条边上的凸起不要重叠。每个凸起单独贴合到边上，两个凸起的占位（`width` 加两侧凹角）一旦交叉，轮廓就会画坏。
+- 凸起移动时保持 `id` 不变：改 `center`、`width`、`height`，同一个凸起会用弹簧过渡过去；换 `id` 则旧凸起收回、另长一个新的。改 `edge` 也不会绕过拐角滑过去：凸起立即离开原来的边，在新的边上重新长出。
+- 想重播分裂，先把凸起关上（`open: false`，或从 `buds` 里移除）再打开，或者下一次换一个新 `id`。分裂后的凸起在完全关闭之前一直是水滴；调小 `detach` 只会把水滴移回来。
+- 根节点不要有自己的 `background`、`border`、`box-shadow`，也不要裁剪它或凸起要长进去的空间（`overflow: hidden`、`clip-path`、`contain: paint`）：剪影就是表面，凸起和水滴都画在根节点的盒子之外。
+- 凸起不占布局空间。每条会长出凸起的边都要留出空间，比如像 demo 那样给父元素加 padding。
+- 表面颜色用 token（`var(--tx-…)`），才能跟随主题；阴影交给 `shadow`，不要写在子元素上，这样一份阴影贴着每个凸起、颈部和水滴走。
+- `fusionSurfacePath({ …, includeBody: false })` 会在宿主内部 `baseOverlap` px 处闭合每个相连形状，让填充盖住接合处宿主自己的边框；这时给路径描边，闭合线也会被描出来。给这种覆盖层描边时，要把宿主内部的部分裁掉，并沿 `spans` 断开宿主自己的边框。
+
+## API 参考
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `buds` | `FusionSurfaceBud[]` | `[]` | 要长出的凸起，字段见下方「类型」。加入列表的凸起会展开，从列表移除的凸起先收回，再卸载内容。 |
+| `radius` | `number` | `16` | 主体圆角，不超过短边的一半；也是每个凸起外侧圆角的默认值。 |
+| `fillet` | `number` | `12` | 凸起与主体相接处凹圆角的最大半径；不超过凸起当前高度的一半。 |
+| `breakAt` | `number` | `28` | 颈部完全闭合时的 `detach`；实际在约 96% 处就会断开。 |
+| `fill` | `string` | `var(--tx-bg-color-overlay)` | 表面填充色，任意 CSS 颜色或 `var()`。 |
+| `stroke` | `string` | `none` | 描边颜色。描边贴着每个凸起、颈部和水滴走，拐角为圆角连接。 |
+| `strokeWidth` | `number` | `1` | 设置了 `stroke` 时的描边宽度（px）。 |
+| `shadow` | `string` | `var(--tx-elevation-3)` | `box-shadow` 语法，在剪影上画成一串 `drop-shadow()`。`inset` 层和带扩展半径的层会被跳过；`var()` 层原样透传，必须只含一层 `x y blur 颜色`，比如 `--tx-elevation-*`。传 `'none'` 去掉阴影。 |
+| `transition` | `'snappy' \| 'smooth' \| 'bouncy' \| SpringConfig` | `'smooth'` | 凸起展开、移动、改尺寸、拉伸时用的弹簧。没有 `{ duration }` 写法：凸起逐帧推进，目标变化时保留速度。 |
+| `contentBlur` | `number` | `6` | 凸起内容展开时起始的模糊（px）；`0` 关闭模糊，保留淡入。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `break` | `(id: string)` | 某个凸起的颈部断开，在断开的那一帧触发。每次分裂只触发一次：凸起完全关闭之前一直是水滴。 |
+| `settle` | `()` | 所有弹簧静止、帧循环休眠时触发。没有任何东西需要移动的变化不会触发。 |
+
+### 插槽
+
+| 插槽名 | Props | 说明 |
+|------|-------|------|
+| `default` | - | 主体内容：普通、可交互的 DOM，画在剪影之上。 |
+| `bud` | `{ bud: FusionSurfaceBud }` | 单个凸起的内容，放在一个沿边长 `width`、向外深 `height` 的内容层里。内容层的外沿贴着凸起的外沿（分裂后贴着水滴，水滴关闭时随它一起缩小）；凸起展开到 45% 之前不可见，到 85% 完全显现，中间带模糊过渡；凸起关闭或被移除时为 `inert`。 |
+
+### 类型
+
+`FusionSurfaceBud`，即 `buds` 的一项：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `id` | `string` | - | 跨更新的身份标识，必填。 |
+| `edge` | `'top' \| 'right' \| 'bottom' \| 'left'` | `'top'` | 凸起长出的边。 |
+| `open` | `boolean \| number` | `true` | 展开或关闭，或 0..1 的展开比例。 |
+| `center` | `number` | 边的中点 | 沿边的位置（px）：上 / 下边从左量，左 / 右边从上量。会被夹紧，保证两侧凹角都落在直边上。 |
+| `width` | `number` | - | 沿边的尺寸（px），超出直边时收窄。必填。 |
+| `height` | `number` | - | 完全展开时向外的尺寸（px）。必填。 |
+| `radius` | `number` | 表面的 `radius` | 凸起外侧圆角半径，受凸起自身尺寸限制。 |
+| `detach` | `number` | `0` | 凸起被拉离主体的距离（px）；越过断裂点后颈部断开，凸起变成水滴。 |
+| `drift` | `number` | `0` | 被拉出部分（分裂后即水滴）的横向偏移（px）：上 / 下边向右为正，左 / 右边向下为正。 |
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import type {
+    FusionSurfaceBud,
+    FusionSurfaceEdge, // 'top' | 'right' | 'bottom' | 'left'
+    FusionSurfaceEmits,
+    FusionSurfaceProps,
+    FusionSurfaceTransition, // 'snappy' | 'smooth' | 'bouncy' | SpringConfig
+    TxFusionSurfaceInstance,
+    // fusionSurfacePath() 用到的类型，见「几何函数」
+    FusionSurfaceBudShape,
+    FusionSurfaceGeometry,
+    FusionSurfaceGeometryInput,
+    FusionSurfaceRect,
+    FusionSurfaceSpan,
+    FusionSurfaceSplit,
+  } from '@talex-touch/tuffex/fusion-surface'
+---
+:::
+
+### CSS 变量
+
+| 变量 | 说明 |
+|------|------|
+| `--tx-fusion-surface-fill` | 剪影填充。由 `fill` 写在根节点上；默认 `var(--tx-bg-color-overlay)`。 |
+| `--tx-fusion-surface-stroke` | 描边颜色。由 `stroke` 写入；默认 `none`。 |
+| `--tx-fusion-surface-stroke-width` | 描边宽度。由 `strokeWidth` 写入；默认 `1px`。 |
+| `--tx-fusion-surface-filter` | 剪影的 `filter`。由 `shadow` 写入；默认 `drop-shadow(var(--tx-elevation-3))`。 |
+| `--tx-fusion-surface-progress` | 每帧写在每个凸起的内容层上：凸起的展开程度，`0`..`1`，供 `bud` 插槽内容读取。 |
+
+前四个只在传了对应属性时才写入，所以没传颜色属性的表面，可以由祖先元素或主题来设置。
+
+## 几何函数
+
+`fusionSurfacePath()` 是组件的几何部分，以纯函数导出，不依赖 Vue 和 DOM。宿主不适合改成 `TxFusionSurface` 时（比如一个要把消息从自身发出去的输入框），可以用它在宿主上方画凸起、颈部和水滴。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import type { FusionSurfaceSplit } from '@talex-touch/tuffex/fusion-surface'
+  import {
+    FUSION_SURFACE_BREAK_PINCH,
+    fusionSurfacePath,
+    fusionSurfacePinch,
+    springSteps,
+  } from '@talex-touch/tuffex/fusion-surface'
+
+  const overlayPath = document.querySelector<SVGPathElement>('#composer-overlay path')!
+  let detach = 0
+  let velocity = 0
+  let split: FusionSurfaceSplit | null = null
+
+  function frame(dt: number) {
+    // 与组件相同的弹簧，换目标时保留速度。
+    ;[detach, velocity] = springSteps(detach, velocity, 44, 'smooth', dt)
+    const pinch = fusionSurfacePinch(detach, 28)
+    // 像组件一样锁存断裂（组件还会把 detach 限制在断裂点）。
+    if (!split && pinch >= FUSION_SURFACE_BREAK_PINCH)
+      split = { center: 208, width: 168, height: 36, detach, drift: 0, remnant: 1, tail: 1 }
+    // …之后用 'snappy' 弹簧把 split.remnant 和 split.tail 降到 0。
+
+    const { d } = fusionSurfacePath({
+      width: 320,
+      height: 48,
+      radius: 16,
+      includeBody: false, // 主体由宿主自己绘制
+      buds: [{ id: 'message', center: 208, width: 168, height: 36, detach, pinch, split }],
+    })
+    overlayPath.setAttribute('d', d)
+  }
+---
+:::
+
+### 输入
+
+`FusionSurfaceGeometryInput`：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `width` / `height` | `number` | - | 主体尺寸（px），两者都为正才会绘制。 |
+| `radius` | `number` | `16` | 主体圆角，不超过短边的一半。 |
+| `buds` | `FusionSurfaceBudShape[]` | `[]` | 当前这一帧的凸起。 |
+| `includeBody` | `boolean` | `true` | 为 `false` 时只输出凸起、颈部和水滴，给自己绘制主体的宿主用。 |
+| `baseOverlap` | `number` | `2` | `includeBody: false` 时，每个相连形状伸进主体的距离（px），用来盖住宿主的边框。 |
+
+`FusionSurfaceBudShape` 的 `id`、`edge`、`center`、`width`、`radius`、`detach`、`drift` 与 `FusionSurfaceBud` 相同，但描述的是当前这一帧，而不是目标：
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `height` | `number` | - | 当前向外的高度：从 0 增长即为展开；小于 0.5 px 不绘制。分裂后表示水滴在 `split.scale` 缩放之前的高度。 |
+| `fillet` | `number` | `12` | 凹圆角的最大半径。 |
+| `pinch` | `number` | `0` | 0..1，颈部收窄的程度；为 1 时收成一个点。 |
+| `split` | `FusionSurfaceSplit \| null` | `null` | 颈部断开后设置；此后忽略 `pinch`。 |
+
+`FusionSurfaceSplit` 记录断开那一帧凸起的样子（`center`、`width`、`height`、`detach`、`drift`），因此之后再移动凸起只会移动水滴；组件会把其中的 `detach` 限制在断裂点，快速拉动时残留不会更高。另有两个从断开时的 1 降到 0 的量：`remnant` 是残留缩回主体边的进度，`tail` 是水滴尖尾收圆的进度。可选的 `scale`（默认 `1`）让水滴以自身中心为基准在两个方向上同时缩小；分裂后的凸起关闭时，组件会把它降到 `0`。
+
+### 输出
+
+`FusionSurfaceGeometry`：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `d` | `string` | 若干顺时针闭合子路径，坐标保留 2 位小数：先是并入了所有相连凸起的主体（`includeBody: false` 时为各个相连形状），再是每滴水滴各一条。不会出现 `NaN` 或 `Infinity`：不可用的数值会退回默认值，或让该凸起不绘制。 |
+| `spans` | `FusionSurfaceSpan[]` | `{ id, edge, from, to }`：每个相连凸起（或其残留）与主体边的接合区间，单位与 `center` 相同。宿主自己的边框在这里断开。 |
+| `rects` | `FusionSurfaceRect[]` | `{ id, edge, x, y, width, height }`：每个凸起当前的外框（分裂后为水滴的外框），主体坐标。组件据此摆放 `bud` 插槽内容。 |
+
+### 辅助导出
+
+- `fusionSurfacePinch(detach, breakAt)`：组件使用的颈部曲线。在 `breakAt` 的前四分之一为 0，之后缓入（smoothstep 的平方）到 `breakAt` 处的 1：颈部还短时只是一道浅腰，临近断裂才迅速收拢。
+- `FUSION_SURFACE_BREAK_PINCH`：`0.985`，组件锁存分裂时的收窄程度；此时腰部只剩凸起半宽的 1.5%。
+- `springSteps(position, velocity, target, config, dt)`：组件所用的积分器，从共享弹簧模块转导出。`config` 为预设名或 `SpringConfig`，`dt` 以秒为单位，返回 `[position, velocity]`。
+
+## 概述
+
+- 渲染一个 `position: relative; isolation: isolate` 的根节点。剪影是铺满根节点的 SVG（`inset: 0`、`overflow: visible`、`z-index: -1`、`pointer-events: none`、`aria-hidden="true"`）：在插槽内容之下、根节点自身背景之上，与 `TxLiquid` 的分层约定相同。
+- 用 `ResizeObserver` 测量根节点（`offsetWidth` / `offsetHeight`），轮廓随之变化。没有 `center` 的凸起在尺寸变化时始终停在边的中点，不走弹簧。
+- 新加入 `buds` 的凸起从关闭状态开始展开；位置和尺寸直接从目标值开始，所以是在原地长出。从 `buds` 移除的凸起先收回，收回期间内容保持挂载且为 `inert`，剪影消失后才卸载。
+- `open`、`center`、`width`、`height`、`detach`、`drift` 都是各自带速度的弹簧；中途换目标会让运动转向，而不是从头开始。
+- 贴合：凸起的宽度被收窄到边的直线部分（边长减去两个圆角和两个凹角），中心被夹紧到两侧凹角都落在直线上的范围；放不下的凸起不绘制。凹角半径取当前高度下的 `min(fillet, height / 2)`，所以会随凸起一起长大。
+- 分裂：颈部按 `fusionSurfacePinch(detach, breakAt)` 收窄，收窄程度达到 `0.985`（约 `breakAt` 的 96%）时断开，并在那一帧触发 `break`；留在主体上的残留缩回，水滴的尖尾收圆，两者都用 `snappy` 弹簧，与 `transition` 无关。
+- 分裂会被锁存：调小 `detach` 只会把水滴移回来，不会重新连上。凸起完全关闭、残留缩回之后再打开，会重新长出一个新凸起。首次出现时就已越过断裂点的凸起，从第一帧起就是水滴，没有残留。
+- 水滴朝自身中心收拢。关闭分裂后的凸起（`open: false`，或从 `buds` 移除）时，水滴以自身中心为基准在两个方向上同时缩小，内容随之缩放并淡出；首次出现时就已越过断裂点的水滴，也从中心同样地长出来。相连的凸起仍按高度从边上展开、收回。
+- 凸起内容由帧循环摆放：每帧直接写内容层的 `transform`、`opacity`、`filter` 和 `--tx-fusion-surface-progress`，Vue 不会因为某一帧重新渲染，重新渲染也不会覆盖这些值。第一帧之前内容层是 `opacity: 0`，服务端渲染的内容不会脱离表面露出来。每个内容层带有 `data-bud="<id>"`。
+- 每个表面一个 `requestAnimationFrame` 循环：`d` 只在变化时写入，`dt` 按墙钟时间计算（从后台标签页切回时最多按 0.25 s 计），所有弹簧静止后循环休眠并触发 `settle`，直到下一次变化再唤醒。卸载时取消待执行的帧，并断开 `ResizeObserver`。
+- `prefers-reduced-motion: reduce`（实时跟随）下，所有弹簧一帧落到目标：凸起直接出现或消失，拉过断裂点时直接得到两个独立形状，仍会触发 `break`。
+
+## 技术实现
+
+- 源码：`packages/tuffex/packages/components/src/fusion-surface/src/`，包括 `TxFusionSurface.vue`（测量、插槽、属性）、`geometry.ts`（`fusionSurfacePath()`，不依赖 Vue 与 DOM）、`driver.ts`（每个表面的帧循环）、`shadow.ts`（`box-shadow` 转 `drop-shadow()`）和 `types.ts`。
+- 相连凸起参照 [uiarc.dev](https://uiarc.dev/) 的 Dock，只借鉴观察到的手法，没有使用其代码：一条由少数几个弹簧值逐帧重算的路径，凸起与主体相接处是二次贝塞尔凹角，外侧是二次贝塞尔凸角，凸起被夹在边的直线部分。
+- 颈部是本库自己的轮廓模型：
+  - 凸起每一侧是一条沿高度分 22 步采样的半宽轮廓；拉伸时，半宽以腰部为中心按升余弦凹下，腰部在凹角之上 `detach` 的 62% 处；
+  - 腰部以下的凹陷一直延伸到凹角，并在那里以零斜率归零，所以凹角与侧边之间没有折角；
+  - 腰部以上的凹陷很短（凸起高度的 0.45，最多 18px），形成水滴的凸肩；
+  - 浅的凹陷先是一道以整条侧边中点为中心的宽腰，随着加深收成上面的形态，收窄过半时完全到位。一开始就钉在颈部时，它的下半段太短，才凹进 2.9px 侧边就在凹角上方斜到 45°：是一道刻痕，不是腰；
+  - 相连、拉伸、收窄、断开都是同一个公式在不同参数下的结果，命令结构不变，任何参数变化都是连续的。
+- 默认的收窄曲线出于同样的原因缓入：`breakAt` 的前四分之一为 0，之后是 smoothstep 的平方。颈部还短时保持浅腰，之后迅速收成沙漏；侧边第一次斜到 45° 时凹陷已有 8.4px 深，`detach` 为 15。
+- 侧边用三次 Hermite 曲线段，切线取轮廓的精确导数。原型用的 Catmull-Rom 以弦作切线，在短颈根部最多偏约 50°，与之相接的凹角要么起折，要么被撑到约两倍半径。
+- 断开后，水滴的内端按采样点从尖尾逐点混合到圆角端。改为混合凹陷深度时，主体上的残留还是尖的，水滴内端却已被削成梯形。
+- 关闭中的水滴以自身中心为基准缩放（`split.scale`），内容层按同样比例、绕同一点缩放。像相连凸起那样只降低高度来关闭，宽度不变，会在半空留下一条整宽的横线。
+- 不用 goo 滤镜（`TxLiquid`、`TxFusion` 用的是它）：模糊加阈值的滤镜无法描边，阈值会让所有边缘发软，滤镜区域还必须覆盖整个运动范围；消息飘过整个会话区时，就是整个窗口，每帧重新栅格化。路径则始终锐利，能描边、能带 `drop-shadow()`，每帧只需重绘一条路径。
+- 弹簧使用 `liquid/src/spring.ts` 中共享的 `snappy` / `smooth` / `bouncy` 预设，由其中的 `springSteps()` 逐帧积分（半隐式欧拉）：
+  - 子步长为 1/240 s，与这些预设编译成 CSS `linear()` 曲线时的步长相同；
+  - 子步长为 1/60 s 时，JS 驱动的弹簧与同一预设的 CSS 曲线最多偏差 10.7%（snappy），1/240 s 时在 60 fps 下偏差 0.2%；
+  - 帧再长也只是多走几个子步，步长不会变大。
+- **实测覆盖:**
+  - `fusion-surface/__tests__/geometry.test.ts` 覆盖无凸起时的圆角矩形（与 uiarc Dock 静止态逐条命令一致）、四条边各长出一个凸起、凹角半径限制、夹紧与收窄、同一条边上的两个凸起、颈部单调收窄、颈部起步是腰而不是刻痕、`detach` 每变化半个像素的连续性、断开后的两个闭合子路径、断开瞬间以及残留与尖尾回缩时无跳变、稳定后的水滴、以中心为基准缩放的水滴、`includeBody: false`、异常输入不产生 `NaN` / `Infinity`，以及缓入的 `fusionSurfacePinch`；
+  - `fusion-surface.test.ts` 覆盖对辅助技术隐藏的剪影、长出与静止、无变化时不唤醒、减少动态效果时一帧到位、卸载时取消帧、`break` 只触发一次与锁存、分裂的凸起关闭后重新长出、水滴连同内容朝中心收拢并从中心重新长出、`inert` 内容、由帧循环摆放和淡入的内容层、循环休眠时才挂载的内容层、被移除的凸起先收回、重复的 id 只渲染一次，以及填充、描边、阴影的映射；
+  - `fusion-surface-style.test.ts` 锁定编译后的样式：没有 CSS 过渡或动画、hover 不过渡颜色、颜色只来自带回退值的 token、默认阴影来自 elevation 刻度、内容层在摆放前隐藏；
+  - `liquid/__tests__/spring.test.ts` 验证 `springSteps` 与编译出的曲线误差在 1% 以内、经得起 2 s 的长帧、结果与时间切分方式无关、换目标时保留速度，以及无类型调用方传入的任何配置都不会让它返回 `NaN`。
+
+<TuffDocSourceLink />
+
+## 使用场景
+
+- 工具栏或 Dock：工具从栏上直接长出选项托盘、子菜单或提示。
+- 面板从边上长出气泡或徽标，再让它脱离。
+- 发送消息：输入框把消息拉断，让它飘进会话。宿主需要自己绘制时，用 `fusionSurfacePath()` 得到同样的形状。
+
+## 相关组件
+
+| 组件 | 用途 |
+|------|------|
+| [Fusion 交融](/docs/dev/components/fusion) | 两个插槽形状通过 goo 滤镜交融，由 hover、点击或手动控制触发 |
+| [Liquid 液态流体](/docs/dev/components/liquid) | 自由移动的块像水滴一样桥接、融合，基于 goo 滤镜 |
+| [BorderBeam 流光边框](/docs/dev/components/border-beam) | 沿元素边框游走或呼吸的光束 |

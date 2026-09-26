@@ -20,10 +20,15 @@ import path from 'node:path'
 import { ChatAnthropic } from '@langchain/anthropic'
 import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { toLangChainAnthropicThinkingFields } from '@talex-touch/utils/intelligence/reasoning-effort'
+import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { extractReasoningContent, extractTextContent } from './langchain-openai-compatible-provider'
 
 const DEFAULT_BASE_URL = 'https://api.anthropic.com/v1'
+
+/** Output ceiling when the caller names none; with thinking on it is the answer's share. */
+const DEFAULT_MAX_TOKENS = 1024
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
@@ -38,16 +43,24 @@ function numberFrom(...candidates: unknown[]): number {
   return 0
 }
 
+/**
+ * Anthropic takes one system prompt, and LangChain's adapter throws on any system message that is
+ * not the first ("System messages are only permitted as the first passed message"). Callers stack
+ * several legitimately — a prompt-template binding ahead of the caller's own system part, a plugin's
+ * several — so they are folded, in order, into one leading prompt: what the pi CLI does with the
+ * same messages. (Main already folds Home's skills/rules into a Home thread's opening note.)
+ */
 function toLangChainMessages(messages: IntelligenceMessage[]): BaseMessage[] {
-  return messages.map((message) => {
-    if (message.role === 'system') {
-      return new SystemMessage(message.content)
-    }
-    if (message.role === 'assistant') {
-      return new AIMessage(message.content)
-    }
-    return new HumanMessage(message.content)
-  })
+  const system = messages.filter((message) => message.role === 'system')
+  const turns = messages
+    .filter((message) => message.role !== 'system')
+    .map((message) =>
+      message.role === 'assistant'
+        ? new AIMessage(message.content)
+        : new HumanMessage(message.content)
+    )
+  if (system.length === 0) return turns
+  return [new SystemMessage(system.map((message) => message.content).join('\n\n')), ...turns]
 }
 
 function normalizeAnthropicBaseUrl(baseUrl: string): string {
@@ -164,18 +177,30 @@ export class AnthropicProvider extends IntelligenceProvider {
 
     const rawBaseUrl = this.config.baseUrl || DEFAULT_BASE_URL
     const baseUrl = normalizeAnthropicBaseUrl(rawBaseUrl)
+    // Main's plan for this provider, translated and nothing more. Without one the model is built
+    // exactly as before — including LangChain's default `thinking: { type: 'disabled' }`.
+    const thinking = toLangChainAnthropicThinkingFields(readReasoningPlan(params.options), {
+      answerTokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
+      streaming: params.streaming === true
+    })
 
     const modelConfig = {
       anthropicApiKey: this.config.apiKey,
       model: params.model,
-      temperature: params.temperature ?? 0.7,
-      maxTokens: params.maxTokens ?? 1024,
+      temperature: thinking?.temperature ?? params.temperature ?? 0.7,
+      maxTokens: thinking?.maxTokens ?? params.maxTokens ?? DEFAULT_MAX_TOKENS,
       streaming: params.streaming,
       timeout: params.options.timeout ?? this.config.timeout ?? 30_000,
       anthropicApiUrl: baseUrl,
       clientOptions: {
         baseURL: baseUrl
-      }
+      },
+      ...(thinking
+        ? {
+            thinking: thinking.thinking,
+            ...(thinking.invocationKwargs ? { invocationKwargs: thinking.invocationKwargs } : {})
+          }
+        : {})
     }
 
     return new ChatAnthropic(modelConfig as ConstructorParameters<typeof ChatAnthropic>[0])

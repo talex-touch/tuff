@@ -94,4 +94,19 @@ describe('fineTuneCard motion contract', () => {
     expect(card).toContain('@keyframes tx-bui-shimmer-text')
     expect(menu).toContain('@keyframes tx-bui-pop-in')
   })
+
+  it('restyles the layout thumb\'s paint but leaves its motion to TxFlatRadio', () => {
+    // TxFlatRadio's jelly engine writes the thumb's transform and width every
+    // frame. The card used to restate a transition on both, which re-eased each
+    // of those frames, and to switch it off under reduced motion, which also
+    // took away the thumb's fade.
+    const css = compileStyles(ANIMATED_COMPONENTS[0][1])
+    const thumbRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter(([, selector = '']) => selector.includes('.tx-flat-radio__indicator'))
+      .map(([, , body = '']) => body)
+
+    expect(thumbRules.some(body => /background:/.test(body) && /box-shadow:/.test(body))).toBe(true)
+    for (const body of thumbRules)
+      expect(body).not.toMatch(/transition/)
+  })
 })

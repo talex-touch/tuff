@@ -583,6 +583,9 @@ describe('transport domain sdk mappings', () => {
     expect(CoreBoxEvents.metaOverlay.flowTransfer.toEventName()).toBe(
       'core-box:meta-overlay:flow-transfer',
     )
+    expect(CoreBoxEvents.metaOverlay.panelState.toEventName()).toBe(
+      'core-box:meta-overlay:panel-state',
+    )
   })
 
   it('storage sdk maps app storage operations to typed storage events', async () => {
@@ -1060,6 +1063,25 @@ describe('transport domain sdk mappings', () => {
 
     expect(transport.send).toHaveBeenCalledWith(
       AppEvents.system.openPromptsFolder,
+    )
+  })
+
+  it('app sdk asks main to reveal only when told to, leaving a plain showInFolder as it was', async () => {
+    const transport = createTransportMock()
+    const sdk = createAppSdk(transport as any)
+
+    await sdk.showInFolder('/Users/me')
+    await sdk.showInFolder('/Applications/Safari.app', { reveal: true })
+
+    expect(transport.send).toHaveBeenNthCalledWith(
+      1,
+      AppEvents.system.showInFolder,
+      { path: '/Users/me' },
+    )
+    expect(transport.send).toHaveBeenNthCalledWith(
+      2,
+      AppEvents.system.showInFolder,
+      { path: '/Applications/Safari.app', reveal: true },
     )
   })
 

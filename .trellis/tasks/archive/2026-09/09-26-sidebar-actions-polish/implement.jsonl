@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend hard rules and pre-development checklist"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Row actions, i18n catalogs, semantic controls, skeleton/row geometry"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Timers for the 3s confirm window must be cleared on unmount / state change"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Typed omni-panel payload if a preselected agent is added"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Renderer -> omni panel payload change end to end"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "Shared working tree: ShellConversationList.vue and lang JSON already carry other tasks' uncommitted edits"}

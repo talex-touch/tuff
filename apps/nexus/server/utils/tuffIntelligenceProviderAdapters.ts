@@ -3,6 +3,7 @@ import type {
   IntelligenceMessage,
   IntelligenceUsageInfo,
 } from "@talex-touch/tuff-intelligence/light";
+import type { ReasoningEffortPlan } from "@talex-touch/utils/intelligence/reasoning-effort";
 import type { IntelligenceProviderRecord } from "./intelligenceStore";
 import {
   invokeAnthropicProviderAdapter,
@@ -45,6 +46,12 @@ export interface IntelligenceProviderAdapterPayload {
    */
   maxTokens?: number;
   signal?: AbortSignal;
+  /**
+   * The reasoning plan for this context's upstream, made by the service from the shared table.
+   * An adapter translates it (`toLangChain*` in `@talex-touch/utils/intelligence/reasoning-effort`)
+   * and never re-decides; absent, it builds exactly the request it always did.
+   */
+  reasoning?: ReasoningEffortPlan;
 }
 
 export type IntelligenceProviderAdapter = (

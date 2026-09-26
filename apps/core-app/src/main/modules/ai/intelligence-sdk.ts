@@ -44,6 +44,7 @@ import type {
   IntelligenceProviderManagerAdapter,
   IntelligenceRAGQueryPayload,
   IntelligenceRAGQueryResult,
+  IntelligenceReasoningEffortDecision,
   IntelligenceRerankPayload,
   IntelligenceRerankResult,
   IntelligenceRewritePayload,
@@ -89,6 +90,14 @@ import { toNormalizedIntelligenceError } from './intelligence-error-normalizer'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { strategyManager } from './intelligence-strategy-manager'
 import { fetchProviderModels } from './provider-models'
+import {
+  planProviderReasoning,
+  reasoningAuditMetadata,
+  sanitizeReasoningRequest,
+  settleReasoningDecision,
+  withReasoningDecision,
+  withReasoningPlan
+} from './reasoning-effort-runtime'
 import { IntelligenceProvider } from './runtime/base-provider'
 
 const intelligenceLog = createLogger('Intelligence')
@@ -765,22 +774,33 @@ export class TuffIntelligenceSDK {
           : {})
       }
       this.applyModelPreference(runtimeOptions, strategyResult.selectedProvider, capabilityId)
+      // Only a chat takes an effort; every other capability type is planned nothing, so a
+      // `reasoningEffort` riding a translate or OCR request never reaches a provider.
+      const selectedReasoningPlan =
+        capability.type === 'chat'
+          ? planProviderReasoning(
+              runtimeOptions,
+              strategyResult.selectedProvider,
+              runtimeOptions.modelPreference?.[0] || strategyResult.selectedProvider.defaultModel
+            )
+          : undefined
 
       const startTime = Date.now()
 
       try {
         throwIfIntelligenceCancelled(signal)
-        const result = await awaitIntelligenceBoundary(
+        const providerResult = await awaitIntelligenceBoundary(
           this.invokeByCapabilityType<T>(
             provider,
             capability.type,
             payload,
-            runtimeOptions,
+            withReasoningPlan(runtimeOptions, selectedReasoningPlan),
             promptTemplate,
             promptVariables
           ),
           signal
         )
+        const result = withReasoningDecision(providerResult, selectedReasoningPlan)
         // Commit point: once this gate passes, cache/audit/result complete as one logical success.
         throwIfIntelligenceCancelled(signal)
 
@@ -795,7 +815,10 @@ export class TuffIntelligenceSDK {
             capabilityId,
             caller: runtimeOptions.metadata?.caller,
             userId: runtimeOptions.metadata?.userId,
-            metadata: runtimeOptions.metadata,
+            metadata: {
+              ...runtimeOptions.metadata,
+              ...reasoningAuditMetadata(result.reasoningEffort)
+            },
             promptTemplate,
             promptVariables
           })
@@ -840,7 +863,10 @@ export class TuffIntelligenceSDK {
               capabilityId,
               caller: runtimeOptions.metadata?.caller,
               userId: runtimeOptions.metadata?.userId,
-              metadata: runtimeOptions.metadata,
+              metadata: {
+                ...runtimeOptions.metadata,
+                ...reasoningAuditMetadata(fallbackResult.reasoningEffort)
+              },
               promptTemplate,
               promptVariables
             })
@@ -873,7 +899,10 @@ export class TuffIntelligenceSDK {
             providerId: strategyResult.selectedProvider.id,
             caller: runtimeOptions.metadata?.caller,
             userId: runtimeOptions.metadata?.userId,
-            metadata: runtimeOptions.metadata,
+            metadata: {
+              ...runtimeOptions.metadata,
+              ...reasoningAuditMetadata(selectedReasoningPlan?.decision)
+            },
             promptTemplate,
             promptVariables
           })
@@ -960,6 +989,12 @@ export class TuffIntelligenceSDK {
         startedAt: number
       }
       let terminalAuditCommitted = false
+      /**
+       * The reasoning decision of the attempt the audit will describe. Beside `terminalAttempt`
+       * rather than in it: that record is rebuilt on every chunk, and this one changes at most once,
+       * when a routed backend reports its own decision.
+       */
+      let terminalReasoning: IntelligenceReasoningEffortDecision | undefined
       const beginTerminalAttempt = (providerConfig: IntelligenceProviderConfig): void => {
         terminalAttempt = {
           provider: providerConfig.id,
@@ -967,6 +1002,7 @@ export class TuffIntelligenceSDK {
           usage: emptyUsage,
           startedAt: Date.now()
         }
+        terminalReasoning = undefined
       }
       const writeStreamSuccessAudit = async (result: unknown): Promise<void> => {
         if (outerGoverned || terminalAuditCommitted) return
@@ -985,7 +1021,7 @@ export class TuffIntelligenceSDK {
             capabilityId,
             caller: runtimeOptions.metadata?.caller,
             userId: runtimeOptions.metadata?.userId,
-            metadata: runtimeOptions.metadata,
+            metadata: { ...runtimeOptions.metadata, ...reasoningAuditMetadata(terminalReasoning) },
             promptTemplate,
             promptVariables
           })
@@ -1008,7 +1044,7 @@ export class TuffIntelligenceSDK {
             latency: terminalAttempt.latency ?? Date.now() - terminalAttempt.startedAt,
             caller: runtimeOptions.metadata?.caller,
             userId: runtimeOptions.metadata?.userId,
-            metadata: runtimeOptions.metadata,
+            metadata: { ...runtimeOptions.metadata, ...reasoningAuditMetadata(terminalReasoning) },
             promptTemplate,
             promptVariables
           })
@@ -1048,6 +1084,15 @@ export class TuffIntelligenceSDK {
         const provisionalTraceId = intelligenceAuditLogger.generateTraceId()
         const configuredModel =
           providerRuntimeOptions.modelPreference?.[0] || providerConfig.defaultModel
+        // Planned for this provider, not once per request: a fallback provider may take another
+        // wire or none, and it has to be sent its own plan, not the one the first provider failed on.
+        const reasoningPlan = planProviderReasoning(
+          providerRuntimeOptions,
+          providerConfig,
+          configuredModel
+        )
+        let finalReasoning = reasoningPlan?.decision
+        terminalReasoning = finalReasoning
         let finalTraceId = provisionalTraceId
         let finalProvider = providerConfig.id
         let finalModel = configuredModel
@@ -1076,11 +1121,15 @@ export class TuffIntelligenceSDK {
           traceId: provisionalTraceId,
           provider: providerConfig.id,
           model: configuredModel,
-          metadata: providerRuntimeOptions.metadata
+          metadata: providerRuntimeOptions.metadata,
+          ...(finalReasoning ? { reasoningEffort: finalReasoning } : {})
         }
 
         throwIfIntelligenceCancelled(signal)
-        const providerStream = provider.chatStream(nextPayload, providerRuntimeOptions)
+        const providerStream = provider.chatStream(
+          nextPayload,
+          withReasoningPlan(providerRuntimeOptions, reasoningPlan)
+        )
         let providerStreamDone = false
         try {
           while (true) {
@@ -1097,6 +1146,10 @@ export class TuffIntelligenceSDK {
             if (chunkTraceId) finalTraceId = chunkTraceId
             if (chunkProvider) finalProvider = chunkProvider
             if (chunkModel) finalModel = chunkModel
+            if (chunk.reasoningEffort) {
+              finalReasoning = settleReasoningDecision(reasoningPlan, chunk.reasoningEffort)
+              terminalReasoning = finalReasoning
+            }
             if (
               typeof chunk.latency === 'number' &&
               Number.isFinite(chunk.latency) &&
@@ -1178,7 +1231,10 @@ export class TuffIntelligenceSDK {
           model: finalModel,
           metadata: {
             latency
-          }
+          },
+          // Carried again on `end`: a fallback provider's `start` is swallowed below, so the
+          // decision the turn actually ran under is only reliably here.
+          ...(finalReasoning ? { reasoningEffort: finalReasoning } : {})
         }
       }
 
@@ -1310,7 +1366,9 @@ export class TuffIntelligenceSDK {
     promptTemplate?: string
     promptVariables?: Record<string, unknown>
   } {
-    const runtimeOptions: HostIntelligenceInvokeOptions = { ...options }
+    // Caller options stop being trusted here: a plan only main may make is stripped, and an
+    // unrecognised reasoning level is dropped before routing or the cache key reads either.
+    const runtimeOptions: HostIntelligenceInvokeOptions = sanitizeReasoningRequest({ ...options })
     runtimeOptions.metadata = {
       ...(runtimeOptions.metadata ?? {}),
       capabilityId
@@ -2204,13 +2262,22 @@ export class TuffIntelligenceSDK {
             : {})
         }
         this.applyModelPreference(fallbackRuntimeOptions, fallbackConfig, capabilityId)
+        // This provider's own plan: the one the failed provider got may name another wire.
+        const fallbackReasoningPlan =
+          capabilityType === 'chat'
+            ? planProviderReasoning(
+                fallbackRuntimeOptions,
+                fallbackConfig,
+                fallbackRuntimeOptions.modelPreference?.[0] || fallbackConfig.defaultModel
+              )
+            : undefined
         throwIfIntelligenceCancelled(signal)
         const result = await awaitIntelligenceBoundary(
           this.invokeFallbackByCapabilityType<T>(
             fallbackProvider,
             capabilityType,
             payload,
-            fallbackRuntimeOptions,
+            withReasoningPlan(fallbackRuntimeOptions, fallbackReasoningPlan),
             promptTemplate,
             promptVariables
           ),
@@ -2220,7 +2287,7 @@ export class TuffIntelligenceSDK {
         if (!result) continue
 
         logInfo(`Fallback successful with provider ${fallbackConfig.id}`)
-        return result
+        return withReasoningDecision(result, fallbackReasoningPlan)
       } catch (fallbackError) {
         if (signal?.aborted) {
           throw new IntelligenceOperationCancelledError()
@@ -2369,7 +2436,10 @@ export class TuffIntelligenceSDK {
       throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
     }
 
-    const runtimeOptions: IntelligenceInvokeOptions = { ...options, stream: true }
+    const runtimeOptions: IntelligenceInvokeOptions = sanitizeReasoningRequest({
+      ...options,
+      stream: true
+    })
     const capabilityRouting = this.config.capabilities?.[capabilityId]
     const configuredProviders =
       capabilityRouting?.providers
@@ -2426,7 +2496,17 @@ export class TuffIntelligenceSDK {
       throw new Error(`[Intelligence] Provider ${strategyResult.selectedProvider.id} not found`)
     }
 
-    yield* provider.chatStream(payload as IntelligenceChatPayload, runtimeOptions)
+    yield* provider.chatStream(
+      payload as IntelligenceChatPayload,
+      withReasoningPlan(
+        runtimeOptions,
+        planProviderReasoning(
+          runtimeOptions,
+          strategyResult.selectedProvider,
+          runtimeOptions.modelPreference?.[0] || strategyResult.selectedProvider.defaultModel
+        )
+      )
+    )
   }
 
   private getCacheKey(

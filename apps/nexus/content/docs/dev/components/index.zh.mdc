@@ -108,7 +108,7 @@ code: |
 |------|------|--------|----------|
 | [基础套件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 92 | `@talex-touch/tuffex/base` |
 | [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 27 | `@talex-touch/tuffex/pro` |
-| [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 31 | `@talex-touch/tuffex/ai` |
+| [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 32 | `@talex-touch/tuffex/ai` |
 | [数据套件](./data-suite.zh.mdc) | 图表 / 可视化 | 10 | `@talex-touch/tuffex/pro`（可视化 + 图表）+ `@talex-touch/tuffex/charts`（图表族入口） |
 | [流程套件](./flow-suite.zh.mdc) | 流程编排 | 1 | `@talex-touch/tuffex/ai` |
 
@@ -252,6 +252,7 @@ code: |
 - [GradientBorder 渐变边框](./gradient-border.zh.mdc)
 - [OutlineBorder 描边容器](./outline-border.zh.mdc)
 - [BorderBeam 流光边框](./border-beam.zh.mdc)
+- [PrismGlow 棱镜光](./prism-glow.zh.mdc)
 - [CornerOverlay 角标容器](./corner-overlay.zh.mdc)
 - [GradualBlur 渐变模糊](./gradual-blur.zh.mdc)
 - [EdgeFadeMask 边缘渐隐遮罩](./edge-fade-mask.zh.mdc)
@@ -264,6 +265,7 @@ code: |
 - [Transition 动效](./transition.zh.mdc)
 - [Stagger 依次进入](./stagger.zh.mdc)
 - [Fusion 交融](./fusion.zh.mdc)
+- [FusionSurface 融合表面](./fusion-surface.zh.mdc)
 - [Liquid 液态流体](./liquid.zh.mdc)
 - [FlipOverlay 翻转遮罩](./flip-overlay.zh.mdc)
 
@@ -288,6 +290,7 @@ AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifulu
 - [ModeChip 模式芯片](./mode-chip.zh.mdc)
 - [MessageActions 消息操作条](./message-actions.zh.mdc)
 - [SuggestionChips 建议胶囊](./suggestion-chips.zh.mdc)
+- [ChoiceCard 选项卡片](./choice-card.zh.mdc)
 - [TypingIndicator 打字中](./typing-indicator.zh.mdc)
 - [ConversationStream 会话流](./conversation-stream.zh.mdc)
 

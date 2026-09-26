@@ -4,6 +4,7 @@ import type { AppDestinationId } from '../../../shared/app-destinations'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { getAppDestination, isAppDestinationId } from '../../../shared/app-destinations'
+import { conversationRoute } from '../../../shared/app-surface-routes'
 
 /**
  * The runtime surface the destination navigation service needs.
@@ -26,11 +27,35 @@ export type AppDestinationUnavailableReason =
   | 'window-unavailable'
   | 'renderer-unavailable'
   | 'destination-unavailable'
+  | 'conversation-unavailable'
 
 export interface AppDestinationOpenResult {
   readonly status: AppDestinationOpenStatus
   readonly destinationId: AppDestinationId
   readonly reason?: AppDestinationUnavailableReason
+}
+
+export interface AppConversationOpenResult {
+  readonly status: AppDestinationOpenStatus
+  readonly conversationId: string
+  readonly reason?: AppDestinationUnavailableReason
+}
+
+/**
+ * The only shape a conversation id may have to become part of a route.
+ *
+ * Conversation ids are UUIDs today, but the boundary is not "is it a UUID": it is that the id
+ * cannot carry a separator, a percent escape, a query or a fragment, so no caller — a crafted
+ * search result, a plugin, a future id scheme — can turn this into navigation anywhere else.
+ * Loose enough to survive an id-scheme change, strict enough that the route stays inside `/home/c/`.
+ */
+const CONVERSATION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/
+
+/** `null` when `value` may not be used in a route. */
+export function normalizeConversationId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return CONVERSATION_ID_PATTERN.test(trimmed) ? trimmed : null
 }
 
 /**
@@ -77,33 +102,67 @@ export class AppDestinationNavigationService {
       return { status: 'unavailable', destinationId, reason: 'destination-unavailable' }
     }
 
+    return { destinationId, ...this.reveal(getAppDestination(destinationId).route, options) }
+  }
+
+  /**
+   * Reveal the window and open one stored conversation.
+   *
+   * A conversation is the one destination a catalog row cannot name — the catalog is static, and
+   * these come out of the database one query at a time — so the id is validated here and turned
+   * into a `/home/c/:id` path by the shared surface table instead of being handed in as a route.
+   */
+  openConversation(
+    conversationId: string,
+    options?: AppDestinationOpenOptions
+  ): AppConversationOpenResult {
+    const id = normalizeConversationId(conversationId)
+    if (!id) {
+      return { status: 'unavailable', conversationId, reason: 'conversation-unavailable' }
+    }
+
+    return { conversationId: id, ...this.reveal(conversationRoute(id), options) }
+  }
+
+  /**
+   * The one reveal plus route delivery sequence, shared by both entry points.
+   *
+   * `route === null` is the reveal-only destination: the native window comes forward and whatever
+   * the renderer is showing stays where it is.
+   */
+  private reveal(
+    route: string | null,
+    options?: AppDestinationOpenOptions
+  ): {
+    status: AppDestinationOpenStatus
+    reason?: AppDestinationUnavailableReason
+  } {
     const window = this.resolveWindow()
     if (!window) {
       this.resetForUnavailableWindow()
-      return { status: 'unavailable', destinationId, reason: 'window-unavailable' }
+      return { status: 'unavailable', reason: 'window-unavailable' }
     }
 
     const webContents = window.webContents
     if (!webContents || webContents.isDestroyed()) {
       this.resetForUnavailableRenderer()
-      return { status: 'unavailable', destinationId, reason: 'renderer-unavailable' }
+      return { status: 'unavailable', reason: 'renderer-unavailable' }
     }
 
     this.observeRenderer(window, webContents)
     const beforeEffect = options?.beforeEffect
     if (!this.revealWindow(window, beforeEffect)) {
-      return { status: 'unavailable', destinationId, reason: 'window-unavailable' }
+      return { status: 'unavailable', reason: 'window-unavailable' }
     }
 
-    const route = getAppDestination(destinationId).route
     if (route === null) {
-      return { status: 'opened', destinationId }
+      return { status: 'opened' }
     }
 
     const canRetryFailedDelivery = !this.ready && this.failedDeliveryWebContents === webContents
     if (!this.ready && !canRetryFailedDelivery) {
       this.pendingRoute = route
-      return { status: 'queued', destinationId }
+      return { status: 'queued' }
     }
 
     beforeEffect?.()
@@ -117,25 +176,25 @@ export class AppDestinationNavigationService {
       const currentWindow = this.resolveWindow()
       if (!currentWindow) {
         this.resetForUnavailableWindow()
-        return { status: 'unavailable', destinationId, reason: 'window-unavailable' }
+        return { status: 'unavailable', reason: 'window-unavailable' }
       }
       const currentWebContents = currentWindow.webContents
       if (!currentWebContents || currentWebContents.isDestroyed()) {
         this.resetForUnavailableRenderer()
-        return { status: 'unavailable', destinationId, reason: 'renderer-unavailable' }
+        return { status: 'unavailable', reason: 'renderer-unavailable' }
       }
       if (currentWindow !== window || currentWebContents !== webContents) {
         this.observeRenderer(currentWindow, currentWebContents)
       } else {
         this.failedDeliveryWebContents = webContents
       }
-      return { status: 'queued', destinationId }
+      return { status: 'queued' }
     }
 
     this.ready = true
     this.pendingRoute = null
     this.failedDeliveryWebContents = null
-    return { status: 'opened', destinationId }
+    return { status: 'opened' }
   }
 
   markPrimaryRendererReady(senderId: number): void {

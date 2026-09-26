@@ -30,6 +30,31 @@ const mainStorageMocks = vi.hoisted(() => ({
   saveConfig: vi.fn()
 }))
 
+const noticeMocks = vi.hoisted(() => {
+  // The one settings label this fake locale carries. Any other key without params comes back as
+  // itself, which is what the real `t` returns for a key it cannot find.
+  const labels: Record<string, string> = {
+    'settingTools.shortcutLabels.screenshot_tool_start': 'Take a screenshot'
+  }
+  return {
+    showInternalSystemNotification: vi.fn(),
+    // Key plus params, so an assertion reads which copy was chosen and what was put into it.
+    t: vi.fn((key: string, params?: Record<string, string | number>) =>
+      params ? `${key} ${JSON.stringify(params)}` : (labels[key] ?? key)
+    )
+  }
+})
+
+/**
+ * What `onInit` wires onto the transport, keyed by the event object itself: a lookup with the
+ * shared event finds a handler only if the module registered that same event, not a copy that
+ * happens to carry the same name.
+ */
+const transportMocks = vi.hoisted(() => ({
+  handlers: new Map<unknown, (payload: unknown) => unknown>(),
+  broadcast: vi.fn()
+}))
+
 const eventBusMocks = vi.hoisted(() => {
   const handlers = new Map<string, Set<(event: unknown) => void>>()
   const on = (event: string, handler: (payload: unknown) => void) => {
@@ -100,13 +125,29 @@ vi.mock('./permission', () => ({
   getPermissionModule: () => null
 }))
 
+vi.mock('./notification', () => ({
+  notificationModule: {
+    showInternalSystemNotification: noticeMocks.showInternalSystemNotification
+  }
+}))
+
+vi.mock('../utils/i18n-helper', () => ({
+  t: noticeMocks.t
+}))
+
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: () => ({
-    on: vi.fn(() => () => {})
+    on: vi.fn((event: unknown, handler: (payload: unknown) => unknown) => {
+      transportMocks.handlers.set(event, handler)
+      return () => {}
+    }),
+    broadcast: transportMocks.broadcast
   })
 }))
 
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
+import { acceleratorsMatch } from '../../shared/accelerator-label'
+import { shortconChangedEvent, shortconGetBindingEvent } from '../../shared/events/shortcut-binding'
 import { ShortcutModule } from './global-shortcon'
 
 type MutableShortcut = Shortcut & {
@@ -182,7 +223,7 @@ type ShortcutModuleHarness = Omit<
   registerMainTrigger: ShortcutModule['registerMainTrigger']
   unregisterMainTrigger: ShortcutModule['unregisterMainTrigger']
   registerBeforeQuitTeardownListener?: () => void
-  shortcutStatusMap?: Map<string, { state?: string; reason?: string }>
+  shortcutStatusMap?: Map<string, { state?: string; reason?: string; conflictWith?: string[] }>
   reregisterAllShortcuts?: () => void
   onDestroy: ShortcutModule['onDestroy']
 }
@@ -200,6 +241,10 @@ afterEach(() => {
   electronMocks.getAllWindows.mockClear()
   mainStorageMocks.getConfig.mockReset()
   mainStorageMocks.saveConfig.mockReset()
+  noticeMocks.showInternalSystemNotification.mockClear()
+  noticeMocks.t.mockClear()
+  transportMocks.handlers.clear()
+  transportMocks.broadcast.mockClear()
 })
 
 describe('ShortcutModule survives a malformed shortcut record', () => {
@@ -615,5 +660,623 @@ describe('ShortcutModule app shortcut rebind', () => {
     expect(previousCallback).not.toHaveBeenCalled()
 
     module.onDestroy()
+  })
+})
+
+describe('ShortcutModule CoreBox default, and CoreBox left without a key', () => {
+  /**
+   * CoreBox moved from ⌘E to ⌥Space, which Raycast and Alfred ship on. The contracts pinned here:
+   * a binding still on the old default moves and one the user chose stays. When ⌥Space cannot be
+   * had -- the OS refuses it, or a built-in shortcut stored before CoreBox is set to it -- no other
+   * key stands in: CoreBox has no key, the stored value stays ⌥Space so the next pass and launch try
+   * it again, and the user is told once per launch why. A key the user chose gets no notice.
+   */
+  const COREBOX_ID = 'core.box.toggle'
+  const DEFAULT_ACCELERATOR = 'Alt+Space'
+  const COREBOX_OPTIONS = {
+    enabled: true,
+    owner: 'module.corebox',
+    legacyDefaultAccelerators: ['CommandOrControl+E'],
+    unavailableNotice: {
+      titleKey: 'notifications.coreBoxShortcutUnavailableTitle',
+      refusedBodyKey: 'notifications.coreBoxShortcutRefusedBody',
+      conflictBodyKey: 'notifications.coreBoxShortcutConflictBody',
+      conflictNamedBodyKey: 'notifications.coreBoxShortcutConflictNamedBody'
+    }
+  }
+
+  /** The body of every notice shown, in order: which copy was chosen, and what went into it. */
+  function shownBodies(): string[] {
+    return noticeMocks.showInternalSystemNotification.mock.calls.map(([request]) =>
+      String((request as { message?: string }).message)
+    )
+  }
+
+  /** Every accelerator handed to `globalShortcut.register` since the last clear, in order. */
+  function registeredAccelerators(): string[] {
+    return electronMocks.register.mock.calls.map(([accelerator]) => accelerator)
+  }
+
+  const liveModules: Array<{ onDestroy: () => unknown }> = []
+
+  /**
+   * A fake `globalShortcut.register` that refuses the listed accelerators, as Windows does for a key
+   * another app holds (macOS registers it anyway), and -- like Electron -- refuses an accelerator
+   * this process already holds until `unregisterAll`. Returns the callbacks it accepted, keyed by
+   * accelerator.
+   */
+  function installRegisterMock(refused: readonly string[]): Map<string, () => void> {
+    const dispatch = new Map<string, () => void>()
+    electronMocks.register.mockImplementation((accelerator: string, callback: () => void) => {
+      if (refused.includes(accelerator) || dispatch.has(accelerator)) return false
+      dispatch.set(accelerator, callback)
+      return true
+    })
+    electronMocks.unregisterAll.mockImplementation(() => {
+      dispatch.clear()
+    })
+    return dispatch
+  }
+
+  function createTrackedModule() {
+    const created = createModule()
+    liveModules.push(created.module)
+    return created
+  }
+
+  function storeSystemBinding(
+    storage: InMemoryShortcutStorage,
+    id: string,
+    accelerator: string
+  ): void {
+    const timestamp = Date.now()
+    storage.addShortcut({
+      id,
+      accelerator,
+      type: ShortcutType.MAIN,
+      // Rebinding in settings keeps the system author, so a user's key is told apart by its value.
+      meta: {
+        creationTime: timestamp,
+        modificationTime: timestamp,
+        author: 'system',
+        enabled: true
+      }
+    })
+  }
+
+  afterEach(() => {
+    for (const module of liveModules.splice(0)) module.onDestroy()
+    electronMocks.register.mockImplementation(() => true)
+    electronMocks.unregisterAll.mockImplementation(() => undefined)
+    noticeMocks.showInternalSystemNotification.mockReset()
+  })
+
+  it('moves a system binding still on the old ⌘E default to ⌥Space', () => {
+    const { module, storage } = createTrackedModule()
+    storeSystemBinding(storage, COREBOX_ID, 'CommandOrControl+E')
+
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+
+    expect(storage.getShortcutById(COREBOX_ID)?.accelerator).toBe(DEFAULT_ACCELERATOR)
+    expect(electronMocks.register).toHaveBeenCalledWith(DEFAULT_ACCELERATOR, expect.any(Function))
+  })
+
+  it('leaves a key the user chose where it is', () => {
+    const { module, storage } = createTrackedModule()
+    storeSystemBinding(storage, COREBOX_ID, 'Command+K')
+
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+
+    expect(storage.getShortcutById(COREBOX_ID)?.accelerator).toBe('Command+K')
+    expect(module.getEffectiveAccelerator(COREBOX_ID)).toBe('Command+K')
+  })
+
+  it('reads the old default through the normaliser, and only the old default', () => {
+    // Other spellings of the stored `CommandOrControl+E` are still the default nobody chose.
+    for (const spelling of ['CmdOrCtrl+E', 'commandorcontrol+e']) {
+      const { module, storage } = createTrackedModule()
+      storeSystemBinding(storage, COREBOX_ID, spelling)
+
+      module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+
+      expect(storage.getShortcutById(COREBOX_ID)?.accelerator).toBe(DEFAULT_ACCELERATOR)
+      module.onDestroy()
+    }
+
+    // ⌘E on a Mac too, but only the recorder writes `Command+E`: the user picked it.
+    const { module, storage } = createTrackedModule()
+    storeSystemBinding(storage, COREBOX_ID, 'Command+E')
+
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+
+    expect(storage.getShortcutById(COREBOX_ID)?.accelerator).toBe('Command+E')
+  })
+
+  it('leaves CoreBox with no key when the OS refuses ⌥Space, and registers nothing in its place', () => {
+    const { module, storage } = createTrackedModule()
+    const dispatch = installRegisterMock([DEFAULT_ACCELERATOR])
+
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+
+    // ⌥Space was asked for and refused, and no other key was tried: ⌘E least of all.
+    expect(registeredAccelerators()).toEqual([DEFAULT_ACCELERATOR])
+    expect(dispatch.size).toBe(0)
+    expect(module.getEffectiveAccelerator(COREBOX_ID)).toBeNull()
+    expect(module.getShortcutBinding(COREBOX_ID)).toEqual({
+      configured: DEFAULT_ACCELERATOR,
+      effective: null
+    })
+    expect(module.shortcutStatusMap?.get(COREBOX_ID)).toEqual({
+      state: 'unavailable',
+      reason: 'register-failed'
+    })
+    // Nothing was written: the next launch tries ⌥Space again.
+    expect(storage.getShortcutById(COREBOX_ID)?.accelerator).toBe(DEFAULT_ACCELERATOR)
+  })
+
+  it('tells the user CoreBox has no key because ⌥Space could not be registered', () => {
+    const { module } = createTrackedModule()
+    installRegisterMock([DEFAULT_ACCELERATOR])
+
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+
+    expect(noticeMocks.showInternalSystemNotification).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        id: 'shortcut-unavailable:core.box.toggle',
+        level: 'error',
+        title: 'notifications.coreBoxShortcutUnavailableTitle {"shortcut":"⌥Space"}',
+        message: 'notifications.coreBoxShortcutRefusedBody {"shortcut":"⌥Space"}'
+      })
+    )
+  })
+
+  it('says the same when `register` throws', () => {
+    const { module } = createTrackedModule()
+    electronMocks.register.mockImplementation((accelerator: string) => {
+      if (accelerator === DEFAULT_ACCELERATOR) throw new Error('refused')
+      return true
+    })
+
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+
+    expect(module.shortcutStatusMap?.get(COREBOX_ID)?.reason).toBe('register-error')
+    expect(shownBodies()).toEqual([
+      'notifications.coreBoxShortcutRefusedBody {"shortcut":"⌥Space"}'
+    ])
+  })
+
+  it('tells the user once per launch, however many passes find ⌥Space refused again', () => {
+    const { module } = createTrackedModule()
+    installRegisterMock([DEFAULT_ACCELERATOR])
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+
+    // Every module registering at startup, and every edit in settings, runs a pass.
+    module.registerMainShortcut('core.test.other', 'CommandOrControl+Shift+K', vi.fn())
+    module.reregisterAllShortcuts?.()
+    module.disableAll()
+    module.enableAll()
+
+    expect(module.getEffectiveAccelerator(COREBOX_ID)).toBeNull()
+    expect(noticeMocks.showInternalSystemNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays quiet when a key the user chose is refused', () => {
+    const { module, storage } = createTrackedModule()
+    storeSystemBinding(storage, COREBOX_ID, 'Command+K')
+    installRegisterMock(['Command+K'])
+
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+
+    // Their own key, and settings shows the refusal on the row where they set it.
+    expect(registeredAccelerators()).toEqual(['Command+K'])
+    expect(module.getEffectiveAccelerator(COREBOX_ID)).toBeNull()
+    expect(noticeMocks.showInternalSystemNotification).not.toHaveBeenCalled()
+  })
+
+  it('names the built-in shortcut stored before CoreBox that takes ⌥Space', () => {
+    const { module, storage } = createTrackedModule()
+    // A fresh profile stores built-in shortcuts in module load order, and the screenshot module
+    // (like voice and local AI) loads before CoreBox. Within a conflict group of built-in
+    // shortcuts the first in storage order keeps the key, so here CoreBox is the one that loses.
+    storeSystemBinding(storage, 'screenshot.tool.start', 'CommandOrControl+Shift+A')
+    storeSystemBinding(storage, COREBOX_ID, DEFAULT_ACCELERATOR)
+    const dispatch = installRegisterMock([])
+    const screenshot = vi.fn()
+    module.registerMainShortcut('screenshot.tool.start', 'CommandOrControl+Shift+A', screenshot)
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+    expect(noticeMocks.showInternalSystemNotification).not.toHaveBeenCalled()
+
+    // The user gives ⌥Space to the screenshot in settings; a Mac's recorder writes `Option+Space`.
+    electronMocks.register.mockClear()
+    module.updateShortcut('screenshot.tool.start', 'Option+Space')
+
+    expect(module.shortcutStatusMap?.get(COREBOX_ID)).toEqual({
+      state: 'conflict',
+      reason: 'conflict-system',
+      conflictWith: ['screenshot.tool.start']
+    })
+    expect(module.getEffectiveAccelerator(COREBOX_ID)).toBeNull()
+    // The key is the screenshot's now, and nothing was registered for CoreBox in its place.
+    expect(registeredAccelerators()).toEqual(['Option+Space'])
+    dispatch.get('Option+Space')?.()
+    expect(screenshot).toHaveBeenCalledTimes(1)
+    expect(noticeMocks.showInternalSystemNotification).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        id: 'shortcut-unavailable:core.box.toggle',
+        level: 'error',
+        title: 'notifications.coreBoxShortcutUnavailableTitle {"shortcut":"⌥Space"}',
+        message:
+          'notifications.coreBoxShortcutConflictNamedBody {"shortcut":"⌥Space","other":"Take a screenshot"}'
+      })
+    )
+
+    module.reregisterAllShortcuts?.()
+    expect(noticeMocks.showInternalSystemNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('says another shortcut holds ⌥Space when that one has no settings label', () => {
+    const { module, storage } = createTrackedModule()
+    storeSystemBinding(storage, 'core.test.unlabelled', DEFAULT_ACCELERATOR)
+    storeSystemBinding(storage, COREBOX_ID, DEFAULT_ACCELERATOR)
+    installRegisterMock([])
+
+    module.registerMainShortcut('core.test.unlabelled', 'CommandOrControl+Shift+U', vi.fn())
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+
+    // Settings prints the raw id for a shortcut it has no label for; in a sentence that is noise.
+    expect(module.shortcutStatusMap?.get(COREBOX_ID)?.state).toBe('conflict')
+    expect(shownBodies()).toEqual([
+      'notifications.coreBoxShortcutConflictBody {"shortcut":"⌥Space"}'
+    ])
+  })
+
+  it('tells the user once per launch, whichever way CoreBox loses its key', () => {
+    const { module, storage } = createTrackedModule()
+    storeSystemBinding(storage, 'screenshot.tool.start', 'CommandOrControl+Shift+A')
+    storeSystemBinding(storage, COREBOX_ID, DEFAULT_ACCELERATOR)
+    installRegisterMock([DEFAULT_ACCELERATOR])
+    module.registerMainShortcut('screenshot.tool.start', 'CommandOrControl+Shift+A', vi.fn())
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+    expect(shownBodies()).toEqual([
+      'notifications.coreBoxShortcutRefusedBody {"shortcut":"⌥Space"}'
+    ])
+
+    // Refused first, then lost to the screenshot later in the run: the user already knows.
+    module.updateShortcut('screenshot.tool.start', 'Option+Space')
+
+    expect(module.shortcutStatusMap?.get(COREBOX_ID)?.state).toBe('conflict')
+    expect(noticeMocks.showInternalSystemNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('finishes the pass when the notice throws, and does not show it again', () => {
+    const { module } = createTrackedModule()
+    installRegisterMock([DEFAULT_ACCELERATOR])
+    noticeMocks.showInternalSystemNotification.mockImplementationOnce(() => {
+      throw new Error('no notification centre')
+    })
+    module.registerMainShortcut('core.test.other', 'CommandOrControl+Shift+K', vi.fn())
+
+    expect(() =>
+      module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+    ).not.toThrow()
+    // The pass that threw still published its statuses.
+    expect(module.shortcutStatusMap?.get(COREBOX_ID)?.state).toBe('unavailable')
+    expect(module.getEffectiveAccelerator('core.test.other')).toBe('CommandOrControl+Shift+K')
+
+    module.reregisterAllShortcuts?.()
+    expect(noticeMocks.showInternalSystemNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays quiet when a key the user chose for CoreBox loses a conflict', () => {
+    const { module, storage } = createTrackedModule()
+    storeSystemBinding(storage, 'screenshot.tool.start', 'Command+K')
+    storeSystemBinding(storage, COREBOX_ID, 'Command+K')
+    installRegisterMock([])
+
+    module.registerMainShortcut('screenshot.tool.start', 'CommandOrControl+Shift+A', vi.fn())
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+
+    // Their own key, and settings already shows the conflict on it: no notice, as for a refusal.
+    expect(module.shortcutStatusMap?.get(COREBOX_ID)?.state).toBe('conflict')
+    expect(noticeMocks.showInternalSystemNotification).not.toHaveBeenCalled()
+  })
+
+  it('stays quiet when CoreBox wins the conflict on its key', () => {
+    const { module, storage } = createTrackedModule()
+    storeSystemBinding(storage, COREBOX_ID, DEFAULT_ACCELERATOR)
+    storeSystemBinding(storage, 'screenshot.tool.start', 'Option+Space')
+    installRegisterMock([])
+
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+    module.registerMainShortcut('screenshot.tool.start', 'CommandOrControl+Shift+A', vi.fn())
+
+    expect(module.getEffectiveAccelerator(COREBOX_ID)).toBe(DEFAULT_ACCELERATOR)
+    expect(module.shortcutStatusMap?.get('screenshot.tool.start')?.state).toBe('conflict')
+    expect(noticeMocks.showInternalSystemNotification).not.toHaveBeenCalled()
+  })
+
+  it('answers the binding query and publishes only a pass that changed a key', () => {
+    const module = new ShortcutModule()
+    liveModules.push(module)
+    module.onInit({
+      app: {},
+      runtime: { channel: {} }
+    } as unknown as Parameters<ShortcutModule['onInit']>[0])
+    const listener = vi.fn()
+    module.onBindingsChanged(listener)
+    transportMocks.broadcast.mockClear()
+
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+
+    // Looked up by the shared event object: a copy defined inside the module would not be found.
+    const getBinding = transportMocks.handlers.get(shortconGetBindingEvent)
+    expect(getBinding?.({ id: COREBOX_ID })).toEqual({
+      configured: DEFAULT_ACCELERATOR,
+      effective: DEFAULT_ACCELERATOR
+    })
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(transportMocks.broadcast).toHaveBeenCalledTimes(1)
+    expect(transportMocks.broadcast.mock.calls[0]?.[0]).toBe(shortconChangedEvent)
+
+    // A pass that changes nothing a surface prints stays quiet.
+    module.registerMainShortcut('core.test.quiet', 'CommandOrControl+Shift+Q', vi.fn())
+    listener.mockClear()
+    transportMocks.broadcast.mockClear()
+    module.enableAll()
+    module.updateShortcut('core.test.quiet', undefined, true)
+    expect(listener).not.toHaveBeenCalled()
+    expect(transportMocks.broadcast).not.toHaveBeenCalled()
+
+    // A rebind in settings is a change.
+    module.updateShortcut(COREBOX_ID, 'Command+K')
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(getBinding?.({ id: COREBOX_ID })).toEqual({
+      configured: 'Command+K',
+      effective: 'Command+K'
+    })
+  })
+})
+
+describe('ShortcutModule renames the macOS modifier names the recorder stored off macOS', () => {
+  /**
+   * The settings recorder used to write the Windows key as `Command` and Alt as `Option` on every
+   * platform. At startup, off macOS, the user's recorded values move to `Super` / `Alt`; anything
+   * cross-platform (`CommandOrControl`), a plugin's own spelling, and every macOS value stay put.
+   */
+  const liveModules: Array<{ onDestroy: () => unknown }> = []
+
+  function record(
+    id: string,
+    accelerator: string,
+    type: ShortcutType = ShortcutType.MAIN,
+    author = 'system'
+  ): Shortcut {
+    return {
+      id,
+      accelerator,
+      type,
+      meta: { creationTime: 0, modificationTime: 0, author, enabled: true }
+    }
+  }
+
+  const STORED: Shortcut[] = [
+    record('core.box.toggle', 'Command+E'),
+    record('feature:plugin-a:search', 'Option+K', ShortcutType.FEATURE, 'plugin-a'),
+    record('core.omniPanel.toggle', 'CommandOrControl+Shift+P'),
+    record('app-launch:editor', 'CmdOrCtrl+Alt+O'),
+    record('core.test.doubled', 'Command+Super+E'),
+    record('plugin.plugin-b.run', 'Command+X', ShortcutType.RENDERER, 'plugin-b'),
+    record('core.test.trigger', 'mouse:right-long-press', ShortcutType.TRIGGER),
+    // Registered by the first pass itself (a feature binding needs no module to register it), and
+    // spelled with `Command`, which the pass's own normaliser keeps: only the rename moves it.
+    record('feature:plugin-a:open', 'Command+Shift+O', ShortcutType.FEATURE, 'plugin-a')
+  ]
+
+  /** A fresh module evaluated on `platform`: the module reads its platform when it is imported. */
+  async function importShortcutModule(platform: string): Promise<typeof ShortcutModule> {
+    const previous = process.platform
+    Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+    vi.resetModules()
+    try {
+      return (await import('./global-shortcon')).ShortcutModule
+    } finally {
+      Object.defineProperty(process, 'platform', { value: previous, configurable: true })
+    }
+  }
+
+  function start(Module: typeof ShortcutModule, stored: Shortcut[]): ShortcutModule {
+    mainStorageMocks.getConfig.mockReturnValue(structuredClone(stored))
+    const module = new Module()
+    liveModules.push(module)
+    module.onInit({
+      app: {},
+      runtime: { channel: {} }
+    } as unknown as Parameters<ShortcutModule['onInit']>[0])
+    return module
+  }
+
+  /** The store as last written, by id. */
+  function persisted(): Record<string, string> {
+    const json = mainStorageMocks.saveConfig.mock.calls.at(-1)?.[1]
+    const shortcuts = JSON.parse(String(json)) as Shortcut[]
+    return Object.fromEntries(shortcuts.map((shortcut) => [shortcut.id, shortcut.accelerator]))
+  }
+
+  afterEach(() => {
+    for (const module of liveModules.splice(0)) module.onDestroy()
+  })
+
+  it.each(['win32', 'linux'])('on %s moves Command and Option to Super and Alt', async (os) => {
+    const Module = await importShortcutModule(os)
+
+    start(Module, STORED)
+
+    expect(persisted()).toEqual({
+      'core.box.toggle': 'Super+E',
+      'feature:plugin-a:search': 'Alt+K',
+      // Cross-platform on purpose, and not the recorder's.
+      'core.omniPanel.toggle': 'CommandOrControl+Shift+P',
+      'app-launch:editor': 'CmdOrCtrl+Alt+O',
+      // Renaming would give two Super keys: left for the user to see and fix.
+      'core.test.doubled': 'Command+Super+E',
+      // A plugin's spelling, which the plugin writes back on every load.
+      'plugin.plugin-b.run': 'Command+X',
+      'core.test.trigger': 'mouse:right-long-press',
+      'feature:plugin-a:open': 'Super+Shift+O'
+    })
+    // Renamed before the first pass, so the binding registers under its new name and never under
+    // the old one. `Option` cannot show this: the pass's normaliser turns it into `Alt` by itself.
+    expect(electronMocks.register).toHaveBeenCalledWith('Super+Shift+O', expect.any(Function))
+    expect(electronMocks.register).not.toHaveBeenCalledWith('Command+Shift+O', expect.any(Function))
+    expect(electronMocks.register).toHaveBeenCalledWith('Alt+K', expect.any(Function))
+  })
+
+  it('does nothing on a second launch', async () => {
+    const Module = await importShortcutModule('win32')
+    start(Module, STORED)
+    const migrated = persisted()
+    for (const module of liveModules.splice(0)) module.onDestroy()
+    mainStorageMocks.saveConfig.mockClear()
+
+    const again = start(
+      Module,
+      STORED.map((shortcut) => ({ ...shortcut, accelerator: migrated[shortcut.id]! }))
+    )
+
+    expect(mainStorageMocks.saveConfig).not.toHaveBeenCalled()
+    expect(again.getShortcutAccelerator('core.box.toggle')).toBe('Super+E')
+    expect(again.getShortcutAccelerator('feature:plugin-a:search')).toBe('Alt+K')
+  })
+
+  it('leaves macOS alone, where Command and Option are the right names', async () => {
+    const Module = await importShortcutModule('darwin')
+
+    const module = start(Module, STORED)
+
+    expect(mainStorageMocks.saveConfig).not.toHaveBeenCalled()
+    expect(module.getShortcutAccelerator('core.box.toggle')).toBe('Command+E')
+    expect(module.getShortcutAccelerator('feature:plugin-a:search')).toBe('Option+K')
+  })
+
+  it('keeps the old value when its write fails, and still moves the rest', async () => {
+    const Module = await importShortcutModule('win32')
+    mainStorageMocks.saveConfig.mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    const module = start(Module, STORED)
+
+    expect(module.getShortcutAccelerator('core.box.toggle')).toBe('Command+E')
+    expect(persisted()['core.box.toggle']).toBe('Command+E')
+    expect(module.getShortcutAccelerator('feature:plugin-a:search')).toBe('Alt+K')
+    expect(persisted()['feature:plugin-a:search']).toBe('Alt+K')
+  })
+
+  it('keeps the old value, and still starts, when putting it back fails too', async () => {
+    const Module = await importShortcutModule('win32')
+    const diskFull = (): never => {
+      throw new Error('disk full')
+    }
+    // The rename's own write, then the write that puts the old value back. A throw escaping the
+    // rename would fail the shortcut module's init, and with it the app's startup.
+    mainStorageMocks.saveConfig.mockImplementationOnce(diskFull).mockImplementationOnce(diskFull)
+
+    const module = start(Module, STORED)
+
+    expect(module.getShortcutAccelerator('core.box.toggle')).toBe('Command+E')
+    // The next record's write carries the whole store, with the old value back in it.
+    expect(persisted()['core.box.toggle']).toBe('Command+E')
+    expect(persisted()['feature:plugin-a:search']).toBe('Alt+K')
+  })
+})
+
+describe('ShortcutModule reports two spellings of one key as a conflict', () => {
+  /**
+   * Conflicts are grouped by the key the platform presses (`acceleratorsMatch`). Grouped by string,
+   * `Option+Space` beside `Alt+Space` on macOS both reached `register`: Electron refused the later
+   * one, and settings showed "registration failed" instead of the conflict.
+   */
+  const liveModules: Array<{ onDestroy: () => unknown }> = []
+  /** The file's pinned platform (darwin), put back after each case switches it. */
+  const pinnedPlatform = process.platform
+
+  afterEach(() => {
+    for (const module of liveModules.splice(0)) module.onDestroy()
+    Object.defineProperty(process, 'platform', { value: pinnedPlatform, configurable: true })
+  })
+
+  /** A fresh module, imported and run on `platform`: it reads the platform at both times. */
+  async function moduleOn(platform: string): Promise<ShortcutModuleHarness> {
+    Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+    vi.resetModules()
+    const { ShortcutModule: Module } = await import('./global-shortcon')
+    const module = new Module() as unknown as ShortcutModuleHarness
+    module.storage = new InMemoryShortcutStorage()
+    liveModules.push(module)
+    return module
+  }
+
+  function registered(): string[] {
+    return electronMocks.register.mock.calls.map(([accelerator]) => accelerator)
+  }
+
+  it('on macOS flags Option+Space beside Alt+Space, and registers the key once', async () => {
+    const module = await moduleOn('darwin')
+
+    module.registerMainShortcut('core.test.first', 'Alt+Space', vi.fn())
+    module.registerMainShortcut('core.test.second', 'Option+Space', vi.fn())
+
+    expect(module.shortcutStatusMap?.get('core.test.first')).toEqual({ state: 'active' })
+    expect(module.shortcutStatusMap?.get('core.test.second')).toEqual({
+      state: 'conflict',
+      reason: 'conflict-system',
+      conflictWith: ['core.test.first']
+    })
+    expect(registered()).not.toContain('Option+Space')
+  })
+
+  it.each(['win32', 'linux'])(
+    'on %s groups the recorded spellings the way acceleratorsMatch reads them',
+    async (os) => {
+      const module = await moduleOn(os)
+      const pairs = [
+        // The old recorder's name for the Windows key beside the right one: one key off macOS.
+        ['Super+E', 'Command+E'],
+        // What CommandOrControl presses off macOS, spelled as the recorder writes it.
+        ['Control+K', 'CommandOrControl+K'],
+        // The Windows key and Ctrl: two keys here, one key on a Mac.
+        ['Command+J', 'CommandOrControl+J']
+      ] as const
+
+      pairs.forEach(([first, second], index) => {
+        module.registerMainShortcut(`core.test.${index}.first`, first, vi.fn())
+        module.registerMainShortcut(`core.test.${index}.second`, second, vi.fn())
+      })
+
+      pairs.forEach(([first, second], index) => {
+        const status = module.shortcutStatusMap?.get(`core.test.${index}.second`)
+        expect(status?.state, `${first} / ${second}`).toBe(
+          acceleratorsMatch(first, second, os) ? 'conflict' : 'active'
+        )
+      })
+      expect(module.shortcutStatusMap?.get('core.test.0.second')?.state).toBe('conflict')
+      expect(module.shortcutStatusMap?.get('core.test.1.second')?.state).toBe('conflict')
+      expect(module.shortcutStatusMap?.get('core.test.2.second')?.state).toBe('active')
+    }
+  )
+
+  it('leaves different keys alone', async () => {
+    const module = await moduleOn('darwin')
+
+    module.registerMainShortcut('core.test.plain', 'Alt+Space', vi.fn())
+    module.registerMainShortcut('core.test.shifted', 'Alt+Shift+Space', vi.fn())
+    module.registerMainShortcut('core.test.other', 'Command+K', vi.fn())
+
+    for (const id of ['core.test.plain', 'core.test.shifted', 'core.test.other']) {
+      expect(module.shortcutStatusMap?.get(id), id).toEqual({ state: 'active' })
+    }
+    expect(registered()).toEqual(
+      expect.arrayContaining(['Alt+Space', 'Alt+Shift+Space', 'Command+K'])
+    )
   })
 })

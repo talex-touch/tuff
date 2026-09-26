@@ -1,6 +1,9 @@
 <script lang="ts" name="ShellBackRow" setup>
+import { onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
+import MetaHintBadge from './MetaHintBadge.vue'
 
 /**
  * Settings' way out, per artboard `iqbKR`'s `BackRow`.
@@ -17,18 +20,33 @@ function goHome(): void {
 
   void router.push('/home')
 }
+
+/**
+ * `⌘[`, registered by this row rather than by the shell's own list: the command only exists while
+ * the way out is on screen, which is the settings column and nowhere else. An id with no handler
+ * is not offered anywhere, so the palette cannot teach the chord outside settings.
+ */
+const disposeCommand = registerMainWindowCommandHandlers([{ id: 'back-to-tuff', run: goHome }])
+
+onBeforeUnmount(disposeCommand)
 </script>
 
 <template>
   <button class="ShellBackRow" type="button" :title="t('settingsNav.back')" @click="goHome">
     <span class="ShellBackRow-Icon i-ri-arrow-left-line" />
     <span class="ShellBackRow-Label">{{ t('settingsNav.back') }}</span>
+    <span class="ShellBackRow-Hint">
+      <MetaHintBadge command="back-to-tuff" placement="trailing" />
+    </span>
   </button>
 </template>
 
 <style lang="scss" scoped>
 .ShellBackRow {
   display: flex;
+  // The chord hint anchors to the row rather than to the sidebar: its trailing edge is the row's
+  // trailing edge, which is where the eye already is.
+  position: relative;
   // Same reason as ShellSearchEntry: a fixed height in the sidebar's flex column needs
   // `flex-shrink: 0`, or an overflowing settings list eats into the 32px.
   flex: 0 0 auto;
@@ -111,6 +129,17 @@ function goHome(): void {
     max-width: 100%;
     font-size: 10px;
     line-height: 1.25;
+  }
+}
+
+/**
+ * Hidden in the rail: the row stacks its label under the icon there, so a chip centred on the row
+ * would land on the second line of the label. The rail sheds the chrome bar's history arrows for
+ * the same reason.
+ */
+.ShellBackRow-Hint {
+  .is-rail & {
+    display: none;
   }
 }
 </style>

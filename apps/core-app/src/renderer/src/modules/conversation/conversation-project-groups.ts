@@ -18,7 +18,8 @@ export interface ConversationProjectProjection {
   archived: ConversationProjectGroup[]
 }
 
-function orderProjects(left: ProjectRecord, right: ProjectRecord): number {
+/** Pinned first, then most recently opened — the sidebar's folder order, also Home push's. */
+export function orderProjects(left: ProjectRecord, right: ProjectRecord): number {
   if (left.pinned !== right.pinned) return left.pinned ? -1 : 1
   if (left.lastOpenedAt !== right.lastOpenedAt) return right.lastOpenedAt - left.lastOpenedAt
   return left.id.localeCompare(right.id)

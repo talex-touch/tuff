@@ -94,7 +94,14 @@ export function isLocalhostUrl(urlStr: string): boolean {
  * @throws Error if an unsupported value is found (reports path and type).
  */
 export function structuredStrictStringify(value: unknown): string {
-  const seen = new WeakMap<object, string>()
+  /**
+   * Objects on the path from the root to the value being serialized, with the path each was reached
+   * at. Only these are cycles. The same object reached again through another branch is shared, not
+   * circular, and serializes in full exactly as `JSON.stringify` would: marking every object ever
+   * seen turned a second reference into a `[Circular ~…]` string, which a renderer that saved the
+   * payload back then persisted in place of the data.
+   */
+  const ancestors = new Map<object, string>()
   const badTypes = [
     'symbol',
   ]
@@ -140,41 +147,51 @@ export function structuredStrictStringify(value: unknown): string {
     }
     // Cycle check
     if (typeof val === 'object') {
-      if (seen.has(val)) {
-        return `[Circular ~${seen.get(val)}]` // You could just throw if you dislike this fallback!
+      const ancestorPath = ancestors.get(val)
+      if (ancestorPath !== undefined) {
+        return `[Circular ~${ancestorPath}]` // You could just throw if you dislike this fallback!
       }
-      seen.set(val, path)
-      if (val instanceof Error) {
-        return {
-          name: val.name,
-          message: val.message,
-          stack: val.stack,
-        }
+      ancestors.set(val, path)
+      try {
+        return serializeObject(val, path)
       }
-      if (Array.isArray(val)) {
-        return val.map((item, idx) => serialize(item, `${path}[${idx}]`))
+      finally {
+        ancestors.delete(val)
       }
-      if (val instanceof Date) {
-        return val.toISOString()
-      }
-      if (val instanceof Map) {
-        const obj: Record<string, any> = {}
-        for (const [k, v] of val.entries()) {
-          obj[typeof k === 'string' ? k : JSON.stringify(k)] = serialize(v, `${path}[Map(${typeof k === 'string' ? k : JSON.stringify(k)})]`)
-        }
-        return obj
-      }
-      if (val instanceof Set) {
-        return Array.from(val).map((item, idx) => serialize(item, `${path}[SetEntry${idx}]`))
-      }
-      // General object
-      const res: any = {}
-      for (const key of Object.keys(val)) {
-        res[key] = serialize(val[key], `${path}.${key}`)
-      }
-      return res
     }
     throw new Error(`Cannot serialize property at path "${path}": unknown type`)
+  }
+
+  function serializeObject(val: any, path: string): any {
+    if (val instanceof Error) {
+      return {
+        name: val.name,
+        message: val.message,
+        stack: val.stack,
+      }
+    }
+    if (Array.isArray(val)) {
+      return val.map((item, idx) => serialize(item, `${path}[${idx}]`))
+    }
+    if (val instanceof Date) {
+      return val.toISOString()
+    }
+    if (val instanceof Map) {
+      const obj: Record<string, any> = {}
+      for (const [k, v] of val.entries()) {
+        obj[typeof k === 'string' ? k : JSON.stringify(k)] = serialize(v, `${path}[Map(${typeof k === 'string' ? k : JSON.stringify(k)})]`)
+      }
+      return obj
+    }
+    if (val instanceof Set) {
+      return Array.from(val).map((item, idx) => serialize(item, `${path}[SetEntry${idx}]`))
+    }
+    // General object
+    const res: any = {}
+    for (const key of Object.keys(val)) {
+      res[key] = serialize(val[key], `${path}.${key}`)
+    }
+    return res
   }
 
   return JSON.stringify(serialize(value, 'root'))

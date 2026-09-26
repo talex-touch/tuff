@@ -360,6 +360,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/gradient-border',
     '/docs/dev/components/outline-border',
     '/docs/dev/components/border-beam',
+    '/docs/dev/components/prism-glow',
     '/docs/dev/components/corner-overlay',
     '/docs/dev/components/gradual-blur',
     '/docs/dev/components/edge-fade-mask',
@@ -371,6 +372,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/transition',
     '/docs/dev/components/stagger',
     '/docs/dev/components/fusion',
+    '/docs/dev/components/fusion-surface',
     '/docs/dev/components/liquid',
     '/docs/dev/components/flip-overlay',
     // pro — Primitives
@@ -389,6 +391,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/mode-chip',
     '/docs/dev/components/message-actions',
     '/docs/dev/components/suggestion-chips',
+    '/docs/dev/components/choice-card',
     '/docs/dev/components/typing-indicator',
     '/docs/dev/components/conversation-stream',
     // ai — AiAgent

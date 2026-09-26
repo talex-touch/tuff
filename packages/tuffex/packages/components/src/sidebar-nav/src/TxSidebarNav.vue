@@ -1,9 +1,13 @@
 <script setup lang="ts">
 // Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
+import type { JellyIndicatorFrame } from '../../../../utils/use-jelly-indicator'
 import type { SidebarNavEmits, SidebarNavGroup, SidebarNavItem, SidebarNavProps, SidebarNavValue } from './types'
-import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { TxIconChip } from '../../icon-chip'
+import { GLIDE, timeScaleSpring } from '../../../../utils/animation/jelly'
 import { useIndicatorBox } from '../../../../utils/use-indicator-box'
+import { useJellyIndicator } from '../../../../utils/use-jelly-indicator'
+import { springSteps } from '../../liquid/src/spring'
 
 defineOptions({ name: 'TxSidebarNav' })
 
@@ -100,10 +104,71 @@ const { box, revealed, measure } = useIndicatorBox({
   },
 })
 
+// The plate rides the shared indicator engine, like the rest of the tabs
+// family. The engine writes its transform, height and opacity every frame; the
+// template binds none of them (one writer per property), so a trip does not
+// re-render the nav. Its width stays with the CSS.
+const indicatorRef = ref<HTMLElement | null>(null)
+let lastFrame: JellyIndicatorFrame | null = null
+
+function writeIndicator(el: HTMLElement, frame: JellyIndicatorFrame) {
+  el.style.opacity = frame.visible ? '1' : '0'
+  el.style.height = `${frame.rect.height}px`
+  el.style.transform = `translate3d(0, ${frame.rect.y}px, 0) scale(${frame.scaleX.toFixed(3)}, ${frame.scaleY.toFixed(3)})`
+}
+
+// The glide material, as for the tabs family: the plate's top and bottom ride
+// their own springs, so it lengthens a little as it follows the pointer and
+// gathers on the row; it never scales. `indicatorDuration` plays the springs
+// faster or slower (220ms, the default, is `GLIDE` as written), with a lighter
+// lag than the tabs — hover tracking wants the plate to keep up.
+const engine = useJellyIndicator({
+  axis: 'y',
+  material: 'glide',
+  integrate: springSteps,
+  glide: () => ({ ...timeScaleSpring(GLIDE, props.indicatorDuration, 220), lag: 0.3 }),
+  // The list's ends. `scrollHeight`, not `clientHeight`: rows past a
+  // height-capped list are still targets. Both share the plate's origin, the
+  // list's padding box.
+  bounds: () => {
+    const nav = navRef.value
+    // A list not laid out yet has no extent; a zero-height wall would clamp
+    // the trailing end straight onto the target.
+    return nav && nav.scrollHeight > 0 ? { start: 0, end: nav.scrollHeight } : null
+  },
+  onFrame(frame) {
+    lastFrame = frame
+    if (indicatorRef.value)
+      writeIndicator(indicatorRef.value, frame)
+  },
+})
+
+// Until the first measurement the plate is held transparent, or it would show
+// at the container's top edge on the first paint.
+watch(indicatorRef, (el) => {
+  if (!el)
+    return
+  if (lastFrame)
+    writeIndicator(el, lastFrame)
+  else
+    el.style.opacity = '0'
+}, { flush: 'sync' })
+
+// Only a new target travels: the pointer or keyboard focus reaching another
+// row, or the plate going home when it leaves the list. A re-measure of the
+// same row (a resize, a font swap, `refreshIndicator()`) lands in place.
+let landedKey: SidebarNavValue | null | undefined
+
+watch(box, (b) => {
+  const key = indicatorKey.value
+  const animate = key !== landedKey
+  landedKey = key
+  engine.moveTo(b ? { x: 0, y: b.top, width: b.width, height: b.height } : null, { animate })
+}, { flush: 'post' })
+
+// No rule reads this since the plate moved onto the spring; it stays on the
+// node for anything outside that keys its own motion to the nav's.
 const indicatorStyle = computed(() => ({
-  top: `${box.value?.top ?? 0}px`,
-  height: `${box.value?.height ?? 0}px`,
-  opacity: box.value ? 1 : 0,
   '--tx-bui-sidebar-nav-indicator-duration': `${props.indicatorDuration}ms`,
 }))
 
@@ -265,6 +330,7 @@ defineExpose({
       @mouseleave="hovered = null"
     >
       <span
+        ref="indicatorRef"
         class="tx-bui-sidebar-nav__indicator"
         :class="{ 'is-revealed': revealed }"
         :style="indicatorStyle"
@@ -514,19 +580,23 @@ defineExpose({
 
   // One travelling plate rather than a background per row: the highlight reads
   // as a single object moving, which is what makes the list feel responsive.
+  //
+  // The indicator engine places it with a transform and sizes its height every
+  // frame, so neither may carry a transition — CSS would re-ease every written
+  // frame and the plate would trail its own spring. `top` stays 0 and the
+  // transform carries the offset; the fade in on reveal is the one transition.
   &__indicator {
     position: absolute;
+    top: 0;
     right: 0;
     left: 0;
     pointer-events: none;
     background: var(--tx-bui-hover, #f4f5f6);
     border-radius: 7px;
+    will-change: transform;
 
     &.is-revealed {
-      transition:
-        top var(--tx-bui-sidebar-nav-indicator-duration, 220ms) var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
-        height var(--tx-bui-sidebar-nav-indicator-duration, 220ms) var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
-        opacity 150ms ease;
+      transition: opacity 150ms ease;
     }
   }
 

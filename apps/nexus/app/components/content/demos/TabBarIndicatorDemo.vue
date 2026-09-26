@@ -8,8 +8,8 @@ const variant = ref<'pill' | 'line' | 'block' | 'dot' | 'none'>('pill')
 const size = ref<'sm' | 'md' | 'lg'>('md')
 
 const copy = computed(() => (locale.value === 'zh'
-  ? { home: '首页', search: '搜索', me: '我的', hint: '切换指示器与尺寸，再点不同的 tab 看滑块移动' }
-  : { home: 'Home', search: 'Search', me: 'Me', hint: 'Switch indicator and size, then pick tabs to watch it travel' }))
+  ? { home: '首页', search: '搜索', me: '我的', hint: '切换指示器与尺寸，再点不同的 tab：它滑过去，途中略微拉长、到位时收拢，从不变形，也不会越出两端' }
+  : { home: 'Home', search: 'Search', me: 'Me', hint: 'Switch indicator and size, then pick tabs: it glides over, lengthening a little on the way and gathering as it lands, never deforming or leaving the bar' }))
 
 const items = computed(() => [
   { value: 'home', label: copy.value.home, iconClass: 'i-carbon-home' },

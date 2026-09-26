@@ -28,7 +28,10 @@ import { globalDictationController } from './global-dictation'
 import { voiceService } from './voice-service'
 import { getRecognitionStatus } from './voice-provider-runtime'
 import { voiceInsightsStore } from './voice-insights-store'
-import { voiceRecognitionStore } from './voice-recognition-store'
+import {
+  subscribeVoiceRecognitionRecordMutations,
+  voiceRecognitionStore
+} from './voice-recognition-store'
 import { assistantModule } from '../assistant/module'
 import { CommandVoiceGestureController, registerPlatformVoiceGesture } from './command-gesture'
 
@@ -74,6 +77,17 @@ export class VoiceModule extends BaseModule<TalexEvents> {
 
     voiceLog.info('Initializing Voice module')
     voiceRecognitionStore.initialize()
+    const mainWindow = runtime.window?.window
+    this.cleanups.push(
+      subscribeVoiceRecognitionRecordMutations((mutation) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return
+        runtime.transport.broadcastToWindow(
+          mainWindow.id,
+          voiceApiEvents.recognitionRecordsChanged,
+          mutation
+        )
+      })
+    )
     this.registerChannels()
     await this.adoptInstalledSpeechModel()
     globalDictationController.register()

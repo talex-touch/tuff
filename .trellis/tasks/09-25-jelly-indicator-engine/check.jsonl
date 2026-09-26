@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "verification standard: smallest relevant tests, git diff --check, no forbidden patterns"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "check composable lifecycle, SSR safety and cleanup of rAF/timers/listeners"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "reduced-motion contract"}
+{"file": ".trellis/tasks/09-25-indicator-family-jelly/research/indicator-family.md", "reason": "list of Radio/slider/jelly tests that must stay green unchanged"}

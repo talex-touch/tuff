@@ -64,7 +64,7 @@ This is a pnpm workspace monorepo with the main application in `apps/core-app/`,
 - **TouchCore**: Entry point that initializes the application and loads all modules
 
 **Key Modules:**
-- **CoreBox** ([modules/box-tool/core-box.ts](apps/core-app/src/main/modules/box-tool/core-box.ts)): Main search/launcher interface with global shortcut (Cmd/Ctrl+E)
+- **CoreBox** ([modules/box-tool/core-box.ts](apps/core-app/src/main/modules/box-tool/core-box.ts)): Main search/launcher interface with global shortcut (Alt+Space, i.e. ⌥Space on macOS)
 - **PluginManager** ([modules/plugin/plugin-provider.ts](apps/core-app/src/main/modules/plugin/plugin-provider.ts)): Handles plugin loading, lifecycle, and feature registration
 - **Storage** ([modules/storage/](apps/core-app/src/main/modules/storage/)): Configuration and data persistence with 100MB per-plugin limits
 - **Channel System** ([core/channel-core.ts](apps/core-app/src/main/core/channel-core.ts)): IPC communication between main/renderer/plugin processes

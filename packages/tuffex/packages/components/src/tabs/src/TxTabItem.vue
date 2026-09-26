@@ -89,19 +89,32 @@ function handleClick() {
   --fake-color: transparent;
 }
 
+// A flex box, not a bare inline span: an icon-font or utility glyph class sets
+// its size as width/height, which an inline `<i>` ignores — the icon measured
+// 0×0 and left only the row's gap in front of the label.
+//
+// Ink is switched through variables on the item, not by stronger selectors on
+// the children, so a host restyling `.tx-tab-item__name` with one class of its
+// own (LingPan sets `color: inherit` on a hard-dark panel) still wins.
 .tx-tab-item__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 18px;
   line-height: 1;
-  color: var(--tx-text-color-secondary, #909399);
+  color: var(--tx-tab-item-icon-ink, var(--tx-text-color-secondary, #909399));
 }
 
-.tx-tab-item.is-active .tx-tab-item__icon {
-  color: var(--tx-text-color-primary, #303133);
-}
-
+// Resting ink for 13px text is `regular`; the active tab steps up to `primary`.
+// Colour only, never weight: a bolder label is wider and shifts its neighbours.
 .tx-tab-item__name {
   font-size: 13px;
   line-height: 1.2;
-  color: var(--tx-text-color-primary, #303133);
+  color: var(--tx-tab-item-ink, var(--tx-text-color-regular, #606266));
+}
+
+.tx-tab-item.is-active {
+  --tx-tab-item-ink: var(--tx-text-color-primary, #303133);
+  --tx-tab-item-icon-ink: var(--tx-text-color-primary, #303133);
 }
 </style>

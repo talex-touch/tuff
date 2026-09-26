@@ -2,8 +2,13 @@ import type {
   IntelligenceMessage,
   IntelligencePartEvent,
   IntelligenceProviderConfig,
+  IntelligenceReasoningLevel,
   IntelligenceUsageInfo
 } from '@talex-touch/tuff-intelligence'
+import type {
+  ReasoningEffortPlan,
+  ReasoningEffortWire
+} from '@talex-touch/utils/intelligence/reasoning-effort'
 import type { CliExecutableForm, CliExecutableLookup } from './cli/cli-executable'
 import {
   getResolvedCliExecutable,
@@ -345,12 +350,17 @@ export interface PiCliToolOptions {
  * `attachmentPaths` are files already written to disk by the caller; they become `pi`'s `@file`
  * positional arguments, which the CLI reads before the message that follows them
  * (`pi [options] [@files...] [messages...]`).
+ *
+ * `thinking` is the level main planned for this run (`--thinking`, pi 0.84.3 `--help`: off,
+ * minimal, low, medium, high, xhigh, max); pi clamps it to what the model offers. Absent — the
+ * composer's auto — the flag is left out and pi keeps the user's own `defaultThinkingLevel`.
  */
 export function buildPiArgs(
   prompt: PiCliPrompt,
   model?: string,
   toolOptions?: PiCliToolOptions,
-  attachmentPaths: string[] = []
+  attachmentPaths: string[] = [],
+  thinking?: IntelligenceReasoningLevel
 ): string[] {
   const allowedTools = toolOptions?.tools?.filter((tool) => tool.trim()) ?? []
   const args = [
@@ -380,6 +390,7 @@ export function buildPiArgs(
   ]
 
   if (model) args.push('--model', model)
+  if (thinking) args.push('--thinking', thinking)
   for (const path of attachmentPaths) args.push(`@${path}`)
   args.push(prompt.prompt)
   return args
@@ -392,11 +403,15 @@ export function buildPiArgs(
  * knows (it calls it `--no-rules`), and neither `--session` nor `--session-id` exists — only
  * `-c/--continue` and `-r/--resume` — so a run is always ephemeral and answer-only. The stream it
  * writes under `--mode json` is pi's NDJSON event for event, so `parsePiCliLine` reads it unchanged.
+ *
+ * `thinking` replaces the long-standing `off` only when main planned a level: auto keeps sending
+ * `--thinking off`, exactly as before this setting existed.
  */
 export function buildOmpArgs(
   prompt: PiCliPrompt,
   model?: string,
-  attachmentPaths: string[] = []
+  attachmentPaths: string[] = [],
+  thinking?: IntelligenceReasoningLevel
 ): string[] {
   const args = [
     '--print',
@@ -408,7 +423,7 @@ export function buildOmpArgs(
     '--no-rules',
     '--no-session',
     '--thinking',
-    'off',
+    thinking ?? 'off',
     '--system-prompt',
     prompt.systemPrompt
   ]
@@ -417,6 +432,17 @@ export function buildOmpArgs(
   for (const path of attachmentPaths) args.push(`@${path}`)
   args.push(prompt.prompt)
   return args
+}
+
+/**
+ * The level a CLI run is sent, if main planned one on that CLI's wire. Any other wire — or none —
+ * leaves the argv exactly as it was.
+ */
+export function cliReasoningLevel(
+  plan: ReasoningEffortPlan | undefined,
+  wire: Extract<ReasoningEffortWire, 'cli-thinking' | 'codex-config' | 'claude-effort'>
+): IntelligenceReasoningLevel | undefined {
+  return plan?.wire === wire ? (plan.decision.applied ?? undefined) : undefined
 }
 
 // ============================================================================

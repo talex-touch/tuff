@@ -47,7 +47,10 @@ vi.mock('@talex-touch/tuff-native/audio', () => nativeAudioMock)
 vi.mock('../clipboard', () => ({ clipboardModule: { applyVoiceText: vi.fn() } }))
 vi.mock('../system/active-app', () => ({ activeAppService: { getActiveApp: vi.fn() } }))
 vi.mock('../storage', () => ({ getMainConfig: () => ({}) }))
-vi.mock('./voice-provider-runtime', () => ({ getConfiguredAsrProvider: vi.fn() }))
+vi.mock('./voice-provider-runtime', () => ({
+  getConfiguredAsrProvider: vi.fn(),
+  getVoiceRecognitionLocation: vi.fn(() => 'cloud')
+}))
 vi.mock('./polish-prompt', () => ({
   getVoicePolishPrompt: (strength: string) => strength,
   wrapTranscription: (transcript: string) => JSON.stringify({ transcription: transcript })

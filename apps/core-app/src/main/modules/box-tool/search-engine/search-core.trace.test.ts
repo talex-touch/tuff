@@ -196,6 +196,10 @@ vi.mock('../addon/apps/app-provider', () => ({
     id: 'app-provider',
     type: 'app',
     onSearch: vi.fn(),
+    // Read by the watch router's app-queue gate: only paths under these roots are app events.
+    getIndexedSourceRoots: vi.fn(() => [
+      { sourceId: 'app-provider', path: '/Applications', permissionState: 'not-required' }
+    ]),
     prepareForSearchIndexShutdown: appProviderPrepareForShutdownSpy,
     setIndexedSourceRuntimeDelegate: appProviderSetRuntimeDelegateSpy
   }
@@ -464,14 +468,17 @@ describe('search-core search-trace', () => {
       .mocked(touchEventBus.on)
       .mock.calls.filter(([event]) => event === TalexEvents.FILE_CHANGED)
       .map(([, handler]) => handler)
-    for (const changedHandler of changedHandlers) {
-      changedHandler?.({
-        name: TalexEvents.FILE_CHANGED,
-        filePath: '/tmp/a.md'
-      } as unknown as Parameters<typeof changedHandler>[0])
+    for (const filePath of ['/tmp/a.md', '/Applications/Probe.app/Contents/Info.plist']) {
+      for (const changedHandler of changedHandlers) {
+        changedHandler?.({
+          name: TalexEvents.FILE_CHANGED,
+          filePath
+        } as unknown as Parameters<typeof changedHandler>[0])
+      }
     }
-    // One route per source: the file queue and the app queue each close their own window.
-    await settleWatchCoalescingWindows(() => routeWatchEventWithResult.mock.calls.length >= 2)
+    // Each queue closes its own window: the file queue takes both paths, the app queue only the
+    // one under its root.
+    await settleWatchCoalescingWindows(() => routeWatchEventWithResult.mock.calls.length >= 3)
 
     expect(routeWatchEventWithResult).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -484,8 +491,12 @@ describe('search-core search-trace', () => {
       expect.objectContaining({
         sourceId: 'app-provider',
         action: 'change',
-        path: '/tmp/a.md'
+        path: '/Applications/Probe.app/Contents/Info.plist'
       })
+    )
+    // A document is never an application: the app source must not pay a health read for it.
+    expect(routeWatchEventWithResult).not.toHaveBeenCalledWith(
+      expect.objectContaining({ sourceId: 'app-provider', path: '/tmp/a.md' })
     )
 
     const recoveredHandler = vi

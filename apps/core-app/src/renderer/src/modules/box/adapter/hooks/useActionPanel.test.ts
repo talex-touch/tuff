@@ -1,7 +1,14 @@
+// @vitest-environment jsdom
 import type { TuffItem } from '@talex-touch/utils'
 import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { onBeforeUnmount } from 'vue'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { COREBOX_PRIMARY_ACTION_ID } from '../../../../../../shared/events/corebox-scenes'
+import {
+  clearCoreBoxFooterFeedback,
+  useCoreBoxFooterFeedback
+} from '../../meta-actions/footer-feedback'
+import { COREBOX_META_ACTION_EVENT } from '../../meta-actions/meta-action-model'
 import { useActionPanel } from './useActionPanel'
 
 const state = vi.hoisted(() => ({
@@ -11,8 +18,7 @@ const state = vi.hoisted(() => ({
   openApp: vi.fn(),
   openExternal: vi.fn(),
   refreshSearch: vi.fn(),
-  toastSuccess: vi.fn(),
-  toastError: vi.fn()
+  logError: vi.fn()
 }))
 
 vi.mock('@talex-touch/utils/transport', () => ({
@@ -51,15 +57,17 @@ vi.mock('vue-i18n', () => ({
   })
 }))
 
-vi.mock('vue-sonner', () => ({
-  toast: {
-    success: state.toastSuccess,
-    error: state.toastError
-  }
-}))
-
 vi.mock('~/utils/dev-log', () => ({
   devLog: vi.fn()
+}))
+
+vi.mock('~/utils/renderer-log', () => ({
+  createRendererLogger: () => ({
+    error: state.logError,
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn()
+  })
 }))
 
 function createItem(overrides: Partial<TuffItem> = {}): TuffItem {
@@ -98,11 +106,23 @@ async function flushAsyncAction(): Promise<void> {
   await Promise.resolve()
 }
 
+const footerFeedback = useCoreBoxFooterFeedback()
+
+/** `onBeforeUnmount` is mocked, so each case's window listener is removed here by hand. */
+function unmountActionPanels(): void {
+  for (const [cleanup] of vi.mocked(onBeforeUnmount).mock.calls) cleanup()
+}
+
 describe('useActionPanel MetaOverlay item action bridge', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     state.listeners.clear()
     state.send.mockResolvedValue(undefined)
+    clearCoreBoxFooterFeedback()
+  })
+
+  afterEach(() => {
+    unmountActionPanels()
   })
 
   it('copies the selected item title with the clipboard write payload shape', async () => {
@@ -118,7 +138,8 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
       type: 'text',
       value: 'CC Switch 2'
     })
-    expect(state.toastSuccess).toHaveBeenCalledWith('已复制')
+    // CoreBox mounts no toast host, so the footer is where a copy is confirmed.
+    expect(footerFeedback.value).toMatchObject({ tone: 'success', message: '已复制' })
   })
 
   it('routes MetaOverlay pin actions through the renderer toggle-pin request', async () => {
@@ -144,6 +165,23 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
     })
     expect(item.meta?.pinned?.isPinned).toBe(true)
     expect(state.refreshSearch).toHaveBeenCalledTimes(1)
+    expect(footerFeedback.value).toMatchObject({ tone: 'success', message: '已固定' })
+  })
+
+  it('reports a failed pin in the footer as an error', async () => {
+    state.send.mockImplementation(async (event: unknown) => {
+      if (event === CoreBoxEvents.item.togglePin) return { success: false, error: 'nope' }
+      return undefined
+    })
+    useActionPanel()
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({
+      actionId: 'toggle-pin',
+      item: createItem()
+    })
+    await flushAsyncAction()
+
+    expect(footerFeedback.value).toMatchObject({ tone: 'error', message: '固定失败' })
   })
 
   it('executes item open actions through the app sdk instead of falling back to default execute', async () => {
@@ -337,6 +375,114 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
     await flushAsyncAction()
 
     expect(state.send).toHaveBeenCalledWith(ClipboardEvents.apply, { id: 7, autoPaste: false })
-    expect(state.toastSuccess).toHaveBeenCalledWith('已复制')
+    expect(footerFeedback.value).toMatchObject({ tone: 'success', message: '已复制' })
+  })
+
+  it('runs a shortcut from the result list through the same action pipeline', async () => {
+    useActionPanel()
+    const item = createItem()
+
+    window.dispatchEvent(
+      new CustomEvent(COREBOX_META_ACTION_EVENT, { detail: { actionId: 'copy-title', item } })
+    )
+    await flushAsyncAction()
+
+    expect(state.send).toHaveBeenCalledWith(ClipboardEvents.write, {
+      type: 'text',
+      value: 'CC Switch 2'
+    })
+    expect(footerFeedback.value).toMatchObject({ tone: 'success', message: '已复制' })
+  })
+
+  it('stops running result-list shortcuts once CoreBox unmounts it', async () => {
+    useActionPanel()
+    unmountActionPanels()
+
+    window.dispatchEvent(
+      new CustomEvent(COREBOX_META_ACTION_EVENT, {
+        detail: { actionId: 'copy-title', item: createItem() }
+      })
+    )
+    await flushAsyncAction()
+
+    expect(state.send).not.toHaveBeenCalled()
+  })
+
+  it('reveals an app in its folder rather than opening it, which would launch it', async () => {
+    useActionPanel()
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({
+      actionId: 'reveal-in-finder',
+      item: createItem()
+    })
+    await flushAsyncAction()
+
+    expect(state.showInFolder).toHaveBeenCalledExactlyOnceWith('/Applications/CC Switch 2.app', {
+      reveal: true
+    })
+  })
+
+  it('keeps opening the containing folder', async () => {
+    useActionPanel()
+    const item = createItem({
+      kind: 'file',
+      meta: { file: { path: '/Users/me/report.pdf' } },
+      actions: [
+        { id: 'open-folder', type: 'open', label: 'Open Folder', payload: { path: '/Users/me' } }
+      ]
+    })
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({ actionId: 'open-folder', item })
+    await flushAsyncAction()
+
+    // No reveal flag: a plain folder opens.
+    expect(state.showInFolder).toHaveBeenCalledExactlyOnceWith('/Users/me')
+  })
+
+  /** Every microtask, so a rejection the handler failed to catch has surfaced by then. */
+  function settle(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
+  it('says in the footer that a panel action failed, instead of rejecting unhandled', async () => {
+    state.showInFolder.mockRejectedValueOnce(new Error('SYSTEM_SHELL_PATH_UNAVAILABLE'))
+    useActionPanel()
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({
+      actionId: 'reveal-in-finder',
+      item: createItem()
+    })
+    await settle()
+
+    expect(footerFeedback.value).toMatchObject({ tone: 'error', message: '操作失败' })
+    expect(state.logError).toHaveBeenCalledExactlyOnceWith('Action failed', {
+      actionId: 'reveal-in-finder',
+      code: undefined
+    })
+  })
+
+  it('reports a failed result-list shortcut the same way, logging its code but never the error', async () => {
+    const denied = Object.assign(new Error('Cannot copy from /Users/me/secret.txt'), {
+      code: 'CLIPBOARD_WRITE_DENIED'
+    })
+    state.send.mockImplementation(async (event: unknown) => {
+      if (event === ClipboardEvents.write) throw denied
+      return undefined
+    })
+    useActionPanel()
+
+    window.dispatchEvent(
+      new CustomEvent(COREBOX_META_ACTION_EVENT, {
+        detail: { actionId: 'copy-title', item: createItem() }
+      })
+    )
+    await settle()
+
+    expect(footerFeedback.value).toMatchObject({ tone: 'error', message: '操作失败' })
+    expect(state.logError).toHaveBeenCalledExactlyOnceWith('Action failed', {
+      actionId: 'copy-title',
+      code: 'CLIPBOARD_WRITE_DENIED'
+    })
+    expect(JSON.stringify(state.logError.mock.calls)).not.toContain('/Users/me')
   })
 })

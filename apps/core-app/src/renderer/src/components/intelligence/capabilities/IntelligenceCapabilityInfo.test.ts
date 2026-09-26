@@ -6,6 +6,7 @@ import type {
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
+import { defineComponent, h, nextTick, reactive, ref } from 'vue'
 import type { CapabilityBinding } from './types'
 import CapabilityModelTransfer from './CapabilityModelTransfer.vue'
 import IntelligenceCapabilityInfo from './IntelligenceCapabilityInfo.vue'
@@ -75,6 +76,7 @@ type InfoProps = {
   isSaving: boolean
   saveState: 'idle' | 'dirty' | 'saved' | 'error'
   saveErrorDetail: string
+  onUpdatePrompt: (capabilityId: string, prompt: string) => void
 }
 
 function createProvider(
@@ -257,5 +259,128 @@ describe('intelligenceCapabilityInfo prompt ownership', () => {
     wrapper.unmount()
 
     expect(wrapper.emitted('updatePrompt')?.at(-1)).toEqual(['audio.asr', '改写后的提示词'])
+  })
+
+  it('writes nothing when the prompt was only viewed', () => {
+    const { wrapper, writes } = mountPromptEditor({ promptTemplate: '已保存的提示词' })
+
+    wrapper.unmount()
+
+    expect(writes).toEqual([])
+  })
+
+  it('does not write back a prompt the store pushed in', async () => {
+    vi.useFakeTimers()
+    try {
+      const { wrapper, writes } = mountPromptEditor()
+
+      await wrapper.setProps({ capability: { ...capability, promptTemplate: '来自存储的提示词' } })
+      // Past the editor's 800 ms debounce: a store value must not come back as a scheduled edit.
+      vi.advanceTimersByTime(1000)
+      wrapper.unmount()
+
+      expect(writes).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('flushes the outgoing draft under its own id when the editor is reused for another capability', async () => {
+    const { wrapper, writes } = mountPromptEditor()
+
+    await buttonByLabel(wrapper, 'settings.intelligence.editPrompt').trigger('click')
+    await wrapper.get('textarea.flat-markdown-stub').setValue('语音识别的草稿')
+    await wrapper.setProps({
+      capability: {
+        id: 'text.translate',
+        label: 'Translation',
+        providers: [],
+        promptTemplate: '译'
+      }
+    })
+    wrapper.unmount()
+
+    expect(writes).toEqual([['audio.asr', '语音识别的草稿']])
+  })
+})
+
+/**
+ * Records every prompt write through the listener prop. `wrapper.emitted()` is not enough here:
+ * `unmount()` clears the component's emit history before tearing it down, so it only shows what was
+ * emitted during the unmount itself.
+ */
+function mountPromptEditor(overrides: Partial<IntelligenceCapabilityConfig> = {}) {
+  const writes: Array<[string, string]> = []
+  const wrapper = mountInfo({
+    capability: { ...capability, ...overrides },
+    onUpdatePrompt: (capabilityId, prompt) => writes.push([capabilityId, prompt])
+  })
+  return { wrapper, writes }
+}
+
+/**
+ * The 2026-09-15 incident, reproduced: `text.chat` ended up with the prompt "text.translate" and
+ * `text.translate` with "text.chat".
+ *
+ * The settings page is KeepAlive-cached, and Vue's HMR does not replace a deactivated cached
+ * instance. When da593d482 changed `updatePrompt` from `[prompt]` to `[capabilityId, prompt]`, this
+ * editor was re-mounted with the new emit while the cached page kept its old handler, which took
+ * the first argument as the prompt and wrote it to whatever capability was selected by then. The
+ * editor flushed on every unmount, so a plain click from one capability to the next wrote the
+ * outgoing capability's id into the incoming one.
+ *
+ * The harness renders the editor the way the page does — keyed by the selection — and binds the
+ * handler that cached page still ran. Only an actual edit may reach a page handler, so switching
+ * capabilities must leave every stored prompt alone whatever the handler does with its arguments.
+ */
+describe('intelligenceCapabilityInfo capability switch', () => {
+  const translatePrompt =
+    '你是专业翻译助手。请将以下文本翻译成 {{targetLang}}，只返回译文，不要解释。'
+
+  it('leaves every stored prompt alone when switching capabilities without an edit', async () => {
+    const store = reactive<Record<string, IntelligenceCapabilityConfig>>({
+      'text.chat': { id: 'text.chat', label: 'Chat', providers: [] },
+      'text.translate': {
+        id: 'text.translate',
+        label: 'Translation',
+        providers: [],
+        promptTemplate: translatePrompt
+      }
+    })
+    const selectedId = ref('text.chat')
+    const writes: unknown[][] = []
+    /** The page handler from before da593d482, as the cached page instance still ran it. */
+    function stalePageUpdatePrompt(...args: unknown[]): void {
+      writes.push(args)
+      store[selectedId.value]!.promptTemplate = args[0] as string
+    }
+
+    const Harness = defineComponent({
+      setup: () => () =>
+        h('div', { key: selectedId.value }, [
+          h(IntelligenceCapabilityInfo, {
+            capability: store[selectedId.value]!,
+            providers: [],
+            bindings: [],
+            isTesting: false,
+            hasPendingChanges: false,
+            isSaving: false,
+            saveState: 'idle',
+            onUpdatePrompt: stalePageUpdatePrompt
+          })
+        ])
+    })
+    const wrapper = mount(Harness, { global: { stubs } })
+
+    selectedId.value = 'text.translate'
+    await nextTick()
+    selectedId.value = 'text.chat'
+    await nextTick()
+
+    expect(writes).toEqual([])
+    expect(store['text.chat']!.promptTemplate).toBeUndefined()
+    expect(store['text.translate']!.promptTemplate).toBe(translatePrompt)
+
+    wrapper.unmount()
   })
 })

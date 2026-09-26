@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
+import { useCoreBoxFooterFeedback } from '~/modules/box/meta-actions/footer-feedback'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { resolveCoreBoxFooterTitle } from './coreBoxFooterDisplay'
 import {
@@ -39,6 +40,12 @@ const debouncedDisplay = useDebounce(displayValue, 100)
 const { t } = useI18n()
 const { isMac } = useRendererPlatform()
 
+/**
+ * What the last action did ("已复制"), shown in place of the item for a moment while the footer is
+ * on screen. CoreBox announces it, and shows it in its header while the footer is not on screen.
+ */
+const feedback = useCoreBoxFooterFeedback()
+
 // --- Indexing status ---
 const { onProgressUpdate, indexProgress } = useFileIndexMonitor()
 
@@ -51,6 +58,15 @@ const shouldDisplayFooter = computed(
   () => isIndexing.value || (displayValue.value && footerVisible.value)
 )
 const debouncedFooterDisplay = useDebounce(shouldDisplayFooter, 100)
+
+/**
+ * Slid in (`display`), rather than parked below the results, as it is for an item that hides its
+ * hints. CoreBox reads it: an action's outcome shows here only while it is true.
+ */
+const onScreen = computed(() => Boolean(debouncedFooterDisplay.value || isIndexing.value))
+const shownFeedback = computed(() => (onScreen.value ? feedback.value : null))
+
+defineExpose({ onScreen })
 
 const indexingLabel = computed(() => {
   if (!isIndexing.value || !indexProgress.value) return ''
@@ -177,12 +193,27 @@ const keyHints = computed(() => {
 
 <template>
   <div
-    :class="{ display: debouncedFooterDisplay || isIndexing }"
+    :class="{ display: onScreen }"
     class="CoreBoxFooter transition-cubic fake-background flex-shrink-0 absolute overflow-hidden z-0 flex items-center justify-between gap-3 h-44px px-3 border-t border-[var(--tx-border-color-lighter)] bg-transparent text-12px text-[color:var(--tx-text-color-secondary)]"
   >
     <div class="FooterInfo">
+      <span
+        v-if="shownFeedback"
+        :key="shownFeedback.id"
+        class="FooterFeedback"
+        :class="shownFeedback.tone === 'error' ? 'is-error' : 'is-success'"
+      >
+        <i
+          class="FooterFeedback-Icon"
+          :class="
+            shownFeedback.tone === 'error' ? 'i-ri-error-warning-line' : 'i-ri-checkbox-circle-line'
+          "
+          aria-hidden="true"
+        />
+        <span class="FooterFeedback-Text">{{ shownFeedback.message }}</span>
+      </span>
       <!-- Indexing indicator takes priority when no search results -->
-      <template v-if="isIndexing && !debouncedDisplay">
+      <template v-else-if="isIndexing && !debouncedDisplay">
         <span class="IndexingDot" />
         <span class="IndexingLabel">{{ indexingLabel }}</span>
       </template>
@@ -277,6 +308,39 @@ const keyHints = computed(() => {
   font-size: 10px;
   font-weight: 500;
   text-transform: uppercase;
+}
+
+// The glyph and the words together: colour alone never carries the outcome.
+.FooterFeedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--tx-text-color-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.FooterFeedback-Icon {
+  flex: none;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+}
+
+.FooterFeedback.is-success .FooterFeedback-Icon {
+  color: var(--tx-color-success);
+}
+
+.FooterFeedback.is-error .FooterFeedback-Icon {
+  color: var(--tx-color-danger);
+}
+
+.FooterFeedback-Text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .FooterHints {

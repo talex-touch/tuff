@@ -418,8 +418,12 @@ onBeforeUnmount(() => {
           />
         </Transition>
       </div>
-      <div class="docs-edge-blur docs-edge-blur--top" aria-hidden="true" />
-      <div class="docs-edge-blur docs-edge-blur--bottom" aria-hidden="true" />
+      <div class="docs-edge-blur docs-edge-blur--top" aria-hidden="true">
+        <span v-for="layer in 4" :key="layer" class="docs-edge-blur__layer" />
+      </div>
+      <div class="docs-edge-blur docs-edge-blur--bottom" aria-hidden="true">
+        <span v-for="layer in 4" :key="layer" class="docs-edge-blur__layer" />
+      </div>
       <TheHeader title="Tuff Docs" class="z-30" />
       <div class="docs-layout-foreground relative flex flex-1 justify-center pb-20 pt-20">
         <div class="docs-layout-frame min-w-0 w-full flex gap-6 lg:gap-8">
@@ -643,40 +647,124 @@ onBeforeUnmount(() => {
   color: rgba(255, 255, 255, 0.82);
 }
 
+/*
+ * Content scrolls on the window, so it passes under the floating header and
+ * off the bottom of the viewport. Each edge is a progressive blur that ends in
+ * the page colour: four full-size backdrop layers, each masked to a band and
+ * twice as strong as the one inside it, then a fade to the page colour on top,
+ * so text and images leave the viewport alike and nothing sharp shows through.
+ *
+ * The container must stay effect-free: an opacity, mask, filter or
+ * backdrop-filter here would make it the layers' backdrop root, and they would
+ * blur only the empty container. That, plus `opacity: 0.72` on a single blur
+ * layer (28% of the sharp page kept showing through), was the previous build.
+ */
+.docs-layout-root {
+  /* The root's own background: `bg-white` / `dark:bg-dark` (#121212 in uno.config.ts). */
+  --docs-edge-color: #fff;
+}
+
+.dark .docs-layout-root,
+[data-theme='dark'] .docs-layout-root {
+  --docs-edge-color: #121212;
+}
+
+.docs-layout-root--tutorial {
+  --docs-edge-color: var(--tx-bg-color, #fff);
+}
+
+.dark .docs-layout-root--tutorial,
+[data-theme='dark'] .docs-layout-root--tutorial,
+.docs-layout-root--tutorial.dark {
+  /* Midway along the root's #07080a → #0b0c0f wash. */
+  --docs-edge-color: #090a0d;
+}
+
 .docs-edge-blur {
   position: fixed;
   left: 0;
+  right: 0;
   z-index: 20;
-  width: 100vw;
-  height: 64px;
+  height: var(--docs-edge-height);
   pointer-events: none;
-  /* Softer top/bottom fade instead of heavy frosted glass. */
-  backdrop-filter: blur(0.55rem) saturate(1.05);
-  opacity: 0.72;
-  mask-image: linear-gradient(to bottom, black 0%, black 42%, transparent 100%);
-  -webkit-backdrop-filter: blur(0.55rem) saturate(1.05);
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 42%, transparent 100%);
 }
 
-.docs-layout-root--tutorial .docs-edge-blur {
-  background: linear-gradient(to bottom, color-mix(in srgb, var(--tx-bg-color, #fff) 78%, transparent), transparent);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  opacity: 1;
-}
-
-.dark .docs-layout-root--tutorial .docs-edge-blur,
-[data-theme='dark'] .docs-layout-root--tutorial .docs-edge-blur {
-  background: linear-gradient(to bottom, rgba(7, 8, 10, 0.72), transparent);
-}
-
+/* The direction points at the viewport edge: 0% is the inner edge, 100% the outer. */
 .docs-edge-blur--top {
   top: 0;
+  /* Down past the header pill (top 16px, ~50px tall) so its corners sit inside the fade. */
+  --docs-edge-height: 88px;
+  --docs-edge-dir: to top;
 }
 
 .docs-edge-blur--bottom {
   bottom: 0;
-  transform: rotate(180deg);
+  --docs-edge-height: 64px;
+  --docs-edge-dir: to bottom;
+}
+
+.docs-edge-blur__layer {
+  position: absolute;
+  /* Full size, masked to a band: blur samples only its own box, so narrow strips would seam. */
+  inset: 0;
+  -webkit-backdrop-filter: blur(var(--docs-edge-blur));
+  backdrop-filter: blur(var(--docs-edge-blur));
+  -webkit-mask-image: linear-gradient(var(--docs-edge-dir), var(--docs-edge-band));
+  mask-image: linear-gradient(var(--docs-edge-dir), var(--docs-edge-band));
+}
+
+.docs-edge-blur__layer:nth-child(1) {
+  --docs-edge-blur: 1px;
+  --docs-edge-band: transparent 0%, #000 25%, #000 50%, transparent 75%;
+}
+
+.docs-edge-blur__layer:nth-child(2) {
+  --docs-edge-blur: 2px;
+  --docs-edge-band: transparent 25%, #000 50%, #000 75%, transparent 100%;
+}
+
+.docs-edge-blur__layer:nth-child(3) {
+  --docs-edge-blur: 4px;
+  --docs-edge-band: transparent 50%, #000 75%, #000 100%;
+}
+
+.docs-edge-blur__layer:nth-child(4) {
+  --docs-edge-blur: 8px;
+  --docs-edge-band: transparent 75%, #000 100%;
+}
+
+/* Painted over the blur layers: the last few px are the page itself. */
+.docs-edge-blur::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    var(--docs-edge-dir),
+    transparent 0%,
+    color-mix(in srgb, var(--docs-edge-color) 55%, transparent) 55%,
+    var(--docs-edge-color) 92%
+  );
+}
+
+/* Solid above the pill (the outer 16px of 88px), so nothing peeks over the header. */
+.docs-edge-blur--top::after {
+  background: linear-gradient(
+    var(--docs-edge-dir),
+    transparent 8%,
+    color-mix(in srgb, var(--docs-edge-color) 72%, transparent) 55%,
+    var(--docs-edge-color) 80%
+  );
+}
+
+/* The guide keeps its calmer, blur-free edge: the colour fade alone. */
+.docs-layout-root--tutorial .docs-edge-blur__layer {
+  display: none;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .docs-edge-blur__layer {
+    display: none;
+  }
 }
 
 .docs-tuffex-hero-bg-frame {

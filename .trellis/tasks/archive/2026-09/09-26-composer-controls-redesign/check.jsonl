@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification bar: tests, lint per package, git diff --check"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "Check hover/press/animation rules and reduced-motion blocks"}
+{"file": ".trellis/spec/main-process/voice-session-contracts.md", "reason": "Dictation honours the voice session contract"}
+{"file": ".trellis/tasks/09-26-composer-controls-redesign/research/proposal.md", "reason": "Acceptance: neighbours never move, T1-T8 timings, reduced motion"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "Only this task's files touched"}

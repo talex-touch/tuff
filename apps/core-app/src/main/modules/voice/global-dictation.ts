@@ -209,6 +209,11 @@ export class GlobalDictationController {
       return
     }
     if (result.delivery?.method === 'autopaste') return
+    if (result.delivery?.method === 'clipboard') {
+      this.notify('听写已复制', '请手动粘贴')
+      return
+    }
+
     if (result.delivery?.method === 'none') {
       this.notify('听写未写入', result.delivery.reason || '当前应用目标已变化，请重试')
     }
@@ -229,6 +234,10 @@ export class GlobalDictationController {
     }
     if (!result.text) {
       this.notify('改口未应用', '没听清改写要求，选中文字保持原样')
+      return
+    }
+    if (result.delivery?.method === 'clipboard') {
+      this.notify('改口结果已复制', '请手动粘贴')
       return
     }
     if (result.delivery?.method !== 'none') return

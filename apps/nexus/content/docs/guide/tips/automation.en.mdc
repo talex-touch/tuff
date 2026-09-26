@@ -12,7 +12,7 @@
 | `record macro` | Capture a macro |
 
 ## Shortcuts
-- `⌘ + E` – summon CoreBox.
+- `⌥ + Space` – summon CoreBox.
 - `⌘ + Shift + Space` – floating widget board.
 - `⌘ + Shift + M` – toggle Focus Mode.
 - Remap everything per workspace in Settings.

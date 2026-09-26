@@ -108,11 +108,14 @@ export class FileProviderIndexFlushExecutorService {
       resolveBatchMetadata: (entries) => this.resolveBatchMetadata(entries),
       resolvePersistMetadata: (result) => this.resolvePersistMetadata(result),
       afterPersist: async ({ entries, result }) => {
-        const staleFileIds = result.staleFileIds ?? []
+        const skippedFileIds = new Set([
+          ...(result.staleFileIds ?? []),
+          ...(result.supersededFileIds ?? [])
+        ])
         const committedEntries =
-          staleFileIds.length === 0
+          skippedFileIds.size === 0
             ? entries
-            : entries.filter((entry) => !staleFileIds.includes(entry.fileId))
+            : entries.filter((entry) => !skippedFileIds.has(entry.fileId))
         const indexedItems = await this.publishRecords(committedEntries)
         // Embeddings are generated only for rows that actually committed, and only after
         // publishing: a metered provider call must never block the results reaching the UI,
@@ -128,7 +131,8 @@ export class FileProviderIndexFlushExecutorService {
         }
         return {
           indexedItems,
-          staleEntries: staleFileIds.length
+          staleEntries: result.staleFileIds?.length ?? 0,
+          supersededEntries: result.supersededFileIds?.length ?? 0
         }
       }
     })
@@ -175,6 +179,7 @@ export class FileProviderIndexFlushExecutorService {
     embeddings: number
     chunks: number
     staleEntries: number
+    supersededEntries: number
   } {
     return {
       persistedRows: summary.persistedRows,
@@ -182,7 +187,8 @@ export class FileProviderIndexFlushExecutorService {
       progressRows: summary.progressRows,
       embeddings: summary.embeddings,
       chunks: summary.chunks,
-      staleEntries: summary.staleFileIds?.length ?? 0
+      staleEntries: summary.staleFileIds?.length ?? 0,
+      supersededEntries: summary.supersededFileIds?.length ?? 0
     }
   }
 }

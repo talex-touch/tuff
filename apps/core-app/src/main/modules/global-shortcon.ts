@@ -3,6 +3,7 @@ import type {
   Shortcut,
   ShortcutMeta
 } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
+import type { ShortcutBinding } from '../../shared/events/shortcut-binding'
 import process from 'node:process'
 import {
   ShortcutTriggerKind,
@@ -13,10 +14,14 @@ import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { BrowserWindow, globalShortcut } from 'electron'
+import { acceleratorLabel, acceleratorsMatch } from '../../shared/accelerator-label'
+import { shortconChangedEvent, shortconGetBindingEvent } from '../../shared/events/shortcut-binding'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../core/runtime-accessor'
+import { t } from '../utils/i18n-helper'
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
+import { notificationModule } from './notification'
 import { getPermissionModule } from './permission'
 import { pluginModule } from './plugin/plugin-module'
 import {
@@ -46,10 +51,29 @@ const shortconSetFeatureEvent = defineRawEvent<
   boolean
 >('shortcon:set-feature')
 
+/**
+ * What the user is told, once per launch, when a system default ends a pass with no key. No other
+ * key stands in for it, so the notice is the only way they learn that the key does nothing.
+ *
+ * Every body receives `{shortcut}`, the default's label; the title receives it too.
+ */
+interface MainShortcutUnavailableNotice {
+  titleKey: string
+  /** The OS refused the default. Names no cause: on macOS a refusal is never another app. */
+  refusedBodyKey: string
+  /** The default lost an in-app conflict to a shortcut that has no settings label. */
+  conflictBodyKey: string
+  /** The same, naming the shortcut that kept the key as `{other}` (its settings label). */
+  conflictNamedBodyKey: string
+}
+
 // A runtime map to hold callbacks for 'main' type shortcuts
 interface MainShortcutRegistration {
   callback: () => void
   owner?: string
+  /** What `registerMainShortcut` was given; a stored value equal to it is still the default. */
+  defaultAccelerator?: string
+  unavailableNotice?: MainShortcutUnavailableNotice
 }
 const mainCallbackRegistry = new Map<string, MainShortcutRegistration>()
 interface MainTriggerRegistration {
@@ -89,7 +113,8 @@ type ShortcutWithStatus = Shortcut & { status?: ShortcutStatus }
 type MainShortcutRegisterOptions = {
   enabled?: boolean
   owner?: string
-  legacyDefaultAccelerators?: string[]
+  legacyDefaultAccelerators?: readonly string[]
+  unavailableNotice?: MainShortcutUnavailableNotice
 }
 type MainTriggerRegisterOptions = {
   enabled?: boolean
@@ -134,6 +159,36 @@ const acceleratorTokenAlias = new Map<string, string>([
 ])
 const F_KEY_REGEX = /^F\d{1,2}$/i
 
+/**
+ * macOS modifier names the settings recorder wrote on every platform, and what the normaliser calls
+ * those keys off macOS. The recorder read its platform check (a computed ref) as a boolean, which
+ * is always true, so on Windows and Linux the Windows key was stored as `Command` and Alt as
+ * `Option`. `CommandOrControl` / `CmdOrCtrl` are not here: they are cross-platform on purpose.
+ */
+const MAC_ONLY_MODIFIER_NAMES = new Map<string, string>([
+  ['COMMAND', 'Super'],
+  ['CMD', 'Super'],
+  ['OPTION', 'Alt'],
+  ['OPT', 'Alt']
+])
+
+/**
+ * `accelerator` with its macOS-only modifier names renamed for this platform, or `null` when there
+ * is nothing to rename -- or when renaming would produce something the old value was not: a key
+ * spelled like a modifier, or two copies of one modifier (`Command+Super+E`). Those are left as
+ * they are; a value the user can still see and fix beats one silently rewritten into another.
+ */
+function renameMacOnlyModifiers(accelerator: string): string | null {
+  const tokens = accelerator.split('+').map((token) => token.trim())
+  const key = tokens.pop()
+  if (!key || tokens.length === 0 || MAC_ONLY_MODIFIER_NAMES.has(key.toUpperCase())) return null
+
+  const renamed = tokens.map((token) => MAC_ONLY_MODIFIER_NAMES.get(token.toUpperCase()) ?? token)
+  if (renamed.every((token, index) => token === tokens[index])) return null
+  if (new Set(renamed.map((token) => token.toUpperCase())).size !== renamed.length) return null
+  return [...renamed, key].join('+')
+}
+
 export class ShortcutModule extends BaseModule {
   static key: symbol = Symbol.for('Shortcut')
   name: ModuleKey = ShortcutModule.key
@@ -143,6 +198,11 @@ export class ShortcutModule extends BaseModule {
   private isEnabled: boolean = true
   private disposeBeforeQuitListener: (() => void) | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
+  /** Ids of the shortcuts this launch has already told the user are left without a key. */
+  private announcedNotices = new Set<string>()
+  private bindingListeners = new Set<() => void>()
+  /** Stored and effective key of every shortcut after the last pass, to publish only changes. */
+  private bindingsSignature = ''
 
   constructor() {
     super(ShortcutModule.key, {
@@ -160,11 +220,50 @@ export class ShortcutModule extends BaseModule {
     if (removedRetiredShortcuts > 0) {
       shortconLog.info(`Removed ${removedRetiredShortcuts} retired global shortcuts`)
     }
+    this.renameRecordedMacModifiers()
     this.registerBeforeQuitTeardownListener()
     const runtime = resolveMainRuntime(ctx, 'ShortcutModule.onInit')
     this.transport = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
     this.setupIpcListeners(this.transport)
     this.reregisterAllShortcuts()
+  }
+
+  /**
+   * Renames the macOS modifier names the recorder stored off macOS (see
+   * {@link MAC_ONLY_MODIFIER_NAMES}) to this platform's, once per launch, before the first pass
+   * registers anything. Idempotent: a renamed value has nothing left to rename.
+   *
+   * Only the values a user records: MAIN (settings, app launches) and FEATURE bindings. A plugin's
+   * RENDERER shortcut is the plugin's own spelling, and the plugin writes it back on every load.
+   * Each record is written on its own, so one that fails to write keeps its old value, in the store
+   * and in this run, while the rest still move; the next launch tries it again.
+   */
+  private renameRecordedMacModifiers(): void {
+    const storage = this.storage
+    if (isMacPlatform || !storage) return
+
+    for (const shortcut of storage.getAllShortcuts()) {
+      if (shortcut.type !== ShortcutType.MAIN && shortcut.type !== ShortcutType.FEATURE) continue
+      if (typeof shortcut.accelerator !== 'string') continue
+      const renamed = renameMacOnlyModifiers(shortcut.accelerator)
+      if (!renamed) continue
+
+      try {
+        storage.updateShortcutAccelerator(shortcut.id, renamed)
+        shortconLog.info(`Renamed ${shortcut.id}: ${shortcut.accelerator} -> ${renamed}`)
+      } catch (error) {
+        // The store sets a value before saving it, so a failed save leaves the new one in memory.
+        // Put the old one back; that sets first too, so it holds even if its own save fails.
+        try {
+          storage.updateShortcutAccelerator(shortcut.id, shortcut.accelerator)
+        } catch {
+          // Already restored in memory; see above.
+        }
+        shortconLog.warn(`Could not rename ${shortcut.id}; kept ${shortcut.accelerator}`, {
+          error
+        })
+      }
+    }
   }
 
   onDestroy(): MaybePromise<void> {
@@ -195,6 +294,11 @@ export class ShortcutModule extends BaseModule {
 
     transport.on(shortconGetAllEvent, () => {
       return this.buildShortcutSnapshot()
+    })
+
+    transport.on(shortconGetBindingEvent, (data) => {
+      const id = typeof data?.id === 'string' ? data.id : ''
+      return this.getShortcutBinding(id)
     })
 
     transport.on(shortconGetFeatureEvent, (data) => {
@@ -237,6 +341,9 @@ export class ShortcutModule extends BaseModule {
   /**
    * Registers a shortcut that executes a callback within the main process.
    * This is called by other main-process modules during initialization.
+   *
+   * `options.unavailableNotice` tells the user when the default ends up with no key -- see
+   * {@link announceUnavailableDefaults}. No other key ever stands in for it.
    */
   registerMainShortcut(
     id: string,
@@ -251,7 +358,9 @@ export class ShortcutModule extends BaseModule {
 
     mainCallbackRegistry.set(id, {
       callback,
-      owner: options?.owner
+      owner: options?.owner,
+      defaultAccelerator,
+      unavailableNotice: options?.unavailableNotice
     })
 
     const existingShortcut = this.storage!.getShortcutById(id)
@@ -269,8 +378,11 @@ export class ShortcutModule extends BaseModule {
       })
     } else if (
       existingShortcut.meta?.author === SYSTEM_SHORTCUT_AUTHOR &&
-      options?.legacyDefaultAccelerators?.includes(existingShortcut.accelerator) &&
-      existingShortcut.accelerator !== defaultAccelerator
+      this.isRetiredDefault(
+        existingShortcut.accelerator,
+        defaultAccelerator,
+        options?.legacyDefaultAccelerators
+      )
     ) {
       this.storage!.updateShortcutAccelerator(id, defaultAccelerator)
     }
@@ -279,6 +391,25 @@ export class ShortcutModule extends BaseModule {
 
     this.reregisterAllShortcuts()
     return true
+  }
+
+  /**
+   * Whether a stored accelerator is one of the earlier defaults and not the current one.
+   *
+   * Compared through the normaliser: `CmdOrCtrl+E` and `commandorcontrol+e` are the stored
+   * `CommandOrControl+E` written another way. A different accelerator is not, even one that
+   * presses the same key on this platform (`Command+E` on macOS), because only the recorder writes
+   * those and that is the user choosing it.
+   */
+  private isRetiredDefault(
+    stored: string,
+    defaultAccelerator: string,
+    legacyDefaults?: readonly string[]
+  ): boolean {
+    if (!legacyDefaults?.length) return false
+    const normalized = this.normalizeAccelerator(stored)
+    if (!normalized || normalized === this.normalizeAccelerator(defaultAccelerator)) return false
+    return legacyDefaults.some((legacy) => this.normalizeAccelerator(legacy) === normalized)
   }
 
   registerMainTrigger(
@@ -456,6 +587,38 @@ export class ShortcutModule extends BaseModule {
 
   getShortcutAccelerator(id: string): string | null {
     return this.storage?.getShortcutById(id)?.accelerator ?? null
+  }
+
+  /**
+   * The accelerator that fires `id` right now, or `null` when no key does: disabled, refused by
+   * the OS, lost an in-app conflict, or not registered yet.
+   *
+   * What a surface prints next to an action. The stored value is the wrong thing to print when it
+   * is not registered, because it names a key that does nothing.
+   */
+  getEffectiveAccelerator(id: string): string | null {
+    const shortcut = this.storage?.getShortcutById(id)
+    return shortcut
+      ? this.resolveEffectiveAccelerator(shortcut, this.shortcutStatusMap.get(id))
+      : null
+  }
+
+  getShortcutBinding(id: string): ShortcutBinding {
+    return {
+      configured: id ? this.getShortcutAccelerator(id) : null,
+      effective: id ? this.getEffectiveAccelerator(id) : null
+    }
+  }
+
+  /**
+   * Called after a registration pass that changed a stored or effective key, for in-process
+   * surfaces that bake a key into a native object (the tray menu). Returns the unsubscribe.
+   */
+  onBindingsChanged(listener: () => void): () => void {
+    this.bindingListeners.add(listener)
+    return () => {
+      this.bindingListeners.delete(listener)
+    }
   }
 
   registerRendererShortcut(
@@ -744,7 +907,12 @@ export class ShortcutModule extends BaseModule {
         }
 
         normalizedMap.set(shortcut.id, normalizedAccelerator)
-        const group = groupedByAccelerator.get(normalizedAccelerator)
+        // Grouped by the key the platform presses, not by string. `Option+Space` beside
+        // `Alt+Space` on macOS is one key: grouped by string, both reached `register`, Electron
+        // refused the later one, and settings showed a failure instead of the conflict.
+        const group = [...groupedByAccelerator].find(([grouped]) =>
+          acceleratorsMatch(grouped, normalizedAccelerator, process.platform)
+        )?.[1]
         if (group) {
           group.push(shortcut)
         } else {
@@ -791,9 +959,154 @@ export class ShortcutModule extends BaseModule {
       }
     }
 
+    this.announceUnavailableDefaults(allShortcuts, statusMap)
+
     this.shortcutStatusMap = statusMap
     this.syncMainTriggerStates(statusMap)
+    this.publishBindings(allShortcuts, statusMap)
     shortconLog.success(`Successfully registered ${successCount} shortcuts`)
+  }
+
+  /**
+   * Tells the user, once per launch, about a system default that ended the pass with no key.
+   *
+   * No other key stands in for it. The stored default is left as it is, so the next pass and the
+   * next launch try it again, and settings shows on its row why it does nothing.
+   *
+   * A default is left without a key in two ways, and the notice says which:
+   *
+   * - The OS refused it (`register-failed` / `register-error`). Windows refuses a key another app
+   *   holds. macOS does not: Electron registers Carbon hotkeys without the exclusive flag, so they
+   *   succeed while another app holds the same key, and a refusal there only comes from inside
+   *   this process. The copy therefore names no cause.
+   * - It lost an in-app conflict: a built-in shortcut stored before it was set to the same key (on
+   *   a fresh profile the screenshot, voice and local AI records precede CoreBox's). The copy names
+   *   that shortcut when settings has a label for it.
+   *
+   * Only a binding still on its system default qualifies. A key the user chose that does nothing is
+   * theirs to see and change in settings, where they set it.
+   */
+  private announceUnavailableDefaults(
+    shortcuts: Shortcut[],
+    statusMap: Map<string, ShortcutStatus>
+  ): void {
+    for (const shortcut of shortcuts) {
+      const status = statusMap.get(shortcut.id)
+      if (!status || !this.isLeftWithoutKey(status)) continue
+      const notice = this.resolveUnavailableNotice(shortcut)
+      if (notice) this.announceUnavailableDefault(shortcut, status, notice)
+    }
+  }
+
+  /** The OS refused the key, or the binding lost an in-app conflict for it. */
+  private isLeftWithoutKey(status: ShortcutStatus): boolean {
+    if (status.state === 'conflict') return true
+    return (
+      status.state === 'unavailable' &&
+      (status.reason === 'register-failed' || status.reason === 'register-error')
+    )
+  }
+
+  /** The notice `shortcut` asked for, when it is a system binding still on its default. */
+  private resolveUnavailableNotice(shortcut: Shortcut): MainShortcutUnavailableNotice | null {
+    if (shortcut.type !== ShortcutType.MAIN) return null
+    if (shortcut.meta?.author !== SYSTEM_SHORTCUT_AUTHOR) return null
+    const registration = mainCallbackRegistry.get(shortcut.id)
+    if (!registration?.unavailableNotice || !registration.defaultAccelerator) return null
+    // The main loop has normalized the stored value already; the default is read the same way.
+    if (shortcut.accelerator !== this.normalizeAccelerator(registration.defaultAccelerator)) {
+      return null
+    }
+    return registration.unavailableNotice
+  }
+
+  /**
+   * One notice per shortcut and launch, whichever way it lost its key. Every pass finds it keyless
+   * again (each module registering at startup runs one, and so does every settings edit), and the
+   * user needs to hear it once. The id is marked before the notice is shown, so a notice that
+   * throws is not retried on every pass.
+   */
+  private announceUnavailableDefault(
+    shortcut: Shortcut,
+    status: ShortcutStatus,
+    notice: MainShortcutUnavailableNotice
+  ): void {
+    if (this.announcedNotices.has(shortcut.id)) return
+    this.announcedNotices.add(shortcut.id)
+
+    try {
+      const label = acceleratorLabel(shortcut.accelerator, process.platform)
+      let message: string
+      if (status.state === 'conflict') {
+        const other = this.resolveShortcutLabel(status.conflictWith?.[0])
+        message = other
+          ? t(notice.conflictNamedBodyKey, { shortcut: label, other })
+          : t(notice.conflictBodyKey, { shortcut: label })
+      } else {
+        message = t(notice.refusedBodyKey, { shortcut: label })
+      }
+      notificationModule.showInternalSystemNotification({
+        id: `shortcut-unavailable:${shortcut.id}`,
+        title: t(notice.titleKey, { shortcut: label }),
+        message,
+        level: 'error',
+        dedupeKey: `shortcut-unavailable:${shortcut.id}`,
+        system: { silent: false }
+      })
+    } catch (error) {
+      shortconLog.warn(`Failed to show the no-key notice for ${shortcut.id}`, { error })
+    }
+  }
+
+  /**
+   * What the settings list calls shortcut `id` -- the `settingTools.shortcutLabels.<id>` key that
+   * `SettingTools.vue` reads -- or `null` when it has none there. Settings then prints the raw id,
+   * which reads as noise in a sentence.
+   */
+  private resolveShortcutLabel(id: string | undefined): string | null {
+    if (!id) return null
+    const key = `settingTools.shortcutLabels.${id.replace(/[.:-]/g, '_')}`
+    const label = t(key)
+    return label && label !== key ? label : null
+  }
+
+  private resolveEffectiveAccelerator(
+    shortcut: Shortcut,
+    status: ShortcutStatus | undefined
+  ): string | null {
+    if (!status) return null
+    // A trigger's "accelerator" is a gesture kind, not a key anyone can press.
+    if (status.state !== 'active' || shortcut.type === ShortcutType.TRIGGER) return null
+    return shortcut.accelerator || null
+  }
+
+  /**
+   * Tells in-process listeners and every window that a key changed. Most passes change nothing a
+   * surface prints (each module registering at startup runs one), so only a change is published.
+   */
+  private publishBindings(shortcuts: Shortcut[], statusMap: Map<string, ShortcutStatus>): void {
+    const signature = JSON.stringify(
+      shortcuts.map((shortcut) => [
+        shortcut.id,
+        shortcut.accelerator,
+        this.resolveEffectiveAccelerator(shortcut, statusMap.get(shortcut.id))
+      ])
+    )
+    if (signature === this.bindingsSignature) return
+    this.bindingsSignature = signature
+
+    for (const listener of [...this.bindingListeners]) {
+      try {
+        listener()
+      } catch (error) {
+        shortconLog.warn('Shortcut binding listener failed', { error })
+      }
+    }
+    try {
+      this.transport?.broadcast(shortconChangedEvent, undefined)
+    } catch (error) {
+      shortconLog.warn('Failed to broadcast shortcut binding change', { error })
+    }
   }
 
   private resolveConflictStatuses(
@@ -1067,6 +1380,7 @@ export class ShortcutModule extends BaseModule {
     mainCallbackRegistry.clear()
     mainTriggerRegistry.clear()
     this.shortcutStatusMap = new Map()
+    this.bindingsSignature = ''
   }
 }
 

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
+import type { JellyIndicatorFrame, JellyRect } from '../../../../utils/use-jelly-indicator'
 import type { TabBarEmits, TabBarIndicator, TabBarItem, TabBarSize, TabBarValue } from './types'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useIndicatorBox } from '../../../../utils/use-indicator-box'
+import { useJellyIndicator } from '../../../../utils/use-jelly-indicator'
+import { springSteps } from '../../liquid/src/spring'
 
 defineOptions({ name: 'TxTabBar' })
 
@@ -73,8 +76,10 @@ const rootStyle = computed<Record<string, string>>(() => {
 })
 
 // --- Sliding indicator ---
-// The same shared measurement TxSidebarNav and TxFlatRadio read from, so a bar
-// that travels cannot drift from the controls that travel beside it.
+// Measured by the same `useIndicatorBox` TxSidebarNav reads, and moved by the
+// same indicator engine, on the glide material it shares with Tabs, FlatRadio
+// and SidebarNav, so a bar that travels cannot drift from the controls that
+// travel beside it.
 const innerRef = ref<HTMLElement | null>(null)
 const itemMap = new Map<TabBarValue, HTMLElement>()
 
@@ -87,37 +92,36 @@ function setItemRef(v: TabBarValue, el: Element | null): void {
 
 onBeforeUnmount(() => itemMap.clear())
 
+// `revealed` only feeds the node's `no-transition` class, kept for external
+// styles that key off it; the engine itself lands the first frame in place.
 const { box, revealed } = useIndicatorBox({
   container: innerRef,
   target: () => itemMap.get(props.modelValue as TabBarValue),
 })
 
-const showIndicator = computed(() => props.indicator !== 'none' && box.value != null)
-
 const DOT_SIZE = 6
 
-const indicatorStyle = computed<Record<string, string>>(() => {
+// Where the indicator should rest, in the inner row's padding-box coordinates.
+const targetRect = computed<JellyRect | null>(() => {
   const b = box.value
-  if (!b)
-    return { opacity: '0' }
+  if (!b || props.indicator === 'none')
+    return null
 
   // Every variant travels on the same x, so switching one never changes where
   // the indicator is, only what it looks like.
-  const style: Record<string, string> = { opacity: '1' }
-
   if (props.indicator === 'line') {
     // A rule the item's width, pinned to the bar's top edge.
-    style.transform = `translateX(${b.left}px)`
-    style.width = `${b.width}px`
-    return style
+    return { x: b.left, y: 0, width: b.width, height: 2 }
   }
 
   if (props.indicator === 'dot') {
     // Centred under the item rather than filling it, so a dense bar stays quiet.
-    style.transform = `translate(${b.left + (b.width - DOT_SIZE) / 2}px, ${b.top + b.height - DOT_SIZE - 6}px)`
-    style.width = `${DOT_SIZE}px`
-    style.height = `${DOT_SIZE}px`
-    return style
+    return {
+      x: b.left + (b.width - DOT_SIZE) / 2,
+      y: b.top + b.height - DOT_SIZE - 6,
+      width: DOT_SIZE,
+      height: DOT_SIZE,
+    }
   }
 
   // `pill` and `block` share the inset box and differ only in paint.
@@ -126,11 +130,68 @@ const indicatorStyle = computed<Record<string, string>>(() => {
   // explicit width and height ignores margin for sizing, so a CSS margin left
   // the pill at the item's full height and hanging out of the bar.
   const { insetX, insetY } = sizeConfig.value
-  style.transform = `translate(${b.left + insetX}px, ${b.top + insetY}px)`
-  style.width = `${Math.max(0, b.width - insetX * 2)}px`
-  style.height = `${Math.max(0, b.height - insetY * 2)}px`
-  return style
+  return {
+    x: b.left + insetX,
+    y: b.top + insetY,
+    width: Math.max(0, b.width - insetX * 2),
+    height: Math.max(0, b.height - insetY * 2),
+  }
 })
+
+// The engine writes the indicator's style itself, every frame, so the template
+// binds none of these properties (one writer per property) and a trip does not
+// re-render the bar.
+const indicatorRef = ref<HTMLElement | null>(null)
+let lastFrame: JellyIndicatorFrame | null = null
+
+function writeIndicator(el: HTMLElement, frame: JellyIndicatorFrame): void {
+  const { x, y, width, height } = frame.rect
+  el.style.opacity = frame.visible ? '1' : '0'
+  el.style.width = `${width}px`
+  el.style.height = `${height}px`
+  el.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${frame.scaleX.toFixed(3)}, ${frame.scaleY.toFixed(3)})`
+}
+
+// The glide material: the indicator's ends ride their own springs, so it
+// lengthens a little on the way and gathers again, and it never scales — the
+// tabs family moves silky and simple (Radio keeps the jelly).
+const engine = useJellyIndicator({
+  axis: 'x',
+  material: 'glide',
+  integrate: springSteps,
+  // The bar's ends: nothing the springs do may carry the indicator out of it.
+  bounds: () => {
+    const inner = innerRef.value
+    // A bar not laid out yet has no extent; a zero-width wall would clamp the
+    // trailing end straight onto the target.
+    return inner && inner.clientWidth > 0 ? { start: 0, end: inner.clientWidth } : null
+  },
+  onFrame(frame) {
+    lastFrame = frame
+    if (indicatorRef.value)
+      writeIndicator(indicatorRef.value, frame)
+  },
+})
+
+// The node only renders once the engine has landed its first frame, so that
+// frame is applied the moment the node exists — in the same flush, before the
+// browser paints it.
+watch(indicatorRef, (el) => {
+  if (el && lastFrame)
+    writeIndicator(el, lastFrame)
+}, { flush: 'sync' })
+
+// Only a new selection travels. The first measurement, a resize, a font swap
+// and a change of `size` or `indicator` all land in place.
+let landedValue: TabBarValue | undefined
+
+watch(targetRect, (rect) => {
+  const animate = props.modelValue !== landedValue
+  landedValue = props.modelValue
+  engine.moveTo(rect, { animate })
+}, { flush: 'post' })
+
+const showIndicator = computed(() => props.indicator !== 'none' && engine.visible.value)
 
 function onPick(v: TabBarValue, disabled?: boolean) {
   if (props.disabled)
@@ -150,9 +211,9 @@ function onPick(v: TabBarValue, disabled?: boolean) {
     <div ref="innerRef" class="tx-tab-bar__inner">
       <span
         v-if="showIndicator"
+        ref="indicatorRef"
         class="tx-tab-bar__indicator"
         :class="[`is-${indicator}`, { 'no-transition': !revealed }]"
-        :style="indicatorStyle"
         aria-hidden="true"
       />
       <button
@@ -211,9 +272,10 @@ function onPick(v: TabBarValue, disabled?: boolean) {
   align-items: center;
 }
 
-// Travel and resize share one duration and one curve — the same contract
-// TxFlatRadio's thumb holds. Two curves make the indicator arrive and only then
-// finish growing, which is what reads as cheap.
+// The indicator engine moves and resizes the indicator by writing its
+// transform and size every frame, so none of those may carry a transition —
+// CSS would re-ease every written frame and the indicator would trail its own
+// spring. The fade is the only transition left.
 .tx-tab-bar__indicator {
   position: absolute;
   top: 0;
@@ -221,15 +283,7 @@ function onPick(v: TabBarValue, disabled?: boolean) {
   pointer-events: none;
   z-index: 0;
   will-change: transform, width;
-
-  transition:
-    transform var(--tx-tab-bar-indicator-duration, 0.26s) var(--tx-tab-bar-indicator-ease, cubic-bezier(0.32, 1.28, 0.5, 1)),
-    width var(--tx-tab-bar-indicator-duration, 0.26s) var(--tx-tab-bar-indicator-ease, cubic-bezier(0.32, 1.28, 0.5, 1)),
-    opacity 0.15s ease;
-
-  &.no-transition {
-    transition: none !important;
-  }
+  transition: opacity 0.15s ease;
 
   // The pill is inset from the item box so it reads as sitting inside the bar
   // rather than replacing the row.
@@ -260,6 +314,8 @@ function onPick(v: TabBarValue, disabled?: boolean) {
   }
 }
 
+// Under reduced motion the engine lands every change in place; this holds the
+// CSS side to the fade whatever the rule above says.
 @media (prefers-reduced-motion: reduce) {
   .tx-tab-bar__indicator {
     transition: opacity 0.15s ease;

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import { scheduleDbWrite } from '../../db/db-write'
 import {
   conversationMessages,
@@ -178,6 +178,114 @@ export async function listConversations(limit = 200): Promise<StoredConversation
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   }))
+}
+
+/**
+ * Default cap on conversation search hits. Small on purpose: these are candidates in a command
+ * bar, and a query like `the` would otherwise fill the result list with history.
+ */
+export const CONVERSATION_SEARCH_LIMIT = 6
+
+/** How many content rows to scan per wanted hit, so one chatty thread cannot use the whole budget. */
+const CONVERSATION_CONTENT_SCAN_FACTOR = 4
+
+/** Characters of context kept around the match, in code points rather than UTF-16 units. */
+const EXCERPT_WINDOW = 96
+
+/** Characters kept before the match, so the row leads with the words the user typed. */
+const EXCERPT_LEAD = 24
+
+export interface ConversationSearchHit {
+  id: string
+  title: string
+  updatedAt: number
+  /** The message text the query reached, windowed around the match; `''` for a title-only hit. */
+  excerpt: string
+}
+
+/**
+ * Conversations whose title or message text contains `term`.
+ *
+ * Title hits first, then content hits, newest-first inside each group: a thread whose own name
+ * matches is a stronger signal than one that merely mentions the words somewhere in its history.
+ * Within one thread the *earliest* matching message supplies the excerpt, so a long chat reports
+ * where the phrase first appeared rather than where it was last repeated.
+ *
+ * `instr`, not `LIKE`: a `%` or `_` in the query is a character the user typed, not a wildcard, and
+ * there is no escape clause to get wrong. `lower()` on both sides is ASCII-only, which is what
+ * SQLite offers — case-insensitive for Latin text and a no-op for scripts that have no case.
+ */
+export async function searchConversations(
+  term: string,
+  limit = CONVERSATION_SEARCH_LIMIT
+): Promise<ConversationSearchHit[]> {
+  const needle = term.trim().toLowerCase()
+  if (!needle || limit <= 0) return []
+
+  const db = databaseModule.getDb()
+
+  const titleRows = await db
+    .select({
+      id: conversations.id,
+      title: conversations.title,
+      updatedAt: conversations.updatedAt
+    })
+    .from(conversations)
+    .where(sql`instr(lower(${conversations.title}), ${needle}) > 0`)
+    .orderBy(desc(conversations.updatedAt))
+    .limit(limit)
+
+  const hits: ConversationSearchHit[] = titleRows.map((row) => ({ ...row, excerpt: '' }))
+  if (hits.length >= limit) return hits
+
+  const seen = new Set(hits.map((hit) => hit.id))
+  const contentRows = await db
+    .select({
+      id: conversations.id,
+      title: conversations.title,
+      updatedAt: conversations.updatedAt,
+      content: conversationMessages.content
+    })
+    .from(conversationMessages)
+    .innerJoin(conversations, eq(conversationMessages.conversationId, conversations.id))
+    .where(sql`instr(lower(${conversationMessages.content}), ${needle}) > 0`)
+    .orderBy(desc(conversations.updatedAt), asc(conversationMessages.seq))
+    .limit(limit * CONVERSATION_CONTENT_SCAN_FACTOR)
+
+  for (const row of contentRows) {
+    if (hits.length >= limit) break
+    if (seen.has(row.id)) continue
+    seen.add(row.id)
+    hits.push({
+      id: row.id,
+      title: row.title,
+      updatedAt: row.updatedAt,
+      excerpt: buildConversationExcerpt(row.content, needle)
+    })
+  }
+
+  return hits
+}
+
+/**
+ * A readable window of `content` around the first occurrence of `needle`.
+ *
+ * Collapsing whitespace first is what makes an excerpt legible: message bodies are Markdown, so a
+ * matched phrase often sits inside a wrapped paragraph or a list item. Code points are counted
+ * rather than UTF-16 units so the window cannot cut an emoji in half and leave a broken glyph in
+ * the row.
+ */
+function buildConversationExcerpt(content: string, needle: string): string {
+  const flattened = content.replace(/\s+/g, ' ').trim()
+  if (!flattened) return ''
+
+  const characters = Array.from(flattened)
+  const matchIndex = flattened.toLowerCase().indexOf(needle)
+  const matchOffset = matchIndex < 0 ? 0 : Array.from(flattened.slice(0, matchIndex)).length
+  const start = Math.max(0, matchOffset - EXCERPT_LEAD)
+  const window = characters.slice(start, start + EXCERPT_WINDOW).join('')
+
+  return `${start > 0 ? '…' : ''}${window}${start + EXCERPT_WINDOW < characters.length ? '…' : ''}`
 }
 
 export async function getConversation(id: string): Promise<ConversationWithMessages | null> {

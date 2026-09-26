@@ -200,8 +200,15 @@
       "shortcut": {
         "command": "command",
         "ctrl": "ctrl",
+        "control": "control",
+        "option": "option",
+        "alt": "alt",
+        "shift": "shift",
+        "win": "win",
+        "super": "super",
         "hint": "Press {shortcut} to quickly open Tuff",
-        "changeInSettings": "You can change this shortcut in Settings"
+        "changeInSettings": "You can change this shortcut in Settings",
+        "conflictHint": "If it opens another app instead (such as Raycast, Alfred or ChatGPT), that app holds the key: pick a different one in Settings."
       }
     },
     "forbidden": {
@@ -430,6 +437,8 @@
     "autoContextGroupDesc": "Controls which local information the model may reach for during a conversation.",
     "autoContext": "Auto Context",
     "autoContextDesc": "Lets the model pull web results, file search, clipboard and related data on demand instead of picking tools per message. Off means specifying them every time.",
+    "homeAiOpening": "AI opening line",
+    "homeAiOpeningDesc": "When a blank conversation opens, the model writes a greeting from your recent conversations and project names. Each one runs on the model the composer has selected and uses its quota; off shows a local template and sends nothing.",
     "groupTitle": "Utilities",
     "groupDesc": "Practical tools provide a unified fast desktop arbitrary promoter for you to use.",
     "customPlaceholder": "Custom Placeholder",
@@ -483,6 +492,7 @@
       "core_box_toggle": "Open command palette",
       "core_omniPanel_toggle": "Open OmniPanel",
       "core_omniPanel_mouseLongPress": "OmniPanel mouse trigger",
+      "screenshot_tool_start": "Take a screenshot",
       "voice_dictation_toggle": "Global dictation (press to start, press again to stop)",
       "voice_quickEdit": "Quick Edit (select text, then speak the change)"
     },
@@ -1206,13 +1216,31 @@
       "week": "Previous 7 days",
       "earlier": "Earlier",
       "untitled": "New chat",
-      "delete": "Delete conversation"
+      "delete": "Delete conversation",
+      "deleteConfirm": "Delete?",
+      "deleteConfirmLabel": "Delete “{title}”?"
     },
     "projects": {
-      "home": "Home",
+      "section": "Projects",
+      "chats": "Chats",
       "archived": "Archived projects",
       "newChat": "New Chat",
+      "newFromFolder": "New project from folder",
+      "empty": "No chats yet",
+      "expand": "Expand {name}",
+      "collapse": "Collapse {name}",
       "runLocalAgent": "Run Local Agent",
+      "groupLocalAgents": "Local Agents",
+      "groupProject": "Project",
+      "openInLocalAgent": "Open in Local Agent",
+      "agentsLoading": "Detecting local agents…",
+      "agentsFailed": "Couldn't detect local agents",
+      "agentsNone": "No local agents available",
+      "agentNotInstalled": "Not installed",
+      "agentTurnedOff": "Off in Settings",
+      "agentUnavailable": "Unavailable",
+      "adoptSessions": "Adopt Local Sessions",
+      "adoptSessionsHint": "Find the sessions local agents left in this project's folder and add them to the sidebar to continue",
       "discoverSessions": "Discover Local Sessions",
       "discoveringSessions": "Discovering Sessions…",
       "discoveryComplete": "Adopted {count} local session(s).",
@@ -1356,13 +1384,20 @@
       "finalText": "Final text",
       "duration": "Recording duration",
       "recognitionDuration": "Recognition time",
-      "providerLatency": "Provider time",
+      "providerLatency": "Cloud route time",
       "tokens": "Tokens",
       "tokensValue": "{count}",
       "tokensSplit": "Input {input} · output {output}",
       "tokensUnavailable": "Not returned by channel",
+      "location": "Processing location",
+      "model": "Recognition model",
       "channel": "Channel",
       "source": "Source",
+      "locationValues": {
+        "cloud": "Cloud",
+        "onDevice": "On-device",
+        "unknown": "Not recorded"
+      },
       "delivery": "Delivery",
       "sourceValues": {
         "microphone": "Microphone",
@@ -1371,6 +1406,7 @@
       "deliveryValues": {
         "native": "Typed in",
         "autopaste": "Auto-pasted",
+        "clipboard": "Copied to clipboard",
         "none": "Not delivered"
       },
       "error": "Error",
@@ -1378,7 +1414,7 @@
         "text": "Transcript",
         "capturedAt": "Captured",
         "status": "Status",
-        "model": "Model"
+        "model": "Recognition model"
       },
       "status": {
         "success": "Success",
@@ -1491,7 +1527,28 @@
       "userLabel": "User",
       "assistantLabel": "Assistant"
     },
-    "effortHigh": "High",
+    "reasoning": {
+      "label": "Reasoning",
+      "auto": "Auto",
+      "level": {
+        "minimal": "Minimal",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "Extra high",
+        "max": "Max"
+      },
+      "unsupportedModel": "This model has no reasoning control",
+      "unsupportedProvider": "This provider has no reasoning control yet",
+      "clamped": "This model has no {requested} level; it will run at {applied}",
+      "autoRoute": "With automatic model choice, this applies only when the chosen model supports it",
+      "cloud": "Tuff Cloud applies it to the model it routes to; ignored where unsupported",
+      "turnTop": "{requested} (this model's strongest: {applied})",
+      "turnClamped": "{applied} (asked for {requested}; this model has no such level)",
+      "turnUnsupportedModel": "{requested} (not supported by this model, not applied)",
+      "turnUnsupportedProvider": "{requested} (not supported by this provider, not applied)",
+      "turnForwarded": "{requested} (Tuff Cloud did not confirm it)"
+    },
     "attach": "Add attachment",
     "attachRemove": "Remove attachment",
     "attachCancel": "Cancel upload",
@@ -1534,11 +1591,125 @@
       "empty": "The model returned nothing",
       "generic": "This reply failed"
     },
-    "pill": {
-      "searchFiles": "Search files in plain language",
-      "translateClipboard": "Translate the clipboard",
-      "tidyDownloads": "Tidy the downloads folder",
-      "runScript": "Run a workspace script"
+    "opening": {
+      "prompt": "You are Tuff, a personal assistant on the user's computer. The user has just opened a new conversation and hasn't said anything yet. The next message is a summary of their local activity compiled by Tuff — not something the user wrote. Speak first: in one sentence, say what you can help with — finding and reading files, sorting through material, writing and translating, analyzing data, working alongside local agents in their projects — then mention one or two concrete things from the summary and ask which they want to move forward first. Rules: at most 3 sentences; conversational, like a colleague who knows them; mention only names that appear in the summary, never invent any; no lists, no Markdown, don't wrap the reply in quotes; if the summary has nothing specific, just briefly say what you can do.",
+      "loading": "Preparing a greeting",
+      "leadNote": "At the start of this conversation you said to the user: “{text}”",
+      "summary": {
+        "currentProject": "Current project: {name}",
+        "recentConversations": "Recent conversations: {titles}",
+        "projects": "Projects: {names}",
+        "localSessions": "Local AI sessions: {count}",
+        "localSessionsIn": "Local AI sessions: {count}, in {names}",
+        "empty": "No local activity yet",
+        "separator": ", ",
+        "quote": "“{text}”"
+      },
+      "template": {
+        "projectConversation": "We're back in {project}. Last time we talked about “{title}” — pick it up, or start something new?",
+        "project": "We're in {project}. Want to review where things stand, or dive straight into something?",
+        "conversation": "Welcome back. Last time we talked about “{title}” — carry on, or start something new?",
+        "sessionInProject": "There's a {provider} session waiting in {project}. Want to push it forward, or tell me something new?",
+        "session": "There's a {provider} session you haven't finished. Want to push it forward, or tell me something new?",
+        "default": "I'm Tuff. I can find files, sort through material, write and translate, and work alongside local agents in your projects. What should we start with?"
+      }
+    },
+    "push": {
+      "card": {
+        "prev": "Previous",
+        "next": "Next"
+      },
+      "guide": {
+        "title": "Where should we start?",
+        "startersTitle": "{category}: which one first?",
+        "self": "I'll say it myself",
+        "selfDesc": "Type it in the box above",
+        "category": {
+          "work": "Work & projects",
+          "workDesc": "Review progress, plan the next step",
+          "files": "Files & tidying",
+          "filesDesc": "Find files, sort folders, read contents",
+          "writing": "Writing & translation",
+          "writingDesc": "Draft, polish, translate",
+          "research": "Research & analysis",
+          "researchDesc": "Summarize documents, analyze data",
+          "automation": "Automation",
+          "automationDesc": "Hand scripts and repetitive work to me"
+        },
+        "work": {
+          "progress": "Review recent progress in {project}",
+          "progressDesc": "See where things stand and list next steps",
+          "enterProject": "Start in {project}",
+          "enterProjectDesc": "Work inside the project's folder",
+          "breakdown": "Break a big goal into small steps",
+          "breakdownDesc": "Work back to a first step you can start now",
+          "plan": "Plan what to push this week",
+          "planDesc": "Put what's on your plate in order",
+          "notes": "Turn meeting notes into to-dos",
+          "notesDesc": "Paste the notes, get action items"
+        },
+        "files": {
+          "find": "Find a file in plain language",
+          "findDesc": "Describe what you remember about it",
+          "downloads": "Tidy the downloads folder",
+          "downloadsDesc": "Sort it by type and date",
+          "projectTour": "Walk me through {project}",
+          "projectTourDesc": "What lives in each folder",
+          "summarize": "Read a file and tell me what it says",
+          "summarizeDesc": "The gist of a long document first"
+        },
+        "writing": {
+          "email": "Draft an email",
+          "emailDesc": "Just say who it's for and why",
+          "polish": "Polish a piece of writing",
+          "polishDesc": "Smoother, still in your voice",
+          "translate": "Translate a passage",
+          "translateDesc": "Chinese and English, formatting kept"
+        },
+        "research": {
+          "summarize": "Summarize a document",
+          "summarizeDesc": "Conclusions and key numbers",
+          "chart": "Chart a set of numbers",
+          "chartDesc": "Paste the data, pick the right chart",
+          "projectStructure": "Explain how {project} is structured",
+          "projectStructureDesc": "From the entry point to the main modules",
+          "compare": "Compare a few options",
+          "compareDesc": "Lay out the trade-offs and recommend one"
+        },
+        "automation": {
+          "script": "Run a workspace script",
+          "scriptDesc": "Pick one of your usual scripts",
+          "rename": "Write a batch-rename script",
+          "renameDesc": "Describe the naming rule, get a script you can run",
+          "repeat": "Turn a repetitive task into a script",
+          "repeatDesc": "Tell me what you keep doing by hand"
+        }
+      },
+      "feed": {
+        "title": "Picked for you",
+        "continueConversation": "Continue “{title}”",
+        "untitledConversation": "Untitled conversation",
+        "conversationDesc": "Pick up where you left off",
+        "conversationInProject": "A conversation in {project}",
+        "continueSession": "Continue {provider} session “{title}”",
+        "continueUntitledSession": "Continue the {provider} session",
+        "sessionDesc": "Local agent session",
+        "sessionInProject": "Local agent session in {project}",
+        "clipboard": "Work with what you just copied",
+        "clipboardExcerpt": "“{excerpt}”",
+        "enterProject": "Start in {project}",
+        "projectDesc": "A new conversation in this project",
+        "pinnedProjectDesc": "Pinned project"
+      }
+    },
+    "composer": {
+      "stop": "Stop",
+      "finishAndSend": "Finish dictation and send",
+      "dictationStop": "Stop dictation",
+      "dictationListening": "Dictating",
+      "dictationFinishing": "Recognizing",
+      "dictationInserted": "Dictated text inserted",
+      "modelPill": "Choose model and reasoning effort, current: {current}"
     }
   },
   "settingsNav": {
@@ -2722,7 +2893,8 @@
       "data": "Data",
       "service": "Service",
       "feature": "Feature",
-      "system": "System"
+      "system": "System",
+      "history": "Conversation"
     },
     "resultSignals": {
       "failed": "Failed",
@@ -5214,6 +5386,10 @@
     "downloadFailedBody": "{filename}\n{error}",
     "appLaunchFailedTitle": "App Launch Failed",
     "appLaunchFailedBody": "Failed to launch {name}\n{error}",
+    "coreBoxShortcutUnavailableTitle": "No Shortcut Opens CoreBox",
+    "coreBoxShortcutRefusedBody": "The default shortcut {shortcut} couldn't be registered, so no shortcut opens CoreBox right now. Pick another in Settings → Plugins & Tools → Shortcuts.",
+    "coreBoxShortcutConflictBody": "The default shortcut {shortcut} is assigned to another shortcut, so no shortcut opens CoreBox right now. Pick another in Settings → Plugins & Tools → Shortcuts.",
+    "coreBoxShortcutConflictNamedBody": "The default shortcut {shortcut} is assigned to “{other}”, so no shortcut opens CoreBox right now. Pick another in Settings → Plugins & Tools → Shortcuts.",
     "fileIndexRebuildCompleteTitle": "File Index Rebuild Complete",
     "fileIndexRebuildCompleteBody": "Manual file index rebuild has completed and search results are up to date.",
     "pluginInstallSuccessTitle": "Plugin Added",
@@ -5306,7 +5482,8 @@
       "voiceTranscribeEmpty": "No speech was detected. Record it again.",
       "voiceListening": "Listening…",
       "voiceTranscribeFailed": "Voice transcription failed",
-      "voiceDeliveryFailed": "Could not insert text — focus the input first",
+      "voiceDeliveryFailed": "Could not insert or copy the recognized text",
+      "voiceCopiedToClipboard": "Insert failed. Copied to clipboard.",
       "submitting": "Sending...",
       "sendToCoreBox": "Send to CoreBox",
       "translateClipboardImage": "Translate clipboard image",
@@ -6109,6 +6286,10 @@
       "settingsTitle": "Tuff Settings",
       "mainWindowSubtitle": "Show and focus the main window",
       "homeSubtitle": "Open the Tuff home surface",
+      "conversationsSubtitle": "See the conversation history the main window holds",
+      "storeSubtitle": "Browse and install plugins",
+      "storeInstalledSubtitle": "Manage the plugins already installed",
+      "downloadsSubtitle": "Check downloads in flight and finished",
       "overviewSubtitle": "All settings at a glance",
       "generalSubtitle": "Startup, language and app behavior",
       "appearanceSubtitle": "Theme, layout and visual effects",
@@ -6155,6 +6336,7 @@
     "pinFailed": "Pin failed",
     "send": "Send",
     "searching": "Searching…",
+    "searchingMore": "Still searching…",
     "searchFailed": "Search failed",
     "retrySearch": "Search failed. Retry search",
     "copied": "Copied",
@@ -6236,11 +6418,39 @@
       "close": "Close",
       "pin": "Pin to Recommendations",
       "unpin": "Unpin",
-      "copyTitle": "Copy Title",
-      "revealInFinder": "Reveal in File Manager",
+      "copyTitle": "Copy Name",
+      "revealInFinder": "Show in Finder",
+      "revealInExplorer": "Show in File Explorer",
+      "revealInFileManager": "Show in File Manager",
       "translateImage": "Translate Image",
       "translateImagePin": "Translate and Pin",
-      "flowTransfer": "Transfer to Plugin"
+      "flowTransfer": "Transfer to Plugin",
+      "open": "Open",
+      "paste": "Paste",
+      "execute": "Run",
+      "copy": "Copy",
+      "copyResult": "Copy Result",
+      "copyLink": "Copy Link",
+      "copyPath": "Copy Path",
+      "copyShellPath": "Copy Shell Path",
+      "copyFileUrl": "Copy File URL",
+      "copyWindowsPath": "Copy Windows Path",
+      "copyWslPath": "Copy WSL Path",
+      "openFolder": "Open Containing Folder",
+      "navigate": "Go To",
+      "preview": "Preview",
+      "edit": "Edit",
+      "delete": "Delete",
+      "share": "Share",
+      "empty": "No matching actions",
+      "failed": "Action failed",
+      "groups": {
+        "open": "Open",
+        "copy": "Copy",
+        "organize": "Organize",
+        "flow": "Flow",
+        "plugin": "Plugins"
+      }
     },
     "systemActions": {
       "addDevPluginTitle": "Add Dev Plugin: {name}",
@@ -6318,5 +6528,44 @@
       "togglePanel": "Toggle preview panel",
       "focusComposer": "Focus the input"
     }
+  },
+  "appMenu": {
+    "about": "About {app}",
+    "services": "Services",
+    "hide": "Hide {app}",
+    "hideOthers": "Hide Others",
+    "showAll": "Show All",
+    "quit": "Quit {app}",
+    "file": "File",
+    "closeWindow": "Close Window",
+    "edit": "Edit",
+    "undo": "Undo",
+    "redo": "Redo",
+    "cut": "Cut",
+    "copy": "Copy",
+    "paste": "Paste",
+    "pasteAndMatchStyle": "Paste and Match Style",
+    "delete": "Delete",
+    "selectAll": "Select All",
+    "substitutions": "Substitutions",
+    "showSubstitutions": "Show Substitutions",
+    "smartQuotes": "Smart Quotes",
+    "smartDashes": "Smart Dashes",
+    "textReplacement": "Text Replacement",
+    "speech": "Speech",
+    "startSpeaking": "Start Speaking",
+    "stopSpeaking": "Stop Speaking",
+    "view": "View",
+    "reload": "Reload",
+    "forceReload": "Force Reload",
+    "toggleDevTools": "Toggle Developer Tools",
+    "resetZoom": "Actual Size",
+    "zoomIn": "Zoom In",
+    "zoomOut": "Zoom Out",
+    "toggleFullScreen": "Toggle Full Screen",
+    "window": "Window",
+    "minimize": "Minimize",
+    "zoom": "Zoom",
+    "bringAllToFront": "Bring All to Front"
   }
 }

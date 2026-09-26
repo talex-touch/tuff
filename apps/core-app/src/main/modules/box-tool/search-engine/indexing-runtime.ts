@@ -7,6 +7,7 @@ import type {
   IndexedSourceReconcileResult,
   IndexedSourceResetRequest,
   IndexedSourceResetResult,
+  IndexedSourceRoot,
   IndexedSourceScanReason,
   IndexedSourceScanRequest,
   IndexedSourceTaskHistoryEntry,
@@ -42,6 +43,7 @@ import type { SearchIndexWriterMode, UpsertFileRecord } from './search-index-wri
 
 import type { IndexingTaskStateStore } from './indexing-task-state-store'
 import type { WatchEventRouteResult } from './indexing-watch-router'
+import process from 'node:process'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import {
   DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT,
@@ -55,6 +57,7 @@ import {
   IndexedSourceTaskRunGate,
   resolveIndexedSourceTaskEligibility,
   resolveIndexedSourceTaskRetryDecision,
+  resolveIndexedSourceWatchRootRoute,
   updateIndexedSourceTaskState
 } from '@talex-touch/utils/search'
 import { isSqliteBusyError } from '../../../db/sqlite-retry'
@@ -279,6 +282,24 @@ export class IndexingRuntime {
 
   setSourceWriterRouter(router: IndexingRuntimeSourceWriterRouter): void {
     this.sourceWriterRouter = router
+  }
+
+  /** The callback retains its source lease through admission, persistence and publication. */
+  async withSourceMutationLease<T>(
+    sourceId: string,
+    operation: (leaseId: string) => Promise<T>
+  ): Promise<T> {
+    const source = this.requireSource(sourceId)
+    return await this.sourceMutationGate.run(sourceId, async (lease) => {
+      try {
+        return await operation(lease.id)
+      } catch (error) {
+        await source
+          .drainMutations?.({ leaseId: lease.id, reason: 'mutation' })
+          .catch(() => undefined)
+        throw error
+      }
+    })
   }
 
   async applySourceBatch(
@@ -536,6 +557,13 @@ export class IndexingRuntime {
     // Watch admission needs fresh health/roots, not an all-source diagnostic report.
     // Optional evidence and unrelated sources must not hold this source's mutations.
     const source = event.sourceId ? this.sources.get(event.sourceId) : undefined
+    // Root ownership first: a path outside every root of the targeted source is filtered whatever
+    // its health says, so it must not pay for a health read. For the app source that read is a
+    // full FTS count on the single read worker, and filtered events used to buy one each — and a
+    // task-history write — before the root check turned them away.
+    if (source && (await this.isOutsideSourceWatchRoots(event, source))) {
+      return buildRootFilteredWatchResult(source.descriptor.id)
+    }
     const sources = event.sourceId ? (source ? [source] : []) : this.listSources()
     const diagnostics = await this.diagnosticsService.getDiagnostics(sources, 'routing')
     await this.applyTaskState(diagnostics)
@@ -543,6 +571,25 @@ export class IndexingRuntime {
     const result = await this.watchRouter.routeWithResult(event, this.sources, diagnostics)
     await this.recordWatchResult(event, result, queuedAt)
     return result
+  }
+
+  /**
+   * Reads the source's current roots (never cached) and reports whether the event lies outside all
+   * of them. Unknown roots, or a source without a watch handler, fall through to the full route so
+   * its existing outcome and diagnostics stay exactly as they were.
+   */
+  private async isOutsideSourceWatchRoots(
+    event: IndexedSourceWatchEvent,
+    source: IndexedSource
+  ): Promise<boolean> {
+    if (!source.handleWatchEvent) return false
+    let roots: IndexedSourceRoot[]
+    try {
+      roots = await source.getRoots()
+    } catch {
+      return false
+    }
+    return resolveIndexedSourceWatchRootRoute(event, roots, { platform: process.platform }) === null
   }
 
   async scanSource(
@@ -1556,6 +1603,27 @@ export class IndexingRuntime {
       taskState.value,
       taskState.historyEntry
     )
+  }
+}
+
+/**
+ * What the full route returns for a source-scoped event outside the source's roots (see
+ * `WatchEventRouter.getSourceByIdAndRoot`), reproduced without the diagnostics that route needs.
+ * Nothing is recorded in task history: the event never belonged to the source.
+ */
+function buildRootFilteredWatchResult(sourceId: string): WatchEventRouteResult {
+  return {
+    deltas: [],
+    matchedSources: 1,
+    handledSources: 0,
+    failedSources: 0,
+    skippedSources: 1,
+    appliedDeltas: 0,
+    failedDeltas: 0,
+    skippedDeltas: 0,
+    errors: [],
+    skipped: [{ sourceId, reason: 'source-watch-filtered' }],
+    deltaSummaries: []
   }
 }
 

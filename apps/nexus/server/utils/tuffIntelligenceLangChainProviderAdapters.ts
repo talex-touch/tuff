@@ -4,6 +4,10 @@ import {
   SystemMessage,
   type BaseMessage,
 } from "@langchain/core/messages";
+import {
+  toLangChainAnthropicThinkingFields,
+  toLangChainOpenAiReasoningFields,
+} from "@talex-touch/utils/intelligence/reasoning-effort";
 import { resolveProviderBaseUrl } from "./intelligenceModels";
 import type {
   IntelligenceProviderAdapterPayload,
@@ -13,6 +17,61 @@ import type {
 
 const OPENAI_CHAT_SUFFIXES = ["/chat/completions", "/v1/chat/completions"];
 const OPENAI_VERSION_SUFFIXES = ["/v1", "/v1/"];
+/** The temperature every OpenAI-compatible request sends when no reasoning plan applies. */
+const OPENAI_DEFAULT_TEMPERATURE = 0.2;
+/** The Anthropic output ceiling when the caller declares none; with thinking, the answer's share. */
+const ANTHROPIC_DEFAULT_MAX_TOKENS = 1200;
+
+type ChatOpenAIFields = NonNullable<
+  ConstructorParameters<typeof import("@langchain/openai").ChatOpenAI>[0]
+>;
+
+/**
+ * The payload's reasoning plan as `ChatOpenAI` fields. Without one the model keeps the fixed 0.2;
+ * with one the temperature is left out, because a reasoning model rejects any but its default.
+ */
+function openAiReasoningConfig(
+  payload: IntelligenceProviderAdapterPayload,
+): Pick<ChatOpenAIFields, "temperature" | "reasoningEffort" | "modelKwargs"> {
+  const reasoning = toLangChainOpenAiReasoningFields(payload.reasoning);
+  if (!reasoning) return { temperature: OPENAI_DEFAULT_TEMPERATURE };
+  return {
+    // Written into the body verbatim; LangChain's bundled OpenAI types stop at `high`.
+    reasoningEffort:
+      reasoning.reasoningEffort as ChatOpenAIFields["reasoningEffort"],
+    ...(reasoning.modelKwargs ? { modelKwargs: reasoning.modelKwargs } : {}),
+  };
+}
+
+/**
+ * The payload's reasoning plan as `ChatAnthropic` fields: the output ceiling alone without one, and
+ * with one the thinking switch, the only temperature thinking accepts, and a ceiling that makes
+ * room for the thinking on top of the answer.
+ */
+function anthropicReasoningConfig(
+  payload: IntelligenceProviderAdapterPayload,
+  streaming: boolean,
+): {
+  maxTokens: number;
+  temperature?: number;
+  thinking?: { type: "enabled"; budget_tokens: number };
+  invocationKwargs?: Record<string, unknown>;
+} {
+  const answerTokens = payload.maxTokens ?? ANTHROPIC_DEFAULT_MAX_TOKENS;
+  const thinking = toLangChainAnthropicThinkingFields(payload.reasoning, {
+    answerTokens,
+    streaming,
+  });
+  if (!thinking) return { maxTokens: answerTokens };
+  return {
+    maxTokens: thinking.maxTokens,
+    temperature: thinking.temperature,
+    thinking: thinking.thinking,
+    ...(thinking.invocationKwargs
+      ? { invocationKwargs: thinking.invocationKwargs }
+      : {}),
+  };
+}
 function createId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -256,7 +315,7 @@ export async function invokeOpenAiCompatibleProviderAdapter(
   const runner = new ChatOpenAI({
     apiKey: context.apiKey || "tuff-local-key",
     model: context.model,
-    temperature: 0.2,
+    ...openAiReasoningConfig(payload),
     timeout: context.timeoutMs,
     maxTokens: payload.maxTokens,
     configuration: { baseURL: baseUrl },
@@ -290,7 +349,7 @@ export async function invokeAnthropicProviderAdapter(
   const runner = new ChatAnthropic({
     anthropicApiKey: context.apiKey || "",
     model: context.model,
-    maxTokens: payload.maxTokens ?? 1200,
+    ...anthropicReasoningConfig(payload, false),
     anthropicApiUrl: baseUrl,
     clientOptions: { baseURL: baseUrl },
   });
@@ -321,7 +380,7 @@ export async function* streamOpenAiCompatibleProviderAdapter(
   const runner = new ChatOpenAI({
     apiKey: context.apiKey || "tuff-local-key",
     model: context.model,
-    temperature: 0.2,
+    ...openAiReasoningConfig(payload),
     timeout: context.timeoutMs,
     streaming: true,
     streamUsage: true,
@@ -350,7 +409,7 @@ export async function* streamAnthropicProviderAdapter(
   const runner = new ChatAnthropic({
     anthropicApiKey: context.apiKey || "",
     model: context.model,
-    maxTokens: payload.maxTokens ?? 1200,
+    ...anthropicReasoningConfig(payload, true),
     streaming: true,
     streamUsage: true,
     anthropicApiUrl: baseUrl,

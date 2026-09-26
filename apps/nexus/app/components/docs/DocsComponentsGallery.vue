@@ -39,8 +39,10 @@ import tuffexPkg from '../../../../../packages/tuffex/package.json'
 // in a cell's stage, and the wrapper adds the reset button that remounts the
 // specimen so its entrance can be watched again.
 import ClientOnly from './DocsGallerySpecimen.vue'
+import GalleryChoiceCard from './gallery/GalleryChoiceCard.vue'
 import GalleryEdgeMarquee from './gallery/GalleryEdgeMarquee.vue'
 import GalleryFusion from './gallery/GalleryFusion.vue'
+import GalleryFusionSurface from './gallery/GalleryFusionSurface.vue'
 import GalleryLiquidMenu from './gallery/GalleryLiquidMenu.vue'
 import GalleryTextMorph from './gallery/GalleryTextMorph.vue'
 import GalleryTransitionLanes from './gallery/GalleryTransitionLanes.vue'
@@ -456,6 +458,26 @@ const drawerOpen = ref(false)
 const popoverOpen = ref(false)
 const overlayLoading = ref(true)
 const tabsActive = ref('')
+const TABS_VARIANTS = ['line', 'pill', 'block', 'outline', 'dot'] as const
+const tabsVariant = ref<(typeof TABS_VARIANTS)[number]>('pill')
+const tabsVariantNote = computed(() => {
+  const notes = localeKey.value === 'zh'
+    ? {
+        line: '细线压在导航与内容的分隔线上，长度对齐标签。',
+        pill: '凸起面，和 TabBar 的胶囊、FlatRadio 的滑块是同一种材质。',
+        block: '主色浅染，不投影，放在卡片里也安静。',
+        outline: '一圈主色描边，向内画，不占布局。',
+        dot: '标签下的小圆点，密集导航里最安静的标记。',
+      }
+    : {
+        line: 'A rule resting on the divider, as long as the label.',
+        pill: 'A raised surface — the same body as TabBar\'s pill and FlatRadio\'s thumb.',
+        block: 'A tint of the primary colour. No shadow, so it stays quiet on a card.',
+        outline: 'A primary ring, drawn inward so it never adds to the box.',
+        dot: 'A small mark under the label — the quietest of the five.',
+      }
+  return notes[tabsVariant.value]
+})
 const selectionRootRef = ref<HTMLElement | null>(null)
 const selectionBarRef = ref<{ el: HTMLElement | null } | null>(null)
 // `ignore` is not optional in practice: clicking into the bar's own prompt field
@@ -2210,18 +2232,29 @@ async function copyInstall() {
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block docs-gallery__tabs">
-              <TxTabs v-model="tabsActive" placement="top">
+              <!-- The variant switcher is a FlatRadio on purpose: its thumb and
+                   the tabs' pointer ride the same jelly engine, so the cell
+                   shows the family twice. -->
+              <TxFlatRadio v-model="tabsVariant" size="sm" class="docs-gallery__tabs-variants">
+                <TxFlatRadioItem v-for="variant in TABS_VARIANTS" :key="variant" :value="variant" :label="variant" />
+              </TxFlatRadio>
+              <TxTabs v-model="tabsActive" placement="top" :indicator-variant="tabsVariant">
                 <!-- `:activation="true"`, not the `activation` shorthand: TxTabs
                      picks the initial tab off the raw vnode props, where the
                      shorthand is the empty string and reads as false. -->
-                <TxTabItem :name="copy.suiteBase" icon-class="i-carbon-settings" :activation="true">
+                <TxTabItem :name="copy.suiteBase" icon-class="i-carbon-home" :activation="true">
                   <p class="docs-gallery__muted">
-                    {{ copy.aboutBody }}
+                    {{ tabsVariantNote }}
                   </p>
                 </TxTabItem>
                 <TxTabItem :name="copy.suitePro" icon-class="i-carbon-rocket">
                   <p class="docs-gallery__muted">
-                    {{ copy.installBody }}
+                    {{ tabsVariantNote }}
+                  </p>
+                </TxTabItem>
+                <TxTabItem :name="copy.suiteAi" icon-class="i-carbon-machine-learning-model">
+                  <p class="docs-gallery__muted">
+                    {{ tabsVariantNote }}
                   </p>
                 </TxTabItem>
               </TxTabs>
@@ -2585,10 +2618,10 @@ async function copyInstall() {
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxStatCard
-                :value="1284"
-                :label="copy.online"
-                icon-class="i-carbon-analytics docs-gallery__stat-icon"
-                :insight="{ from: 1100, to: 1284, type: 'percent' }"
+                :value="12847"
+                :label="localeKey === 'zh' ? '周活跃用户' : 'Weekly active users'"
+                icon-class="i-carbon-user-multiple docs-gallery__stat-icon"
+                :insight="{ from: 11020, to: 12847, type: 'percent' }"
               />
             </div>
             <template #fallback>
@@ -2948,6 +2981,20 @@ async function copyInstall() {
       </section>
 
       <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('fusion-surface')">
+          {{ cellLabel('FusionSurface', '融合表面') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <GalleryFusionSurface />
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('glass-surface')">
           {{ cellLabel('GlassSurface', '玻璃表面') }}
         </NuxtLink>
@@ -3107,6 +3154,24 @@ async function copyInstall() {
                 <span class="docs-gallery__meter-text">mask</span>
               </div>
             </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('prism-glow')">
+          {{ cellLabel('PrismGlow', '棱镜光') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <!-- The glow's root is the card: its light paints over the card's
+                 background and under the text, rising from the bottom edge. -->
+            <TxPrismGlow class="docs-gallery__prism-card">
+              {{ copy.searching }}…
+            </TxPrismGlow>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -3343,6 +3408,22 @@ async function copyInstall() {
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxSuggestionChips :suggestions="copy.suggestions" layout="list" />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('choice-card')">
+          {{ cellLabel('ChoiceCard', '选项卡片') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__block">
+              <GalleryChoiceCard />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />

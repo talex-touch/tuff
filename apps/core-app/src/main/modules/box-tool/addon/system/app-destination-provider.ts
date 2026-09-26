@@ -33,8 +33,15 @@ const APP_DESTINATION_ACTION_PREFIX = 'open-destination:'
 const MAIN_WINDOW_ITEM_ID = 'main-window'
 const PREFIXED_ITEM_ID_PREFIX = 'app-destination:'
 
-/** Upper bound on metadata search tokens; the alias list is small but must stay bounded. */
-const MAX_SEARCH_TOKENS = 16
+/**
+ * Upper bound on metadata search tokens.
+ *
+ * The alias lists are static and hand-written, so this is a sanity bound rather than a working
+ * limit — but it has to clear the largest family in the catalog (a MainWindow surface with its
+ * English, Chinese and full/initial pinyin aliases is 24 entries today). At 16 the pinyin initials
+ * were the entries that fell off the end, which silently costs those queries their rank score.
+ */
+const MAX_SEARCH_TOKENS = 32
 
 /**
  * Deterministic item id -> destination id. Only the two exact item id shapes this provider

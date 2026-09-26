@@ -64,10 +64,11 @@ function activate(): void {
   // The hint chip anchors to the row rather than to the sidebar: its trailing edge is the row's
   // trailing edge, which is where the eye already is.
   position: relative;
-  gap: 10px;
+  // Metrics come from ShellSidebar, which every other row in the column reads too.
+  gap: var(--shell-row-gap);
   align-items: center;
   width: 100%;
-  padding: 6px 9px;
+  padding: var(--shell-row-pad-y) var(--shell-row-pad-x);
   border: 1px solid transparent;
   border-radius: var(--shell-radius-md);
   background: transparent;
@@ -108,11 +109,11 @@ function activate(): void {
  */
 .ShellNavItem-Icon {
   flex: 0 0 auto;
-  width: 16px;
-  min-width: 16px;
-  height: 16px;
-  min-height: 16px;
-  font-size: 16px;
+  width: var(--shell-row-icon);
+  min-width: var(--shell-row-icon);
+  height: var(--shell-row-icon);
+  min-height: var(--shell-row-icon);
+  font-size: var(--shell-row-icon);
 }
 
 .ShellNavItem-Label {

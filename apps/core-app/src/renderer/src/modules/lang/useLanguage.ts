@@ -1,14 +1,16 @@
 import { hasNavigator, hasWindow } from '@talex-touch/utils/env'
 import { appSettings } from '@talex-touch/utils/renderer/storage'
 import { readonly, ref, watch } from 'vue'
-import { appSetting } from '~/modules/storage/app-storage'
+import { appSetting, appSettingStore } from '~/modules/storage/app-storage'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { devLog } from '~/utils/dev-log'
 import { getGlobalI18nInstance, loadLocaleMessages, setI18nLanguage } from './i18n'
 import {
+  BOOT_LANGUAGE_PREFERENCE,
   resolveInitialLanguagePreference,
   resolveSupportedLocale,
   SUPPORTED_LANGUAGES,
+  type InitialLanguagePreference,
   type SupportedLanguage
 } from './language-preferences'
 
@@ -19,18 +21,36 @@ const currentLanguage = ref<SupportedLanguage>('zh-CN')
 const followSystemLanguage = ref(false)
 let initialStateResolved = false
 
+/**
+ * The language this window should show right now.
+ *
+ * `appSetting.lang` answers with the origin default (`followSystem: true`) until the settings
+ * store's first reply lands. Resolving that default boots the window in the OS language, which is
+ * how a CoreBox opened before the storage reply showed an English UI - and English CoreBox results
+ * on a machine whose app language is 简体中文. Until the stored preference is here, the product
+ * default is the honest answer; {@link setupLanguageFollow} re-resolves from the real setting as
+ * soon as it lands.
+ */
+export function readLanguagePreference(): InitialLanguagePreference {
+  if (!appSettingStore.isHydrated()) {
+    return BOOT_LANGUAGE_PREFERENCE
+  }
+
+  return resolveInitialLanguagePreference({
+    settingLocale: appSetting?.lang?.locale,
+    settingFollowSystem: appSetting?.lang?.followSystem,
+    browserLanguage: hasNavigator() ? navigator.language : null,
+    intlLocale: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().locale : null
+  })
+}
+
 function resolveInitialState(): void {
   if (initialStateResolved) {
     return
   }
   initialStateResolved = true
 
-  const preference = resolveInitialLanguagePreference({
-    settingLocale: appSetting?.lang?.locale,
-    settingFollowSystem: appSetting?.lang?.followSystem,
-    browserLanguage: hasNavigator() ? navigator.language : null,
-    intlLocale: typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().locale : null
-  })
+  const preference = readLanguagePreference()
 
   currentLanguage.value = preference.locale
   followSystemLanguage.value = preference.followSystem
@@ -114,6 +134,25 @@ export function setupLanguageFollow(): void {
       }
     }
   )
+
+  /**
+   * This window may have booted on {@link BOOT_LANGUAGE_PREFERENCE}, which is what a storage reply
+   * slower than the boot's soft wait leaves behind. Recompute from the stored setting once it
+   * lands: a follower must end on the system language even when the origin default and the stored
+   * value look identical, so the watch above cannot be relied on to fire.
+   */
+  void appSettings.whenHydrated().then(async () => {
+    const preference = readLanguagePreference()
+    followSystemLanguage.value = preference.followSystem
+    if (preference.locale === currentLanguage.value) {
+      return
+    }
+    try {
+      await applyLanguage(preference.locale)
+    } catch (error) {
+      languageLog.error('Failed to apply the stored language after hydration', error)
+    }
+  })
 }
 
 /**

@@ -12,7 +12,7 @@ verified: true
 ## 用法
 
 ### SidebarNav
-:::TuffDemoWrapper{demo="SidebarNavSidebarNavDemo" code-lang="vue" title="工作区导航" description="快捷搜索可用，按 `/` 聚焦；悬停时高亮块会跟随移动。"}
+:::TuffDemoWrapper{demo="SidebarNavSidebarNavDemo" code-lang="vue" title="工作区导航" description="快捷搜索可用，按 `/` 聚焦；悬停时高亮块顺滑地跟过去。"}
 ---
 code: |
   <template>
@@ -58,7 +58,7 @@ code: |
 | `actionLabel` | `string` | - | 主操作文案；不传则不渲染按钮。 |
 | `filter` | `(items, query) => items` | - | 覆盖内建匹配。远端场景传 `items => items`。 |
 | `ariaLabel` | `string` | `'Workspace'` | `<nav>` 地标的可访问名。 |
-| `indicatorDuration` | `number` | `220` | 高亮块的移动时长（ms）。 |
+| `indicatorDuration` | `number` | `220` | 高亮块的速度（ms）：把滑行的弹簧整体放快或放慢（默认的 220 即 `GLIDE` 原值）。小于 100 的值按 100 播放。 |
 
 ### Types
 
@@ -92,7 +92,7 @@ code: |
 | 名称 | 说明 |
 |------|------|
 | `focusSearch()` | 聚焦搜索框，供宿主绑定自定义快捷键。 |
-| `refreshIndicator()` | 在观察器覆盖不到的布局变化后重新测量高亮块。 |
+| `refreshIndicator()` | 在观察器覆盖不到的布局变化后重新测量高亮块。它直接落位，不会滑过去。 |
 
 ## 高亮块的移动与测量
 
@@ -104,7 +104,15 @@ code: |
 import { useIndicatorBox } from '@talex-touch/tuffex'
 ```
 
-它同时返回 `top / left / width / height` 四条边，水平方向的分段控件可以复用同一次测量。相比上游多了两点：容器与目标都挂了 `ResizeObserver`（上游只在悬停/选中变化时测一次，容器改变尺寸或字体加载完成后高亮块就错位了），以及一个 `revealed` 标志，让首帧直接落位而不是从容器顶部滑进来。
+它同时返回 `top / left / width / height` 四条边，水平方向的分段控件可以复用同一次测量。相比上游多了两点：容器与目标都挂了 `ResizeObserver`（上游只在悬停/选中变化时测一次，容器改变尺寸或字体加载完成后高亮块就错位了），以及一个 `revealed` 标志，导航用它在高亮块有了落脚的行之后再让它淡入。
+
+高亮块由共享的指示器引擎 `useJellyIndicator` 驱动，用的是 `TxTabs`、`TxTabBar`、`TxFlatRadio` 同样在用的滑行材质（Radio 按钮组保留果冻）：
+
+- 朝向新行的一边走 `GLIDE` 弹簧（刚度 420、阻尼 38）领先，另一边走同一根弹簧的慢放版本跟上，lag 比 Tabs 更轻（0.3），所以高亮块跟得上扫过多行的指针：28px 的高亮块途中长到约 33px、到位时收拢。它从不缩放。`indicatorDuration` 把两根弹簧整体放快或放慢——默认的 220ms 即 `GLIDE` 原值；途中换了目标时直接改弹簧的目标，不会先走完上一段。
+- 它的宽度始终是 CSS 给的宽度、从不改变，所以整行宽的高亮块不会横向溢出列表。
+- 到了第一行和最后一行，要离开列表的那一边停在列表末端，而不是把高亮块带出卡片。引擎的墙是列表的完整高度（`scrollHeight`），所以高度受限的列表里超出可视区的行仍然到得了。
+- 只有目标变了才会移动：指针或键盘焦点到了另一行，或者移出列表后回到选中行。首次测量以及同一行的重新测量（尺寸变化、字体替换、`refreshIndicator()`）都直接落位。
+- `prefers-reduced-motion: reduce` 下高亮块直接跳到目标行，出现时也不淡入。
 
 ## 快捷搜索与 `/` 快捷键
 
@@ -125,9 +133,10 @@ import { useIndicatorBox } from '@talex-touch/tuffex'
 ## 技术实现
 
 - Component source: `packages/tuffex/packages/components/src/sidebar-nav/src/TxSidebarNav.vue`。
-- Composable: `packages/tuffex/packages/components/src/sidebar-nav/src/use-indicator-box.ts`，从 `sidebar-nav/index.ts` 一并导出。
+- Composables: `packages/tuffex/packages/utils/use-indicator-box.ts` 负责测量，并从 `sidebar-nav/index.ts` 一并导出；`packages/tuffex/packages/utils/use-jelly-indicator.ts` 以滑行材质负责移动，由 `springSteps`（`packages/tuffex/packages/components/src/liquid/src/spring.ts`，按 1/240 s 分步积分）驱动。
 - Types: `packages/tuffex/packages/components/src/sidebar-nav/src/types.ts`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/sidebar-nav/__tests__/sidebar-nav.test.ts` 验证分组渲染与 `aria-current`、禁用项不派发、查询过滤与空分组收起、`filter` 覆盖、工作区与主操作事件、行尾操作是具名按钮且不连带触发导航、徽标重建、无分组项前置、高亮块首帧不过渡、以及桩化尺寸后高亮块确实从选中行移到悬停行再移回；快捷键部分覆盖聚焦、输入区/组合键/已消费事件让路、多字符角标不占键位与卸载解绑。
+- **动效说明:** 引擎每帧直接写高亮块的 `transform`、`height` 与 `opacity`，模板不绑定其中任何一项，所以一次移动不会让导航重新渲染；`top` 固定为 0，宽度仍交给 CSS。transform 与高度上不挂 CSS transition，因为它会把引擎写入的每一帧再缓动一遍。高亮块上仍带着行内的 `--tx-bui-sidebar-nav-indicator-duration`，但已经没有样式规则读取它。
+- **实测覆盖:** `packages/tuffex/packages/components/src/sidebar-nav/__tests__/sidebar-nav.test.ts` 验证分组渲染与 `aria-current`、禁用项不派发、查询过滤与空分组收起、`filter` 覆盖、工作区与主操作事件、行尾操作是具名按钮且不连带触发导航、徽标重建、无分组项前置、高亮块在测量前保持透明且不带淡入，以及桩化尺寸并使用假计时器后：首次测量直接落在选中行，随后高亮块滑行（而不是瞬移）到悬停行再移回——途中比一行更高、从不缩放——每次都精确落位且不写行内 `top`；往返第一行与最后一行时每一帧都在列表内；`prefers-reduced-motion: reduce` 下直接跳到悬停行。对编译后的样式，还验证高亮块只过渡淡入，减弱动效下连它也关掉；快捷键部分覆盖聚焦、输入区/组合键/已消费事件让路、多字符角标不占键位与卸载解绑。
 - 改编自 [Beautiful UI](https://www.beautifului.dev)，© 2026 Shane Levine，MIT 协议。
 
 <TuffDocSourceLink />

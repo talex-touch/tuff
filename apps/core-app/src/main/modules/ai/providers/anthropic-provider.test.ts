@@ -1,3 +1,4 @@
+import type { BaseMessage } from '@langchain/core/messages'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 
@@ -84,6 +85,70 @@ describe('AnthropicProvider timeout resolution', () => {
     expect(modelMocks.construct).toHaveBeenCalledWith(
       expect.objectContaining({ timeout: expectedTimeout })
     )
+  })
+})
+
+describe('AnthropicProvider system prompt', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function sentMessages(): Array<[string, unknown]> {
+    const messages = modelMocks.invoke.mock.calls[0]?.[0] as BaseMessage[]
+    return messages.map((message) => [message.getType(), message.content])
+  }
+
+  /**
+   * LangChain's Anthropic adapter throws on a system message that is not the first one, and a
+   * caller can stack them — a prompt-template binding ahead of its own system part. Unfolded, every
+   * such request failed on Anthropic.
+   */
+  it('folds stacked system messages into the one leading prompt Anthropic accepts', async () => {
+    modelMocks.invoke.mockResolvedValueOnce({ content: 'ok' })
+
+    await createProvider().chat(
+      {
+        messages: [
+          { role: 'system', content: 'Imported skills and rules.' },
+          { role: 'system', content: 'At the start you said: which one first?' },
+          { role: 'user', content: 'Tidy my downloads' },
+          { role: 'assistant', content: 'Sorted by type.' },
+          { role: 'user', content: 'Now by date' }
+        ]
+      },
+      {}
+    )
+
+    expect(sentMessages()).toEqual([
+      ['system', 'Imported skills and rules.\n\nAt the start you said: which one first?'],
+      ['human', 'Tidy my downloads'],
+      ['ai', 'Sorted by type.'],
+      ['human', 'Now by date']
+    ])
+  })
+
+  it('sends a single system prompt, or none, exactly as before', async () => {
+    modelMocks.invoke.mockResolvedValue({ content: 'ok' })
+    const provider = createProvider()
+
+    await provider.chat(
+      {
+        messages: [
+          { role: 'system', content: 'Be brief.' },
+          { role: 'user', content: 'Hi' }
+        ]
+      },
+      {}
+    )
+    expect(sentMessages()).toEqual([
+      ['system', 'Be brief.'],
+      ['human', 'Hi']
+    ])
+
+    vi.clearAllMocks()
+    modelMocks.invoke.mockResolvedValue({ content: 'ok' })
+    await provider.chat({ messages: [{ role: 'user', content: 'Hi' }] }, {})
+    expect(sentMessages()).toEqual([['human', 'Hi']])
   })
 })
 

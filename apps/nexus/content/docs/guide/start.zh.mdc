@@ -25,7 +25,7 @@
 - **数据所有权**：所有内容落在本地 LibSQL 数据库，云端仅同步加密后的配置片段。
 
 ## 4. 快捷体验
-- `⌘ + E` / `Ctrl + E`：唤出 CoreBox。
+- `⌥ + Space` / `Alt + Space`：唤出 CoreBox。如果按下后打开的是别的应用（例如 Raycast、Alfred、ChatGPT），说明这个键已被占用，在设置中换一个快捷键即可。
 - CoreBox 已内置 **App Semantic Alias Catalog / 应用语义别名目录**：搜索 `im`、`chat`、`即时通讯` 可以召回微信、飞书、Telegram 等已安装通讯应用；搜索 `design`、`ps`、`设计` 可以召回 Photoshop、Figma 等设计工具；搜索 `vsc`、`code` 可以召回 VS Code。
 - 长按拖拽 Dock 图标：快速切换 Workspace。
 - 通知中心小部件：查看当前 workflow 队列与插件状态。

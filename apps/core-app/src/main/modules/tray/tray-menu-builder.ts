@@ -7,11 +7,13 @@ import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app, Menu, shell } from 'electron'
+import { COREBOX_TOGGLE_SHORTCUT_ID } from '../../../shared/corebox-shortcut'
 import { t } from '../../utils/i18n-helper'
 import { setQuitIntent } from '../../core/quit-intent'
 import { coreBoxManager } from '../box-tool/core-box/manager'
 import { getAppDestinationNavigationService } from '../app-destination/app-destination-navigation'
-import { screenshotSessionModule } from '../screenshot-session'
+import { shortcutModule } from '../global-shortcon'
+import { SCREENSHOT_SHORTCUT_ID, screenshotSessionModule } from '../screenshot-session'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -124,7 +126,11 @@ export class TrayMenuBuilder {
     return [
       {
         label: t('tray.openCoreBox'),
-        accelerator: process.platform === 'darwin' ? 'Cmd+E' : 'Ctrl+E',
+        // The key that opens CoreBox right now, which is not always the stored one: a key the OS
+        // refused, or one that lost an in-app conflict, does nothing. Then the row prints no key
+        // rather than a dead one.
+        accelerator:
+          shortcutModule.getEffectiveAccelerator(COREBOX_TOGGLE_SHORTCUT_ID) ?? undefined,
         click: () => {
           coreBoxManager.trigger(true, { triggeredByShortcut: true })
         }
@@ -134,7 +140,10 @@ export class TrayMenuBuilder {
         submenu: [
           {
             label: t('tray.screenshotNow'),
-            accelerator: process.platform === 'darwin' ? 'Cmd+Shift+S' : 'Ctrl+Shift+S',
+            // Read like the CoreBox row. The ⇧⌘S written here was neither the screenshot default
+            // (⇧⌘A) nor any rebind, so the row taught a key that did nothing.
+            accelerator:
+              shortcutModule.getEffectiveAccelerator(SCREENSHOT_SHORTCUT_ID) ?? undefined,
             click: () => {
               void screenshotSessionModule.startStandalone('tray', 0).catch(() => {})
             }

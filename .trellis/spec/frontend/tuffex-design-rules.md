@@ -175,9 +175,32 @@ Non-negotiable for any declared transition or animation. Keyframe animations add
 
 Worked example: `TxEmptyState`'s illustrations (all variants since 2026-09-24). An element whose resting style is not a finished frame of its animation — a stroke at a full dash offset or a dot at opacity 0 (the hidden start), a bubble not yet shifted into place — must be set to the frame its animation ends on inside the reduced-motion block, not merely have `animation: none`; otherwise the still frame is missing that part or shows it out of place. `empty-state.test.ts` fails when any `animation: tx-empty-state-*` selector has no reduced-motion stop.
 
+The inverse form is equally valid and smaller: declare the animation **only** inside `@media (prefers-reduced-motion: no-preference) { … }`, so reduced motion never starts it and the element simply rests in its declared (final) style. `TxStatCard`, the charts and `TxChoiceCard` use it (2026-09-26: it took ~0.4 KiB off `TxChoiceCard` with pixel-identical output). Pick one form per component; a style-contract test must then assert the form you picked — either every animated selector has a `reduce` stop, or every `animation:` declaration sits inside a `no-preference` block.
+
 ### Collapsing content keeps its size while it closes
 
 A collapse that shrinks its content box during the close animation makes the text reflow on the way out, which reads as a glitch rather than a transition. Animate the container; leave the content at its measured size until the animation ends. See `bui-disclosure-collapse` in `style/mixins.scss`.
+
+### A looping effect runs on the compositor, with its parameters outside the keyframes
+
+A loading or ambient effect plays exactly while the main thread is busy (a search in flight, a model streaming), so no frame of it may need the main thread:
+
+- Animate only `translate`, `scale`, `rotate` and `opacity`, as individual properties. Two animations on one element then never compete for `transform`, and a static `transform` can still hold a base size that the animated `scale` composes with.
+- Keep `var()` out of `@keyframes`. Per-element parameters such as period, phase and hue sit on the element as custom properties and reach the animation through `calc()` in `animation-duration` / `animation-delay`, never through keyframe values.
+- Write the per-instance custom properties inline and keep one rule for every instance, instead of generating a selector per instance.
+
+Additive light only works on dark surfaces. `mix-blend-mode: plus-lighter` is what makes overlapping beams merge towards white on dark. On a near-white page it is invisible, and a white core reads as a grey smudge, so light mode keeps the core coloured and blends `normal`. `multiply` is not the fix: it turns blue over yellow into olive.
+
+Worked example: `TxPrismGlow` (2026-09-26); `prism-glow.test.ts` covers it.
+
+### A loading surface retracts when content lands under it
+
+When results arrive and make the host of a loading effect taller, the effect must not share a frame with the content. Swap the fade-out for a short retract (about 140ms) the moment the host grows, and keep the effect off until the loading flag cycles. `TxPrismGlow`'s `collapseOnGrow` is the reference:
+
+- Watch the height with a `ResizeObserver`. Its callbacks run after layout and before paint, and Vue flushes in the same step, so a frame showing grown content under a lit effect never paints.
+- Ignore growth below about 8px: a late web font reflows the host by a few pixels, and that is not content.
+- Growth during a fade-out counts too, because `items = data; loading = false` in one update is the common case. Speed up the running fade through `animation.playbackRate` rather than restarting it.
+- An `inset: 0` layer stretches with a growing host, so pin the leaving layer to its pre-growth height in the Transition's `@before-leave` hook. A node that `v-if` is removing receives no new bindings; a reactive `:style` cannot pin it.
 
 ---
 
@@ -232,6 +255,7 @@ A component is not done when it renders. It is done when all of these hold:
 6. Screen-reader-only text uses the clip pattern (`position: absolute; width: 1px; height: 1px; clip: rect(0,0,0,0)`), never `display: none`, which removes the node from the a11y tree.
 7. A state that changes without user action gets a `role="status" aria-live="polite"` region. Swapping a visible label or an `aria-label` is never re-announced.
 8. Registration chain complete: component dir → `components.ts` → the matching `base`/`pro`/`ai` barrel (guarded by `src/__tests__/suite-barrels.test.ts`) → `apps/nexus` taxonomy, sidebar, gallery, hub index → `.zh.mdc` + `.en.mdc` + demo + `demo-registry.ts`. See [TuffEx Docs Sync](./tuffex-docs-sync.md).
+9. The stylesheet fits `pnpm -C packages/tuffex audit:size`. The full and on-demand CSS gates run with only a few KiB of headroom, so a new component slims before it asks for a gate change: stagger with one rule reading an inline `--<block>-index` custom property instead of generated `:nth-child` rules, put layout variants in container queries, let ink inherit instead of restating it per element, and never re-declare what a composed primitive (`TxSkeleton`, `TxIcon`) already ships. A gate bump, when it is unavoidable, rides in the same commit as the component that needs it, never in a later "fix CI" commit.
 
 ### Narrowing a published prop union
 

@@ -13,6 +13,7 @@ import { app, nativeTheme, protocol } from 'electron'
 import { resolveThemeModeFromStyle } from '../shared/theme/theme-mode'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'
+import { configureAboutPanel, installApplicationMenu } from './core/application-menu'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import { innerRootPath, isDuplicateInstance } from './core/precore'
 import { setQuitIntent } from './core/quit-intent'
@@ -63,6 +64,7 @@ import { updateServiceModule } from './modules/update/UpdateService'
 import { voiceModule } from './modules/voice/voice-module'
 
 import { pluginLogModule } from './service/plugin-log.service'
+import { adoptPersistedLocale } from './utils/i18n-helper'
 import { loggerManager, mainLog } from './utils/logger'
 import './polyfills'
 
@@ -283,6 +285,13 @@ app.whenReady().then(async () => {
   if (!canContinue) return
 
   electronReadyTime = Date.now()
+
+  // Menu bar and About panel are window-less shell chrome, so they are installed here rather than
+  // from a module: the first window that opens already has them, and neither depends on a loaded
+  // module (`configureAboutPanel` only needs `app`, `installApplicationMenu` only the locale).
+  configureAboutPanel()
+  installApplicationMenu()
+
   // Names the sequence below, which is the only startup health check there is. A core/startup-health
   // module used to exist and this line read as its log; it was a 14-line generic helper nothing
   // imported, deleted in #802.
@@ -303,6 +312,12 @@ app.whenReady().then(async () => {
         fallbackReason: startupAppConfig.fallbackReason
       }
     })
+    /**
+     * Before any window opens and before the renderer can push its own locale: the persisted
+     * choice is the only thing on this machine that knows the user's language, and the first
+     * CoreBox query can arrive while the renderer is still hydrating its storage.
+     */
+    adoptPersistedLocale(startupAppConfig.settings)
     const touchApp = genTouchApp(startupAppConfig.settings)
 
     const modulesStartTime = Date.now()

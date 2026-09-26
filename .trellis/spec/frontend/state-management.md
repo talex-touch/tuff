@@ -611,3 +611,5 @@ if (cache.getVersion(key) === persistedRevision) {
   cache.clearDirty(key)
 }
 ```
+
+> **Dev gotcha (2026-09-26): Pinia setup stores are not hot-replaced.** Editing a store's returned shape (a new ref or action) HMR-updates the components but leaves the live store instance on the old shape, so a component calling the new action gets `undefined`. Reload the window (CDP `Page.reload`, since page-initiated reloads are swallowed) before judging the change; the project stores do not wire `acceptHMRUpdate`.

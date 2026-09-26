@@ -133,18 +133,16 @@ export function useSignIn() {
   const supportsPasskey = ref(false)
   const lastLoginMethod = ref<LoginMethod | null>(null)
   const reauthNotified = ref(false)
-  const storedOauthContext = ref<OauthContext | null>(import.meta.client ? readOauthContext() : null)
+  // Filled on mount, like lastLoginMethod: both live in localStorage, which the server render
+  // cannot see, so reading them during setup made the first client render disagree with the
+  // SSR markup. An OAuth error return then drew the OAuth step into the email step's leftover
+  // DOM, and hydration never corrects a mismatched class.
+  const storedOauthContext = ref<OauthContext | null>(null)
   const passkeyPhase = ref<'idle' | 'prepare' | 'prompt' | 'verifying' | 'error' | 'success'>('idle')
   const passkeyError = ref('')
 
   let passkeyTimer: ReturnType<typeof setTimeout> | null = null
   let successTimer: ReturnType<typeof setTimeout> | null = null
-
-  if (hasWindow()) {
-    const storedMethod = window.localStorage.getItem(LAST_LOGIN_METHOD_KEY)
-    if (storedMethod && LOGIN_METHODS.includes(storedMethod as LoginMethod))
-      lastLoginMethod.value = storedMethod as LoginMethod
-  }
 
   const canToast = import.meta.client
 
@@ -537,6 +535,11 @@ export function useSignIn() {
 
   onMounted(() => {
     supportsPasskey.value = hasWindow() && Boolean(window.PublicKeyCredential)
+
+    const storedMethod = window.localStorage.getItem(LAST_LOGIN_METHOD_KEY)
+    if (storedMethod && LOGIN_METHODS.includes(storedMethod as LoginMethod))
+      lastLoginMethod.value = storedMethod as LoginMethod
+
     refreshStoredOauthContext()
 
     if (!isOauthCallback.value && storedOauthContext.value) {

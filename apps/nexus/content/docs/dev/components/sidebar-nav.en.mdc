@@ -12,7 +12,7 @@ verified: true
 ## Usage
 
 ### SidebarNav
-:::TuffDemoWrapper{demo="SidebarNavSidebarNavDemo" code-lang="vue" title="Workspace navigation" description="The quick search works and `/` focuses it; the highlight travels with the pointer."}
+:::TuffDemoWrapper{demo="SidebarNavSidebarNavDemo" code-lang="vue" title="Workspace navigation" description="The quick search works and `/` focuses it; the highlight glides after the pointer."}
 ---
 code: |
   <template>
@@ -58,7 +58,7 @@ code: |
 | `actionLabel` | `string` | - | Primary action label; omit to drop the button. |
 | `filter` | `(items, query) => items` | - | Replaces the built-in match. Pass `items => items` for remote results. |
 | `ariaLabel` | `string` | `'Workspace'` | Accessible name for the `<nav>` landmark. |
-| `indicatorDuration` | `number` | `220` | Travel time for the highlight, in ms. |
+| `indicatorDuration` | `number` | `220` | Speed of the highlight, in ms: the glide's springs played faster or slower as a whole (220, the default, is `GLIDE` as written). Values under 100 play as 100. |
 
 ### Types
 
@@ -92,7 +92,7 @@ code: |
 | Name | Description |
 |------|------|
 | `focusSearch()` | Focuses the search field, for hosts wiring their own shortcut. |
-| `refreshIndicator()` | Re-measures the highlight after a layout change the observers cannot see. |
+| `refreshIndicator()` | Re-measures the highlight after a layout change the observers cannot see. It lands in place rather than travelling. |
 
 ## How the Highlight Travels
 
@@ -104,7 +104,15 @@ It is one absolutely positioned element that moves by measuring the target row a
 import { useIndicatorBox } from '@talex-touch/tuffex'
 ```
 
-It reports all four edges (`top / left / width / height`), so a horizontal segmented control can reuse the same reading. Two things it adds over upstream: a `ResizeObserver` on both the container and the target (upstream measures only when hover/active changes, so the highlight is stranded after a container resize or a font swap), and a `revealed` flag so the first paint lands in place instead of sliding in from the container's top edge.
+It reports all four edges (`top / left / width / height`), so a horizontal segmented control can reuse the same reading. Two things it adds over upstream: a `ResizeObserver` on both the container and the target (upstream measures only when hover/active changes, so the highlight is stranded after a container resize or a font swap), and a `revealed` flag, which the nav uses to fade the plate in once it has a row to sit on.
+
+The plate moves on the shared indicator engine, `useJellyIndicator`, on the glide material that `TxTabs`, `TxTabBar` and `TxFlatRadio` also ride (Radio's button group keeps the jelly):
+
+- The edge facing the new row leads on the `GLIDE` spring (stiffness 420, damping 38) and the far edge follows the same spring played slower, with a lighter lag than the tabs (0.3), so the plate keeps up with a pointer sweeping across rows: a 28px plate runs to about 33px on the way and gathers on the row. It never scales. `indicatorDuration` plays both springs faster or slower as a whole — 220ms, the default, is `GLIDE` as written — and a new target mid-trip retargets the springs instead of waiting for the old trip to end.
+- Its width is the CSS one and never changes, so the full-width plate cannot spill sideways out of the list.
+- At the first and last row an edge that would leave the list stops at its end instead of carrying the plate out of the card. The engine's walls are the list's full height (`scrollHeight`), so rows past a height-capped list are still reached.
+- A new target travels: the pointer or keyboard focus reaching another row, or the plate going home when it leaves the list. The first measurement and any re-measure of the same row (a resize, a font swap, `refreshIndicator()`) land in place.
+- Under `prefers-reduced-motion: reduce` the plate jumps to its row and appears without the fade.
 
 ## Quick Search and the `/` Shortcut
 
@@ -125,9 +133,10 @@ It reports all four edges (`top / left / width / height`), so a horizontal segme
 ## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/sidebar-nav/src/TxSidebarNav.vue`.
-- Composable: `packages/tuffex/packages/components/src/sidebar-nav/src/use-indicator-box.ts`, re-exported from `sidebar-nav/index.ts`.
+- Composables: `packages/tuffex/packages/utils/use-indicator-box.ts` measures the plate and is re-exported from `sidebar-nav/index.ts`; `packages/tuffex/packages/utils/use-jelly-indicator.ts` moves it on the glide material, integrated with `springSteps` (`packages/tuffex/packages/components/src/liquid/src/spring.ts`, 1/240 s substeps).
 - Types: `packages/tuffex/packages/components/src/sidebar-nav/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/sidebar-nav/__tests__/sidebar-nav.test.ts` verifies grouped rendering and `aria-current`, disabled items emitting nothing, query filtering with empty groups collapsing, the `filter` override, workspace and primary-action events, the trailing action being a named button that does not also navigate, badge rebuilding, ungrouped items leading, the highlight staying untransitioned until measured, and — with stubbed rects — the highlight actually moving from the active row to the hovered row and back. The shortcut tests cover focusing, standing down for typing targets / chords / already-consumed events, multi-character hints not claiming a key, and unbinding on unmount.
+- **Motion note:** the engine writes the plate's `transform`, `height` and `opacity` every frame and the template binds none of them, so a trip does not re-render the nav; `top` stays 0 and the width stays with the CSS. No CSS transition sits on the transform or the height, because it would re-ease every written frame. The plate still carries `--tx-bui-sidebar-nav-indicator-duration` inline, but no rule reads it any more.
+- **Verified coverage:** `packages/tuffex/packages/components/src/sidebar-nav/__tests__/sidebar-nav.test.ts` verifies grouped rendering and `aria-current`, disabled items emitting nothing, query filtering with empty groups collapsing, the `filter` override, workspace and primary-action events, the trailing action being a named button that does not also navigate, badge rebuilding, ungrouped items leading, the highlight staying transparent and without its fade until measured, and — with stubbed rects and fake timers — the first measurement landing on the active row in place, then the highlight gliding, not jumping, to the hovered row and back — taller than a row on the way, never scaling — landing exactly on each without an inline `top`; a round trip to the first and last row keeping the plate inside the list at every frame; and `prefers-reduced-motion: reduce` jumping it straight to the hovered row. Against the compiled styles it checks that the plate transitions only its fade, which reduced motion switches off. The shortcut tests cover focusing, standing down for typing targets / chords / already-consumed events, multi-character hints not claiming a key, and unbinding on unmount.
 - Adapted from [Beautiful UI](https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />

@@ -1,22 +1,19 @@
 /**
- * Schema parity for `voice_recognition_records` (aux-homed, provider latency added 2026-09-21).
+ * Schema parity for `voice_recognition_records` (aux-homed, with additive provider timing and
+ * recognition-location columns).
  *
  * The table has TWO creators: the hand-written migration chain (`0043_voice_recognition_records.sql`,
- * extended by `0049_voice_provider_latency.sql`, on the primary db — also the fallback home aux
- * writes land on before the background aux init finishes) and the raw `ensureAuxTables()` DDL
- * (`database-aux.db`). Per database-write-contracts §6 the homes must agree — a column that exists
- * on one and not the other resurfaces as a runtime `no such column` on whichever home
- * `scheduleAuxWrite` happens to resolve.
+ * extended by `0049_voice_provider_latency.sql` and `0050_voice_recognition_location.sql`) on the
+ * primary database, and the raw `ensureAuxTables()` DDL for `database-aux.db`. Per
+ * database-write-contracts §6 the homes must agree: a column that exists on only one side becomes a
+ * runtime `no such column` as soon as `scheduleAuxWrite` resolves to the other home.
  *
- * `provider_latency_ms` is the one column whose aux side has two sources: the `CREATE TABLE` DDL
- * (fresh installs) and the pragma-guarded `ALTER TABLE` (installs that already had the table, where
- * the CREATE is a no-op). Both are exercised below, because dropping the guard leaves every existing
- * aux database without the column while a fresh install still looks healthy.
- *
- * It is also the only place that pins the registered side of the migration: the column list is read
- * from a database migrated through the real `_journal.json` chain, so a migration written but never
- * journaled shows up as a missing column rather than as a silent no-op.
+ * Additive columns therefore have two aux sources: the `CREATE TABLE` DDL for fresh installs and
+ * pragma-guarded `ALTER TABLE` statements for existing profiles where CREATE is a no-op. Both paths
+ * are exercised below. The migration side is loaded through the real `_journal.json` chain, so an
+ * unregistered migration fails as a missing column rather than passing as dead source.
  */
+
 import type { Client } from '@libsql/client'
 import { createClient } from '@libsql/client'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
@@ -31,6 +28,7 @@ const databaseModuleSource = resolve(testDir, './index.ts')
 
 const TABLE = 'voice_recognition_records'
 const LATENCY_COLUMN = 'provider_latency_ms'
+const LOCATION_COLUMN = 'recognition_location'
 const COLUMNS = [
   'id',
   'captured_at',
@@ -50,9 +48,9 @@ const COLUMNS = [
   'total_tokens',
   'error_code',
   'delivery_method',
-  // Appended by the 0049 `ALTER TABLE`, so it sits at the tail of the migrated table while the aux
-  // DDL declares it beside the other durations. Hence the name-keyed comparison below.
-  LATENCY_COLUMN
+  // Added by migrations, so they sit at the tail while the aux DDL declares them inline.
+  LATENCY_COLUMN,
+  LOCATION_COLUMN
 ]
 
 interface ColumnInfo {
@@ -103,10 +101,8 @@ async function readColumns(client: Client): Promise<ColumnInfo[]> {
   }))
 }
 
-/**
- * Columns keyed by name: the migration appends the latency column to the tail of the table while the
- * aux DDL declares it inline, so the two homes only agree as sets of columns.
- */
+/** Migration-added columns sit at the tail while aux DDL declares them inline. */
+
 function columnsByName(columns: ColumnInfo[]): Record<string, Omit<ColumnInfo, 'name'>> {
   return Object.fromEntries(
     columns.map((column) => [
@@ -171,16 +167,13 @@ async function applyAuxTables(client: Client, ddl: AuxDdl, create = ddl.create):
   }
 }
 
-/**
- * The table as an install predating the column left it: `ensureAuxTables()` has already run once
- * against that database, so today's `CREATE TABLE IF NOT EXISTS` is a no-op there and only the
- * guarded `ALTER TABLE` can hand it the column.
- */
-function preLatencyCreate(create: string): string {
-  const legacy = create.replace(new RegExp(`\\n\\s*${LATENCY_COLUMN} \\w+,`), '')
-  expect(legacy, `the pre-upgrade aux table still declares ${LATENCY_COLUMN}`).not.toContain(
-    LATENCY_COLUMN
-  )
+/** An aux database created before the additive columns existed. */
+function preUpgradeCreate(create: string): string {
+  let legacy = create
+  for (const column of [LATENCY_COLUMN, LOCATION_COLUMN]) {
+    legacy = legacy.replace(new RegExp(`\\n\\s*${column} \\w+,`), '')
+    expect(legacy, `the pre-upgrade aux table still declares ${column}`).not.toContain(column)
+  }
   return legacy
 }
 
@@ -221,13 +214,13 @@ describe(`${TABLE} schema`, () => {
     expect(await readIndexes(auxClient)).toEqual(await readIndexes(primaryClient))
   })
 
-  it('hands the column to an existing aux database, where the CREATE TABLE is a no-op', async () => {
+  it('hands additive columns to an existing aux database, where CREATE TABLE is a no-op', async () => {
     primaryClient = createClient({ url: `file:${join(directory, 'primary.db')}` })
     auxClient = createClient({ url: `file:${join(directory, 'aux.db')}` })
 
     await applyFullChain(primaryClient)
     const ddl = await extractAuxDdl()
-    await applyAuxTables(auxClient, ddl, preLatencyCreate(ddl.create))
+    await applyAuxTables(auxClient, ddl, preUpgradeCreate(ddl.create))
     await auxClient.execute(
       `INSERT INTO ${TABLE} (id, captured_at, source, status) VALUES ('recorded-before-upgrade', 1, 'recording', 'completed')`
     )
@@ -235,14 +228,17 @@ describe(`${TABLE} schema`, () => {
     for (const statement of ddl.upgrades) await auxClient.execute(statement)
 
     const auxColumns = await readColumns(auxClient)
-    expect(auxColumns.map((column) => column.name)).toContain(LATENCY_COLUMN)
+    expect(auxColumns.map((column) => column.name)).toEqual(
+      expect.arrayContaining([LATENCY_COLUMN, LOCATION_COLUMN])
+    )
     expect(columnsByName(auxColumns)).toEqual(columnsByName(await readColumns(primaryClient)))
 
-    // The rows that were already there are why the upgrade is a nullable ADD COLUMN: a recording
-    // made before the column existed simply has no provider latency to report.
+    // Existing rows keep null metadata rather than receiving invented timing or route location.
     const existing = await auxClient.execute(
-      `SELECT ${LATENCY_COLUMN} AS latency FROM ${TABLE} WHERE id = 'recorded-before-upgrade'`
+      `SELECT ${LATENCY_COLUMN} AS latency, ${LOCATION_COLUMN} AS location FROM ${TABLE} WHERE id = 'recorded-before-upgrade'`
     )
-    expect(existing.rows.map((row) => row.latency)).toEqual([null])
+    expect(existing.rows.map((row) => ({ latency: row.latency, location: row.location }))).toEqual([
+      { latency: null, location: null }
+    ])
   })
 })

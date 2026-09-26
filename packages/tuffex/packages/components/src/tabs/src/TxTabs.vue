@@ -1,12 +1,45 @@
 <script lang="ts">
 import type { PropType } from 'vue'
 import { Comment, Fragment, computed, defineComponent, h, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
+import type { JellyBounds, JellyIndicatorFrame, JellyRect } from '../../../../utils/use-jelly-indicator'
 import type { TabsAnimation, TabsProps } from './types'
+import { timeScaleSpring } from '../../../../utils/animation/jelly'
+import { useJellyIndicator } from '../../../../utils/use-jelly-indicator'
+import { springSteps } from '../../liquid/src/spring'
 import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
 import TxTabHeader from './TxTabHeader.vue'
 import TxTabItem from './TxTabItem.vue'
 
 const qualifiedName = ['TxTabItem', 'TxTabItemGroup', 'TxTabHeader']
+
+/** `line` thickness and `dot` diameter, px. */
+const LINE_SIZE = 2
+const DOT_SIZE = 6
+/** The shortest `line`, px: a one-letter label would otherwise get a speck. */
+const LINE_MIN_LENGTH = 16
+/** How far the `dot` sits in from the nav's outer edge, px. */
+const DOT_INSET = 4
+
+/**
+ * `indicatorMotion` once named a CSS keyframe; it now names a variation of the
+ * glide material (`useJellyIndicator({ material: 'glide' })`): the pointer's
+ * two ends ride springs, the trailing one `1 − lag / 2` as fast, so it
+ * lengthens a little and gathers again — it never squashes or scales. Each
+ * spring is played on the `animation.indicator.durationMs` clock (350ms = as
+ * written here).
+ */
+const MOTION_GLIDE: Record<NonNullable<TabsProps['indicatorMotion']>, { stiffness: number, damping: number, lag: number }> = {
+  // The default: a hair under critical damping, a short stretch.
+  stretch: { stiffness: 420, damping: 38, lag: 0.45 },
+  // Softer damping: one small overshoot.
+  spring: { stiffness: 420, damping: 24, lag: 0.3 },
+  // A longer stretch.
+  warp: { stiffness: 420, damping: 38, lag: 0.7 },
+  // Both ends together: a rigid slide.
+  glide: { stiffness: 380, damping: 38, lag: 0 },
+  // Quicker and damped harder.
+  snap: { stiffness: 720, damping: 50, lag: 0.25 },
+}
 
 function getVNodeComponentName(vnode: any): string {
   const type = vnode?.type
@@ -300,14 +333,8 @@ export default defineComponent({
 
     let layoutResizeObserver: ResizeObserver | null = null
     let layoutResizeRaf: number | null = null
-    let pointerAnimTimer: number | null = null
-    let lastPointerPosition: { x: number, y: number } | null = null
 
     onBeforeUnmount(() => {
-      if (pointerAnimTimer != null)
-        window.clearTimeout(pointerAnimTimer)
-      pointerAnimTimer = null
-
       if (layoutResizeRaf != null)
         cancelAnimationFrame(layoutResizeRaf)
       layoutResizeRaf = null
@@ -316,6 +343,54 @@ export default defineComponent({
         layoutResizeObserver.disconnect()
         layoutResizeObserver = null
       }
+    })
+
+    const isBoxIndicator = computed(() => {
+      const v = indicatorVariant.value
+      return v === 'pill' || v === 'block' || v === 'outline'
+    })
+
+    // The motion picks the springs (`MOTION_GLIDE`), the duration plays them
+    // faster or slower, and the strength scales the stretch.
+    const motionGlide = computed(() => {
+      const tuning = MOTION_GLIDE[indicatorMotion.value]
+      return {
+        ...timeScaleSpring(tuning, animationIndicator.value.durationMs, 350),
+        lag: tuning.lag * indicatorMotionStrength.value,
+      }
+    })
+
+    // Written straight onto the element, never through a vnode `style`: the
+    // render function re-evaluates every tab slot, so it must not run per frame.
+    function paintPointer(frame: JellyIndicatorFrame) {
+      const el = pointerElRef.value
+      if (!el)
+        return
+      const { x, y, width, height } = frame.rect
+      el.style.opacity = frame.visible && indicatorRevealed.value ? '1' : '0'
+      el.style.width = `${width}px`
+      el.style.height = `${height}px`
+      el.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${frame.scaleX.toFixed(3)}, ${frame.scaleY.toFixed(3)})`
+
+      // Compared against the element, not a cached flag: the pointer DOM is
+      // rebuilt when `showIndicator` flips or top/bottom swap the nav and
+      // panel, and a fresh inner would otherwise keep its glow through a trip.
+      const inner = pointerInnerElRef.value
+      if (inner && inner.classList.contains('is-moving') !== frame.moving)
+        inner.classList.toggle('is-moving', frame.moving)
+    }
+
+    // Walls for the spring's overshoot along the travel axis; measured with
+    // each target in `applyPointerFor`.
+    let pointerBounds: JellyBounds | null = null
+
+    const pointer = useJellyIndicator({
+      axis: () => (isVertical.value ? 'y' : 'x'),
+      material: 'glide',
+      integrate: springSteps,
+      glide: () => motionGlide.value,
+      bounds: () => pointerBounds,
+      onFrame: paintPointer,
     })
 
     function getActiveTabElement(): HTMLElement | null {
@@ -375,38 +450,22 @@ export default defineComponent({
       { immediate: true, flush: 'post' },
     )
 
-    function playPointerAnim(direction: 'forward' | 'backward' = 'forward') {
-      const el = pointerInnerElRef.value
-      if (!el)
-        return
-
-      const motions = ['stretch', 'warp', 'glide', 'snap', 'spring'] as const
-      for (const m of motions) {
-        el.classList.remove(`tx-tabs__pointer--motion-${m}-x`)
-        el.classList.remove(`tx-tabs__pointer--motion-${m}-y`)
+    function readItemBox(el: HTMLElement) {
+      const cs = typeof getComputedStyle === 'function' ? getComputedStyle(el) : null
+      return {
+        top: Number.parseFloat(cs?.paddingTop ?? '') || 0,
+        right: Number.parseFloat(cs?.paddingRight ?? '') || 0,
+        bottom: Number.parseFloat(cs?.paddingBottom ?? '') || 0,
+        left: Number.parseFloat(cs?.paddingLeft ?? '') || 0,
+        radius: cs?.borderRadius ?? '',
       }
-      el.classList.remove('tx-tabs__pointer--glow')
-
-      const cls = isVertical.value
-        ? `tx-tabs__pointer--motion-${indicatorMotion.value}-y`
-        : `tx-tabs__pointer--motion-${indicatorMotion.value}-x`
-
-      el.style.transformOrigin = isVertical.value
-        ? direction === 'forward' ? 'center top' : 'center bottom'
-        : direction === 'forward' ? 'left center' : 'right center'
-
-      void el.offsetWidth
-      el.classList.add(cls)
-
-      if (pointerAnimTimer != null)
-        window.clearTimeout(pointerAnimTimer)
-      pointerAnimTimer = window.setTimeout(() => {
-        el.classList.remove(cls)
-        el.classList.add('tx-tabs__pointer--glow')
-        pointerAnimTimer = null
-      }, Math.max(120, animationIndicator.value?.durationMs ?? 350))
     }
 
+    /**
+     * Measure the active tab and hand the variant's target box to the engine.
+     * Travel is the shared indicator engine's (its glide material); this only
+     * knows where each variant sits.
+     */
     function applyPointerFor(vnodeOrEl: any, options: { reveal?: boolean, animate?: boolean } = {}) {
       const pointerEl = pointerElRef.value
       const nodeEl = (vnodeOrEl?.el ?? vnodeOrEl) as HTMLElement | undefined
@@ -416,97 +475,82 @@ export default defineComponent({
 
       const nodeRect = nodeEl.getBoundingClientRect()
       const navInnerRect = navInnerEl.getBoundingClientRect()
-      const diff = props.offset || 0
 
       if (options.reveal) {
         indicatorRevealed.value = true
       }
       else if (!indicatorRevealed.value && nodeRect.width > 0 && nodeRect.height > 0) {
-        // Reveal on the first real measurement, not on the first click. `reveal:
-        // true` is only ever passed from a tab's own click handler, so a freshly
-        // mounted TxTabs — including one whose active tab comes from `v-model`
-        // or `activation` — painted its indicator at opacity 0 and kept it there
-        // until someone clicked. Every path that lands here passes
-        // `animate: false`, so the indicator appears where it belongs instead of
-        // sliding in from the nav's edge; the zero-size guard keeps it hidden
-        // until layout has actually happened.
+        // Reveal on the first real measurement, not on the first click: a
+        // TxTabs whose active tab comes from `v-model` or `activation` would
+        // otherwise hold its indicator at opacity 0 until someone clicked.
         indicatorRevealed.value = true
       }
 
-      pointerEl.style.opacity = indicatorRevealed.value ? '1' : '0'
+      if (nodeRect.width <= 0 || nodeRect.height <= 0) {
+        // Nothing laid out yet (a hidden panel, jsdom): keep the pointer out of
+        // the engine until a real box exists, so it never travels from zero.
+        pointer.moveTo(null)
+        pointerEl.style.opacity = '0'
+        return
+      }
 
-      pointerEl.style.width = ''
-      pointerEl.style.height = ''
+      // Rects are visual pixels while the translate is in the nav's own space;
+      // an ancestor transform (a dialog scaling in) scales only the former.
+      // Same normalisation as `useIndicatorBox`, down to the border offset:
+      // the pointer is placed from the tablist's padding box.
+      const ratio = navInnerEl.offsetWidth > 0 ? navInnerRect.width / navInnerEl.offsetWidth : 1
+      const scale = Number.isFinite(ratio) && ratio > 0 ? ratio : 1
 
+      const left = (nodeRect.left - navInnerRect.left) / scale - navInnerEl.clientLeft + navInnerEl.scrollLeft
+      const top = (nodeRect.top - navInnerRect.top) / scale - navInnerEl.clientTop + navInnerEl.scrollTop
+      const width = nodeRect.width / scale
+      const height = nodeRect.height / scale
+      const navWidth = navInnerEl.clientWidth
+      const navHeight = navInnerEl.clientHeight
+      const item = readItemBox(nodeEl)
       const variant = indicatorVariant.value
-      let nextPointerX = 0
-      let nextPointerY = 0
 
-      if (isVertical.value) {
-        const topBase = nodeRect.top - navInnerRect.top + navInnerEl.scrollTop
-        const leftBase = nodeRect.left - navInnerRect.left + navInnerEl.scrollLeft
-
-        const navInnerWidth = navInnerEl.clientWidth
-
-        if (variant === 'block' || variant === 'outline') {
-          nextPointerX = leftBase
-          nextPointerY = topBase
-          pointerEl.style.width = `${nodeRect.width}px`
-          pointerEl.style.height = `${nodeRect.height}px`
-        }
-        else if (variant === 'dot') {
-          nextPointerX = placement.value === 'right' ? (navInnerWidth - 8 - 8) : 8
-          nextPointerY = topBase + nodeRect.height * 0.5 - 4
-          pointerEl.style.height = `8px`
-          pointerEl.style.width = `8px`
-        }
-        else {
-          const thickness = variant === 'pill' ? 6 : 3
-          nextPointerX = placement.value === 'right' ? (navInnerWidth - thickness) : 0
-          nextPointerY = topBase + nodeRect.height * 0.2 + diff
-          pointerEl.style.width = `${thickness}px`
-          pointerEl.style.height = `${nodeRect.height * 0.6}px`
-        }
+      let rect: JellyRect
+      if (isBoxIndicator.value) {
+        // Behind the whole item, with the item's own corners (hosts restyle them).
+        rect = { x: left, y: top, width, height }
+        pointerEl.style.borderRadius = item.radius
+      }
+      else if (variant === 'dot') {
+        rect = isVertical.value
+          ? { x: placement.value === 'right' ? navWidth - DOT_SIZE - DOT_INSET : DOT_INSET, y: top + (height - DOT_SIZE) / 2, width: DOT_SIZE, height: DOT_SIZE }
+          : { x: left + (width - DOT_SIZE) / 2, y: placement.value === 'bottom' ? DOT_INSET : navHeight - DOT_SIZE - DOT_INSET, width: DOT_SIZE, height: DOT_SIZE }
+        pointerEl.style.borderRadius = ''
       }
       else {
-        const topBase = nodeRect.top - navInnerRect.top + navInnerEl.scrollTop
-        const leftBase = nodeRect.left - navInnerRect.left + navInnerEl.scrollLeft
-
-        const navInnerHeight = navInnerEl.clientHeight
-
-        if (variant === 'block' || variant === 'outline') {
-          nextPointerX = leftBase
-          nextPointerY = topBase
-          pointerEl.style.width = `${nodeRect.width}px`
-          pointerEl.style.height = `${nodeRect.height}px`
+        // Under the label, icon to text, resting on the nav/content divider:
+        // nav-inner fills the bar's height, so its far edge is the divider. A
+        // one-letter label still gets a line long enough to read as one.
+        const offset = props.offset || 0
+        const span = (start: number, size: number, padStart: number, padEnd: number) => {
+          const length = Math.min(size, Math.max(size - padStart - padEnd, LINE_MIN_LENGTH))
+          const from = start + padStart + (size - padStart - padEnd - length) / 2
+          return { from: from + offset, length }
         }
-        else if (variant === 'dot') {
-          nextPointerX = leftBase + nodeRect.width * 0.5 - 4
-          nextPointerY = placement.value === 'bottom' ? 8 : (navInnerHeight - 8 - 8)
-          pointerEl.style.width = `8px`
-          pointerEl.style.height = `8px`
+        if (isVertical.value) {
+          const { from, length } = span(top, height, item.top, item.bottom)
+          rect = { x: placement.value === 'right' ? navWidth - LINE_SIZE : 0, y: from, width: LINE_SIZE, height: length }
         }
         else {
-          const thickness = variant === 'pill' ? 6 : 3
-          nextPointerX = leftBase + nodeRect.width * 0.2 + diff
-          nextPointerY = placement.value === 'bottom' ? 0 : (navInnerHeight - thickness)
-          pointerEl.style.width = `${nodeRect.width * 0.6}px`
-          pointerEl.style.height = `${thickness}px`
+          const { from, length } = span(left, width, item.left, item.right)
+          rect = { x: from, y: placement.value === 'bottom' ? 0 : navHeight - LINE_SIZE, width: length, height: LINE_SIZE }
         }
+        pointerEl.style.borderRadius = ''
       }
 
-      pointerEl.style.transform = `translate3d(${nextPointerX}px, ${nextPointerY}px, 0)`
+      // The tablist clips its overflow (a vertical one is clipped by the root),
+      // so an end overshooting the first or last tab stops at a wall — the
+      // scrollable extent — instead of being cut off. A target beyond a wall
+      // moves it out.
+      const extent = isVertical.value ? navInnerEl.scrollHeight : navInnerEl.scrollWidth
+      pointerBounds = extent > 0 ? { start: 0, end: extent } : null
 
-      const previousPointerPosition = lastPointerPosition
-      const direction = previousPointerPosition
-        ? isVertical.value
-          ? nextPointerY >= previousPointerPosition.y ? 'forward' : 'backward'
-          : nextPointerX >= previousPointerPosition.x ? 'forward' : 'backward'
-        : 'forward'
-      lastPointerPosition = { x: nextPointerX, y: nextPointerY }
-
-      if (options.animate && indicatorRevealed.value)
-        playPointerAnim(direction)
+      pointer.moveTo(rect, { animate: !!options.animate && indicatorRevealed.value })
     }
 
     const idScope = useId() ?? 'tx-tabs'
@@ -557,6 +601,9 @@ export default defineComponent({
 
       setActive(target)
       void nextTick(() => {
+        // The arrow keys move the pointer like a click does. Before, only the
+        // content's ResizeObserver happened to drag it along.
+        syncPointerToActive({ reveal: true, animate: animationIndicator.value.enabled })
         const name = getNodeName(target)
         const id = tabDomId(name)
         // Match on the id property rather than building a `#id` selector: tab
@@ -588,9 +635,15 @@ export default defineComponent({
           if (el) {
             if (animationContent.value.enabled)
               el.classList.remove('tx-tabs-content-enter')
-            void runAutoHeight(() => setActive(vnode)).then(() => {
+            void runAutoHeight(() => {
+              setActive(vnode)
+              // Travel once the switch has rendered, not once `runAutoHeight`
+              // settles: a size animation holds that for a frame or more, and
+              // the new panel's layout refresh would reach the engine first
+              // with `animate: false` and land the pointer without a trip.
+              void nextTick(() => applyPointerFor(tab, { reveal: true, animate: animationIndicator.value.enabled }))
+            }).then(() => {
               nextTick(() => {
-                applyPointerFor(tab, { reveal: true, animate: animationIndicator.value.enabled })
                 if (animationContent.value.enabled)
                   el.classList.add('tx-tabs-content-enter')
               })
@@ -687,6 +740,17 @@ export default defineComponent({
       return content
     }
 
+    // A prop-driven switch travels only once the pointer has been revealed. Sent
+    // from inside `runAutoHeight`'s action for the same reason as a click.
+    function travelAfterSwitch() {
+      void nextTick(() => {
+        syncPointerToActive({
+          reveal: indicatorRevealed.value,
+          animate: indicatorRevealed.value && animationIndicator.value.enabled,
+        })
+      })
+    }
+
     watch(
       () => props.modelValue,
       (val) => {
@@ -695,13 +759,7 @@ export default defineComponent({
         if (activeName.value !== val) {
           void runAutoHeight(() => {
             activeName.value = val
-          }).then(() => {
-            nextTick(() => {
-              syncPointerToActive({
-                reveal: indicatorRevealed.value,
-                animate: indicatorRevealed.value && animationIndicator.value.enabled,
-              })
-            })
+            travelAfterSwitch()
           })
         }
       },
@@ -715,13 +773,9 @@ export default defineComponent({
           return
         const node = findByName(val)
         if (node) {
-          void runAutoHeight(() => setActive(node)).then(() => {
-            nextTick(() => {
-              syncPointerToActive({
-                reveal: indicatorRevealed.value,
-                animate: indicatorRevealed.value && animationIndicator.value.enabled,
-              })
-            })
+          void runAutoHeight(() => {
+            setActive(node)
+            travelAfterSwitch()
           })
         }
       },
@@ -740,12 +794,40 @@ export default defineComponent({
       { immediate: true, flush: 'post' },
     )
 
+    // A new variant (or placement, or offset) is a new target box for the same
+    // tab — nothing in the layout changes, so no observer would re-measure it.
+    // It travels like a switch does: a pill gliding into a line is one motion too.
+    watch(
+      () => [indicatorVariant.value, placement.value, props.offset] as const,
+      () => {
+        void nextTick(() => {
+          syncPointerToActive({
+            reveal: false,
+            animate: indicatorRevealed.value && animationIndicator.value.enabled,
+          })
+        })
+      },
+      { flush: 'post' },
+    )
+
+    // Hiding the pointer ends its work: a trip in flight would otherwise keep
+    // its frame loop running for an element that is gone, and showing it
+    // again is then a first measurement, which lands in place.
+    watch(
+      () => props.showIndicator,
+      (show) => {
+        if (!show)
+          pointer.moveTo(null)
+      },
+    )
+
     return () => {
       const [tabs, tabHeader, activeNode] = renderTabs()
 
       const navRightSlot = slots['nav-right']?.()
 
-      const pointer = props.showIndicator
+      // `pointerNode`, not `pointer`: that name is the engine in setup scope.
+      const pointerNode = props.showIndicator
         ? h(
             'div',
             {
@@ -830,7 +912,7 @@ export default defineComponent({
                   'aria-orientation': isVertical.value ? 'vertical' : 'horizontal',
                   onKeydown: handleTablistKeydown,
                 },
-                pointer ? [...tabs, pointer] : tabs,
+                pointerNode ? [...tabs, pointerNode] : tabs,
               ),
               navRightSlot
                 ? h('div', { class: 'tx-tabs__nav-extra' }, navRightSlot)
@@ -987,17 +1069,25 @@ export default defineComponent({
   opacity: 0.9;
 }
 
+// The pointer's box and transform are written every frame by the shared
+// indicator engine (`paintPointer`); CSS only paints it. Nothing here may transition
+// transform, width or height, or each frame would be eased a second time.
 .tx-tabs__pointer {
   position: absolute;
   top: 0;
   left: 0;
-  width: 3px;
-  border-radius: 50px;
+  width: 0;
+  height: 0;
   opacity: 0;
-  transform: translate3d(0, 0, 0);
+  pointer-events: none;
   transform-origin: center;
-  will-change: top, left, right, bottom, width, height, opacity, transform;
+  will-change: transform, width, height, opacity;
   z-index: 0;
+}
+
+// The first appearance fades in where it belongs; travel is the engine's.
+.tx-tabs--indicator-anim .tx-tabs__pointer {
+  transition: opacity 180ms ease;
 }
 
 .tx-tabs__pointer-inner {
@@ -1005,30 +1095,6 @@ export default defineComponent({
   width: 100%;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(180deg, var(--tx-color-primary, #409eff), color-mix(in srgb, var(--tx-color-primary, #409eff) 72%, white));
-  box-shadow:
-    1px 2px 8px color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
-  transform: scale(1);
-  transform-origin: center;
-  will-change: transform, opacity;
-}
-
-.tx-tabs__pointer-inner::before {
-  content: '';
-  position: absolute;
-  inset: -16px -8px;
-  border-radius: 999px;
-  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, transparent) 0%, transparent 70%);
-  filter: blur(10px);
-  opacity: 0;
-  transform: scale(0.75);
-  transition: opacity 1s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
-
-.tx-tabs__pointer-inner.tx-tabs__pointer--glow::before {
-  opacity: 0.42;
-  transform: scale(1);
 }
 
 .tx-tabs__nav-inner :deep(.tx-tab-item) {
@@ -1036,188 +1102,78 @@ export default defineComponent({
   z-index: 1;
 }
 
-.tx-tabs--indicator-pill .tx-tabs__pointer {
-  width: 6px;
-  border-radius: 999px;
+// One highlight: the pointer. The active item drops the fill it paints for
+// itself (and on hover) whenever a pointer is shown.
+.tx-tabs:not(.tx-tabs--indicator-hidden) .tx-tabs__nav-inner :deep(.tx-tab-item.is-active) {
+  --fake-color: transparent;
 }
 
-.tx-tabs--top.tx-tabs--indicator-pill .tx-tabs__pointer,
-.tx-tabs--bottom.tx-tabs--indicator-pill .tx-tabs__pointer {
-  height: 6px;
-  width: auto;
-}
-
+// `line` and `dot`: a primary mark, with a soft pool of its own colour under it
+// once it has landed.
+.tx-tabs--indicator-line .tx-tabs__pointer,
 .tx-tabs--indicator-dot .tx-tabs__pointer {
-  width: 8px;
-  height: 8px;
   border-radius: 999px;
 }
 
-.tx-tabs--indicator-block .tx-tabs__pointer {
-  border-radius: 12px;
+.tx-tabs--indicator-line .tx-tabs__pointer-inner,
+.tx-tabs--indicator-dot .tx-tabs__pointer-inner {
+  background: var(--tx-color-primary, #409eff);
 }
 
+.tx-tabs--indicator-line .tx-tabs__pointer-inner::before,
+.tx-tabs--indicator-dot .tx-tabs__pointer-inner::before {
+  content: '';
+  position: absolute;
+  inset: -5px -4px;
+  border-radius: 999px;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--tx-color-primary, #409eff) 38%, transparent), transparent);
+  opacity: 0.45;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.tx-tabs__pointer-inner.is-moving::before {
+  opacity: 0;
+  transition-duration: 0.12s;
+}
+
+// `pill`: a raised surface behind the item — the same body as TxTabBar's pill
+// and TxFlatRadio's thumb. The corners come from the measured item.
+.tx-tabs--indicator-pill .tx-tabs__pointer-inner {
+  background: var(--tx-surface-raised, var(--tx-bg-color-overlay, #fff));
+  box-shadow:
+    var(--tx-elevation-1, 1px 2px 4px rgba(0, 0, 0, 0.04)),
+    inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5);
+}
+
+// `block`: a tint, not a surface — no shadow.
 .tx-tabs--indicator-block .tx-tabs__pointer-inner {
-  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent);
 }
 
-.tx-tabs--indicator-outline .tx-tabs__pointer {
-  border-radius: 12px;
-}
-
+// `outline`: a ring, inset so it never adds to the box.
 .tx-tabs--indicator-outline .tx-tabs__pointer-inner {
-  background: transparent;
-  border: 1.5px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tx-color-primary, #409eff) 60%, transparent);
 }
 
+// A mark or a tint carries the brand colour into the active item's glyph; on a
+// neutral raised pill the ink stays neutral.
+.tx-tabs--indicator-line:not(.tx-tabs--indicator-hidden) .tx-tabs__nav-inner :deep(.tx-tab-item.is-active),
+.tx-tabs--indicator-dot:not(.tx-tabs--indicator-hidden) .tx-tabs__nav-inner :deep(.tx-tab-item.is-active),
 .tx-tabs--indicator-block:not(.tx-tabs--indicator-hidden) .tx-tabs__nav-inner :deep(.tx-tab-item.is-active),
 .tx-tabs--indicator-outline:not(.tx-tabs--indicator-hidden) .tx-tabs__nav-inner :deep(.tx-tab-item.is-active) {
-  --fake-color: transparent;
-  --fake-opacity: 0;
+  --tx-tab-item-icon-ink: var(--tx-color-primary, #409eff);
 }
 
-.tx-tabs--indicator-block .tx-tabs__pointer {
-  z-index: 0;
-}
-
-.tx-tabs--indicator-block .tx-tabs__pointer-inner {
-  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--tx-color-primary, #409eff) 20%, transparent),
-    3px 6px 18px color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);
-}
-
-.tx-tabs__pointer-inner.tx-tabs__pointer--motion-stretch-x {
-  animation: tx-tabs-pointer-stretch-x var(--tx-tabs-indicator-duration, 350ms)
-    cubic-bezier(0.25, 0.46, 0.45, 0.94)
-    both;
-}
-
-.tx-tabs__pointer-inner.tx-tabs__pointer--motion-stretch-y {
-  animation: tx-tabs-pointer-stretch-y var(--tx-tabs-indicator-duration, 350ms)
-    cubic-bezier(0.25, 0.46, 0.45, 0.94)
-    both;
-}
-
-.tx-tabs__pointer-inner.tx-tabs__pointer--motion-warp-x {
-  animation: tx-tabs-pointer-warp-x calc(var(--tx-tabs-indicator-duration, 180ms) + 170ms)
-    cubic-bezier(0.2, 1.3, 0.2, 1)
-    both;
-}
-
-.tx-tabs__pointer-inner.tx-tabs__pointer--motion-warp-y {
-  animation: tx-tabs-pointer-warp-y calc(var(--tx-tabs-indicator-duration, 180ms) + 170ms)
-    cubic-bezier(0.2, 1.3, 0.2, 1)
-    both;
-}
-
-.tx-tabs__pointer-inner.tx-tabs__pointer--motion-glide-x {
-  animation: tx-tabs-pointer-glide-x calc(var(--tx-tabs-indicator-duration, 180ms) + 120ms)
-    cubic-bezier(0.22, 0.9, 0.2, 1)
-    both;
-}
-
-.tx-tabs__pointer-inner.tx-tabs__pointer--motion-glide-y {
-  animation: tx-tabs-pointer-glide-y calc(var(--tx-tabs-indicator-duration, 180ms) + 120ms)
-    cubic-bezier(0.22, 0.9, 0.2, 1)
-    both;
-}
-
-.tx-tabs__pointer-inner.tx-tabs__pointer--motion-snap-x {
-  animation: tx-tabs-pointer-snap-x calc(var(--tx-tabs-indicator-duration, 180ms) + 90ms)
-    cubic-bezier(0.3, 1.1, 0.3, 1)
-    both;
-}
-
-.tx-tabs__pointer-inner.tx-tabs__pointer--motion-snap-y {
-  animation: tx-tabs-pointer-snap-y calc(var(--tx-tabs-indicator-duration, 180ms) + 90ms)
-    cubic-bezier(0.3, 1.1, 0.3, 1)
-    both;
-}
-
-.tx-tabs__pointer-inner.tx-tabs__pointer--motion-spring-x {
-  animation: tx-tabs-pointer-spring-x calc(var(--tx-tabs-indicator-duration, 180ms) + 220ms)
-    cubic-bezier(0.34, 1.56, 0.64, 1)
-    both;
-}
-
-.tx-tabs__pointer-inner.tx-tabs__pointer--motion-spring-y {
-  animation: tx-tabs-pointer-spring-y calc(var(--tx-tabs-indicator-duration, 180ms) + 220ms)
-    cubic-bezier(0.34, 1.56, 0.64, 1)
-    both;
-}
-
-@keyframes tx-tabs-pointer-stretch-x {
-  0% { transform: scaleX(1); }
-  42% { transform: scaleX(calc(1 + ((1.36 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  100% { transform: scaleX(1); }
-}
-
-@keyframes tx-tabs-pointer-stretch-y {
-  0% { transform: scaleY(1); }
-  42% { transform: scaleY(calc(1 + ((1.36 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  100% { transform: scaleY(1); }
-}
-
-@keyframes tx-tabs-pointer-warp-x {
-  0% { transform: scaleX(calc(1 + ((0.92 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  32% { transform: scaleX(calc(1 + ((1.34 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  62% { transform: scaleX(calc(1 + ((0.97 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  100% { transform: scaleX(1); }
-}
-
-@keyframes tx-tabs-pointer-warp-y {
-  0% { transform: scaleY(calc(1 + ((0.92 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  32% { transform: scaleY(calc(1 + ((1.34 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  62% { transform: scaleY(calc(1 + ((0.97 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  100% { transform: scaleY(1); }
-}
-
-@keyframes tx-tabs-pointer-glide-x {
-  0% { transform: scaleX(calc(1 + ((0.98 - 1) * var(--tx-tabs-indicator-strength, 1)))); opacity: 0.85; }
-  55% { transform: scaleX(calc(1 + ((1.14 - 1) * var(--tx-tabs-indicator-strength, 1)))); opacity: 1; }
-  100% { transform: scaleX(1); opacity: 1; }
-}
-
-@keyframes tx-tabs-pointer-glide-y {
-  0% { transform: scaleY(calc(1 + ((0.98 - 1) * var(--tx-tabs-indicator-strength, 1)))); opacity: 0.85; }
-  55% { transform: scaleY(calc(1 + ((1.14 - 1) * var(--tx-tabs-indicator-strength, 1)))); opacity: 1; }
-  100% { transform: scaleY(1); opacity: 1; }
-}
-
-@keyframes tx-tabs-pointer-snap-x {
-  0% { transform: scaleX(calc(1 + ((0.94 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  70% { transform: scaleX(calc(1 + ((1.22 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  100% { transform: scaleX(1); }
-}
-
-@keyframes tx-tabs-pointer-snap-y {
-  0% { transform: scaleY(calc(1 + ((0.94 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  70% { transform: scaleY(calc(1 + ((1.22 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  100% { transform: scaleY(1); }
-}
-
-@keyframes tx-tabs-pointer-spring-x {
-  0% { transform: scaleX(calc(1 + ((0.92 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  40% { transform: scaleX(calc(1 + ((1.32 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  66% { transform: scaleX(calc(1 + ((0.96 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  82% { transform: scaleX(calc(1 + ((1.06 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  100% { transform: scaleX(1); }
-}
-
-@keyframes tx-tabs-pointer-spring-y {
-  0% { transform: scaleY(calc(1 + ((0.92 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  40% { transform: scaleY(calc(1 + ((1.32 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  66% { transform: scaleY(calc(1 + ((0.96 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  82% { transform: scaleY(calc(1 + ((1.06 - 1) * var(--tx-tabs-indicator-strength, 1)))); }
-  100% { transform: scaleY(1); }
-}
-
-.tx-tabs--indicator-anim .tx-tabs__pointer {
-  transition: opacity var(--tx-tabs-indicator-duration, 350ms) var(--tx-tabs-indicator-easing, ease),
-    transform var(--tx-tabs-indicator-duration, 350ms) var(--tx-tabs-indicator-easing, ease),
-    width var(--tx-tabs-indicator-duration, 350ms) var(--tx-tabs-indicator-easing, ease),
-    height var(--tx-tabs-indicator-duration, 350ms) var(--tx-tabs-indicator-easing, ease);
+@media (prefers-reduced-motion: reduce) {
+  // The same selectors as the rules they cut, so they win on source order. A
+  // bare `.tx-tabs__pointer-inner::before` is one class short of the variant
+  // rule above and left the glow's fade running.
+  .tx-tabs--indicator-anim .tx-tabs__pointer,
+  .tx-tabs--indicator-line .tx-tabs__pointer-inner::before,
+  .tx-tabs--indicator-dot .tx-tabs__pointer-inner::before {
+    transition: none;
+  }
 }
 
 .tx-tabs--right {
@@ -1246,11 +1202,15 @@ export default defineComponent({
   border-top: 1px solid var(--tx-border-color, #dcdfe6);
 }
 
+// Fill the bar's height (items stay centred inside): when `nav-right` content
+// or a host's `min-height` makes the bar taller, the line indicator still sits
+// on the divider rather than floating above it.
 .tx-tabs--top .tx-tabs__nav-inner,
 .tx-tabs--bottom .tx-tabs__nav-inner {
   display: flex;
   flex-direction: row;
   align-items: center;
+  align-self: stretch;
   padding: 6px 8px;
   flex-wrap: nowrap;
   overflow-x: auto;
@@ -1262,12 +1222,6 @@ export default defineComponent({
 .tx-tabs--top .tx-tabs__nav-inner::-webkit-scrollbar,
 .tx-tabs--bottom .tx-tabs__nav-inner::-webkit-scrollbar {
   display: none;
-}
-
-.tx-tabs--top .tx-tabs__pointer,
-.tx-tabs--bottom .tx-tabs__pointer {
-  width: auto;
-  height: 3px;
 }
 
 .tx-tabs__main {

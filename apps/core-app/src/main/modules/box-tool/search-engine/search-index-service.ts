@@ -673,6 +673,37 @@ export class SearchIndexService {
     return rows[0]?.cnt ?? 0
   }
 
+  /**
+   * The same row count as {@link countByProvider}, answered from `search_index_meta`.
+   *
+   * `provider` is an UNINDEXED FTS5 column, so `countByProvider` walks the entire content table:
+   * 250–340ms on a large file index, on the single read worker that every CoreBox query and
+   * commit-visibility barrier also waits for. The meta table holds one row per indexed document
+   * under a `(provider_id, item_id)` primary key, which turns the count into a short index range.
+   *
+   * Every write path keeps the two in step (`applyDocument`, removals, replacement commits), but
+   * meta rows can outlive FTS rows when the FTS table itself is wiped or rebuilt, and rows written
+   * before meta existed have none. The FTS decides wherever meta cannot be trusted:
+   * - an empty FTS table makes every meta row an orphan, so the answer is 0;
+   * - a provider with no meta rows gets the exact FTS count.
+   */
+  async countByProviderViaMeta(providerId: string, signal?: AbortSignal): Promise<number> {
+    signal?.throwIfAborted()
+    await this.ensureInitialized()
+    signal?.throwIfAborted()
+    const rows = await this.readAll<{ metaRows: number; ftsHasRows: number }>(
+      sql`SELECT
+            (SELECT count(*) FROM search_index_meta WHERE provider_id = ${providerId}) AS metaRows,
+            EXISTS (SELECT 1 FROM search_index LIMIT 1) AS ftsHasRows`,
+      signal
+    )
+    signal?.throwIfAborted()
+    if (!Number(rows[0]?.ftsHasRows ?? 0)) return 0
+    const metaRows = Number(rows[0]?.metaRows ?? 0)
+    if (metaRows > 0) return metaRows
+    return await this.countByProvider(providerId, signal)
+  }
+
   async removeByProvider(providerId: string): Promise<number> {
     const start = performance.now()
     const removedItems = await this.scheduleWrite('search-index.removeByProvider', async () => {
@@ -1031,9 +1062,10 @@ export class SearchIndexService {
   }
 
   private async prepareSearchIndexSchema(): Promise<void> {
-    await this.createSearchIndexTable()
+    const createdSearchIndex = await this.createSearchIndexTable()
     await this.createFileFtsTable()
     await this.createSearchIndexMetaTable()
+    if (createdSearchIndex) await this.clearOrphanedSearchIndexMeta()
     await this.createKeywordMappingIndexes()
     await this.createProviderReplacementTables()
   }
@@ -1073,7 +1105,8 @@ export class SearchIndexService {
     }
   }
 
-  private async createSearchIndexTable(): Promise<void> {
+  /** @returns true when the FTS table did not exist and was created empty by this call. */
+  private async createSearchIndexTable(): Promise<boolean> {
     const tableInfo = await this.readSearchIndexColumns()
     const hasContent = tableInfo.some((col) => col.name === 'content')
 
@@ -1093,6 +1126,17 @@ export class SearchIndexService {
       content,
       tokenize = 'unicode61 remove_diacritics 2'
     )`)
+    return tableInfo.length === 0
+  }
+
+  /**
+   * A freshly created FTS table holds no documents, so every meta row that survived it (a repair
+   * that dropped the table, a profile whose FTS was lost) describes a document that no longer
+   * exists. Left behind, those rows would make {@link countByProviderViaMeta} report documents the
+   * index does not have once other providers repopulate it.
+   */
+  private async clearOrphanedSearchIndexMeta(): Promise<void> {
+    await this.db.run(sql`DELETE FROM search_index_meta`)
   }
 
   private async readSearchIndexColumns(): Promise<SearchIndexColumnInfo[]> {

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "Token-only colour, reduced-motion escape with a static final frame, v-if inside Transition, new component checklist"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Registration chain, demo rules, nexus gates, dist build lock and :3200 restart traps"}
+{"file": ".trellis/spec/frontend/nexus-docs-structure.md", "reason": "Canonical docs page sections and order for prism-glow.{zh,en}.mdc"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Loading-state and motion rules the effect must respect when used by CoreBox"}

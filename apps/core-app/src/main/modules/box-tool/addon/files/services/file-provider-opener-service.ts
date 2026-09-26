@@ -1,7 +1,7 @@
 import type { OpenerInfo } from '@talex-touch/utils'
+import { toTfileUrl } from '@talex-touch/utils/network'
 import type { DbUtils } from '../../../../../db/utils'
 import { fileExtensions, files as filesSchema } from '../../../../../db/schema'
-import { Buffer } from 'node:buffer'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
@@ -40,8 +40,7 @@ export interface FileProviderOpenerServiceDeps {
   withDbWrite: <T>(label: string, operation: () => Promise<T>) => Promise<T>
   getStoredOpeners: () => Record<string, OpenerInfo>
   saveStoredOpeners: (next: Record<string, OpenerInfo>) => void
-  extractFileIconQueued: (filePath: string) => Promise<Buffer | null>
-  isValidBase64DataUrl: (value: string) => boolean
+  getFileIconPath: (filePath: string) => Promise<string | null>
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
   logError: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
 }
@@ -61,8 +60,7 @@ export class FileProviderOpenerService {
   private readonly withDbWrite: FileProviderOpenerServiceDeps['withDbWrite']
   private readonly getStoredOpeners: FileProviderOpenerServiceDeps['getStoredOpeners']
   private readonly saveStoredOpeners: FileProviderOpenerServiceDeps['saveStoredOpeners']
-  private readonly extractFileIconQueued: FileProviderOpenerServiceDeps['extractFileIconQueued']
-  private readonly isValidBase64DataUrl: FileProviderOpenerServiceDeps['isValidBase64DataUrl']
+  private readonly getFileIconPath: FileProviderOpenerServiceDeps['getFileIconPath']
   private readonly logWarn: FileProviderOpenerServiceDeps['logWarn']
   private readonly logError: FileProviderOpenerServiceDeps['logError']
 
@@ -78,6 +76,8 @@ export class FileProviderOpenerService {
   private readonly openerIconJobs = new Map<string, Promise<void>>()
   private readonly utiCache = new Map<string, string | null>()
   private readonly bundleIdCache = new Map<string, string | null>()
+  private closed = false
+  private readonly ownedWrites = new Set<Promise<unknown>>()
 
   constructor(deps: FileProviderOpenerServiceDeps) {
     this.emptyLogo = deps.emptyLogo
@@ -86,10 +86,14 @@ export class FileProviderOpenerService {
     this.withDbWrite = deps.withDbWrite
     this.getStoredOpeners = deps.getStoredOpeners
     this.saveStoredOpeners = deps.saveStoredOpeners
-    this.extractFileIconQueued = deps.extractFileIconQueued
-    this.isValidBase64DataUrl = deps.isValidBase64DataUrl
+    this.getFileIconPath = deps.getFileIconPath
     this.logWarn = deps.logWarn
     this.logError = deps.logError
+  }
+
+  async close(): Promise<void> {
+    this.closed = true
+    await Promise.allSettled([...this.ownedWrites])
   }
 
   async withOpenerResolveSlot<T>(task: () => Promise<T>): Promise<T> {
@@ -129,6 +133,7 @@ export class FileProviderOpenerService {
   }
 
   async getOpenerForExtension(rawExtension: string): Promise<ResolvedOpener | null> {
+    if (this.closed) return null
     const normalized = normalizeOpenerExtension(rawExtension)
     if (!normalized) {
       return null
@@ -187,7 +192,7 @@ export class FileProviderOpenerService {
   }
 
   async resolveOpener(extension: string): Promise<ResolvedOpener | null> {
-    if (process.platform !== 'darwin') {
+    if (this.closed || process.platform !== 'darwin') {
       return null
     }
 
@@ -235,7 +240,7 @@ export class FileProviderOpenerService {
 
   resolveOpenerLogo(logo?: string | null): string {
     if (logo && logo.trim().length > 0) {
-      return logo
+      return toTfileUrl(logo)
     }
     return this.emptyLogo
   }
@@ -265,7 +270,7 @@ export class FileProviderOpenerService {
 
   persistOpenerIcon(fileId: number, logo: string): void {
     const dbUtils = this.getDbUtils()
-    if (!dbUtils || !logo) {
+    if (this.closed || !dbUtils || !logo) {
       return
     }
 
@@ -273,14 +278,19 @@ export class FileProviderOpenerService {
     // (execWrite → search-index worker when the split is on) instead of a
     // direct main-thread insert on the primary connection — file_extensions
     // is a moved table under the split (2d.3 opener extension writer).
-    void this.withDbWrite('file-opener.icon.persist', () =>
+    const write = this.withDbWrite('file-opener.icon.persist', () =>
       dbUtils.addFileExtension(fileId, 'icon', logo)
-    ).catch((error) => {
-      this.logWarn('Failed to persist opener icon', error, { fileId })
-    })
+    )
+    this.ownedWrites.add(write)
+    void write
+      .catch((error) => {
+        if (!this.closed) this.logWarn('Failed to persist opener icon', error, { fileId })
+      })
+      .finally(() => this.ownedWrites.delete(write))
   }
 
   persistOpenerToStorage(extension: string, opener: OpenerInfo): void {
+    if (this.closed) return
     try {
       const current = this.getStoredOpeners()
       const existing = current[extension]
@@ -308,7 +318,7 @@ export class FileProviderOpenerService {
     bundleId: string,
     appInfo: { fileId: number; name: string; path: string; logo: string }
   ): void {
-    if (!this.enableFileIconExtraction || !appInfo.path) {
+    if (this.closed || !this.enableFileIconExtraction || !appInfo.path) {
       return
     }
 
@@ -318,7 +328,7 @@ export class FileProviderOpenerService {
 
     const task = (async () => {
       const logo = await this.generateApplicationIcon(appInfo.path)
-      if (!logo) {
+      if (!logo || this.closed) {
         return
       }
 
@@ -329,7 +339,7 @@ export class FileProviderOpenerService {
       const opener: ResolvedOpener = {
         bundleId,
         name: appInfo.name,
-        logo,
+        logo: this.resolveOpenerLogo(logo),
         path: appInfo.path,
         lastResolvedAt: new Date().toISOString()
       }
@@ -565,12 +575,7 @@ export class FileProviderOpenerService {
 
   async generateApplicationIcon(appPath: string): Promise<string> {
     try {
-      const buffer = await this.extractFileIconQueued(appPath)
-      if (buffer && buffer.length > 0) {
-        const normalized = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer)
-        const iconValue = `data:image/png;base64,${normalized.toString('base64')}`
-        return this.isValidBase64DataUrl(iconValue) ? iconValue : ''
-      }
+      return (await this.getFileIconPath(appPath)) ?? ''
     } catch (error) {
       this.logWarn('Failed to extract icon', error, { path: appPath })
     }

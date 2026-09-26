@@ -443,6 +443,13 @@ describe('win app scanner', () => {
       if (target === targetPath) return createFileStat()
       throw new Error(`Unexpected stat path: ${target}`)
     })
+    // Cached app icons are handed out as the cache file path now, not re-encoded as a data URL
+    // (#1964): the scanner asks whether the versioned cache file exists and returns that path.
+    const accessedPaths: string[] = []
+    accessMock.mockImplementation(async (target: string) => {
+      accessedPaths.push(target)
+      return undefined
+    })
     mockPowerShellOutputs({
       registryApps: [
         {
@@ -470,7 +477,10 @@ describe('win app scanner', () => {
       launchTarget: targetPath,
       stableId: 'registry:c:\\program files\\foo\\foo.exe'
     })
-    expect(apps[0].icon).toBe('data:image/png;base64,AQID')
+    const cachedIconPath = accessedPaths.find((candidate) => candidate.endsWith('.png'))
+    expect(cachedIconPath).toBeTruthy()
+    expect(apps[0].icon).toBe(cachedIconPath)
+    expect(apps[0].icon.startsWith('data:')).toBe(false)
   })
 
   it('falls back to InstallLocation executables for registry apps', async () => {

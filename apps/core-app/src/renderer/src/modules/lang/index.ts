@@ -1,5 +1,5 @@
 export { loadLocaleMessages, setI18nLanguage, setupI18n } from './i18n'
-export { setupLanguageFollow, useLanguage } from './useLanguage'
+export { readLanguagePreference, setupLanguageFollow, useLanguage } from './useLanguage'
 export type { I18nInstance } from './i18n'
 export {
   resolveInitialLanguagePreference,

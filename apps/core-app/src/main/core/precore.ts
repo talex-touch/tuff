@@ -453,6 +453,10 @@ app.on('before-quit', (event) => {
     }
     mainLog.info('App quit requested')
 
+    // DevProcessManager calls app.quit() synchronously while this promise is still pending.
+    // Cleanup has finished, so that reentrant before-quit must not be prevented again.
+    beforeQuitFlowDone = true
+
     const finalized = finalizeBeforeQuit({
       broadcast: broadcastBeforeQuit,
       // Development mode: let DevProcessManager orchestrate shutdown steps.
@@ -462,10 +466,7 @@ app.on('before-quit', (event) => {
         mainLog.debug('Development mode: delegating quit to DevProcessManager')
         devProcessManager.triggerGracefulShutdown()
       },
-      quit: () => {
-        beforeQuitFlowDone = true
-        app.quit()
-      },
+      quit: () => app.quit(),
       logError: (message, error) => mainLog.error(message, { error })
     })
 

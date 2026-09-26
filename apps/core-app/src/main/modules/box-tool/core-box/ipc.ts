@@ -33,6 +33,7 @@ import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-over
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { createLogger } from '../../../utils/logger'
 import { coreBoxImageTranslateEvent } from '../../../../shared/events/corebox-scenes'
+import { extendMetaPanelHeightForPluginRows } from '../../../../shared/meta-overlay-geometry'
 import { pluginModule } from '../../plugin/plugin-module'
 import { OnboardingGateError } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
@@ -618,14 +619,23 @@ export class IpcManager {
           meta: {
             hasItem: Boolean(request.item),
             builtinActions: request.builtinActions?.length ?? 0,
-            itemActions: request.itemActions?.length ?? 0
+            itemActions: request.itemActions?.length ?? 0,
+            anchor: request.anchor ?? null,
+            desiredPanelHeight: request.desiredPanelHeight ?? null
           }
         })
-        // Expand first so `show()` reads the final parent bounds: it sizes the overlay view from
-        // them, and expanding afterwards would leave the view at the pre-expand height until the
-        // deferred height sync caught up.
-        coreBoxManager.expand({ forceMax: true })
-        request.pluginActions = metaOverlayManager.getPluginActions()
+        // No forced expand: the manager grows CoreBox only when the panel does not fit, and hands
+        // the height back on close. Forcing 600 left an empty strip of window under short result
+        // lists, where the vibrancy material showed the desktop behind CoreBox.
+        const pluginActions = metaOverlayManager.getPluginActions()
+        request.pluginActions = pluginActions
+        if (typeof request.desiredPanelHeight === 'number') {
+          // The renderer that sized the panel cannot see the registered plugin actions.
+          request.desiredPanelHeight = extendMetaPanelHeightForPluginRows(
+            request.desiredPanelHeight,
+            pluginActions.filter((action) => action.render?.disabled !== true).length
+          )
+        }
         metaOverlayManager.show(request)
         return { accepted: true }
       })

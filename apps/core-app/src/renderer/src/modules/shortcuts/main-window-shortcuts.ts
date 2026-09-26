@@ -138,8 +138,8 @@ export function installMainWindowShortcutCapture(
     // Held-down auto-repeat must not re-run a command a dozen times.
     if (event.repeat) return
 
-    const command = mainWindowCommands.value.find((candidate) =>
-      shortcutChordMatches(event, candidate.chord, isMac)
+    const command = mainWindowCommands.value.find(
+      (candidate) => candidate.chord !== null && shortcutChordMatches(event, candidate.chord, isMac)
     )
     if (!command) return
 

@@ -79,6 +79,25 @@ identity, and plugin permissions remain in main.
 - `AppSetting.voiceInput.enabled` alone gates platform dictation gestures, HUD entry, and the
   Assistant voice runtime projection. Assistant visibility, floating-ball visibility, and legacy
   wake-word preferences must not authorize or disable shortcut dictation.
+- The Home composer's microphone (`views/base/home/composer/useComposerDictation.ts`) is outside
+  that gate (D10-a): pressing the in-composer button is itself the consent, it requests
+  `delivery: 'none'` so nothing is typed into another application, and its words land only in the
+  composer's own draft. Every session rule above still applies to it — one generation per session,
+  a stop asked for before the stream handle arrives is applied as `stop()`, never `cancel()` — and it
+  offers no retry or undo, because main's recovery slot is global and may hold the HUD's recording.
+- A `partial` is the provider's whole hypothesis for the utterance so far (main keeps it the same
+  way, `lastPartialText = partial`): a consumer **replaces** its last partial with it. Merging it as
+  new words appends every revision — a corrected word or a trailing `。` turned into `，` defeats a
+  prefix check — and a session that ends without a `final` then leaves the stacked copies in place
+  (a real composer message went out as one sentence repeated 25 times). Finals commit and reset it.
+- Silence transcribes as junk: punctuation-only segments (`。。。。。。。。。。`, the first partial and,
+  in a silent session, the final) and Whisper-style credits (`(字幕:J Chong)`). The composer drops a
+  segment with no letter, digit or CJK character, and whole segments on a short hallucination list
+  (`dictation-text.ts` `spokenSegment`); a silent session leaves the draft untouched.
+- `level.rms` from the built-in microphone is small: room tone ≈ 0.002–0.003, speech into it peaks
+  around 0.0066. A fixed noise gate of 0.012 zeroed every frame; the composer's waveform gates at
+  about twice the session's own tracked floor (≥ 0.002) against a reference floor of 0.01
+  (`voice-level.ts`).
 - Missing `voiceInput` is migrated during raw main-storage normalization, before caching/defaults
   can hide absence: preserve legacy `assistant.enabled && voiceWake.enabled` and language once.
   Any explicit new value wins; malformed new values fail closed rather than restoring legacy enablement.

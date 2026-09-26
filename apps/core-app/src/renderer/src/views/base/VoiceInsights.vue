@@ -1,7 +1,8 @@
 <script setup lang="ts" name="VoiceInsights">
 import type {
   VoiceInsights,
-  VoiceRecognitionRecord
+  VoiceRecognitionRecord,
+  VoiceRecognitionRecordMutation
 } from '@talex-touch/utils/transport/sdk/domains/voice'
 import type { CSSProperties } from 'vue'
 import type { DataTableColumn } from '@talex-touch/tuffex/data-table'
@@ -23,7 +24,7 @@ import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import VoiceRecordDetails from '~/components/intelligence/voice/VoiceRecordDetails.vue'
 import { appSetting } from '~/modules/storage/app-storage'
-import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
+import { createVoiceSdk, voiceApiEvents } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -221,6 +222,9 @@ const expandedRecord = computed<VoiceRecognitionRecord | null>(
 const showSkeleton = useDeferredLoading(() => !hasLoaded.value && !loadFailed.value)
 let loadRevision = 0
 let disposed = false
+let recordMutationCleanup: (() => void) | null = null
+let recordMutationRevision = 0
+let recordClearRevision = 0
 
 const hasData = computed(() => {
   const value = insights.value
@@ -576,12 +580,36 @@ async function revealLatestHeatmap(): Promise<void> {
   heatmapScroller.value.scrollLeft =
     heatmapScroller.value.scrollWidth - heatmapScroller.value.clientWidth
 }
+function mergeRecognitionRecords(
+  ...collections: ReadonlyArray<ReadonlyArray<VoiceRecognitionRecord>>
+): VoiceRecognitionRecord[] {
+  const byId = new Map<string, VoiceRecognitionRecord>()
+  for (const collection of collections) {
+    for (const record of collection) byId.set(record.id, record)
+  }
+  return [...byId.values()].sort((left, right) => right.capturedAt - left.capturedAt).slice(0, 100)
+}
+
+function applyRecognitionRecordMutation(mutation: VoiceRecognitionRecordMutation): void {
+  recordMutationRevision += 1
+  if (mutation.type === 'clear') {
+    recordClearRevision += 1
+    records.value = []
+    expandedRecordId.value = null
+    recordPage.value = 1
+    return
+  }
+  records.value = mergeRecognitionRecords([mutation.record], records.value)
+}
 
 async function loadInsights(background = false): Promise<void> {
   if (clearing.value || disposed) return
 
   const revision = ++loadRevision
   const recoveringClearedState = postClearRefreshFailed.value
+  const mutationRevisionAtStart = recordMutationRevision
+  const clearRevisionAtStart = recordClearRevision
+
   if (background) refreshing.value = true
   if (!insights.value) hasLoaded.value = false
   if (!recoveringClearedState) loadFailed.value = false
@@ -594,7 +622,12 @@ async function loadInsights(background = false): Promise<void> {
     ])
     if (revision !== loadRevision || disposed) return
     insights.value = next
-    records.value = nextRecords ?? []
+    records.value =
+      recordMutationRevision === mutationRevisionAtStart
+        ? (nextRecords ?? [])
+        : recordClearRevision === clearRevisionAtStart
+          ? mergeRecognitionRecords(records.value, nextRecords ?? [])
+          : records.value
     hasLoaded.value = true
     loadFailed.value = false
     postClearRefreshFailed.value = false
@@ -703,6 +736,19 @@ function recordDateLabel(timestamp: number): string {
 function recordStatusLabel(status: VoiceRecognitionRecord['status']): string {
   return t(`voiceInsights.records.status.${status}`)
 }
+function recordLocationLabel(record: VoiceRecognitionRecord): string {
+  if (record.recognitionLocation === 'cloud') {
+    return t('voiceInsights.records.locationValues.cloud')
+  }
+  if (record.recognitionLocation === 'on-device') {
+    return t('voiceInsights.records.locationValues.onDevice')
+  }
+  return t('voiceInsights.records.locationValues.unknown')
+}
+
+function recordModelLabel(record: VoiceRecognitionRecord): string {
+  return record.model || record.providerId || record.channel || '—'
+}
 
 /**
  * The status tones.
@@ -736,7 +782,7 @@ const recordColumns = computed<DataTableColumn<VoiceRecognitionRecord>[]>(() => 
     nowrap: true
   },
   { key: 'status', title: t('voiceInsights.records.columns.status'), width: 96, nowrap: true },
-  { key: 'model', title: t('voiceInsights.records.columns.model'), width: 176, nowrap: true }
+  { key: 'model', title: t('voiceInsights.records.columns.model'), width: 220, nowrap: true }
 ])
 
 /**
@@ -795,6 +841,10 @@ watch(expandedRecordId, async (id) => {
 })
 
 onMounted(() => {
+  recordMutationCleanup = transport.on(
+    voiceApiEvents.recognitionRecordsChanged,
+    applyRecognitionRecordMutation
+  )
   void loadInsights()
 })
 
@@ -833,6 +883,8 @@ onBeforeUnmount(() => {
   disposed = true
   loadRevision += 1
   refreshing.value = false
+  recordMutationCleanup?.()
+  recordMutationCleanup = null
   // The watcher only fires when the canvas goes away with the branch; leaving the page does not
   // go through it, and a loose rAF outlives the component that owns it.
   stopWave()
@@ -1347,7 +1399,14 @@ onBeforeUnmount(() => {
             />
           </template>
           <template #cell-model="{ row }">
-            <span class="VoiceInsights-RecordModel">{{ row.model || row.channel || '—' }}</span>
+            <span
+              class="VoiceInsights-RecordModel"
+              :title="`${recordLocationLabel(row)} · ${recordModelLabel(row)}`"
+            >
+              <span class="VoiceInsights-RecordLocation">{{ recordLocationLabel(row) }}</span>
+              <span class="VoiceInsights-RecordModelSeparator" aria-hidden="true">·</span>
+              <span class="VoiceInsights-RecordModelName">{{ recordModelLabel(row) }}</span>
+            </span>
           </template>
         </TxDataTable>
 
@@ -2107,14 +2166,37 @@ onBeforeUnmount(() => {
  * wrap would give every row a different height and take the table's one advantage — a column of
  * times you can read down — straight back out.
  */
-.VoiceInsights-RecordText,
-.VoiceInsights-RecordModel {
+.VoiceInsights-RecordText {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.VoiceInsights-RecordModel {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: var(--shell-space-1);
+}
+
+.VoiceInsights-RecordLocation {
+  flex: none;
+  color: var(--shell-text-primary);
+  font-weight: 600;
+}
+
+.VoiceInsights-RecordModelSeparator {
+  flex: none;
+  color: var(--shell-text-muted);
+}
+
+.VoiceInsights-RecordModelName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Absence, not content: a dash that reads as "nothing here" rather than as a value. */
 .VoiceInsights-RecordText.is-empty {
   color: var(--shell-text-muted);

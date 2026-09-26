@@ -1,5 +1,5 @@
-import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TxFlatRadio from '../src/TxFlatRadio.vue'
 import flatRadioSource from '../src/TxFlatRadio.vue?raw'
 import TxFlatRadioItem from '../src/TxFlatRadioItem.vue'
@@ -167,23 +167,26 @@ describe('txFlatRadio indicator contrast', () => {
   })
 })
 
+/** Property names of the first `transition:` declaration in `css`. */
+function transitionedProperties(css: string): string[] {
+  const declaration = css.slice(css.indexOf('transition:') + 'transition:'.length)
+  return splitTopLevel(declaration.slice(0, declaration.indexOf(';')))
+    .map(segment => segment.split(/\s+/)[0] ?? '')
+}
+
 describe('txFlatRadio motion', () => {
-  it('travels and resizes on one duration and one curve', () => {
-    // Previously `transform` ran a 0.25s overshoot while `width` ran a 0.2s
-    // ease, so on labels of unequal width the thumb arrived and only then
-    // finished growing. Pinning the numbers here would churn on every retune;
-    // the contract is that the two segments agree.
-    const body = indicatorRuleBody().replace(/\s+/g, ' ')
-    const declaration = body.slice(body.indexOf('transition:'))
-    const value = declaration.slice('transition:'.length, declaration.indexOf(';'))
+  it('leaves travel and resize to the indicator engine and keeps only the fade', () => {
+    // The engine writes the thumb's transform and width every frame. A CSS
+    // transition on either would re-ease each written frame, so the thumb would
+    // trail its own spring. Travel and resize used to share one curve so the
+    // thumb did not arrive and then finish growing; the springs under its two
+    // ends now carry both, which keeps that.
+    expect(transitionedProperties(indicatorRuleBody())).toEqual(['opacity'])
 
-    const segments = splitTopLevel(value)
-    const transform = segments.find(segment => segment.startsWith('transform '))
-    const width = segments.find(segment => segment.startsWith('width '))
-
-    expect(transform).toBeTruthy()
-    expect(width).toBeTruthy()
-    expect(transform!.replace(/^transform /, '')).toBe(width!.replace(/^width /, ''))
+    // Reduced motion keeps the fade too: the engine is what drops the travel.
+    const reduced = flatRadioSource.slice(flatRadioSource.indexOf('@media (prefers-reduced-motion: reduce)'))
+    const reducedRule = reduced.slice(reduced.indexOf('.tx-flat-radio__indicator {'))
+    expect(transitionedProperties(reducedRule.slice(0, reducedRule.indexOf('}')))).toEqual(['opacity'])
   })
 
   it('keeps item width independent of selection', () => {
@@ -218,6 +221,155 @@ describe('txFlatRadio motion', () => {
   it('drops travel and press motion under prefers-reduced-motion', () => {
     expect(flatRadioSource).toContain('@media (prefers-reduced-motion: reduce)')
     expect(flatRadioItemSource).toContain('@media (prefers-reduced-motion: reduce)')
+  })
+})
+
+describe('txFlatRadio thumb on the glide material', () => {
+  // The xl tier: a 219px track, 44px tall with 5px padding, so the thumb is
+  // 34px tall. Items of unequal width, 6px apart, the last one ending on the
+  // padding.
+  const TRACK = 219
+  const ITEMS = [
+    { left: 5, width: 40 },
+    { left: 51, width: 50 },
+    { left: 107, width: 107 },
+  ]
+
+  function rect(left: number, top: number, width: number, height: number): () => DOMRect {
+    return () => ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) }) as DOMRect
+  }
+
+  /** Mounts an xl group and lays it out before its first measurement runs. */
+  function mountLaidOut() {
+    const wrapper = mount({
+      components: { TxFlatRadio, TxFlatRadioItem },
+      data: () => ({ value: 'a' }),
+      template: `
+        <TxFlatRadio v-model="value" size="xl">
+          <TxFlatRadioItem value="a" label="A" />
+          <TxFlatRadioItem value="b" label="Bee" />
+          <TxFlatRadioItem value="c" label="Ceeeee" />
+        </TxFlatRadio>
+      `,
+    })
+    const root = wrapper.find('.tx-flat-radio').element
+    root.getBoundingClientRect = rect(0, 0, TRACK, 44)
+    Object.defineProperty(root, 'clientWidth', { configurable: true, value: TRACK })
+    Object.defineProperty(root, 'offsetWidth', { configurable: true, value: TRACK })
+    const thumb = wrapper.find('.tx-flat-radio__indicator').element as HTMLElement
+    // The thumb's CSS height, which the host reads back into the target box.
+    Object.defineProperty(thumb, 'offsetHeight', { configurable: true, value: 34 })
+    wrapper.findAll('.tx-flat-radio-item').forEach((item, index) => {
+      item.element.getBoundingClientRect = rect(ITEMS[index]!.left, 5, ITEMS[index]!.width, 34)
+    })
+    return { wrapper, thumb }
+  }
+
+  function read(thumb: HTMLElement) {
+    const move = thumb.style.transform.match(/translate3d\(([\d.-]+)px, 0, 0\) scale\(([\d.]+), ([\d.]+)\)/)
+    return { x: Number(move?.[1]), scaleX: Number(move?.[2]), scaleY: Number(move?.[3]), width: Number.parseFloat(thumb.style.width) }
+  }
+
+  async function select(wrapper: ReturnType<typeof mountLaidOut>['wrapper'], value: string) {
+    ;(wrapper.vm as unknown as { value: string }).value = value
+    await flushPromises()
+  }
+
+  beforeEach(() => {
+    // The engine steps on requestAnimationFrame.
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('lands the first measurement in place, then glides to a new selection', async () => {
+    const { wrapper, thumb } = mountLaidOut()
+    await flushPromises()
+
+    expect(thumb.style.opacity).toBe('1')
+    expect(thumb.style.transform).toBe('translate3d(5px, 0, 0) scale(1.000, 1.000)')
+    expect(thumb.style.width).toBe('40px')
+    // The CSS keeps the thumb's top and height; the engine never writes them.
+    expect(thumb.style.height).toBe('')
+    expect(thumb.style.top).toBe('')
+
+    await select(wrapper, 'b')
+
+    // Between the items it runs longer than either (40px, about 54px, 50px):
+    // the end facing the new item leads and the trailing end catches up. The
+    // thumb never scales.
+    let midFlight = false
+    let longest = 0
+    for (let frame = 0; frame < 200; frame++) {
+      vi.advanceTimersByTime(16)
+      const { x, width, scaleX, scaleY } = read(thumb)
+      expect([scaleX, scaleY]).toEqual([1, 1])
+      if (x > 5 && x < 51)
+        midFlight = true
+      longest = Math.max(longest, width)
+    }
+    expect(midFlight).toBe(true)
+    expect(longest).toBeGreaterThan(50 + 1)
+
+    expect(thumb.style.transform).toBe('translate3d(51px, 0, 0) scale(1.000, 1.000)')
+    expect(thumb.style.width).toBe('50px')
+  })
+
+  // The track's ends are the walls: an end of the thumb that would leave the
+  // track stops there. The glide never scales, so the painted box is exactly
+  // the written one and the thumb keeps its CSS height inside the padding.
+  it('keeps the thumb on the track at both ends', async () => {
+    const { wrapper, thumb } = mountLaidOut()
+    await flushPromises()
+
+    let travelled = false
+    for (const value of ['c', 'a']) {
+      await select(wrapper, value)
+      for (let frame = 0; frame < 150; frame++) {
+        vi.advanceTimersByTime(16)
+        const { x, width, scaleX, scaleY } = read(thumb)
+        expect([scaleX, scaleY]).toEqual([1, 1])
+        expect(x).toBeGreaterThanOrEqual(0)
+        expect(x + width).toBeLessThanOrEqual(TRACK)
+        if (x > 20 && x < 90)
+          travelled = true
+      }
+    }
+
+    expect(travelled).toBe(true)
+    expect(thumb.style.transform).toBe('translate3d(5px, 0, 0) scale(1.000, 1.000)')
+    expect(thumb.style.width).toBe('40px')
+    expect(thumb.style.height).toBe('')
+  })
+
+  it('lands a new selection directly under prefers-reduced-motion', async () => {
+    const original = window.matchMedia
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('reduce'),
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia
+
+    try {
+      const { wrapper, thumb } = mountLaidOut()
+      await flushPromises()
+
+      await select(wrapper, 'c')
+      expect(thumb.style.transform).toBe('translate3d(107px, 0, 0) scale(1.000, 1.000)')
+      expect(thumb.style.width).toBe('107px')
+    }
+    finally {
+      window.matchMedia = original
+    }
   })
 })
 

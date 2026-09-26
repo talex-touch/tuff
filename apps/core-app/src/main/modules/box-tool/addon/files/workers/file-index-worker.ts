@@ -11,6 +11,7 @@ import type {
   WorkerMetricsRequest,
   WorkerMetricsResponse
 } from './worker-status'
+import { getWorkerMemorySnapshot } from './worker-status'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -24,6 +25,15 @@ import {
   getTypeTagsForExtension,
   KEYWORD_MAP
 } from '../constants'
+import {
+  INDEX_WORKER_RESULT_MAX_BYTES,
+  INDEX_WORKER_RESULT_TOO_LARGE,
+  measureIndexWorkerPayloadBytes
+} from './index-worker-payload-budget'
+import {
+  classifyIndexWorkerReadFailure,
+  pushIndexWorkerFailureSample
+} from './index-worker-read-failure'
 
 interface IndexFilePayload {
   id: number
@@ -55,6 +65,8 @@ interface IndexDoneMessage {
   taskId: string
   processed: number
   failed: number
+  /** Up to three `lastError` values of this batch's failed files. */
+  failureSamples?: string[]
 }
 
 interface IndexErrorMessage {
@@ -84,26 +96,28 @@ interface IndexFileResultMessage {
   type: 'file'
   taskId: string
   fileId: number
+  /** File mtime (ms) the result was produced for; new-version fence. */
+  fileVersion: number
+  /** File size at scheduling time; second half of the version fingerprint. */
+  fileSize: number | null
   progress: IndexProgressUpdate
   fileUpdate: IndexFileUpdate | null
   indexItem: SearchIndexItem
 }
 
+interface IndexFileVersionFingerprint {
+  mtime: number
+  size: number | null
+}
+
 function buildMetricsPayload(): WorkerMetricsPayload {
-  const memory = process.memoryUsage()
   const eventLoop =
     typeof performance.eventLoopUtilization === 'function'
       ? performance.eventLoopUtilization()
       : null
   return {
     timestamp: Date.now(),
-    memory: {
-      rss: memory.rss,
-      heapUsed: memory.heapUsed,
-      heapTotal: memory.heapTotal,
-      external: memory.external,
-      arrayBuffers: memory.arrayBuffers ?? 0
-    },
+    memory: getWorkerMemorySnapshot(),
     cpuUsage: process.cpuUsage(),
     eventLoop: eventLoop
       ? {
@@ -174,24 +188,39 @@ function buildSearchIndexItem(
   }
 }
 
-function emitFileResult(message: IndexFileResultMessage): void {
+function emitFileResult(
+  version: IndexFileVersionFingerprint,
+  message: Omit<IndexFileResultMessage, 'fileVersion' | 'fileSize'>
+): void {
   if (cancelledTaskIds.has(message.taskId)) return
-  parentPort?.postMessage(message)
+  parentPort?.postMessage({
+    ...message,
+    fileVersion: version.mtime,
+    fileSize: version.size
+  })
 }
 
-async function handleIndexTask(task: IndexRequest): Promise<{ processed: number; failed: number }> {
+async function handleIndexTask(
+  task: IndexRequest
+): Promise<{ processed: number; failed: number; failureSamples: string[] }> {
   let failed = 0
+  const failureSamples: string[] = []
 
   for (const file of task.files) {
     if (cancelledTaskIds.has(task.taskId)) break
+    // Fingerprint the version BEFORE ensureFileSize may stat/mutate size: the
+    // fence must compare against the size the database row carried at scheduling.
+    const version: IndexFileVersionFingerprint = {
+      mtime: file.mtime,
+      size: typeof file.size === 'number' ? file.size : null
+    }
     const extension = (file.extension || path.extname(file.name) || '').toLowerCase()
     const indexable = CONTENT_INDEXABLE_EXTENSIONS.has(extension)
     const size = await ensureFileSize(file)
     if (cancelledTaskIds.has(task.taskId)) break
-    let content: string | null = null
 
     if (!indexable) {
-      emitFileResult({
+      emitFileResult(version, {
         type: 'file',
         taskId: task.taskId,
         fileId: file.id,
@@ -211,7 +240,7 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
 
     const maxBytes = getContentSizeLimitMB(extension) * 1024 * 1024
     if (maxBytes && size !== null && size > maxBytes) {
-      emitFileResult({
+      emitFileResult(version, {
         type: 'file',
         taskId: task.taskId,
         fileId: file.id,
@@ -229,7 +258,7 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
       continue
     }
 
-    emitFileResult({
+    emitFileResult(version, {
       type: 'file',
       taskId: task.taskId,
       fileId: file.id,
@@ -255,7 +284,9 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
       })
     } catch (error) {
       failed += 1
-      emitFileResult({
+      const lastError = error instanceof Error ? error.message : 'parser-error'
+      pushIndexWorkerFailureSample(failureSamples, lastError)
+      emitFileResult(version, {
         type: 'file',
         taskId: task.taskId,
         fileId: file.id,
@@ -264,7 +295,7 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
           progress: 100,
           processedBytes: 0,
           totalBytes: size ?? null,
-          lastError: error instanceof Error ? error.message : 'parser-error',
+          lastError,
           updatedAt: new Date().toISOString()
         },
         fileUpdate: null,
@@ -276,7 +307,7 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
     if (cancelledTaskIds.has(task.taskId)) break
 
     if (!result) {
-      emitFileResult({
+      emitFileResult(version, {
         type: 'file',
         taskId: task.taskId,
         fileId: file.id,
@@ -303,15 +334,15 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
         rawContent.length > MAX_CONTENT_LENGTH
           ? `${rawContent.slice(0, MAX_CONTENT_LENGTH)}\n...[truncated]`
           : rawContent
-      content = trimmedContent
       const embeddingStatus =
         result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
       const contentHash = buildContentHash(rawContent)
-
-      emitFileResult({
+      const successMessage = {
         type: 'file',
         taskId: task.taskId,
         fileId: file.id,
+        fileVersion: version.mtime,
+        fileSize: version.size,
         progress: {
           status: 'completed',
           progress: 100,
@@ -325,14 +356,49 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
           embeddingStatus,
           embeddings: result.embeddings?.length ? result.embeddings : undefined,
           contentHash
-        },
-        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType, content)
-      })
+        } satisfies IndexFileUpdate,
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType, trimmedContent)
+      } satisfies IndexFileResultMessage
+
+      if (
+        measureIndexWorkerPayloadBytes(successMessage, INDEX_WORKER_RESULT_MAX_BYTES).exceedsBudget
+      ) {
+        // Explicit terminal failure: oversized output is never silently dropped
+        // and is counted in `failed` like every other real worker failure (the
+        // existing failure semantics — surface the batch failure, do not fake
+        // failed=0). It terminates because the emitted progress is `failed`, so
+        // resume (pending/processing/null only) will not re-select the file. The
+        // metadata-only indexItem keeps it searchable by name/path.
+        failed += 1
+        pushIndexWorkerFailureSample(failureSamples, INDEX_WORKER_RESULT_TOO_LARGE)
+        emitFileResult(version, {
+          type: 'file',
+          taskId: task.taskId,
+          fileId: file.id,
+          progress: {
+            status: 'failed',
+            progress: 100,
+            processedBytes,
+            totalBytes,
+            lastError: INDEX_WORKER_RESULT_TOO_LARGE,
+            updatedAt: new Date().toISOString()
+          },
+          fileUpdate: null,
+          indexItem: buildSearchIndexItem(file, task.providerId, task.providerType)
+        })
+        continue
+      }
+
+      // Already carries fileVersion/fileSize, so post it verbatim; keep the
+      // cancellation guard emitFileResult would have applied.
+      if (!cancelledTaskIds.has(task.taskId)) {
+        parentPort?.postMessage(successMessage)
+      }
       continue
     }
 
     if (result.status === 'skipped') {
-      emitFileResult({
+      emitFileResult(version, {
         type: 'file',
         taskId: task.taskId,
         fileId: file.id,
@@ -350,9 +416,32 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
       continue
     }
 
-    failed += 1
+    const readSkipReason = classifyIndexWorkerReadFailure(result.errorCode)
+    if (readSkipReason) {
+      // A missing or unreadable file fails the same way until the file itself
+      // changes: record a terminal skip, not a failure (index-worker-read-failure).
+      emitFileResult(version, {
+        type: 'file',
+        taskId: task.taskId,
+        fileId: file.id,
+        progress: {
+          status: 'skipped',
+          progress: 100,
+          processedBytes: 0,
+          totalBytes: size ?? null,
+          lastError: readSkipReason,
+          updatedAt: new Date().toISOString()
+        },
+        fileUpdate: null,
+        indexItem: buildSearchIndexItem(file, task.providerId, task.providerType)
+      })
+      continue
+    }
 
-    emitFileResult({
+    failed += 1
+    pushIndexWorkerFailureSample(failureSamples, result.reason)
+
+    emitFileResult(version, {
       type: 'file',
       taskId: task.taskId,
       fileId: file.id,
@@ -369,7 +458,7 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
     })
   }
 
-  return { processed: task.files.length, failed }
+  return { processed: task.files.length, failed, failureSamples }
 }
 
 async function processQueue(): Promise<void> {
@@ -386,13 +475,14 @@ async function processQueue(): Promise<void> {
   running = true
   activeTaskId = next.taskId
   try {
-    const { processed, failed } = await handleIndexTask(next)
+    const { processed, failed, failureSamples } = await handleIndexTask(next)
     if (!cancelledTaskIds.has(next.taskId)) {
       parentPort?.postMessage({
         type: 'done',
         taskId: next.taskId,
         processed,
-        failed
+        failed,
+        ...(failureSamples.length > 0 ? { failureSamples } : {})
       } satisfies IndexDoneMessage)
     }
   } catch (error) {

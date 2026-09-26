@@ -12,7 +12,7 @@
 | `record macro` | 录制快捷脚本 |
 
 ## 快捷键策略
-- `⌘ + E`：唤起 CoreBox。
+- `⌥ + Space`：唤起 CoreBox。
 - `⌘ + Shift + Space`：呼出浮动 Widget 面板。
 - `⌘ + Shift + M`：启用/退出聚焦模式。
 - 所有快捷键可在设置中针对 Workspace 重新映射。

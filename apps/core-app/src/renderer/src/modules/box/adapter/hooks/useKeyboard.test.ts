@@ -15,8 +15,13 @@ import {
   useKeyboard
 } from './useKeyboard'
 
+// One stable object: a factory returning a fresh mock per call would leave nothing to assert on.
+const transportMock = vi.hoisted(() => ({
+  send: vi.fn((_event: unknown, _payload?: unknown) => Promise.resolve(undefined))
+}))
+
 vi.mock('@talex-touch/utils/transport', () => ({
-  useTuffTransport: () => ({ send: vi.fn() })
+  useTuffTransport: () => transportMock
 }))
 
 const keyTransportMock = vi.hoisted(() => ({
@@ -281,7 +286,8 @@ function createGridResults(): TuffItem[] {
 function mountGridKeyboardHarness(
   focus: number,
   layout: NonNullable<IBoxOptions['layout']> = { mode: 'grid', grid: { columns: 5 } },
-  activations: IProviderActivate[] | null = null
+  activations: IProviderActivate[] | null = null,
+  items: TuffItem[] = createGridResults()
 ): GridKeyboardHarness {
   const root = document.createElement('div')
   const boxOptions: IBoxOptions = {
@@ -292,7 +298,7 @@ function mountGridKeyboardHarness(
     data: {},
     layout
   }
-  const results = ref(createGridResults())
+  const results = ref(items)
   const scrollbar = ref<{
     getScrollInfo: () => { clientHeight: number; scrollTop: number }
     scrollTo: (x: number, y: number) => void
@@ -534,5 +540,366 @@ describe('useKeyboard detached DivisionBox result keys', () => {
 
     expect(keyTransportMock.forwardKeyEvent).not.toHaveBeenCalled()
     expect(harness.handleExecute).toHaveBeenCalledTimes(1)
+  })
+})
+
+type ActionKeyHarness = {
+  boxOptions: IBoxOptions
+  handleExecute: Mock
+  dispatched: Array<{ actionId: string; item: TuffItem }>
+  cleanup: () => void
+}
+
+let activeActionKeyHarness: ActionKeyHarness | undefined
+
+const ACTION_FILE_ITEM = {
+  id: '/Users/me/report.pdf',
+  kind: 'file',
+  source: { type: 'file', id: 'file-provider', name: 'Files' },
+  render: { mode: 'default', basic: { title: 'report.pdf' } },
+  actions: [
+    { id: 'open-file', type: 'open', label: 'Open', primary: true, payload: { path: '/x' } },
+    { id: 'file-copy-path', type: 'copy', label: 'Copy Path', payload: { text: '/x' } }
+  ],
+  meta: { file: { path: '/Users/me/report.pdf' } }
+} as TuffItem
+
+const ACTION_APP_ITEM = {
+  id: 'com.apple.Safari',
+  kind: 'app',
+  source: { type: 'application', id: 'app-provider', name: 'Applications' },
+  render: { mode: 'default', basic: { title: 'Safari' } },
+  actions: [{ id: 'open-app', type: 'open', label: 'Open', primary: true, payload: {} }],
+  meta: { app: { path: '/Applications/Safari.app' } }
+} as TuffItem
+
+const ACTION_PREVIEW_ITEM = {
+  id: 'preview-1',
+  kind: 'preview',
+  source: { type: 'system', id: 'preview-provider', name: 'Preview' },
+  render: { mode: 'default', basic: { title: '2 + 2 = 4' } },
+  actions: [{ id: 'preview-copy-primary', type: 'copy', label: '复制结果', payload: {} }]
+} as TuffItem
+
+function mountActionKeyHarness(
+  results: TuffItem[],
+  activations: IProviderActivate[] | null = null
+): ActionKeyHarness {
+  const dispatched: ActionKeyHarness['dispatched'] = []
+  const onAction = (event: Event): void => {
+    dispatched.push((event as CustomEvent<{ actionId: string; item: TuffItem }>).detail)
+  }
+  window.addEventListener('corebox:meta-action', onAction)
+  const harness = mountGridKeyboardHarness(0, undefined, activations, results)
+
+  return {
+    ...harness,
+    dispatched,
+    cleanup: () => {
+      harness.cleanup()
+      window.removeEventListener('corebox:meta-action', onAction)
+    }
+  }
+}
+
+/** The test platform is non-mac (see the renderer-platform mock), so Ctrl is the command key. */
+function pressActionKey(code: string, init: KeyboardEventInit = {}): KeyboardEvent {
+  const event = new KeyboardEvent('keydown', {
+    bubbles: true,
+    cancelable: true,
+    code,
+    key: code.startsWith('Key') ? code.slice(3).toLowerCase() : code,
+    ctrlKey: true,
+    ...init
+  })
+  document.dispatchEvent(event)
+  return event
+}
+
+describe('useKeyboard ⌘K request', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', () => 0)
+    transportMock.send.mockClear()
+  })
+
+  afterEach(() => {
+    activeActionKeyHarness?.cleanup()
+    activeActionKeyHarness = undefined
+    document.body.classList.remove('core-box')
+    document.querySelectorAll('.CoreBoxFooter-Sticky').forEach((element) => element.remove())
+    vi.unstubAllGlobals()
+  })
+
+  function lastShowRequest(): Record<string, unknown> {
+    const call = transportMock.send.mock.calls.at(-1)
+    expect(call, 'expected ⌘K to ask main to show the panel').toBeDefined()
+    return call![1] as Record<string, unknown>
+  }
+
+  it('anchors above a displayed footer and says how tall the panel needs to be', () => {
+    const footer = document.createElement('div')
+    footer.className = 'CoreBoxFooter CoreBoxFooter-Sticky display'
+    document.body.appendChild(footer)
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_APP_ITEM])
+
+    const event = pressActionKey('KeyK')
+
+    expect(event.defaultPrevented).toBe(true)
+    const request = lastShowRequest()
+    expect(request.anchor).toBe('footer')
+    // Five rows in five sections, four titled: the same model the panel draws.
+    expect(request.desiredPanelHeight).toBe(364)
+    expect((request.builtinActions as Array<{ id: string }>).map((action) => action.id)).toEqual([
+      '__corebox_primary__',
+      'reveal-in-finder',
+      'copy-title',
+      'toggle-pin',
+      'flow-transfer'
+    ])
+    expect((request.itemActions as Array<{ id: string }>).map((action) => action.id)).toEqual([
+      'open-app'
+    ])
+  })
+
+  it('drops to the window corner when no footer is shown', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_APP_ITEM])
+
+    pressActionKey('KeyK')
+
+    expect(lastShowRequest().anchor).toBe('corner')
+  })
+
+  it('drops to the corner in plugin UI mode even if a footer element lingers', () => {
+    const footer = document.createElement('div')
+    footer.className = 'CoreBoxFooter-Sticky display'
+    document.body.appendChild(footer)
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_APP_ITEM], [createUIModeActivation()])
+
+    pressActionKey('KeyK')
+
+    expect(lastShowRequest().anchor).toBe('corner')
+  })
+})
+
+describe('useKeyboard action shortcuts on the selected result', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', () => 0)
+    keyTransportMock.forwardKeyEvent.mockClear()
+  })
+
+  afterEach(() => {
+    activeActionKeyHarness?.cleanup()
+    activeActionKeyHarness = undefined
+    document.body.classList.remove('core-box')
+    document.querySelectorAll('.FlowSelector').forEach((element) => element.remove())
+    window.__coreboxHistoryVisible = undefined
+    vi.unstubAllGlobals()
+  })
+
+  it.each([
+    { name: 'Mod⇧C copies the path', code: 'KeyC', init: { shiftKey: true }, id: 'file-copy-path' },
+    { name: 'Mod⌥C copies the name', code: 'KeyC', init: { altKey: true }, id: 'copy-title' },
+    { name: 'ModO reveals it', code: 'KeyO', init: {}, id: 'reveal-in-finder' },
+    // Off macOS pin adds Shift: a Chinese IME takes Ctrl+. for punctuation width.
+    { name: 'Ctrl+Shift+. pins it', code: 'Period', init: { shiftKey: true }, id: 'toggle-pin' },
+    { name: 'Mod↵ runs the secondary', code: 'Enter', init: {}, id: 'reveal-in-finder' }
+  ])('$name without opening the panel', ({ code, init, id }) => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
+    const harness = activeActionKeyHarness
+
+    const event = pressActionKey(code, init)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(harness.dispatched).toEqual([{ actionId: id, item: ACTION_FILE_ITEM }])
+    expect(harness.handleExecute).not.toHaveBeenCalled()
+  })
+
+  it('matches the physical key, so Option rewriting the character changes nothing', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
+
+    pressActionKey('KeyC', { altKey: true, key: 'ç' })
+
+    expect(activeActionKeyHarness.dispatched.map((detail) => detail.actionId)).toEqual([
+      'copy-title'
+    ])
+  })
+
+  it('does not respond to, or swallow, a key that does not apply to the item', () => {
+    // An app has no path to copy.
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_APP_ITEM])
+
+    const event = pressActionKey('KeyC', { shiftKey: true })
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(activeActionKeyHarness.dispatched).toEqual([])
+  })
+
+  it('lets Mod↵ fall through to the ordinary Enter path when there is no secondary', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_PREVIEW_ITEM])
+
+    pressActionKey('Enter')
+
+    expect(activeActionKeyHarness.dispatched).toEqual([])
+    expect(activeActionKeyHarness.handleExecute).toHaveBeenCalledExactlyOnceWith(
+      ACTION_PREVIEW_ITEM
+    )
+  })
+
+  it('leaves keys to the IME while it composes', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
+
+    const event = pressActionKey('KeyO', { isComposing: true })
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(activeActionKeyHarness.dispatched).toEqual([])
+  })
+
+  it('runs once for a held chord, swallowing the auto-repeats', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
+
+    pressActionKey('Period', { shiftKey: true })
+    const repeat = pressActionKey('Period', { shiftKey: true, repeat: true })
+
+    expect(repeat.defaultPrevented).toBe(true)
+    expect(activeActionKeyHarness.dispatched).toHaveLength(1)
+  })
+
+  it('leaves Ctrl+. alone off macOS, where it belongs to the IME', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
+
+    const event = pressActionKey('Period')
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(activeActionKeyHarness.dispatched).toEqual([])
+  })
+
+  it('keeps forwarding to an attached plugin view in UI mode', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM], [createUIModeActivation()])
+
+    pressActionKey('KeyC', { altKey: true })
+
+    expect(activeActionKeyHarness.dispatched).toEqual([])
+    expect(keyTransportMock.forwardKeyEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'KeyC', ctrlKey: true, altKey: true })
+    )
+  })
+
+  it('leaves Mod⇧D to the existing Flow shortcut', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
+    const flowListener = vi.fn()
+    window.addEventListener('corebox:flow-item', flowListener)
+
+    try {
+      pressActionKey('KeyD', { shiftKey: true, key: 'D' })
+
+      expect(activeActionKeyHarness.dispatched).toEqual([])
+      expect(flowListener).toHaveBeenCalledTimes(1)
+    } finally {
+      window.removeEventListener('corebox:flow-item', flowListener)
+    }
+  })
+
+  it('stays out of the way of the Flow picker and the calculation history', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
+
+    const flowSelector = document.createElement('div')
+    flowSelector.className = 'FlowSelector'
+    document.body.appendChild(flowSelector)
+    pressActionKey('KeyO')
+    flowSelector.remove()
+
+    window.__coreboxHistoryVisible = true
+    pressActionKey('KeyO')
+
+    expect(activeActionKeyHarness.dispatched).toEqual([])
+  })
+})
+
+/**
+ * An Enter held on a ⌘K row. The panel runs the row, main hides it and hands focus back to
+ * CoreBox, and the key is still down: its auto-repeats arrive here, and used to run the selected
+ * result as well — opening the file whose path the user had only copied.
+ */
+describe('useKeyboard Enter held over from the ⌘K panel', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', () => 0)
+    keyTransportMock.forwardKeyEvent.mockClear()
+  })
+
+  afterEach(() => {
+    activeActionKeyHarness?.cleanup()
+    activeActionKeyHarness = undefined
+    document.body.classList.remove('core-box')
+    vi.unstubAllGlobals()
+  })
+
+  function pressEnter(init: KeyboardEventInit = {}): KeyboardEvent {
+    return dispatchGridKey('Enter', { code: 'Enter', ...init })
+  }
+
+  it('swallows the auto-repeats of an Enter pressed in another document', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
+
+    const repeat = pressEnter({ repeat: true })
+
+    expect(repeat.defaultPrevented).toBe(true)
+    expect(activeActionKeyHarness.handleExecute).not.toHaveBeenCalled()
+
+    // The next real press is the user's again.
+    pressEnter()
+    expect(activeActionKeyHarness.handleExecute).toHaveBeenCalledExactlyOnceWith(ACTION_FILE_ITEM)
+  })
+
+  it('leaves a press that began here to repeat as before', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
+
+    pressEnter()
+    pressEnter({ repeat: true })
+
+    expect(activeActionKeyHarness.handleExecute).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves the Enter an IME commits with to the IME', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
+
+    // A fresh press, so not the guard's: it neither runs the result nor is taken from the IME.
+    const composing = pressEnter({ isComposing: true })
+
+    expect(composing.defaultPrevented).toBe(false)
+    expect(activeActionKeyHarness.handleExecute).not.toHaveBeenCalled()
+  })
+
+  it.each(['blur', 'focus'])('forgets a press once the window sees %s', (type) => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
+    pressEnter()
+
+    // Focus moved to the panel, so the keyup went there; main then hands focus back.
+    window.dispatchEvent(new Event(type))
+    pressEnter({ repeat: true })
+
+    expect(activeActionKeyHarness.handleExecute).toHaveBeenCalledTimes(1)
+  })
+
+  it('forgets a press on its keyup', () => {
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
+    pressEnter()
+    document.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter' }))
+
+    pressEnter({ repeat: true })
+
+    expect(activeActionKeyHarness.handleExecute).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops a held Mod↵ too, and never forwards the repeats to a plugin view', () => {
+    // No secondary: Mod↵ would fall through to the plain Enter path.
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_PREVIEW_ITEM])
+    pressEnter({ ctrlKey: true, repeat: true })
+    expect(activeActionKeyHarness.handleExecute).not.toHaveBeenCalled()
+    activeActionKeyHarness.cleanup()
+
+    activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM], [createUIModeActivation()])
+    const repeat = pressEnter({ repeat: true })
+    expect(repeat.defaultPrevented).toBe(true)
+    expect(keyTransportMock.forwardKeyEvent).not.toHaveBeenCalled()
   })
 })

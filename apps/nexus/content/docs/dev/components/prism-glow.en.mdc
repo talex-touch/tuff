@@ -1,0 +1,322 @@
+---
+title: "PrismGlow"
+description: "Spectral light cones that rise from one edge of an element and flow left to right, for loading and working states"
+category: Effects
+status: beta
+since: 0.6.0
+tags: [glow, prism, loading, effect, spectrum]
+syncStatus: reviewed
+verified: true
+---
+
+## Installation
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxPrismGlow } from '@talex-touch/tuffex/prism-glow'
+  import '@talex-touch/tuffex/prism-glow/style.css'
+  import '@talex-touch/tuffex/base.css' // tokens + resets, once per app
+---
+:::
+
+## Usage
+
+Six spectral light cones rise from one edge of the host and flow left to right at different speeds, merging as they catch up and splitting as they pull apart. Use it for a loading or working state.
+
+### Card
+
+The root is the card: the background and radius go on the root, and the light paints over that background and under the slot. The controls below drive the first five props; the other two are covered in Collapse on grow.
+
+:::TuffDemoWrapper{demo="PrismGlowShowcaseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref(true)
+  const palette = ref<'spectrum' | 'accent'>('spectrum')
+  </script>
+
+  <template>
+    <TxPrismGlow
+      class="canvas-card"
+      :active="active"
+      :palette="palette"
+      placement="bottom"
+      :intensity="1"
+      :duration="6"
+    >
+      <strong>Generating canvas</strong>
+      <span>Building 3 layers from your prompt</span>
+    </TxPrismGlow>
+    <TxSwitch v-model="active" aria-label="active" />
+    <TxFlatRadio v-model="palette" size="sm" aria-label="palette">
+      <TxFlatRadioItem value="spectrum" label="spectrum" />
+      <TxFlatRadioItem value="accent" label="accent" />
+    </TxFlatRadio>
+  </template>
+
+  <style scoped>
+  /* Background and radius on the root: the light paints over it and under the slot */
+  .canvas-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 200px;
+    padding: 18px 20px;
+    border-radius: 16px;
+    background: var(--tx-bg-color-overlay);
+  }
+  </style>
+---
+:::
+
+### Collapse on grow
+
+When the host grows taller while the light is on, the light sinks into its edge in about 140ms instead of the 0.45s fade, so it never lingers over content that has just landed. It stays off until `active` is switched off and on again.
+
+Press Load content and the points land, the card grows and the light retracts at once. Press Reset and the points go, `active` cycles off and on, and the light comes back.
+
+:::TuffDemoWrapper{demo="PrismGlowGrowDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { nextTick, ref } from 'vue'
+
+  const active = ref(true)
+  const loaded = ref(false)
+
+  // A collapse holds until active is switched off and on again
+  async function reset() {
+    loaded.value = false
+    active.value = false
+    await nextTick()
+    active.value = true
+  }
+  </script>
+
+  <template>
+    <!-- The root is watched by default: the points land, the card grows, the light retracts -->
+    <TxPrismGlow class="summary-card" :active="active">
+      <strong>Meeting summary</strong>
+      <span role="status">{{ loaded ? '3 key points' : 'Writing the summary…' }}</span>
+      <ul v-if="loaded">
+        <li>Release moves to next Wednesday.</li>
+        <li>Dark-mode screenshots are due before the design review.</li>
+        <li>The search team takes the performance regression.</li>
+      </ul>
+    </TxPrismGlow>
+    <TxButton size="sm" variant="primary" :disabled="loaded" @click="loaded = true">Load content</TxButton>
+    <TxButton size="sm" variant="secondary" :disabled="!loaded" @click="reset">Reset</TxButton>
+  </template>
+
+  <style scoped>
+  /* No fixed height: the card grows when the points land; min-height only gives the light room */
+  .summary-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 140px;
+    padding: 18px 20px;
+    border-radius: 16px;
+    background: var(--tx-bg-color-overlay);
+  }
+  </style>
+---
+:::
+
+### Overlay
+
+Without a slot, the component can sit behind the content of any host. The CoreBox search bar uses it this way:
+
+- the host itself must be a stacking context (`position: relative; z-index: 0`, or `isolation: isolate`);
+- a class on the component's root sets `position: absolute; inset: 0; z-index: -1`.
+
+Press Search and the glow lights for about 2.4 s, then fades out; the input stays usable throughout.
+
+:::TuffDemoWrapper{demo="PrismGlowSearchDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { onBeforeUnmount, ref } from 'vue'
+
+  const searching = ref(false)
+  let timer: number | undefined
+
+  function search() {
+    searching.value = true
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => { searching.value = false }, 2400)
+  }
+
+  onBeforeUnmount(() => window.clearTimeout(timer))
+  </script>
+
+  <template>
+    <form class="search-bar" role="search" @submit.prevent="search">
+      <TxPrismGlow class="search-bar__glow" :active="searching" />
+      <input placeholder="Search apps, files and commands" aria-label="Search apps, files and commands">
+      <TxButton native-type="submit" size="sm" variant="primary">Search</TxButton>
+      <!-- The component announces nothing; the host provides the status text -->
+      <span class="sr-only" role="status">{{ searching ? 'Searching' : '' }}</span>
+    </form>
+  </template>
+
+  <style scoped>
+  /* The host is a stacking context: the glow's z-index: -1 lands on its background */
+  .search-bar {
+    position: relative;
+    z-index: 0;
+    display: flex;
+    align-items: center;
+    height: 56px;
+    border-radius: 14px;
+    background: var(--tx-bg-color-overlay);
+  }
+
+  /* The root's own position: relative has zero specificity, so this wins */
+  .search-bar__glow {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+  }
+  </style>
+---
+:::
+
+### Best Practices
+
+- Turn it on only while something is in progress: set `active` to `true` when the work starts and back to `false` when it ends. Off, the layer fades out and unmounts, leaving no animation running. Do not use it as permanent decoration.
+- When the glow sits in a part that never grows (such as CoreBox's fixed-height header), point `growTarget` at the outer container that grows with the content; otherwise the light does not retract when the content lands. Turn `collapseOnGrow` off only when the host legitimately changes its own height while loading (an expand animation, output streaming in line by line).
+- Let the host say what is happening: the component renders no text and announces nothing, so pair it with visible status text or a `role="status"` region (sr-only is fine).
+- Put the background on the root or the host, never on the slot: the light sits under the slot, and an opaque slot background covers it.
+- In the overlay usage, the host must be a stacking context; otherwise `z-index: -1` drops the light under the host's background, where nobody sees it.
+- Keep the main text away from the edge the light rises from (the upper half for `placement="bottom"`): light behind text lowers its contrast.
+- One per view: it is a high-attention effect.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `active` | `boolean` | `true` | On / off. Turning it on fades the light layer in over 0.3s; turning it off fades it out over 0.45s and then unmounts it. No light layer renders while off. While on, growth of the watched element can retract the light early; see `collapseOnGrow` |
+| `palette` | `'spectrum' \| 'accent'` | `'spectrum'` | `spectrum`: six hues spread across the whole wheel. `accent`: six neighbouring hues derived from `--tx-color-primary` |
+| `placement` | `'bottom' \| 'top'` | `'bottom'` | The edge the light rises from. It flows left to right either way |
+| `intensity` | `number` | `1` | Opacity of the light layer, 0–1. Values outside are clamped, and a non-finite value counts as `1`. The slot is unaffected |
+| `duration` | `number` | `6` | Base flow period in seconds; smaller is faster. Each cone runs its own multiple of it (0.9–1.38). Anything but a positive finite number falls back to `6` |
+| `collapseOnGrow` | `boolean` | `true` | When the watched element grows more than 8px taller while the light is on or fading out, the light sinks into the edge it rises from in about 140ms instead of the 0.45s fade, and stays off until `active` is switched off and on again. Shrinking never triggers it |
+| `growTarget` | `HTMLElement \| null` | `null` | The element whose height `collapseOnGrow` watches. `null` means the component root, which is the host in both the wrapper and the overlay usage. Point it at the outer container when the glow sits in a part that never grows, such as a fixed-height header |
+
+### Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | Content, rendered above the light layer. Leave it out to use the component as an overlay behind a host |
+
+### CSS Variables
+
+The props write two variables into the root's inline style on every render; change them through the props:
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `--tx-prism-glow-intensity` | `intensity` | Light-layer opacity, clamped to 0–1 |
+| `--tx-prism-glow-duration` | `duration` | Base flow period, with its `s` unit |
+
+The rest are declared on the root, with one set of defaults for light surfaces and one for dark:
+
+| Variable | Light | Dark | Description |
+|----------|-------|------|-------------|
+| `--tx-prism-glow-l` / `--tx-prism-glow-c` | `0.76` / `0.19` | `0.74` / `0.19` | oklch lightness and chroma of the cone colour |
+| `--tx-prism-glow-l-core` / `-c-core` / `-a-core` | `0.78` / `0.18` / `0.5` | `0.95` / `0.05` / `0.78` | Lightness, chroma and alpha of the core along the edge: near white in dark, coloured in light |
+| `--tx-prism-glow-a-halo` | `0.22` | `0.3` | Alpha of the halo |
+| `--tx-prism-glow-a-fringe` | `0.3` | `0.44` | Alpha of the two dispersion fringes |
+| `--tx-prism-glow-a-ray` | `0.05` | `0.07` | Alpha of the vertical rays |
+| `--tx-prism-glow-blend` | `normal` | `plus-lighter` | Blend mode between cones |
+| `--tx-prism-glow-reach` | `1` | `1` | Cone height factor; `0.45` in high contrast, and `0` on the leaving layer during a collapse on grow |
+
+- The `accent` palette reads its hue from `--tx-color-primary`.
+- To override these, use a selector more specific than the component's theme blocks (light is `.tx-prism-glow`, dark is `:is([data-theme='dark'], .dark) .tx-prism-glow`), and give dark its own rule.
+- `--tx-pg-*` are internal and not part of the API.
+
+## Overview
+
+- The root is `div.tx-prism-glow` with two modifier classes, `tx-prism-glow--{palette}` and `tx-prism-glow--{placement}` (plus `is-collapsing` while a collapse on grow runs), and `isolation: isolate`, which makes it its own stacking context.
+- The light layer, `.tx-prism-glow__field`, is `position: absolute; inset: 0; z-index: -1`:
+  - it paints over the root's background and under the slot, and never drops behind the host page;
+  - it is clipped to the root's radius (`border-radius: inherit` plus `overflow: hidden`) and takes no part in layout.
+- The light layer carries `aria-hidden="true"` and `pointer-events: none`; slot content stays clickable and its text selectable.
+- Overlay usage: the root's `position: relative` sits inside `:where(.tx-prism-glow)`, at zero specificity. Whatever order the stylesheets load in, a host class can turn it into `position: absolute; inset: 0; z-index: -1`. The host has to be a stacking context. The CoreBox search bar uses it this way.
+- `active` from `false` to `true`: the light layer mounts and fades in over 0.3s. From `true` to `false`: it fades out over 0.45s and then unmounts, leaving no cones and no running animation. The slot is never affected, and the component emits no events.
+- Collapse on grow (`collapseOnGrow`, on by default):
+  - while the light is on (`active` is `true` and it has not collapsed yet), once the watched element is more than 8px taller than its lowest height since the light came on, the beams and rays sink into the edge they rise from in about 140ms while the layer fades, and then it unmounts. Changes within 8px (sub-pixel rounding, a web font swapping in) and shrinking never trigger it;
+  - the leaving layer is pinned to the root's height from before the growth, so the cones retract where they were instead of stretching with the host;
+  - it stays off even when the host shrinks back; switching `active` off and on again relights it, measuring from the height at that moment;
+  - growth during the 0.45s fade that follows switching `active` off triggers it too: the rest of the fade ends within about 140ms and the cones retract the same way. Setting `items = data; loading = false` in one update is exactly this case;
+  - the watched element is the root unless `growTarget` names another one; changing it starts the measurement over.
+- The first frame after turning it on is already mid-flow: every cone starts with a negative animation delay, so nothing waits for the first cone to come in from the left.
+- Each of the six cones crosses once in 0.9–1.38 × `duration`. The periods differ pairwise, so the cones keep catching each other up, merging, and pulling apart again:
+  - each crossing rises out of the edge in its first 16% and sinks and fades in its last 16%;
+  - each beam also swells and shrinks back and forth, one swell or one shrink taking 0.38–0.58 × `duration`.
+- `placement="top"` flips the whole light layer vertically (`scaleY(-1)`): the light hangs from the top edge and still flows left to right.
+- Dark is detected from an ancestor: under `[data-theme='dark']` or `.dark` the dark tuning applies (near-white core, `plus-lighter` blending); otherwise the light tuning (coloured core, `normal` blending). There is no theme prop.
+- `prefers-reduced-motion: reduce`:
+  - every animation and the enter and leave transitions stop;
+  - the six cones hold one finished frame: all risen, fully lit, and spread evenly from the left edge to the right one (12cqw apart);
+  - the light layer appears and disappears with `active` at once, and a collapse on grow drops it at once too, with no retract.
+- High contrast (`html.contrast`, `html[data-tx-contrast='high']`, or `prefers-contrast: more` without `html[data-tx-contrast='normal']`): `--tx-prism-glow-reach` drops to `0.45`, the cones shrink to a band along the edge, and the rays are hidden, so no colour spreads behind text.
+- The component renders no text and announces nothing; the host provides the status text.
+
+## Technologies
+
+- Compositor-only motion:
+  - `translate` carries the travel, `scale` the rise and the breathing, `opacity` the fades;
+  - they are split between two element layers, the cone and the beam, so no two animations write the same property;
+  - no keyframe reads a `var()`, so the compositor runs every animation and the flow stays smooth while the main thread is busy, which is exactly the case during a search;
+  - no JS frame loop, no `filter` / `backdrop-filter`, no size or layout animation.
+- Cone width and travel are in container units (`cqw`). The light layer is a `container-type: size` container whose size comes from `inset: 0`, never from content.
+- Growth detection:
+  - one ResizeObserver watches the height of `growTarget` (the root by default) and, by its border box, the root, recording the height a leave pins the layer to. The layer is `inset: 0` and spans the root's padding box, so that height is the observed content height plus the vertical padding; it keeps updating after a collapse;
+  - its callback runs after layout and before paint, and a collapse starts the leave in the same flush. The `before-leave` hook writes `top: 0; bottom: auto; height: <root height before the growth>` onto the leaving layer, so the stretched frame never paints. The pin goes on the leaving element itself because a node the `v-if` is removing no longer receives new bindings;
+  - the retract hangs off the root's `is-collapsing` class: the leaving layer sets `--tx-prism-glow-reach` to `0`, and the beams' and rays' `transform` and the layer's `opacity` transition over 0.14s, still compositor-only;
+  - growth partway through a fade: the running `opacity` transition is sped up through its Web Animations `playbackRate`, so the rest finishes in about 140ms; when the fade has not started yet (the growth landed in the same update), `is-collapsing` gives it the 0.14s transition directly.
+- Blending:
+  - in dark mode the cones blend with `plus-lighter`, so overlaps add up towards white, which is what reads as two beams merging;
+  - on a light surface additive light is invisible and a near-white core reads as a grey smudge, so light mode blends `normal` with a coloured core, and high chroma at low alpha keeps three overlapping cones clean.
+- Colour:
+  - each cone has one tint variable, and the core, the two dispersion fringes (hue shifted ±34° either side), the halo, the 1.5px hairline along the edge and the rays all derive from it through relative colour (`oklch(from …)`);
+  - the spectrum palette supplies only hue angles (350 / 95 / 205 / 300 / 150 / 258), with lightness and chroma from the theme; `accent` only swaps the tint's source for `--tx-color-primary`;
+  - the rays are a `repeating-conic-gradient` under a radial mask; a mask reads alpha only, so the tint itself serves as the opaque stop;
+  - apart from `var()` fallbacks, the stylesheet has no colour literal.
+- The six cones' parameters (hue, accent shift, period, phase, breathing period, size, place in the reduced-motion frame) live in `cones.ts` and ride on each element as inline custom properties, so the stylesheet holds one rule for all six.
+- Rejected designs:
+  - `multiply` blending in light mode: it mixes blue and yellow into olive;
+  - WebGL / canvas: the frame loop runs on the main thread and stutters when the host is busy, and a search in flight is exactly that moment.
+- The look is inspired by Unicorn Studio's "New AI canvas loading state" clip, posted by George Hastings (@soulegit) on 2026-09-23. Only the look was borrowed; no code came from it.
+- Source: `packages/tuffex/packages/components/src/prism-glow/src/TxPrismGlow.vue`; cone parameters in `cones.ts`, types in `types.ts`.
+- **Verified coverage:** `prism-glow/__tests__/prism-glow.test.ts`, 17 tests:
+  - component: the slot renders apart from the `aria-hidden` light layer; six cones each carry their own parameters, with pairwise distinct periods; the layer mounts only while `active` and fades out before it unmounts; palette and placement modifier classes; `intensity` / `duration` binding, clamping and fallbacks;
+  - collapse on grow, driven by a stand-in ResizeObserver: the first report only sets the baseline, and changes within 8px, a font swap's reflow included, are ignored; growth retracts the light at once, with the leaving layer pinned to the height from before the growth; growth during a fade-out retracts it too, pinned at the height the fade started from, and a fade already under way is sped up to finish in about 140ms; the pin is the root's padding box (content box plus vertical padding); the root stays tracked through a collapse, so a fade after relighting pins the height the box grew to; shrinking back does not relight it, and only cycling `active` does, measuring from the height at that moment; the baseline is the lowest height since the light came on; nothing collapses with `collapseOnGrow` off; with `growTarget` only that element's growth counts, not the root's, and the layer is pinned at the root's height; setting `growTarget` back to `null` watches the root alone;
+  - compiled style: keyframes animate only `translate` / `scale` / `opacity` and read no `var()`; every animation name resolves to a `tx-prism-glow-*` keyframes block; reduced motion stops every animation and transition, the collapse's retract included, and holds a finished frame spread edge to edge; the layer appears and disappears at once; no colour literal outside `var()` fallbacks.
+
+## Use cases
+
+- A loading or working state on a card, input, search bar or message composer.
+- The wait during a long AI generation (a canvas, an image, a long answer).
+- The "searching" state of the CoreBox search bar, its first consumer.
+
+## Related components
+
+- [BorderBeam](/docs/dev/components/border-beam): a beam that travels along or breathes around a border, for emphasising cards, buttons and search bars; it draws the border, not cones rising from an edge.
+- [ThinkingOrb](/docs/dev/components/thinking-orb): a standalone canvas orb with its own `label`. Use it when "thinking" needs an element of its own; use PrismGlow to light up a card or input that is already there.
+- [GlowText](/docs/dev/components/glow-text): a shine that sweeps across text or a card.
+
+<!-- Keep this as the last node. The component has no slot and HTML parsing ignores the self-closing slash, so anything written after it becomes its child and never renders. -->
+<TuffDocSourceLink label="View source" />

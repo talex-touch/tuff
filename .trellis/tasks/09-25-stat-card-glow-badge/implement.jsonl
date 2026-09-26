@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "badge material: token-only colour, ring not border, one light source, hover motion without colour transitions, reduced-motion"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "stat-card zh+en docs rewrite, rejected-design record, demo rules, icon classes invisible to nexus"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "One writer per CSS custom property for --tx-stat-card-icon-color"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "shared worktree, build lock"}
+{"file": ".trellis/tasks/09-25-stat-card-glow-badge/research/stat-card.md", "reason": "consumers, test contracts (two source regexes), docs sections, icon rendering, progress geometry"}

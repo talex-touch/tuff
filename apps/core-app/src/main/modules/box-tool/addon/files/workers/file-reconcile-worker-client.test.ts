@@ -143,7 +143,7 @@ describe('FileReconcileWorkerClient idle shutdown', () => {
     await expect(secondReconcile).resolves.toEqual(secondResult)
   })
 
-  it('keeps the worker alive while status metrics are pending', async () => {
+  it('defers idle retirement while a status metrics sample spans the idle deadline', async () => {
     vi.useFakeTimers()
     const client = new FileReconcileWorkerClient()
     const result: ReconcileResult = {
@@ -161,19 +161,59 @@ describe('FileReconcileWorkerClient idle shutdown', () => {
     })
     await expect(reconcile).resolves.toEqual(result)
 
+    // Reach the last moment before the idle deadline, then start a sample that spans it.
+    await vi.advanceTimersByTimeAsync(59_900)
     const statusPromise = client.getStatus()
-    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
     expect(messageTypeOf(worker.messages[1])).toBe('metrics')
 
-    await vi.advanceTimersByTimeAsync(60_000)
+    // Cross the 60s deadline with metrics outstanding: the in-flight sample must keep it alive.
+    await vi.advanceTimersByTimeAsync(100)
     expect(worker.terminateCalls).toBe(0)
+
+    // The sample times out at +300ms and the worker retires promptly — not another 60s window.
+    await vi.advanceTimersByTimeAsync(200)
     await expect(statusPromise).resolves.toMatchObject({
       name: 'file-reconcile',
       state: 'idle',
       metrics: null
     })
-
-    await vi.advanceTimersByTimeAsync(300)
+    await vi.advanceTimersByTimeAsync(1_000)
     expect(worker.terminateCalls).toBe(1)
+  })
+
+  it('does not extend worker liveness when status is polled faster than the idle timeout', async () => {
+    vi.useFakeTimers()
+    const client = new FileReconcileWorkerClient()
+    const result: ReconcileResult = {
+      filesToAdd: [createDiskFile('a.txt')],
+      filesToUpdate: [],
+      deletedIds: []
+    }
+    const reconcile = client.reconcile([createDiskFile('a.txt')], [], ['/tmp'])
+    const worker = workerMock.workers.at(-1)!
+
+    worker.emit('message', {
+      type: 'done',
+      taskId: taskIdOf(worker.messages[0]),
+      result
+    })
+    await expect(reconcile).resolves.toEqual(result)
+
+    // A diagnostics panel refreshing every 5s used to reset the whole 60s window on each
+    // call, so a cold worker never died. Poll well past the deadline; it must still go.
+    for (let elapsed = 0; elapsed < 75_000; elapsed += 5_000) {
+      const status = client.getStatus()
+      await vi.advanceTimersByTimeAsync(300)
+      await status
+      await vi.advanceTimersByTimeAsync(4_700)
+    }
+
+    expect(worker.terminateCalls).toBe(1)
+    expect(workerMock.workers).toHaveLength(1)
+    await expect(client.getStatus()).resolves.toMatchObject({
+      name: 'file-reconcile',
+      state: 'offline'
+    })
+    expect(workerMock.workers).toHaveLength(1)
   })
 })

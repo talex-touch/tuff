@@ -32,6 +32,11 @@ export interface FileParserResult {
   processedBytes?: number
   totalBytes?: number
   reason?: string
+  /**
+   * Node errno code (`ENOENT`, `EACCES`, …) when a `failed` result came from a
+   * filesystem read. `reason` keeps the human-readable message.
+   */
+  errorCode?: string
   embeddings?: FileParserEmbedding[]
   durationMs?: number
 }

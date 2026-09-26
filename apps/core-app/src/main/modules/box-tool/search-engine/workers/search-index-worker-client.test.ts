@@ -484,7 +484,7 @@ describe('SearchIndexWorkerClient init gate', () => {
     await expect(client.drain()).resolves.toBeUndefined()
   })
 
-  it('does not terminate during status metrics sampling and restarts the idle window after timeout', async () => {
+  it('defers idle retirement while a status metrics sample spans the idle deadline', async () => {
     vi.useFakeTimers()
     const client = new SearchIndexWorkerClient()
     const initPromise = client.init('/tmp/search-index.db')
@@ -493,20 +493,53 @@ describe('SearchIndexWorkerClient init gate', () => {
     worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
     await initPromise
 
+    // Reach the last moment before the idle deadline, then start a sample that spans it.
+    await vi.advanceTimersByTimeAsync(59_900)
     const statusPromise = client.getStatus()
-    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
     expect(messageTypeOf(worker.messages[1])).toBe('metrics')
 
-    await vi.advanceTimersByTimeAsync(60_000)
+    // Cross the 60s deadline with metrics outstanding: the in-flight sample must keep it alive.
+    await vi.advanceTimersByTimeAsync(100)
     expect(worker.terminateCalls).toBe(0)
+
+    // The sample times out at +300ms; retirement starts at once rather than after a fresh window,
+    // and the graceful DB close then completes.
+    await vi.advanceTimersByTimeAsync(200)
     await expect(statusPromise).resolves.toMatchObject({
       name: 'search-index',
       state: 'idle',
       metrics: null
     })
-
-    await vi.advanceTimersByTimeAsync(300)
+    await vi.advanceTimersByTimeAsync(2_500)
     expect(worker.terminateCalls).toBe(1)
+  })
+
+  it('does not extend worker liveness when status is polled faster than the idle timeout', async () => {
+    vi.useFakeTimers()
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+
+    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    // A diagnostics panel refreshing every 5s used to reset the whole 60s window on each call,
+    // so the writer thread never retired. Poll well past the deadline; it must still go.
+    for (let elapsed = 0; elapsed < 75_000; elapsed += 5_000) {
+      const status = client.getStatus()
+      await vi.advanceTimersByTimeAsync(300)
+      await status
+      await vi.advanceTimersByTimeAsync(4_700)
+    }
+
+    expect(worker.terminateCalls).toBe(1)
+    expect(workerMock.workers).toHaveLength(1)
+    // Polling a retired worker reports cached offline status and must not respawn it.
+    await expect(client.getStatus()).resolves.toMatchObject({
+      name: 'search-index',
+      state: 'offline'
+    })
+    expect(workerMock.workers).toHaveLength(1)
   })
 
   it('reports pending work while an atomic provider item write is in flight', async () => {

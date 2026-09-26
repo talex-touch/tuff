@@ -270,14 +270,44 @@ const emit = defineEmits<{
   gap: 2px;
 }
 
+/*
+ * Status ink. 12px text needs 4.5:1, and in the light theme the plain hues and `secondary` read
+ * 2.90 (red), 2.24 (green) and 3.08 (grey) on the white cell. Light themes mix each hue toward the
+ * primary ink -- the same-hue recipe in tuffex-design-rules.md, 55% for danger and 45% for
+ * success -- and read grey on `regular`. Measured in Chromium (WCAG 2):
+ *   light, on #ffffff                red 5.66   green 5.61   grey 6.11
+ *   light high contrast, on #ffffff  red 11.47  green 12.42  grey 14.68
+ * Dark themes keep the plain tokens, unchanged: on #1d1e1f red 6.04, green 9.58 and grey
+ * (`secondary`) 6.85; high contrast on #111827 9.38 / 12.63 / 12.04. The save-state row tints
+ * below do not render (`rgba()` over a space-separated triplet); were they fixed, the light inks
+ * would still read 5.26 (green on its tint) and 4.78 (red on its tint). Re-measure when a hue or
+ * ink token moves.
+ */
 .ShortcutDialog-StatusText {
+  --shortcut-status-danger: color-mix(
+    in srgb,
+    var(--tx-color-danger, #f56c6c) 55%,
+    var(--tx-text-color-primary, #303133)
+  );
+  --shortcut-status-success: color-mix(
+    in srgb,
+    var(--tx-color-success, #67c23a) 45%,
+    var(--tx-text-color-primary, #303133)
+  );
+  --shortcut-status-muted: var(--tx-text-color-regular, #606266);
   font-size: 12px;
-  color: var(--tx-color-danger);
+  color: var(--shortcut-status-danger);
+}
+
+.dark .ShortcutDialog-StatusText {
+  --shortcut-status-danger: var(--tx-color-danger);
+  --shortcut-status-success: var(--tx-color-success);
+  --shortcut-status-muted: var(--tx-text-color-secondary);
 }
 
 .ShortcutDialog-StatusText.active,
 .ShortcutDialog-StatusText.disabled {
-  color: var(--tx-text-color-secondary);
+  color: var(--shortcut-status-muted);
 }
 
 .ShortcutDialog-StatusText.is-saving,
@@ -289,15 +319,15 @@ const emit = defineEmits<{
 }
 
 .ShortcutDialog-StatusText.is-saving {
-  color: var(--tx-text-color-secondary);
+  color: var(--shortcut-status-muted);
 }
 
 .ShortcutDialog-StatusText.is-success {
-  color: var(--tx-color-success);
+  color: var(--shortcut-status-success);
 }
 
 .ShortcutDialog-StatusText.is-error {
-  color: var(--tx-color-danger);
+  color: var(--shortcut-status-danger);
 }
 
 .ShortcutDialog-StatusText i {

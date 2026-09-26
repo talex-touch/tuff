@@ -338,20 +338,18 @@ function onLayout(value: TxFlatRadioValue | TxFlatRadioValue[]): void {
     }
   }
 
+  // Fill and shadow only. The thumb's motion stays TxFlatRadio's: its
+  // indicator engine writes the transform and width every frame, and a transition
+  // restated here would re-ease each of those frames.
   .tx-flat-radio__indicator {
     background: var(--tx-bui-surface, #fff);
     // The thumb rides on a ring-plus-shadow like every other raised BUI
     // surface; tuffex's default thumb shadow is a plain drop shadow.
     box-shadow: var(--tx-bui-shadow-btn, 0 0 0 1px #e0e2e5, 0 1px 2px #1018280d);
-    transition:
-      transform 0.3s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
-      width 0.3s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)),
-      opacity 0.15s ease;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .tx-flat-radio-item,
-    .tx-flat-radio__indicator {
+    .tx-flat-radio-item {
       transition: none;
     }
   }

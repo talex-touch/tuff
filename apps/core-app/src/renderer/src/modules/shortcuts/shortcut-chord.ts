@@ -69,7 +69,7 @@ export function shortcutChordMatches(
 
 /**
  * Badge text: `⌘⇧N` on macOS, `Ctrl+Shift+N` elsewhere. Command first on both, which is how the
- * rest of the app writes a chord (`⌘E` on the sidebar's search entry, `⌘1…⌘9` in the model menu).
+ * rest of the app writes a chord (`⌘1…⌘9` in the model menu).
  */
 export function shortcutChordLabel(chord: ShortcutChord, isMac: boolean): string {
   // A letter key's cap is its own letter; anything else needs the table (or the raw code, for a

@@ -3,7 +3,9 @@ import { AdvancedExpressionAbility } from './advanced-expression-ability'
 import { BasicExpressionAbility } from './basic-expression-ability'
 import { ColorPreviewAbility } from './color-ability'
 import { CurrencyPreviewAbility } from './currency-ability'
+import { LineToolsAbility } from './line-tools-ability'
 import { PercentageAbility } from './percentage-ability'
+import { RadixConversionAbility } from './radix-ability'
 import { ScientificConstantsAbility } from './scientific-constants-ability'
 import { TextStatsAbility } from './text-stats-ability'
 import { TimeDeltaAbility } from './time-delta-ability'
@@ -15,10 +17,12 @@ export function registerDefaultPreviewAbilities(registry: {
   registry.register(new AdvancedExpressionAbility()) // Higher priority for advanced math
   registry.register(new BasicExpressionAbility())
   registry.register(new UnitConversionAbility())
+  registry.register(new RadixConversionAbility())
   registry.register(new ScientificConstantsAbility())
   registry.register(new ColorPreviewAbility())
   registry.register(new TimeDeltaAbility())
   registry.register(new CurrencyPreviewAbility())
   registry.register(new PercentageAbility())
+  registry.register(new LineToolsAbility())
   registry.register(new TextStatsAbility())
 }

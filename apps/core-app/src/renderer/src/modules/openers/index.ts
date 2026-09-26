@@ -1,4 +1,5 @@
 import type { ComputedRef } from 'vue'
+import { toTfileUrl } from '@talex-touch/utils/network'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { OpenerEvents } from '@talex-touch/utils/transport/events'
 import { watch } from 'vue'
@@ -65,5 +66,8 @@ export function useOpenerAutoResolve(extension: ComputedRef<string | null | unde
 export function getOpenerByExtension(extension?: string | null): RemoteOpener | undefined {
   if (!extension) return undefined
   const normalized = extension.replace(/^\./, '').toLowerCase()
-  return openers[normalized] as RemoteOpener | undefined
+  const opener = openers[normalized] as RemoteOpener | undefined
+  if (!opener) return undefined
+  const logo = toTfileUrl(opener.logo)
+  return logo === opener.logo ? opener : { ...opener, logo }
 }

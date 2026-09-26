@@ -1,4 +1,6 @@
+import type { ReasoningEffortSetting } from '../../../intelligence/reasoning-effort'
 import type { CoreBoxCanvasConfig, CoreBoxThemeConfig, LayoutAtomConfig, LayoutCanvasConfig } from './layout-atom-types'
+import { DEFAULT_REASONING_EFFORT_SETTING } from '../../../intelligence/reasoning-effort'
 
 export const VOICE_POLISH_STRENGTHS = ['natural', 'structured', 'deep'] as const
 export type VoicePolishStrength = typeof VOICE_POLISH_STRENGTHS[number]
@@ -320,6 +322,13 @@ const _appSettingOriginData = {
      */
     autoContext: true,
     /**
+     * Whether a blank Home conversation opens with a line the model writes from recent titles and
+     * project names. Off by default: it is a model call on the composer's route every time Home is
+     * blank, paid from the user's quota without them asking. Off means the local template. Only an
+     * explicit `true` turns it on — a config saved before the key existed reads as off.
+     */
+    homeAiOpening: false,
+    /**
      * Whether the assistant may run tools (search, read, open) at all.
      *
      * Off by default and deliberately separate from `autoContext`: pulling
@@ -365,6 +374,12 @@ const _appSettingOriginData = {
     model: null as null | { providerId: string, model: string },
     /** Starred rows of the home model menu, in the order they were starred. */
     favoriteModels: [] as Array<{ providerId: string, model: string }>,
+    /**
+     * The reasoning effort the composer asks for, for every model — one global choice, like the
+     * pinned model. `auto` sends nothing, so each route keeps its own default. Switching to a model
+     * that cannot take the stored level never rewrites it: the level simply is not sent there.
+     */
+    reasoningEffort: DEFAULT_REASONING_EFFORT_SETTING as ReasoningEffortSetting,
   },
   dashboard: {
     enable: false,
@@ -517,6 +532,12 @@ const _appSettingOriginData = {
     sidebarWidth: 260,
     /** Whether the sidebar is collapsed to the icon-only rail. */
     sidebarCollapsed: false,
+    /**
+     * Projects whose folder is open in the sidebar. A rendering preference only: configs written
+     * before it existed lack it (read as "none open"), and ids of projects that no longer exist
+     * are pruned when the project list loads.
+     */
+    expandedProjectIds: [] as string[],
   },
   setup: {
     fileAccess: false,

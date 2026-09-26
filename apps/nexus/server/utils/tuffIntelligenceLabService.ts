@@ -4,9 +4,16 @@ import {
   resolveIntelligenceProviderRoutes,
   toRuntimeCapabilityId,
   type IntelligenceMessage,
+  type IntelligenceReasoningEffort,
+  type IntelligenceReasoningEffortDecision,
   type IntelligenceUsageInfo,
   type TuffIntelligenceApprovalTicket,
 } from "@talex-touch/tuff-intelligence/light";
+import {
+  normalizeReasoningEffort,
+  planReasoningEffort,
+  type ReasoningEffortPlan,
+} from "@talex-touch/utils/intelligence/reasoning-effort";
 import {
   buildCapabilityMessages,
   normalizeCapabilityMessages,
@@ -119,6 +126,8 @@ interface InvokeModelResult {
   status?: number;
   latency: number;
   usage?: IntelligenceUsageInfo;
+  /** How the requested reasoning effort resolved on this context's upstream. */
+  reasoningEffort?: IntelligenceReasoningEffortDecision;
 }
 
 interface InvokeModelOptions {
@@ -133,6 +142,11 @@ interface InvokeModelOptions {
   allowedProviderIds?: string[];
   /** Output cap handed to the provider, when the caller declared one. */
   maxTokens?: number;
+  /**
+   * Reasoning depth the client asked for. Resolved per upstream context against the shared table
+   * (`@talex-touch/utils/intelligence/reasoning-effort`); absent sends nothing, as before.
+   */
+  reasoningEffort?: IntelligenceReasoningEffort;
 }
 
 interface NexusInvokeOptions extends InvokeModelOptions {
@@ -928,6 +942,7 @@ async function invokeModel(
           context,
           payload.messages,
           payload.maxTokens,
+          payload.reasoningEffort,
         );
         if (settings.enableAudit) {
           await createAudit(event, {
@@ -1102,6 +1117,7 @@ async function invokeModelStream(
               await hooks.onDelta(delta, meta);
             },
           },
+          payload.reasoningEffort,
         );
         if (settings.enableAudit) {
           await createAudit(event, {
@@ -1285,17 +1301,42 @@ export async function probeIntelligenceLabProvider(
   };
 }
 
+/**
+ * The reasoning plan for one upstream context, from the same table the client plans with. Routed by
+ * provider type alone: Nexus's own provider ids are not the client's, and a Nexus upstream is never
+ * a local CLI or another Nexus. `undefined` when the caller asked for no effort, so the adapter
+ * builds exactly the request it always did.
+ */
+function planContextReasoning(
+  context: ResolvedProviderContext,
+  reasoningEffort: IntelligenceReasoningEffort | undefined,
+): ReasoningEffortPlan | undefined {
+  if (!reasoningEffort) return undefined;
+  return planReasoningEffort(reasoningEffort, {
+    providerType: context.provider.type,
+    model: context.model,
+  });
+}
+
 async function invokeWithResolvedContext(
   context: ResolvedProviderContext,
   messages: IntelligenceMessage[],
   maxTokens?: number,
+  reasoningEffort?: IntelligenceReasoningEffort,
 ): Promise<InvokeModelResult> {
   try {
     const adapter = resolveIntelligenceProviderAdapter(context.provider.type);
     if (!adapter) {
       throw new Error(`Unsupported provider type: ${context.provider.type}`);
     }
-    return await adapter({ context, messages, maxTokens });
+    const reasoning = planContextReasoning(context, reasoningEffort);
+    const result = await adapter({
+      context,
+      messages,
+      maxTokens,
+      ...(reasoning ? { reasoning } : {}),
+    });
+    return reasoning ? { ...result, reasoningEffort: reasoning.decision } : result;
   } catch (error) {
     const normalized =
       error instanceof Error ? error : new Error(String(error));
@@ -1317,6 +1358,7 @@ async function streamWithResolvedContext(
   messages: IntelligenceMessage[],
   maxTokens: number | undefined,
   hooks: NexusIntelligenceStreamHooks & { capabilityId: string },
+  reasoningEffort?: IntelligenceReasoningEffort,
 ): Promise<InvokeModelResult> {
   try {
     const adapter = resolveIntelligenceProviderStreamAdapter(
@@ -1327,6 +1369,7 @@ async function streamWithResolvedContext(
         `Unsupported streaming provider type: ${context.provider.type}`,
       );
 
+    const reasoning = planContextReasoning(context, reasoningEffort);
     let content = "";
     let finalChunk: IntelligenceProviderAdapterStreamChunk | null = null;
     let started = false;
@@ -1335,6 +1378,7 @@ async function streamWithResolvedContext(
       messages,
       maxTokens,
       signal: hooks.signal,
+      ...(reasoning ? { reasoning } : {}),
     })) {
       finalChunk = chunk;
       const meta: NexusIntelligenceStreamMeta = {
@@ -1347,7 +1391,10 @@ async function streamWithResolvedContext(
       if (chunk.delta) {
         if (!started) {
           started = true;
-          await hooks.onStart?.(meta);
+          // The decision rides `start` once, not every delta.
+          await hooks.onStart?.(
+            reasoning ? { ...meta, reasoningEffort: reasoning.decision } : meta,
+          );
         }
         content += chunk.delta;
         await hooks.onDelta(chunk.delta, meta);
@@ -1365,6 +1412,7 @@ async function streamWithResolvedContext(
       status: finalChunk.status,
       latency: finalChunk.latency,
       usage: finalChunk.usage,
+      ...(reasoning ? { reasoningEffort: reasoning.decision } : {}),
     };
   } catch (error) {
     const normalized =
@@ -2138,6 +2186,12 @@ export interface NexusIntelligenceInvokeResult {
       reason: "intelligence-invoke";
     };
     providerUsageLedgerIds?: string[];
+    /**
+     * How the requested reasoning effort resolved on the upstream that answered — `applied` /
+     * `clamped` with the level sent, or an `unsupported-*` status when the upstream takes none and
+     * nothing was sent. Absent when the caller asked for no effort.
+     */
+    reasoningEffort?: IntelligenceReasoningEffortDecision;
   };
 }
 
@@ -2147,6 +2201,8 @@ export interface NexusIntelligenceStreamMeta {
   model: string;
   traceId: string;
   latency: number;
+  /** On the `start` meta only: the decision for the upstream now streaming. */
+  reasoningEffort?: IntelligenceReasoningEffortDecision;
 }
 
 export interface NexusIntelligenceStreamHooks {
@@ -2296,6 +2352,11 @@ export async function invokeIntelligenceCapability(
         maxTokens: readDeclaredOutputTokens(options),
         modelPreference: options.modelPreference,
         allowedProviderIds: options.allowedProviderIds,
+        // Chat only: every other capability is sent no reasoning parameter.
+        reasoningEffort:
+          capabilityId === "text.chat"
+            ? normalizeReasoningEffort(options.reasoningEffort)
+            : undefined,
         messages,
         source: audit.source,
         stage: `capability:${capabilityId}`,
@@ -2329,6 +2390,9 @@ export async function invokeIntelligenceCapability(
       providerGovernanceId: resolveGovernanceProviderId(
         invocation.context.provider,
       ),
+      ...(invocation.result.reasoningEffort
+        ? { reasoningEffort: invocation.result.reasoningEffort }
+        : {}),
     },
   };
   const meter = resolveInvokeMeter(reservation.rule, {
@@ -2398,6 +2462,7 @@ export async function streamIntelligenceCapability(
           maxTokens: readDeclaredOutputTokens(options),
           modelPreference: options.modelPreference,
           allowedProviderIds: options.allowedProviderIds,
+          reasoningEffort: normalizeReasoningEffort(options.reasoningEffort),
           messages,
           source: audit.source,
           stage: `capability:${capabilityId}`,
@@ -2433,6 +2498,9 @@ export async function streamIntelligenceCapability(
       providerGovernanceId: resolveGovernanceProviderId(
         invocation.context.provider,
       ),
+      ...(invocation.result.reasoningEffort
+        ? { reasoningEffort: invocation.result.reasoningEffort }
+        : {}),
     },
   };
   const meter = resolveInvokeMeter(reservation.rule, {

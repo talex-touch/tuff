@@ -1,4 +1,5 @@
 import type { AiAttachment, AiMessagePart, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
+import type { ReasoningEffortSetting } from '@talex-touch/utils/intelligence/reasoning-effort'
 import type { StreamController } from '@talex-touch/utils/transport'
 import type {
   IntelligenceChatPayload,
@@ -8,11 +9,18 @@ import type {
   IntelligenceMessage,
   IntelligenceMessageAttachment,
   IntelligencePartEvent,
+  IntelligenceReasoningEffort,
+  IntelligenceReasoningEffortStatus,
+  IntelligenceReasoningLevel,
   IntelligenceStreamOptions,
   IntelligenceUsageInfo
 } from '@talex-touch/utils/types/intelligence'
 import type { ComputedRef } from 'vue'
 import type { ConversationError } from './conversation-error-display'
+import {
+  normalizeReasoningEffort,
+  normalizeReasoningEffortDecision
+} from '@talex-touch/utils/intelligence/reasoning-effort'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import {
   INTELLIGENCE_HOME_SURFACE,
@@ -32,6 +40,15 @@ import {
  */
 const CHAT_CAPABILITY_ID = 'text.chat'
 
+/**
+ * Used only when the caller supplies no `leadNote`. HomePage injects the catalog wording, so this
+ * never reaches a model in the shipped app; it exists so a caller that forgets still sends a
+ * conversation that opens with the user rather than one a provider rejects.
+ */
+function defaultLeadNote(lead: string): string {
+  return `At the start of this conversation you said to the user: "${lead}"`
+}
+
 export type ConversationRole = 'user' | 'assistant'
 export type ConversationMessageStatus = 'complete' | 'streaming' | 'failed'
 
@@ -48,6 +65,16 @@ export interface ConversationTurnMeta {
   latencyMs?: number
   /** How many times the provider compacted its context while producing this turn. */
   compactions?: number
+  /**
+   * The reasoning effort the turn asked for; absent when the composer was on auto. The three
+   * reasoning fields are flat primitives on purpose: this object is spread off a reactive message
+   * and saved through `structuredClone`, and a nested object would come along as a Proxy.
+   */
+  reasoningRequested?: IntelligenceReasoningEffort
+  /** The level the answering route actually ran at; absent when nothing was sent. */
+  reasoningApplied?: IntelligenceReasoningLevel
+  /** How the request resolved on the provider that answered. */
+  reasoningStatus?: IntelligenceReasoningEffortStatus
 }
 
 export interface ConversationMessage {
@@ -116,6 +143,26 @@ export interface UseHomeConversationOptions {
   autoContext?: () => boolean
   /** Live Home thread identity, allocated before the first send and never inferred from UI state. */
   identity?: () => { conversationId: string; projectId: string | null }
+  /**
+   * The composer's reasoning effort, read at send time like `routing`. `auto` — or no getter — puts
+   * nothing on the request, so every route keeps its own default.
+   */
+  reasoningEffort?: () => ReasoningEffortSetting | undefined
+  /**
+   * Wording of the system note that carries assistant messages sent before the user's first
+   * message — the Home opening — on every turn. Model-facing text is locale text, so HomePage
+   * supplies it from the catalog; the default only keeps the payload well-formed without it.
+   */
+  leadNote?: (lead: string) => string
+}
+
+export interface ConversationSendOptions {
+  /**
+   * An assistant message to open the thread with, ahead of the user's: the Home opening the reader
+   * saw above the composer. Taken only when the thread is still empty, and stored like any other
+   * settled reply.
+   */
+  lead?: string
 }
 
 export interface UseHomeConversationReturn {
@@ -126,7 +173,11 @@ export interface UseHomeConversationReturn {
   isCompacting: ComputedRef<boolean>
   /** Metadata of the most recent settled assistant turn, for the side panel. */
   lastTurn: ComputedRef<ConversationTurnMeta | undefined>
-  send: (text: string, attachments?: AiAttachment[]) => Promise<void>
+  send: (
+    text: string,
+    attachments?: AiAttachment[],
+    options?: ConversationSendOptions
+  ) => Promise<void>
   stop: () => void
   retry: () => Promise<void>
   /** Drops the thread and cancels any turn in flight — used when navigating to a blank `/home`. */
@@ -146,6 +197,7 @@ export function useHomeConversation(
 
   function resolveInvokeOptions(): IntelligenceInvokeOptions {
     const routing = options.routing?.()
+    const reasoningEffort = normalizeReasoningEffort(options.reasoningEffort?.())
     const metadata: IntelligenceHomeSurfaceMetadata = {
       surface: INTELLIGENCE_HOME_SURFACE,
       operation: INTELLIGENCE_HOME_SURFACE,
@@ -157,6 +209,8 @@ export function useHomeConversation(
     return {
       ...(routing?.providerId ? { preferredProviderId: routing.providerId } : {}),
       ...(routing?.model ? { modelPreference: [routing.model] } : {}),
+      // Omitted on auto rather than sent as a value: absence is what keeps every route as it was.
+      ...(reasoningEffort ? { reasoningEffort } : {}),
       metadata
     }
   }
@@ -182,10 +236,23 @@ export function useHomeConversation(
    * Only settled turns are context. A `streaming` placeholder is empty by definition and a `failed`
    * one never carried an answer, so sending either would teach the model that blanks are valid
    * replies.
+   *
+   * Assistant messages ahead of the first user message — the Home opening — travel as one system
+   * note instead of as turns. Anthropic rejects a conversation that does not open with the user, and
+   * the note rides into the pi CLI's system prompt on every turn, native continuation included, where
+   * a transcript line would be dropped. Position is the whole test: only an opening can precede the
+   * user, so a reloaded thread converts the same way without a stored marker.
    */
   function toProviderMessages(): IntelligenceMessage[] {
     const settled = messages.value.filter((message) => message.status === 'complete')
-    return settled.map((message, index) => {
+    const firstUser = settled.findIndex((message) => message.role === 'user')
+    const leadCount = firstUser === -1 ? settled.length : firstUser
+    const lead = settled
+      .slice(0, leadCount)
+      .map((message) => message.content.trim())
+      .filter(Boolean)
+    const turns = settled.slice(leadCount)
+    const provider = turns.map((message, index) => {
       const base: IntelligenceMessage = { role: message.role, content: message.content }
       // Only the turn being answered carries its images. Re-sending the ones from earlier turns
       // would spill and re-upload them on every message that follows, for a model that has already
@@ -194,9 +261,12 @@ export function useHomeConversation(
       //
       // `toRaw`: read off a reactive message this is a Proxy, and the transport's structuredClone
       // rejects proxies — every turn carrying an image would fail at the IPC boundary.
-      const attachments = index === settled.length - 1 ? toRaw(message.modelAttachments) : undefined
+      const attachments = index === turns.length - 1 ? toRaw(message.modelAttachments) : undefined
       return attachments?.length ? { ...base, attachments } : base
     })
+    if (lead.length === 0) return provider
+    const note = (options.leadNote ?? defaultLeadNote)(lead.join('\n\n'))
+    return [{ role: 'system', content: note }, ...provider]
   }
 
   function dropMessage(target: ConversationMessage): void {
@@ -235,6 +305,42 @@ export function useHomeConversation(
         completionTokens: usage.completionTokens,
         totalTokens: usage.totalTokens
       })
+    }
+
+    /**
+     * Written as one unit, unlike `recordMeta`: a later decision replaces the earlier one whole — a
+     * fallback provider that sent nothing must clear the level the first provider's `start` named,
+     * which a merge that skips absent fields would keep. Anything that is not a well-formed decision
+     * is ignored rather than half-recorded.
+     */
+    const recordReasoning = (value: unknown): void => {
+      const decision = normalizeReasoningEffortDecision(value)
+      if (!decision) return
+      const next: ConversationTurnMeta = {
+        ...(assistant.meta ?? {}),
+        reasoningRequested: decision.requested,
+        reasoningStatus: decision.status
+      }
+      if (decision.applied) next.reasoningApplied = decision.applied
+      else delete next.reasoningApplied
+      assistant.meta = next
+    }
+
+    // A retried turn keeps its meta; the attempt about to run reports its own decision, and a stale
+    // one would outlive a switch back to auto.
+    if (
+      assistant.meta &&
+      (assistant.meta.reasoningRequested ||
+        assistant.meta.reasoningApplied ||
+        assistant.meta.reasoningStatus)
+    ) {
+      const {
+        reasoningRequested: _requested,
+        reasoningApplied: _applied,
+        reasoningStatus: _status,
+        ...rest
+      } = assistant.meta
+      assistant.meta = rest
     }
 
     // ------------------------------------------------------------------
@@ -464,6 +570,7 @@ export function useHomeConversation(
         assistant.content = typeof result?.result === 'string' ? result.result : ''
         recordMeta({ provider: result?.provider, model: result?.model })
         recordUsage(result?.usage)
+        recordReasoning(result?.reasoningEffort)
         complete()
       } catch (fallbackError) {
         // The fallback ran the same request without streaming, so its failure describes the
@@ -478,6 +585,7 @@ export function useHomeConversation(
           event.provider === PI_CLI_PROVIDER_ID &&
           typeof invokeOptions.metadata?.conversationId === 'string'
         recordMeta({ provider: event.provider, model: event.model })
+        recordReasoning(event.reasoningEffort)
       },
       onDelta: (delta, event) => {
         if (settled || !delta) return
@@ -518,6 +626,9 @@ export function useHomeConversation(
       onEnd: (event) => {
         recordMeta({ provider: event?.provider, model: event?.model })
         recordUsage(event?.usage)
+        // `end` is where the decision the turn actually ran under lands: a fallback provider's
+        // `start` never reaches here, and Tuff Nexus reports its own mid-stream.
+        recordReasoning(event?.reasoningEffort)
         complete()
       },
       onError: (error) => {
@@ -561,9 +672,20 @@ export function useHomeConversation(
     await finished
   }
 
-  async function send(rawText: string, attachments?: AiAttachment[]): Promise<void> {
+  async function send(
+    rawText: string,
+    attachments?: AiAttachment[],
+    sendOptions: ConversationSendOptions = {}
+  ): Promise<void> {
     const text = rawText.trim()
     if (!text || streaming.value) return
+
+    // Only an unstarted thread takes a lead, and in the same flush as the user message: the lead is
+    // this conversation's first message, never one inserted into a thread that already has history.
+    const lead = sendOptions.lead?.trim()
+    if (lead && messages.value.length === 0) {
+      messages.value.push(createMessage('assistant', lead, 'complete'))
+    }
 
     const user = createMessage('user', text, 'complete')
     if (attachments && attachments.length > 0) user.attachments = attachments

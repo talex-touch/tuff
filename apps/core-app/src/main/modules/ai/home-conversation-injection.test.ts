@@ -39,6 +39,30 @@ describe('applyHomeConversationInjection', () => {
     expect(payload.messages).toHaveLength(1)
   })
 
+  /**
+   * A Home thread that opens with the assistant's greeting leads with its own system note. Stacked,
+   * the two would reach backends that take one system prompt — Anthropic behind Tuff Nexus — as a
+   * second system message they reject on every turn.
+   */
+  it('folds into a leading system message the caller supplied, keeping one system prompt', async () => {
+    const payload = {
+      messages: [
+        { role: 'system' as const, content: 'OPENING NOTE' },
+        { role: 'user' as const, content: 'hello' }
+      ]
+    }
+
+    const result = await applyHomeConversationInjection(payload, homeOptions(true), false)
+
+    expect(result).toEqual({
+      messages: [
+        { role: 'system', content: 'SKILLS AND RULES\n\nOPENING NOTE' },
+        { role: 'user', content: 'hello' }
+      ]
+    })
+    expect(payload.messages[0]).toEqual({ role: 'system', content: 'OPENING NOTE' })
+  })
+
   it('leaves the payload untouched when auto context is off', async () => {
     const payload = chatPayload()
 

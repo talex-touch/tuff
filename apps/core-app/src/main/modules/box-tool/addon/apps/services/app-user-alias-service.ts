@@ -13,6 +13,11 @@ const USER_ALIASES_CONFIG_KEY = 'app_provider_user_aliases'
 
 export interface AppUserAliasServiceOptions {
   getDbUtils: () => DbUtils | null
+  /**
+   * Fires after a mutation has been persisted and adopted. The in-memory search catalog folds
+   * these names into its exact-keyword set, so it has to hear about an edit without a rescan.
+   */
+  onChanged?: () => void
 }
 
 /**
@@ -90,6 +95,7 @@ export class AppUserAliasService {
   async replace(aliases: Record<string, string[]>): Promise<void> {
     await this.persist(aliases)
     this.aliases = aliases
+    this.options.onChanged?.()
   }
 
   /**
@@ -108,6 +114,7 @@ export class AppUserAliasService {
 
     await this.persist(next)
     this.aliases = next
+    this.options.onChanged?.()
   }
 
   /** Writes the map as it will be held. A failed write throws so the caller can report it. */

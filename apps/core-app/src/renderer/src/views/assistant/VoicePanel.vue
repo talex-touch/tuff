@@ -6,7 +6,10 @@ import type {
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import type { StreamController } from '@talex-touch/utils/transport/types'
-import type { VoiceAsrStreamEvent } from '@talex-touch/utils/transport/sdk/domains/voice'
+import type {
+  VoiceAsrStreamEvent,
+  VoiceDeliveryResult
+} from '@talex-touch/utils/transport/sdk/domains/voice'
 import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { DEFAULT_VOICE_POLISH_STRENGTH } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
@@ -28,6 +31,7 @@ const NOTICE_HOLD_MS = {
   /** A notice carrying a button has to outlast the reflex to reach for it. */
   action: 6500
 } as const
+const CLIPBOARD_NOTICE_HOLD_MS = 5000
 
 /**
  * Main owns the cancellation deadline. The HUD uses the same interval only to draw the charge
@@ -849,7 +853,13 @@ function endRecoveryOffer(): void {
   })
 }
 
-function showNotice(message: string, tone: NoticeTone, action?: NoticeAction, icon?: string): void {
+function showNotice(
+  message: string,
+  tone: NoticeTone,
+  action?: NoticeAction,
+  icon?: string,
+  holdMs?: number
+): void {
   clearDeviceNotice()
   endRecoveryOffer()
   notice.value = { message, tone, ...(action ? { action } : {}), ...(icon ? { icon } : {}) }
@@ -864,7 +874,7 @@ function showNotice(message: string, tone: NoticeTone, action?: NoticeAction, ic
   stopCaptureStartTimer()
   clearFinishTimer()
   // A notice you can act on gets the long hold; one you can only read gets its own.
-  const hold = action ? NOTICE_HOLD_MS.action : NOTICE_HOLD_MS[tone]
+  const hold = holdMs ?? (action ? NOTICE_HOLD_MS.action : NOTICE_HOLD_MS[tone])
   finishTimer = setTimeout(() => {
     finishTimer = null
     // The surface is collapsing, so whatever it was offering stops being reachable here.
@@ -1097,6 +1107,24 @@ function completeVoiceSession(generation: number): void {
   emitFinished()
 }
 
+function handleDeliveryNotice(delivery?: VoiceDeliveryResult): boolean {
+  if (delivery?.method === 'clipboard') {
+    showNotice(
+      t('assistant.voicePanel.voiceCopiedToClipboard'),
+      'warning',
+      undefined,
+      undefined,
+      CLIPBOARD_NOTICE_HOLD_MS
+    )
+    return true
+  }
+  if (delivery?.method === 'none') {
+    showNotice(t('assistant.voicePanel.voiceDeliveryFailed'), 'danger')
+    return true
+  }
+  return false
+}
+
 function handleVoiceSessionEvent(generation: number, event: VoiceAsrStreamEvent): void {
   if (!isCurrentVoiceSession(generation)) return
   if (event.type === 'ready') {
@@ -1131,7 +1159,9 @@ function handleVoiceSessionEvent(generation: number, event: VoiceAsrStreamEvent)
     if (!finalText) {
       retireVoiceSession(generation)
       showNotice(t('assistant.voicePanel.voiceTranscribeEmpty'), 'warning')
+      return
     }
+    handleDeliveryNotice(event.delivery)
     return
   }
   completeVoiceSession(generation)
@@ -1341,6 +1371,7 @@ async function recoverLast(): Promise<void> {
       showNotice(t('assistant.voicePanel.voiceTranscribeEmpty'), 'warning')
       return
     }
+    if (handleDeliveryNotice(result.delivery)) return
     emitFinished()
   } catch (error) {
     if (!isCurrentPanel(generation, taskGeneration)) return

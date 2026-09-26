@@ -17,6 +17,14 @@ export type MetaAction = TuffQuickAction
 // ============================================================================
 
 /**
+ * Where the action panel sits inside the overlay.
+ *
+ * - `footer`: bottom-right, just above the CoreBox footer and its ⌘K hint.
+ * - `corner`: the window's bottom-right corner, for plugin UI mode or when no footer is shown.
+ */
+export type MetaPanelAnchor = 'footer' | 'corner'
+
+/**
  * Request to show MetaOverlay
  */
 export interface MetaShowRequest {
@@ -39,6 +47,18 @@ export interface MetaShowRequest {
    * Plugin-registered global actions
    */
   pluginActions?: MetaAction[]
+
+  /**
+   * Where the panel is anchored. Omitted means `corner`.
+   */
+  anchor?: MetaPanelAnchor
+
+  /**
+   * Height in CSS pixels the panel needs for its actions, already capped at the panel's own
+   * maximum. Main grows the CoreBox window only when its current height cannot fit the panel,
+   * and restores it when the panel closes. Omitted means the window is left as it is.
+   */
+  desiredPanelHeight?: number
 }
 
 /**

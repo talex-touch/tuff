@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Loading states; ready results must not wait for reveal motion; reduced-motion/low-battery; shell colour tokens"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Watcher flush order and cleanup for addon hysteresis, FLIP capture, selection block"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Forbidden patterns and verification"}
+{"file": ".trellis/spec/main-process/search-hotpath-contracts.md", "reason": "Streaming search contracts that the same-query reconcile (R-B) must respect"}

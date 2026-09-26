@@ -1,9 +1,11 @@
 <script lang="ts" name="AppShell" setup>
 import { computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import MainWindowCommandPalette from '~/components/shell/MainWindowCommandPalette.vue'
 import ShellSidebar from '~/components/shell/ShellSidebar.vue'
 import ShellWindowControls from '~/components/shell/ShellWindowControls.vue'
 import { useMainWindowCommands } from '~/composables/useMainWindowCommands'
+import { useKeepAliveHmrPrune } from '~/modules/layout/useKeepAliveHmrPrune'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
 import { useWallpaper } from '~/modules/layout/useWallpaper'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
@@ -80,6 +82,16 @@ const wrapperStyle = computed<Record<string, string | number>>(() => {
 })
 
 const routeTransitionStartedAt = new Map<string, number>()
+
+/**
+ * Dev only: after a hot update, a page KeepAlive holds off screen is dropped when its own component
+ * was part of the update, so it does not keep running pre-update code (see `useKeepAliveHmrPrune`).
+ * Production builds replace `import.meta.hot` with `undefined`, which leaves this `undefined` and
+ * the composable out of the bundle.
+ */
+const keepAliveExclude = import.meta.hot
+  ? useKeepAliveHmrPrune(import.meta.hot, useRouter())
+  : undefined
 
 function isKeepAliveRoute(route: { meta?: Record<string, unknown> } | null | undefined): boolean {
   return Boolean(route?.meta && (route.meta as { keepAlive?: boolean }).keepAlive)
@@ -199,7 +211,11 @@ const { paletteOpen, commands, runCommand } = useMainWindowCommands()
             @after-enter="() => onRouteEnterEnd(route.fullPath)"
             @enter-cancelled="() => onRouteEnterCancelled(route.fullPath)"
           >
-            <KeepAlive v-if="Component && isKeepAliveRoute(route)" :max="10">
+            <KeepAlive
+              v-if="Component && isKeepAliveRoute(route)"
+              :max="10"
+              :exclude="keepAliveExclude"
+            >
               <component :is="Component" :key="resolveRouteCacheKey(route)" />
             </KeepAlive>
             <component :is="Component" v-else-if="Component" :key="route.fullPath" />

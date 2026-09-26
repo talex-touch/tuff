@@ -83,3 +83,78 @@ describe('buildTurnInfoRows', () => {
     ).toEqual(['messages', 'provider', 'model', 'tokens', 'latency', 'compactions'])
   })
 })
+
+describe('buildTurnInfoRows reasoning', () => {
+  /** Renders keys with their parameters, so the branch taken is visible in the value. */
+  const tWithParams = (key: string, params?: Record<string, unknown>): string =>
+    params ? `${key}(${Object.values(params).join(',')})` : key
+
+  function reasoningOf(turn: ConversationTurnMeta): string | undefined {
+    return buildTurnInfoRows({ turn, messageCount: 2, t: tWithParams }).find(
+      (row) => row.key === 'reasoning'
+    )?.value
+  }
+
+  it('has no row on auto, where nothing was asked for', () => {
+    expect(keys({ provider: 'openai', model: 'gpt-5.5' })).not.toContain('reasoning')
+  })
+
+  it('sits after the model, labelled as the effort', () => {
+    const turn: ConversationTurnMeta = {
+      provider: 'openai',
+      model: 'gpt-5.5',
+      reasoningRequested: 'high',
+      reasoningApplied: 'high',
+      reasoningStatus: 'applied',
+      latencyMs: 1000
+    }
+    expect(keys(turn)).toEqual(['messages', 'provider', 'model', 'reasoning', 'latency'])
+    expect(rows(turn).find((row) => row.key === 'reasoning')?.label).toBe('home.reasoning.label')
+  })
+
+  it('names what was asked for and what ran', () => {
+    expect(
+      reasoningOf({
+        reasoningRequested: 'high',
+        reasoningApplied: 'high',
+        reasoningStatus: 'applied'
+      })
+    ).toBe('home.reasoning.level.high')
+    expect(
+      reasoningOf({
+        reasoningRequested: 'max',
+        reasoningApplied: 'xhigh',
+        reasoningStatus: 'applied'
+      })
+    ).toBe('home.reasoning.turnTop(home.reasoning.level.max,home.reasoning.level.xhigh)')
+    expect(
+      reasoningOf({
+        reasoningRequested: 'low',
+        reasoningApplied: 'high',
+        reasoningStatus: 'clamped'
+      })
+    ).toBe('home.reasoning.turnClamped(home.reasoning.level.low,home.reasoning.level.high)')
+  })
+
+  it('says plainly when nothing was applied, and why', () => {
+    expect(reasoningOf({ reasoningRequested: 'high', reasoningStatus: 'unsupported-model' })).toBe(
+      'home.reasoning.turnUnsupportedModel(home.reasoning.level.high)'
+    )
+    expect(
+      reasoningOf({ reasoningRequested: 'high', reasoningStatus: 'unsupported-provider' })
+    ).toBe('home.reasoning.turnUnsupportedProvider(home.reasoning.level.high)')
+    expect(reasoningOf({ reasoningRequested: 'medium', reasoningStatus: 'forwarded' })).toBe(
+      'home.reasoning.turnForwarded(home.reasoning.level.medium)'
+    )
+  })
+
+  it('stays silent on a stored record that does not add up', () => {
+    // Stored meta is read back from disk; a half-written or hand-edited record claims nothing.
+    const broken = [
+      { reasoningRequested: 'high', reasoningStatus: 'applied' },
+      { reasoningRequested: 'turbo', reasoningApplied: 'high', reasoningStatus: 'applied' },
+      { reasoningRequested: 'high', reasoningApplied: 'high', reasoningStatus: 'made-up' }
+    ] as unknown as ConversationTurnMeta[]
+    for (const turn of broken) expect(keys(turn)).not.toContain('reasoning')
+  })
+})

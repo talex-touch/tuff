@@ -14,6 +14,13 @@ definePageMeta({
 
 defineI18nRoute(false)
 
+// The server renders only what the URL determines (the email step, or the OAuth step on an
+// `oauth=1` return). Everything else is entered from client state — a stored OAuth context
+// after an error return, a passkey prompt — while `stripMessagesPayload` ships only the keys
+// the server render used and the full locale merges after hydration. A state entered on mount
+// therefore had its strings stick at their inline fallbacks; ship the whole `auth` namespace.
+useI18nPreloadKeys(['auth'])
+
 const {
   t,
   step,

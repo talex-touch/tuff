@@ -7,6 +7,8 @@ import { useI18n } from 'vue-i18n'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { MAIN_WINDOW_COMMAND_GROUPS } from '~/modules/shortcuts/main-window-command-catalog'
 import { shortcutChordLabel } from '~/modules/shortcuts/shortcut-chord'
+import { useCoreBoxShortcut } from '~/modules/shortcuts/useCoreBoxShortcut'
+import { COREBOX_TOGGLE_SHORTCUT_ID } from '../../../../shared/corebox-shortcut'
 
 /**
  * The window ⌘/ opens: every command the MainWindow can run, grouped, with the key that runs it.
@@ -28,6 +30,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { isMac } = useRendererPlatform()
+/** Open CoreBox runs on CoreBox's global key, which the user can rebind or the OS can refuse. */
+const { effectiveLabel: coreBoxKey } = useCoreBoxShortcut()
 
 const listRef = ref<HTMLElement | null>(null)
 const activeIndex = ref(0)
@@ -35,7 +39,8 @@ const activeIndex = ref(0)
 interface PaletteRow {
   command: MainWindowCommand
   label: string
-  chord: string
+  /** The key that runs the command, or `null` when none does: no key is printed then. */
+  chord: string | null
   runnable: boolean
 }
 
@@ -44,11 +49,17 @@ const visible = computed({
   set: (value: boolean) => emit('update:modelValue', value)
 })
 
+/** The in-window chord, or the global key a command runs on as it is bound right now. */
+function keyLabel(command: MainWindowCommand): string | null {
+  if (command.chord) return shortcutChordLabel(command.chord, isMac.value)
+  return command.globalShortcutId === COREBOX_TOGGLE_SHORTCUT_ID ? coreBoxKey.value : null
+}
+
 function toRow(command: MainWindowCommand): PaletteRow {
   return {
     command,
     label: t(command.labelKey),
-    chord: shortcutChordLabel(command.chord, isMac.value),
+    chord: keyLabel(command),
     runnable: command.enabled ? command.enabled() : true
   }
 }
@@ -172,7 +183,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
         >
           <span class="MainWindowCommandPalette-Icon" :class="row.command.icon" />
           <span class="MainWindowCommandPalette-Label">{{ row.label }}</span>
-          <TxKbd class="MainWindowCommandPalette-Chord">{{ row.chord }}</TxKbd>
+          <TxKbd v-if="row.chord" class="MainWindowCommandPalette-Chord">{{ row.chord }}</TxKbd>
         </button>
       </section>
     </div>

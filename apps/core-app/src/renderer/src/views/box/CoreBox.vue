@@ -8,13 +8,22 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createLocalAiCliSdk } from '@talex-touch/utils/transport/sdk/domains/local-ai-cli'
 import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useElementSize } from '@vueuse/core'
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  shallowRef,
+  watch
+} from 'vue'
 import { useRouter } from 'vue-router'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { getStaggerDelay } from './stagger-delay'
-import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
+import { TxPrismGlow } from '@talex-touch/tuffex/prism-glow'
 
 import { normalizeCoreBoxIcon } from '~/components/render/icon-color-mode'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -23,11 +32,11 @@ import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
 import BoxGrid from '~/components/render/BoxGrid.vue'
 import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
 import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
+import CoreBoxSelectionBlock from '~/components/render/CoreBoxSelectionBlock.vue'
 import PreviewHistoryPanel from '~/components/render/custom/PreviewHistoryPanel.vue'
 import { appSetting } from '~/modules/storage/app-storage'
 import { isDefaultWidgetRenderer } from '@talex-touch/utils/plugin/widget'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
-import { useBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
 import { sanitizeUserCss } from '~/modules/style/sanitizeUserCss'
 import { BoxMode } from '../../modules/box/adapter'
 import { useActionPanel } from '../../modules/box/adapter/hooks/useActionPanel'
@@ -36,6 +45,8 @@ import { useClipboard } from '../../modules/box/adapter/hooks/useClipboard'
 import { useDetach } from '../../modules/box/adapter/hooks/useDetach'
 import { useFocus } from '../../modules/box/adapter/hooks/useFocus'
 import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
+import { useListFlip } from '../../modules/box/adapter/hooks/useListFlip'
+import { useMotionGate } from '../../modules/box/adapter/hooks/useMotionGate'
 import { usePreviewHistory } from '../../modules/box/adapter/hooks/usePreviewHistory'
 import {
   captureFlipSnapshot,
@@ -43,7 +54,10 @@ import {
   type FlipSnapshot
 } from '../../modules/box/adapter/hooks/flip-layout'
 import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
+import { useSelectionBlock } from '../../modules/box/adapter/hooks/useSelectionBlock'
 import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
+import { useCoreBoxFooterFeedback } from '../../modules/box/meta-actions/footer-feedback'
+import { useMetaPanelFill } from '../../modules/box/meta-actions/meta-panel-fill'
 import { useCoreBoxTheme } from './theme'
 import BoxInput from './BoxInput.vue'
 import DivisionBoxHeader from './DivisionBoxHeader.vue'
@@ -91,6 +105,8 @@ const {
   select,
   res,
   loading,
+  awaitingFirstResults,
+  searchSettling,
   searchError,
   activeItem,
   activeActivations,
@@ -103,13 +119,19 @@ const {
   // cancelSearch
 } = useSearch(boxOptions, clipboardOptions)
 
-const showSearchProgress = useDeferredLoading(loading, { delay: 600, minDuration: 0 })
+// The searching cue waits for the current query's first rows. Once they are up, the deferred layer
+// (the files) still gathering gets the quieter settling status instead (useSearch).
+const showSearchProgress = useDeferredLoading(awaitingFirstResults, {
+  delay: 600,
+  minDuration: 400
+})
+const showSearchSettling = useDeferredLoading(searchSettling, { delay: 300, minDuration: 400 })
 
 function handleRetrySearch(): void {
   void handleSearchImmediate({ force: true })
 }
 
-const { lowBatteryMode } = useBatteryOptimizer()
+const { lowBatteryMode, shouldAnimate } = useMotionGate()
 
 const resultTransitionEnabled = computed(
   () => appSetting.animation?.resultTransition === true && !lowBatteryMode.value
@@ -431,6 +453,33 @@ const shouldShowInput = computed(() => {
 
   return activeActivations.value.some((a) => a.showInput === true)
 })
+// The bar-wide glow is the searching cue. Without motion (reduced motion or low battery: the one
+// motion gate) the status texts are shown in its place, the settling one included.
+const searchPulseAnimated = computed(() => shouldAnimate())
+const showSearchPulse = computed(
+  () =>
+    showSearchProgress.value &&
+    shouldShowInput.value &&
+    !searchError.value &&
+    searchPulseAnimated.value &&
+    // A header-less DivisionBox still renders this header, hidden; nothing to light there.
+    !isDivisionBoxMode()
+)
+/**
+ * What the search status announcer says. It is always mounted, on the wrapper like the action
+ * feedback's: several screen readers (VoiceOver with Chromium among them) do not announce a live
+ * region that is inserted already filled, which is how the status texts used to arrive. It stays
+ * silent wherever those texts never spoke: a DivisionBox, a hidden input, a failed search.
+ */
+const searchStatusMessage = computed(() => {
+  const message = showSearchProgress.value
+    ? t('corebox.searching')
+    : showSearchSettling.value
+      ? t('corebox.searchingMore')
+      : ''
+  if (!message || isDivisionBoxMode() || !shouldShowInput.value || searchError.value) return ''
+  return message
+})
 const activeActivationsList = computed<IProviderActivate[]>(() => activeActivations.value ?? [])
 // DivisionBox mode computed properties
 const isDivisionBox = computed(() => isDivisionBoxMode())
@@ -671,6 +720,9 @@ const actionPanel = useActionPanel({
   }
 })
 
+// The ⌘K panel grew the window for itself: paint the space it added instead of the desktop.
+const metaPanelFill = useMetaPanelFill()
+
 // Channel: focus input
 const unregFocusInput = transport.on(CoreBoxEvents.input.focus, () => focusInput())
 
@@ -716,17 +768,71 @@ function handleItemTrigger(index: number, item: TuffItem): void {
   handleExecute(item)
 }
 
-const addon = computed(() => {
-  if (!activeItem.value) return undefined
+/**
+ * The preview pane follows the selection with hysteresis, so arrowing through a list that mixes
+ * files with apps does not flip the results column between full and 40% width on every step.
+ * - A file opens the pane at once, or switches the open pane to it.
+ * - Off files, the pane closes only once the selection has rested on other rows for
+ *   PREVIEW_CLOSE_DELAY_MS; until then it keeps showing the last file, not the row selected now.
+ *   That also covers a refresh of the same query whose fast snapshot drops the file for a moment.
+ * - It closes at once when there is nothing to go back to: no row is selected, or a new or cleared
+ *   query has replaced the results and the file is not among them.
+ */
+const PREVIEW_CLOSE_DELAY_MS = 200
+const addonType = ref<'preview' | undefined>(undefined)
+/** What the pane shows: the selected file, or the last one while the pane waits to close. */
+const addonItem = shallowRef<TuffItem | undefined>(undefined)
+/** The query of the rows the shown file was selected from. */
+let addonQuery = ''
+let addonCloseTimer: ReturnType<typeof setTimeout> | null = null
+/**
+ * The query the rows on screen answer: the input text when they last changed. Written in sync with
+ * `res`, so the pre-flush watcher below never reads it a render late.
+ */
+let rowsQuery = searchVal.value
+watch(res, () => (rowsQuery = searchVal.value), { flush: 'sync' })
 
-  const item = activeItem.value
+function cancelAddonClose(): void {
+  if (addonCloseTimer === null) return
+  clearTimeout(addonCloseTimer)
+  addonCloseTimer = null
+}
 
-  if (item.kind === 'file') {
-    return 'preview'
-  }
+function closeAddon(): void {
+  cancelAddonClose()
+  addonType.value = undefined
+  addonItem.value = undefined
+}
 
-  return undefined
-})
+watch(
+  activeItem,
+  (item: TuffItem | undefined) => {
+    // A new query moves the selection to row 0 while the previous query's rows are still up, and a
+    // cleared one keeps them up until the grid lands. None of them is the new query's: the pane
+    // stays as it is until its rows replace them, instead of previewing a file from the old ones.
+    if (loading.value && searchVal.value !== rowsQuery) return
+    if (item?.kind === 'file') {
+      cancelAddonClose()
+      addonItem.value = item
+      addonQuery = rowsQuery
+      addonType.value = 'preview'
+      return
+    }
+    if (!addonType.value) return
+
+    const shownId = addonItem.value?.id
+    const replaced = rowsQuery !== addonQuery && !res.value.some((result) => result.id === shownId)
+    if (!item || replaced) {
+      closeAddon()
+      return
+    }
+    cancelAddonClose()
+    addonCloseTimer = setTimeout(closeAddon, PREVIEW_CLOSE_DELAY_MS)
+  },
+  { immediate: true }
+)
+
+onBeforeUnmount(cancelAddonClose)
 
 const pinIcon = computed<ITuffIcon>(() => ({
   type: 'class',
@@ -742,11 +848,12 @@ function handleGridSelect(index: number, item: TuffItem): void {
 
 /**
  * The preview pane's open-with control is a shortcut for the same thing Enter does on the focused
- * item, so it runs the identical execute path (item actions, hide, clipboard bookkeeping).
+ * item, so it runs the identical execute path (item actions, hide, clipboard bookkeeping). It acts
+ * on the file the pane shows, which is the focused item except while the pane waits to close.
  */
 function handlePreviewOpen(): void {
-  if (!activeItem.value) return
-  handleExecute(activeItem.value)
+  if (!addonItem.value) return
+  handleExecute(addonItem.value)
 }
 
 /**
@@ -757,7 +864,7 @@ function handlePreviewOpen(): void {
  * outcome matches every other way of opening a result from the box.
  */
 async function handlePreviewOpenWith(applicationId: string): Promise<void> {
-  const filePath = activeItem.value?.meta?.file?.path
+  const filePath = addonItem.value?.meta?.file?.path
   if (!filePath) return
 
   try {
@@ -792,9 +899,69 @@ function revealActiveItemAfterReflow(): void {
   window.setTimeout(scrollActiveItemIntoView, TILE_REFLOW_SETTLE_MS)
 }
 
-watch(addon, () => {
+watch(addonType, () => {
   if (isGridMode.value) revealActiveItemAfterReflow()
 })
+
+/**
+ * Results that change under the list must not strand the highlight off-screen. Focus-only changes
+ * (a key press, a click) are left to useKeyboard, which already scrolls for them.
+ * - A new query's first results start at the top, where useSearch has already reset the focus. So
+ *   do the first results after CoreBox is shown again: useSearch re-runs the same query from row 0,
+ *   and the list is still scrolled wherever it was left when the box was hidden.
+ * - A streamed re-rank or refresh that moves the selection to another row brings it back into
+ *   view, but only if the highlight was on screen before: a list the user scrolled away from stays
+ *   where they put it. The selection moves when it follows the row the user picked, or when a later
+ *   batch hands that row back after a refresh snapshot dropped it and focus fell back to row 0;
+ *   an untouched default never moves (useSearch keeps it on row 0).
+ */
+// The query of the results on screen; `null` once a re-show has made the next results fresh.
+let resultsQuery: string | null = searchVal.value
+// The res watcher above hands `itemRefs` a fresh array before each re-render; keep the one the
+// rows on screen registered into, so the pre-flush check can measure a row before it moves.
+let onScreenItemRefs = itemRefs.value
+let followedRowWasOnScreen = false
+
+function isRowOnScreen(itemRef: ItemRef | undefined): boolean {
+  const row = itemRef instanceof HTMLElement ? itemRef : itemRef?.$el
+  const viewport: unknown = scrollbar.value?.$el
+  if (!(row instanceof HTMLElement) || !(viewport instanceof HTMLElement)) return false
+  const rowRect = row.getBoundingClientRect()
+  const viewportRect = viewport.getBoundingClientRect()
+  return rowRect.bottom > viewportRect.top && rowRect.top < viewportRect.bottom
+}
+
+watch(
+  [res, () => boxOptions.focus],
+  ([items, focus], [previousItems, previousFocus]) => {
+    followedRowWasOnScreen =
+      items !== previousItems &&
+      focus !== previousFocus &&
+      isRowOnScreen(onScreenItemRefs[previousFocus])
+  },
+  { flush: 'pre' }
+)
+
+watch(
+  [res, () => boxOptions.focus],
+  ([items], [previousItems]) => {
+    onScreenItemRefs = itemRefs.value
+    if (items === previousItems) return
+    if (searchVal.value !== resultsQuery) {
+      resultsQuery = searchVal.value
+      scrollbar.value?.scrollTo(0, 0)
+    } else if (followedRowWasOnScreen) {
+      scrollActiveItemIntoView()
+    }
+  },
+  { flush: 'post' }
+)
+
+function expectFreshResults(): void {
+  resultsQuery = null
+}
+onMounted(() => window.addEventListener('corebox:shown', expectFreshResults))
+onBeforeUnmount(() => window.removeEventListener('corebox:shown', expectFreshResults))
 
 async function handleDeactivateProvider(id?: string): Promise<void> {
   await deactivateProvider(id)
@@ -812,6 +979,19 @@ const resultHoverClass = computed(
 
 const shouldShowResultArea = computed(() => !isUIMode.value && res.value.length > 0)
 
+/**
+ * What an action did ("已复制") shows in the footer while the footer is on screen. When it is not,
+ * the header's status slot shows it instead, so a ⌘K action is never silent. The footer is off
+ * screen when it is not rendered (no result area: a plugin view fills the box, or there are no
+ * rows) and when it is parked below the results for an item that hides its hints (a plugin widget,
+ * an item hiding every hint). One live region, the wrapper's, announces it wherever it shows:
+ * never twice, and not again when it changes place.
+ */
+const actionFeedback = useCoreBoxFooterFeedback()
+const footerRef = ref<InstanceType<typeof CoreBoxFooter> | null>(null)
+const footerOnScreen = computed(() => footerRef.value?.onScreen === true)
+const headerActionFeedback = computed(() => (footerOnScreen.value ? null : actionFeedback.value))
+
 type CoreBoxCanvasArea = 'logo' | 'input' | 'tags' | 'actions' | 'results' | 'addon' | 'footer'
 
 const isCanvasLayout = computed(() => canvasEnabled.value && !isDivisionBox.value)
@@ -823,7 +1003,10 @@ const isCanvasLayout = computed(() => canvasEnabled.value && !isDivisionBox.valu
 const COMPRESSED_RESULTS_FRACTION = 0.4
 
 const resultsRootRef = ref<HTMLElement | null>(null)
+const wrapperRef = ref<HTMLElement | null>(null)
 const scrollContentRef = ref<HTMLElement | null>(null)
+const listRef = ref<HTMLElement | null>(null)
+const selectionBlockRef = ref<ComponentPublicInstance | null>(null)
 const { width: resultsRootWidth } = useElementSize(resultsRootRef)
 
 /**
@@ -833,7 +1016,9 @@ const { width: resultsRootWidth } = useElementSize(resultsRootRef)
  */
 const gridAvailableWidth = computed(() => {
   if (isCanvasLayout.value || resultsRootWidth.value <= 0) return undefined
-  return addon.value ? resultsRootWidth.value * COMPRESSED_RESULTS_FRACTION : resultsRootWidth.value
+  return addonType.value
+    ? resultsRootWidth.value * COMPRESSED_RESULTS_FRACTION
+    : resultsRootWidth.value
 })
 
 /**
@@ -842,21 +1027,58 @@ const gridAvailableWidth = computed(() => {
  * tiles and the column count all switch together — and each row and tile is played from its old
  * box to its new one with transforms only. Nothing is transitioned in layout, which is what kept
  * the collapse from stuttering.
+ *
+ * The FLIP runs on `element.animate()`, which neither the reduced-motion media query nor the
+ * low-battery attribute can stop, so it asks the motion gate; without it the layout just lands.
+ *
+ * A grid replacing the list (a cleared query whose recommendations land as the pane closes) has
+ * nothing to play from: the rows on screen are the list's, keyed by the same item ids as the
+ * tiles, which would morph out of full-width rows.
  */
 let pendingFlipSnapshot: FlipSnapshot | null = null
 function captureResultsLayout(): void {
-  if (pendingFlipSnapshot || !isGridMode.value) return
+  if (pendingFlipSnapshot || !isGridMode.value || listRef.value || !shouldAnimate()) return
   const snapshot = captureFlipSnapshot(scrollContentRef.value)
   if (!snapshot) return
   pendingFlipSnapshot = snapshot
   void nextTick(() => {
     pendingFlipSnapshot = null
-    playFlip(scrollContentRef.value, snapshot)
+    if (shouldAnimate()) playFlip(scrollContentRef.value, snapshot)
   })
 }
 
-watch(addon, captureResultsLayout, { flush: 'pre' })
+watch(addonType, captureResultsLayout, { flush: 'pre' })
 watch(gridAvailableWidth, captureResultsLayout, { flush: 'pre' })
+
+/**
+ * List mode: one selection block moves between the rows (D8), and rows a result update moved
+ * slide to their new place (G, behind the result-transition setting), carrying the block with
+ * its row. Grid mode keeps the tile highlight and the FLIP above.
+ */
+const selectionBlock = useSelectionBlock({
+  container: listRef,
+  block: () => selectionBlockRef.value?.$el as HTMLElement | undefined,
+  focus: () => boxOptions.focus,
+  items: () => res.value,
+  shouldAnimate,
+  pointerIdleHost: wrapperRef
+})
+
+useListFlip({
+  container: listRef,
+  viewport: () => scrollbar.value?.$el as HTMLElement | undefined,
+  items: () => res.value,
+  enabled: () => resultTransitionEnabled.value,
+  shouldAnimate,
+  follower: selectionBlock.follower
+})
+
+/**
+ * Whether the list FLIP can play: the setting is on (never on low battery) and the motion gate is
+ * open. The list opts out of scroll anchoring then (`item-list--flip`); with it off, the browser's
+ * default anchoring keeps rows on screen where they are.
+ */
+const listFlipEnabled = computed(() => resultTransitionEnabled.value && shouldAnimate())
 
 const canvasAreaMap = computed(() => {
   const map = new Map<string, { x: number; y: number; w: number; h: number; visible?: boolean }>()
@@ -914,6 +1136,7 @@ const customCss = computed(() => {
   </teleport>
 
   <div
+    ref="wrapperRef"
     class="CoreBox-Wrapper"
     :style="wrapperStyle"
     :class="[
@@ -921,10 +1144,23 @@ const customCss = computed(() => {
       inputBgClass,
       resultHoverClass,
       { 'CoreBox-Wrapper--canvas': isCanvasLayout },
-      { 'CoreBox-Wrapper--division-no-header': isDivisionBox && !showDivisionBoxHeader }
+      { 'CoreBox-Wrapper--division-no-header': isDivisionBox && !showDivisionBoxHeader },
+      { 'CoreBox-Wrapper--meta-fill': metaPanelFill }
     ]"
   >
     <component :is="'style'" v-if="customCss">{{ customCss }}</component>
+    <!-- The one announcer for an action's outcome, shown in the footer or the header. Always
+         mounted, and outside the header, which a DivisionBox hides: a live region only announces
+         changes to an element that already exists. -->
+    <span class="CoreBox-ActionFeedback-Live sr-only" role="status" aria-live="polite">{{
+      actionFeedback?.message ?? ''
+    }}</span>
+    <!-- The one announcer for the search status, for the same reason. Kept apart from the one
+         above: sharing a region, an outcome would overwrite the status and the status would be
+         announced again when the outcome clears. The header's status texts are visual only. -->
+    <span class="CoreBox-SearchStatus-Live sr-only" role="status" aria-live="polite">{{
+      searchStatusMessage
+    }}</span>
     <div
       class="CoreBox"
       :class="{ 'CoreBox--canvas': isCanvasLayout }"
@@ -944,6 +1180,15 @@ const customCss = computed(() => {
 
       <!-- MainBox Mode Header -->
       <template v-else>
+        <!-- The header never grows; the window does when results land, so the glow watches the
+             wrapper and retracts the moment the box expands. -->
+        <TxPrismGlow
+          class="CoreBox-SearchGlow"
+          :active="showSearchPulse"
+          :intensity="0.85"
+          :grow-target="wrapperRef"
+        />
+
         <PrefixPart
           v-if="showLogo"
           :class="{ 'CoreBox-LogoRight': logoOrderRight }"
@@ -979,6 +1224,23 @@ const customCss = computed(() => {
           :class="{ 'CoreBox-Configure--input-hidden': !shouldShowInput }"
           :style="getCanvasAreaStyle('actions')"
         >
+          <span
+            v-if="headerActionFeedback"
+            :key="headerActionFeedback.id"
+            class="CoreBox-ActionFeedback"
+            :class="headerActionFeedback.tone === 'error' ? 'is-error' : 'is-success'"
+          >
+            <i
+              class="CoreBox-ActionFeedback-Icon"
+              :class="
+                headerActionFeedback.tone === 'error'
+                  ? 'i-ri-error-warning-line'
+                  : 'i-ri-checkbox-circle-line'
+              "
+              aria-hidden="true"
+            />
+            <span class="CoreBox-ActionFeedback-Text">{{ headerActionFeedback.message }}</span>
+          </span>
           <div
             v-if="shouldShowInput && searchError"
             class="CoreBox-SearchStatus CoreBox-SearchStatus--error"
@@ -995,12 +1257,22 @@ const customCss = computed(() => {
               <span>{{ t('corebox.searchFailed') }}</span>
             </button>
           </div>
+          <!-- The status texts stand in for the glow when motion is degraded (reduced motion or low
+               battery), and only then. Visual only: the announcer on the wrapper speaks for them. -->
           <div
-            v-else-if="shouldShowInput && showSearchProgress"
+            v-else-if="shouldShowInput && showSearchProgress && !searchPulseAnimated"
             class="CoreBox-SearchStatus CoreBox-SearchStatus--progress"
+            aria-hidden="true"
           >
-            <TxSpinner :size="14" :label="t('corebox.searching')" />
-            <span>{{ t('corebox.searching') }}</span>
+            {{ t('corebox.searching') }}
+          </div>
+          <!-- Rows are up and the files are still coming. -->
+          <div
+            v-else-if="shouldShowInput && showSearchSettling && !searchPulseAnimated"
+            class="CoreBox-SearchStatus CoreBox-SearchStatus--settling"
+            aria-hidden="true"
+          >
+            {{ t('corebox.searchingMore') }}
           </div>
           <button
             v-if="isSendModeActive"
@@ -1050,7 +1322,7 @@ const customCss = computed(() => {
           class="CoreBoxRes-Main"
           :style="getCanvasAreaStyle('results')"
           :class="{
-            compressed: !!addon && !isWidgetMode,
+            compressed: !!addonType && !isWidgetMode,
             'CoreBoxRes-Main--canvas': isCanvasLayout,
             'CoreBoxRes-Main--widget': isWidgetMode
           }"
@@ -1087,7 +1359,7 @@ const customCss = computed(() => {
                 :items="res"
                 :layout="boxOptions.layout"
                 :focus="boxOptions.focus"
-                :compact="!!addon"
+                :compact="!!addonType"
                 :available-width="gridAvailableWidth"
                 :register-item="setItemRef"
                 @select="handleGridSelect"
@@ -1095,14 +1367,20 @@ const customCss = computed(() => {
               />
               <div
                 v-else
+                ref="listRef"
                 key="list"
                 class="item-list"
-                :class="{ 'result-layout-motion': resultTransitionEnabled }"
+                :class="{
+                  'result-layout-motion': resultTransitionEnabled,
+                  'item-list--flip': listFlipEnabled
+                }"
               >
                 <CoreBoxRender
                   v-for="(item, index) in res"
                   :key="item.id || index"
                   :ref="(el) => setItemRef(el, index)"
+                  :data-flip-key="item.id"
+                  data-flip="move"
                   :active="boxOptions.focus === index"
                   :item="item"
                   :index="index"
@@ -1117,10 +1395,12 @@ const customCss = computed(() => {
                   }"
                   @trigger="handleItemTrigger(index, item)"
                 />
+                <CoreBoxSelectionBlock ref="selectionBlockRef" />
               </div>
             </div>
           </TxScroll>
           <CoreBoxFooter
+            ref="footerRef"
             :display="isWidgetMode || !!res.length"
             :item="widgetItemToRender ?? activeItem ?? null"
             :active-activations="activeActivations"
@@ -1133,8 +1413,8 @@ const customCss = computed(() => {
           />
         </div>
         <TuffItemAddon
-          :type="addon"
-          :item="activeItem"
+          :type="addonType"
+          :item="addonItem"
           :search-query="searchVal"
           :style="getCanvasAreaStyle('addon')"
           @open-item="handlePreviewOpen"
@@ -1253,16 +1533,19 @@ const customCss = computed(() => {
   background: var(--tx-bg-color);
 }
 
-.CoreBox-Wrapper.CoreBoxResultHover-background .BoxItem:hover {
+// Hover never paints over the selected row, and stays off from a key press until the pointer
+// moves again (`data-pointer-idle`, set by useSelectionBlock).
+.CoreBox-Wrapper.CoreBoxResultHover-background:not([data-pointer-idle])
+  .BoxItem:not(.is-active):hover {
   background: var(--tx-fill-color-lighter) !important;
 }
 
-.CoreBox-Wrapper.CoreBoxResultHover-border .BoxItem:hover {
+.CoreBox-Wrapper.CoreBoxResultHover-border:not([data-pointer-idle]) .BoxItem:not(.is-active):hover {
   background: transparent !important;
   box-shadow: inset 0 0 0 1px var(--tx-border-color) !important;
 }
 
-.CoreBox-Wrapper.CoreBoxResultHover-scale .BoxItem:hover {
+.CoreBox-Wrapper.CoreBoxResultHover-scale:not([data-pointer-idle]) .BoxItem:not(.is-active):hover {
   transform: scale(1.01);
 }
 
@@ -1314,8 +1597,53 @@ const customCss = computed(() => {
     cursor: default;
   }
 
+  // Rendered only when motion is degraded, so never `sr-only`: the announcer on the wrapper is.
   .CoreBox-SearchStatus--progress {
     padding-inline: var(--shell-space-1);
+  }
+
+  // Quieter than the cue by its words, not its ink: the secondary text colour is 4.5:1 on
+  // `--tx-fill-color` in the light theme, the AA floor, so any lower opacity drops it below.
+  .CoreBox-SearchStatus--settling {
+    padding-inline: var(--shell-space-1);
+  }
+
+  // An action's outcome where there is no footer to show it: the footer's feedback, header-sized.
+  // The glyph and the words together, as there: colour alone never carries the outcome.
+  .CoreBox-ActionFeedback {
+    flex: 0 1 auto;
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--shell-space-1);
+    padding-inline: var(--shell-space-1);
+    color: var(--shell-text-primary);
+    font-size: var(--shell-fs-sm);
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: default;
+  }
+
+  .CoreBox-ActionFeedback-Icon {
+    flex: none;
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    font-size: 14px;
+  }
+
+  .CoreBox-ActionFeedback.is-success .CoreBox-ActionFeedback-Icon {
+    color: var(--shell-success);
+  }
+
+  .CoreBox-ActionFeedback.is-error .CoreBox-ActionFeedback-Icon {
+    color: var(--shell-danger);
+  }
+
+  .CoreBox-ActionFeedback-Text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .CoreBox-SearchRetry {
@@ -1467,9 +1795,21 @@ div.CoreBoxRes.CoreBoxRes--widget {
 }
 
 .CoreBoxRes-Main > .scroll-area .item-list {
+  // The selection block's containing block and the rows' offsetParent, and a stacking context of
+  // its own, so the block (z-index: -1) paints under every row and over nothing outside the list.
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   width: 100%;
+}
+
+// No scroll anchoring on a list the FLIP moves (`useListFlip`). Rows landing above a scrolled list
+// would be held still by the browser adjusting the scroll, and the FLIP, which measures against the
+// list, would then slide them in from a place they were never drawn at. With the FLIP off, the
+// default anchoring keeps the rows on screen where they are.
+.CoreBoxRes-Main > .scroll-area .item-list.item-list--flip {
+  overflow-anchor: none;
 }
 
 .CoreBoxRes-ScrollContent {
@@ -1548,6 +1888,16 @@ div.CoreBox {
   }
 }
 
+// div.CoreBox is a z-indexed positioned element, so it is its own stacking context: -1 puts
+// the searching glow under the header content and over the bar's transparent background.
+.CoreBox-SearchGlow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
 .core-box .AppLayout-Wrapper {
   visibility: hidden;
 }
@@ -1560,6 +1910,28 @@ div.CoreBox {
 
   opacity: 0.75;
   background-color: var(--tx-fill-color);
+}
+
+// The ⌘K panel grew the window (`useMetaPanelFill`). The results have no surface of their own, only
+// the mask above over the window material, so the space the growth added showed a blur of the
+// desktop under the panel's dim. Everything under the header takes the mask's colour at full
+// strength instead: over the mask, behind every row and the footer; the header keeps its material.
+.CoreBox-Wrapper.CoreBox-Wrapper--meta-fill::before {
+  content: '';
+  position: absolute;
+  // `div.CoreBoxRes` starts here.
+  inset: 56px 0 0;
+  z-index: -1;
+  border-radius: 0 0 var(--corebox-container-radius, 8px) var(--corebox-container-radius, 8px);
+  background-color: var(--tx-fill-color);
+  pointer-events: none;
+}
+
+// A canvas layout sizes its header on its own grid, inside padding, so no fixed line marks where
+// the results start: the whole launcher takes the fill, header card included.
+.CoreBox-Wrapper.CoreBox-Wrapper--canvas.CoreBox-Wrapper--meta-fill::before {
+  inset: 0;
+  border-radius: var(--corebox-container-radius, 8px);
 }
 
 // DivisionBox specific styles

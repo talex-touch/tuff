@@ -1,7 +1,22 @@
 import type { ModuleInitContext } from '@talex-touch/utils'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { setLocale } from '../../utils/i18n-helper'
+import { setLocale, t } from '../../utils/i18n-helper'
+
+/** The shortcut module's binding surface: the key it reports, and who it tells when that moves. */
+const shortcutMocks = vi.hoisted(() => {
+  const listeners = new Set<() => void>()
+  return {
+    listeners,
+    getEffectiveAccelerator: vi.fn<(id: string) => string | null>(() => 'Alt+Space'),
+    onBindingsChanged: vi.fn((listener: () => void) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    })
+  }
+})
 
 const {
   appMock,
@@ -151,7 +166,15 @@ vi.mock('../division-box/manager', () => ({
   }
 }))
 
+vi.mock('../global-shortcon', () => ({
+  shortcutModule: {
+    getEffectiveAccelerator: shortcutMocks.getEffectiveAccelerator,
+    onBindingsChanged: shortcutMocks.onBindingsChanged
+  }
+}))
+
 vi.mock('../screenshot-session', () => ({
+  SCREENSHOT_SHORTCUT_ID: 'screenshot.tool.start',
   screenshotSessionModule: {
     startStandalone: vi.fn(async () => undefined)
   }
@@ -436,6 +459,56 @@ describe('TrayManager', () => {
     trayManager.initializeTray()
 
     expect(trayInstances[0]?.setToolTip).toHaveBeenCalledWith('Tuff')
+  })
+
+  it('rebuilds the menu when the key that opens CoreBox moves', () => {
+    // The tray is built before CoreBox registers its key, and the key moves later: the user
+    // rebinds it in settings, or the OS refuses it and the row must drop it.
+    const mainWindow = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      isVisible: vi.fn(() => true),
+      isDestroyed: vi.fn(() => false),
+      webContents: {}
+    }
+    const trayManager = new TrayManager() as unknown as {
+      touchApp: {
+        window: { window: typeof mainWindow }
+        channel: unknown
+        config: { data: Record<string, unknown> }
+        isQuitting: boolean
+        version: string
+      }
+      menuBuilder: { setTouchApp: (touchApp: unknown) => void }
+      initializeTray: () => void
+      registerEventListeners: () => void
+      onDestroy: () => void
+    }
+    trayManager.touchApp = {
+      window: { window: mainWindow },
+      channel: {},
+      config: { data: {} },
+      isQuitting: false,
+      version: 'dev'
+    }
+    trayManager.menuBuilder.setTouchApp(trayManager.touchApp)
+    const openCoreBoxAccelerator = (): unknown =>
+      trayInstances[0]?.setContextMenu.mock.calls
+        .at(-1)?.[0]
+        .find((item: { label?: string }) => item.label === t('tray.openCoreBox'))?.accelerator
+
+    shortcutMocks.getEffectiveAccelerator.mockReturnValue(null)
+    trayManager.registerEventListeners()
+    trayManager.initializeTray()
+    expect(openCoreBoxAccelerator()).toBeUndefined()
+
+    shortcutMocks.getEffectiveAccelerator.mockReturnValue('CommandOrControl+K')
+    for (const listener of shortcutMocks.listeners) listener()
+    expect(openCoreBoxAccelerator()).toBe('CommandOrControl+K')
+
+    trayManager.onDestroy()
+    expect(shortcutMocks.listeners.size).toBe(0)
+    shortcutMocks.getEffectiveAccelerator.mockReturnValue('Alt+Space')
   })
 
   it('returns real runtime tray snapshot values', () => {

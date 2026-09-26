@@ -24,6 +24,15 @@ import {
 } from './file-provider-index-flush-retry-service'
 
 const INDEX_FLUSH_FAILURE_LOG_THROTTLE_MS = 30_000
+const FILE_INDEX_PERSIST_BARRIER_TIMEOUT_MS = 30_000
+const FILE_INDEX_PERSIST_BARRIER_INTERVAL_MS = 10
+
+export interface FileProviderIndexBufferSnapshot {
+  pending: number
+  inflight: number
+  pendingBytes: number
+  inflightBytes: number
+}
 
 export type FileProviderIndexFlushSnapshot = Omit<IndexedWriteFlushSnapshot, 'status'> & {
   status: 'idle' | 'flushed' | 'worker-not-ready' | 'failed'
@@ -70,6 +79,7 @@ export class FileProviderIndexRuntimeService {
   private readonly now: () => number
   private readonly config: Required<NonNullable<FileProviderIndexRuntimeServiceDeps['config']>>
   private explicitFlushNotBefore = 0
+  private activeFlushes = 0
   private failureLogState: { signature: string; loggedAt: number; suppressed: number } | null = null
   private readonly bufferService: FileProviderIndexFlushBufferService
   private readonly retryService: FileProviderIndexFlushRetryService
@@ -180,6 +190,48 @@ export class FileProviderIndexRuntimeService {
     return this.flushSnapshotService.getSnapshot()
   }
 
+  /**
+   * Current retained result ownership, including conservative byte totals.
+   * Purely observational — never schedules or extends work.
+   */
+  getBufferSnapshot(): FileProviderIndexBufferSnapshot {
+    return {
+      pending: this.bufferService.pendingSize,
+      inflight: this.bufferService.inflightSize,
+      pendingBytes: this.bufferService.pendingBytes,
+      inflightBytes: this.bufferService.inflightBytes
+    }
+  }
+
+  /**
+   * Durable completion barrier: resolves only once no worker result is still
+   * pending or inflight, i.e. every result has been persisted AND published.
+   * Used as the worker client's `afterBatch` so scheduler admission credit is
+   * not released early. It drives only this runtime's own flush — never the
+   * scheduler's drain.
+   */
+  async waitForPersisted(timeoutMs = FILE_INDEX_PERSIST_BARRIER_TIMEOUT_MS): Promise<void> {
+    const deadline = this.now() + timeoutMs
+    while (
+      this.activeFlushes > 0 ||
+      this.bufferService.pendingSize > 0 ||
+      this.bufferService.inflightSize > 0
+    ) {
+      this.scheduleFlush(0, 'batch-completion-barrier')
+      if (this.now() >= deadline) break
+      await new Promise<void>((resolve) =>
+        setTimeout(resolve, FILE_INDEX_PERSIST_BARRIER_INTERVAL_MS)
+      )
+    }
+    if (
+      this.activeFlushes > 0 ||
+      this.bufferService.pendingSize > 0 ||
+      this.bufferService.inflightSize > 0
+    ) {
+      throw new Error('FILE_INDEX_PERSIST_BARRIER_TIMEOUT')
+    }
+  }
+
   scheduleFlush(delayMs: number, reason: string): void {
     this.flushRuntime.scheduleFlush(delayMs, reason)
   }
@@ -194,15 +246,20 @@ export class FileProviderIndexRuntimeService {
   }
 
   private async executeFlush(): Promise<FileProviderIndexFlushExecutorResult> {
-    const result = await this.flushExecutor.execute()
-    this.recordFlushExecutorResult(result)
-    if (result.status === 'worker-not-ready') {
-      this.logWarn('Index worker flush skipped: worker init unavailable', undefined, {
-        pending: result.pending,
-        inflight: result.inflight
-      })
+    this.activeFlushes += 1
+    try {
+      const result = await this.flushExecutor.execute()
+      this.recordFlushExecutorResult(result)
+      if (result.status === 'worker-not-ready') {
+        this.logWarn('Index worker flush skipped: worker init unavailable', undefined, {
+          pending: result.pending,
+          inflight: result.inflight
+        })
+      }
+      return result
+    } finally {
+      this.activeFlushes -= 1
     }
-    return result
   }
 
   private recordFlushExecutorResult(result: FileProviderIndexFlushExecutorResult): void {

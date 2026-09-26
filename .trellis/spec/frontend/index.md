@@ -32,6 +32,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Anchor Overlay Chain](./anchor-overlay-chain.md)             | Nested overlay chain: anchor-delay links, hover travel, outside-click, submenus      | Filled |
 | [Hook Guidelines](./hook-guidelines.md)                       | Custom composables, lifecycle, data access                                           | Filled |
 | [State Management](./state-management.md)                     | Local state, Pinia, host/server state                                                | Filled |
+| [CoreBox Results Contracts](./corebox-results-contracts.md)   | CoreBox renderer: selection follow, append-only merge and refresh reconcile, searching cue, one motion gate, selection block, list FLIP, preview pane | Filled |
 | [TuffEx Design Rules](./tuffex-design-rules.md)               | Kumo-derived type/spacing/colour/motion rules restated in `--tx-*` tokens and BEM      | Filled |
 | [TuffEx Charts Package](./tuffex-charts-package.md)           | tuffex-charts contracts: no echarts, CSS-var theming, kumo divergences               | Filled |
 | [TuffEx Text Motion](./tuffex-text-motion.md)                 | One text-morph engine: torph port, the shared spring, unscoped styles, mode fallbacks | Filled |
@@ -44,6 +45,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Nexus Docs Rendering](./nexus-docs-rendering-contract.md)    | Docs HTML always embeds the body; payload-key agreement, body-fetch retry rules       | Filled |
 | [Nexus Docs Static Delivery](./nexus-docs-static-delivery.md) | `<route>.html` layout, `_headers` windows and the zone Cache Rule they need, `404.html` + `_redirects`, i18n preload off the hydration path, one nav request | Filled |
 | [Nexus Docs Templates](./nexus-docs-templates.md)           | Templates tab: registration chain, `TemplateFrame` stage contract (slot size, `@enter`, overlay layers, Esc), template demo rules | Filled |
+| [Nexus Docs Layout Chrome](./nexus-docs-layout.md)           | Docs layout stacking tree, header band, and the effect-free progressive-blur edge fade | Filled |
 | [Nexus DashScope Filetrans](./nexus-dashscope-filetrans-contract.md) | Nexus-owned DashScope ASR handoff, routing, reservation, and disclosure rules | Filled |
 | [Release Acceptance Testing](./release-testing.md)            | Downloaded release, integrity, trust, and isolated packaged-runtime gates            | Filled |
 | [Native Resource Protocols](./native-resource-protocols.md)   | Protocol data-plane rules, path-only native callbacks, and macOS app-icon extraction | Filled |
@@ -68,8 +70,9 @@ Before editing frontend code:
 12. Read [Privacy Data Lifecycle](./privacy-data-lifecycle.md) before changing Privacy SDK payloads, retention/export owners, Provider or Plugin credential persistence/runtime resolution, Secret backup envelopes, portable credential catalogs, secure-store batch mutation, the sensitive-data inventory, or the isolated Privacy lifecycle smoke.
 13. Read [Nexus Deployment Secrets](./nexus-preview-secret-deployment.md) before changing Preview or Production variables, Cloudflare Pages credentials, auth/emergency runtime secrets, deployment commands, or deployment evidence.
 14. Read [Native Resource Protocols](./native-resource-protocols.md) before adding native media/file callbacks, worker/IPC byte payloads, custom protocol consumers, or macOS application-icon extraction.
-15. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
-16. Read [Release Acceptance Testing](./release-testing.md) whenever the user says “发版测试”, asks to validate a published build, or requests download/update acceptance.
+15. Read [CoreBox Results Contracts](./corebox-results-contracts.md) before changing CoreBox result rows, the selection, the search status or result motion (`useSearch.ts`, `CoreBox.vue`, `BoxItem.vue`, `useSelectionBlock`, `useListFlip`): rows on screen keep their place, an untouched selection stays on row 0, the glow means no rows yet, and every script-driven motion asks one gate.
+16. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
+17. Read [Release Acceptance Testing](./release-testing.md) whenever the user says “发版测试”, asks to validate a published build, or requests download/update acceptance.
 
 Also read shared thinking guides when the trigger applies:
 

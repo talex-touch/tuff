@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/main-process/search-hotpath-contracts.md", "reason": "Verify commit coalescing keeps cache correctness and hot-path contracts"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Code standards and verification"}

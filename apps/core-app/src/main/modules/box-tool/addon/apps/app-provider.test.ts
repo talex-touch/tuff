@@ -1398,6 +1398,65 @@ describe('appProvider rebuild maintenance', () => {
     expect(processSearchResults).not.toHaveBeenCalled()
   })
 
+  it('answers from the in-memory catalog once it has loaded, leaving the index alone', async () => {
+    const { appProvider } = await loadSubject()
+    const { processSearchResults } = await import('./search-processing-service')
+    const privateProvider = asPrivateProvider(appProvider)
+    const mutableProvider = privateProvider as typeof privateProvider & {
+      appIndexSettings: { hideNoisySystemApps: boolean }
+      isMac: boolean
+      searchCatalog: { isReady: () => boolean; reload: (reason: string) => Promise<void> }
+    }
+    mutableProvider.isMac = false
+    mutableProvider.appIndexSettings = { hideNoisySystemApps: false }
+
+    const chatApp = createAppSearchRow(31, '/Applications/Chat Studio.app', 'Chat Studio')
+    const paintApp = createAppSearchRow(32, '/Applications/Studio Paint.app', 'Studio Paint')
+    const whereMock = vi.fn(async () => [chatApp, paintApp])
+    const selectMock = vi.fn(() => ({ from: vi.fn(() => ({ where: whereMock })) }))
+    const searchIndex = {
+      lookupByKeywords: vi.fn(async () => new Map()),
+      lookupByKeywordPrefix: vi.fn(async () => []),
+      search: vi.fn(async () => []),
+      lookupByNgrams: vi.fn(async () => []),
+      lookupBySubsequence: vi.fn(async () => [])
+    }
+    vi.mocked(processSearchResults).mockImplementation(async (apps) =>
+      apps.map((app) => ({
+        ...executeItem({
+          id: app.path,
+          render: { mode: 'default', basic: { title: app.displayName ?? app.name } }
+        }),
+        score: 100
+      }))
+    )
+    privateProvider.dbUtils = { getDb: () => ({ select: selectMock }) }
+    privateProvider.fetchExtensionsForFiles = vi.fn(async (apps) => apps)
+    privateProvider.searchIndex = searchIndex
+
+    // Until the first snapshot lands, the SQL path still answers.
+    expect(mutableProvider.searchCatalog.isReady()).toBe(false)
+    await appProvider.onSearch({ text: 'chat', inputs: [] })
+    expect(searchIndex.lookupByKeywords).toHaveBeenCalledTimes(1)
+
+    await mutableProvider.searchCatalog.reload('load')
+    expect(mutableProvider.searchCatalog.isReady()).toBe(true)
+    expect(selectMock).toHaveBeenCalledTimes(1)
+    for (const lookup of Object.values(searchIndex)) lookup.mockClear()
+
+    const result = await appProvider.onSearch({ text: 'chat', inputs: [] })
+
+    expect(result.items.map((item) => item.id)).toEqual([chatApp.path])
+    expect(selectMock).toHaveBeenCalledTimes(1)
+    for (const lookup of Object.values(searchIndex)) expect(lookup).not.toHaveBeenCalled()
+    expect(processSearchResults).toHaveBeenLastCalledWith(
+      [chatApp],
+      { text: 'chat', inputs: [] },
+      false,
+      expect.any(Function)
+    )
+  })
+
   it('diagnoses indexed app keywords and query recall stages', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)

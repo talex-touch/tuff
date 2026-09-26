@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { Buffer } from 'node:buffer'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core/alias'
 import type { DbUtils } from '../../../../../db/utils'
@@ -16,18 +15,10 @@ import type {
   ThumbnailWorkerClient,
   ThumbnailGenerationResult
 } from '../workers/thumbnail-worker-client'
-import {
-  FILE_ICON_META_EXTENSION_KEY,
-  persistFileIconCache,
-  type FileIconCacheMeta
-} from './file-provider-icon-cache-service'
+import { persistFileIconCache } from './file-provider-icon-cache-service'
+import { FileProviderIconMigrationService } from './file-provider-icon-migration-service'
 
 const THUMBNAIL_STATUS_KEY = 'thumbnailStatus'
-
-interface IconCacheEntry {
-  icon?: string | null
-  meta?: FileIconCacheMeta
-}
 
 interface ThumbnailStatusPayload {
   status: 'failed' | 'unsupported'
@@ -43,7 +34,10 @@ type ThumbnailFileSnapshot = Pick<FileRecord, 'mtime' | 'size'>
 type LogMeta = Record<string, unknown>
 
 export interface FileProviderAssetServiceDeps {
-  iconService: Pick<IconService, 'extractFileIcon' | 'getFileIconWorkerStatus'>
+  iconService: Pick<
+    IconService,
+    'getFileIconPath' | 'getFileIconWorkerStatus' | 'getFileIconCacheDirectory'
+  >
   thumbnailWorker: Pick<ThumbnailWorkerClient, 'generate' | 'getStatus'>
   getDbUtils: () => DbUtils | null
   withDbWrite: <T>(label: string, operation: () => Promise<T>) => Promise<T>
@@ -51,7 +45,6 @@ export interface FileProviderAssetServiceDeps {
   waitForIdle: () => Promise<void>
   yieldToEventLoop: () => Promise<void>
   toTimestamp: (value: Date | number | string | null | undefined) => number | null
-  isValidBase64DataUrl: (value: string) => boolean
   logDebug: (message: string, meta?: LogMeta) => void
   logWarn: (message: string, error?: unknown, meta?: LogMeta) => void
   now?: () => number
@@ -59,25 +52,36 @@ export interface FileProviderAssetServiceDeps {
   iconWriteMaxQueue: number
 }
 
-/**
- * In-flight cap for icon extraction. Each in-flight extraction holds one pending
- * `file-icon.persist` write on the single-writer lane, so this is the DB-pressure
- * ceiling a bulk index can apply through the icon path.
- */
+/** Bound this provider's optional extraction and persistence ownership. */
 const MAX_PENDING_ICON_EXTRACTIONS = 64
 const ICON_SHED_LOG_THROTTLE_MS = 30_000
 
 export class FileProviderAssetService {
-  private readonly iconExtractionPending = new Map<string, Promise<Buffer | null>>()
   private readonly pendingIconExtractions = new Set<number>()
   private readonly pendingThumbnailExtractions = new Set<number>()
   private thumbnailTaskRunning = false
   private shedIconExtractions = 0
   private lastIconShedLogAt = 0
   private readonly now: () => number
+  private closed = false
+  private readonly ownedWrites = new Set<Promise<unknown>>()
+  private readonly iconMigration: FileProviderIconMigrationService
+  private iconMigrationScheduled = false
+  private iconMigrationTimer: NodeJS.Timeout | null = null
 
   constructor(private readonly deps: FileProviderAssetServiceDeps) {
     this.now = deps.now ?? Date.now
+    this.iconMigration = new FileProviderIconMigrationService({
+      getDbUtils: deps.getDbUtils,
+      getCacheDirectory: () => deps.iconService.getFileIconCacheDirectory(),
+      withDbWrite: async (label, operation) =>
+        (await this.trackWrite(() => deps.withDbWrite(label, operation))) ?? false,
+      isStopping: () => this.closed,
+      waitForIdle: deps.waitForIdle,
+      yieldToEventLoop: deps.yieldToEventLoop,
+      logInfo: deps.logDebug,
+      logWarn: deps.logWarn
+    })
   }
 
   getWorkerStatuses() {
@@ -87,24 +91,6 @@ export class FileProviderAssetService {
     ] as const
   }
 
-  extractIconQueued(filePath: string): Promise<Buffer | null> {
-    const existing = this.iconExtractionPending.get(filePath)
-    if (existing) return existing
-
-    const task = (async () => {
-      await this.deps.waitForIdle()
-      try {
-        return await this.deps.iconService.extractFileIcon(filePath)
-      } catch (error) {
-        this.deps.logWarn('Icon worker extraction failed; skipping icon', error, { path: filePath })
-        return null
-      }
-    })()
-
-    this.iconExtractionPending.set(filePath, task)
-    task.finally(() => this.iconExtractionPending.delete(filePath))
-    return task
-  }
   /**
    * Resolves only an indexed live ordinary file for a renderer preview grant.
    * The database row is authoritative; the final stat closes the stale-path
@@ -142,14 +128,8 @@ export class FileProviderAssetService {
   }
 
   async ensureIcon(fileId: number, filePath: string, file?: FileRecord): Promise<void> {
-    if (this.pendingIconExtractions.has(fileId)) return
-    // Every extraction ends in one `file-icon.persist` write, and the only
-    // producers are fire-and-forget (`void ensureIcon(...)` per indexed file /
-    // per search hit). Unbounded, a bulk index queues one write per file: a
-    // 106k-file home scan reached q=5897 / avg wait 1505ms / max 10174ms and had
-    // 534 writes dropped, while starving every other label on the same lane.
-    // `pendingIconExtractions` already IS the in-flight set, so it doubles as the
-    // queue bound; shed icons are re-requested by the next search hit or scan.
+    if (this.closed || !this.deps.enableIconExtraction || this.pendingIconExtractions.has(fileId))
+      return
     if (this.pendingIconExtractions.size >= MAX_PENDING_ICON_EXTRACTIONS) {
       this.shedIconExtractions += 1
       const now = this.now()
@@ -172,35 +152,58 @@ export class FileProviderAssetService {
         return
       }
 
-      const icon = await this.extractIconQueued(filePath)
-      if (!icon || icon.length === 0) return
-
-      const iconBuffer = Buffer.isBuffer(icon) ? icon : Buffer.from(icon)
-      const iconValue = `data:image/png;base64,${iconBuffer.toString('base64')}`
-      if (!this.deps.isValidBase64DataUrl(iconValue)) {
-        this.deps.logWarn('Invalid base64 icon generated, skipping persist', undefined, {
-          fileId,
-          path: filePath
-        })
-        return
-      }
+      await this.deps.waitForIdle()
+      if (this.closed) return
+      const iconPath = await this.deps.iconService.getFileIconPath(filePath)
+      if (!iconPath || this.closed) return
 
       const dbUtils = this.deps.getDbUtils()
       if (!dbUtils) return
 
-      await persistFileIconCache(
-        { dbUtils, withDbWrite: this.deps.withDbWrite },
-        fileId,
-        iconValue,
-        {
+      await this.trackWrite(() =>
+        persistFileIconCache({ dbUtils, withDbWrite: this.deps.withDbWrite }, fileId, iconPath, {
           mtime: file ? this.deps.toTimestamp(file.mtime) : this.now(),
           size: file && typeof file.size === 'number' ? file.size : null
-        }
+        })
       )
     } catch (error) {
       this.deps.logWarn('Failed to extract icon', error, { path: filePath })
     } finally {
       this.pendingIconExtractions.delete(fileId)
+    }
+  }
+
+  scheduleLegacyIconMigration(delayMs: number): void {
+    if (this.closed || this.iconMigrationScheduled) return
+    this.iconMigrationScheduled = true
+    this.iconMigrationTimer = setTimeout(() => {
+      this.iconMigrationTimer = null
+      if (this.closed) return
+      void this.iconMigration.run().catch(() => {
+        this.deps.logWarn('File icon migration paused; remaining values retry on next startup')
+      })
+    }, delayMs)
+    this.iconMigrationTimer.unref?.()
+  }
+
+  async close(): Promise<void> {
+    this.closed = true
+    if (this.iconMigrationTimer) {
+      clearTimeout(this.iconMigrationTimer)
+      this.iconMigrationTimer = null
+    }
+    this.thumbnailTaskRunning = false
+    await Promise.allSettled([...this.ownedWrites])
+  }
+
+  private async trackWrite<T>(operation: () => Promise<T>): Promise<T | undefined> {
+    if (this.closed) return
+    const write = operation()
+    this.ownedWrites.add(write)
+    try {
+      return await write
+    } finally {
+      this.ownedWrites.delete(write)
     }
   }
 
@@ -210,7 +213,7 @@ export class FileProviderAssetService {
     file?: FileRecord,
     extensions?: Record<string, string>
   ): Promise<void> {
-    if (this.pendingThumbnailExtractions.has(fileId)) return
+    if (this.closed || this.pendingThumbnailExtractions.has(fileId)) return
     if (file && this.shouldSkipThumbnailGeneration(file, extensions)) return
 
     if (file && !isThumbnailCandidate(file.extension, file.size)) {
@@ -250,7 +253,7 @@ export class FileProviderAssetService {
 
   async generateMissingThumbnails(): Promise<void> {
     const dbUtils = this.deps.getDbUtils()
-    if (this.thumbnailTaskRunning || !dbUtils) return
+    if (this.closed || this.thumbnailTaskRunning || !dbUtils) return
     this.thumbnailTaskRunning = true
 
     try {
@@ -354,60 +357,6 @@ export class FileProviderAssetService {
     }
   }
 
-  async buildIconCache(files: FileRecord[]): Promise<Map<number, IconCacheEntry>> {
-    const cache = new Map<number, IconCacheEntry>()
-    const dbUtils = this.deps.getDbUtils()
-    if (!dbUtils) return cache
-
-    const fileIds = files
-      .map((file) => file.id)
-      .filter((id): id is number => typeof id === 'number')
-    if (fileIds.length === 0) return cache
-
-    const rows = await dbUtils.getFileExtensionsByFileIds(fileIds, [
-      'icon',
-      FILE_ICON_META_EXTENSION_KEY
-    ])
-    const invalidIconFileIds: number[] = []
-    for (const row of rows) {
-      const entry = cache.get(row.fileId) ?? {}
-      if (row.key === 'icon') {
-        if (row.value && !this.deps.isValidBase64DataUrl(row.value)) {
-          invalidIconFileIds.push(row.fileId)
-        } else {
-          entry.icon = row.value
-        }
-      } else if (row.key === FILE_ICON_META_EXTENSION_KEY && row.value) {
-        try {
-          const parsed = JSON.parse(row.value) as FileIconCacheMeta
-          entry.meta = {
-            mtime: typeof parsed.mtime === 'number' ? parsed.mtime : null,
-            size: typeof parsed.size === 'number' ? parsed.size : null
-          }
-        } catch {
-          entry.meta = undefined
-        }
-      }
-      cache.set(row.fileId, entry)
-    }
-
-    if (invalidIconFileIds.length > 0) {
-      this.deps.logWarn('Invalid icon cache detected, will re-extract', undefined, {
-        count: invalidIconFileIds.length,
-        sample: invalidIconFileIds.slice(0, 3)
-      })
-    }
-    return cache
-  }
-
-  needsIconExtraction(file: FileRecord, cached?: IconCacheEntry): boolean {
-    if (!this.deps.enableIconExtraction || !cached?.icon || !cached.meta) return true
-    const cachedMtime = typeof cached.meta.mtime === 'number' ? cached.meta.mtime : null
-    if (cachedMtime !== this.deps.toTimestamp(file.mtime)) return true
-    const cachedSize = typeof cached.meta.size === 'number' ? cached.meta.size : null
-    return cachedSize !== (typeof file.size === 'number' ? file.size : null)
-  }
-
   private shouldSkipThumbnailGeneration(
     file: ThumbnailFileSnapshot,
     extensions?: Record<string, string>
@@ -449,15 +398,17 @@ export class FileProviderAssetService {
   ): Promise<void> {
     const dbUtils = this.deps.getDbUtils()
     if (!dbUtils) return
-    await this.deps.withDbWrite(label, () =>
-      dbUtils.addFileExtensions([
-        { fileId, key: 'thumbnail', value: thumbnailPath },
-        {
-          fileId,
-          key: THUMBNAIL_STATUS_KEY,
-          value: JSON.stringify({ status: 'generated', at: this.now() })
-        }
-      ])
+    await this.trackWrite(() =>
+      this.deps.withDbWrite(label, () =>
+        dbUtils.addFileExtensions([
+          { fileId, key: 'thumbnail', value: thumbnailPath },
+          {
+            fileId,
+            key: THUMBNAIL_STATUS_KEY,
+            value: JSON.stringify({ status: 'generated', at: this.now() })
+          }
+        ])
+      )
     )
   }
 
@@ -468,20 +419,22 @@ export class FileProviderAssetService {
   ): Promise<void> {
     const dbUtils = this.deps.getDbUtils()
     if (!dbUtils) return
-    await this.deps.withDbWrite('thumbnail.status', () =>
-      dbUtils.addFileExtensions([
-        {
-          fileId,
-          key: THUMBNAIL_STATUS_KEY,
-          value: JSON.stringify({
-            status: result.status,
-            reason: result.reason,
-            mtime: file ? this.deps.toTimestamp(file.mtime) : null,
-            size: file && typeof file.size === 'number' ? file.size : null,
-            at: this.now()
-          })
-        }
-      ])
+    await this.trackWrite(() =>
+      this.deps.withDbWrite('thumbnail.status', () =>
+        dbUtils.addFileExtensions([
+          {
+            fileId,
+            key: THUMBNAIL_STATUS_KEY,
+            value: JSON.stringify({
+              status: result.status,
+              reason: result.reason,
+              mtime: file ? this.deps.toTimestamp(file.mtime) : null,
+              size: file && typeof file.size === 'number' ? file.size : null,
+              at: this.now()
+            })
+          }
+        ])
+      )
     )
   }
 }

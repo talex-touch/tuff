@@ -130,10 +130,9 @@ import {
   syncScannedAppExtensions,
   upsertAppExtensions
 } from './app-index-metadata'
-import { matchNoisySystemAppRule } from './app-noise-filter'
 import { resolveExistingVersionedAppIconCachePath } from './app-icon-cache'
 import { diagnoseAppSearch, reindexAppSearchTarget } from './app-provider-diagnostics'
-import { appProviderLog, logApp, logAppDuration, logAppDurationMs } from './app-provider-log'
+import { appProviderLog, logApp, logAppDuration } from './app-provider-log'
 import {
   hasAppIconDrift,
   hasAppLaunchMetadataDrift,
@@ -154,10 +153,15 @@ import {
   getAppToolSourceCatalogSummary,
   resolveAppToolSourceIds
 } from './app-tool-source-catalog'
-import { isSearchableAppRow, processSearchResults } from './search-processing-service'
+import {
+  finishAppSearch,
+  searchAppCatalog,
+  type AppSearchFinishOptions
+} from './app-search-pipeline'
+import { AppSearchCatalogService } from './services/app-search-catalog-service'
+import { searchIndexCommitHub } from '../../search-engine/search-index-commit-hub'
 import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
-const SLOW_SEARCH_THRESHOLD_MS = 400
 /** Second-precision comparison key for app mtimes; the catalog stores them without the fraction. */
 function toMtimeSeconds(value: Date | number | string): number {
   return Math.floor(new Date(value).getTime() / 1000)
@@ -166,6 +170,11 @@ const APP_INDEX_SCAN_POLL_MS = 75
 
 type DbAppRecord = typeof filesSchema.$inferSelect
 type DbAppWithExtensions = DbAppRecord & { extensions: Record<string, string | null> }
+/**
+ * Kill switch for the in-memory app search path (09-26-app-search-in-memory-match). Off, every
+ * keystroke goes back to the three SQL lookups on the read worker shared with the file provider.
+ */
+const APP_SEARCH_MEMORY_PATH_ENABLED = true
 type AppFileMutationDb = Pick<CoreDatabase, 'insert' | 'update' | 'delete'>
 type AppDbBatchItem = Parameters<CoreDatabase['batch']>[0][number]
 type AppIndexSyncStats = {
@@ -398,7 +407,26 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     getAliases: (app) => this._getAliasesForApp(app),
     resolveToolSourceIds: (app) => this.resolveScannedAppToolSourceIds(app)
   })
-  private readonly userAliases = new AppUserAliasService({ getDbUtils: () => this.dbUtils })
+  private readonly userAliases = new AppUserAliasService({
+    getDbUtils: () => this.dbUtils,
+    onChanged: () => this.searchCatalog.scheduleReload('user-aliases')
+  })
+  /**
+   * The applications as the search path sees them, held in memory. `onSearch` used to issue
+   * three SQL lookups per keystroke on the read worker it shares with the file provider; the FTS
+   * one scanned the whole shared table and took 0.4–0.5s for 156 apps, so apps missed the fast
+   * layer on every keystroke. The catalog reloads from the database (still the source of truth)
+   * on every index commit that names this provider, on alias edits, after icon-pointer repairs,
+   * and when a search finds it stale.
+   */
+  private readonly searchCatalog = new AppSearchCatalogService({
+    providerId: this.id,
+    loadRows: () => this.loadSearchCatalogRows(),
+    toScannedInfo: (row) => this._mapDbAppToScannedInfo(row),
+    generateKeywords: (info) => this._generateKeywordsForApp(info),
+    subscribeCommits: (listener) =>
+      searchIndexCommitHub.subscribe((payload) => listener(payload.providerIds))
+  })
   /**
    * The index manager's API: summaries, aliases, launch shortcuts, launch and usage.
    *
@@ -761,6 +789,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     // empty map at scan time silently drops every user alias from the search index. Awaited
     // because `_scheduleFullSync` below is what publishes those projections.
     await this.userAliases.load()
+    // Not awaited: the SQL path serves a search that lands before the first snapshot, and a
+    // catalog that cannot load must not hold up the provider (it retries on the next commit).
+    void this.searchCatalog.reload('load')
     // Accelerators survive a restart in the shortcut store, but their callbacks cannot be
     // serialized: without this the key is registered with the OS and does nothing.
     await this.entryActions.restoreShortcuts()
@@ -860,6 +891,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   async onDestroy(): Promise<void> {
     logApp('Unloading AppProvider service', LogStyle.process)
+    this.searchCatalog.dispose()
     await this.prepareForSearchIndexShutdown()
     logApp('AppProvider service unloaded', LogStyle.success)
   }
@@ -1438,6 +1470,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       `Repaired ${chalk.green(iconUpserts.length)} cached and cleared ${chalk.yellow(staleIconFileIds.length)} stale app icon pointers`,
       LogStyle.success
     )
+    // Icon pointers change the row without an index delta, so the catalog would not hear of it.
+    this.searchCatalog.scheduleReload('icon-pointers')
   }
 
   private async persistHydratedAppIcons(
@@ -1638,14 +1672,24 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return { appCount: 0, indexedItemCount: 0, healthy: false }
     }
 
+    // The unprobed read is the routing/diagnostics health: it runs for app watch events and
+    // diagnostics polls, on the read worker CoreBox queries share, so it takes the meta-backed
+    // count. The probed read feeds the startup decisions that act on the answer (backfill or
+    // not), which keep the exact FTS count.
+    const searchIndex = this.searchIndex
+    const countIndexedItems = (
+      options?.probeFilesystem === true
+        ? searchIndex.countByProvider(this.id)
+        : searchIndex.countByProviderViaMeta(this.id)
+    ).catch((error) => {
+      logApp('Failed to count app search index rows', LogStyle.warning, {
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return 0
+    })
     const [apps, indexedItemCount] = await Promise.all([
       this.dbUtils.getFilesByType('app'),
-      this.searchIndex.countByProvider(this.id).catch((error) => {
-        logApp('Failed to count app search index rows', LogStyle.warning, {
-          error: error instanceof Error ? error.message : String(error)
-        })
-        return 0
-      })
+      countIndexedItems
     ])
 
     const countsHealthy = apps.length > 0 && indexedItemCount > 0
@@ -3376,6 +3420,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }))
   }
 
+  /** Every catalog row with its extensions: the in-memory search catalog's load. */
+  private async loadSearchCatalogRows(): Promise<DbAppWithExtensions[]> {
+    // Thrown rather than an empty list: a load that could not read the database must not leave
+    // the catalog ready and empty, answering nothing where the SQL path would still answer.
+    if (!this.dbUtils) throw new Error('APP_SEARCH_CATALOG_DB_UNAVAILABLE')
+    const files = await this.dbUtils
+      .getDb()
+      .select()
+      .from(filesSchema)
+      .where(eq(filesSchema.type, 'app'))
+    return await this.fetchExtensionsForFiles(files)
+  }
+
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item, searchResult } = args
 
@@ -3443,6 +3500,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const rawText = query.text.trim()
     if (!rawText) {
       return new TuffSearchResultBuilder(query).build()
+    }
+
+    if (APP_SEARCH_MEMORY_PATH_ENABLED && this.searchCatalog.isReady()) {
+      const context = { query, rawText, searchStart, signal }
+      return await searchAppCatalog(this.searchCatalog, context, this.searchFinishOptions())
     }
 
     const db = this.dbUtils.getDb()
@@ -3698,75 +3760,29 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (signal?.aborted) {
       return new TuffSearchResultBuilder(query).build()
     }
-    const searchableAppsWithExtensions = appsWithExtensions.filter(isSearchableAppRow)
-    const filteredAppsWithExtensions =
-      this.isMac && this.appIndexSettings.hideNoisySystemApps
-        ? (() => {
-            const ruleCounts: Record<string, number> = {}
-            const filtered = searchableAppsWithExtensions.filter((app) => {
-              const rule = matchNoisySystemAppRule({
-                path: app.path,
-                bundleId: app.extensions.bundleId,
-                name: app.displayName || app.name
-              })
-              if (!rule) {
-                return true
-              }
-              ruleCounts[rule] = (ruleCounts[rule] ?? 0) + 1
-              return false
-            })
-            const filteredCount = searchableAppsWithExtensions.length - filtered.length
-            if (filteredCount > 0) {
-              appProviderLog.debug('Filtered noisy system apps from search candidates', {
-                query: rawText,
-                filteredCount,
-                ruleCounts
-              })
-            }
-            return filtered
-          })()
-        : searchableAppsWithExtensions
     const isFuzzySearch = !preciseMatchedItemIds || preciseMatchedItemIds.size === 0
-
-    const processedResults = await processSearchResults(
-      filteredAppsWithExtensions,
-      query,
-      isFuzzySearch,
-      (app) => this.userAliases.resolveForApp(app)
+    return await finishAppSearch(
+      {
+        query,
+        rawText,
+        searchStart,
+        signal,
+        appsWithExtensions,
+        isFuzzySearch,
+        recallSummary: `precise=${chalk.cyan(preciseMatchedItemIds?.size ?? 0)}, fts=${chalk.cyan(
+          ftsMatches.length
+        )}`
+      },
+      this.searchFinishOptions()
     )
+  }
 
-    if (signal?.aborted) {
-      return new TuffSearchResultBuilder(query).build()
+  /** What the post-recall pipeline shared by both recall paths needs from this provider. */
+  private searchFinishOptions(): AppSearchFinishOptions {
+    return {
+      hideNoisySystemApps: this.isMac && this.appIndexSettings.hideNoisySystemApps,
+      resolveAliases: (app) => this.userAliases.resolveForApp(app)
     }
-
-    const sortedItems = processedResults.map((item) => {
-      const { score: _score, ...rest } = item
-      return rest
-    })
-
-    const elapsedMs = performance.now() - searchStart
-    if (elapsedMs > SLOW_SEARCH_THRESHOLD_MS) {
-      logAppDurationMs(
-        'SlowSearch',
-        elapsedMs,
-        {
-          label: 'Slow search',
-          message: `Slow search: ${chalk.cyan(rawText)}`,
-          style: 'warning',
-          unit: 's',
-          precision: 2,
-          suffix: `returned ${chalk.green(sortedItems.length)} results (precise=${chalk.cyan(
-            preciseMatchedItemIds?.size ?? 0
-          )}, fts=${chalk.cyan(ftsMatches.length)})`
-        },
-        {
-          logThresholds: { none: SLOW_SEARCH_THRESHOLD_MS, info: 1000, warn: 2500 },
-          logger: (message) => appProviderLog.warn(message)
-        }
-      )
-    }
-
-    return new TuffSearchResultBuilder(query).setItems(sortedItems).build()
   }
 
   /**

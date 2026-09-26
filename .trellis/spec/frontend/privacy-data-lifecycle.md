@@ -422,6 +422,7 @@ type PackagedProviderAcceptanceReport = {
       invalidOperationRows: number
       homeConversationRequests: number
       conversationTitleRequests: number
+      homeOpeningRequests: number
       expectedSuccessfulRequests: number
       expectedHomeConversationRequests: number
       expectedConversationTitleRequests: number
@@ -469,6 +470,7 @@ The typed credential mutation is exactly `preserve`, `set(value)`, or `clear`. P
 - A passing real-Provider lifecycle run uses a runner-created isolated profile and only runner-owned processes. It saves a generated credential through UI, verifies the exact main-owned secure value, reacquires the UI after relaunch, deletes through UI, proves the secure envelope valid and key absent, requests cleanup, and reports that the profile was not retained. A caller-supplied real profile or retained profile is diagnostic-only evidence.
 - Credential canary checks traverse every non-symlink regular file below the isolated profile while the credential is encrypted at rest and again after deletion. The traversal has fixed file/byte bounds and no Sentry or telemetry subtree exemption, so `sentry/scope_v3.json` is covered when present. Exposed canaries, unreadable traversal, or exceeded bounds fail closed. An aggregate `credentialCanaryAbsent` result proves scan coverage, not that a particular optional file existed.
 - Provider acceptance reconciles unique request audit rows with day/month usage for request, success/failure, prompt/completion/total token, and cost fields. Cancellation must settle without a false Home failure audit; any allowed background title request remains explicitly accounted.
+- Every launch and the first turn pass through a blank Home, whose `home-opening` request may or may not finish before the runner sends or navigates away. Such rows are admitted by id even when they started before the window, counted in `homeOpeningRequests`, and reconciled like any other row (unique trace, acceptance provider, success, included in usage), but never expected: a passing window holds exactly the expected Home/title requests plus those openings, and every raw ledger row-count comparison adds the same count.
 - Live MCP is a separate opt-in gate. An environment without explicit opt-in remains `partial/blocked`; synthetic MCP, local tool fixtures, or the Provider report cannot promote it to passed.
 
 ### 4. Validation & Error Matrix

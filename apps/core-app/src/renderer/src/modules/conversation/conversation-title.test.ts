@@ -5,6 +5,7 @@ import type { TitleChatSdk } from './conversation-title'
 import {
   CONVERSATION_TITLE_MAX_CODEPOINTS,
   deriveRestoredTitle,
+  findTitleExchange,
   generateConversationTitle,
   normalizeGeneratedTitle,
   shouldGenerateTitle
@@ -92,6 +93,49 @@ describe('shouldGenerateTitle', () => {
     expect(shouldGenerateTitle({ ...ready, firstAssistantContent: undefined })).toBe(false)
     expect(shouldGenerateTitle({ ...ready, firstAssistantContent: '  ' })).toBe(false)
     expect(shouldGenerateTitle({ ...ready, firstUserContent: undefined })).toBe(false)
+  })
+})
+
+describe('findTitleExchange', () => {
+  /**
+   * A thread opened from Home starts with the assistant's opening line. Summarising that greeting
+   * would title every such conversation after the greeting instead of after what was asked.
+   */
+  it('skips the Home opening that precedes the first user message', () => {
+    expect(
+      findTitleExchange([
+        { role: 'assistant', content: '你好，要先推进哪件事？', status: 'complete' },
+        { role: 'user', content: '帮我整理下载目录', status: 'complete' },
+        { role: 'assistant', content: '好的,可以按扩展名分组…', status: 'complete' }
+      ])
+    ).toEqual({
+      firstUserContent: '帮我整理下载目录',
+      firstAssistantContent: '好的,可以按扩展名分组…'
+    })
+  })
+
+  it('waits for a settled reply after the user message', () => {
+    expect(
+      findTitleExchange([
+        { role: 'assistant', content: '你好', status: 'complete' },
+        { role: 'user', content: '帮我整理下载目录', status: 'complete' },
+        { role: 'assistant', content: '', status: 'streaming' }
+      ])
+    ).toEqual({ firstUserContent: '帮我整理下载目录', firstAssistantContent: undefined })
+  })
+
+  it('reads a thread without an opening as before', () => {
+    expect(
+      findTitleExchange([
+        { role: 'user', content: 'u', status: 'complete' },
+        { role: 'assistant', content: 'a', status: 'failed' },
+        { role: 'assistant', content: 'b', status: 'complete' }
+      ])
+    ).toEqual({ firstUserContent: 'u', firstAssistantContent: 'b' })
+    expect(findTitleExchange([])).toEqual({
+      firstUserContent: undefined,
+      firstAssistantContent: undefined
+    })
   })
 })
 

@@ -18,6 +18,7 @@ import type { RouteLocationNormalizedLoaded, RouteRecordRaw } from 'vue-router'
 import { isDevEnv } from '@talex-touch/utils/env'
 import { nextTick } from 'vue'
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { APP_SURFACE_ROUTES } from '../../../shared/app-surface-routes'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 import {
   DEFAULT_SETTING_PATH,
@@ -199,7 +200,7 @@ const routes: RouteRecordRaw[] = [
     redirect: '/home'
   },
   {
-    path: '/home',
+    path: APP_SURFACE_ROUTES.home,
     name: '$I18n:router.home',
     component: HomePageRouteComponent,
     meta: {
@@ -215,7 +216,7 @@ const routes: RouteRecordRaw[] = [
      * the id is read from the route param rather than from a fresh mount, and in-place is what
      * lets the composer keep focus and the undock FLIP measure a real before/after.
      */
-    path: '/home/c/:id',
+    path: APP_SURFACE_ROUTES.conversation,
     name: '$I18n:router.homeConversation',
     component: HomePageRouteComponent,
     meta: {
@@ -232,7 +233,7 @@ const routes: RouteRecordRaw[] = [
     redirect: '/setting/intelligence'
   },
   {
-    path: '/store',
+    path: APP_SURFACE_ROUTES.store,
     name: '$I18n:router.pluginStore',
     component: withRouteComponentPerf('/store', () => import('../views/base/Store.vue')),
     meta: {
@@ -242,7 +243,7 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/store/installed',
+    path: APP_SURFACE_ROUTES.storeInstalled,
     name: '$I18n:router.installedPlugins',
     component: withRouteComponentPerf('/store/installed', () => import('../views/base/Store.vue')),
     meta: {
@@ -304,7 +305,7 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/downloads',
+    path: APP_SURFACE_ROUTES.downloads,
     name: '$I18n:router.downloads',
     component: withRouteComponentPerf(
       '/downloads',

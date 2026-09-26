@@ -1,0 +1,30 @@
+{
+  "id": "tabs-indicator-redo",
+  "name": "tabs-indicator-redo",
+  "title": "TxTabs 指示器重做 + 画廊变体展示",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-25",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-25-tuffex-jelly-indicator-polish",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "完成 TxTabs 指示器重做 + 画廊变体展示 分批提交与主线合并验证。",
+    "blocker": "无阻塞项。",
+    "evidence": "TxTabs 指示器重做 + 画廊变体展示: - `09-25-jelly-indicator-engine` 已完成且通过其 review gate。; - 读 research/tabs.md（消费方、测试锁定点、文档段落、图标根因、画廊变体写法）与 design.md。; - 接 `useJellyIndicator`（`axis` 随 placement；`onFrame` 命令式写 `.tx-tabs__pointer`；`.is-moving` 控制光晕）；"
+  }
+}

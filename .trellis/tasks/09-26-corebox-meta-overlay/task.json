@@ -1,0 +1,30 @@
+{
+  "id": "corebox-meta-overlay",
+  "name": "corebox-meta-overlay",
+  "title": "CoreBox 操作面板（meta overlay）居中、背景模糊与展示形式重构",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-26",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-25-corebox-ux-polish",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "完成 CoreBox 操作面板（meta overlay）居中、背景模糊与展示形式重构 分批提交与主线合并验证。",
+    "blocker": "无阻塞项。",
+    "evidence": "CoreBox 操作面板（meta overlay）居中、背景模糊与展示形式重构: - 按 design 重写：右下锚定面板、10% 遮罩、单行、分组标题、底部过滤框、空状态；; - 键盘交互：IME 保护、瞬时滚动、pointermove hover。; - [x] Windows / Linux 固定快捷键改为 Ctrl+Shift+.（macOS 仍是 ⌘.）。"
+  }
+}

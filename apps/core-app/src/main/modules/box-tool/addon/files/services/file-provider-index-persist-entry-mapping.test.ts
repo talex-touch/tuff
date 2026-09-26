@@ -55,6 +55,8 @@ describe('file-provider index persist entry mapping', () => {
     expect(entries).toEqual([
       {
         fileId: 1,
+        fileVersion: null,
+        fileSize: null,
         fileUpdate: {
           content: 'hello',
           embeddingStatus: 'completed',
