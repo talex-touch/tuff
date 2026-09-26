@@ -340,15 +340,19 @@ export function ensureLocalAsrRoute(installedModelIds: string[]): void {
   if (!stored || !Array.isArray(capability?.providers)) return
 
   const provider = findLocalAsrProvider(stored)
-  if (provider && provider.enabled === false) return
-  if (provider?.metadata?.[LOCAL_ASR_USER_DISABLED_KEY] === true) return
-
   const bindings = capability.providers
   const binding = findLocalAsrBinding(stored)
 
   if (installed.length === 0) {
     if (!binding) return
     /*
+     * Releasing comes before the preference checks below, because a binding that outlives its model
+     * is wrong whatever the user decided about the channel: behind those checks a disabled provider
+     * kept a binding naming the model the user had just removed, and switching the channel back on
+     * in the same session then pointed `audio.asr` at weights that are gone. The preference lives on
+     * `stored.providers`, which this branch does not touch, so `enabled` and the user-disabled
+     * marker survive the release.
+     *
      * Set before the write. The config listener compares the route's usable state against this
      * value, so releasing it here would otherwise be recorded as the user closing the route — and
      * the marker it writes is what keeps the next install from binding again.
@@ -361,6 +365,9 @@ export function ensureLocalAsrRoute(installedModelIds: string[]): void {
     intelligenceConfigLog.info('Released the on-device ASR route: no model is installed')
     return
   }
+
+  if (provider && provider.enabled === false) return
+  if (provider?.metadata?.[LOCAL_ASR_USER_DISABLED_KEY] === true) return
 
   /*
    * A model that is already bound stays bound while it is still on disk. Re-picking on every launch
