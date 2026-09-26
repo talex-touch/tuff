@@ -64,7 +64,8 @@ describe('file-provider-full-scan-run-service', () => {
     expect(finishPerfContext).toHaveBeenCalledTimes(1)
     expect(result).toEqual({
       added: 2,
-      completedPaths: ['/a', '/b']
+      completedPaths: ['/a', '/b'],
+      checkpointsToClear: new Map()
     })
   })
 
@@ -83,7 +84,8 @@ describe('file-provider-full-scan-run-service', () => {
 
     await expect(service.execute([], {})).resolves.toEqual({
       added: 0,
-      completedPaths: []
+      completedPaths: [],
+      checkpointsToClear: new Map()
     })
     expect(enterPerfContext).not.toHaveBeenCalled()
   })

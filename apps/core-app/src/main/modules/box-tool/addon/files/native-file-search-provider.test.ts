@@ -1,14 +1,32 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock, getMainConfigMock, getPathMock, iconCacheEnsureMock, statMock } = vi.hoisted(
-  () => ({
+const {
+  execFileMock,
+  getMainConfigMock,
+  getPathMock,
+  iconCacheEnsureMock,
+  iconCacheGetMock,
+  originalPlatform,
+  readdirMock,
+  statMock
+} = vi.hoisted(() => {
+  // The filter constants are platform-derived at import time (`~/Library` is a system location
+  // only on darwin), so the Spotlight platform is pinned before any module loads, not in
+  // beforeAll: otherwise a Linux runner would evaluate them for Linux and the macOS rules under
+  // test would silently not apply.
+  const platform = process.platform
+  Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+  return {
     execFileMock: vi.fn(),
     getMainConfigMock: vi.fn(),
     getPathMock: vi.fn(),
     iconCacheEnsureMock: vi.fn(),
+    iconCacheGetMock: vi.fn(),
+    originalPlatform: platform,
+    readdirMock: vi.fn(),
     statMock: vi.fn()
-  })
-)
+  }
+})
 
 vi.mock('electron', () => ({
   app: {
@@ -25,8 +43,10 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('node:fs/promises', () => ({
   default: {
+    readdir: readdirMock,
     stat: statMock
   },
+  readdir: readdirMock,
   stat: statMock
 }))
 
@@ -57,9 +77,7 @@ vi.mock('../../search-engine/search-logger', () => ({
 
 vi.mock('./everything-icon-cache', () => ({
   EverythingIconCache: vi.fn(() => ({
-    get: vi.fn((filePath: string) =>
-      filePath.includes('cached-icon') ? 'data:image/png;base64,cached' : null
-    ),
+    get: iconCacheGetMock,
     ensure: iconCacheEnsureMock,
     clear: vi.fn()
   }))
@@ -69,7 +87,20 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { registerFileAssetBridge } from './file-asset-bridge'
-import { __test__, macSpotlightFileProvider } from './native-file-search-provider'
+import {
+  __test__,
+  linuxNativeFileProvider,
+  macSpotlightFileProvider
+} from './native-file-search-provider'
+
+/**
+ * A real 1x1 PNG. A generated icon reaches the renderer as the cache path it was written to, and the
+ * item pipeline drops a path that cannot be read, so icon fixtures have to exist on disk.
+ */
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+  'base64'
+)
 
 interface SearchableSpotlightProvider {
   searchNative: (
@@ -82,8 +113,6 @@ interface SearchableSpotlightProvider {
 // `process.platform !== this.capabilities.platform`, so on a Linux runner it
 // reports unavailable and warms no icons, and the failure reads as a broken
 // icon cache. Pinned so the macOS behaviour is asserted explicitly.
-const originalPlatform = process.platform
-
 beforeAll(() => {
   Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
 })
@@ -98,6 +127,10 @@ describe('native-file-search-provider', () => {
     getMainConfigMock.mockReset()
     getPathMock.mockReset()
     iconCacheEnsureMock.mockReset()
+    iconCacheGetMock.mockReset()
+    iconCacheGetMock.mockReturnValue(null)
+    readdirMock.mockReset()
+    readdirMock.mockResolvedValue([])
     statMock.mockReset()
     getMainConfigMock.mockReturnValue({ extraPaths: [] })
     getPathMock.mockImplementation((name: string) => {
@@ -212,48 +245,65 @@ describe('native-file-search-provider', () => {
   })
 
   it('uses cached file icons and warms missing icons for Spotlight results', async () => {
-    execFileMock.mockImplementation((_command, args, _options, callback) => {
-      if (Array.isArray(args) && args.includes('-version')) {
-        callback(null, { stdout: 'mdfind test' })
-        return
-      }
-      callback(null, {
-        stdout: '/Users/demo/Documents/cached-icon.docx\0/Users/demo/Documents/missing-icon.pdf\0'
-      })
-    })
-    statMock.mockResolvedValue({
-      size: 12,
-      mtime: new Date('2026-05-12T00:00:00.000Z'),
-      ctime: new Date('2026-05-12T00:00:00.000Z'),
-      isDirectory: () => false
-    })
-
-    await macSpotlightFileProvider.onLoad()
-    const result = await macSpotlightFileProvider.onSearch(
-      { text: 'icon' },
-      new AbortController().signal
+    // The cached value is the path of a generated icon: it reaches the renderer as the tfile: URL
+    // that will actually load, which requires the file to be there.
+    const iconDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spotlight-icons-'))
+    const cachedIcon = path.join(iconDir, 'cached.png')
+    fs.writeFileSync(cachedIcon, ONE_PIXEL_PNG)
+    iconCacheGetMock.mockImplementation((filePath: string) =>
+      filePath === '/Users/demo/Documents/cached-icon.docx' ? cachedIcon : null
     )
 
-    expect(result.items).toHaveLength(2)
-    expect(result.items[0]).toEqual(
-      expect.objectContaining({
-        render: expect.objectContaining({
-          basic: expect.objectContaining({
-            icon: { type: 'url', value: 'data:image/png;base64,cached' }
-          })
+    try {
+      execFileMock.mockImplementation((_command, args, _options, callback) => {
+        if (Array.isArray(args) && args.includes('-version')) {
+          callback(null, { stdout: 'mdfind test' })
+          return
+        }
+        callback(null, {
+          stdout: '/Users/demo/Documents/cached-icon.docx\0/Users/demo/Documents/missing-icon.pdf\0'
         })
       })
-    )
-    expect(result.items[1]).toEqual(
-      expect.objectContaining({
-        render: expect.objectContaining({
-          basic: expect.objectContaining({
-            icon: { type: 'class', value: 'i-ri-file-line' }
+      statMock.mockResolvedValue({
+        size: 12,
+        mtime: new Date('2026-05-12T00:00:00.000Z'),
+        ctime: new Date('2026-05-12T00:00:00.000Z'),
+        isDirectory: () => false
+      })
+
+      await macSpotlightFileProvider.onLoad()
+      const result = await macSpotlightFileProvider.onSearch(
+        { text: 'icon' },
+        new AbortController().signal
+      )
+
+      expect(result.items).toHaveLength(2)
+      expect(result.items[0]).toEqual(
+        expect.objectContaining({
+          render: expect.objectContaining({
+            basic: expect.objectContaining({
+              icon: { type: 'url', value: `tfile://${cachedIcon}` }
+            })
           })
         })
-      })
-    )
-    expect(iconCacheEnsureMock).toHaveBeenCalledWith('/Users/demo/Documents/missing-icon.pdf')
+      )
+      expect(result.items[1]).toEqual(
+        expect.objectContaining({
+          render: expect.objectContaining({
+            basic: expect.objectContaining({
+              icon: { type: 'class', value: 'i-ri-file-line' }
+            })
+          })
+        })
+      )
+      // The warm-up carries the version of the file it is for, so a stale entry cannot be reused.
+      expect(iconCacheEnsureMock).toHaveBeenCalledWith(
+        '/Users/demo/Documents/missing-icon.pdf',
+        expect.objectContaining({ size: 12 })
+      )
+    } finally {
+      fs.rmSync(iconDir, { recursive: true, force: true })
+    }
   })
 
   it('shows the index thumbnail for an image Spotlight found and asks for a missing one', async () => {
@@ -335,7 +385,10 @@ describe('native-file-search-provider', () => {
       expect(ensureThumbnail.mock.calls[0][0]).toMatchObject({ id: 8 })
       // Not indexed at all: never its own (refused) path — the file glyph, with an icon warm-up.
       expect(icons[2]).toEqual({ type: 'class', value: 'i-ri-file-line' })
-      expect(iconCacheEnsureMock).toHaveBeenCalledWith('/Users/demo/Pictures/stray.png')
+      expect(iconCacheEnsureMock).toHaveBeenCalledWith(
+        '/Users/demo/Pictures/stray.png',
+        expect.objectContaining({ size: 12 })
+      )
       expect(result.items[0]?.id).toBe('/Users/demo/Pictures/shot.png')
     } finally {
       disposeBridge()
@@ -361,5 +414,236 @@ describe('native-file-search-provider', () => {
     expect(
       __test__.isWithinMacSpotlightSearchRoots('/System/Library/PrivateFrameworks/a.svg', roots)
     ).toBe(false)
+  })
+
+  describe('file-index directory rule (D-b)', () => {
+    const stubStat = (directories: readonly string[] = []): void => {
+      statMock.mockImplementation(async (filePath: string) => ({
+        size: 12,
+        mtime: new Date('2026-09-25T19:07:00.000Z'),
+        ctime: new Date('2026-09-25T19:07:00.000Z'),
+        isDirectory: () => directories.includes(filePath)
+      }))
+    }
+    const stubMdfind = (paths: readonly string[]): void => {
+      execFileMock.mockImplementation((_command, _args, _options, callback) => {
+        callback(null, { stdout: paths.map((entry) => `${entry}\0`).join('') })
+      })
+    }
+    /** A readdir that answers from a fixed map of folder -> entries. */
+    const stubFolders = (folders: Record<string, string[]>): void => {
+      readdirMock.mockImplementation(async (directoryPath: string) => {
+        const entries = folders[directoryPath]
+        if (!entries) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+        return entries
+      })
+    }
+
+    it('hides build output, dependencies and ~/Library the way the file index does', async () => {
+      // What mdfind answered for "wx" on the machine the refresh storm was reported on.
+      stubFolders({
+        '/Users/demo/Workspace/talex-touch/apps/core-app': ['package.json', 'src', 'out'],
+        '/Users/demo/Workspace/mikobot/nanobot/web': ['package.json', 'dist', 'src'],
+        // Not a project: `build` here is a user's folder, as #1727 intends.
+        '/Users/demo/Documents': ['build', 'notes.md']
+      })
+      stubMdfind([
+        '/Users/demo/Workspace/talex-touch/apps/core-app/out/renderer/assets/KaTeX_Caligraphic-Regular-wX97UBjC.ttf',
+        '/Users/demo/Workspace/mikobot/nanobot/web/dist/assets/KaTeX_Caligraphic-Regular-wX97UBjC.ttf',
+        '/Users/demo/Workspace/mikobot-run/webui/node_modules/wx-sdk/index.js',
+        '/Users/demo/Library/Application Support/WeChat/wx-cache.json',
+        '/Users/demo/Documents/build/2026/wx-report.pdf',
+        '/Users/demo/Documents/wx-notes.md'
+      ])
+      stubStat()
+
+      const provider = macSpotlightFileProvider as unknown as SearchableSpotlightProvider
+      const results = await provider.searchNative('wx', new AbortController().signal)
+
+      expect(results.map((result) => result.path)).toEqual([
+        '/Users/demo/Documents/build/2026/wx-report.pdf',
+        '/Users/demo/Documents/wx-notes.md'
+      ])
+      // Hidden candidates are decided before any stat.
+      expect(statMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('keeps iCloud Drive, which lives under ~/Library, and still hides the rest of ~/Library', async () => {
+      const cloud = '/Users/demo/Library/Mobile Documents'
+      stubFolders({
+        [`${cloud}/com~apple~CloudDocs/proj`]: ['package.json', 'node_modules', 'src']
+      })
+      stubMdfind([
+        `${cloud}/com~apple~CloudDocs/Plans/wx-plan.md`,
+        `${cloud}/iCloud~com~apple~Pages/Documents/wx-brief.pages`,
+        `${cloud}/com~apple~CloudDocs/proj/node_modules/wx/index.js`,
+        '/Users/demo/Library/Application Support/WeChat/wx-cache.json'
+      ])
+      stubStat()
+
+      const provider = macSpotlightFileProvider as unknown as SearchableSpotlightProvider
+      const results = await provider.searchNative('wx', new AbortController().signal)
+
+      // Documents in iCloud Drive and in an app's iCloud container stay; dependencies inside
+      // iCloud Drive and ordinary ~/Library data do not.
+      expect(results.map((result) => result.path)).toEqual([
+        `${cloud}/com~apple~CloudDocs/Plans/wx-plan.md`,
+        `${cloud}/iCloud~com~apple~Pages/Documents/wx-brief.pages`
+      ])
+    })
+
+    it('scopes the iCloud Drive exception to that one folder, so no other ~/Library path leaks', async () => {
+      const cloud = '/Users/demo/Library/Mobile Documents'
+      const cases: Array<[path: string, expected: 'visible' | 'hidden']> = [
+        [`${cloud}/com~apple~CloudDocs/Plans/wx-plan.md`, 'visible'],
+        // The same folder on a case-insensitive APFS volume.
+        ['/Users/demo/library/mobile documents/com~apple~CloudDocs/wx-case.md', 'visible'],
+        // A user's own folder named Library inside iCloud Drive.
+        [`${cloud}/com~apple~CloudDocs/Library/wx-user-folder.md`, 'visible'],
+        // `build` with no project marker beside it is a user's folder.
+        [`${cloud}/com~apple~CloudDocs/build/2026/wx-report.pdf`, 'visible'],
+        [`${cloud}/com~apple~CloudDocs/.secret/wx-dot.md`, 'hidden'],
+        [`${cloud}/com~apple~CloudDocs/proj/node_modules/wx/index.js`, 'hidden'],
+        // Siblings that only share the prefix.
+        [`${cloud} Backup/wx-sibling.md`, 'hidden'],
+        [`${cloud}Old/wx-sibling2.md`, 'hidden'],
+        [`${cloud}/../Application Support/WeChat/wx-dotdot.json`, 'hidden'],
+        ['/Users/demo/Library/Application Support/WeChat/wx-cache.json', 'hidden'],
+        // The iCloud sync agent's own container is ~/Library data, not iCloud Drive.
+        [
+          '/Users/demo/Library/Containers/com.apple.CloudDocs.MobileDocumentsFileProvider/Data/wx-fp.db',
+          'hidden'
+        ],
+        ['/Users/demo/Library/wx-direct.md', 'hidden'],
+        ['/Users/demo/LIBRARY/Caches/wx-upper.bin', 'hidden'],
+        ['/Users/demo/Documents/wx-notes.md', 'visible']
+      ]
+      // iCloud Drive's root holds no project marker, so its `build` folder is a user's folder;
+      // `proj` is a project, so its `node_modules` is a dependency folder.
+      stubFolders({
+        [`${cloud}/com~apple~CloudDocs`]: ['Plans', 'Library', 'build', '.secret', 'proj'],
+        [`${cloud}/com~apple~CloudDocs/proj`]: ['package.json', 'node_modules']
+      })
+      stubMdfind(cases.map(([path]) => path))
+      stubStat()
+
+      const provider = macSpotlightFileProvider as unknown as SearchableSpotlightProvider
+      const visible = new Set(
+        (await provider.searchNative('wx', new AbortController().signal)).map(
+          (result) => result.path
+        )
+      )
+
+      const mismatches = cases.filter(
+        ([path, expected]) => (visible.has(path) ? 'visible' : 'hidden') !== expected
+      )
+      expect(mismatches).toEqual([])
+    })
+
+    it('fills the visible list from a wider pool when build output leads the answer', async () => {
+      stubFolders({ '/Users/demo/Workspace/pool-app': ['package.json', 'out'] })
+      const buildOutput = Array.from(
+        { length: 60 },
+        (_, index) => `/Users/demo/Workspace/pool-app/out/assets/wx-${index}.js`
+      )
+      const documents = Array.from(
+        { length: 10 },
+        (_, index) => `/Users/demo/Documents/pool-wx-${index}.md`
+      )
+      stubMdfind([...buildOutput, ...documents])
+      stubStat()
+
+      const provider = macSpotlightFileProvider as unknown as SearchableSpotlightProvider
+      const results = await provider.searchNative('wx', new AbortController().signal)
+
+      // Truncating to 50 before filtering would have kept only build output.
+      expect(results.map((result) => result.path)).toEqual(documents)
+    })
+
+    it('still caps the visible list at 50', async () => {
+      const documents = Array.from(
+        { length: 80 },
+        (_, index) => `/Users/demo/Documents/cap-wx-${index}.md`
+      )
+      stubMdfind(documents)
+      stubStat()
+
+      const provider = macSpotlightFileProvider as unknown as SearchableSpotlightProvider
+      const results = await provider.searchNative('wx', new AbortController().signal)
+
+      expect(results.map((result) => result.path)).toEqual(documents.slice(0, 50))
+    })
+
+    it('reads a folder once for all its results and reuses the verdict on the next query', async () => {
+      stubFolders({ '/Users/demo/Workspace/cache-app': ['package.json', 'dist'] })
+      stubMdfind([
+        '/Users/demo/Workspace/cache-app/dist/a-wx.js',
+        '/Users/demo/Workspace/cache-app/dist/b-wx.js',
+        '/Users/demo/Workspace/cache-app/dist/nested/c-wx.js'
+      ])
+      stubStat()
+
+      const provider = macSpotlightFileProvider as unknown as SearchableSpotlightProvider
+      await expect(provider.searchNative('wx', new AbortController().signal)).resolves.toEqual([])
+      await expect(provider.searchNative('wx', new AbortController().signal)).resolves.toEqual([])
+
+      const projectReads = readdirMock.mock.calls.filter(
+        ([directoryPath]) => directoryPath === '/Users/demo/Workspace/cache-app'
+      )
+      expect(projectReads).toHaveLength(1)
+    })
+
+    it('drops a folder result that is itself build output or a dependency folder', async () => {
+      stubFolders({ '/Users/demo/Workspace/self-app': ['package.json', 'dist', 'wx-docs'] })
+      stubMdfind([
+        '/Users/demo/Workspace/self-app/node_modules',
+        '/Users/demo/Workspace/self-app/dist',
+        '/Users/demo/Workspace/self-app/wx-docs'
+      ])
+      stubStat([
+        '/Users/demo/Workspace/self-app/node_modules',
+        '/Users/demo/Workspace/self-app/dist',
+        '/Users/demo/Workspace/self-app/wx-docs'
+      ])
+
+      const provider = macSpotlightFileProvider as unknown as SearchableSpotlightProvider
+      const results = await provider.searchNative('wx', new AbortController().signal)
+
+      expect(results.map((result) => result.path)).toEqual([
+        '/Users/demo/Workspace/self-app/wx-docs'
+      ])
+    })
+
+    it('applies the same rule to the Linux native backends and asks them for the wider pool', async () => {
+      const provider = linuxNativeFileProvider as unknown as SearchableSpotlightProvider & {
+        backend: string | null
+      }
+      provider.backend = 'locate'
+      stubFolders({ '/home/demo/app': ['package.json', 'build'] })
+      execFileMock.mockImplementation((_command, _args, _options, callback) => {
+        callback(null, {
+          stdout: [
+            '/home/demo/app/node_modules/wx/index.js',
+            '/home/demo/app/build/wx.bundle.js',
+            '/home/demo/docs/wx-notes.md'
+          ].join('\n')
+        })
+      })
+      stubStat()
+
+      try {
+        const results = await provider.searchNative('wx', new AbortController().signal)
+
+        expect(results.map((result) => result.path)).toEqual(['/home/demo/docs/wx-notes.md'])
+        expect(execFileMock).toHaveBeenCalledWith(
+          'locate',
+          ['-i', '-l', '150', 'wx'],
+          expect.any(Object),
+          expect.any(Function)
+        )
+      } finally {
+        provider.backend = null
+      }
+    })
   })
 })

@@ -1,0 +1,30 @@
+{
+  "id": "bound-indexing-memory-icons",
+  "name": "bound-indexing-memory-icons",
+  "title": "Bound Tuff indexing memory and icon storage",
+  "description": "Execute the approved Issue 1964 remediation in order: bounded indexing and diagnostics, on-demand path icons, resumable legacy icon migration, native crash delivery evidence, isolated 100k and three-hour acceptance. No real-profile writes, commits, pushes, or releases.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-26",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Run the isolated 100k-file campaign with slow writes, concurrent search and mutations, then keep one isolated candidate live for three hours with per-isolate memory and queue evidence (implement.md items 12-13), and attribute the native allocator growth seen during the whole-home scan.",
+    "blocker": "An isolated instance registers the same global shortcuts as the running dev app, so a multi-hour soak on this machine needs an env switch that skips shortcut registration, or a host with no other Tuff instance running.",
+    "evidence": "research/verification-2026-09-26.md: native crash round trip to Sentry (event a66f76b63f954801b5134c9dbf249d61); path-backed icons render from the content-hash cache and iconGeneratedBytesCumulative stayed 0 through the home scan; every isolate heap stayed at or below 183MB while RSS swung with the scan. The code ships in PR #1965, validated as recorded in implement.md item 14."
+  }
+}

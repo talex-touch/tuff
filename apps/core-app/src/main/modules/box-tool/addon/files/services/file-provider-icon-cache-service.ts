@@ -1,4 +1,5 @@
 import type { DbUtils } from '../../../../../db/utils'
+import path from 'node:path'
 
 export const FILE_ICON_META_EXTENSION_KEY = 'iconMeta'
 
@@ -16,6 +17,9 @@ export function persistFileIconCache(
   iconValue: string,
   meta: FileIconCacheMeta
 ): Promise<unknown> {
+  if (!path.isAbsolute(iconValue)) {
+    return Promise.reject(new TypeError('FILE_ICON_CACHE_PATH_REQUIRED'))
+  }
   return deps.withDbWrite('file-icon.persist', () =>
     deps.dbUtils.addFileExtensions([
       { fileId, key: 'icon', value: iconValue },

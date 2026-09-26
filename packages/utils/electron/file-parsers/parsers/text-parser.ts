@@ -99,9 +99,11 @@ export class TextFileParser implements FileParser {
       }
     }
     catch (error) {
+      const code = (error as NodeJS.ErrnoException | null)?.code
       return {
         status: 'failed',
         reason: error instanceof Error ? error.message : 'unknown-error',
+        ...(typeof code === 'string' ? { errorCode: code } : {}),
       }
     }
   }

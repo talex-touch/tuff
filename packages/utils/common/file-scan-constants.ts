@@ -512,24 +512,31 @@ export const PATH_PATTERNS = {
       : []),
   ],
 
-  /** 开发路径模式（跨平台） */
+  /**
+   * 开发路径模式（跨平台）。
+   *
+   * Anchored to a whole path segment. The unanchored forms (`/out\//`, `/build\//`, `/dist\//`)
+   * matched inside other names, so `src/layout/components` was excluded as `out/` and
+   * `Documents/about/team` as `bout/`… the probe in
+   * `.trellis/tasks/09-26-corebox-refresh-churn/research/root-cause.md` §3 shows both.
+   */
   DEV_PATHS: [
-    /node_modules/,
-    /\.git\//,
-    /\.svn\//,
-    /\.hg\//,
-    /dist\//,
-    /build\//,
-    /target\//,
-    /out\//,
-    /\.vscode\//,
-    /\.idea\//,
-    /\.next\//,
-    /\.nuxt\//,
-    /\.vuepress\//,
-    /\.docusaurus\//,
-    /coverage\//,
-    /\.nyc_output\//,
+    /(?:^|\/)node_modules(?:\/|$)/,
+    /(?:^|\/)\.git\//,
+    /(?:^|\/)\.svn\//,
+    /(?:^|\/)\.hg\//,
+    /(?:^|\/)dist\//,
+    /(?:^|\/)build\//,
+    /(?:^|\/)target\//,
+    /(?:^|\/)out\//,
+    /(?:^|\/)\.vscode\//,
+    /(?:^|\/)\.idea\//,
+    /(?:^|\/)\.next\//,
+    /(?:^|\/)\.nuxt\//,
+    /(?:^|\/)\.vuepress\//,
+    /(?:^|\/)\.docusaurus\//,
+    /(?:^|\/)coverage\//,
+    /(?:^|\/)\.nyc_output\//,
   ],
 
   /** 缓存路径模式（跨平台） */

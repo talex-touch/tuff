@@ -1,4 +1,6 @@
 import type { IExecuteArgs, TuffSearchResult, TuffQuery } from '@talex-touch/utils'
+import type { FileFilterReason } from '@talex-touch/utils/common/file-filter-service'
+import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-constants'
 import type { ProviderContext } from '../../search-engine/types'
 import type { files as filesSchema } from '../../../../db/schema'
 import type { ISearchProvider } from '@talex-touch/utils'
@@ -19,7 +21,7 @@ import { searchLogger } from '../../search-engine/search-logger'
 import type { FileIndexSettings } from './types'
 import { EverythingIconCache } from './everything-icon-cache'
 import { getFileAssetBridge, type IndexedFileAssets } from './file-asset-bridge'
-import { mapFileToTuffItem } from './utils'
+import { getDirectoryLevelExclusionReason, mapFileToTuffItem } from './utils'
 
 export interface NativeFileSearchCapabilities {
   platform: NodeJS.Platform
@@ -48,12 +50,134 @@ type LinuxNativeSearchBackend = 'locate' | 'tracker3' | 'tracker' | 'baloo'
 const nativeFileSearchLog = getLogger('file-provider').child('Native')
 const execFileAsync = promisify(execFile)
 const NATIVE_SEARCH_MAX_RESULTS = 50
+/**
+ * Candidates examined per query before the result list is cut to its 50. The directory rule
+ * below can drop most of a native backend's head — for "wx", mdfind's first 13 hits were one
+ * build's `out/renderer/assets` — so the pool is wider than what is shown. It stays bounded
+ * because each distinct parent directory costs a (cached) lookup.
+ */
+const NATIVE_SEARCH_CANDIDATE_POOL = 150
+const NATIVE_SEARCH_DIRECTORY_CACHE_LIMIT = 2_048
+/** A verdict can flip when a project marker appears beside a folder; re-read after this long. */
+const NATIVE_SEARCH_DIRECTORY_CACHE_TTL_MS = 5 * 60_000
 const NATIVE_ICON_WARMUP_LIMIT = 12
 const MAC_SPOTLIGHT_DEFAULT_PATH_NAMES = ['home'] as const
 
 interface MacSpotlightSearchRoot {
   path: string
   key: string
+}
+
+interface NativeSearchDirectoryVerdict {
+  reason: Promise<FileFilterReason | null>
+  expiresAt: number
+}
+
+/**
+ * The file index's directory rule applied to native search results (D-b, 2026-09-26): a result
+ * is hidden when its folder, or any folder between it and the search root, is one the index
+ * never enters — build output beside a project marker, dependency folders, dot folders,
+ * `~/Library`. Spotlight only used the file-level search rule, so a query like "wx" was answered
+ * with `out/renderer/assets`, `dist/_nuxt`, `node_modules` and `~/Library/Application Support`
+ * entries the index itself would never hold.
+ *
+ * Each level is judged by `getDirectoryLevelExclusionReason`, the same per-level rule the file
+ * index applies to watched paths, and every directory's verdict (its own name plus everything
+ * above it) is cached, so sibling results share one walk and a folder's entries are read at most
+ * once per TTL. The search root itself is never judged: it is where the user asked to look.
+ */
+class NativeSearchDirectoryFilter {
+  private readonly verdicts = new Map<string, NativeSearchDirectoryVerdict>()
+
+  constructor(
+    private readonly normalizeKey: (directoryPath: string) => string,
+    private readonly readdir: (directoryPath: string) => Promise<string[]> = (target) =>
+      fs.readdir(target),
+    private readonly now: () => number = Date.now,
+    /** Scan options for the levels under one root key; see `findMacICloudDriveRootKey`. */
+    private readonly levelOptionsOf: (rootKey: string | null) => FileScanOptions | undefined = () =>
+      undefined
+  ) {}
+
+  /** Candidates whose folders the index would enter, in their original order, up to `limit`. */
+  async selectVisible(
+    candidates: readonly string[],
+    limit: number,
+    rootKeyOf: (filePath: string) => string | null = () => null
+  ): Promise<string[]> {
+    const reasons = await Promise.all(
+      candidates.map((candidate) =>
+        this.getDirectoryReason(path.dirname(candidate), rootKeyOf(candidate))
+      )
+    )
+    const visible: string[] = []
+    for (let index = 0; index < candidates.length && visible.length < limit; index += 1) {
+      if (reasons[index] === null) visible.push(candidates[index]!)
+    }
+    return visible
+  }
+
+  /** Drops directory results that are themselves folders the index never enters. */
+  async dropExcludedDirectories(
+    results: NativeFileSearchResult[],
+    rootKeyOf: (filePath: string) => string | null = () => null
+  ): Promise<NativeFileSearchResult[]> {
+    const reasons = await Promise.all(
+      results.map((result) =>
+        result.isDir
+          ? this.getDirectoryReason(result.path, rootKeyOf(result.path))
+          : Promise.resolve(null)
+      )
+    )
+    return results.filter((_result, index) => reasons[index] === null)
+  }
+
+  private getDirectoryReason(
+    directoryPath: string,
+    rootKey: string | null
+  ): Promise<FileFilterReason | null> {
+    const key = `${rootKey ?? ''}\u0000${directoryPath}`
+    const now = this.now()
+    const cached = this.verdicts.get(key)
+    if (cached && cached.expiresAt > now) {
+      // Refresh recency: Map order is the eviction order.
+      this.verdicts.delete(key)
+      this.verdicts.set(key, cached)
+      return cached.reason
+    }
+
+    const reason = this.resolveDirectoryReason(directoryPath, rootKey)
+    this.verdicts.delete(key)
+    this.verdicts.set(key, {
+      reason,
+      expiresAt: now + NATIVE_SEARCH_DIRECTORY_CACHE_TTL_MS
+    })
+    while (this.verdicts.size > NATIVE_SEARCH_DIRECTORY_CACHE_LIMIT) {
+      const oldest = this.verdicts.keys().next().value
+      if (oldest === undefined) break
+      this.verdicts.delete(oldest)
+    }
+    return reason
+  }
+
+  private async resolveDirectoryReason(
+    directoryPath: string,
+    rootKey: string | null
+  ): Promise<FileFilterReason | null> {
+    if (rootKey !== null && this.normalizeKey(directoryPath) === rootKey) return null
+    // Ancestors first: inside an excluded tree nothing below needs its own (possibly readdir)
+    // check.
+    const parent = path.dirname(directoryPath)
+    if (parent !== directoryPath) {
+      const inherited = await this.getDirectoryReason(parent, rootKey)
+      if (inherited) return inherited
+    }
+    return await getDirectoryLevelExclusionReason(
+      directoryPath,
+      this.readdir,
+      this.levelOptionsOf(rootKey)
+    )
+  }
 }
 
 function normalizeMacSpotlightPathKey(filePath: string): string {
@@ -114,8 +238,41 @@ function isWithinMacSpotlightSearchRoots(
   filePath: string,
   roots: readonly MacSpotlightSearchRoot[]
 ): boolean {
+  return findMacSpotlightSearchRootKey(filePath, roots) !== null
+}
+
+function findMacSpotlightSearchRootKey(
+  filePath: string,
+  roots: readonly MacSpotlightSearchRoot[]
+): string | null {
   const fileKey = normalizeMacSpotlightPathKey(filePath)
-  return roots.some((root) => fileKey === root.key || fileKey.startsWith(`${root.key}/`))
+  return (
+    roots.find((root) => fileKey === root.key || fileKey.startsWith(`${root.key}/`))?.key ?? null
+  )
+}
+
+/**
+ * iCloud Drive is the exception to the `~/Library` rule (user decision, 2026-09-26): the user's own
+ * documents live in `~/Library/Mobile Documents` — `com~apple~CloudDocs` plus one container per
+ * app (Pages, Numbers, ...). A result inside it is judged from that folder down, the way a search
+ * root is, so `~/Library` above it never hides it while `node_modules` or build output below it
+ * still do.
+ */
+function getMacICloudDriveRootKey(): string | null {
+  try {
+    const home = app.getPath('home')
+    return home
+      ? normalizeMacSpotlightPathKey(path.join(home, 'Library', 'Mobile Documents'))
+      : null
+  } catch {
+    return null
+  }
+}
+
+function findMacICloudDriveRootKey(filePath: string): string | null {
+  const rootKey = getMacICloudDriveRootKey()
+  if (!rootKey) return null
+  return normalizeMacSpotlightPathKey(filePath).startsWith(`${rootKey}/`) ? rootKey : null
 }
 
 function emptyResult(query: TuffQuery): TuffSearchResult {
@@ -189,9 +346,13 @@ async function buildNativeSearchItems(
         embeddingStatus: 'none' as const
       } satisfies typeof filesSchema.$inferSelect)
 
-    const cachedIcon = iconCache?.get(result.path)
+    const iconSource = { mtimeMs: result.mtime.getTime(), size: result.size }
+    const cachedIcon = iconCache?.get(result.path, iconSource)
     const extensions: Record<string, string> = { ...(known?.extensions ?? {}) }
-    if (cachedIcon) extensions.icon = cachedIcon
+    if (cachedIcon) {
+      extensions.icon = cachedIcon
+      delete extensions.iconMeta
+    }
     const item = mapFileToTuffItem(
       fileObj,
       extensions,
@@ -201,7 +362,7 @@ async function buildNativeSearchItems(
         ? undefined
         : (file) => {
             scheduledIconWarmups += 1
-            void iconCache?.ensure(file.path)
+            void iconCache?.ensure(file.path, iconSource)
           },
       known && bridge
         ? (file) => {
@@ -337,6 +498,17 @@ class MacSpotlightFileProvider extends BaseNativeFileSearchProvider {
     supportsMetadata: true,
     supportsContent: true
   }
+  private readonly directoryFilter = new NativeSearchDirectoryFilter(
+    normalizeMacSpotlightPathKey,
+    undefined,
+    undefined,
+    // Inside iCloud Drive the `~/Library` system-path pattern would still match every level, so
+    // it is off there; name rules (dependencies, dot folders, build output) still apply.
+    (rootKey) =>
+      rootKey !== null && rootKey === getMacICloudDriveRootKey()
+        ? { enableSystemPathFilter: false }
+        : undefined
+  )
 
   protected async detect(): Promise<boolean> {
     await execFileAsync('mdfind', ['-version'], { timeout: 1000 }).catch(() => undefined)
@@ -362,7 +534,7 @@ class MacSpotlightFileProvider extends BaseNativeFileSearchProvider {
       maxBuffer: 1024 * 1024 * 5,
       signal
     })
-    const paths = Array.from(
+    const candidates = Array.from(
       new Set(
         stdout
           .split('\0')
@@ -371,9 +543,20 @@ class MacSpotlightFileProvider extends BaseNativeFileSearchProvider {
           .filter((entry) => isWithinMacSpotlightSearchRoots(entry, searchRoots))
           .filter((entry) => fileFilterService.getSearchExclusionReason({ path: entry }) === null)
       )
-    ).slice(0, NATIVE_SEARCH_MAX_RESULTS)
+    ).slice(0, NATIVE_SEARCH_CANDIDATE_POOL)
+    const rootKeyOf = (entry: string): string | null =>
+      findMacICloudDriveRootKey(entry) ?? findMacSpotlightSearchRootKey(entry, searchRoots)
+    const paths = await this.directoryFilter.selectVisible(
+      candidates,
+      NATIVE_SEARCH_MAX_RESULTS,
+      rootKeyOf
+    )
+    if (signal.aborted) return []
     const results = await Promise.all(paths.map((filePath) => toNativeResult(filePath)))
-    return results.filter((result): result is NativeFileSearchResult => Boolean(result))
+    return await this.directoryFilter.dropExcludedDirectories(
+      results.filter((result): result is NativeFileSearchResult => Boolean(result)),
+      rootKeyOf
+    )
   }
 }
 
@@ -387,6 +570,10 @@ class LinuxNativeFileProvider extends BaseNativeFileSearchProvider {
     supportsContent: false
   }
   private backend: LinuxNativeSearchBackend | null = null
+  // No search roots here: the backends answer for the whole filesystem, so the walk runs to `/`.
+  private readonly directoryFilter = new NativeSearchDirectoryFilter(
+    (directoryPath) => directoryPath
+  )
 
   protected async detect(): Promise<boolean> {
     const candidates: Array<{
@@ -425,24 +612,30 @@ class LinuxNativeFileProvider extends BaseNativeFileSearchProvider {
       maxBuffer: 1024 * 1024 * 5,
       signal
     })
-    const paths = this.parseOutput(stdout)
+    const candidates = this.parseOutput(stdout)
       .filter((entry) => fileFilterService.getSearchExclusionReason({ path: entry }) === null)
-      .slice(0, NATIVE_SEARCH_MAX_RESULTS)
+      .slice(0, NATIVE_SEARCH_CANDIDATE_POOL)
+    const paths = await this.directoryFilter.selectVisible(candidates, NATIVE_SEARCH_MAX_RESULTS)
+    if (signal.aborted) return []
     const results = await Promise.all(paths.map((filePath) => toNativeResult(filePath)))
-    return results.filter((result): result is NativeFileSearchResult => Boolean(result))
+    return await this.directoryFilter.dropExcludedDirectories(
+      results.filter((result): result is NativeFileSearchResult => Boolean(result))
+    )
   }
 
   private buildSearchCommand(text: string): { command: string; args: string[] } {
+    // Ask for the candidate pool, not the visible 50: the directory rule drops part of it.
+    const limit = String(NATIVE_SEARCH_CANDIDATE_POOL)
     switch (this.backend) {
       case 'tracker3':
-        return { command: 'tracker3', args: ['search', '--files', '--limit', '50', text] }
+        return { command: 'tracker3', args: ['search', '--files', '--limit', limit, text] }
       case 'tracker':
-        return { command: 'tracker', args: ['search', '--files', '--limit', '50', text] }
+        return { command: 'tracker', args: ['search', '--files', '--limit', limit, text] }
       case 'baloo':
-        return { command: 'baloosearch', args: ['--limit', '50', text] }
+        return { command: 'baloosearch', args: ['--limit', limit, text] }
       case 'locate':
       default:
-        return { command: 'locate', args: ['-i', '-l', '50', text] }
+        return { command: 'locate', args: ['-i', '-l', limit, text] }
     }
   }
 

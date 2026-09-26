@@ -1,15 +1,37 @@
+import type { Mock } from 'vitest'
+import type { IndexWorkerBatchResult, IndexWorkerFile } from '../workers/file-index-worker-client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileProviderIndexSchedulerService } from './file-provider-index-scheduler-service'
+
+interface SchedulerFile {
+  id: number
+  path: string
+  name: string
+  size: number
+  mtime: number
+  ctime: number
+}
+
+function file(id: number, name: string, size = 1): SchedulerFile {
+  return { id, path: `/tmp/${name}`, name, size, mtime: 1_000, ctime: 1_000 }
+}
 
 function createService(
   options: {
     dbPath?: string | null
     watchPaths?: string[]
-    depthDelayMs?: number
     normalizePath?: (rawPath: string) => string
+    config?: { backgroundContentMinBytes?: number; chunkSize?: number }
   } = {}
 ) {
-  const indexFiles = vi.fn(async () => ({ processed: 0, failed: 0 }))
+  const indexFiles = vi.fn<
+    (
+      dbPath: string,
+      providerId: string,
+      providerType: string,
+      files: IndexWorkerFile[]
+    ) => Promise<IndexWorkerBatchResult>
+  >(async () => ({ processed: 0, failed: 0 }))
   const logWarn = vi.fn()
   const dbPath = Object.prototype.hasOwnProperty.call(options, 'dbPath')
     ? options.dbPath
@@ -24,9 +46,8 @@ function createService(
     logWarn,
     config: {
       backgroundContentMinBytes: 10,
-      backgroundDelayMs: 20,
-      depthDelayMs: options.depthDelayMs ?? 20,
-      chunkSize: 2
+      chunkSize: 2,
+      ...options.config
     }
   })
 
@@ -37,33 +58,31 @@ function createService(
   }
 }
 
+function dispatchedIds(indexFiles: Mock): number[] {
+  return indexFiles.mock.calls.map((call) => {
+    const files = call[3] as Array<{ id: number }>
+    return files[0]!.id
+  })
+}
+
 describe('file-provider-index-scheduler-service', () => {
   beforeEach(() => {
     vi.useFakeTimers()
   })
 
   afterEach(() => {
+    vi.clearAllTimers()
+    vi.restoreAllMocks()
     vi.useRealTimers()
   })
 
   it('skips scheduling when database path is unavailable', () => {
     const { indexFiles, service } = createService({ dbPath: null })
 
-    service.schedule(
-      [
-        {
-          id: 1,
-          path: '/tmp/a.txt',
-          name: 'a.txt',
-          size: 1,
-          mtime: new Date(1000),
-          ctime: new Date(1000)
-        }
-      ],
-      'test'
-    )
+    service.schedule([file(1, 'a.txt')], 'test')
 
     expect(indexFiles).not.toHaveBeenCalled()
+    expect(service.hasPendingWork()).toBe(false)
   })
 
   it('maps files and chunks immediate worker payloads', async () => {
@@ -81,22 +100,8 @@ describe('file-provider-index-scheduler-service', () => {
           mtime: new Date(1000),
           ctime: '1970-01-01T00:00:02.000Z'
         },
-        {
-          id: 2,
-          path: '/tmp/b.txt',
-          name: 'b.txt',
-          size: 2,
-          mtime: 3000,
-          ctime: 4000
-        },
-        {
-          id: 3,
-          path: '/tmp/c.txt',
-          name: 'c.txt',
-          size: 3,
-          mtime: 5000,
-          ctime: 6000
-        }
+        { id: 2, path: '/tmp/b.txt', name: 'b.txt', size: 2, mtime: 3000, ctime: 4000 },
+        { id: 3, path: '/tmp/c.txt', name: 'c.txt', size: 3, mtime: 5000, ctime: 6000 }
       ],
       'immediate'
     )
@@ -151,112 +156,96 @@ describe('file-provider-index-scheduler-service', () => {
     ])
   })
 
-  it('defers large file content indexing with background reason suffix', async () => {
-    const { indexFiles, service } = createService()
-
-    service.schedule(
-      [
-        {
-          id: 1,
-          path: '/tmp/large.bin',
-          name: 'large.bin',
-          size: 10,
-          mtime: 1000,
-          ctime: 1000
-        }
-      ],
-      'scan'
-    )
-
-    expect(indexFiles).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(20)
-
-    expect(indexFiles).toHaveBeenCalledWith('/tmp/index.db', 'file-provider', 'file', [
-      expect.objectContaining({ id: 1, path: '/tmp/large.bin' })
-    ])
-  })
-
-  it('prioritizes shallower watch-root files before deeper files', async () => {
+  it('orders shallower watch-root files ahead of deeper files regardless of input order', async () => {
     const { indexFiles, service } = createService({
       watchPaths: ['/tmp/root'],
-      depthDelayMs: 20
+      config: { chunkSize: 1 }
     })
 
     service.schedule(
       [
-        {
-          id: 1,
-          path: '/tmp/root/a.txt',
-          name: 'a.txt',
-          size: 1,
-          mtime: 1000,
-          ctime: 1000
-        },
         {
           id: 2,
           path: '/tmp/root/one/two/three/deep.txt',
           name: 'deep.txt',
           size: 1,
-          mtime: 1000,
-          ctime: 1000
+          mtime: 1_000,
+          ctime: 1_000
+        },
+        {
+          id: 1,
+          path: '/tmp/root/a.txt',
+          name: 'a.txt',
+          size: 1,
+          mtime: 1_000,
+          ctime: 1_000
         }
       ],
       'watch'
     )
-    await vi.advanceTimersByTimeAsync(0)
+    await service.drain()
 
-    expect(indexFiles).toHaveBeenCalledTimes(1)
-    expect(indexFiles).toHaveBeenCalledWith('/tmp/index.db', 'file-provider', 'file', [
-      expect.objectContaining({ id: 1, path: '/tmp/root/a.txt' })
-    ])
-
-    await vi.advanceTimersByTimeAsync(40)
-    expect(indexFiles).toHaveBeenCalledTimes(2)
-    expect(indexFiles).toHaveBeenLastCalledWith('/tmp/index.db', 'file-provider', 'file', [
-      expect.objectContaining({ id: 2, path: '/tmp/root/one/two/three/deep.txt' })
-    ])
+    expect(dispatchedIds(indexFiles)).toEqual([1, 2])
   })
 
-  it('ignores watch roots rejected by the normalizer when calculating depth', async () => {
+  it('returns large files as deferred rather than admitting them before small ones', async () => {
+    const { indexFiles, service } = createService({
+      watchPaths: ['/tmp'],
+      config: { chunkSize: 1, backgroundContentMinBytes: 10 }
+    })
+
+    const result = service.schedule(
+      [
+        file(1, 'small-1.txt', 1),
+        file(2, 'small-2.txt', 1),
+        file(3, 'small-3.txt', 1),
+        file(4, 'large-1.bin', 100),
+        file(5, 'large-2.bin', 100)
+      ],
+      'scan'
+    )
+
+    // The shared scheduler retains one active plus one queued batch; the overflow is returned to
+    // the caller (which persists it durably) instead of being queued in memory.
+    expect(result).toEqual({ accepted: 2, deferred: 3 })
+
+    await service.drain()
+    expect(dispatchedIds(indexFiles)).toEqual([1, 2])
+  })
+
+  it('ignores watch roots rejected by the normalizer when ordering by depth', async () => {
     const { indexFiles, service } = createService({
       watchPaths: ['/tmp/rejected', '/tmp/root'],
-      depthDelayMs: 20,
-      normalizePath: (rawPath) => (rawPath === '/tmp/rejected' ? '' : rawPath.toLowerCase())
+      normalizePath: (rawPath) => (rawPath === '/tmp/rejected' ? '' : rawPath.toLowerCase()),
+      config: { chunkSize: 1 }
     })
 
     service.schedule(
       [
         {
           id: 1,
-          path: '/tmp/rejected/one/two/deep.txt',
+          path: '/tmp/root/one/two/deep.txt',
           name: 'deep.txt',
           size: 1,
-          mtime: 1000,
-          ctime: 1000
+          mtime: 1_000,
+          ctime: 1_000
         },
         {
           id: 2,
-          path: '/tmp/root/one/two/deep.txt',
-          name: 'root-deep.txt',
+          path: '/tmp/rejected/one/two/deep.txt',
+          name: 'rejected-deep.txt',
           size: 1,
-          mtime: 1000,
-          ctime: 1000
+          mtime: 1_000,
+          ctime: 1_000
         }
       ],
       'watch'
     )
-    await vi.advanceTimersByTimeAsync(0)
+    await service.drain()
 
-    expect(indexFiles).toHaveBeenCalledTimes(1)
-    expect(indexFiles).toHaveBeenCalledWith('/tmp/index.db', 'file-provider', 'file', [
-      expect.objectContaining({ id: 1, path: '/tmp/rejected/one/two/deep.txt' })
-    ])
-
-    await vi.advanceTimersByTimeAsync(20)
-    expect(indexFiles).toHaveBeenCalledTimes(2)
-    expect(indexFiles).toHaveBeenLastCalledWith('/tmp/index.db', 'file-provider', 'file', [
-      expect.objectContaining({ id: 2, path: '/tmp/root/one/two/deep.txt' })
-    ])
+    // The rejected root contributes no depth, so its file is treated as surface-level and ordered
+    // ahead of the genuinely deep file under the valid root.
+    expect(dispatchedIds(indexFiles)).toEqual([2, 1])
   })
 
   it('logs worker failures through scheduler drain', async () => {
@@ -264,19 +253,7 @@ describe('file-provider-index-scheduler-service', () => {
     const { indexFiles, logWarn, service } = createService()
     indexFiles.mockRejectedValueOnce(error)
 
-    service.schedule(
-      [
-        {
-          id: 1,
-          path: '/tmp/a.txt',
-          name: 'a.txt',
-          size: 1,
-          mtime: 1000,
-          ctime: 1000
-        }
-      ],
-      'test'
-    )
+    service.schedule([file(1, 'a.txt')], 'test')
     await expect(service.drain()).rejects.toMatchObject({ errors: [error] })
 
     expect(logWarn).toHaveBeenCalledWith('File index worker failed', error, {
@@ -289,27 +266,7 @@ describe('file-provider-index-scheduler-service', () => {
     const { indexFiles, logWarn, service } = createService()
     indexFiles.mockResolvedValueOnce({ processed: 2, failed: 1 })
 
-    service.schedule(
-      [
-        {
-          id: 1,
-          path: '/tmp/a.txt',
-          name: 'a.txt',
-          size: 1,
-          mtime: 1000,
-          ctime: 1000
-        },
-        {
-          id: 2,
-          path: '/tmp/b.txt',
-          name: 'b.txt',
-          size: 1,
-          mtime: 1000,
-          ctime: 1000
-        }
-      ],
-      'per-file-failure'
-    )
+    service.schedule([file(1, 'a.txt'), file(2, 'b.txt')], 'per-file-failure')
 
     await expect(service.drain()).rejects.toMatchObject({
       errors: [expect.objectContaining({ message: 'FILE_INDEX_WORKER_BATCH_FAILED:1/2' })]
@@ -321,83 +278,49 @@ describe('file-provider-index-scheduler-service', () => {
     )
   })
 
-  it('reports depth and deferred timers as pending until the active worker dispatch drains', async () => {
-    let releaseDispatch!: () => void
-    const dispatchDone = new Promise<void>((resolve) => {
-      releaseDispatch = resolve
+  it("adds the worker's lastError samples to the failed-batch warning", async () => {
+    const { indexFiles, logWarn, service } = createService()
+    const failureSamples = [
+      "EISDIR: illegal operation on a directory, read '/tmp/a.txt'",
+      'result-too-large'
+    ]
+    indexFiles.mockResolvedValueOnce({ processed: 2, failed: 2, failureSamples })
+
+    service.schedule([file(1, 'a.txt'), file(2, 'b.txt')], 'sampled-failure')
+
+    await expect(service.drain()).rejects.toMatchObject({
+      errors: [expect.objectContaining({ message: 'FILE_INDEX_WORKER_BATCH_FAILED:2/2' })]
     })
-    const { indexFiles, service } = createService({
-      watchPaths: ['/tmp/root'],
-      depthDelayMs: 20
-    })
+    expect(logWarn).toHaveBeenCalledWith(
+      'File index worker failed',
+      expect.objectContaining({ message: 'FILE_INDEX_WORKER_BATCH_FAILED:2/2' }),
+      { reason: 'sampled-failure', size: 2, lastErrorSamples: failureSamples }
+    )
+  })
+
+  it('does not launch retained queued work once closed', async () => {
+    const gate = Promise.withResolvers<void>()
+    const { indexFiles, service } = createService({ config: { chunkSize: 1 } })
     indexFiles.mockImplementation(async () => {
-      await dispatchDone
+      await gate.promise
       return { processed: 1, failed: 0 }
     })
 
-    service.schedule(
-      [
-        {
-          id: 1,
-          path: '/tmp/root/one/two/three/deep.txt',
-          name: 'deep.txt',
-          size: 1,
-          mtime: 1_000,
-          ctime: 1_000
-        }
-      ],
-      'watch',
-      'lease-1'
-    )
-
-    expect(service.hasPendingWork()).toBe(true)
-    await vi.advanceTimersByTimeAsync(40)
-    expect(indexFiles).toHaveBeenCalledWith('/tmp/index.db', 'file-provider', 'file', [
-      expect.objectContaining({ id: 1, mutationLeaseId: 'lease-1' })
-    ])
-    expect(service.hasPendingWork()).toBe(true)
-
-    const draining = service.drain()
-    releaseDispatch()
-    await vi.runAllTimersAsync()
-    await draining
-
-    expect(service.hasPendingWork()).toBe(false)
-  })
-
-  it('cancels delayed depth and background work when closed', async () => {
-    const { indexFiles, service } = createService({
-      watchPaths: ['/tmp/root'],
-      depthDelayMs: 20
-    })
-
-    service.schedule(
-      [
-        {
-          id: 1,
-          path: '/tmp/root/one/two/three/deep.txt',
-          name: 'deep.txt',
-          size: 10,
-          mtime: 1_000,
-          ctime: 1_000
-        },
-        {
-          id: 2,
-          path: '/tmp/root/large.bin',
-          name: 'large.bin',
-          size: 10,
-          mtime: 1_000,
-          ctime: 1_000
-        }
-      ],
-      'watch'
-    )
-    expect(service.hasPendingWork()).toBe(true)
+    service.schedule([file(1, 'a.txt'), file(2, 'b.txt')], 'watch', 'lease-1')
+    await settleMicrotasks()
+    expect(indexFiles).toHaveBeenCalledTimes(1)
 
     service.close()
-    await vi.runAllTimersAsync()
+    gate.resolve()
+    await settleMicrotasks()
 
-    expect(indexFiles).not.toHaveBeenCalled()
+    expect(indexFiles).toHaveBeenCalledTimes(1)
     expect(service.hasPendingWork()).toBe(false)
   })
 })
+
+async function settleMicrotasks(): Promise<void> {
+  for (let index = 0; index < 16; index += 1) {
+    await Promise.resolve()
+  }
+}

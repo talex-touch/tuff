@@ -1,0 +1,3 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. List candidates with `find .trellis/spec -name '*.md'` — note that `get_context.py --mode packages` reports layers only and omits spec/guides, which real manifests do cite. Delete this line once real entries are added."}
+{"file": ".trellis/spec/main-process/database-write-contracts.md", "reason": "verify no main-thread writes to search tables"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "exclusion rules are shared by index, reconcile and Spotlight filter"}

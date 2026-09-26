@@ -160,11 +160,14 @@
   - 吞吐正反馈：`upsertBatchScheduler` 被显式压到 `initialSize 5 / maxSize 20`（`file-provider.ts:409-416`，而 `AdaptiveBatchScheduler` 默认 maxSize 80）→ 15.5 万行切成 ≥7,800 块，每块付 `appTaskGate.waitForIdle` + 两次 worker 往返 + `publishCommit` 的 reader-visibility barrier；主线程拖延又被 AIMD 当拥塞信号 → 窗口压回 minSize 2 → 块数继续上升。
   - 剩余候选修法（**每一项都需要在真实规模 profile 上做前后 A/B 才可判定**，不要凭代码阅读直接改）：
     - A ✅ **已修（2026-09-21）**：`FileProvider.getIndexStats()` 增加 1s TTL 快照（`FILE_INDEX_STATS_CACHE_MS`，与仓库既有 `INDEXED_WORKER_STATUS_SNAPSHOT_CACHE_TTL_MS` 同值），返回值收敛到共享类型 `FileIndexStats`，所有出口返回副本以免调用方互相污染。定案数据：同一连接内 8 条 COUNT 合计 50 ms（单条 ~6 ms，13.7k 行、覆盖索引命中），而**新建连接**每次约 120 ms —— 所以成本在长连接下约 36 ms/次；配合 `indexing-runtime.ts:486-494` 的「每条 FS watch 事件一次 diagnostics」，一次事件风暴就等于一次扫描风暴。TTL 把调用频率压到 1Hz，单次成本不变。这也覆盖了 B 想解决的一半（降低单位时间内的调用次数），B 若仍要做只是为了减少调用**次数**本身。
-    - B 把 watch 路径改成「每窗口一次」而非「每事件一次」（`indexed-source-event-router.ts:63-67` + `indexing-runtime.ts:1299-1304`；影响 recentTasks 粒度与既有断言）——A 的 TTL 已消掉其**成本**侧收益，剩余价值是可观测性粒度，优先级下降。
+    - B ✅ **watch 准入与完整诊断解耦（2026-09-25）**：显式 `sourceId` 的 watch 仅查询目标源的实时 health/roots；无 sourceId 时仍查询所有源的 health/roots；两条路均不再读取 evidence/progress。保留既有 1s 统计缓存、任务历史 hydration 和 root policy 更新；不缓存权限或 enabled 状态。完整 `getDiagnostics()` 的管理台契约不变。相关回归以修改前源码作控制，会因无关/可选诊断被调用而失败；隔离 Electron 中实际新增文件约 1.02s 发布到索引，同时人为挂起的无关 health 与目标 evidence/progress 调用次数为 0。
     - C 重配 `upsertBatchScheduler` 大小、把 `waitForIdle` 提到 worker 批粒度（影响首帧搜索体验与 AIMD 测试）——未做：需要一次完整 fullScan 的前后对比，且 `maxSize 20` 是显式压低（默认 80），改动会直接换掉时延/吞吐的取舍，应单独立项。
   - 另一条同场证据（未定位到具体生产者）：本机隔离实例在索引期间高频出现 `[DbWriteScheduler] DB write task waited 3.4–4.3s: file-icon.persist`（累计 300+ slow tasks），说明主库写 lane 在索引期同样被压满。icon 写队列上限 24（`FILE_ICON_WRITE_MAX_QUEUE`）值得单独复核。
   - 可观测性：给 `computeIndexStats`、`SqliteIndexingTaskStateStore.save`、`IndexingRuntime.getDiagnostics` 各包一层 `enterPerfContext(label, {mode:'blocking'})`，否则 lag 日志永远只能给出误导性的 `fullScan` 标签（本次只能靠读代码定案的原因）。
 - 2026-09-22 **埋点细化已落地**：`FileProvider.computeIndexStats`、`IndexingTaskStateStore.save`、`IndexingRuntime.getDiagnostics` 及每源诊断均有 `blocking` perf context；fused file/FTS 写入记录 worker 持久化、FTS apply、worker 总耗时、IPC 往返与 visibility barrier 阶段，并仅向 diagnostics evidence 暴露数值/稳定枚举。**未改变调度与耗时策略**，R10 的性能 A/B 仍保持 open。
+  - 2026-09-25 **退出链收口**：`search-core.destroy()` 在等待 session/router drain 前发出扫描取消并停止生产者，消除「watch 排队等待 scan mutation gate，但取消位于 drain 后」的等待环；所有已启动 drain 立即接拒绝处理，仍先排空再关闭 writer。实际隔离 Electron 在 scan 活跃时退出：search-core 163ms 收尾、整体约 1.92s、exit 0。首次验收暴露的开发态同步 `app.quit()` 重入与 Sentry 卸载后继续收事件也已修复；没有缩短超时、强杀 SQLite worker 或清空真实索引。
+  - 2026-09-25 **最终复验（PID 25430）**：单测试根目录的 602 个文件全部完成并发布；人为挂起无关来源 health 时，真实新增文件仍在 2029ms 内发布，watch 不读取 evidence/progress。退出时仍有 1 个活动 file scan，收到 `INDEXED_SOURCE_SCAN_ABORTED`；search-core 31ms、44 个模块 1570ms、从请求退出到 quit 事件 2226ms，exit 0。该次新增错误日志为 0，无 `StorageModule not ready`、未处理 rejection、before-quit 或 DevProcessManager 强退超时。
+  - **证据边界**：本轮使用全隔离数据与合成文件（前次 601 条、最终复验 602 条文件记录），未对用户的 2GB/8.7万行索引执行全量重扫 A/B；不据此宣称全部 R10 同步查询成本已消除。`blocking` perf-context 也可能包围 `await`，不能把它的墙钟存活时长当作同等长度的连续主线程阻塞。
 
 - [x] **R11 — 读 worker 客户端失败后永久不可用** ✅ 已修（2026-09-21）
   - 症状：`SearchIndexReadWorkerClient.failWorker()` 会置 `closed = true` 且**没有任何重建路径**（客户端只在 `search-core.ts:2048` 构造一次），于是一次超时或 worker exit 之后，该会话内所有文件/应用搜索永久失败，而写侧与 commit 一直正常。运行时证据：`D.2026-09-21.log` 中 `Search index commit has degraded reader visibility` 1475 次、`retry failed` 1277 次、`recovered` 0 次，跨 06:50:43 → 07:17:10 共 26.5 分钟零恢复；`SearchIndex:Writer` 的修复重试（100/500/2000ms）因此变成纯固定开销。
@@ -183,6 +186,10 @@
 - [x] **C4 — 死代码** ✅ 已修（[#342](https://github.com/talex-touch/tuff/issues/342) / [PR #1083](https://github.com/talex-touch/tuff/pull/1083)，2026-08-07）：两个 handler 连同只为它们存在的 `enqueueIncrementalUpdate` 依赖（声明/字段/构造赋值/上游传入的闭包）与三个类型 import 一并删除。确认路径：`file-provider.ts:2442` 传的是 `subscribeToFileSystemEvents: () => undefined`，真实增量在 `indexed-source-event-router.ts:93` 绑的是另一套命名的 `handleFileAddedOrChanged`。
 - [ ] **C5 — Windows OCR COM apartment**：`winrt_ocr.cpp:157` 每次 init 不 uninit → 线程复用下 `RPC_E_CHANGED_MODE` 风险。
 - [ ] **C6 — Windows 全链路重依赖 PowerShell**：应用扫描 4 源 + Everything 装 PATH 全经 `powershell -Command`，ExecutionPolicy 受限时大面积降级且扫描侧无降级 UI。
+- [ ] **C7 — CoreBox 对话搜索按每次按键全表 `instr` 扫消息**（2026-09-26 新增功能时记账）
+  - 新增 `conversation-provider`（`addon/conversations/conversation-provider.ts`，`priority: 'fast'`）在**主进程同步**执行两条查询：`conversations` 标题 `instr(lower(title), ?)`，以及 join `conversation_messages` 的内容 `instr(lower(content), ?)`（`modules/conversation/conversation-store.ts:searchConversations`）。两列都没有索引，`instr` 只能全扫；查询文本按每次输入的 80ms debounce 触发一次。
+  - 当前规模下不是问题：本机 dev 库实测 `conversations` 7 行 / `conversation_messages` 26 行 / 正文合计 946 字节。风险面在长历史用户：消息正文是主要成本项（助手长回答），且单字查询会让 `ORDER BY updatedAt, seq` 面对海量命中行排序。`fastLayerConcurrency` 也因该 provider 从 6 提到 7（`search-gather.ts:62`）——一旦这条查询超过 80ms 窗口，它会以 late result 到达，而不是拖慢首帧。
+  - 修法（需要真实长历史 profile 的前后 A/B 才可判定，勿凭代码阅读直接改）：给 `conversation_messages.content` 建 FTS5 表或至少把内容检索限制在最近 N 个会话内；或把该 provider 移到 deferred 层。
 
 ---
 

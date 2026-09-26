@@ -925,6 +925,8 @@ export class DatabaseModule extends BaseModule {
         id text PRIMARY KEY NOT NULL,
         captured_at integer NOT NULL,
         source text NOT NULL,
+        recognition_location text,
+
         status text NOT NULL,
         audio_path text,
         audio_bytes integer,
@@ -1033,6 +1035,20 @@ export class DatabaseModule extends BaseModule {
     if (voiceProviderLatencyColumn.rows.length === 0) {
       await this.auxClient.execute(
         'ALTER TABLE voice_recognition_records ADD COLUMN provider_latency_ms integer'
+      )
+    }
+    const voiceRecognitionLocationColumn = await this.auxClient.execute(
+      "SELECT 1 FROM pragma_table_info('voice_recognition_records') WHERE name = 'recognition_location' LIMIT 1"
+    )
+    if (voiceRecognitionLocationColumn.rows.length === 0) {
+      await this.auxClient.execute(
+        'ALTER TABLE voice_recognition_records ADD COLUMN recognition_location text'
+      )
+      await this.auxClient.execute(
+        "UPDATE voice_recognition_records SET recognition_location = 'on-device' WHERE provider_id IN ('local-offline', 'tuff-local-asr')"
+      )
+      await this.auxClient.execute(
+        "UPDATE voice_recognition_records SET recognition_location = 'cloud' WHERE recognition_location IS NULL AND provider_id IS NOT NULL"
       )
     }
 

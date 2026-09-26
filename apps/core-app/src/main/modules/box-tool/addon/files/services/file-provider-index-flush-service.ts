@@ -7,6 +7,7 @@ import {
   getIndexedWriteFlushDelay,
   getIndexedWriteFlushExponentialRetryDelay
 } from '@talex-touch/utils/search'
+import { estimateIndexWorkerFileResultsBytes } from '../workers/index-worker-payload-budget'
 
 export interface IndexWorkerBusyRetryOptions {
   baseDelayMs?: number
@@ -55,8 +56,8 @@ export class FileProviderIndexFlushBufferService {
   private readonly buffer: IndexedEntryKeyedWriteBufferService<number, IndexWorkerFileResult>
 
   constructor(
-    pending: Map<number, IndexWorkerFileResult>,
-    inflight: Map<number, IndexWorkerFileResult>
+    private readonly pending: Map<number, IndexWorkerFileResult>,
+    private readonly inflight: Map<number, IndexWorkerFileResult>
   ) {
     this.buffer = new IndexedEntryKeyedWriteBufferService(
       pending,
@@ -73,7 +74,26 @@ export class FileProviderIndexFlushBufferService {
     return this.buffer.inflightSize
   }
 
+  get pendingBytes(): number {
+    return estimateIndexWorkerFileResultsBytes(this.pending.values())
+  }
+
+  get inflightBytes(): number {
+    return estimateIndexWorkerFileResultsBytes(this.inflight.values())
+  }
+
   enqueue(payload: IndexWorkerFileResult): number {
+    const version = payload.fileVersion
+    if (typeof version === 'number' && Number.isFinite(version)) {
+      // A result produced for an older file version must never displace a newer
+      // one already owned here. The persistence fence is the authoritative
+      // guard; this keeps stale results from occupying capacity at all.
+      const newestOwned = Math.max(
+        this.pending.get(payload.fileId)?.fileVersion ?? Number.NEGATIVE_INFINITY,
+        this.inflight.get(payload.fileId)?.fileVersion ?? Number.NEGATIVE_INFINITY
+      )
+      if (version < newestOwned) return this.buffer.pendingSize
+    }
     return this.buffer.enqueue(payload)
   }
 

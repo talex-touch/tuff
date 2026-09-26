@@ -1,0 +1,4 @@
+{"file":".trellis/spec/main-process/database-write-contracts.md","reason":"Single-writer, split ownership and safe migration contracts"}
+{"file":".trellis/spec/main-process/background-task-timeout-contracts.md","reason":"Bounded asynchronous work and native worker lifecycle"}
+{"file":".trellis/spec/main-process/channel-transport-contracts.md","reason":"Startup IPC, mutation cancellation and writer-last shutdown"}
+{"file":".trellis/tasks/09-26-bound-indexing-memory-icons/design.md","reason":"Approved ordered design and cross-agent API contracts"}
