@@ -31,8 +31,7 @@ import type {
   IndexedSourceResetResult,
   IndexedSourceScanRequest,
   IndexedSourceWatchEvent,
-  IndexedWorkerScheduleResult,
-  IndexedWorkerSchedulerSnapshot
+  IndexedWorkerScheduleResult
 } from '@talex-touch/utils/search'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../db/schema'
@@ -53,14 +52,10 @@ import { OpenerEvents } from '@talex-touch/utils/transport/events'
 
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import {
-  IndexedSourceIntegrityEvidenceService,
-  IndexedWriteFlushEvidenceService,
   IndexedWriteFlushSnapshotService,
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
   IndexedWriteRuntimeEmitterService,
-  buildIndexedWriteFlushFailureSnapshot,
-  buildIndexedWriteFlushResultSnapshot,
   mapIndexedFileSourceRecord,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
@@ -151,10 +146,15 @@ import {
   type FileProviderIncrementalChangeEntry
 } from './services/file-provider-incremental-write-service'
 import { FileProviderEmbeddingIndexService } from './services/file-provider-embedding-index-service'
+import { FileProviderIndexRuntimeService } from './services/file-provider-index-runtime-service'
+import { computeFileIndexStats } from './services/file-provider-index-stats'
 import {
-  FileProviderIndexRuntimeService,
-  type FileProviderIndexBufferSnapshot
-} from './services/file-provider-index-runtime-service'
+  buildFileProviderRuntimeEvidence,
+  buildIndexWorkerWorkload,
+  recordRuntimeWriteFailureSnapshot,
+  recordRuntimeWriteSnapshot,
+  type FileProviderIndexBacklogSnapshot
+} from './services/file-provider-runtime-evidence'
 import {
   FileProviderIntegrityService,
   type FileProviderIntegritySnapshot
@@ -178,7 +178,6 @@ import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags
 import { FileProviderWriteSideEffectService } from './services/file-provider-write-side-effect-service'
 import { FileProviderIndexSchedulerService } from './services/file-provider-index-scheduler-service'
 import type { FileProviderIndexSchedulerFile } from './services/file-provider-index-scheduler-service'
-import { INDEX_WORKER_BATCH_MAX_BYTES } from './workers/index-worker-payload-budget'
 import { isIndexWorkerFileMissing } from './workers/index-worker-read-failure'
 import { FileProviderReconciliationInsertService } from './services/file-provider-reconciliation-insert-service'
 import { FileProviderCleanupDeleteService } from './services/file-provider-cleanup-delete-service'
@@ -230,8 +229,6 @@ const FILE_PATH_NORMALIZATION_INITIAL_DELAY_MS = 30_000
 const FILE_PATH_NORMALIZATION_CONFIG_KEY = 'file_provider_path_normalization_version'
 const FILE_KEYWORD_BACKFILL_INITIAL_DELAY_MS = 30_000
 const FILE_KEYWORD_BACKFILL_CONFIG_KEY = 'file_provider_keyword_schema_version'
-const fileIntegrityEvidenceService = new IndexedSourceIntegrityEvidenceService()
-const indexFlushEvidenceService = new IndexedWriteFlushEvidenceService()
 
 function chunkArray<T>(items: T[], chunkSize: number): T[][] {
   const safeChunkSize = Math.max(1, Math.floor(chunkSize))
@@ -1865,7 +1862,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       const result = await mutation(batch, acceptedRecords)
       const persisted = result.persisted as Array<typeof filesSchema.$inferSelect>
       const metrics = result.metrics
-      this.recordRuntimeWriteSnapshot(this.ftsWriteSnapshotService, {
+      recordRuntimeWriteSnapshot(this.ftsWriteSnapshotService, {
         entries: persisted.length,
         reason: 'full-scan.upsert.fused',
         durationMs: performance.now() - startedAt,
@@ -1887,7 +1884,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
       return persisted
     } catch (error) {
-      this.recordRuntimeWriteFailureSnapshot(this.ftsWriteSnapshotService, {
+      recordRuntimeWriteFailureSnapshot(this.ftsWriteSnapshotService, {
         error,
         reason: 'full-scan.upsert.fused',
         entries: acceptedRecords.length,
@@ -1919,7 +1916,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       const persisted = (await this.requireFilePersistencePort().upsertFiles(
         acceptedRecords
       )) as unknown as Array<typeof filesSchema.$inferSelect>
-      this.recordRuntimeWriteSnapshot(this.ftsWriteSnapshotService, {
+      recordRuntimeWriteSnapshot(this.ftsWriteSnapshotService, {
         entries: persisted.length,
         reason,
         durationMs: performance.now() - startedAt,
@@ -1932,7 +1929,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
       return persisted
     } catch (error) {
-      this.recordRuntimeWriteFailureSnapshot(this.ftsWriteSnapshotService, {
+      recordRuntimeWriteFailureSnapshot(this.ftsWriteSnapshotService, {
         error,
         reason,
         entries: acceptedRecords.length,
@@ -2572,29 +2569,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.workerDiagnosticsStarted = true
     this.workerStatusService.startDiagnostics(
       () => this.getWorkerStatusSnapshot(),
-      () => this.buildWorkerWorkload()
+      () =>
+        buildIndexWorkerWorkload(
+          this.getIndexBacklogSnapshot(),
+          iconService.getFileIconCacheStats()
+        )
     )
-  }
-
-  private buildWorkerWorkload(): Record<string, number> {
-    const scheduler = this.indexSchedulerService.getSnapshot()
-    const buffer = this.indexRuntimeService.getBufferSnapshot()
-    const icons = iconService.getFileIconCacheStats()
-    return {
-      schedulerActiveBatches: scheduler.activeBatches,
-      schedulerQueuedBatches: scheduler.queuedBatches,
-      schedulerPendingRecords: scheduler.pendingRecords,
-      schedulerDeferredRecords: scheduler.deferredRecords,
-      bufferPendingResults: buffer.pending,
-      bufferInflightResults: buffer.inflight,
-      bufferPendingBytes: buffer.pendingBytes,
-      bufferInflightBytes: buffer.inflightBytes,
-      iconInflight: icons.inflight,
-      iconCached: icons.cached,
-      iconCacheHitsCumulative: icons.cacheHits,
-      iconDeferredCumulative: icons.deferred,
-      iconGeneratedBytesCumulative: icons.generatedBytesCumulative
-    }
   }
 
   private registerOpenersChannel(context: ProviderContext): void {
@@ -2710,245 +2690,29 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async computeIndexStats(): Promise<FileIndexStats> {
-    if (!this.dbUtils) {
-      return {
-        totalFiles: 0,
-        failedFiles: 0,
-        skippedFiles: 0,
-        completedFiles: 0,
-        embeddingCompletedFiles: 0,
-        embeddingRows: 0
-      }
-    }
-
-    const disposeStats = enterPerfContext(
-      'FileProvider.computeIndexStats',
-      {
-        sourceId: this.id,
-        queryCount: 6,
-        readHome: 'file-index'
-      },
-      { mode: 'blocking' }
-    )
-    try {
-      // Live index stats (files / progress / embeddings) belong to the
-      // file-index domain — read the home the worker writes.
-      const db = this.dbUtils.getFileIndexReadDb()
-
-      const [
-        totalFilesResult,
-        failedFilesResult,
-        skippedFilesResult,
-        completedFilesResult,
-        embeddingCompletedFilesResult,
-        embeddingRowsResult
-      ] = await Promise.all([
-        db
-          .select({ count: sql<number>`COUNT(*)` })
-          .from(filesSchema)
-          .where(eq(filesSchema.type, 'file')),
-        db
-          .select({ count: sql<number>`COUNT(*)` })
-          .from(fileIndexProgress)
-          .where(eq(fileIndexProgress.status, 'failed')),
-        db
-          .select({ count: sql<number>`COUNT(*)` })
-          .from(fileIndexProgress)
-          .where(eq(fileIndexProgress.status, 'skipped')),
-        db
-          .select({ count: sql<number>`COUNT(*)` })
-          .from(fileIndexProgress)
-          .where(eq(fileIndexProgress.status, 'completed')),
-        db
-          .select({ count: sql<number>`COUNT(*)` })
-          .from(filesSchema)
-          .where(and(eq(filesSchema.type, 'file'), eq(filesSchema.embeddingStatus, 'completed'))),
-        db
-          .select({ count: sql<number>`COUNT(*)` })
-          .from(embeddingsSchema)
-          .where(eq(embeddingsSchema.sourceType, 'file'))
-      ])
-
-      const totalFiles = totalFilesResult[0]?.count ?? 0
-      const failedFiles = failedFilesResult[0]?.count ?? 0
-      const skippedFiles = skippedFilesResult[0]?.count ?? 0
-      const completedFiles = completedFilesResult[0]?.count ?? 0
-      const embeddingCompletedFiles = embeddingCompletedFilesResult[0]?.count ?? 0
-      const embeddingRows = embeddingRowsResult[0]?.count ?? 0
-
-      return {
-        totalFiles,
-        failedFiles,
-        skippedFiles,
-        completedFiles,
-        embeddingCompletedFiles,
-        embeddingRows
-      }
-    } finally {
-      disposeStats()
-    }
+    return await computeFileIndexStats(this.dbUtils, this.id)
   }
 
   public async getIndexedSourceEvidence(): Promise<IndexedSourceEvidence[]> {
     const stats = await this.getIndexStats()
-    const evidence: IndexedSourceEvidence[] = [
+    return [
       await this.scanProgressService.buildEvidence({
         sourceId: this.id,
         watchPaths: this.watchPaths,
         pendingPermissionPaths: this.getPendingWatchPermissionPaths(),
         stats,
         isIndexingActive: this.isInitializing !== null || this.backgroundStartupPromise !== null
+      }),
+      ...buildFileProviderRuntimeEvidence({
+        sourceId: this.id,
+        integrity: this.lastIntegritySnapshot,
+        flush: this.indexRuntimeService.getFlushSnapshot(),
+        backlog: this.getIndexBacklogSnapshot(),
+        incrementalPersist: this.incrementalPersistSnapshotService.getSnapshot(),
+        ftsWrite: this.ftsWriteSnapshotService.getSnapshot(),
+        ftsDelete: this.ftsDeleteSnapshotService.getSnapshot()
       })
     ]
-
-    if (this.lastIntegritySnapshot) {
-      evidence.push(
-        fileIntegrityEvidenceService.build({
-          id: `${this.id}:integrity`,
-          label: 'File index integrity',
-          snapshot: {
-            ...this.lastIntegritySnapshot,
-            indexedRows: this.lastIntegritySnapshot.ftsRows
-          },
-          reasons: {
-            rebuildScheduled: 'fts-files-count-mismatch-rebuild-scheduled',
-            aligned: 'fts-files-count-aligned'
-          },
-          metadata: {
-            ...this.lastIntegritySnapshot
-          }
-        })
-      )
-    }
-
-    const flushSnapshot = this.indexRuntimeService.getFlushSnapshot()
-    if (flushSnapshot) {
-      evidence.push(
-        indexFlushEvidenceService.build({
-          id: `${this.id}:index-flush`,
-          label: 'File index flush',
-          snapshot: flushSnapshot
-        })
-      )
-    }
-
-    const backlog = this.getIndexBacklogSnapshot()
-    const backlogDepth =
-      backlog.scheduler.activeBatches +
-      backlog.scheduler.queuedBatches +
-      backlog.buffer.pending +
-      backlog.buffer.inflight
-    evidence.push(
-      indexFlushEvidenceService.build({
-        id: `${this.id}:index-backlog`,
-        label: 'File index backlog',
-        snapshot: {
-          status: backlogDepth > 0 ? 'backlog' : 'idle',
-          entries: backlog.scheduler.pendingRecords,
-          pending: backlog.buffer.pending,
-          inflight: backlog.buffer.inflight,
-          reason: 'content-scheduler',
-          checkedAt: Date.now(),
-          metadata: {
-            activeBatches: backlog.scheduler.activeBatches,
-            queuedBatches: backlog.scheduler.queuedBatches,
-            pendingRecords: backlog.scheduler.pendingRecords,
-            // Cumulative since boot — NOT the current backlog.
-            deferredRecordsCumulative: backlog.scheduler.deferredRecords,
-            bufferPendingBytes: backlog.buffer.pendingBytes,
-            bufferInflightBytes: backlog.buffer.inflightBytes,
-            bufferBudgetBytes: INDEX_WORKER_BATCH_MAX_BYTES
-          }
-        }
-      })
-    )
-
-    this.pushRuntimeWriteEvidence(evidence)
-
-    return evidence
-  }
-
-  private pushRuntimeWriteEvidence(evidence: IndexedSourceEvidence[]): void {
-    const snapshots: Array<{
-      snapshot: FileProviderRuntimeWriteSnapshot | null
-      id: string
-      label: string
-    }> = [
-      {
-        snapshot: this.incrementalPersistSnapshotService.getSnapshot(),
-        id: `${this.id}:incremental-persist`,
-        label: 'File incremental DB persist'
-      },
-      {
-        snapshot: this.ftsWriteSnapshotService.getSnapshot(),
-        id: `${this.id}:fts-write`,
-        label: 'File FTS write'
-      },
-      {
-        snapshot: this.ftsDeleteSnapshotService.getSnapshot(),
-        id: `${this.id}:fts-delete`,
-        label: 'File FTS delete'
-      }
-    ]
-
-    for (const item of snapshots) {
-      if (!item.snapshot) continue
-      evidence.push(
-        indexFlushEvidenceService.build({
-          id: item.id,
-          label: item.label,
-          snapshot: item.snapshot
-        })
-      )
-    }
-  }
-
-  private recordRuntimeWriteSnapshot(
-    service: IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>,
-    input: {
-      entries: number
-      reason: string
-      metadata?: Record<string, unknown>
-      durationMs?: number
-    }
-  ): void {
-    service.record(
-      buildIndexedWriteFlushResultSnapshot<FileProviderRuntimeWriteSnapshot>({
-        status: 'flushed',
-        entries: input.entries,
-        pending: 0,
-        inflight: 0,
-        reason: input.reason,
-        metadata: input.metadata,
-        durationMs: input.durationMs
-      })
-    )
-  }
-
-  private recordRuntimeWriteFailureSnapshot(
-    service: IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>,
-    input: {
-      error: unknown
-      reason: string
-      entries?: number
-      metadata?: Record<string, unknown>
-    }
-  ): void {
-    service.record(
-      buildIndexedWriteFlushFailureSnapshot<FileProviderRuntimeWriteSnapshot>({
-        error: input.error,
-        pendingSize: 0,
-        inflightSize: 0,
-        flushResult: {
-          status: 'failed',
-          entries: input.entries ?? 0,
-          pending: 0,
-          inflight: 0,
-          reason: input.reason,
-          metadata: input.metadata
-        }
-      })
-    )
   }
 
   /**
@@ -3807,7 +3571,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           await this.requireRuntimeMutationDelegate().applyBatch({ sourceId: this.id, records })
         }
       }
-      this.recordRuntimeWriteSnapshot(this.incrementalPersistSnapshotService, {
+      recordRuntimeWriteSnapshot(this.incrementalPersistSnapshotService, {
         entries: result.inserted.length + result.updated.length,
         reason: 'incremental.add-change',
         durationMs: performance.now() - startedAt,
@@ -3821,7 +3585,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }
       })
     } catch (error) {
-      this.recordRuntimeWriteFailureSnapshot(this.incrementalPersistSnapshotService, {
+      recordRuntimeWriteFailureSnapshot(this.incrementalPersistSnapshotService, {
         error,
         reason: 'incremental.add-change',
         entries: entries.length,
@@ -4454,15 +4218,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     ])
   }
 
-  /**
-   * Numeric, content-free backlog diagnostics: the bounded scheduler's retained
-   * batches/records (cumulative deferred included) and the runtime flush
-   * buffer's result/byte ownership.
-   */
-  public getIndexBacklogSnapshot(): {
-    scheduler: IndexedWorkerSchedulerSnapshot
-    buffer: FileProviderIndexBufferSnapshot
-  } {
+  /** Numeric, content-free backlog diagnostics; see {@link FileProviderIndexBacklogSnapshot}. */
+  public getIndexBacklogSnapshot(): FileProviderIndexBacklogSnapshot {
     return {
       scheduler: this.indexSchedulerService.getSnapshot(),
       buffer: this.indexRuntimeService.getBufferSnapshot()

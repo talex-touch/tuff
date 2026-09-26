@@ -3,8 +3,12 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FileIndexProgress as FileIndexProgressPayload } from '@talex-touch/utils/transport/events/types'
-import type { IndexedSourceResetReason } from '@talex-touch/utils/search'
+import type {
+  IndexedSourceResetReason,
+  IndexedWriteFlushSnapshotService
+} from '@talex-touch/utils/search'
 import type { FilePersistencePort } from '../../search-engine/search-index-writer'
+import type { FileProviderRuntimeWriteSnapshot } from './file-provider-index-contracts'
 import { IndexedSourceResetReasons, IndexedSourceScanReasons } from '@talex-touch/utils/search'
 
 const {
@@ -207,6 +211,7 @@ import {
   type FileProviderIndexSchedulerDeps
 } from './services/file-provider-index-scheduler-service'
 import { fileProvider, resolveFileProviderBaseWatchPaths } from './file-provider'
+import { recordRuntimeWriteSnapshot } from './services/file-provider-runtime-evidence'
 
 interface MutableFileProvider {
   prepareForSearchIndexShutdown: () => Promise<void>
@@ -325,18 +330,9 @@ interface FileProviderIndexingLifecycleTestApi extends MutableFileProvider {
       metadata?: Record<string, unknown>
     }>
   >
-  recordRuntimeWriteSnapshot: (
-    service: unknown,
-    input: {
-      entries: number
-      reason: string
-      metadata?: Record<string, unknown>
-      durationMs?: number
-    }
-  ) => void
-  incrementalPersistSnapshotService: unknown
-  ftsWriteSnapshotService: unknown
-  ftsDeleteSnapshotService: unknown
+  incrementalPersistSnapshotService: IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>
+  ftsWriteSnapshotService: IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>
+  ftsDeleteSnapshotService: IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>
   setIndexedSourceRuntimeResetDelegate: (
     delegate:
       | null
@@ -1301,7 +1297,7 @@ describe('file-provider startup readiness', () => {
     const originalDbUtils = provider.dbUtils
 
     provider.dbUtils = null
-    provider.recordRuntimeWriteSnapshot(provider.incrementalPersistSnapshotService, {
+    recordRuntimeWriteSnapshot(provider.incrementalPersistSnapshotService, {
       entries: 3,
       reason: 'incremental.add-change',
       durationMs: 12,
@@ -1313,7 +1309,7 @@ describe('file-provider startup readiness', () => {
         storeBoundary: 'incremental-db-persist'
       }
     })
-    provider.recordRuntimeWriteSnapshot(provider.ftsWriteSnapshotService, {
+    recordRuntimeWriteSnapshot(provider.ftsWriteSnapshotService, {
       entries: 4,
       reason: 'full-scan',
       durationMs: 8,
@@ -1323,7 +1319,7 @@ describe('file-provider startup readiness', () => {
         storeBoundary: 'fts-write'
       }
     })
-    provider.recordRuntimeWriteSnapshot(provider.ftsDeleteSnapshotService, {
+    recordRuntimeWriteSnapshot(provider.ftsDeleteSnapshotService, {
       entries: 2,
       reason: 'incremental.delete',
       durationMs: 5,

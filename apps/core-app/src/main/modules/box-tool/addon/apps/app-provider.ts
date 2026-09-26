@@ -130,10 +130,9 @@ import {
   syncScannedAppExtensions,
   upsertAppExtensions
 } from './app-index-metadata'
-import { matchNoisySystemAppRule } from './app-noise-filter'
 import { resolveExistingVersionedAppIconCachePath } from './app-icon-cache'
 import { diagnoseAppSearch, reindexAppSearchTarget } from './app-provider-diagnostics'
-import { appProviderLog, logApp, logAppDuration, logAppDurationMs } from './app-provider-log'
+import { appProviderLog, logApp, logAppDuration } from './app-provider-log'
 import {
   hasAppIconDrift,
   hasAppLaunchMetadataDrift,
@@ -154,12 +153,15 @@ import {
   getAppToolSourceCatalogSummary,
   resolveAppToolSourceIds
 } from './app-tool-source-catalog'
-import { isSearchableAppRow, processSearchResults } from './search-processing-service'
+import {
+  finishAppSearch,
+  searchAppCatalog,
+  type AppSearchFinishOptions
+} from './app-search-pipeline'
 import { AppSearchCatalogService } from './services/app-search-catalog-service'
 import { searchIndexCommitHub } from '../../search-engine/search-index-commit-hub'
 import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
-const SLOW_SEARCH_THRESHOLD_MS = 400
 /** Second-precision comparison key for app mtimes; the catalog stores them without the fraction. */
 function toMtimeSeconds(value: Date | number | string): number {
   return Math.floor(new Date(value).getTime() / 1000)
@@ -3491,7 +3493,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (APP_SEARCH_MEMORY_PATH_ENABLED && this.searchCatalog.isReady()) {
-      return await this.searchViaCatalog(query, rawText, searchStart, signal)
+      const context = { query, rawText, searchStart, signal }
+      return await searchAppCatalog(this.searchCatalog, context, this.searchFinishOptions())
     }
 
     const db = this.dbUtils.getDb()
@@ -3748,130 +3751,28 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return new TuffSearchResultBuilder(query).build()
     }
     const isFuzzySearch = !preciseMatchedItemIds || preciseMatchedItemIds.size === 0
-    return await this.finishSearch({
-      query,
-      rawText,
-      searchStart,
-      signal,
-      appsWithExtensions,
-      isFuzzySearch,
-      recallSummary: `precise=${chalk.cyan(preciseMatchedItemIds?.size ?? 0)}, fts=${chalk.cyan(
-        ftsMatches.length
-      )}`
-    })
-  }
-
-  /**
-   * The in-memory path: the same recall funnel over the catalog, then the same result pipeline.
-   * No database or read-worker call happens between the keystroke and the result.
-   */
-  private async searchViaCatalog(
-    query: TuffQuery,
-    rawText: string,
-    searchStart: number,
-    signal?: AbortSignal
-  ): Promise<TuffSearchResult> {
-    const recall = this.searchCatalog.recall(query)
-    if (signal?.aborted) {
-      return new TuffSearchResultBuilder(query).build()
-    }
-    if (recall.rows.length === 0) {
-      logApp('No candidates found for query, returning empty result', LogStyle.info)
-      return new TuffSearchResultBuilder(query).build()
-    }
-    const { stats } = recall
-    return await this.finishSearch({
-      query,
-      rawText,
-      searchStart,
-      signal,
-      appsWithExtensions: recall.rows,
-      isFuzzySearch: recall.isFuzzySearch,
-      recallSummary: `memory precise=${chalk.cyan(stats.precise)}, prefix=${chalk.cyan(
-        stats.prefix
-      )}, fts=${chalk.cyan(stats.fts)}, ngram=${chalk.cyan(stats.ngram)}, subseq=${chalk.cyan(
-        stats.subsequence
-      )}`
-    })
-  }
-
-  /** Everything after candidate recall, shared by the memory path and the SQL path. */
-  private async finishSearch(input: {
-    query: TuffQuery
-    rawText: string
-    searchStart: number
-    signal?: AbortSignal
-    appsWithExtensions: DbAppWithExtensions[]
-    isFuzzySearch: boolean
-    recallSummary: string
-  }): Promise<TuffSearchResult> {
-    const { query, rawText, searchStart, signal, appsWithExtensions, isFuzzySearch } = input
-    const searchableAppsWithExtensions = appsWithExtensions.filter(isSearchableAppRow)
-    const filteredAppsWithExtensions =
-      this.isMac && this.appIndexSettings.hideNoisySystemApps
-        ? (() => {
-            const ruleCounts: Record<string, number> = {}
-            const filtered = searchableAppsWithExtensions.filter((app) => {
-              const rule = matchNoisySystemAppRule({
-                path: app.path,
-                bundleId: app.extensions.bundleId,
-                name: app.displayName || app.name
-              })
-              if (!rule) {
-                return true
-              }
-              ruleCounts[rule] = (ruleCounts[rule] ?? 0) + 1
-              return false
-            })
-            const filteredCount = searchableAppsWithExtensions.length - filtered.length
-            if (filteredCount > 0) {
-              appProviderLog.debug('Filtered noisy system apps from search candidates', {
-                query: rawText,
-                filteredCount,
-                ruleCounts
-              })
-            }
-            return filtered
-          })()
-        : searchableAppsWithExtensions
-
-    const processedResults = await processSearchResults(
-      filteredAppsWithExtensions,
-      query,
-      isFuzzySearch,
-      (app) => this.userAliases.resolveForApp(app)
+    return await finishAppSearch(
+      {
+        query,
+        rawText,
+        searchStart,
+        signal,
+        appsWithExtensions,
+        isFuzzySearch,
+        recallSummary: `precise=${chalk.cyan(preciseMatchedItemIds?.size ?? 0)}, fts=${chalk.cyan(
+          ftsMatches.length
+        )}`
+      },
+      this.searchFinishOptions()
     )
+  }
 
-    if (signal?.aborted) {
-      return new TuffSearchResultBuilder(query).build()
+  /** What the post-recall pipeline shared by both recall paths needs from this provider. */
+  private searchFinishOptions(): AppSearchFinishOptions {
+    return {
+      hideNoisySystemApps: this.isMac && this.appIndexSettings.hideNoisySystemApps,
+      resolveAliases: (app) => this.userAliases.resolveForApp(app)
     }
-
-    const sortedItems = processedResults.map((item) => {
-      const { score: _score, ...rest } = item
-      return rest
-    })
-
-    const elapsedMs = performance.now() - searchStart
-    if (elapsedMs > SLOW_SEARCH_THRESHOLD_MS) {
-      logAppDurationMs(
-        'SlowSearch',
-        elapsedMs,
-        {
-          label: 'Slow search',
-          message: `Slow search: ${chalk.cyan(rawText)}`,
-          style: 'warning',
-          unit: 's',
-          precision: 2,
-          suffix: `returned ${chalk.green(sortedItems.length)} results (${input.recallSummary})`
-        },
-        {
-          logThresholds: { none: SLOW_SEARCH_THRESHOLD_MS, info: 1000, warn: 2500 },
-          logger: (message) => appProviderLog.warn(message)
-        }
-      )
-    }
-
-    return new TuffSearchResultBuilder(query).setItems(sortedItems).build()
   }
 
   /**
