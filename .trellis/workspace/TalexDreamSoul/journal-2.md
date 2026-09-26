@@ -1125,3 +1125,63 @@ Audited why Nexus docs felt un-SSG'd and slow (docs were prerendered but never e
 ### Next Steps
 
 - None - task complete
+
+
+## Session 78: Home 会话打磨：托起发送、助理推送、工具栏与听写、推理强度
+
+**Date**: 2026-09-26
+**Task**: Home 会话打磨：托起发送、助理推送、工具栏与听写、推理强度
+**Branch**: `master`
+
+### Summary
+
+Home session polish program: 13 child tasks archived; lift send, assistant push (opt-in AI opening), composer toolbar + dictation, real reasoning effort
+
+### Main Changes
+
+## Home 会话打磨（父任务 09-25-home-session-polish，13 个子任务全部归档）
+
+- 空态去掉重复的项目徽标；侧边栏项目文件夹化、当前项唯一高亮；侧边栏操作改成说人话，删除要点两次「确认？」。
+- tuffex：新增 TxFusionSurface（路径绘制的分裂表面）与 TxChoiceCard（分页富选项卡）；导出 `resolveTransition`。
+- 发送动效：先后试过融合分裂与波纹，老板定为 iMessage 式「托起」——按下即发、首条消息更慢；空态切对话不再闪。
+- 助理推送：空白对话的开场白（模型写、2.5s 后模板顶着、30s 内写完整段替换、走聊天同款路由）+「为你准备」卡片；最后按老板要求改为默认关闭、设置 · 插件与工具里「AI 开场白」开关打开才调模型。
+- 输入框工具栏：统一控件家族、灵动岛式发送键（「■ 停止」胶囊）、听写（听写胶囊、电平、结束并发送），推理强度真实接入（自动/低/中/高/极高，含 Nexus 服务端）。
+- 顺手修复：能力提示词被存成能力 id（「为什么是翻译」）、文档自闭合组件标签、任意位置粘贴图片。
+
+真实窗口实测中发现并修掉的：电平门限对本机麦克风过高、静音被转写成标点 / 字幕幻听、听写中间结果叠加（老板实际遇到，整句被叠 25 遍发出）、Codex 未固定模型时推理强度不生效。
+
+未解决 / 环境：本机 Codex 经 CC Switch 上游 KTVSky 401、全部渠道熔断，应用里只显示 UNKNOWN（CLI 错误原文未透传，待办）；开场白在 OpenAI 推理模型路由上会因 temperature / maxTokens 被拒而只见模板（取舍待定）。
+
+部分提交由并行会话代为提交：`ca7a7d4ef`、`f1b01e934`（以及 `7078544ee`、`732faadc5`、`86e394974` 中的相关文件）。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6a6de895c` | (see git log) |
+| `02fd57ba5` | (see git log) |
+| `792aa7c8e` | (see git log) |
+| `c470ae610` | (see git log) |
+| `0ef4b4209` | (see git log) |
+| `1cf1eee71` | (see git log) |
+| `3f403ac82` | (see git log) |
+| `0c421e4d5` | (see git log) |
+| `90b73f918` | (see git log) |
+| `2248298de` | (see git log) |
+| `d08d08a04` | (see git log) |
+| `ca7a7d4ef` | (see git log) |
+| `f1b01e934` | (see git log) |
+| `3b0b3485b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
