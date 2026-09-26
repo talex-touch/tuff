@@ -354,7 +354,14 @@ export class VoiceModule extends BaseModule<TalexEvents> {
           { permissionId: VOICE_PERMISSION },
           async (payload: VoiceSpeechModelInstallPayload, context) => {
             if (context?.plugin) throw new Error('VOICE_SPEECH_MODELS_HOST_ONLY')
-            return installSpeechModel(payload.id, payload.version)
+            const result = await installSpeechModel(payload.id, payload.version)
+            /*
+             * The download is the user asking for dictation. Routing follows the store here rather
+             * than at the next launch: a bundle that is on disk but bound to nothing leaves `本地`
+             * reporting an unavailable route for weights the user just paid for.
+             */
+            await this.adoptInstalledSpeechModel()
+            return result
           },
           {
             onError: (error) => voiceLog.error('Speech model install failed:', { error }),
@@ -371,6 +378,8 @@ export class VoiceModule extends BaseModule<TalexEvents> {
           async (payload: VoiceSpeechModelInstallPayload, context) => {
             if (context?.plugin) throw new Error('VOICE_SPEECH_MODELS_HOST_ONLY')
             await uninstallSpeechModel(payload.id, payload.version)
+            // Same rule in reverse: the route has to stop naming a model that is no longer here.
+            await this.adoptInstalledSpeechModel()
           },
           { onError: (error) => voiceLog.error('Speech model removal failed:', { error }) }
         )
