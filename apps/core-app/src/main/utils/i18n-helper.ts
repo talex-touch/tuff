@@ -48,6 +48,25 @@ function resolveLocale(locale: string): Locale {
 }
 
 /**
+ * Surfaces that bake a translation into a native object — the application menu is the one — cannot
+ * re-read it later, so they subscribe here and rebuild.
+ *
+ * Only real changes are announced: `initI18n` resolves the starting locale, and `setLocale` is a
+ * no-op for the locale already in use, so a subscriber never sees two events for one language.
+ */
+const localeChangeListeners = new Set<(locale: Locale) => void>()
+
+/**
+ * Subscribe to locale changes. Returns the unsubscribe function.
+ */
+export function onLocaleChange(listener: (locale: Locale) => void): () => void {
+  localeChangeListeners.add(listener)
+  return () => {
+    localeChangeListeners.delete(listener)
+  }
+}
+
+/**
  * Set current locale
  */
 export function setLocale(locale: Locale): void {
@@ -61,6 +80,16 @@ export function setLocale(locale: Locale): void {
 
   currentLocale = locale
   i18nLog.info(`Locale changed to: ${currentLocale}`)
+
+  for (const listener of localeChangeListeners) {
+    try {
+      listener(currentLocale)
+    } catch (error) {
+      // One stale native surface is not worth failing the language switch for: the renderer has
+      // already applied the new locale by the time this runs.
+      i18nLog.warn('Locale change listener failed', { meta: { error: String(error) } })
+    }
+  }
 }
 
 /**
