@@ -1,0 +1,52 @@
+# Branch/tag policy guard -- the mechanical half of .trellis/spec/guides/branch-and-release.md.
+#
+# Its own workflow rather than a step in ci.yml: the ancestry check needs the full graph, and the
+# ci.yml jobs check out shallow. A shallow clone makes `git merge-base --is-ancestor` answer "no" for
+# everything, so the check would read as a violation *or* (once repaired to pass) as a pass it never
+# proved. Here the checkout pays for the whole graph instead, which costs a few seconds and is the
+# only reason this job can be trusted.
+#
+# The tag trigger is the load-bearing one: a tag is a deploy entry point, and a tag taken on the
+# wrong branch builds and publishes from a commit that is not on any release line at all.
+name: Branch Policy
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - stage
+    tags:
+      - v*
+  # Drift audit: branch and tag hygiene is repository-wide state, which no PR event can see.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: branch-policy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  branch-policy:
+    name: Branch Policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the full graph
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # No arguments: the script reads GITHUB_HEAD_REF / GITHUB_REF_NAME / GITHUB_REF_TYPE itself, so
+      # the PR source branch, the pushed branch and the pushed tag are all read the way GitHub means
+      # them rather than through shell interpolation.
+      - name: Check branch and tag policy
+        run: node scripts/check-branch-policy.mjs
+
+      # A guard that matches nothing looks exactly like a repository with nothing to report, and this
+      # one exits 0 in that case by design (a shallow clone, an unfetched ref). The self-test is what
+      # makes the verdict above worth reading.
+      - name: Check branch-policy self-test
+        run: node scripts/check-branch-policy.mjs --self-test

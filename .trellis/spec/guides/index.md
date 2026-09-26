@@ -25,6 +25,7 @@ These guides help you **ask the right questions before coding**.
 | [Cross-Layer Thinking Guide](./cross-layer-thinking-guide.md) | Think through data flow across layers | Features spanning multiple layers |
 | [Multi-Session Collaboration Guide](./multi-session-collab-guide.md) | Work safely while other sessions write the repo | Shared-file commits, CDP driving, parallel agent dispatch |
 | [Guard Thinking Guide](./guard-thinking-guide.md) | Write checks that fail when the thing they protect breaks | Adding a test, a CI gate, a ratchet, or any absence scan |
+| [Branch and Release Policy](./branch-and-release.md) | Which branches may exist, and where a tag is allowed to land | Creating a branch, cutting a beta, tagging a release |
 
 ---
 
@@ -66,6 +67,16 @@ These guides help you **ask the right questions before coding**.
 3. **Variable misreading**: Not tracing a variable to its actual definition (e.g., Map keyed by path vs name)
 
 **Verification rule**: Every CRITICAL/WARNING finding must be verified against the actual code before prioritizing. Budget ~35% false-positive rate for AI reviews.
+
+### When Branching, Tagging, or Releasing
+
+- [ ] You're about to `git switch -c` — the name is `task/<type>/<slug>`, cut from `stage`
+- [ ] You're about to merge into `master` — it is a fast-forward from `stage`, never a merge commit or a squash
+- [ ] You're about to tag — `vX.Y.Z` on `master`, `vX.Y.Z-beta.<n>` on `stage`, and pushed last
+- [ ] You found a commit on `master` that `stage` does not have — that is the shape that reverts a release later
+- [ ] You're tempted to rename or restructure branches — two names for one role is what the guard exists to catch
+
+→ Read [Branch and Release Policy](./branch-and-release.md)
 
 ---
 

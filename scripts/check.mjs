@@ -30,6 +30,7 @@ const REPO_ROOT = path.resolve(SCRIPTS_DIR, '..')
 const GATES = {
   'action-pins': 'check-action-pins.mjs',
   'audit-report-claims': 'check-audit-report-claims.mjs',
+  'branch-policy': 'check-branch-policy.mjs',
   'build-allowlist': 'check-build-allowlist.mjs',
   'coreapp-ui-contract': 'check-coreapp-ui-contract.mjs',
   'doc-metadata': 'check-doc-metadata.mjs',

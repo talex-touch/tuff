@@ -1,0 +1,9 @@
+# Advisory only, and deliberately so.
+#
+# The authoritative run of this check is the Branch Policy workflow: it sees the full graph, the
+# pushed tag, and every published ref. This hook exists for one thing -- naming an off-policy branch
+# while renaming it is still one command -- so it must never block a push, and `--offline` keeps it
+# off the network: a fetch in a push path turns a slow remote into one that looks hung. `|| true`
+# because a local clone can legitimately be stale (a `stage` never fetched, a tag that is not here),
+# and a push is not the place to resolve that.
+node scripts/check-branch-policy.mjs --offline || true
