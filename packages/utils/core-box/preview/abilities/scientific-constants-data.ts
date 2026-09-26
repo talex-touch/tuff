@@ -169,7 +169,165 @@ export const SCIENTIFIC_CONSTANTS: ScientificConstantDefinition[] = [
     source: "CODATA 2018",
     aliases: ["faraday constant", "法拉第常数", "faraday number"],
   },
+  {
+    id: "vacuum_permittivity",
+    name: "真空介电常数",
+    symbol: "ε₀",
+    category: "电磁常数",
+    value: "8.8541878128e-12",
+    unit: "F*m^-1",
+    description: "真空中电位移与电场强度之比，是电容与电磁场计算的基础常数。",
+    source: "CODATA 2018",
+    aliases: [
+      "vacuum permittivity",
+      "electric constant",
+      "真空介电常数",
+      "介电常数",
+      "真空电容率",
+      "epsilon0",
+      "epsilon naught",
+    ],
+  },
+  {
+    id: "vacuum_permeability",
+    name: "真空磁导率",
+    symbol: "μ₀",
+    category: "电磁常数",
+    value: "1.25663706212e-6",
+    unit: "H*m^-1",
+    description: "真空中磁场强度与磁感应强度的换算系数，旧称真空磁导率常数。",
+    source: "CODATA 2018",
+    aliases: [
+      "vacuum permeability",
+      "magnetic constant",
+      "真空磁导率",
+      "磁导率",
+      "mu0",
+      "mu naught",
+    ],
+  },
+  {
+    id: "electron_mass",
+    name: "电子质量",
+    symbol: "mₑ",
+    category: "原子物理",
+    value: "9.1093837015e-31",
+    unit: "kg",
+    description: "电子的静止质量，用于质能换算与粒子物理计算。",
+    source: "CODATA 2018",
+    aliases: ["electron mass", "电子质量", "电子静止质量", "m_e"],
+  },
+  {
+    id: "proton_mass",
+    name: "质子质量",
+    symbol: "mₚ",
+    category: "原子物理",
+    value: "1.67262192369e-27",
+    unit: "kg",
+    description: "质子的静止质量，约为电子质量的 1836 倍。",
+    source: "CODATA 2018",
+    aliases: ["proton mass", "质子质量", "m_p"],
+  },
+  {
+    id: "bohr_radius",
+    name: "玻尔半径",
+    symbol: "a₀",
+    category: "原子物理",
+    value: "5.29177210903e-11",
+    unit: "m",
+    description: "氢原子基态电子轨道半径，是原子尺度的长度基准。",
+    source: "CODATA 2018",
+    aliases: ["bohr radius", "玻尔半径", "a0"],
+  },
+  {
+    id: "rydberg_constant",
+    name: "里德伯常数",
+    symbol: "R∞",
+    category: "原子物理",
+    value: "10973731.568160",
+    unit: "m^-1",
+    description: "氢原子光谱项的基础常数，用于谱线波数与能级计算。",
+    source: "CODATA 2018",
+    aliases: ["rydberg constant", "里德伯常数", "rydberg"],
+  },
+  {
+    id: "stefan_boltzmann_constant",
+    name: "斯特藩-玻尔兹曼常数",
+    symbol: "σ",
+    category: "热力学",
+    value: "5.670374419e-8",
+    unit: "W*m^-2*K^-4",
+    description: "黑体辐射总能量与温度四次方之间的比例常数。",
+    source: "CODATA 2018",
+    aliases: [
+      "stefan-boltzmann constant",
+      "stefan boltzmann constant",
+      "斯特藩-玻尔兹曼常数",
+      "斯特藩玻尔兹曼常数",
+    ],
+  },
+  {
+    id: "standard_atmosphere",
+    name: "标准大气压",
+    symbol: "atm",
+    category: "地球物理",
+    value: "101325",
+    unit: "Pa",
+    description: "定义值：海平面标准大气压，等于 760 mmHg。",
+    source: "ISO 2533",
+    aliases: ["standard atmosphere", "标准大气压", "标准大气压力"],
+  },
 ];
+
+const SHORT_ALIAS_MIN_LENGTH = 2;
+
+/**
+ * Greek letters and `∞` have no compatibility decomposition, so NFKC keeps them
+ * and the strip regex below would delete them — `ε₀` normalized to `0`, which
+ * made a bare `0` query resolve to a physics constant. Transliterate the ones
+ * this table actually uses (`ħ`/`ℏ` stay as-is: mapping them to `h` would
+ * collide with the Planck constant alias).
+ */
+const GREEK_TRANSLITERATION: Record<string, string> = {
+  "α": "alpha",
+  "β": "beta",
+  "γ": "gamma",
+  "δ": "delta",
+  "Δ": "delta",
+  "ε": "epsilon",
+  "θ": "theta",
+  "λ": "lambda",
+  "μ": "mu",
+  "ν": "nu",
+  "ξ": "xi",
+  "π": "pi",
+  "ρ": "rho",
+  "σ": "sigma",
+  "τ": "tau",
+  "φ": "phi",
+  "ϕ": "phi",
+  "χ": "chi",
+  "ψ": "psi",
+  "ω": "omega",
+  "Ω": "omega",
+  "∞": "infinity",
+};
+
+function transliterateSymbols(input: string): string {
+  let output = "";
+  for (const character of input) {
+    output += GREEK_TRANSLITERATION[character] ?? character;
+  }
+  return output;
+}
+
+function normalizeConstantKey(input: string): string {
+  return transliterateSymbols(input.normalize("NFKC"))
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4E00-\u9FA5\u0127\u210F\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 const ALIAS_INDEX = new Map<string, ScientificConstantDefinition>();
 
@@ -186,17 +344,6 @@ for (const constant of SCIENTIFIC_CONSTANTS) {
     if (!normalized || ALIAS_INDEX.has(normalized)) continue;
     ALIAS_INDEX.set(normalized, constant);
   }
-}
-
-const SHORT_ALIAS_MIN_LENGTH = 2;
-
-function normalizeConstantKey(input: string): string {
-  return input
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4E00-\u9FA5\u03C0\u0127\u210F\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 export function findScientificConstant(

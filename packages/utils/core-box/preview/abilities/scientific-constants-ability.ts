@@ -17,7 +17,7 @@ export {
 export type { ScientificConstantDefinition } from "./scientific-constants-data";
 
 const CONSTANT_KEYWORDS =
-  /(constant|常量|gravity|光速|普朗克|玻尔兹曼|阿伏伽德罗|π|\bpi\b|planck|boltzmann|avogadro|faraday|圆周率|自然常数|元电荷|气体常数|重力)/i;
+  /(constant|常量|gravity|光速|普朗克|玻尔兹曼|阿伏伽德罗|π|\bpi\b|planck|boltzmann|avogadro|faraday|圆周率|自然常数|元电荷|气体常数|重力|permittivity|permeability|介电|电容率|磁导率|electron mass|电子质量|proton mass|质子质量|bohr|玻尔|rydberg|里德伯|stefan|斯特藩|atmosphere|大气压|\batm\b|ħ|ℏ|[εμσρλ∞₀-₉ₑₚₙ])/i;
 
 function formatValue(value: string): {
   formatted: string;

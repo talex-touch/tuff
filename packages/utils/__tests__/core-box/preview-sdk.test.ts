@@ -16,6 +16,7 @@ import {
   createPreviewSdk,
   createStaticPreviewSafetyPolicy,
   evaluateBasicExpression,
+  findScientificConstant,
   hasQuickOpsDeveloperCommand,
   runPreviewSdkBenchmark,
 } from "../../core-box/preview";
@@ -917,5 +918,60 @@ describe("PreviewSDK text stats tag boundaries", () => {
       );
     }
   });
+});
+
+/* Regression: the constant alias normalizer used to delete Greek letters and `∞`
+ * outright, so `ε₀` normalized to `0` and a bare `0` query resolved to a physics
+ * constant. Bare `0`/`r` must resolve nothing, while symbols and legacy aliases
+ * still hit their entries. */
+describe("PreviewSDK scientific constants", () => {
+  function createConstantsSdk() {
+    return createPreviewSdk({ abilities: [new ScientificConstantsAbility()] });
+  }
+
+  it.each([
+    ["ε₀", "真空介电常数"],
+    ["ε0", "真空介电常数"],
+    ["μ₀", "真空磁导率"],
+    ["mₑ", "电子质量"],
+    ["a₀", "玻尔半径"],
+    ["R∞", "里德伯常数"],
+    ["介电常数", "真空介电常数"],
+    ["磁导率", "真空磁导率"],
+    ["玻尔半径", "玻尔半径"],
+    ["rydberg constant", "里德伯常数"],
+    ["stefan boltzmann constant", "斯特藩-玻尔兹曼常数"],
+    ["standard atmosphere", "标准大气压"],
+    ["atm", "标准大气压"],
+    ["ħ", "约化普朗克常数"],
+    ["光速", "真空光速"],
+  ] as const)("resolves %s", async (query, expectedName) => {
+    const sdk = createConstantsSdk();
+    const result = await sdk.resolve({
+      query: { text: query, inputs: [] },
+      signal: signal(),
+    });
+
+    expect(result?.abilityId).toBe("preview.constants.scientific");
+    expect(result?.payload.title).toBe(expectedName);
+  });
+
+  it("keeps the ascii zero alias free instead of collapsing ε₀ onto it", () => {
+    expect(findScientificConstant("0")).toBeNull();
+  });
+
+  it.each(["0", "r", "blender"])(
+    "produces no card for bare %s without a constant keyword",
+    async (text) => {
+      const sdk = createConstantsSdk();
+      const output = await sdk.resolveWithDiagnostics({
+        query: { text, inputs: [] },
+        signal: signal(),
+      });
+
+      expect(output.result, `query: ${text}`).toBeNull();
+      expect(output.diagnostics.status, `query: ${text}`).toBe("no-match");
+    },
+  );
 });
 
