@@ -1,4 +1,5 @@
 import { DEFAULT_CAPABILITIES, IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { getLogger } from '@talex-touch/utils/common/logger'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ensureIntelligenceConfigLoaded, getCapabilityOptions } from './intelligence-config'
 import { tuffIntelligence } from './intelligence-sdk'
@@ -1171,5 +1172,241 @@ describe('intelligence-config auth listener wiring', () => {
 
     expect(nexusRouteDisabledByUser()).toBe(true)
     expect(nexusProviderEnabled()).toBe(false)
+  })
+})
+
+describe('intelligence-config prompt repair', () => {
+  const translateDefault = DEFAULT_CAPABILITIES['text.translate']?.promptTemplate
+  const configLog = getLogger('intelligence-config')
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(configLog, 'warn').mockImplementation(() => undefined)
+  })
+
+  function promptBinding(capabilityId: string) {
+    return {
+      capabilityId,
+      promptId: `capability.${capabilityId}.default`,
+      promptVersion: '1.0.0',
+      channel: 'stable'
+    }
+  }
+
+  function promptRecord(capabilityId: string, template: string) {
+    return {
+      ...promptBinding(capabilityId),
+      id: `capability.${capabilityId}.default`,
+      version: '1.0.0',
+      name: `${capabilityId} prompt`,
+      template,
+      scope: 'capability',
+      status: 'active',
+      updatedAt: 1789448376487
+    }
+  }
+
+  function capabilityWithPrompt(capabilityId: string, promptTemplate: string) {
+    return {
+      id: capabilityId,
+      label: capabilityId,
+      providers: [{ providerId: 'local-default', priority: 1, enabled: true }],
+      promptTemplate,
+      promptBinding: promptBinding(capabilityId)
+    }
+  }
+
+  function createConfig(prompts: Record<string, string>) {
+    return {
+      providers: [
+        {
+          id: 'local-default',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Local Model',
+          enabled: true,
+          priority: 1,
+          capabilities: Object.keys(prompts)
+        }
+      ],
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false,
+        enableQuota: true
+      },
+      capabilities: Object.fromEntries(
+        Object.entries(prompts).map(([capabilityId, prompt]) => [
+          capabilityId,
+          capabilityWithPrompt(capabilityId, prompt)
+        ])
+      ),
+      promptRegistry: Object.entries(prompts).map(([capabilityId, prompt]) =>
+        promptRecord(capabilityId, prompt)
+      ),
+      promptBindings: Object.keys(prompts).map(promptBinding),
+      version: 2
+    }
+  }
+
+  type PersistedPrompts = {
+    capabilities: Record<string, { promptTemplate?: string; promptBinding?: unknown }>
+    promptRegistry: Array<{ id: string; template: string }>
+    promptBindings: Array<{ capabilityId?: string } | string>
+  }
+
+  function persisted(): PersistedPrompts {
+    return storageMocks.storedConfig as PersistedPrompts
+  }
+
+  it('restores text.chat and text.translate after each was written with the other id', () => {
+    // The dev profile as found on 2026-09-26, prompt registry included.
+    storageMocks.storedConfig = createConfig({
+      'text.chat': 'text.translate',
+      'text.translate': 'text.chat',
+      'text.summarize': '用三句话总结下面的内容。'
+    })
+
+    ensureIntelligenceConfigLoaded(true)
+
+    // What the model receives: no system prompt for chat, the translation prompt for translation.
+    expect(getCapabilityOptions('text.chat').promptTemplate).toBeUndefined()
+    expect(getCapabilityOptions('text.translate').promptTemplate).toBe(translateDefault)
+    expect(getCapabilityOptions('text.summarize').promptTemplate).toBe('用三句话总结下面的内容。')
+
+    const config = persisted()
+    expect(config.capabilities['text.chat']).not.toHaveProperty('promptTemplate')
+    expect(config.capabilities['text.translate']?.promptTemplate).toBe(translateDefault)
+    // The patch pass also seeds the default capabilities this fixture leaves out, with records.
+    const templates = new Map(config.promptRegistry.map((record) => [record.id, record.template]))
+    expect(templates.has('capability.text.chat.default')).toBe(false)
+    expect(templates.get('capability.text.translate.default')).toBe(translateDefault)
+    expect(templates.get('capability.text.summarize.default')).toBe('用三句话总结下面的内容。')
+    expect([...templates.values()]).not.toContain('text.chat')
+    expect([...templates.values()]).not.toContain('text.translate')
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(expect.anything(), config)
+    expect(configLog.warn).toHaveBeenCalledOnce()
+    expect(configLog.warn).toHaveBeenCalledWith(expect.any(String), {
+      capabilities: [
+        { capabilityId: 'text.chat', prompt: 'text.translate', restored: 'cleared' },
+        { capabilityId: 'text.translate', prompt: 'text.chat', restored: 'default' }
+      ],
+      droppedPromptRecords: [
+        { promptId: 'capability.text.chat.default', template: 'text.translate' },
+        { promptId: 'capability.text.translate.default', template: 'text.chat' }
+      ]
+    })
+
+    // Repaired once: the next load finds nothing to undo.
+    vi.mocked(configLog.warn).mockClear()
+    ensureIntelligenceConfigLoaded(true)
+    expect(configLog.warn).not.toHaveBeenCalled()
+  })
+
+  it('treats an id-shaped prompt the same way when no capability carries that id', () => {
+    const summarizeDefault = DEFAULT_CAPABILITIES['text.summarize']?.promptTemplate
+    // `chat.completion` is a registry alias, never a key of the capability map.
+    storageMocks.storedConfig = createConfig({ 'text.summarize': 'chat.completion' })
+
+    ensureIntelligenceConfigLoaded(true)
+
+    expect(persisted().capabilities['text.summarize']?.promptTemplate).toBe(summarizeDefault)
+    expect(getCapabilityOptions('text.summarize').promptTemplate).toBe(summarizeDefault)
+    expect(configLog.warn).toHaveBeenCalledOnce()
+  })
+
+  it('leaves prompts that a person wrote alone', () => {
+    const prompts = {
+      'text.chat': '像 text.chat 那样回答，但要简短。',
+      'text.translate': 'Translate into {{targetLang}}.',
+      'text.summarize': '{{text}}',
+      'code.explain': 'Explain.'
+    }
+    storageMocks.storedConfig = createConfig(prompts)
+
+    ensureIntelligenceConfigLoaded(true)
+
+    for (const [capabilityId, prompt] of Object.entries(prompts)) {
+      expect(persisted().capabilities[capabilityId]?.promptTemplate).toBe(prompt)
+      expect(getCapabilityOptions(capabilityId).promptTemplate).toBe(prompt)
+    }
+    expect(configLog.warn).not.toHaveBeenCalled()
+  })
+
+  /**
+   * One binding object in both `promptBindings` and `capability.promptBinding` is what the channel
+   * serializer sent as `"[Circular ~…]"` in its second position, which the renderer then saved back.
+   */
+  it('writes every prompt binding as its own object', () => {
+    // text.chat gains a prompt with no binding yet; text.summarize has a binding only in the list.
+    storageMocks.storedConfig = {
+      ...createConfig({}),
+      capabilities: {
+        'text.chat': {
+          id: 'text.chat',
+          label: 'Chat',
+          providers: [],
+          promptTemplate: '简短地回答。'
+        },
+        'text.summarize': { id: 'text.summarize', label: 'Summarize', providers: [] }
+      },
+      promptBindings: [promptBinding('text.summarize')]
+    }
+
+    ensureIntelligenceConfigLoaded(true)
+
+    const config = persisted()
+    for (const capabilityId of ['text.chat', 'text.summarize']) {
+      const listed = config.promptBindings.find(
+        (binding) => typeof binding === 'object' && binding.capabilityId === capabilityId
+      )
+      expect(config.capabilities[capabilityId]?.promptBinding).toEqual(listed)
+    }
+    // The defaults the patch pass seeds get bindings the same way, so check every capability.
+    const listedObjects = new Set<unknown>(config.promptBindings)
+    const sharedWithList = Object.entries(config.capabilities)
+      .filter(([, capability]) => listedObjects.has(capability.promptBinding))
+      .map(([capabilityId]) => capabilityId)
+    expect(sharedWithList).toEqual([])
+  })
+
+  it('drops the circular placeholders a renderer saved back', () => {
+    const listPlaceholder = '[Circular ~root.data.data.capabilities.text.chat.promptBinding]'
+    const fieldPlaceholder = '[Circular ~root.data.data.promptBindings[2]]'
+    const base = createConfig({ 'text.summarize': '用三句话总结下面的内容。' })
+    storageMocks.storedConfig = {
+      ...base,
+      capabilities: {
+        ...base.capabilities,
+        'text.chat': {
+          id: 'text.chat',
+          label: 'Chat',
+          providers: [],
+          promptBinding: promptBinding('text.chat')
+        },
+        'text.summarize': {
+          ...base.capabilities['text.summarize'],
+          promptBinding: fieldPlaceholder
+        }
+      },
+      // As found in the dev profile: the placeholder sits beside the binding it stood for.
+      promptBindings: [promptBinding('text.chat'), listPlaceholder, promptBinding('text.summarize')]
+    }
+
+    ensureIntelligenceConfigLoaded(true)
+
+    const config = persisted()
+    expect(config.promptBindings.filter((binding) => typeof binding === 'string')).toEqual([])
+    expect(config.capabilities['text.summarize']?.promptBinding).toEqual(
+      promptBinding('text.summarize')
+    )
+    expect(getCapabilityOptions('text.summarize').promptTemplate).toBe('用三句话总结下面的内容。')
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(expect.anything(), config)
+    expect(configLog.warn).toHaveBeenCalledOnce()
+    expect(configLog.warn).toHaveBeenCalledWith(expect.any(String), {
+      dropped: [
+        { at: 'promptBindings[1]', placeholder: listPlaceholder },
+        { at: 'capabilities.text.summarize.promptBinding', placeholder: fieldPlaceholder }
+      ]
+    })
   })
 })

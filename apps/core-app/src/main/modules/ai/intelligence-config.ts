@@ -619,9 +619,12 @@ function syncPromptSchema(config: IntelligenceSDKPersistedConfig): boolean {
       ? normalizePromptBindingCapability(capabilityId, capabilityConfig.promptBinding)
       : promptBindings.find((item) => item.capabilityId === capabilityId)
 
+    // Every binding written below is its own copy. One object in both `promptBindings` and
+    // `capability.promptBinding` is what the channel serializer used to send as
+    // `"[Circular ~…]"` in its second position, and the renderer saved that string back.
     if (!promptTemplate) {
       if (candidateBinding && !capabilityConfig.promptBinding) {
-        capabilityConfig.promptBinding = candidateBinding
+        capabilityConfig.promptBinding = cloneValue(candidateBinding)
         changed = true
       }
       continue
@@ -639,12 +642,12 @@ function syncPromptSchema(config: IntelligenceSDKPersistedConfig): boolean {
       changed = true
     }
 
-    if (upsertPromptBinding(promptBindings, binding)) {
+    if (upsertPromptBinding(promptBindings, cloneValue(binding))) {
       changed = true
     }
 
     if (!capabilityConfig.promptBinding) {
-      capabilityConfig.promptBinding = binding
+      capabilityConfig.promptBinding = cloneValue(binding)
       changed = true
     }
 
@@ -675,6 +678,159 @@ function syncPromptSchema(config: IntelligenceSDKPersistedConfig): boolean {
   config.promptRegistry = promptRegistry
   config.promptBindings = promptBindings
   return changed
+}
+
+/** What the channel serializer used to send in place of an object it had already sent once. */
+function isCircularPlaceholder(value: unknown): value is string {
+  return typeof value === 'string' && value.startsWith('[Circular ~') && value.endsWith(']')
+}
+
+type DroppedPlaceholder = { at: string; placeholder: string }
+
+function withoutCircularPlaceholders<T>(list: T[], at: string, dropped: DroppedPlaceholder[]): T[] {
+  const kept = list.filter((entry, index) => {
+    if (!isCircularPlaceholder(entry)) return true
+    dropped.push({ at: `${at}[${index}]`, placeholder: entry })
+    return false
+  })
+  return kept.length === list.length ? list : kept
+}
+
+/**
+ * Drops `"[Circular ~…]"` strings from the places that hold objects.
+ *
+ * The channel serializer used to send every second reference to one object as such a string, and
+ * the renderer saved the config back with it in place: `promptBindings` carried
+ * `"[Circular ~root.data.data.capabilities.text.chat.promptBinding]"` because `syncPromptSchema`
+ * had put one binding object in two places. The string only stood for an object that is still
+ * present where it was first referenced, so nothing is lost; `syncPromptSchema` re-adds a binding
+ * that survived only as a placeholder.
+ */
+function dropCircularPlaceholders(config: IntelligenceSDKPersistedConfig): boolean {
+  const dropped: DroppedPlaceholder[] = []
+
+  config.providers = withoutCircularPlaceholders(config.providers, 'providers', dropped)
+  if (Array.isArray(config.promptRegistry)) {
+    config.promptRegistry = withoutCircularPlaceholders(
+      config.promptRegistry,
+      'promptRegistry',
+      dropped
+    )
+  }
+  if (Array.isArray(config.promptBindings)) {
+    config.promptBindings = withoutCircularPlaceholders(
+      config.promptBindings,
+      'promptBindings',
+      dropped
+    )
+  }
+  for (const [capabilityId, capability] of Object.entries(config.capabilities ?? {})) {
+    if (!capability || typeof capability !== 'object') continue
+    if (Array.isArray(capability.providers)) {
+      capability.providers = withoutCircularPlaceholders(
+        capability.providers,
+        `capabilities.${capabilityId}.providers`,
+        dropped
+      )
+    }
+    if (isCircularPlaceholder(capability.promptBinding)) {
+      dropped.push({
+        at: `capabilities.${capabilityId}.promptBinding`,
+        placeholder: capability.promptBinding
+      })
+      delete capability.promptBinding
+    }
+  }
+
+  if (dropped.length === 0) return false
+
+  intelligenceConfigLog.warn('Dropped serializer placeholders from the intelligence config', {
+    dropped
+  })
+  return true
+}
+
+/** Dot-separated lowercase identifier segments, the shape every capability id has. */
+const IDENTIFIER_ONLY_PROMPT = /^[a-z][a-z0-9_-]*(?:\.[a-z0-9_-]+)+$/
+
+/**
+ * The identifier a prompt consists of, or `null` when it is a real prompt. An identifier is a known
+ * capability id, or anything shaped like one with no whitespace: nobody writes `text.translate` as a
+ * system prompt.
+ */
+function identifierOnlyPrompt(value: unknown, capabilityIds: ReadonlySet<string>): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  return capabilityIds.has(trimmed) || IDENTIFIER_ONLY_PROMPT.test(trimmed) ? trimmed : null
+}
+
+/**
+ * Undoes capability prompts that were overwritten with a capability id.
+ *
+ * On 2026-09-15 a stale settings page (KeepAlive-cached across an HMR change of the prompt editor's
+ * emit signature) wrote `text.translate` into `text.chat`'s prompt and `text.chat` into
+ * `text.translate`'s, and the model then received the literal id as its system prompt — chat turned
+ * into a translator. Such a capability gets its default prompt back, or none when it has no default.
+ *
+ * The registry is repaired too: a record takes precedence over `promptTemplate` when a binding
+ * resolves, and `syncPromptSchema` never touches the record of a capability left without a prompt,
+ * so a bad record would keep answering for `text.chat` on its own. Bad records are dropped;
+ * `syncPromptSchema` recreates those of capabilities that still have a prompt.
+ *
+ * Only this shape of damage is touched: anything with whitespace, or any character an id cannot
+ * contain, is a prompt someone wrote and is left alone.
+ */
+function repairIdentifierOnlyPrompts(config: IntelligenceSDKPersistedConfig): boolean {
+  const capabilities = config.capabilities ?? {}
+  const capabilityIds = new Set([
+    ...Object.keys(DEFAULT_CAPABILITIES),
+    ...Object.keys(capabilities)
+  ])
+
+  const repairedCapabilities: Array<{
+    capabilityId: string
+    prompt: string
+    restored: 'default' | 'cleared'
+  }> = []
+  for (const [capabilityId, capability] of Object.entries(capabilities)) {
+    const prompt = identifierOnlyPrompt(capability?.promptTemplate, capabilityIds)
+    if (!prompt) continue
+
+    const defaultTemplate = DEFAULT_CAPABILITIES[capabilityId]?.promptTemplate
+    if (defaultTemplate) {
+      capability.promptTemplate = defaultTemplate
+    } else {
+      delete capability.promptTemplate
+    }
+    repairedCapabilities.push({
+      capabilityId,
+      prompt,
+      restored: defaultTemplate ? 'default' : 'cleared'
+    })
+  }
+
+  const keptRecords: IntelligencePromptRecord[] = []
+  const droppedRecords: Array<{ promptId: string; template: string }> = []
+  for (const record of Array.isArray(config.promptRegistry) ? config.promptRegistry : []) {
+    const template = identifierOnlyPrompt(record?.template, capabilityIds)
+    if (template) {
+      droppedRecords.push({ promptId: record.id, template })
+    } else {
+      keptRecords.push(record)
+    }
+  }
+  if (droppedRecords.length > 0) {
+    config.promptRegistry = keptRecords
+  }
+
+  if (repairedCapabilities.length === 0 && droppedRecords.length === 0) return false
+
+  intelligenceConfigLog.warn('Repaired capability prompts that had been overwritten with an id', {
+    capabilities: repairedCapabilities,
+    droppedPromptRecords: droppedRecords
+  })
+  return true
 }
 
 function resolveCapabilityPromptTemplate(
@@ -744,6 +900,11 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
 
   if (!Number.isFinite(config.version)) {
     config.version = INTELLIGENCE_DEFAULT_VERSION
+    changed = true
+  }
+
+  // Before anything below walks these arrays expecting objects.
+  if (dropCircularPlaceholders(config)) {
     changed = true
   }
 
@@ -926,6 +1087,11 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
         changed = true
       }
     }
+  }
+
+  // Before the prompt sync: it rebuilds the registry from the repaired prompts.
+  if (repairIdentifierOnlyPrompts(config)) {
+    changed = true
   }
 
   if (syncPromptSchema(config)) {

@@ -50,13 +50,24 @@ const emits = defineEmits<{
 
 const { t } = useI18n()
 
-const promptValue = ref(props.capability.promptTemplate || '')
+/**
+ * The prompt draft and the capability it belongs to. `savedPrompt` is what the store holds for
+ * `draftOwner`: only a draft that differs from it is an edit, and only an edit is ever written.
+ *
+ * Writing on every unmount is what let a stale page corrupt prompts on 2026-09-15. The settings page
+ * is KeepAlive-cached, and Vue's HMR does not replace a deactivated cached instance, so after this
+ * editor started emitting `(capabilityId, prompt)` the cached page still took the first argument as
+ * the prompt — and each plain click between capabilities wrote the outgoing capability's id into
+ * the next one's prompt.
+ */
+let draftOwner = props.capability.id
+let savedPrompt = props.capability.promptTemplate || ''
+const promptValue = ref(savedPrompt)
 const focusedProviderId = ref<string>('')
 const showModelDrawer = ref(false)
 const showPromptDrawer = ref(false)
 const showTestDrawer = ref(false)
 let promptTimer: number | null = null
-let syncingFromProps = false
 
 const providerMetaMap = computed(
   () => new Map(props.providers.map((provider) => [provider.id, provider]))
@@ -179,44 +190,44 @@ const focusedModelSummary = computed(() =>
     : t('settings.intelligence.capabilityBindingModelsDesc')
 )
 
-watch(
-  () => props.capability.promptTemplate,
-  (value) => {
-    syncingFromProps = true
-    promptValue.value = value || ''
-    syncingFromProps = false
-  }
-)
+function cancelPromptSync(): void {
+  if (promptTimer === null) return
+  clearTimeout(promptTimer)
+  promptTimer = null
+}
 
 /**
- * The prompt travels with the capability it belongs to. The last edit of a draft is flushed from
- * `onBeforeUnmount`, which runs after the page has already switched selection — writing to
- * "whatever is selected now" would copy this capability's prompt onto the next one.
+ * Writes the pending edit, if there is one, under the capability it was typed for. The last edit is
+ * flushed from `onBeforeUnmount`, which runs after the page has already switched selection, so the
+ * owner travels with the draft rather than being read from whatever is selected now.
  */
 function flushPrompt(): void {
-  if (syncingFromProps) return
-  emits('updatePrompt', props.capability.id, promptValue.value)
+  cancelPromptSync()
+  if (promptValue.value === savedPrompt) return
+  savedPrompt = promptValue.value
+  emits('updatePrompt', draftOwner, savedPrompt)
 }
 
-function schedulePromptSync(): void {
-  if (syncingFromProps) return
-  if (promptTimer) {
-    clearTimeout(promptTimer)
-  }
-  promptTimer = window.setTimeout(() => {
-    flushPrompt()
-    promptTimer = null
-  }, 800)
-}
-
-watch(promptValue, () => {
-  schedulePromptSync()
+watch(promptValue, (value) => {
+  cancelPromptSync()
+  if (value === savedPrompt) return
+  promptTimer = window.setTimeout(flushPrompt, 800)
 })
 
+/**
+ * Store → editor. A value arriving from the store is the saved prompt, not an edit, so it is never
+ * written back. A different capability (the editor reused rather than re-mounted) first flushes the
+ * outgoing draft under its own id.
+ */
 watch(
-  () => props.capability.id,
-  () => {
-    flushPrompt()
+  [() => props.capability.id, () => props.capability.promptTemplate || ''],
+  ([capabilityId, template]) => {
+    if (capabilityId !== draftOwner) {
+      flushPrompt()
+      draftOwner = capabilityId
+    }
+    savedPrompt = template
+    promptValue.value = template
   }
 )
 
@@ -313,9 +324,6 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  if (promptTimer) {
-    clearTimeout(promptTimer)
-  }
   flushPrompt()
 })
 </script>
