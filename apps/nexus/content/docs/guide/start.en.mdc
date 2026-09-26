@@ -26,7 +26,7 @@
 - **Data ownership**: stored locally in LibSQL; cloud only sees encrypted config shards.
 
 ## 4. Try It
-- `⌘ + E` / `Ctrl + E`: summon CoreBox.
+- `⌥ + Space` / `Alt + Space`: summon CoreBox. If pressing it opens another app instead (such as Raycast, Alfred or ChatGPT), that app holds the key: pick a different shortcut in Settings.
 - CoreBox includes **App Semantic Alias Catalog / 应用语义别名目录**: search `im`, `chat`, or `即时通讯` to recall installed messaging apps such as WeChat, Lark, and Telegram; search `design`, `ps`, or `设计` for Photoshop/Figma-style tools; search `vsc` or `code` for VS Code.
 - Drag the Dock icon to switch workspaces.
 - Notification widget shows workflow queue + plugin health.

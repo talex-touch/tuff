@@ -360,6 +360,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/gradient-border',
     '/docs/dev/components/outline-border',
     '/docs/dev/components/border-beam',
+    '/docs/dev/components/prism-glow',
     '/docs/dev/components/corner-overlay',
     '/docs/dev/components/gradual-blur',
     '/docs/dev/components/edge-fade-mask',

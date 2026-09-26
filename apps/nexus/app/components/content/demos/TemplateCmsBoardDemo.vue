@@ -4,9 +4,10 @@ import './TemplateCmsBoardDemo.css'
 // Nexus blog, read as a flow from draft to published rather than row by row.
 //
 // Each column is its own TxSortableList, which owns in-column order, keyboard
-// pick-up and the screen-reader announcements. Its drag state is private to
-// the instance, so a card cannot leave its list on its own: the board adds the
-// cross-column half with native DnD on the column bodies and the week lane,
+// pick-up and the screen-reader announcements. It runs in `drag-mode="native"`
+// because the board needs the HTML5 drag it starts. Its drag state is private
+// to the instance, so a card cannot leave its list on its own: the board adds
+// the cross-column half with native DnD on the column bodies and the week lane,
 // and commits the move in its own `dragend` — after the source list has
 // settled its preview, and while the source row is still mounted. Keyboard and
 // touch users move cards with the card menu or ←/→.
@@ -1741,6 +1742,7 @@ onBeforeUnmount(() => {
 
               <TxSortableList
                 :model-value="board[column]"
+                drag-mode="native"
                 :aria-label="copy.listLabel(L(COLUMN_META[column].label), board[column].length)"
                 :item-label="cardLabel"
                 :labels="sortLabels"

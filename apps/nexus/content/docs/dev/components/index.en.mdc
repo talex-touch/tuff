@@ -252,6 +252,7 @@ Rich interaction, visual effects and low-level primitives, importable through th
 - [GradientBorder](./gradient-border.en.mdc)
 - [OutlineBorder](./outline-border.en.mdc)
 - [BorderBeam](./border-beam.en.mdc)
+- [PrismGlow](./prism-glow.en.mdc)
 - [CornerOverlay](./corner-overlay.en.mdc)
 - [GradualBlur](./gradual-blur.en.mdc)
 - [EdgeFadeMask](./edge-fade-mask.en.mdc)

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/nexus-docs-templates.md", "reason": "docs layout root/stage isolation and header z-index contract the edge strips sit inside"}
+{"file": ".trellis/spec/frontend/nexus-docs-static-delivery.md", "reason": "docs hydration path constraints when touching layouts/docs.vue"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "shared :3200 dev server and worktree"}
+{"file": ".trellis/tasks/09-25-docs-edge-blur/research/edge-blur.md", "reason": "root cause, stacking tree, backdrop-root pitfalls, gate test, CSS draft"}

@@ -515,7 +515,7 @@ onBeforeUnmount(() => {
           <span v-else class="i-carbon-search CommandCard-SearchIcon" aria-hidden="true" />
           <span class="CommandCard-Query">{{ typed }}</span>
           <span class="CommandCard-Caret" aria-hidden="true" />
-          <span class="CommandCard-Kbd">⌘E</span>
+          <span class="CommandCard-Kbd">⌥Space</span>
         </div>
 
         <div class="CommandCard-Results">

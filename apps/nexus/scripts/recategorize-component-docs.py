@@ -211,6 +211,7 @@ TAXONOMY: dict[str, list[str]] = {
         "gradient-border",
         "outline-border",
         "border-beam",
+        "prism-glow",
         "corner-overlay",
         "gradual-blur",
         "edge-fade-mask",

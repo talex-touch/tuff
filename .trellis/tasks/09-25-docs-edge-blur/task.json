@@ -1,0 +1,30 @@
+{
+  "id": "docs-edge-blur",
+  "name": "docs-edge-blur",
+  "title": "Nexus 文档页顶/底边缘渐变模糊修复",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-25",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-25-tuffex-jelly-indicator-polish",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "完成 Nexus 文档页顶/底边缘渐变模糊修复 分批提交与主线合并验证。",
+    "blocker": "无阻塞项。",
+    "evidence": "Nexus 文档页顶/底边缘渐变模糊修复: - 顶部：正文行停在药丸上方 0–16px / 圆角处的截图；; - 底部：FilterChips + ImageGallery 一行停在视口底边的截图；临时把 `.docs-edge-blur--bottom` 设 `display: none` 再截一张，确认图片同样被模糊（research §8.4-2），`document.elementsFromPoint` 确认缩略图在遮罩条之下；; - CDP Performance 录一次滚动（基线帧时间）。"
+  }
+}

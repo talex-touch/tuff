@@ -252,6 +252,7 @@ code: |
 - [GradientBorder 渐变边框](./gradient-border.zh.mdc)
 - [OutlineBorder 描边容器](./outline-border.zh.mdc)
 - [BorderBeam 流光边框](./border-beam.zh.mdc)
+- [PrismGlow 棱镜光](./prism-glow.zh.mdc)
 - [CornerOverlay 角标容器](./corner-overlay.zh.mdc)
 - [GradualBlur 渐变模糊](./gradual-blur.zh.mdc)
 - [EdgeFadeMask 边缘渐隐遮罩](./edge-fade-mask.zh.mdc)

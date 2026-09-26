@@ -291,8 +291,10 @@
   gap: 3px;
 }
 
-/* StatCard's decorative icon takes its colour from the icon class; this is the
-   tint the card's glow is derived from. */
+/* StatCard reads its icon's colour and draws its aura from it: three blobs in
+   that hue, a neighbouring hue and a lighter tint across the right of the card.
+   Without a colour class the icon and the aura are primary anyway; the class
+   keeps the cell's hue in one place. */
 .docs-gallery__stat-icon {
   color: var(--tx-color-primary);
 }
@@ -305,9 +307,24 @@
 
 /* TxTabs defaults to placement="left" with navMinWidth 220. In the old 240px
    block that left the panel 20px, which is the "proportions are wrong" the
-   cell showed. The gallery drives it from the top instead. */
+   cell showed. The gallery drives it from the top instead, under a variant
+   switcher; the tabs take whatever height the switcher leaves. */
 .docs-gallery__tabs {
-  height: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 200px;
+}
+
+.docs-gallery__tabs-variants {
+  align-self: center;
+  flex: none;
+}
+
+.docs-gallery__tabs .tx-tabs {
+  flex: 1;
+  min-height: 0;
+  text-align: start;
 }
 
 /* Transfer is two full panels; left to itself it ran 240px tall and stretched
@@ -597,6 +614,21 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
   color: var(--docs-muted);
+}
+
+/* TxPrismGlow's root is the card. The light layer sits between this background
+   and the text, so the background goes on the root and never on the slot. */
+.docs-gallery__prism-card {
+  display: flex;
+  align-items: flex-start;
+  width: 240px;
+  height: 112px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--tx-bg-color-overlay);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter);
+  font-size: 13px;
+  color: var(--tx-text-color-regular);
 }
 
 .docs-gallery__meter {
