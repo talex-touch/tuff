@@ -17,6 +17,8 @@
 5. **split driver**：`composables/send-split/split-driver.ts`——弹簧推进、调用 `fusionSurfacePath`、断开判定与小尖回缩、三次落点读取与改道、落地揭开；单测用假时钟 / 假 rAF 覆盖：阶段顺序、断开只触发一次、改道时位置与速度连续、新的一次发送让旧动画立刻落位、卸载清理、减少动态效果直接返回。
 6. **编排**：`useSendChoreography.ts` 用 `playSplit` 替换 `playSend`，`playComposerFlip` 支持 `delay`；`HomePage.vue`：覆盖层模板、`.is-splitting`、草稿幽灵、输入框高度锁与解锁过渡、`--home-z-seam`；`submit()` 按 design §1 的顺序调用。更新 `useSendChoreography.test.ts`。
 7. **调参与验证**：CDP screencast 逐帧看形状与时序，按录帧调 score 常量；复测性能，未达标则执行 design §4.3 的决策点。
+   - **A/B 开关（仅 dev，对比完删除）**：在主窗口 DevTools 或 CDP `Runtime.evaluate` 里执行 `localStorage.setItem('tuff:send-motion', 'flight')` 切回旧的克隆飞行，`localStorage.removeItem('tuff:send-motion')` 回到分裂。每次发送时读取，无需刷新。实现是 `HomePage.vue` 的 `prefersLegacyFlight()`（`import.meta.env.DEV` 之外恒为分裂）；带附件的发送两种模式下都走旧飞行（整行连托盘一起飞）。
+   - 调参只改 `composables/send-split/score.ts` 的 `SPLIT_SCORE`；分裂期间逐帧采样可读 `.HomePage-SendSplitAttached` / `.HomePage-SendSplitDrop` 的 `d`、`.HomePage-SendSplitText` 的 `transform` / `clip-path` / `opacity` / `filter`，以及 `.HomePage-SendSplit` 上的 `--home-split-mix`。
 8. **收尾**：清理测试产生的对话（历史里删除），停止 screencast / tracing，dev 进程保持带调试端口运行直到父任务集成走查结束，再问老板是否恢复原来的启动方式。
 
 ## 测试发送的成本
