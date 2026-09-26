@@ -184,6 +184,10 @@ import { FileProviderReconciliationInsertService } from './services/file-provide
 import { FileProviderCleanupDeleteService } from './services/file-provider-cleanup-delete-service'
 import { FileProviderFullScanInsertService } from './services/file-provider-full-scan-insert-service'
 import { FileProviderFullScanRunService } from './services/file-provider-full-scan-run-service'
+import {
+  FileProviderFullScanCheckpointService,
+  listScanChildDirectories
+} from './services/file-provider-full-scan-checkpoint-service'
 import { FileProviderReconciliationDeleteService } from './services/file-provider-reconciliation-delete-service'
 import { FileProviderReconciliationDiffService } from './services/file-provider-reconciliation-diff-service'
 import {
@@ -459,6 +463,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     IndexedWriteDeleteRecord,
     FileIndexRunOptions | undefined
   >
+  private readonly fullScanCheckpointService: FileProviderFullScanCheckpointService
   private readonly fullScanRunService: FileProviderFullScanRunService<
     FileIndexRunOptions | undefined
   >
@@ -780,6 +785,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           .limit(limit)
       },
       isWithinWatchRoots: (filePath) => this.isWithinWatchRoots(filePath),
+      isStaleIndexPath: (filePath) => this.isStaleExcludedIndexPath(filePath),
       yieldAfterRead: async () => {
         await new Promise<void>((resolve) => setImmediate(resolve))
       },
@@ -789,6 +795,32 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       now: () => performance.now(),
       formatDuration,
       logInfo: (message, meta) => this.logInfo(message, meta),
+      logDebug: (message, meta) => this.logDebug(message, meta)
+    })
+    this.fullScanCheckpointService = new FileProviderFullScanCheckpointService({
+      listChildDirectories: (rootPath, excludePathsSet) =>
+        listScanChildDirectories(rootPath, {
+          readdir: (directoryPath) => fs.readdir(directoryPath, { withFileTypes: true }),
+          join: (root, name) => path.join(root, name),
+          hooks: {
+            getTraversalExclusionReason: (directoryPath, context) =>
+              fileFilterService.getTraversalExclusionReason(directoryPath, undefined, context)
+          },
+          excludePathsSet
+        }),
+      getCompletedPaths: (paths) => this.scanProgressService.getCompletedPaths(paths),
+      recordCompleted: async (checkpointPath, reason) => {
+        await this.scanProgressService.upsertCompletedPaths(
+          [checkpointPath],
+          new Date().toISOString(),
+          reason
+        )
+      },
+      clearCompleted: async (paths) => {
+        if (!this.dbUtils) return
+        await this.scanProgressService.deletePaths(this.dbUtils.getFileIndexReadDb(), paths)
+      },
+      normalizePath: (rawPath) => this.normalizePath(rawPath),
       logDebug: (message, meta) => this.logDebug(message, meta)
     })
     this.fullScanRunService = new FileProviderFullScanRunService({
@@ -803,7 +835,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       },
       now: () => performance.now(),
       formatDuration,
-      logDebug: (message, meta) => this.logDebug(message, meta)
+      logDebug: (message, meta) => this.logDebug(message, meta),
+      checkpoints: this.fullScanCheckpointService
     })
     this.fullScanInsertService = new FileProviderFullScanInsertService({
       sourceId: this.id,
@@ -3575,6 +3608,26 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   /**
+   * A row under a directory the traversal rules exclude today. Rows like that were admitted by an
+   * older rule set (the home-anchored `~/go/pkg` exclusion arrived after 222k of them were indexed
+   * on one profile) and the cleanup pass is the paged, yielding place to retire them. A path the
+   * user added explicitly is never stale: those roots are theirs to keep.
+   */
+  private isStaleExcludedIndexPath(filePath: string): boolean {
+    const parent = path.dirname(filePath)
+    if (!parent || parent === filePath) return false
+    const normalizedFile = this.normalizePath(filePath)
+    const underUserRoot = this.fileIndexSettings.extraPaths.some((extraPath) => {
+      const normalizedRoot = this.normalizePath(extraPath).replace(/[\\/]+$/, '')
+      return (
+        normalizedRoot.length > 0 &&
+        (normalizedFile === normalizedRoot || normalizedFile.startsWith(`${normalizedRoot}/`))
+      )
+    })
+    if (underUserRoot) return false
+    return fileFilterService.getTraversalExclusionReason(parent) !== null
+  }
+  /**
    * Single ingress for every non-scan path that reaches the index: watcher
    * events and manual adds both land here, and macOS hands them over
    * decomposed (NFD). Normalizing once here is what lets DB lookups compare
@@ -4078,6 +4131,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
     options?.signal?.throwIfAborted()
     const completedScanProgressPaths = new Set<string>()
+    const fullScanCheckpointsToClear = new Map<string, string[]>()
 
     // --- 3. Full Scan for New Paths ---
     if (newPathsToScan.length > 0) {
@@ -4087,6 +4141,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       stats.added += fullScanResult.added
       for (const scannedPath of fullScanResult.completedPaths) {
         completedScanProgressPaths.add(scannedPath)
+      }
+      for (const [rootPath, children] of fullScanResult.checkpointsToClear) {
+        fullScanCheckpointsToClear.set(rootPath, children)
       }
     }
     options?.signal?.throwIfAborted()
@@ -4117,6 +4174,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         scanTime.toISOString(),
         'scan-progress.upsert'
       )
+      // Only once the root's own record exists: a root that is both unrecorded and stripped of
+      // its child checkpoints would be rescanned from zero on the next boot.
+      for (const [rootPath, children] of fullScanCheckpointsToClear) {
+        if (!completedScanProgressPaths.has(rootPath)) continue
+        await this.fullScanCheckpointService.clearRootCheckpoints(children)
+      }
     }
 
     this.emitIndexingProgress('completed', 1, 1)
