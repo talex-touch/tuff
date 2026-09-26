@@ -65,3 +65,8 @@
 - 搜索失败 / 重试按钮样式；DivisionBox 头部；搜索结果区与结果揭示动效（归 `09-25-corebox-list-motion`）。
 - `TxPrismGlow` 组件本身的实现与文档（归 `09-25-tuffex-prism-glow`）。
 - 新增单元测试（门控用临时脚本验证，用完即删）。
+
+## 归档说明（2026-09-26）
+
+- TxPrismGlow 已接入 CoreBox；与 talex-touch-31 的规格一起改为「只在还没有结果时亮」，搜索状态改由常驻播报区播报。已提交到本地 master（`6994723e0`）。
+- 真机：搜索 270–400ms 就结束，光效按设计几乎不亮；强制点亮时外观正常，截图见 `/tmp/corebox-d8-verify/r4/glow-headers.png`。

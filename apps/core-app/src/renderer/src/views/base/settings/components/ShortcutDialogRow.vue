@@ -131,8 +131,6 @@ const emit = defineEmits<{
   box-shadow: -12px 0 16px rgba(0, 0, 0, 0.06);
 }
 
-.ShortcutDialog-Row.is-success .ShortcutDialog-EnabledCell,
-.ShortcutDialog-Row.is-error .ShortcutDialog-EnabledCell,
 .ShortcutDialog-Row.is-saving .ShortcutDialog-EnabledCell {
   background: inherit;
 }
@@ -141,12 +139,32 @@ const emit = defineEmits<{
   background-color: transparent;
 }
 
+/*
+ * A save result tints the row. The `--tx-color-*-rgb` tokens are space-separated triplets
+ * (`103 194 58`), so the tint is `rgb(var(--…-rgb) / alpha)`: the comma form `rgba(var(…), alpha)`
+ * is invalid once substituted, the declaration drops, and the row never showed a tint.
+ *
+ * The sticky cell keeps an opaque base, so columns scrolled under it never show through, and lays
+ * the row's one tint over it. Inheriting the translucent tint instead would stack it twice under
+ * the status text: red would read 4.15 on light and 3.68 on dark, below 4.5.
+ */
 .ShortcutDialog-Row.is-success {
-  background-color: rgba(var(--tx-color-success-rgb), 0.08);
+  --shortcut-row-tint: rgb(var(--tx-color-success-rgb) / 0.08);
 }
 
 .ShortcutDialog-Row.is-error {
-  background-color: rgba(var(--tx-color-danger-rgb), 0.16);
+  --shortcut-row-tint: rgb(var(--tx-color-danger-rgb) / 0.16);
+}
+
+.ShortcutDialog-Row.is-success,
+.ShortcutDialog-Row.is-error {
+  background-color: var(--shortcut-row-tint);
+}
+
+.ShortcutDialog-Row.is-success .ShortcutDialog-EnabledCell,
+.ShortcutDialog-Row.is-error .ShortcutDialog-EnabledCell {
+  background:
+    linear-gradient(var(--shortcut-row-tint), var(--shortcut-row-tint)), var(--tx-bg-color-overlay);
 }
 
 .ShortcutDialog-RowFX {
@@ -278,10 +296,10 @@ const emit = defineEmits<{
  *   light, on #ffffff                red 5.66   green 5.61   grey 6.11
  *   light high contrast, on #ffffff  red 11.47  green 12.42  grey 14.68
  * Dark themes keep the plain tokens, unchanged: on #1d1e1f red 6.04, green 9.58 and grey
- * (`secondary`) 6.85; high contrast on #111827 9.38 / 12.63 / 12.04. The save-state row tints
- * below do not render (`rgba()` over a space-separated triplet); were they fixed, the light inks
- * would still read 5.26 (green on its tint) and 4.78 (red on its tint). Re-measure when a hue or
- * ink token moves.
+ * (`secondary`) 6.85; high contrast on #111827 9.38 / 12.63 / 12.04. On a save result's row tint
+ * (8% green, 16% red, see above) green and red read 5.26 / 4.78 light, 11.05 / 8.78 light high
+ * contrast, 8.18 / 4.73 dark and 10.61 / 6.83 dark high contrast. Re-measure when a hue, an ink
+ * token or a tint moves.
  */
 .ShortcutDialog-StatusText {
   --shortcut-status-danger: color-mix(

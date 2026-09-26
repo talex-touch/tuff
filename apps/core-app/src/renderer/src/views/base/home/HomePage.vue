@@ -823,10 +823,13 @@ async function submit(): Promise<void> {
 /**
  * The send key, Enter and the send shortcut. While dictating they mean 「结束并发送」 (D10-d): the
  * session stops, and once its last words have landed in the draft they go out as an ordinary send.
+ * A session that heard nothing still sends what the draft already held — the press asked for a
+ * send; `submit` does nothing when the draft is empty too.
  */
 async function pressSend(): Promise<void> {
   if (dictation.active.value) {
-    if ((await dictation.stop()) === 'inserted') await submit()
+    const outcome = await dictation.stop()
+    if (outcome === 'inserted' || outcome === 'empty') await submit()
     return
   }
   await submit()

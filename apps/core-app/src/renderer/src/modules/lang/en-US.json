@@ -492,6 +492,7 @@
       "core_box_toggle": "Open command palette",
       "core_omniPanel_toggle": "Open OmniPanel",
       "core_omniPanel_mouseLongPress": "OmniPanel mouse trigger",
+      "local_ai_cli_quick_open": "Open local AI agent",
       "screenshot_tool_start": "Take a screenshot",
       "voice_dictation_toggle": "Global dictation (press to start, press again to stop)",
       "voice_quickEdit": "Quick Edit (select text, then speak the change)"

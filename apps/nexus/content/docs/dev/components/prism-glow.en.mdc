@@ -266,7 +266,7 @@ The rest are declared on the root, with one set of defaults for light surfaces a
   - each crossing rises out of the edge in its first 16% and sinks and fades in its last 16%;
   - each beam also swells and shrinks back and forth, one swell or one shrink taking 0.38–0.58 × `duration`.
 - `placement="top"` flips the whole light layer vertically (`scaleY(-1)`): the light hangs from the top edge and still flows left to right.
-- Dark is detected from an ancestor: under `[data-theme='dark']` or `.dark` the dark tuning applies (near-white core, `plus-lighter` blending); otherwise the light tuning (coloured core, `normal` blending). There is no theme prop.
+- Dark is detected from an ancestor: under `[data-theme='dark']` or `.dark` the dark tuning applies (near-white core, `plus-lighter` blending); otherwise the light tuning (coloured core, `normal` blending, the light hue order). There is no theme prop.
 - `prefers-reduced-motion: reduce`:
   - every animation and the enter and leave transitions stop;
   - the six cones hold one finished frame: all risen, fully lit, and spread evenly from the left edge to the right one (12cqw apart);
@@ -289,22 +289,27 @@ The rest are declared on the root, with one set of defaults for light surfaces a
   - growth partway through a fade: the running `opacity` transition is sped up through its Web Animations `playbackRate`, so the rest finishes in about 140ms; when the fade has not started yet (the growth landed in the same update), `is-collapsing` gives it the 0.14s transition directly.
 - Blending:
   - in dark mode the cones blend with `plus-lighter`, so overlaps add up towards white, which is what reads as two beams merging;
-  - on a light surface additive light is invisible and a near-white core reads as a grey smudge, so light mode blends `normal` with a coloured core, and high chroma at low alpha keeps three overlapping cones clean.
+  - on a light surface a near-white core reads as a grey smudge, so light mode keeps the core coloured and blends `normal`. A `normal` overlap is the average of the two colours, and two hues more than about 120° apart average to grey;
+  - what keeps light-mode overlaps clean is the hue order. The phases decide which cones set off together: cone 2 travels with cone 6 for the first 0.4 × `duration` (the whole of a CoreBox search), and cones 3, 4 and 5 fade out together at the right edge and come back in together on the left. In light mode each of those groups stays within 120° of hue.
 - Colour:
   - each cone has one tint variable, and the core, the two dispersion fringes (hue shifted ±34° either side), the halo, the 1.5px hairline along the edge and the rays all derive from it through relative colour (`oklch(from …)`);
-  - the spectrum palette supplies only hue angles (350 / 95 / 205 / 300 / 150 / 258), with lightness and chroma from the theme; `accent` only swaps the tint's source for `--tx-color-primary`;
+  - the spectrum palette supplies only hue angles, with lightness and chroma from the theme: 350 / 95 / 205 / 300 / 150 / 258 on a dark surface, and the same six hues with cones 2 and 4 traded on a light one (350 / 300 / 205 / 95 / 150 / 258). Used on a light surface, the dark order had blue riding over yellow, which read olive-grey. `accent` only swaps the tint's source for `--tx-color-primary`; its six hues span 100° in all, so it keeps one order;
   - the rays are a `repeating-conic-gradient` under a radial mask; a mask reads alpha only, so the tint itself serves as the opaque stop;
   - apart from `var()` fallbacks, the stylesheet has no colour literal.
-- The six cones' parameters (hue, accent shift, period, phase, breathing period, size, place in the reduced-motion frame) live in `cones.ts` and ride on each element as inline custom properties, so the stylesheet holds one rule for all six.
+- The six cones' parameters (dark and light hue, accent shift, period, phase, breathing period, size, place in the reduced-motion frame) live in `cones.ts` and ride on each element as inline custom properties, so the stylesheet holds one rule for all six.
 - Rejected designs:
   - `multiply` blending in light mode: it mixes blue and yellow into olive;
+  - other blend modes in light mode (`screen`, `lighten`, `plus-lighter`): at these alphas a blend mode only changes the part of an overlap where both cones are opaque, and the rest is still the average, so blue over yellow stayed grey. `plus-lighter` made it denser; `screen` only made it about a fifth lighter;
+  - warming the yellow towards amber, or lowering its chroma: amber is just as far from blue, so the two still went grey where they met, and a low-chroma yellow turns khaki;
+  - lowering the halo and fringe alpha: the grey only gets fainter, and so does every cone;
   - WebGL / canvas: the frame loop runs on the main thread and stutters when the host is busy, and a search in flight is exactly that moment.
 - The look is inspired by Unicorn Studio's "New AI canvas loading state" clip, posted by George Hastings (@soulegit) on 2026-09-23. Only the look was borrowed; no code came from it.
 - Source: `packages/tuffex/packages/components/src/prism-glow/src/TxPrismGlow.vue`; cone parameters in `cones.ts`, types in `types.ts`.
-- **Verified coverage:** `prism-glow/__tests__/prism-glow.test.ts`, 17 tests:
-  - component: the slot renders apart from the `aria-hidden` light layer; six cones each carry their own parameters, with pairwise distinct periods; the layer mounts only while `active` and fades out before it unmounts; palette and placement modifier classes; `intensity` / `duration` binding, clamping and fallbacks;
+- **Verified coverage:** `prism-glow/__tests__/prism-glow.test.ts`, 20 tests:
+  - component: the slot renders apart from the `aria-hidden` light layer; six cones each carry their own parameters, both hues included, with pairwise distinct periods; the layer mounts only while `active` and fades out before it unmounts; palette and placement modifier classes; `intensity` / `duration` binding, clamping and fallbacks;
   - collapse on grow, driven by a stand-in ResizeObserver: the first report only sets the baseline, and changes within 8px, a font swap's reflow included, are ignored; growth retracts the light at once, with the leaving layer pinned to the height from before the growth; growth during a fade-out retracts it too, pinned at the height the fade started from, and a fade already under way is sped up to finish in about 140ms; the pin is the root's padding box (content box plus vertical padding); the root stays tracked through a collapse, so a fade after relighting pins the height the box grew to; shrinking back does not relight it, and only cycling `active` does, measuring from the height at that moment; the baseline is the lowest height since the light came on; nothing collapses with `collapseOnGrow` off; with `growTarget` only that element's growth counts, not the root's, and the layer is pinned at the root's height; setting `growTarget` back to `null` watches the root alone;
-  - compiled style: keyframes animate only `translate` / `scale` / `opacity` and read no `var()`; every animation name resolves to a `tx-prism-glow-*` keyframes block; reduced motion stops every animation and transition, the collapse's retract included, and holds a finished frame spread edge to edge; the layer appears and disappears at once; no colour literal outside `var()` fallbacks.
+  - compiled style: keyframes animate only `translate` / `scale` / `opacity` and read no `var()`; every animation name resolves to a `tx-prism-glow-*` keyframes block; reduced motion stops every animation and transition, the collapse's retract included, and holds a finished frame spread edge to edge; the layer appears and disappears at once; no colour literal outside `var()` fallbacks;
+  - light hue order: both orders use the same six hues; through the first 0.4 × `duration`, no two cones more than 120° apart in light hue come within 30cqw of each other, while the dark order does (blue and yellow, the positive control); the default tint reads the light hue, and on a dark surface the spectrum tint reads the dark one and leaves the accent tint alone.
 
 ## Use cases
 
