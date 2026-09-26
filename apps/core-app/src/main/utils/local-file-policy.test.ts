@@ -48,6 +48,19 @@ vi.mock('node:fs', () => ({
 
 const { getAllowedLocalFileRoots, isAllowedLocalFilePath } = await import('./local-file-policy')
 
+const hostPlatform = process.platform
+
+/**
+ * Forces the platform the policy branches on. node:path is POSIX on darwin and linux alike, so
+ * the darwin assertions below hold on every runner that is not Windows.
+ */
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: platform
+  })
+}
+
 afterEach(() => {
   mockedUserDataPath = USER_DATA
   resetRuntimeRootPathForTests()
@@ -126,6 +139,67 @@ describe('isAllowedLocalFilePath against the narrowed roots', () => {
           ? path.join(HOME, 'AppData', 'Local', 'ProgramsPrivate', 'secret.txt')
           : path.join(HOME, '.local', 'share', 'applications-private', 'secret.txt')
     expect(isAllowedLocalFilePath(sibling, roots)).toBe(false)
+  })
+})
+
+/**
+ * macOS gives one file two absolute names — `/tmp`, `/var` and `/etc` are symlinks into
+ * `/private`. A root configured as `/tmp/<x>` therefore stopped matching its own files once the
+ * renderer received them canonicalized (`TuffIconImpl` realpaths every icon candidate), and the
+ * plugin's own manifest icon came back as tfile 403 / NETWORK_FILE_FORBIDDEN.
+ */
+describe.skipIf(process.platform === 'win32')('darwin /private alias folding', () => {
+  const ROOT = '/tmp/tuff-runtime'
+  const CANONICAL_ROOT = '/private/tmp/tuff-runtime'
+
+  beforeEach(() => {
+    setPlatform('darwin')
+  })
+
+  afterEach(() => {
+    setPlatform(hostPlatform)
+  })
+
+  it.each([
+    {
+      name: 'a canonicalized file under the /tmp root',
+      filePath: `${CANONICAL_ROOT}/assets/logo.svg`,
+      root: ROOT,
+      allowed: true
+    },
+    {
+      name: 'a /tmp file against the canonicalized root',
+      filePath: `${ROOT}/assets/logo.svg`,
+      root: CANONICAL_ROOT,
+      allowed: true
+    },
+    {
+      name: 'a sibling under /private/tmp',
+      filePath: '/private/tmp/other/logo.svg',
+      root: ROOT,
+      allowed: false
+    },
+    {
+      name: 'a sibling whose name merely extends the root',
+      filePath: `${CANONICAL_ROOT}-backup/logo.svg`,
+      root: ROOT,
+      allowed: false
+    }
+  ])('$name: allowed=$allowed', ({ filePath, root, allowed }) => {
+    expect(isAllowedLocalFilePath(filePath, [root])).toBe(allowed)
+  })
+
+  it('does not let a /private-prefixed path escape the root through ..', () => {
+    // The fold must not run before normalization, and normalization must not be skipped: a
+    // prefix comparison on the raw string would accept both of these.
+    expect(isAllowedLocalFilePath(`${CANONICAL_ROOT}/../../etc/passwd`, [ROOT])).toBe(false)
+    expect(isAllowedLocalFilePath(`${ROOT}/../other/logo.svg`, [ROOT])).toBe(false)
+  })
+
+  it('leaves the alias unfolded off darwin', () => {
+    setPlatform('linux')
+
+    expect(isAllowedLocalFilePath(`${CANONICAL_ROOT}/assets/logo.svg`, [ROOT])).toBe(false)
   })
 })
 

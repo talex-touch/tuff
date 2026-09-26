@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   projectSpeechCatalogApiError: vi.fn(),
   // A machine with nothing installed: the module's route adoption then has nothing to do, which is
   // what this suite is not about.
-  installedSpeechModels: vi.fn(async () => []),
+  installedSpeechModels: vi.fn<() => Promise<Array<{ id: string }>>>(async () => []),
   speechModelCatalogView: vi.fn(),
   uninstallSpeechModel: vi.fn(),
   ensureLocalAsrRoute: vi.fn(),
@@ -217,6 +217,91 @@ describe('VoiceModule file transcription streams', () => {
     expect(context.error).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'VOICE_RECOGNITION_HOST_ONLY' })
     )
+    await module.onDestroy()
+  })
+})
+
+/** A transport context for a main-owned (non-plugin) caller, the shape these handlers receive. */
+function hostContext(): StreamTestContext {
+  return {
+    signal: new AbortController().signal,
+    isCancelled: () => false,
+    emit: vi.fn(),
+    end: vi.fn(),
+    error: vi.fn()
+  }
+}
+
+describe('VoiceModule speech model route adoption', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.handlers.clear()
+  })
+
+  /** Registers the module and waits out the launch adoption, so a case reads only its own calls. */
+  async function registerModuleAfterAdoption(): Promise<VoiceModule> {
+    const module = registerModule()
+    await eventually(() => {
+      expect(mocks.ensureLocalAsrRoute).toHaveBeenCalled()
+    })
+    mocks.ensureLocalAsrRoute.mockClear()
+    return module
+  }
+
+  it('re-adopts the route with the downloaded model once the install resolves', async () => {
+    const installGate = Promise.withResolvers<{
+      id: string
+      version: string
+      bytes: number
+      reused: number
+      downloaded: number
+    }>()
+    mocks.installSpeechModel.mockReturnValue(installGate.promise)
+    mocks.installedSpeechModels.mockImplementation(async () => [{ id: 'sense-voice-small' }])
+
+    const module = await registerModuleAfterAdoption()
+    const handler = mocks.handlers.get(voiceApiEvents.installSpeechModel.toEventName())
+    if (!handler) throw new Error('Missing speech model install handler')
+
+    const installTask = handler({ id: 'sense-voice-small', version: '1.0.0' }, hostContext())
+    await eventually(() => {
+      expect(mocks.installSpeechModel).toHaveBeenCalledWith('sense-voice-small', '1.0.0')
+    })
+    // The store has not changed yet, so there is nothing new to route.
+    expect(mocks.ensureLocalAsrRoute).not.toHaveBeenCalled()
+
+    installGate.resolve({
+      id: 'sense-voice-small',
+      version: '1.0.0',
+      bytes: 1,
+      reused: 0,
+      downloaded: 1
+    })
+    await installTask
+
+    expect(mocks.ensureLocalAsrRoute).toHaveBeenCalledWith(['sense-voice-small'])
+    await module.onDestroy()
+  })
+
+  it('re-adopts the route once the removal resolves so the gone model is unbound', async () => {
+    const removalGate = Promise.withResolvers<boolean>()
+    mocks.uninstallSpeechModel.mockReturnValue(removalGate.promise)
+    mocks.installedSpeechModels.mockImplementation(async () => [])
+
+    const module = await registerModuleAfterAdoption()
+    const handler = mocks.handlers.get(voiceApiEvents.uninstallSpeechModel.toEventName())
+    if (!handler) throw new Error('Missing speech model removal handler')
+
+    const removalTask = handler({ id: 'sense-voice-small', version: '1.0.0' }, hostContext())
+    await eventually(() => {
+      expect(mocks.uninstallSpeechModel).toHaveBeenCalledWith('sense-voice-small', '1.0.0')
+    })
+    expect(mocks.ensureLocalAsrRoute).not.toHaveBeenCalled()
+
+    removalGate.resolve(true)
+    await removalTask
+
+    expect(mocks.ensureLocalAsrRoute).toHaveBeenCalledWith([])
     await module.onDestroy()
   })
 })

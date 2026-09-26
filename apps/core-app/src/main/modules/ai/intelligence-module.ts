@@ -63,7 +63,8 @@ import { intelligenceContextExecutionService } from './intelligence-context-exec
 import { contextHygieneService } from './intelligence-context-hygiene'
 import {
   normalizeIntelligenceError,
-  toNormalizedIntelligenceError
+  toNormalizedIntelligenceError,
+  toStreamFailure
 } from './intelligence-error-normalizer'
 import { applyHomeConversationInjection } from './home-conversation-injection'
 import { getIntelligenceLocalEnvironment } from './intelligence-local-environment'
@@ -388,7 +389,8 @@ function createPluginIntelligencePermissionGuard<TReq>(
     try {
       await guard(payload, context)
     } catch (error) {
-      throw toIntelligenceStreamError(error)
+      // The permission guard only ever stops a plugin.
+      throw toIntelligenceStreamError(error, { host: false })
     }
   }
 }
@@ -411,9 +413,9 @@ function toStableIntelligenceErrorCode(error: unknown): string {
   }
 }
 
-function toIntelligenceStreamError(error: unknown): Error {
-  const code = toStableIntelligenceErrorCode(error)
-  return Object.assign(new Error(code), { code })
+/** A plugin gets the stable code alone; the app's own renderer also what the provider said. */
+function toIntelligenceStreamError(error: unknown, options: { host: boolean }): Error {
+  return toStreamFailure(toStableIntelligenceErrorCode(error), error, options)
 }
 
 function resolveContextActor(context: Pick<HandlerContext, 'plugin'>) {
@@ -1372,7 +1374,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           await handler(payload, context)
         } catch (error) {
           createErrorLogger(action)(error)
-          context.error(toIntelligenceStreamError(error))
+          context.error(toIntelligenceStreamError(error, { host: !context.plugin }))
         }
       })
     }

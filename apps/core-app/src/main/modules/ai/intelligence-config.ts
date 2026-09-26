@@ -313,16 +313,20 @@ function applyLocalAsrRouteUserPreference(): boolean {
 }
 
 /**
- * Binds an installed on-device model to `audio.asr` when nothing else routes it.
+ * Makes `audio.asr` follow the on-device model store.
  *
- * Called once per launch with what the model store actually holds. It stays out of the way of every
- * case it does not own: no model installed, a route the user closed, a channel already routing
- * `audio.asr`, or an on-device channel that is switched off. A route this module inferred must never
- * outrank a choice made on the channels page.
+ * Called once per launch with what the store holds, and again whenever an install or a removal
+ * changes it. Weights on disk decide the route: a bundle nobody is bound to is hundreds of megabytes
+ * dictation never consults, and a binding that outlives its model reports the route ready and then
+ * fails the decode.
+ *
+ * The user keeps the final word, and only that: a route closed on the channels page stays closed and
+ * a channel switched off there stays off, both of which arrive as state this function reads rather
+ * than as a reason to guess. Everything else is left alone — other channels keep their own bindings,
+ * their own priorities, and the `云端` source never sees this one.
  */
 export function ensureLocalAsrRoute(installedModelIds: string[]): void {
   const installed = installedModelIds.filter((id) => typeof id === 'string' && id.length > 0)
-  if (installed.length === 0) return
 
   try {
     ensureIntelligenceConfigLoaded()
@@ -341,10 +345,22 @@ export function ensureLocalAsrRoute(installedModelIds: string[]): void {
 
   const bindings = capability.providers
   const binding = findLocalAsrBinding(stored)
-  const otherRouteEnabled = bindings.some(
-    (candidate) => candidate.providerId !== LOCAL_ASR_PROVIDER_ID && candidate.enabled !== false
-  )
-  if (!binding && otherRouteEnabled) return
+
+  if (installed.length === 0) {
+    if (!binding) return
+    /*
+     * Set before the write. The config listener compares the route's usable state against this
+     * value, so releasing it here would otherwise be recorded as the user closing the route — and
+     * the marker it writes is what keeps the next install from binding again.
+     */
+    observedLocalAsrEnabled = false
+    capability.providers = bindings.filter(
+      (candidate) => candidate.providerId !== LOCAL_ASR_PROVIDER_ID
+    )
+    saveMainConfig(StorageList.IntelligenceConfig, stored)
+    intelligenceConfigLog.info('Released the on-device ASR route: no model is installed')
+    return
+  }
 
   /*
    * A model that is already bound stays bound while it is still on disk. Re-picking on every launch

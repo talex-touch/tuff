@@ -1,0 +1,30 @@
+{
+  "id": "corebox-list-motion",
+  "name": "corebox-list-motion",
+  "title": "CoreBox 列表与 item 加载过渡动效优化",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-25",
+  "completedAt": "2026-09-26",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-25-corebox-ux-polish",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "完成 CoreBox 列表与 item 加载过渡动效优化 分批提交与主线合并验证。",
+    "blocker": "无阻塞项。",
+    "evidence": "CoreBox 列表与 item 加载过渡动效优化: - R-E：统一门控，包括 CoreBox 挂上低电量开关和抽出 `shouldAnimate()`；; - R-A：预览面板迟滞；; - R-C：推荐路径不预先清空。"
+  }
+}

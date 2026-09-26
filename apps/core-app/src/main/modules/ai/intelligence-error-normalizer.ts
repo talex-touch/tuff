@@ -1,4 +1,5 @@
 import type { IntelligenceErrorCode as SharedIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
+import { homedir } from 'node:os'
 
 export type IntelligenceErrorCode = SharedIntelligenceErrorCode
 
@@ -182,4 +183,68 @@ export function toNormalizedIntelligenceError(
   wrapped.capabilityId = normalized.capabilityId
   wrapped.cause = error
   return wrapped
+}
+
+// ---------------------------------------------------------------------------
+// What the provider said, for the app's own renderer
+// ---------------------------------------------------------------------------
+
+/** Longest provider detail the renderer is sent: one or two lines of the failed bubble. */
+export const PROVIDER_DETAIL_MAX_CHARS = 300
+
+/**
+ * What the provider itself said about a failure (`providerDetail`, set where a local CLI's run ended
+ * without an answer), found on the error or anywhere down its `cause` chain — the SDK and the
+ * normalizer wrap errors on the way out.
+ */
+export function readProviderDetail(error: unknown): string | null {
+  let current: unknown = error
+  for (let depth = 0; depth < 6 && current && typeof current === 'object'; depth += 1) {
+    const detail = (current as { providerDetail?: unknown }).providerDetail
+    if (typeof detail === 'string' && detail.trim()) return detail
+    current = (current as { cause?: unknown }).cause
+  }
+  return null
+}
+
+const REDACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\bsk-[\w-]{6,}/g, 'sk-…'],
+  [/\b(bearer)\s+[\w.~+/=-]{8,}/gi, '$1 …'],
+  [
+    /\b(api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|authorization)(["']?\s*[:=]\s*["']?)[^\s"',;&]+/gi,
+    '$1$2…'
+  ],
+  // Any other long unbroken run of key-like characters.
+  [/[\w+/-]{32,}={0,2}/g, '…']
+]
+
+/**
+ * A provider's words made fit to show: one line, credential-shaped runs and the home directory
+ * masked, cut to {@link PROVIDER_DETAIL_MAX_CHARS}.
+ */
+export function redactProviderDetail(text: string, home = homedir()): string {
+  let out = text.replace(/\s+/g, ' ').trim()
+  if (home && home.length > 1) out = out.split(home).join('~')
+  for (const [pattern, replacement] of REDACTIONS) out = out.replace(pattern, replacement)
+  const chars = [...out]
+  return chars.length > PROVIDER_DETAIL_MAX_CHARS
+    ? `${chars.slice(0, PROVIDER_DETAIL_MAX_CHARS - 1).join('')}…`
+    : out
+}
+
+/**
+ * The error a failed intelligence stream ends with. Everyone gets the stable `code`. The app's own
+ * renderer (`host`) also gets what the provider said, as `[CODE] detail` — the prefix the Home
+ * conversation parses (`conversation-error-display.ts`) — so a CLI's 「invalid API key」 reaches the
+ * failed bubble instead of a bare UNKNOWN. A plugin gets the code alone: a provider's words can name
+ * the user's own endpoints and accounts.
+ */
+export function toStreamFailure(
+  code: string,
+  error: unknown,
+  options: { host: boolean }
+): Error & { code: string } {
+  const raw = options.host ? readProviderDetail(error) : null
+  const detail = raw ? redactProviderDetail(raw) : ''
+  return Object.assign(new Error(detail ? `[${code}] ${detail}` : code), { code })
 }

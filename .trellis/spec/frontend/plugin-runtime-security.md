@@ -3727,6 +3727,13 @@ await runtime.callLifecycle('onFeatureTriggered', [id, query, snapshotLifecycleF
   HTTP(S), require a valid Location, cap redirects, and strip Authorization before a
   cross-origin next hop. Recompute only automatic authority for the next actual URL; do not
   restore an explicit credential stripped from a previous origin.
+- That path must run on `net.request({ redirect: 'manual' })`, not `session.fetch`. Chromium's
+  fetch answers a manual-mode hop with `Error: Redirect was cancelled` instead of a 3xx response,
+  so a fetch-based implementation fails every redirecting download (the Nexus `download.tpex`
+  endpoint always answers 302) while mocked unit tests stay green. `net.request` reports the hop
+  through its `redirect` event, then cancels it; `net.request` also only accepts string/buffer
+  bodies, and its `IncomingMessage` is an EventEmitter without `pipe`/`destroy`, so the response
+  body is bridged into a `PassThrough` before it reaches `pipeline()` consumers.
 - A redirect response may have no body. The manual stream API still returns its status and
   headers so the provider can decide the next hop without buffering a package.
 - Stream and writer failures close both sides before deleting the partial file. Use the standard
@@ -3754,8 +3761,9 @@ await runtime.callLifecycle('onFeatureTriggered', [id, query, snapshotLifecycleF
   Authorization precedence, and invalid runtime base.
 - Download tests inspect the actual headers sent on same-origin and cross-origin hops, cover
   missing/invalid/overflow redirects, and simulate Windows `EBUSY` until the writer closes.
-- NetworkService tests prove the manual stream path uses `redirect: 'manual'` and exposes a
-  bodyless redirect. A mutation that reverses the origin check must make the security suite red.
+- NetworkService tests prove the manual stream path issues `net.request` with `redirect: 'manual'`
+  (and never `session.fetch`), exposes a bodyless redirect, and bridges the response body byte for
+  byte. A mutation that reverses the origin check must make the security suite red.
 
 ### 5. Wrong vs Correct
 

@@ -10,7 +10,7 @@ interface DownloadTestOptions extends IDownloadOptions {
 }
 
 const mocks = vi.hoisted(() => ({
-  downloadRequests: [] as Array<{ url: string; headers: Record<string, string> }>,
+  downloadRequests: [] as Array<{ url: string; headers: Record<string, string>; timeout?: number }>,
   downloadToTempFile: vi.fn(),
   getAuthToken: vi.fn(),
   getEnabledApiSources: vi.fn(),
@@ -77,7 +77,7 @@ function getHeader(headers: Record<string, string> | undefined, name: string): s
   return Object.entries(headers ?? {}).find(([key]) => key.toLowerCase() === normalizedName)?.[1]
 }
 
-function createDetailResponse(packageUrl: string): Record<string, unknown> {
+function createDetailResponse(packageUrl: string, packageSize = 64): Record<string, unknown> {
   return {
     plugin: {
       id: 'plugin-id',
@@ -93,7 +93,7 @@ function createDetailResponse(packageUrl: string): Record<string, unknown> {
         version: '1.0.0',
         channel: 'RELEASE',
         packageUrl,
-        packageSize: 64,
+        packageSize,
         artifactSha256: 'a'.repeat(64),
         nexusAttestation: {
           payload: {
@@ -136,7 +136,7 @@ describe('TpexPluginProvider request credentials', () => {
         const headers = options?.resolveHeadersForUrl
           ? await options.resolveHeadersForUrl(new URL(url), baseHeaders)
           : baseHeaders
-        mocks.downloadRequests.push({ url, headers })
+        mocks.downloadRequests.push({ url, headers, timeout: options?.timeout })
         return '/tmp/demo.tpex'
       }
     )
@@ -155,9 +155,31 @@ describe('TpexPluginProvider request credentials', () => {
     expect(mocks.downloadRequests).toEqual([
       {
         url: 'https://nexus.example.test/packages/demo.tpex',
-        headers: { Authorization: 'Bearer runtime-token' }
+        headers: { Authorization: 'Bearer runtime-token' },
+        timeout: 30_000
       }
     ])
+  })
+
+  it('raises the package download deadline for a size the 30s floor cannot cover', async () => {
+    const packageSize = 14_334_464
+    mocks.requestNoRedirect.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      data: createDetailResponse('/packages/demo.tpex', packageSize),
+      url: 'https://nexus.example.test/api/store/plugins/demo',
+      ok: true
+    })
+    const provider = new TpexPluginProvider({ apiBase: 'https://nexus.example.test' })
+
+    await provider.install({ source: 'tpex:demo', hintType: PluginProviderType.TPEX })
+
+    const timeout = mocks.downloadRequests[0]?.timeout
+    expect(timeout).toBeGreaterThan(30_000)
+    // The deadline has to fit the whole body at the pessimistic throughput, otherwise this
+    // package dies mid-download exactly the way it did at a fixed 30s.
+    expect(timeout).toBeGreaterThanOrEqual(Math.ceil((packageSize / (50 * 1024)) * 1000))
   })
 
   it('fails closed when the registry detail endpoint redirects', async () => {
@@ -188,7 +210,8 @@ describe('TpexPluginProvider request credentials', () => {
     expect(getHeader(detailOptions.headers, 'authorization')).toBeUndefined()
     expect(mocks.downloadRequests[0]).toEqual({
       url: 'https://store.example.test/packages/demo.tpex',
-      headers: {}
+      headers: {},
+      timeout: 30_000
     })
     expect(mocks.getAuthToken).not.toHaveBeenCalled()
   })

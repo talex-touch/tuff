@@ -189,9 +189,11 @@ A loading or ambient effect plays exactly while the main thread is busy (a searc
 - Keep `var()` out of `@keyframes`. Per-element parameters such as period, phase and hue sit on the element as custom properties and reach the animation through `calc()` in `animation-duration` / `animation-delay`, never through keyframe values.
 - Write the per-instance custom properties inline and keep one rule for every instance, instead of generating a selector per instance.
 
-Additive light only works on dark surfaces. `mix-blend-mode: plus-lighter` is what makes overlapping beams merge towards white on dark. On a near-white page it is invisible, and a white core reads as a grey smudge, so light mode keeps the core coloured and blends `normal`. `multiply` is not the fix: it turns blue over yellow into olive.
+Additive light only works on dark surfaces. `mix-blend-mode: plus-lighter` is what makes overlapping beams merge towards white on dark. A near-white page leaves nothing to add up to: blended with the page the beams vanish, and isolated in their own layer the overlaps only get denser. A white core reads as a grey smudge there too, so light mode keeps the core coloured and blends `normal`. `multiply` is not the fix: it turns blue over yellow into olive.
 
-Worked example: `TxPrismGlow` (2026-09-26); `prism-glow.test.ts` covers it.
+On a light surface, then, an overlap is the average of the two colours, and two hues more than about 120° apart average to grey. No blend mode fixes that at glow alphas, because a blend only rewrites the part of an overlap where both layers are opaque: `screen`, `lighten` and `plus-lighter` all left blue over yellow grey. What decides it is which hues overlap, and in a looping effect the phases decide that. Elements that set off together overlap for the first seconds, which is all a short loading state ever shows. Give each such group neighbouring hues on light surfaces, as a light-only hue order, and keep the dark order, where any overlap adds up to white. Judge it on frozen frames by chroma at an overlap pixel against how far it darkens the page, not by eye on a running loop.
+
+Worked example: `TxPrismGlow` (2026-09-26). `cones.ts` holds both hue orders; `prism-glow.test.ts` covers the loop, and its light hue order guard fails any order that sets off two hues more than 120° apart together.
 
 ### A loading surface retracts when content lands under it
 

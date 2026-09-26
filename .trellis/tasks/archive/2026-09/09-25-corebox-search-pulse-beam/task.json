@@ -1,0 +1,30 @@
+{
+  "id": "corebox-search-pulse-beam",
+  "name": "corebox-search-pulse-beam",
+  "title": "CoreBox 搜索中状态：整条 bar 背景左→右脉冲 + 底边 beam morph",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-25",
+  "completedAt": "2026-09-26",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-25-corebox-ux-polish",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "完成 CoreBox 搜索中状态：整条 bar 背景左→右脉冲 + 底边 beam morph 分批提交与主线合并验证。",
+    "blocker": "无阻塞项。",
+    "evidence": "CoreBox 搜索中状态：整条 bar 背景左→右脉冲 + 底边 beam morph: - 删除 `import SearchPulse from './SearchPulse.vue'`，改为 `import { TxPrismGlow } from '@talex-touch/tuffex/prism-glow'`；; - 模板里 `<SearchPulse :active=\"showSearchPulse\" />` 换成 `<TxPrismGlow class=\"CoreBox-SearchGlow\" :active=\"showSearchPulse\" :intensity=\"…\" "
+  }
+}

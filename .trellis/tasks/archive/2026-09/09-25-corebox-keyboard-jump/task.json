@@ -1,0 +1,30 @@
+{
+  "id": "corebox-keyboard-jump",
+  "name": "corebox-keyboard-jump",
+  "title": "CoreBox 下键选中跳到最后一个文件",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-25",
+  "completedAt": "2026-09-26",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-25-corebox-ux-polish",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "完成 CoreBox 下键选中跳到最后一个文件 分批提交与主线合并验证。",
+    "blocker": "无阻塞项。",
+    "evidence": "CoreBox 下键选中跳到最后一个文件: - `res` 变化前（`flush: 'pre'`）记下当前选中行是否在视口内；; - 更新后（`flush: 'post'`）分两种情况：; - focus 因新查询重置为 0 → 立即滚回顶部；"
+  }
+}

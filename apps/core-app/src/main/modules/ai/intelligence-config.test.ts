@@ -1117,6 +1117,214 @@ describe('intelligence-config Nexus sign-in activation', () => {
   })
 })
 
+const LOCAL_ASR_PROVIDER_ID = 'tuff-local-asr'
+const LOCAL_ASR_MODEL_ID = 'sense-voice-small'
+const CLOUD_ASR_PROVIDER_ID = 'custom-cloud-asr'
+
+/**
+ * A machine that already routes `audio.asr` through a configured cloud channel: the shape the
+ * on-device route used to stay out of, on the assumption that one route was the whole story.
+ */
+function createCloudAsrConfig() {
+  const guest = createGuestConfig()
+  const audioAsrProviders: StoredBinding[] = [
+    {
+      providerId: CLOUD_ASR_PROVIDER_ID,
+      priority: 2,
+      enabled: true,
+      models: ['paraformer-realtime-v2']
+    }
+  ]
+  return {
+    ...guest,
+    providers: [
+      ...guest.providers,
+      {
+        id: CLOUD_ASR_PROVIDER_ID,
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Custom Cloud ASR',
+        enabled: true,
+        priority: 2,
+        capabilities: ['audio.asr'],
+        metadata: { voiceAsr: { protocol: 'bailian-paraformer' } }
+      }
+    ],
+    capabilities: {
+      ...guest.capabilities,
+      'audio.asr': {
+        id: 'audio.asr',
+        name: 'Realtime ASR',
+        type: 'asr',
+        providers: audioAsrProviders
+      }
+    }
+  }
+}
+
+/** The on-device channel as this module writes it, marker included. */
+function localAsrChannel(overrides: Partial<StoredProvider> = {}): StoredProvider {
+  return {
+    id: LOCAL_ASR_PROVIDER_ID,
+    type: IntelligenceProviderType.CUSTOM,
+    name: 'Local Speech',
+    enabled: true,
+    capabilities: ['audio.asr'],
+    metadata: { channelType: 'on-device', voiceAsr: { protocol: 'local-offline' } },
+    ...overrides
+  }
+}
+
+function localAsrRouteBinding(): StoredBinding {
+  return {
+    providerId: LOCAL_ASR_PROVIDER_ID,
+    priority: 1,
+    enabled: true,
+    models: [LOCAL_ASR_MODEL_ID]
+  }
+}
+
+function localAsrProvider(): StoredProvider | undefined {
+  return storedConfig().providers.find((provider) => provider.id === LOCAL_ASR_PROVIDER_ID)
+}
+
+function localAsrRoute(): StoredBinding | undefined {
+  return storedConfig().capabilities['audio.asr']?.providers?.find(
+    (binding) => binding.providerId === LOCAL_ASR_PROVIDER_ID
+  )
+}
+
+/**
+ * Seeds a fixture the way a launch does — config loaded once, listeners live — and clears the write
+ * log so a case only observes the writes it causes itself.
+ */
+async function launchWithConfig(fixture: unknown) {
+  storageMocks.storedConfig = fixture
+  const imported = await importFreshConfigModule()
+  imported.config.ensureIntelligenceConfigLoaded(true)
+  imported.config.setupConfigUpdateListener()
+  storageMocks.saveMainConfig.mockClear()
+  return imported
+}
+
+describe('intelligence-config on-device ASR route adoption', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    authMocks.session.isSignedIn = false
+    authMocks.listeners.clear()
+    storageMocks.configListeners.clear()
+    authMocks.subscribeAuthState.mockImplementation(
+      (listener: (state: { isSignedIn: boolean }) => void) => {
+        authMocks.listeners.add(listener)
+        return () => authMocks.listeners.delete(listener)
+      }
+    )
+    storageMocks.storedConfig = undefined
+  })
+
+  it('binds an installed model even while another channel already serves audio.asr', async () => {
+    const { config } = await launchWithConfig(createCloudAsrConfig())
+    const cloudRouteBefore = structuredClone(
+      storedConfig().capabilities['audio.asr']?.providers?.find(
+        (binding) => binding.providerId === CLOUD_ASR_PROVIDER_ID
+      )
+    )
+    expect(cloudRouteBefore).toMatchObject({ enabled: true })
+
+    config.ensureLocalAsrRoute([LOCAL_ASR_MODEL_ID])
+
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        providers: expect.arrayContaining([
+          expect.objectContaining({
+            id: LOCAL_ASR_PROVIDER_ID,
+            enabled: true,
+            models: [LOCAL_ASR_MODEL_ID]
+          })
+        ]),
+        capabilities: expect.objectContaining({
+          'audio.asr': expect.objectContaining({
+            providers: expect.arrayContaining([localAsrRouteBinding()])
+          })
+        })
+      })
+    )
+    expect(localAsrProvider()).toMatchObject({
+      enabled: true,
+      capabilities: ['audio.asr'],
+      models: [LOCAL_ASR_MODEL_ID]
+    })
+    expect(localAsrProvider()?.metadata?.voiceAsr).toEqual({ protocol: 'local-offline' })
+    expect(localAsrRoute()).toEqual(localAsrRouteBinding())
+
+    // The cloud channel is not asked to make room: same binding, still enabled.
+    expect(
+      storedConfig().capabilities['audio.asr']?.providers?.find(
+        (binding) => binding.providerId === CLOUD_ASR_PROVIDER_ID
+      )
+    ).toEqual(cloudRouteBefore)
+  })
+
+  it('releases the route when the model is gone and binds it again on the next install', async () => {
+    const fixture = createCloudAsrConfig()
+    fixture.providers.push(localAsrChannel())
+    fixture.capabilities['audio.asr'].providers.push(localAsrRouteBinding())
+    const { config } = await launchWithConfig(fixture)
+
+    // The launch that finds the model on disk keeps the route.
+    config.ensureLocalAsrRoute([LOCAL_ASR_MODEL_ID])
+    expect(localAsrRoute()?.enabled).toBe(true)
+
+    // The model is removed: the route stops naming a bundle that is no longer there.
+    config.ensureLocalAsrRoute([])
+
+    expect(localAsrRoute()).toBeUndefined()
+    expect(storageMocks.saveMainConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        capabilities: expect.objectContaining({
+          'audio.asr': expect.objectContaining({
+            providers: [expect.objectContaining({ providerId: CLOUD_ASR_PROVIDER_ID })]
+          })
+        })
+      })
+    )
+
+    // Storage announces the write the way it announces any other. Releasing the route is this
+    // module's own doing, so it must not be recorded as the user closing it — the marker it would
+    // write is what keeps the next install from binding again.
+    storageMocks.emitConfigChanged()
+    expect(localAsrProvider()?.metadata?.localAsrRouteUserDisabled).toBeUndefined()
+
+    config.ensureLocalAsrRoute([LOCAL_ASR_MODEL_ID])
+    expect(localAsrRoute()).toEqual(localAsrRouteBinding())
+  })
+
+  it('leaves the route closed after the user switched the on-device channel off', async () => {
+    const fixture = createCloudAsrConfig()
+    fixture.providers.push(localAsrChannel({ metadata: { localAsrRouteUserDisabled: true } }))
+    const { config } = await launchWithConfig(fixture)
+
+    config.ensureLocalAsrRoute([LOCAL_ASR_MODEL_ID])
+
+    expect(storageMocks.saveMainConfig).not.toHaveBeenCalled()
+    expect(localAsrRoute()).toBeUndefined()
+    expect(localAsrProvider()?.metadata?.localAsrRouteUserDisabled).toBe(true)
+  })
+
+  it('does not re-enable an on-device channel the user switched off', async () => {
+    const fixture = createCloudAsrConfig()
+    fixture.providers.push(localAsrChannel({ enabled: false }))
+    const { config } = await launchWithConfig(fixture)
+
+    config.ensureLocalAsrRoute([LOCAL_ASR_MODEL_ID])
+
+    expect(storageMocks.saveMainConfig).not.toHaveBeenCalled()
+    expect(localAsrRoute()).toBeUndefined()
+    expect(localAsrProvider()?.enabled).toBe(false)
+  })
+})
+
 describe('intelligence-config auth listener wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks()

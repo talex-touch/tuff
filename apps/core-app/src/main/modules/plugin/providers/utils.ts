@@ -21,6 +21,26 @@ const DOWNLOAD_VALIDATE_STATUSES = [
   ...DOWNLOAD_REDIRECT_STATUSES
 ]
 const MAX_DOWNLOAD_REDIRECTS = 5
+const DOWNLOAD_TIMEOUT_FLOOR_MS = 30_000
+const DOWNLOAD_TIMEOUT_CEILING_MS = 10 * 60_000
+/** Pessimistic floor the deadline is scaled at; real links are usually far faster. */
+const DOWNLOAD_MIN_THROUGHPUT_BYTES_PER_SECOND = 50 * 1024
+
+/**
+ * Deadline for one package download.
+ *
+ * The timeout is a deadline for the *whole* body, so a fixed 30s only survives links faster than
+ * ~0.5 MB/s: a 14 MB package then dies mid-download with `NETWORK_TIMEOUT` on an ordinary
+ * connection. Scale by the registry's advertised size at a deliberately pessimistic throughput,
+ * keep the old 30s for small packages, and cap it so a stalled transfer still gives up.
+ */
+export function resolvePackageDownloadTimeout(packageSize?: number): number {
+  if (typeof packageSize !== 'number' || !Number.isFinite(packageSize) || packageSize <= 0) {
+    return DOWNLOAD_TIMEOUT_FLOOR_MS
+  }
+  const scaled = Math.ceil((packageSize / DOWNLOAD_MIN_THROUGHPUT_BYTES_PER_SECOND) * 1000)
+  return Math.min(Math.max(scaled, DOWNLOAD_TIMEOUT_FLOOR_MS), DOWNLOAD_TIMEOUT_CEILING_MS)
+}
 
 interface DownloadToTempFileOptions extends IDownloadOptions {
   resolveHeadersForUrl?: (

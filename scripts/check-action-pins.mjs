@@ -15,7 +15,7 @@
  * nothing looks exactly like a fully pinned repository.
  */
 
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -151,5 +151,23 @@ function main() {
 // Guarded so findUnpinned can be imported without running the check — without this, an
 // `import` of this module prints a verdict, which is exactly how my own adversarial test
 // of it produced a misleading pass.
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+//
+// Compared through `realpathSync`, not `path.resolve`: `process.argv[1]` is the path the caller used,
+// so invoking this through a symlink (a bin shim, a wrapper in a hooks directory) made the comparison
+// false, the script exit 0, and the check print nothing at all — a pin checker that matches nothing,
+// which reads exactly like a fully pinned repository. Measured 2026-09-25: `ln -s` + `node <link>`
+// produced no output and exit 0, while the same file run by its real path printed its verdict.
+function invokedDirectly() {
+  if (!process.argv[1])
+    return false
+  const self = fileURLToPath(import.meta.url)
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(self)
+  }
+  catch {
+    return path.resolve(process.argv[1]) === self
+  }
+}
+
+if (invokedDirectly())
   main()
