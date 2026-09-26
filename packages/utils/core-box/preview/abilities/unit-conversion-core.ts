@@ -73,6 +73,13 @@ const UNIT_CONVERSIONS: Readonly<Record<string, UnitConversion>> =
     "unit.length.yard": LINEAR(0.9144),
     "unit.length.foot": LINEAR(0.3048),
     "unit.length.inch": LINEAR(0.0254),
+    "unit.length.nautical-mile": LINEAR(1852),
+    "unit.length.light-year": LINEAR(9460730472580800),
+    "unit.length.astronomical-unit": LINEAR(149597870700),
+    "unit.length.chi": LINEAR(1 / 3),
+    "unit.length.cun": LINEAR(1 / 30),
+    "unit.length.zhang": LINEAR(10 / 3),
+    "unit.length.li": LINEAR(500),
 
     "unit.mass.tonne": LINEAR(1000),
     "unit.mass.kilogram": LINEAR(1),
@@ -109,6 +116,7 @@ const UNIT_CONVERSIONS: Readonly<Record<string, UnitConversion>> =
     "unit.area.square-centimeter": LINEAR(0.0001),
     "unit.area.hectare": LINEAR(10000),
     "unit.area.acre": LINEAR(4046.86),
+    "unit.area.mu": LINEAR(10000 / 15),
     "unit.area.square-foot": LINEAR(0.092903),
 
     "unit.volume.liter": LINEAR(1),

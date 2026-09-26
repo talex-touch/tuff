@@ -1,6 +1,6 @@
 import { DomainLexiconRegistry, type DomainLexiconEntry } from "./lexicon";
 
-export const UNIT_LEXICON_VERSION = "260000";
+export const UNIT_LEXICON_VERSION = "260100";
 
 export const UNIT_CATEGORIES = [
   "length",
@@ -93,6 +93,45 @@ export const UNIT_LEXICON_ENTRIES: readonly DomainLexiconEntry[] =
       "inch",
       ["英寸"],
       ["inch", "inches"],
+    ),
+    unit(
+      "unit.length.nautical-mile",
+      "length",
+      "nmi",
+      "海里",
+      "nautical mile",
+      ["海里", "浬"],
+      ["nautical mile", "nautical miles", "nmi"],
+    ),
+    unit(
+      "unit.length.light-year",
+      "length",
+      "ly",
+      "光年",
+      "light year",
+      ["光年"],
+      ["light year", "light years", "lightyear"],
+    ),
+    unit(
+      "unit.length.astronomical-unit",
+      "length",
+      "AU",
+      "天文单位",
+      "astronomical unit",
+      ["天文单位"],
+      ["astronomical unit", "astronomical units", "au"],
+    ),
+    unit("unit.length.chi", "length", "尺", "尺", "chi", ["市尺"], ["chi"]),
+    unit("unit.length.cun", "length", "寸", "寸", "cun", ["市寸"], ["cun"]),
+    unit("unit.length.zhang", "length", "丈", "丈", "zhang", ["市丈"], ["zhang"]),
+    unit(
+      "unit.length.li",
+      "length",
+      "里",
+      "里",
+      "li",
+      ["市里", "华里"],
+      ["chinese mile"],
     ),
 
     unit(
@@ -354,6 +393,7 @@ export const UNIT_LEXICON_ENTRIES: readonly DomainLexiconEntry[] =
       ["hectare", "hectares"],
     ),
     unit("unit.area.acre", "area", "acre", "英亩", "acre", ["英亩"], ["acres"]),
+    unit("unit.area.mu", "area", "亩", "亩", "mu", ["亩", "市亩"], ["mu"]),
     unit(
       "unit.area.square-foot",
       "area",

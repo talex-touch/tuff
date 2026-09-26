@@ -975,3 +975,27 @@ describe("PreviewSDK scientific constants", () => {
   );
 });
 
+describe("PreviewSDK new unit lexicon entries", () => {
+  it.each([
+    ["light year to km", "1 光年 to km", "9460730472580.8"],
+    ["light year alias to km", "1 ly to km", "9460730472580.8"],
+    ["astronomical unit to km", "1 天文单位 to km", "149597870.7"],
+    ["nautical mile to km", "1 海里 to km", "1.852"],
+    ["chinese li to meters", "1 里 to 米", "500"],
+    ["chinese chi to centimeters", "3 尺 to 厘米", "100"],
+    ["chinese zhang to meters", "10 丈 to 米", "33.3333"],
+    ["chinese cun to centimeters", "1 寸 to 厘米", "3.3333"],
+    ["mu to square meters", "1 亩 to 平方米", "666.6667"],
+    ["mu to hectares", "1 亩 to 公顷", "0.06667"],
+  ] as const)("converts %s", async (_name, query, expected) => {
+    const sdk = createPreviewSdk({ abilities: [new UnitConversionAbility()] });
+    const result = await sdk.resolve({
+      query: { text: query, inputs: [] },
+      signal: signal(),
+    });
+
+    expect(result?.abilityId).toBe("preview.unit");
+    expect(result?.payload.primaryValue).toBe(expected);
+  });
+});
+
