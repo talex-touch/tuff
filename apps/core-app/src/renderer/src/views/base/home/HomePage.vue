@@ -671,7 +671,8 @@ function toAttachment(file: File): AiAttachment {
 }
 
 function addFiles(files: File[]): void {
-  if (files.length === 0 || isStreaming.value) return
+  // Allowed while a reply streams, like typing: only sending waits for the turn to end.
+  if (files.length === 0) return
   pendingAttachments.value = [...pendingAttachments.value, ...files.map(toAttachment)]
 }
 
@@ -688,22 +689,43 @@ function onFilePick(event: Event): void {
   input.value = ''
 }
 
-function onPaste(event: ClipboardEvent): void {
-  const items = event.clipboardData?.items
-  if (!items) return
-
+/** The files a paste carries — a copied picture arrives as one `image/png` file item. */
+function pastedFiles(event: ClipboardEvent): File[] {
   const files: File[] = []
-  for (const item of Array.from(items)) {
+  for (const item of Array.from(event.clipboardData?.items ?? [])) {
     if (item.kind !== 'file') continue
     const file = item.getAsFile()
     if (file) files.push(file)
   }
-  if (files.length === 0) return
+  return files
+}
 
+function onPaste(event: ClipboardEvent): void {
+  const files = pastedFiles(event)
+  if (files.length === 0) return
   // Keeps platform side text (a Finder-copied file pastes its name) out of the draft.
   event.preventDefault()
   addFiles(files)
 }
+
+/**
+ * A picture pasted with the focus outside any field still lands in the composer: after a click on
+ * the send button, on the thread or on nothing, ⌘V never reaches the textarea's own handler.
+ * A paste into another field stays that field's; text pasted outside a field is dropped as before.
+ */
+function onPagePaste(event: ClipboardEvent): void {
+  if (event.defaultPrevented || !isHomeRoute.value) return
+  const target = event.target instanceof Element ? event.target : null
+  if (target?.closest('input, textarea, [contenteditable]:not([contenteditable="false"])')) return
+  const files = pastedFiles(event)
+  if (files.length === 0) return
+  event.preventDefault()
+  addFiles(files)
+  inputRef.value?.focus()
+}
+
+window.addEventListener('paste', onPagePaste)
+onBeforeUnmount(() => window.removeEventListener('paste', onPagePaste))
 
 /** Enter/leave fire per descendant — only the pair count says "still inside". */
 const dragDepth = ref(0)
@@ -714,7 +736,7 @@ function dragHasFiles(event: DragEvent): boolean {
 }
 
 function onDragEnter(event: DragEvent): void {
-  if (isStreaming.value || !dragHasFiles(event)) return
+  if (!dragHasFiles(event)) return
   event.preventDefault()
   dragDepth.value += 1
 }
