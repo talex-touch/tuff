@@ -1,4 +1,8 @@
-import type { IndexWorkerFile } from '../workers/file-index-worker-client'
+import type {
+  IndexedWorkerScheduleResult,
+  IndexedWorkerSchedulerSnapshot
+} from '@talex-touch/utils/search'
+import type { IndexWorkerBatchResult, IndexWorkerFile } from '../workers/file-index-worker-client'
 import path from 'node:path'
 import {
   IndexedWorkerSchedulerService,
@@ -29,17 +33,55 @@ export interface FileProviderIndexSchedulerDeps {
     providerId: string,
     providerType: string,
     files: IndexWorkerFile[]
-  ) => Promise<{ processed: number; failed: number }>
+  ) => Promise<IndexWorkerBatchResult>
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
   config?: {
     backgroundContentMinBytes?: number
-    backgroundDelayMs?: number
-    depthDelayMs?: number
-    depthPriorityStart?: number
     chunkSize?: number
+    maxInFlight?: number
+    maxPendingBatches?: number
   }
 }
 
+/**
+ * A batch whose worker reported failed files. Carries up to three of their
+ * `lastError` values so the `File index worker failed` warning says why.
+ */
+class FileIndexWorkerBatchFailedError extends Error {
+  readonly lastErrorSamples: string[]
+
+  constructor(result: IndexWorkerBatchResult) {
+    super(`FILE_INDEX_WORKER_BATCH_FAILED:${result.failed}/${result.processed}`)
+    this.lastErrorSamples = result.failureSamples ?? []
+  }
+}
+
+function withLastErrorSamples(
+  meta: Record<string, unknown> | undefined,
+  error: unknown
+): Record<string, unknown> | undefined {
+  if (!(error instanceof FileIndexWorkerBatchFailedError) || error.lastErrorSamples.length === 0) {
+    return meta
+  }
+  return { ...meta, lastErrorSamples: error.lastErrorSamples }
+}
+
+interface ScheduledEntry {
+  file: IndexWorkerFile
+  depth: number
+  background: boolean
+  order: number
+}
+
+/**
+ * File-specific adapter over the shared bounded `IndexedWorkerSchedulerService`.
+ *
+ * There are deliberately no per-file/per-depth timers: a large scan would create
+ * an unbounded timer queue. Shallow files are ordered first and large files
+ * last, so once the shared scheduler's capacity is full the tail — the large,
+ * deep work — is returned as `deferred` and stays durable in
+ * file_index_progress for the enrichment-resume service.
+ */
 export class FileProviderIndexSchedulerService {
   private readonly getDatabaseFilePath: FileProviderIndexSchedulerDeps['getDatabaseFilePath']
   private readonly getProviderId: FileProviderIndexSchedulerDeps['getProviderId']
@@ -49,7 +91,6 @@ export class FileProviderIndexSchedulerService {
   private readonly indexFiles: FileProviderIndexSchedulerDeps['indexFiles']
   private readonly config: Required<NonNullable<FileProviderIndexSchedulerDeps['config']>>
   private readonly scheduler: IndexedWorkerSchedulerService<IndexWorkerFile>
-  private readonly depthTimers = new Map<ReturnType<typeof setTimeout>, string | undefined>()
   private closed = false
 
   constructor(deps: FileProviderIndexSchedulerDeps) {
@@ -61,10 +102,9 @@ export class FileProviderIndexSchedulerService {
     this.indexFiles = deps.indexFiles
     this.config = {
       backgroundContentMinBytes: deps.config?.backgroundContentMinBytes ?? 5 * 1024 * 1024,
-      backgroundDelayMs: deps.config?.backgroundDelayMs ?? 5_000,
-      depthDelayMs: deps.config?.depthDelayMs ?? 750,
-      depthPriorityStart: deps.config?.depthPriorityStart ?? 2,
-      chunkSize: deps.config?.chunkSize ?? 30
+      chunkSize: deps.config?.chunkSize ?? 30,
+      maxInFlight: deps.config?.maxInFlight ?? 1,
+      maxPendingBatches: deps.config?.maxPendingBatches ?? 2
     }
     this.scheduler = new IndexedWorkerSchedulerService({
       getWorkerContext: () => this.getDatabaseFilePath(),
@@ -76,14 +116,19 @@ export class FileProviderIndexSchedulerService {
           files
         )
         if (result.failed > 0) {
-          throw new Error(`FILE_INDEX_WORKER_BATCH_FAILED:${result.failed}/${result.processed}`)
+          throw new FileIndexWorkerBatchFailedError(result)
         }
       },
       logWarn: (message, error, meta) =>
-        deps.logWarn(this.mapWorkerFailureMessage(message), error, meta),
+        deps.logWarn(
+          this.mapWorkerFailureMessage(message),
+          error,
+          withLastErrorSamples(meta, error)
+        ),
       config: {
         chunkSize: this.config.chunkSize,
-        deferredDelayMs: this.config.backgroundDelayMs
+        maxInFlight: this.config.maxInFlight,
+        maxPendingBatches: this.config.maxPendingBatches
       }
     })
   }
@@ -92,117 +137,66 @@ export class FileProviderIndexSchedulerService {
     files: FileProviderIndexSchedulerFile[],
     reason: string,
     mutationLeaseId?: string
-  ): void {
-    if (this.closed) return
-    const dbPath = this.getDatabaseFilePath()
-    if (!dbPath) {
-      return
+  ): IndexedWorkerScheduleResult {
+    if (this.closed || files.length === 0) {
+      return { accepted: 0, deferred: 0 }
+    }
+    if (!this.getDatabaseFilePath()) {
+      return { accepted: 0, deferred: 0 }
     }
 
-    const immediate: Array<{ file: IndexWorkerFile; depth: number }> = []
-    const deferred: Array<{ file: IndexWorkerFile; depth: number }> = []
-
+    const entries: ScheduledEntry[] = []
     for (const file of files) {
       const entry = this.toIndexWorkerFile(file, mutationLeaseId)
       if (!entry) continue
-
-      const depth = this.getRelativeWatchDepth(entry.path)
-      const target =
-        (entry.size ?? 0) >= this.config.backgroundContentMinBytes ? deferred : immediate
-      target.push({ file: entry, depth })
+      entries.push({
+        file: entry,
+        depth: this.getRelativeWatchDepth(entry.path),
+        background: (entry.size ?? 0) >= this.config.backgroundContentMinBytes,
+        order: entries.length
+      })
+    }
+    if (entries.length === 0) {
+      return { accepted: 0, deferred: 0 }
     }
 
-    this.scheduleByDepth(deferred, `${reason}:background-content`, true, mutationLeaseId)
-    this.scheduleByDepth(immediate, reason, false, mutationLeaseId)
+    entries.sort(
+      (left, right) =>
+        Number(left.background) - Number(right.background) ||
+        left.depth - right.depth ||
+        left.order - right.order
+    )
+
+    return this.scheduler.schedule({
+      payload: entries.map((entry) => entry.file),
+      reason,
+      scopeId: mutationLeaseId
+    })
+  }
+
+  getSnapshot(): IndexedWorkerSchedulerSnapshot {
+    return this.scheduler.getSnapshot()
   }
 
   hasPendingWork(mutationLeaseId?: string): boolean {
-    return this.hasDepthTimers(mutationLeaseId) || this.scheduler.hasPendingWork(mutationLeaseId)
+    return this.scheduler.hasPendingWork(mutationLeaseId)
   }
 
   async drain(timeoutMs = 15_000, mutationLeaseId?: string): Promise<void> {
-    const deadline = Date.now() + timeoutMs
-    while (this.hasDepthTimers(mutationLeaseId)) {
-      const remaining = deadline - Date.now()
-      if (remaining <= 0) throw new Error('FILE_INDEX_SCHEDULER_DRAIN_TIMEOUT')
-      await new Promise<void>((resolve) => setTimeout(resolve, Math.min(20, remaining)))
-    }
-    await this.scheduler.drain(Math.max(1, deadline - Date.now()), mutationLeaseId)
+    await this.scheduler.drain(timeoutMs, mutationLeaseId)
   }
 
   cancelLease(mutationLeaseId: string): void {
-    for (const [timer, timerLeaseId] of this.depthTimers) {
-      if (timerLeaseId !== mutationLeaseId) continue
-      clearTimeout(timer)
-      this.depthTimers.delete(timer)
-    }
     this.scheduler.cancelScope(mutationLeaseId)
   }
 
   cancelPending(mutationLeaseId?: string): void {
-    for (const [timer, timerLeaseId] of this.depthTimers) {
-      if (mutationLeaseId !== undefined && timerLeaseId !== mutationLeaseId) continue
-      clearTimeout(timer)
-      this.depthTimers.delete(timer)
-    }
     this.scheduler.cancelPending(mutationLeaseId)
   }
 
   close(): void {
     this.closed = true
-    this.cancelPending()
     this.scheduler.close()
-  }
-
-  private scheduleByDepth(
-    entries: Array<{ file: IndexWorkerFile; depth: number }>,
-    reason: string,
-    deferred: boolean,
-    mutationLeaseId?: string
-  ): void {
-    if (this.closed) return
-    if (entries.length === 0) {
-      return
-    }
-
-    const depthGroups = new Map<number, IndexWorkerFile[]>()
-    for (const entry of entries.sort((left, right) => left.depth - right.depth)) {
-      const group = depthGroups.get(entry.depth) ?? []
-      group.push(entry.file)
-      depthGroups.set(entry.depth, group)
-    }
-
-    for (const [depth, payload] of depthGroups) {
-      const depthDelayMs = this.getDepthDelayMs(depth)
-      if (deferred || depthDelayMs > 0) {
-        const timer = setTimeout(() => {
-          this.depthTimers.delete(timer)
-          this.scheduler.schedule({
-            payload,
-            reason: depthDelayMs > 0 ? `${reason}:depth-${depth}` : reason,
-            deferred,
-            scopeId: mutationLeaseId
-          })
-        }, depthDelayMs)
-        this.depthTimers.set(timer, mutationLeaseId)
-        continue
-      }
-
-      this.scheduler.schedule({ payload, reason, scopeId: mutationLeaseId })
-    }
-  }
-
-  private hasDepthTimers(mutationLeaseId?: string): boolean {
-    if (mutationLeaseId === undefined) return this.depthTimers.size > 0
-    for (const timerLeaseId of this.depthTimers.values()) {
-      if (timerLeaseId === mutationLeaseId) return true
-    }
-    return false
-  }
-
-  private getDepthDelayMs(depth: number): number {
-    const extraDepth = Math.max(0, depth - this.config.depthPriorityStart)
-    return extraDepth * this.config.depthDelayMs
   }
 
   private getRelativeWatchDepth(filePath: string): number {

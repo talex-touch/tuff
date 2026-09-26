@@ -32,6 +32,10 @@ export interface IndexWorkerFileResult {
   type: 'file'
   taskId: string
   fileId: number
+  /** File mtime (ms) this result was produced for; used to fence stale versions. */
+  fileVersion?: number
+  /** File size at scheduling time; second half of the version fingerprint. */
+  fileSize?: number | null
   progress: IndexWorkerProgressUpdate
   fileUpdate: IndexWorkerFileUpdate | null
   indexItem: SearchIndexItem
@@ -50,8 +54,15 @@ export interface IndexWorkerFile {
   mutationLeaseId?: string
 }
 
+/** Outcome of one worker batch; `failureSamples` holds up to three failed files' `lastError`. */
+export interface IndexWorkerBatchResult {
+  processed: number
+  failed: number
+  failureSamples?: string[]
+}
+
 interface PendingIndex {
-  resolve: (value: { processed: number; failed: number }) => void
+  resolve: (value: IndexWorkerBatchResult) => void
   reject: (error: Error) => void
   startedAt: number
   mutationLeaseId?: string
@@ -63,7 +74,7 @@ interface PendingMetrics {
 }
 
 type WorkerMessage =
-  | { type: 'done'; taskId: string; processed: number; failed: number }
+  | ({ type: 'done'; taskId: string } & IndexWorkerBatchResult)
   | { type: 'error'; taskId: string; error: string }
   | IndexWorkerFileResult
   | WorkerMetricsResponse
@@ -72,6 +83,13 @@ const fileProviderLog = getLogger('file-provider')
 
 export class FileIndexWorkerClient {
   private readonly onFile?: (payload: IndexWorkerFileResult) => void
+  /**
+   * Optional completion barrier awaited after a worker task reports `done`.
+   * `indexFiles` resolves only once it settles, so scheduler admission credit
+   * stays held until results are persisted and published. It must never call
+   * the parent scheduler's drain.
+   */
+  private readonly afterBatch?: () => Promise<void>
   private worker: Worker | null = null
   private pending = new Map<string, PendingIndex>()
   private metricsPending = new Map<string, PendingMetrics>()
@@ -86,8 +104,9 @@ export class FileIndexWorkerClient {
     shutdown: () => this.terminateWorker()
   })
 
-  constructor(onFile?: (payload: IndexWorkerFileResult) => void) {
+  constructor(onFile?: (payload: IndexWorkerFileResult) => void, afterBatch?: () => Promise<void>) {
     this.onFile = onFile
+    this.afterBatch = afterBatch
   }
 
   async indexFiles(
@@ -95,12 +114,12 @@ export class FileIndexWorkerClient {
     providerId: string,
     providerType: string,
     files: IndexWorkerFile[]
-  ): Promise<{ processed: number; failed: number }> {
+  ): Promise<IndexWorkerBatchResult> {
     const taskId = `index-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const startedAt = Date.now()
     const worker = this.ensureWorker()
 
-    return new Promise<{ processed: number; failed: number }>((resolve, reject) => {
+    return new Promise<IndexWorkerBatchResult>((resolve, reject) => {
       this.pending.set(taskId, {
         resolve,
         reject,
@@ -119,8 +138,14 @@ export class FileIndexWorkerClient {
     })
   }
 
+  /**
+   * Observational: never creates a worker and never extends worker liveness.
+   * Cancelling the idle timer here used to move the shutdown deadline on every
+   * poll, so a diagnostics reader polling faster than FILE_WORKER_IDLE_SHUTDOWN_MS
+   * kept the worker alive forever. An in-flight metrics request still defers
+   * shutdown through shouldShutdown() reading metricsPending.
+   */
   async getStatus(): Promise<WorkerStatusSnapshot> {
-    this.idleShutdown.cancel()
     const worker = this.worker
     const pendingCount = this.pending.size
     const metrics = worker ? await this.requestMetrics() : null
@@ -214,8 +239,6 @@ export class FileIndexWorkerClient {
     }
 
     if (message.type === 'done') {
-      this.pending.delete(message.taskId)
-      pending.resolve({ processed: message.processed, failed: message.failed })
       this.lastTask = {
         id: message.taskId,
         startedAt: new Date(pending.startedAt).toISOString(),
@@ -223,7 +246,13 @@ export class FileIndexWorkerClient {
         durationMs: Date.now() - pending.startedAt,
         error: null
       }
-      this.scheduleIdleShutdown()
+      // Keep the pending entry (and therefore hasPendingWork / admission
+      // credit) until the completion barrier settles.
+      void this.settleCompletedTask(message.taskId, pending, {
+        processed: message.processed,
+        failed: message.failed,
+        ...(message.failureSamples?.length ? { failureSamples: message.failureSamples } : {})
+      })
       return
     }
 
@@ -240,6 +269,30 @@ export class FileIndexWorkerClient {
       pending.reject(new Error(message.error))
       this.scheduleIdleShutdown()
     }
+  }
+
+  private async settleCompletedTask(
+    taskId: string,
+    pending: PendingIndex,
+    result: IndexWorkerBatchResult
+  ): Promise<void> {
+    try {
+      if (this.afterBatch) await this.afterBatch()
+    } catch (error) {
+      if (this.pending.get(taskId) !== pending) return
+      this.pending.delete(taskId)
+      const normalized = error instanceof Error ? error : new Error(String(error))
+      this.lastError = normalized.message
+      pending.reject(normalized)
+      this.scheduleIdleShutdown()
+      return
+    }
+    // Cancellation (cancelLease/shutdown) may have settled this task while the
+    // barrier was running; leave its settlement untouched.
+    if (this.pending.get(taskId) !== pending) return
+    this.pending.delete(taskId)
+    pending.resolve(result)
+    this.scheduleIdleShutdown()
   }
 
   private handleWorkerError(error: Error): void {

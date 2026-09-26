@@ -127,4 +127,59 @@ describe('dbUtils search-split routing (execWrite forwarding)', () => {
 
     expect(dbUtils.getFileIndexReadDb()).toBe(dbUtils.getDb())
   })
+
+  // Durable deferral contract: every existing row that is not already `pending` must be fenced
+  // back to pending BEFORE it can be re-admitted, so an enrichment batch the scheduler returns as
+  // `deferred` stays recoverable on the next resume — including a stale `processing` row left by a
+  // previous version of a changed file. Already-pending rows are left alone, and files with no
+  // progress row are covered by resume's isNull branch — so nothing is inserted here.
+  it('markFileEnrichmentPending fences every non-pending row back while leaving pending work untouched', async () => {
+    const main = await makeDb()
+    const search = await makeDb()
+
+    await search.client.execute(`CREATE TABLE file_index_progress (
+      file_id INTEGER NOT NULL PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'pending',
+      progress INTEGER NOT NULL DEFAULT 0,
+      processed_bytes INTEGER,
+      total_bytes INTEGER,
+      last_error TEXT,
+      started_at INTEGER,
+      updated_at INTEGER NOT NULL DEFAULT 0
+    )`)
+    await search.client.execute(`INSERT INTO file_index_progress
+      (file_id, status, progress, last_error, updated_at)
+      VALUES
+      (1, 'completed', 100, 'stale-error', 1000),
+      (2, 'pending', 50, NULL, 2000),
+      (3, 'processing', 10, NULL, 2500)`)
+
+    // Simulate the worker: run forwarded statements on the search connection.
+    const writer: DbUtilsSplitContext['writer'] = {
+      execWrite: async (statements) => {
+        for (const statement of statements) {
+          await search.client.execute({ sql: statement.sql, args: statement.args as InValue[] })
+        }
+        return []
+      }
+    }
+    const dbUtils = createDbUtils(main.db, main.db, {
+      enabled: true,
+      searchDb: search.db,
+      writer
+    })
+
+    await dbUtils.markFileEnrichmentPending([1, 2, 3, 4], new Date(5_000))
+
+    const rows = await search.client.execute(
+      'SELECT file_id, status, progress, last_error FROM file_index_progress ORDER BY file_id'
+    )
+    expect(rows.rows.map((row) => [row.file_id, row.status, row.progress, row.last_error])).toEqual(
+      [
+        [1, 'pending', 0, null],
+        [2, 'pending', 50, null],
+        [3, 'pending', 0, null]
+      ]
+    )
+  })
 })

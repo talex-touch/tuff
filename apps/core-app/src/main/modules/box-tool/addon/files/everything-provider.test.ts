@@ -4,6 +4,7 @@ const {
   transportOn,
   appTaskWaitForIdle,
   iconWorkerExtract,
+  iconServiceGetFileIconPath,
   execFileMock,
   spawnMock,
   accessMock,
@@ -20,6 +21,9 @@ const {
   transportOn: vi.fn(),
   appTaskWaitForIdle: vi.fn(() => Promise.resolve()),
   iconWorkerExtract: vi.fn(() => Promise.resolve<Buffer | null>(null)),
+  iconServiceGetFileIconPath: vi.fn<(filePath: string, size?: number) => Promise<string | null>>(
+    () => Promise.resolve(null)
+  ),
   execFileMock: vi.fn(),
   spawnMock: vi.fn(() => ({
     once: vi.fn(),
@@ -133,12 +137,24 @@ vi.mock('./workers/icon-worker-client', () => ({
   }))
 }))
 
+vi.mock('../../../../service/icon-service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../../service/icon-service')>()
+  // Producing the icon is the domain service's job: it stages real bytes and returns the cache path
+  // the renderer loads. Only that one call is replaced here — the rest of the service (and the
+  // worker plumbing it is mocked against) stays real for every other test in this file.
+  actual.iconService.getFileIconPath = iconServiceGetFileIconPath
+  return actual
+})
+
 vi.mock('./file-provider', () => ({
   fileProvider: {
     onSearch: fileProviderOnSearch
   }
 }))
 
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { everythingProvider } from './everything-provider'
 import { EverythingBackendService } from './everything-backend-service'
 import { EverythingInstallService } from './everything-install-service'
@@ -156,6 +172,15 @@ import {
   everythingTestEvent,
   everythingToggleEvent
 } from '../../../../../shared/events/everything'
+
+/**
+ * A real 1x1 PNG. A generated icon reaches the renderer as the cache path it was written to, and the
+ * item pipeline drops a path that cannot be read, so icon fixtures have to exist on disk.
+ */
+const ONE_PIXEL_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==',
+  'base64'
+)
 
 const initialManagedSdkDllPath = process.env.TALEX_EVERYTHING_DLL_PATH
 
@@ -338,6 +363,8 @@ afterEach(() => {
   appTaskWaitForIdle.mockResolvedValue(undefined)
   iconWorkerExtract.mockReset()
   iconWorkerExtract.mockResolvedValue(null)
+  iconServiceGetFileIconPath.mockReset()
+  iconServiceGetFileIconPath.mockResolvedValue(null)
   execFileMock.mockReset()
   spawnMock.mockReset()
   spawnMock.mockReturnValue({
@@ -897,32 +924,42 @@ describe('everything-provider fallback chain', () => {
     provider.isEnabled = true
 
     vi.spyOn(provider, 'searchEverything').mockResolvedValue([buildResult('C:/demo.txt')])
-    iconWorkerExtract.mockResolvedValue(Buffer.from('icon-bytes'))
 
-    const first = await withPlatform('win32', () =>
-      provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
-    )
+    // Icon production belongs to the domain service: it stages the image and hands back the cache
+    // path. That path is only usable if the file is really there, so the fixture is a real PNG.
+    const iconDir = fs.mkdtempSync(path.join(os.tmpdir(), 'everything-icons-'))
+    const iconPath = path.join(iconDir, 'demo.png')
+    fs.writeFileSync(iconPath, ONE_PIXEL_PNG)
+    iconServiceGetFileIconPath.mockResolvedValue(iconPath)
 
-    const icon = first.items?.[0]?.render?.basic?.icon
-    expect(icon).toEqual({
-      type: 'class',
-      value: 'i-ri-file-line'
-    })
-    expect(icon?.value?.startsWith('data:')).toBe(false)
+    try {
+      const first = await withPlatform('win32', () =>
+        provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
+      )
 
-    await Promise.resolve()
-    await Promise.resolve()
+      const icon = first.items?.[0]?.render?.basic?.icon
+      expect(icon).toEqual({
+        type: 'class',
+        value: 'i-ri-file-line'
+      })
 
-    const second = await withPlatform('win32', () =>
-      provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
-    )
+      // Once the icon exists, later queries serve it, and the warm-up is not repeated.
+      await vi.waitFor(async () => {
+        const warmed = await withPlatform('win32', () =>
+          provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
+        )
 
-    expect(second.items?.[0]?.render?.basic?.icon).toEqual({
-      type: 'url',
-      value: 'data:image/png;base64,aWNvbi1ieXRlcw=='
-    })
-    expect(iconWorkerExtract).toHaveBeenCalledTimes(1)
-    expect(appTaskWaitForIdle).toHaveBeenCalledTimes(1)
+        expect(warmed.items?.[0]?.render?.basic?.icon).toEqual({
+          type: 'url',
+          value: `tfile://${iconPath}`
+        })
+      })
+
+      expect(iconServiceGetFileIconPath).toHaveBeenCalledTimes(1)
+      expect(appTaskWaitForIdle).toHaveBeenCalledTimes(1)
+    } finally {
+      fs.rmSync(iconDir, { recursive: true, force: true })
+    }
   })
 
   it('aborts SDK search without switching backend state', async () => {

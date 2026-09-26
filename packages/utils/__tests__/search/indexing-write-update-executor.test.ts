@@ -6,8 +6,14 @@ interface TestUpdateRecord {
   value: string;
 }
 
+async function settleMicrotasks(): Promise<void> {
+  for (let index = 0; index < 8; index += 1) {
+    await Promise.resolve();
+  }
+}
+
 describe("indexing-write-update-executor-service", () => {
-  it("updates records in chunks, refreshes updated rows, and dispatches side effects", async () => {
+  it("updates every record and dispatches one side effect per chunk", async () => {
     const updates: TestUpdateRecord[] = [
       { id: 1, value: "a" },
       { id: 2, value: "b" },
@@ -15,7 +21,6 @@ describe("indexing-write-update-executor-service", () => {
     ];
     const updateOne = vi.fn(async () => {});
     const dispatchUpdated = vi.fn();
-    const waitBeforeChunk = vi.fn(async () => {});
     const runQueue = vi.fn(async (chunks, handler) => {
       for (const chunk of chunks) {
         await handler(chunk);
@@ -26,7 +31,7 @@ describe("indexing-write-update-executor-service", () => {
       TestUpdateRecord,
       TestUpdateRecord
     >({
-      waitBeforeChunk,
+      waitBeforeChunk: vi.fn(async () => {}),
       updateOne,
       refreshUpdated: async (chunk) =>
         chunk.map((record) => ({
@@ -45,24 +50,48 @@ describe("indexing-write-update-executor-service", () => {
       label: "test-update-executor",
     });
 
-    const result = await service.execute(updates, 2);
-
-    expect(runQueue).toHaveBeenCalledWith(
-      [[updates[0], updates[1]], [updates[2]]],
-      expect.any(Function),
-      {
-        estimatedTaskTimeMs: 20,
-        label: "test-update-executor",
-      },
-    );
-    expect(waitBeforeChunk).toHaveBeenCalledTimes(2);
-    expect(updateOne).toHaveBeenCalledTimes(3);
-    expect(dispatchUpdated).toHaveBeenCalledTimes(2);
-    expect(result).toEqual([
+    await expect(service.execute(updates, 2)).resolves.toEqual([
       { id: 1, value: "A" },
       { id: 2, value: "B" },
       { id: 3, value: "C" },
     ]);
+    expect(updateOne).toHaveBeenCalledTimes(3);
+    expect(dispatchUpdated).toHaveBeenCalledTimes(2);
+  });
+
+  it("waits for the updated-side-effect dispatch before resolving", async () => {
+    const updates: TestUpdateRecord[] = [{ id: 1, value: "a" }];
+    const dispatchGate = Promise.withResolvers<void>();
+    const service = new IndexedWriteUpdateExecutorService<
+      TestUpdateRecord,
+      TestUpdateRecord
+    >({
+      waitBeforeChunk: vi.fn(async () => {}),
+      updateOne: vi.fn(async () => {}),
+      refreshUpdated: async (chunk) => chunk,
+      dispatchUpdated: async () => {
+        await dispatchGate.promise;
+      },
+      runQueue: async (chunks, handler) => {
+        for (const chunk of chunks) {
+          await handler(chunk);
+        }
+      },
+      now: () => 0,
+      formatDuration: (durationMs) => `${durationMs}ms`,
+      logDebug: vi.fn(),
+    });
+
+    let settled = false;
+    const execution = service.execute(updates, 1).then((value) => {
+      settled = true;
+      return value;
+    });
+    await settleMicrotasks();
+    expect(settled).toBe(false);
+
+    dispatchGate.resolve(undefined);
+    await expect(execution).resolves.toEqual(updates);
   });
 
   it("uses a chunk writer once per chunk before refresh and side effects", async () => {

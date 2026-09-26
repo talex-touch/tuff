@@ -5,8 +5,14 @@ interface TestInsertRecord {
   path: string;
 }
 
+async function settleMicrotasks(): Promise<void> {
+  for (let index = 0; index < 8; index += 1) {
+    await Promise.resolve();
+  }
+}
+
 describe("indexing-write-insert-executor-service", () => {
-  it("persists records, dispatches inserted rows, and logs inserted count", async () => {
+  it("resolves only after the inserted side effect settles", async () => {
     const records: TestInsertRecord[] = [
       { path: "/tmp/a.txt" },
       { path: "/tmp/b.txt" },
@@ -16,7 +22,10 @@ describe("indexing-write-insert-executor-service", () => {
       id: index + 1,
     }));
     const persist = vi.fn(async () => inserted);
-    const dispatchInserted = vi.fn();
+    const dispatchGate = Promise.withResolvers<void>();
+    const dispatchInserted = vi.fn(async () => {
+      await dispatchGate.promise;
+    });
     const logDebug = vi.fn();
     const service = new IndexedWriteInsertExecutorService({
       persist,
@@ -25,9 +34,18 @@ describe("indexing-write-insert-executor-service", () => {
       successMessage: "test insert completed",
     });
 
-    await expect(service.execute(records)).resolves.toEqual(inserted);
-    expect(persist).toHaveBeenCalledWith(records);
-    expect(dispatchInserted).toHaveBeenCalledWith(inserted);
+    let settled = false;
+    const execution = service.execute(records).then((value) => {
+      settled = true;
+      return value;
+    });
+    await settleMicrotasks();
+
+    // The insert must not be reported complete while its side effect is outstanding.
+    expect(settled).toBe(false);
+
+    dispatchGate.resolve(undefined);
+    await expect(execution).resolves.toEqual(inserted);
     expect(logDebug).toHaveBeenCalledWith("test insert completed", {
       inserted: 2,
     });

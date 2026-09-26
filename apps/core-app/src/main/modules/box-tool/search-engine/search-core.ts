@@ -2131,6 +2131,8 @@ export class SearchEngineCore
       invalidateRecommendations: () => instance.invalidateAppRecommendationPresentation()
     })
     fileProvider.setIndexedSourceRuntimeMutationDelegate({
+      withMutationLease: async (operation) =>
+        await indexingRuntime.withSourceMutationLease(FILE_INDEXED_SOURCE_ID, operation),
       applyBatch: async (batch) => await indexingRuntime.applySourceBatch(batch),
       applyBatchWithPersistence: async (batch, records) => {
         const result = await indexingRuntime.applySourceBatchWithPersistence(batch, records)

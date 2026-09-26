@@ -1,5 +1,5 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, inArray, ne, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
 import {
@@ -27,6 +27,14 @@ export const FILE_INDEX_PERSISTENCE_RETRY_LABELS = {
 
 export interface FilePersistenceEntry {
   fileId: number
+  /**
+   * File mtime (ms) the worker produced this entry for. When it no longer
+   * matches `files.mtime`, a newer version already owns the row and this entry
+   * is skipped (never overwrites newer content or progress).
+   */
+  fileVersion?: number | null
+  /** File size at scheduling time; second half of the version fingerprint. */
+  fileSize?: number | null
   fileUpdate: {
     content: string | null
     embeddingStatus: string
@@ -53,6 +61,8 @@ export interface PersistEntriesSummary {
   embeddings: number
   /** File rows deleted before their asynchronous enrichment result reached SQLite. */
   staleFileIds?: number[]
+  /** Entries skipped because a newer file version already owns the row. */
+  supersededFileIds?: number[]
 }
 
 export interface UpsertFileRecord {
@@ -105,6 +115,7 @@ interface PersistChunkSummary {
   progressRows: number
   embeddings: number
   staleFileIds: number[]
+  supersededFileIds: number[]
 }
 
 export function withFileIndexPersistenceRetry<T>(
@@ -125,7 +136,8 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
       fileUpdates: 0,
       progressRows: 0,
       embeddings: 0,
-      staleFileIds: []
+      staleFileIds: [],
+      supersededFileIds: []
     }
 
     for (let offset = 0; offset < entries.length; offset += PERSIST_CHUNK_SIZE) {
@@ -137,6 +149,7 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
       summary.progressRows += chunkSummary.progressRows
       summary.embeddings += chunkSummary.embeddings
       summary.staleFileIds?.push(...chunkSummary.staleFileIds)
+      summary.supersededFileIds?.push(...chunkSummary.supersededFileIds)
 
       if (offset + PERSIST_CHUNK_SIZE < entries.length) {
         await new Promise<void>((resolve) => setTimeout(resolve, PERSIST_CHUNK_YIELD_MS))
@@ -149,41 +162,67 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
   async upsertFiles(records: UpsertFileRecord[]): Promise<Array<Record<string, unknown>>> {
     if (records.length === 0) return []
 
-    const rows = await withFileIndexPersistenceRetry(
+    return await withFileIndexPersistenceRetry(
       () =>
-        this.db
-          .insert(schema.files)
-          .values(
-            records.map((record) => ({
-              path: record.path,
-              name: record.name,
-              extension: record.extension ?? null,
-              size: typeof record.size === 'number' ? record.size : null,
-              mtime: toDate(record.mtime),
-              ctime: toDate(record.ctime),
-              lastIndexedAt: toDate(record.lastIndexedAt),
-              isDir: record.isDir,
-              type: record.type
-            }))
-          )
-          .onConflictDoUpdate({
-            target: schema.files.path,
-            set: {
-              name: sql`excluded.name`,
-              extension: sql`excluded.extension`,
-              size: sql`excluded.size`,
-              mtime: sql`excluded.mtime`,
-              ctime: sql`excluded.ctime`,
-              lastIndexedAt: sql`excluded.last_indexed_at`,
-              isDir: sql`excluded.is_dir`,
-              type: sql`excluded.type`
-            }
-          })
-          .returning(),
+        this.db.transaction(
+          async (tx) => {
+            const rows = await tx
+              .insert(schema.files)
+              .values(
+                records.map((record) => ({
+                  path: record.path,
+                  name: record.name,
+                  extension: record.extension ?? null,
+                  size: typeof record.size === 'number' ? record.size : null,
+                  mtime: toDate(record.mtime),
+                  ctime: toDate(record.ctime),
+                  lastIndexedAt: toDate(record.lastIndexedAt),
+                  isDir: record.isDir,
+                  type: record.type
+                }))
+              )
+              .onConflictDoUpdate({
+                target: schema.files.path,
+                set: {
+                  name: sql`excluded.name`,
+                  extension: sql`excluded.extension`,
+                  size: sql`excluded.size`,
+                  mtime: sql`excluded.mtime`,
+                  ctime: sql`excluded.ctime`,
+                  lastIndexedAt: sql`excluded.last_indexed_at`,
+                  isDir: sql`excluded.is_dir`,
+                  type: sql`excluded.type`
+                }
+              })
+              .returning()
+            await this.markPendingInTransaction(
+              tx,
+              rows.filter((row) => row.type === 'file').map((row) => row.id)
+            )
+            return rows as Array<Record<string, unknown>>
+          },
+          { behavior: 'immediate' }
+        ),
       FILE_INDEX_PERSISTENCE_RETRY_LABELS.upsertFiles
     )
+  }
 
-    return rows as Array<Record<string, unknown>>
+  private async markPendingInTransaction(
+    tx: Pick<LibSQLDatabase<typeof schema>, 'update'>,
+    fileIds: number[]
+  ): Promise<void> {
+    if (fileIds.length === 0) return
+    // A restart between metadata commit and scheduler admission must still see
+    // the changed file as dirty. Missing progress rows remain recoverable by IS NULL.
+    await tx
+      .update(schema.fileIndexProgress)
+      .set({ status: 'pending', progress: 0, lastError: null, updatedAt: new Date() })
+      .where(
+        and(
+          inArray(schema.fileIndexProgress.fileId, fileIds),
+          ne(schema.fileIndexProgress.status, 'pending')
+        )
+      )
   }
 
   async updateFileMetadata(
@@ -249,6 +288,12 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
                 .where(eq(schema.files.id, record.id))
               attemptSummary.updated += 1
             }
+            await this.markPendingInTransaction(
+              tx,
+              validated
+                .filter((record) => record.type === 'file' && existingFileIds.has(record.id))
+                .map((record) => record.id)
+            )
 
             return attemptSummary
           },
@@ -334,7 +379,8 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
         fileUpdates: 0,
         progressRows: 0,
         embeddings: 0,
-        staleFileIds: []
+        staleFileIds: [],
+        supersededFileIds: []
       }
     }
 
@@ -343,7 +389,11 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
         this.db.transaction(
           async (tx) => {
             const existingRows = await tx
-              .select({ fileId: schema.files.id })
+              .select({
+                fileId: schema.files.id,
+                mtime: schema.files.mtime,
+                size: schema.files.size
+              })
               .from(schema.files)
               .where(
                 inArray(
@@ -351,19 +401,40 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
                   entries.map((entry) => entry.fileId)
                 )
               )
-            const existingFileIds = new Set(existingRows.map((row) => row.fileId))
+            const fingerprintByFileId = new Map(
+              existingRows.map((row) => [
+                row.fileId,
+                { mtime: row.mtime.getTime(), size: row.size ?? null }
+              ])
+            )
             const summary: PersistChunkSummary = {
               persistedRows: 0,
               fileUpdates: 0,
               progressRows: 0,
               embeddings: 0,
-              staleFileIds: []
+              staleFileIds: [],
+              supersededFileIds: []
             }
 
             for (const entry of entries) {
               const { fileId, fileUpdate, progress } = entry
-              if (!existingFileIds.has(fileId)) {
+              const currentFingerprint = fingerprintByFileId.get(fileId)
+              if (!currentFingerprint) {
                 summary.staleFileIds.push(fileId)
+                continue
+              }
+              if (
+                typeof entry.fileVersion === 'number' &&
+                Number.isFinite(entry.fileVersion) &&
+                (currentFingerprint.mtime !== entry.fileVersion ||
+                  currentFingerprint.size !== (entry.fileSize ?? null))
+              ) {
+                // A newer file version already owns this row: skip both content
+                // and progress so an older result can never resurrect stale
+                // content or reset newer progress to completed. Size is part of
+                // the fingerprint because mtime can be quantized to seconds, so
+                // an in-second change would otherwise slip past an mtime-only fence.
+                summary.supersededFileIds.push(fileId)
                 continue
               }
 

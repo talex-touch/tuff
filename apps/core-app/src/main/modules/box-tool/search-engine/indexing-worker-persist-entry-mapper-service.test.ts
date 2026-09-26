@@ -40,6 +40,8 @@ describe('indexing-worker-persist-entry-mapper-service', () => {
     expect(entries).toEqual([
       {
         fileId: 1,
+        fileVersion: null,
+        fileSize: null,
         fileUpdate: {
           content: 'hello',
           embeddingStatus: 'completed',

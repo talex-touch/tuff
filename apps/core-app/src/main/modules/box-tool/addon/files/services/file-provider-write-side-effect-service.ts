@@ -11,7 +11,11 @@ export interface FileProviderWriteSideEffectOptions {
 
 export interface FileProviderWriteSideEffectServiceDeps<TFile> {
   processFileExtensions: (files: TFile[]) => Promise<void>
-  scheduleIndexing: (files: TFile[], reason: string, mutationLeaseId?: string) => void
+  scheduleIndexing: (
+    files: TFile[],
+    reason: string,
+    mutationLeaseId?: string
+  ) => void | Promise<unknown>
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
 }
 
@@ -27,7 +31,7 @@ export class FileProviderWriteSideEffectService<TFile> {
     })
   }
 
-  dispatch(files: TFile[], options: FileProviderWriteSideEffectOptions): void {
-    this.dispatcher.dispatch(files, options satisfies IndexedWriteSideEffectOptions)
+  dispatch(files: TFile[], options: FileProviderWriteSideEffectOptions): Promise<void> {
+    return this.dispatcher.dispatch(files, options satisfies IndexedWriteSideEffectOptions)
   }
 }

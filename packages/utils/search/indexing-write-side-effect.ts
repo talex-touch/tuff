@@ -1,52 +1,32 @@
 export interface IndexedWriteSideEffectOptions {
-  extensionContext: string;
-  indexReason: string;
-  mutationLeaseId?: string;
+  extensionContext: string
+  indexReason: string
+  mutationLeaseId?: string
 }
 
 export interface IndexedWriteSideEffectServiceDeps<TRecord> {
-  processExtensions: (records: TRecord[]) => Promise<void>;
-  scheduleIndexing: (
-    records: TRecord[],
-    reason: string,
-    mutationLeaseId?: string,
-  ) => void;
-  logWarn: (
-    message: string,
-    error?: unknown,
-    meta?: Record<string, unknown>,
-  ) => void;
-  formatExtensionFailureMessage?: (context: string) => string;
+  processExtensions: (records: TRecord[]) => Promise<void>
+  scheduleIndexing: (records: TRecord[], reason: string, mutationLeaseId?: string) => void | Promise<unknown>
+  logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
+  formatExtensionFailureMessage?: (context: string) => string
 }
 
 export class IndexedWriteSideEffectService<TRecord> {
-  private readonly formatExtensionFailureMessage: (context: string) => string;
+  private readonly formatExtensionFailureMessage: (context: string) => string
 
-  constructor(
-    private readonly deps: IndexedWriteSideEffectServiceDeps<TRecord>,
-  ) {
+  constructor(private readonly deps: IndexedWriteSideEffectServiceDeps<TRecord>) {
     this.formatExtensionFailureMessage =
-      deps.formatExtensionFailureMessage ??
-      ((context) => `processExtensions failed (${context})`);
+      deps.formatExtensionFailureMessage ?? (context => `processExtensions failed (${context})`)
   }
 
-  dispatch(records: TRecord[], options: IndexedWriteSideEffectOptions): void {
+  async dispatch(records: TRecord[], options: IndexedWriteSideEffectOptions): Promise<void> {
     if (records.length === 0) {
-      return;
+      return
     }
 
-    void this.deps
+    await this.deps.scheduleIndexing(records, options.indexReason, options.mutationLeaseId)
+    await this.deps
       .processExtensions(records)
-      .catch((error) =>
-        this.deps.logWarn(
-          this.formatExtensionFailureMessage(options.extensionContext),
-          error,
-        ),
-      );
-    this.deps.scheduleIndexing(
-      records,
-      options.indexReason,
-      options.mutationLeaseId,
-    );
+      .catch(error => this.deps.logWarn(this.formatExtensionFailureMessage(options.extensionContext), error))
   }
 }

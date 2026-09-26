@@ -40,6 +40,8 @@ describe("indexing-worker-persist-entry-mapper", () => {
     expect(entries).toEqual([
       {
         fileId: 1,
+        fileVersion: null,
+        fileSize: null,
         fileUpdate: {
           content: "hello",
           embeddingStatus: "completed",
@@ -98,5 +100,35 @@ describe("indexing-worker-persist-entry-mapper", () => {
       },
     });
     expect(entries[0]).not.toHaveProperty("indexItem");
+  });
+
+  // The persistence layer fences a stale result by the file version it was produced for (#1964):
+  // a newer mtime/size already on the row wins over an older deferred result.
+  it("carries the worker's file version fingerprint through to persistence", () => {
+    const mapper = new IndexedWorkerPersistEntryMapperService();
+
+    const [entry] = mapper.map([
+      {
+        fileId: 3,
+        fileVersion: 1_790_000_000_000,
+        fileSize: 4096,
+        fileUpdate: null,
+        progress: {
+          status: "completed",
+          progress: 100,
+          processedBytes: 4096,
+          totalBytes: 4096,
+          lastError: null,
+          startedAt: null,
+          updatedAt: null,
+        },
+      },
+    ]);
+
+    expect(entry).toMatchObject({
+      fileId: 3,
+      fileVersion: 1_790_000_000_000,
+      fileSize: 4096,
+    });
   });
 });
