@@ -1,16 +1,50 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { app, BrowserWindow } from 'electron'
 import * as Sentry from '@sentry/electron/main'
 import type { TelemetryUploadStatsRecord } from './telemetry-upload-stats-store'
+import type * as LoggerModule from '../../utils/logger'
 import { sanitizeNexusTelemetryEvent, sanitizeSentryEvent } from './telemetry-sanitizer'
 
 const networkRequestMock = vi.hoisted(() => vi.fn())
+
+const DEFAULT_INNER_ROOT_PATH = '/tmp/tuff-sentry-test'
+const DEFAULT_CRASH_DUMPS_PATH = '/tmp/tuff-sentry-test/crash-dumps'
+
+/**
+ * Mutable so native-crash tests can point the pre-init config lookup (and therefore the crash dump
+ * root) at a per-test temp directory instead of a shared path that a leftover run could poison.
+ */
+const precoreMock = vi.hoisted(() => ({ innerRootPath: '/tmp/tuff-sentry-test' }))
+
+type CrashDiagnosticLogRecord = {
+  level: string
+  message: string
+  meta: Record<string, unknown> | undefined
+}
+
+/**
+ * Records only the SentryService namespace so native-crash diagnostics can be inspected for leaked
+ * dump names/paths/content without silencing the rest of the module graph.
+ */
+const crashDiagnosticLogs = vi.hoisted(() => {
+  const records: CrashDiagnosticLogRecord[] = []
+  return {
+    records,
+    reset: () => {
+      records.length = 0
+    }
+  }
+})
 
 vi.mock('electron', () => ({
   app: {
     isPackaged: false,
     on: vi.fn(),
     off: vi.fn(),
+    getPath: vi.fn(() => '/tmp/tuff-sentry-test/crash-dumps'),
     commandLine: { appendSwitch: vi.fn() }
   },
   BrowserWindow: {
@@ -41,6 +75,7 @@ vi.mock('electron', () => ({
 
 vi.mock('@sentry/electron/main', () => ({
   init: vi.fn(),
+  getClient: vi.fn(),
   setContext: vi.fn(),
   setUser: vi.fn(),
   setTag: vi.fn(),
@@ -49,9 +84,34 @@ vi.mock('@sentry/electron/main', () => ({
   captureException: vi.fn()
 }))
 
-vi.mock('../../core/precore', () => ({
-  innerRootPath: '/tmp/tuff-sentry-test'
-}))
+vi.mock('../../core/precore', () => precoreMock)
+
+vi.mock('../../utils/logger', async (importOriginal) => {
+  const actual = await importOriginal<typeof LoggerModule>()
+  return {
+    ...actual,
+    createLogger: (namespace: string) => {
+      const logger = actual.createLogger(namespace)
+      if (namespace !== 'SentryService') return logger
+      const record =
+        (level: string) => (message: unknown, options?: Parameters<typeof logger.info>[1]) => {
+          crashDiagnosticLogs.records.push({
+            level,
+            message: String(message),
+            meta: options?.meta as Record<string, unknown> | undefined
+          })
+        }
+      return {
+        ...logger,
+        info: record('info'),
+        warn: record('warn'),
+        error: record('error'),
+        success: record('success'),
+        debug: record('debug')
+      }
+    }
+  }
+})
 
 vi.mock('../database', () => ({
   databaseModule: {
@@ -72,7 +132,13 @@ vi.mock('../network', () => ({
   }))
 }))
 
-import { SentryServiceModule } from './sentry-service'
+vi.mock('../nexus/runtime-base', () => ({
+  getRuntimeNexusBaseUrl: vi.fn(() => 'https://nexus.test')
+}))
+
+import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
+import { subscribeMainConfig } from '../storage'
+import { SentryServiceModule, type NativeCrashDeliveryStatus } from './sentry-service'
 
 type TestableWindowPerf = {
   ensureWindowPerformanceListeners: () => void
@@ -340,6 +406,284 @@ describe('SentryServiceModule Nexus telemetry privacy gates', () => {
     expect(remove).not.toHaveBeenCalledWith(2)
     expect(markAttempt).not.toHaveBeenCalled()
   })
+
+  it('flushes the accepted Nexus telemetry once on destroy, then ignores late search and queued flush events', async () => {
+    const pollingService = {
+      isRegistered: vi.fn(() => false),
+      register: vi.fn(),
+      start: vi.fn(),
+      unregister: vi.fn()
+    }
+    const reportQueue = {
+      insert: vi.fn(async () => {}),
+      list: vi.fn(async () => [])
+    }
+    const telemetryStats = {
+      upsert: vi.fn(async () => {})
+    }
+    const service = new SentryServiceModule() as unknown as {
+      config: { enabled: boolean; anonymous: boolean }
+      pollingService: typeof pollingService
+      getReportQueueStore: () => typeof reportQueue
+      getTelemetryStatsStore: () => typeof telemetryStats
+      nexusTelemetryBuffer: unknown[]
+      isTelemetryEnabled: () => boolean
+      queueNexusTelemetry: (event: { eventType: string }) => void
+      onDestroy: (ctx: { appClosing?: boolean }) => Promise<void>
+    }
+    service.pollingService = pollingService
+    service.getReportQueueStore = () => reportQueue
+    service.getTelemetryStatsStore = () => telemetryStats
+    service.config = { enabled: true, anonymous: false }
+
+    service.queueNexusTelemetry({ eventType: 'search' })
+    expect(service.nexusTelemetryBuffer).toHaveLength(1)
+    const flushTask = pollingService.register.mock.calls[0]?.[1] as
+      | (() => Promise<void>)
+      | undefined
+    if (!flushTask) throw new Error('Expected the Nexus telemetry flush task to be registered')
+
+    await service.onDestroy({ appClosing: false })
+
+    // The event accepted before destroy is written to the outbox exactly once...
+    expect(reportQueue.insert).toHaveBeenCalledTimes(1)
+    expect(service.nexusTelemetryBuffer).toEqual([])
+
+    // ...after which the events that outlive the module -- a late search event and the already
+    // captured polling flush callback -- must not read/write a storage-backed store or re-arm the
+    // timer. ModuleManager keeps delivering while Storage/Database unload, and an unguarded flush
+    // there constructs stores against a torn-down StorageModule.
+    for (const spy of [
+      reportQueue.insert,
+      reportQueue.list,
+      telemetryStats.upsert,
+      pollingService.register,
+      pollingService.start
+    ]) {
+      spy.mockClear()
+    }
+
+    expect(service.isTelemetryEnabled()).toBe(false)
+    expect(() => service.queueNexusTelemetry({ eventType: 'search' })).not.toThrow()
+    await expect(flushTask()).resolves.toBeUndefined()
+
+    expect(service.nexusTelemetryBuffer).toEqual([])
+    expect(reportQueue.insert).not.toHaveBeenCalled()
+    expect(reportQueue.list).not.toHaveBeenCalled()
+    expect(telemetryStats.upsert).not.toHaveBeenCalled()
+    expect(pollingService.register).not.toHaveBeenCalled()
+    expect(pollingService.start).not.toHaveBeenCalled()
+  })
+
+  type TeardownHarness = {
+    config: { enabled: boolean; anonymous: boolean }
+    pollingService: {
+      isRegistered: (id: string) => boolean
+      register: (id: string, task?: unknown, options?: unknown) => void
+      start: () => void
+      unregister: (id: string) => void
+    }
+    getReportQueueStore: () => {
+      insert: (item: { endpoint: string; payload: { events: unknown[] } }) => Promise<void>
+      list: (cutoff?: number) => Promise<unknown[]>
+      remove: (id: number) => Promise<void>
+      markAttempt: (id: number, error?: string) => Promise<void>
+    } | null
+    getTelemetryStatsStore: () => {
+      get: () => Promise<unknown>
+      upsert: (record: unknown) => Promise<void>
+    } | null
+    nexusTelemetryBuffer: unknown[]
+    telemetryStatsPersistTimer: NodeJS.Timeout | null
+    eventLoopDelay?: { disable: () => void }
+    isTelemetryEnabled: () => boolean
+    queueNexusTelemetry: (event: { eventType: string; metadata?: Record<string, unknown> }) => void
+    saveConfig: (config: { enabled?: boolean; anonymous?: boolean }) => void
+    schedulePersistTelemetryStats: () => void
+    onInit: (ctx: unknown) => Promise<void>
+    onDestroy: (ctx: { appClosing?: boolean }) => Promise<void>
+    setupIPCChannels: (ctx: unknown) => void
+    syncPerformanceMonitors: () => void
+    ensureWindowPerformanceListeners: () => void
+    waitForShutdownGrace: (appClosing: boolean) => Promise<void>
+  }
+
+  /**
+   * Deterministic teardown harness: the polling registry is stateful (so `isRegistered` reflects what
+   * was actually armed) and every storage/database/Electron boundary is a fake, keeping the lifecycle
+   * contract observable without a real timer, DB, or window.
+   */
+  function createTeardownHarness() {
+    const tasks = new Set<string>()
+    const pollingService = {
+      isRegistered: vi.fn((id: string) => tasks.has(id)),
+      register: vi.fn((id: string, _task?: unknown, _options?: unknown) => {
+        tasks.add(id)
+      }),
+      start: vi.fn(),
+      unregister: vi.fn((id: string) => {
+        tasks.delete(id)
+      })
+    }
+    const reportQueue = {
+      insert: vi.fn<(item: { endpoint: string; payload: { events: unknown[] } }) => Promise<void>>(
+        async () => {}
+      ),
+      list: vi.fn(async () => [] as unknown[]),
+      remove: vi.fn(async () => {}),
+      markAttempt: vi.fn(async () => {})
+    }
+    const statsStore = {
+      get: vi.fn(async () => null),
+      upsert: vi.fn(async () => {})
+    }
+    // Private lifecycle seams are the test's access contract; no public surface exposes them.
+    const service = new SentryServiceModule() as unknown as TeardownHarness
+    service.pollingService = pollingService
+    service.getReportQueueStore = () => reportQueue
+    service.getTelemetryStatsStore = () => statsStore
+    service.setupIPCChannels = vi.fn()
+    service.ensureWindowPerformanceListeners = vi.fn()
+    service.waitForShutdownGrace = vi.fn(async () => {})
+    service.config = { enabled: true, anonymous: false }
+    return { service, pollingService, reportQueue, statsStore }
+  }
+
+  it('refuses a late telemetry burst after destroy without reading storage, re-arming the timer, or latching admission', async () => {
+    const { service, pollingService, reportQueue } = createTeardownHarness()
+    service.syncPerformanceMonitors = vi.fn()
+    await service.onInit({ app: { channel: {} } })
+    expect(service.isTelemetryEnabled()).toBe(true)
+
+    await service.onDestroy({ appClosing: true })
+    expect(reportQueue.insert).not.toHaveBeenCalled()
+
+    // Storage/Database are gone: any resolver that reaches them explodes. A full batch (>= the flush
+    // size) is the case that used to reach the fire-and-forget flush synchronously. The resolver cast
+    // matches the harness field; the fake only has to throw.
+    const tornDownStorage = vi.fn(() => {
+      throw new Error('StorageModule not ready')
+    })
+    service.getReportQueueStore = tornDownStorage as unknown as () => typeof reportQueue
+    networkRequestMock.mockClear()
+    pollingService.register.mockClear()
+    pollingService.start.mockClear()
+
+    for (let index = 0; index < 25; index += 1) {
+      expect(() =>
+        service.queueNexusTelemetry({
+          eventType: 'feature_use',
+          metadata: { featureId: `late-${index}` }
+        })
+      ).not.toThrow()
+    }
+
+    expect(service.nexusTelemetryBuffer).toEqual([])
+    expect(service.isTelemetryEnabled()).toBe(false)
+    expect(tornDownStorage).not.toHaveBeenCalled()
+    expect(networkRequestMock).not.toHaveBeenCalled()
+    expect(pollingService.isRegistered('sentry.nexus.flush')).toBe(false)
+    expect(pollingService.register).not.toHaveBeenCalled()
+    expect(pollingService.start).not.toHaveBeenCalled()
+
+    // A later init reopens admission instead of latching the module shut for the whole process.
+    await service.onInit({ app: { channel: {} } })
+    expect(service.isTelemetryEnabled()).toBe(true)
+    service.queueNexusTelemetry({
+      eventType: 'feature_use',
+      metadata: { featureId: 'after-reinit' }
+    })
+    expect(service.nexusTelemetryBuffer).toHaveLength(1)
+    expect(pollingService.isRegistered('sentry.nexus.flush')).toBe(true)
+  })
+
+  it('drains the accepted telemetry to the resolved outbox endpoint and drains the outbox on a live store', async () => {
+    const { service, reportQueue } = createTeardownHarness()
+    service.queueNexusTelemetry({ eventType: 'feature_use', metadata: { featureId: 'accepted-a' } })
+    service.queueNexusTelemetry({ eventType: 'feature_use', metadata: { featureId: 'accepted-b' } })
+    expect(service.nexusTelemetryBuffer).toHaveLength(2)
+
+    await service.onDestroy({ appClosing: false })
+
+    expect(reportQueue.insert).toHaveBeenCalledTimes(1)
+    expect(reportQueue.insert.mock.calls[0]?.[0]).toMatchObject({
+      endpoint: `${getRuntimeNexusBaseUrl()}/api/telemetry/batch`,
+      payload: {
+        events: [
+          expect.objectContaining({ eventType: 'feature_use' }),
+          expect.objectContaining({ eventType: 'feature_use' })
+        ]
+      }
+    })
+    expect(service.nexusTelemetryBuffer).toEqual([])
+    // The queued outbox is drained in the same teardown pass while the store is still live.
+    expect(reportQueue.list).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not re-arm a flush task or the stats timer on a late config change after destroy', async () => {
+    const { service, pollingService } = createTeardownHarness()
+    await service.onDestroy({ appClosing: true })
+    pollingService.register.mockClear()
+    pollingService.start.mockClear()
+
+    service.schedulePersistTelemetryStats()
+    expect(service.telemetryStatsPersistTimer).toBeNull()
+
+    // An enabled flip arriving after teardown must not restart any producer watching storage.
+    service.config = { enabled: false, anonymous: false }
+    service.saveConfig({ enabled: true })
+
+    expect(pollingService.register).not.toHaveBeenCalled()
+    expect(pollingService.start).not.toHaveBeenCalled()
+    expect(service.telemetryStatsPersistTimer).toBeNull()
+
+    // Defensive cleanup: a pre-fix run creates an event-loop monitor before registering.
+    service.eventLoopDelay?.disable()
+  })
+
+  it('detaches the config subscription on destroy and replaces it instead of stacking on re-init', async () => {
+    const { service } = createTeardownHarness()
+    service.syncPerformanceMonitors = vi.fn()
+    const liveSubscriptions: Array<(data: unknown) => void> = []
+    const disposers: Array<Mock<() => void>> = []
+    // The mocked subscribeMainConfig is generic over the storage key; its concrete subscription
+    // contract (record the callback, return a disposer) cannot be expressed without the cast.
+    vi.mocked(subscribeMainConfig).mockImplementation(((
+      _key: unknown,
+      callback: (data: unknown) => void
+    ) => {
+      liveSubscriptions.push(callback)
+      const dispose = vi.fn(() => {
+        const index = liveSubscriptions.indexOf(callback)
+        if (index >= 0) liveSubscriptions.splice(index, 1)
+      })
+      disposers.push(dispose)
+      return dispose
+    }) as never)
+
+    try {
+      await service.onInit({ app: { channel: {} } })
+      expect(disposers).toHaveLength(1)
+      expect(liveSubscriptions).toHaveLength(1)
+
+      await service.onDestroy({ appClosing: true })
+      // Teardown detaches the live subscription, so a late storage push can no longer reach saveConfig.
+      expect(disposers[0]).toHaveBeenCalledTimes(1)
+      expect(liveSubscriptions).toHaveLength(0)
+
+      await service.onInit({ app: { channel: {} } })
+      expect(disposers).toHaveLength(2)
+      expect(liveSubscriptions).toHaveLength(1)
+
+      // One more init while the second subscription is live replaces it rather than stacking.
+      await service.onInit({ app: { channel: {} } })
+      expect(disposers[1]).toHaveBeenCalledTimes(1)
+      expect(disposers).toHaveLength(3)
+      expect(liveSubscriptions).toHaveLength(1)
+    } finally {
+      vi.mocked(subscribeMainConfig).mockReset()
+    }
+  })
 })
 
 describe('SentryServiceModule telemetry stats hydration', () => {
@@ -481,5 +825,374 @@ describe('SentryServiceModule window performance listeners', () => {
     // The live window in the same batch proves the skip is selective. Without it, teardown that
     // bailed out entirely on the first destroyed window would pass this test.
     expect(live.off).toHaveBeenCalledTimes(3)
+  })
+})
+
+type FakeNativeTransportEvent = { platform?: string }
+type FakeNativeTransportResponse = { statusCode?: number }
+type FakeNativeTransportListener = (
+  event: FakeNativeTransportEvent,
+  response: FakeNativeTransportResponse
+) => void
+
+type FakeNativeTransportClient = {
+  options: { enabled: boolean }
+  on: Mock<(event: string, listener: FakeNativeTransportListener) => () => void>
+  getOptions: Mock<() => { enabled: boolean }>
+  listenerCount: () => number
+  dispatchNativeAfterSend: (
+    event: FakeNativeTransportEvent,
+    response: FakeNativeTransportResponse
+  ) => void
+}
+
+type TestableNativeCrashService = {
+  preInitBeforeReady: () => void
+  saveConfig: (config: { enabled?: boolean; anonymous?: boolean }) => void
+  getNativeCrashDeliveryStatus: () => NativeCrashDeliveryStatus
+  syncPerformanceMonitors: () => void
+  getReportQueueStore: () => null
+}
+
+/**
+ * Minimal hand-written stand-in for the Sentry client's hook registry. It honours the unsubscribe
+ * returned by `on`, so "the transport hook was detached" is observable through dispatch behaviour
+ * instead of a mock-call assertion that a rename would invalidate.
+ */
+function createFakeNativeTransportClient(): FakeNativeTransportClient {
+  const options = { enabled: true }
+  const listeners = new Set<FakeNativeTransportListener>()
+  return {
+    options,
+    on: vi.fn((event: string, listener: FakeNativeTransportListener) => {
+      if (event === 'afterSendEvent') listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }),
+    getOptions: vi.fn(() => options),
+    listenerCount: () => listeners.size,
+    dispatchNativeAfterSend(event, response) {
+      for (const listener of [...listeners]) listener(event, response)
+    }
+  }
+}
+
+describe('SentryServiceModule native crash delivery diagnostics', () => {
+  let root: string
+  let crashRoot: string
+  let activeClient: FakeNativeTransportClient | undefined
+
+  function createService(): TestableNativeCrashService {
+    const service = new SentryServiceModule() as unknown as TestableNativeCrashService
+    // Keep the diagnostic lifecycle isolated from performance monitors and the telemetry outbox.
+    service.syncPerformanceMonitors = vi.fn()
+    service.getReportQueueStore = () => null
+    return service
+  }
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'tuff-sentry-native-'))
+    crashRoot = path.join(root, 'crash-dumps')
+    precoreMock.innerRootPath = root
+
+    vi.mocked(app.getPath).mockReset()
+    vi.mocked(app.getPath).mockReturnValue(crashRoot)
+
+    vi.mocked(Sentry.init).mockClear()
+    vi.mocked(Sentry.getClient).mockReset()
+    activeClient = undefined
+    vi.mocked(Sentry.getClient).mockImplementation((() => activeClient) as never)
+
+    crashDiagnosticLogs.reset()
+  })
+
+  afterEach(() => {
+    vi.mocked(app.getPath).mockReset()
+    vi.mocked(app.getPath).mockReturnValue(DEFAULT_CRASH_DUMPS_PATH)
+    vi.mocked(Sentry.getClient).mockReset()
+    vi.mocked(Sentry.init).mockClear()
+    precoreMock.innerRootPath = DEFAULT_INNER_ROOT_PATH
+    fs.rmSync(root, { recursive: true, force: true })
+  })
+
+  it('keeps native crash delivery untouched when reporting is disabled: no dump scan, no client, no transport hook', () => {
+    fs.mkdirSync(path.join(root, 'modules', 'config'), { recursive: true })
+    fs.writeFileSync(
+      path.join(root, 'modules', 'config', 'sentry-config.json'),
+      JSON.stringify({ enabled: false })
+    )
+    fs.mkdirSync(path.join(crashRoot, 'completed'), { recursive: true })
+    fs.writeFileSync(path.join(crashRoot, 'completed', 'pending-crash.dmp'), 'dump-body')
+
+    const service = createService()
+    service.preInitBeforeReady()
+
+    // Disabled reporting must not create a client or bind a transport hook that could upload, and
+    // the status proves the whole lifecycle (including the dump count) stayed switched off.
+    expect(vi.mocked(Sentry.init)).not.toHaveBeenCalled()
+    expect(vi.mocked(Sentry.getClient)).not.toHaveBeenCalled()
+    expect(service.getNativeCrashDeliveryStatus()).toEqual({
+      phase: 'disabled',
+      pendingAtStartup: 0,
+      pendingAtStartupTruncated: false,
+      discoveredAt: null,
+      parsedAt: null,
+      sentAt: null,
+      statusCode: null,
+      failureCode: null
+    })
+  })
+
+  it('counts only .dmp filenames from the darwin completed/pending directories without reading dump content', () => {
+    // The scanned directories are per platform (win32 `reports`, darwin `completed` + `pending`,
+    // others `completed` only), so this pins darwin instead of inheriting the runner's platform.
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    fs.mkdirSync(path.join(crashRoot, 'completed', 'nested'), { recursive: true })
+    fs.mkdirSync(path.join(crashRoot, 'pending'), { recursive: true })
+    fs.writeFileSync(path.join(crashRoot, 'completed', 'alpha.dmp'), 'dump-body-alpha')
+    fs.writeFileSync(path.join(crashRoot, 'completed', 'beta.DMP'), 'dump-body-beta')
+    fs.writeFileSync(path.join(crashRoot, 'completed', 'notes.txt'), 'not a dump')
+    fs.writeFileSync(path.join(crashRoot, 'completed', 'nested', 'gamma.dmp'), 'nested dump')
+    fs.writeFileSync(path.join(crashRoot, 'pending', 'delta.dmp'), 'pending dump')
+
+    const readFileSpy = vi.spyOn(fs, 'readFileSync')
+    try {
+      const service = createService()
+      activeClient = createFakeNativeTransportClient()
+      service.preInitBeforeReady()
+
+      const status = service.getNativeCrashDeliveryStatus()
+      expect(status.phase).toBe('discovered')
+      // Only alpha.dmp and delta.dmp count: the uppercase, text, and nested entries are not dumps.
+      expect(status.pendingAtStartup).toBe(2)
+      expect(status.discoveredAt).toEqual(expect.any(Number))
+
+      const readCalls = readFileSpy.mock.calls as unknown as Array<[unknown]>
+      const dumpReads = readCalls.filter(([target]) => /\.dmp$/i.test(String(target)))
+      expect(dumpReads).toEqual([])
+    } finally {
+      readFileSpy.mockRestore()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it.each([
+    { dumps: 99, truncated: false },
+    { dumps: 100, truncated: true }
+  ])(
+    'bounds the startup dump scan at 100 entries ($dumps dumps -> truncated=$truncated)',
+    ({ dumps, truncated }) => {
+      const completed = path.join(crashRoot, 'completed')
+      fs.mkdirSync(completed, { recursive: true })
+      for (let index = 0; index < dumps; index += 1) {
+        fs.writeFileSync(path.join(completed, `crash-${index}.dmp`), '')
+      }
+
+      const service = createService()
+      activeClient = createFakeNativeTransportClient()
+      service.preInitBeforeReady()
+
+      const status = service.getNativeCrashDeliveryStatus()
+      expect(status.pendingAtStartup).toBe(dumps)
+      expect(status.pendingAtStartupTruncated).toBe(truncated)
+    }
+  )
+
+  it('moves discovery to parsed for a native beforeSend payload only', () => {
+    const service = createService()
+    activeClient = createFakeNativeTransportClient()
+    service.preInitBeforeReady()
+
+    const beforeSend = vi.mocked(Sentry.init).mock.calls.at(-1)?.[0]?.beforeSend
+    expect(beforeSend).toBeTypeOf('function')
+
+    beforeSend?.({ platform: 'javascript', type: undefined }, {})
+    const afterJavaScriptEvent = service.getNativeCrashDeliveryStatus()
+    expect(afterJavaScriptEvent.phase).toBe('idle')
+    expect(afterJavaScriptEvent.parsedAt).toBeNull()
+
+    beforeSend?.({ platform: 'native', type: undefined }, {})
+    const afterNativeEvent = service.getNativeCrashDeliveryStatus()
+    expect(afterNativeEvent.phase).toBe('parsed')
+    expect(afterNativeEvent.parsedAt).toEqual(expect.any(Number))
+    expect(afterNativeEvent.sentAt).toBeNull()
+  })
+
+  it.each([
+    { name: '2xx success (200)', statusCode: 200, phase: 'sent', failureCode: null },
+    { name: '2xx upper boundary (299)', statusCode: 299, phase: 'sent', failureCode: null },
+    {
+      name: 'bad request (400)',
+      statusCode: 400,
+      phase: 'transport-failed',
+      failureCode: 'SENTRY_NATIVE_TRANSPORT_HTTP_400'
+    },
+    {
+      name: 'server error (503)',
+      statusCode: 503,
+      phase: 'transport-failed',
+      failureCode: 'SENTRY_NATIVE_TRANSPORT_HTTP_503'
+    },
+    {
+      name: 'offline transport stored the envelope without a response status',
+      statusCode: undefined,
+      phase: 'queued',
+      failureCode: 'SENTRY_NATIVE_TRANSPORT_QUEUED'
+    }
+  ])(
+    'maps afterSendEvent response status to the native transport outcome: $name',
+    ({ statusCode, phase, failureCode }) => {
+      const service = createService()
+      const client = createFakeNativeTransportClient()
+      activeClient = client
+      service.preInitBeforeReady()
+
+      client.dispatchNativeAfterSend(
+        { platform: 'native' },
+        statusCode === undefined ? {} : { statusCode }
+      )
+
+      const status = service.getNativeCrashDeliveryStatus()
+      expect(status.phase).toBe(phase)
+      expect(status.failureCode).toBe(failureCode)
+      expect(status.statusCode).toBe(statusCode ?? null)
+      // Transport implies the dump reached the parsed stage; only a confirmed send sets sentAt.
+      expect(status.parsedAt).toEqual(expect.any(Number))
+      if (phase === 'sent') {
+        expect(status.sentAt).toEqual(expect.any(Number))
+      } else {
+        expect(status.sentAt).toBeNull()
+      }
+    }
+  )
+
+  it('ignores afterSendEvent results that are not native crash events', () => {
+    const service = createService()
+    const client = createFakeNativeTransportClient()
+    activeClient = client
+    service.preInitBeforeReady()
+    expect(service.getNativeCrashDeliveryStatus().phase).toBe('idle')
+
+    client.dispatchNativeAfterSend({ platform: 'javascript' }, { statusCode: 500 })
+
+    const status = service.getNativeCrashDeliveryStatus()
+    expect(status.phase).toBe('idle')
+    expect(status.statusCode).toBeNull()
+    expect(status.failureCode).toBeNull()
+  })
+
+  it('returns a defensive copy of the native crash delivery status', () => {
+    fs.mkdirSync(path.join(crashRoot, 'completed'), { recursive: true })
+    fs.writeFileSync(path.join(crashRoot, 'completed', 'one.dmp'), 'dump-body')
+
+    const service = createService()
+    activeClient = createFakeNativeTransportClient()
+    service.preInitBeforeReady()
+
+    const first = service.getNativeCrashDeliveryStatus()
+    expect(first.phase).toBe('discovered')
+    first.phase = 'sent'
+    first.pendingAtStartup = 999
+    first.sentAt = 123
+
+    const second = service.getNativeCrashDeliveryStatus()
+    expect(second.phase).toBe('discovered')
+    expect(second.pendingAtStartup).toBe(1)
+    expect(second.sentAt).toBeNull()
+  })
+
+  it('disabling reporting disables the live client, detaches the hook, and ignores a late native send', () => {
+    const service = createService()
+    const client = createFakeNativeTransportClient()
+    activeClient = client
+    service.preInitBeforeReady()
+    expect(client.listenerCount()).toBe(1)
+
+    service.saveConfig({ enabled: false })
+
+    // The active client is switched off and the hook detached, so a native send that still fires
+    // after shutdown cannot be reported as delivered.
+    expect(client.options.enabled).toBe(false)
+    expect(client.listenerCount()).toBe(0)
+    expect(service.getNativeCrashDeliveryStatus().phase).toBe('disabled')
+
+    client.dispatchNativeAfterSend({ platform: 'native' }, { statusCode: 200 })
+    expect(service.getNativeCrashDeliveryStatus().phase).toBe('disabled')
+  })
+
+  it('re-enabling binds one fresh client and only the fresh hook can advance the phase', () => {
+    const service = createService()
+    const first = createFakeNativeTransportClient()
+    activeClient = first
+    service.preInitBeforeReady()
+    expect(vi.mocked(Sentry.init)).toHaveBeenCalledTimes(1)
+    expect(first.listenerCount()).toBe(1)
+
+    // Prove the first hook is wired before tearing it down.
+    first.dispatchNativeAfterSend({ platform: 'native' }, { statusCode: 500 })
+    expect(service.getNativeCrashDeliveryStatus().phase).toBe('transport-failed')
+
+    service.saveConfig({ enabled: false })
+    expect(first.options.enabled).toBe(false)
+    expect(first.listenerCount()).toBe(0)
+
+    fs.mkdirSync(path.join(crashRoot, 'completed'), { recursive: true })
+    fs.writeFileSync(path.join(crashRoot, 'completed', 'rearmed.dmp'), 'dump-body')
+    const second = createFakeNativeTransportClient()
+    activeClient = second
+    service.saveConfig({ enabled: true })
+
+    expect(vi.mocked(Sentry.init)).toHaveBeenCalledTimes(2)
+    expect(second.listenerCount()).toBe(1)
+
+    // Fresh discovery, not the stale transport-failed state.
+    const rearmed = service.getNativeCrashDeliveryStatus()
+    expect(rearmed.phase).toBe('discovered')
+    expect(rearmed.pendingAtStartup).toBe(1)
+
+    first.dispatchNativeAfterSend({ platform: 'native' }, { statusCode: 200 })
+    expect(service.getNativeCrashDeliveryStatus().phase).toBe('discovered')
+
+    second.dispatchNativeAfterSend({ platform: 'native' }, { statusCode: 200 })
+    expect(service.getNativeCrashDeliveryStatus().phase).toBe('sent')
+  })
+
+  it('keeps dump filenames, dump content, and the crash directory out of diagnostic logs and the public status', () => {
+    const nameCanary = 'CANARY_NATIVE_DUMP_FILENAME'
+    const contentCanary = 'CANARY_NATIVE_DUMP_CONTENT'
+    const dumpPath = path.join(crashRoot, 'completed', `crash-${nameCanary}.dmp`)
+    fs.mkdirSync(path.dirname(dumpPath), { recursive: true })
+    fs.writeFileSync(dumpPath, `minidump-body-${contentCanary}`)
+
+    const service = createService()
+    const client = createFakeNativeTransportClient()
+    activeClient = client
+    service.preInitBeforeReady()
+    const beforeSend = vi.mocked(Sentry.init).mock.calls.at(-1)?.[0]?.beforeSend
+    beforeSend?.({ platform: 'native', type: undefined }, {})
+    client.dispatchNativeAfterSend({ platform: 'native' }, { statusCode: 200 })
+
+    // Positive control: the diagnostic sites actually reported the lifecycle (startup count plus the
+    // parsed/sent phases), so the absence assertions below cannot pass just because nothing logged.
+    const reportedValues = crashDiagnosticLogs.records.flatMap((record) =>
+      Object.values(record.meta ?? {})
+    )
+    expect(reportedValues).toContain(1)
+    expect(reportedValues).toContain('parsed')
+    expect(reportedValues).toContain('sent')
+
+    const logged = JSON.stringify(crashDiagnosticLogs.records)
+    expect(logged).not.toContain(nameCanary)
+    expect(logged).not.toContain(contentCanary)
+    expect(logged).not.toContain(crashRoot)
+    expect(logged).not.toContain('.dmp')
+
+    const exposed = JSON.stringify(service.getNativeCrashDeliveryStatus())
+    expect(exposed).not.toContain(nameCanary)
+    expect(exposed).not.toContain(contentCanary)
+    expect(exposed).not.toContain(crashRoot)
+    expect(exposed).not.toContain('.dmp')
   })
 })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { APP_DESTINATIONS } from '../../../../shared/app-destinations'
+import { APP_SURFACE_ROUTES } from '../../../../shared/app-surface-routes'
 import {
   SETTING_CATEGORIES,
   groupedSettingCategories,
@@ -200,7 +201,9 @@ describe('destination catalog route parity', () => {
     ...SETTING_CATEGORIES.map((category) => category.path),
     ...SETTING_CATEGORIES.flatMap((category) =>
       (category.children ?? []).map((child) => child.path)
-    )
+    ),
+    // The MainWindow's own surfaces, from the table the router and the destination catalog share.
+    ...Object.values(APP_SURFACE_ROUTES)
   ])
   const routeBySettingKey = new Map<string, string>([
     ...SETTING_CATEGORIES.map((category) => [category.key, category.path] as const),
@@ -241,7 +244,7 @@ describe('destination catalog route parity', () => {
         continue
       }
       expect(
-        registeredRoutes.has(definition.route as string) || definition.route === '/home',
+        registeredRoutes.has(definition.route as string),
         `${definition.id} -> ${definition.route} is not a registered route`
       ).toBe(true)
     }

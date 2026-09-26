@@ -351,6 +351,13 @@
       "when": 1786665600000,
       "tag": "0049_voice_provider_latency",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1786752000000,
+      "tag": "0050_voice_recognition_location",
+      "breakpoints": true
     }
   ]
 }

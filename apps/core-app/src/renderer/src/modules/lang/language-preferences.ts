@@ -33,6 +33,23 @@ export interface LegacyLanguagePreferenceSnapshot {
 const DEFAULT_LANGUAGE: SupportedLanguage = 'zh-CN'
 const DEFAULT_FOLLOW_SYSTEM = true
 
+/**
+ * The language a window boots on while the settings store has not answered yet.
+ *
+ * The store reports the origin default (`followSystem: true`) until its first reply lands, and
+ * that default is not a user choice: resolving it boots the window in the OS language, which is
+ * an English CoreBox on a macOS set to English while the app itself is set to 简体中文. The
+ * product default is the honest answer until the stored preference is here - a window that does
+ * follow the system re-resolves as soon as it arrives.
+ */
+export const BOOT_LANGUAGE_PREFERENCE: InitialLanguagePreference = {
+  locale: DEFAULT_LANGUAGE,
+  followSystem: false,
+  source: 'default',
+  shouldUseLegacySnapshot: false,
+  shouldClearLegacySnapshot: false
+}
+
 export function resolveSupportedLocale(locale?: string | null): SupportedLanguage | null {
   if (!locale) return null
   const normalized = locale.replace('_', '-').toLowerCase()

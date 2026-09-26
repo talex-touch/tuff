@@ -5,13 +5,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { registerSystemShellHandlers } from './system-shell-handlers'
 
-const { fsStatMock, shellOpenExternalMock, shellOpenPathMock, shellShowItemInFolderMock } =
-  vi.hoisted(() => ({
-    fsStatMock: vi.fn(),
-    shellOpenExternalMock: vi.fn(),
-    shellOpenPathMock: vi.fn(async () => ''),
-    shellShowItemInFolderMock: vi.fn()
-  }))
+const {
+  fsRealpathMock,
+  fsStatMock,
+  shellOpenExternalMock,
+  shellOpenPathMock,
+  shellShowItemInFolderMock
+} = vi.hoisted(() => ({
+  fsRealpathMock: vi.fn(async (target: string) => target),
+  fsStatMock: vi.fn(),
+  shellOpenExternalMock: vi.fn(),
+  shellOpenPathMock: vi.fn(async () => ''),
+  shellShowItemInFolderMock: vi.fn()
+}))
 
 const { checkPermissionMock, getPermissionModuleMock } = vi.hoisted(() => {
   const checkPermissionMock = vi.fn(
@@ -35,6 +41,7 @@ vi.mock('../modules/plugin/plugin-module', () => ({
 
 vi.mock('node:fs/promises', () => ({
   default: {
+    realpath: fsRealpathMock,
     stat: fsStatMock
   }
 }))
@@ -367,6 +374,129 @@ describe('registerSystemShellHandlers', () => {
       AppEvents.system.executeCommand,
       expect.any(Function)
     )
+  })
+})
+
+/**
+ * "Show in Finder" selects; only a plain folder opens.
+ *
+ * Opening a directory hands it to the OS association. For a folder that shows a window, but a
+ * macOS package launches an application, installs a plug-in or mounts an image. The ⌘K panel's
+ * reveal opened `/Applications/Safari.app` — it launched Safari — and this event is reachable from
+ * a plugin surface holding `system.shell`: the same class of hole openApp closed (#908).
+ */
+describe('showInFolder reveals instead of opening', () => {
+  function showInFolderHandler(platform: NodeJS.Platform) {
+    const { handlers, transport } = createTransport()
+    registerSystemShellHandlers(transport as never, {
+      configRootPath: () => '/tmp/tuff',
+      appRootPath: () => '/tmp/tuff',
+      logger: { warn: vi.fn() },
+      registerSafeHandler: vi.fn(() => vi.fn()) as never,
+      platform
+    })
+    return getHandler(handlers, AppEvents.system.showInFolder.toEventName())
+  }
+
+  function asDirectory(): void {
+    fsStatMock.mockResolvedValue({ isDirectory: () => true })
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fsStatMock.mockReset()
+    fsRealpathMock.mockReset()
+    fsRealpathMock.mockImplementation(async (target: string) => target)
+    shellOpenPathMock.mockReset()
+    shellOpenPathMock.mockResolvedValue('')
+    checkPermissionMock.mockReturnValue({ allowed: true })
+  })
+
+  it('selects a directory in its parent when asked to reveal it', async () => {
+    asDirectory()
+
+    await showInFolderHandler('linux')({ path: '/home/me/Projects', reveal: true }, {})
+
+    expect(shellShowItemInFolderMock).toHaveBeenCalledWith('/home/me/Projects')
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('never launches a macOS application bundle, even without reveal', async () => {
+    asDirectory()
+
+    await showInFolderHandler('darwin')({ path: '/Applications/Calculator.app' }, {})
+
+    expect(shellShowItemInFolderMock).toHaveBeenCalledWith('/Applications/Calculator.app')
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    '/Library/PreferencePanes/Evil.prefPane',
+    '/Users/me/Pictures/Photos Library.photoslibrary',
+    '/Users/me/Disk.sparsebundle',
+    '/Applications/Shouting.APP',
+    '/Applications/Safari.app/'
+  ])('selects the macOS package %s instead of opening it', async (target) => {
+    asDirectory()
+
+    await showInFolderHandler('darwin')({ path: target }, {})
+
+    expect(shellShowItemInFolderMock).toHaveBeenCalledWith(target)
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('follows a symlink with a folder name to the .app it points at', async () => {
+    asDirectory()
+    fsRealpathMock.mockResolvedValue('/Applications/Calculator.app')
+
+    await showInFolderHandler('darwin')({ path: '/tmp/innocent-folder' }, {})
+
+    expect(fsRealpathMock).toHaveBeenCalledWith('/tmp/innocent-folder')
+    expect(shellShowItemInFolderMock).toHaveBeenCalledWith('/tmp/innocent-folder')
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('still opens a plain folder, which is what "Open Containing Folder" sends', async () => {
+    asDirectory()
+
+    await showInFolderHandler('darwin')({ path: '/Users/me/Documents' }, {})
+
+    expect(shellOpenPathMock).toHaveBeenCalledWith('/Users/me/Documents')
+    expect(shellShowItemInFolderMock).not.toHaveBeenCalled()
+  })
+
+  it('opens an .app-named folder where it is only a folder', async () => {
+    asDirectory()
+
+    await showInFolderHandler('linux')({ path: '/home/me/notes.app' }, {})
+
+    expect(shellOpenPathMock).toHaveBeenCalledWith('/home/me/notes.app')
+    expect(shellShowItemInFolderMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps the system.shell gate in front of a reveal', async () => {
+    checkPermissionMock.mockReturnValue({ allowed: false, reason: 'not granted' })
+    asDirectory()
+
+    await expect(
+      showInFolderHandler('darwin')(
+        { path: '/Applications/Calculator.app', reveal: true },
+        { plugin: { name: 'com.example.greedy' } }
+      )
+    ).rejects.toMatchObject({ code: 'SYSTEM_SHELL_PERMISSION_DENIED' })
+
+    expect(fsStatMock).not.toHaveBeenCalled()
+    expect(shellShowItemInFolderMock).not.toHaveBeenCalled()
+    expect(shellOpenPathMock).not.toHaveBeenCalled()
+  })
+
+  it('still reports a missing path on reveal, without the path', async () => {
+    fsStatMock.mockRejectedValue(new Error('ENOENT: /Users/private/gone'))
+
+    await expect(
+      showInFolderHandler('darwin')({ path: '/Users/private/gone', reveal: true }, {})
+    ).rejects.toThrow(/^SYSTEM_SHELL_PATH_UNAVAILABLE$/)
+    expect(shellShowItemInFolderMock).not.toHaveBeenCalled()
   })
 })
 

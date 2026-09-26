@@ -1511,8 +1511,8 @@ async function runHomeStream(
         evaluate<boolean>(
           send,
           `(() => {
-            const button = document.querySelector('.HomePage-SendBtn')
-            if (!(button instanceof HTMLButtonElement) || button.disabled) return false
+            const button = document.querySelector('.HomePage .ComposerSendIsland')
+            if (!(button instanceof HTMLButtonElement) || button.dataset.state !== 'ready') return false
             button.click()
             return true
           })()`
@@ -1666,8 +1666,8 @@ async function runHomeCancellation(
     const submitted = await evaluate<boolean>(
       send,
       `(() => {
-        const button = document.querySelector('.HomePage-SendBtn')
-        if (!(button instanceof HTMLButtonElement) || button.disabled) return false
+        const button = document.querySelector('.HomePage .ComposerSendIsland')
+        if (!(button instanceof HTMLButtonElement) || button.dataset.state !== 'ready') return false
         button.click()
         return true
       })()`
@@ -1684,7 +1684,7 @@ async function runHomeCancellation(
             const message = Array.from(document.querySelectorAll('.HomePage-Message.assistant[data-message-id]'))
               .find((node) => !previous.has(node.getAttribute('data-message-id')))
             const reply = message?.querySelector('.HomePage-Reply')
-            const stop = document.querySelector('.HomePage-SendBtn .i-ri-stop-fill')?.closest('button')
+            const stop = document.querySelector('.HomePage .ComposerSendIsland:is([data-state="waiting"], [data-state="streaming"], [data-state="blocked"])')
             const failed = Boolean(message?.querySelector('.HomePage-Error'))
             if (
               !failed &&
@@ -1718,7 +1718,7 @@ async function runHomeCancellation(
               busy: message?.getAttribute('aria-busy') === 'true',
               failed: Boolean(message?.querySelector('.HomePage-Error')),
               hasActions: Boolean(message?.querySelector('.HomePage-MsgActions')),
-              stopVisible: Boolean(document.querySelector('.HomePage-SendBtn .i-ri-stop-fill'))
+              stopVisible: Boolean(document.querySelector('.HomePage .ComposerSendIsland:is([data-state="waiting"], [data-state="streaming"], [data-state="blocked"])'))
             }
           })()`
         ),

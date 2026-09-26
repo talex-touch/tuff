@@ -302,11 +302,33 @@ factory when adding an export here.
 
 ## Diagnosing
 
-`[Perf:EventLoop]` reports name the culprit directly:
+`[Perf:EventLoop]` records timer lateness; contexts are attribution clues, not sampled stacks.
 
-- `pollingActive` / `pollingRecent` carry `durationMs` and `maxDurationMs` per
-  task — a `maxDurationMs` in the tens of seconds is an unbounded task.
-- `queueDepthByLane` with a deep `serial` queue plus
-  `suspectedCause=polling_queue_backlog` is the default-lane trap above.
-- `contexts=[]` means no `Search.*` perf context was open, i.e. the stall is
-  _not_ the search engine — look at the polling tasks.
+- `lagMs` is the observed event-loop delay. A long-lived `FileProvider.fullScan` context is
+  scan wall time, not proof that directory traversal blocked the main thread.
+- `mode: 'blocking'` is an explicit caller label. If the span encloses an `await`, its full
+  duration can include asynchronous waiting. Confirm the synchronous boundary with a stack
+  sample or an event-loop responsiveness probe before changing scheduling.
+- `pollingRecent` and `lastSlowIpc` describe past work; inspect age and overlap before
+  assigning causality. `contexts=[]` does not exclude uninstrumented main-thread work.
+- High swap usage can outlive memory pressure. Compare current CPU, memory pressure and
+  page-in/out activity; allocated swap capacity is not a fixed resource-exhaustion threshold.
+
+## Index watch and shutdown lifecycle
+
+- Watch admission reads current health and roots, not a full diagnostic report. Explicit
+  source events query only that source; unscoped events still consider all sources. Never
+  cache permission/enabled decisions to optimize this path. Preserve stored task history
+  before recording the first watch result after a runtime restart.
+- `SearchEngineCore.destroy()` closes admission and initiates scan cancellation/provider
+  shutdown before awaiting session or event-router drains. A queued watch can hold up a
+  router drain while waiting on the scan mutation gate; placing cancellation after that
+  await creates a cycle. Attach rejection handlers when concurrent drains are created,
+  collect failures, and keep the writer alive until every required drain succeeds.
+- After before-quit cleanup finishes, set the completed latch **before** handing off to
+  DevProcessManager. Its synchronous `app.quit()` re-enters the same handler; otherwise
+  the pending cleanup promise prevents that second quit and the 5s force-exit timer wins.
+- Sentry teardown closes telemetry admission and detaches producer subscriptions/timers
+  before its first await. Flush already accepted events while Storage is still live.
+  Late module lifecycle events and previously queued polling callbacks must not read
+  destroyed storage or re-arm work. Re-initialization reopens admission explicitly.

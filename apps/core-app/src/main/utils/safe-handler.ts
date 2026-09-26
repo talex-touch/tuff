@@ -4,7 +4,15 @@ import { withPermission } from '../modules/permission/channel-guard'
 
 const SAFE_HANDLER_PUBLIC_ERROR = 'The operation failed. Please retry.'
 
-export type ApiResponse<T = undefined> = { ok: true; result?: T } | { ok: false; error: string }
+export interface ApiErrorProjection {
+  error: string
+  code?: string
+  retryable?: boolean
+}
+
+export type ApiResponse<T = undefined> =
+  | { ok: true; result?: T }
+  | ({ ok: false } & ApiErrorProjection)
 
 export type OpResponse<T extends Record<string, unknown> = Record<string, never>> =
   | ({ success: true } & T)
@@ -17,6 +25,11 @@ export type MainHandler<TReq, TRes> = (
 
 export interface SafeHandlerOptions<TReq = unknown> {
   onError?: (error: unknown, payload: TReq, context: HandlerContext) => void
+  projectError?: (
+    error: unknown,
+    payload: TReq,
+    context: HandlerContext
+  ) => ApiErrorProjection | undefined
 }
 
 export function toErrorMessage(error: unknown): string {
@@ -33,7 +46,13 @@ export function safeApiHandler<TReq, TRes>(
       return { ok: true, result }
     } catch (error) {
       options.onError?.(error, payload, context)
-      return { ok: false, error: SAFE_HANDLER_PUBLIC_ERROR }
+      let projected: ApiErrorProjection | undefined
+      try {
+        projected = options.projectError?.(error, payload, context)
+      } catch {
+        projected = undefined
+      }
+      return { ok: false, ...(projected ?? { error: SAFE_HANDLER_PUBLIC_ERROR }) }
     }
   }
 }

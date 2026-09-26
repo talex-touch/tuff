@@ -200,8 +200,15 @@
       "shortcut": {
         "command": "command",
         "ctrl": "ctrl",
+        "control": "control",
+        "option": "option",
+        "alt": "alt",
+        "shift": "shift",
+        "win": "win",
+        "super": "super",
         "hint": "按下 {shortcut} 可快速唤起 Tuff",
-        "changeInSettings": "可在设置中修改快捷键"
+        "changeInSettings": "可在设置中修改快捷键",
+        "conflictHint": "如果按下后打开的是别的应用（例如 Raycast、Alfred、ChatGPT），说明这个键已被占用，去设置里换一个即可。"
       }
     },
     "forbidden": {
@@ -483,6 +490,7 @@
       "core_box_toggle": "唤起命令面板",
       "core_omniPanel_toggle": "唤起 OmniPanel",
       "core_omniPanel_mouseLongPress": "OmniPanel 鼠标触发",
+      "screenshot_tool_start": "截图",
       "voice_dictation_toggle": "全局听写（按一下开始，再按一下停止）",
       "voice_quickEdit": "划词改口（选中文字后按快捷键，说出要改成什么）"
     },
@@ -664,9 +672,20 @@
     },
     "models": {
       "title": "端侧模型",
-      "loading": "正在读取云端目录…",
-      "catalogUnavailable": "读不到云端模型目录，请检查网络后重试。",
-      "signInRequired": "登录 Tuff 账号后才能读取云端模型目录。",
+      "description": "用于端侧或混合语音识别；这里的目录状态不代表云端识别状态。",
+      "loading": "正在读取可安装的端侧模型目录…",
+      "catalogErrors": {
+        "authRequired": "登录后可查看并安装官方端侧模型。",
+        "timeout": "端侧模型目录请求超时。",
+        "upstreamUnavailable": "端侧模型目录服务暂时不可用。",
+        "invalid": "端侧模型目录校验失败，为保护安装安全，本次未展示可下载模型。",
+        "unavailable": "无法读取端侧模型目录。"
+      },
+      "catalogImpact": {
+        "cloud": "这不会影响当前的云端语音输入；已安装模型仍可管理。",
+        "local": "已安装模型仍可继续使用和移除。",
+        "hybrid": "云端语音输入与已安装模型仍可继续使用。"
+      },
       "retry": "重试",
       "installed": "已安装",
       "recommended": "推荐",
@@ -1363,13 +1382,20 @@
       "finalText": "最终文本",
       "duration": "录音时长",
       "recognitionDuration": "识别耗时",
-      "providerLatency": "服务商耗时",
+      "providerLatency": "云端链路耗时",
       "tokens": "Tokens",
       "tokensValue": "{count}",
       "tokensSplit": "输入 {input} · 输出 {output}",
       "tokensUnavailable": "渠道未返回",
+      "location": "处理位置",
+      "model": "识别模型",
       "channel": "渠道",
       "source": "来源",
+      "locationValues": {
+        "cloud": "云端",
+        "onDevice": "端侧",
+        "unknown": "未记录"
+      },
       "delivery": "投递",
       "sourceValues": {
         "microphone": "麦克风",
@@ -1378,6 +1404,7 @@
       "deliveryValues": {
         "native": "直接写入",
         "autopaste": "自动粘贴",
+        "clipboard": "已复制到剪贴板",
         "none": "未投递"
       },
       "error": "错误",
@@ -1385,7 +1412,7 @@
         "text": "内容",
         "capturedAt": "时间",
         "status": "状态",
-        "model": "模型"
+        "model": "识别模型"
       },
       "status": {
         "success": "成功",
@@ -1498,7 +1525,6 @@
       "userLabel": "用户",
       "assistantLabel": "助手"
     },
-    "effortHigh": "高",
     "reasoning": {
       "label": "推理强度",
       "auto": "自动",
@@ -1673,6 +1699,15 @@
         "projectDesc": "新建一段项目对话",
         "pinnedProjectDesc": "已置顶的项目"
       }
+    },
+    "composer": {
+      "stop": "停止",
+      "finishAndSend": "结束听写并发送",
+      "dictationStop": "结束听写",
+      "dictationListening": "正在听写",
+      "dictationFinishing": "正在识别",
+      "dictationInserted": "已插入听写的文字",
+      "modelPill": "选择模型与推理强度，当前：{current}"
     }
   },
   "settingsNav": {
@@ -2856,7 +2891,8 @@
       "data": "数据",
       "service": "服务",
       "feature": "功能",
-      "system": "系统"
+      "system": "系统",
+      "history": "对话"
     },
     "resultSignals": {
       "failed": "失败",
@@ -5348,6 +5384,10 @@
     "downloadFailedBody": "{filename}\n{error}",
     "appLaunchFailedTitle": "应用启动失败",
     "appLaunchFailedBody": "未能启动 {name}\n{error}",
+    "coreBoxShortcutUnavailableTitle": "CoreBox 暂无可用快捷键",
+    "coreBoxShortcutRefusedBody": "默认快捷键 {shortcut} 无法注册，CoreBox 暂时不能用快捷键呼出。请在「设置 → 插件与工具 → 快捷方式」中换一个快捷键。",
+    "coreBoxShortcutConflictBody": "默认快捷键 {shortcut} 已设给另一个快捷键，CoreBox 暂时不能用快捷键呼出。请在「设置 → 插件与工具 → 快捷方式」中换一个快捷键。",
+    "coreBoxShortcutConflictNamedBody": "默认快捷键 {shortcut} 已设给「{other}」，CoreBox 暂时不能用快捷键呼出。请在「设置 → 插件与工具 → 快捷方式」中换一个快捷键。",
     "fileIndexRebuildCompleteTitle": "文件索引重建完成",
     "fileIndexRebuildCompleteBody": "手动文件索引重建已完成，搜索结果已更新。",
     "pluginInstallSuccessTitle": "插件已添加",
@@ -5440,7 +5480,8 @@
       "voiceTranscribeEmpty": "未识别到语音内容，请重新录制",
       "voiceListening": "正在聆听…",
       "voiceTranscribeFailed": "语音转写失败",
-      "voiceDeliveryFailed": "未能写入，请先点一下输入框",
+      "voiceDeliveryFailed": "未能写入，也无法复制到剪贴板",
+      "voiceCopiedToClipboard": "写入失败，已复制到剪贴板",
       "submitting": "发送中...",
       "sendToCoreBox": "发送到 CoreBox",
       "translateClipboardImage": "翻译剪贴板图片",
@@ -6251,6 +6292,10 @@
       "settingsTitle": "Tuff 设置",
       "mainWindowSubtitle": "显示并聚焦主窗口",
       "homeSubtitle": "打开塔芙首页",
+      "conversationsSubtitle": "查看主窗口里的历史对话",
+      "storeSubtitle": "浏览并安装插件",
+      "storeInstalledSubtitle": "管理已经装好的插件",
+      "downloadsSubtitle": "查看进行中和已完成的下载",
       "overviewSubtitle": "一览全部设置",
       "generalSubtitle": "启动、语言与应用行为",
       "appearanceSubtitle": "主题、布局与视觉效果",
@@ -6297,6 +6342,7 @@
     "pinFailed": "固定失败",
     "send": "发送",
     "searching": "正在搜索…",
+    "searchingMore": "还在搜索更多…",
     "searchFailed": "搜索失败",
     "retrySearch": "搜索失败，重新搜索",
     "copied": "已复制",
@@ -6379,10 +6425,38 @@
       "pin": "固定到推荐",
       "unpin": "取消固定",
       "copyTitle": "复制名称",
-      "revealInFinder": "在文件管理器中显示",
+      "revealInFinder": "在 Finder 中显示",
+      "revealInExplorer": "在资源管理器中显示",
+      "revealInFileManager": "在文件管理器中显示",
       "translateImage": "翻译图片",
       "translateImagePin": "翻译并置顶",
-      "flowTransfer": "流转到其他插件"
+      "flowTransfer": "流转到其他插件",
+      "open": "打开",
+      "paste": "粘贴",
+      "execute": "执行",
+      "copy": "复制",
+      "copyResult": "复制结果",
+      "copyLink": "复制链接",
+      "copyPath": "复制路径",
+      "copyShellPath": "复制 Shell 路径",
+      "copyFileUrl": "复制文件 URL",
+      "copyWindowsPath": "复制 Windows 路径",
+      "copyWslPath": "复制 WSL 路径",
+      "openFolder": "打开所在文件夹",
+      "navigate": "前往",
+      "preview": "预览",
+      "edit": "编辑",
+      "delete": "删除",
+      "share": "分享",
+      "empty": "没有匹配的操作",
+      "failed": "操作失败",
+      "groups": {
+        "open": "打开",
+        "copy": "复制",
+        "organize": "整理",
+        "flow": "流转",
+        "plugin": "插件"
+      }
     },
     "systemActions": {
       "addDevPluginTitle": "添加 Dev 插件：{name}",

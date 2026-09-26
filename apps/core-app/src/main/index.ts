@@ -64,6 +64,7 @@ import { updateServiceModule } from './modules/update/UpdateService'
 import { voiceModule } from './modules/voice/voice-module'
 
 import { pluginLogModule } from './service/plugin-log.service'
+import { adoptPersistedLocale } from './utils/i18n-helper'
 import { loggerManager, mainLog } from './utils/logger'
 import './polyfills'
 
@@ -311,6 +312,12 @@ app.whenReady().then(async () => {
         fallbackReason: startupAppConfig.fallbackReason
       }
     })
+    /**
+     * Before any window opens and before the renderer can push its own locale: the persisted
+     * choice is the only thing on this machine that knows the user's language, and the first
+     * CoreBox query can arrive while the renderer is still hydrating its storage.
+     */
+    adoptPersistedLocale(startupAppConfig.settings)
     const touchApp = genTouchApp(startupAppConfig.settings)
 
     const modulesStartTime = Date.now()

@@ -119,6 +119,32 @@ Rules of thumb:
 - Group-wide state (a hover that fans the whole row) changes one variable on the wrapper root and lets inheritance carry it — do not re-derive it per item.
 - Content that gets **teleported** (a popover panel the wrapper renders) is no longer a descendant of the root, so `:deep()` from the root will not match it. Write those as standalone selectors; they still carry the scope id because the wrapper rendered them.
 
+### Icon boxes, state ink, and colours read back from CSS
+
+Four small contracts that each cost a visible bug before they were written down.
+
+**A box that holds an icon class must size it.** UnoCSS `presetIcons` (both Nexus and CoreApp) emits `width`/`height` in `em` but no `display`, so an `<i :class="iconClass">` inside an inline `<span>` stays `display: inline` and measures 0×0 — only the row's `gap` shows. Make the wrapper `display: inline-flex` (or `flex`) so the `<i>` is a flex item. `TxTabItem`'s icons were invisible in every host until 2026-09-26; `TxTabBar`'s always showed because its icon wrapper was already flex.
+
+```scss
+// Wrong: the glyph class sets 1.2em × 1.2em on an inline box, which ignores both
+.tx-tab-item__icon { font-size: 18px; line-height: 1; }
+// Correct
+.tx-tab-item__icon { display: inline-flex; align-items: center; justify-content: center; font-size: 18px; line-height: 1; }
+```
+
+**Switch state ink through variables on the root, not with stronger child selectors.** A host restyles a part with one class of its own (`.debug-tabs :deep(.tx-tab-item__name) { color: inherit }`, specificity 0,3,0). An active rule written as `.tx-tab-item.is-active .tx-tab-item__name` (0,4,0 once scoped) silently beats it — LingPan's hard-dark panel would have turned dark text on dark in the light theme. Set `--tx-tab-item-ink` / `--tx-tab-item-icon-ink` on `.is-active` and read them in the part's single-class rule; the host's override still wins.
+
+**A colour read with `getComputedStyle` is a snapshot.** `TxStatCard` tints its aura from the icon's computed colour; success / warning / danger resolve to different values per theme, so the read must be redone when the theme flips. Subscribe to one shared observer (a `MutationObserver` on `<html>` `class` / `data-theme` plus `prefers-color-scheme`), created lazily on the first subscriber, disconnected with the last, coalescing re-reads into one frame — `stat-card/src/theme-change.ts`. Never read at module scope or in setup (SSR), and write the result to a custom property only the script owns.
+
+**Lift a derived ink before reading the colour back.** When the stylesheet inks an element with a mix of the very colour the script reads off it, every re-read mixes the mix: each theme switch walks the stored colour further towards the mix target (seen 2026-09-26 — two toggles turned `TxStatCard`'s blue aura slate grey). Gate the derived rule behind a class and set that class around the read; `getComputedStyle` recalculates synchronously, so nothing paints in between.
+
+```scss
+// Wrong: the read-back colour feeds the rule that changes it
+.tx-stat-card--tinted .tx-stat-card__icon { color: color-mix(in oklab, var(--tx-stat-card-icon-color) 60%, var(--tx-text-color-primary)); }
+// Correct: the script adds --reading around getComputedStyle(icon).color
+.tx-stat-card--tinted:not(.tx-stat-card--reading) .tx-stat-card__icon { color: color-mix(in oklab, var(--tx-stat-card-icon-color) 60%, var(--tx-text-color-primary)); }
+```
+
 ### Floating layers around non-rectangular triggers
 
 `TxBaseAnchor` sets `inheritAttrs: false` and forwards attrs to the *teleported panel*, so `class`/`style` on `TxPopover` style the floating layer, not the trigger. Use the `referenceClass` prop to reach the trigger wrapper.
@@ -161,6 +187,92 @@ The replacement is one transition whose easing *is* the spring:
 - The fallback outside that block must **not** overshoot. A bezier faking a bounce is worse than no bounce.
 - Target one visible reversal and 2–5 % overshoot. `spring.ts`'s own simulator gives you both; count reversals outside a ±0.1 % settle band, because the compiler pins the last sample to exactly 1 and that manufactures a sub-visible wiggle at the tail. Measured: 480/34 → +1.4 %, 560/34 → +3.0 % / 362 ms / 1 reversal, 580/34 → 2 reversals.
 - Give hover its own shorter, non-overshooting clock. Hover in and out must never bounce, so it cannot share the spring variable.
+
+### Sliding indicators ride `useJellyIndicator`
+
+**Scope.** Any single shape that travels between sibling elements to mark a selection or a hover: `TxRadioGroup` (button type), `TxTabs`, `TxTabBar`, `TxFlatRadio`, `TxSidebarNav`. Since 2026-09-26 they share one engine, `packages/tuffex/packages/utils/use-jelly-indicator.ts`, in one of two materials:
+
+- **`jelly`** (default) — `TxRadioGroup` only. One spring, squash and stretch (`jellyScale`, `JELLY` in `utils/animation/jelly.ts`): Radio's reference feel.
+- **`glide`** — the tabs family: `TxTabs`, `TxTabBar`, `TxFlatRadio`, `TxSidebarNav`. The two ends along the travel ride separate springs: the leading end the glide spring, the trailing end the same spring time-scaled by `1 − lag / 2`. Which end leads is decided per trip from the centres. Cross-axis position and size ride the leading spring. The shape lengthens a little and gathers again, never scales, and has no emerge / sink pops. Defaults `GLIDE` 420 / 38 / lag 0.45; `timeScaleSpring(spring, durationMs, referenceMs)` maps a duration prop onto it.
+
+The jelly was tried on the tabs family and rejected the same day (review: "不够丝滑、简单"). Its phase pops (1.06 × 1.08 emerge, 0.97 sink) are discontinuous uniform scales and its stretch saturates with speed, so a tab pill jumped from frame to frame and read as a tall capsule. Do not move a tabs-family host back onto it.
+
+This is a different tool from the compiled spring above: a CSS `linear()` spring animates a known start and end, while an indicator's target moves under it (hover sweeps, retargets mid-flight, drag), so it is integrated per frame.
+
+**Exception: the CoreBox result list's selection block** (`useSelectionBlock`, D8 of `09-25-corebox-list-motion`). It travels between rows, but only the keyboard steps it. An adjacent step is one WAAPI ease-out of at most 90ms (`SELECTION_STEP_MS`). A step that arrives inside that window (a held arrow key), or while a list FLIP is carrying the block, lands at once instead of retargeting. With no moving target there is nothing for a per-frame spring to integrate, and a spring would lag behind key repeat, which is the trail the block was built to remove. So it deliberately does not use `useJellyIndicator`. Its rest position sits in `translate`, so the list FLIP's `transform` composes on top of it. Contract: [CoreBox Results Contracts](./corebox-results-contracts.md#scenario-the-selection-block-d8-and-hover-rule-k).
+
+**Signature.**
+
+```ts
+const engine = useJellyIndicator({
+  axis?: MaybeRefOrGetter<'x' | 'y'>,          // travel axis
+  material?: 'jelly' | 'glide',                 // default 'jelly'
+  glide?: { stiffness?, damping?, lag? },       // glide: default GLIDE 420 / 38 / 0.45; lag 0 = rigid slide, capped 0.85
+  integrate?: JellySpringStep,                  // glide: pass springSteps; without it a glide move lands in place
+  elastic?, stiffness?, damping?,               // jelly: default JELLY 110 / 12; jellySpring(ms) time-scales it
+  deform?: number | { along?, across? },        // jelly: 1 = Radio's; 0 = rigid
+  maxGrowth?: number,                           // jelly: px cap on swelling, per axis
+  bounds?: { start, end } | null,               // walls along the travel axis (container coords)
+  onSettle?: () => void,                        // every arrival, including direct landings
+  onFrame?: (frame: { visible, rect: Readonly<JellyRect>, scaleX, scaleY, moving, phase }) => void,
+})
+engine.moveTo(rect | null, { animate?: boolean })
+engine.grab() / drag(rect, velocity, { atEdge }) / release(kick)   // Radio's drag only
+```
+
+**`integrate: springSteps`.** The glide is integrated with `springSteps` from `components/src/liquid/src/spring.ts`, the library's frame spring (1/240 s substeps, any `dt` safe; see `tuffex-text-motion.md` "Frame-driven motion uses `springSteps`"). utils cannot import from components (the utils build's `rootDir` is `utils`), so each glide host passes it in, and engine tests import it in the test file only. A host that forgets it gets an indicator that lands on the next frame, never one that hangs mid-trip.
+
+**Host contract.** The host measures (in its container's padding-box coordinates, scale-normalised like `useIndicatorBox`) and paints; the engine only moves.
+
+| Host event | Call |
+| --- | --- |
+| selection changed by click / keyboard / `v-model` / hover | `moveTo(rect, { animate: true })` |
+| first measurement, ResizeObserver, size tier or layout change | `moveTo(rect, { animate: false })` — lands at rest, only retargets mid-flight |
+| variant / placement / offset changed (new box, same target) | re-measure; the host picks: TxTabs travels (`animate: true`, a pill melting into a line), TxTabBar lands its `indicator` / `size` switch |
+| nothing to point at (multi-select, `indicator="none"`) | `moveTo(null)` |
+| a zero-size measurement (hidden panel, jsdom) | TxTabs hides with `moveTo(null)` until a real box exists, so it never travels out of zero; the other hosts land on it, which paints nothing |
+
+- Paint from `onFrame` onto the element with `style.transform = translate3d(x, y, 0) scale(sx, sy)` plus `width` / `height`, and never bind those properties in the template (see "One writer per CSS custom property"). A render-function component (`TxTabs`) must paint this way: re-running its render re-evaluates every slot.
+- No CSS `transition` on `transform`, `width`, `height` or `top` of the indicator, anywhere — including a wrapper's override (`TxFineTuneCard` used to ease FlatRadio's thumb, which would re-ease every frame). Keep only an `opacity` fade, with its reduced-motion escape.
+- `prefers-reduced-motion: reduce` is the engine's job: every move lands and the scale is identity. Hosts do not branch on it.
+- Inside a container that clips (`overflow: hidden` frames, TxTabs' scrolling tablist), pass `bounds` = the container's extent along the travel. On the glide an end that would cross a wall stops there; on the jelly the whole shape stops and lands as a squash, so draw its walls in by `maxGrowth / 2` to keep the squash inside. A target beyond a wall moves the wall out to it, so an edge-flush target (TabBar's first `line`) is still reached. Tabs, TabBar, FlatRadio and SidebarNav pass walls; Radio passes none — its pill poking past the group is the reference look. Verify with a round trip first → last → first over every style write. In jsdom stub the extent (`clientWidth` / `scrollHeight` read 0): a zero extent pins the walls to the target's own span, and an end that starts beyond it snaps to it — on SidebarNav's return trip the plate collapsed to zero height for its first frames until the test stubbed `scrollHeight`.
+- Jelly only: the material scales by ratio (1.36× is +10px on a 28px pill, +72px on a 200px row), so `maxGrowth` and `deform.across` size the swell to a container. No host passes them today; the glide has nothing to cap.
+
+**Relation to `springSteps`.** The glide *is* `springSteps`, so it needs no carve-out from `tuffex-text-motion.md`'s "Frame-driven motion uses `springSteps`". The jelly keeps its own integrator: Radio's shipped one (one semi-implicit step per frame, `dt ≤ JELLY.maxFrameS`, `JELLY` 110 / 12), lifted verbatim because its trajectory is Radio's reference feel (browser-verified frame-identical to the pre-extraction Radio). Re-basing it onto `springSteps` would be a retune of Radio, compared frame by frame, never a dedupe.
+
+**Tests required.** Fake `setTimeout`, `clearTimeout`, `requestAnimationFrame`, `cancelAnimationFrame` and `performance` together (`vi.useFakeTimers({ toFake: [...] })`). Assert the first measurement lands (`scale(1.000, 1.000)` at the target), a `matchMedia` reduce stub lands directly, and a switch settles exactly on its target. On the glide, sample every frame of the switch: the box passes between the ends, its travel-axis size exceeds both its start and end size at some frame (the lag), and the scale is `(1.000, 1.000)` on every frame; a round trip keeps both ends inside the container on every frame. On the jelly (Radio), the scale is ≠ 1 mid-flight. The vitest setup's `matchMedia` answers `false` for every query, so the spring runs unless a test says otherwise.
+
+**Wrong vs correct.**
+
+```ts
+// Wrong: CSS eases the geometry and a keyframe fakes the bounce on top
+el.style.transform = `translate3d(${x}px, 0, 0)`   // .pointer { transition: transform .35s }
+el.classList.add('pointer--motion-stretch-x')      // @keyframes with overshooting segments
+
+// Wrong: a tabs-family host on the jelly — it pops and squashes (rejected 2026-09-26)
+useJellyIndicator({ axis: 'x', maxGrowth: 16, onFrame: paint })
+
+// Correct: the engine owns the motion on the glide; the host only measures and paints
+const engine = useJellyIndicator({ axis: 'x', material: 'glide', integrate: springSteps, bounds, onFrame: paint })
+engine.moveTo(measureActive(), { animate: true })
+```
+
+### Pointer-driven reordering (`TxSortableList`)
+
+HTML5 drag and drop cannot feel direct: the browser draws a translucent drag image, nothing can make it springy, and the rows swap instantly under it. `TxSortableList` defaults to `dragMode: 'pointer'` since 2026-09-26; `'native'` is only for a host that needs `dragstart` / `dataTransfer` to move items between lists (Nexus `TemplateCmsBoardDemo`).
+
+| Concern | Contract |
+|---|---|
+| Order | The DOM order is frozen while a row is carried. The row follows the pointer on `translate`; passed rows step aside on theirs by the carried row's height plus the gap. Release commits once (`update:modelValue` + `reorder`), then every row FLIPs from its drawn centre. |
+| Clocks | Individual `translate` / `scale`, not `transform`: the carried row's translate has no transition while its lift springs. The script owns each row's whole `transition` list (base transitions included); a stylesheet transition on either property would re-ease every pointer frame. Springs come from `resolveTransition` (room `{ 480, 30 }`, lift / land `'bouncy'`). |
+| Geometry | Slots are read from `offsetTop` / `offsetHeight` (transform-free) when the drag starts. The target index is the slot the carried row would sit centred closest to — top-aligned above its origin, bottom-aligned below — so it swaps past half-way at any heights and reaches the last slot without overscroll. Past the ends it follows at 0.3. Scroll during the drag is subtracted via the list's viewport top. |
+| Click | A 4px threshold keeps a click a click; the click produced by a drag's release is swallowed by a capture listener removed a macrotask later. |
+| Surface | A carried row passes over others, so it sits on an opaque surface (`--tx-bg-color-overlay`); `--tx-fill-color-blank` is `transparent` in the dark theme. |
+| Touch | `touch-action: none` on the row, or only on `[data-tx-sort-handle]` in `handle` mode. |
+
+Do **not** FLIP a native `dragover` reorder: hit-testing follows transforms, so a row still sliding out from under the pointer catches the next `dragover` and swaps straight back.
+
+Tests (jsdom has no layout): stub `offsetTop` / `offsetHeight` per row, dispatch `MouseEvent`s with `pointerId` / `isPrimary` defined, and flush a macrotask between cases (`afterEach(() => new Promise(r => setTimeout(r, 0)))`) or one case's click-swallow listener eats the next case's click.
 
 ### TuffEx semantic hues in dark mode
 
@@ -296,6 +408,10 @@ prune, spacer origin) and `useHomeConversation.test.ts` (id uniqueness after res
 
 - Replacing a native control with `div @click` to preserve styling.
 - Binding a CSS custom property in `:style` that another code path also writes with `setProperty()`; an `undefined` value deletes the imperative write on every re-render (see One writer per CSS custom property).
+- Easing a sliding indicator's `transform` / `width` with a CSS transition, or faking its bounce with keyframes, instead of `useJellyIndicator` (see Sliding indicators ride `useJellyIndicator`).
+- Wrapping an icon class in an inline element: the glyph measures 0×0 (see Icon boxes, state ink, and colours read back from CSS).
+- Reading a colour back off an element whose ink the stylesheet derives from that same colour; each re-read mixes the mix (see Icon boxes, state ink, and colours read back from CSS).
+- Painting a carried or lifted surface with `--tx-fill-color-blank`, which is transparent in the dark theme, or FLIP-animating a native `dragover` reorder (see Pointer-driven reordering).
 - Adding a CoreApp-only primitive when a TuffEx primitive already exists.
 - Changing class names during semantic migrations without updating focused tests.
 - Reading browser-only state in Nexus SSR paths.

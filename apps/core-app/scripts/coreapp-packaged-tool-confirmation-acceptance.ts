@@ -1405,7 +1405,7 @@ async function openHome(send: CdpSend): Promise<void> {
         `document.hidden === false && Boolean(
           document.querySelector('.HomePage textarea.HomePage-Input') &&
           document.querySelector('.HomePage .HomePermissionMenu-Pill') &&
-          document.querySelector('.HomePage .HomePage-ModelPill')
+          document.querySelector('.HomePage .ComposerModelPill')
         )`
       ),
     Boolean,
@@ -1533,7 +1533,7 @@ async function enableReviewMode(send: CdpSend): Promise<void> {
     () =>
       evaluate<boolean>(
         send,
-        `document.hidden === false && document.querySelector('.HomePermissionMenu-Pill')?.classList.contains('active') === true`
+        `document.hidden === false && document.querySelector('.HomePermissionMenu-Pill')?.classList.contains('is-info') === true`
       ),
     Boolean,
     8_000,
@@ -1618,7 +1618,7 @@ async function selectControlledPiModel(send: CdpSend): Promise<void> {
   const opened = await evaluate<boolean>(
     send,
     `(() => {
-      const button = document.querySelector('.HomePage .HomePage-ModelPill')
+      const button = document.querySelector('.HomePage .ComposerModelPill')
       if (!(button instanceof HTMLButtonElement)) return false
       button.click()
       return true
@@ -1647,7 +1647,7 @@ async function selectControlledPiModel(send: CdpSend): Promise<void> {
     () =>
       evaluate<boolean>(
         send,
-        `document.hidden === false && document.querySelector('.HomePage-ModelName')?.textContent?.trim() === ${JSON.stringify(PI_MODEL)}`
+        `document.hidden === false && document.querySelector('.HomePage .ComposerModelPill .ComposerChip-Label .tx-text-transformer__layer--current')?.textContent?.trim() === ${JSON.stringify(PI_MODEL)}`
       ),
     Boolean,
     8_000,
@@ -1910,7 +1910,7 @@ export async function submitControlledTurn(send: CdpSend): Promise<void> {
   const assertReviewModeActive = async (): Promise<void> => {
     const reviewModeActive = await evaluate<boolean>(
       send,
-      `document.querySelector('.HomePage .HomePermissionMenu-Pill')?.classList.contains('active') === true`
+      `document.querySelector('.HomePage .HomePermissionMenu-Pill')?.classList.contains('is-info') === true`
     )
     if (!reviewModeActive) fail('REVIEW_MODE_ROLLED_BACK')
   }
@@ -1944,12 +1944,12 @@ export async function submitControlledTurn(send: CdpSend): Promise<void> {
         send,
         `(() => {
       const input = document.querySelector('.HomePage textarea.HomePage-Input')
-      const button = document.querySelector('.HomePage .HomePage-SendBtn')
+      const button = document.querySelector('.HomePage .ComposerSendIsland')
       return !(
         !(input instanceof HTMLTextAreaElement) ||
         input.value !== ${JSON.stringify(CONTROLLED_TURN_PROMPT)} ||
         !(button instanceof HTMLButtonElement) ||
-        button.disabled
+        button.dataset.state !== 'ready'
       )
     })()`
       ),
@@ -1962,14 +1962,14 @@ export async function submitControlledTurn(send: CdpSend): Promise<void> {
     send,
     `(() => {
       const input = document.querySelector('.HomePage textarea.HomePage-Input')
-      const button = document.querySelector('.HomePage .HomePage-SendBtn')
+      const button = document.querySelector('.HomePage .ComposerSendIsland')
       const permission = document.querySelector('.HomePage .HomePermissionMenu-Pill')
-      if (!permission?.classList.contains('active')) return 'review-mode-inactive'
+      if (!permission?.classList.contains('is-info')) return 'review-mode-inactive'
       if (
         !(input instanceof HTMLTextAreaElement) ||
         input.value !== ${JSON.stringify(CONTROLLED_TURN_PROMPT)} ||
         !(button instanceof HTMLButtonElement) ||
-        button.disabled
+        button.dataset.state !== 'ready'
       ) return 'not-ready'
       button.click()
       return 'submitted'
@@ -2059,7 +2059,7 @@ async function waitForCancelledAssistantState(
         `({
           documentHidden: document.hidden,
           streamRunning: Boolean(
-            document.querySelector('.HomePage .HomePage-SendBtn .i-ri-stop-fill') ||
+            document.querySelector('.HomePage .ComposerSendIsland:is([data-state="waiting"], [data-state="streaming"], [data-state="blocked"])') ||
             document.querySelector('.HomePage-Message.assistant[aria-busy="true"]')
           )
         })`
@@ -2178,7 +2178,7 @@ async function recoverHome(send: CdpSend): Promise<void> {
   await evaluate(
     send,
     `(() => {
-      const stop = document.querySelector('.HomePage .HomePage-SendBtn .i-ri-stop-fill')?.closest('button')
+      const stop = document.querySelector('.HomePage .ComposerSendIsland:is([data-state="waiting"], [data-state="streaming"], [data-state="blocked"])')
       if (stop instanceof HTMLButtonElement) stop.click()
       const deny = document.querySelector('.HomePage-ConfirmSlot .tx-tool-confirmation__deny')
       if (deny instanceof HTMLButtonElement) deny.click()
@@ -2367,7 +2367,7 @@ async function runCancelScenario(
   const cancelStartedAt = await evaluate<number>(
     send,
     `(() => {
-      const button = document.querySelector('.HomePage .HomePage-SendBtn .i-ri-stop-fill')?.closest('button')
+      const button = document.querySelector('.HomePage .ComposerSendIsland:is([data-state="waiting"], [data-state="streaming"], [data-state="blocked"])')
       if (!(button instanceof HTMLButtonElement)) return 0
       button.click()
       return Date.now()

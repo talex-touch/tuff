@@ -56,9 +56,13 @@ function injectRuntimeCredential(provider: IntelligenceProviderConfig): Intellig
   }
 
   const authToken = toNexusApiKey(getAuthToken())
+  const capabilities = provider.capabilities?.includes('audio.asr')
+    ? provider.capabilities
+    : [...(provider.capabilities ?? []), 'audio.asr']
   return {
     ...provider,
     apiKey: authToken || provider.apiKey || 'guest',
+    capabilities,
     metadata: {
       ...(provider.metadata || {}),
       origin: 'tuff-nexus',

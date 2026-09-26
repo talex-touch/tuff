@@ -125,6 +125,7 @@ import type {
   CoreBoxMetaOverlayActionExecutedPayload,
   CoreBoxMetaOverlayFlowTransferPayload,
   CoreBoxMetaOverlayItemActionPayload,
+  CoreBoxMetaOverlayPanelStatePayload,
   CoreBoxNoResultsPayload,
   CoreBoxPreviewCopyRequest,
   CoreBoxRecommendationExposureRequest,
@@ -1458,6 +1459,15 @@ export const CoreBoxEvents = {
       .module('meta-overlay')
       .event('flow-transfer')
       .define<CoreBoxMetaOverlayFlowTransferPayload, void>(),
+
+    /**
+     * Tell the CoreBox renderer whether the action panel is open and whether main grew the window
+     * for it. Fire-and-forget, sent on change.
+     */
+    panelState: defineEvent('core-box')
+      .module('meta-overlay')
+      .event('panel-state')
+      .define<CoreBoxMetaOverlayPanelStatePayload, void>(),
   },
 } as const
 

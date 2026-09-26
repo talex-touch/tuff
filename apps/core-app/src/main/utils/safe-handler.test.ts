@@ -41,6 +41,68 @@ describe('safe-handler', () => {
     expect(onError).toHaveBeenCalledOnce()
   })
 
+  it('safeApiHandler projects a recognized failure into its safe code and retryable flag', async () => {
+    const onError = vi.fn()
+    const raw = new Error('SPEECH_CATALOG_TIMEOUT: exceeded the 25000ms deadline')
+    const handler = safeApiHandler(
+      async () => {
+        throw raw
+      },
+      {
+        onError,
+        projectError: (error) =>
+          error instanceof Error && error.message.startsWith('SPEECH_CATALOG_TIMEOUT')
+            ? {
+                error: 'The speech model catalog request timed out.',
+                code: 'SPEECH_CATALOG_TIMEOUT',
+                retryable: true
+              }
+            : undefined
+      }
+    )
+
+    const result = await handler(undefined, {} as never)
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'The speech model catalog request timed out.',
+      code: 'SPEECH_CATALOG_TIMEOUT',
+      retryable: true
+    })
+    // The raw detail is still available to the in-process error log, never to the caller.
+    expect(onError).toHaveBeenCalledWith(raw, undefined, {})
+  })
+
+  it('safeApiHandler keeps the generic error when the projector declines the failure', async () => {
+    const handler = safeApiHandler(
+      async () => {
+        throw new Error('https://nexus.example.test/api/v1/speech/models?digest=deadbeef')
+      },
+      { projectError: () => undefined }
+    )
+
+    const result = await handler(undefined, {} as never)
+
+    expect(result).toEqual({ ok: false, error: SAFE_PUBLIC_ERROR })
+  })
+
+  it('safeApiHandler keeps the generic error when the projector itself throws', async () => {
+    const handler = safeApiHandler(
+      async () => {
+        throw new Error('boom')
+      },
+      {
+        projectError: () => {
+          throw new Error('projector bug')
+        }
+      }
+    )
+
+    const result = await handler(undefined, {} as never)
+
+    expect(result).toEqual({ ok: false, error: SAFE_PUBLIC_ERROR })
+  })
+
   it('safeOpHandler merges success payload when handler returns object', async () => {
     const handler = safeOpHandler(async () => ({ taskId: 'task-1' }))
 

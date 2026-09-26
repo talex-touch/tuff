@@ -24,7 +24,8 @@ import {
 import { ElectronScreenshotWindowFactory, type ScreenshotTouchWindowLike } from './window-factory'
 
 const screenshotSessionLog = createLogger('ScreenshotSession')
-const SCREENSHOT_SHORTCUT_ID = 'screenshot.tool.start'
+/** Exported for the tray, which prints the key this id is bound to. */
+export const SCREENSHOT_SHORTCUT_ID = 'screenshot.tool.start'
 const SCREENSHOT_SHORTCUT_OWNER = 'module.screenshot-session'
 const SCREENSHOT_DEFAULT_ACCELERATOR = 'CommandOrControl+Shift+A'
 const SCREENSHOT_LEGACY_DEFAULT_ACCELERATORS = ['CommandOrControl+Shift+S']

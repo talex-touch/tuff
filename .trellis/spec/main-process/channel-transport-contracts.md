@@ -138,6 +138,9 @@ reportPerfToMain(report: RendererPerfReport): void
 - The finalizer fallback broadcast is idempotent; it must not reopen renderer work after quiesce.
 - Performance reporting never reports the `app:analytics:perf-report` event itself. A missing perf handler must not recursively generate another perf report.
 - Default-session permissions remain denied during shutdown, but expected denial logs are suppressed once `TouchApp.isQuitting` is true.
+- Search shutdown closes admission and initiates scan cancellation/producer stop before awaiting session or watcher-queue drains. A watcher waiting for the scan's mutation gate must not prevent that scan from receiving its cancellation. Every concurrently started drain needs an immediate rejection handler; the writer closes only after successful drains.
+- The completed `before-quit` latch is set before final broadcast or delegation to `DevProcessManager`: its synchronous `app.quit()` re-enters `before-quit` and must be allowed through, not prevented behind the still-pending first promise.
+- Sentry stops accepting telemetry and detaches producer subscriptions/timers at the start of `onDestroy`. Already accepted events still flush while Storage/Database are live. Late lifecycle events and captured polling callbacks cannot re-arm work after destroy; re-init restores admission. Do not mask a dependency-order defect with an endpoint fallback or claim an in-memory batch survives process exit.
 
 ### 4. Validation & Error Matrix
 
@@ -160,6 +163,7 @@ reportPerfToMain(report: RendererPerfReport): void
 - Renderer transport test: after `destroy()`, `send()` rejects and the fake channel receives zero calls.
 - Existing before-quit guard/finalizer/module-manager tests stay green.
 - Isolated Electron auto-quit smoke: inspect the post-`App quit requested` log for missing-handler recursion and permission-denial noise.
+- Quit during an active scan: verify scan cancellation, writer-last cleanup, `exit 0`, and no outer quit timeout, DevProcessManager forced exit, or post-Storage telemetry rejection. A `blocking` perf-context enclosing `await` is a wall-clock span, not proof of continuous synchronous execution.
 
 ### 7. Wrong vs Correct
 

@@ -209,8 +209,7 @@ export class ClipboardAutopasteAutomation {
           error,
           'Voice text auto-paste failed',
           { platform: process.platform },
-          AUTO_PASTE_FAILED_MESSAGE,
-          { notify: true }
+          AUTO_PASTE_FAILED_MESSAGE
         )
       }
     })

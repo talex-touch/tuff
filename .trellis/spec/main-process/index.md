@@ -32,6 +32,24 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   delivery modes, notification-vs-request semantics, renderer quiesce before handler teardown,
   destroyed-transport send rejection, perf-report recursion prevention, delivery-target identity,
   port allowlist, and stable-mock/runtime quit evidence.
+- [corebox-meta-overlay-contracts.md](corebox-meta-overlay-contracts.md) — the ⌘K action
+  panel across main, CoreBox and the overlay renderer: main owns the window height only while
+  the panel is open (grow-to-fit on the settled height, hold the latest layout update, replay it
+  over the pre-open height on close), the host-only `panelState` notification that keeps the
+  grown space painted until the shrink lands, `showInFolder` reveal-never-open (macOS packages
+  after realpath, behind `system.shell`), and the key rules (code chords, platform-split pin,
+  held-Enter guard, IME) with failures logged as id + code and shown in footer or header.
+- [global-shortcut-contracts.md](global-shortcut-contracts.md) — the OS-level keys
+  `ShortcutModule` registers: defaults written once (`shared/corebox-shortcut.ts`) and migrated
+  by value, not by author; what a refused registration means per OS (macOS registers
+  non-exclusively and never reports another app holding the key, so ⌥Space conflicts get an
+  onboarding hint instead of a detector; Windows refuses held keys); no fallback (a default the
+  OS refuses or that loses an in-app conflict leaves CoreBox with no key and one once-per-launch
+  notice saying why, naming the winning shortcut when settings labels it; the ⌘E stand-in was
+  removed); the effective key every surface prints, the command window's Open CoreBox row
+  included (`shortcon:get-binding` / `shortcon:changed` defined once, stale answers dropped, tray
+  rebuilt on change; no in-window ⌘E chord); recorder
+  modifier names and the off-macOS `Command`/`Option` → `Super`/`Alt` rename; settings status ink.
 - [app-semantic-catalog-contracts.md](app-semantic-catalog-contracts.md) — category
   vocabulary: locale-structured alias groups (new language = locale key + rule),
   automatic English pluralization + skip-table discipline, match-needle token
@@ -53,6 +71,16 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   path: token dedup funnels through `addSearchToken` (O(1) WeakMap/Set), per-app
   derivation memoized with a content key that must cover every input field, cached
   arrays are shared read-only references.
+- [index-commit-refresh-contracts.md](index-commit-refresh-contracts.md) — how
+  background indexing reaches an open CoreBox: per-stream `index-committed`
+  notifications in a window the first commit opens and later ones never extend
+  (1s; 3s plus `bulk` during a scan or a dense run) while the hub revision still
+  moves per commit; renderer refresh backoff (500ms → 2s → 5s), a hidden CoreBox
+  holding one pending refresh, same-query reconcile against pre-cap delivered
+  ids; app watch events gated by root before health; meta-backed provider health
+  count; native file results under the file-index directory rule (pool 150 → 50,
+  iCloud Drive exception); enrichment-resume cooldown/cursor and read-failure
+  skip classes.
 - [background-task-timeout-contracts.md](background-task-timeout-contracts.md) —
   main-thread liveness: streaming requests default to a fetch-through-EOF
   deadline, caller-owned idle streams opt in explicitly, caller cancellation is

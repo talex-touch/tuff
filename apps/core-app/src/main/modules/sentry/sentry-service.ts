@@ -6,7 +6,7 @@
 
 import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { TelemetryUploadStatsRecord } from './telemetry-upload-stats-store'
-import fs from 'node:fs'
+import fs, { type Dir } from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
@@ -55,6 +55,81 @@ const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
 const SENTRY_DSN =
   'https://f8019096132f03a7a66c879a53462a67@o4508024637620224.ingest.us.sentry.io/4510196503871488'
 const DEV_DISABLED_SENTRY_INTEGRATIONS = new Set(['ElectronNet', 'ElectronBreadcrumbs'])
+const NATIVE_CRASH_DIAGNOSTIC_MAX_FILES = 100
+
+export type NativeCrashDeliveryPhase =
+  | 'disabled'
+  | 'idle'
+  | 'discovered'
+  | 'parsed'
+  | 'queued'
+  | 'sent'
+  | 'transport-failed'
+
+export interface NativeCrashDeliveryStatus {
+  phase: NativeCrashDeliveryPhase
+  pendingAtStartup: number
+  pendingAtStartupTruncated: boolean
+  discoveredAt: number | null
+  parsedAt: number | null
+  sentAt: number | null
+  statusCode: number | null
+  failureCode: string | null
+}
+
+function createNativeCrashDeliveryStatus(
+  phase: NativeCrashDeliveryPhase
+): NativeCrashDeliveryStatus {
+  return {
+    phase,
+    pendingAtStartup: 0,
+    pendingAtStartupTruncated: false,
+    discoveredAt: null,
+    parsedAt: null,
+    sentAt: null,
+    statusCode: null,
+    failureCode: null
+  }
+}
+
+function countPendingNativeCrashDumps(): { count: number; truncated: boolean } {
+  let crashRoot: string
+  try {
+    crashRoot = app.getPath('crashDumps')
+  } catch {
+    return { count: 0, truncated: false }
+  }
+  const directories =
+    process.platform === 'win32'
+      ? [path.join(crashRoot, 'reports')]
+      : process.platform === 'darwin'
+        ? [path.join(crashRoot, 'completed'), path.join(crashRoot, 'pending')]
+        : [path.join(crashRoot, 'completed')]
+  let count = 0
+  for (const directory of directories) {
+    let handle: Dir | null = null
+    try {
+      handle = fs.opendirSync(directory)
+      while (count < NATIVE_CRASH_DIAGNOSTIC_MAX_FILES) {
+        const entry = handle.readSync()
+        if (!entry) break
+        if (entry.isFile() && entry.name.endsWith('.dmp')) count += 1
+      }
+      if (count >= NATIVE_CRASH_DIAGNOSTIC_MAX_FILES) {
+        return { count, truncated: true }
+      }
+    } catch {
+      // A missing/unreadable directory means no observable dump in that location.
+    } finally {
+      try {
+        handle?.closeSync()
+      } catch {
+        // Diagnostics never make Sentry initialization fail.
+      }
+    }
+  }
+  return { count, truncated: false }
+}
 
 export interface SentryConfig {
   enabled: boolean
@@ -184,6 +259,11 @@ export class SentryServiceModule extends BaseModule {
   private searchCount = 0
   private searchMetricsBuffer: SearchMetrics[] = []
   private isInitialized = false
+  private destroying = false
+  /** Detached in `onDestroy`; a late storage push must not re-arm teardown work. */
+  private configUnsubscribe: (() => void) | null = null
+  private nativeCrashDelivery = createNativeCrashDeliveryStatus('disabled')
+  private disposeNativeCrashTransportHook: (() => void) | null = null
 
   private nexusTelemetryBuffer: NexusTelemetryEvent[] = []
   private lastNexusUploadTime: number | null = null
@@ -251,6 +331,7 @@ export class SentryServiceModule extends BaseModule {
   }
 
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    this.destroying = false
     sentryLog.info('Initializing Sentry service')
 
     // Load configuration
@@ -280,11 +361,15 @@ export class SentryServiceModule extends BaseModule {
     this.setupIPCChannels(ctx)
 
     try {
-      subscribeMainConfig(StorageList.SENTRY_CONFIG, (data) => {
+      // Re-init replaces the previous subscription instead of stacking a second callback on the
+      // same storage channel: teardown detaches it, so only the current one stays live.
+      this.configUnsubscribe?.()
+      this.configUnsubscribe = subscribeMainConfig(StorageList.SENTRY_CONFIG, (data) => {
         const cfg = data as Partial<SentryConfig>
         this.saveConfig(cfg)
       })
     } catch {
+      this.configUnsubscribe = null
       sentryLog.warn('Failed to subscribe sentry-config changes', {
         meta: { code: 'SENTRY_CONFIG_SUBSCRIBE_FAILED' }
       })
@@ -329,14 +414,33 @@ export class SentryServiceModule extends BaseModule {
   }
 
   async onDestroy(ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
+    // Later module unloads still emit telemetry. Stop accepting it before any await,
+    // then persist the already accepted buffer while Storage/Database are still live.
+    this.destroying = true
+    this.detachTelemetryProducers()
     if (this.isInitialized) {
       await this.waitForShutdownGrace(ctx?.appClosing === true)
     }
+    this.disposeNativeCrashTransportHook?.()
+    this.disposeNativeCrashTransportHook = null
 
     this.disposeOperationalErrorSinks()
     await this.stopNexusTelemetryTimer({ uploadOutbox: ctx?.appClosing !== true })
     this.stopPerformanceMonitors()
     await this.flushTelemetryStats()
+  }
+
+  /** Stop event subscriptions and timers before draining accepted telemetry. */
+  private detachTelemetryProducers(): void {
+    if (this.pollingService.isRegistered(SENTRY_NEXUS_TASK_ID)) {
+      this.pollingService.unregister(SENTRY_NEXUS_TASK_ID)
+    }
+    if (this.telemetryStatsPersistTimer) {
+      clearTimeout(this.telemetryStatsPersistTimer)
+      this.telemetryStatsPersistTimer = null
+    }
+    this.configUnsubscribe?.()
+    this.configUnsubscribe = null
   }
 
   /**
@@ -454,6 +558,9 @@ export class SentryServiceModule extends BaseModule {
   }
 
   private schedulePersistTelemetryStats(): void {
+    // No late queue after destroy: the teardown flush below is the last write, and arming a
+    // timer here would outlive the storage it is meant to write to.
+    if (this.destroying) return
     if (this.telemetryStatsPersistTimer) return
     this.telemetryStatsPersistTimer = setTimeout(() => {
       this.telemetryStatsPersistTimer = null
@@ -610,6 +717,8 @@ export class SentryServiceModule extends BaseModule {
   }
 
   private startPerformanceMonitors(): void {
+    // A late config change during teardown must not re-arm the perf flush timer.
+    if (this.destroying) return
     if (this.pollingService.isRegistered(SENTRY_PERF_TASK_ID)) return
 
     this.ensureWindowPerformanceListeners()
@@ -807,11 +916,74 @@ export class SentryServiceModule extends BaseModule {
   /**
    * Initialize Sentry
    */
+  private resetNativeCrashDeliveryStatus(): void {
+    const pending = countPendingNativeCrashDumps()
+    const discoveredAt = pending.count > 0 ? Date.now() : null
+    this.nativeCrashDelivery = {
+      ...createNativeCrashDeliveryStatus(pending.count > 0 ? 'discovered' : 'idle'),
+      pendingAtStartup: pending.count,
+      pendingAtStartupTruncated: pending.truncated,
+      discoveredAt
+    }
+    sentryLog.info('Native crash delivery discovery completed', {
+      meta: {
+        phase: this.nativeCrashDelivery.phase,
+        pending: pending.count,
+        truncated: pending.truncated
+      }
+    })
+  }
+
+  private markNativeCrashParsed(): void {
+    const now = Date.now()
+    this.nativeCrashDelivery = {
+      ...this.nativeCrashDelivery,
+      phase: 'parsed',
+      discoveredAt: this.nativeCrashDelivery.discoveredAt ?? now,
+      parsedAt: now,
+      sentAt: null,
+      statusCode: null,
+      failureCode: null
+    }
+    sentryLog.info('Native crash minidump parsed', { meta: { phase: 'parsed' } })
+  }
+
+  private markNativeCrashTransport(statusCode?: number): void {
+    const queued = statusCode === undefined
+    const successful = !queued && statusCode >= 200 && statusCode < 300
+    const now = Date.now()
+    this.nativeCrashDelivery = {
+      ...this.nativeCrashDelivery,
+      phase: queued ? 'queued' : successful ? 'sent' : 'transport-failed',
+      discoveredAt: this.nativeCrashDelivery.discoveredAt ?? now,
+      parsedAt: this.nativeCrashDelivery.parsedAt ?? now,
+      sentAt: successful ? now : null,
+      statusCode: statusCode ?? null,
+      failureCode: successful
+        ? null
+        : queued
+          ? 'SENTRY_NATIVE_TRANSPORT_QUEUED'
+          : `SENTRY_NATIVE_TRANSPORT_HTTP_${statusCode}`
+    }
+    const metadata = {
+      phase: this.nativeCrashDelivery.phase,
+      statusCode: this.nativeCrashDelivery.statusCode,
+      failureCode: this.nativeCrashDelivery.failureCode
+    }
+    if (successful) sentryLog.info('Native crash event transport completed', { meta: metadata })
+    else if (queued)
+      sentryLog.warn('Native crash event queued by offline transport', { meta: metadata })
+    else sentryLog.warn('Native crash event transport failed', { meta: metadata })
+  }
+
   private initializeSentry(): void {
     if (this.isInitialized) {
       return
     }
 
+    this.resetNativeCrashDeliveryStatus()
+    this.disposeNativeCrashTransportHook?.()
+    this.disposeNativeCrashTransportHook = null
     try {
       const isDevelopmentRuntime = !app.isPackaged || process.env.NODE_ENV === 'development'
       Sentry.init({
@@ -826,7 +998,8 @@ export class SentryServiceModule extends BaseModule {
           override: process.env.TUFF_SENTRY_TRACES_SAMPLE_RATE
         }),
         // Before send hook to filter sensitive data
-        beforeSend(event) {
+        beforeSend: (event) => {
+          if (event.platform === 'native') this.markNativeCrashParsed()
           event.contexts = {
             ...event.contexts,
             environment: getEnvironmentContext()
@@ -850,6 +1023,11 @@ export class SentryServiceModule extends BaseModule {
           : {})
         // Error handling is done by Sentry automatically
       })
+      const client = Sentry.getClient()
+      this.disposeNativeCrashTransportHook =
+        client?.on('afterSendEvent', (event, response) => {
+          if (event.platform === 'native') this.markNativeCrashTransport(response.statusCode)
+        }) ?? null
       this.isInitialized = true
       this.bindOperationalDetailSink()
 
@@ -883,6 +1061,11 @@ export class SentryServiceModule extends BaseModule {
     if (!this.isInitialized) {
       return
     }
+    const client = Sentry.getClient()
+    if (client) client.getOptions().enabled = false
+    this.disposeNativeCrashTransportHook?.()
+    this.disposeNativeCrashTransportHook = null
+    this.nativeCrashDelivery = createNativeCrashDeliveryStatus('disabled')
     this.disposeOperationalDetailSink?.()
     this.disposeOperationalDetailSink = null
     operationalErrorService.disableDetailDelivery()
@@ -1138,6 +1321,10 @@ export class SentryServiceModule extends BaseModule {
     })
   }
 
+  getNativeCrashDeliveryStatus(): NativeCrashDeliveryStatus {
+    return { ...this.nativeCrashDelivery }
+  }
+
   /**
    * Check if Sentry is initialized and enabled
    */
@@ -1149,7 +1336,7 @@ export class SentryServiceModule extends BaseModule {
    * Check if telemetry upload is enabled (independent of Sentry init).
    */
   isTelemetryEnabled(): boolean {
-    return this.config.enabled
+    return this.config.enabled && !this.destroying
   }
 
   /**
@@ -1238,7 +1425,7 @@ export class SentryServiceModule extends BaseModule {
    * Queue telemetry event for batch upload to Nexus
    */
   queueNexusTelemetry(event: Omit<NexusTelemetryEvent, 'isAnonymous'>): void {
-    if (!this.config.enabled) return
+    if (!this.isTelemetryEnabled()) return
 
     if (event.eventType === 'search') {
       this.searchCount++
@@ -1268,22 +1455,26 @@ export class SentryServiceModule extends BaseModule {
   }
 
   private ensureNexusFlushTaskRegistered(): void {
+    // Teardown unregisters this task; nothing may re-register it afterwards, even if a producer
+    // that slipped past the queue gate reaches here.
+    if (this.destroying) return
     if (this.pollingService.isRegistered(SENTRY_NEXUS_TASK_ID)) {
       return
     }
 
     this.pollingService.register(
       SENTRY_NEXUS_TASK_ID,
-      () =>
-        this.flushNexusTelemetry()
-          .then(async () => {
-            await this.flushQueuedNexusTelemetryOutbox()
+      async () => {
+        if (this.destroying) return
+        try {
+          await this.flushNexusTelemetry()
+          if (!this.destroying) await this.flushQueuedNexusTelemetryOutbox()
+        } catch (error) {
+          this.recordTelemetryFailure('Nexus telemetry flush task failed', {
+            code: stableTelemetryFailureCode(error, 'TELEMETRY_FLUSH_FAILED')
           })
-          .catch((error) => {
-            this.recordTelemetryFailure('Nexus telemetry flush task failed', {
-              code: stableTelemetryFailureCode(error, 'TELEMETRY_FLUSH_FAILED')
-            })
-          }),
+        }
+      },
       {
         interval: NEXUS_TELEMETRY_FLUSH_INTERVAL,
         unit: 'milliseconds',
@@ -1307,16 +1498,6 @@ export class SentryServiceModule extends BaseModule {
 
     const events = [...this.nexusTelemetryBuffer]
     this.nexusTelemetryBuffer = []
-    const url = resolveTelemetryBatchEndpoint()
-    const payload: Record<string, unknown> = {
-      eventType: 'telemetry_batch',
-      metadata: {
-        kind: NEXUS_TELEMETRY_OUTBOX_KIND,
-        idempotencyKey: `sentry:${randomUUID()}`,
-        count: events.length
-      },
-      events
-    }
 
     const store = this.getReportQueueStore()
     if (!store) {
@@ -1328,6 +1509,16 @@ export class SentryServiceModule extends BaseModule {
     }
 
     try {
+      const url = resolveTelemetryBatchEndpoint()
+      const payload: Record<string, unknown> = {
+        eventType: 'telemetry_batch',
+        metadata: {
+          kind: NEXUS_TELEMETRY_OUTBOX_KIND,
+          idempotencyKey: `sentry:${randomUUID()}`,
+          count: events.length
+        },
+        events
+      }
       await store.insert({
         payload,
         endpoint: url,
@@ -1481,7 +1672,11 @@ export class SentryServiceModule extends BaseModule {
    * Stop Nexus telemetry flush timer
    */
   async stopNexusTelemetryTimer(options: { uploadOutbox?: boolean } = {}): Promise<void> {
-    this.pollingService.unregister(SENTRY_NEXUS_TASK_ID)
+    // Teardown already detached this task before its first await; the guard keeps a second stop
+    // from reporting a task that is intentionally gone.
+    if (this.pollingService.isRegistered(SENTRY_NEXUS_TASK_ID)) {
+      this.pollingService.unregister(SENTRY_NEXUS_TASK_ID)
+    }
     await this.flushNexusTelemetry()
     if (options.uploadOutbox !== false) {
       await this.flushQueuedNexusTelemetryOutbox()

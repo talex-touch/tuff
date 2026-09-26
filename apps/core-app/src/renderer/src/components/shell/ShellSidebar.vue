@@ -7,8 +7,8 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { useConversationEntry } from '~/modules/conversation/useConversationEntry'
 import { blankConversationOwner } from '~/modules/layout/useProjectFolders'
 import { useShellSidebar } from '~/modules/layout/useShellSidebar'
-import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { groupedSettingNavigation } from '~/modules/settings/categories'
+import { useCoreBoxShortcut } from '~/modules/shortcuts/useCoreBoxShortcut'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { useProjectStore } from '~/stores/projects'
@@ -27,10 +27,10 @@ const { t } = useI18n()
 const route = useRoute()
 const projectStore = useProjectStore()
 const transport = useTuffTransport()
-const { isMac } = useRendererPlatform()
 const { packageJson } = useEnv()
 const { collapsed, isDragging, startDrag } = useShellSidebar()
 const { enterConversation, enterPickedProjectConversation } = useConversationEntry()
+const { effectiveLabel: coreBoxShortcutLabel } = useCoreBoxShortcut()
 
 /**
  * A width transition is off while the grip is held so the edge stays under the pointer. Snapping
@@ -71,7 +71,11 @@ const contextTransition = computed(() =>
   isSettingsContext.value ? 'ShellSidebar-forward' : 'ShellSidebar-back'
 )
 
-const searchKbd = computed(() => (isMac.value ? '⌘E' : 'Ctrl+E'))
+/**
+ * The global key that opens CoreBox, not a written-in one: the user can rebind it, and a key the
+ * OS refused or one that lost an in-app conflict does nothing. No key at all hides the hint.
+ */
+const searchKbd = computed(() => coreBoxShortcutLabel.value ?? undefined)
 const settingGroups = computed(() =>
   groupedSettingNavigation(Boolean(appSetting?.dev?.developerMode))
 )

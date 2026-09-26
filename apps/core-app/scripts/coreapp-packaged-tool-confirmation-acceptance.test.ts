@@ -337,7 +337,7 @@ function controlledSubmitSend(
         tools: ready ? [TOOL_ID] : []
       })
     }
-    if (expression.includes("HomePermissionMenu-Pill')?.classList.contains('active')")) {
+    if (expression.includes("HomePermissionMenu-Pill')?.classList.contains('is-info')")) {
       return cdpValue(
         typeof options.reviewModeActive === 'function'
           ? options.reviewModeActive()
@@ -345,7 +345,7 @@ function controlledSubmitSend(
       )
     }
     if (expression.includes("input.dispatchEvent(new InputEvent('input'")) return cdpValue(true)
-    if (expression.includes('return !(') && expression.includes('button.disabled')) {
+    if (expression.includes('return !(') && expression.includes('button.dataset.state')) {
       return cdpValue(readSubmitReady())
     }
     if (expression.includes('button.click()')) {
