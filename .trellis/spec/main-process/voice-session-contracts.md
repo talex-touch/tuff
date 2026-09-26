@@ -79,6 +79,12 @@ identity, and plugin permissions remain in main.
 - `AppSetting.voiceInput.enabled` alone gates platform dictation gestures, HUD entry, and the
   Assistant voice runtime projection. Assistant visibility, floating-ball visibility, and legacy
   wake-word preferences must not authorize or disable shortcut dictation.
+- The Home composer's microphone (`views/base/home/composer/useComposerDictation.ts`) is outside
+  that gate (D10-a): pressing the in-composer button is itself the consent, it requests
+  `delivery: 'none'` so nothing is typed into another application, and its words land only in the
+  composer's own draft. Every session rule above still applies to it — one generation per session,
+  a stop asked for before the stream handle arrives is applied as `stop()`, never `cancel()` — and it
+  offers no retry or undo, because main's recovery slot is global and may hold the HUD's recording.
 - Missing `voiceInput` is migrated during raw main-storage normalization, before caching/defaults
   can hide absence: preserve legacy `assistant.enabled && voiceWake.enabled` and language once.
   Any explicit new value wins; malformed new values fail closed rather than restoring legacy enablement.
@@ -101,6 +107,8 @@ identity, and plugin permissions remain in main.
 - The internal Nexus `metadata.voiceAsr.protocol = 'nexus-pack'` is not a user-authored Provider protocol or a second capability table. It resolves the matching provider id from the active RSA-verified/A256GCM-decrypted Catalog registry once before capture, then freezes descriptor and model for the session.
 - A Nexus pack may replace only same-origin submit/poll paths, allowlisted non-credential headers, model allowlist, and bounded bytes/duration/deadline. Protocol/transport/auth/body/idempotency shape stays code-owned, and every numeric bound is `min(pack, local hard cap)`. Expiry/sdkapi/origin/model mismatch fails with `VOICE_ASR_PACK_*`; no active pack retains the built-in Nexus buffered route.
 - Remote voice catalog check/sync and authenticated key delivery require a loaded signed-in account and stop before network work with `CATALOG_AUTH_REQUIRED` otherwise. Catalog status and local rollback remain reachable while signed out; the runtime itself still requires the Nexus session token.
+- `tuff-nexus-default` stays `audio.stt`-only in persisted `DEFAULT_PROVIDERS`; the Nexus runtime projection adds `audio.asr` exactly once beside `metadata.voiceAsr.protocol = 'nexus-pack'`. This is what lets the shared resolver see an enabled signed-pack binding without claiming a durable capability when the pack runtime is absent. Do not widen every custom Provider, modify the shared capability filter, or mutate the stored capability list.
+- The installable on-device model catalog is independent from cloud dictation readiness. Nexus validates every root entry before a bounded descriptor fan-out, preserves source order, coalesces one source's in-flight build, caches only complete success, and aborts request/build work before the CoreApp deadline. Main projects only `SPEECH_CATALOG_AUTH_REQUIRED | TIMEOUT | UPSTREAM_UNAVAILABLE | INVALID | UNAVAILABLE`; the renderer switches on that code, never on message text, and cloud-source copy states that a catalog failure does not disable cloud dictation.
 - Pack activation and login never mutate `AppSetting.voiceInput.enabled`. The fresh and malformed-value default is off; only the explicit Settings switch may enable it, and that row must visibly distinguish “off by default” from “manually enabled”. The historical both-Assistant-and-VoiceWake migration remains a preserved prior user choice, not a new default.
 
 ## Capture signal chain
@@ -121,7 +129,7 @@ reintroduce a second processing site in the audio callback.
 - A non-finite input sample must be zeroed before it reaches any cascade. The sections are
   recursive: one NaN in their state is not one bad sample, it is silence to the end of the
   session.
-- Trailing-silence detection runs on the chain's *output*, against a noise floor estimated from
+- Trailing-silence detection runs on the chain's _output_, against a noise floor estimated from
   the signal — the minimum window RMS over a recent sliding window, plus an absolute guard.
   A fixed absolute threshold is wrong in both directions and was measured wrong on real
   hardware: at -40 dBFS it sat 3.7 dB under an ordinary quiet room's median noise, 18% of
@@ -337,15 +345,15 @@ table/summary. Rationale and market evidence: `.trellis/tasks/09-10-voice-polish
 
 ### Validation & Error Matrix
 
-| Condition | Outcome |
-|---|---|
-| units < 12 | no request; raw delivered; one `skipped-short` row |
+| Condition                      | Outcome                                                            |
+| ------------------------------ | ------------------------------------------------------------------ |
+| units < 12                     | no request; raw delivered; one `skipped-short` row                 |
 | 12 ≤ units < 60, strength deep | `natural` prompt; row records strength `natural`, requested `deep` |
-| units ≥ 60 | configured strength; `applied` / `unchanged` recorded |
-| provider deadline | raw delivered; `timeout` row with elapsed latency |
-| provider error | raw delivered; `failed` row |
-| user clears insights | rows deleted; summary returns zero |
-| telemetry write fails | logged only; delivery unchanged |
+| units ≥ 60                     | configured strength; `applied` / `unchanged` recorded              |
+| provider deadline              | raw delivered; `timeout` row with elapsed latency                  |
+| provider error                 | raw delivered; `failed` row                                        |
+| user clears insights           | rows deleted; summary returns zero                                 |
+| telemetry write fails          | logged only; delivery unchanged                                    |
 
 ### Tests Required
 

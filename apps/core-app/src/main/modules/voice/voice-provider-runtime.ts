@@ -9,11 +9,15 @@ import type {
   VoiceProviderRegistry
 } from '@talex-touch/utils/i18n'
 import type {
+  VoiceRecognitionLocation,
   VoiceRecognitionStatus,
   VoiceRecognitionStatusSnapshot
 } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { StorageList } from '@talex-touch/utils'
-import { resolveIntelligenceProviderRoutes } from '@talex-touch/tuff-intelligence'
+import {
+  IntelligenceProviderType,
+  resolveIntelligenceProviderRoutes
+} from '@talex-touch/tuff-intelligence'
 import {
   DEFAULT_VOICE_ASR_SOURCE,
   normalizeVoiceAsrSource,
@@ -59,6 +63,19 @@ export interface ConfiguredAsrProvider {
   provider: VoiceProviderAdapter
   model: string
   mode?: 'realtime' | 'buffered'
+  location: VoiceRecognitionLocation
+}
+/** Projects the selected provider into the route location a recognition record persists. */
+export function getVoiceRecognitionLocation(providerId: string): VoiceRecognitionLocation {
+  if (providerId === 'local-offline') return 'on-device'
+  ensureIntelligenceConfigLoaded()
+  const provider = getIntelligenceProviderManager().get(providerId)
+  if (!provider) return 'cloud'
+  const config = provider.getConfig()
+  return config.type === IntelligenceProviderType.LOCAL ||
+    getVoiceAsrMetadata(config.metadata)?.protocol === 'local-offline'
+    ? 'on-device'
+    : 'cloud'
 }
 
 function hasEnabledCapabilityBinding(capabilityId: string): boolean {
@@ -296,6 +313,8 @@ function createNexusPackBufferedProvider(
   const { descriptor, model, packId, version } = resolved
   return {
     model,
+    location: 'cloud',
+
     mode: 'buffered',
     provider: createBufferedSttVoiceProvider({
       providerId: route.provider.id,
@@ -360,6 +379,8 @@ function resolveNexusBufferedSttProvider(source: VoiceAsrSource): ConfiguredAsrP
   if (route.model !== NEXUS_AUDIO_TRANSCRIBE_MODEL) return null
   return {
     model: route.model,
+    location: 'cloud',
+
     mode: 'buffered',
     provider: createBufferedSttVoiceProvider({
       providerId: route.provider.id,
@@ -440,6 +461,8 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
     }
     return {
       model: `${installed.descriptor.id}@${installed.descriptor.version}`,
+      location: 'on-device',
+
       mode: 'buffered',
       provider: new LocalOfflineVoiceProvider({ model: installed })
     }
@@ -468,6 +491,8 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
       const endpoints = resolveBailianVoiceEndpoints(route.provider.baseUrl)
       return {
         model,
+        location: 'cloud',
+
         mode: 'realtime',
         provider: new BailianParaformerVoiceProvider({
           credentials: { apiKey: credential, workspaceId: endpoints.workspaceId },
@@ -481,6 +506,8 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
       const endpoints = resolveBailianVoiceEndpoints(route.provider.baseUrl)
       return {
         model,
+        location: 'cloud',
+
         mode: 'realtime',
         provider: new DashscopeQwenAsrRealtimeVoiceProvider({
           credentials: { apiKey: credential, workspaceId: endpoints.workspaceId },
@@ -492,6 +519,7 @@ export function getConfiguredAsrProvider(): ConfiguredAsrProvider {
     case 'doubao':
       return {
         model,
+        location: 'cloud',
         mode: 'realtime',
         provider: new DoubaoVoiceProvider({
           credentials: { apiKey: credential, resourceId: metadata.resourceId! },

@@ -16,6 +16,7 @@ import {
   getSpeechModelProgress,
   installSpeechModel,
   installedSpeechModels,
+  projectSpeechCatalogApiError,
   speechModelCatalogView,
   uninstallSpeechModel
 } from './speech-model-service'
@@ -27,7 +28,10 @@ import { globalDictationController } from './global-dictation'
 import { voiceService } from './voice-service'
 import { getRecognitionStatus } from './voice-provider-runtime'
 import { voiceInsightsStore } from './voice-insights-store'
-import { voiceRecognitionStore } from './voice-recognition-store'
+import {
+  subscribeVoiceRecognitionRecordMutations,
+  voiceRecognitionStore
+} from './voice-recognition-store'
 import { assistantModule } from '../assistant/module'
 import { CommandVoiceGestureController, registerPlatformVoiceGesture } from './command-gesture'
 
@@ -73,6 +77,17 @@ export class VoiceModule extends BaseModule<TalexEvents> {
 
     voiceLog.info('Initializing Voice module')
     voiceRecognitionStore.initialize()
+    const mainWindow = runtime.window?.window
+    this.cleanups.push(
+      subscribeVoiceRecognitionRecordMutations((mutation) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return
+        runtime.transport.broadcastToWindow(
+          mainWindow.id,
+          voiceApiEvents.recognitionRecordsChanged,
+          mutation
+        )
+      })
+    )
     this.registerChannels()
     await this.adoptInstalledSpeechModel()
     globalDictationController.register()
@@ -312,7 +327,10 @@ export class VoiceModule extends BaseModule<TalexEvents> {
             if (context?.plugin) throw new Error('VOICE_SPEECH_MODELS_HOST_ONLY')
             return speechModelCatalogView()
           },
-          { onError: (error) => voiceLog.error('Speech model catalog read failed:', { error }) }
+          {
+            onError: (error) => voiceLog.error('Speech model catalog read failed:', { error }),
+            projectError: projectSpeechCatalogApiError
+          }
         )
       )
     )
@@ -338,7 +356,10 @@ export class VoiceModule extends BaseModule<TalexEvents> {
             if (context?.plugin) throw new Error('VOICE_SPEECH_MODELS_HOST_ONLY')
             return installSpeechModel(payload.id, payload.version)
           },
-          { onError: (error) => voiceLog.error('Speech model install failed:', { error }) }
+          {
+            onError: (error) => voiceLog.error('Speech model install failed:', { error }),
+            projectError: projectSpeechCatalogApiError
+          }
         )
       )
     )

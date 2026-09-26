@@ -24,6 +24,10 @@ vi.mock('../storage', () => ({ getMainConfig: storage.getMainConfig }))
 vi.mock('./voice-recognition-store', () => ({
   voiceRecognitionStore: { record: recognitionStore.record }
 }))
+vi.mock('./voice-provider-runtime', () => ({
+  getConfiguredAsrProvider: vi.fn(),
+  getVoiceRecognitionLocation: vi.fn(() => 'cloud')
+}))
 
 import { VoiceService } from './voice-service'
 

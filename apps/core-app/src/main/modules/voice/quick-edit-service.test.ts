@@ -55,7 +55,8 @@ vi.mock('./voice-insights-store', () => ({
   }
 }))
 vi.mock('./voice-provider-runtime', () => ({
-  getConfiguredAsrProvider: vi.fn()
+  getConfiguredAsrProvider: vi.fn(),
+  getVoiceRecognitionLocation: vi.fn(() => 'cloud')
 }))
 
 vi.mock('./polish-prompt', () => ({

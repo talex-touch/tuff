@@ -3,11 +3,16 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxTag } from '@talex-touch/tuffex/tag'
 import {
   createVoiceSdk,
+  isVoiceSpeechCatalogErrorCode,
+  VoiceApiError,
+  VOICE_SPEECH_CATALOG_ERROR_CODES,
   type VoiceInstalledSpeechModel,
+  type VoiceSpeechCatalogErrorCode,
   type VoiceSpeechModelCatalog,
   type VoiceSpeechModelEntry,
   type VoiceSpeechModelInstallProgress
 } from '@talex-touch/utils/transport/sdk/domains/voice'
+import type { VoiceAsrSource } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -26,13 +31,18 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
  * Install progress is polled rather than streamed: a bundle is tens to hundreds of megabytes, and
  * a percentage is the difference between waiting and wondering whether it is stuck.
  */
+interface Props {
+  source?: VoiceAsrSource
+}
+
+const props = withDefaults(defineProps<Props>(), { source: 'hybrid' })
 
 const { t } = useI18n()
 const voiceSdk = createVoiceSdk(useTuffTransport())
 
 const installed = ref<VoiceInstalledSpeechModel[]>([])
 const catalog = ref<VoiceSpeechModelCatalog | null>(null)
-const catalogError = ref<string | null>(null)
+const catalogError = ref<VoiceSpeechCatalogErrorCode | null>(null)
 const catalogLoading = ref(true)
 const busyKey = ref<string | null>(null)
 const actionError = ref<string | null>(null)
@@ -71,7 +81,10 @@ async function loadCatalog(): Promise<void> {
     catalogError.value = null
   } catch (error) {
     catalog.value = null
-    catalogError.value = error instanceof Error ? error.message : String(error)
+    const code = error instanceof VoiceApiError ? error.code : undefined
+    catalogError.value = isVoiceSpeechCatalogErrorCode(code)
+      ? code
+      : VOICE_SPEECH_CATALOG_ERROR_CODES.unavailable
   } finally {
     catalogLoading.value = false
   }
@@ -152,8 +165,23 @@ const rows = computed(() => {
   }))
 })
 
-const catalogNeedsAccount = computed(
-  () => catalogError.value?.includes('SPEECH_CATALOG_AUTH_REQUIRED') === true
+const catalogErrorTitleKey = computed(() => {
+  switch (catalogError.value) {
+    case VOICE_SPEECH_CATALOG_ERROR_CODES.authRequired:
+      return 'settingSpeechRecognition.models.catalogErrors.authRequired'
+    case VOICE_SPEECH_CATALOG_ERROR_CODES.timeout:
+      return 'settingSpeechRecognition.models.catalogErrors.timeout'
+    case VOICE_SPEECH_CATALOG_ERROR_CODES.upstreamUnavailable:
+      return 'settingSpeechRecognition.models.catalogErrors.upstreamUnavailable'
+    case VOICE_SPEECH_CATALOG_ERROR_CODES.invalid:
+      return 'settingSpeechRecognition.models.catalogErrors.invalid'
+    default:
+      return 'settingSpeechRecognition.models.catalogErrors.unavailable'
+  }
+})
+
+const catalogImpactKey = computed(
+  () => `settingSpeechRecognition.models.catalogImpact.${props.source}`
 )
 
 /**
@@ -189,6 +217,7 @@ onBeforeUnmount(() => {
   <TuffGroupBlock
     class="SpeechModelSettings"
     :name="t('settingSpeechRecognition.models.title')"
+    :description="t('settingSpeechRecognition.models.description')"
     default-icon="i-carbon-chip"
     active-icon="i-carbon-chip"
   >
@@ -201,11 +230,8 @@ onBeforeUnmount(() => {
 
     <TuffBlockSlot
       v-else-if="catalogError"
-      :title="
-        catalogNeedsAccount
-          ? t('settingSpeechRecognition.models.signInRequired')
-          : t('settingSpeechRecognition.models.catalogUnavailable')
-      "
+      :title="t(catalogErrorTitleKey)"
+      :description="t(catalogImpactKey)"
       default-icon="i-carbon-warning-alt"
       data-testid="speech-model-error"
     >

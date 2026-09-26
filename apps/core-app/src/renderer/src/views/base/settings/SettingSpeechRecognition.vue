@@ -266,7 +266,7 @@ useEventListener(window, 'focus', () => {
     />
   </TuffGroupBlock>
   <VoiceProviderCatalogSettings />
-  <SpeechModelSettings />
+  <SpeechModelSettings :source="voiceSource" />
 </template>
 
 <style scoped lang="scss">

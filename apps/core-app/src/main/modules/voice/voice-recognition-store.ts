@@ -1,5 +1,10 @@
 import { desc, eq } from 'drizzle-orm'
-import type { VoiceRecognitionRecord } from '@talex-touch/utils/transport/sdk/domains/voice'
+import type {
+  VoiceRecognitionLocation,
+  VoiceRecognitionRecord,
+  VoiceRecognitionRecordMutation
+} from '@talex-touch/utils/transport/sdk/domains/voice'
+
 import { toTfileUrl } from '@talex-touch/utils/network'
 import { Buffer } from 'node:buffer'
 import * as schema from '../../db/schema'
@@ -12,6 +17,24 @@ const MAX_RECORDS = 200
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024
 const MAX_TEXT_LENGTH = 2_000_000
 const voiceRecordLog = createLogger('VoiceRecords')
+const mutationListeners = new Set<(mutation: VoiceRecognitionRecordMutation) => void>()
+
+export function subscribeVoiceRecognitionRecordMutations(
+  listener: (mutation: VoiceRecognitionRecordMutation) => void
+): () => void {
+  mutationListeners.add(listener)
+  return () => mutationListeners.delete(listener)
+}
+
+function emitVoiceRecognitionRecordMutation(mutation: VoiceRecognitionRecordMutation): void {
+  for (const listener of mutationListeners) {
+    try {
+      listener(mutation)
+    } catch (error) {
+      voiceRecordLog.warn('Recognition record listener failed', { error })
+    }
+  }
+}
 
 async function loadTempFileService(): Promise<TempFileService> {
   const module = await import('../../service/temp-file.service')
@@ -22,6 +45,7 @@ export interface VoiceRecognitionRecordInput {
   id: string
   capturedAt: number
   source: VoiceRecognitionRecord['source']
+  recognitionLocation?: VoiceRecognitionLocation
   status: VoiceRecognitionRecord['status']
   audio?: Buffer
   audioFormat?: 'wav' | 'pcm' | 'encoded'
@@ -87,6 +111,9 @@ function toRecord(row: typeof schema.voiceRecognitionRecords.$inferSelect): Voic
     id: row.id,
     capturedAt: row.capturedAt,
     source: row.source as VoiceRecognitionRecord['source'],
+    ...(row.recognitionLocation
+      ? { recognitionLocation: row.recognitionLocation as VoiceRecognitionLocation }
+      : {}),
     status: row.status as VoiceRecognitionRecord['status'],
     ...(row.audioPath ? { audioUrl: toTfileUrl(row.audioPath) } : {}),
     ...(row.audioBytes === null ? {} : { audioBytes: Math.max(0, row.audioBytes) }),
@@ -169,6 +196,7 @@ export class VoiceRecognitionStore {
       id: input.id,
       capturedAt: Math.max(0, Math.floor(input.capturedAt)),
       source: input.source,
+      ...(input.recognitionLocation ? { recognitionLocation: input.recognitionLocation } : {}),
       status: input.status,
       ...(audioPath ? { audioPath } : {}),
       ...(audioBytes === undefined ? {} : { audioBytes }),
@@ -202,12 +230,17 @@ export class VoiceRecognitionStore {
     }
 
     try {
-      const stalePaths = await scheduleAuxWrite('voice-records.record', async (db) => {
+      const outcome = await scheduleAuxWrite('voice-records.record', async (db) => {
         return await db.transaction(async (tx) => {
           await tx.insert(schema.voiceRecognitionRecords).values(values).onConflictDoUpdate({
             target: schema.voiceRecognitionRecords.id,
             set: values
           })
+          const [stored] = await tx
+            .select()
+            .from(schema.voiceRecognitionRecords)
+            .where(eq(schema.voiceRecognitionRecords.id, input.id))
+            .limit(1)
           const retained = await tx
             .select({
               id: schema.voiceRecognitionRecords.id,
@@ -222,11 +255,24 @@ export class VoiceRecognitionStore {
               .delete(schema.voiceRecognitionRecords)
               .where(eq(schema.voiceRecognitionRecords.id, row.id))
           }
-          return stale.flatMap((row) => (row.audioPath ? [row.audioPath] : []))
+          return {
+            record: stored ? toRecord(stored) : null,
+            stalePaths: stale.flatMap((row) => (row.audioPath ? [row.audioPath] : []))
+          }
         })
       })
-      for (const path of stalePaths ?? []) {
-        await tempFileService.deleteFileFromNamespaces(path, [RECORDING_NAMESPACE])
+      if (outcome?.record) {
+        emitVoiceRecognitionRecordMutation({ type: 'upsert', record: outcome.record })
+      }
+      for (const path of outcome?.stalePaths ?? []) {
+        try {
+          await tempFileService.deleteFileFromNamespaces(path, [RECORDING_NAMESPACE])
+        } catch (error) {
+          voiceRecordLog.warn('Stale recognition audio cleanup failed', {
+            meta: { code: 'VOICE_RECORD_STALE_AUDIO_CLEANUP_FAILED' },
+            error
+          })
+        }
       }
     } catch (error) {
       if (audioPath) {
@@ -262,6 +308,7 @@ export class VoiceRecognitionStore {
     await scheduleAuxWrite('voice-records.clear', async (writeDb) => {
       await writeDb.delete(schema.voiceRecognitionRecords)
     })
+    emitVoiceRecognitionRecordMutation({ type: 'clear' })
     for (const path of paths.flatMap((row) => (row.audioPath ? [row.audioPath] : []))) {
       await tempFileService.deleteFileFromNamespaces(path, [RECORDING_NAMESPACE])
     }

@@ -76,8 +76,13 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * adds the provider round-trip column beside the end-to-end recognition duration. Both homes that
  * create the table are pinned by voice-recognition-records-schema.test.ts. This records only that
  * migration's known gap; it does not regenerate or claim to repair snapshot history.
+ *
+ * Raised 36 → 37 on 2026-09-26 for `0050_voice_recognition_location`, the hand-written
+ * upgrade that records whether each attempt actually ran in the cloud or on-device. Primary and
+ * auxiliary homes, including existing-profile ALTER paths, are pinned by
+ * voice-recognition-records-schema.test.ts. This records only the known gap.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 36
+export const KNOWN_MISSING_SNAPSHOTS = 37
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))
