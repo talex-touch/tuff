@@ -294,3 +294,83 @@ const cancelOwnerKey = resolveOwnerKey(channelType, event.sender, authoritativeP
 if (cancelOwnerKey) runtime.handleCancel({ streamId, ownerKey: cancelOwnerKey })
 if (record.sender === event.sender) record.confirmed = true
 ```
+
+## Scenario: Typed Reasoning Effort On Intelligence Requests
+
+### 1. Scope / Trigger
+
+- Trigger: changing `IntelligenceInvokeOptions.reasoningEffort`, the decision it resolves to on
+  events and results, the shared table `packages/utils/intelligence/reasoning-effort.ts`, or any
+  hop that carries them: renderer → `intelligence:api:stream` / `intelligence:api:invoke` → main
+  SDK → provider → Tuff Nexus `/api/v1/intelligence/{stream,invoke}` → upstream adapter.
+- The field rides the existing events; no channel is added.
+
+### 2. Signatures
+
+```ts
+IntelligenceInvokeOptions.reasoningEffort?: 'low' | 'medium' | 'high' | 'max' // absent = auto
+
+interface IntelligenceReasoningEffortDecision {
+  requested: IntelligenceReasoningEffort
+  applied: IntelligenceReasoningLevel | null // null whenever nothing was sent
+  status: 'applied' | 'clamped' | 'unsupported-model' | 'unsupported-provider' | 'forwarded'
+}
+IntelligenceStreamEvent.reasoningEffort?  // `start` and `end` only
+IntelligenceInvokeResult.reasoningEffort?
+IntelligenceStreamChunk.reasoningEffort?  // a routed backend's own report (Nexus)
+
+sanitizeReasoningRequest(options)                       // main SDK entry
+planProviderReasoning(options, providerConfig, model)   // one plan per provider attempt
+settleReasoningDecision(plan, reported)                 // what `end` / the result carries
+```
+
+### 3. Contracts
+
+- Auto is absence. The renderer omits the field (`normalizeReasoningEffort` maps `auto` and anything
+  unknown to `undefined`); without it main plans nothing, and every request body and CLI argv is
+  byte-identical to the pre-setting one.
+- Every hop re-normalizes and drops rather than forwards: the renderer's settings read and request,
+  the main SDK entry (`sanitizeReasoningRequest` in `prepareRuntimeOptions` and `invokeStream`,
+  before routing and the cache key), Nexus `parseRequest` / `invokeIntelligenceCapability`, and
+  every decision read off the wire or out of stored turn meta (`normalizeReasoningEffortDecision`).
+- The plan is host-only. The SDK entry strips a caller's `reasoningPlan`; the SDK attaches main's
+  plan per provider attempt, for `chat` capabilities only, after the provider is chosen and its
+  model preference applied. Providers translate `readReasoningPlan(options)` and never re-decide.
+  Nexus plans per upstream context with the same table.
+- The planned model is the surviving preference or the provider's `defaultModel`; a missing one is
+  sent nothing (`unsupported-model`). One exception: the Codex CLI handed no model runs the `model`
+  in its own `~/.codex/config.toml`, so the plan reads it (`readCodexConfiguredModel()`) instead of
+  refusing a route that answers every unpinned turn.
+- `end` (or the invoke result) is authoritative: a fallback provider's `start` is swallowed, and a
+  routed backend may report mid-stream. The renderer records `start`, then lets the final decision
+  replace it whole, as flat structured-cloneable turn-meta fields.
+- A routed backend's report replaces only main's `forwarded` placeholder, and only when it answers
+  the same `requested` level; main's own decisions are never overruled.
+- Audit metadata carries exactly `reasoningEffort` / `reasoningApplied` / `reasoningStatus`, always
+  set from main's decision, so caller metadata cannot claim a level main never resolved.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+|---|---|
+| Composer on auto, or no getter | field omitted; no plan; no decision on any event, result or audit |
+| Unknown level (`'ultra'`, `'xhigh'`, a number) at any hop | dropped at that hop; never forwarded or planned |
+| Caller-supplied `reasoningPlan` | stripped at the SDK entry |
+| Non-chat capability carrying a level | planned nothing; no decision on the result |
+| Route or model takes no effort | `unsupported-provider` / `unsupported-model`, `applied: null`; request built exactly as on auto |
+| Model lacks the level | nearest level, stronger first → `clamped`; `max` = the model's strongest → `applied` |
+| Nexus route on a server without the field | `forwarded` stays |
+| Nexus report that contradicts itself or names another `requested` | ignored; `forwarded` stays |
+| Provider fails before the first delta | the fallback is re-planned for itself; `end` carries its decision |
+
+### 5. Tests Required
+
+- Shared table and plans: `packages/utils/__tests__/reasoning-effort.test.ts`.
+- Main: `reasoning-effort-runtime.test.ts`, `intelligence-sdk.reasoning.test.ts` (auto plans
+  nothing and puts no decision on events; per-attempt re-plan; forged plan stripped; audit keys).
+- Wire: the provider `*.reasoning.test.ts` suites pin the **whole** auto body or argv as literals,
+  not only the absence of the new field, and assert a plan that sends nothing builds the auto bytes.
+- Renderer: `useHomeConversation.reasoning.test.ts` (exact auto request shape, same level on the
+  non-streaming fallback, clone-safe turn meta), `turn-info-rows.test.ts`, `HomeModelMenu.test.ts`.
+- Nexus: `tuffIntelligenceReasoningEffort.test.ts`, `tuffIntelligenceLangChainProviderAdapters.test.ts`,
+  `test/api/v1/intelligence/stream.post.test.ts`.

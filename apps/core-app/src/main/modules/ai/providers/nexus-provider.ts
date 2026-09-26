@@ -9,6 +9,8 @@ import type {
   IntelligenceImageTranslateE2eResult,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
+  IntelligenceReasoningEffort,
+  IntelligenceReasoningEffortDecision,
   IntelligenceRewritePayload,
   IntelligenceStreamChunk,
   IntelligenceSummarizePayload,
@@ -33,8 +35,10 @@ import { extractTranslatedImageFromSceneRun, runNexusScene } from '../../nexus/s
 import { transcribeNexusAudio } from '../../nexus/asr-client'
 import { NEXUS_AUDIO_TRANSCRIBE_MODEL } from '@talex-touch/utils/types/intelligence'
 import { normalizeIntelligenceError } from '../intelligence-error-normalizer'
+import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
+import { normalizeReasoningEffortDecision } from '@talex-touch/utils/intelligence/reasoning-effort'
 
 interface NexusInvokeResponse<T = unknown> {
   invocation?: {
@@ -45,6 +49,8 @@ interface NexusInvokeResponse<T = unknown> {
     latency?: number
     traceId?: string
     provider?: string
+    /** Read defensively: an older server has no such field, and a newer one is still remote data. */
+    metadata?: { reasoningEffort?: unknown }
   }
 }
 
@@ -69,6 +75,8 @@ interface NexusStreamEvent extends NexusTransportFailure {
   latency?: number
   traceId?: string
   provider?: string
+  /** The server's decision for the upstream it picked; on `start` and `usage`. */
+  reasoningEffort?: IntelligenceReasoningEffortDecision
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -124,8 +132,21 @@ function parseNexusStreamEvent(value: string): NexusStreamEvent | null {
     model: readOptionalString(parsed.model),
     latency: readOptionalNumber(parsed.latency),
     traceId: readOptionalString(parsed.traceId),
-    provider: readOptionalString(parsed.provider)
+    provider: readOptionalString(parsed.provider),
+    reasoningEffort: normalizeReasoningEffortDecision(parsed.reasoningEffort)
   }
+}
+
+/**
+ * The options body both Nexus routes take. `reasoningEffort` goes only when main planned the Nexus
+ * wire, and then as the level the user asked for: the server resolves it against the upstream it
+ * picks, which is not known here. Without a plan the body is exactly what it always was.
+ */
+function nexusReasoningOptions(options: IntelligenceInvokeOptions): {
+  reasoningEffort?: IntelligenceReasoningEffort
+} {
+  const plan = readReasoningPlan(options)
+  return plan?.wire === 'nexus' ? { reasoningEffort: plan.decision.requested } : {}
 }
 
 function createNexusTransportError(failureData: NexusTransportFailure): Error & {
@@ -283,7 +304,8 @@ export class NexusProvider extends IntelligenceProvider {
             providerId: options.preferredProviderId,
             modelPreference: options.modelPreference,
             timeoutMs: options.timeout,
-            metadata: options.metadata
+            metadata: options.metadata,
+            ...nexusReasoningOptions(options)
           }
         },
         responseType: 'json',
@@ -314,6 +336,7 @@ export class NexusProvider extends IntelligenceProvider {
     if (!invocation) {
       throw new Error('NEXUS_AI_EMPTY_RESPONSE')
     }
+    const reasoningEffort = normalizeReasoningEffortDecision(invocation.metadata?.reasoningEffort)
 
     return {
       result: invocation.result,
@@ -321,7 +344,8 @@ export class NexusProvider extends IntelligenceProvider {
       model: invocation.model || this.config.defaultModel || this.config.models?.[0] || 'nexus',
       latency: invocation.latency ?? Date.now() - startedAt,
       traceId: invocation.traceId || this.generateTraceId(),
-      provider: invocation.provider || this.config.id
+      provider: invocation.provider || this.config.id,
+      ...(reasoningEffort ? { reasoningEffort } : {})
     }
   }
 
@@ -353,7 +377,8 @@ export class NexusProvider extends IntelligenceProvider {
           modelPreference: options.modelPreference,
           allowedProviderIds: options.allowedProviderIds,
           timeoutMs: options.timeout,
-          metadata: options.metadata
+          metadata: options.metadata,
+          ...nexusReasoningOptions(options)
         }
       },
       timeoutMs: options.timeout ?? this.config.timeout ?? 30_000,
@@ -380,12 +405,16 @@ export class NexusProvider extends IntelligenceProvider {
     let model = this.config.defaultModel || this.config.models?.[0] || 'nexus'
     let latency = 0
     let ended = false
+    // Only ever set by the server; a server that predates the field sends none, and main keeps its
+    // own `forwarded` decision.
+    let reasoningEffort: IntelligenceReasoningEffortDecision | undefined
 
     const applyMetadata = (event: NexusStreamEvent): void => {
       traceId = event.traceId ?? traceId
       provider = event.provider ?? provider
       model = event.model ?? model
       latency = event.latency ?? latency
+      reasoningEffort = event.reasoningEffort ?? reasoningEffort
     }
 
     const consumeFrame = function* (frame: string): Generator<IntelligenceStreamChunk> {
@@ -408,7 +437,8 @@ export class NexusProvider extends IntelligenceProvider {
           traceId,
           provider,
           model,
-          latency
+          latency,
+          ...(reasoningEffort ? { reasoningEffort } : {})
         }
         return
       }
@@ -422,7 +452,8 @@ export class NexusProvider extends IntelligenceProvider {
           traceId,
           provider,
           model,
-          latency
+          latency,
+          ...(reasoningEffort ? { reasoningEffort } : {})
         }
       }
     }

@@ -156,7 +156,12 @@ const AUDIT_METADATA_KEYS = new Set([
   'retryCount',
   'batchSize',
   'cacheHit',
-  'fallbackUsed'
+  'fallbackUsed',
+  // The reasoning effort a chat turn asked for, the level the answering route actually ran at, and
+  // how it resolved (`reasoning-effort-runtime.ts`). All three are bare level/status words.
+  'reasoningEffort',
+  'reasoningApplied',
+  'reasoningStatus'
 ])
 
 function boundedAuditIdentifier(value: unknown, fallback: string): string {

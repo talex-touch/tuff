@@ -36,6 +36,7 @@ import {
 } from '../../local-ai-cli/session-store'
 import { getLocalAiCliWorkspaceRoot } from '../../local-ai-cli/workspace-root'
 import { getProject } from '../../project/project-store'
+import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { collectMessageAttachments } from './attachment-spill'
 import { runCliChat } from './cli/cli-process-runtime'
@@ -47,6 +48,7 @@ import {
   buildPiPrompt,
   CLAUDE_CLI_ORIGIN,
   CLAUDE_CLI_PROVIDER_ID,
+  cliReasoningLevel,
   CODEX_CLI_ORIGIN,
   CODEX_CLI_PROVIDER_ID,
   OMP_CLI_ORIGIN,
@@ -329,6 +331,11 @@ export class PiCliProvider extends IntelligenceProvider {
         nativeContinuation: Boolean(pointer)
       })
       const model = this.resolveModel(options)
+      // Main's plan, on this CLI's own wire only; auto leaves every argv below unchanged.
+      const reasoningPlan = readReasoningPlan(options)
+      const thinkingLevel = cliReasoningLevel(reasoningPlan, 'cli-thinking')
+      const codexEffort = cliReasoningLevel(reasoningPlan, 'codex-config')
+      const claudeEffort = cliReasoningLevel(reasoningPlan, 'claude-effort')
       const toolOptions =
         toolRuntime || nativeSessionId
           ? {
@@ -351,7 +358,7 @@ export class PiCliProvider extends IntelligenceProvider {
           errorPrefix,
           executable,
           args: isOmp
-            ? (attachmentPaths) => buildOmpArgs(prompt, model, attachmentPaths)
+            ? (attachmentPaths) => buildOmpArgs(prompt, model, attachmentPaths, thinkingLevel)
             : isCodex && isolationRoot
               ? (attachmentPaths) => [
                   'exec',
@@ -369,6 +376,9 @@ export class PiCliProvider extends IntelligenceProvider {
                   // that would also drop their `model_provider` (`--ignore-user-config`) is not used.
                   '-c',
                   'mcp_servers={}',
+                  // Codex has no effort flag; a `-c` override beats the user's own
+                  // `model_reasoning_effort` for this run only. Quoted so it parses as a TOML string.
+                  ...(codexEffort ? ['-c', `model_reasoning_effort="${codexEffort}"`] : []),
                   ...(model ? ['-m', model] : []),
                   // Attachments are images only: the spill writes png/jpg/webp/gif and nothing else.
                   ...attachmentPaths.flatMap((path) => ['-i', path]),
@@ -402,10 +412,12 @@ export class PiCliProvider extends IntelligenceProvider {
                       '--system-prompt',
                       prompt.systemPrompt,
                       ...(model ? ['--model', model] : []),
+                      ...(claudeEffort ? ['--effort', claudeEffort] : []),
                       prompt.prompt
                     ]
                   }
-                : (attachmentPaths) => buildPiArgs(prompt, model, toolOptions, attachmentPaths),
+                : (attachmentPaths) =>
+                    buildPiArgs(prompt, model, toolOptions, attachmentPaths, thinkingLevel),
           ...(isolationRoot ? { cwd: isolationRoot } : cwd ? { cwd } : {}),
           ...(nativeSession && nativeSessionId
             ? {

@@ -1,4 +1,5 @@
 import type { NexusIntelligenceInvokePayload } from '../../../utils/tuffIntelligenceLabService'
+import { normalizeReasoningEffort } from '@talex-touch/utils/intelligence/reasoning-effort'
 import { createError, readBody } from 'h3'
 import { requireAuth } from '../../../utils/auth'
 import { normalizeNexusIntelligenceTransportError } from '../../../utils/intelligenceErrorContract'
@@ -64,6 +65,8 @@ function parseRequest(value: unknown): NexusIntelligenceInvokePayload {
           metadata: isRecord(rawOptions.metadata)
             ? rawOptions.metadata
             : undefined,
+          // A known level or nothing: an unknown value is dropped here, never forwarded upstream.
+          reasoningEffort: normalizeReasoningEffort(rawOptions.reasoningEffort),
         }
       : undefined,
   }
@@ -123,6 +126,11 @@ export default defineEventHandler(async (event) => {
             provider: result.provider,
             model: result.model,
             latency: result.latency,
+            // Repeated from `start` so the client has it even if it missed that frame; absent when
+            // the caller asked for no reasoning effort.
+            ...(result.metadata?.reasoningEffort
+              ? { reasoningEffort: result.metadata.reasoningEffort }
+              : {}),
           })
           send({ type: 'end' })
         }

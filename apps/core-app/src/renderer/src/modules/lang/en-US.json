@@ -1499,6 +1499,28 @@
       "assistantLabel": "Assistant"
     },
     "effortHigh": "High",
+    "reasoning": {
+      "label": "Reasoning",
+      "auto": "Auto",
+      "level": {
+        "minimal": "Minimal",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "Extra high",
+        "max": "Max"
+      },
+      "unsupportedModel": "This model has no reasoning control",
+      "unsupportedProvider": "This provider has no reasoning control yet",
+      "clamped": "This model has no {requested} level; it will run at {applied}",
+      "autoRoute": "With automatic model choice, this applies only when the chosen model supports it",
+      "cloud": "Tuff Cloud applies it to the model it routes to; ignored where unsupported",
+      "turnTop": "{requested} (this model's strongest: {applied})",
+      "turnClamped": "{applied} (asked for {requested}; this model has no such level)",
+      "turnUnsupportedModel": "{requested} (not supported by this model, not applied)",
+      "turnUnsupportedProvider": "{requested} (not supported by this provider, not applied)",
+      "turnForwarded": "{requested} (Tuff Cloud did not confirm it)"
+    },
     "attach": "Add attachment",
     "attachRemove": "Remove attachment",
     "attachCancel": "Cancel upload",

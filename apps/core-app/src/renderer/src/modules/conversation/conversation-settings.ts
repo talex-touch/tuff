@@ -1,4 +1,9 @@
+import type { ReasoningEffortSetting } from '@talex-touch/utils/intelligence/reasoning-effort'
 import type { ModelRef } from './model-display'
+import {
+  DEFAULT_REASONING_EFFORT_SETTING,
+  normalizeReasoningEffortSetting
+} from '@talex-touch/utils/intelligence/reasoning-effort'
 import { appSetting } from '~/modules/storage/app-storage'
 import { sameModelRef } from './model-display'
 
@@ -11,6 +16,11 @@ import { sameModelRef } from './model-display'
 export interface ConversationSettings {
   model: ModelRef | null
   favoriteModels: ModelRef[]
+  /**
+   * Optional here although the defaults carry it: the same shallow merge leaves it out of every
+   * block written before it existed, and absent reads as `auto`.
+   */
+  reasoningEffort?: ReasoningEffortSetting
 }
 
 export function isModelRef(value: unknown): value is ModelRef {
@@ -54,13 +64,27 @@ export function readFavoriteModels(): ModelRef[] {
 }
 
 /**
+ * The reasoning effort the composer asks for, `auto` when missing or unrecognised. Never adjusted
+ * to the pinned model: a level a model cannot take is simply not sent to it, and comes back with
+ * the next model that can.
+ */
+export function readReasoningEffortSetting(): ReasoningEffortSetting {
+  return normalizeReasoningEffortSetting(currentBlock()?.reasoningEffort)
+}
+
+/**
  * The live block for writes, created on first use when the profile lacks it. Returned through
  * the settings proxy rather than as the literal that was assigned, so writes land on the
  * reactive object the auto-save watcher observes.
  */
 export function writableConversationSettings(): ConversationSettings {
   if (!currentBlock()) {
-    const created: ConversationSettings = { model: null, favoriteModels: [] }
+    // The block the defaults would have written, so a profile that lacked it matches a fresh one.
+    const created: Required<ConversationSettings> = {
+      model: null,
+      favoriteModels: [],
+      reasoningEffort: DEFAULT_REASONING_EFFORT_SETTING
+    }
     appSetting.conversation = created
   }
   return appSetting.conversation as ConversationSettings

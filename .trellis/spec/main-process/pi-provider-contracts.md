@@ -393,8 +393,9 @@ CliLineEvent = {
   partEvent?; partEvents?; retry?; commit?; reset?
 }
 
-buildPiArgs(prompt, model?, toolOptions?, attachmentPaths?)   // pi-cli-runtime.ts
-buildOmpArgs(prompt, model?, attachmentPaths?)                // pi-cli-runtime.ts
+buildPiArgs(prompt, model?, toolOptions?, attachmentPaths?, thinking?)   // pi-cli-runtime.ts
+buildOmpArgs(prompt, model?, attachmentPaths?, thinking?)                // pi-cli-runtime.ts
+cliReasoningLevel(plan, wire)       // pi-cli-runtime.ts: the level on this CLI's own wire, or undefined
 createClaudeLineParser()                                      // cli/claude-stream-json.ts
 createCodexLineParser()                                       // cli/codex-exec-json.ts
 resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executable.ts
@@ -420,6 +421,13 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
 | model | `--model` | `--model` | `-m` | `--model` |
 | attachments | `@<path>` positionals before the prompt | `@<path>` positionals | `-i <path>` (repeatable) | **rejected** — no flag exists, so the run fails with `ATTACHMENTS_UNSUPPORTED` before spawn |
 | working root | `--no-context-files` + the host's cwd | `--no-rules` is its name for the same idea; no session flags exist | `-C <isolationRoot> --skip-git-repo-check` | cwd = `isolationRoot` |
+| reasoning effort (main's plan only; auto adds nothing) | `--thinking <level>` (pi 0.84.3: `off`…`max`, pi clamps to the model); auto omits it and pi keeps the user's `defaultThinkingLevel` | `--thinking <level>` replaces the fixed `off`; auto keeps `--thinking off` | `-c model_reasoning_effort="<level>"` (TOML-quoted; 极高 = the model's strongest per the shared table, never `ultra`); auto omits it and the user's `config.toml` rules | `--effort <level>` (2.1.280: `low`…`max`; `haiku` / `*-4-5` top out at `high`); auto omits it |
+
+- The level comes only from `cliReasoningLevel(readReasoningPlan(options), <this CLI's wire>)`:
+  `cli-thinking` for pi / omp, `codex-config`, `claude-effort`. A plan on another wire, or one that
+  sends nothing (`unsupported-model`), leaves the argv exactly as auto builds it; the provider never
+  re-decides. The table and the plan live in `packages/utils/intelligence/reasoning-effort.ts`
+  (see `channel-transport-contracts.md`, "Typed Reasoning Effort").
 
 - `--no-context-files` is **pi's** spelling. omp rejects it (`unknown flag`,
   exit 2) and calls it `--no-rules`; using pi's vector for omp fails before the
@@ -514,6 +522,7 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
 | codex emits a non-fatal `item.completed{error}` and then an answer | answer delivered; the error item is recorded only |
 | attachment sent to claude | `ATTACHMENTS_UNSUPPORTED` before the child starts — never guessed at with a path in the prompt, never silently dropped |
 | two CLI turns at once | independent children; each owns its own teardown |
+| composer on auto, or a plan that sends nothing / names another CLI's wire | argv byte-identical to the pre-setting vector (omp keeps `--thinking off`) |
 
 ### 5. Tests Required
 
@@ -523,6 +532,9 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
   `.trellis/tasks/09-06-local-cli-model-providers/research/cli-protocol-samples.md`.
 - Argv tests per CLI: the flags above, and the **negative** case — omp must not
   receive `--no-context-files`.
+- Reasoning effort (`pi-cli-reasoning.test.ts`): each CLI's flag under a plan, run through the
+  provider against argv-recording stubs, and each CLI's **whole** auto argv pinned as a literal —
+  "the new flag is absent" alone does not catch auto adding, dropping or reordering anything else.
 - Executable lookup: override wins, override-to-non-executable means absent,
   `pie` fallback form, version-manager roots, probe-cache reset.
 - Model options: four rows when present, row removed when probed absent, row

@@ -1,4 +1,5 @@
 import type { AiAttachment, AiMessagePart, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
+import type { ReasoningEffortSetting } from '@talex-touch/utils/intelligence/reasoning-effort'
 import type { StreamController } from '@talex-touch/utils/transport'
 import type {
   IntelligenceChatPayload,
@@ -8,11 +9,18 @@ import type {
   IntelligenceMessage,
   IntelligenceMessageAttachment,
   IntelligencePartEvent,
+  IntelligenceReasoningEffort,
+  IntelligenceReasoningEffortStatus,
+  IntelligenceReasoningLevel,
   IntelligenceStreamOptions,
   IntelligenceUsageInfo
 } from '@talex-touch/utils/types/intelligence'
 import type { ComputedRef } from 'vue'
 import type { ConversationError } from './conversation-error-display'
+import {
+  normalizeReasoningEffort,
+  normalizeReasoningEffortDecision
+} from '@talex-touch/utils/intelligence/reasoning-effort'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import {
   INTELLIGENCE_HOME_SURFACE,
@@ -57,6 +65,16 @@ export interface ConversationTurnMeta {
   latencyMs?: number
   /** How many times the provider compacted its context while producing this turn. */
   compactions?: number
+  /**
+   * The reasoning effort the turn asked for; absent when the composer was on auto. The three
+   * reasoning fields are flat primitives on purpose: this object is spread off a reactive message
+   * and saved through `structuredClone`, and a nested object would come along as a Proxy.
+   */
+  reasoningRequested?: IntelligenceReasoningEffort
+  /** The level the answering route actually ran at; absent when nothing was sent. */
+  reasoningApplied?: IntelligenceReasoningLevel
+  /** How the request resolved on the provider that answered. */
+  reasoningStatus?: IntelligenceReasoningEffortStatus
 }
 
 export interface ConversationMessage {
@@ -126,6 +144,11 @@ export interface UseHomeConversationOptions {
   /** Live Home thread identity, allocated before the first send and never inferred from UI state. */
   identity?: () => { conversationId: string; projectId: string | null }
   /**
+   * The composer's reasoning effort, read at send time like `routing`. `auto` — or no getter — puts
+   * nothing on the request, so every route keeps its own default.
+   */
+  reasoningEffort?: () => ReasoningEffortSetting | undefined
+  /**
    * Wording of the system note that carries assistant messages sent before the user's first
    * message — the Home opening — on every turn. Model-facing text is locale text, so HomePage
    * supplies it from the catalog; the default only keeps the payload well-formed without it.
@@ -174,6 +197,7 @@ export function useHomeConversation(
 
   function resolveInvokeOptions(): IntelligenceInvokeOptions {
     const routing = options.routing?.()
+    const reasoningEffort = normalizeReasoningEffort(options.reasoningEffort?.())
     const metadata: IntelligenceHomeSurfaceMetadata = {
       surface: INTELLIGENCE_HOME_SURFACE,
       operation: INTELLIGENCE_HOME_SURFACE,
@@ -185,6 +209,8 @@ export function useHomeConversation(
     return {
       ...(routing?.providerId ? { preferredProviderId: routing.providerId } : {}),
       ...(routing?.model ? { modelPreference: [routing.model] } : {}),
+      // Omitted on auto rather than sent as a value: absence is what keeps every route as it was.
+      ...(reasoningEffort ? { reasoningEffort } : {}),
       metadata
     }
   }
@@ -279,6 +305,42 @@ export function useHomeConversation(
         completionTokens: usage.completionTokens,
         totalTokens: usage.totalTokens
       })
+    }
+
+    /**
+     * Written as one unit, unlike `recordMeta`: a later decision replaces the earlier one whole — a
+     * fallback provider that sent nothing must clear the level the first provider's `start` named,
+     * which a merge that skips absent fields would keep. Anything that is not a well-formed decision
+     * is ignored rather than half-recorded.
+     */
+    const recordReasoning = (value: unknown): void => {
+      const decision = normalizeReasoningEffortDecision(value)
+      if (!decision) return
+      const next: ConversationTurnMeta = {
+        ...(assistant.meta ?? {}),
+        reasoningRequested: decision.requested,
+        reasoningStatus: decision.status
+      }
+      if (decision.applied) next.reasoningApplied = decision.applied
+      else delete next.reasoningApplied
+      assistant.meta = next
+    }
+
+    // A retried turn keeps its meta; the attempt about to run reports its own decision, and a stale
+    // one would outlive a switch back to auto.
+    if (
+      assistant.meta &&
+      (assistant.meta.reasoningRequested ||
+        assistant.meta.reasoningApplied ||
+        assistant.meta.reasoningStatus)
+    ) {
+      const {
+        reasoningRequested: _requested,
+        reasoningApplied: _applied,
+        reasoningStatus: _status,
+        ...rest
+      } = assistant.meta
+      assistant.meta = rest
     }
 
     // ------------------------------------------------------------------
@@ -508,6 +570,7 @@ export function useHomeConversation(
         assistant.content = typeof result?.result === 'string' ? result.result : ''
         recordMeta({ provider: result?.provider, model: result?.model })
         recordUsage(result?.usage)
+        recordReasoning(result?.reasoningEffort)
         complete()
       } catch (fallbackError) {
         // The fallback ran the same request without streaming, so its failure describes the
@@ -522,6 +585,7 @@ export function useHomeConversation(
           event.provider === PI_CLI_PROVIDER_ID &&
           typeof invokeOptions.metadata?.conversationId === 'string'
         recordMeta({ provider: event.provider, model: event.model })
+        recordReasoning(event.reasoningEffort)
       },
       onDelta: (delta, event) => {
         if (settled || !delta) return
@@ -562,6 +626,9 @@ export function useHomeConversation(
       onEnd: (event) => {
         recordMeta({ provider: event?.provider, model: event?.model })
         recordUsage(event?.usage)
+        // `end` is where the decision the turn actually ran under lands: a fallback provider's
+        // `start` never reaches here, and Tuff Nexus reports its own mid-stream.
+        recordReasoning(event?.reasoningEffort)
         complete()
       },
       onError: (error) => {

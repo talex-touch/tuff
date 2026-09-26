@@ -1499,6 +1499,28 @@
       "assistantLabel": "助手"
     },
     "effortHigh": "高",
+    "reasoning": {
+      "label": "推理强度",
+      "auto": "自动",
+      "level": {
+        "minimal": "最低",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "超高",
+        "max": "极高"
+      },
+      "unsupportedModel": "该模型不支持推理强度",
+      "unsupportedProvider": "该服务暂不支持推理强度",
+      "clamped": "该模型没有「{requested}」档，将按「{applied}」运行",
+      "autoRoute": "自动选择模型时，落到支持推理强度的模型才会生效",
+      "cloud": "由 Tuff 云端按实际调用的模型应用，不支持时不生效",
+      "turnTop": "{requested}（该模型最高档：{applied}）",
+      "turnClamped": "{applied}（请求「{requested}」，该模型没有此档）",
+      "turnUnsupportedModel": "{requested}（该模型不支持，未应用）",
+      "turnUnsupportedProvider": "{requested}（该服务不支持，未应用）",
+      "turnForwarded": "{requested}（云端未确认是否应用）"
+    },
     "attach": "添加附件",
     "attachRemove": "移除附件",
     "attachCancel": "取消上传",

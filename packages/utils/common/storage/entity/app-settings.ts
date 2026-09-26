@@ -1,4 +1,6 @@
+import type { ReasoningEffortSetting } from '../../../intelligence/reasoning-effort'
 import type { CoreBoxCanvasConfig, CoreBoxThemeConfig, LayoutAtomConfig, LayoutCanvasConfig } from './layout-atom-types'
+import { DEFAULT_REASONING_EFFORT_SETTING } from '../../../intelligence/reasoning-effort'
 
 export const VOICE_POLISH_STRENGTHS = ['natural', 'structured', 'deep'] as const
 export type VoicePolishStrength = typeof VOICE_POLISH_STRENGTHS[number]
@@ -365,6 +367,12 @@ const _appSettingOriginData = {
     model: null as null | { providerId: string, model: string },
     /** Starred rows of the home model menu, in the order they were starred. */
     favoriteModels: [] as Array<{ providerId: string, model: string }>,
+    /**
+     * The reasoning effort the composer asks for, for every model — one global choice, like the
+     * pinned model. `auto` sends nothing, so each route keeps its own default. Switching to a model
+     * that cannot take the stored level never rewrites it: the level simply is not sent there.
+     */
+    reasoningEffort: DEFAULT_REASONING_EFFORT_SETTING as ReasoningEffortSetting,
   },
   dashboard: {
     enable: false,
