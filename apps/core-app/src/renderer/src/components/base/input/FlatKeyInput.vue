@@ -26,8 +26,6 @@ const { t } = useI18n()
 
 const model = useVModel(props, 'modelValue', emits)
 const { isMac } = useRendererPlatform()
-const metaModifier = isMac ? 'Command' : 'Super'
-const altModifier = isMac ? 'Option' : 'Alt'
 
 const MODIFIER_ONLY_KEYS = new Set(['Meta', 'Alt', 'Control', 'Shift'])
 
@@ -102,10 +100,14 @@ function formatAccelerator(event: KeyboardEvent): string | null {
   }
 
   const modifiers: string[] = []
+  // `isMac` is a computed ref. Read bare it is an object and always truthy, which recorded the
+  // Windows key as `Command` everywhere -- a modifier Electron documents as having no effect on
+  // Windows and Linux. Off macOS the names are the ones the main process normalises to.
+  const mac = isMac.value
 
-  if (event.metaKey) modifiers.push(metaModifier)
+  if (event.metaKey) modifiers.push(mac ? 'Command' : 'Super')
   if (event.ctrlKey) modifiers.push('Control')
-  if (event.altKey) modifiers.push(altModifier)
+  if (event.altKey) modifiers.push(mac ? 'Option' : 'Alt')
   if (event.shiftKey) modifiers.push('Shift')
 
   return [...modifiers, key].join('+')

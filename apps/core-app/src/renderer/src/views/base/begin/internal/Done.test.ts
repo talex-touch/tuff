@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
-import { mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ShortcutBinding } from '~/modules/channel/main/shortcon'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick, ref } from 'vue'
+
+// The page listens for keys on `window`. A mounted page left behind by an earlier case would
+// answer the next case's key press too, and every save/hide count would be off by one.
+enableAutoUnmount(afterEach)
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
@@ -41,7 +47,11 @@ vi.mock('@talex-touch/tuffex/button', () => ({
 }))
 
 vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key })
+  // Key plus params, so a test reads which copy was chosen and which key went into it.
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, unknown>) =>
+      params ? `${key} ${JSON.stringify(params)}` : key
+  })
 }))
 
 vi.mock('vue-sonner', () => ({
@@ -56,8 +66,11 @@ vi.mock('~/modules/storage/app-storage', () => ({
   appSetting: mocks.appSetting,
   appSettingStore: { saveDurable: mocks.saveDurable }
 }))
-vi.mock('~/modules/platform/renderer-platform', () => ({
-  useRendererPlatform: () => ({ isMac: { value: false } })
+/** What the main process reports for the CoreBox key, and the platform the page renders for. */
+const coreBoxShortcut = ref<ShortcutBinding | null>(null)
+const platform = ref('win32')
+vi.mock('~/modules/shortcuts/useCoreBoxShortcut', () => ({
+  useCoreBoxShortcut: () => ({ binding: coreBoxShortcut, platform })
 }))
 vi.mock('~/utils/renderer-log', () => ({
   // Both levels: a double missing `warn` turned the retry path into a TypeError swallowed by the
@@ -74,6 +87,8 @@ describe('onboarding completion', () => {
     mocks.appSetting.beginner.shortcutArmed = false
     mocks.appSetting.setup.hideDock = false
     mocks.hide.mockResolvedValue(undefined)
+    coreBoxShortcut.value = { configured: 'Alt+Space', effective: 'Alt+Space' }
+    platform.value = 'win32'
   })
 
   function mountDone() {
@@ -107,7 +122,7 @@ describe('onboarding completion', () => {
     mocks.saveDurable.mockResolvedValue({ success: true, version: 1 })
     mountDone()
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', ctrlKey: true }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', altKey: true }))
     await vi.waitFor(() => expect(mocks.hide).toHaveBeenCalledOnce())
 
     expect(mocks.appSetting.setup.hideDock).toBe(false)
@@ -199,5 +214,132 @@ describe('onboarding completion', () => {
     // The user is waiting on a button; this must not loop.
     expect(mocks.saveDurable).toHaveBeenCalledTimes(3)
     expect(mocks.appSetting.beginner.init).toBe(false)
+  })
+})
+
+/**
+ * The page teaches the key that opens CoreBox. It used to draw ⌘ + E whatever was bound; now it
+ * draws what the main process reports: ⌥Space, or the key the user rebound it to.
+ */
+describe('onboarding shortcut keys', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.appSetting.beginner.init = false
+    mocks.appSetting.beginner.shortcutArmed = false
+    mocks.hide.mockResolvedValue(undefined)
+    mocks.saveDurable.mockResolvedValue({ success: true, version: 1 })
+    coreBoxShortcut.value = { configured: 'Alt+Space', effective: 'Alt+Space' }
+    platform.value = 'darwin'
+  })
+
+  function mountDone() {
+    return mount(Done, { global: { provide: { step: mocks.step } } })
+  }
+
+  function caps(wrapper: ReturnType<typeof mountDone>) {
+    return wrapper.findAll('.BeginShortcutKey').map((cap) => ({
+      label: cap.find('.BeginShortcutKey-Text').text(),
+      symbol: cap.find('.BeginShortcutKey-Icon').exists()
+        ? cap.find('.BeginShortcutKey-Icon').text()
+        : null
+    }))
+  }
+
+  function hint(wrapper: ReturnType<typeof mountDone>): string {
+    return wrapper.find('.Done-Content > p').text()
+  }
+
+  it('teaches ⌥Space, and follows a rebind', async () => {
+    const wrapper = mountDone()
+
+    expect(caps(wrapper)).toEqual([
+      { label: 'beginner.done.shortcut.option', symbol: '⌥' },
+      { label: 'Space', symbol: null }
+    ])
+    expect(hint(wrapper)).toBe('beginner.done.shortcut.hint {"shortcut":"⌥ + Space"}')
+
+    coreBoxShortcut.value = { configured: 'Command+Shift+K', effective: 'Command+Shift+K' }
+    await nextTick()
+
+    expect(caps(wrapper)).toEqual([
+      { label: 'beginner.done.shortcut.command', symbol: '⌘' },
+      { label: 'beginner.done.shortcut.shift', symbol: '⇧' },
+      { label: 'K', symbol: null }
+    ])
+    expect(hint(wrapper)).toBe('beginner.done.shortcut.hint {"shortcut":"⌘ + ⇧ + K"}')
+  })
+
+  it('names the keys a PC keyboard prints', async () => {
+    platform.value = 'win32'
+    const wrapper = mountDone()
+
+    expect(caps(wrapper)).toEqual([
+      { label: 'beginner.done.shortcut.alt', symbol: null },
+      { label: 'Space', symbol: null }
+    ])
+    expect(hint(wrapper)).toBe('beginner.done.shortcut.hint {"shortcut":"Alt + Space"}')
+
+    coreBoxShortcut.value = { configured: 'Control+K', effective: 'Control+K' }
+    await nextTick()
+
+    expect(caps(wrapper)).toEqual([
+      { label: 'beginner.done.shortcut.ctrl', symbol: null },
+      { label: 'K', symbol: null }
+    ])
+  })
+
+  it('names the stored key when no key is live, rather than a default it is not set to', () => {
+    coreBoxShortcut.value = { configured: 'Command+K', effective: null }
+    const wrapper = mountDone()
+
+    expect(caps(wrapper)).toEqual([
+      { label: 'beginner.done.shortcut.command', symbol: '⌘' },
+      { label: 'K', symbol: null }
+    ])
+  })
+
+  it.each(['darwin', 'win32', 'linux'])(
+    'warns under the keys on %s that another app may already answer them',
+    (os) => {
+      // macOS registers the key even while Raycast, Alfred or ChatGPT holds it, so the page is the
+      // only place the user hears about it; shown on every platform, whatever the key.
+      platform.value = os
+      const wrapper = mountDone()
+
+      const hint = wrapper.find('.Done-Shortcut .Done-ShortcutConflict')
+      expect(hint.exists()).toBe(true)
+      expect(hint.text()).toBe('beginner.done.shortcut.conflictHint')
+    }
+  )
+
+  it('lights each key while it is held', async () => {
+    const wrapper = mountDone()
+    const option = () => wrapper.findAll('.BeginShortcutKey')[0]!.attributes('aria-pressed')
+
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Alt', code: 'AltLeft', altKey: true })
+    )
+    await nextTick()
+    expect(option()).toBe('true')
+
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Alt', code: 'AltLeft', altKey: false }))
+    await nextTick()
+    expect(option()).toBe('false')
+  })
+
+  it('completes on the key it teaches, and no longer on the old ⌘E', async () => {
+    mountDone()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', code: 'KeyE', metaKey: true }))
+    // The finish flow is a promise chain; a single tick would pass before it got to saving.
+    await flushPromises()
+    expect(mocks.saveDurable).not.toHaveBeenCalled()
+    expect(mocks.hide).not.toHaveBeenCalled()
+
+    // Option rewrites `key` on a Mac: ⌥Space types a no-break space, so only `code` says Space.
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: '\u00A0', code: 'Space', altKey: true })
+    )
+    await vi.waitFor(() => expect(mocks.hide).toHaveBeenCalledOnce())
   })
 })

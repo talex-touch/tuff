@@ -1,4 +1,5 @@
 import type { ShortcutChord } from './shortcut-chord'
+import { COREBOX_TOGGLE_SHORTCUT_ID } from '../../../../shared/corebox-shortcut'
 import { shortcutChordLabel } from './shortcut-chord'
 
 /**
@@ -23,6 +24,7 @@ export type MainWindowCommandId =
   | 'open-corebox'
   | 'open-store'
   | 'open-settings'
+  | 'back-to-tuff'
   | 'toggle-sidebar'
   | 'open-palette'
   | 'toggle-panel'
@@ -50,7 +52,17 @@ export interface MainWindowCommandDescriptor {
   /** UnoCSS icon class. UnoCSS does not extract `.ts`, so this table is safelisted in uno.config. */
   icon: string
   group: MainWindowCommandGroup
-  chord: ShortcutChord
+  /**
+   * The in-window chord, or `null` for a command a global shortcut runs (`globalShortcutId`). The
+   * global key fires while this window is focused too, so a chord of its own would only teach a
+   * second key for the same command.
+   */
+  chord: ShortcutChord | null
+  /**
+   * The global shortcut that runs the command. The command window prints that key as it is bound
+   * right now, and no key while none is registered; no hint badge draws it.
+   */
+  globalShortcutId?: typeof COREBOX_TOGGLE_SHORTCUT_ID
 }
 
 export const MAIN_WINDOW_COMMAND_CATALOG: readonly MainWindowCommandDescriptor[] = Object.freeze([
@@ -90,11 +102,21 @@ export const MAIN_WINDOW_COMMAND_CATALOG: readonly MainWindowCommandDescriptor[]
     chord: { code: 'Period' }
   },
   {
+    id: 'back-to-tuff',
+    // Same label as the settings back row: the palette names the control the user already knows.
+    labelKey: 'settingsNav.back',
+    icon: 'i-ri-arrow-left-line',
+    group: 'navigate',
+    chord: { code: 'BracketLeft' }
+  },
+  {
     id: 'open-corebox',
     labelKey: 'shortcuts.commands.openCoreBox',
     icon: 'i-ri-search-line',
     group: 'navigate',
-    chord: { code: 'KeyE' }
+    // CoreBox's global key (⌥Space by default) opens it from this window as well.
+    chord: null,
+    globalShortcutId: COREBOX_TOGGLE_SHORTCUT_ID
   },
   {
     id: 'open-store',
@@ -145,12 +167,13 @@ export const MAIN_WINDOW_COMMAND_ICON_CLASSES: readonly string[] = Object.freeze
 )
 
 /**
- * The badge text for one command, or `null` for an id the catalog does not know.
+ * The badge text for one command, or `null` for an id the catalog does not know or a command with
+ * no in-window chord.
  *
  * `null` rather than a fallback string: a badge is drawn from a hand-written id at each call site,
  * and a typo that rendered `undefined` on screen would look like a styling bug.
  */
 export function mainWindowCommandChordLabel(id: string, isMac: boolean): string | null {
   const command = MAIN_WINDOW_COMMAND_CATALOG.find((candidate) => candidate.id === id)
-  return command ? shortcutChordLabel(command.chord, isMac) : null
+  return command?.chord ? shortcutChordLabel(command.chord, isMac) : null
 }

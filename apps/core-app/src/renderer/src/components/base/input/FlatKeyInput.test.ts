@@ -1,7 +1,24 @@
 // @vitest-environment jsdom
 import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import FlatKeyInput from './FlatKeyInput.vue'
+
+/**
+ * The platform the recorder runs on. Handed out as a computed ref, the way the real
+ * `useRendererPlatform` does: the bug this guards was reading that ref as a bare value, and a mock
+ * returning a plain boolean would hide it.
+ */
+const platform = vi.hoisted(() => ({ current: 'darwin' }))
+
+vi.mock('~/modules/platform/renderer-platform', async () => {
+  const { computed } = await import('vue')
+  return {
+    useRendererPlatform: () => ({
+      platform: computed(() => platform.current),
+      isMac: computed(() => platform.current === 'darwin')
+    })
+  }
+})
 
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
@@ -89,5 +106,33 @@ describe('FlatKeyInput clear affordance', () => {
     const wrapper = mountKeyInput('', true)
 
     expect(wrapper.get('button.FlatKeyInput-Clear').attributes('disabled')).toBeDefined()
+  })
+})
+
+/**
+ * The recorder writes the accelerator Electron and the main process read, so the Windows key has
+ * to come out as `Super` off macOS. It came out as `Command` everywhere: the platform check read a
+ * computed ref as a boolean, which is always true.
+ */
+describe('FlatKeyInput modifier names', () => {
+  afterEach(() => {
+    platform.current = 'darwin'
+  })
+
+  it.each([
+    ['win32', { key: 'e', metaKey: true }, 'Super+E'],
+    ['linux', { key: 'e', metaKey: true }, 'Super+E'],
+    ['darwin', { key: 'e', metaKey: true }, 'Command+E'],
+    ['win32', { key: 'k', altKey: true }, 'Alt+K'],
+    ['darwin', { key: 'k', altKey: true }, 'Option+K'],
+    ['win32', { key: ' ', metaKey: true, shiftKey: true }, 'Super+Shift+Space']
+  ])('on %s records %o as %s', async (os, init, expected) => {
+    platform.current = os
+    const wrapper = mountKeyInput()
+
+    pressKey(wrapper.get<HTMLInputElement>('input').element, init)
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('update:modelValue')).toEqual([[expected]])
   })
 })

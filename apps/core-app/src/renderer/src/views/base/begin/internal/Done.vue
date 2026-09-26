@@ -1,19 +1,30 @@
 <script setup lang="ts" name="Done">
 import type { AnimationItem } from 'lottie-web'
 import type { Component } from 'vue'
+import type { AcceleratorModifier } from '../../../../../../shared/accelerator-label'
 import { sleep } from '@talex-touch/utils/common/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { computed, onMounted, onUnmounted, ref, toRaw } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import WelcomeData from '~/assets/lotties/welcome.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
+import { useCoreBoxShortcut } from '~/modules/shortcuts/useCoreBoxShortcut'
 import { appSetting, appSettingStore } from '~/modules/storage/app-storage'
-import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { createRendererLogger } from '~/utils/renderer-log'
+import {
+  acceleratorKeyCap,
+  acceleratorKeyEventCodes,
+  acceleratorLabel,
+  acceleratorMatchesEvent,
+  acceleratorModifierFlag,
+  acceleratorModifierLabel,
+  parseAccelerator
+} from '../../../../../../shared/accelerator-label'
+import { COREBOX_TOGGLE_DEFAULT_ACCELERATOR } from '../../../../../../shared/corebox-shortcut'
 import BeginShortcutKey from './components/BeginShortcutKey.vue'
 
 type StepFunction = (
@@ -29,19 +40,75 @@ const ONBOARDING_SAVE_RETRIES = 2
 const ONBOARDING_SAVE_RETRY_DELAY_MS = 120
 const appSdk = useAppSdk()
 const transport = useTuffTransport()
-const { isMac } = useRendererPlatform()
+const { binding: coreBoxShortcut, platform } = useCoreBoxShortcut()
 
-const shortcutKeyLabel = computed(() =>
-  isMac.value ? t('beginner.done.shortcut.command') : t('beginner.done.shortcut.ctrl')
+/**
+ * The key this page teaches: the one CoreBox is set to, as settings show it, and before the main
+ * process answers, the default. No other key ever stands in for it, so the live key is this one or
+ * none; with none (the OS refused it, or it lost an in-app conflict) the page still names it and
+ * still completes on it, and the user has had the notice that says why it does nothing elsewhere.
+ */
+const shortcutAccelerator = computed(
+  () => coreBoxShortcut.value?.configured ?? COREBOX_TOGGLE_DEFAULT_ACCELERATOR
 )
-const shortcutHint = computed(() => (isMac.value ? '⌘ + E' : 'Ctrl + E'))
+const parsedShortcut = computed(() => parseAccelerator(shortcutAccelerator.value, platform.value))
+const shortcutHint = computed(() =>
+  acceleratorLabel(shortcutAccelerator.value, platform.value, ' + ')
+)
 
-const isModifierPressed = ref(false)
-const isEPressed = ref(false)
+/** Modifier state as the last key event reported it, so each cap lights while its key is held. */
+const heldModifiers = reactive({ metaKey: false, ctrlKey: false, altKey: false, shiftKey: false })
+const isKeyPressed = ref(false)
+/** The finish flow presses every cap at once, whichever way the shortcut arrived. */
+const isShortcutPressed = ref(false)
 const isShortcutSuccess = ref(false)
 const isShortcutFlowRunning = ref(false)
 const isDoneClosing = ref(false)
 let removeShortcutTriggeredListener: (() => void) | null = null
+
+/** The word printed on a modifier key: `option` on a Mac keyboard, `alt` on a PC one. */
+function modifierLegendKey(modifier: AcceleratorModifier): string {
+  if (platform.value === 'darwin') {
+    if (modifier === 'alt') return 'option'
+    return modifier === 'super' ? 'command' : modifier
+  }
+  switch (modifier) {
+    case 'control':
+      return 'ctrl'
+    case 'alt':
+      return 'alt'
+    case 'shift':
+      return 'shift'
+    default:
+      return platform.value === 'win32' ? 'win' : 'super'
+  }
+}
+
+interface ShortcutCap {
+  id: string
+  label: string
+  symbol?: string
+  active: boolean
+}
+
+const shortcutCaps = computed<ShortcutCap[]>(() => {
+  const parsed = parsedShortcut.value
+  if (!parsed) return []
+  const isMacPlatform = platform.value === 'darwin'
+  return [
+    ...parsed.modifiers.map((modifier) => ({
+      id: modifier,
+      label: t(`beginner.done.shortcut.${modifierLegendKey(modifier)}`),
+      symbol: isMacPlatform ? acceleratorModifierLabel(modifier, platform.value) : undefined,
+      active: isShortcutPressed.value || heldModifiers[acceleratorModifierFlag(modifier)]
+    })),
+    {
+      id: 'key',
+      label: acceleratorKeyCap(parsed.key),
+      active: isShortcutPressed.value || isKeyPressed.value
+    }
+  ]
+})
 
 type BeginnerState = {
   init: boolean
@@ -152,8 +219,7 @@ async function runShortcutFinishFlow(): Promise<void> {
   if (isDoneClosing.value || isShortcutFlowRunning.value) return
 
   isShortcutFlowRunning.value = true
-  isModifierPressed.value = true
-  isEPressed.value = true
+  isShortcutPressed.value = true
   await sleep(120)
 
   isShortcutSuccess.value = true
@@ -163,8 +229,8 @@ async function runShortcutFinishFlow(): Promise<void> {
   if (!completed) {
     isShortcutFlowRunning.value = false
     isShortcutSuccess.value = false
-    isModifierPressed.value = false
-    isEPressed.value = false
+    isShortcutPressed.value = false
+    resetKeyPressedState()
   }
 }
 
@@ -172,19 +238,28 @@ function goon(): void {
   void completeBeginner()
 }
 
+function syncHeldModifiers(event: KeyboardEvent): void {
+  heldModifiers.metaKey = event.metaKey
+  heldModifiers.ctrlKey = event.ctrlKey
+  heldModifiers.altKey = event.altKey
+  heldModifiers.shiftKey = event.shiftKey
+}
+
+/**
+ * Reached only when the global shortcut did not take the press, e.g. when it is not registered:
+ * a registered one is consumed by the OS and arrives as `beginner.shortcutTriggered` instead.
+ * Matched by physical key: Option rewrites `key` on a Mac (`⌥Space` types a no-break space).
+ */
 function handleKeyDown(event: KeyboardEvent): void {
-  const modifierActive = isMac.value ? event.metaKey : event.ctrlKey
-  const normalizedKey = event.key.toLowerCase()
+  syncHeldModifiers(event)
+  const parsed = parsedShortcut.value
+  if (!parsed) return
 
-  if (event.key === 'Meta' || event.key === 'Control') {
-    isModifierPressed.value = true
+  if (acceleratorKeyEventCodes(parsed.key).includes(event.code)) {
+    isKeyPressed.value = true
   }
 
-  if (normalizedKey === 'e') {
-    isEPressed.value = true
-  }
-
-  if (!modifierActive || normalizedKey !== 'e') return
+  if (!acceleratorMatchesEvent(parsed, event)) return
 
   event.preventDefault()
   event.stopPropagation()
@@ -194,19 +269,20 @@ function handleKeyDown(event: KeyboardEvent): void {
 function handleKeyUp(event: KeyboardEvent): void {
   if (isShortcutFlowRunning.value) return
 
-  if (event.key === 'Meta' || event.key === 'Control') {
-    isModifierPressed.value = false
-  }
-
-  if (event.key.toLowerCase() === 'e') {
-    isEPressed.value = false
+  syncHeldModifiers(event)
+  const parsed = parsedShortcut.value
+  if (parsed && acceleratorKeyEventCodes(parsed.key).includes(event.code)) {
+    isKeyPressed.value = false
   }
 }
 
 function resetKeyPressedState(): void {
   if (isShortcutFlowRunning.value) return
-  isModifierPressed.value = false
-  isEPressed.value = false
+  heldModifiers.metaKey = false
+  heldModifiers.ctrlKey = false
+  heldModifiers.altKey = false
+  heldModifiers.shiftKey = false
+  isKeyPressed.value = false
 }
 
 onMounted(() => {
@@ -251,15 +327,22 @@ onUnmounted(() => {
       <p>{{ t('beginner.done.shortcut.hint', { shortcut: shortcutHint }) }}</p>
       <div class="Done-Shortcut">
         <div class="Done-ShortcutKeys my-4">
-          <BeginShortcutKey
-            :label="shortcutKeyLabel"
-            :active="isModifierPressed"
-            :success="isShortcutSuccess"
-          />
-          <span class="Done-ShortcutPlus">+</span>
-          <BeginShortcutKey label="E" :active="isEPressed" :success="isShortcutSuccess" />
+          <template v-for="(cap, index) in shortcutCaps" :key="cap.id">
+            <span v-if="index > 0" class="Done-ShortcutPlus">+</span>
+            <BeginShortcutKey
+              :label="cap.label"
+              :symbol="cap.symbol"
+              :active="cap.active"
+              :success="isShortcutSuccess"
+            />
+          </template>
         </div>
         <small>{{ t('beginner.done.shortcut.changeInSettings') }}</small>
+        <!--
+          On every platform: macOS reports the key as registered even while another app holds it,
+          so a press that opens Raycast, Alfred or ChatGPT is the only sign the user will get.
+        -->
+        <small class="Done-ShortcutConflict">{{ t('beginner.done.shortcut.conflictHint') }}</small>
       </div>
       <TxButton variant="flat" type="primary" @click="goon">
         {{ t('beginner.done.action') }}
@@ -339,6 +422,12 @@ onUnmounted(() => {
       color: var(--tx-text-color-secondary);
       font-size: 0.72rem;
       text-align: center;
+    }
+
+    // The longest line on the page; balanced so it wraps into two even lines, not one and a word.
+    &Conflict {
+      max-width: 28rem;
+      text-wrap: balance;
     }
   }
 }
