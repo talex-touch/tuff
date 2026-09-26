@@ -110,8 +110,8 @@ function parseDigits(raw: string, fallbackBase: number): bigint | null {
   const prefixedBase = detectPrefixedBase(unsigned);
   const base = prefixedBase ?? fallbackBase;
   const digits = prefixedBase === null ? unsigned : unsigned.slice(2);
-  if (!DIGIT_PATTERN_BY_BASE[base].test(digits)) return null;
-
+  const pattern = DIGIT_PATTERN_BY_BASE[base];
+  if (!pattern || !pattern.test(digits)) return null;
   const magnitude =
     base === 16
       ? BigInt(`0x${digits}`)
@@ -170,7 +170,7 @@ function resolveTaggedValue(
   const unsigned = trimmed.replace(/^[-+]/, "");
   const prefixedBase = detectPrefixedBase(unsigned);
   const sourceBase =
-    prefixedBase ?? (DIGIT_PATTERN_BY_BASE[10].test(unsigned) ? 10 : taggedBase);
+    prefixedBase ?? (DIGIT_PATTERN_BY_BASE[10]?.test(unsigned) ? 10 : taggedBase);
   const value = parseDigits(trimmed, sourceBase);
   if (value === null) return null;
 
