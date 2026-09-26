@@ -40,6 +40,7 @@ import ToolWidgetCard from '~/components/intelligence/ToolWidgetCard.vue'
 import ToolFormCard from '~/components/intelligence/ToolFormCard.vue'
 import { toMessageSegments } from '~/modules/conversation/chain-steps'
 import { createLatestOnly } from '~/modules/conversation/latest-only'
+import type { SendFlightHandle, SendLift } from '~/composables/useSendChoreography'
 import {
   FLIGHT_IMPACT_MS,
   prefersReducedMotion,
@@ -102,6 +103,21 @@ const headRef = ref<HTMLElement | null>(null)
  */
 const pageRef = ref<HTMLElement | null>(null)
 const composerHeight = ref(0)
+
+/**
+ * The send lift's bubble (see `useSendChoreography().liftDraft`). Declared in the template rather
+ * than created at runtime so the scoped styles reach it.
+ */
+const liftGhostRef = ref<HTMLElement | null>(null)
+const liftFillRef = ref<HTMLElement | null>(null)
+const liftTextRef = ref<HTMLElement | null>(null)
+/** A wrapped draft as it sat in the field, fading out while the lifted bubble's text fades in. */
+const draftGhostRef = ref<HTMLElement | null>(null)
+/**
+ * The sent text is still on the composer (lifted, not yet clear of it): the empty field's
+ * placeholder would read as a second text under it, so it waits.
+ */
+const lifting = ref(false)
 
 const router = useRouter()
 const route = useRoute()
@@ -313,7 +329,13 @@ const choreography = useSendChoreography({
   scroller: () =>
     pageRef.value?.querySelector<HTMLElement>('.tx-conversation-stream__scroller') ?? null,
   composerGroup: () => composerGroupRef.value,
-  composer: () => composerRef.value
+  composer: () => composerRef.value,
+  liftOverlay: () => {
+    const ghost = liftGhostRef.value
+    const fill = liftFillRef.value
+    const text = liftTextRef.value
+    return ghost && fill && text ? { ghost, fill, text } : null
+  }
 })
 const enteringMessages = choreography.enteringMessages
 
@@ -522,11 +544,65 @@ function autoGrow(): void {
   input.style.height = `${Math.min(input.scrollHeight, MAX_INPUT_HEIGHT)}px`
 }
 
+/**
+ * The field returns to one line once its draft is sent — eased rather than snapped when `animate`:
+ * the docked composer is bottom-anchored, so a multi-line draft collapsing at once would drop its
+ * top edge in one frame.
+ */
+function collapseDraft(animate: boolean): void {
+  const input = inputRef.value
+  if (!input) return
+  const from = input.offsetHeight
+  autoGrow()
+  const to = Number.parseFloat(input.style.height) || from
+  if (animate && Math.abs(from - to) >= 1 && !prefersReducedMotion()) {
+    input.animate([{ height: `${from}px` }, { height: `${to}px` }], {
+      duration: 220,
+      easing: 'cubic-bezier(0.2, 0, 0, 1)'
+    })
+  }
+}
+
+/** Widest a user bubble may be: its `max-width` (78%) against the chat lane the rows share. */
+function bubbleMaxWidth(): number {
+  const lane = composerGroupRef.value?.querySelector<HTMLElement>('.HomePage-ComposerBeam')
+  return (lane?.getBoundingClientRect().width ?? 0) * 0.78
+}
+
 async function applyPill(key: string): Promise<void> {
   draft.value = t(`home.pill.${key}`)
   await nextTick()
   autoGrow()
   inputRef.value?.focus()
+}
+
+/** The greeting as it stood before the stage flips to a conversation; `null` when there is none. */
+interface LeavingHead {
+  el: HTMLElement
+  rect: DOMRect
+}
+
+/** Read before the reactive flip: once the thread is non-empty, the ref no longer points at it. */
+function measureLeavingHead(): LeavingHead | null {
+  const el = headRef.value
+  return el ? { el, rect: el.getBoundingClientRect() } : null
+}
+
+/**
+ * The leaving greeting must neither ride the new layout (it would teleport to the column top) nor
+ * keep occupying it (it would shove the stream down, then snap it up when the fade ends): pin it
+ * where it stood, out of flow. Both ways off the blank stage need it — a first send and opening a
+ * stored thread.
+ */
+function pinLeavingHead(head: LeavingHead | null): void {
+  if (!head?.el.isConnected || prefersReducedMotion()) return
+  const host = head.el.parentElement?.getBoundingClientRect()
+  if (!host) return
+  head.el.style.position = 'absolute'
+  head.el.style.top = `${Math.round(head.rect.top - host.top)}px`
+  head.el.style.left = `${Math.round(head.rect.left - host.left)}px`
+  // Only the measured offsets are inline; the layer rides the shared scale.
+  head.el.classList.add('is-leaving')
 }
 
 async function submit(): Promise<void> {
@@ -535,11 +611,34 @@ async function submit(): Promise<void> {
   const text = draft.value
   const attachments =
     pendingAttachments.value.length > 0 ? [...pendingAttachments.value] : undefined
+  // The lift carries the typed text off the composer as its own bubble. A send with attachments
+  // keeps the clone flight, which carries the whole row — the tray included — not the text alone.
+  const input = inputRef.value
+  // The conversation's first message: its lift and the dock take their time (LIFT_SCORE).
+  const opening = isEmpty.value
+  const liftable = !attachments && !!input && !prefersReducedMotion()
+  let lift: SendLift | null = null
+  if (liftable && input) {
+    // A lift still in the air lands first — before this one lays its bubble over the draft.
+    choreography.invalidate()
+    // Read before the draft clears: the bubble is laid over the text where it sits.
+    lift = choreography.liftDraft({
+      text,
+      input,
+      bubbleMaxWidth: bubbleMaxWidth(),
+      draftGhost: draftGhostRef.value,
+      opening,
+      onClear: () => {
+        lifting.value = false
+      }
+    })
+    lifting.value = lift !== null
+  }
   draft.value = ''
   // Ownership moves to the message: the tray empties, the bubbles keep the object URLs alive.
   pendingAttachments.value = []
   await nextTick()
-  autoGrow()
+  collapseDraft(lift !== null)
 
   // Allocated here rather than at setup so an untouched home screen never claims an id.
   conversationId.value ??= createConversationId()
@@ -552,8 +651,7 @@ async function submit(): Promise<void> {
   // around the reactive flip so the same node glides instead of teleporting.
   const composerEl = composerRef.value
   const first = composerEl?.getBoundingClientRect()
-  const headEl = headRef.value
-  const headRect = headEl?.getBoundingClientRect()
+  const head = measureLeavingHead()
 
   const turn = conversation.send(text, attachments)
   // Sending from a scrolled-up position still lands you on your own message —
@@ -566,42 +664,49 @@ async function submit(): Promise<void> {
   // path — the watcher already consumed it.
   choreographedSend = false
 
-  // The leaving greeting must neither ride the new layout (it would teleport
-  // to the column top) nor keep occupying it (it would shove the stream down,
-  // then snap it up when the fade ends): pin it where it stood, out of flow.
-  if (headEl?.isConnected && headRect && !prefersReducedMotion()) {
-    const host = headEl.parentElement?.getBoundingClientRect()
-    if (host) {
-      headEl.style.position = 'absolute'
-      headEl.style.top = `${Math.round(headRect.top - host.top)}px`
-      headEl.style.left = `${Math.round(headRect.left - host.left)}px`
-      // Only the measured offsets are inline; the layer rides the shared scale.
-      headEl.classList.add('is-leaving')
-    }
-  }
+  pinLeavingHead(head)
 
   if (composerEl && first && !prefersReducedMotion()) {
+    // The box docks as the bubble rises: the two part in opposite directions, together.
     const deltaY = first.top - composerEl.getBoundingClientRect().top
-    if (Math.abs(deltaY) > 8) choreography.playComposerFlip(deltaY)
+    if (Math.abs(deltaY) > 8) {
+      choreography.playComposerFlip(deltaY, opening && lift ? { opening: true } : undefined)
+    }
   }
 
   // The send choreography: space and strike as ONE gesture. The freshly
   // appended rows are already in the layout (hidden by `--enter`), so the
-  // glide opens the room while the clone is already in the air — iMessage's
-  // zero-latency press.
-  choreography.invalidate()
+  // glide opens the room while the message is already on its way —
+  // iMessage's zero-latency press.
+  //
+  // A lift took the stage at the top of `submit`, landing any lift still in
+  // the air there. That landing resolved its impact, and the placeholder reveal
+  // chained to it was stamped during the awaits since: a second bump here would
+  // silence it and leave the earlier reply hidden until the entrance watchdog —
+  // and would land this send's own lift.
+  if (!liftable) choreography.invalidate()
   const sentId = [...messages.value].reverse().find((message) => message.role === 'user')?.id
   const placeholderId =
     messages.value.at(-1)?.role === 'assistant' ? messages.value.at(-1)?.id : undefined
 
   if (prefersReducedMotion()) {
+    // Only reachable when the preference flipped mid-send: put the lifted text down.
+    lift?.cancel()
     streamRef.value?.scrollToBottom()
     await turn
     return
   }
 
   void streamRef.value?.tweenToBottom(SCROLL_TWEEN_MS)
-  const flight = sentId ? choreography.playSend(sentId, composerEl) : null
+  let flight: SendFlightHandle | null = null
+  if (lift) {
+    if (sentId) flight = lift.fly(sentId)
+    else lift.cancel()
+  } else {
+    // No lift (attachments, or one that could not be laid out): the clone flight carries the row,
+    // so a claimed row is never left hidden for the watchdog to find.
+    flight = sentId ? choreography.playSend(sentId, composerEl) : null
+  }
   if (placeholderId) {
     // No knock of its own: the thread was just struck, and a second hit this
     // close would read as stutter rather than physics.
@@ -894,6 +999,11 @@ watch(
     // of teleporting. Thread-to-thread hops measure ~0 and stay still.
     const composerEl = composerRef.value
     const first = composerEl?.getBoundingClientRect()
+    const head = measureLeavingHead()
+    // A send still in the air lands before its thread is swapped out, rather than flying on to a row
+    // that is leaving. Not before the same-thread return above: a first send's own navigation to its
+    // new id passes through here and must leave its lift alone.
+    choreography.invalidate()
     conversation.restore(restored.messages)
     // A stored title that differs from the opening message is a real one; the working-title
     // persist writes the opening message back, and treating that as custom would block
@@ -903,8 +1013,10 @@ watch(
       restored.messages.find((message) => message.role === 'user')?.content
     )
     // Wholesale replacement doesn't trip the stream's prepend anchoring, and keep-alive
-    // reuses this instance — landing at the latest message needs an explicit call.
+    // reuses this instance — landing at the latest message needs an explicit call. The greeting
+    // leaves the flow first, so the scroll lands against the stream's final height.
     await nextTick()
+    pinLeavingHead(head)
     streamRef.value?.scrollToBottom()
     if (composerEl && first && !prefersReducedMotion()) {
       const dy = first.top - composerEl.getBoundingClientRect().top
@@ -1362,7 +1474,11 @@ onBeforeUnmount(disposeCommands)
               <div
                 ref="composerRef"
                 class="HomePage-Composer"
-                :class="{ 'is-dragover': isDragover, 'is-live': isStreaming }"
+                :class="{
+                  'is-dragover': isDragover,
+                  'is-live': isStreaming,
+                  'is-lifting': lifting
+                }"
                 @dragenter="onDragEnter"
                 @dragover="onDragOver"
                 @dragleave="onDragLeave"
@@ -1468,6 +1584,12 @@ onBeforeUnmount(disposeCommands)
                     </button>
                   </div>
                 </div>
+
+                <!-- A wrapped draft as it sat, fading out while the lifted bubble's own lines fade in
+                     (~140ms); empty otherwise. -->
+                <div class="HomePage-DraftGhost" aria-hidden="true">
+                  <div ref="draftGhostRef" class="HomePage-DraftGhostText" />
+                </div>
               </div>
             </TxBorderBeam>
 
@@ -1502,6 +1624,13 @@ onBeforeUnmount(disposeCommands)
         </div>
       </Transition>
     </div>
+
+    <!-- The send lift: the sent text, lifted off the composer as its own bubble and sprung to its
+         row (composables/send-lift). Idle it is hidden and holds nothing. -->
+    <div ref="liftGhostRef" class="HomePage-SendLift" aria-hidden="true">
+      <div ref="liftFillRef" class="HomePage-SendLiftFill" />
+      <div ref="liftTextRef" class="HomePage-UserBubble HomePage-SendLiftText" />
+    </div>
   </div>
 </template>
 
@@ -1523,14 +1652,18 @@ onBeforeUnmount(disposeCommands)
   // animation's clone used to carry a hardcoded `z-index: 30` and flew OVER
   // the box it had just left.
   //
-  // The three values compete directly: nothing between here and them opens a
+  // The values compete directly: nothing between here and them opens a
   // stacking context (`.HomePage-Center` is `position: relative` at `z-index:
   // auto`, `.HomePage-Body` only has `overflow`), so they have to be read off
   // one scale rather than picked per site.
   // ---------------------------------------------------------------------------
   --home-z-leaving: 0; // the stream and greeting dissolving on their way out
-  --home-z-flight: 1; // the send animation's in-air bubble clone
+  --home-z-flight: 1; // the send flight's clone
   --home-z-composer: 2; // composer and pending confirmation — above every message
+  // The one exception: the send lift's bubble. It starts as the draft's own text, which lies on the
+  // composer's surface, so it leaves from above the box rather than from behind it; its fill is
+  // transparent while it still overlaps the box, so nothing of the composer is covered.
+  --home-z-lift: 3;
 
   // ---------------------------------------------------------------------------
   // TuffEx token bridge: every tuffex component under this surface renders in
@@ -1832,6 +1965,43 @@ onBeforeUnmount(disposeCommands)
 }
 
 /**
+ * The send lift's bubble: fixed to the viewport so it can cross the whole pane, moved by
+ * `transform` alone (`composables/send-lift`), and laid out once exactly as the landed bubble —
+ * same typography, same widest width — so the swap to the real row is invisible. Hidden and empty
+ * between sends.
+ */
+.HomePage-SendLift {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--home-z-lift);
+  pointer-events: none;
+  visibility: hidden;
+
+  // Promoted only while a lift runs: a layer held between sends would be memory for nothing.
+  &.is-active {
+    visibility: visible;
+    will-change: transform;
+  }
+}
+
+/* The bubble's own material, faded in as it leaves the composer (opacity only: composited). */
+.HomePage-SendLiftFill {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--shell-radius-lg);
+  background: var(--shell-surface-2);
+  opacity: 0;
+}
+
+/* The message itself, typeset by `.HomePage-UserBubble`; its fill is the layer under it. */
+.HomePage-UserBubble.HomePage-SendLiftText {
+  position: relative;
+  margin: 0;
+  background: none;
+}
+
+/**
  * No fill on replies: in v2 the raised look comes from strokes, and body copy is not a
  * raised surface. The class now sits on TxStreamMarkdown — no `pre-wrap` here, markdown
  * owns its own whitespace; colour and size align the markdown body with the shell.
@@ -2125,6 +2295,39 @@ textarea.HomePage-Input:focus-visible {
 
 .HomePage-Input::placeholder {
   color: var(--shell-text-muted);
+  // The way back in once a lifted send has cleared the box; the way out is instant (below).
+  transition: color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The sent text is still lifting off the composer: an empty field's placeholder under it would read
+   as two texts at once. */
+.HomePage-Composer.is-lifting .HomePage-Input::placeholder {
+  color: transparent;
+  transition: none;
+}
+
+/**
+ * A wrapped draft where it sat in the textarea (`fadeDraft`), fading out while the lifted bubble's
+ * own lines fade in over it. Empty outside a send.
+ */
+.HomePage-DraftGhost {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Typeset like `.HomePage-Input`, and like a textarea wraps, so the first frame is the draft. */
+.HomePage-DraftGhostText {
+  position: absolute;
+  margin: 0;
+  color: var(--shell-text-primary);
+  font-family: inherit;
+  font-size: var(--shell-fs-md);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 .HomePage-ToolRow {

@@ -92,10 +92,20 @@ const liveKey = computed(() =>
 // Virtual window
 // ---------------------------------------------------------------------------
 
-const range = computed(() => {
+/**
+ * Hands back the previous object while the window's start and end stand still.
+ * Every scroll frame writes `scrollTop`, and a fresh `{ start, end }` per frame
+ * rebuilt `windowItems` and re-ran every visible row's slot on each frame of a
+ * glide, though the window only changes when the viewport crosses a row
+ * boundary. A computed that returns the same value does not wake its
+ * dependents; offsets still refresh through `windowItems`' own read of
+ * `layoutVersion`.
+ */
+const range = computed<{ start: number, end: number }>((previous) => {
   void layoutVersion.value
   const top = Math.max(0, scrollTop.value - spacerTop.value)
-  return cache.visibleRange(top, viewportHeight.value, props.overscan)
+  const next = cache.visibleRange(top, viewportHeight.value, props.overscan)
+  return previous && previous.start === next.start && previous.end === next.end ? previous : next
 })
 
 const windowItems = computed(() => {
@@ -528,8 +538,10 @@ defineExpose({
       </template>
     </div>
 
+    <!-- Only for a reader who left the bottom: while the stream glides there on its own (a send, a
+         programmatic scroll) it is not at the bottom yet, but nobody needs to be offered a way back. -->
     <button
-      v-if="!stick.atBottom.value && items.length > 0"
+      v-if="!stick.following.value && !stick.atBottom.value && items.length > 0"
       type="button"
       class="tx-conversation-stream__pill"
       :class="{ 'is-streaming': streaming }"

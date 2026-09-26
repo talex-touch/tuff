@@ -1,5 +1,11 @@
+import type { LiftOverlay } from './send-lift/lift-driver'
+import type { LiftRect } from './send-lift/score'
 import { reactive } from 'vue'
 import { hasWindow } from '@talex-touch/utils/env'
+import { SendLiftDriver } from './send-lift/lift-driver'
+import { LIFT_SCORE, liftOrigin, predictLanding, sampleSpringCurve } from './send-lift/score'
+
+export type { LiftOverlay } from './send-lift/lift-driver'
 
 /**
  * The send choreography — the whole motion score for a chat turn, lifted out of
@@ -15,6 +21,11 @@ import { hasWindow } from '@talex-touch/utils/env'
  * message flies in on a damped spring and, at the moment it lands, knocks the
  * thread above it upward in a decaying wave. Both curves are sampled offline
  * because WAAPI has no spring primitive.
+ *
+ * The composer's own send is the lift (`liftDraft`, frames in `send-lift/`), the
+ * way iMessage sends: the typed text is lifted off the composer as it stands,
+ * its bubble fills in around it, and the bubble rides one spring to its row.
+ * `playSend`'s clone flight stays for sends that carry attachments.
  */
 
 /**
@@ -235,15 +246,61 @@ export function prefersReducedMotion(): boolean {
   return hasWindow() && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
 }
 
+let openingDock: ReturnType<typeof sampleSpringCurve> | null = null
+
+/** The first send's lift curve (opening spring + ramp), sampled once for the dock's keyframes. */
+function openingDockCurve(): ReturnType<typeof sampleSpringCurve> {
+  openingDock ??= sampleSpringCurve(
+    LIFT_SCORE.openingSpring,
+    LIFT_SCORE.openingRampMs,
+    LIFT_SCORE.openingRampFloor
+  )
+  return openingDock
+}
+
 export interface SendChoreographyOptions {
   /** Where the flight clone is parked — the page root, outside the scroller. */
   host: () => HTMLElement | null
-  /** The stream's scroller, read only for the "this send barely travels" bail. */
+  /**
+   * The stream's scroller: read for the flight's "this send barely travels" bail, and for how much
+   * of its glide a lifted bubble's landing still owes.
+   */
   scroller: () => HTMLElement | null
   /** The composer group; the FLIP travels the group so the pills ride along. */
   composerGroup: () => HTMLElement | null
   /** The composer itself, used as the FLIP fallback and the recoil target. */
   composer: () => HTMLElement | null
+  /** The lifted bubble, declared in the view's template. Without it a send never lifts. */
+  liftOverlay?: () => LiftOverlay | null
+}
+
+export interface SendLiftStart {
+  /** The draft as sent. */
+  text: string
+  /** The field it was typed in — read before it clears. */
+  input: HTMLTextAreaElement
+  /** Widest the landed bubble may be, px (the bubble's `max-width` against its row). */
+  bubbleMaxWidth: number
+  /**
+   * An element in the composer, over the field, that can show the draft where it sat: a wrapped
+   * draft fades out there while the bubble's own layout fades in.
+   */
+  draftGhost?: HTMLElement | null
+  /** The bubble is wholly above the composer: the field's placeholder may come back. Once. */
+  onClear?: () => void
+  /** The conversation's first message: it rides the slower opening spring (`LIFT_SCORE`). */
+  opening?: boolean
+}
+
+/** A draft lifted off the composer, waiting for the row it becomes. */
+export interface SendLift {
+  /**
+   * Flies the lifted bubble to the (hidden) row `messageId` — `null` when it cannot, and the row
+   * is revealed at once. Resolves `impact` on the first touch.
+   */
+  fly: (messageId: string) => SendFlightHandle | null
+  /** Puts the draft down without a flight (the send never appended a row). */
+  cancel: () => void
 }
 
 export interface SendFlightHandle {
@@ -257,7 +314,17 @@ export interface SendChoreography {
   markEntering: (ids: string[]) => void
   playEntrance: (id: string, strength?: number) => void
   playSend: (messageId: string, composerEl: HTMLElement | null) => SendFlightHandle | null
-  playComposerFlip: (deltaY: number) => void
+  /**
+   * The composer's own send, first half: lays the lifted bubble over the draft — same glyphs, same
+   * place — on the press, before the field clears. `null` when it cannot (reduced motion, no
+   * overlay, nothing typed). A newer lift, `invalidate()` or `cancel()` lands this one at once.
+   */
+  liftDraft: (start: SendLiftStart) => SendLift | null
+  /**
+   * `opening`: the conversation's first send docks on its lifted bubble's own curve — the same
+   * slow peel-off, in the other direction.
+   */
+  playComposerFlip: (deltaY: number, flip?: { opening?: boolean }) => void
   /**
    * Runs `fn` after `delay` unless a newer send — or an unmount — took the
    * stage first. Registered, so it dies with `cancel()`.
@@ -548,6 +615,231 @@ export function useSendChoreography(options: SendChoreographyOptions): SendChore
   }
 
   /**
+   * The lift on stage, if any. One at a time: the overlay is a single set of elements. A newer
+   * send, a thread switch or an unmount lands it where it stands — before the newcomer draws.
+   */
+  let activeLift: { finish: () => void } | null = null
+
+  function landActiveLift(): void {
+    const lift = activeLift
+    activeLift = null
+    lift?.finish()
+  }
+
+  /** Where the hidden real bubble rests, viewport px; with `predicted`, after the stream's glide. */
+  function readLiftLanding(messageId: string, predicted: boolean): LiftRect | null {
+    const bubble = messageElement(messageId)?.querySelector<HTMLElement>('.HomePage-UserBubble')
+    if (!bubble) return null
+    const rect = bubble.getBoundingClientRect()
+    const landing = { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
+    if (!predicted) return landing
+    const scroller = options.scroller()
+    return predictLanding(
+      landing,
+      scroller
+        ? {
+            scrollTop: scroller.scrollTop,
+            scrollHeight: scroller.scrollHeight,
+            clientHeight: scroller.clientHeight
+          }
+        : null
+    )
+  }
+
+  function liftDraft(start: SendLiftStart): SendLift | null {
+    const overlay = options.liftOverlay?.() ?? null
+    const composer = options.composer()
+    if (!overlay || !composer || !start.text.trim() || prefersReducedMotion()) return null
+    landActiveLift()
+
+    // Laid out once, as the landed bubble will be: the same text, typography and widest width, so
+    // the bubble shrink-wraps to the row's own size. The fixed layer's origin is read with it.
+    const { ghost, fill, text } = overlay
+    ghost.style.transform = 'none'
+    fill.style.opacity = '0'
+    text.textContent = start.text
+    text.style.maxWidth = `${start.bubbleMaxWidth.toFixed(2)}px`
+    const layer = ghost.getBoundingClientRect()
+    const size = { width: layer.width, height: layer.height }
+    const px = (value: string): number => Number.parseFloat(value) || 0
+    const textStyle = getComputedStyle(text)
+    const inputStyle = getComputedStyle(start.input)
+    const inputRect = start.input.getBoundingClientRect()
+    const bubbleLine = px(textStyle.lineHeight) || px(textStyle.fontSize) * 1.6
+    const inputLine = px(inputStyle.lineHeight) || px(inputStyle.fontSize) * 1.5
+    // The bubble is narrower than the field, so any line that fits it fits the field: the same
+    // number of lines means the same breaks. An unscrolled draft whose lines match lifts glyph for
+    // glyph; one that wraps differently (or is scrolled) cross-fades instead.
+    const bubbleLines = Math.max(
+      1,
+      Math.round(
+        (size.height - px(textStyle.paddingTop) - px(textStyle.paddingBottom)) / bubbleLine
+      )
+    )
+    const draftLines = Math.max(1, Math.round(start.input.scrollHeight / inputLine))
+    const sameLines = bubbleLines === draftLines && start.input.scrollTop === 0
+    const from = liftOrigin({
+      line: {
+        left: inputRect.left + start.input.clientLeft + px(inputStyle.paddingLeft),
+        top:
+          inputRect.top + start.input.clientTop + px(inputStyle.paddingTop) - start.input.scrollTop
+      },
+      inset: { left: px(textStyle.paddingLeft), top: px(textStyle.paddingTop) },
+      inputLineHeight: inputLine,
+      bubbleLineHeight: bubbleLine,
+      lines: sameLines ? bubbleLines : 1
+    })
+    const clearY = composer.getBoundingClientRect().top
+    ghost.style.transform = `translate(${(from.left - layer.left).toFixed(2)}px, ${(from.top - layer.top).toFixed(2)}px)`
+    ghost.classList.add('is-active')
+
+    // A draft that the bubble lays out differently: the draft fades out where it sat while the
+    // bubble's own lines fade in over it.
+    if (!sameLines) {
+      animateRaw(text, [{ opacity: 0 }, { opacity: 1 }], {
+        duration: LIFT_SCORE.crossfadeMs,
+        easing: 'cubic-bezier(0.2, 0, 0, 1)'
+      })
+      fadeDraft(start.draftGhost ?? null, start.input, start.text)
+    }
+
+    let cleared = false
+    const clear = (): void => {
+      if (cleared) return
+      cleared = true
+      start.onClear?.()
+    }
+    let driver: SendLiftDriver | null = null
+    let flying: string | null = null
+    let wait = 0
+    let ended = false
+    let resolveImpact: () => void = () => {}
+
+    const stage = {
+      finish: (): void => {
+        if (ended) return
+        ended = true
+        if (activeLift === stage) activeLift = null
+        if (wait) cancelAnimationFrame(wait)
+        wait = 0
+        if (driver) {
+          driver.finish()
+          return
+        }
+        ghost.classList.remove('is-active')
+        ghost.style.transform = ''
+        fill.style.opacity = ''
+        text.textContent = ''
+        text.style.maxWidth = ''
+        clear()
+        if (flying) enteringMessages.delete(flying)
+        resolveImpact()
+      }
+    }
+    activeLift = stage
+
+    return {
+      cancel: () => stage.finish(),
+      fly: (messageId) => {
+        if (ended) return null
+        // Only a row this send appended and still hides: anything else has nothing to land on.
+        if (!enteringMessages.has(messageId) || !messageElement(messageId)) {
+          stage.finish()
+          enteringMessages.delete(messageId)
+          return null
+        }
+        flying = messageId
+        const impact = new Promise<void>((resolve) => {
+          resolveImpact = resolve
+        })
+        const launch = (): void => {
+          wait = 0
+          if (ended) return
+          // The entrance watchdog runs on timers while a hidden window holds frames back: a row it
+          // has already revealed must not be flown to, or the message shows twice.
+          if (!enteringMessages.has(messageId)) {
+            stage.finish()
+            return
+          }
+          try {
+            driver = new SendLiftDriver(
+              overlay,
+              {
+                originX: layer.left,
+                originY: layer.top,
+                from,
+                size,
+                clearY,
+                spring: start.opening ? LIFT_SCORE.openingSpring : LIFT_SCORE.spring,
+                ramp: start.opening
+                  ? { ms: LIFT_SCORE.openingRampMs, floor: LIFT_SCORE.openingRampFloor }
+                  : undefined
+              },
+              {
+                onClear: clear,
+                onImpact: () => resolveImpact(),
+                onLand: () => {
+                  // The bubble's last pose is the row's, so the row appears in the frame the
+                  // overlay clears: Vue patches the class before that frame paints.
+                  ended = true
+                  if (activeLift === stage) activeLift = null
+                  enteringMessages.delete(messageId)
+                },
+                readLanding: (predicted) => readLiftLanding(messageId, predicted)
+              }
+            )
+          } catch (error) {
+            // Never strand the hidden row: land, then let the error surface.
+            stage.finish()
+            throw error
+          }
+        }
+        // The appended rows render in the first frame; the virtualizer measures them and re-lays
+        // its window in the second. Read any earlier and the landing is an estimated height.
+        let frames = LIFT_SCORE.settleFrames
+        const settle = (): void => {
+          frames -= 1
+          if (frames > 0) wait = requestAnimationFrame(settle)
+          else launch()
+        }
+        wait = requestAnimationFrame(settle)
+        return { impact }
+      }
+    }
+  }
+
+  /** Only the newest fade may empty the draft ghost. */
+  let draftSeq = 0
+
+  /**
+   * The draft as it sat in the field — its own wrapping, only the lines that were on screen —
+   * fading out in place while the lifted bubble's text fades in over it.
+   */
+  function fadeDraft(ghost: HTMLElement | null, input: HTMLTextAreaElement, text: string): void {
+    if (!ghost) return
+    const seq = ++draftSeq
+    const { offsetLeft, offsetTop, clientWidth, clientHeight, scrollTop, scrollHeight } = input
+    ghost.textContent = text
+    Object.assign(ghost.style, {
+      left: `${offsetLeft}px`,
+      top: `${offsetTop - scrollTop}px`,
+      width: `${clientWidth}px`,
+      clipPath: `inset(${scrollTop}px 0px ${Math.max(0, scrollHeight - scrollTop - clientHeight)}px 0px)`
+    } satisfies Partial<CSSStyleDeclaration>)
+    const fade = animateRaw(ghost, [{ opacity: 1 }, { opacity: 0 }], {
+      duration: LIFT_SCORE.crossfadeMs,
+      easing: 'cubic-bezier(0.4, 0, 1, 1)',
+      fill: 'forwards'
+    })
+    const clear = (): void => {
+      if (seq !== draftSeq) return
+      ghost.textContent = ''
+      fade.cancel()
+    }
+    void fade.finished.then(clear, clear)
+  }
+
+  /**
    * The composer's dock/undock journey rides the same spring as the messages —
    * a slight overshoot past its destination and a whisper of jelly, so landing
    * reads as a soft impact rather than an ease-out stop. Sign-agnostic: the
@@ -555,9 +847,25 @@ export function useSendChoreography(options: SendChoreographyOptions): SendChore
    * travels, so the quick pills dissolve in place on the composer's back
    * instead of detaching the moment the dock class flips the layout.
    */
-  function playComposerFlip(deltaY: number): void {
+  function playComposerFlip(deltaY: number, flip: { opening?: boolean } = {}): void {
     const el = options.composerGroup() ?? options.composer()
     if (!el) return
+    if (flip.opening) {
+      // The lifted bubble's own curve, as keyframes: slow off the mark, then away — no overshoot to
+      // compress, and only a whisper of the jelly the message dock carries.
+      const curve = openingDockCurve()
+      animateRaw(
+        el,
+        curve.frames.map(({ o, x, v }) => ({
+          offset: o,
+          transform:
+            `translateY(${((1 - x) * deltaY).toFixed(1)}px) ` +
+            `scaleY(${(1 + 0.012 * v).toFixed(4)})`
+        })),
+        { duration: curve.duration, easing: 'linear' }
+      )
+      return
+    }
     animateRaw(
       el,
       SPRING.map(({ o, x, v }) => {
@@ -596,13 +904,16 @@ export function useSendChoreography(options: SendChoreographyOptions): SendChore
 
   function invalidate(): void {
     sendSeq += 1
+    landActiveLift()
   }
 
   function cancel(): void {
     for (const handle of timers) window.clearTimeout(handle)
     timers.clear()
-    // Any in-flight clone reads this on its next frame and retires itself.
+    // Any in-flight clone reads this on its next frame and retires itself; a lift is landed here
+    // and now.
     sendSeq += 1
+    landActiveLift()
   }
 
   return {
@@ -610,6 +921,7 @@ export function useSendChoreography(options: SendChoreographyOptions): SendChore
     markEntering,
     playEntrance,
     playSend,
+    liftDraft,
     playComposerFlip,
     scheduleForCurrentSend,
     invalidate,

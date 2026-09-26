@@ -14,11 +14,14 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLIGHT_IMPACT_MS, sampleFlight, useSendChoreography } from './useSendChoreography'
+import type { LiftOverlay } from './useSendChoreography'
+import { LIFT_SCORE } from './send-lift/score'
 
 const FLIGHT_MS = 460
 
 let now = 0
-let frames: FrameRequestCallback[] = []
+let frames: Array<{ id: number; callback: FrameRequestCallback }> = []
+let frameIds = 0
 
 /** Drives the rAF loop to `target` ms, one 16ms frame at a time. */
 function advanceTo(target: number): void {
@@ -26,7 +29,7 @@ function advanceTo(target: number): void {
     now = Math.min(target, now + 16)
     const due = frames
     frames = []
-    for (const frame of due) frame(now)
+    for (const { callback } of due) callback(now)
   }
 }
 
@@ -81,9 +84,14 @@ function buildStage(options: { composerTop: number; rowTop: number }) {
 beforeEach(() => {
   now = 0
   frames = []
-  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
-    frames.push(cb)
-    return frames.length
+  frameIds = 0
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frameIds += 1
+    frames.push({ id: frameIds, callback })
+    return frameIds
+  })
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+    frames = frames.filter((frame) => frame.id !== id)
   })
   vi.spyOn(performance, 'now').mockImplementation(() => now)
   // jsdom has no WAAPI; the flight only needs `animate` to not throw.
@@ -281,5 +289,261 @@ describe('sampleFlight', () => {
     }
     // The soft capture overshoots ~3% before settling.
     expect(sampleFlight(0.79).x).toBeGreaterThan(1)
+  })
+})
+
+/**
+ * The split's page stage: a composer whose top edge sits at y=700, a hidden user row whose bubble
+ * rests up and to the right, and the overlay the view declares in its template.
+ */
+/**
+ * A page for the lift: a composer with its field, a stream whose last user row hides a bubble, and
+ * the lift overlay. Rects are fixed numbers — jsdom lays nothing out — and `bubbleTop` is mutable
+ * so a test can move the row under the flight.
+ */
+function buildLiftStage(options: { draft?: string; wrapped?: boolean } = {}) {
+  const state = { bubbleTop: 300 }
+  const host = document.createElement('div')
+  const stream = document.createElement('div')
+  stream.className = 'HomePage-Stream'
+  const scroller = document.createElement('div')
+  const row = document.createElement('div')
+  row.setAttribute('data-message-id', 'msg-1')
+  const bubble = document.createElement('div')
+  bubble.className = 'HomePage-UserBubble'
+  row.append(bubble)
+  scroller.append(row)
+  stream.append(scroller)
+
+  const composer = document.createElement('div')
+  const input = document.createElement('textarea')
+  Object.assign(input.style, { lineHeight: '21px', paddingLeft: '0px', paddingTop: '0px' })
+  Object.defineProperty(input, 'scrollHeight', { value: options.wrapped ? 84 : 21 })
+  composer.append(input)
+  const draftGhost = document.createElement('div')
+  composer.append(draftGhost)
+
+  const ghost = document.createElement('div')
+  const fill = document.createElement('div')
+  const text = document.createElement('div')
+  // The lifted text wears the bubble's class, so it answers for the bubble's typography.
+  Object.assign(text.style, {
+    lineHeight: '22.4px',
+    paddingLeft: '14px',
+    paddingTop: '10px',
+    paddingBottom: '10px'
+  })
+  ghost.append(fill, text)
+  host.append(stream, composer, ghost)
+  document.body.append(host)
+
+  const rect = (left: number, top: number, width: number, height: number) =>
+    ({ left, top, width, height, right: left + width, bottom: top + height }) as DOMRect
+  composer.getBoundingClientRect = () => rect(40, 700, 720, 110)
+  input.getBoundingClientRect = () => rect(57, 717, 690, options.wrapped ? 84 : 21)
+  ghost.getBoundingClientRect = () => rect(0, 0, 140, options.wrapped ? 131.6 : 42.4)
+  bubble.getBoundingClientRect = () =>
+    rect(620, state.bubbleTop, 140, options.wrapped ? 131.6 : 42.4)
+
+  const overlay: LiftOverlay = { ghost, fill, text }
+  const choreography = useSendChoreography({
+    host: () => host,
+    scroller: () => null,
+    composerGroup: () => null,
+    composer: () => composer,
+    liftOverlay: () => overlay
+  })
+  const lift = () =>
+    choreography.liftDraft({
+      text: options.draft ?? 'Ship it tonight',
+      input,
+      bubbleMaxWidth: 561.6,
+      draftGhost
+    })
+  const translate = (): { x: number; y: number } => {
+    const m = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(ghost.style.transform)
+    return { x: Number(m?.[1]), y: Number(m?.[2]) }
+  }
+  return { state, overlay, choreography, lift, translate, row, draftGhost, text }
+}
+
+describe('send lift', () => {
+  it("lays the bubble over the draft on the press: the draft's first line under the bubble's", () => {
+    const stage = buildLiftStage()
+    const lift = stage.lift()
+    expect(lift).not.toBeNull()
+    expect(stage.overlay.ghost.classList.contains('is-active')).toBe(true)
+    expect(stage.overlay.text.textContent).toBe('Ship it tonight')
+    expect(Number.parseFloat(stage.overlay.text.style.maxWidth)).toBeCloseTo(561.6, 2)
+    // Field text at (57, 717) with a 21px line; the bubble pads 14/10 and centres a 22.4px line.
+    expect(stage.translate()).toEqual({ x: 43, y: 717 - 10 - 0.7 })
+    // Still on the composer: no fill yet.
+    expect(stage.overlay.fill.style.opacity).toBe('0')
+  })
+
+  it('flies to the row after the settle frames, fills in on the way, lands exactly and reveals it', async () => {
+    const stage = buildLiftStage()
+    stage.choreography.markEntering(['msg-1'])
+    const onClear = vi.fn()
+    const lift = stage.choreography.liftDraft({
+      text: 'Ship it tonight',
+      input: stage.overlay.ghost.ownerDocument.querySelector('textarea')!,
+      bubbleMaxWidth: 561.6,
+      onClear
+    })!
+    const handle = lift.fly('msg-1')
+    expect(handle).not.toBeNull()
+    // Holds on the draft while the rows settle.
+    advanceTo(16)
+    expect(stage.translate().y).toBeCloseTo(706.3, 1)
+
+    let filled = 0
+    let lastY = stage.translate().y
+    let overshoot = false
+    while (now < 1500 && stage.overlay.ghost.classList.contains('is-active')) {
+      advanceTo(now + 16)
+      filled = Math.max(filled, Number(stage.overlay.fill.style.opacity || 0))
+      const { y } = stage.translate()
+      if (!Number.isNaN(y) && y < 300) overshoot = true
+      if (!Number.isNaN(y)) lastY = y
+    }
+    expect(filled).toBe(1)
+    expect(onClear).toHaveBeenCalledTimes(1)
+    await expect(handle!.impact).resolves.toBeUndefined()
+    // The swap: the row is revealed in the frame the overlay clears, from its own pose.
+    expect(stage.choreography.enteringMessages.has('msg-1')).toBe(false)
+    expect(stage.overlay.ghost.classList.contains('is-active')).toBe(false)
+    expect(Math.abs(lastY - 300)).toBeLessThanOrEqual(LIFT_SCORE.landTolerancePx)
+    // One small overshoot, the spring's own.
+    expect(overshoot).toBe(true)
+  })
+
+  it('bends to a row that moved mid-flight and lands on the new place', () => {
+    const stage = buildLiftStage()
+    stage.choreography.markEntering(['msg-1'])
+    stage.lift()!.fly('msg-1')
+    advanceTo(120)
+    stage.state.bubbleTop = 260
+    let lastY = Number.NaN
+    while (now < 1500 && stage.overlay.ghost.classList.contains('is-active')) {
+      advanceTo(now + 16)
+      const { y } = stage.translate()
+      if (!Number.isNaN(y)) lastY = y
+    }
+    expect(Math.abs(lastY - 260)).toBeLessThanOrEqual(LIFT_SCORE.landTolerancePx)
+    expect(stage.choreography.enteringMessages.has('msg-1')).toBe(false)
+  })
+
+  it('cross-fades a wrapped draft: the draft fades where it sat, the bubble text fades in', () => {
+    const stage = buildLiftStage({ wrapped: true, draft: 'one\ntwo\nthree\nfour' })
+    stage.lift()
+    const animate = vi.mocked(Element.prototype.animate)
+    const on = (el: Element) => animate.mock.calls.filter((_, i) => animate.mock.contexts[i] === el)
+    expect(on(stage.text)[0]?.[0]).toEqual([{ opacity: 0 }, { opacity: 1 }])
+    expect(on(stage.draftGhost)[0]?.[0]).toEqual([{ opacity: 1 }, { opacity: 0 }])
+    expect(stage.draftGhost.textContent).toBe('one\ntwo\nthree\nfour')
+  })
+
+  it('lifts a multi-line draft with the same breaks glyph for glyph, centred, without a fade', () => {
+    // Four field lines (84px) and a bubble of four 22.4px lines plus 20px of padding.
+    const stage = buildLiftStage({ wrapped: true, draft: 'one\ntwo\nthree\nfour' })
+    stage.overlay.ghost.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 140, height: 109.6, right: 140, bottom: 109.6 }) as DOMRect
+    stage.lift()
+    expect(vi.mocked(Element.prototype.animate)).not.toHaveBeenCalled()
+    // Centred on the draft's block: 4 × (22.4 − 21) / 2 above the single-line alignment.
+    expect(stage.translate().y).toBeCloseTo(717 - 10 - 2.8, 2)
+  })
+
+  it('does not cross-fade a one-line draft: the glyphs are the same ones', () => {
+    const stage = buildLiftStage()
+    stage.lift()
+    expect(vi.mocked(Element.prototype.animate)).not.toHaveBeenCalled()
+  })
+
+  it('a newer send lands a lift in the air at once, row revealed and overlay cleared', () => {
+    const stage = buildLiftStage()
+    stage.choreography.markEntering(['msg-1'])
+    stage.lift()!.fly('msg-1')
+    advanceTo(80)
+    stage.choreography.invalidate()
+    expect(stage.choreography.enteringMessages.has('msg-1')).toBe(false)
+    expect(stage.overlay.ghost.classList.contains('is-active')).toBe(false)
+    expect(stage.overlay.text.textContent).toBe('')
+  })
+
+  it('cancel puts the draft down and clears the field placeholder hold once', () => {
+    const stage = buildLiftStage()
+    const onClear = vi.fn()
+    const lift = stage.choreography.liftDraft({
+      text: 'Ship it tonight',
+      input: document.querySelector('textarea')!,
+      bubbleMaxWidth: 561.6,
+      onClear
+    })!
+    lift.cancel()
+    lift.cancel()
+    expect(onClear).toHaveBeenCalledTimes(1)
+    expect(stage.overlay.ghost.classList.contains('is-active')).toBe(false)
+  })
+
+  it('never flies to a row the send did not append, and reveals it', () => {
+    const stage = buildLiftStage()
+    expect(stage.lift()!.fly('msg-1')).toBeNull()
+    expect(stage.overlay.ghost.classList.contains('is-active')).toBe(false)
+  })
+
+  it("flies the conversation's first message on the slower opening spring", () => {
+    const framesToLand = (opening: boolean): number => {
+      now = 0
+      frames = []
+      document.body.innerHTML = ''
+      const stage = buildLiftStage()
+      stage.choreography.markEntering(['msg-1'])
+      stage.choreography
+        .liftDraft({
+          text: 'Ship it tonight',
+          input: document.querySelector('textarea')!,
+          bubbleMaxWidth: 561.6,
+          opening
+        })!
+        .fly('msg-1')
+      let count = 0
+      while (count < 400 && stage.overlay.ghost.classList.contains('is-active')) {
+        advanceTo(now + 16)
+        count += 1
+      }
+      return count
+    }
+    expect(framesToLand(true)).toBeGreaterThan(framesToLand(false))
+  })
+
+  it("docks the first send on its bubble's own slow curve", () => {
+    const group = document.createElement('div')
+    const choreography = useSendChoreography({
+      host: () => null,
+      scroller: () => null,
+      composerGroup: () => group,
+      composer: () => null
+    })
+    choreography.playComposerFlip(-300, { opening: true })
+    const [frames, timing] = vi.mocked(Element.prototype.animate).mock.lastCall as [
+      { offset: number; transform: string }[],
+      { duration: number; easing: string }
+    ]
+    expect(timing.easing).toBe('linear')
+    expect(timing.duration).toBeGreaterThan(850)
+    // Starts where the box stood (300px up) and barely moves in the first tenth.
+    expect(frames[0].transform).toContain('translateY(-300.0px)')
+    const early = frames.find((f) => f.offset >= 0.1)!
+    expect(Number(/translateY\(([-\d.]+)px\)/.exec(early.transform)?.[1])).toBeLessThan(-270)
+    expect(frames.at(-1)!.transform).toContain('translateY(0.0px)')
+  })
+
+  it('does not lift under reduced motion', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }) as MediaQueryList)
+    const stage = buildLiftStage()
+    expect(stage.lift()).toBeNull()
+    expect(stage.overlay.ghost.classList.contains('is-active')).toBe(false)
   })
 })
