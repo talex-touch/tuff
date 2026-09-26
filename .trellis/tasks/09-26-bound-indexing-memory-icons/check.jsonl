@@ -1,0 +1,4 @@
+{"file":".trellis/spec/main-process/database-write-contracts.md","reason":"Check no cross-home or dual writer regressions"}
+{"file":".trellis/spec/main-process/channel-transport-contracts.md","reason":"Verify startup and shutdown behavior"}
+{"file":".trellis/tasks/09-26-bound-indexing-memory-icons/prd.md","reason":"Every named acceptance criterion including scale, residency and privacy"}
+{"file":".trellis/tasks/09-26-bound-indexing-memory-icons/design.md","reason":"Verify admission/result budgets, durability and cancellation contracts"}

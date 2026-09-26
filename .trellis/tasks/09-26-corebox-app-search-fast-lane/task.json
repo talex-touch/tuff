@@ -1,0 +1,31 @@
+{
+  "id": "corebox-app-search-fast-lane",
+  "name": "corebox-app-search-fast-lane",
+  "title": "CoreBox 应用搜索优先与索引减负",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-26",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-26-app-search-in-memory-match",
+    "09-26-search-read-fast-lane",
+    "09-26-corebox-pulse-semantics",
+    "09-26-file-index-bloat-control"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
