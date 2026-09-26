@@ -568,9 +568,7 @@
     "refresh": "Refresh",
     "input": {
       "title": "Voice input",
-      "description": "Off by default; once enabled, Fn/Ctrl starts input. The microphone is captured only while input is active.",
-      "defaultOffLabel": "Off by default",
-      "manualOnLabel": "Manually enabled"
+      "description": "Off by default; once enabled, Fn/Ctrl starts input. The microphone is captured only while input is active."
     },
     "globeKey": {
       "title": "The system still owns the Fn key",

@@ -148,34 +148,6 @@ describe('SettingSpeechRecognition', () => {
     wrapper.unmount()
   })
 
-  it('labels the Voice Input opt-in state without disturbing the sibling preferences', async () => {
-    const wrapper = mountSettings()
-    await flushPromises()
-
-    expect(wrapper.get('[data-testid="voice-input-opt-in-status"]').text().trim()).toBe(
-      'settingSpeechRecognition.input.defaultOffLabel'
-    )
-
-    await controlByTitle(wrapper, 'settingSpeechRecognition.input.title').vm.$emit(
-      'update:modelValue',
-      true
-    )
-    await flushPromises()
-
-    expect(wrapper.get('[data-testid="voice-input-opt-in-status"]').text().trim()).toBe(
-      'settingSpeechRecognition.input.manualOnLabel'
-    )
-    expect(settings.assistant.enabled).toBe(false)
-    expect(settings.floatingBall.enabled).toBe(false)
-    expect(settings.voiceInput).toMatchObject({
-      enabled: true,
-      polishEnabled: true,
-      historyEnabled: true
-    })
-
-    wrapper.unmount()
-  })
-
   it('toggles Voice Input without changing assistant, floating-ball, strength, or history settings', async () => {
     const wrapper = mountSettings()
     await flushPromises()
