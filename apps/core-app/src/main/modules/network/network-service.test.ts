@@ -22,9 +22,61 @@ const localFileMocks = vi.hoisted(() => ({
 const electronMocks = vi.hoisted(() => {
   const fetch = vi.fn()
   const setProxy = vi.fn()
+
+  type Listener = (...args: unknown[]) => void
+
+  /** Electron hands back emitters, not Node streams, so the fake owns the event plumbing. */
+  class FakeEmitter {
+    private readonly listeners = new Map<string, Listener[]>()
+
+    on(event: string, listener: Listener): this {
+      const registered = this.listeners.get(event)
+      if (registered) registered.push(listener)
+      else this.listeners.set(event, [listener])
+      return this
+    }
+
+    emit(event: string, ...args: unknown[]): boolean {
+      const registered = this.listeners.get(event)
+      if (!registered) return false
+      for (const listener of [...registered]) listener(...args)
+      return true
+    }
+  }
+
+  class FakeIncomingMessage extends FakeEmitter {
+    readonly pause = vi.fn()
+    readonly resume = vi.fn()
+
+    constructor(
+      public statusCode: number,
+      public statusMessage: string,
+      public headers: Record<string, string | string[]> = {}
+    ) {
+      super()
+    }
+  }
+
+  /**
+   * `net.ClientRequest` stand-in. `abort()` fails the in-flight request the way Chromium does
+   * (`net::ERR_ABORTED`), which is how a cancelled hop reaches `NetworkAbortError`.
+   */
+  class FakeClientRequest extends FakeEmitter {
+    readonly abort = vi.fn((): void => {
+      this.emit('error', new Error('net::ERR_ABORTED'))
+    })
+    readonly write = vi.fn()
+    readonly end = vi.fn()
+  }
+
+  const netRequest = vi.fn()
+
   return {
     fetch,
     setProxy,
+    netRequest,
+    FakeIncomingMessage,
+    FakeClientRequest,
     session: {
       fromPartition: vi.fn(() => ({
         fetch,
@@ -38,7 +90,10 @@ vi.mock('electron', () => ({
   app: {
     getPath: vi.fn(() => '/tmp')
   },
-  session: electronMocks.session
+  session: electronMocks.session,
+  net: {
+    request: electronMocks.netRequest
+  }
 }))
 
 vi.mock('../storage', () => ({
@@ -73,9 +128,27 @@ vi.mock('../../utils/secure-store', () => ({
   getSecureStoreValue: vi.fn()
 }))
 
+/**
+ * Wires `net.request` to a fresh fake hop and resolves `issued` once the transport has taken it,
+ * so a test can drive the hop's events without racing Electron's handler registration.
+ */
+function createManualRedirectHop() {
+  const request = new electronMocks.FakeClientRequest()
+  let markIssued!: () => void
+  const issued = new Promise<void>((resolve) => {
+    markIssued = resolve
+  })
+  electronMocks.netRequest.mockImplementation(() => {
+    markIssued()
+    return request
+  })
+  return { request, issued }
+}
+
 describe('networkService cooldown policy', () => {
   beforeEach(() => {
     electronMocks.fetch.mockReset()
+    electronMocks.netRequest.mockReset()
     electronMocks.setProxy.mockReset()
     electronMocks.session.fromPartition.mockClear()
     electronMocks.setProxy.mockResolvedValue(undefined)
@@ -156,58 +229,167 @@ describe('networkService cooldown policy', () => {
     expect(headers.get('x-provider-header')).toBe('preserved')
   })
 
-  it('exposes bodyless redirects through the manual stream path', async () => {
+  it('surfaces a redirect hop through net.request instead of a cancelled fetch', async () => {
     const service = new NetworkService()
-    electronMocks.fetch.mockResolvedValueOnce(
-      new Response(null, {
-        status: 302,
-        statusText: 'Found',
-        headers: { location: 'https://cdn.example.test/plugin.tpex' }
-      })
-    )
+    const { request, issued } = createManualRedirectHop()
 
-    const response = await service.requestStreamManualRedirect({
+    const pending = service.requestStreamManualRedirect({
       method: 'GET',
       url: 'https://nexus.example.test/plugin.tpex',
       responseType: 'stream',
       validateStatus: [200, 301, 302, 303, 307, 308]
     })
+    await issued
+    request.emit('redirect', 302, 'GET', 'https://cdn.example.test/plugin.tpex', {
+      location: ['https://cdn.example.test/plugin.tpex'],
+      'X-Content-Type-Options': 'nosniff'
+    })
+
+    const response = await pending
 
     expect(response).toMatchObject({
       status: 302,
-      headers: { location: 'https://cdn.example.test/plugin.tpex' }
+      statusText: 'Found',
+      headers: {
+        location: 'https://cdn.example.test/plugin.tpex',
+        'x-content-type-options': 'nosniff'
+      }
     })
-    expect(electronMocks.fetch).toHaveBeenCalledWith(
-      'https://nexus.example.test/plugin.tpex',
-      expect.objectContaining({ redirect: 'manual' })
+    expect(electronMocks.netRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirect: 'manual',
+        url: 'https://nexus.example.test/plugin.tpex'
+      })
     )
-    await expect(
-      (async () => {
-        const chunks: Buffer[] = []
-        for await (const chunk of response.stream) chunks.push(Buffer.from(chunk))
-        return Buffer.concat(chunks)
-      })()
-    ).resolves.toEqual(Buffer.alloc(0))
+    // The regression this transport replaced: `session.fetch({ redirect: 'manual' })` cancels the
+    // hop instead of reporting it, so leaving a call here breaks every redirecting download.
+    expect(electronMocks.fetch).not.toHaveBeenCalled()
+    expect(request.abort).toHaveBeenCalledTimes(1)
+
+    const chunks: Buffer[] = []
+    for await (const chunk of response.stream) chunks.push(Buffer.from(chunk))
+    expect(Buffer.concat(chunks)).toEqual(Buffer.alloc(0))
   })
 
-  it('still rejects a bodyless success response through the manual stream path', async () => {
+  it('reports the absolute redirect target rather than the raw Location header', async () => {
     const service = new NetworkService()
-    electronMocks.fetch.mockResolvedValueOnce(
-      new Response(null, {
-        status: 200,
-        statusText: 'OK'
-      })
+    const { request, issued } = createManualRedirectHop()
+
+    const pending = service.requestStreamManualRedirect({
+      method: 'GET',
+      url: 'https://nexus.example.test/plugin.tpex',
+      responseType: 'stream',
+      validateStatus: [200, 301, 302, 303, 307, 308]
+    })
+    await issued
+    // Origins send a relative `Location`; the caller resolves the next hop from `headers.location`.
+    request.emit('redirect', 301, 'GET', 'https://cdn.example.test/plugin.tpex', {
+      location: ['/plugin.tpex']
+    })
+
+    await expect(pending).resolves.toMatchObject({
+      status: 301,
+      statusText: 'Moved Permanently',
+      headers: { location: 'https://cdn.example.test/plugin.tpex' }
+    })
+  })
+
+  it('bridges the Electron response body into a Node stream byte for byte', async () => {
+    const service = new NetworkService()
+    const { request, issued } = createManualRedirectHop()
+    const first = Buffer.from('plugin-header')
+    // Bytes that no string round-trip survives: the bridge must not decode the body.
+    const second = Buffer.from([0x00, 0xff, 0xfe, 0x10])
+
+    const pending = service.requestStreamManualRedirect({
+      method: 'GET',
+      url: 'https://cdn.example.test/plugin.tpex',
+      responseType: 'stream'
+    })
+    await issued
+    const upstream = new electronMocks.FakeIncomingMessage(200, 'OK', {
+      'content-length': String(first.byteLength + second.byteLength)
+    })
+    request.emit('response', upstream)
+    upstream.emit('data', first)
+    upstream.emit('data', second)
+    upstream.emit('end')
+
+    const response = await pending
+    expect(response.status).toBe(200)
+
+    // `downloadToTempFile` pipes this stream; an emitter cannot be piped, and dropped bytes or a
+    // reordered body would both surface here.
+    const chunks: Buffer[] = []
+    for await (const chunk of response.stream) chunks.push(Buffer.from(chunk))
+    expect(Buffer.concat(chunks)).toEqual(Buffer.concat([first, second]))
+  })
+
+  it('fails closed on a bodyless success response through the manual stream path', async () => {
+    const service = new NetworkService()
+    const { request, issued } = createManualRedirectHop()
+
+    const pending = service.requestStreamManualRedirect({
+      method: 'GET',
+      url: 'https://nexus.example.test/plugin.tpex',
+      responseType: 'stream',
+      retryPolicy: { maxRetries: 0 },
+      validateStatus: [200, 301, 302, 303, 307, 308]
+    })
+    await issued
+    request.emit(
+      'response',
+      new electronMocks.FakeIncomingMessage(200, 'OK', { 'content-length': '0' })
     )
 
-    await expect(
-      service.requestStreamManualRedirect({
-        method: 'GET',
-        url: 'https://nexus.example.test/plugin.tpex',
-        responseType: 'stream',
-        retryPolicy: { maxRetries: 0 },
-        validateStatus: [200, 301, 302, 303, 307, 308]
-      })
-    ).rejects.toThrow('NETWORK_EMPTY_STREAM_BODY')
+    await expect(pending).rejects.toThrow('NETWORK_EMPTY_STREAM_BODY')
+    expect(request.abort).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a status outside validateStatus through the manual stream path', async () => {
+    const service = new NetworkService()
+    const { request, issued } = createManualRedirectHop()
+
+    const pending = service.requestStreamManualRedirect({
+      method: 'GET',
+      url: 'https://nexus.example.test/plugin.tpex',
+      responseType: 'stream',
+      retryPolicy: { maxRetries: 0 },
+      validateStatus: [200, 301, 302, 303, 307, 308]
+    })
+    await issued
+    request.emit('response', new electronMocks.FakeIncomingMessage(500, 'Internal Server Error'))
+
+    await expect(pending).rejects.toMatchObject({
+      name: 'NetworkHttpStatusError',
+      code: 'NETWORK_HTTP_STATUS_500',
+      status: 500,
+      statusText: 'Internal Server Error'
+    })
+    expect(request.abort).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels the manual-redirect hop when the caller aborts', async () => {
+    const service = new NetworkService()
+    const caller = new AbortController()
+    const { request, issued } = createManualRedirectHop()
+
+    const pending = service.requestStreamManualRedirect({
+      method: 'GET',
+      url: 'https://nexus.example.test/plugin.tpex',
+      responseType: 'stream',
+      signal: caller.signal,
+      retryPolicy: { maxRetries: 0 }
+    })
+    await issued
+    caller.abort()
+
+    await expect(pending).rejects.toMatchObject({
+      name: 'NetworkAbortError',
+      code: 'NETWORK_ABORTED',
+      message: 'NETWORK_ABORTED'
+    })
+    expect(request.abort).toHaveBeenCalledTimes(1)
   })
 
   it('pins plugin HTTP to the approved address, rejects redirects and bounds bytes while reading', async () => {

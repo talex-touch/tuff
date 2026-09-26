@@ -156,18 +156,35 @@ export function normalizeDarwinUsersPath(filePath: string): string {
   return normalized
 }
 
+/**
+ * macOS exposes `/tmp`, `/var` and `/etc` as symlinks into `/private`, so one file has two absolute
+ * paths. Roots arrive in whichever form the process was configured with, while plugin directories
+ * reach the renderer canonicalized (`TuffIconImpl` realpaths every icon candidate before handing it
+ * over), and the allow-list compares path prefixes: the plugin's own icon then reads as outside its
+ * own root and the tfile handler answers 403. Fold `/private` on both sides of the comparison, so
+ * either form keeps matching itself.
+ */
+function foldDarwinPrivateAlias(filePath: string): string {
+  if (process.platform !== 'darwin' || !filePath.startsWith('/private/')) {
+    return filePath
+  }
+
+  return filePath.slice('/private'.length)
+}
+
 export function isAllowedLocalFilePath(filePath: string, roots: string[]): boolean {
   const normalized = normalizeAbsolutePath(filePath)
   if (!normalized) {
     return false
   }
+  const comparable = foldDarwinPrivateAlias(normalized)
 
   if (process.platform === 'darwin') {
-    const lower = normalized.toLowerCase()
+    const lower = comparable.toLowerCase()
     return roots.some((root) => {
       const normalizedRoot = normalizeAbsolutePath(root)
       if (!normalizedRoot) return false
-      const lowerRoot = normalizedRoot.toLowerCase()
+      const lowerRoot = foldDarwinPrivateAlias(normalizedRoot).toLowerCase()
       return lower === lowerRoot || lower.startsWith(`${lowerRoot}/`)
     })
   }
@@ -179,7 +196,7 @@ export function isAllowedLocalFilePath(filePath: string, roots: string[]): boole
     }
 
     return Boolean(
-      resolveSafePath(normalizedRoot, normalized, {
+      resolveSafePath(foldDarwinPrivateAlias(normalizedRoot), comparable, {
         allowAbsolute: true,
         allowRoot: true
       }).resolvedPath

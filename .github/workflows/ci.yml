@@ -9,6 +9,9 @@ on:
     branches:
       - main
       - master
+      # `stage` is the beta channel, so the content that will be fast-forwarded into master is
+      # checked while it is still testing rather than for the first time at promotion.
+      - stage
 
 permissions:
   contents: read

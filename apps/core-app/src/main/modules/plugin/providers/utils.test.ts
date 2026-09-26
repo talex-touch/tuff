@@ -16,7 +16,7 @@ vi.mock('../../network', () => ({
 }))
 
 import { Readable as NodeReadable, Writable } from 'node:stream'
-import { downloadToTempFile } from './utils'
+import { downloadToTempFile, resolvePackageDownloadTimeout } from './utils'
 
 function createTimedOutStream(): Readable {
   return new NodeReadable({
@@ -39,6 +39,60 @@ function resolveRuntimeHeaders(
   if (getHeader(headers, 'authorization')) return { ...headers }
   return { ...headers, Authorization: 'Bearer runtime-token' }
 }
+
+/**
+ * The download deadline is a deadline for the *whole* body, so a fixed 30s only covered links
+ * faster than ~0.5 MB/s and a 14 MB package died mid-download with `NETWORK_TIMEOUT after
+ * 30000ms`. The policy is a floor, a size-scaled middle, and a ceiling.
+ */
+describe('resolvePackageDownloadTimeout', () => {
+  const FLOOR_MS = 30_000
+  const CEILING_MS = 10 * 60_000
+  /** The pessimistic throughput the deadline is scaled at, so real links finish early. */
+  const PESSIMISTIC_BYTES_PER_SECOND = 50 * 1024
+
+  it.each([
+    { name: 'an unknown size', packageSize: undefined },
+    { name: 'a zero size', packageSize: 0 },
+    { name: 'a negative size', packageSize: -1 },
+    { name: 'an infinite size', packageSize: Number.POSITIVE_INFINITY },
+    { name: 'the 277 KiB Clipboard History artifact', packageSize: 277 * 1024 }
+  ])('keeps the 30s floor for $name', ({ packageSize }) => {
+    expect(resolvePackageDownloadTimeout(packageSize)).toBe(FLOOR_MS)
+  })
+
+  it('covers a 14 MB package instead of dying at the floor', () => {
+    const packageSize = 14_334_464
+    const timeout = resolvePackageDownloadTimeout(packageSize)
+
+    expect(timeout).toBeGreaterThan(FLOOR_MS)
+    expect(timeout).toBeGreaterThanOrEqual(
+      Math.ceil((packageSize / PESSIMISTIC_BYTES_PER_SECOND) * 1000)
+    )
+  })
+
+  it('caps an absurd advertised size at the ten-minute ceiling', () => {
+    expect(resolvePackageDownloadTimeout(10 * 1024 ** 3)).toBe(CEILING_MS)
+  })
+
+  it('never leaves the floor..ceiling band and never shortens as the package grows', () => {
+    const sizes = [
+      1,
+      277 * 1024,
+      14_334_464,
+      512 * 1024 * 1024,
+      10 * 1024 ** 3,
+      Number.MAX_SAFE_INTEGER
+    ]
+    const timeouts = sizes.map((size) => resolvePackageDownloadTimeout(size))
+
+    for (const timeout of timeouts) {
+      expect(timeout).toBeGreaterThanOrEqual(FLOOR_MS)
+      expect(timeout).toBeLessThanOrEqual(CEILING_MS)
+    }
+    expect(timeouts).toEqual([...timeouts].sort((left, right) => left - right))
+  })
+})
 
 describe('downloadToTempFile', () => {
   beforeEach(() => {

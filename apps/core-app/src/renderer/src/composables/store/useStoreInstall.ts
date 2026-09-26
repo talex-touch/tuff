@@ -162,7 +162,9 @@ export function useStoreInstall() {
           ? t('store.upgradeDialog.successMessage', { name: plugin.name })
           : t('store.installation.successMessage', { name: plugin.name })
 
-        await forTouchTip(successTitle, successMessage)
+        await forTouchTip(successTitle, successMessage, [
+          { content: t('common.confirm'), type: 'info', onClick: async () => true }
+        ])
       } else {
         const reason = result?.message || 'INSTALL_FAILED'
         throw new Error(reason)
@@ -176,7 +178,8 @@ export function useStoreInstall() {
         const uiInfo = errorMessage.replace('PLUGIN_HAS_ACTIVE_UI:', '')
         await forTouchTip(
           t('store.upgradeDialog.activeUITitle'),
-          t('store.upgradeDialog.activeUIMessage', { name: plugin.name, ui: uiInfo })
+          t('store.upgradeDialog.activeUIMessage', { name: plugin.name, ui: uiInfo }),
+          [{ content: t('common.confirm'), type: 'info', onClick: async () => true }]
         )
         return
       }
@@ -190,7 +193,8 @@ export function useStoreInstall() {
         t('store.installation.failureMessage', {
           name: plugin.name,
           reason: resolveStoreInstallFailureReason(errorMessage, t)
-        })
+        }),
+        [{ content: t('common.confirm'), type: 'info', onClick: async () => true }]
       )
     }
   }

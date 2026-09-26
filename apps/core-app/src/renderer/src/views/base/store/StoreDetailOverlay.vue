@@ -268,14 +268,16 @@ async function onInstallContentPackage(contentPackage: PluginContentPackage): Pr
       t('store.detailDialog.contentInstallSuccessMessage', {
         title: contentPackage.title,
         count: result.importedCount ?? 0
-      })
+      }),
+      [{ content: t('common.confirm'), type: 'info', onClick: async () => true }]
     )
     return
   }
 
   await forTouchTip(
     t('store.detailDialog.contentInstallFailedTitle'),
-    resolvePluginContentErrorReason(result.error, t)
+    resolvePluginContentErrorReason(result.error, t),
+    [{ content: t('common.confirm'), type: 'info', onClick: async () => true }]
   )
 }
 
@@ -289,7 +291,9 @@ async function onRatingChange(value: number): Promise<void> {
 
   if (ratingError.value === 'NOT_AUTHENTICATED' || ratingError.value === 'UNAUTHORIZED') {
     userRating.value = previous
-    await forTouchTip(t('store.rating.loginRequiredTitle'), t('store.rating.loginRequired'))
+    await forTouchTip(t('store.rating.loginRequiredTitle'), t('store.rating.loginRequired'), [
+      { content: t('common.confirm'), type: 'info', onClick: async () => true }
+    ])
     return
   }
 
@@ -297,7 +301,8 @@ async function onRatingChange(value: number): Promise<void> {
     userRating.value = previous
     await forTouchTip(
       t('store.rating.submitFailedTitle'),
-      ratingErrorText.value ?? ratingError.value
+      ratingErrorText.value ?? ratingError.value,
+      [{ content: t('common.confirm'), type: 'info', onClick: async () => true }]
     )
   }
 }

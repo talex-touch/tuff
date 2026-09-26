@@ -18,6 +18,18 @@ import { defineEvent } from '../../event/builder'
 /** Outlasts the 150s buffered Provider deadline plus polish and active-target delivery. */
 const VOICE_RETRY_TRANSPORT_TIMEOUT_MS = 180_000
 
+/**
+ * Outlasts a full bundle install: the engine runtime is provisioned first, then the weights —
+ * hundreds of megabytes together (228 MB for the recommended SenseVoice-Small alone).
+ *
+ * The channel's 60s default is shorter than the download, and the main process does not stop when
+ * the renderer gives up on the answer: the install finished on disk while the settings pane
+ * reported a timeout, which is the worst of both — a failure the user cannot act on, for work
+ * already done. Liveness comes from polling `getSpeechModelProgress`; this is only the outer bound
+ * that keeps a genuinely hung channel from holding the pending request forever.
+ */
+const VOICE_SPEECH_MODEL_INSTALL_TIMEOUT_MS = 30 * 60 * 1000
+
 export const VOICE_SPEECH_CATALOG_ERROR_CODES = {
   authRequired: 'SPEECH_CATALOG_AUTH_REQUIRED',
   timeout: 'SPEECH_CATALOG_TIMEOUT',
@@ -680,7 +692,9 @@ export function createVoiceSdk(transport: VoiceSdkTransport): VoiceSdk {
       return assertVoiceApiResponse(response, 'Installed speech models read failed')
     },
     async installSpeechModel(payload) {
-      const response = await transport.send(voiceApiEvents.installSpeechModel, payload)
+      const response = await transport.send(voiceApiEvents.installSpeechModel, payload, {
+        timeout: VOICE_SPEECH_MODEL_INSTALL_TIMEOUT_MS,
+      })
       return assertVoiceApiResponse(response, 'Speech model install failed')
     },
     async uninstallSpeechModel(payload) {

@@ -568,9 +568,7 @@
     "refresh": "刷新",
     "input": {
       "title": "语音输入",
-      "description": "默认关闭；开启后 Fn/Ctrl 触发输入，麦克风仅在输入时采集。",
-      "defaultOffLabel": "默认关闭",
-      "manualOnLabel": "已手动开启"
+      "description": "默认关闭；开启后 Fn/Ctrl 触发输入，麦克风仅在输入时采集。"
     },
     "globeKey": {
       "title": "Fn 键仍归系统占用",

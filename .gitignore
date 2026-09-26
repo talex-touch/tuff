@@ -209,3 +209,6 @@ apps/g-wggu5114-thisai-thisai-view-/
 
 # Vitest JUnit reports written by the App suites CI job
 test-reports/
+
+# Local agent config (omp skills / settings), per checkout — never committed
+/.omp/
