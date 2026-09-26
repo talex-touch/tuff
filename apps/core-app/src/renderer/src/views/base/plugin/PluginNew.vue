@@ -252,7 +252,11 @@ async function installPluginFromSource(): Promise<void> {
 
   const trimmedSource = installState.source.trim()
   if (!trimmedSource) {
-    await forTouchTip(t('plugin.new.install.tipTitle'), t('plugin.new.install.emptySourceMessage'))
+    await forTouchTip(
+      t('plugin.new.install.tipTitle'),
+      t('plugin.new.install.emptySourceMessage'),
+      [{ content: t('common.confirm'), type: 'info', onClick: async () => true }]
+    )
     return
   }
 
@@ -303,7 +307,9 @@ async function installPluginFromSource(): Promise<void> {
       installState.manifest = result.manifest as IManifest | undefined
       installState.provider = result.provider as PluginProviderType
       installState.official = Boolean(result.official)
-      await forTouchTip(t('plugin.new.install.successTitle'), t('plugin.new.install.successTip'))
+      await forTouchTip(t('plugin.new.install.successTitle'), t('plugin.new.install.successTip'), [
+        { content: t('common.confirm'), type: 'info', onClick: async () => true }
+      ])
     } else {
       installState.status = 'error'
       installState.message = result?.message || t('plugin.new.install.errorMessage')
@@ -375,7 +381,8 @@ async function createAction(ctx: ActionContext): Promise<void> {
   if (!plugin.agreement) {
     await forTouchTip(
       t('plugin.new.create.agreementAlertTitle'),
-      t('plugin.new.create.agreementAlertMessage')
+      t('plugin.new.create.agreementAlertMessage'),
+      [{ content: t('common.confirm'), type: 'info', onClick: async () => true }]
     )
     return
   }
@@ -389,7 +396,8 @@ async function createAction(ctx: ActionContext): Promise<void> {
     } else {
       await forTouchTip(
         t('plugin.new.create.createFailedTitle'),
-        res?.error || t('plugin.new.create.createFailedMessage')
+        res?.error || t('plugin.new.create.createFailedMessage'),
+        [{ content: t('common.confirm'), type: 'info', onClick: async () => true }]
       )
     }
   } finally {
