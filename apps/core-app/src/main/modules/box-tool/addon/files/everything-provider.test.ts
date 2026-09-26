@@ -164,6 +164,7 @@ import {
   parseEverythingSdkOutput
 } from './everything-parser'
 import { DownloadStatus } from '@talex-touch/utils'
+import { toTfileUrl } from '@talex-touch/utils/network'
 import {
   everythingSetCliPathEvent,
   everythingInstallStartEvent,
@@ -949,9 +950,11 @@ describe('everything-provider fallback chain', () => {
           provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
         )
 
+        // Built the way the renderer receives it: a Windows temp path comes back drive-encoded
+        // (`tfile://C%3A/…`), which raw concatenation only matches on POSIX.
         expect(warmed.items?.[0]?.render?.basic?.icon).toEqual({
           type: 'url',
-          value: `tfile://${iconPath}`
+          value: toTfileUrl(iconPath)
         })
       })
 

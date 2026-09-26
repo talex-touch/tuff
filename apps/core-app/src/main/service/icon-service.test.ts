@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * A real 2x2 8-bit RGBA PNG (84 bytes). IconService validates whatever native or worker output it
@@ -151,6 +151,17 @@ function answerExtraction(
 async function cacheDirectoryEntries(service: IconService): Promise<string[]> {
   return (await fs.readdir(service.getFileIconCacheDirectory()).catch(() => [] as string[])).sort()
 }
+
+/**
+ * sharp picks its native binding from `process.platform` the first time it loads, and these tests
+ * fake `process.platform`. Loading it once under the real platform keeps the artifact store's decode
+ * real while IconService runs under the simulated one. Without this, whichever platform the first
+ * test simulates decides the binding sharp looks for: a Linux runner asks for a darwin binding that
+ * is not installed, the failed load is cached, and every later promotion yields no icon.
+ */
+beforeAll(async () => {
+  await import('sharp')
+})
 
 beforeEach(async () => {
   tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'icon-service-'))

@@ -661,6 +661,10 @@ describe('SentryServiceModule native crash delivery diagnostics', () => {
   })
 
   it('counts only .dmp filenames from the darwin completed/pending directories without reading dump content', () => {
+    // The scanned directories are per platform (win32 `reports`, darwin `completed` + `pending`,
+    // others `completed` only), so this pins darwin instead of inheriting the runner's platform.
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     fs.mkdirSync(path.join(crashRoot, 'completed', 'nested'), { recursive: true })
     fs.mkdirSync(path.join(crashRoot, 'pending'), { recursive: true })
     fs.writeFileSync(path.join(crashRoot, 'completed', 'alpha.dmp'), 'dump-body-alpha')
@@ -686,6 +690,7 @@ describe('SentryServiceModule native crash delivery diagnostics', () => {
       expect(dumpReads).toEqual([])
     } finally {
       readFileSpy.mockRestore()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
 
