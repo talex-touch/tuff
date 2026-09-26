@@ -30,7 +30,7 @@ CF AI Gateway 值得接，但**只能当「传输 + 观测 + 限流层」，不�
 | `2026-09-24` **之前**已建过 | Legacy Logs | Free：10 万条/账号；Paid：1000 万条/gateway；单条 ≤10 MB |
 | `2026-09-24` **当天及之后**建第一个 | **Workers Logs 计费** | Free：20 万条/天、留存 3 天；Paid：2000 万条/月含 + \$0.6/百万、留存 7 天；单条 ≤256 KB |
 
-**本仓现状（已核实）**：全仓 `grep -E 'ai-gateway|gateway\.ai\.cloudflare|AI_GATEWAY|cf-aig'` → **零命中**，即尚未建过任何 gateway。因此**一旦开始接入就会落进新计费口径**（Workers Logs）。
+**本仓现状（已核实）**：全仓 `grep -E 'ai-gateway|gateway\.ai\.cloudflare|AI_GATEWAY|cf-aig'` → **零命中**，即本仓代码从未接入过任何 gateway。**这只证明仓库侧**：账号里是否在 `2026-09-24` 之前手工建过 gateway（从而落进 Legacy Logs）只能在 dashboard 复核；若没有，**一旦开始接入就会落进新计费口径**（Workers Logs）。
 
 ### 1.2 计费结论
 
@@ -82,7 +82,7 @@ CF AI Gateway 值得接，但**只能当「传输 + 观测 + 限流层」，不�
 | 自托管 CF 模型 | ✅ | `@cf/qwen/qwen3.8-27b`、`@cf/deepseek-ai/*`、`@cf/moonshotai/*` |
 | **火山引擎 / 豆包** | ❌ **查无此项** | `doubao` / `volcengine` 在 catalog 中零命中 → 只能走 Custom Provider |
 
-> 补充：Custom Provider 的 `base_url` 只放域名（或固定前缀），路径全部由请求 URL 决定；CF 侧**未文档化** custom provider 是否支持 BYOK 存 key，也未文档化其是否可走 Unified Billing（CF 代付）。其官方示例均自带 `Authorization: Bearer $PROVIDER_API_KEY`。**按「必须自带 key」规划更安全。**
+> 补充：Custom Provider 的 `base_url` 只放域名（或固定前缀），路径全部由请求 URL 决定；其官方示例均自带 `Authorization: Bearer $PROVIDER_API_KEY`，但同页 Best practices 第 6 条明确**推荐用 BYOK 存 key**（`configuration/bring-your-own-keys`），即 custom provider 走 BYOK 是官方推荐而非未文档化；未文档化的是它能否走 Unified Billing（CF 代付）。**按「必须自带 key 或自建 BYOK 条目」规划更安全。**
 
 ## 4. Nexus 现状对照（本仓事实，带行号）
 
@@ -130,7 +130,7 @@ CF AI Gateway 值得接，但**只能当「传输 + 观测 + 限流层」，不�
 
 默认缓存 key = `provider + endpoint + model + provider 认证头 + 完整 body` 的 SHA-256。若走 Unified Billing（请求里**没有** provider 认证头），则**两个不同用户发出相同 prompt 会命中同一份缓存响应**。桌面端极易发生（同一模板、同一 system prompt）。
 
-必须二选一：默认 `cf-aig-skip-cache: true`，或强制 `cf-aig-cache-key` 含 userId 维度。
+必须二选一：默认 `cf-aig-skip-cache: true`，或强制 `cf-aig-cache-key` —— 该头是**整体覆盖**默认 key、不是追加维度，所以自定义 key 必须自带全部维度（provider + endpoint + model + 认证头 + 完整 body）；只放 userId 会让同一用户的不同 prompt 命中同一份缓存响应。
 
 ### 7.2 🔴 凭据与内容边界
 
@@ -141,9 +141,9 @@ CF AI Gateway 值得接，但**只能当「传输 + 观测 + 限流层」，不�
 
 1. Nexus 是 **Pages Functions**，而 AI Gateway 的 binding 文档都以 Workers 为例；Pages 上的 `context.env.AI` **只被文档确认为 Workers AI**。→ 实测 `/ai/run` 与 gateway 参数在 Pages 上是否可用；不可用则一律走 HTTP。
 2. `/compat/chat/completions` 上「不带 provider key」时的实际落点：走 BYOK default、还是落 Unified Billing（文档在 unified-billing 与 custom-providers 两处表述不完全一致）。
-3. Custom Provider 是否支持 **BYOK 存 key**（文档只给了 per-request key 示例）。
+3. ~~Custom Provider 是否支持 BYOK 存 key~~ 已定案：官方 Best practices 第 6 条推荐用 BYOK 存 key。仍需实测的是 BYOK 条目对 **custom** provider 是否生效——该页只给了 per-request key 示例，未给 custom 专属的 BYOK 示例。
 4. Custom Provider 能否走 **Unified Billing**（CF 代付），即豆包能否免 key 使用。
-5. Dynamic Routes 的 **REST 管理端点**（文档称可用 REST API 定义，但未给出具体 endpoint；REST API 页又声明不支持 dynamic routing）。
+5. Dynamic Routes 的 **REST 端点**：`features/dynamic-routing/json-configuration` 页明写「用 REST API 定义」并给出 JSON 结构，具体 endpoint 从该页取；它与 REST API 索引页「不支持 dynamic routing」的表述仍需实测对齐（账号内鉴权与可用性）。
 6. 从 CF 边缘出网到**国内上游**（`dashscope.aliyuncs.com` 等）的连通性与延迟基线。
 7. Free plan 下 gateway 数量（10）与日志额度（20 万条/天）在真实用量下的余量。
 8. 三个 `cf-aig-*` 头在 Pages 环境透传是否完整（`metadata` / `skip-cache` / `cache-key`）。
