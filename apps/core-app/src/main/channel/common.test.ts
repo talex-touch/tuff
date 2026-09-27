@@ -309,7 +309,8 @@ vi.mock('../modules/box-tool/addon/files/file-provider', () => ({
     addWatchPath: vi.fn(),
     rebuildIndex: vi.fn(),
     resolvePreviewResourcePath: vi.fn(),
-    registerProgressStream: vi.fn()
+    registerProgressStream: vi.fn(),
+    registerOpenersChannel: vi.fn()
   }
 }))
 
@@ -2238,6 +2239,7 @@ describe('CommonChannelModule private helpers', () => {
       getFailedFiles: ReturnType<typeof vi.fn>
       addWatchPath: ReturnType<typeof vi.fn>
       rebuildIndex: ReturnType<typeof vi.fn>
+      registerOpenersChannel: ReturnType<typeof vi.fn>
     }
     fileProviderMock.getIndexingStatus.mockImplementation(() => {
       throw canaryError
@@ -2345,6 +2347,7 @@ describe('CommonChannelModule private helpers', () => {
         app: { addListener: vi.fn() }
       }
     } as never)
+    expect(fileProviderMock.registerOpenersChannel).toHaveBeenCalledWith(transport)
 
     // --- File index handlers: every failure returns a stable projected result.
     const statusHandler = handlers.get(AppEvents.fileIndex.status.toEventName())

@@ -18,7 +18,7 @@ const pendingResolutions = new Map<string, Promise<void>>()
 const transport = useTuffTransport()
 const openersLog = createRendererLogger('Openers')
 
-async function requestOpener(extension: string): Promise<void> {
+async function requestOpener(extension: string, attempt = 0): Promise<void> {
   const normalized = extension.replace(/^\./, '').toLowerCase()
   if (!normalized || openers[normalized]) {
     return
@@ -41,8 +41,22 @@ async function requestOpener(extension: string): Promise<void> {
         }
       }
     })
-    .catch((error) => {
-      openersLog.error(`Failed to resolve opener for .${normalized}`, error)
+    .catch((error: unknown) => {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      const isMissingHandler = errorMsg.includes('No handler registered')
+      if (isMissingHandler && attempt < 2) {
+        openersLog.debug(
+          `Opener handler not ready for .${normalized}, scheduling retry (attempt ${attempt + 1})`
+        )
+        setTimeout(
+          () => {
+            void requestOpener(extension, attempt + 1)
+          },
+          800 * (attempt + 1)
+        )
+        return
+      }
+      openersLog.warn(`Failed to resolve opener for .${normalized}`, error)
     })
     .finally(() => {
       pendingResolutions.delete(normalized)

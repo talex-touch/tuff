@@ -50,7 +50,7 @@ import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { OpenerEvents } from '@talex-touch/utils/transport/events'
 
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
+import { getTuffTransportMain, type ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import {
   IndexedWriteFlushSnapshotService,
   IndexedSourceResetReasons,
@@ -2582,15 +2582,30 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  private registerOpenersChannel(context: ProviderContext): void {
+  public registerOpenersChannel(contextOrTransport?: ProviderContext | ITuffTransportMain): void {
     if (this.openersChannelRegistered) {
       return
     }
 
-    const channel = context.touchApp.channel as unknown
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel, keyManager)
+    let transport: ITuffTransportMain | null = null
+    if (
+      contextOrTransport &&
+      'on' in contextOrTransport &&
+      typeof contextOrTransport.on === 'function'
+    ) {
+      transport = contextOrTransport
+    } else if (contextOrTransport && 'touchApp' in contextOrTransport) {
+      const channel = contextOrTransport.touchApp.channel
+      const keyManager =
+        channel && typeof channel === 'object' && 'keyManager' in channel
+          ? channel.keyManager
+          : channel
+      transport = getTuffTransportMain(channel, keyManager)
+    }
+
+    if (!transport) {
+      return
+    }
 
     const resolveOpenerHandler = async (payload: { extension?: string }) => {
       const extension = typeof payload?.extension === 'string' ? payload.extension : null
