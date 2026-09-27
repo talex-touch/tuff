@@ -1,7 +1,8 @@
 <script lang="ts" setup>
 import type { IPlatform, ITouchPlugin } from '@talex-touch/utils/plugin'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
+import { TxMarkdownView } from '@talex-touch/tuffex/markdown-view'
 import OSIcon from '~/components/icon/OSIcon.vue'
 
 const props = defineProps<{
@@ -11,13 +12,13 @@ const props = defineProps<{
 const { t } = useI18n()
 
 const platforms = computed<IPlatform>(() => props.plugin?.platforms || {})
-const readme = computed<string>(() => props.plugin.readme)
+const readme = computed<string>(() => props.plugin?.readme || '')
 </script>
 
 <template>
-  <div class="w-full">
+  <div class="PluginOverview w-full">
     <!-- Environment Cards -->
-    <div v-if="platforms && Object.keys(platforms).length" class="glass-card">
+    <div v-if="platforms && Object.keys(platforms).length" class="glass-card mb-6">
       <div class="card-header">
         <i class="i-ri-computer-line" />
         <h3>{{ t('plugin.overview.environment') }}</h3>
@@ -43,19 +44,25 @@ const readme = computed<string>(() => props.plugin.readme)
     </div>
 
     <!-- Documentation -->
-    <template v-if="plugin.readme">
+    <template v-if="readme">
       <div class="card-header">
         <i class="i-ri-file-text-line" />
         <h3>{{ t('plugin.overview.documentation') }}</h3>
       </div>
       <div class="readme-content">
-        <FlatMarkdown v-model="readme" :readonly="true" />
+        <TxMarkdownView :content="readme" theme="auto" />
       </div>
     </template>
   </div>
 </template>
 
 <style lang="scss" scoped>
+.PluginOverview {
+  box-sizing: border-box;
+  padding: 1.25rem 1.5rem 2rem;
+  width: 100%;
+}
+
 .card-header {
   display: flex;
   align-items: center;
@@ -148,30 +155,37 @@ const readme = computed<string>(() => props.plugin.readme)
 }
 
 .readme-content {
+  position: relative;
+  background: var(--tx-fill-color);
+  border: 1px solid rgba(var(--tx-border-color-rgb), 0.3);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  box-sizing: border-box;
+
   &::before {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 500px;
-    opacity: 0.25;
-    filter: blur(18px);
-    background: linear-gradient(
-      to bottom,
-      var(--tx-color-primary-light-7) 10%,
-      var(--tx-fill-color-light) 90%
-    );
-    border-radius: 12px;
-    padding: 0.5rem;
+    right: 0;
+    height: 120px;
+    opacity: 0.18;
+    filter: blur(20px);
+    background: linear-gradient(to bottom, var(--tx-color-primary-light-7) 0%, transparent 100%);
+    border-radius: 12px 12px 0 0;
+    pointer-events: none;
   }
-  position: relative;
 
-  background: var(--tx-fill-color);
-  border-radius: 12px;
-  padding: 0.5rem;
+  :deep(.tx-markdown-view) {
+    position: relative;
+    z-index: 1;
+    color: var(--tx-text-color-primary);
 
-  overflow: hidden;
+    .markdown-body {
+      background: transparent;
+      color: inherit;
+    }
+  }
 }
 
 @keyframes pulse {
