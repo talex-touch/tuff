@@ -2216,6 +2216,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         return stats
       })
       .catch((error) => {
+        if (this.shuttingDown || options?.signal?.aborted) {
+          this.initializationFailed = false
+          this.initializationFailure = null
+          this.logDebug(`File indexing ${source} run cancelled during shutdown`)
+          this.emitIndexingProgress('idle', 0, 0)
+          if (source === 'manual') this.manualRebuildPendingNotification = false
+          if (options?.throwOnFailure) throw error
+          return createFileIndexSyncStats()
+        }
+
         this.initializationFailed = true
         const busy = isSqliteBusyError(error)
         const report = operationalErrorService.report({
@@ -2361,6 +2371,24 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     reason: string,
     mutationLeaseId?: string
   ): Promise<void> {
+    if (this.shuttingDown) {
+      if (mutationLeaseId !== undefined) {
+        this.cancelledIndexWorkerMutationLeases.add(mutationLeaseId)
+        this.indexSchedulerService.cancelLease(mutationLeaseId)
+        this.fileIndexWorker.cancelLease(mutationLeaseId)
+      } else {
+        this.indexSchedulerService.cancelPending()
+      }
+      // These results have not crossed the durable persistence barrier. Their progress rows were
+      // set to pending before scheduler admission, so dropping the in-memory copies is recoverable.
+      for (const [fileId, result] of this.pendingIndexWorkerResults) {
+        if (mutationLeaseId === undefined || result.mutationLeaseId === mutationLeaseId) {
+          this.pendingIndexWorkerResults.delete(fileId)
+        }
+      }
+      return
+    }
+
     try {
       await this.waitForSearchIndexDrain(reason, mutationLeaseId)
       if (!this.shuttingDown) this.enrichmentResumeService.resume(reason)
