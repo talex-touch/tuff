@@ -26,8 +26,8 @@
 
 - [x] R1：channel 错误回复在渲染层以 rejection 到达调用方（携带主进程给的 `message`/`reason`），成功回复不受影响；`useSvgContent` 等消费方在失败时拿到可读错误而不是 `TypeError`。
 - [x] R1：至少一个真实错误路径（`network:read-text` 读被拒路径）端到端复现“失败即 reject”，且 `packages/utils/transport/sdk/**` 的类型声明与实际返回值一致（或显式声明为可错误）。
-- [x] R2：`/private/tmp/<profile>` 形态的插件图标在真机上正常渲染（日志无 `Blocked path`、无 `NETWORK_FILE_FORBIDDEN`）。
-  - ⚠️ 实际验到的是**策略层**：经 channel 读 `/tmp/…` 与 `/private/tmp/…` 两种形态都成功 ✓；**未**单独跑一张真实插件图标的渲染。覆盖图标场景的是同一条 `isAllowedLocalFilePath`，`local-file-policy.test.ts` 已含插件图标用例 ✓。
+- [ ] R2：`/private/tmp/<profile>` 形态的插件图标在真机上正常渲染（日志无 `Blocked path`、无 `NETWORK_FILE_FORBIDDEN`）。
+  - ⚠️ 实际验到的是**策略层**：经 channel 读 `/tmp/…` 与 `/private/tmp/…` 两种形态都成功 ✓；**未**单独跑一张真实插件图标的渲染，所以这条不算完成。覆盖图标场景的是同一条 `isAllowedLocalFilePath`，`local-file-policy.test.ts` 已含插件图标用例 ✓。
 
 ## Verification (2026-09-26)
 
