@@ -1798,22 +1798,45 @@ async function executeNexusRequest(
   }
 }
 
+const inFlightNexusGets = new Map<string, Promise<NexusResponsePayload | null>>()
+
 async function performNexusRequest(
   payload: NexusRequestPayload
 ): Promise<NexusResponsePayload | null> {
-  const token = await ensureFreshAccessToken('request')
-  if (!token) {
-    authLog.warn('Nexus request skipped without auth token', {
-      meta: { context: payload.context ?? '', path: payload.path ?? '', url: payload.url ?? '' }
-    })
-    return null
-  }
-  const url = resolveNexusRequestUrl(payload)
   const method = (payload.method ? payload.method.toUpperCase() : 'GET') as NetworkMethod
-  const headers = new Headers(payload.headers ?? {})
-  headers.set('Authorization', normalizeBearerToken(token))
+  const isIdempotentGet = method === 'GET' && !payload.body
+  const inFlightKey = isIdempotentGet
+    ? `${method}:${payload.url || payload.path || ''}:${payload.context ?? ''}`
+    : null
 
-  return executeNexusRequest(url, method, headers, payload.body, payload.context)
+  if (inFlightKey && inFlightNexusGets.has(inFlightKey)) {
+    return inFlightNexusGets.get(inFlightKey)!
+  }
+
+  const runRequest = async (): Promise<NexusResponsePayload | null> => {
+    const token = await ensureFreshAccessToken('request')
+    if (!token) {
+      authLog.warn('Nexus request skipped without auth token', {
+        meta: { context: payload.context ?? '', path: payload.path ?? '', url: payload.url ?? '' }
+      })
+      return null
+    }
+    const url = resolveNexusRequestUrl(payload)
+    const headers = new Headers(payload.headers ?? {})
+    headers.set('Authorization', normalizeBearerToken(token))
+
+    return executeNexusRequest(url, method, headers, payload.body, payload.context)
+  }
+
+  if (inFlightKey) {
+    const promise = runRequest().finally(() => {
+      inFlightNexusGets.delete(inFlightKey)
+    })
+    inFlightNexusGets.set(inFlightKey, promise)
+    return promise
+  }
+
+  return runRequest()
 }
 
 /** Internal main-process Nexus request used by binary capability clients. */
