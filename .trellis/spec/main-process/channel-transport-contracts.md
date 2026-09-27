@@ -399,12 +399,15 @@ export const INSTALL_TRANSPORT_TIMEOUT_MS: number
 
 ### 3. Contracts
 
-- `plugin:install-source` spans three budgets in the main process: the package download (sized from
-  the registry's advertised `packageSize`), the permission/confirmation prompt (bounded only by the
-  renderer card's auto-deny), and unpack + signature verification + registration.
-- Its transport deadline is the sum of the worst case of each — `INSTALL_TRANSPORT_TIMEOUT_MS` — so
-  it can only fire when the main process stopped answering. Every stage inside enforces its own
-  tighter deadline; the outer wall is a backstop, never the liveness control.
+- `plugin:install-source` and `plugin:api:install` both route into the same main-side install queue
+  and span three budgets: the package download (sized from the registry's advertised `packageSize`),
+  the permission/confirmation prompt (bounded only by the renderer card's auto-deny), and unpack +
+  signature verification + registration.
+- Both transport deadlines are the sum of the worst case of each — `INSTALL_TRANSPORT_TIMEOUT_MS` —
+  so they can only fire when the main process stopped answering. Every stage inside enforces its own
+  tighter deadline; the outer wall is a backstop, never the liveness control. `plugin:api:install`
+  used the 60s transport default, which is *shorter* than the permission card's own 120s budget: a
+  user who answered after a minute got a failure report for an install that was still running.
 - The budgets live in one shared module. The renderer's `PERMISSION_REQUEST_TIMEOUT_MS` is that
   module's `INSTALL_CONFIRM_BUDGET_MS`: raising the card's auto-deny without raising the wall
   reintroduces the false failure below.
@@ -414,7 +417,7 @@ export const INSTALL_TRANSPORT_TIMEOUT_MS: number
   main process was still holding the prepared install.
 - Residual gap (not fixed, needs a product decision): the *plain* confirmation dialog
   (`install-manager.handleConfirm`, non-permission branch) waits for the user with no budget of its
-  own, so only the 12-minute wall bounds it. Bounding it needs the mention dialog to auto-dismiss,
+  own, so only the 780 s wall bounds it. Bounding it needs the mention dialog to auto-dismiss,
   which is a UX decision rather than a contract fix.
 
 ### 4. Validation & Error Matrix
@@ -431,8 +434,8 @@ export const INSTALL_TRANSPORT_TIMEOUT_MS: number
 
 - `packages/utils/__tests__/install-budgets.test.ts`: the wall covers download ceiling + confirm +
   unpack for every sampled size, and is strictly larger than the old flat 3 minutes.
-- `packages/utils/__tests__/plugin-install-deadline.test.ts`: `installFromSource` sends with the
-  derived budget.
+- `packages/utils/__tests__/plugin-install-deadline.test.ts`: `installFromSource` and `install`
+  send with the derived budget.
 - Renderer guard: `PERMISSION_REQUEST_TIMEOUT_MS <= INSTALL_CONFIRM_BUDGET_MS`.
 
 ### 6. Wrong vs Correct
