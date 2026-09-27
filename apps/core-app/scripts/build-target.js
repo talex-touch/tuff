@@ -9,6 +9,11 @@ const {
   syncOfficialPluginBundledRuntimes
 } = require('./lib/touch-translation-runtime-sync')
 const {
+  nativeAddonReleaseDir,
+  preserveRequiredNativeAddons,
+  restorePreservedNativeAddons
+} = require('./build-target/native-addons')
+const {
   PACKAGED_RUNTIME_MODULES,
   collectPackagedRuntimeModuleEntries,
   collectResourceModuleClosure,
@@ -158,14 +163,7 @@ function resolveBuilderBin() {
 // no v8/node symbols, so a Node-targeted build is ABI-compatible with Electron. CI says the
 // same thing out loud - the Windows rebuild step is named "for Node.js".
 function verifyNativeModules(strict, target) {
-  const releaseDir = path.join(
-    projectRoot,
-    'node_modules',
-    '@talex-touch',
-    'tuff-native',
-    'build',
-    'Release'
-  )
+  const releaseDir = nativeAddonReleaseDir(projectRoot)
   const requiredModuleNames = requiredNativeAddonNames(target)
 
   const missingModuleNames = requiredModuleNames.filter(
@@ -669,6 +667,10 @@ function build() {
       }
       const builderBinForShell = process.platform === 'win32' ? `"${builderBin}"` : builderBin
       const installCommand = `${builderBinForShell} ${installAppDepsArgs.join(' ')}`.trim()
+      const preservedAddons = preserveRequiredNativeAddons({
+        projectRoot,
+        target: normalizedTarget
+      })
 
       try {
         execSync(installCommand, {
@@ -680,9 +682,16 @@ function build() {
         })
         console.log('✓ electron-builder install-app-deps completed\n')
         console.timeEnd('build-target:install-app-deps')
+        const restoredAddons = restorePreservedNativeAddons({ projectRoot, preserved: preservedAddons })
+        if (restoredAddons.length > 0) {
+          console.log(
+            `[build-target] Restored the Cargo-built addons install-app-deps removed: ${restoredAddons.join(', ')}\n`
+          )
+        }
         verifyNativeModules(process.env.CI === 'true', normalizedTarget)
       } catch (error) {
         console.timeEnd('build-target:install-app-deps')
+        fs.rmSync(preservedAddons.backupDir, { recursive: true, force: true })
         console.error('\n❌ electron-builder install-app-deps failed!')
         throw error
       }
