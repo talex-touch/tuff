@@ -1,4 +1,5 @@
 import type { TuffItem } from '@talex-touch/utils'
+import type * as sqliteRetry from '../../../../db/sqlite-retry'
 import { ContextProvider, type ContextSignal, hashContextContent } from './context-provider'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -50,7 +51,10 @@ vi.mock('../../../../db/db-write-scheduler', () => ({
   }
 }))
 
-vi.mock('../../../../db/sqlite-retry', () => ({
+vi.mock('../../../../db/sqlite-retry', async (importOriginal) => ({
+  // Only the retry wrapper is stubbed; the busy classifier stays real, because the
+  // scheduler under test reads it and a partial mock must still export it.
+  ...(await importOriginal<typeof sqliteRetry>()),
   withSqliteRetry: vi.fn((task: () => unknown) => task())
 }))
 
