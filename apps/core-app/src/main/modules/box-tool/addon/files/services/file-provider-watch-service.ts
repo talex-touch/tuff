@@ -18,18 +18,15 @@ import FileSystemWatcher from '../../../file-system-watcher'
 import { isSearchRecentlyActive } from '../../../search-engine/search-activity'
 import type { FileIndexSettings } from '../types'
 import {
-  expandIndexedSourceProgressPaths,
   filterIndexedWatchPendingPermissionPaths,
   isIndexedWatchPathOwned,
   resolveIndexedAutoScanPreflight,
   resolveIndexedScanEligibility,
-  resolveIndexedWatchRootSet
+  resolveIndexedWatchRootSet,
+  toIndexedScanTimestamp
 } from '@talex-touch/utils/search'
 import { sql } from 'drizzle-orm'
-import {
-  buildScanProgressPathInClause,
-  resolveScanProgressSchemaShape
-} from '../../../search-engine/scan-progress-schema'
+import { resolveScanProgressSchemaShape } from '../../../search-engine/scan-progress-schema'
 
 const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanEnabled: true,
@@ -38,7 +35,8 @@ const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanCheckIntervalMs: 5 * 60 * 1000,
   extraPaths: []
 }
-const STARTUP_RECONCILE_DELAY_MS = 2_500
+/** How long after boot the first scan check runs — a check, not a forced scan. */
+const STARTUP_SCAN_CHECK_DELAY_MS = 2_500
 
 export interface FileProviderWatchServiceDeps {
   baseWatchPaths: string[]
@@ -80,9 +78,11 @@ export class FileProviderWatchService {
   private autoIndexTaskRegistered = false
   private fsEventsSubscribed = false
   private watchPathsRegistered = false
-  /** Startup reconciliation covers files created while the app was offline. */
-  private startupReconcilePending = true
-  private startupReconcileTimer: NodeJS.Timeout | null = null
+  /**
+   * The boot check. Files created while the app was offline are covered by the same eligibility
+   * rules as any other run — an unseen or stale root — so boot never forces a scan on its own.
+   */
+  private startupScanTimer: NodeJS.Timeout | null = null
   private fileIndexSettings: FileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
 
   constructor(deps: FileProviderWatchServiceDeps) {
@@ -235,18 +235,6 @@ export class FileProviderWatchService {
     }
   }
 
-  private async runStartupReconcile(): Promise<boolean> {
-    const completed = await this.runAutoIndexing()
-    if (!completed) return false
-
-    this.startupReconcilePending = false
-    if (this.startupReconcileTimer) {
-      clearTimeout(this.startupReconcileTimer)
-      this.startupReconcileTimer = null
-    }
-    return true
-  }
-
   initializeBackgroundTaskService(): void {
     const dbUtils = this.getDbUtils()
     if (!dbUtils) {
@@ -293,7 +281,7 @@ export class FileProviderWatchService {
         canInterrupt: true,
         estimatedDuration: 15 * 60 * 1000,
         execute: async () => {
-          await this.runStartupReconcile()
+          await this.runAutoIndexing()
         }
       })
       this.autoIndexTaskRegistered = true
@@ -311,24 +299,22 @@ export class FileProviderWatchService {
 
     this.backgroundTaskService.start()
 
-    if (this.startupReconcilePending && !this.startupReconcileTimer) {
-      this.startupReconcileTimer = setTimeout(() => {
-        this.startupReconcileTimer = null
-        if (!this.startupReconcilePending) return
-        void this.runStartupReconcile().catch((error) => {
-          this.logWarn('Startup file reconciliation failed', error)
+    if (!this.startupScanTimer) {
+      this.startupScanTimer = setTimeout(() => {
+        this.startupScanTimer = null
+        void this.runAutoIndexing().catch((error) => {
+          this.logWarn('Startup file scan check failed', error)
         })
-      }, STARTUP_RECONCILE_DELAY_MS)
-      this.startupReconcileTimer.unref()
+      }, STARTUP_SCAN_CHECK_DELAY_MS)
+      this.startupScanTimer.unref()
     }
 
     this.logDebug('Background task service initialized')
   }
   dispose(): void {
-    this.startupReconcilePending = false
-    if (this.startupReconcileTimer) {
-      clearTimeout(this.startupReconcileTimer)
-      this.startupReconcileTimer = null
+    if (this.startupScanTimer) {
+      clearTimeout(this.startupScanTimer)
+      this.startupScanTimer = null
     }
   }
 
@@ -336,10 +322,12 @@ export class FileProviderWatchService {
     newPaths: string[]
     stalePaths: string[]
     lastScannedAt: number | null
+    /** Any progress row in scope — the root's own or one of its checkpointed children. */
+    hasScanEvidence: boolean
   }> {
     const dbUtils = this.getDbUtils()
     if (!dbUtils) {
-      return { newPaths: [], stalePaths: [], lastScannedAt: null }
+      return { newPaths: [], stalePaths: [], lastScannedAt: null, hasScanEvidence: false }
     }
 
     // Eligibility must read the home the worker writes scan_progress into
@@ -348,29 +336,72 @@ export class FileProviderWatchService {
     // shouldRunAutoIndexing never allowed a scan and the empty search file was
     // never populated (V1 ship-blocker #3). Split off → same handle as before.
     const db = dbUtils.getFileIndexReadDb()
-    const scopedPaths = expandIndexedSourceProgressPaths(this.watchPaths, this.normalizePath)
     const shape = await resolveScanProgressSchemaShape(db)
-    const completedScans =
-      scopedPaths.length > 0
-        ? shape.sourceScoped
-          ? await db.all<{ path: string; lastScanned: unknown }>(sql`
-              SELECT path, last_scanned AS lastScanned
-              FROM scan_progress
-              WHERE source_id = ${'file-provider'}
-                AND path IN ${buildScanProgressPathInClause(scopedPaths)}
-            `)
-          : await db.all<{ path: string; lastScanned: unknown }>(sql`
-              SELECT path, last_scanned AS lastScanned
-              FROM scan_progress
-              WHERE path IN ${buildScanProgressPathInClause(scopedPaths)}
-            `)
-        : []
-    return resolveIndexedScanEligibility({
-      watchPaths: this.watchPaths,
-      completedScans,
-      intervalMs: this.fileIndexSettings.autoScanIntervalMs,
-      normalizePath: this.normalizePath
-    })
+    const progressRows = shape.sourceScoped
+      ? await db.all<{ path: string; lastScanned: unknown }>(sql`
+          SELECT path, last_scanned AS lastScanned
+          FROM scan_progress
+          WHERE source_id = ${'file-provider'}
+        `)
+      : await db.all<{ path: string; lastScanned: unknown }>(sql`
+          SELECT path, last_scanned AS lastScanned
+          FROM scan_progress
+        `)
+    const completedScans = this.foldScanProgressOntoWatchRoots(progressRows)
+
+    return {
+      ...resolveIndexedScanEligibility({
+        watchPaths: this.watchPaths,
+        completedScans,
+        intervalMs: this.fileIndexSettings.autoScanIntervalMs,
+        normalizePath: this.normalizePath
+      }),
+      hasScanEvidence: completedScans.length > 0
+    }
+  }
+
+  /**
+   * Scan progress is recorded per resumable unit: a root writes its own path once the whole tree
+   * is walked, and each completed child while the walk is still in flight. Keeping only the rows
+   * that are watch roots themselves discarded that partial progress, so a half-walked root looked
+   * untouched and every boot started it over. Fold each row onto the root that owns it, newest
+   * timestamp wins.
+   */
+  private foldScanProgressOntoWatchRoots(
+    rows: ReadonlyArray<{ path: string; lastScanned: unknown }>
+  ): Array<{ path: string; lastScanned: unknown }> {
+    const newestByRoot = new Map<string, number>()
+    const rowByRoot = new Map<string, { path: string; lastScanned: unknown }>()
+    for (const row of rows) {
+      const root = this.resolveOwningWatchRoot(row.path)
+      if (!root) continue
+      const timestamp = toIndexedScanTimestamp(row.lastScanned)
+      if (timestamp === null) continue
+      const known = newestByRoot.get(root)
+      if (known !== undefined && known >= timestamp) continue
+      newestByRoot.set(root, timestamp)
+      rowByRoot.set(root, { path: root, lastScanned: row.lastScanned })
+    }
+    return Array.from(rowByRoot.values())
+  }
+
+  /** The most specific watch root containing `rawPath`, or null when no root owns it. */
+  private resolveOwningWatchRoot(rawPath: string): string | null {
+    let owner: string | null = null
+    let ownerLength = -1
+    for (const root of this.watchPaths) {
+      const normalizedRoot = this.normalizePath(root)
+      const owned = isIndexedWatchPathOwned({
+        rawPath,
+        normalizedWatchPaths: [normalizedRoot],
+        normalizePath: this.normalizePath,
+        pathSeparator: path.sep
+      })
+      if (!owned || normalizedRoot.length <= ownerLength) continue
+      owner = root
+      ownerLength = normalizedRoot.length
+    }
+    return owner
   }
 
   async shouldRunAutoIndexing(input: {
@@ -399,10 +430,7 @@ export class FileProviderWatchService {
     const eligibility = await this.getScanEligibility()
     const preflight = resolveIndexedAutoScanPreflight({
       ...basePreflightInput,
-      hasEligiblePaths:
-        this.startupReconcilePending ||
-        eligibility.newPaths.length > 0 ||
-        eligibility.stalePaths.length > 0
+      hasEligiblePaths: eligibility.newPaths.length > 0 || eligibility.stalePaths.length > 0
     })
 
     if (!preflight.allowed) {
@@ -410,9 +438,12 @@ export class FileProviderWatchService {
     }
 
     const decision = await deviceIdleService.canRun({
-      idleThresholdMs: this.startupReconcilePending
-        ? 0
-        : this.fileIndexSettings.autoScanIdleThresholdMs
+      // No progress at all means there is nothing to search until one scan finishes, so that very
+      // first run may start straight away. Every later run — the check right after boot included —
+      // waits for the idle window, so restarting the app can no longer start a full walk by itself.
+      idleThresholdMs: eligibility.hasScanEvidence
+        ? this.fileIndexSettings.autoScanIdleThresholdMs
+        : 0
     })
 
     const battery = decision.snapshot.battery

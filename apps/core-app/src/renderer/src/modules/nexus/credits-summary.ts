@@ -17,8 +17,12 @@ export interface CreditSummaryState {
   teamRemaining: ComputedRef<number>
   teamUsed: ComputedRef<number>
   teamQuota: ComputedRef<number>
-  refresh: () => Promise<void>
+  refresh: (options?: { force?: boolean }) => Promise<void>
   openCreditsDashboard: () => void
+}
+
+export interface RefreshCreditsOptions {
+  force?: boolean
 }
 
 function resolveCreditsError(status: number, statusText: string): string {
@@ -32,7 +36,11 @@ const rawSummary = ref<CreditSummary | null>(null)
 const loading = ref(false)
 const error = ref('')
 let activeRequestId = 0
+let lastFetchedAt = 0
+let inFlightPromise: Promise<void> | null = null
+let authWatchInitialized = false
 
+const CREDITS_SUMMARY_CACHE_TTL_MS = 15_000
 export function useCreditsSummary(): CreditSummaryState {
   const { isLoggedIn } = useAuth()
   const appSdk = useAppSdk()
@@ -52,10 +60,26 @@ export function useCreditsSummary(): CreditSummaryState {
   const teamUsed = computed(() => (hasTeamPool.value ? (summary.value?.team.used ?? 0) : 0))
   const teamQuota = computed(() => (hasTeamPool.value ? (summary.value?.team.quota ?? 0) : 0))
 
-  async function refresh() {
+  async function refresh(options: RefreshCreditsOptions = { force: true }): Promise<void> {
     if (!isLoggedIn.value) {
       rawSummary.value = null
       error.value = ''
+      lastFetchedAt = 0
+      return
+    }
+
+    // 1. 如果已有相同请求在进行中，聚合复用该 in-flight promise，避免并发重复打远端
+    if (inFlightPromise) {
+      return inFlightPromise
+    }
+
+    // 2. 非强制刷新且在缓存有效时间内，直接复用当前缓存
+    const isForce = options.force ?? true
+    if (
+      !isForce &&
+      rawSummary.value !== null &&
+      Date.now() - lastFetchedAt < CREDITS_SUMMARY_CACHE_TTL_MS
+    ) {
       return
     }
 
@@ -63,29 +87,35 @@ export function useCreditsSummary(): CreditSummaryState {
     loading.value = true
     error.value = ''
 
-    try {
-      const response = await fetchNexusWithAuth('/api/credits/summary', {}, 'credits-summary')
-      if (requestId !== activeRequestId) return
-      if (!response) {
+    inFlightPromise = (async () => {
+      try {
+        const response = await fetchNexusWithAuth('/api/credits/summary', {}, 'credits-summary')
+        if (requestId !== activeRequestId) return
+        if (!response) {
+          rawSummary.value = null
+          error.value = '登录后才能获取 AI 积分信息。'
+          return
+        }
+        if (!response.ok) {
+          rawSummary.value = null
+          error.value = resolveCreditsError(response.status, response.statusText)
+          return
+        }
+        rawSummary.value = normalizeCreditSummary(await response.json())
+        lastFetchedAt = Date.now()
+      } catch (err) {
+        if (requestId !== activeRequestId) return
         rawSummary.value = null
-        error.value = '登录后才能获取 AI 积分信息。'
-        return
+        error.value = err instanceof Error && err.message ? err.message : 'Credits 信息获取失败。'
+      } finally {
+        if (requestId === activeRequestId) {
+          loading.value = false
+        }
+        inFlightPromise = null
       }
-      if (!response.ok) {
-        rawSummary.value = null
-        error.value = resolveCreditsError(response.status, response.statusText)
-        return
-      }
-      rawSummary.value = normalizeCreditSummary(await response.json())
-    } catch (err) {
-      if (requestId !== activeRequestId) return
-      rawSummary.value = null
-      error.value = err instanceof Error && err.message ? err.message : 'Credits 信息获取失败。'
-    } finally {
-      if (requestId === activeRequestId) {
-        loading.value = false
-      }
-    }
+    })()
+
+    return inFlightPromise
   }
 
   function openCreditsDashboard() {
@@ -93,18 +123,22 @@ export function useCreditsSummary(): CreditSummaryState {
     void appSdk.openExternal(`${baseUrl}/dashboard/credits`)
   }
 
-  watch(
-    isLoggedIn,
-    (signedIn) => {
-      if (signedIn) {
-        void refresh()
-        return
-      }
-      rawSummary.value = null
-      error.value = ''
-    },
-    { immediate: true }
-  )
+  if (!authWatchInitialized) {
+    authWatchInitialized = true
+    watch(
+      isLoggedIn,
+      (signedIn) => {
+        if (signedIn) {
+          void refresh({ force: false })
+          return
+        }
+        rawSummary.value = null
+        error.value = ''
+        lastFetchedAt = 0
+      },
+      { immediate: true }
+    )
+  }
 
   return {
     summary,

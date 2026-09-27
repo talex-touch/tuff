@@ -5,8 +5,13 @@ import { appTaskGate } from '../../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../../service/device-idle-service'
 import { isSearchRecentlyActive } from '../../../search-engine/search-activity'
 
+interface RegisteredBackgroundTask {
+  id: string
+  execute: () => Promise<void>
+}
+
 const backgroundTaskMocks = vi.hoisted(() => ({
-  registerTask: vi.fn(),
+  registerTask: vi.fn<(task: RegisteredBackgroundTask) => void>(),
   on: vi.fn(),
   start: vi.fn(),
   recordActivity: vi.fn()
@@ -74,8 +79,7 @@ function createDbUtils(
   options: { sourceScoped?: boolean } = {}
 ) {
   const all = vi.fn(async (query: unknown) => {
-    const text = String(query)
-    if (text.includes('PRAGMA table_info(scan_progress)')) {
+    if (readSqlText(query).includes('PRAGMA table_info(scan_progress)')) {
       return options.sourceScoped
         ? [
             { name: 'source_id', pk: 1 },
@@ -88,11 +92,7 @@ function createDbUtils(
           ]
     }
 
-    const scopedPaths = extractSqlParamValues(query)
-    if (scopedPaths.size === 0) {
-      return rows
-    }
-    return rows.filter((row) => scopedPaths.has(row.path))
+    return rows
   })
 
   const handle = { all }
@@ -107,35 +107,17 @@ function createDbUtils(
   }
 }
 
-function extractSqlParamValues(condition: unknown): Set<string> {
-  const values: string[] = []
-  const visit = (value: unknown) => {
-    if (typeof value === 'string') {
-      values.push(value)
-      return
-    }
-    if (!value || typeof value !== 'object') return
-    const record = value as { value?: unknown; queryChunks?: unknown[] }
-    if (typeof record.value === 'string') {
-      values.push(record.value)
-    } else if (Array.isArray(record.value)) {
-      record.value.filter((entry): entry is string => typeof entry === 'string').forEach(visit)
-    }
-    if (Array.isArray(record.queryChunks)) {
-      for (const chunk of record.queryChunks) {
-        if (Array.isArray(chunk)) {
-          chunk.forEach(visit)
-        } else {
-          visit(chunk)
-        }
-      }
-    }
-  }
-  visit(condition)
-
-  return new Set(
-    values.filter((value) => value !== 'file-provider').filter((value) => value.startsWith('/'))
-  )
+/** Drizzle SQL objects stringify to `[object Object]`; read the chunked statement text instead. */
+function readSqlText(query: unknown): string {
+  const chunks = (query as { queryChunks?: unknown[] } | null)?.queryChunks ?? []
+  return chunks
+    .map((chunk) => {
+      if (typeof chunk === 'string') return chunk
+      const value = (chunk as { value?: unknown } | null)?.value
+      if (!Array.isArray(value)) return ''
+      return value.filter((entry): entry is string => typeof entry === 'string').join('')
+    })
+    .join('')
 }
 
 function createService(
@@ -158,6 +140,37 @@ function createService(
   })
 }
 
+/**
+ * Boot wiring as production has it: file-provider passes `() => this.runAutoIndexing()`, and that
+ * method's first act is `watchService.shouldRunAutoIndexing(...)`. The boot timer and the registered
+ * `file-index.auto-scan` task therefore both enter through the same gate, and `startIndexScan` is the
+ * only thing that actually walks the tree — which lets a test tell "the check ran" from "a scan ran".
+ */
+function createGatedService(input: { dbUtils: unknown; startIndexScan: () => Promise<boolean> }) {
+  let service: FileProviderWatchService | null = null
+  const created = createService({
+    dbUtils: input.dbUtils,
+    runAutoIndexing: async () => {
+      if (!service) {
+        throw new Error('watch service not initialized')
+      }
+      const decision = await service.shouldRunAutoIndexing({
+        isInitializing: false,
+        hasInitializationContext: true
+      })
+      return decision.allowed ? input.startIndexScan() : false
+    }
+  })
+  service = created
+  return created
+}
+
+function findRegisteredTask(id: string): RegisteredBackgroundTask | undefined {
+  return backgroundTaskMocks.registerTask.mock.calls
+    .map(([task]) => task)
+    .find((task) => task.id === id)
+}
+
 describe('file-provider-watch-service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -169,7 +182,8 @@ describe('file-provider-watch-service', () => {
     await expect(service.getScanEligibility()).resolves.toEqual({
       newPaths: [],
       stalePaths: [],
-      lastScannedAt: null
+      lastScannedAt: null,
+      hasScanEvidence: false
     })
   })
 
@@ -222,11 +236,9 @@ describe('file-provider-watch-service', () => {
     expect(eligibility.lastScannedAt).toBe(scannedAt.getTime())
   })
 
-  it('includes raw and normalized watch roots in the scan progress query', async () => {
-    const scannedAt = new Date('2026-06-20T10:00:00.000Z')
-    const { dbUtils, all } = createDbUtils([
-      { path: '/users/me/documents', lastScanned: scannedAt }
-    ])
+  it('counts a progress row stored under the normalized watch root', async () => {
+    const scannedAt = Date.now() - 60 * 60 * 1000
+    const { dbUtils } = createDbUtils([{ path: '/users/me/documents', lastScanned: scannedAt }])
     const service = createService({
       baseWatchPaths: ['/Users/me/Documents'],
       dbUtils,
@@ -235,16 +247,18 @@ describe('file-provider-watch-service', () => {
 
     const eligibility = await service.getScanEligibility()
 
-    expect(extractSqlParamValues(all.mock.calls[1]?.[0])).toEqual(
-      new Set(['/Users/me/Documents', '/users/me/documents'])
-    )
     expect(eligibility.newPaths).toEqual([])
-    expect(eligibility.lastScannedAt).toBe(scannedAt.getTime())
+    expect(eligibility.lastScannedAt).toBe(scannedAt)
+    expect(eligibility.hasScanEvidence).toBe(true)
   })
 
-  it('skips watch roots rejected by the normalizer before reading scan progress', async () => {
-    const scannedAt = new Date('2026-06-20T10:00:00.000Z')
-    const { dbUtils, all } = createDbUtils([{ path: '/tmp/accepted', lastScanned: scannedAt }])
+  it('drops watch roots rejected by the normalizer from scan evidence', async () => {
+    const acceptedTimestamp = Date.now() - 60 * 60 * 1000
+    const rejectedTimestamp = Date.now()
+    const { dbUtils } = createDbUtils([
+      { path: '/tmp/accepted', lastScanned: acceptedTimestamp },
+      { path: '/tmp/rejected', lastScanned: rejectedTimestamp }
+    ])
     const service = createService({
       baseWatchPaths: ['/tmp/rejected', '/tmp/accepted'],
       dbUtils,
@@ -253,9 +267,10 @@ describe('file-provider-watch-service', () => {
 
     const eligibility = await service.getScanEligibility()
 
-    expect(extractSqlParamValues(all.mock.calls[1]?.[0])).toEqual(new Set(['/tmp/accepted']))
+    expect(service.getWatchPaths()).toEqual(['/tmp/accepted'])
     expect(eligibility.newPaths).toEqual([])
-    expect(eligibility.lastScannedAt).toBe(scannedAt.getTime())
+    expect(eligibility.lastScannedAt).toBe(acceptedTimestamp)
+    expect(eligibility.hasScanEvidence).toBe(true)
   })
 
   it('marks stale paths when scan progress exceeds the auto scan interval', async () => {
@@ -289,6 +304,37 @@ describe('file-provider-watch-service', () => {
     expect(eligibility.lastScannedAt).toBe(scopedTimestamp)
   })
 
+  // Regression: progress is written per resumable unit, so a half-walked root only has checkpoint
+  // rows for its children. Those must count as the root's progress, newest checkpoint winning —
+  // otherwise every boot restarted the walk from scratch.
+  it('folds child checkpoint rows onto their watch root', async () => {
+    const checkpointTimestamp = Date.now() - 60 * 1000
+    const olderCheckpointTimestamp = Date.now() - 2 * 60 * 60 * 1000
+    const { dbUtils } = createDbUtils([
+      { path: '/tmp/tuff-index-a/sub', lastScanned: olderCheckpointTimestamp },
+      { path: '/tmp/tuff-index-a/sub/deep', lastScanned: checkpointTimestamp }
+    ])
+    const service = createService({ dbUtils })
+
+    const eligibility = await service.getScanEligibility()
+
+    expect(eligibility.newPaths).toEqual(['/tmp/tuff-index-b'])
+    expect(eligibility.stalePaths).toEqual([])
+    expect(eligibility.lastScannedAt).toBe(checkpointTimestamp)
+    expect(eligibility.hasScanEvidence).toBe(true)
+  })
+
+  it('treats progress rows owned by no watch root as no scan evidence', async () => {
+    const { dbUtils } = createDbUtils([{ path: '/external-index-root', lastScanned: Date.now() }])
+    const service = createService({ dbUtils })
+
+    const eligibility = await service.getScanEligibility()
+
+    expect(eligibility.hasScanEvidence).toBe(false)
+    expect(eligibility.lastScannedAt).toBeNull()
+    expect(eligibility.newPaths).toEqual(['/tmp/tuff-index-a', '/tmp/tuff-index-b'])
+  })
+
   it('does not read scan progress when auto indexing is initializing', async () => {
     const { dbUtils, all } = createDbUtils([])
     const service = createService({ dbUtils })
@@ -303,7 +349,7 @@ describe('file-provider-watch-service', () => {
     expect(deviceIdleService.canRun).not.toHaveBeenCalled()
   })
 
-  it('schedules one startup reconcile at 2.5 seconds without duplicating or resetting it', async () => {
+  it('schedules one startup scan check at 2.5 seconds without duplicating or resetting it', async () => {
     const freshTimestamp = new Date('2026-09-03T00:00:00.000Z').getTime()
     vi.useFakeTimers()
     vi.setSystemTime(freshTimestamp)
@@ -340,7 +386,7 @@ describe('file-provider-watch-service', () => {
     }
   })
 
-  it('cancels the pending startup reconcile when disposed before the delay', async () => {
+  it('cancels the pending startup scan check when disposed before the delay', async () => {
     const freshTimestamp = new Date('2026-09-03T00:00:00.000Z').getTime()
     vi.useFakeTimers()
     vi.setSystemTime(freshTimestamp)
@@ -364,80 +410,89 @@ describe('file-provider-watch-service', () => {
     }
   })
 
-  it('keeps the startup idle gate through a failed one-shot reconcile until the recurring scan succeeds', async () => {
-    const freshTimestamp = new Date('2026-09-03T00:00:00.000Z').getTime()
+  // Regression: the boot path no longer carries a flag that forces a scan. The boot check enters the
+  // same gate as the recurring task, so fresh progress rows mean no walk — and the idle service is
+  // never even consulted (the removed code always queried it with `idleThresholdMs: 0`).
+  it('refuses the boot check and the recurring task while progress rows are fresh', async () => {
+    const bootTimestamp = new Date('2026-09-03T00:00:00.000Z').getTime()
     vi.useFakeTimers()
-    vi.setSystemTime(freshTimestamp)
+    vi.setSystemTime(bootTimestamp)
 
     try {
       const { dbUtils } = createDbUtils([
-        { path: '/tmp/tuff-index-a', lastScanned: freshTimestamp },
-        { path: '/tmp/tuff-index-b', lastScanned: freshTimestamp }
+        { path: '/tmp/tuff-index-a', lastScanned: bootTimestamp },
+        { path: '/tmp/tuff-index-b', lastScanned: bootTimestamp }
       ])
-      const runAutoIndexing = vi
-        .fn<() => Promise<boolean>>()
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce(true)
-      const service = createService({ dbUtils, runAutoIndexing })
+      const startIndexScan = vi.fn(async () => true)
+      const service = createGatedService({ dbUtils, startIndexScan })
 
       service.initializeBackgroundTaskService()
-      const autoTask = backgroundTaskMocks.registerTask.mock.calls
-        .map(([task]) => task as { id: string; execute: () => Promise<void> })
-        .find((task) => task.id === 'file-index.auto-scan')
+      const autoTask = findRegisteredTask('file-index.auto-scan')
       expect(autoTask).toBeDefined()
 
-      await vi.advanceTimersByTimeAsync(2_499)
-      expect(runAutoIndexing).not.toHaveBeenCalled()
-      await vi.advanceTimersByTimeAsync(1)
-      expect(runAutoIndexing).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(2_500)
 
-      await expect(
-        service.shouldRunAutoIndexing({
-          isInitializing: false,
-          hasInitializationContext: true
-        })
-      ).resolves.toMatchObject({ allowed: true })
-      expect(deviceIdleService.canRun).toHaveBeenCalledTimes(1)
-      expect(deviceIdleService.canRun).toHaveBeenNthCalledWith(1, { idleThresholdMs: 0 })
+      expect(startIndexScan).not.toHaveBeenCalled()
+      expect(deviceIdleService.canRun).not.toHaveBeenCalled()
 
       await autoTask?.execute()
+
+      expect(startIndexScan).not.toHaveBeenCalled()
       await expect(
         service.shouldRunAutoIndexing({
           isInitializing: false,
           hasInitializationContext: true
         })
       ).resolves.toEqual({ allowed: false, reason: 'interval' })
-      expect(runAutoIndexing).toHaveBeenCalledTimes(2)
-      expect(deviceIdleService.canRun).toHaveBeenCalledTimes(1)
+      expect(deviceIdleService.canRun).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('uses the normal idle gate for stale scans after startup reconcile succeeds', async () => {
-    const currentTimestamp = new Date('2026-09-03T00:00:00.000Z').getTime()
+  // A first-ever run has nothing to search until one scan finishes, so it may start without waiting
+  // for idle — the only case where the boot check scans with an empty search index.
+  it('lets the first-ever scan start from the boot check without waiting for idle', async () => {
+    const bootTimestamp = new Date('2026-09-03T00:00:00.000Z').getTime()
     vi.useFakeTimers()
-    vi.setSystemTime(currentTimestamp)
+    vi.setSystemTime(bootTimestamp)
 
     try {
-      const staleTimestamp = currentTimestamp - 25 * 60 * 60 * 1000
+      const { dbUtils } = createDbUtils([])
+      const startIndexScan = vi.fn(async () => true)
+      const service = createGatedService({ dbUtils, startIndexScan })
+
+      service.initializeBackgroundTaskService()
+      expect(startIndexScan).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(2_500)
+
+      expect(startIndexScan).toHaveBeenCalledTimes(1)
+      expect(deviceIdleService.canRun).toHaveBeenCalledTimes(1)
+      expect(deviceIdleService.canRun).toHaveBeenCalledWith({ idleThresholdMs: 0 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits for the configured idle window at the boot check when a watch root is stale', async () => {
+    const bootTimestamp = new Date('2026-09-03T00:00:00.000Z').getTime()
+    vi.useFakeTimers()
+    vi.setSystemTime(bootTimestamp)
+
+    try {
+      const staleTimestamp = bootTimestamp - 25 * 60 * 60 * 1000
       const { dbUtils } = createDbUtils([
         { path: '/tmp/tuff-index-a', lastScanned: staleTimestamp },
-        { path: '/tmp/tuff-index-b', lastScanned: staleTimestamp }
+        { path: '/tmp/tuff-index-b', lastScanned: bootTimestamp }
       ])
-      const runAutoIndexing = vi.fn<() => Promise<boolean>>().mockResolvedValue(true)
-      const service = createService({ dbUtils, runAutoIndexing })
+      const startIndexScan = vi.fn(async () => true)
+      const service = createGatedService({ dbUtils, startIndexScan })
 
       service.initializeBackgroundTaskService()
       await vi.advanceTimersByTimeAsync(2_500)
-      expect(runAutoIndexing).toHaveBeenCalledTimes(1)
 
-      await expect(
-        service.shouldRunAutoIndexing({
-          isInitializing: false,
-          hasInitializationContext: true
-        })
-      ).resolves.toEqual({ allowed: true, battery: null })
+      expect(startIndexScan).toHaveBeenCalledTimes(1)
       expect(deviceIdleService.canRun).toHaveBeenCalledTimes(1)
       expect(deviceIdleService.canRun).toHaveBeenCalledWith({ idleThresholdMs: 60 * 60 * 1000 })
     } finally {
