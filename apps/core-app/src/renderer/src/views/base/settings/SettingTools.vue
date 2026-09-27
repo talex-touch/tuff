@@ -23,6 +23,7 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import TuffBetaTag from '~/components/tuff/tags/TuffBetaTag.vue'
 import ShortcutDialog from '~/views/base/settings/components/ShortcutDialog.vue'
 import { useBeginnerGuide } from '~/composables/useBeginnerGuide'
 import { shortconApi } from '~/modules/channel/main/shortcon'
@@ -61,6 +62,13 @@ const autoContextEnabled = computed({
   get: () => appSetting.tools?.autoContext !== false,
   set: (value: boolean) => {
     if (appSetting.tools) appSetting.tools.autoContext = value
+  }
+})
+/** Home's personal-assistant push: off by default (Beta), opt in. */
+const homeRecommendationsEnabled = computed({
+  get: () => appSetting.tools?.homeRecommendations === true,
+  set: (value: boolean) => {
+    if (appSetting.tools) appSetting.tools.homeRecommendations = value
   }
 })
 /** Home's model-written opening: a model call on every blank Home, so off unless turned on. */
@@ -152,6 +160,7 @@ function ensureClipboardPollingSettings(): void {
   if (!appSetting.tools || typeof appSetting.tools !== 'object') {
     appSetting.tools = {
       autoContext: true,
+      homeRecommendations: false,
       homeAiOpening: false,
       // Off by default: a tool call reaches out and touches the user's machine,
       // so it stays something they turned on deliberately.
@@ -710,6 +719,16 @@ onBeforeUnmount(() => {
       :description="t('settingTools.autoContextDesc')"
     />
     <TuffBlockSwitch
+      v-model="homeRecommendationsEnabled"
+      :title="t('settingTools.homeRecommendations')"
+      :description="t('settingTools.homeRecommendationsDesc')"
+    >
+      <template #tags>
+        <TuffBetaTag />
+      </template>
+    </TuffBlockSwitch>
+    <TuffBlockSwitch
+      v-if="homeRecommendationsEnabled"
       v-model="homeAiOpeningEnabled"
       :title="t('settingTools.homeAiOpening')"
       :description="t('settingTools.homeAiOpeningDesc')"

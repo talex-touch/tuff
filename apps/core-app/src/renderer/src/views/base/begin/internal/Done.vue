@@ -338,11 +338,6 @@ onUnmounted(() => {
           </template>
         </div>
         <small>{{ t('beginner.done.shortcut.changeInSettings') }}</small>
-        <!--
-          On every platform: macOS reports the key as registered even while another app holds it,
-          so a press that opens Raycast, Alfred or ChatGPT is the only sign the user will get.
-        -->
-        <small class="Done-ShortcutConflict">{{ t('beginner.done.shortcut.conflictHint') }}</small>
       </div>
       <TxButton variant="flat" type="primary" @click="goon">
         {{ t('beginner.done.action') }}
@@ -422,12 +417,6 @@ onUnmounted(() => {
       color: var(--tx-text-color-secondary);
       font-size: 0.72rem;
       text-align: center;
-    }
-
-    // The longest line on the page; balanced so it wraps into two even lines, not one and a word.
-    &Conflict {
-      max-width: 28rem;
-      text-wrap: balance;
     }
   }
 }

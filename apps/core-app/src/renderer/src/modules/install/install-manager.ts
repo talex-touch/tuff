@@ -11,6 +11,7 @@ import { useI18nText } from '~/modules/lang'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import {
   PERMISSION_REQUEST_TIMEOUT_MS,
+  permissionRequestIdentity,
   showPermissionRequestCard
 } from '~/modules/permission/permission-request-card'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -150,6 +151,7 @@ async function handleConfirm(request: PluginInstallConfirmRequest): Promise<void
     const reasons = request.permissions?.reasons || {}
 
     const { result } = showPermissionRequestCard({
+      identity: permissionRequestIdentity(request.pluginId ?? request.source ?? name, required),
       title: t('plugin.permissions.startup.title'),
       message: t('plugin.permissions.startup.requestMessage', { name }),
       permissions: required.map((permissionId) => ({

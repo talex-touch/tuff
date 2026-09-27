@@ -57,6 +57,7 @@ import {
 } from '../../events/types'
 import type { ITuffTransport } from '../../types'
 import { PluginEvents } from '../../events'
+import { INSTALL_TRANSPORT_TIMEOUT_MS } from '../../../plugin/install-budgets'
 
 export interface PluginSdk {
   list: (request?: PluginApiListRequest) => Promise<PluginApiListResponse>
@@ -100,8 +101,6 @@ export interface PluginSdk {
   installContent: (payload: PluginContentInstallRequest) => Promise<PluginContentInstallResponse>
 }
 
-const PLUGIN_INSTALL_TIMEOUT_MS = 3 * 60 * 1000
-
 export function createPluginSdk(transport: ITuffTransport): PluginSdk {
   return {
     list: async request => transport.send(PluginEvents.api.list, request ?? {}),
@@ -111,7 +110,11 @@ export function createPluginSdk(transport: ITuffTransport): PluginSdk {
     enable: async request => transport.send(PluginEvents.api.enable, normalizePluginApiOperationRequest(request)),
     disable: async request => transport.send(PluginEvents.api.disable, normalizePluginApiOperationRequest(request)),
     reload: async request => transport.send(PluginEvents.api.reload, normalizePluginApiOperationRequest(request)),
-    install: async request => transport.send(PluginEvents.api.install, request),
+    // Same queue, same budgets as `installFromSource`: the default 60s wall is shorter than the
+    // permission prompt's own budget, so a user who thinks for a minute sees a failed install that
+    // is still running.
+    install: async request =>
+      transport.send(PluginEvents.api.install, request, { timeout: INSTALL_TRANSPORT_TIMEOUT_MS }),
     uninstall: async request => {
       const response = await transport.send(PluginEvents.api.uninstall, normalizePluginUninstallRequest(request))
       return normalizePluginUninstallResponse(response)
@@ -158,8 +161,13 @@ export function createPluginSdk(transport: ITuffTransport): PluginSdk {
       await transport.send(PluginEvents.install.confirmResponse, payload)
     },
 
+    /**
+     * Spans the whole main-side install: download, permission/confirmation prompt and unpack. The
+     * deadline therefore has to outlast the sum of those budgets (see `install-budgets.ts`) — a
+     * shorter wall reports a failure for an install that is still running.
+     */
     installFromSource: async payload =>
-      transport.send(PluginEvents.install.source, payload, { timeout: PLUGIN_INSTALL_TIMEOUT_MS }),
+      transport.send(PluginEvents.install.source, payload, { timeout: INSTALL_TRANSPORT_TIMEOUT_MS }),
     installContent: async payload => transport.send(PluginEvents.content.install, payload),
   }
 }

@@ -216,10 +216,12 @@ What that means:
 - **Linux was not probed.** Document no behaviour for it until someone measures it.
 - **A macOS conflict is invisible to Tuff.** Nobody measured which app a press reaches while another
   app also holds ⌥Space, and nothing in the registration reports the overlap. The only thing the user
-  sees is another app opening. The product answers with a sentence instead of a detector (R6):
-  - `beginner.done.shortcut.conflictHint`, under the key caps in
-    `renderer/views/base/begin/internal/Done.vue`, on every platform, whatever key is shown;
-  - the same sentence in `apps/nexus/content/docs/guide/start.{zh,en}.mdc`.
+  sees is another app opening. The product answered with a sentence instead of a detector (R6); the
+  onboarding copy of it (`beginner.done.shortcut.conflictHint`, under the key caps in
+  `renderer/views/base/begin/internal/Done.vue`) was **removed on 2026-09-26** by product decision, so
+  the app now says nothing about it. What remains is the sentence in
+  `apps/nexus/content/docs/guide/start.{zh,en}.mdc`. Removing the copy did not remove the paragraph
+  below: there is still nothing to detect.
 - **An exclusive native probe (for example through tuff-native) does not fix it.** Two reasons:
   - An exclusive registration only fails against another exclusive holder (last table row), so it
     misses a non-exclusive Raycast, Alfred or ChatGPT.
@@ -230,7 +232,7 @@ What that means:
 
 | Situation | `register` | Status | What the user hears (next scenario) |
 | --- | --- | --- | --- |
-| macOS, Raycast / Alfred / ChatGPT hold ⌥Space | `true` | `active` | nothing from the registration; the onboarding hint is the only signal |
+| macOS, Raycast / Alfred / ChatGPT hold ⌥Space | `true` | `active` | nothing: the registration does not report it, and the onboarding hint was removed on 2026-09-26 |
 | macOS, another Tuff binding on the same key, spelled differently (`Option+Space` beside `Alt+Space`) | not called for the later one | `conflict` (classified before registering; next scenario) | the no-key notice naming the other binding, if CoreBox's default is the one that lost |
 | Windows, PowerToys Run holds Alt+Space | `false` | `unavailable` / `register-failed` | the no-key notice ("couldn't be registered"); no other key |
 | any platform, `register` throws | — | `unavailable` / `register-error` | the same notice |
@@ -238,8 +240,8 @@ What that means:
 
 ### 5. Good / Base / Bad Cases
 
-- Good, macOS: ⌥Space opens ChatGPT instead of CoreBox. The onboarding page tells the user to change
-  the key in settings.
+- Good, macOS: ⌥Space opens ChatGPT instead of CoreBox. Tuff reports nothing (the onboarding hint was
+  removed on 2026-09-26); the docs guide is where a user reads that the key may be held elsewhere.
 - Good, Windows: PowerToys Run holds Alt+Space. CoreBox has no key this run, the user gets one
   notice saying the default couldn't be registered and where to pick another, and settings shows the
   row as not registered.
@@ -255,8 +257,6 @@ What that means:
   refusal. Its `installRegisterMock(refused)` refuses the listed accelerators, as Windows does for a
   held key. Like Electron, it also refuses any accelerator the process already holds, until
   `unregisterAll`.
-- `renderer/views/base/begin/internal/Done.test.ts` › "warns under the keys on %s that another app may
-  already answer them" (darwin, win32, linux).
 - After an OS or Electron upgrade, re-run the table: two processes, each with an event loop, plus
   the in-process spelling pair.
 
@@ -281,8 +281,9 @@ const taken = nativeProbe.registerExclusive('Alt+Space') === EVENT_HOT_KEY_EXIST
 ```
 
 ```vue
-<!-- Correct: nothing to detect; tell the user where they learn the key (Done.vue) -->
-<small class="Done-ShortcutConflict">{{ t('beginner.done.shortcut.conflictHint') }}</small>
+<!-- Removed on 2026-09-26 (product decision): the onboarding hint that named Raycast, Alfred and
+     ChatGPT is gone, so Done.vue now carries nothing about a macOS holder. Detection was never the
+     answer either; see the paragraph above. -->
 ```
 
 ## Scenario: No fallback: CoreBox without a registered default shows one notice and no stand-in key
