@@ -47,7 +47,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Nexus Docs Templates](./nexus-docs-templates.md)           | Templates tab: registration chain, `TemplateFrame` stage contract (slot size, `@enter`, overlay layers, Esc), template demo rules | Filled |
 | [Nexus Docs Layout Chrome](./nexus-docs-layout.md)           | Docs layout stacking tree, header band, and the effect-free progressive-blur edge fade | Filled |
 | [Nexus DashScope Filetrans](./nexus-dashscope-filetrans-contract.md) | Nexus-owned DashScope ASR handoff, routing, reservation, and disclosure rules | Filled |
-| [Release Acceptance Testing](./release-testing.md)            | Downloaded release, integrity, trust, and isolated packaged-runtime gates            | Filled |
+| [Release Acceptance Testing](./release-testing.md)            | Downloaded release, integrity, trust, packaged-runtime gates, OTA lifecycle, update settings page | Filled |
 | [Native Resource Protocols](./native-resource-protocols.md)   | Protocol data-plane rules, path-only native callbacks, and macOS app-icon extraction | Filled |
 
 ---
@@ -72,7 +72,7 @@ Before editing frontend code:
 14. Read [Native Resource Protocols](./native-resource-protocols.md) before adding native media/file callbacks, worker/IPC byte payloads, custom protocol consumers, or macOS application-icon extraction.
 15. Read [CoreBox Results Contracts](./corebox-results-contracts.md) before changing CoreBox result rows, the selection, the search status or result motion (`useSearch.ts`, `CoreBox.vue`, `BoxItem.vue`, `useSelectionBlock`, `useListFlip`): rows on screen keep their place, an untouched selection stays on row 0, the glow means no rows yet, and every script-driven motion asks one gate.
 16. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
-17. Read [Release Acceptance Testing](./release-testing.md) whenever the user says “发版测试”, asks to validate a published build, or requests download/update acceptance.
+17. Read [Release Acceptance Testing](./release-testing.md) whenever the user says “发版测试”, asks to validate a published build, or requests download/update acceptance — and before changing the update settings page, `useUpdateRuntime` checks/downloads, or any `update:*` transport event: its OTA scenarios own the lifecycle, and its last scenario owns the page's status, progress, authenticity banner and local-history contract.
 
 Also read shared thinking guides when the trigger applies:
 
