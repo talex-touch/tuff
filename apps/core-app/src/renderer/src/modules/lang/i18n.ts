@@ -60,6 +60,61 @@ const localeMessages: Record<string, MessageMap> = {
   'en-US': enUS
 }
 
+/** Walks a dotted key through a bundle, tolerating a bundle that stores the key flat. */
+function lookupLoadedMessage(bundle: MessageMap | undefined, key: string): string | undefined {
+  if (!bundle) return undefined
+
+  const direct = bundle[key]
+  if (typeof direct === 'string') return direct
+
+  let cursor: unknown = bundle
+  for (const segment of key.split('.')) {
+    if (!cursor || typeof cursor !== 'object') return undefined
+    cursor = (cursor as Record<string, unknown>)[segment]
+  }
+  return typeof cursor === 'string' ? cursor : undefined
+}
+
+/** `{placeholders}` the way vue-i18n writes them, so both paths read the same. */
+function fillLoadedMessage(template: string, params?: Record<string, unknown>): string {
+  if (!params) return template
+  return template.replace(/\{(\w+)\}/g, (match, name) =>
+    params[name] === undefined ? match : String(params[name])
+  )
+}
+
+/**
+ * Resolve a key against the bundles this window has actually loaded.
+ *
+ * The composer can be out of reach — a transport callback has no component instance, and a window
+ * still booting has no global i18n yet — and a caller that then falls back to the key itself puts
+ * `plugin.permissions.startup.title` on screen. The bundles are module constants, so they answer
+ * regardless of how far the app got: the question is only which language is being read, and the
+ * active locale is preferred over the rest.
+ *
+ * Returns null when no loaded bundle carries the key, which is the one case a caller has to decide
+ * about itself.
+ */
+export function resolveLoadedMessageText(
+  key: string,
+  params?: Record<string, unknown>
+): string | null {
+  if (!key) return null
+
+  const activeLocale = getGlobalI18nInstance()?.global?.locale?.value
+  const candidates = [activeLocale, ...Object.keys(localeMessages)]
+  const tried = new Set<string>()
+
+  for (const locale of candidates) {
+    if (typeof locale !== 'string' || tried.has(locale)) continue
+    tried.add(locale)
+    const template = lookupLoadedMessage(localeMessages[locale], key)
+    if (template !== undefined) return fillLoadedMessage(template, params)
+  }
+
+  return null
+}
+
 /**
  * Load locale messages dynamically
  * @param i18n - i18n instance
