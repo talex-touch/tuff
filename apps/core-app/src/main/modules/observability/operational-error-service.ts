@@ -16,7 +16,7 @@ const SAFE_IDENTIFIER_PATTERN = /^[a-zA-Z0-9_.:-]{1,96}$/
 const SENSITIVE_CONTEXT_KEY_PATTERN =
   /(query|text|keyword|path|file|folder|url|email|token|secret|password|credential|clipboard|content|prompt|response|html|image|screenshot|body|payload|stack|trace|request|headers|cookie|sql|params)/i
 const UNSAFE_PUBLIC_MESSAGE_PATTERN =
-  /(\bselect\b|\binsert\b|\bdelete\b|\bupdate\b|\bparams?:|\/Users\/|\/home\/|[a-zA-Z]:\\)/i
+  /(\bselect\b|\binsert\b|\bdelete\b|\bupdate\s+[`"]?\w+[`"]?\s+set\b|\bparams?:|\/Users\/|\/home\/|[a-zA-Z]:\\)/i
 
 interface ErrorDetails {
   error: Error
