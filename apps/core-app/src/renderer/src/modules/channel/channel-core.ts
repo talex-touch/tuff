@@ -15,8 +15,32 @@ const CHANNEL_SEND_WARN_MS = 500
 const CHANNEL_SEND_ERROR_MS = 2_000
 const CHANNEL_ROUTE_MAIN = 'main' as const
 const DATA_CODE_SUCCESS = 200
-const DATA_CODE_NETWORK_ERROR = 500
 const DATA_CODE_ERROR = 100
+
+/**
+ * A reply that is not `SUCCESS` is the main process saying the call failed; it never carries result
+ * data. Resolving it like one is how a consumer ends up using `{ message, reason }` as if it were
+ * the value it asked for, so such a reply rejects instead, keeping the reason the main process gave.
+ */
+function createChannelReplyError(eventName: string, code: number, payload: unknown): Error {
+  const record =
+    payload && typeof payload === 'object'
+      ? (payload as { message?: unknown; reason?: unknown })
+      : null
+  const reason = typeof record?.reason === 'string' ? record.reason : undefined
+  const message =
+    typeof record?.message === 'string' && record.message.trim()
+      ? record.message.trim()
+      : `Channel request "${eventName}" replied with code ${code}: ${formatPayloadPreview(payload)}`
+
+  return Object.assign(new Error(message), {
+    code: 'channel_error_reply',
+    eventName,
+    replyCode: code,
+    ...(reason ? { reason } : {}),
+    payload
+  })
+}
 
 type ChannelDataCode = number
 type ChannelRouteType = typeof CHANNEL_ROUTE_MAIN | 'plugin'
@@ -315,8 +339,8 @@ class TouchChannel implements TouchClientChannelLike {
           })
         }
 
-        if (res.code === DATA_CODE_ERROR || res.code === DATA_CODE_NETWORK_ERROR) {
-          console.warn(`[Channel][send][errorReply] \"${eventName}\" replied with ERROR`, {
+        if (res.code !== DATA_CODE_SUCCESS) {
+          console.warn(`[Channel][send][errorReply] "${eventName}" replied with ERROR`, {
             payloadPreview: this.formatPayloadPreview(arg),
             replyPreview: this.formatPayloadPreview(res.data),
             stack
@@ -334,6 +358,8 @@ class TouchChannel implements TouchClientChannelLike {
               syncId: uniqueId
             }
           })
+          reject(createChannelReplyError(eventName, res.code, res.data))
+          return
         }
 
         resolve(res.data as TResponse)
