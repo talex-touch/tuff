@@ -9,7 +9,7 @@ import type {
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { UpdateLifecyclePatch } from './update-lifecycle'
 import { isUpdateLifecyclePhase } from '@talex-touch/utils'
-import { and, desc, eq, notInArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNotNull, notInArray } from 'drizzle-orm'
 import * as schema from '../../db/schema'
 import {
   isTerminalUpdatePhase,
@@ -18,6 +18,8 @@ import {
 } from './update-lifecycle'
 
 const TERMINAL_PHASES: UpdateLifecyclePhase[] = ['idle', 'healthy', 'recovered', 'failed']
+/** Terminal phases that end an update, as opposed to `idle`, which ends a check that found none. */
+const FINISHED_UPDATE_PHASES: UpdateLifecyclePhase[] = ['healthy', 'recovered', 'failed']
 
 type UpdateAttemptRow = typeof schema.appUpdateAttempts.$inferSelect
 
@@ -126,6 +128,26 @@ export class UpdateAttemptRepository {
       .limit(1)
 
     return row ? rowToLifecycleSnapshot(row) : null
+  }
+
+  /**
+   * Finished attempts that got as far as naming a target version, newest first: the source of
+   * this device's update history. A check that failed before finding a release has no target.
+   */
+  async listTerminalAttempts(max = 200): Promise<UpdateLifecycleSnapshot[]> {
+    const rows = await this.db
+      .select()
+      .from(schema.appUpdateAttempts)
+      .where(
+        and(
+          inArray(schema.appUpdateAttempts.phase, FINISHED_UPDATE_PHASES),
+          isNotNull(schema.appUpdateAttempts.targetVersion)
+        )
+      )
+      .orderBy(desc(schema.appUpdateAttempts.updatedAt), desc(schema.appUpdateAttempts.createdAt))
+      .limit(max)
+
+    return rows.map(rowToLifecycleSnapshot)
   }
 
   async transition(input: TransitionUpdateAttemptInput): Promise<UpdateLifecycleSnapshot> {

@@ -1,4 +1,4 @@
-import type { GitHubRelease } from '@talex-touch/utils'
+import type { GitHubRelease, UpdateCheckResult } from '@talex-touch/utils'
 import type { ModuleInitContext } from '@talex-touch/utils/types/modules'
 import type { PathLike } from 'node:fs'
 import { resetQuitIntentForTest, setQuitIntent } from '../../core/quit-intent'
@@ -61,6 +61,7 @@ const mocks = vi.hoisted(() => {
       const lifecycle = activeLifecycle ?? latestLifecycle
       return lifecycle?.taskId === taskId ? lifecycle : null
     }),
+    listTerminalAttempts: vi.fn(async (): Promise<Record<string, unknown>[]> => []),
     createChecking: vi.fn(
       async (input: {
         id: string
@@ -267,6 +268,7 @@ vi.mock('./update-attempt-repository', () => ({
     getLatest = mocks.lifecycleRepository.getLatest
     getById = mocks.lifecycleRepository.getById
     getByDownloadTaskId = mocks.lifecycleRepository.getByDownloadTaskId
+    listTerminalAttempts = mocks.lifecycleRepository.listTerminalAttempts
     createChecking = mocks.lifecycleRepository.createChecking
     transition = mocks.lifecycleRepository.transition
   }
@@ -337,6 +339,63 @@ async function useGitHubSource(): Promise<void> {
   })
 }
 
+const HOUR_IN_MS = 60 * 60 * 1000
+
+async function checkWithoutForce(service: object): Promise<UpdateCheckResult> {
+  const internal = service as { checkForUpdates: (force: boolean) => Promise<UpdateCheckResult> }
+  return await internal.checkForUpdates(false)
+}
+
+/** The release record a previous run fetched and stored, `fetchedAgoMs` before now. */
+function persistPendingRelease(tag: string, fetchedAgoMs: number): void {
+  mocks.repository.getLatestRecord.mockResolvedValue({
+    id: 1,
+    tag,
+    channel: AppPreviewChannel.RELEASE,
+    name: `Tuff ${tag}`,
+    source: 'Nexus Releases',
+    publishedAt: null,
+    fetchedAt: Date.now() - fetchedAgoMs,
+    payload: JSON.stringify(release(tag)),
+    status: 'pending',
+    snoozeUntil: null,
+    lastActionAt: null
+  } as never)
+}
+
+/** Drives an attempt for `tag` through the lifecycle until it rests at `phase`. */
+async function activeAttemptAt(
+  tag: string,
+  phase: 'downloading' | 'ready'
+): Promise<Record<string, unknown>> {
+  const created = await mocks.lifecycleRepository.createChecking({
+    id: `attempt-${tag}`,
+    currentVersion: '1.0.0',
+    channel: AppPreviewChannel.RELEASE,
+    installOnNormalQuit: true,
+    now: 100
+  })
+  let lifecycle: Record<string, unknown> = created
+  for (const [to, patch] of [
+    ['available', { targetVersion: tag, releaseTag: tag, source: 'nexus' }],
+    ['downloading', { taskId: `task-${tag}` }],
+    ['verifying', undefined],
+    ['ready', undefined]
+  ] as const) {
+    lifecycle = await mocks.lifecycleRepository.transition({
+      attemptId: created.attemptId,
+      to,
+      patch
+    })
+    if (to === phase) break
+  }
+  return lifecycle
+}
+
+async function settle(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve))
+}
+
 describe('UpdateServiceModule facade', () => {
   beforeEach(() => {
     Object.defineProperty(process, 'resourcesPath', {
@@ -351,6 +410,8 @@ describe('UpdateServiceModule facade', () => {
     mocks.request.mockReset()
     mocks.repository.getLatestRecord.mockResolvedValue(null)
     mocks.repository.getRecordByTag.mockResolvedValue(null)
+    mocks.lifecycleRepository.listTerminalAttempts.mockResolvedValue([])
+    mocks.updateSystem.downloadUpdate.mockResolvedValue('download-task')
     mocks.app.isPackaged = true
   })
 
@@ -598,5 +659,168 @@ describe('UpdateServiceModule facade', () => {
     } finally {
       await service.onDestroy()
     }
+  })
+
+  describe('automatic download from a cached check result', () => {
+    it.each([
+      { path: 'a persisted result inside the cache TTL', fetchedAgoMs: 0, lastCheckedAgoMs: null },
+      {
+        path: 'a restart inside the check-frequency window',
+        fetchedAgoMs: 2 * HOUR_IN_MS,
+        lastCheckedAgoMs: HOUR_IN_MS
+      }
+    ])('starts the download for $path', async ({ fetchedAgoMs, lastCheckedAgoMs }) => {
+      if (lastCheckedAgoMs !== null) {
+        mocks.fs.existsSync.mockImplementation((file) =>
+          String(file).endsWith('update-settings.json')
+        )
+        mocks.fs.readFileSync.mockReturnValue(
+          JSON.stringify({ lastCheckedAt: Date.now() - lastCheckedAgoMs })
+        )
+      }
+      persistPendingRelease('v1.1.0', fetchedAgoMs)
+      mocks.updateSystem.downloadUpdate.mockResolvedValue({
+        taskId: 'auto-task',
+        rollbackFromVersion: '1.0.0',
+        rollbackCompatible: false
+      } as never)
+      const service = await createService()
+
+      try {
+        await expect(checkWithoutForce(service)).resolves.toMatchObject({
+          hasUpdate: true,
+          release: { tag_name: 'v1.1.0' }
+        })
+        await vi.waitFor(() =>
+          expect(mocks.lifecycleRepository.getActive()).resolves.toMatchObject({
+            phase: 'downloading',
+            releaseTag: 'v1.1.0',
+            taskId: 'auto-task'
+          })
+        )
+        expect(mocks.updateSystem.downloadUpdate).toHaveBeenCalledOnce()
+        expect(mocks.updateSystem.downloadUpdate).toHaveBeenCalledWith(
+          expect.objectContaining({ tag_name: 'v1.1.0' })
+        )
+        expect(mocks.request).not.toHaveBeenCalled()
+      } finally {
+        await service.onDestroy()
+      }
+    })
+
+    it('leaves the update at available when automatic download is off', async () => {
+      persistPendingRelease('v1.1.0', 0)
+      const service = await createService()
+
+      try {
+        await invoke(UpdateEvents.updateSettings, { settings: { autoDownload: false } })
+        await expect(checkWithoutForce(service)).resolves.toMatchObject({ hasUpdate: true })
+        await settle()
+
+        await expect(mocks.lifecycleRepository.getActive()).resolves.toMatchObject({
+          phase: 'available',
+          releaseTag: 'v1.1.0'
+        })
+        expect(mocks.updateSystem.downloadUpdate).not.toHaveBeenCalled()
+      } finally {
+        await service.onDestroy()
+      }
+    })
+
+    it.each([
+      { active: 'another release is already downloading', tag: 'v1.0.5', phase: 'downloading' },
+      { active: 'the cached release is already ready', tag: 'v1.1.0', phase: 'ready' }
+    ] as const)('does not start a download when $active', async ({ tag, phase }) => {
+      persistPendingRelease('v1.1.0', 0)
+      const service = await createService()
+      const active = await activeAttemptAt(tag, phase)
+
+      try {
+        await expect(checkWithoutForce(service)).resolves.toMatchObject({ hasUpdate: true })
+        await settle()
+
+        await expect(mocks.lifecycleRepository.getActive()).resolves.toEqual(active)
+        expect(mocks.updateSystem.downloadUpdate).not.toHaveBeenCalled()
+      } finally {
+        await service.onDestroy()
+      }
+    })
+  })
+
+  describe('update history', () => {
+    function finishedAttempt(
+      attemptId: string,
+      phase: 'healthy' | 'recovered' | 'failed',
+      targetVersion: string,
+      updatedAt: number
+    ): Record<string, unknown> {
+      return {
+        attemptId,
+        revision: 8,
+        phase,
+        currentVersion: '1.0.0',
+        targetVersion,
+        source: 'nexus',
+        channel: AppPreviewChannel.RELEASE,
+        releaseTag: targetVersion,
+        taskId: `task-${attemptId}`,
+        installMode: null,
+        installOnNormalQuit: true,
+        rollbackCompatible: false,
+        rollbackFromVersion: null,
+        previousVersion: null,
+        recoveryAvailable: false,
+        lastCheckAt: null,
+        error: null,
+        createdAt: updatedAt - 10,
+        updatedAt
+      }
+    }
+
+    it('answers with the finished attempts projected into history rows', async () => {
+      mocks.lifecycleRepository.listTerminalAttempts.mockResolvedValue([
+        finishedAttempt('updated', 'healthy', 'v1.1.0', 300),
+        finishedAttempt('rolled-back', 'recovered', 'v1.0.9', 200)
+      ])
+      const service = await createService()
+
+      try {
+        await expect(invoke(UpdateEvents.getHistory, { limit: 1 })).resolves.toEqual({
+          success: true,
+          data: [
+            {
+              attemptId: 'updated',
+              fromVersion: '1.0.0',
+              toVersion: 'v1.1.0',
+              channel: AppPreviewChannel.RELEASE,
+              outcome: 'updated',
+              finishedAt: 300,
+              error: null
+            }
+          ]
+        })
+      } finally {
+        await service.onDestroy()
+      }
+    })
+
+    it('reports an unreadable history as a failure rather than an empty one', async () => {
+      mocks.lifecycleRepository.listTerminalAttempts.mockRejectedValue(
+        new Error('database is locked')
+      )
+      const service = await createService()
+
+      try {
+        await expect(invoke(UpdateEvents.getHistory)).resolves.toEqual({
+          success: false,
+          error: 'database is locked'
+        })
+        expect(mocks.logger.warn).toHaveBeenCalledWith('Failed to load update history', {
+          error: expect.any(Error)
+        })
+      } finally {
+        await service.onDestroy()
+      }
+    })
   })
 })

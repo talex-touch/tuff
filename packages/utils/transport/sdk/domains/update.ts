@@ -12,6 +12,8 @@ import type {
   UpdateDownloadRequest,
   UpdateGetBundledReleaseNotesResponse,
   UpdateGetCachedReleaseResponse,
+  UpdateGetHistoryRequest,
+  UpdateGetHistoryResponse,
   UpdateGetSettingsResponse,
   UpdateGetStatusResponse,
   UpdateIgnoreVersionRequest,
@@ -33,6 +35,7 @@ export interface UpdateSdk {
   getCachedRelease: (payload?: {
     channel?: AppPreviewChannel
   }) => Promise<UpdateGetCachedReleaseResponse>
+  getHistory: (payload?: UpdateGetHistoryRequest) => Promise<UpdateGetHistoryResponse>
   getBundledReleaseNotes: () => Promise<UpdateGetBundledReleaseNotesResponse>
   acknowledgeReleaseNotes: (payload: { version: string }) => Promise<UpdateOpResponse>
   recordAction: (payload: {
@@ -66,6 +69,8 @@ export function createUpdateSdk(transport: ITuffTransport): UpdateSdk {
     clearCache: () => transport.send(UpdateEvents.clearCache),
     getCachedRelease: payload =>
       transport.send(UpdateEvents.getCachedRelease, payload ?? {}),
+    getHistory: payload =>
+      transport.send(UpdateEvents.getHistory, payload ?? {}),
     getBundledReleaseNotes: () =>
       transport.send(UpdateEvents.getBundledReleaseNotes),
     acknowledgeReleaseNotes: payload =>
@@ -91,6 +96,8 @@ export type {
   UpdateCheckResponse,
   UpdateGetBundledReleaseNotesResponse,
   UpdateGetCachedReleaseResponse,
+  UpdateGetHistoryRequest,
+  UpdateGetHistoryResponse,
   UpdateGetSettingsResponse,
   UpdateGetStatusResponse,
   UpdateLifecycleChangedPayload,

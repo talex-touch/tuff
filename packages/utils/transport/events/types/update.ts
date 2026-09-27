@@ -4,6 +4,7 @@ import type {
   CachedUpdateRecord,
   GitHubRelease,
   UpdateCheckResult,
+  UpdateHistoryEntry,
   UpdateLifecycleSnapshot,
   UpdateSettings,
   UpdateUserAction,
@@ -69,6 +70,14 @@ export type UpdateLifecycleChangedPayload = UpdateLifecycleSnapshot
 
 export type UpdateGetCachedReleaseResponse
   = UpdateOpResponse<CachedUpdateRecord | null>
+
+export interface UpdateGetHistoryRequest {
+  /** Rows to return after de-duplication by version; the main process clamps it to 1–50. */
+  limit?: number
+}
+
+/** Newest first. An empty list means no update has finished on this device yet. */
+export type UpdateGetHistoryResponse = UpdateOpResponse<UpdateHistoryEntry[]>
 
 export type UpdateGetBundledReleaseNotesResponse
   = UpdateOpResponse<BundledReleaseNotesState>
