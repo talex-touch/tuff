@@ -14,7 +14,7 @@
  *
  * Synthetic rows only; no real profile data is ever touched.
  */
-import { createClient, type Client } from '@libsql/client'
+import { createClient, type Client, type Transaction } from '@libsql/client'
 import { eq } from 'drizzle-orm'
 import { drizzle, type LibSQLDatabase } from 'drizzle-orm/libsql'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -84,6 +84,7 @@ interface LockFixture {
   directory: string
   writerClient: Client
   lockClient: Client
+  lockTransaction: Transaction | null
   writerDb: LibSQLDatabase<typeof schema>
   repository: SqliteFileIndexPersistenceRepository
 }
@@ -92,9 +93,8 @@ async function createLockFixture(): Promise<LockFixture> {
   const directory = await mkdtemp(join(tmpdir(), 'file-index-update-lock-'))
   const url = `file:${join(directory, 'index.sqlite')}`
 
-  const writerClient = createClient({ url })
+  const writerClient = createClient({ url, timeout: 200 })
   await writerClient.execute('PRAGMA journal_mode = WAL')
-  await writerClient.execute('PRAGMA busy_timeout = 200')
   await writerClient.execute(FILES_TABLE_DDL)
   await writerClient.execute(FILE_INDEX_PROGRESS_DDL)
   await writerClient.execute(`
@@ -106,13 +106,12 @@ async function createLockFixture(): Promise<LockFixture> {
     VALUES (1, 'completed', 100, 1)
   `)
 
-  const lockClient = createClient({ url })
+  const lockClient = createClient({ url, timeout: 200 })
   await lockClient.execute('PRAGMA journal_mode = WAL')
-  await lockClient.execute('PRAGMA busy_timeout = 200')
 
   const writerDb = drizzle(writerClient, { schema })
   const repository = new SqliteFileIndexPersistenceRepository(writerDb)
-  return { directory, writerClient, lockClient, writerDb, repository }
+  return { directory, writerClient, lockClient, lockTransaction: null, writerDb, repository }
 }
 
 async function readRow(client: Client): Promise<Record<string, unknown>> {
@@ -129,8 +128,7 @@ describe('file metadata update under a real second-connection writer lock', () =
 
   afterEach(async () => {
     if (!fixture) return
-    // Best-effort: release any lock a failing assertion left behind.
-    await fixture.lockClient.execute('ROLLBACK').catch(() => undefined)
+    await fixture.lockTransaction?.rollback().catch(() => undefined)
     fixture.writerClient.close()
     fixture.lockClient.close()
     await rm(fixture.directory, { recursive: true, force: true })
@@ -141,7 +139,7 @@ describe('file metadata update under a real second-connection writer lock', () =
     fixture = await createLockFixture()
     const { writerDb, lockClient, writerClient } = fixture
 
-    await lockClient.execute('BEGIN IMMEDIATE')
+    fixture.lockTransaction = await lockClient.transaction('write')
 
     // The OLD failure shape: a plain Drizzle `UPDATE files` on the main
     // connection while another writer holds the lock (issue #476 screenshot).
@@ -176,7 +174,8 @@ describe('file metadata update under a real second-connection writer lock', () =
       type: 'file'
     })
 
-    await lockClient.execute('ROLLBACK')
+    await fixture.lockTransaction.rollback()
+    fixture.lockTransaction = null
 
     // Recovery: the worker-owned repository update succeeds after release.
     await expect(fixture.repository.updateFileMetadata([metadataRecord()])).resolves.toEqual({
@@ -214,7 +213,7 @@ describe('file metadata update under a real second-connection writer lock', () =
       fixture = await createLockFixture()
       const { lockClient, writerClient, repository } = fixture
 
-      await lockClient.execute('BEGIN IMMEDIATE')
+      fixture.lockTransaction = await lockClient.transaction('write')
 
       const exhausted = await repository.updateFileMetadata([metadataRecord()]).then(
         () => null,
@@ -223,7 +222,8 @@ describe('file metadata update under a real second-connection writer lock', () =
       expect(exhausted).toBeTruthy()
       expect(isSqliteBusyError(exhausted)).toBe(true)
 
-      await lockClient.execute('ROLLBACK')
+      await fixture.lockTransaction.rollback()
+      fixture.lockTransaction = null
 
       await expect(repository.updateFileMetadata([metadataRecord()])).resolves.toEqual({
         requested: 1,

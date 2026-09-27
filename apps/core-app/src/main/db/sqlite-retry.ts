@@ -13,6 +13,8 @@ export interface SqliteRetryOptions {
   /** Throttle retry logs to avoid spamming under sustained contention. */
   logThrottleMs?: number
   label?: string
+  /** Repair driver state after SQLITE_BUSY and before retrying (for example, reconnect). */
+  onBusy?: (error: unknown) => void | Promise<void>
 }
 
 export interface SqliteRetryExhaustedEvent {
@@ -269,6 +271,13 @@ export async function withSqliteRetry<T>(
       lastError = error
       const busy = isSqliteBusyError(error)
       if (!busy) throw error
+      if (options.onBusy) {
+        try {
+          await options.onBusy(error)
+        } catch (recoveryError) {
+          log.warn(`SQLite busy recovery failed during ${label}`, { error: recoveryError })
+        }
+      }
       if (attempt >= retries) {
         notifySqliteRetryExhausted({
           label,

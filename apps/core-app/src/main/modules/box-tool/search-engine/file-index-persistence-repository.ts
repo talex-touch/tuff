@@ -1,3 +1,4 @@
+import type { Client } from '@libsql/client'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { and, eq, inArray, ne, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
@@ -120,13 +121,30 @@ interface PersistChunkSummary {
 
 export function withFileIndexPersistenceRetry<T>(
   operation: () => Promise<T>,
-  label: string
+  label: string,
+  client?: Pick<Client, 'reconnect'>
 ): Promise<T> {
-  return withSqliteRetry(operation, { label })
+  return withSqliteRetry(operation, {
+    label,
+    // @libsql/client#352: a native statement that fails SQLITE_BUSY stays active until GC.
+    // Reconnect this writer-owned file client before retrying so the poisoned connection cannot
+    // make every later transaction fail at COMMIT with "SQL statements in progress".
+    onBusy: client ? () => client.reconnect() : undefined
+  })
 }
 
 export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenceRepository {
-  constructor(private readonly db: LibSQLDatabase<typeof schema>) {}
+  private readonly client: Client
+
+  constructor(private readonly db: LibSQLDatabase<typeof schema>) {
+    const client = (db as LibSQLDatabase<typeof schema> & { $client?: Client }).$client
+    if (!client) throw new Error('LIBSQL_CLIENT_UNAVAILABLE')
+    this.client = client
+  }
+
+  private withRetry<T>(operation: () => Promise<T>, label: string): Promise<T> {
+    return withFileIndexPersistenceRetry(operation, label, this.client)
+  }
 
   async persistEntries(entries: FilePersistenceEntry[]): Promise<PersistEntriesSummary> {
     const summary: PersistEntriesSummary = {
@@ -162,7 +180,7 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
   async upsertFiles(records: UpsertFileRecord[]): Promise<Array<Record<string, unknown>>> {
     if (records.length === 0) return []
 
-    return await withFileIndexPersistenceRetry(
+    return await this.withRetry(
       () =>
         this.db.transaction(
           async (tx) => {
@@ -248,7 +266,7 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
 
     // The summary is built inside the retried closure so a busy retry never
     // double-counts rows or duplicates missingFileIds entries.
-    return await withFileIndexPersistenceRetry(
+    return await this.withRetry(
       () =>
         this.db.transaction(
           async (tx) => {
@@ -314,7 +332,7 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
     const shape = await resolveScanProgressSchemaShape(this.db)
     if (shape.sourceScoped) {
       const resolvedSourceId = normalizeScanProgressSourceId(sourceId)
-      await withFileIndexPersistenceRetry(
+      await this.withRetry(
         () =>
           upsertSourceScopedScanProgress(this.db, {
             sourceId: resolvedSourceId,
@@ -335,7 +353,7 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
       offset += SCAN_PROGRESS_UPSERT_CHUNK_ROWS
     ) {
       const chunk = normalizedUpsert.paths.slice(offset, offset + SCAN_PROGRESS_UPSERT_CHUNK_ROWS)
-      await withFileIndexPersistenceRetry(
+      await this.withRetry(
         () =>
           this.db.run(sql`
             INSERT INTO scan_progress (path, last_scanned)
@@ -355,7 +373,7 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
   }
 
   async removeFile(path: string): Promise<void> {
-    await withFileIndexPersistenceRetry(async () => {
+    await this.withRetry(async () => {
       await this.db.delete(schema.files).where(eq(schema.files.path, path))
     }, FILE_INDEX_PERSISTENCE_RETRY_LABELS.removeFile)
   }
@@ -363,7 +381,7 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
   async removeFileExtensions(fileId: number, keys: string[]): Promise<void> {
     if (keys.length === 0) return
 
-    await withFileIndexPersistenceRetry(async () => {
+    await this.withRetry(async () => {
       await this.db
         .delete(schema.fileExtensions)
         .where(
@@ -384,7 +402,7 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
       }
     }
 
-    return await withFileIndexPersistenceRetry(
+    return await this.withRetry(
       () =>
         this.db.transaction(
           async (tx) => {
