@@ -246,6 +246,7 @@ vi.mock('../../../../db/db-write-scheduler', () => ({
 }))
 
 vi.mock('../../../../db/sqlite-retry', () => ({
+  isSqliteBusyError: vi.fn(() => false),
   withSqliteRetry: withSqliteRetryMock
 }))
 
