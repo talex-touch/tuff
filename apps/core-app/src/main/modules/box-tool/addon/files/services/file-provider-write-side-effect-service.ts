@@ -31,7 +31,15 @@ export class FileProviderWriteSideEffectService<TFile> {
     })
   }
 
-  dispatch(files: TFile[], options: FileProviderWriteSideEffectOptions): Promise<void> {
-    return this.dispatcher.dispatch(files, options satisfies IndexedWriteSideEffectOptions)
+  dispatch(
+    files: TFile[],
+    options: FileProviderWriteSideEffectOptions,
+    indexingFiles: TFile[] = files
+  ): Promise<void> {
+    return this.dispatcher.dispatch(
+      files,
+      options satisfies IndexedWriteSideEffectOptions,
+      indexingFiles
+    )
   }
 }

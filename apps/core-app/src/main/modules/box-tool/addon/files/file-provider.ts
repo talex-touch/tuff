@@ -334,7 +334,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   /** AIMD adaptive batch scheduler for fullScan upsert — persists across scans. */
   private readonly upsertBatchScheduler = new AdaptiveBatchScheduler({
     initialSize: 5,
-    maxSize: 20,
+    maxSize: 10,
     targetMs: 300,
     minSize: 2,
     ssthresh: 10
@@ -1168,11 +1168,23 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .from(filesSchema)
       .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, paths)))
     if (files.length === 0) return
-    await this.writeSideEffectService.dispatch(files, {
-      extensionContext: 'runtime-writer-ack',
-      indexReason: 'runtime-writer-ack',
-      mutationLeaseId
+    const progressRows = await this.dbUtils.getFileIndexProgressByFileIds(
+      files.map((file) => file.id)
+    )
+    const progressByFileId = new Map(progressRows.map((row) => [row.fileId, row.status]))
+    const indexingFiles = files.filter((file) => {
+      const status = progressByFileId.get(file.id)
+      return status === undefined || status === 'pending' || status === 'processing'
     })
+    await this.writeSideEffectService.dispatch(
+      files,
+      {
+        extensionContext: 'runtime-writer-ack',
+        indexReason: 'runtime-writer-ack',
+        mutationLeaseId
+      },
+      indexingFiles
+    )
   }
 
   private requireFilePersistencePort(): FilePersistencePort {
@@ -3962,24 +3974,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     try {
       const desiredKeywordExtensions = new Map<number, string>()
 
-      await runAdaptiveTaskQueue(
-        files,
-        async (file) => {
-          const fileId = typeof file.id === 'number' ? file.id : null
-
-          const fileExtension = file.extension || path.extname(file.name).toLowerCase()
-          const keywords = KEYWORD_MAP[fileExtension]
-          if (keywords) {
-            if (fileId) {
-              desiredKeywordExtensions.set(fileId, JSON.stringify(keywords))
-            }
-          }
-        },
-        {
-          estimatedTaskTimeMs: 3,
-          label: 'FileProvider::processFileExtensions'
+      for (const file of files) {
+        const fileId = typeof file.id === 'number' ? file.id : null
+        const fileExtension = file.extension || path.extname(file.name).toLowerCase()
+        const keywords = KEYWORD_MAP[fileExtension]
+        if (keywords && fileId) {
+          desiredKeywordExtensions.set(fileId, JSON.stringify(keywords))
         }
-      )
+      }
 
       if (desiredKeywordExtensions.size > 0) {
         const fileIds = Array.from(desiredKeywordExtensions.keys())

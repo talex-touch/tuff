@@ -2438,6 +2438,10 @@ export class SearchEngineCore
         runtime?.drainAdmittedTasks(),
         'Failed to drain admitted Runtime indexing tasks'
       )
+      const taskStateDrain = trackDrain(
+        runtime?.drainTaskStateWrites(),
+        'Failed to drain deferred indexed source task state writes'
+      )
       this.usageSummaryService?.stop()
       this.stopMaintenance()
       // Both of these wait on work the aborts above are already cancelling: search sessions settle
@@ -2456,6 +2460,7 @@ export class SearchEngineCore
         appProducerDrain,
         appRuntimeDrain,
         initialAppScanDrain,
+        taskStateDrain,
         fileRuntimeDrain,
         admittedTaskDrain,
         fileDrain,
