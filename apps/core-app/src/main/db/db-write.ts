@@ -2,6 +2,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from './schema'
 import type { DbWriteLane, ScheduleOptions } from './db-write-scheduler'
 import { dbWriteScheduler } from './db-write-scheduler'
+import { isSqliteBusyError } from './sqlite-retry'
 
 /**
  * Shared entry points for main-process DB writes (design D3, issue #295 follow-up).
@@ -34,6 +35,32 @@ export type AuxDbResolver = () => AuxDbResolution
 // via search-index-writer and the migrated call sites) on files in db/, and a
 // direct import would create a cycle.
 let auxDbResolver: AuxDbResolver | null = null
+
+type DbBusyRecovery = () => Promise<void>
+
+const busyRecoveries: Partial<Record<DbWriteLane, DbBusyRecovery>> = {}
+
+export function setDbBusyRecovery(lane: DbWriteLane, recovery: DbBusyRecovery | null): void {
+  if (recovery) busyRecoveries[lane] = recovery
+  else delete busyRecoveries[lane]
+}
+
+async function runWithDbBusyRecovery<T>(
+  lane: DbWriteLane,
+  operation: () => Promise<T>
+): Promise<T> {
+  try {
+    return await operation()
+  } catch (error) {
+    if (isSqliteBusyError(error)) {
+      // libsql-client#352: a failed native statement remains active until GC. The registered
+      // file owner reconnects and reapplies its PRAGMAs before the scheduler re-enqueues.
+      // Recovery failure must not replace the original SQLITE_BUSY identity.
+      await busyRecoveries[lane]?.().catch(() => undefined)
+    }
+    throw error
+  }
+}
 
 export function setAuxDbResolver(resolver: AuxDbResolver): void {
   auxDbResolver = resolver
@@ -72,7 +99,11 @@ export function scheduleDbWrite<T>(
   operation: () => Promise<T>,
   options?: ScheduleOptions
 ): Promise<T> {
-  return dbWriteScheduler.schedule(label, operation, options)
+  return dbWriteScheduler.schedule(
+    label,
+    () => runWithDbBusyRecovery(options?.lane ?? 'primary', operation),
+    options
+  )
 }
 
 /**
@@ -110,5 +141,8 @@ export async function scheduleAuxWrite<T>(
   }
   const { db, isAux } = resolver()
   const lane: DbWriteLane = isAux ? 'aux' : 'primary'
-  return dbWriteScheduler.schedule(label, () => opFactory(db), { ...scheduleOptions, lane })
+  return dbWriteScheduler.schedule(label, () => runWithDbBusyRecovery(lane, () => opFactory(db)), {
+    ...scheduleOptions,
+    lane
+  })
 }

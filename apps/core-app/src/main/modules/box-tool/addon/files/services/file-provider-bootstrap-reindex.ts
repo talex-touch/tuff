@@ -7,9 +7,9 @@
  * trigger is scan-progress emptiness (empty file → no completed roots → full
  * scan), but that gate can be wedged shut when scan_progress rows survived
  * while the index rows did not (partial file loss, interrupted rebuild). This
- * decision closes that hole: index empty + roots configured → force one
- * Startup scan, whose integrity check then clears the bogus scan_progress and
- * runs the full pipeline.
+ * decision closes that hole: index empty + roots configured → request one
+ * Startup scan. The runtime still applies the same source eligibility in dev
+ * and production; this is not a force bypass.
  *
  * Deliberately NOT gated behind the startup degrade window: an empty search
  * index is missing user-visible search capability, not deferrable maintenance.
