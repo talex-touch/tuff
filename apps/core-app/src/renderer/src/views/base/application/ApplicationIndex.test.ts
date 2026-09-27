@@ -12,6 +12,12 @@ vi.mock('vue-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key })
 }))
 
+// The page reads the entry CoreBox asked it to open from the route (`?entry=…`). A plain mount
+// has no router, so the query is empty here and only the sidebar path is exercised.
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {} as Record<string, string | undefined> })
+}))
+
 vi.mock('vue-sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() }
 }))

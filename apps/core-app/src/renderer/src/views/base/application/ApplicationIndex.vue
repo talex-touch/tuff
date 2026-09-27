@@ -9,10 +9,12 @@ import type {
 import { TxButton } from '@talex-touch/tuffex/button'
 import { toTfileUrl } from '@talex-touch/utils/network'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
+import { APPLICATION_ROUTE_ENTRY_PARAM } from '../../../../../shared/app-surface-routes'
 import AppDetail from './AppDetail.vue'
 import AppIndexLaunchZoneDrawer from './AppIndexLaunchZoneDrawer.vue'
 import AppList from './AppList.vue'
@@ -29,6 +31,7 @@ import { createRendererLogger } from '~/utils/renderer-log'
  */
 const { t } = useI18n()
 const settingsSdk = useSettingsSdk()
+const route = useRoute()
 const log = createRendererLogger('ApplicationIndex')
 
 const entries = ref<AppIndexManagedEntry[]>([])
@@ -178,6 +181,47 @@ function handleSelect(id: string | null): void {
   void loadUsage(id)
   void loadAliases(id)
   void loadShortcut(id)
+}
+
+/**
+ * The application CoreBox asked this page to open.
+ *
+ * The ⌘K panel's "bind a shortcut" row arrives as
+ * `/setting/applications?entry=<app path>`: an application is selected here rather than being
+ * searched for, because the row already knows exactly which one the user meant.
+ */
+const requestedEntry = computed(() => {
+  const value = route.query[APPLICATION_ROUTE_ENTRY_PARAM]
+  return typeof value === 'string' && value ? value : null
+})
+
+/**
+ * Bumped for every request applied. The list reveals the selected row on it: asking twice for the
+ * same application changes no id, so the row would otherwise stay wherever the user left it.
+ */
+const revealRevision = ref(0)
+
+/**
+ * Selects the requested application once the entries are known.
+ *
+ * A path the index no longer holds — the app was removed or renamed since CoreBox found it — is
+ * reported instead of leaving the page looking as though nothing was asked of it.
+ */
+function applyRequestedEntry(): void {
+  const target = requestedEntry.value
+  if (!target || loading.value) return
+
+  const entry = entries.value.find((candidate) => candidate.path === target)
+  if (!entry) {
+    log.warn('Requested application is not in the index', { path: target })
+    toast.error(t('appList.entryMissing'))
+    return
+  }
+
+  // A filter left over from an earlier visit would hide the row being selected.
+  searchQuery.value = ''
+  handleSelect(entry.path)
+  revealRevision.value += 1
 }
 
 async function loadShortcut(path: string): Promise<void> {
@@ -417,9 +461,16 @@ async function handleCopyDiagnostic(entry: AppIndexManagedEntry): Promise<void> 
   }
 }
 
-onMounted(() => {
-  void loadEntries()
+onMounted(async () => {
+  await loadEntries()
+  applyRequestedEntry()
 })
+
+// The page is reused when only its query changes — the panel's row navigates here on every app —
+// so the request is honoured on arrival rather than only on the first mount. The query object,
+// not the entry string: asking twice for the same application is one query value but two
+// requests, and only a new object tells them apart.
+watch(() => route.query, applyRequestedEntry)
 </script>
 
 <template>
@@ -435,6 +486,7 @@ onMounted(() => {
       <AppList
         :items="listItems"
         :selected-id="selectedPath"
+        :reveal-revision="revealRevision"
         :loading="loading"
         :load-failed="loadFailed"
         :usage-degraded="summariesDegraded"

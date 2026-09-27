@@ -3020,6 +3020,7 @@
     "filteredOnDevice": "{count} filtered",
     "usageUnavailable": "No usage data; sorted by name",
     "emptyFiltered": "No matching applications",
+    "entryMissing": "That application is not in the index; it may have been removed",
     "view": {
       "change": "Change list view",
       "dictionary": "Alphabetical",
@@ -6425,6 +6426,7 @@
       "translateImage": "Translate Image",
       "translateImagePin": "Translate and Pin",
       "flowTransfer": "Transfer to Plugin",
+      "bindShortcut": "Bind Shortcut",
       "open": "Open",
       "paste": "Paste",
       "execute": "Run",

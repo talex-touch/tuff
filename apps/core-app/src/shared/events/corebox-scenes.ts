@@ -16,6 +16,17 @@ export const COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID = 'translate-image-pin'
  * whatever `item.actions[0]` happens to be (historically a copy action).
  */
 export const COREBOX_PRIMARY_ACTION_ID = '__corebox_primary__'
+
+/**
+ * The ⌘K panel's "bind a shortcut" row on an application.
+ *
+ * The one built-in row main executes itself rather than relaying back to the CoreBox renderer:
+ * what it opens is the applications page in the main window, and the reveal-plus-route delivery
+ * behind that is main's. The renderer still builds the row (it is a host action with a fixed
+ * label), so the id is shared rather than spelled out on both sides.
+ */
+export const COREBOX_APP_BIND_SHORTCUT_ACTION_ID = 'app-bind-shortcut'
+
 export const COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID = 'corebox.screenshot.translate'
 export const COREBOX_FX_LATEST_SCENE_ID = 'corebox.fx.latest'
 export const COREBOX_FX_CONVERT_SCENE_ID = 'corebox.fx.convert'

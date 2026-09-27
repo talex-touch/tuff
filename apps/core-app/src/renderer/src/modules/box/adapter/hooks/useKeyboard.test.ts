@@ -647,11 +647,12 @@ describe('useKeyboard ⌘K request', () => {
     expect(event.defaultPrevented).toBe(true)
     const request = lastShowRequest()
     expect(request.anchor).toBe('footer')
-    // Five rows in five sections, four titled: the same model the panel draws.
-    expect(request.desiredPanelHeight).toBe(364)
+    // Six rows in five sections, four titled: the same model the panel draws.
+    expect(request.desiredPanelHeight).toBe(396)
     expect((request.builtinActions as Array<{ id: string }>).map((action) => action.id)).toEqual([
       '__corebox_primary__',
       'reveal-in-finder',
+      'app-bind-shortcut',
       'copy-title',
       'toggle-pin',
       'flow-transfer'

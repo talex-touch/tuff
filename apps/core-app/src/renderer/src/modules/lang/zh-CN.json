@@ -3020,6 +3020,7 @@
     "filteredOnDevice": "筛选出 {count} 个",
     "usageUnavailable": "无使用统计，按名称排序",
     "emptyFiltered": "没有匹配的应用",
+    "entryMissing": "应用索引里找不到该应用，可能已被移除",
     "view": {
       "change": "切换列表视图",
       "dictionary": "字典排序",
@@ -6425,6 +6426,7 @@
       "translateImage": "翻译图片",
       "translateImagePin": "翻译并置顶",
       "flowTransfer": "流转到其他插件",
+      "bindShortcut": "绑定快捷键",
       "open": "打开",
       "paste": "粘贴",
       "execute": "执行",
