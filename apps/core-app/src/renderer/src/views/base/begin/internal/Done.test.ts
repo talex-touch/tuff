@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ShortcutBinding } from '~/modules/channel/main/shortcon'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref } from 'vue'
@@ -42,7 +43,8 @@ vi.mock('@talex-touch/tuffex/button', () => ({
   TxButton: {
     name: 'TxButton',
     emits: ['click'],
-    template: '<button type="button"><slot /></button>'
+    template:
+      '<button v-bind="$attrs" type="button" @click="$emit(\'click\', $event)"><slot /></button>'
   }
 }))
 
@@ -120,9 +122,13 @@ describe('onboarding completion', () => {
 
   it('preserves an explicit hide Dock false through shortcut completion', async () => {
     mocks.saveDurable.mockResolvedValue({ success: true, version: 1 })
-    mountDone()
+    const wrapper = mountDone()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', altKey: true }))
+    await vi.waitFor(() =>
+      expect(wrapper.find('[data-testid="shortcut-completion-choice"]').exists()).toBe(true)
+    )
+    await wrapper.get('[data-testid="shortcut-completion-hide"]').trigger('click')
     await vi.waitFor(() => expect(mocks.hide).toHaveBeenCalledOnce())
 
     expect(mocks.appSetting.setup.hideDock).toBe(false)
@@ -313,19 +319,47 @@ describe('onboarding shortcut keys', () => {
     expect(option()).toBe('false')
   })
 
-  it('completes on the key it teaches, and no longer on the old ⌘E', async () => {
-    mountDone()
+  it('offers a choice on the taught shortcut and keeps the main window open by default', async () => {
+    const wrapper = mountDone()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', code: 'KeyE', metaKey: true }))
-    // The finish flow is a promise chain; a single tick would pass before it got to saving.
+    // The finish flow is a promise chain; a single tick would pass before it reaches the choice.
     await flushPromises()
-    expect(mocks.saveDurable).not.toHaveBeenCalled()
-    expect(mocks.hide).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="shortcut-completion-choice"]').exists()).toBe(false)
 
     // Option rewrites `key` on a Mac: ⌥Space types a no-break space, so only `code` says Space.
     window.dispatchEvent(
       new KeyboardEvent('keydown', { key: '\u00A0', code: 'Space', altKey: true })
     )
+    await vi.waitFor(() =>
+      expect(wrapper.find('[data-testid="shortcut-completion-choice"]').exists()).toBe(true)
+    )
+
+    expect(mocks.saveDurable).not.toHaveBeenCalled()
+    expect(mocks.hide).not.toHaveBeenCalled()
+    expect(mocks.send).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-testid="shortcut-completion-continue"]').trigger('click')
+    await vi.waitFor(() => expect(mocks.appSetting.beginner.init).toBe(true))
+
+    expect(mocks.step).toHaveBeenCalledWith({ comp: null })
+    expect(mocks.hide).not.toHaveBeenCalled()
+    expect(mocks.send).not.toHaveBeenCalled()
+  })
+
+  it('hides the main window and summons CoreBox only after the user chooses it', async () => {
+    const wrapper = mountDone()
+
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', { key: '\u00A0', code: 'Space', altKey: true })
+    )
+    await vi.waitFor(() =>
+      expect(wrapper.find('[data-testid="shortcut-completion-choice"]').exists()).toBe(true)
+    )
+
+    await wrapper.get('[data-testid="shortcut-completion-hide"]').trigger('click')
     await vi.waitFor(() => expect(mocks.hide).toHaveBeenCalledOnce())
+
+    expect(mocks.send).toHaveBeenCalledWith(CoreBoxEvents.ui.show)
   })
 })

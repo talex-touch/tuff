@@ -86,6 +86,7 @@ const syncToggleDescription = computed(() => {
 })
 
 const showRuntimeApiServer = computed(() => isDevEnv() && !isLoggedIn.value)
+const showNexusBaseUrlEditor = isDevEnv()
 
 const useLocalServer = computed({
   get: () => getRuntimeServerMode() === 'local',
@@ -411,6 +412,7 @@ function openProfileEditor() {
     />
 
     <TuffBlockSlot
+      v-if="showNexusBaseUrlEditor"
       :title="t('settingUser.nexusBaseUrlTitle', 'Nexus 服务地址')"
       :description="nexusBaseUrlDescription"
       default-icon="i-carbon-network-4"
@@ -508,6 +510,7 @@ function openProfileEditor() {
   </TModal>
 
   <TModal
+    v-if="showNexusBaseUrlEditor"
     v-model="nexusBaseUrlDialogVisible"
     :title="t('settingUser.nexusBaseUrlTitle', 'Nexus 服务地址')"
   >
