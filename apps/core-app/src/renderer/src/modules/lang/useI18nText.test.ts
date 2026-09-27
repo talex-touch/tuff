@@ -150,6 +150,14 @@ function fill(template: string, params: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (match, name: string) => params[name] ?? match)
 }
 
+/**
+ * The message tree a probe composer carries: a nested bundle of strings, the shape a locale file
+ * has. Written out rather than taken from vue-i18n's own recursive locale type, which a plain
+ * `Record<string, unknown>` does not satisfy — and widening the tree would make the whole composer
+ * untyped instead.
+ */
+type ProbeMessages = { [key: string]: string | ProbeMessages }
+
 const wrappers: VueWrapper[] = []
 
 /**
@@ -161,7 +169,7 @@ const wrappers: VueWrapper[] = []
  * its first `globalI18nInstance` — for the rest of the file, which is exactly the state these
  * tests vary.
  */
-async function mountTranslator(messages: Record<string, unknown>): Promise<Translate> {
+async function mountTranslator(messages: ProbeMessages): Promise<Translate> {
   const { useI18nText } = await import('./useI18nText')
   const appI18n = createI18n({
     legacy: false,
