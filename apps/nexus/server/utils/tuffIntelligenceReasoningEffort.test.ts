@@ -1,8 +1,3 @@
-import type { IntelligenceProviderRecord } from './intelligenceStore'
-import type {
-  IntelligenceProviderAdapterPayload,
-  IntelligenceProviderAdapterStreamChunk,
-} from './tuffIntelligenceProviderAdapters'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CREDIT_PRICING, selectCreditPricingRule } from './creditPricingStore'
 import { invokeIntelligenceCapability, streamIntelligenceCapability } from './tuffIntelligenceLabService'
@@ -10,6 +5,9 @@ import {
   clearIntelligenceProviderAdaptersForTest,
   registerIntelligenceProviderAdapterForTest,
   registerIntelligenceProviderStreamAdapterForTest,
+  type IntelligenceProviderAdapterPayload,
+  type IntelligenceProviderAdapterStreamChunk,
+  type IntelligenceProviderRecord,
 } from './tuffIntelligenceProviderAdapters'
 
 /**
@@ -20,11 +18,10 @@ import {
 
 const storeMocks = vi.hoisted(() => ({
   createAudit: vi.fn(),
-  getSettings: vi.fn(),
 }))
-const providerBridgeMocks = vi.hoisted(() => ({
-  getIntelligenceProviderApiKeyWithRegistryFallback: vi.fn(),
-  listIntelligenceProvidersWithRegistryMirrors: vi.fn(),
+const registryRuntimeMocks = vi.hoisted(() => ({
+  getProviderApiKey: vi.fn(),
+  listRegistryRuntimeProviders: vi.fn(),
 }))
 const creditStoreMocks = vi.hoisted(() => ({
   consumeCredits: vi.fn(),
@@ -39,9 +36,36 @@ const usageLedgerMocks = vi.hoisted(() => ({
 
 vi.mock('./intelligenceStore', async () => {
   const actual = await vi.importActual<typeof import('./intelligenceStore')>('./intelligenceStore')
-  return { ...actual, createAudit: storeMocks.createAudit, getSettings: storeMocks.getSettings }
+  return { ...actual, createAudit: storeMocks.createAudit }
 })
-vi.mock('./intelligenceProviderRegistryBridge', () => providerBridgeMocks)
+vi.mock('./sceneOrchestrator', () => ({
+  resolveCapabilitySceneId: (capability: string) => `nexus.intelligence.${capability}`,
+  resolveSceneProviderCandidates: async (event: unknown, options: { capability: string, ownerId: string }) => {
+    const providers: IntelligenceProviderRecord[] = await registryRuntimeMocks.listRegistryRuntimeProviders(event, options.ownerId)
+    const candidates = providers
+      .filter(provider => provider.enabled && (provider.capabilities ?? []).includes(options.capability))
+      .map(provider => ({
+        provider: {
+          id: provider.id, name: provider.id, displayName: provider.name, vendor: 'custom', status: 'enabled',
+          authType: provider.type === 'local' ? 'none' : 'api_key', authRef: provider.type === 'local' ? null : `secure://providers/${provider.id}`,
+          ownerScope: 'system', ownerId: null, description: null, endpoint: provider.baseUrl, region: null,
+          metadata: { ...(provider.metadata ?? {}), adapterKey: 'openai-compatible', models: provider.models, defaultModel: provider.defaultModel, intelligenceType: provider.type },
+          capabilities: (provider.capabilities ?? []).map(capability => ({ id: `${provider.id}:${capability}`, providerId: provider.id, capability, schemaRef: null, metering: null, constraints: null, metadata: null, createdAt: provider.createdAt, updatedAt: provider.updatedAt })),
+          createdBy: provider.userId, createdAt: provider.createdAt, updatedAt: provider.updatedAt,
+        },
+        binding: { id: `binding:${provider.id}`, sceneId: `nexus.intelligence.${options.capability}`, providerId: provider.id, capability: options.capability, model: provider.defaultModel, priority: provider.priority, weight: null, status: 'enabled', constraints: null, metadata: null, createdAt: provider.createdAt, updatedAt: provider.updatedAt },
+        capability: options.capability, model: provider.defaultModel, adapterKey: 'openai-compatible',
+      }))
+    return { scene: { id: `nexus.intelligence.${options.capability}`, auditPolicy: { persistTrace: true } }, capability: options.capability, candidates, trace: [], fallbackTrail: [] }
+  },
+}))
+vi.mock('./providerCredentialStore', () => ({
+  getProviderCredential: async (event: unknown, authRef: string) => {
+    const providerId = authRef.split('/').pop() ?? ''
+    const apiKey = await registryRuntimeMocks.getProviderApiKey(event, 'user_1', providerId)
+    return apiKey ? { apiKey } : null
+  },
+}))
 vi.mock('./creditsStore', async () => {
   const { MockCreditPricingD1Database } = await import('../../test/helpers/credit-pricing-test-utils')
   const pricingDb = new MockCreditPricingD1Database()
@@ -128,9 +152,8 @@ describe('Nexus reasoning effort', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearIntelligenceProviderAdaptersForTest()
-    storeMocks.getSettings.mockResolvedValue({ defaultStrategy: 'priority', enableAudit: false })
-    providerBridgeMocks.getIntelligenceProviderApiKeyWithRegistryFallback.mockResolvedValue('sk-test')
-    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValue([provider()])
+    registryRuntimeMocks.getProviderApiKey.mockResolvedValue('sk-test')
+    registryRuntimeMocks.listRegistryRuntimeProviders.mockResolvedValue([provider()])
     pricingMocks.resolveCreditPricingRule.mockImplementation(
       async (_event: unknown, capability: string) =>
         selectCreditPricingRule(capability, DEFAULT_CREDIT_PRICING),
@@ -163,7 +186,7 @@ describe('Nexus reasoning effort', () => {
   })
 
   it('sends nothing to an upstream model that takes no effort, and says it was not applied', async () => {
-    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValue([
+    registryRuntimeMocks.listRegistryRuntimeProviders.mockResolvedValue([
       provider({ models: ['gpt-4o-mini'], defaultModel: 'gpt-4o-mini' }),
     ])
     const payloads = recordingStreamAdapter('openai')
@@ -183,7 +206,7 @@ describe('Nexus reasoning effort', () => {
   })
 
   it('reports an upstream route that takes no effort at all', async () => {
-    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValue([
+    registryRuntimeMocks.listRegistryRuntimeProviders.mockResolvedValue([
       provider({ id: 'ip_sf', type: 'siliconflow', models: ['deepseek-ai/DeepSeek-R1'], defaultModel: 'deepseek-ai/DeepSeek-R1' }),
     ])
     recordingStreamAdapter('siliconflow')
@@ -202,12 +225,12 @@ describe('Nexus reasoning effort', () => {
   })
 
   it('re-plans for the fallback upstream that actually answers', async () => {
-    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValue([
+    registryRuntimeMocks.listRegistryRuntimeProviders.mockResolvedValue([
       provider({ id: 'ip_primary', priority: 1 }),
       provider({ id: 'ip_claude', type: 'anthropic', priority: 2, models: ['claude-haiku-4-5'], defaultModel: 'claude-haiku-4-5' }),
     ])
     registerIntelligenceProviderStreamAdapterForTest('openai', async function* () {
-      throw new Error('primary temporarily unavailable')
+      throw Object.assign(new Error('primary temporarily unavailable'), { statusCode: 429 })
     })
     const claudePayloads = recordingStreamAdapter('anthropic')
 

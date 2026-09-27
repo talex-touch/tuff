@@ -9,10 +9,10 @@ import { createError } from 'h3'
 import { networkClient } from '@talex-touch/utils/network'
 import { buildOpenAiCompatBaseUrls, resolveProviderBaseUrl } from './intelligenceModels'
 import { getProviderCredential } from './providerCredentialStore'
+import { resolveProviderSceneAdapterKey } from './sceneCapabilityAdapterRegistry'
 
-const INTELLIGENCE_PROVIDER_SOURCE = 'intelligence'
 const VISION_OCR_CAPABILITY = 'vision.ocr'
-const OPENAI_COMPATIBLE_TYPES = new Set(['openai', 'deepseek', 'siliconflow', 'custom'])
+const OPENAI_COMPATIBLE_TYPES = new Set(['openai', 'deepseek', 'siliconflow', 'custom', 'local'])
 const DEFAULT_TIMEOUT_MS = 30000
 
 interface OpenAiChatCompletionResponse {
@@ -84,18 +84,19 @@ function providerHasCapability(provider: ProviderRegistryRecord) {
 }
 
 function resolveIntelligenceType(provider: ProviderRegistryRecord): string {
-  if (provider.metadata?.source !== INTELLIGENCE_PROVIDER_SOURCE) {
+  const adapterKey = resolveProviderSceneAdapterKey(provider)
+  if (adapterKey !== 'openai-compatible' && adapterKey !== 'openai-responses') {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Provider is not an Intelligence registry mirror.',
+      statusMessage: 'Provider adapter does not support Intelligence OCR.',
     })
   }
 
-  const intelligenceType = readStringMetadata(provider.metadata, 'intelligenceType')
-  if (!intelligenceType) {
+  const intelligenceType = readStringMetadata(provider.metadata, 'intelligenceType') ?? provider.vendor
+  if (!OPENAI_COMPATIBLE_TYPES.has(intelligenceType)) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Intelligence provider mirror metadata is incomplete.',
+      statusMessage: 'Provider Intelligence type is not supported.',
     })
   }
   return intelligenceType

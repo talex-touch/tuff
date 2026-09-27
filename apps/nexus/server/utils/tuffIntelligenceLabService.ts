@@ -1,7 +1,6 @@
 import {
   IntelligenceProviderType,
   normalizeIntelligencePayload,
-  resolveIntelligenceProviderRoutes,
   toRuntimeCapabilityId,
   type IntelligenceMessage,
   type IntelligenceReasoningEffort,
@@ -34,12 +33,10 @@ import {
   resolveIntelligenceProviderAdapter,
   resolveIntelligenceProviderStreamAdapter,
   type IntelligenceProviderAdapterStreamChunk,
+  type IntelligenceProviderRecord,
 } from "./tuffIntelligenceProviderAdapters";
 import { invokeIntelligenceVisionOcr } from "./intelligenceVisionOcrProvider";
-import {
-  getIntelligenceProviderApiKeyWithRegistryFallback,
-  listIntelligenceProvidersWithRegistryMirrors,
-} from "./intelligenceProviderRegistryBridge";
+import { getProviderCredential } from "./providerCredentialStore";
 import {
   assertIntelligenceProviderQuota,
   recordIntelligenceProviderRequest,
@@ -52,12 +49,14 @@ import type {
   SceneRunTraceStep,
 } from "./sceneOrchestrator";
 import {
+  resolveCapabilitySceneId,
+  resolveSceneProviderCandidates,
+} from "./sceneOrchestrator";
+import {
   createAudit,
-  getSettings,
   resolveCapabilityPromptTemplate as resolvePromptTemplateFromRegistry,
   savePromptBinding,
   savePromptRecord,
-  type IntelligenceProviderRecord,
 } from "./intelligenceStore";
 import {
   appendRuntimeTraceEvent,
@@ -111,11 +110,12 @@ export interface IntelligenceLabExecutionResult {
   approvalTicket?: TuffIntelligenceApprovalTicket;
 }
 
-interface ResolvedProviderContext {
+export interface ResolvedProviderContext {
   provider: IntelligenceProviderRecord;
   model: string;
   apiKey: string | null;
   timeoutMs: number;
+  auditEnabled: boolean;
 }
 
 interface InvokeModelResult {
@@ -312,7 +312,7 @@ export interface IntelligenceLabOrchestrationResult {
 
 const PLANNER_MAX_ACTIONS = 8;
 const DEFAULT_TIMEOUT_MS = 45_000;
-const DEFAULT_PROVIDER_RETRY_COUNT = 1;
+const DEFAULT_PROVIDER_RETRY_COUNT = 0;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000;
 const STREAM_CONTRACT_VERSION = 3;
 const STREAM_ENGINE = "intelligence";
@@ -557,6 +557,10 @@ function tryResolveHttpStatus(error: Error): number | null {
   if (typeof directStatus === "number" && Number.isFinite(directStatus))
     return directStatus;
 
+  const h3Status = detail.statusCode;
+  if (typeof h3Status === "number" && Number.isFinite(h3Status))
+    return h3Status;
+
   const nestedResponse = asRecord(detail.response);
   if (
     typeof nestedResponse.status === "number" &&
@@ -595,6 +599,13 @@ export function isRetryableInvokeError(error: Error): boolean {
 function isProviderQuotaError(error: Error): boolean {
   const code = getErrorCode(error);
   return Boolean(code && PROVIDER_QUOTA_ERROR_CODES.has(code));
+}
+
+function isSafeProviderFallbackError(error: Error): boolean {
+  if (isProviderQuotaError(error))
+    return true;
+  const status = tryResolveHttpStatus(error);
+  return status !== null && [400, 401, 403, 404, 409, 422, 429].includes(status);
 }
 
 async function recordProviderQuotaBlockedEvidence(
@@ -803,6 +814,52 @@ async function withTimeout<T>(
   ]);
 }
 
+function readProviderModels(provider: ProviderRegistryRecord): string[] {
+  const models = provider.metadata?.models;
+  return Array.isArray(models)
+    ? models.filter((model): model is string => typeof model === "string" && model.trim().length > 0)
+    : [];
+}
+
+function toRuntimeProviderRecord(
+  provider: ProviderRegistryRecord,
+  userId: string,
+  priority: number,
+): IntelligenceProviderRecord {
+  const models = readProviderModels(provider);
+  const defaultModel = readOptionalString(provider.metadata?.defaultModel) ?? models[0] ?? null;
+  const intelligenceType = readOptionalString(provider.metadata?.intelligenceType)
+    ?? (provider.vendor === "deepseek" ? IntelligenceProviderType.DEEPSEEK : IntelligenceProviderType.CUSTOM);
+  return {
+    id: provider.id,
+    userId: provider.ownerId ?? userId,
+    type: intelligenceType,
+    name: provider.displayName,
+    enabled: provider.status === "enabled",
+    hasApiKey: provider.authType === "none" || Boolean(provider.authRef),
+    baseUrl: provider.endpoint,
+    models,
+    defaultModel,
+    instructions: readOptionalString(provider.metadata?.instructions) ?? null,
+    timeout: readOptionalNumber(provider.metadata?.timeout) ?? DEFAULT_TIMEOUT_MS,
+    priority,
+    rateLimit: null,
+    capabilities: provider.capabilities.map(capability => capability.capability),
+    metadata: provider.metadata,
+    createdAt: provider.createdAt,
+    updatedAt: provider.updatedAt,
+  };
+}
+
+async function resolveRegistryApiKey(event: H3Event, provider: ProviderRegistryRecord): Promise<string | null> {
+  if (provider.authType === "none")
+    return null;
+  if (provider.authType !== "api_key" || !provider.authRef)
+    return null;
+  const credential = await getProviderCredential(event, provider.authRef);
+  return credential && "apiKey" in credential && credential.apiKey ? credential.apiKey : null;
+}
+
 async function resolveProviderCandidates(
   event: H3Event,
   userId: string,
@@ -815,84 +872,56 @@ async function resolveProviderCandidates(
     allowedProviderIds?: string[];
   } = {},
 ): Promise<ResolvedProviderContext[]> {
-  const providers = await listIntelligenceProvidersWithRegistryMirrors(
-    event,
-    userId,
-  );
-  if (providers.filter((provider) => provider.enabled).length <= 0)
-    throw new Error("No enabled intelligence providers.");
-
-  const settings = await getSettings(event, userId);
-  const routing = resolveIntelligenceProviderRoutes({
-    capabilityId: options.capabilityId || "text.chat",
-    providers,
-    options: {
-      providerId: options.providerId,
-      preferredProviderId: options.providerId,
-      model: options.model,
-      timeoutMs: options.timeoutMs,
-      modelPreference: options.modelPreference,
-      allowedProviderIds: options.allowedProviderIds,
-    },
-    defaultStrategy: settings.defaultStrategy,
-    requireApiKey: false,
+  const capabilityId = options.capabilityId || "text.chat";
+  const resolution = await resolveSceneProviderCandidates(event, {
+    sceneId: resolveCapabilitySceneId(capabilityId),
+    capability: capabilityId,
+    ownerId: userId,
+  });
+  const allowedProviderIds = options.allowedProviderIds ? new Set(options.allowedProviderIds) : null;
+  const candidates = resolution.candidates.filter(({ provider }) => {
+    if (allowedProviderIds && !allowedProviderIds.has(provider.id))
+      return false;
+    if (!options.providerId)
+      return true;
+    return provider.id === options.providerId;
   });
 
-  if (routing.routes.length <= 0) {
-    const firstSkipped = routing.skipped[0];
-    if (firstSkipped?.reason === "provider_not_allowed")
-      throw new Error("Target provider not found.");
-    if (firstSkipped?.reason === "model_missing")
-      throw new Error("No available intelligence providers: model is missing.");
-    if (firstSkipped?.reason === "capability_not_supported")
-      throw new Error(
-        `No provider supports ${options.capabilityId || "text.chat"}.`,
-      );
-    throw new Error("No available intelligence providers.");
-  }
-
   const contexts: ResolvedProviderContext[] = [];
-  const skippedErrors: string[] = [];
-  for (const route of routing.routes) {
-    const provider = route.provider;
-    const model = route.model;
-    if (!model) {
-      skippedErrors.push(
-        `Provider "${provider.name}" has no model configured.`,
-      );
+  for (const candidate of candidates) {
+    const provider = toRuntimeProviderRecord(candidate.provider, userId, candidate.binding.priority);
+    const model = candidate.model ?? provider.defaultModel ?? provider.models[0];
+    if (!model)
       continue;
-    }
-
-    const timeoutMs = Math.max(
-      DEFAULT_TIMEOUT_MS,
-      route.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    );
-    const apiKey =
-      provider.type === IntelligenceProviderType.LOCAL
-        ? null
-        : await getIntelligenceProviderApiKeyWithRegistryFallback(
-            event,
-            userId,
-            provider.id,
-          );
-    if (provider.type !== IntelligenceProviderType.LOCAL && !apiKey) {
-      skippedErrors.push(`Provider "${provider.name}" API key is missing.`);
+    const apiKey = await resolveRegistryApiKey(event, candidate.provider);
+    if (candidate.provider.authType !== "none" && !apiKey)
       continue;
-    }
-
     contexts.push({
       provider,
       model,
       apiKey,
-      timeoutMs,
+      timeoutMs: Math.max(DEFAULT_TIMEOUT_MS, options.timeoutMs ?? provider.timeout),
+      auditEnabled: resolution.scene.auditPolicy?.enabled === true
+        || resolution.scene.auditPolicy?.persistTrace === true,
     });
   }
 
-  if (contexts.length <= 0) {
-    throw new Error(skippedErrors[0] || "No available intelligence providers.");
-  }
-
+  if (contexts.length === 0)
+    throw new Error(`No configured provider is available for ${capabilityId}.`);
   return contexts;
+}
+
+export async function resolveIntelligenceProviderRuntimeContexts(
+  event: H3Event,
+  userId: string,
+  options: {
+    capabilityId: string;
+    providerId?: string;
+    timeoutMs?: number;
+    allowedProviderIds?: string[];
+  },
+): Promise<ResolvedProviderContext[]> {
+  return await resolveProviderCandidates(event, userId, options);
 }
 
 async function invokeModel(
@@ -902,7 +931,6 @@ async function invokeModel(
     messages: IntelligenceMessage[];
   },
 ): Promise<InvokeModelWithFallbackResult> {
-  const settings = await getSettings(event, userId);
   const contexts = await resolveProviderCandidates(event, userId, {
     capabilityId: payload.capabilityId,
     providerId: payload.providerId,
@@ -944,7 +972,7 @@ async function invokeModel(
           payload.maxTokens,
           payload.reasoningEffort,
         );
-        if (settings.enableAudit) {
+        if (context.auditEnabled) {
           await createAudit(event, {
             userId,
             providerId: context.provider.id,
@@ -1006,7 +1034,7 @@ async function invokeModel(
 
         providerLastError = normalizedError;
 
-        if (settings.enableAudit) {
+        if (context.auditEnabled) {
           await createAudit(event, {
             userId,
             providerId: context.provider.id,
@@ -1016,7 +1044,7 @@ async function invokeModel(
             status,
             latency: context.timeoutMs,
             success: false,
-            errorMessage: normalizedError.message,
+            errorMessage: errorCode,
             traceId: createId("trace"),
             metadata: {
               source: payload.source || "intelligence-agent",
@@ -1042,14 +1070,17 @@ async function invokeModel(
 
     if (providerLastError) {
       lastError = providerLastError;
+      const errorCode = normalizeNexusIntelligenceTransportError(providerLastError).code;
       errors.push({
         providerId: context.provider.id,
         providerName: context.provider.name,
-        message: providerLastError.message,
+        message: errorCode,
       });
-      if (index < contexts.length - 1) {
+      if (index < contexts.length - 1 && isSafeProviderFallbackError(providerLastError)) {
         fallbackCount += 1;
+        continue;
       }
+      break;
     }
   }
 
@@ -1065,7 +1096,6 @@ async function invokeModelStream(
   payload: InvokeModelOptions & { messages: IntelligenceMessage[] },
   hooks: NexusIntelligenceStreamHooks & { capabilityId: string },
 ): Promise<InvokeModelWithFallbackResult> {
-  const settings = await getSettings(event, userId);
   const contexts = await resolveProviderCandidates(event, userId, {
     capabilityId: payload.capabilityId,
     providerId: payload.providerId,
@@ -1119,7 +1149,7 @@ async function invokeModelStream(
           },
           payload.reasoningEffort,
         );
-        if (settings.enableAudit) {
+        if (context.auditEnabled) {
           await createAudit(event, {
             userId,
             providerId: context.provider.id,
@@ -1183,7 +1213,7 @@ async function invokeModelStream(
         detail.streamStarted = emittedDelta;
         providerLastError = normalizedError;
 
-        if (settings.enableAudit) {
+        if (context.auditEnabled) {
           await createAudit(event, {
             userId,
             providerId: context.provider.id,
@@ -1193,7 +1223,7 @@ async function invokeModelStream(
             status,
             latency: context.timeoutMs,
             success: false,
-            errorMessage: normalizedError.message,
+            errorMessage: errorCode,
             traceId: createId("trace"),
             metadata: {
               source: payload.source || "intelligence-agent",
@@ -1222,12 +1252,17 @@ async function invokeModelStream(
 
     if (providerLastError) {
       lastError = providerLastError;
+      const errorCode = normalizeNexusIntelligenceTransportError(providerLastError).code;
       errors.push({
         providerId: context.provider.id,
         providerName: context.provider.name,
-        message: providerLastError.message,
+        message: errorCode,
       });
-      if (index < contexts.length - 1) fallbackCount += 1;
+      if (index < contexts.length - 1 && isSafeProviderFallbackError(providerLastError)) {
+        fallbackCount += 1;
+        continue;
+      }
+      break;
     }
   }
 
@@ -1620,6 +1655,7 @@ async function recordIntelligenceInvokeUsageLedger(
         providerName: invocation.metadata.providerName || invocation.provider,
         vendor: invocation.metadata.providerType || "unknown",
         capability: invocation.capabilityId,
+        model: invocation.model ?? null,
         priority: 0,
         weight: null,
         bindingId: `intelligence:${governanceProviderId}`,
@@ -2086,52 +2122,26 @@ async function settleIntelligenceInvokeCredits(
   return { ...billing, ledgerId: reservation.ledgerId };
 }
 
-function providerHasRegistryCapability(
-  provider: ProviderRegistryRecord,
-  capability: string,
-): boolean {
-  return provider.capabilities.some((item) => item.capability === capability);
-}
-
 async function resolveVisionOcrProvider(
   event: H3Event,
   userId: string,
   providerId?: string,
 ): Promise<ProviderRegistryRecord> {
-  const entries = await listProviderRegistryEntries(event);
-  const providers = entries
-    .filter((provider) => provider.status === "enabled")
-    .filter(
-      (provider) =>
-        provider.ownerScope === "system" || provider.ownerId === userId,
-    )
-    .filter((provider) => providerHasRegistryCapability(provider, "vision.ocr"))
-    .filter((provider) => provider.metadata?.source === "intelligence");
-
+  const resolution = await resolveSceneProviderCandidates(event, {
+    sceneId: resolveCapabilitySceneId("vision.ocr"),
+    capability: "vision.ocr",
+    ownerId: userId,
+  });
   const selected = providerId
-    ? providers.find((provider) => {
-        const intelligenceProviderId = readOptionalString(
-          provider.metadata?.intelligenceProviderId,
-        );
-        return (
-          provider.id === providerId || intelligenceProviderId === providerId
-        );
-      })
-    : providers.sort((a, b) => {
-        const aPriority = readOptionalNumber(a.metadata?.priority) ?? 999;
-        const bPriority = readOptionalNumber(b.metadata?.priority) ?? 999;
-        return aPriority - bPriority;
-      })[0];
-
+    ? resolution.candidates.find(({ provider }) => provider.id === providerId)
+    : resolution.candidates[0];
   if (!selected) {
     throw createError({
       statusCode: 409,
-      statusMessage: providerId
-        ? "Target vision OCR provider not found."
-        : "No enabled vision OCR provider is available.",
+      statusMessage: "Target vision OCR provider not found.",
     });
   }
-  return selected;
+  return selected.provider;
 }
 
 export interface NexusIntelligenceInvokePayload {
@@ -2226,14 +2236,11 @@ export async function invokeIntelligenceCapability(
   const capabilityId = normalizeCapabilityId(normalizedRequest.capabilityId);
   const options = request.options ?? {};
   const audit = resolveInvokeAuditContext(options);
-  const model = options.model;
-  const providerId =
-    options.providerId || options.preferredProviderId || undefined;
   const timeoutMs =
     options.timeoutMs || readOptionalNumber(options.metadata?.timeout);
 
   if (capabilityId === "vision.ocr") {
-    const provider = await resolveVisionOcrProvider(event, userId, providerId);
+    const provider = await resolveVisionOcrProvider(event, userId);
     const governanceProviderId = provider.id;
     try {
       await assertIntelligenceProviderQuota(
@@ -2290,9 +2297,7 @@ export async function invokeIntelligenceCapability(
         readOptionalString(provider.metadata?.defaultModel) || "vision-ocr",
       latency: ocr.latencyMs || now() - startedAt,
       traceId: ocr.providerRequestId || createId("trace"),
-      provider:
-        readOptionalString(provider.metadata?.intelligenceProviderId) ||
-        provider.id,
+      provider: provider.id,
       metadata: {
         nexus: true,
         providerName: provider.displayName,
@@ -2346,12 +2351,8 @@ export async function invokeIntelligenceCapability(
       reservation,
       invocation: await invokeModel(event, userId, {
         capabilityId,
-        providerId,
-        model,
         timeoutMs,
         maxTokens: readDeclaredOutputTokens(options),
-        modelPreference: options.modelPreference,
-        allowedProviderIds: options.allowedProviderIds,
         // Chat only: every other capability is sent no reasoning parameter.
         reasoningEffort:
           capabilityId === "text.chat"
@@ -2434,8 +2435,6 @@ export async function streamIntelligenceCapability(
 
   const options = request.options ?? {};
   const audit = resolveInvokeAuditContext(options);
-  const providerId =
-    options.providerId || options.preferredProviderId || undefined;
   const timeoutMs =
     options.timeoutMs || readOptionalNumber(options.metadata?.timeout);
   const messages = buildCapabilityMessages(
@@ -2456,12 +2455,8 @@ export async function streamIntelligenceCapability(
         userId,
         {
           capabilityId,
-          providerId,
-          model: options.model,
           timeoutMs,
           maxTokens: readDeclaredOutputTokens(options),
-          modelPreference: options.modelPreference,
-          allowedProviderIds: options.allowedProviderIds,
           reasoningEffort: normalizeReasoningEffort(options.reasoningEffort),
           messages,
           source: audit.source,
@@ -2809,15 +2804,17 @@ export async function listIntelligenceLabProviders(
   userId: string,
 ): Promise<{
   providers: IntelligenceProviderRecord[];
-  defaultStrategy: string;
 }> {
-  const [providers, settings] = await Promise.all([
-    listIntelligenceProvidersWithRegistryMirrors(event, userId),
-    getSettings(event, userId),
-  ]);
+  const entries = await listProviderRegistryEntries(event);
+  const providers = entries
+    .filter(provider => provider.ownerScope === "system" || provider.ownerId === userId)
+    .map(provider => toRuntimeProviderRecord(
+      provider,
+      userId,
+      readOptionalNumber(provider.metadata?.priority) ?? 100,
+    ));
   return {
     providers,
-    defaultStrategy: settings.defaultStrategy,
   };
 }
 

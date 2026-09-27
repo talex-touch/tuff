@@ -150,6 +150,7 @@ function binding(providerId: string, capabilityName: string, priority: number): 
     sceneId: 'corebox.screenshot.translate',
     providerId,
     capability: capabilityName,
+    model: null,
     priority,
     weight: null,
     status: 'enabled',
@@ -180,6 +181,7 @@ function scene(overrides: Partial<SceneRegistryRecord> = {}): SceneRegistryRecor
         sceneId: 'corebox.selection.translate',
         providerId: 'prv_tencent_cloud_mt',
         capability: 'text.translate',
+        model: null,
         priority: 10,
         weight: null,
         status: 'enabled',
@@ -288,9 +290,10 @@ describe('runSceneOrchestrator', () => {
       providerId: exactProvider.id,
       vendor: 'tencent-cloud',
       capability: 'text.translate',
+      adapterKey: 'tencent-translation',
       ready: true,
       matchedKey: 'tencent-cloud:text.translate',
-      fallbackKey: null,
+      fallbackKey: 'tencent-translation:text.translate',
       reason: 'adapter-ready',
     })
 
@@ -301,9 +304,10 @@ describe('runSceneOrchestrator', () => {
       providerId: exactProvider.id,
       vendor: 'tencent-cloud',
       capability: 'text.translate',
+      adapterKey: 'tencent-translation',
       ready: true,
       matchedKey: '*:text.translate',
-      fallbackKey: 'tencent-cloud:text.translate',
+      fallbackKey: 'tencent-translation:text.translate',
       reason: 'adapter-ready',
     })
 
@@ -312,7 +316,7 @@ describe('runSceneOrchestrator', () => {
     expect(resolveSceneCapabilityAdapterReadiness(exactProvider, 'text.translate')).toMatchObject({
       ready: false,
       matchedKey: null,
-      fallbackKey: 'tencent-cloud:text.translate',
+      fallbackKey: 'tencent-translation:text.translate',
       reason: 'adapter-missing',
     })
     expect(resolveSceneCapabilityAdapterReadiness(exactProvider, 'image.translate')).toMatchObject({
@@ -337,15 +341,15 @@ describe('runSceneOrchestrator', () => {
 
     expect(resolveSceneCapabilityAdapterReadiness(openAiProvider, 'chat.completion')).toMatchObject({
       ready: true,
-      matchedKey: 'openai:chat.completion',
+      matchedKey: 'openai-compatible:chat.completion',
     })
     expect(resolveSceneCapabilityAdapterReadiness(openAiProvider, 'text.summarize')).toMatchObject({
       ready: true,
-      matchedKey: 'openai:text.summarize',
+      matchedKey: 'openai-compatible:text.summarize',
     })
     expect(resolveSceneCapabilityAdapterReadiness(openAiProvider, 'content.extract')).toMatchObject({
       ready: true,
-      matchedKey: 'openai:content.extract',
+      matchedKey: 'openai-compatible:content.extract',
     })
   })
 
@@ -563,13 +567,13 @@ describe('runSceneOrchestrator', () => {
         run: expect.objectContaining({
           status: 'failed',
           error: expect.objectContaining({
-            message: 'OpenAI-compatible chat returned 401: Incorrect API key provided.',
+            message: 'Provider rejected the request before acceptance.',
           }),
           fallbackTrail: expect.arrayContaining([
             expect.objectContaining({
               providerId: 'prv_openai_extract',
               status: 'failed',
-              reason: 'OpenAI-compatible chat returned 401: Incorrect API key provided.',
+              reason: 'provider_rejected_pre_acceptance',
             }),
           ]),
         }),
@@ -1346,7 +1350,7 @@ describe('runSceneOrchestrator', () => {
 
     registerSceneCapabilityAdapter('tencent-cloud:text.translate', async ({ provider }) => {
       if (provider.id === 'prv_primary')
-        throw new Error('primary unavailable')
+        throw Object.assign(new Error('primary unavailable'), { statusCode: 429 })
       return {
         output: { translatedText: 'fallback result' },
         providerRequestId: 'req_secondary',
@@ -1375,7 +1379,7 @@ describe('runSceneOrchestrator', () => {
         expect.objectContaining({ providerId: 'prv_secondary' }),
       ],
       fallbackTrail: expect.arrayContaining([
-        expect.objectContaining({ providerId: 'prv_primary', status: 'failed', reason: 'primary unavailable' }),
+        expect.objectContaining({ providerId: 'prv_primary', status: 'failed', reason: 'provider_rejected_pre_acceptance' }),
         expect.objectContaining({ providerId: 'prv_secondary', status: 'selected' }),
       ]),
       usage: [
@@ -1450,7 +1454,7 @@ describe('runSceneOrchestrator', () => {
           status: 'failed',
           selected: [],
           fallbackTrail: expect.arrayContaining([
-            expect.objectContaining({ providerId: 'prv_primary', status: 'failed', reason: 'primary unavailable' }),
+            expect.objectContaining({ providerId: 'prv_primary', status: 'failed', reason: 'provider_failed_uncertain' }),
           ]),
         }),
       },
@@ -1873,8 +1877,8 @@ describe('runSceneOrchestrator', () => {
       authType: 'api_key',
       authRef: 'secure://providers/intelligence-vision',
       metadata: {
-        source: 'intelligence',
-        intelligenceProviderId: 'ip_vision',
+        source: 'provider-registry',
+        adapterKey: 'openai-compatible',
         intelligenceType: 'openai',
         defaultModel: 'gpt-4.1-mini',
       },
