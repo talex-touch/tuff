@@ -634,8 +634,7 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .PluginPermissions {
-  height: 100%;
-  overflow-y: auto;
+  width: 100%;
 }
 
 .loading-state {

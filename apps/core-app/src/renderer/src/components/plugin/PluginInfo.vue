@@ -984,6 +984,23 @@ async function handlePrimaryAction(): Promise<void> {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+
+  :deep(.tx-tabs__content-scroll) {
+    padding: 16px 16px 24px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+  }
+
+  :deep(.tx-tabs__content-wrapper) {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0%;
+    min-height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+  }
 }
 
 .plugin-info-root.has-error-glow {
