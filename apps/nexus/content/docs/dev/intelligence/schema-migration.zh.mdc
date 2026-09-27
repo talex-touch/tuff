@@ -1,77 +1,52 @@
-# Intelligence 统一 Schema 与迁移方案
+# Intelligence Provider Registry 与 Scene 路由
 
-本页定义 provider/capability/prompts 的统一配置模型，并给出从 Core-App + Nexus 零散配置迁移到统一 Schema 的路径。
+Nexus 对 AI、翻译、OCR、图片合成与语音渠道只保留一套服务端配置模型。
 
-## 为什么要统一
+## 唯一事实源
 
-当前存在多份配置来源：
+- `provider_registry`：聚合渠道、显式适配器格式、作用域、Endpoint、安全 metadata 与 `authRef`。
+- `provider_capabilities`：每个渠道声明的能力。
+- `provider_secure_store`：由 `authRef` 引用的加密凭据。
+- `scene_registry`：产品场景与所需能力。
+- `scene_strategy_bindings`：场景能力对应的有序渠道/模型绑定与 fallback 顺序。
 
-- Core-App 主配置：`StorageList.IntelligenceConfig`（providers/capabilities/globalConfig）
-- Core-App Prompt 库：`intelligence/prompt-library`（renderer 侧 custom prompts）
-- Core-App DB 适配：`intelligence/providers`、`intelligence/capabilities`、`intelligence/prompts`
-- Nexus D1：`intelligence_providers`、`intelligence_settings`（及 runtime 审计）
+已退役的 `intelligence_providers` 表、Provider 镜像桥、旧 Dashboard Provider CRUD、迁移接口与 CoreApp Provider 同步接口不再参与运行时配置。
 
-结果是字段语义接近但不完全等价，迁移/排障成本高。
+## 运行时契约
 
-## 统一 Schema（建议 v1）
+客户端只提交 capability ID 与输入，不选择 Provider、Endpoint、适配器、凭据、价格或模型。Nexus 先解析规范 Scene，再选择其有序 binding：
 
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  interface IntelligenceUnifiedConfigV1 {
-    schemaVersion: 1
-    updatedAt: number
-    providers: IntelligenceProviderPersisted[]
-    capabilities: Record<string, IntelligenceCapabilityConfig>
-    prompts: PromptTemplate[]
-    globalConfig: IntelligenceGlobalConfig
-    governance: {
-      defaultTimeoutMs: number
-      fallbackPolicy: 'next-available' | 'fail-fast' | 'round-robin'
-      approvalEnabled: boolean
-      auditEnabled: boolean
-    }
-  }
+```text
+能力请求
+  -> 规范 Scene
+  -> binding（provider + adapter + model + priority）
+  -> 受保护凭据
+  -> Provider adapter
+  -> Credits 结算 + 安全 usage trace
+```
 
-  interface IntelligenceProviderPersisted extends Omit<IntelligenceProviderConfig, 'apiKey'> {
-    auth?: {
-      mode: 'secret-ref' | 'token-ref' | 'none'
-      secretRef?: string
-    }
-  }
----
-:::
+Fallback 只做串行兜底。仅当前一个渠道明确在接收计费前拒绝时，才尝试下一个 binding；已接收、接收状态不确定、发送后取消或已经输出流内容的请求绝不换上游重放。
 
-> 说明：`apiKey` 不应以明文持久化在统一配置对象中，运行时按 `secretRef` 解密注入。
+## 配置规则
 
-## 数据安全约束
+- Provider 声明能力时必须配置 `metadata.adapterKey`，且必须是已注册适配器。
+- `metadata.defaultModel` 若存在，必须包含在 `metadata.models` 中。
+- Scene binding 只能选择对应 Provider 模型列表中的模型。
+- system Provider 对已登录用户可用并统一扣 Credits；user Provider 仅 owner 可用；无法判定的 workspace scope 关闭失败。
+- Provider/capability/adapter/model 缺失时，Scene 投影为 `degraded`，不允许“看似启用、实际必失败”。
+- 凭据、Prompt、媒体、转写文本、上游完整响应与原生错误不得进入普通 Provider metadata 或 usage ledger。
 
-- SQLite 作为本地 SoT；JSON 仅用于同步载荷，且必须加密（`payload_enc` / `payload_ref`）。
-- `deviceId` 只作为设备标识，不参与密钥材料。
-- provider 凭据必须走系统安全存储（safeStorage/Keychain/Credential Locker/libsecret）。
+## 语音能力
 
-## 迁移映射（核心字段）
+Nexus 承载的缓冲式 `audio.stt` 与上传式 `audio.transcribe` 统一通过 Scene + Provider Registry 选择渠道；不经过 Nexus 的实时语音传输仍由 CoreApp 管理。Nexus 语音服务继续保留媒体校验、幂等、接收不确定围栏、转写隐私与持久 Credits 结算。
 
-| 来源 | 字段 | 目标 |
-| --- | --- | --- |
-| Core-App `providers[]` | `id/type/name/enabled/baseUrl/models/defaultModel` | `providers[]` 同名字段 |
-| Core-App `providers[].apiKey` | 明文/临时注入值 | `providers[].auth.secretRef` |
-| Core-App `capabilities` | `providers/promptTemplate` | `capabilities` |
-| Core-App prompt library | `customPrompts[]` | `prompts[]`（追加并去重） |
-| Nexus `intelligence_settings` | `default_strategy/enable_audit/...` | `globalConfig + governance` |
+## 旧表删除
 
-## 建议迁移流程
+应用启动过程永不执行破坏性 DDL。运维仅在受保护的 `provider:legacy:drop` 命令完成以下门禁后删除旧表：
 
-1. **读取阶段**：采集 Core-App/Nexus 现有配置快照（只读）。
-2. **归一化阶段**：统一 providerId、capabilityId、prompt id，修复默认值。
-3. **安全重写阶段**：将凭据字段转换为 `secretRef`，清理明文残留。
-4. **写入阶段**：写入 unified config（带 `schemaVersion`）并保留回滚快照。
-5. **双读灰度阶段**：运行时优先读新 schema，回退读旧 schema（只读）。
-6. **收敛阶段**：完成兼容窗口后移除旧写入入口。
+1. 导出 D1 备份；
+2. 确认存在启用的 Registry Provider 与 Scene；
+3. 确认每个启用且需要凭据的 Provider 都有 secure-store 记录；
+4. 同时提供 `--execute` 与显式破坏性确认环境变量。
 
-## 迁移验收
-
-- 单用户迁移后 provider/capability/prompt 数量一致。
-- 同一 capability 在迁移前后 provider 选择结果一致（允许仅排序差异）。
-- 无任何 API Key 明文残留在 JSON、日志或同步载荷。
-- Nexus/Core-App UI 对同一配置显示一致。
+Prompt、Prompt binding、审计、IP 封禁、运行时会话/trace、Provider health、usage ledger 与 Credits 记录均不依赖旧 Provider 表，继续保留。
