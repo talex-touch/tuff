@@ -18,7 +18,7 @@ import migrationsLocator from '../../../../resources/db/locator.json?commonjs-ex
 import * as schema from '../../db/schema'
 import { resolveRuntimeRootPath } from '../../utils/app-root-path'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
-import { setAuxDbResolver } from '../../db/db-write'
+import { setAuxDbResolver, setDbBusyRecovery } from '../../db/db-write'
 import { DB_AUX_ENABLED, DB_SEARCH_SPLIT_ENABLED } from '../../db/runtime-flags'
 import {
   getSqliteBusyRetryCount,
@@ -282,7 +282,6 @@ export class DatabaseModule extends BaseModule {
     // Enforce declared foreign keys. SQLite defaults this OFF per-connection,
     // which silently disabled every onDelete: 'cascade' in the schema.
     await client.execute('PRAGMA foreign_keys = ON')
-    await client.execute(`PRAGMA busy_timeout = ${MAIN_DB_BUSY_TIMEOUT_MS}`)
     await client.execute('PRAGMA synchronous = NORMAL')
     await client.execute('PRAGMA locking_mode = NORMAL')
     await client.execute('PRAGMA mmap_size = 268435456')
@@ -291,6 +290,17 @@ export class DatabaseModule extends BaseModule {
     )
   }
 
+  private async recoverSqliteClient(
+    client: Client,
+    label: 'primary' | 'aux' | 'search'
+  ): Promise<void> {
+    try {
+      await client.reconnect()
+      await this.configureSqliteClient(client, label)
+    } catch (error) {
+      dbLog.warn(`Failed to recover SQLite ${label} client after SQLITE_BUSY`, { error })
+    }
+  }
   /**
    * Probe a freshly-opened database for on-disk corruption via `PRAGMA
    * quick_check`. Returns true when the file is corrupt (or a badly damaged
@@ -408,7 +418,7 @@ export class DatabaseModule extends BaseModule {
     // (e.g. WAL unsupported on the filesystem) must never leave this.client
     // pointing at the closed corrupt handle — migrations still run on the fresh,
     // empty database, just without the optimal pragmas.
-    const freshClient = createClient({ url: `file:${dbPath}` })
+    const freshClient = createClient({ url: `file:${dbPath}`, timeout: MAIN_DB_BUSY_TIMEOUT_MS })
     if (label === 'primary') {
       this.client = freshClient
       this.db = drizzle(freshClient, { schema })
@@ -1140,7 +1150,10 @@ export class DatabaseModule extends BaseModule {
     this.searchDbPath = this.searchDbPath || path.join(databaseDirPath, 'search-index.db')
 
     const setupSearch = async (): Promise<void> => {
-      this.searchClient = createClient({ url: `file:${this.searchDbPath}` })
+      this.searchClient = createClient({
+        url: `file:${this.searchDbPath}`,
+        timeout: MAIN_DB_BUSY_TIMEOUT_MS
+      })
       await this.configureSqliteClient(this.searchClient, 'search')
       // Search/file-index tables are rebuildable — no data migration. Apply the
       // same drizzle migrations to the dedicated file; providers re-index on
@@ -1253,7 +1266,10 @@ export class DatabaseModule extends BaseModule {
 
     try {
       this.auxDbPath = path.join(databaseDirPath, 'database-aux.db')
-      this.auxClient = createClient({ url: `file:${this.auxDbPath}` })
+      this.auxClient = createClient({
+        url: `file:${this.auxDbPath}`,
+        timeout: MAIN_DB_BUSY_TIMEOUT_MS
+      })
       await this.configureSqliteClient(this.auxClient, 'aux')
       await this.ensureDatabaseIntegrity(this.auxDbPath, 'aux', this.probeDbIntegrity)
       const auxDb = drizzle(this.auxClient, { schema })
@@ -1262,12 +1278,16 @@ export class DatabaseModule extends BaseModule {
       if (this.destroying) return
       this.auxDb = auxDb
       this.auxInitialized = true
+      setDbBusyRecovery('aux', async () => {
+        if (this.auxClient) await this.recoverSqliteClient(this.auxClient, 'aux')
+      })
       dbLog.info('Aux database initialized', {
         meta: { path: this.auxDbPath }
       })
     } catch (error) {
       dbLog.warn('Aux database initialization failed; fallback to primary DB', { error })
       this.auxInitialized = false
+      setDbBusyRecovery('aux', null)
       this.auxDb = null
       try {
         this.auxClient?.close()
@@ -1339,7 +1359,7 @@ export class DatabaseModule extends BaseModule {
     } catch (error) {
       dbLog.warn('Failed to write database running marker', { error })
     }
-    this.client = createClient({ url: `file:${dbPath}` })
+    this.client = createClient({ url: `file:${dbPath}`, timeout: MAIN_DB_BUSY_TIMEOUT_MS })
 
     this.db = drizzle(this.client, { schema })
 
@@ -1356,6 +1376,9 @@ export class DatabaseModule extends BaseModule {
     } catch (error) {
       dbLog.warn('Failed to configure SQLite pragmas', { error })
     }
+    setDbBusyRecovery('primary', async () => {
+      if (this.client) await this.recoverSqliteClient(this.client, 'primary')
+    })
 
     // Detect on-disk corruption and rebuild before migrations run — only after an
     // unclean prior shutdown (see probeDbIntegrity). Safe here because no other
@@ -1744,6 +1767,8 @@ export class DatabaseModule extends BaseModule {
     this.destroying = true
     this.disposeRetryExhaustedListener?.()
     this.disposeRetryExhaustedListener = null
+    setDbBusyRecovery('primary', null)
+    setDbBusyRecovery('aux', null)
     if (this.backgroundStartupPromise) {
       await this.backgroundStartupPromise
       this.backgroundStartupPromise = null

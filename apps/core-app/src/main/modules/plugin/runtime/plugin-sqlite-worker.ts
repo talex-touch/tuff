@@ -280,21 +280,15 @@ async function handleRequest(request: PluginSqliteWorkerRequest): Promise<void> 
       return
     }
 
-    const results: PluginSqliteExecuteResult[] = []
-    await client.execute('BEGIN IMMEDIATE')
-    try {
-      for (const statement of operation.statements) {
-        const result = await client.execute({
+    const results = (
+      await client.batch(
+        operation.statements.map((statement) => ({
           sql: statement.sql,
           args: normalizeParams(statement.params)
-        })
-        results.push(executeResult(result))
-      }
-      await client.execute('COMMIT')
-    } catch (error) {
-      await client.execute('ROLLBACK').catch(() => undefined)
-      throw error
-    }
+        })),
+        'write'
+      )
+    ).map(executeResult)
     await enforceDiskQuota(client)
     await assertSafeDatabasePath(true)
     postResult(request.requestId, { results })
