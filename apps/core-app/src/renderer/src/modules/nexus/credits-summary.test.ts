@@ -180,4 +180,26 @@ describe('useCreditsSummary', () => {
     await vi.waitFor(() => expect(credits.summary.value).toBeNull())
     expect(credits.error.value).toBe('')
   })
+
+  it('coalesces concurrent refresh calls into a single network request', async () => {
+    let requestCount = 0
+    serve({
+      '/api/credits/summary': async () => {
+        requestCount += 1
+        return nexusResponse(200, SUMMARY)
+      }
+    })
+
+    const credits = useCreditsSummary()
+    authState.isLoggedIn.value = true
+
+    await vi.waitFor(() => expect(credits.summary.value?.user.remaining).toBe(750))
+    const baseCount = requestCount
+
+    // 并发触发 3 次 refresh
+    await Promise.all([credits.refresh(), credits.refresh(), credits.refresh()])
+
+    // 只应该增加 1 次网络请求
+    expect(requestCount - baseCount).toBe(1)
+  })
 })

@@ -715,10 +715,22 @@ async function ensureBalance(event: H3Event, scope: 'team' | 'user', scopeId: st
 }
 
 async function resolveActiveCreditTeam(event: H3Event, userId: string) {
-  const personalTeamId = await ensurePersonalTeam(event, userId)
+  const personalTeamId = `team_${userId}`
   const teams = await listUserTeams(event, userId)
   const organizationTeam = teams.find(team => team.type === 'organization') || null
-  const personalTeam = teams.find(team => team.id === personalTeamId) || null
+  let personalTeam = teams.find(team => team.id === personalTeamId) || null
+  if (!personalTeam) {
+    await ensurePersonalTeam(event, userId)
+    personalTeam = {
+      id: personalTeamId,
+      name: 'Personal',
+      type: 'personal',
+      ownerUserId: userId,
+      createdAt: new Date().toISOString(),
+      role: 'owner',
+      joinedAt: new Date().toISOString(),
+    }
+  }
   const activeTeam = organizationTeam || personalTeam
   return {
     personalTeamId,
@@ -731,23 +743,49 @@ async function resolveActiveCreditTeam(event: H3Event, userId: string) {
 export async function getCreditSummary(event: H3Event, userId: string) {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
-  const activeCreditTeam = await resolveActiveCreditTeam(event, userId)
-
-  await ensureBalance(event, 'team', activeCreditTeam.personalTeamId)
-  if (activeCreditTeam.hasTeamPool)
-    await ensureBalance(event, 'team', activeCreditTeam.teamId)
-  await ensureBalance(event, 'user', userId)
-
   const month = getMonthKey()
-  const plan = await resolvePlanForScope(event, 'user', userId)
-  const teamBalance = await db.prepare(`
-    SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?
-  `).bind(activeCreditTeam.teamId, month).first()
-  const userBalance = await db.prepare(`
-    SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'user' AND scope_id = ? AND month = ?
-  `).bind(userId, month).first()
+
+  const [activeCreditTeam, plan] = await Promise.all([
+    resolveActiveCreditTeam(event, userId),
+    resolvePlanForScope(event, 'user', userId),
+  ])
+
+  let [teamBalance, userBalance] = await Promise.all([
+    db.prepare(`
+      SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?
+    `).bind(activeCreditTeam.teamId, month).first<{ quota?: unknown; used?: unknown }>(),
+    db.prepare(`
+      SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'user' AND scope_id = ? AND month = ?
+    `).bind(userId, month).first<{ quota?: unknown; used?: unknown }>(),
+  ])
+
+  const basePersonalQuota = resolveCreditAmount(PERSONAL_QUOTA_BY_PLAN[plan] ?? DEFAULT_PERSONAL_QUOTA)
+  const expectedPersonalQuota = await resolvePersonalQuota(event, userId, basePersonalQuota, month, plan)
+  const expectedTeamQuota = activeCreditTeam.hasTeamPool
+    ? await resolveTeamQuotaByPlan(event, activeCreditTeam.teamId, plan)
+    : DEFAULT_TEAM_QUOTA
+
+  const needsUserEnsure = !userBalance || Number(userBalance.quota ?? 0) < expectedPersonalQuota
+  const needsTeamEnsure = !teamBalance || Number(teamBalance.quota ?? 0) < expectedTeamQuota
+
+  if (needsUserEnsure) {
+    await ensureBalance(event, 'user', userId)
+    userBalance = await db.prepare(`
+      SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'user' AND scope_id = ? AND month = ?
+    `).bind(userId, month).first<{ quota?: unknown; used?: unknown }>()
+  }
+
+  if (needsTeamEnsure) {
+    await ensureBalance(event, 'team', activeCreditTeam.personalTeamId)
+    if (activeCreditTeam.hasTeamPool) {
+      await ensureBalance(event, 'team', activeCreditTeam.teamId)
+    }
+    teamBalance = await db.prepare(`
+      SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?
+    `).bind(activeCreditTeam.teamId, month).first<{ quota?: unknown; used?: unknown }>()
+  }
   const boost = plan === 'FREE' ? await getCreditBoostStatus(event, userId, month, plan) : null
-  const userQuota = resolveCreditAmount((userBalance as any)?.quota ?? 0)
+  const userQuota = resolveCreditAmount(userBalance?.quota ?? 0)
   const canClaimNow = boost ? (boost.eligible && !boost.claimedThisMonth && userQuota < BOOSTED_PERSONAL_QUOTA) : false
   return {
     month,
