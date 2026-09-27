@@ -284,9 +284,21 @@ describe('SearchIndexWorkerClient init gate', () => {
       legacyItemIds: ['file:/tmp/legacy.txt']
     })
 
+    // The worker reports a count, not the persisted rows themselves — the fused
+    // reply must stay off the row payload the caller no longer consumes.
     const combined = {
-      persisted: [{ id: 7, path: '/tmp/demo.txt' }],
-      summary: { removedItems: 0, indexedItems: 1 }
+      persistedCount: 1,
+      summary: { removedItems: 0, indexedItems: 1 },
+      metrics: {
+        requestedRows: 1,
+        persistedRows: 1,
+        indexedItems: 1,
+        removedItems: 0,
+        legacyItemIds: 1,
+        workerDurationMs: 4,
+        persistDurationMs: 2,
+        applyDurationMs: 2
+      }
     }
     worker.emit('message', {
       type: 'result',

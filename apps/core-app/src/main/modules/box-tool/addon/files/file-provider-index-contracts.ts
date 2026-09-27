@@ -51,7 +51,7 @@ export interface FileIndexedSourceRuntimeMutationDelegate {
     batch: IndexedSourceRecordBatch,
     records: UpsertFileRecord[]
   ) => Promise<{
-    persisted: Array<Record<string, unknown>>
+    persistedCount: number
     metrics?: PersistAndApplyProviderItemsMetrics
   }>
   applyDelta: (delta: IndexedSourceDelta) => Promise<unknown>

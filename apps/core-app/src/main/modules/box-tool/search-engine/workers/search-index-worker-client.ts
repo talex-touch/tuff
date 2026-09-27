@@ -281,7 +281,7 @@ export class SearchIndexWorkerClient {
     })
     if (!result) {
       return {
-        persisted: [],
+        persistedCount: 0,
         summary: { removedItems: 0, indexedItems: items.length }
       }
     }

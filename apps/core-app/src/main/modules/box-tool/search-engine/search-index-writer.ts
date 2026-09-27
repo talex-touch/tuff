@@ -67,13 +67,13 @@ export interface SearchIndexWriterCommit {
 }
 
 export interface SearchIndexPersistAndIndexResult {
-  persisted: Array<Record<string, unknown>>
+  persistedCount: number
   commit: SearchIndexWriterCommit
   metrics?: PersistAndApplyProviderItemsMetrics
 }
 
 export interface SearchIndexPersistAndApplyResult {
-  persisted: Array<Record<string, unknown>>
+  persistedCount: number
   affectedItems: number
   metrics?: PersistAndApplyProviderItemsMetrics
 }
@@ -181,6 +181,7 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
   private initializationPromise: Promise<void> | null = null
   private closed = false
   private shutdownComplete = false
+  private shutdownPromise: Promise<void> | null = null
   private admissionGate: Promise<void> | null = null
   private resumeAdmission: (() => void) | null = null
   private pauseQueue: Promise<void> = Promise.resolve()
@@ -277,7 +278,7 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
     legacyItemIds: readonly string[] = []
   ): Promise<SearchIndexPersistAndApplyResult> {
     if (records.length === 0 && items.length === 0 && legacyItemIds.length === 0) {
-      return { persisted: [], affectedItems: 0 }
+      return { persistedCount: 0, affectedItems: 0 }
     }
     return await this.withAdmission(async () => {
       const result = await this.client.persistAndApplyProviderItems(
@@ -287,7 +288,7 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
         legacyItemIds
       )
       return {
-        persisted: result.persisted,
+        persistedCount: result.persistedCount,
         affectedItems: result.summary.removedItems + result.summary.indexedItems,
         metrics: result.metrics
       }
@@ -395,18 +396,32 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
     }
   }
 
-  async shutdown(timeoutMs = 5_000): Promise<void> {
-    if (this.shutdownComplete) return
-    this.closed = true
-    await this.drain(timeoutMs)
+  beginShutdown(): Promise<void> {
+    if (this.shutdownComplete) return Promise.resolve()
+    if (this.shutdownPromise) return this.shutdownPromise
 
-    await this.client.shutdown()
-    this.readiness = { state: 'closed' }
+    this.closed = true
     const resume = this.resumeAdmission
     this.admissionGate = null
     this.resumeAdmission = null
     resume?.()
-    this.shutdownComplete = true
+
+    const shutdown = this.client
+      .shutdown()
+      .then(() => {
+        this.readiness = { state: 'closed' }
+        this.shutdownComplete = true
+      })
+      .catch((error) => {
+        if (this.shutdownPromise === shutdown) this.shutdownPromise = null
+        throw error
+      })
+    this.shutdownPromise = shutdown
+    return shutdown
+  }
+
+  shutdown(): Promise<void> {
+    return this.beginShutdown()
   }
 
   private async withAdmission<T>(operation: () => Promise<T>): Promise<T> {
@@ -565,7 +580,7 @@ export class SourceScopedIndexWriterRouter implements SearchIndexMutationWriter 
       ...(options.legacyItemIds ?? [])
     ])
     return {
-      persisted: result.persisted,
+      persistedCount: result.persistedCount,
       commit,
       metrics: result.metrics
         ? {

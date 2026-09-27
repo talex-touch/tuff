@@ -56,7 +56,7 @@ export interface PersistAndApplyProviderItemsMetrics {
 }
 
 export interface PersistAndApplyProviderItemsResult {
-  persisted: Array<Record<string, unknown>>
+  persistedCount: number
   summary: SearchIndexProviderReplacementSummary
   metrics?: PersistAndApplyProviderItemsMetrics
 }
