@@ -197,6 +197,11 @@
       "description": "You're all set. Let's get started.",
       "action": "Get Started",
       "persistFailed": "Could not save onboarding completion. Try again before closing this guide.",
+      "completionChoice": {
+        "prompt": "The shortcut works. Hide the main window and use CoreBox, or keep exploring here?",
+        "hide": "Hide and open CoreBox",
+        "continue": "Keep exploring"
+      },
       "shortcut": {
         "command": "command",
         "ctrl": "ctrl",
@@ -5484,6 +5489,9 @@
       "voiceTranscribeUnavailable": "AI voice transcription is unavailable. Check login, quota, or provider status.",
       "voiceRecognitionNotConfigured": "Speech recognition is not set up",
       "voiceRecognitionUnavailable": "Speech recognition is unavailable",
+      "voiceCaptureUnavailable": "The audio component is unavailable — see the details or reinstall",
+      "voiceCaptureComponentMissing": "This build is missing its audio component, so voice input cannot run",
+      "voiceCapturePlatformUnsupported": "Voice input is not supported on this system",
       "voiceTranscribeEmpty": "No speech was detected. Record it again.",
       "voiceListening": "Listening…",
       "voiceTranscribeFailed": "Voice transcription failed",
