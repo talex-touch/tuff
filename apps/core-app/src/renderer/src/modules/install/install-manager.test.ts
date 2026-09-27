@@ -49,7 +49,12 @@ vi.mock('~/modules/mention/dialog-mention', () => ({
   forTouchTip: vi.fn().mockResolvedValue(undefined)
 }))
 
-vi.mock('~/modules/permission/permission-request-card', () => ({
+vi.mock('~/modules/permission/permission-request-card', async (importOriginal) => ({
+  // The card's identity is a pure function of the plugin and its permission set, and the install
+  // manager now calls it: stubbing the module down to `showPermissionRequestCard` left that import
+  // undefined, so the confirmation threw before it could answer. Take the real module and override
+  // only what this test is about.
+  ...(await importOriginal<typeof PermissionRequestCardModule>()),
   PERMISSION_REQUEST_TIMEOUT_MS: 30_000,
   showPermissionRequestCard: permissionCardState.showPermissionRequestCard
 }))

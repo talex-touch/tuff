@@ -10,6 +10,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   PERMISSION_REQUEST_TIMEOUT_MS,
+  permissionRequestIdentity,
   showPermissionRequestCard
 } from '~/modules/permission/permission-request-card'
 
@@ -26,6 +27,7 @@ export function usePermissionStartup() {
     if (!request.required || request.required.length === 0) return
 
     const { result } = showPermissionRequestCard({
+      identity: permissionRequestIdentity(request.pluginId, request.required),
       title: t('plugin.permissions.startup.title'),
       message: t('plugin.permissions.startup.requestMessage', { name: request.pluginName }),
       permissions: request.required.map((permissionId) => ({
