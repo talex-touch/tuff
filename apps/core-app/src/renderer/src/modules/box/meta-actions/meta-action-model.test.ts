@@ -562,9 +562,9 @@ describe('resolveMetaActionShortcut', () => {
 
 describe('estimateMetaActionPanelHeight', () => {
   it('counts rows, titled sections and gaps with the shared geometry', () => {
-    // App: five rows in five sections, four of them titled.
-    // 40 header + (6 + 5 × 32 + 4 × 24 + 4 × 4 + 6) list + 40 filter.
-    expect(estimateMetaActionPanelHeight(build(APP_ITEM))).toBe(364)
+    // App: six rows in five sections, four of them titled.
+    // 40 header + (6 + 6 × 32 + 4 × 24 + 4 × 4 + 6) list + 40 filter.
+    expect(estimateMetaActionPanelHeight(build(APP_ITEM))).toBe(396)
   })
 
   it('caps a long action list at the panel maximum, where the list scrolls', () => {

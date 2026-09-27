@@ -1161,7 +1161,7 @@ function createCloudAsrConfig() {
   }
 }
 
-/** The on-device channel as this module writes it, marker included. */
+/** The on-device channel as this module writes it. */
 function localAsrChannel(overrides: Partial<StoredProvider> = {}): StoredProvider {
   return {
     id: LOCAL_ASR_PROVIDER_ID,
@@ -1290,38 +1290,37 @@ describe('intelligence-config on-device ASR route adoption', () => {
       })
     )
 
-    // Storage announces the write the way it announces any other. Releasing the route is this
-    // module's own doing, so it must not be recorded as the user closing it — the marker it would
-    // write is what keeps the next install from binding again.
+    // Storage announces the write the way it announces any other. Reloading must not resurrect the
+    // binding this module just released: nothing put it back, and the model is still gone.
     storageMocks.emitConfigChanged()
-    expect(localAsrProvider()?.metadata?.localAsrRouteUserDisabled).toBeUndefined()
+    expect(localAsrRoute()).toBeUndefined()
 
     config.ensureLocalAsrRoute([LOCAL_ASR_MODEL_ID])
     expect(localAsrRoute()).toEqual(localAsrRouteBinding())
   })
 
-  it('leaves the route closed after the user switched the on-device channel off', async () => {
+  it('adopts the route over a stale record left switched off by an older version', async () => {
     const fixture = createCloudAsrConfig()
-    fixture.providers.push(localAsrChannel({ metadata: { localAsrRouteUserDisabled: true } }))
+    fixture.providers.push(
+      localAsrChannel({
+        enabled: false,
+        metadata: {
+          channelType: 'on-device',
+          voiceAsr: { protocol: 'local-offline' },
+          localAsrRouteUserDisabled: true
+        }
+      })
+    )
     const { config } = await launchWithConfig(fixture)
 
     config.ensureLocalAsrRoute([LOCAL_ASR_MODEL_ID])
 
-    expect(storageMocks.saveMainConfig).not.toHaveBeenCalled()
-    expect(localAsrRoute()).toBeUndefined()
-    expect(localAsrProvider()?.metadata?.localAsrRouteUserDisabled).toBe(true)
-  })
-
-  it('does not re-enable an on-device channel the user switched off', async () => {
-    const fixture = createCloudAsrConfig()
-    fixture.providers.push(localAsrChannel({ enabled: false }))
-    const { config } = await launchWithConfig(fixture)
-
-    config.ensureLocalAsrRoute([LOCAL_ASR_MODEL_ID])
-
-    expect(storageMocks.saveMainConfig).not.toHaveBeenCalled()
-    expect(localAsrRoute()).toBeUndefined()
-    expect(localAsrProvider()?.enabled).toBe(false)
+    expect(localAsrRoute()).toEqual(localAsrRouteBinding())
+    expect(localAsrProvider()).toMatchObject({ enabled: true, models: [LOCAL_ASR_MODEL_ID] })
+    // Nothing sets this marker any more, and the switch that could have cleared it is gone, so it
+    // is dropped rather than honoured — otherwise a machine that switched the channel off once
+    // would keep a dead local route no surface could turn back on.
+    expect(localAsrProvider()?.metadata?.localAsrRouteUserDisabled).toBeUndefined()
   })
 })
 

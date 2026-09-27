@@ -112,6 +112,16 @@ identity, and plugin permissions remain in main.
 - `audio.asr` owns realtime capability bindings; `audio.stt` owns file transcription bindings.
   Reuse the shared Intelligence route resolver and model policy; never create a Voice-specific provider catalog
   or persist a second routing table in app settings. `audio.transcribe` retains its original semantics.
+- The on-device dictation channel (`tuff-local-asr`, `metadata.channelType = 'on-device'`,
+  `metadata.voiceAsr.protocol = 'local-offline'`) is program-owned: main seeds, enables, and releases
+  it and its `audio.asr` binding from the installed speech-model store alone, and no marker, switch, or
+  other user preference decides any of it. It has no endpoint, no credential, and no model to choose,
+  so no surface that manages channels may show it — the channels list and its counts, the channel-type
+  picker, the capability binding rows, the capability test targets, and the channel editor's on-device
+  fields all exclude it while the stored record and binding stay untouched. `voiceInput.source`
+  (cloud/local/hybrid) is the only user control and it only reorders the routes the bindings produced.
+  A filtered view writes back every binding it was given, or reordering another channel would unbind
+  the installed models.
 - Voice settings expose read-only readiness and links to the existing channel/capability editors.
   A configured state is not proof of cloud connectivity. ASR capability tests exercise only saved bindings.
 - A live ASR session and its recovery retain the original adapter/model; no cross-provider/STT replay.

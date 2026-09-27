@@ -3,7 +3,7 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
@@ -22,6 +22,11 @@ export interface AppListItem {
 const props = defineProps<{
   items: AppListItem[]
   selectedId?: string | null
+  /**
+   * Bumped by the page each time it asks this list to bring the selected row on screen. An id
+   * alone cannot carry that request: asking twice for the same application changes nothing in it.
+   */
+  revealRevision?: number
   loading?: boolean
   loadFailed?: boolean
   /**
@@ -112,10 +117,36 @@ function handleClick(item: AppListItem): void {
   // Repeat click => cancel
   emits('select', props.selectedId === item.id ? null : item.id)
 }
+
+const scrollRef = ref<HTMLElement>()
+
+/**
+ * Brings the selected row on screen.
+ *
+ * Selection can arrive from outside this list — the ⌘K panel's "bind a shortcut" row opens the
+ * page on one application — and a selected row below the fold reads as no selection at all.
+ * Re-run when the rendered rows change, and on `revealRevision`, for the same reason: the row a
+ * selection names may render a beat later than the selection itself once the deferred skeleton
+ * gives way to the list, and asking for an application already selected changes no id at all.
+ */
+function scrollSelectedIntoView(): void {
+  const id = props.selectedId
+  if (!id) return
+  const rows = scrollRef.value?.querySelectorAll<HTMLElement>('[data-app-row-id]')
+  if (!rows) return
+  const row = [...rows].find((candidate) => candidate.dataset.appRowId === id)
+  row?.scrollIntoView?.({ block: 'nearest' })
+}
+
+watch(
+  [() => props.selectedId, () => props.revealRevision, () => orderedItems.value.length],
+  scrollSelectedIntoView,
+  { flush: 'post' }
+)
 </script>
 
 <template>
-  <div class="AppList-Scroll">
+  <div ref="scrollRef" class="AppList-Scroll">
     <ul v-if="showSkeleton" class="AppList" aria-hidden="true">
       <li v-for="row in SKELETON_ROWS" :key="row" class="AppList-Row is-skeleton">
         <TxSkeleton variant="rect" :width="32" :height="32" :radius="8" />
@@ -142,6 +173,7 @@ function handleClick(item: AppListItem): void {
         :class="{ active: selectedId === item.id, 'is-disabled': item.disabled }"
         role="button"
         tabindex="0"
+        :data-app-row-id="item.id"
         :aria-pressed="selectedId === item.id"
         @click="handleClick(item)"
         @keydown.enter.prevent="handleClick(item)"

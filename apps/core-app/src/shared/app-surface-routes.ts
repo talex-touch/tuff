@@ -14,7 +14,9 @@ export const APP_SURFACE_ROUTES = Object.freeze({
   conversation: '/home/c/:id',
   store: '/store',
   storeInstalled: '/store/installed',
-  downloads: '/downloads'
+  downloads: '/downloads',
+  /** The applications category, whose split page selects whatever {@link applicationRoute} names. */
+  applications: '/setting/applications'
 })
 
 /**
@@ -26,4 +28,19 @@ export const APP_SURFACE_ROUTES = Object.freeze({
  */
 export function conversationRoute(id: string): string {
   return `/home/c/${encodeURIComponent(id)}`
+}
+
+/** The query parameter the applications page reads the entry it must select from. */
+export const APPLICATION_ROUTE_ENTRY_PARAM = 'entry'
+
+/**
+ * The applications page with one indexed application selected.
+ *
+ * The path is percent-encoded rather than interpolated: it is a filesystem path — a macOS bundle
+ * directory, a Windows `shell:AppsFolder\…` id, a UNC share — and this is the one function that
+ * decides how it becomes a query value. Callers still validate the path's shape first; this only
+ * guarantees the encoding, not the authority.
+ */
+export function applicationRoute(path: string): string {
+  return `${APP_SURFACE_ROUTES.applications}?${APPLICATION_ROUTE_ENTRY_PARAM}=${encodeURIComponent(path)}`
 }

@@ -83,7 +83,6 @@
   "files": [
     "dist"
   ],
-  "license": "MIT",
   "peerDependencies": {
     "echarts": "^6.1.0",
     "vue": "^3.5.27"

@@ -4,7 +4,7 @@ import type { AppDestinationId } from '../../../shared/app-destinations'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { getAppDestination, isAppDestinationId } from '../../../shared/app-destinations'
-import { conversationRoute } from '../../../shared/app-surface-routes'
+import { conversationRoute, applicationRoute } from '../../../shared/app-surface-routes'
 
 /**
  * The runtime surface the destination navigation service needs.
@@ -28,6 +28,7 @@ export type AppDestinationUnavailableReason =
   | 'renderer-unavailable'
   | 'destination-unavailable'
   | 'conversation-unavailable'
+  | 'application-unavailable'
 
 export interface AppDestinationOpenResult {
   readonly status: AppDestinationOpenStatus
@@ -38,6 +39,13 @@ export interface AppDestinationOpenResult {
 export interface AppConversationOpenResult {
   readonly status: AppDestinationOpenStatus
   readonly conversationId: string
+  readonly reason?: AppDestinationUnavailableReason
+}
+
+export interface AppApplicationOpenResult {
+  readonly status: AppDestinationOpenStatus
+  /** The path the page is asked to select, already normalized; empty when it was refused. */
+  readonly applicationPath: string
   readonly reason?: AppDestinationUnavailableReason
 }
 
@@ -56,6 +64,44 @@ export function normalizeConversationId(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return CONVERSATION_ID_PATTERN.test(trimmed) ? trimmed : null
+}
+
+/**
+ * Longest application path the applications route accepts.
+ *
+ * Not a filesystem limit: it is the point past which the value is no longer an entry path but a
+ * caller dumping text into a query string.
+ */
+const APPLICATION_PATH_MAX_LENGTH = 1_024
+
+/**
+ * Whether the value carries a control character — anything below a space, plus DEL.
+ *
+ * Written as a scan rather than a character class: `no-control-regex` forbids the literal escapes,
+ * and the set is short enough to name directly instead of disabling the rule for one line.
+ */
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code <= 0x1f || code === 0x7f) return true
+  }
+  return false
+}
+
+/**
+ * `null` when `value` may not be used in a route.
+ *
+ * The boundary is deliberately not "is it a real path": entries arrive as macOS bundle
+ * directories, Windows `shell:AppsFolder\…` ids and UNC shares, so judging shape here would
+ * refuse real applications. What a route cannot carry is an empty value, one too long to be a
+ * path, or one with a control character in it — everything a path may legitimately hold is
+ * percent-encoded by {@link applicationRoute}.
+ */
+export function normalizeApplicationPath(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > APPLICATION_PATH_MAX_LENGTH) return null
+  return hasControlCharacter(trimmed) ? null : trimmed
 }
 
 /**
@@ -125,7 +171,26 @@ export class AppDestinationNavigationService {
   }
 
   /**
-   * The one reveal plus route delivery sequence, shared by both entry points.
+   * Reveal the window and open one indexed application in the applications page.
+   *
+   * A second destination a catalog row cannot name: the entry is whichever application the user
+   * was looking at in CoreBox, so the value is validated here and turned into the applications
+   * route by the shared surface table rather than being handed in as a path.
+   */
+  openApplication(
+    applicationPath: string,
+    options?: AppDestinationOpenOptions
+  ): AppApplicationOpenResult {
+    const target = normalizeApplicationPath(applicationPath)
+    if (!target) {
+      return { status: 'unavailable', applicationPath: '', reason: 'application-unavailable' }
+    }
+
+    return { applicationPath: target, ...this.reveal(applicationRoute(target), options) }
+  }
+
+  /**
+   * The one reveal plus route delivery sequence, shared by every entry point.
    *
    * `route === null` is the reveal-only destination: the native window comes forward and whatever
    * the renderer is showing stays where it is.

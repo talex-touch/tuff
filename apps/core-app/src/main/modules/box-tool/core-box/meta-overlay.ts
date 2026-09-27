@@ -21,6 +21,8 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { app, WebContentsView } from 'electron'
+import { COREBOX_APP_BIND_SHORTCUT_ACTION_ID } from '../../../../shared/events/corebox-scenes'
+import { getAppDestinationNavigationService } from '../../app-destination/app-destination-navigation'
 import { BoxWindowOption } from '../../../config/default'
 import { maybeGetRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { buildWindowWebPreferences } from '../../../core/window-security-profile'
@@ -713,6 +715,24 @@ export class MetaOverlayManager {
     }
 
     const touchApp = runtime.app
+
+    // A host row main serves itself, before the relay below. What it opens is a main-window
+    // surface, and the destination service already owns revealing that window and delivering an
+    // allowlisted route to it. The panel is dismissed first on purpose: the reveal takes focus,
+    // and closing afterwards would hand that focus back to CoreBox, leaving the page behind it.
+    if (actionId === COREBOX_APP_BIND_SHORTCUT_ACTION_ID) {
+      this.hide()
+      const result = getAppDestinationNavigationService(touchApp).openApplication(
+        targetItem.meta?.app?.path ?? ''
+      )
+      if (result.status === 'unavailable') {
+        metaOverlayLog.warn('Applications destination unavailable from the action panel', {
+          error: result.reason
+        })
+        return { success: false, error: result.reason }
+      }
+      return { success: true }
+    }
 
     // Handle based on action type
     if (pluginId) {

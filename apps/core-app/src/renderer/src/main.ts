@@ -8,7 +8,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 
 import { createPinia } from 'pinia'
-import type { Router } from 'vue-router'
+import type { RouteLocationRaw, Router } from 'vue-router'
 import { createApp } from 'vue'
 import { TX_ICON_CONFIG_KEY } from '@talex-touch/tuffex/icon'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
@@ -85,6 +85,9 @@ let router: Router | null = null
 let routerEventsRegistered = false
 let lifecycleEventsRegistered = false
 
+/** Only ever an origin for `URL` to resolve a route against; nothing is fetched from it. */
+const DESTINATION_ROUTE_BASE = 'http://tuff.local'
+
 registerNotificationHub(transport)
 registerMainWindowSideEffects()
 registerLifecycleEvents()
@@ -124,6 +127,24 @@ function reportContentSecurityPolicyViolations(): void {
   })
 }
 
+/**
+ * A destination arrives as one route string, and this turns it into the location object `force`
+ * needs.
+ *
+ * The object form does not parse a query out of `path`, so a route carrying one — the applications
+ * page names the entry it must select that way — would lose it. A throwaway origin is enough to
+ * let `URL` do the splitting the router does for a string.
+ */
+function toForcedRouteLocation(route: string): RouteLocationRaw {
+  const { pathname, search, hash } = new URL(route, DESTINATION_ROUTE_BASE)
+  return {
+    path: pathname,
+    query: Object.fromEntries(new URLSearchParams(search)),
+    hash,
+    force: true
+  }
+}
+
 function registerRouterEvents(instance: Router): void {
   if (routerEventsRegistered) {
     return
@@ -134,7 +155,11 @@ function registerRouterEvents(instance: Router): void {
     const target = typeof payload?.path === 'string' ? payload.path : ''
     const normalized = target === '/clipboard' ? '/details' : target
     if (normalized) {
-      instance.push(normalized).catch(() => {})
+      // `force`: a destination is an instruction, not a state. Without it, asking for the route
+      // already on screen is dropped as a duplicated navigation, so the surface never learns the
+      // request arrived — an application the user was sent to twice would stay wherever they had
+      // scrolled or deselected it in the meantime.
+      instance.push(toForcedRouteLocation(normalized)).catch(() => {})
     }
   })
 

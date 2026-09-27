@@ -13,6 +13,7 @@ import type {
   TuffItemStatusDot
 } from '~/components/tuff/template/TuffItemTemplate.vue'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+import { isOnDeviceAsrProvider } from '@talex-touch/utils/intelligence/voice-asr'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
@@ -88,8 +89,19 @@ const capabilityList = computed<IntelligenceCapabilityConfig[]>(() =>
     return (a.label || a.id).localeCompare(b.label || b.id)
   })
 )
+/**
+ * Providers the capability editor may show.
+ *
+ * The program-owned on-device dictation channel is seeded and bound by main and exposes nothing to
+ * configure, so it is not a channel the user picks, tests, or edits. It stays in the stored config —
+ * only this view's copy is filtered — and its `audio.asr` binding is preserved on every write,
+ * because dropping it would take dictation off the installed models until the next reconcile.
+ */
+const visibleProviders = computed(() =>
+  providers.value.filter((provider) => !isOnDeviceAsrProvider(provider))
+)
 const providerMap = computed(
-  () => new Map(providers.value.map((provider) => [provider.id, provider]))
+  () => new Map(visibleProviders.value.map((provider) => [provider.id, provider]))
 )
 
 const filteredCapabilities = computed(() => {
@@ -161,6 +173,8 @@ function getCapabilityIcon(capability: IntelligenceCapabilityConfig): ITuffIcon 
 }
 
 function getConfiguredProviderCount(capability: IntelligenceCapabilityConfig): number {
+  // Counts the program-owned on-device channel too: it is bound and it is what serves dictation,
+  // so a count that skipped it would report a working capability as `Not configured`.
   return capability.providers?.filter((provider) => provider.enabled !== false).length ?? 0
 }
 
@@ -493,7 +507,7 @@ async function handleCapabilityTest(
         <IntelligenceCapabilityInfo
           v-if="selectedCapability"
           :capability="selectedCapability"
-          :providers="providers"
+          :providers="visibleProviders"
           :bindings="activeBindings(selectedCapability.id)"
           :is-testing="!!capabilityTesting[selectedCapability.id]"
           :test-result="capabilityTests[selectedCapability.id]"
