@@ -2531,21 +2531,17 @@ describe('file-provider startup readiness', () => {
       emit: (payload: FileIndexProgressPayload) => void
       isCancelled: () => boolean
     }
-    const provider = fileProvider as unknown as {
-      progressStreamContexts: Set<ProgressStream>
-      lastProgressStreamPayload: FileIndexProgressPayload | null
-      lastProgressStreamEmitAt: number
-      pendingProgressStreamPayload: FileIndexProgressPayload | null
-      progressStreamFlushTimer: NodeJS.Timeout | null
-      registerProgressStream: (context: ProgressStream) => void
-      emitProgressStream: (payload: FileIndexProgressPayload) => void
-      clearProgressCleanupTimer: () => void
-    }
-    const originalLastPayload = provider.lastProgressStreamPayload
-    const originalLastEmitAt = provider.lastProgressStreamEmitAt
-    const originalPendingPayload = provider.pendingProgressStreamPayload
-    const originalFlushTimer = provider.progressStreamFlushTimer
-    const originalContexts = new Set(provider.progressStreamContexts)
+    // The publisher is the only thing that holds stream state now, so a test drives it directly
+    // through its own seams and resets it afterwards instead of reaching for the provider's fields.
+    const publisher = (
+      fileProvider as unknown as {
+        progressStream: {
+          register: (context: ProgressStream) => void
+          emit: (payload: FileIndexProgressPayload) => void
+          reset: () => void
+        }
+      }
+    ).progressStream
     const now = new Date('2026-09-03T00:00:00.000Z')
     vi.useFakeTimers()
     vi.setSystemTime(now)
@@ -2566,18 +2562,13 @@ describe('file-provider startup readiness', () => {
 
     try {
       for (const terminalStage of ['completed', 'idle'] as const) {
-        provider.progressStreamContexts.clear()
-        provider.lastProgressStreamPayload = null
-        provider.lastProgressStreamEmitAt = 0
-        provider.pendingProgressStreamPayload = null
-        if (provider.progressStreamFlushTimer) clearTimeout(provider.progressStreamFlushTimer)
-        provider.progressStreamFlushTimer = null
+        publisher.reset()
 
         const subscriber: ProgressStream = { emit: vi.fn(), isCancelled: vi.fn(() => false) }
-        provider.registerProgressStream(subscriber)
-        provider.emitProgressStream(payload('indexing', 10, 0.1))
-        provider.emitProgressStream(payload('indexing', 11, 0.1))
-        provider.emitProgressStream(payload(terminalStage, 100, 1))
+        publisher.register(subscriber)
+        publisher.emit(payload('indexing', 10, 0.1))
+        publisher.emit(payload('indexing', 11, 0.1))
+        publisher.emit(payload(terminalStage, 100, 1))
 
         expect(vi.mocked(subscriber.emit).mock.calls.map(([update]) => update.stage)).toEqual([
           'indexing',
@@ -2588,22 +2579,17 @@ describe('file-provider startup readiness', () => {
           'indexing',
           terminalStage
         ])
-      }
 
-      const lateSubscriber: ProgressStream = { emit: vi.fn(), isCancelled: vi.fn(() => false) }
-      provider.registerProgressStream(lateSubscriber)
-      await vi.advanceTimersByTimeAsync(0)
-      expect(vi.mocked(lateSubscriber.emit)).toHaveBeenCalledWith(
-        expect.objectContaining({ stage: 'idle', progress: 1 })
-      )
+        // A subscriber that arrives after the run ended replays the last payload, whatever it was.
+        const lateSubscriber: ProgressStream = { emit: vi.fn(), isCancelled: vi.fn(() => false) }
+        publisher.register(lateSubscriber)
+        await vi.advanceTimersByTimeAsync(0)
+        expect(vi.mocked(lateSubscriber.emit)).toHaveBeenCalledWith(
+          expect.objectContaining({ stage: terminalStage, progress: 1 })
+        )
+      }
     } finally {
-      provider.clearProgressCleanupTimer()
-      provider.progressStreamContexts.clear()
-      for (const context of originalContexts) provider.progressStreamContexts.add(context)
-      provider.lastProgressStreamPayload = originalLastPayload
-      provider.lastProgressStreamEmitAt = originalLastEmitAt
-      provider.pendingProgressStreamPayload = originalPendingPayload
-      provider.progressStreamFlushTimer = originalFlushTimer
+      publisher.reset()
     }
   })
 })

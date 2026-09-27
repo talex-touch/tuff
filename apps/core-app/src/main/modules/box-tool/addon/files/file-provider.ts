@@ -47,7 +47,6 @@ import { StorageList, timingLogger, TuffInputType } from '@talex-touch/utils'
 import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
-import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { OpenerEvents } from '@talex-touch/utils/transport/events'
 
 import { getTuffTransportMain, type ITuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -118,10 +117,7 @@ import {
 import type { FilePersistencePort, UpsertFileRecord } from '../../search-engine/search-index-writer'
 import { searchIndexWriter } from '../../search-engine/search-index-writer'
 import { isIndexingSourceMutationLeaseInvalidError } from '../../search-engine/indexing-source-mutation-gate'
-import {
-  getProgressStreamFlushDelayMs,
-  shouldEmitProgressStreamImmediately
-} from './services/file-provider-progress-stream-service'
+import { FileProviderProgressStreamPublisher } from './services/file-provider-progress-stream-service'
 import { FileProviderProgressEstimatorService } from './services/file-provider-progress-estimator-service'
 import {
   FileProviderWorkerStatusService,
@@ -240,9 +236,6 @@ function chunkArray<T>(items: T[], chunkSize: number): T[][] {
   return chunks
 }
 
-const FILE_PROVIDER_PROGRESS_TASK_ID = 'file-provider.progress-cleanup'
-const pollingService = PollingService.getInstance()
-
 const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanEnabled: true,
   autoScanIntervalMs: 24 * 60 * 60 * 1000,
@@ -352,11 +345,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly timestampToleranceMs = 1_000
 
   private openersChannelRegistered = false
-  private readonly progressStreamContexts = new Set<StreamContext<FileIndexProgressPayload>>()
-  private lastProgressStreamPayload: FileIndexProgressPayload | null = null
-  private lastProgressStreamEmitAt = 0
-  private pendingProgressStreamPayload: FileIndexProgressPayload | null = null
-  private progressStreamFlushTimer: NodeJS.Timeout | null = null
+  private readonly progressStream = new FileProviderProgressStreamPublisher()
   private readonly fileScanWorker = new FileScanWorkerClient()
   private readonly reconcileWorker = new FileReconcileWorkerClient()
   private readonly fileIndexWorker: FileIndexWorkerClient
@@ -2974,121 +2963,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return { success: true, status: 'added', path: watchPath }
   }
 
+  /**
+   * The stream the progress throttle publishes to. The publisher owns the subscriptions, the
+   * replay for a late subscriber and the flush timer, so this only has to admit one.
+   */
   public registerProgressStream(context: StreamContext<FileIndexProgressPayload>): void {
-    this.progressStreamContexts.add(context)
-    if (this.lastProgressStreamPayload) {
-      // Emit asynchronously to avoid adding extra sync work to stream-start handshake.
-      setImmediate(() => {
-        if (!context.isCancelled()) {
-          context.emit(this.lastProgressStreamPayload as FileIndexProgressPayload)
-        }
-      })
-    }
-    this.ensureProgressCleanupTimer()
-  }
-
-  private emitProgressStream(payload: FileIndexProgressPayload): void {
-    if (this.progressStreamContexts.size === 0) {
-      this.lastProgressStreamPayload = payload
-      this.clearProgressStreamFlushTimer()
-      this.pendingProgressStreamPayload = null
-      return
-    }
-
-    const now = Date.now()
-    const previous = this.lastProgressStreamEmitAt > 0 ? this.lastProgressStreamPayload : null
-
-    if (
-      shouldEmitProgressStreamImmediately({
-        previous,
-        next: payload,
-        now,
-        lastEmitAt: this.lastProgressStreamEmitAt
-      })
-    ) {
-      // An immediate transition is newer than any throttled payload already
-      // waiting in the timer. Retire that payload before publishing so an old
-      // `indexing 100%` update can never overwrite `completed` or `idle`.
-      this.clearProgressStreamFlushTimer()
-      this.pendingProgressStreamPayload = null
-      this.flushProgressStreamPayload(payload, now)
-      return
-    }
-
-    this.pendingProgressStreamPayload = payload
-    this.scheduleProgressStreamFlush(now)
-  }
-
-  private scheduleProgressStreamFlush(now: number): void {
-    if (this.progressStreamFlushTimer) {
-      return
-    }
-
-    const delayMs = getProgressStreamFlushDelayMs(now, this.lastProgressStreamEmitAt)
-    this.progressStreamFlushTimer = setTimeout(() => {
-      this.progressStreamFlushTimer = null
-      const pending = this.pendingProgressStreamPayload
-      this.pendingProgressStreamPayload = null
-      if (!pending) {
-        return
-      }
-      this.flushProgressStreamPayload(pending, Date.now())
-    }, delayMs)
-  }
-
-  private clearProgressStreamFlushTimer(): void {
-    if (this.progressStreamFlushTimer) {
-      clearTimeout(this.progressStreamFlushTimer)
-      this.progressStreamFlushTimer = null
-    }
-  }
-
-  private flushProgressStreamPayload(payload: FileIndexProgressPayload, emittedAt: number): void {
-    this.lastProgressStreamPayload = payload
-    this.lastProgressStreamEmitAt = emittedAt
-
-    for (const stream of Array.from(this.progressStreamContexts)) {
-      if (stream.isCancelled()) {
-        this.progressStreamContexts.delete(stream)
-        continue
-      }
-      stream.emit(payload)
-    }
-
-    if (this.progressStreamContexts.size === 0) {
-      this.clearProgressStreamFlushTimer()
-      this.pendingProgressStreamPayload = null
-      this.clearProgressCleanupTimer()
-    }
-  }
-
-  private ensureProgressCleanupTimer(): void {
-    if (pollingService.isRegistered(FILE_PROVIDER_PROGRESS_TASK_ID)) {
-      return
-    }
-
-    pollingService.register(
-      FILE_PROVIDER_PROGRESS_TASK_ID,
-      () => {
-        for (const stream of Array.from(this.progressStreamContexts)) {
-          if (stream.isCancelled()) {
-            this.progressStreamContexts.delete(stream)
-          }
-        }
-
-        if (this.progressStreamContexts.size === 0) {
-          this.clearProgressCleanupTimer()
-        }
-      },
-      { interval: 30_000, unit: 'milliseconds' }
-    )
-    pollingService.start()
-  }
-
-  private clearProgressCleanupTimer(): void {
-    pollingService.unregister(FILE_PROVIDER_PROGRESS_TASK_ID)
-    this.clearProgressStreamFlushTimer()
-    this.pendingProgressStreamPayload = null
+    this.progressStream.register(context)
   }
 
   private async *scanDirectoryBatchesWithWorker(
@@ -3831,7 +3711,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       estimateBasis: estimate.estimateBasis
     }
 
-    this.emitProgressStream(payload)
+    this.progressStream.emit(payload)
   }
 
   /**
