@@ -665,6 +665,13 @@
       "title": "无法读取识别状态",
       "description": ""
     },
+    "capture": {
+      "title": "语音输入不可用",
+      "componentMissing": "本机应用缺少录音组件，语音识别再正常也无法录音；请更新到最新版本或重新安装。",
+      "noDevice": "找不到可用的麦克风，请接入设备后重试。",
+      "platformUnsupported": "这个系统不支持语音输入。",
+      "disabled": "语音录音已被环境变量关闭（TUFF_DISABLE_NATIVE_AUDIO），去掉后重启即可。"
+    },
     "reasons": {
       "credentialMissing": "所选渠道没有凭据",
       "unavailable": "识别暂时不可用",
@@ -5423,7 +5430,7 @@
       "voiceRecognitionNotConfigured": "尚未配置语音识别",
       "voiceRecognitionUnavailable": "语音识别不可用",
       "voiceCaptureUnavailable": "录音组件不可用，请查看提示详情或重装应用",
-      "voiceCaptureComponentMissing": "本机应用缺少录音组件，无法使用语音输入",
+      "voiceCaptureComponentMissing": "本机应用缺少录音组件，语音输入不可用；请更新到最新版本或重新安装",
       "voiceCapturePlatformUnsupported": "这个系统不支持语音输入",
       "voiceTranscribeEmpty": "未识别到语音内容，请重新录制",
       "voiceListening": "正在聆听…",

@@ -54,6 +54,51 @@ export function isVoiceSpeechCatalogErrorCode(value: unknown): value is VoiceSpe
   }
 }
 
+/**
+ * Why this build cannot capture audio, as a closed set the renderer switches on.
+ *
+ * The native reason behind each code names a module path or a device string, and neither belongs
+ * in a renderer — `Voice capture is unavailable: Cannot find module '/Applications/…'` is a
+ * sentence for a log, not for a toast. main maps the reason to one of these and the UI keeps its
+ * own copy, the same division the speech catalog uses.
+ *
+ * `COMPONENT_MISSING` is the one the UI acts on structurally: nothing the user can do brings an
+ * absent addon back, so the entry point that would only fail is withheld rather than offered.
+ */
+export const VOICE_CAPTURE_UNAVAILABLE_CODES = {
+  /** The audio addon is not in this build, or will not load. */
+  componentMissing: 'VOICE_ASR_CAPTURE_COMPONENT_MISSING',
+  /** The component is present without the export a buffered route needs. */
+  drainUnavailable: 'VOICE_ASR_CAPTURE_DRAIN_UNAVAILABLE',
+  /** No input device, or the device would not answer a probe. */
+  deviceUnavailable: 'VOICE_ASR_CAPTURE_DEVICE_UNAVAILABLE',
+  /** No capture backend on this platform. */
+  platformUnsupported: 'VOICE_ASR_CAPTURE_PLATFORM_UNSUPPORTED',
+  /** Switched off deliberately (`TUFF_DISABLE_NATIVE_AUDIO`). */
+  disabled: 'VOICE_ASR_CAPTURE_DISABLED',
+  /** A reason this build does not recognise yet. */
+  unavailable: 'VOICE_ASR_CAPTURE_UNAVAILABLE',
+} as const
+
+export type VoiceCaptureUnavailableCode =
+  (typeof VOICE_CAPTURE_UNAVAILABLE_CODES)[keyof typeof VOICE_CAPTURE_UNAVAILABLE_CODES]
+
+export function isVoiceCaptureUnavailableCode(
+  value: unknown
+): value is VoiceCaptureUnavailableCode {
+  switch (value) {
+    case VOICE_CAPTURE_UNAVAILABLE_CODES.componentMissing:
+    case VOICE_CAPTURE_UNAVAILABLE_CODES.drainUnavailable:
+    case VOICE_CAPTURE_UNAVAILABLE_CODES.deviceUnavailable:
+    case VOICE_CAPTURE_UNAVAILABLE_CODES.platformUnsupported:
+    case VOICE_CAPTURE_UNAVAILABLE_CODES.disabled:
+    case VOICE_CAPTURE_UNAVAILABLE_CODES.unavailable:
+      return true
+    default:
+      return false
+  }
+}
+
 /** A safely projected main-process failure that keeps stable machine-readable fields. */
 export class VoiceApiError extends Error {
   readonly code: string | undefined
@@ -349,6 +394,19 @@ export interface VoiceRecognitionStatus {
 export interface VoiceRecognitionStatusSnapshot {
   asr: VoiceRecognitionStatus
   stt: VoiceRecognitionStatus
+  /**
+   * Whether this build can capture audio at all — a separate question from whether a recogniser is
+   * configured, and the one that decides whether a microphone button can do anything. Absent from
+   * older hosts, so a renderer must treat `undefined` as "keep offering it".
+   */
+  capture?: VoiceCaptureStatus
+}
+
+/** Capture availability, projected as a closed code rather than the component's own sentence. */
+export interface VoiceCaptureStatus {
+  ready: boolean
+  /** Stable non-secret code from `VOICE_CAPTURE_UNAVAILABLE_CODES`. Omitted only when ready. */
+  reason?: VoiceCaptureUnavailableCode
 }
 
 /** Main-owned local-file transcription lifecycle. No path or provider override leaves main. */

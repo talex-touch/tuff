@@ -665,6 +665,13 @@
       "title": "Recognition status could not be read",
       "description": ""
     },
+    "capture": {
+      "title": "Voice input is unavailable",
+      "componentMissing": "This build is missing its audio component, so no recogniser can record; update to the latest version or reinstall.",
+      "noDevice": "No microphone is available. Connect one and try again.",
+      "platformUnsupported": "Voice input is not supported on this system.",
+      "disabled": "Recording is switched off by the TUFF_DISABLE_NATIVE_AUDIO environment variable; remove it and restart."
+    },
     "reasons": {
       "credentialMissing": "The selected channel has no credential",
       "unavailable": "Recognition is unavailable right now",
@@ -5423,7 +5430,7 @@
       "voiceRecognitionNotConfigured": "Speech recognition is not set up",
       "voiceRecognitionUnavailable": "Speech recognition is unavailable",
       "voiceCaptureUnavailable": "The audio component is unavailable — see the details or reinstall",
-      "voiceCaptureComponentMissing": "This build is missing its audio component, so voice input cannot run",
+      "voiceCaptureComponentMissing": "This build is missing its audio component, so voice input cannot run — update to the latest version or reinstall",
       "voiceCapturePlatformUnsupported": "Voice input is not supported on this system",
       "voiceTranscribeEmpty": "No speech was detected. Record it again.",
       "voiceListening": "Listening…",

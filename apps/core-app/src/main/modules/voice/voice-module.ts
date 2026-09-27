@@ -25,7 +25,7 @@ import { withPermissionSafeApi } from '../../utils/safe-handler'
 import { withPermission } from '../permission/channel-guard'
 import { BaseModule } from '../abstract-base-module'
 import { globalDictationController } from './global-dictation'
-import { voiceService } from './voice-service'
+import { captureUnavailableCode, voiceService } from './voice-service'
 import { getRecognitionStatus } from './voice-provider-runtime'
 import { voiceInsightsStore } from './voice-insights-store'
 import {
@@ -166,7 +166,16 @@ export class VoiceModule extends BaseModule<TalexEvents> {
           { permissionId: VOICE_PERMISSION },
           (_payload, context) => {
             if (context?.plugin) throw new Error('VOICE_RECOGNITION_HOST_ONLY')
-            return getRecognitionStatus()
+            // Capture readiness is composed here rather than inside the routing projection: it is a
+            // fact about the native component, not about which recogniser is bound. The two are
+            // answered together so a caller cannot read one and miss the other — the packaging bug
+            // behind #322 was a build whose recogniser was configured and whose microphone could
+            // never open, and the status only ever reported the first half.
+            const captureCode = captureUnavailableCode()
+            return {
+              ...getRecognitionStatus(),
+              capture: captureCode ? { ready: false, reason: captureCode } : { ready: true }
+            }
           },
           { onError: (error) => voiceLog.error('Voice recognition status read failed:', { error }) }
         )
