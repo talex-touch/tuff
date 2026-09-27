@@ -80,7 +80,7 @@ import { activeAppService } from '../system/active-app'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { getConfiguredAsrProvider } from './voice-provider-runtime'
 import type { VoiceRecognitionRecordInput } from './voice-recognition-store'
-import { VoiceService } from './voice-service'
+import { captureUnavailableCode, VoiceService } from './voice-service'
 
 const support = nativeAudio.getNativeAudioSupport as unknown as ReturnType<typeof vi.fn>
 const startCapture = nativeAudio.startCapture as unknown as ReturnType<typeof vi.fn>
@@ -131,6 +131,23 @@ function pumpInBackground(gen: AsyncGenerator<VoiceAsrStreamEvent>): { done: Pro
     }
   })()
   return { done }
+}
+
+/**
+ * The rejection object from the first `next()`, rather than `rejects.toThrow`.
+ *
+ * `toThrow` only ever reads the message, and the stable code carried alongside it is exactly
+ * the part renderers classify on: a build missing the capture addon reports its reason as
+ * `Cannot find module ...`, which no device-missing heuristic can tell from absent hardware.
+ * Returning the error keeps the caller's own expectations at its own call site.
+ */
+async function captureRejection(service: VoiceService): Promise<Error & { code?: unknown }> {
+  try {
+    await service.streamDictation({}).next()
+  } catch (error) {
+    return error as Error & { code?: unknown }
+  }
+  throw new Error('an unsupported capture build must not open a session')
 }
 
 /** 16-bit LE mono PCM at a constant amplitude, so the expected RMS is exact. */
@@ -1594,8 +1611,11 @@ describe('VoiceService recovery status', () => {
     // if the entry point does not clear it, the previous recording survives into the next
     // session. Aborting instead would not prove it — that path still reaches the capture setup,
     // which replaces the slot on its own.
-    support.mockReturnValueOnce({ supported: false, reason: 'no device' })
-    await expect(service.streamDictation({}).next()).rejects.toThrow('Voice capture is unavailable')
+    support.mockReturnValue({ supported: false, reason: 'no device' })
+    const rejection = await captureRejection(service)
+    expect(rejection.message).toContain('Voice capture is unavailable')
+    // A reason this build does not recognise still leaves with a code rather than none.
+    expect(rejection.code).toBe('VOICE_ASR_CAPTURE_UNAVAILABLE')
 
     expect(service.getRecoveryStatus()).toEqual({ available: false })
   })
@@ -1642,6 +1662,176 @@ describe('VoiceService recovery status', () => {
     await drainStream(service.streamDictation({}))
 
     expect(service.getRecoveryStatus()).toEqual({ available: false })
+  })
+})
+
+/**
+ * The cross-process contract for a build without the capture addon.
+ *
+ * Renderers never see this error object; they see the projected message and code. The code is
+ * what separates "this build has no audio component" from "no microphone is attached", and the
+ * wording cannot: the addon reports an absent .node as `Cannot find module ...`, which reads
+ * like any other failure. The sentence stays, because it carries the reason that names *which*
+ * build lost the component — and because a classifier keying on the code still needs the
+ * fallback reason for a support probe that returns no reason at all.
+ */
+describe('VoiceService capture unavailability contract', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    support.mockReturnValue({ supported: true, platform: 'darwin' })
+    startCapture.mockResolvedValue({ sessionId: 's1' })
+    drainCapture.mockReturnValue({ pcm: pcm(16_384), sampleRate: 16000, channels: 1 })
+    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+    getMainConfig.mockReturnValue({ voiceInput: { polishStrength: 'deep' } })
+    resolveAsrProvider.mockReturnValue({
+      model: 'fake-model',
+      provider: {
+        id: 'fake',
+        defaultStreamModel: 'fake-model',
+        createStream: vi.fn(async () => createFakeConnection().connection)
+      }
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /**
+   * The code set itself, which is the only part of this failure a renderer ever sees.
+   *
+   * Every reason here is the component's own — the loader's substitution when the binding is
+   * absent, and `build_native_audio_support`'s reports when it loaded — so each row pins the
+   * class a build lands in. `COMPONENT_MISSING` is the one the UI acts on structurally: it is
+   * what withholds the entry point, so a probe that has nothing to say still lands there rather
+   * than on a code no surface will ever match.
+   */
+  it.each([
+    {
+      name: 'a capture component that loaded',
+      probe: { supported: true, platform: 'darwin' },
+      code: null
+    },
+    {
+      name: 'an unsupported probe that reports no reason',
+      probe: { supported: false },
+      code: 'VOICE_ASR_CAPTURE_COMPONENT_MISSING'
+    },
+    {
+      // Recorded verbatim from a packaged build whose addon is missing.
+      name: 'a loader that cannot find the addon',
+      probe: {
+        supported: false,
+        reason:
+          "Cannot find module '/Applications/Tuff.app/Contents/Resources/app.asar/node_modules/@talex-touch/tuff-native/build/Release/tuff_native_audio.node'"
+      },
+      code: 'VOICE_ASR_CAPTURE_COMPONENT_MISSING'
+    },
+    {
+      name: 'a dlopen that failed',
+      probe: {
+        supported: false,
+        reason:
+          'dlopen(/Applications/Tuff.app/Contents/Resources/app.asar/node_modules/@talex-touch/tuff-native/build/Release/tuff_native_audio.node, 0x0001): tried: ...'
+      },
+      code: 'VOICE_ASR_CAPTURE_COMPONENT_MISSING'
+    },
+    {
+      name: 'a binding that never loaded',
+      probe: { supported: false, reason: 'native-module-not-loaded' },
+      code: 'VOICE_ASR_CAPTURE_COMPONENT_MISSING'
+    },
+    {
+      name: 'a component without an export this route needs',
+      probe: { supported: false, reason: 'missing export: drainCapture' },
+      code: 'VOICE_ASR_CAPTURE_COMPONENT_MISSING'
+    },
+    {
+      name: 'capture switched off by the environment',
+      probe: { supported: false, reason: 'disabled-by-env' },
+      code: 'VOICE_ASR_CAPTURE_DISABLED'
+    },
+    {
+      name: 'a machine with no input device',
+      probe: { supported: false, reason: 'no-input-device' },
+      code: 'VOICE_ASR_CAPTURE_DEVICE_UNAVAILABLE'
+    },
+    {
+      name: 'an input probe that failed',
+      probe: { supported: false, reason: 'input-probe-failed: no default input device' },
+      code: 'VOICE_ASR_CAPTURE_DEVICE_UNAVAILABLE'
+    },
+    {
+      name: 'a platform with no capture backend',
+      probe: { supported: false, reason: 'platform-not-supported' },
+      code: 'VOICE_ASR_CAPTURE_PLATFORM_UNSUPPORTED'
+    },
+    {
+      name: 'a reason this build does not know',
+      probe: { supported: false, reason: 'capture backend went away' },
+      code: 'VOICE_ASR_CAPTURE_UNAVAILABLE'
+    }
+  ])('reads $name as $code', ({ probe, code }) => {
+    support.mockReturnValue(probe)
+
+    expect(captureUnavailableCode()).toBe(code)
+  })
+
+  it.each([
+    {
+      // Recorded verbatim from a packaged build whose addon is missing.
+      name: 'a packaged build with no capture addon',
+      reason:
+        "Cannot find module '/Applications/Tuff.app/Contents/Resources/app.asar/node_modules/@talex-touch/tuff-native/build/Release/tuff_native_audio.node'",
+      expected: 'Cannot find module',
+      code: 'VOICE_ASR_CAPTURE_COMPONENT_MISSING'
+    },
+    {
+      name: 'a build with capture disabled by environment',
+      reason: 'disabled-by-env',
+      expected: 'disabled-by-env',
+      code: 'VOICE_ASR_CAPTURE_DISABLED'
+    },
+    {
+      name: 'a machine with no input device',
+      reason: 'no-input-device',
+      expected: 'no-input-device',
+      code: 'VOICE_ASR_CAPTURE_DEVICE_UNAVAILABLE'
+    },
+    {
+      name: 'an unsupported platform',
+      reason: 'platform-not-supported',
+      expected: 'platform-not-supported',
+      code: 'VOICE_ASR_CAPTURE_PLATFORM_UNSUPPORTED'
+    }
+  ])(
+    'reports $name as $code, not as the generic capture failure',
+    async ({ reason, expected, code }) => {
+      // Not `...Once`: a session asks the probe once to gate and once again to classify, and only a
+      // probe that answers the same way both times is the real component — a one-shot probe would
+      // have the classification read the unsupported answer as a supported one.
+      support.mockReturnValue({ supported: false, reason })
+      const service = new VoiceService()
+
+      const rejection = await captureRejection(service)
+
+      expect(rejection.code).toBe(code)
+      expect(rejection.message).toContain('Voice capture is unavailable')
+      // The reason is the addon's own, not a rewording: it is what tells the builds apart.
+      expect(rejection.message).toContain(expected)
+    }
+  )
+
+  it('still carries a code when the support probe supplies no reason', async () => {
+    support.mockReturnValue({ supported: false })
+    const service = new VoiceService()
+
+    const rejection = await captureRejection(service)
+
+    // Nothing to classify the build by, so it lands on the code the UI withholds the entry for.
+    expect(rejection.code).toBe('VOICE_ASR_CAPTURE_COMPONENT_MISSING')
+    expect(rejection.message).toContain('unsupported platform')
   })
 })
 

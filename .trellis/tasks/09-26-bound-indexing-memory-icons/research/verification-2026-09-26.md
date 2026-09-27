@@ -29,3 +29,23 @@ Both instances were stopped; total lifetime of the isolated app ≈ 3 minutes. N
 ## Memory (items 12–13 evidence so far, real dev app)
 
 Per-worker heap telemetry added: the writer worker (`search-index`) could never answer the 300ms metrics message while inside synchronous libSQL, so its heap showed as `null`; `Worker#getHeapStatistics` now fills it in. With that, during the whole-home scan every isolate stays small (main heapTotal 105–183MB, search-index 21–25MB, file-index 4–9MB, file-scan ~6MB) while process RSS swings 1.2–5.2GB and `footprint` peaks at 4.8–6.2GB with ~4GB dirty under "App-Specific Tag 14" (the process allocator arena, not V8 — `Malloc*` zones are ~3MB because Electron routes malloc through PartitionAlloc). The V8-heap OOM class from the issue is therefore closed by evidence; the native arena growth during the scan is real, transient (drops after subtrees finish) and not yet attributed. libvips worker threads are idle (condition waits), not the cause.
+
+## 2026-09-27 CPU / writer / shutdown follow-up
+
+- Packaged beta.47 whole-home startup scan held the main process near one full core and exposed an 8s `search-engine-core` quit timeout. `context=FileProvider.fullScan Ns` was only the longest-lived perf label; `schedulerDeferredRecords` was cumulative since boot, not the live queue.
+- Deterministic shutdown A/B used an isolated 20k tree and a separate process holding `BEGIN IMMEDIATE` on `search-index.db` for 20s. Before the fix, the 5s dev shutdown guard force-exited. After cancellation-first writer close, shutdown gives the worker 500ms to checkpoint, then unrefs/terminates it without awaiting confirmation on the quit critical path; the interrupted database reopened cleanly. Final re-run against the completed 100,002-row profile while the same 20s lock was held: all 44 modules unloaded in 2026ms, total shutdown 3.532s, no force-timeout.
+- The fused fullScan result now returns `persistedCount` instead of structured-cloning persisted rows back from the worker, and the fullScan service no longer retains inserted rows for the whole root. Custom sinks retain the legacy per-batch row emission contract.
+- Partial-root recovery is distinct from completion: child `scan_progress` rows keep an incomplete root eligible while counting as scan evidence. A profile interrupted at 3400 rows resumed to 6185 after restart instead of being suppressed by the 24h interval.
+
+### Isolated 100k campaign
+
+- Root: `/Users/talexdreamsoul/tuff-index-probe-beta47`; 100,000 synthetic Markdown files / 53.4 MiB, plus two files created during the live scan. Business profile and Chromium state were under `/tmp/tuff-beta47-100k`; `TUFF_DISABLE_GLOBAL_SHORTCUTS=1` prevented OS shortcut registration. The real profile was read-only.
+- Full scan completed with exactly **100,002** `files` rows and one exact root completion checkpoint. Duration from first 30s telemetry sample to `File indexing auto run completed successfully`: about **1h31m56s**.
+- Resource envelope across 187 snapshots: process RSS **214.1–514.6 MiB**; main V8 heapTotal max **155.7 MiB**; final scheduler active/queued/pending = `0/0/0`; pending/inflight buffers and bytes all `0`. `schedulerDeferredRecords=49,810` was cumulative; durable `file_index_progress` ended at 50,960 completed / 12 pending. The writer held **10** descriptors to the index after the full campaign.
+- Concurrent CoreBox search returned indexed results in **230ms** during the scan. Two filesystem mutations intentionally created during the scan were held by the source mutation gate (not visible within 9s), then converged after the authoritative scan and were searchable in **171ms / 155ms**.
+- One 553ms event-loop lag occurred during the 92-minute campaign; it coincided with a 30s `startup-analytics.outbox.flush` polling round plus interactive preview/default-opener IPC, so it is not evidence of a 748s main-thread fullScan block.
+
+### Live dev divergence found from the user's screenshot
+
+- The running dev PID 88881 used master before the stage-only beta.47 libSQL fixes: app-provider 50-item batches took **52.7–94.8s**, file enrichment hit `FILE_INDEX_PERSIST_BARRIER_TIMEOUT`, and `lsof` showed **241** descriptors to the 7.41GB `search-index.db`.
+- The isolated fixed build held 10 descriptors under the completed 100k campaign. Released commits `9ed43e307` (libSQL/driver transaction update) and `bcac84591` (reconnect poisoned busy connections and close stale init clients) were therefore synchronized into the current worktree. The already-running old dev process must restart before those changes can affect it.

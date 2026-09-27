@@ -27,6 +27,14 @@ Path prefixes: `shared/` = `apps/core-app/src/shared/`, `main/` = `apps/core-app
 `renderer/` = `apps/core-app/src/renderer/src/`, `utils/` = `packages/utils/`. R-numbers refer to
 `.trellis/tasks/09-26-corebox-default-shortcut/prd.md`.
 
+## Isolated runtime verification
+
+An isolated Electron probe that coexists with another Tuff instance must set
+`TUFF_DISABLE_GLOBAL_SHORTCUTS=1`. `ShortcutModule` still builds storage/runtime registrations so
+the rest of startup is real, but every OS registration pass is disabled and `enableAll()` cannot
+override the process-level gate. This is a verification boundary only; production launches omit
+the variable.
+
 ## Scenario: Defaults are declared once and migrate by value
 
 ### 1. Scope / Trigger

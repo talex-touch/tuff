@@ -4,6 +4,7 @@ import type {
   IndexedSourceResetResult
 } from '@talex-touch/utils/search'
 import type { Mock } from 'vitest'
+import type * as sqliteRetry from '../../../../db/sqlite-retry'
 import { vi } from 'vitest'
 
 type HarnessLogger = {
@@ -245,8 +246,10 @@ vi.mock('../../../../db/db-write-scheduler', () => ({
   }
 }))
 
-vi.mock('../../../../db/sqlite-retry', () => ({
-  isSqliteBusyError: vi.fn(() => false),
+vi.mock('../../../../db/sqlite-retry', async (importOriginal) => ({
+  // The retry wrapper is the mock; everything else in the module stays real so the
+  // provider's busy classification is exercised rather than mocked away.
+  ...(await importOriginal<typeof sqliteRetry>()),
   withSqliteRetry: withSqliteRetryMock
 }))
 

@@ -1718,6 +1718,8 @@ export class CommonChannelModule extends BaseModule {
   private registerIndexSettingsTransportHandlers(
     transport: NonNullable<CommonChannelModule['transport']>
   ): void {
+    fileProvider.registerOpenersChannel?.(transport)
+
     this.transportDisposers.push(
       transport.on(AppEvents.fileIndex.status, () => {
         try {

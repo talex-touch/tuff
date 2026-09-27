@@ -41,10 +41,12 @@ const props = withDefaults(
     sendState: SendState
     micState: DictationState
     micLevels: readonly number[]
+    /** This build cannot capture audio: the entry is withheld instead of failing on press. */
+    micBlocked?: boolean
     micElapsedMs?: number
     micOutcome?: DictationOutcome | null
   }>(),
-  { micElapsedMs: 0, micOutcome: null }
+  { micBlocked: false, micElapsedMs: 0, micOutcome: null }
 )
 
 const emit = defineEmits<{
@@ -190,7 +192,13 @@ defineExpose({ launch })
           </template>
         </HomeModelMenu>
       </div>
-      <div ref="micSlotRef" class="ComposerToolbar-MicSlot">
+      <!--
+        Withheld, not disabled, when this build has no audio component: the slot is removed so the
+        send key takes its place. A disabled button would pose a question the app already knows the
+        answer to, and the status read that decided this is the same one a session would fail on.
+        Nothing measures this slot unless a session starts, and a blocked build never starts one.
+      -->
+      <div v-if="!micBlocked" ref="micSlotRef" class="ComposerToolbar-MicSlot">
         <ComposerMic
           :state="micState"
           :levels="micLevels"

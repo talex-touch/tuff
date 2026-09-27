@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality bar for renderer changes and tests"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Skeleton/loading-state rule and general frontend conventions to verify against"}
+{"file": ".trellis/spec/frontend/release-testing.md", "reason": "Verify the updated native-trust/authenticity contract matches the implementation"}
+{"file": ".trellis/spec/main-process/channel-transport-contracts.md", "reason": "Verify the new getHistory event follows request-response contract rules"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer consistency between shared types, main handler and renderer consumer"}

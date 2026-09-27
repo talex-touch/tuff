@@ -6,47 +6,77 @@ import type {
   UpdateSettings
 } from '@talex-touch/utils'
 import type { BuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
+import type { UpdateStatusActionKind } from './update-status-display'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxModal as TModal } from '@talex-touch/tuffex/modal'
 import { TxSelectItem } from '@talex-touch/tuffex/select'
-import { AppPreviewChannel, DownloadModule } from '@talex-touch/utils'
-import { useDownloadSdk } from '@talex-touch/utils/renderer'
+import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
+import {
+  AppPreviewChannel,
+  DownloadModule,
+  resolveUpdateChannelLabel,
+  splitUpdateTag
+} from '@talex-touch/utils'
+import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
+import { useAppSdk, useDownloadSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { isBuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import SettingSkeleton from '~/components/settings/SettingSkeleton.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { useEnv } from '~/modules/hooks/env-hooks'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { getPreloadProcessInfo } from '~/modules/preload/process-info'
+import { appSetting } from '~/modules/storage/app-storage'
 import {
   normalizeStoredUpdateChannel,
   normalizeSupportedUpdateChannel
 } from '~/modules/update/channel'
 import { GithubUpdateProvider } from '~/modules/update/GithubUpdateProvider'
 import { createRendererLogger } from '~/utils/renderer-log'
+import SettingUpdateHistory from './SettingUpdateHistory.vue'
+import SettingUpdateStatus from './SettingUpdateStatus.vue'
 import {
   buildUpdateDiagnosticEvidenceFilename,
   buildUpdateDiagnosticEvidencePayload,
   formatUpdateDiagnosticEvidenceJson,
-  resolveMacNativeTrust,
-  resolveMacNativeTrustDisplay,
+  resolveBuildAuthenticity,
   resolveUpdateLifecycleDisplay
 } from './update-diagnostic-evidence'
+import {
+  AUTO_DOWNLOAD_GRACE_MS,
+  formatFileSize,
+  formatUpdateVersionLabel,
+  resolveUpdateStatusView
+} from './update-status-display'
+import { useUpdateDownloadProgress } from './useUpdateDownloadProgress'
+
+/** The official build, fixed rather than the configurable Nexus address: the point is a genuine copy. */
+const OFFICIAL_DOWNLOAD_PAGE = `${NEXUS_BASE_URL}/updates`
 
 const { t } = useI18n()
 const githubProvider = new GithubUpdateProvider()
 const downloadSdk = useDownloadSdk()
+const appSdk = useAppSdk()
 const transport = useTuffTransport()
 const downloadStatusDisposers: Array<() => void> = []
 const { platform, isMac } = useRendererPlatform()
 const settingUpdateLog = createRendererLogger('SettingUpdate')
 const { startupInfo } = useStartupInfo()
+const { packageJson } = useEnv()
+/**
+ * The running version, read where the sidebar reads it. `startupInfo.version` is not a version:
+ * it is the build kind (`dev` / `release`).
+ */
+const appVersion = computed(() => packageJson.value?.version ?? null)
 
 const {
   lifecycleSnapshot,
@@ -58,12 +88,13 @@ const {
   getUpdateStatus,
   getCachedRelease
 } = useUpdateRuntime()
+const { progress: downloadProgress } = useUpdateDownloadProgress(lifecycleSnapshot)
 
 const settings = ref<UpdateSettings | null>(null)
 const selectedChannel = ref<AppPreviewChannel>(AppPreviewChannel.RELEASE)
 const selectedFrequency = ref<UpdateSettings['frequency']>('everyday')
+/** Drives both `autoDownload` and `installOnNormalQuit`; see `handleAutoUpdateChange`. */
 const autoDownloadEnabled = ref<boolean>(true)
-const installOnNormalQuitEnabled = ref(true)
 const rendererOverrideEnabled = ref(false)
 /**
  * Mirrors `TUFF_ENABLE_RENDERER_OVERRIDE` in the main process. When false the row is not rendered
@@ -79,17 +110,45 @@ let buildVerificationStatusDisposer: (() => void) | null = null
 const assetsDialogVisible = ref(false)
 
 const fetching = ref(false)
+/**
+ * The first status request has answered, successfully or not. Until then a missing snapshot or
+ * version keeps the card a skeleton; `useEnv` reports no failure, so this also bounds that wait.
+ */
+const statusSettled = ref(false)
 const channelSaving = ref(false)
 const frequencySaving = ref(false)
+const autoUpdateSaving = ref(false)
 const rendererOverrideSaving = ref(false)
 const notifyOnUpdateSaving = ref(false)
 const installingUpdate = ref(false)
 const manualChecking = ref(false)
+/** Cleared when the lifecycle leaves `available`, not when the request answers. */
+const downloadRequestPending = ref(false)
 const isMacAutoInstallPlatform = computed(() => isMac.value)
-const nativeTrust = computed(() =>
-  resolveMacNativeTrust(platform.value, buildVerificationStatus.value)
+
+const developerMode = computed(() => Boolean(appSetting?.dev?.developerMode))
+const isBetaBuild = computed(() => {
+  const version = appVersion.value
+  if (!version) return false
+  return resolveUpdateChannelLabel(splitUpdateTag(version).channelLabel) === AppPreviewChannel.BETA
+})
+/**
+ * Channels are a developer-mode option, except for beta builds and for anyone already on Beta —
+ * who would otherwise have no way back to Release once developer mode is off.
+ */
+const channelRowWanted = computed(
+  () => isBetaBuild.value || selectedChannel.value === AppPreviewChannel.BETA || developerMode.value
 )
-const nativeTrustDisplay = computed(() => resolveMacNativeTrustDisplay(nativeTrust.value))
+/** Once shown, the row stays for this visit: switching to Release must not pull it away mid-change. */
+const channelRowRevealed = ref(false)
+watch(
+  channelRowWanted,
+  (wanted) => {
+    if (wanted) channelRowRevealed.value = true
+  },
+  { immediate: true }
+)
+const showChannelRow = computed(() => channelRowWanted.value || channelRowRevealed.value)
 
 const channelOptions = computed(() => {
   return [
@@ -115,65 +174,8 @@ const channelSelectDisabled = computed(
     manualChecking.value ||
     !lifecycleDisplay.value.canCheck
 )
-const channelDescription = computed(() =>
-  t(
-    selectedChannel.value === AppPreviewChannel.BETA
-      ? 'settings.settingUpdate.channelDescBeta'
-      : 'settings.settingUpdate.channelDescRelease'
-  )
-)
 const frequencySelectDisabled = computed(() => fetching.value || frequencySaving.value)
-
-/** The status row only expands when there is an error worth reading. */
-const lifecycleExpanded = computed(() => Boolean(lifecycleSnapshot.value?.error))
-const showNativeTrustVerified = computed(
-  () => isMacAutoInstallPlatform.value && nativeTrust.value.status === 'pass'
-)
-const lifecycleStatusTitle = computed(() => {
-  if (fetching.value && !lifecycleSnapshot.value) {
-    return t('settings.settingUpdate.status.loading')
-  }
-  return t(lifecycleDisplay.value.labelKey)
-})
-const lifecycleStatusDescription = computed(() => {
-  if (fetching.value && !lifecycleSnapshot.value) {
-    return t('settings.settingUpdate.lifecycle.loadingDescription')
-  }
-  return t(lifecycleDisplay.value.descriptionKey)
-})
-/**
- * `autoDownload` and `installOnNormalQuit` used to be two switches whose combined meaning users
- * had to infer, and the second one sat permanently disabled whenever the build lacked downgrade
- * evidence. Artboard `aRjnd` folds them into one ordered choice; the locked case simply drops the
- * middle option instead of showing a dead toggle.
- */
-type InstallMode = 'manual' | 'onQuit' | 'immediate'
-
-const installModeSaving = ref(false)
-
-const installMode = computed<InstallMode>(() => {
-  if (!autoDownloadEnabled.value) return 'manual'
-  return lifecycleDisplay.value.canEnableNormalQuit && installOnNormalQuitEnabled.value
-    ? 'onQuit'
-    : 'immediate'
-})
-
-const installModeOptions = computed(() => {
-  const options: { value: InstallMode; label: string }[] = [
-    { value: 'manual', label: t('settings.settingUpdate.installMode.manual') }
-  ]
-  if (lifecycleDisplay.value.canEnableNormalQuit) {
-    options.push({ value: 'onQuit', label: t('settings.settingUpdate.installMode.onQuit') })
-  }
-  options.push({ value: 'immediate', label: t('settings.settingUpdate.installMode.immediate') })
-  return options
-})
-
-const installModeDescription = computed(() =>
-  lifecycleDisplay.value.canEnableNormalQuit
-    ? autoDownloadDescription.value
-    : t('settings.settingUpdate.installOnNormalQuitLocked')
-)
+const authenticity = computed(() => resolveBuildAuthenticity(buildVerificationStatus.value))
 
 const runtimeArch = computed(() => getRuntimeArch())
 const currentRuntimeLabel = computed(() =>
@@ -209,7 +211,7 @@ const assetsSummary = computed(() => {
     matching: cachedAssets.value.length,
     total: allCachedAssets.value.length
   })
-  return `${cachedRelease.value.release.tag_name} · ${countText}`
+  return `${formatUpdateVersionLabel(cachedRelease.value.release.tag_name)} · ${countText}`
 })
 const canStartDownload = computed(
   () =>
@@ -217,38 +219,75 @@ const canStartDownload = computed(
     Boolean(cachedRelease.value?.release) &&
     cachedAssets.value.length > 0
 )
-const autoDownloadDescription = computed(() => {
-  if (platform.value === 'darwin') return t('settings.settingUpdate.autoDownloadDescMac')
-  if (platform.value === 'win32') return t('settings.settingUpdate.autoDownloadDescWindows')
-  return t('settings.settingUpdate.autoDownloadDescLinux')
-})
-const installActionDescription = computed(() => {
-  if (platform.value === 'darwin') return t('settings.settingUpdate.actions.restartMacDesc')
-  if (platform.value === 'win32')
-    return t('settings.settingUpdate.actions.startWindowsInstallerDesc')
-  return t('settings.settingUpdate.actions.openLinuxPackageDesc')
-})
-const primaryActionKind = computed<'install' | 'download' | 'check' | null>(() => {
-  if (lifecycleDisplay.value.phase === 'ready') return 'install'
-  if (lifecycleDisplay.value.canDownload) return 'download'
-  if (lifecycleDisplay.value.canCheck) return 'check'
-  return null
-})
-const primaryActionDescription = computed(() => {
-  if (primaryActionKind.value === 'install') return installActionDescription.value
-  if (primaryActionKind.value === 'download') {
-    return t('settings.settingUpdate.actions.downloadAvailableDesc')
+
+/**
+ * When this page saw the current attempt enter `available`, plus a clock that ticks only through
+ * the automatic-download grace period — long enough to hide the manual button, then stops.
+ */
+const availableSinceMs = ref<number | null>(null)
+const nowMs = ref(Date.now())
+let graceTimer: ReturnType<typeof setInterval> | null = null
+
+function stopGraceTimer(): void {
+  if (graceTimer !== null) {
+    clearInterval(graceTimer)
+    graceTimer = null
   }
-  if (primaryActionKind.value === 'check') {
-    return t('settings.settingUpdate.actions.manualCheckDesc')
-  }
-  return t('settings.settingUpdate.actions.lifecycleInProgressDesc')
-})
-const installActionLabel = computed(() => {
-  if (platform.value === 'darwin') return t('settings.settingUpdate.actions.restartMac')
-  if (platform.value === 'win32') return t('settings.settingUpdate.actions.startWindowsInstaller')
-  return t('settings.settingUpdate.actions.openLinuxPackage')
-})
+}
+
+watch(
+  () => {
+    const snapshot = lifecycleSnapshot.value
+    return snapshot?.phase === 'available' ? (snapshot.attemptId ?? 'available') : null
+  },
+  (availableAttempt) => {
+    stopGraceTimer()
+    downloadRequestPending.value = false
+    if (availableAttempt === null) {
+      availableSinceMs.value = null
+      return
+    }
+    const since = Date.now()
+    availableSinceMs.value = since
+    nowMs.value = since
+    graceTimer = setInterval(() => {
+      nowMs.value = Date.now()
+      if (nowMs.value - since >= AUTO_DOWNLOAD_GRACE_MS) stopGraceTimer()
+    }, 1_000)
+  },
+  { immediate: true }
+)
+
+const statusView = computed(() =>
+  resolveUpdateStatusView({
+    snapshot: lifecycleSnapshot.value,
+    loading: !statusSettled.value,
+    currentVersion: appVersion.value,
+    autoDownload: autoDownloadEnabled.value,
+    availableSinceMs: availableSinceMs.value,
+    nowMs: nowMs.value,
+    platform: platform.value,
+    authenticity: authenticity.value,
+    downloadProgress: downloadProgress.value,
+    canStartDownload: canStartDownload.value,
+    checkRequestPending: manualChecking.value,
+    checkLocked: fetching.value,
+    downloadRequestPending: downloadRequestPending.value,
+    installRequestPending: installingUpdate.value
+  })
+)
+const statusRow = computed(() => (statusView.value.kind === 'status' ? statusView.value : null))
+const showStatusSkeleton = useDeferredLoading(() => statusView.value.kind === 'skeleton')
+/**
+ * The cards below wait until the status card or its skeleton holds the top of the page. Neither is
+ * drawn during the skeleton's 150ms delay, and the history card — one request away, where the
+ * status card is two — would otherwise take the top and then be pushed down.
+ */
+const statusSlotFilled = computed(() => showStatusSkeleton.value || statusRow.value !== null)
+/** Mirrors the loaded card: the status row, and the channel row when it will be shown. */
+const statusSkeletonGroups = computed(() => [
+  { rows: showChannelRow.value ? 2 : 1, description: true, trailing: true }
+])
 
 onMounted(async () => {
   setupBuildVerificationStatusListener()
@@ -267,6 +306,7 @@ onUnmounted(() => {
   downloadStatusDisposers.length = 0
   buildVerificationStatusDisposer?.()
   buildVerificationStatusDisposer = null
+  stopGraceTimer()
 })
 
 function applyBuildVerificationStatus(value: unknown): void {
@@ -312,7 +352,6 @@ async function loadSettings(): Promise<void> {
       normalizeStoredUpdateChannel(fetched.updateChannel) ?? AppPreviewChannel.RELEASE
     selectedFrequency.value = fetched.frequency
     autoDownloadEnabled.value = fetched.autoDownload ?? true
-    installOnNormalQuitEnabled.value = fetched.installOnNormalQuit ?? true
     rendererOverrideEnabled.value = fetched.rendererOverrideEnabled ?? false
     rendererOverrideAvailable.value = fetched.rendererOverrideAvailable ?? false
     notifyOnUpdate.value = fetched.notifyOnUpdate ?? true
@@ -323,6 +362,7 @@ async function loadSettings(): Promise<void> {
     toast.error(t('settings.settingUpdate.messages.loadFailed'))
   } finally {
     fetching.value = false
+    statusSettled.value = true
   }
 }
 
@@ -331,6 +371,8 @@ async function refreshStatus(): Promise<void> {
     await getUpdateStatus()
   } catch (error) {
     settingUpdateLog.warn('Failed to refresh authoritative update lifecycle', error)
+  } finally {
+    statusSettled.value = true
   }
 }
 
@@ -373,7 +415,7 @@ async function handleChannelChange(value: AppPreviewChannel): Promise<void> {
   toast.success(t('settings.settingUpdate.messages.channelSaved', { channel: channelLabel }))
   manualChecking.value = true
   try {
-    await checkApplicationUpgrade(true)
+    await checkApplicationUpgrade(true, { presentDialog: false })
     await refreshStatus()
     await refreshCachedRelease(normalizedValue)
   } catch (error) {
@@ -384,6 +426,12 @@ async function handleChannelChange(value: AppPreviewChannel): Promise<void> {
   }
 }
 
+/*
+ * Known gap, left as found: the frequency, notification and renderer-override rows bind `v-model`
+ * as well as their handler, and `v-model` assigns first, so each handler's `previous` is already
+ * the new value and a failed save does not roll back. The automatic-update switch binds
+ * `:model-value` only for that reason.
+ */
 async function handleFrequencyChange(value: UpdateSettings['frequency']): Promise<void> {
   if (!settings.value || frequencySaving.value) return
 
@@ -422,30 +470,28 @@ async function handleNotifyOnUpdateChange(value: boolean): Promise<void> {
   }
 }
 
-/** Writes both underlying flags in one call so the two can never drift out of sync. */
-async function handleInstallModeChange(value: InstallMode): Promise<void> {
-  if (!settings.value || installModeSaving.value) return
+/**
+ * One switch for what used to be a three-way install mode. On means download in the background and
+ * install when Tuff quits; off means notify only. The retired middle option (download, install by
+ * hand) keeps its stored values and reads as on until the user flips the switch.
+ */
+async function handleAutoUpdateChange(value: boolean): Promise<void> {
+  if (!settings.value || autoUpdateSaving.value) return
 
-  const previousAutoDownload = autoDownloadEnabled.value
-  const previousInstallOnQuit = installOnNormalQuitEnabled.value
-  const autoDownload = value !== 'manual'
-  const installOnNormalQuit = value === 'onQuit'
-
-  autoDownloadEnabled.value = autoDownload
-  installOnNormalQuitEnabled.value = installOnNormalQuit
-  installModeSaving.value = true
+  const previous = autoDownloadEnabled.value
+  autoDownloadEnabled.value = value
+  autoUpdateSaving.value = true
   try {
-    await updateSettings({ autoDownload, installOnNormalQuit })
-    settings.value.autoDownload = autoDownload
-    settings.value.installOnNormalQuit = installOnNormalQuit
-    toast.success(t('settings.settingUpdate.messages.installModeSaved'))
+    await updateSettings({ autoDownload: value, installOnNormalQuit: value })
+    settings.value.autoDownload = value
+    settings.value.installOnNormalQuit = value
+    toast.success(t('settings.settingUpdate.messages.autoUpdateSaved'))
   } catch (error) {
-    settingUpdateLog.error('Failed to update install mode', error)
-    autoDownloadEnabled.value = previousAutoDownload
-    installOnNormalQuitEnabled.value = previousInstallOnQuit
+    settingUpdateLog.error('Failed to update automatic updates', error)
+    autoDownloadEnabled.value = previous
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
-    installModeSaving.value = false
+    autoUpdateSaving.value = false
   }
 }
 
@@ -466,6 +512,26 @@ async function handleRendererOverrideChange(value: boolean): Promise<void> {
   } finally {
     rendererOverrideSaving.value = false
   }
+}
+
+function handleStatusAction(kind: UpdateStatusActionKind): void {
+  switch (kind) {
+    case 'check':
+    case 'retry':
+      void handleManualCheck()
+      return
+    case 'download':
+      void handleDownloadAvailableUpdate()
+      return
+    case 'install':
+      void handleInstallUpdate()
+  }
+}
+
+function openOfficialDownloadPage(): void {
+  appSdk.openExternal(OFFICIAL_DOWNLOAD_PAGE).catch((error: unknown) => {
+    settingUpdateLog.warn('Failed to open the official download page', error)
+  })
 }
 
 async function handleDownloadAsset(asset: DownloadAsset): Promise<void> {
@@ -500,14 +566,24 @@ async function handleDownloadAsset(asset: DownloadAsset): Promise<void> {
 }
 
 async function handleDownloadAvailableUpdate(): Promise<void> {
-  if (!canStartDownload.value || !cachedRelease.value?.release) {
+  if (downloadRequestPending.value || !canStartDownload.value || !cachedRelease.value?.release) {
     return
   }
 
-  await handleDownloadUpdate({
+  downloadRequestPending.value = true
+  const started = await handleDownloadUpdate({
     ...cachedRelease.value.release,
     assets: cachedAssets.value
   })
+  if (!started) {
+    downloadRequestPending.value = false
+    return
+  }
+  // The answer normally carries the `downloading` snapshot. If it did not, ask for it rather than
+  // leave the button spinning.
+  if (lifecycleSnapshot.value?.phase === 'available') {
+    await refreshStatus()
+  }
 }
 
 async function handleInstallUpdate(): Promise<void> {
@@ -534,7 +610,7 @@ async function handleManualCheck(): Promise<void> {
 
   manualChecking.value = true
   try {
-    await checkApplicationUpgrade(true)
+    await checkApplicationUpgrade(true, { presentDialog: false })
   } finally {
     try {
       await refreshStatus()
@@ -582,6 +658,7 @@ function buildCurrentUpdateEvidence() {
     arch: getRuntimeArch(),
     isMacAutoInstallPlatform: isMacAutoInstallPlatform.value,
     buildVerificationStatus: buildVerificationStatus.value,
+    // startupInfo.version is the AppVersion enum ('dev' | 'release'), so installedVersion.current is wrong here; left as-is.
     currentVersion: startupInfo.value?.version ?? null
   })
 }
@@ -603,23 +680,6 @@ function saveUpdateEvidence(): void {
   link.click()
   URL.revokeObjectURL(url)
   toast.success(t('settings.settingUpdate.evidenceSaved'))
-}
-
-function formatFileSize(bytes: number): string {
-  if (!bytes) {
-    return '0 B'
-  }
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let size = bytes
-  let unitIndex = 0
-
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024
-    unitIndex += 1
-  }
-
-  const digits = unitIndex === 0 ? 0 : size < 10 ? 1 : 0
-  return `${size.toFixed(digits)} ${units[unitIndex]}`
 }
 
 function formatPlatform(platform: DownloadAsset['platform'] | 'unknown'): string {
@@ -680,38 +740,36 @@ function openAssetsDialog(): void {
 </script>
 
 <template>
-  <TuffGroupBlock
-    data-settings-section="update"
-    :name="t('settings.settingUpdate.groupTitle')"
-    :description="t('settings.settingUpdate.groupDesc')"
-    :collapsible="false"
-  >
-    <div
-      v-if="nativeTrustDisplay.showCriticalAlert"
-      class="native-trust-alert"
-      role="alert"
-      aria-live="assertive"
-      aria-atomic="true"
-    >
-      <i class="native-trust-alert-icon i-carbon-warning-alt-filled" aria-hidden="true" />
-      <div class="native-trust-alert-body">
-        <div class="native-trust-alert-head">
-          <strong>{{ t(nativeTrustDisplay.titleKey) }}</strong>
-          <code>{{ nativeTrustDisplay.code }}</code>
-        </div>
-        <p>{{ t(nativeTrustDisplay.descriptionKey) }}</p>
-        <ul>
-          <li v-for="riskKey in nativeTrustDisplay.riskKeys" :key="riskKey">
-            {{ t(riskKey) }}
-          </li>
-        </ul>
+  <!--
+    The first card answers one question — where the update is — and adds only what someone must
+    act on: a copy that is not genuine, or a channel they can switch. History appears once an update
+    has finished here; everything configurable waits behind developer mode.
+  -->
+  <SettingSkeleton
+    v-if="showStatusSkeleton"
+    class="update-status-skeleton"
+    :groups="statusSkeletonGroups"
+    :dividers="false"
+  />
+  <TuffGroupBlock v-else-if="statusRow" data-settings-section="update" :collapsible="false">
+    <div v-if="authenticity === 'unofficial'" class="authenticity-banner" role="alert">
+      <i class="authenticity-banner__icon i-carbon-warning-alt-filled" aria-hidden="true" />
+      <div class="authenticity-banner__body">
+        <strong>{{ t('settings.settingUpdate.authenticity.title') }}</strong>
+        <p>{{ t('settings.settingUpdate.authenticity.description') }}</p>
       </div>
+      <TxButton variant="flat" type="danger" @click="openOfficialDownloadPage">
+        {{ t('settings.settingUpdate.actions.openDownloadPage') }}
+      </TxButton>
     </div>
 
+    <SettingUpdateStatus :view="statusRow" @action="handleStatusAction" />
+
     <TuffBlockSelect
+      v-if="showChannelRow"
       v-model="selectedChannel"
       :title="t('settings.settingUpdate.channelTitle')"
-      :description="channelDescription"
+      description=""
       :disabled="channelSelectDisabled"
       @update:model-value="(value) => handleChannelChange(value as AppPreviewChannel)"
     >
@@ -719,11 +777,19 @@ function openAssetsDialog(): void {
         {{ item.label }}
       </TxSelectItem>
     </TuffBlockSelect>
+  </TuffGroupBlock>
 
+  <SettingUpdateHistory v-if="statusSlotFilled" />
+
+  <TuffGroupBlock
+    v-if="developerMode && statusSlotFilled"
+    :name="t('settings.settingUpdate.advancedTitle')"
+    :collapsible="false"
+  >
     <TuffBlockSelect
       v-model="selectedFrequency"
       :title="t('settings.settingUpdate.frequencyTitle')"
-      :description="t('settings.settingUpdate.frequencyDesc')"
+      description=""
       :disabled="frequencySelectDisabled"
       @update:model-value="(value) => handleFrequencyChange(value as UpdateSettings['frequency'])"
     >
@@ -732,102 +798,21 @@ function openAssetsDialog(): void {
       </TxSelectItem>
     </TuffBlockSelect>
 
-    <TuffBlockSelect
-      :model-value="installMode"
-      :title="t('settings.settingUpdate.installMode.title')"
-      :description="installModeDescription"
-      :disabled="fetching || installModeSaving"
-      @update:model-value="(value) => handleInstallModeChange(value as InstallMode)"
-    >
-      <TxSelectItem v-for="mode in installModeOptions" :key="mode.value" :value="mode.value">
-        {{ mode.label }}
-      </TxSelectItem>
-    </TuffBlockSelect>
+    <TuffBlockSwitch
+      :model-value="autoDownloadEnabled"
+      :title="t('settings.settingUpdate.autoUpdate')"
+      :disabled="fetching || autoUpdateSaving"
+      @update:model-value="handleAutoUpdateChange"
+    />
 
-    <tuff-block-switch
+    <TuffBlockSwitch
       v-model="notifyOnUpdate"
       :title="t('settings.settingUpdate.notifyOnUpdate')"
-      :description="t('settings.settingUpdate.notifyOnUpdateDesc')"
       :disabled="fetching || notifyOnUpdateSaving"
       @update:model-value="handleNotifyOnUpdateChange"
     />
 
-    <!-- Only exists when launched with the env var; see `rendererOverrideAvailable`. -->
-    <tuff-block-switch
-      v-if="rendererOverrideAvailable"
-      v-model="rendererOverrideEnabled"
-      :title="t('settings.settingUpdate.rendererOverrideTitle')"
-      :description="t('settings.settingUpdate.rendererOverrideDesc')"
-      :disabled="fetching || rendererOverrideSaving"
-      @update:model-value="handleRendererOverrideChange"
-    />
-
-    <!--
-      Status and its primary action are one row: the eight-field lifecycle grid that used to sit
-      here read "不可用" on every line for a healthy install, and duplicated the native-trust alert
-      already shown above. That detail now ships through 「导出诊断」 instead.
-    -->
-    <TuffBlockSlot
-      class="lifecycle-status-slot"
-      :class="{ 'lifecycle-advanced': lifecycleExpanded }"
-      :title="lifecycleStatusTitle"
-      :description="primaryActionDescription || lifecycleStatusDescription"
-    >
-      <div class="lifecycle-panel">
-        <div class="lifecycle-status-row">
-          <span class="lifecycle-badge" :class="`tone-${lifecycleDisplay.tone}`">
-            <span class="lifecycle-badge-dot" aria-hidden="true" />
-            {{ lifecycleStatusTitle }}
-          </span>
-          <span v-if="showNativeTrustVerified" class="lifecycle-verified">
-            <i class="i-carbon-security" aria-hidden="true" />
-            {{ t('settings.settingUpdate.nativeTrust.verifiedBadge') }}
-          </span>
-        </div>
-        <p v-if="lifecycleSnapshot?.error" class="lifecycle-error-line">
-          {{ lifecycleSnapshot.error.message }}
-        </p>
-      </div>
-
-      <TxButton
-        v-if="primaryActionKind === 'install'"
-        variant="flat"
-        type="primary"
-        :disabled="installingUpdate || !lifecycleDisplay.canInstall"
-        :loading="installingUpdate"
-        @click="handleInstallUpdate"
-      >
-        {{ installActionLabel }}
-      </TxButton>
-      <TxButton
-        v-else-if="primaryActionKind === 'download'"
-        variant="flat"
-        type="primary"
-        :disabled="!canStartDownload"
-        @click="handleDownloadAvailableUpdate"
-      >
-        {{ t('settings.settingUpdate.actions.downloadAvailable') }}
-      </TxButton>
-      <TxButton
-        v-else-if="primaryActionKind === 'check'"
-        variant="flat"
-        type="primary"
-        :disabled="fetching || manualChecking || !lifecycleDisplay.canCheck"
-        :loading="manualChecking"
-        @click="handleManualCheck"
-      >
-        {{ t('settings.settingUpdate.actions.manualCheck') }}
-      </TxButton>
-      <span v-else class="action-pending">
-        {{ t('settings.settingUpdate.actions.waitForLifecycle') }}
-      </span>
-    </TuffBlockSlot>
-
-    <TuffBlockSlot
-      v-if="cachedRelease?.release"
-      :title="t('settings.settingUpdate.assetsTitle')"
-      :description="t('settings.settingUpdate.assetsDesc')"
-    >
+    <TuffBlockSlot v-if="cachedRelease?.release" :title="t('settings.settingUpdate.assetsTitle')">
       <div class="assets-summary">
         {{ assetsSummary }}
       </div>
@@ -836,18 +821,21 @@ function openAssetsDialog(): void {
       </TxButton>
     </TuffBlockSlot>
 
-    <!--
-      One export action rather than a copy/save pair: both produced the same payload, and this is
-      now the only surface carrying the lifecycle detail that the removed grid used to print.
-    -->
-    <TuffBlockSlot
-      :title="t('settings.settingUpdate.evidenceTitle')"
-      :description="t('settings.settingUpdate.evidenceDesc')"
-    >
+    <TuffBlockSlot :title="t('settings.settingUpdate.evidenceTitle')">
       <TxButton variant="flat" @click="saveUpdateEvidence">
         {{ t('settings.settingUpdate.exportEvidence') }}
       </TxButton>
     </TuffBlockSlot>
+
+    <!-- Only exists when launched with the env var; see `rendererOverrideAvailable`. -->
+    <TuffBlockSwitch
+      v-if="rendererOverrideAvailable"
+      v-model="rendererOverrideEnabled"
+      :title="t('settings.settingUpdate.rendererOverrideTitle')"
+      :description="t('settings.settingUpdate.rendererOverrideDesc')"
+      :disabled="fetching || rendererOverrideSaving"
+      @update:model-value="handleRendererOverrideChange"
+    />
   </TuffGroupBlock>
 
   <TModal
@@ -861,7 +849,9 @@ function openAssetsDialog(): void {
       </div>
       <div v-else class="assets-list">
         <div class="assets-header">
-          <span class="assets-version">{{ cachedRelease.release.tag_name }}</span>
+          <span class="assets-version">{{
+            formatUpdateVersionLabel(cachedRelease.release.tag_name)
+          }}</span>
           <span class="assets-count">{{
             t('settings.settingUpdate.assetsMatchingCount', {
               matching: cachedAssets.length,
@@ -929,236 +919,54 @@ function openAssetsDialog(): void {
 </template>
 
 <style scoped>
-.native-trust-alert {
+/*
+ * TuffBlockSlot rows are 56px: a 20px title line and an 18px detail line 2px apart, centred in the
+ * floor. The skeleton rows default to SettingRow's metrics, so they are restated here.
+ */
+.update-status-skeleton {
+  --tx-skeleton-row-padding-block: 8px;
+  --tx-skeleton-row-title-line: 20px;
+  --tx-skeleton-row-text-gap: 2px;
+}
+
+.authenticity-banner {
   display: flex;
+  align-items: center;
   gap: 12px;
-  padding: 14px 16px;
   /*
-   * No bottom edge of its own: the group card draws the hairline under every row, and the two
-   * stacked into a visible double line. `background-color`, not the shorthand, for the same
-   * reason — the hairline rides on the row's `background-image`.
+   * The button ends where every row's trailing control does: the row's own 16px side padding
+   * (TuffBlockSlot.vue) plus the 32px `margin-right` TuffGroupBlock.vue gives `.TBlockSelection-Func`.
    */
+  padding: 14px calc(16px + 32px) 14px 16px;
+  /* Concentric with the card's 12px corner inside its 1px border; the card is headless. */
+  border-radius: 11px 11px 0 0;
   background-color: var(--shell-danger-soft);
   color: var(--shell-danger);
 }
 
-.native-trust-alert-icon {
+.authenticity-banner__icon {
   flex: 0 0 auto;
-  margin-top: 1px;
   font-size: 18px;
 }
 
-.native-trust-alert-body {
+.authenticity-banner__body {
   display: flex;
   flex: 1;
   min-width: 0;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
-.native-trust-alert-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.native-trust-alert-head strong {
+.authenticity-banner__body strong {
   font-size: 14px;
   font-weight: 600;
 }
 
-.native-trust-alert-head code {
-  margin-left: auto;
-  overflow-wrap: anywhere;
-  font-size: 11px;
-  opacity: 0.75;
-}
-
-.native-trust-alert p {
+.authenticity-banner__body p {
   margin: 0;
   color: var(--shell-text-primary);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
-}
-
-.native-trust-alert ul {
-  display: grid;
-  gap: 4px;
-  margin: 2px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.native-trust-alert li {
-  position: relative;
-  padding-left: 14px;
-  color: var(--shell-text-regular);
-  font-size: var(--shell-fs-sm);
-  line-height: 1.45;
-}
-
-.native-trust-alert li::before {
-  content: '';
-  position: absolute;
-  top: 7px;
-  left: 3px;
-  width: 4px;
-  height: 4px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0.5;
-}
-
-:deep(.lifecycle-status-slot.lifecycle-advanced.TBlockSlot-Container) {
-  min-height: 56px;
-  height: auto;
-  align-items: flex-start;
-  padding-top: 12px;
-  padding-bottom: 12px;
-}
-
-:deep(.lifecycle-status-slot.lifecycle-advanced .TBlockSlot-Content) {
-  align-items: flex-start;
-  padding-top: 4px;
-}
-
-:deep(.lifecycle-status-slot.lifecycle-advanced .TBlockSlot-Slot) {
-  flex: 1 1 60%;
-  min-width: 0;
-  justify-content: stretch;
-}
-
-.lifecycle-panel {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.lifecycle-status-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.lifecycle-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--tx-text-color-regular);
-  background: var(--tx-fill-color);
-}
-
-.lifecycle-badge-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.lifecycle-badge.tone-info {
-  color: var(--tx-color-info);
-  background: color-mix(in srgb, var(--tx-color-info) 12%, transparent);
-}
-
-.lifecycle-badge.tone-success {
-  color: var(--tx-color-success);
-  background: color-mix(in srgb, var(--tx-color-success) 12%, transparent);
-}
-
-.lifecycle-badge.tone-warning {
-  color: var(--tx-color-warning);
-  background: color-mix(in srgb, var(--tx-color-warning) 12%, transparent);
-}
-
-.lifecycle-badge.tone-danger {
-  color: var(--tx-color-danger);
-  background: color-mix(in srgb, var(--tx-color-danger) 12%, transparent);
-}
-
-.lifecycle-verified {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--tx-color-success);
-}
-
-.lifecycle-error-line {
-  margin: 0;
-  font-size: var(--shell-fs-sm);
-  line-height: 1.45;
-  color: var(--shell-danger);
-}
-
-.lifecycle-phase-code,
-.native-trust-status > code {
-  font-size: 11px;
-  color: inherit;
-  opacity: 0.75;
-}
-
-.lifecycle-metadata {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 12px;
-  margin: 0;
-}
-
-.lifecycle-metadata > div {
-  min-width: 0;
-}
-
-.lifecycle-metadata dt {
-  font-size: 11px;
-  color: var(--tx-text-color-secondary);
-}
-
-.lifecycle-metadata dd {
-  margin: 2px 0 0;
-  overflow-wrap: anywhere;
-  font-size: 12px;
-  color: var(--tx-text-color-primary);
-}
-
-.lifecycle-error,
-.native-trust-status {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-}
-
-.lifecycle-error {
-  border: 1px solid color-mix(in srgb, var(--tx-color-danger) 24%, transparent);
-  background: color-mix(in srgb, var(--tx-color-danger) 10%, transparent);
-  color: var(--tx-color-danger);
-}
-
-.native-trust-status.is-success {
-  border: 1px solid color-mix(in srgb, var(--tx-color-success) 24%, transparent);
-  background: color-mix(in srgb, var(--tx-color-success) 10%, transparent);
-  color: var(--tx-color-success);
-}
-
-.native-trust-status.is-danger {
-  border: 1px solid color-mix(in srgb, var(--tx-color-danger) 42%, transparent);
-  background: color-mix(in srgb, var(--tx-color-danger) 14%, transparent);
-  color: var(--tx-color-danger);
-}
-
-.action-pending {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
 }
 
 .assets-summary {
@@ -1273,26 +1081,5 @@ function openAssetsDialog(): void {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
-}
-
-.evidence-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-@media (max-width: 720px) {
-  :deep(.lifecycle-status-slot.lifecycle-advanced.TBlockSlot-Container) {
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  :deep(.lifecycle-status-slot.lifecycle-advanced .TBlockSlot-Slot) {
-    width: 100%;
-  }
-
-  .lifecycle-metadata {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 </style>

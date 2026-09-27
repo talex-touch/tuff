@@ -89,6 +89,20 @@ describe('transport domain sdk mappings', () => {
     )
   })
 
+  it('update sdk maps the local update history event', async () => {
+    const transport = createTransportMock()
+    const sdk = createUpdateSdk(transport as any)
+
+    await sdk.getHistory({ limit: 5 })
+    await sdk.getHistory()
+
+    expect(UpdateEvents.getHistory.toEventName()).toBe('update:service:get-history')
+    expect(transport.send).toHaveBeenNthCalledWith(1, UpdateEvents.getHistory, {
+      limit: 5,
+    })
+    expect(transport.send).toHaveBeenNthCalledWith(2, UpdateEvents.getHistory, {})
+  })
+
   it('update sdk maps bundled release notes and acknowledgement events', async () => {
     const transport = createTransportMock()
     const sdk = createUpdateSdk(transport as any)

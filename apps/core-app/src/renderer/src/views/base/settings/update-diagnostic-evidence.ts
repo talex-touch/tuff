@@ -52,66 +52,24 @@ export function resolveMacNativeTrust(
   }
 }
 
-export interface MacNativeTrustDisplay {
-  tone: 'success' | 'danger' | 'neutral'
-  titleKey: string
-  descriptionKey: string
-  code: string
-  showCriticalAlert: boolean
-  alertTitleKey: string
-  alertDescriptionKey: string
-  riskKeys: readonly string[]
-}
+/**
+ * Whether the running copy is an official, untampered Tuff build, on every desktop platform.
+ *
+ * Unlike {@link resolveMacNativeTrust}, which only feeds diagnostic evidence, this drives the
+ * settings banner. `unknown` means the status has not arrived yet: the banner stays hidden rather
+ * than flashing red while it loads.
+ */
+export type BuildAuthenticity = 'official' | 'unofficial' | 'unknown'
 
-const MAC_NATIVE_TRUST_RISK_KEYS = [
-  'settings.settingUpdate.nativeTrust.risks.origin',
-  'settings.settingUpdate.nativeTrust.risks.nativeChain',
-  'settings.settingUpdate.nativeTrust.risks.reinstall'
-] as const
-
-export function resolveMacNativeTrustDisplay(
-  trust: MacNativeTrustProjection
-): MacNativeTrustDisplay {
-  if (trust.status === 'pass') {
-    return {
-      tone: 'success',
-      titleKey: 'settings.settingUpdate.nativeTrust.passedTitle',
-      descriptionKey: 'settings.settingUpdate.nativeTrust.passedDescription',
-      code: `${trust.status}:${trust.reason}`,
-      showCriticalAlert: false,
-      alertTitleKey: 'settings.settingUpdate.nativeTrust.criticalTitle',
-      alertDescriptionKey: 'settings.settingUpdate.nativeTrust.criticalDescription',
-      riskKeys: []
-    }
-  }
-
-  if (trust.status === 'unverified') {
-    const descriptionKey =
-      trust.reason === 'build-attestation-verification-failed'
-        ? 'settings.settingUpdate.nativeTrust.verificationFailedRisk'
-        : 'settings.settingUpdate.nativeTrust.unavailableRisk'
-    return {
-      tone: 'danger',
-      titleKey: 'settings.settingUpdate.nativeTrust.unverifiedTitle',
-      descriptionKey,
-      code: `${trust.status}:${trust.reason}`,
-      showCriticalAlert: true,
-      alertTitleKey: 'settings.settingUpdate.nativeTrust.criticalTitle',
-      alertDescriptionKey: 'settings.settingUpdate.nativeTrust.criticalDescription',
-      riskKeys: MAC_NATIVE_TRUST_RISK_KEYS
-    }
-  }
-
-  return {
-    tone: 'neutral',
-    titleKey: 'settings.settingUpdate.nativeTrust.notApplicableTitle',
-    descriptionKey: 'settings.settingUpdate.nativeTrust.notApplicableDescription',
-    code: 'not-applicable',
-    showCriticalAlert: false,
-    alertTitleKey: 'settings.settingUpdate.nativeTrust.criticalTitle',
-    alertDescriptionKey: 'settings.settingUpdate.nativeTrust.criticalDescription',
-    riskKeys: []
-  }
+export function resolveBuildAuthenticity(
+  verificationStatus: BuildVerificationStatus | null
+): BuildAuthenticity {
+  if (!verificationStatus) return 'unknown'
+  return verificationStatus.isOfficialBuild &&
+    verificationStatus.hasOfficialKey &&
+    !verificationStatus.verificationFailed
+    ? 'official'
+    : 'unofficial'
 }
 
 export type UpdateDiagnosticBlocker =
@@ -120,34 +78,11 @@ export type UpdateDiagnosticBlocker =
   | 'no-cached-release'
   | 'no-matching-asset'
 
-export type UpdateLifecycleDisplayTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
-
 export interface UpdateLifecycleDisplay {
   phase: UpdateLifecyclePhase
-  tone: UpdateLifecycleDisplayTone
-  labelKey: string
-  descriptionKey: string
   canCheck: boolean
   canDownload: boolean
   canInstall: boolean
-  canEnableNormalQuit: boolean
-}
-
-const UPDATE_LIFECYCLE_TONES: Record<UpdateLifecyclePhase, UpdateLifecycleDisplayTone> = {
-  idle: 'neutral',
-  checking: 'info',
-  available: 'info',
-  downloading: 'info',
-  verifying: 'info',
-  ready: 'success',
-  'install-scheduled': 'info',
-  'handoff-started': 'info',
-  'awaiting-health': 'warning',
-  healthy: 'success',
-  'recovery-required': 'warning',
-  recovering: 'warning',
-  recovered: 'success',
-  failed: 'danger'
 }
 
 const CHECKABLE_UPDATE_LIFECYCLE_PHASES: ReadonlySet<UpdateLifecyclePhase> = new Set([
@@ -163,13 +98,9 @@ export function resolveUpdateLifecycleDisplay(
   const phase = snapshot?.phase ?? 'idle'
   return {
     phase,
-    tone: UPDATE_LIFECYCLE_TONES[phase],
-    labelKey: `settings.settingUpdate.lifecycle.phases.${phase}.label`,
-    descriptionKey: `settings.settingUpdate.lifecycle.phases.${phase}.description`,
     canCheck: CHECKABLE_UPDATE_LIFECYCLE_PHASES.has(phase),
     canDownload: phase === 'available',
-    canInstall: phase === 'ready' && Boolean(snapshot?.taskId),
-    canEnableNormalQuit: snapshot?.rollbackCompatible === true
+    canInstall: phase === 'ready' && Boolean(snapshot?.taskId)
   }
 }
 

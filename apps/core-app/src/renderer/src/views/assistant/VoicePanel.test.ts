@@ -107,6 +107,12 @@ vi.mock('vue-i18n', () => ({
           'assistant.voicePanel.voiceRecognitionNotConfigured': 'Speech recognition is not set up',
           'assistant.voicePanel.voiceRecognitionUnavailable':
             'Speech recognition channel is unavailable',
+          'assistant.voicePanel.voiceCaptureComponentMissing':
+            'This build is missing its audio component, so voice input cannot run',
+          'assistant.voicePanel.voiceCapturePlatformUnsupported':
+            'Voice input is not supported on this system',
+          'assistant.voicePanel.voiceCaptureUnavailable':
+            'The audio component is unavailable — see the details or reinstall',
           'assistant.voicePanel.openRecognitionSettings': 'Open Intelligence settings',
           'assistant.voicePanel.microphoneUnresponsive': 'The microphone is not responding',
           'assistant.voicePanel.microphoneMissing': 'No microphone available',
@@ -192,6 +198,17 @@ function barHeights(wrapper: VueWrapper): string[] {
   return wrapper
     .findAll('[data-testid="voice-wave"] span')
     .map((bar) => bar.attributes('style') ?? '')
+}
+
+/**
+ * The shape main emits when capture cannot start: a stable `code` plus the reason in the message.
+ * Built here rather than spelled out per case so every capture test speaks the real contract and
+ * a changed message format breaks one place.
+ */
+function captureFailure(reason: string): Error & { code: string } {
+  return Object.assign(new Error(`Voice capture is unavailable: ${reason}`), {
+    code: 'VOICE_ASR_CAPTURE_UNAVAILABLE'
+  })
 }
 
 beforeEach(() => {
@@ -747,7 +764,35 @@ describe('VoicePanel session control', () => {
     ],
     // Unclassified failures no longer surface the provider's own sentence: it is English,
     // gets truncated by the pill width, and offers nothing to act on.
-    ['unknown', new Error('socket reset'), 'Voice transcription failed', 'voice-dock--danger']
+    ['unknown', new Error('socket reset'), 'Voice transcription failed', 'voice-dock--danger'],
+    // Capture failures classify on the `code` main attaches, whatever the reason says. A device
+    // reason still gets the microphone copy and its settings action; a reason we do not know yet
+    // still gets our sentence rather than the provider's English.
+    [
+      'capture with no input device',
+      captureFailure('no-input-device'),
+      'No microphone available',
+      'voice-dock--warning'
+    ],
+    [
+      'capture on a platform with no backend',
+      captureFailure('platform-not-supported'),
+      'Voice input is not supported on this system',
+      'voice-dock--danger'
+    ],
+    [
+      'capture disabled by the environment',
+      captureFailure('disabled-by-env'),
+      'The audio component is unavailable',
+      'voice-dock--danger'
+    ],
+    // The code outranks the wording: permission language would otherwise claim this one.
+    [
+      'capture code ahead of permission wording',
+      captureFailure('PERMISSION check failed before the device opened'),
+      'The audio component is unavailable',
+      'voice-dock--danger'
+    ]
   ])('sorts a %s failure into its own tone', async (_label, error, text, toneClass) => {
     const wrapper = await mountVoicePanel()
 
@@ -758,6 +803,48 @@ describe('VoicePanel session control', () => {
 
     expect(wrapper.find('[data-testid="voice-notice"]').text()).toContain(text)
     expect(wrapper.find(`.${toneClass}`).exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The regression this branch exists for.
+   *
+   * A native addon missing from the build arrives as `Cannot find module .../tuff_native_audio.node`,
+   * which the device heuristic reads through `CANNOT_?FIND` as absent hardware — so the user was
+   * told to check a microphone that was never the problem. The capture code has to win over that
+   * wording: the message names the incomplete install, the tone is an error, and no microphone
+   * mark appears to point at the wrong culprit.
+   */
+  it('reports a build missing its audio component, not a missing microphone', async () => {
+    // The paths main reports from: the addon absent from the asar is the one that historically
+    // tripped the device heuristic.
+    const appRoot = '/Applications/Tuff.app/Contents/Resources/app.asar'
+    const nativeAddon = `${appRoot}/node_modules/@talex-touch/tuff-native/build/Release/tuff_native_audio.node`
+
+    const wrapper = await mountVoicePanel()
+
+    exposed(wrapper).startVoiceInput()
+    await flushPromises()
+    callbacksOrThrow().onError?.(
+      captureFailure(
+        `Cannot find module '${nativeAddon}'\nRequire stack:\n- ${appRoot}/native-loader.js`
+      )
+    )
+    await flushPromises()
+
+    const notice = wrapper.find('[data-testid="voice-notice"]')
+    expect(notice.text()).toContain('missing its audio component')
+    expect(notice.text()).not.toContain('No microphone available')
+    expect(wrapper.find('.voice-dock--danger').exists()).toBe(true)
+    expect(wrapper.find('.voice-dock--warning').exists()).toBe(false)
+    // The microphone mark belongs to the device branch; this failure is not about the device.
+    expect(wrapper.find('[data-testid="voice-notice-icon"]').exists()).toBe(false)
+    // Nor a retry: the button re-enters the same setup that reads the same absent module, so it
+    // would promise a fix the build cannot deliver. With no action the slot falls through to the
+    // confirm control instead — the only remaining button on the pill.
+    expect(wrapper.find('[data-testid="voice-recover"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-confirm"]').exists()).toBe(true)
 
     wrapper.unmount()
   })

@@ -2,6 +2,7 @@ import type {
   CachedUpdateRecord,
   GitHubRelease,
   UpdateCheckResult,
+  UpdateHistoryEntry,
   UpdateLifecycleSnapshot,
   UpdateSettings,
   UpdateUserAction
@@ -36,7 +37,14 @@ interface AppVersion {
 }
 
 const CHANNEL_TIMEOUT = 4_000
+/**
+ * `update:download` answers only after the main process has fetched the release manifest (up to
+ * 8s) and queued the download task. The 4s default reported a failure while the download was
+ * already starting, and the user saw "nothing happen".
+ */
+const DOWNLOAD_START_TIMEOUT = 30_000
 const INSTALL_TIMEOUT = 10 * 60 * 1000
+const UPDATE_HISTORY_OUTCOMES: ReadonlySet<string> = new Set(['updated', 'rolled-back', 'failed'])
 
 const updateListenerDisposers: Array<() => void> = []
 let updateListenerInitialized = false
@@ -51,6 +59,19 @@ function acceptUpdateLifecycleSnapshot(snapshot: UpdateLifecycleSnapshot): Updat
   }
   lifecycleSnapshotState.value = snapshot
   return snapshot
+}
+
+function isUpdateHistoryEntry(value: unknown): value is UpdateHistoryEntry {
+  if (!value || typeof value !== 'object') return false
+  const entry = value as Partial<Record<keyof UpdateHistoryEntry, unknown>>
+  return (
+    typeof entry.attemptId === 'string' &&
+    typeof entry.toVersion === 'string' &&
+    typeof entry.finishedAt === 'number' &&
+    Number.isFinite(entry.finishedAt) &&
+    typeof entry.outcome === 'string' &&
+    UPDATE_HISTORY_OUTCOMES.has(entry.outcome)
+  )
 }
 
 function resolveVersion(versionString: string): AppVersion {
@@ -268,6 +289,22 @@ export function useUpdateRuntime() {
     }
   }
 
+  /** This device's finished updates, newest first. Empty when there are none or the read fails. */
+  async function getUpdateHistory(limit?: number): Promise<UpdateHistoryEntry[]> {
+    try {
+      const response = await sendRequest('update:get-history', () =>
+        updateSdk.getHistory(limit === undefined ? {} : { limit })
+      )
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to get update history')
+      }
+      return Array.isArray(response.data) ? response.data.filter(isUpdateHistoryEntry) : []
+    } catch (historyError) {
+      updateRuntimeLog.error('Failed to get update history', historyError)
+      return []
+    }
+  }
+
   async function recordAction(tag: string, action: UpdateUserAction): Promise<void> {
     const response = await sendRequest('update:record-action', () =>
       updateSdk.recordAction({ tag, action })
@@ -406,7 +443,14 @@ export function useUpdateRuntime() {
     return true
   }
 
-  async function checkApplicationUpgrade(force = false): Promise<UpdateCheckResult | undefined> {
+  /**
+   * `presentDialog: false` is for the settings page, which renders the result itself: a modal
+   * there would sit over the page's own download button, and the page's refresh would wait for it.
+   */
+  async function checkApplicationUpgrade(
+    force = false,
+    options?: { presentDialog?: boolean }
+  ): Promise<UpdateCheckResult | undefined> {
     if (!canShowUpdatePrompt()) {
       return undefined
     }
@@ -435,6 +479,10 @@ export function useUpdateRuntime() {
         appStates.hasUpdate = true
         appStates.noUpdateAvailable = false
         clearUpdateErrorMessage()
+
+        if (options?.presentDialog === false) {
+          return result
+        }
 
         const updateSettings = await getUpdateSettings()
         if (updateSettings.autoDownload && !force) {
@@ -470,8 +518,10 @@ export function useUpdateRuntime() {
 
   async function handleDownloadUpdate(release: GitHubRelease): Promise<boolean> {
     try {
-      const response = await sendRequest('update:download', () =>
-        updateSdk.download({ tag: release.tag_name })
+      const response = await sendRequest(
+        'update:download',
+        () => updateSdk.download({ tag: release.tag_name }),
+        DOWNLOAD_START_TIMEOUT
       )
       if (response.snapshot) {
         acceptUpdateLifecycleSnapshot(response.snapshot)
@@ -688,6 +738,7 @@ export function useUpdateRuntime() {
     clearUpdateCache,
     getUpdateStatus,
     getCachedRelease,
+    getUpdateHistory,
     setupUpdateListener
   }
 }
