@@ -84,6 +84,30 @@ const PACKAGED_RUNTIME_MODULES = RUNTIME_MODULE_MANIFEST.packaged
 const PLATFORM_RUNTIME_BASE_MODULES = RUNTIME_MODULE_MANIFEST.platform.base
 const PLATFORM_RUNTIME_MODULE_MAP = RUNTIME_MODULE_MANIFEST.platform.modules
 
+/**
+ * The addons a package cannot be built without, by build target.
+ *
+ * Lives here rather than in build-target.js because after-pack has to assert the same list
+ * against the *packaged* tree, and build-target.js runs a whole build the moment it is required.
+ *
+ * `tuff_native_audio.node` is on the list because nothing used to cover it: no workflow built it,
+ * no CI step loaded it, and no check required it, so release 2.4.14-beta.47 shipped without it and
+ * every voice entry point in that build died on `assertSupported` (#322). Screenshot stays off the
+ * list for the reason it always was — `screenshot-protocol.js` degrades to `binding-unavailable`
+ * instead of throwing, so demanding it would turn a soft capability loss into a hard build
+ * failure. The release pipeline builds and verifies that addon on its own.
+ *
+ * Both spellings of the Windows target are accepted: build-target passes `win`, after-pack works
+ * in Electron's `win32`.
+ */
+function requiredNativeAddonNames(target) {
+  const names = ['tuff_native_ocr.node', 'tuff_native_audio.node']
+  if (target === 'win' || target === 'win32') {
+    names.push('tuff_native_everything.node')
+  }
+  return names
+}
+
 function createRuntimePaths(options = {}) {
   const projectRoot = path.resolve(options.projectRoot || defaultProjectRoot)
   const workspaceRoot = path.resolve(
@@ -983,6 +1007,7 @@ module.exports = {
   resolvePlatformRuntimeModules,
   resolveRuntimeModuleDir,
   resolveRuntimeModuleTargetDir,
+  requiredNativeAddonNames,
   verifyPackagedEsbuildBinaries,
   syncMissingPackagedRuntimeModules,
   syncPackagedResourceModules
