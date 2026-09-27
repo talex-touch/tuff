@@ -95,4 +95,58 @@ describe('intelligence strategy manager', () => {
       selectProvider('strategy-test.model-preference', { modelPreference: ['second-model'] })
     ).resolves.toBe('provider-second')
   })
+
+  it('selects Nexus first when Nexus has priority 1 and local CLI has priority 99', async () => {
+    const providersWithCli: IntelligenceProviderConfig[] = [
+      {
+        id: 'pi-cli-default',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Pi (local CLI)',
+        enabled: true,
+        priority: 99
+      },
+      {
+        id: 'tuff-nexus-default',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Tuff Nexus',
+        enabled: true,
+        priority: 1
+      }
+    ]
+
+    const result = await strategyManager.select({
+      capabilityId: 'text.chat',
+      options: {},
+      availableProviders: providersWithCli
+    })
+
+    expect(result.selectedProvider.id).toBe('tuff-nexus-default')
+  })
+
+  it('selects local CLI first when user reordered capability so CLI is priority 1', async () => {
+    const reorderedProviders: IntelligenceProviderConfig[] = [
+      {
+        id: 'tuff-nexus-default',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Tuff Nexus',
+        enabled: true,
+        priority: 2
+      },
+      {
+        id: 'pi-cli-default',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Pi (local CLI)',
+        enabled: true,
+        priority: 1
+      }
+    ]
+
+    const result = await strategyManager.select({
+      capabilityId: 'text.chat',
+      options: {},
+      availableProviders: reorderedProviders
+    })
+
+    expect(result.selectedProvider.id).toBe('pi-cli-default')
+  })
 })

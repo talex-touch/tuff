@@ -280,7 +280,15 @@ function onUpdatePrompt(capabilityId: string, prompt: string): void {
 
 function onReorderProviders(bindings: IntelligenceCapabilityProviderBinding[]): void {
   if (!selectedCapability.value) return
-  setCapabilityProviders(selectedCapability.value.id, bindings)
+  const capabilityId = selectedCapability.value.id
+  const current = capabilities.value[capabilityId]
+  setCapabilityProviders(capabilityId, bindings)
+  updateCapability(capabilityId, {
+    metadata: {
+      ...(current?.metadata || {}),
+      userReordered: true
+    }
+  })
   markCapabilityDirty()
 }
 

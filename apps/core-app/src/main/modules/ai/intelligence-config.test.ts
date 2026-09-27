@@ -1618,3 +1618,130 @@ describe('intelligence-config prompt repair', () => {
     })
   })
 })
+
+describe('intelligence-config CLI provider defaults and Nexus priority', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    authMocks.session.isSignedIn = false
+    authMocks.listeners.clear()
+    storageMocks.configListeners.clear()
+    authMocks.subscribeAuthState.mockImplementation(
+      (listener: (state: { isSignedIn: boolean }) => void) => {
+        authMocks.listeners.add(listener)
+        return () => authMocks.listeners.delete(listener)
+      }
+    )
+    storageMocks.storedConfig = undefined
+  })
+
+  it('seeds detected CLI providers as disabled with priority 10 by default', async () => {
+    const { config } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+    const savedConfig = storageMocks.saveMainConfig.mock.calls[0]?.[1] as {
+      providers: Array<{
+        id: string
+        enabled: boolean
+        priority: number
+        metadata?: Record<string, unknown>
+      }>
+      capabilities: Record<
+        string,
+        { providers: Array<{ providerId: string; enabled: boolean; priority: number }> }
+      >
+    }
+
+    // CLI providers when seeded must be disabled and have priority 10
+    const cliProviders = savedConfig.providers.filter((p) => p.metadata?.isLocalCli === true)
+    for (const cli of cliProviders) {
+      expect(cli.enabled).toBe(false)
+      expect(cli.priority).toBe(10)
+    }
+  })
+
+  it('ensures Nexus has priority 1 when user signs in, without disturbing userReordered capabilities', async () => {
+    storageMocks.storedConfig = {
+      providers: [
+        {
+          id: 'tuff-nexus-default',
+          type: IntelligenceProviderType.CUSTOM,
+          name: 'Tuff Nexus',
+          enabled: false,
+          priority: 1,
+          capabilities: ['text.chat'],
+          metadata: { origin: 'tuff-nexus' }
+        },
+        {
+          id: 'pi-cli-default',
+          type: IntelligenceProviderType.LOCAL,
+          name: 'Pi (local CLI)',
+          enabled: true,
+          priority: 10,
+          capabilities: ['text.chat'],
+          metadata: { isLocalCli: true, origin: 'pi-cli' }
+        }
+      ],
+      globalConfig: {
+        defaultStrategy: 'adaptive-default',
+        enableAudit: true,
+        enableCache: false,
+        enableQuota: true
+      },
+      capabilities: {
+        'text.chat': {
+          id: 'text.chat',
+          label: 'Chat',
+          providers: [
+            { providerId: 'pi-cli-default', priority: 1, enabled: true },
+            { providerId: 'tuff-nexus-default', priority: 2, enabled: false }
+          ]
+        },
+        'text.translate': {
+          id: 'text.translate',
+          label: 'Translate',
+          metadata: { userReordered: true },
+          providers: [
+            { providerId: 'custom-provider', priority: 1, enabled: true },
+            { providerId: 'tuff-nexus-default', priority: 2, enabled: false }
+          ]
+        }
+      },
+      promptRegistry: [],
+      promptBindings: [],
+      version: 4
+    }
+
+    const { config } = await importFreshConfigModule()
+    config.ensureIntelligenceConfigLoaded(true)
+    config.setupConfigUpdateListener()
+    storageMocks.saveMainConfig.mockClear()
+
+    authMocks.emitSignedIn(true)
+
+    const savedConfig = storageMocks.saveMainConfig.mock.calls.at(-1)?.[1] as {
+      providers: Array<{ id: string; enabled: boolean }>
+      capabilities: Record<
+        string,
+        {
+          metadata?: Record<string, unknown>
+          providers: Array<{ providerId: string; enabled: boolean; priority: number }>
+        }
+      >
+    }
+
+    // For text.chat (not userReordered): Nexus is enabled and set to priority 1, other provider pushed to 2
+    const chatBindings = savedConfig.capabilities['text.chat']?.providers ?? []
+    const nexusChat = chatBindings.find((b) => b.providerId === 'tuff-nexus-default')
+    const piChat = chatBindings.find((b) => b.providerId === 'pi-cli-default')
+    expect(nexusChat?.enabled).toBe(true)
+    expect(nexusChat?.priority).toBe(1)
+    expect(piChat?.priority).toBe(2)
+
+    // For text.translate (userReordered === true): Nexus is enabled, but priority remains user's 2!
+    const translateBindings = savedConfig.capabilities['text.translate']?.providers ?? []
+    const nexusTranslate = translateBindings.find((b) => b.providerId === 'tuff-nexus-default')
+    const customTranslate = translateBindings.find((b) => b.providerId === 'custom-provider')
+    expect(nexusTranslate?.enabled).toBe(true)
+    expect(nexusTranslate?.priority).toBe(2)
+    expect(customTranslate?.priority).toBe(1)
+  })
+})

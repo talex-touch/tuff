@@ -1471,8 +1471,26 @@ export class TuffIntelligenceSDK {
       .filter((provider) => !hasUsableRuntimeCredential(provider))
       .map((provider) => provider.id)
 
+    const capabilityRouting = this.resolveCapabilityRouting(capabilityId)
+    const bindingPriorityMap: Record<string, number> = {}
+    for (const binding of capabilityRouting?.providers ?? []) {
+      if (typeof binding.priority === 'number') {
+        bindingPriorityMap[binding.providerId] = binding.priority
+      }
+    }
+
     const availableProviders = capabilityFilteredProviders
-      .map((provider) => provider.getConfig())
+      .map((provider) => {
+        const config = provider.getConfig()
+        const bindingPriority = bindingPriorityMap[config.id]
+        if (bindingPriority !== undefined) {
+          return {
+            ...config,
+            priority: bindingPriority
+          }
+        }
+        return config
+      })
       .filter((provider) => hasUsableRuntimeCredential(provider))
 
     if (!explicitProviderSelection && availableProviders.length > 0) {
