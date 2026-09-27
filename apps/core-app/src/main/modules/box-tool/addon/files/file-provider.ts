@@ -117,6 +117,7 @@ import {
 } from '@talex-touch/utils/search'
 import type { FilePersistencePort, UpsertFileRecord } from '../../search-engine/search-index-writer'
 import { searchIndexWriter } from '../../search-engine/search-index-writer'
+import { isIndexingSourceMutationLeaseInvalidError } from '../../search-engine/indexing-source-mutation-gate'
 import {
   getProgressStreamFlushDelayMs,
   shouldEmitProgressStreamImmediately
@@ -2000,9 +2001,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private isIndexWorkerMutationLeaseCancelled(mutationLeaseId?: string): boolean {
-    return (
-      mutationLeaseId !== undefined && this.cancelledIndexWorkerMutationLeases.has(mutationLeaseId)
-    )
+    return Boolean(mutationLeaseId && this.cancelledIndexWorkerMutationLeases.has(mutationLeaseId))
   }
 
   private async publishCommittedWorkerRecords(entries: IndexWorkerFileResult[]): Promise<number> {
@@ -2029,13 +2028,25 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         })
         continue
       }
-      const summary = await this.requireRuntimeMutationDelegate().applyBatch({
-        sourceId: this.id,
-        records: group.map((entry) => this.mapWorkerResultToIndexedSourceRecord(entry)),
-        mutationLeaseId
-      })
-      if (summary && typeof summary === 'object' && 'indexedItemCount' in summary) {
-        indexedItems += Number(summary.indexedItemCount) || 0
+      try {
+        const summary = await this.requireRuntimeMutationDelegate().applyBatch({
+          sourceId: this.id,
+          records: group.map((entry) => this.mapWorkerResultToIndexedSourceRecord(entry)),
+          mutationLeaseId
+        })
+        if (summary && typeof summary === 'object' && 'indexedItemCount' in summary) {
+          indexedItems += Number(summary.indexedItemCount) || 0
+        }
+      } catch (error) {
+        if (!mutationLeaseId || !isIndexingSourceMutationLeaseInvalidError(error, this.id))
+          throw error
+        await this.markContentEnrichmentPending(group.map((entry) => ({ id: entry.fileId })))
+        this.logWarn('Re-armed worker enrichment after mutation lease expiry', error, {
+          mutationLeaseId,
+          entries: group.length,
+          recoveryReason: 'stale-mutation-lease'
+        })
+        if (!this.shuttingDown) this.enrichmentResumeService.resume('recovery.stale-mutation-lease')
       }
     }
     return indexedItems
@@ -2046,10 +2057,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     options?: FileIndexRunOptions
   ): Promise<void> {
     if (batch.records.length === 0) return
-    if (options?.onRecordBatch) {
-      await options.onRecordBatch(batch)
-      return
-    }
+    if (options?.onRecordBatch) return options.onRecordBatch(batch)
     await this.requireRuntimeMutationDelegate().applyBatch(batch)
   }
 
@@ -2057,10 +2065,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     delta: IndexedSourceDelta,
     options?: FileIndexRunOptions
   ): Promise<void> {
-    if (options?.onDelta) {
-      await options.onDelta(delta)
-      return
-    }
+    if (options?.onDelta) return options.onDelta(delta)
     await this.requireRuntimeMutationDelegate().applyDelta(delta)
   }
 
