@@ -193,7 +193,11 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         searchIndexWorkerLog.debug('Fused file/index write completed', {
           meta: { operation: 'persist-and-apply', sourceId: message.providerId, ...metrics }
         })
-        const result: PersistAndApplyProviderItemsResult = { persisted, summary, metrics }
+        const result: PersistAndApplyProviderItemsResult = {
+          persistedCount: persisted.length,
+          summary,
+          metrics
+        }
         respond({ type: 'result', taskId, result })
         break
       }

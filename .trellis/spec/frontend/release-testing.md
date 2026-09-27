@@ -209,7 +209,7 @@ verify-macos-release-signing.mjs \
 - Runtime/UI native trust is a read-only projection of typed `AppEvents.build.getVerificationStatus`; renderer code must not infer waiver or pass from `process.platform` alone.
 - A Darwin runtime reports `pass:official-macos-release-attested` only when the packaged build attestation is official, backed by the pinned release key, and has no verification failure. This runtime projection relies on the mandatory distribution gates above; it does not replace codesign/stapler/Gatekeeper release evidence.
 - Missing, unofficial, key-inconsistent, or failed build attestation reports `unverified` with an explicit reason and risk. Non-Darwin runtimes report `not-applicable`. The retired `waived:apple-developer-not-configured` sentinel must not appear in current renderer UI or diagnostic evidence.
-- `SettingHeader` and `SettingUpdate` must consume the same typed native-trust projection. On macOS `unverified`, Settings renders a non-dismissible `role=alert` danger block with stable reason/risk keys, hides the Chromium/Node.js/Vue runtime badges, and applies a danger-red header edge. `pass` and non-Darwin `not-applicable` must not receive this danger treatment.
+- `SettingUpdate` shows authenticity to users through one typed projection on every desktop platform: `resolveBuildAuthenticity(BuildVerificationStatus | null)` → `official | unofficial | unknown`, where `official` requires `isOfficialBuild && hasOfficialKey && !verificationFailed`. `unofficial` (any of darwin/win32/linux, dev builds included) renders a non-dismissible `role=alert` danger banner with one stable title/description key pair and an entry to the official download page (`${NEXUS_BASE_URL}/updates`). `official` renders no trust marker at all, and `unknown` (status not yet received) renders nothing, so the banner cannot flash before verification answers. The macOS native-trust projection above (`pass | unverified | not-applicable` plus reason) is the diagnostic-evidence contract (`runtimeTarget.nativeTrust` in the exported JSON); it no longer drives UI copy. On macOS an `unofficial` build's `ready` update offers no install action at all — `MAC_UPDATE_BUILD_UNTRUSTED` would refuse it, on request and on quit — and says so in the status detail; the banner stays the only way to the download page, so the card never shows two identical calls to action.
 - Published packages are immutable: correcting the renderer projection changes the next release only; an already-published app containing the stale hard-coded waiver cannot be repaired in place without invalidating its attestation and native signature.
 
 ### 4. Validation & Error Matrix
@@ -226,6 +226,8 @@ verify-macos-release-signing.mjs \
 | `spctl` reports `override=security disabled`                      | Blocked Gatekeeper evidence; never relabel as pass |
 | Official macOS attestation + pinned key + no verification failure | Renderer/evidence native trust `pass`              |
 | Missing/unofficial/failed build attestation                       | Renderer/evidence `unverified`; retain risk        |
+| Any desktop platform, authenticity `unofficial`                   | Update page shows the danger banner + download link |
+| Authenticity `official`, or status not yet received               | No banner and no trust badge                       |
 | Renderer selects trust from `darwin` alone                        | Invalid projection; fail review                    |
 
 ### 5. Good / Base / Bad Cases
@@ -401,6 +403,7 @@ shouldAcceptUpdateLifecycleSnapshot(current, incoming): boolean
 - Download completion enters `verifying`; only streamed checksum and pinned detached-signature success enters `ready`. Completion alone never launches an installer.
 - `update:get-status` and update action responses expose the authoritative snapshot. Renderer accepts a same-attempt snapshot only when its revision is not older, and orders different attempts by `createdAt`.
 - `installOnNormalQuit` replaces the legacy immediate-handoff setting and defaults true. New-key values win; legacy true/false values migrate once; unlinked pending-version strings are removed, not promoted to `ready`.
+- Automatic download starts from every check path that leaves an attempt in `available`: a network result and a cached or persisted result alike. `synchronizeCachedCheckResult` calls the same `maybeAutoDownloadLifecycle` as the network path, with the same gates (packaged app, `autoDownload === true`, tag not already in flight). It does so only when the returned phase is `available`: a cached result must never reach a `ready` or `downloading` attempt. Before this, a restart inside the check-frequency window left auto-download users on "update available".
 
 ### 4. Validation & Error Matrix
 
@@ -415,6 +418,8 @@ shouldAcceptUpdateLifecycleSnapshot(current, incoming): boolean
 | Process restarts during verification                        | Re-run verification before `ready`                      |
 | Incoming renderer snapshot is stale                         | Retain the newer snapshot                               |
 | Legacy pending version lacks trusted task/integrity linkage | Remove it and require a new download                    |
+| Cached/persisted result marks `available`, auto-download on | Auto-download starts, same gates as a network result    |
+| Cached result while an attempt is `ready`/`downloading`     | No download call; the active attempt is untouched       |
 
 ### 5. Good / Base / Bad Cases
 
@@ -785,4 +790,153 @@ const rollbackCompatible =
 const recoveryAvailable =
   rollbackCompatible && previousAsset?.version === rollbackFromVersion;
 // Renderer accepts only a revision-valid UpdateLifecycleSnapshot from main.
+```
+
+## Scenario: Update Settings Page — Status, Progress and Local History
+
+### 1. Scope / Trigger
+
+- Trigger: changing any of these:
+  - `SettingUpdate.vue`, `SettingUpdateStatus.vue` or `SettingUpdateHistory.vue`
+  - `update-status-display.ts` or `useUpdateDownloadProgress.ts`
+  - `useUpdateRuntime().checkApplicationUpgrade` / `getUpdateHistory`
+  - the `update:service:get-history` handler, or `UpdateAttemptRepository.listTerminalAttempts`
+- What it prevents (all four shipped once):
+  - a download button that silently does nothing;
+  - a download with no visible progress;
+  - a version label that reads `vdev` / `vrelease`;
+  - a local history that turns back into the remote release-notes browser removed on 2026-07-31.
+
+### 2. Signatures
+
+```ts
+// packages/utils
+type UpdateHistoryOutcome = 'updated' | 'rolled-back' | 'failed'
+interface UpdateHistoryEntry {
+  attemptId: string
+  fromVersion: string // app version, no `v` (2.4.14-beta.46)
+  toVersion: string // release tag as stored, keeps its `v` (v2.4.14-beta.47)
+  channel: AppPreviewChannel
+  outcome: UpdateHistoryOutcome
+  finishedAt: number // attempt.updatedAt of the terminal transition
+  error: UpdateLifecycleError | null
+}
+UpdateEvents.getHistory // 'update:service:get-history'
+  // request  UpdateGetHistoryRequest  { limit?: number }
+  // response UpdateGetHistoryResponse UpdateOpResponse<UpdateHistoryEntry[]>, newest first
+UpdateSdk.getHistory(payload?: { limit?: number })
+
+// main
+UpdateAttemptRepository.listTerminalAttempts(max = 200): Promise<UpdateLifecycleSnapshot[]>
+buildUpdateHistory(snapshots, limit?): UpdateHistoryEntry[]
+
+// renderer
+checkApplicationUpgrade(force = false, options?: { presentDialog?: boolean }) // presentDialog defaults true
+getUpdateHistory(limit?): Promise<UpdateHistoryEntry[]> // [] on any failure
+resolveUpdateStatusView(input): { kind: 'skeleton' } | UpdateStatusRowView
+formatUpdateVersionLabel(value): string // trim, strip v/V, prefix v; '' for empty
+AUTO_DOWNLOAD_GRACE_MS = 15_000
+DOWNLOAD_START_TIMEOUT = 30_000 // renderer timeout for update:download only
+```
+
+### 3. Contracts
+
+- **Two sources of truth.** The status row is a pure projection of the revisioned lifecycle snapshot (the Persistent OTA Lifecycle scenario) plus DownloadCenter bytes.
+  - Progress comes from `task-progress` / `task-updated` pushes: take the task whose id equals `snapshot.taskId`, or any `APP_UPDATE` task before the snapshot names one.
+  - On mount it is backfilled once with `getTaskStatus({ taskId })`. A late backfill never overwrites a newer push.
+  - The lifecycle snapshot carries no progress fields; do not add them.
+- **Running version.** It is `useEnv().packageJson.version`, the value the sidebar shows.
+  - `startupInfo.version` is the `TalexTouch.AppVersion` enum, `'dev' | 'release'` (`core/touch-app.ts`). It is never a version and never a beta signal.
+  - `snapshot.currentVersion` is where the latest attempt started, so it goes stale after an update. It is only a fallback.
+- **Version labels.** Every version shown on the page goes through `formatUpdateVersionLabel`: tags and app versions differ only by the `v`. Never compare a raw tag with an app version.
+- **Page-initiated checks never open the modal.** The update page's check/retry and channel switch call `checkApplicationUpgrade(true, { presentDialog: false })`.
+  - The "发现新版本" dialog awaits the user. While it is open the page cannot refresh its cached release, so its own download button stays disabled.
+  - The non-forced callers (`useLayoutController`, `useAppLifecycle`) keep the default.
+- **Download start.** `update:download` uses `DOWNLOAD_START_TIMEOUT`. Main resolves the manifest (up to 8s) before the attempt reaches `downloading`, so the 4s channel default reported a failure for a download that then started. The button stays loading until the lifecycle leaves `available`.
+- **Auto-download grace.** With `autoDownload` on, an `available` attempt shows "正在准备下载" with no action for `AUTO_DOWNLOAD_GRACE_MS`, counted from when the page saw it, and only then offers 下载更新. This keeps the page from starting a manual download that races the automatic one.
+- **Visibility.**
+  - The first card holds only the authenticity banner, the status row and the channel row.
+  - The channel row shows for a beta build, a selected Beta channel, or developer mode. Once shown it stays for the visit.
+  - Developer mode (`appSetting.dev.developerMode`) gates the 高级 card: frequency, the 自动更新 switch, notifications, GitHub packages, diagnostics, and Renderer Override (still env-gated as well).
+  - No row carries a description, except the banner sentence and Renderer Override.
+  - The status row never shows an idle label or a trust badge.
+- **自动更新 switch.** Its value is `autoDownload`. On writes `{ autoDownload: true, installOnNormalQuit: true }`, off writes both false, and a failed save reverts both.
+- **History is local.**
+  - Source: `app_update_attempts` rows in `healthy | recovered | failed` with a target version.
+  - Deduplicated by raw tag, newest wins. The limit is clamped to 1–50 and defaults to 20.
+  - The card shows 5 rows and expands to 20. It refreshes when an attempt reaches a terminal phase and renders nothing when empty.
+  - It fetches no release notes.
+- **Loading.** The status card is a `SettingSkeleton` behind `useDeferredLoading` until both the first snapshot and the package version exist. The history and 高级 cards render only after the status slot is filled, so nothing reflows when the slower status call answers. The settings pages are KeepAlive-cached: returning to the page does not remount it.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                        | Result                                                                      |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `get-history` without an attempt repository                      | `{ success: true, data: [] }`                                               |
+| `get-history` repository throws                                  | `{ success: false, error }` + warn; renderer returns `[]`; card hidden      |
+| `limit` missing / NaN / fractional / >50 / <1                    | 20 / 20 / floor / 50 / 1                                                    |
+| Same tag failed twice, then succeeded                            | One row, `updated`                                                          |
+| Attempt failed during `checking` (no target version)             | Not in history                                                              |
+| `update:download` answers after 8s                               | No failure toast; button loading until `downloading`                        |
+| Page check finds an update                                       | No dialog; row shows 正在准备下载 / 发现新版本; download enabled at once    |
+| Page mounts while a download runs                                | First paint already shows percent, size and speed                           |
+| `downloading` but the task is gone from memory (restart)         | Indeterminate bar (known DownloadCenter restart gap, not a UI fault)        |
+| macOS `unofficial` + `ready`                                     | No action; `readyBlocked` detail; the banner is the only download entry     |
+| `startupInfo.version` used as the app version                    | Invalid: renders `vdev` / `vrelease` and hides the beta channel row         |
+
+### 5. Good / Base / Bad Cases
+
+- **Good:** the user opens the page mid-download and sees the real percentage on first paint; it reaches `ready`, and the row offers the platform install action with "退出 Tuff 时会自动安装" when normal-quit install is armed.
+- **Base:** a release build with developer mode off shows one row, 已是最新版本 with the real `v` version and 检查更新, plus history once an update has finished here.
+- **Bad:**
+  - pop the update dialog from the page;
+  - read progress from the lifecycle snapshot;
+  - label versions from `startupInfo`;
+  - fetch release notes into history;
+  - render the history card above an empty status slot.
+
+### 6. Tests Required
+
+- `update-history.test.ts`: outcome mapping, dedupe (repeated failures collapse; fail-then-success shows success), limit clamping incl. NaN/Infinity, ordering independent of input order, empty input.
+- `update-attempt-repository.test.ts`: `listTerminalAttempts` excludes `idle`, non-terminal and target-less rows (real SQLite + migrations).
+- `UpdateService.test.ts`:
+  - the cached/persisted hit starts auto-download, including the restart-in-frequency-window path;
+  - `autoDownload` false does not start it;
+  - an active or `ready` attempt does not start it;
+  - the `get-history` handler success and failure;
+  - removing the added call must fail the "starts" cases.
+- `useUpdateRuntime.test.ts`: download still pending at 29.999s, fails at 30s; `presentDialog: false` never calls the dialog while the default still does; `getUpdateHistory` returns `[]` on reject and on `success: false`.
+- `update-status-display.test.ts`: every lifecycle phase row, both sides of the grace window, macOS-unofficial `ready`, `formatUpdateVersionLabel` for `v` / `V` / bare / empty, and every emitted i18n key present in both locales.
+- `useUpdateDownloadProgress.test.ts`: task-id matching, other modules ignored, mount backfill, stale backfill never overwrites a push, cleared on leaving `downloading`, disposed with its scope.
+- `SettingUpdate.channel.test.ts`:
+  - mock `startupInfo.version` with its real shape (`'release'` / `'dev'`) and the version through `env-hooks`;
+  - a beta package with Release selected and developer mode off still shows the channel row;
+  - the check and channel switch pass `{ presentDialog: false }`;
+  - skeleton before the first snapshot, and no card above an empty status slot;
+  - the history toggle sits inside a row.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const version = startupInfo.value?.version // 'dev' | 'release'
+const isBetaBuild = splitUpdateTag(version).channelLabel === 'beta' // always false
+await checkApplicationUpgrade(true) // awaits a modal; the page cannot refresh until it closes
+await refreshCachedRelease(channel)
+```
+
+#### Correct
+
+```ts
+const { packageJson } = useEnv()
+const appVersion = computed(() => packageJson.value?.version ?? null)
+const isBetaBuild = computed(
+  () =>
+    resolveUpdateChannelLabel(splitUpdateTag(appVersion.value ?? '').channelLabel) ===
+    AppPreviewChannel.BETA
+)
+await checkApplicationUpgrade(true, { presentDialog: false }) // the status row shows the result
+await refreshStatus()
+await refreshCachedRelease(channel)
 ```

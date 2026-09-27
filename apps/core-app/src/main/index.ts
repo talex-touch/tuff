@@ -4,11 +4,11 @@ import type { LogLevel } from './utils/logger'
 import path from 'node:path'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
-import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import {
-  LogLevel as ModuleLogLevel,
-  loggerManager as moduleLoggerManager
+  loggerManager as moduleLoggerManager,
+  LogLevel as ModuleLogLevel
 } from '@talex-touch/utils/common/logger'
+import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { app, nativeTheme, protocol } from 'electron'
 import { resolveThemeModeFromStyle } from '../shared/theme/theme-mode'
 import { commonChannelModule } from './channel/common'
@@ -17,7 +17,7 @@ import { configureAboutPanel, installApplicationMenu } from './core/application-
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import { innerRootPath, isDuplicateInstance } from './core/precore'
 import { setQuitIntent } from './core/quit-intent'
-import { loadStartupModules } from './core/startup-module-loader'
+import { loadStartupModules, resolveStartupModuleName } from './core/startup-module-loader'
 import { enforceDevReleaseStartupConstraint } from './core/startup-version-guard'
 import { addonOpenerModule } from './modules/addon-opener'
 import { intelligenceModule } from './modules/ai/intelligence-module'
@@ -39,6 +39,7 @@ import { fileProtocolModule } from './modules/file-protocol'
 import { flowBusModule } from './modules/flow-bus'
 import { shortcutModule } from './modules/global-shortcon'
 import { localAiCliModule } from './modules/local-ai-cli'
+import { mcpHostModule } from './modules/mcp-host'
 import { nativeCapabilitiesModule } from './modules/native-capabilities'
 import { networkModule } from './modules/network'
 import { notificationModule } from './modules/notification'
@@ -56,16 +57,17 @@ import { syncModule } from './modules/sync'
 import { systemUpdateModule } from './modules/system-update'
 import { platformPermissionModule } from './modules/system/platform-permission-service'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
-import { mcpHostModule } from './modules/mcp-host'
 import { terminalModule } from './modules/terminal/terminal.manager'
 import { toolGatewayModule } from './modules/tool-gateway'
 import { trayManagerModule } from './modules/tray/tray-manager'
 import { updateServiceModule } from './modules/update/UpdateService'
 import { voiceModule } from './modules/voice/voice-module'
-
 import { pluginLogModule } from './service/plugin-log.service'
 import { adoptPersistedLocale } from './utils/i18n-helper'
-import { loggerManager, mainLog } from './utils/logger'
+import { formatDuration, loggerManager, mainLog } from './utils/logger'
+
+import { enterPerfContext } from './utils/perf-context'
+import { perfMonitor } from './utils/perf-monitor'
 import './polyfills'
 
 // 设置环境变量禁用 ws 模块的可选依赖
@@ -339,6 +341,18 @@ app.whenReady().then(async () => {
         normalizedMetric.order
       )
 
+      if (normalizedMetric.loadTime >= 80) {
+        mainLog.warn(
+          `[Startup] Slow module load: ${normalizedMetric.name} took ${formatDuration(normalizedMetric.loadTime)} (order: ${normalizedMetric.order})`
+        )
+        perfMonitor.recordMainReport({
+          kind: 'channel.send.slow',
+          eventName: `startup.module.${normalizedMetric.name}`,
+          durationMs: normalizedMetric.loadTime,
+          at: Date.now(),
+          meta: { order: normalizedMetric.order }
+        })
+      }
       if (moduleCtor === storageModule) {
         try {
           const appSettings = getMainConfig(StorageList.APP_SETTING)
@@ -365,7 +379,17 @@ app.whenReady().then(async () => {
     const foregroundModuleMetrics = (await loadStartupModules({
       modules: foregroundModulesToLoad,
       loadModule: async (moduleCtor) => {
-        return await touchApp.moduleManager.loadModule(moduleCtor)
+        const order = foregroundModulesToLoad.indexOf(moduleCtor)
+        const name = resolveStartupModuleName(moduleCtor, order)
+        const exitContext = enterPerfContext(`StartupModule:${name}`, undefined, {
+          mode: 'blocking',
+          warnMs: 100
+        })
+        try {
+          return await touchApp.moduleManager.loadModule(moduleCtor)
+        } finally {
+          exitContext()
+        }
       },
       optionalModules: optionalModulesToLoad,
       onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {
@@ -374,10 +398,23 @@ app.whenReady().then(async () => {
       onLoaded: handleModuleLoaded
     })) as ModuleLoadMetric[]
 
+    const totalForegroundLoadTime = foregroundModuleMetrics.reduce((sum, m) => sum + m.loadTime, 0)
+    const topSlowModules = [...foregroundModuleMetrics]
+      .filter((m) => m.loadTime >= 30)
+      .sort((a, b) => b.loadTime - a.loadTime)
+      .slice(0, 5)
+      .map((m) => `${m.name}: ${Math.round(m.loadTime)}ms`)
+
     foregroundModuleLoadTimer.end('Foreground modules loaded', {
-      meta: { modules: foregroundModuleMetrics.length }
+      meta: {
+        modules: foregroundModuleMetrics.length,
+        totalLoadTimeMs: totalForegroundLoadTime,
+        topSlowModules: topSlowModules.length ? topSlowModules.join(', ') : 'none'
+      }
     })
 
+    const rendererWaitTimer = mainLog.time('Renderer initialization wait', 'success')
+    const rendererWaitStartedAt = Date.now()
     const rendererInitPromise = touchApp.waitUntilInitialized()
     if (touchApp.isSilentStart()) {
       void rendererInitPromise.catch((error) => {
@@ -388,9 +425,18 @@ app.whenReady().then(async () => {
     } else {
       await rendererInitPromise
     }
+    const rendererWaitDuration = Date.now() - rendererWaitStartedAt
+    rendererWaitTimer.end('Renderer initialization settled', {
+      meta: { durationMs: rendererWaitDuration }
+    })
 
     startupTimer.end('Startup health check passed', {
-      meta: { modules: foregroundModuleMetrics.length }
+      meta: {
+        modules: foregroundModuleMetrics.length,
+        foregroundModulesMs: totalForegroundLoadTime,
+        rendererWaitMs: rendererWaitDuration,
+        totalStartupMs: Date.now() - electronReadyTime
+      }
     })
 
     const finalizeModuleBootstrap = (): void => {
@@ -425,7 +471,17 @@ app.whenReady().then(async () => {
         const deferredModuleMetrics = (await loadStartupModules({
           modules: deferredModulesToLoad,
           loadModule: async (moduleCtor) => {
-            return await touchApp.moduleManager.loadModule(moduleCtor)
+            const order = (deferredModulesToLoad as readonly unknown[]).indexOf(moduleCtor)
+            const name = resolveStartupModuleName(moduleCtor, order)
+            const exitContext = enterPerfContext(`StartupModule:deferred:${name}`, undefined, {
+              mode: 'blocking',
+              warnMs: 100
+            })
+            try {
+              return await touchApp.moduleManager.loadModule(moduleCtor)
+            } finally {
+              exitContext()
+            }
           },
           optionalModules: optionalModulesToLoad,
           onOptionalModuleLoadFailed: async (_moduleCtor, metric) => {

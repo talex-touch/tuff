@@ -174,6 +174,10 @@ export class IndexingRuntime {
     this.taskAdmissionClosed = true
   }
 
+  isShuttingDown(): boolean {
+    return this.taskAdmissionClosed
+  }
+
   async drainAdmittedTasks(timeoutMs = 10_000): Promise<void> {
     if (this.activeAdmittedTasks === 0) return
 

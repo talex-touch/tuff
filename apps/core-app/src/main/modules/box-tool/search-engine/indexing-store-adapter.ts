@@ -48,7 +48,7 @@ export interface IndexStoreBatchApplySummary {
   cursor?: string
 }
 export interface IndexStoreBatchApplyWithPersistenceSummary extends IndexStoreBatchApplySummary {
-  persisted: Array<Record<string, unknown>>
+  persistedCount: number
   metrics?: PersistAndApplyProviderItemsMetrics
 }
 
@@ -326,7 +326,7 @@ export class SearchIndexStoreAdapter implements IndexStoreAdapter {
       indexedItemCount: items.length,
       done: batch.done === true,
       cursor: batch.cursor,
-      persisted: result.persisted,
+      persistedCount: result.persistedCount,
       metrics: result.metrics
     }
     await this.options.onBatchApplied?.(summary, batch)

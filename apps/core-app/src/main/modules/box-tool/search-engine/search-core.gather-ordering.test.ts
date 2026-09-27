@@ -256,6 +256,8 @@ vi.mock('./search-index-writer', () => ({
   SourceScopedIndexWriterRouter: class {},
   searchIndexWriter: {
     getFilePersistencePort: vi.fn(() => null),
+    // Destroy stops admission before it drains, so the router the core holds must answer both.
+    beginShutdown: vi.fn(async () => undefined),
     shutdown: vi.fn(async () => undefined)
   }
 }))

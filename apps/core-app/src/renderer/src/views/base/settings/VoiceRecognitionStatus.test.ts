@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type * as VoiceDomain from '@talex-touch/utils/transport/sdk/domains/voice'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import VoiceRecognitionStatus from './VoiceRecognitionStatus.vue'
@@ -22,9 +23,15 @@ vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: vi.fn()
 }))
 
-vi.mock('@talex-touch/utils/transport/sdk/domains/voice', () => ({
-  createVoiceSdk: () => voiceSdk
-}))
+vi.mock('@talex-touch/utils/transport/sdk/domains/voice', async () => {
+  // Only the SDK factory is faked; `VOICE_CAPTURE_UNAVAILABLE_CODES` is the real map, because the
+  // component switches on the very values main puts on the wire. A hand-copied stub could drift
+  // from the host while both sides still agreed with each other.
+  const actual = await vi.importActual<typeof VoiceDomain>(
+    '@talex-touch/utils/transport/sdk/domains/voice'
+  )
+  return { ...actual, createVoiceSdk: () => voiceSdk }
+})
 
 async function mountStatus(): Promise<VueWrapper> {
   const wrapper = mount(VoiceRecognitionStatus, {
@@ -101,6 +108,116 @@ describe('VoiceRecognitionStatus', () => {
 
     await wrapper.find('[data-testid="voice-status-configure"]').trigger('click')
     expect(router.push).toHaveBeenCalledWith('/setting/intelligence/capabilities')
+
+    wrapper.unmount()
+  })
+
+  /**
+   * A build that cannot capture at all is reported ahead of every ASR reason, with its own
+   * sentence and no way out: the channels page cannot bring an absent audio component back, so
+   * the button that would walk the reader there is withheld (#322). This is what a package
+   * shipped without `tuff_native_audio.node` looked like — a healthy recogniser and a
+   * microphone that could never open.
+   */
+  it.each([
+    ['VOICE_ASR_CAPTURE_COMPONENT_MISSING', 'settingSpeechRecognition.capture.componentMissing'],
+    [
+      'VOICE_ASR_CAPTURE_PLATFORM_UNSUPPORTED',
+      'settingSpeechRecognition.capture.platformUnsupported'
+    ],
+    ['VOICE_ASR_CAPTURE_DISABLED', 'settingSpeechRecognition.capture.disabled']
+  ])('reports a %s capture as its own sentence with nothing to open', async (reason, copy) => {
+    voiceSdk.getRecognitionStatus.mockResolvedValue({
+      asr: { ready: true },
+      stt: { ready: true },
+      capture: { ready: false, reason }
+    })
+    const wrapper = await mountStatus()
+
+    const box = alert(wrapper)
+    expect(box.text()).toContain('settingSpeechRecognition.capture.title')
+    expect(box.text()).toContain(copy)
+    // The recogniser is fine, so nothing here may read as an ASR problem.
+    expect(box.text()).not.toContain('settingSpeechRecognition.asr.notReady')
+    expect(wrapper.find('[data-testid="voice-status-configure"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-status-catalog"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="voice-status-retry"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * A device is the one capture failure this page can send the user to fix, so it keeps the
+   * button — and it keeps the capture sentence rather than the ASR one.
+   */
+  it('keeps the Settings button for an input device that is not there', async () => {
+    voiceSdk.getRecognitionStatus.mockResolvedValue({
+      asr: { ready: true },
+      stt: { ready: true },
+      capture: { ready: false, reason: 'VOICE_ASR_CAPTURE_DEVICE_UNAVAILABLE' }
+    })
+    const wrapper = await mountStatus()
+
+    const box = alert(wrapper)
+    expect(box.text()).toContain('settingSpeechRecognition.capture.noDevice')
+    expect(box.text()).not.toContain('settingSpeechRecognition.capture.componentMissing')
+
+    await wrapper.find('[data-testid="voice-status-configure"]').trigger('click')
+    expect(router.push).toHaveBeenCalledWith('/setting/intelligence/capabilities')
+
+    wrapper.unmount()
+  })
+
+  /** A capture that reads ready is a working build: presence alone is not a problem. */
+  it('says nothing for a build whose capture reads ready', async () => {
+    voiceSdk.getRecognitionStatus.mockResolvedValue({
+      asr: { ready: true },
+      stt: { ready: true },
+      capture: { ready: true }
+    })
+    const wrapper = await mountStatus()
+
+    expect(alert(wrapper).exists()).toBe(false)
+    expect(wrapper.html()).toBe('<!--v-if-->')
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The #322 regression itself: a recogniser that is also unconfigured does not make this an ASR
+   * problem. Capture is a fact about this install, and it is what the reader is told.
+   */
+  it('reports the capture over a recogniser that is not ready either', async () => {
+    voiceSdk.getRecognitionStatus.mockResolvedValue({
+      asr: { ready: false, reason: 'VOICE_ASR_NOT_CONFIGURED' },
+      stt: { ready: true },
+      capture: { ready: false, reason: 'VOICE_ASR_CAPTURE_COMPONENT_MISSING' }
+    })
+    const wrapper = await mountStatus()
+
+    const box = alert(wrapper)
+    expect(box.text()).toContain('settingSpeechRecognition.capture.componentMissing')
+    expect(box.text()).not.toContain('settingSpeechRecognition.asr.notConfigured')
+
+    wrapper.unmount()
+  })
+
+  /**
+   * Older hosts send no `capture` at all, and that must not be read as "broken": the page keeps
+   * saying what it always said, about the recogniser it can see.
+   */
+  it('reads an absent capture as an older host rather than as a broken one', async () => {
+    voiceSdk.getRecognitionStatus.mockResolvedValue({
+      asr: { ready: false, reason: 'VOICE_ASR_NOT_CONFIGURED' },
+      stt: { ready: true },
+      capture: undefined
+    })
+    const wrapper = await mountStatus()
+
+    const box = alert(wrapper)
+    expect(box.text()).toContain('settingSpeechRecognition.asr.notConfigured')
+    expect(box.text()).not.toContain('settingSpeechRecognition.capture.')
+    expect(wrapper.find('[data-testid="voice-status-configure"]').exists()).toBe(true)
 
     wrapper.unmount()
   })

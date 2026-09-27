@@ -1,0 +1,30 @@
+{
+  "id": "update-page-silent-progress",
+  "name": "update-page-silent-progress",
+  "title": "更新设置页重构：默认静默更新 + 进度可见 + 高级项收纳",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-27",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "无阻塞。等用户决定是否提交；共享检出里有其他会话的未提交改动（含两个 lang JSON），提交需按 hunk 拆分到从 origin/master 新建的 task/feat/update-page-silent-progress。",
+    "evidence": "实现 R1-R17 完成。trellis-check：284+50 测试、tsc/vue-tsc 0 错误（正向对照已做）、eslint/prettier 干净、F3 撤回反证、布局顺序回归测试。真机（隔离 dev 实例，截图 /tmp/tuff-update-page/*.png）：默认视图、beta 构建渠道行、开发者模式高级卡、自动更新开关持久化、下载 beta.48 进度、下载中首次挂载回填、检查不弹框、已就绪非官方态、历史卡。R5 三平台：beta.47 Windows/Linux 官方包离线校验 official（research/r5-attestation-offline-verification.md）。F3 未做打包实测。",
+    "nextAction": "用户确认后：按 hunk 提交到新分支并开 PR；随后 task.py finish/archive。未修旁路问题见 prd.md Out of Scope。"
+  }
+}

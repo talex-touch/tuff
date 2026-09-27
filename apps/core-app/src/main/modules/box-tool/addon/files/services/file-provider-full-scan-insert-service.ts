@@ -5,8 +5,7 @@ import {
 import type { IndexedSourceRecord, IndexedSourceRecordBatch } from '@talex-touch/utils/search'
 import type { UpsertFileRecord } from '../../../search-engine/search-index-writer'
 
-export interface FileProviderFullScanInsertResult<TInserted> {
-  inserted: TInserted[]
+export interface FileProviderFullScanInsertResult {
   insertedCount: number
 }
 
@@ -26,7 +25,7 @@ export interface FileProviderFullScanInsertDeps<TInserted, TContext> {
   recordBatchDuration: (durationMs: number) => void
   waitForIdle: () => Promise<void>
   upsertFiles: (records: UpsertFileRecord[], reason: string) => Promise<TInserted[]>
-  persistAndEmitBatch?: (records: UpsertFileRecord[], context: TContext) => Promise<TInserted[]>
+  persistAndEmitBatch?: (records: UpsertFileRecord[], context: TContext) => Promise<number>
   emitRecordBatch: (batch: IndexedSourceRecordBatch, context: TContext) => Promise<void>
   emitProgress: (current: number, total: number) => void
   sleep: (durationMs: number) => Promise<void>
@@ -80,9 +79,9 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
     rootPath: string,
     records: UpsertFileRecord[],
     context: TContext
-  ): Promise<FileProviderFullScanInsertResult<TInserted>> {
+  ): Promise<FileProviderFullScanInsertResult> {
     if (records.length === 0) {
-      return { inserted: [], insertedCount: 0 }
+      return { insertedCount: 0 }
     }
 
     this.logInfo('Preparing to index full-scan results', {
@@ -90,13 +89,14 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
       files: records.length
     })
 
-    const insertedRecords: TInserted[] = []
+    let insertedCount = 0
     let indexedFiles = 0
     let recordOffset = 0
     type PendingChunk = {
       chunk: UpsertFileRecord[]
       result: Promise<{
         inserted: TInserted[]
+        insertedCount: number
         batchMs: number
         waitForIdleMs: number
         writeMs: number
@@ -111,12 +111,12 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
         const waitForIdleMs = this.now() - waitStartedAt
         const chunkStart = this.now()
         const fused = this.persistAndEmitBatch
-        const inserted = fused
-          ? await fused(chunk, context)
-          : await this.upsertFiles(chunk, 'full-scan.upsert')
+        const inserted = fused ? [] : await this.upsertFiles(chunk, 'full-scan.upsert')
+        const chunkInsertedCount = fused ? await fused(chunk, context) : inserted.length
         const writeMs = this.now() - chunkStart
         return {
           inserted,
+          insertedCount: chunkInsertedCount,
           batchMs: writeMs,
           waitForIdleMs,
           writeMs,
@@ -152,9 +152,15 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
         pendingChunk = null
         if (!currentChunk) break
 
-        const { inserted, batchMs, waitForIdleMs, writeMs, published } = await currentChunk.result
+        const {
+          inserted,
+          insertedCount: chunkInsertedCount,
+          batchMs,
+          waitForIdleMs,
+          writeMs,
+          published
+        } = await currentChunk.result
         this.recordBatchDuration(batchMs)
-        insertedRecords.push(...inserted)
 
         this.logDebug('Full scan chunk inserted', {
           path: rootPath,
@@ -184,6 +190,7 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
         }
 
         indexedFiles += currentChunk.chunk.length
+        insertedCount += chunkInsertedCount
         this.runtimeEmitter.emitProgressSnapshot({
           current: indexedFiles,
           total: records.length
@@ -202,9 +209,6 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
       if (pendingChunk) await pendingChunk.result.catch(() => undefined)
     }
 
-    return {
-      inserted: insertedRecords,
-      insertedCount: insertedRecords.length
-    }
+    return { insertedCount }
   }
 }

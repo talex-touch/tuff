@@ -173,6 +173,18 @@ describe('ComposerToolbar', () => {
     wrapper.unmount()
   })
 
+  it('withholds the microphone entry, and only it, on a build that cannot capture', async () => {
+    const wrapper = mountToolbar({ micBlocked: true })
+    // Withheld, not disabled: the press that could only fail is not in the row at all, and the
+    // send key stays where it was.
+    expect(wrapper.find('button.ComposerMic').exists()).toBe(false)
+    expect(wrapper.find('button.ComposerSendIsland').exists()).toBe(true)
+
+    await wrapper.setProps({ micBlocked: false })
+    expect(wrapper.find('button.ComposerMic').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('names the send key 「结束并发送」 while dictating', async () => {
     const wrapper = mountToolbar({ micState: 'listening' })
     expect(wrapper.get('button.ComposerSendIsland').attributes('aria-label')).toBe(

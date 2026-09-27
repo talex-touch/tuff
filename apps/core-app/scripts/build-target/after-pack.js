@@ -4,6 +4,7 @@ const plist = require('simple-plist')
 const {
   findPackagedResourcesDir,
   getPlatformRuntimeRootModules,
+  requiredNativeAddonNames,
   syncMissingPackagedRuntimeModules,
   syncPackagedResourceModules
 } = require('./runtime-modules')
@@ -215,6 +216,52 @@ function verifyPackagedOfficialPluginSeeds(context) {
   }
 }
 
+/**
+ * Every addon the build machine produced also reached the packaged app.
+ *
+ * The presence check in build-target.js proves the addon existed before packaging; this proves it
+ * survived packaging. They are different failures — the release build that shipped without its
+ * audio component was the first kind, but `@talex-touch/tuff-native` is also *copied out of the
+ * asar* into `Resources/node_modules` (runtime-modules.js, `location: 'resources'`), and a sync
+ * filter that dropped `build/Release` would produce the second kind with the first check green.
+ *
+ * Strict only on CI, the same rule build-target.js uses for its own list: a developer's tree can
+ * legitimately be missing a Rust-built addon (it is built by the dev wrapper, skipped under
+ * `TUFF_DISABLE_NATIVE_AUDIO=1`), and refusing to package locally over that would be a worse trade
+ * than the warning. The release pipeline builds the addons itself and runs with CI=true.
+ */
+function verifyPackagedNativeAddons(context, options = {}) {
+  const strict = options.strict ?? process.env.CI === 'true'
+  const resourcesDir = findPackagedResourcesDir(context.appOutDir, '[afterPack]')
+  if (!resourcesDir) {
+    throw new Error('[afterPack] Unable to locate packaged Resources for native addon verification')
+  }
+
+  const nativePackageRoot = path.join(resourcesDir, 'node_modules', '@talex-touch', 'tuff-native')
+  const addonNames = requiredNativeAddonNames(context.electronPlatformName)
+  const missing = addonNames.filter(
+    (addonName) => !fs.existsSync(path.join(nativePackageRoot, 'build', 'Release', addonName))
+  )
+  if (missing.length === 0) {
+    console.log(
+      `[afterPack] Verified packaged native addons: ${addonNames.join(', ')} in ${path.join(
+        nativePackageRoot,
+        'build',
+        'Release'
+      )}`
+    )
+    return
+  }
+
+  const message =
+    `[afterPack] Packaged native addons missing from ${path.join(nativePackageRoot, 'build', 'Release')}: ` +
+    `${missing.join(', ')}. Build them with \`pnpm -C packages/tuff-native run build:audio\`.`
+  if (strict) {
+    throw new Error(message)
+  }
+  console.warn(`[afterPack] Warning: ${message}`)
+}
+
 function verifyPackagedEverythingNative(context) {
   if (context.electronPlatformName !== 'win32') {
     return
@@ -263,6 +310,7 @@ module.exports = async function afterPack(context) {
     requiredModules
   })
   verifyPackagedEverythingNative(context)
+  verifyPackagedNativeAddons(context)
   verifyPackagedOfficialPluginSeeds(context)
   pruneCrossPlatformFfprobeBinaries(context)
 
@@ -290,3 +338,4 @@ module.exports = async function afterPack(context) {
 module.exports.pruneCrossPlatformFfprobeBinaries = pruneCrossPlatformFfprobeBinaries
 module.exports.verifyPackagedOfficialPluginSeeds = verifyPackagedOfficialPluginSeeds
 module.exports.verifyPackagedEverythingNative = verifyPackagedEverythingNative
+module.exports.verifyPackagedNativeAddons = verifyPackagedNativeAddons

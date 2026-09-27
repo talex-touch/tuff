@@ -51,6 +51,7 @@ import {
 import { compareUpdateVersions, parseComparableUpdateVersion } from '../../../shared/update/version'
 import { UpdateRecordStatus, UpdateRepository } from './update-repository'
 import { UpdateAttemptRepository } from './update-attempt-repository'
+import { buildUpdateHistory } from './update-history'
 import { UpdateLifecycleConflictError } from './update-lifecycle'
 import { resolveUpdateInstallSettingsMigration } from './update-settings-migration'
 import { ReleaseFetchService } from './services/release-fetch-service'
@@ -624,6 +625,23 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         }
       }),
 
+      tx.on(UpdateEvents.getHistory, async (payload) => {
+        const repository = this.updateAttemptRepository
+        if (!repository) {
+          return { success: true, data: [] }
+        }
+        try {
+          const attempts = await repository.listTerminalAttempts()
+          return { success: true, data: buildUpdateHistory(attempts, payload?.limit) }
+        } catch (error) {
+          updateLog.warn('Failed to load update history', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Update history is unavailable'
+          }
+        }
+      }),
+
       tx.on(UpdateEvents.getBundledReleaseNotes, async () => {
         try {
           return {
@@ -1033,7 +1051,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return
     }
     try {
-      await this.markAvailableLifecycle(result.release, channel)
+      const lifecycle = await this.markAvailableLifecycle(result.release, channel)
+      // Cached and persisted results used to stop at `available`, so after a restart inside the
+      // check-frequency window an auto-download user was left looking at "update available".
+      if (lifecycle.phase === 'available') {
+        void this.maybeAutoDownloadLifecycle(result.release)
+      }
     } catch (error) {
       if (!(error instanceof UpdateLifecycleConflictError)) {
         throw error

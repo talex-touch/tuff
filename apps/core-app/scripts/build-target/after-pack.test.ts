@@ -2,20 +2,27 @@ import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const require = createRequire(import.meta.url)
-const { verifyPackagedEverythingNative, verifyPackagedOfficialPluginSeeds } =
-  require('./after-pack.js') as {
-    verifyPackagedEverythingNative: (context: {
-      appOutDir: string
-      electronPlatformName: string
-    }) => void
-    verifyPackagedOfficialPluginSeeds: (context: {
-      appOutDir: string
-      packager: { projectDir: string }
-    }) => void
-  }
+const {
+  verifyPackagedEverythingNative,
+  verifyPackagedNativeAddons,
+  verifyPackagedOfficialPluginSeeds
+} = require('./after-pack.js') as {
+  verifyPackagedEverythingNative: (context: {
+    appOutDir: string
+    electronPlatformName: string
+  }) => void
+  verifyPackagedNativeAddons: (
+    context: { appOutDir: string; electronPlatformName: string },
+    options?: { strict?: boolean }
+  ) => void
+  verifyPackagedOfficialPluginSeeds: (context: {
+    appOutDir: string
+    packager: { projectDir: string }
+  }) => void
+}
 const { OFFICIAL_PLUGIN_BUILD_TARGETS } = require('../lib/touch-translation-runtime-sync.js') as {
   OFFICIAL_PLUGIN_BUILD_TARGETS: readonly Array<{
     packageName: string
@@ -103,6 +110,37 @@ async function createPackagedEverythingFixture(): Promise<PackagedEverythingFixt
   ])
 
   return { appOutDir, resourcesDir }
+}
+
+type PackagedNativeAddonFixture = {
+  appOutDir: string
+  releaseDir: string
+  resourcesDir: string
+}
+
+async function createPackagedNativeAddonFixture(
+  addonNames: readonly string[]
+): Promise<PackagedNativeAddonFixture> {
+  const workspaceRoot = await fs.mkdtemp(path.join(tmpdir(), 'after-pack-native-addons-'))
+  fixtureRoots.push(workspaceRoot)
+
+  const appOutDir = path.join(workspaceRoot, 'packaged-app')
+  const resourcesDir = path.join(appOutDir, 'Tuff.app', 'Contents', 'Resources')
+  const releaseDir = path.join(
+    resourcesDir,
+    'node_modules',
+    '@talex-touch',
+    'tuff-native',
+    'build',
+    'Release'
+  )
+  await fs.mkdir(releaseDir, { recursive: true })
+  await Promise.all([
+    fs.writeFile(path.join(resourcesDir, 'app.asar'), 'fixture'),
+    ...addonNames.map((addonName) => fs.writeFile(path.join(releaseDir, addonName), 'fixture'))
+  ])
+
+  return { appOutDir, releaseDir, resourcesDir }
 }
 
 afterEach(async () => {
@@ -235,5 +273,59 @@ describe('verifyPackagedEverythingNative', () => {
     expect(() =>
       verifyPackagedEverythingNative({ appOutDir, electronPlatformName: 'win32' })
     ).toThrow(/Packaged Everything runtime is incomplete: .*tuff_native_everything\.node/)
+  })
+})
+
+describe('verifyPackagedNativeAddons', () => {
+  it('accepts a darwin package whose OCR and audio addons survived packaging', async () => {
+    const { appOutDir } = await createPackagedNativeAddonFixture([
+      'tuff_native_ocr.node',
+      'tuff_native_audio.node'
+    ])
+
+    expect(() =>
+      verifyPackagedNativeAddons({ appOutDir, electronPlatformName: 'darwin' }, { strict: true })
+    ).not.toThrow()
+  })
+
+  it('rejects a strict darwin package that lost the audio addon', async () => {
+    const { appOutDir, releaseDir } = await createPackagedNativeAddonFixture([
+      'tuff_native_ocr.node',
+      'tuff_native_audio.node'
+    ])
+    await fs.rm(path.join(releaseDir, 'tuff_native_audio.node'))
+
+    expect(() =>
+      verifyPackagedNativeAddons({ appOutDir, electronPlatformName: 'darwin' }, { strict: true })
+    ).toThrow(/Packaged native addons missing from .*: tuff_native_audio\.node\./)
+  })
+
+  it('only warns for a non-strict package that lost the audio addon', async () => {
+    const { appOutDir, releaseDir } = await createPackagedNativeAddonFixture([
+      'tuff_native_ocr.node',
+      'tuff_native_audio.node'
+    ])
+    await fs.rm(path.join(releaseDir, 'tuff_native_audio.node'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      expect(() =>
+        verifyPackagedNativeAddons({ appOutDir, electronPlatformName: 'darwin' }, { strict: false })
+      ).not.toThrow()
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('tuff_native_audio.node'))
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('rejects a Win32 package that lost the Everything addon', async () => {
+    const { appOutDir } = await createPackagedNativeAddonFixture([
+      'tuff_native_ocr.node',
+      'tuff_native_audio.node'
+    ])
+
+    expect(() =>
+      verifyPackagedNativeAddons({ appOutDir, electronPlatformName: 'win32' }, { strict: true })
+    ).toThrow(/Packaged native addons missing from .*: tuff_native_everything\.node\./)
   })
 })
