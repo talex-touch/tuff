@@ -5778,10 +5778,7 @@
         "modelsFetchEmpty": "No models were returned. Check that the local service is reachable and has models installed.",
         "modelsFetchFailedToast": "Failed to fetch models: {message}",
         "modelsFetchedToast": "Fetched {count} models",
-        "confirm": "OK",
-        "voiceAsrOnDeviceModel": "On-device model ID",
-        "voiceAsrOnDeviceModelPlaceholder": "tuff-asr-zh-tiny",
-        "voiceAsrOnDeviceModelHint": "Identifier of an installed speech bundle. Install one into Tuff's speech model directory first."
+        "confirm": "OK"
       },
       "model": {
         "title": "Model Configuration",

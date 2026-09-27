@@ -5778,10 +5778,7 @@
         "modelsFetchEmpty": "未从提供商获取到模型，请确认本地服务可访问并已安装模型",
         "modelsFetchFailedToast": "获取模型失败: {message}",
         "modelsFetchedToast": "已获取 {count} 个模型",
-        "confirm": "确定",
-        "voiceAsrOnDeviceModel": "端侧模型标识",
-        "voiceAsrOnDeviceModelPlaceholder": "tuff-asr-zh-tiny",
-        "voiceAsrOnDeviceModelHint": "已安装的语音模型包标识；在 Tuff 的语音模型目录中安装后即可使用。"
+        "confirm": "确定"
       },
       "model": {
         "title": "模型配置",

@@ -7,6 +7,7 @@ import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { useAppSdk, useIntelligenceSdk } from '@talex-touch/utils/renderer'
+import { isOnDeviceAsrBinding } from '@talex-touch/utils/intelligence/voice-asr'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -69,12 +70,17 @@ const providerMap = computed(
 const testEnabledBindings = computed(() => {
   const capability = (capabilities.value || {})[testCapabilityId.value]
   if (!capability?.providers) return []
-  return capability.providers
-    .filter((binding) => binding.enabled !== false)
-    .map((binding) => ({
-      ...binding,
-      provider: providerMap.value.get(binding.providerId)
-    }))
+  return (
+    capability.providers
+      .filter((binding) => binding.enabled !== false)
+      // The program-owned on-device channel is bound by main and has nothing to configure, so it is
+      // not something this page offers to test against.
+      .filter((binding) => !isOnDeviceAsrBinding(binding))
+      .map((binding) => ({
+        ...binding,
+        provider: providerMap.value.get(binding.providerId)
+      }))
+  )
 })
 
 async function handlePromptTest(options: {

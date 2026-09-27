@@ -30,7 +30,17 @@ const PROVIDER_CHANNEL_TYPE_VALUES: Record<ProviderChannelKind, true> = {
   [ProviderChannelType.ON_DEVICE]: true
 }
 
-export const PROVIDER_CHANNEL_TYPE_OPTIONS = Object.values(ProviderChannelType)
+/**
+ * The channel kinds a user may create.
+ *
+ * `on-device` is deliberately absent: that channel runs weights this machine already has, with no
+ * endpoint and no credential, so it is seeded and bound by the main process and has nothing to
+ * configure. It stays in `ProviderChannelType` because a stored on-device record still has to be
+ * classified, and `getRuntimeProviderType` still has to map it.
+ */
+export const PROVIDER_CHANNEL_TYPE_OPTIONS: ProviderChannelKind[] = Object.values(
+  ProviderChannelType
+).filter((kind) => kind !== ProviderChannelType.ON_DEVICE)
 
 export function normalizeProviderChannelType(value: unknown): ProviderChannelKind {
   if (typeof value === 'string' && Object.hasOwn(PROVIDER_CHANNEL_TYPE_VALUES, value)) {

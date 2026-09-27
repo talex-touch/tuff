@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import {
+  ON_DEVICE_ASR_CHANNEL_TYPE,
+  TUFF_LOCAL_ASR_PROVIDER_ID
+} from '@talex-touch/utils/intelligence/voice-asr'
 import type * as RendererUtils from '@talex-touch/utils/renderer'
 import type * as Vue from 'vue'
-import { mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { mount, type DOMWrapper } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import IntelligenceChannelsPage from './IntelligenceChannelsPage.vue'
 
@@ -19,9 +24,10 @@ vi.mock('vue-sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() }
 }))
 
-vi.mock('~/modules/auth/useAuth', () => ({
-  useAuth: () => ({ isLoggedIn: { value: false } })
-}))
+vi.mock('~/modules/auth/useAuth', async () => {
+  const { ref } = await vi.importActual<typeof Vue>('vue')
+  return { useAuth: () => ({ isLoggedIn: ref(false) }) }
+})
 
 /**
  * Only the provider SDK is replaced. Everything else in the renderer barrel — the storage SDK
@@ -40,11 +46,22 @@ vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({ send: vi.fn() })
 }))
 
+/**
+ * The provider set the mocked manager hands the page. The mock cannot close over a fixture declared
+ * below it (factories are elevated above the imports), so the ref is published on a hoisted holder
+ * that each test seeds before mounting.
+ */
+const manager = vi.hoisted(() => ({
+  providers: undefined as unknown as Vue.Ref<IntelligenceProviderConfig[]>
+}))
+
 vi.mock('~/modules/hooks/useIntelligenceManager', async () => {
   const { computed, ref } = await vi.importActual<typeof Vue>('vue')
+  const providers = ref<IntelligenceProviderConfig[]>([])
+  manager.providers = providers
   return {
     useIntelligenceManager: () => ({
-      providers: ref<IntelligenceProviderConfig[]>([]),
+      providers,
       selectedProviderId: ref<string | null>(null),
       selectedProvider: computed<IntelligenceProviderConfig | null>(() => null),
       addProvider: vi.fn(),
@@ -75,6 +92,46 @@ function mountPage() {
     }
   })
 }
+
+/** A speech channel the user configured themselves. */
+const dashscopeChannel: IntelligenceProviderConfig = {
+  id: 'dashscope-asr',
+  name: 'DashScope',
+  enabled: true,
+  type: IntelligenceProviderType.CUSTOM,
+  metadata: { channelType: 'bailian' }
+}
+
+/** The dictation channel main seeds on this machine — stored exactly as the program owns it. */
+const onDeviceChannel: IntelligenceProviderConfig = {
+  id: TUFF_LOCAL_ASR_PROVIDER_ID,
+  name: 'Local Speech',
+  enabled: true,
+  type: IntelligenceProviderType.CUSTOM,
+  capabilities: ['audio.asr'],
+  models: ['sense-voice-small'],
+  defaultModel: 'sense-voice-small',
+  metadata: {
+    channelType: ON_DEVICE_ASR_CHANNEL_TYPE,
+    voiceAsr: { protocol: 'local-offline' }
+  }
+}
+
+/** The count badge on the group the aside list draws under "enabled". */
+function enabledCountBadge(aside: DOMWrapper<Element>) {
+  const enabledGroup = aside
+    .findAll('.TuffListTemplate-Group')
+    .find(
+      (group) =>
+        group.get('.TuffListTemplate-GroupTitleText').text() === 'intelligence.list.enabled'
+    )
+  if (!enabledGroup) throw new Error('the aside list drew no enabled group')
+  return enabledGroup.get('.TuffListTemplate-Badge')
+}
+
+beforeEach(() => {
+  manager.providers.value = []
+})
 
 describe('IntelligenceChannelsPage shell', () => {
   /**
@@ -114,6 +171,28 @@ describe('IntelligenceChannelsPage shell', () => {
     // Nothing is selected, so the detail pane owns the empty state.
     expect(detail.findComponent({ name: 'IntelligenceEmptyState' }).exists()).toBe(true)
     expect(detail.findComponent({ name: 'IntelligenceList' }).exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  /**
+   * The on-device dictation channel is seeded and bound by main from the speech models already
+   * installed, with no endpoint and no credential: there is nothing about it to configure or to
+   * delete. The aside list must therefore neither offer it as a channel nor count it as one, even
+   * though it is a real entry of the stored provider config.
+   */
+  it('leaves the program-owned on-device channel out of the aside list and out of its count', async () => {
+    manager.providers.value = [dashscopeChannel, onDeviceChannel]
+
+    const wrapper = mountPage()
+    await nextTick()
+
+    const aside = wrapper.find('.TuffAsideTemplate-Aside')
+
+    expect(aside.findAll('.TuffItemTemplate-TitleText').map((row) => row.text())).toEqual([
+      'DashScope'
+    ])
+    expect(enabledCountBadge(aside).text()).toBe('1')
 
     wrapper.unmount()
   })

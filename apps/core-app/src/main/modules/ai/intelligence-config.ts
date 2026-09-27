@@ -18,7 +18,9 @@ import {
 import { StorageList } from '@talex-touch/utils'
 import {
   DASHSCOPE_QWEN_ASR_REALTIME_MODELS,
-  getVoiceCapabilityRecommendedModels
+  getVoiceCapabilityRecommendedModels,
+  ON_DEVICE_ASR_CHANNEL_TYPE,
+  TUFF_LOCAL_ASR_PROVIDER_ID
 } from '@talex-touch/utils/intelligence/voice-asr'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
@@ -246,25 +248,24 @@ function applyNexusRouteUserPreference(): boolean {
 }
 
 /**
- * The on-device ASR channel this module seeds, and the marker that remembers the user closing it.
+ * The on-device ASR channel this module seeds.
  *
  * Downloading a model only writes weights to disk; routing is decided by capability bindings. A
  * machine holding three models and no `audio.asr` binding reports `VOICE_ASR_NOT_CONFIGURED` — the
  * weights it paid for are never consulted. Seeding the channel and its binding is what turns an
  * install into something dictation can run.
+ *
+ * The channel is program-owned: it is reconciled from the model store alone and never appears on the
+ * channels page, so none of the writes below wait on a user preference about it.
  */
-const LOCAL_ASR_PROVIDER_ID = 'tuff-local-asr'
-const LOCAL_ASR_USER_DISABLED_KEY = 'localAsrRouteUserDisabled'
+const LOCAL_ASR_PROVIDER_ID = TUFF_LOCAL_ASR_PROVIDER_ID
 
 /**
- * The on-device route's usable state as this module last left or found it, `null` before the first
- * observation.
- *
- * The binding's own `enabled` flag cannot tell this module's write apart from the user's click, and
- * deleting the binding is indistinguishable from never having bound one. Comparing against what we
- * wrote is what makes an intentional close stick, exactly as the Nexus route does it.
+ * An earlier version let the user switch this channel off and remembered the click under this key.
+ * Nothing writes it now, and the row that could have cleared it is gone, so the route follows the
+ * model store again and the stale key is dropped on the next write rather than read.
  */
-let observedLocalAsrEnabled: boolean | null = null
+const LOCAL_ASR_LEGACY_USER_DISABLED_KEY = 'localAsrRouteUserDisabled'
 
 function findLocalAsrProvider(
   config: IntelligenceSDKPersistedConfig
@@ -272,44 +273,12 @@ function findLocalAsrProvider(
   return (config.providers ?? []).find((provider) => provider.id === LOCAL_ASR_PROVIDER_ID)
 }
 
-/** The `audio.asr` entry for the on-device channel; its absence is itself a user decision. */
+/** The `audio.asr` entry for the on-device channel. */
 function findLocalAsrBinding(config: IntelligenceSDKPersistedConfig) {
   const bindings = config.capabilities?.['audio.asr']?.providers
   return Array.isArray(bindings)
     ? bindings.find((binding) => binding.providerId === LOCAL_ASR_PROVIDER_ID)
     : undefined
-}
-
-function isLocalAsrRouteUsable(config: IntelligenceSDKPersistedConfig): boolean {
-  const binding = findLocalAsrBinding(config)
-  return Boolean(binding) && binding?.enabled !== false
-}
-
-/**
- * Records the user switching the on-device route off, so no later launch switches it back on.
- *
- * Runs from the config listener before the reload refreshes the observed value. Deleting the
- * binding counts as switching it off: this module would otherwise read "nothing bound" and seed it
- * again, which is the loop the marker exists to break.
- */
-function applyLocalAsrRouteUserPreference(): boolean {
-  const stored = getLatestConfig()
-  if (!stored) return false
-
-  const usable = isLocalAsrRouteUsable(stored)
-  const previous = observedLocalAsrEnabled
-  observedLocalAsrEnabled = usable
-  if (previous !== true || usable) return false
-
-  const provider = findLocalAsrProvider(stored)
-  if (!provider) return false
-  const metadata = { ...(provider.metadata ?? {}) }
-  if (metadata[LOCAL_ASR_USER_DISABLED_KEY] === true) return false
-  metadata[LOCAL_ASR_USER_DISABLED_KEY] = true
-  provider.metadata = metadata
-  saveMainConfig(StorageList.IntelligenceConfig, stored)
-  intelligenceConfigLog.info('On-device ASR route closed by the user')
-  return true
 }
 
 /**
@@ -320,10 +289,9 @@ function applyLocalAsrRouteUserPreference(): boolean {
  * dictation never consults, and a binding that outlives its model reports the route ready and then
  * fails the decode.
  *
- * The user keeps the final word, and only that: a route closed on the channels page stays closed and
- * a channel switched off there stays off, both of which arrive as state this function reads rather
- * than as a reason to guess. Everything else is left alone — other channels keep their own bindings,
- * their own priorities, and the `云端` source never sees this one.
+ * The model store is the whole input. Nothing else is consulted: the channel is seeded, enabled, and
+ * released by this function alone, and other channels keep their own bindings, their own priorities,
+ * and never see this one.
  */
 export function ensureLocalAsrRoute(installedModelIds: string[]): void {
   const installed = installedModelIds.filter((id) => typeof id === 'string' && id.length > 0)
@@ -345,19 +313,10 @@ export function ensureLocalAsrRoute(installedModelIds: string[]): void {
 
   if (installed.length === 0) {
     if (!binding) return
-    /*
-     * Releasing comes before the preference checks below, because a binding that outlives its model
-     * is wrong whatever the user decided about the channel: behind those checks a disabled provider
-     * kept a binding naming the model the user had just removed, and switching the channel back on
-     * in the same session then pointed `audio.asr` at weights that are gone. The preference lives on
-     * `stored.providers`, which this branch does not touch, so `enabled` and the user-disabled
-     * marker survive the release.
-     *
-     * Set before the write. The config listener compares the route's usable state against this
-     * value, so releasing it here would otherwise be recorded as the user closing the route — and
-     * the marker it writes is what keeps the next install from binding again.
-     */
-    observedLocalAsrEnabled = false
+    // A binding that outlives its model is wrong however it got there: leaving it would point
+    // `audio.asr` at weights that are gone and fail the decode instead of reporting the route
+    // unconfigured. The provider record is left alone, so the channel is still there for the next
+    // install.
     capability.providers = bindings.filter(
       (candidate) => candidate.providerId !== LOCAL_ASR_PROVIDER_ID
     )
@@ -366,16 +325,19 @@ export function ensureLocalAsrRoute(installedModelIds: string[]): void {
     return
   }
 
-  if (provider && provider.enabled === false) return
-  if (provider?.metadata?.[LOCAL_ASR_USER_DISABLED_KEY] === true) return
-
   /*
    * A model that is already bound stays bound while it is still on disk. Re-picking on every launch
-   * would move dictation off a model the user chose, and the tie-break only has to be stable: with
-   * several models installed there is no server-side recommendation to consult offline.
+   * would move dictation off the model that was chosen for this machine, and the tie-break only has
+   * to be stable: with several models installed there is no server-side recommendation to consult
+   * offline.
    */
   const boundModel = binding?.models?.find((model) => installed.includes(model))
   const modelId = boundModel ?? [...installed].sort()[0]!
+
+  // The marker an older version wrote to remember a user switching this channel off. The control
+  // that could have cleared it no longer exists, so it is dropped here instead of being honoured.
+  const { [LOCAL_ASR_LEGACY_USER_DISABLED_KEY]: _legacyUserDisabled, ...providerMetadata } =
+    provider?.metadata ?? {}
 
   const nextProvider: IntelligenceProviderConfig = {
     ...(provider ?? {}),
@@ -387,8 +349,8 @@ export function ensureLocalAsrRoute(installedModelIds: string[]): void {
     models: [modelId],
     defaultModel: modelId,
     metadata: {
-      ...(provider?.metadata ?? {}),
-      channelType: 'on-device',
+      ...providerMetadata,
+      channelType: ON_DEVICE_ASR_CHANNEL_TYPE,
       voiceAsr: { protocol: 'local-offline' }
     }
   }
@@ -404,9 +366,6 @@ export function ensureLocalAsrRoute(installedModelIds: string[]): void {
     safeJsonStringify({ provider, binding }) ===
       safeJsonStringify({ provider: nextProvider, binding: nextBinding })
 
-  // Set before the write: the listener compares against it, and a write that clears it would be
-  // recorded as the user closing the route.
-  observedLocalAsrEnabled = true
   if (unchanged) return
 
   stored.providers = provider
@@ -1462,7 +1421,6 @@ export function setupConfigUpdateListener(): void {
         // Before the reload refreshes the observed value: this is what tells the user's own
         // on/off click apart from a config write of ours.
         applyNexusRouteUserPreference()
-        applyLocalAsrRouteUserPreference()
         applyNexusAsrRouteUserPreference()
         ensureIntelligenceConfigLoaded()
       } catch {

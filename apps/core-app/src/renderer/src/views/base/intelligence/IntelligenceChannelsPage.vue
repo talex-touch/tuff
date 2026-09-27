@@ -10,6 +10,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxIconPicker, type IconPickerShape } from '@talex-touch/tuffex/icon-picker'
 import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
+import { isOnDeviceAsrProvider } from '@talex-touch/utils/intelligence/voice-asr'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, ref } from 'vue'
@@ -98,6 +99,19 @@ const basicDraft = ref<{
 
 const canEditSelectedProvider = computed(
   () => !!selectedProvider.value && !isNexusManagedProvider(selectedProvider.value)
+)
+
+/**
+ * The channels this page manages.
+ *
+ * The on-device dictation channel is program-owned — seeded and bound by main from the installed
+ * speech models, with no endpoint and no credential to edit — so it is not a channel anyone
+ * configures and it never reaches this list. Everything that addresses the list (rendering, the
+ * empty state, keyboard navigation, what to select after a delete) reads this array, never the raw
+ * one, or the list and its navigation would disagree about which rows exist.
+ */
+const visibleProviders = computed(() =>
+  providers.value.filter((provider) => !isOnDeviceAsrProvider(provider))
 )
 
 /**
@@ -407,15 +421,15 @@ async function handleDeleteProvider(): Promise<void> {
   if (!selectedProvider.value) return
   const deletedId = selectedProvider.value.id
 
-  const currentIndex = providers.value.findIndex((p) => p.id === deletedId)
+  const currentIndex = visibleProviders.value.findIndex((p) => p.id === deletedId)
   await aiClient.deleteProviderConfig({ providerId: deletedId })
   removeProvider(deletedId)
 
   // Smoothly select next provider after deletion
-  const remainingProviders = providers.value
+  const remainingProviders = visibleProviders.value
   if (remainingProviders.length > 0) {
     // Try to select the provider at the same index, or the last one if index is out of bounds
-    const newIndex = Math.min(currentIndex, remainingProviders.length - 1)
+    const newIndex = Math.min(Math.max(currentIndex, 0), remainingProviders.length - 1)
     selectedProviderId.value = remainingProviders[newIndex].id
   } else {
     selectedProviderId.value = null
@@ -426,17 +440,17 @@ async function handleDeleteProvider(): Promise<void> {
 }
 
 function navigateToNextProvider(): void {
-  const currentIndex = providers.value.findIndex((p) => p.id === selectedProviderId.value)
-  if (currentIndex < providers.value.length - 1) {
-    selectedProviderId.value = providers.value[currentIndex + 1].id
+  const currentIndex = visibleProviders.value.findIndex((p) => p.id === selectedProviderId.value)
+  if (currentIndex < visibleProviders.value.length - 1) {
+    selectedProviderId.value = visibleProviders.value[currentIndex + 1].id
     testResult.value = null
   }
 }
 
 function navigateToPreviousProvider(): void {
-  const currentIndex = providers.value.findIndex((p) => p.id === selectedProviderId.value)
+  const currentIndex = visibleProviders.value.findIndex((p) => p.id === selectedProviderId.value)
   if (currentIndex > 0) {
-    selectedProviderId.value = providers.value[currentIndex - 1].id
+    selectedProviderId.value = visibleProviders.value[currentIndex - 1].id
     testResult.value = null
   }
 }
@@ -460,7 +474,7 @@ useKeyboardNavigation({
       <IntelligenceList
         class="h-full w-full"
         aria-label="AI Provider List"
-        :providers="providers"
+        :providers="visibleProviders"
         :selected-id="selectedProviderId"
         :search-query="searchQuery"
         @select="handleSelectProvider"
@@ -473,7 +487,10 @@ useKeyboardNavigation({
           Rendered above the action it asks for. The list's own empty text describes the current
           filter; this one is about the channel set the user has to change.
         -->
-        <p v-if="providers.length === 0" class="text-sm text-[var(--tx-text-color-secondary)]">
+        <p
+          v-if="visibleProviders.length === 0"
+          class="text-sm text-[var(--tx-text-color-secondary)]"
+        >
           {{ t('settings.intelligence.emptyProviders') }}
         </p>
         <TxButton
