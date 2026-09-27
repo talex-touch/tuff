@@ -7,19 +7,21 @@
 import type { PermissionStartupRequestPayload } from '@talex-touch/utils/transport/events/types'
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { onMounted, onUnmounted, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 import {
   PERMISSION_REQUEST_TIMEOUT_MS,
   permissionRequestIdentity,
   showPermissionRequestCard
 } from '~/modules/permission/permission-request-card'
+import { useI18nText } from '~/modules/lang'
 
 type PermissionStartupRequest = PermissionStartupRequestPayload
 
 export function usePermissionStartup() {
   const pendingRequests = ref<PermissionStartupRequest[]>([])
   const permissionSdk = usePermissionSdk()
-  const { t } = useI18n()
+  // The card's copy is read by the user before they grant anything, so it goes through the
+  // translator that falls back to the loaded locale bundles rather than printing a raw key.
+  const { t } = useI18nText()
   let unregister: (() => void) | null = null
 
   const handlePermissionRequest = async (request: PermissionStartupRequest) => {
