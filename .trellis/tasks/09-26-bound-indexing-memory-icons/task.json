@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "nextAction": "Run the isolated 100k-file campaign with slow writes, concurrent search and mutations, then keep one isolated candidate live for three hours with per-isolate memory and queue evidence (implement.md items 12-13), and attribute the native allocator growth seen during the whole-home scan.",
-    "blocker": "An isolated instance registers the same global shortcuts as the running dev app, so a multi-hour soak on this machine needs an env switch that skips shortcut registration, or a host with no other Tuff instance running.",
-    "evidence": "research/verification-2026-09-26.md: native crash round trip to Sentry (event a66f76b63f954801b5134c9dbf249d61); path-backed icons render from the content-hash cache and iconGeneratedBytesCumulative stayed 0 through the home scan; every isolate heap stayed at or below 183MB while RSS swung with the scan. The code ships in PR #1965, validated as recorded in implement.md item 14."
+    "nextAction": "Reproduce the remaining split-off / legacy opener icon lane only if it can be isolated safely; otherwise close this R10 round with the measured source-scoped diagnostics and per-batch query evidence.",
+    "blocker": "Default split-on icon lane, task-state coalescing, fullScan batch ceiling, source-scoped diagnostics, three-hour residency, and replay-loop fix are verified. Remaining evidence is limited to the emergency split-off topology and legacy opener icon lane; no live or real profile may be touched.",
+    "evidence": "research/verification-2026-09-26.md: 100k/three-hour evidence, maxSize 10 A/B, post-scan replay fix, watch task-state save coalescing, source-scoped diagnostics (7.48 GiB clone: 1,237ms all-source timeout versus 10.9ms scoped), and per-batch acknowledgement query A/B (44.25ms current versus 43.55ms LEFT JOIN)."
   }
 }

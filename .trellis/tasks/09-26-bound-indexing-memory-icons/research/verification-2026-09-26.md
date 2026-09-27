@@ -49,3 +49,35 @@ Per-worker heap telemetry added: the writer worker (`search-index`) could never 
 
 - The running dev PID 88881 used master before the stage-only beta.47 libSQL fixes: app-provider 50-item batches took **52.7–94.8s**, file enrichment hit `FILE_INDEX_PERSIST_BARRIER_TIMEOUT`, and `lsof` showed **241** descriptors to the 7.41GB `search-index.db`.
 - The isolated fixed build held 10 descriptors under the completed 100k campaign. Released commits `9ed43e307` (libSQL/driver transaction update) and `bcac84591` (reconnect poisoned busy connections and close stale init clients) were therefore synchronized into the current worktree. The already-running old dev process must restart before those changes can affect it.
+
+### 2026-09-27 post-scan enrichment re-admission fix
+
+- Root cause: `SearchIndexStoreAdapter.onBatchApplied` acknowledges base file records after every FTS batch; the acknowledgement previously sent every acknowledged row through the same content scheduler, including rows already terminal in `file_index_progress`. A completed 100k scan therefore kept re-admitting 100-row pages while `Processed file extensions` ran with `extensions=0`.
+- Fix: runtime writer acknowledgements still refresh extensions for the whole base batch, but schedule content enrichment only for rows with no progress row or `pending`/`processing` status. `worker-enrichment` publications remain excluded. The pure extension-keyword loop no longer pays the per-record adaptive queue delay.
+- Regression evidence: shared side-effect tests 6/6; FileProvider startup/replay tests 57/57; a real isolated 300-file profile completed 300 rows with `pending=0`, explicit `schema-migration` replay completed in 104ms without growing the backlog, and a 10s post-replay CPU delta was +0.10s with the process RSS falling 435→428 MiB. Graceful shutdown unloaded 44/44 modules in 1,536ms with no force-timeout.
+
+- Post-fix settle smoke: the completed 300-file profile stayed live for 180.008s across 12 samples with files fixed at 300, scheduler active/queued/pending `0/0/0`, result pending/inflight and bytes all zero, search-index handles fixed at 21, RSS 384.3–509.7 MiB, and no early exit. It then exited cleanly with 44/44 modules unloaded and no timeout.
+
+### 2026-09-27 R10 fullScan batch-ceiling A/B
+
+- Isolated clone, same 10,000 Markdown files and same startup/profile flags; only `upsertBatchScheduler.maxSize` changed. `maxSize=20`: **542 batches / 49,571 ms**. `maxSize=10`: **1,002 batches / 36,042 ms** (~27.3% faster). Both runs completed exactly 10,000 rows with `scan` task status `succeeded`.
+- 3,000-file repeat control: `maxSize=20` **6,155 / 6,131 ms**; `maxSize=10` **5,917 / 5,896 ms**. `maxSize=40` measured **6,802 ms**, slower; no larger window was promoted.
+- Production `upsertBatchScheduler.maxSize` is now 10. This closes only the batch-ceiling subfinding; R10 remains open for `file-icon.persist` writer-lane contention and the remaining synchronous diagnostics statements. No live or real profile was used.
+
+### 2026-09-27 R10 watch task-state persistence A/B
+
+- Same isolated 300-file watch root; mutate 200 files in one storm. Before coalescing, `DbWriteScheduler` reported `indexing.task-state.save enqueued=191, ok=191`; after the one-second leading-edge window, the same probe reported `enqueued=49, ok=49` (about **−74%**). Both runs had `drop=0`, `fail=0`, and no `file-icon.persist` or `[Perf:EventLoop]` line in the probe log.
+- Watch diagnostics update in-memory state immediately; durable history is flushed by `IndexingRuntime.drainTaskStateWrites()` during shutdown. Scan and reconcile task-state writes remain awaited. Focused runtime suite: **102/102**; node typecheck and Electron build passed. This closes the measured task-state write-fanout subfinding; the icon writer lane and remaining synchronous diagnostics remain open.
+
+### 2026-09-27 R10 file-icon writer-lane qualification
+
+- The historical `file-icon.persist` slow-task evidence was not reproducible on the current default split topology. In an isolated 300-file profile, an explicit file-provider search returned 50 rows and caused 120 `icon`/`iconMeta` extension rows; the worker-owned search database stayed at 20 open handles, the Electron main process sampled about 0.6% CPU, and the log contained zero `file-icon.persist` and zero event-loop-lag entries.
+- This qualifies rather than deletes the old finding: the legacy shared-file fallback (`TUFF_DB_SEARCH_SPLIT_ENABLED=0`) and the separate opener icon lane still need their own runtime reproduction before R10 can close completely.
+
+### 2026-09-27 R10 source-scoped diagnostics
+
+- The real search profile was 7.48 GiB (`search-index.db`) with 148,510 file rows and 105,575 progress rows; an APFS clone was used for runtime verification.
+- The six existing stats statements used covering indexes. Direct same-connection measurement on the clone was 4.5 ms median for six separate counts (4.2 ms for one scalar-subquery statement); the data does not justify a query-shape rewrite by itself.
+- The former diagnostics IPC path always built all five source reports before filtering `sourceId`. On the isolated clone, the first all-source request hit an unrelated app-provider fast-read timeout and took 1,237 ms. After adding `IndexingRuntime.getSourceDiagnostics()` and using it for explicit `sourceId` requests, the first file-provider-scoped request took 10.9 ms and did not read unrelated sources. No-source diagnostics retain the full contract.
+- Focused `indexing-runtime` + `common` suites passed 143/143 after the change; CoreApp node typecheck, targeted ESLint, and electron-vite build passed. The remaining R10 boundary is the per-batch file-provider `path IN (...)` read and legacy split-off/opener icon lanes; no broad cache or query rewrite was made without runtime evidence.
+- On the same clone, 100 repetitions of the current 10-path acknowledgement read (`files WHERE path IN (…)` plus `file_index_progress WHERE file_id IN (…)`) measured **44.25ms median / 73.2ms p95**; a single LEFT JOIN variant measured **43.55ms / 75.4ms**. The ~1.6% median difference is below the threshold for a cross-layer row-shape change, so this path remains monitored rather than rewritten.
