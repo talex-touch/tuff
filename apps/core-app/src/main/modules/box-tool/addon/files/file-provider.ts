@@ -1519,10 +1519,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
    * ship-blocker #3). The primary trigger for a fresh search-index.db is
    * scan-progress emptiness (empty file → full scan); this net additionally
    * covers "index rows lost but scan_progress survived", where the eligibility
-   * gate would stay closed forever. At most once per boot; idempotent (a
-   * populated index is a no-op); deliberately NOT deferred by the startup
-   * degrade window — an empty index is missing user-visible search capability,
-   * not background maintenance. All failures are contained.
+   * gate would otherwise stay closed forever. At most once per boot; the runtime
+   * applies the same source eligibility in development and production. It is
+   * deliberately NOT deferred by the startup degrade window because an empty
+   * index is missing user-visible search capability, not background maintenance.
    */
   private async maybeRunBootstrapReindex(): Promise<void> {
     if (this.shuttingDown || this.bootstrapReindexChecked) return
@@ -2108,10 +2108,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         if (workerReady) {
           this.backgroundStartupReady = true
           // Layer-2 safety net for the split topology: if the (rebuildable)
-          // search file holds zero index rows while watch roots exist, force
-          // one Startup scan. Fire-and-forget with contained errors — a net
-          // failure must never reject the startup chain (V1 lesson: an
-          // uncontained worker-init rejection killed search for the session).
+          // search file holds zero index rows while watch roots exist, request
+          // one Startup scan through the normal eligibility gate. Development
+          // and production use the same path; a contained failure must never
+          // reject the startup chain.
           void this.maybeRunBootstrapReindex()
           this.schedulePathNormalizationMigration()
           this.assetService.scheduleLegacyIconMigration(
