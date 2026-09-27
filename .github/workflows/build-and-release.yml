@@ -404,7 +404,7 @@ jobs:
             libpipewire-0.3-dev \
             libwayland-dev \
             libxcb1-dev \
-            libxcb-randr-dev \
+            libxcb-randr0-dev \
             libxdo-dev \
             libxkbcommon-dev \
             libxrandr-dev \
