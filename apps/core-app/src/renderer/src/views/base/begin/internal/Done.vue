@@ -62,6 +62,7 @@ const isKeyPressed = ref(false)
 /** The finish flow presses every cap at once, whichever way the shortcut arrived. */
 const isShortcutPressed = ref(false)
 const isShortcutSuccess = ref(false)
+const showShortcutCompletionChoice = ref(false)
 const isShortcutFlowRunning = ref(false)
 const isDoneClosing = ref(false)
 let removeShortcutTriggeredListener: (() => void) | null = null
@@ -140,7 +141,9 @@ function handleWelcomeLoaded(animation: AnimationItem): void {
   animation.setSpeed(1.5)
 }
 
-async function completeBeginner(options: { openCoreBox?: boolean } = {}): Promise<boolean> {
+async function completeBeginner(
+  options: { hideMainWindow?: boolean; openCoreBox?: boolean } = {}
+): Promise<boolean> {
   if (isDoneClosing.value) return false
 
   isDoneClosing.value = true
@@ -198,10 +201,12 @@ async function completeBeginner(options: { openCoreBox?: boolean } = {}): Promis
   disarmDoneShortcut()
   step({ comp: null })
 
-  try {
-    await appSdk.hide()
-  } catch {
-    // noop
+  if (options.hideMainWindow !== false) {
+    try {
+      await appSdk.hide()
+    } catch {
+      // noop
+    }
   }
 
   if (options.openCoreBox) {
@@ -225,13 +230,14 @@ async function runShortcutFinishFlow(): Promise<void> {
   isShortcutSuccess.value = true
   await sleep(420)
 
-  const completed = await completeBeginner({ openCoreBox: true })
-  if (!completed) {
-    isShortcutFlowRunning.value = false
-    isShortcutSuccess.value = false
-    isShortcutPressed.value = false
-    resetKeyPressedState()
-  }
+  showShortcutCompletionChoice.value = true
+}
+
+async function resolveShortcutCompletion(hideMainWindow: boolean): Promise<void> {
+  await completeBeginner({
+    hideMainWindow,
+    openCoreBox: hideMainWindow
+  })
 }
 
 function goon(): void {
@@ -324,7 +330,12 @@ onUnmounted(() => {
     </div>
 
     <div class="Done-Content">
-      <p>{{ t('beginner.done.shortcut.hint', { shortcut: shortcutHint }) }}</p>
+      <p v-if="!showShortcutCompletionChoice">
+        {{ t('beginner.done.shortcut.hint', { shortcut: shortcutHint }) }}
+      </p>
+      <p v-else id="shortcut-completion-choice-label">
+        {{ t('beginner.done.completionChoice.prompt') }}
+      </p>
       <div class="Done-Shortcut">
         <div class="Done-ShortcutKeys my-4">
           <template v-for="(cap, index) in shortcutCaps" :key="cap.id">
@@ -337,9 +348,37 @@ onUnmounted(() => {
             />
           </template>
         </div>
-        <small>{{ t('beginner.done.shortcut.changeInSettings') }}</small>
+        <small v-if="!showShortcutCompletionChoice">
+          {{ t('beginner.done.shortcut.changeInSettings') }}
+        </small>
       </div>
-      <TxButton variant="flat" type="primary" @click="goon">
+      <div
+        v-if="showShortcutCompletionChoice"
+        class="Done-CompletionChoice"
+        role="group"
+        aria-labelledby="shortcut-completion-choice-label"
+        data-testid="shortcut-completion-choice"
+      >
+        <TxButton
+          variant="ghost"
+          :disabled="isDoneClosing"
+          data-testid="shortcut-completion-hide"
+          @click="resolveShortcutCompletion(true)"
+        >
+          {{ t('beginner.done.completionChoice.hide') }}
+        </TxButton>
+        <TxButton
+          variant="flat"
+          type="primary"
+          :loading="isDoneClosing"
+          :disabled="isDoneClosing"
+          data-testid="shortcut-completion-continue"
+          @click="resolveShortcutCompletion(false)"
+        >
+          {{ t('beginner.done.completionChoice.continue') }}
+        </TxButton>
+      </div>
+      <TxButton v-else variant="flat" type="primary" @click="goon">
         {{ t('beginner.done.action') }}
       </TxButton>
     </div>
@@ -418,6 +457,13 @@ onUnmounted(() => {
       font-size: 0.72rem;
       text-align: center;
     }
+  }
+
+  &-CompletionChoice {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
   }
 }
 </style>

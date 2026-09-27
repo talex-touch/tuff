@@ -32,7 +32,7 @@ Quality in this repo means matching the owning surface, preserving trust boundar
 - Preserve existing class/event contracts during semantic UI migrations.
 - Normalize untrusted or cross-layer payloads at the boundary.
 - Keep generated chunks, local profiles, raw logs, and exploratory evidence out of source changes unless an evidence README explicitly lists them as curated artifacts.
-- Completing onboarding must mark the beginner state, hide the primary window through the host app SDK, and only then optionally summon CoreBox. Main-window hiding is a completion invariant, not a caller option.
+- Completing onboarding must mark the beginner state durably before closing the guide. The ordinary action may hide the primary window; shortcut completion must first offer a localized choice. “Keep exploring” leaves the primary window visible and does not summon CoreBox. “Hide and open CoreBox” hides through the host app SDK before summoning CoreBox.
 - CoreBox's `WindowManager.setPinned(pinned)` must no-op when the pin state is unchanged; broad `APP_SETTING` notifications include onboarding choices and main-window bounds saves. New-window creation must still initialize native policy even when the default pin state is unchanged.
 - CoreBox is a nonactivating macOS `NSPanel`. Its `setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })` must retain the process-transform skip: Electron's default fullscreen handling invokes native `DockHide()` for the whole process, bypassing JavaScript `app.dock.hide()` instrumentation and disrupting the main window. Do not apply this exemption blindly to ordinary `BrowserWindow` instances.
 
@@ -48,7 +48,7 @@ Choose the smallest meaningful verification for the slice:
 - Plugins: plugin-local tests/build/lint when scripts exist, plus manifest validation for manifest changes.
 - Nexus: focused route/component/build guard tests, `pnpm -C "apps/nexus" run typecheck`, and production preview evidence when the TODO requires it.
 - Always run `git diff --check` before reporting completion.
-- Onboarding window-lifecycle changes: use an isolated profile to finish onboarding, verify the primary window hides, then summon and hide CoreBox and verify the primary window does not reappear.
+- Onboarding window-lifecycle changes: use an isolated profile to finish onboarding through both shortcut choices. Verify “keep exploring” preserves the primary window without summoning CoreBox; verify “hide and open CoreBox” hides it, then summon and hide CoreBox and confirm the primary window does not reappear.
 - CoreBox pin/workspace regressions must cover initial unpinned creation, unchanged pin values through the real settings subscription, and genuine pin/unpin transitions. In isolated Electron, a bounds/config save with unchanged pin must cause zero workspace setter calls; CoreBox show/hide must preserve its floating, all-Spaces panel behavior without revealing the primary window.
 
 Package-level recommended commands are listed in:
@@ -1091,7 +1091,7 @@ StorageEvents.app.save: TuffEvent<StorageSaveRequest, StorageSaveResponse>;
 - A durable flush absorbs transient SQLite `BUSY` with a bounded retry. A `persist: true` caller holds a lifecycle gate open and has no later debounce tick to fall back on, so it must not inherit the background write path's fail-fast-and-retry-next-tick policy.
 - Persistence-internal cache reads use a non-touching accessor. Maintenance must not make a dirty entry look externally hot or hide a concurrent read from eviction checks.
 - On persistence failure, main may restore the previous cache value only while the cache version still equals the failed request's accepted version. A newer concurrent write always wins and must never be overwritten by rollback.
-- Onboarding marks `beginner.init`, closes the guide, hides the primary window, and optionally summons CoreBox only after durable success. Failure leaves the guide available and shows localized recovery feedback.
+- Onboarding marks `beginner.init` and closes the guide only after durable success. Shortcut completion asks the user whether to keep the primary window visible or hide it before summoning CoreBox; persistence failure leaves the guide and choice available with localized recovery feedback.
 
 ### 4. Validation & Error Matrix
 
@@ -1113,7 +1113,7 @@ StorageEvents.app.save: TuffEvent<StorageSaveRequest, StorageSaveResponse>;
 
 - Storage handler tests assert ordinary save behavior, durable success ordering, persistence failure rollback, and newer-write preservation.
 - Renderer tests assert the reactive beginner state and window lifecycle stay unchanged while persistence is pending and after failure.
-- Onboarding flow tests assert success order: durable save -> beginner state -> guide close -> primary-window hide -> optional CoreBox summon.
+- Onboarding flow tests assert success order: durable save -> beginner state -> guide close, then either keep the primary window visible with no CoreBox summon or hide the primary window -> summon CoreBox.
 - Run focused storage/onboarding tests, CoreApp node/web type-checks, and `git diff --check`. An isolated Electron profile is still required before claiming the complete window-lifecycle experience.
 
 ### 7. Wrong vs Correct

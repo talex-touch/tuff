@@ -197,6 +197,11 @@
       "description": "一切就绪，开始使用吧。",
       "action": "开始使用",
       "persistFailed": "无法保存引导完成状态，请重试后再关闭引导。",
+      "completionChoice": {
+        "prompt": "快捷键已生效。要隐藏主窗口使用 CoreBox，还是继续体验主窗口？",
+        "hide": "隐藏并打开 CoreBox",
+        "continue": "继续体验主窗口"
+      },
       "shortcut": {
         "command": "command",
         "ctrl": "ctrl",
@@ -5484,6 +5489,9 @@
       "voiceTranscribeUnavailable": "AI 语音转写不可用，请检查登录、额度或 Provider 状态",
       "voiceRecognitionNotConfigured": "尚未配置语音识别",
       "voiceRecognitionUnavailable": "语音识别不可用",
+      "voiceCaptureUnavailable": "录音组件不可用，请查看提示详情或重装应用",
+      "voiceCaptureComponentMissing": "本机应用缺少录音组件，无法使用语音输入",
+      "voiceCapturePlatformUnsupported": "这个系统不支持语音输入",
       "voiceTranscribeEmpty": "未识别到语音内容，请重新录制",
       "voiceListening": "正在聆听…",
       "voiceTranscribeFailed": "语音转写失败",
