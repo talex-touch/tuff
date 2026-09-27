@@ -1,5 +1,5 @@
 import type { ITuffTransport } from '../transport/types'
-import type { PluginInstallSourceRequest } from '../transport/events/types'
+import type { PluginApiInstallRequest, PluginInstallSourceRequest } from '../transport/events/types'
 import { describe, expect, it, vi } from 'vitest'
 import { INSTALL_TRANSPORT_TIMEOUT_MS } from '../plugin/install-budgets'
 import { PluginProviderType } from '../plugin/providers/types'
@@ -11,6 +11,11 @@ const payload = {
   hintType: PluginProviderType.TPEX,
   metadata: { officialVersion: '1.0.8' },
 } satisfies PluginInstallSourceRequest
+
+const apiInstallPayload = {
+  source: 'https://example.test/widget.tpex',
+  hintType: PluginProviderType.TPEX,
+} satisfies PluginApiInstallRequest
 
 function createTransport() {
   return {
@@ -35,5 +40,27 @@ describe('plugin:install-source deadline', () => {
     expect(transport.send).toHaveBeenCalledExactlyOnceWith(PluginEvents.install.source, payload, {
       timeout: INSTALL_TRANSPORT_TIMEOUT_MS,
     })
+  })
+})
+
+describe('plugin:api:install deadline', () => {
+  /**
+   * `plugin:api:install` routes into the same main-side install queue as `plugin:install-source`,
+   * so its call spans the same download + permission prompt + unpack budgets and needs the same
+   * derived deadline. The 60s transport default is shorter than the permission card's own 120s
+   * budget, so a user who takes a minute to accept the card sees a failed install that is in fact
+   * still running.
+   */
+  it('sends the download+prompt+unpack budget as the transport deadline', async () => {
+    const transport = createTransport()
+    const sdk = createPluginSdk(transport as unknown as ITuffTransport)
+
+    await sdk.install(apiInstallPayload)
+
+    expect(transport.send).toHaveBeenCalledExactlyOnceWith(
+      PluginEvents.api.install,
+      apiInstallPayload,
+      { timeout: INSTALL_TRANSPORT_TIMEOUT_MS }
+    )
   })
 })

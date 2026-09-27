@@ -110,7 +110,11 @@ export function createPluginSdk(transport: ITuffTransport): PluginSdk {
     enable: async request => transport.send(PluginEvents.api.enable, normalizePluginApiOperationRequest(request)),
     disable: async request => transport.send(PluginEvents.api.disable, normalizePluginApiOperationRequest(request)),
     reload: async request => transport.send(PluginEvents.api.reload, normalizePluginApiOperationRequest(request)),
-    install: async request => transport.send(PluginEvents.api.install, request),
+    // Same queue, same budgets as `installFromSource`: the default 60s wall is shorter than the
+    // permission prompt's own budget, so a user who thinks for a minute sees a failed install that
+    // is still running.
+    install: async request =>
+      transport.send(PluginEvents.api.install, request, { timeout: INSTALL_TRANSPORT_TIMEOUT_MS }),
     uninstall: async request => {
       const response = await transport.send(PluginEvents.api.uninstall, normalizePluginUninstallRequest(request))
       return normalizePluginUninstallResponse(response)
