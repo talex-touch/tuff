@@ -1414,43 +1414,41 @@ function applyNexusProviderAuthState(signedIn: boolean): boolean {
   // `enabled: false`, which would otherwise undo the enablement below on the next reload.
   if (patchStoredConfigDefaults(stored)) changed = true
 
+  const wasEnabled = provider.enabled === true
   if (!userDisabled) {
-    if (provider.enabled !== true) {
+    if (!wasEnabled) {
       provider.enabled = true
       changed = true
     }
 
-    for (const capability of Object.values(stored.capabilities ?? {})) {
+    for (const [capabilityId, capability] of Object.entries(stored.capabilities ?? {})) {
       const userReordered = capability.metadata?.userReordered === true
-      let foundNexus = false
       for (const binding of capability.providers ?? []) {
-        if (binding.providerId === TUFF_NEXUS_PROVIDER_ID) {
-          foundNexus = true
-          if (binding.enabled === false) {
-            binding.enabled = true
-            changed = true
-          }
-          if (!userReordered && binding.priority !== 1) {
-            binding.priority = 1
-            changed = true
-          }
+        if (binding.providerId === TUFF_NEXUS_PROVIDER_ID && binding.enabled === false) {
+          binding.enabled = true
+          changed = true
         }
       }
 
-      if (!userReordered && foundNexus && Array.isArray(capability.providers)) {
-        for (const binding of capability.providers) {
-          if (binding.providerId !== TUFF_NEXUS_PROVIDER_ID && (binding.priority ?? 999) <= 1) {
-            binding.priority = 2
+      if (!wasEnabled && !userReordered && Array.isArray(capability.providers)) {
+        const nexusBinding = capability.providers.find(
+          (b) => b.providerId === TUFF_NEXUS_PROVIDER_ID
+        )
+        if (nexusBinding && capabilityId === 'text.chat') {
+          if (nexusBinding.priority !== 1) {
+            nexusBinding.priority = 1
             changed = true
+          }
+          for (const binding of capability.providers) {
+            if (binding.providerId !== TUFF_NEXUS_PROVIDER_ID && (binding.priority ?? 999) <= 1) {
+              binding.priority = 2
+              changed = true
+            }
           }
         }
       }
     }
   }
-
-  // Observed before the write, for the same reason as the disabling branch above: only a change this
-  // module did not make is the user's, and only that one may set or clear the override.
-  observedNexusEnabled = provider.enabled === true
   if (!changed) return false
 
   saveMainConfig(StorageList.IntelligenceConfig, stored)
