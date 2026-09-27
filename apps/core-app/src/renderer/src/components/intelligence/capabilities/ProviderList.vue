@@ -2,7 +2,10 @@
 import type { ITuffIcon } from '@talex-touch/utils'
 import type { CapabilityBinding } from './types'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
-import { getVoiceCapabilityRecommendedModels } from '@talex-touch/utils/intelligence/voice-asr'
+import {
+  getVoiceCapabilityRecommendedModels,
+  isOnDeviceAsrBinding
+} from '@talex-touch/utils/intelligence/voice-asr'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -26,8 +29,17 @@ const emits = defineEmits<{
 
 const { t } = useI18n()
 
+/**
+ * The rows this list draws.
+ *
+ * The program-owned on-device channel is bound by main and has nothing to configure, so it never
+ * becomes a row the user can disable, reorder, or edit — but it stays in `enabledBindings`, which is
+ * what a reorder writes back, so ordering any other channel cannot drop it.
+ */
 const allProviders = computed(() => {
-  return [...props.enabledBindings, ...props.disabledBindings]
+  return [...props.enabledBindings, ...props.disabledBindings].filter(
+    (binding) => !isOnDeviceAsrBinding(binding)
+  )
 })
 
 const enabledProviderIds = computed(() => {

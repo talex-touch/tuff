@@ -32,6 +32,7 @@ const GLYPH_CLASSES: Readonly<Record<MetaActionGlyph, string>> = {
   folder: 'i-ri-folder-line',
   pin: 'i-ri-pushpin-line',
   unpin: 'i-ri-unpin-line',
+  shortcut: 'i-ri-keyboard-line',
   flow: 'i-ri-share-forward-line',
   translate: 'i-ri-translate-2',
   'translate-pin': 'i-ri-window-line',

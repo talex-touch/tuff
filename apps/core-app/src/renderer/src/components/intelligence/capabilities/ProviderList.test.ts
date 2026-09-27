@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import {
+  ON_DEVICE_ASR_CHANNEL_TYPE,
+  TUFF_LOCAL_ASR_PROVIDER_ID
+} from '@talex-touch/utils/intelligence/voice-asr'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -23,7 +27,10 @@ vi.mock('@talex-touch/tuffex/switch', () => ({
   TxSwitch: {
     name: 'TxSwitch',
     props: ['modelValue'],
-    template: '<span class="channel-switch" />'
+    emits: ['change'],
+    // A row routes this event into `handleProviderToggle`, so the stub has to be the control that
+    // raises it rather than a decorative span.
+    template: `<button type="button" class="channel-switch" @click="$emit('change', !modelValue)" />`
   }
 }))
 
@@ -63,12 +70,46 @@ function bind(provider: IntelligenceProviderConfig, enabled = true): CapabilityB
   }
 }
 
+/** A speech channel the user configured themselves, on the Bailian adapter. */
+const bailianAsrBinding: CapabilityBinding = {
+  ...bind(bailianChannel),
+  providerId: 'dashscope-asr',
+  provider: {
+    ...bailianChannel,
+    metadata: { channelType: 'bailian', voiceAsr: { protocol: 'bailian-paraformer' } }
+  }
+}
+
+/** The dictation channel main seeds on this machine — stored exactly as the program owns it. */
+const onDeviceChannel: IntelligenceProviderConfig = {
+  id: TUFF_LOCAL_ASR_PROVIDER_ID,
+  type: IntelligenceProviderType.CUSTOM,
+  name: 'Local Speech',
+  enabled: true,
+  capabilities: ['audio.asr'],
+  models: ['sense-voice-small'],
+  defaultModel: 'sense-voice-small',
+  metadata: {
+    channelType: ON_DEVICE_ASR_CHANNEL_TYPE,
+    voiceAsr: { protocol: 'local-offline' }
+  }
+}
+
+const onDeviceBinding: CapabilityBinding = { ...bind(onDeviceChannel), priority: 2 }
+
 function rowFor(wrapper: VueWrapper, title: string) {
   const row = wrapper
     .findAll('.TBlockSlot-Container')
     .find((candidate) => candidate.find('h5').exists() && candidate.get('h5').text() === title)
   if (!row) throw new Error(`no provider row titled "${title}"`)
   return row
+}
+
+/** The titles of the rows the list actually drew, in template order. */
+function rowTitles(wrapper: VueWrapper): string[] {
+  return wrapper
+    .findAll('.TBlockSlot-Container')
+    .map((row) => (row.find('h5').exists() ? row.get('h5').text() : ''))
 }
 
 function mountProviderList(
@@ -119,6 +160,30 @@ describe('providerList channel rows', () => {
     expect(row.get('h5').text()).toBe('orphan-channel')
     expect(row.get('p').text()).toBe('orphan-channel')
     expect(row.get('i').classes()).toContain(FALLBACK_ICON)
+
+    wrapper.unmount()
+  })
+})
+
+/**
+ * The on-device dictation channel is seeded and bound by main from the speech models already on
+ * this machine: no endpoint, no credential, nothing the user can configure. It is therefore not a
+ * row — but it *is* one of `enabledBindings`, which is exactly what `reorder` writes back, so
+ * hiding some other row must never take the program-owned route out of the stored config.
+ */
+describe('providerList program-owned on-device channel', () => {
+  it('draws no row for it, yet a reorder taken from the rows still carries it', async () => {
+    const wrapper = mountProviderList([bailianAsrBinding, onDeviceBinding])
+
+    expect(rowTitles(wrapper)).toEqual(['DashScope'])
+
+    await rowFor(wrapper, 'DashScope').get('button').trigger('click')
+
+    const reorders = wrapper.emitted('reorder')
+    expect(reorders).toHaveLength(1)
+
+    const [nextBindings] = reorders?.[0] as [CapabilityBinding[]]
+    expect(nextBindings.map((binding) => binding.providerId)).toEqual([TUFF_LOCAL_ASR_PROVIDER_ID])
 
     wrapper.unmount()
   })

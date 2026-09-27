@@ -46,8 +46,11 @@ const SHORTCUT_ID_PREFIX = 'app-launch:'
 
 export interface AppShortcutServiceOptions {
   getDbUtils: () => DbUtils | null
-  /** Launches the bound application, recording the launch against the shortcut entry point. */
-  launch: (path: string) => Promise<void>
+  /**
+   * What pressing the bound key does. Named for the key rather than for a launch: a press summons
+   * the application when it is elsewhere, and puts it away when it is already in front.
+   */
+  press: (path: string) => Promise<void>
 }
 
 export class AppShortcutService {
@@ -74,9 +77,7 @@ export class AppShortcutService {
         delete this.bindings[shortcutId]
         continue
       }
-      shortcutModule.setAppShortcut(shortcutId, accelerator, () => {
-        void this.options.launch(path)
-      })
+      shortcutModule.setAppShortcut(shortcutId, accelerator, () => this.pressBinding(path))
     }
   }
 
@@ -107,9 +108,9 @@ export class AppShortcutService {
     const previousAccelerator = shortcutModule.getShortcutAccelerator(shortcutId)
     const previousPath = this.bindings[shortcutId]
 
-    const registered = shortcutModule.setAppShortcut(shortcutId, accelerator, () => {
-      void this.options.launch(path)
-    })
+    const registered = shortcutModule.setAppShortcut(shortcutId, accelerator, () =>
+      this.pressBinding(path)
+    )
     if (!registered) {
       // `setAppShortcut` has already put the previous binding back — or removed the attempt when
       // there was none — so the store must not be touched again here: removing it would discard
@@ -160,8 +161,19 @@ export class AppShortcutService {
       shortcutModule.removeAppShortcut(shortcutId)
       return
     }
-    shortcutModule.setAppShortcut(shortcutId, accelerator, () => {
-      void this.options.launch(path)
+    shortcutModule.setAppShortcut(shortcutId, accelerator, () => this.pressBinding(path))
+  }
+
+  /**
+   * The callback the OS invokes for a bound key.
+   *
+   * Returned rather than dropped so one press can be awaited; the failure is logged here because
+   * nothing else is left holding the promise, and a press that raises silently would read as a key
+   * that does nothing.
+   */
+  private pressBinding(path: string): Promise<void> {
+    return this.options.press(path).catch((error) => {
+      log.warn('App shortcut press failed', { error, meta: { path } })
     })
   }
 
