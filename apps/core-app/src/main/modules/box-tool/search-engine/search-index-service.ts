@@ -1,3 +1,4 @@
+import type { Client } from '@libsql/client'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { SQL } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
@@ -235,7 +236,11 @@ export class SearchIndexService {
    */
   private async scheduleWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
     if (this.directMode) {
-      return withSqliteRetry(operation, { label })
+      const client = (this.db as LibSQLDatabase<typeof schema> & { $client?: Client }).$client
+      return withSqliteRetry(operation, {
+        label,
+        onBusy: client ? () => client.reconnect() : undefined
+      })
     }
     return scheduleDbWrite(label, operation)
   }

@@ -457,7 +457,7 @@ async function handleInit(message: InitMessage): Promise<void> {
     }
   }
 
-  const workerClient = createClient({ url: `file:${dbPath}` })
+  const workerClient = createClient({ url: `file:${dbPath}`, timeout: 30_000 })
   client = workerClient
 
   // Apply WAL mode and performance pragmas — same as main thread
@@ -472,7 +472,6 @@ async function handleInit(message: InitMessage): Promise<void> {
       meta: { journalMode }
     })
   }
-  await workerClient.execute('PRAGMA busy_timeout = 30000')
   await workerClient.execute('PRAGMA synchronous = NORMAL')
   await workerClient.execute('PRAGMA locking_mode = NORMAL')
   // Disable mmap on the worker connection. The worker is force-terminated
@@ -499,19 +498,24 @@ async function handleInit(message: InitMessage): Promise<void> {
 
 /** Persist file content, embeddings, and progress rows in one transaction. */
 async function handleCleanupOrphanKeywords(message: CleanupOrphanKeywordsMessage): Promise<number> {
-  if (!db) throw new Error('Worker not initialized')
+  if (!db || !client) throw new Error('Worker not initialized')
   const { sourceId } = message
 
   const workerDb = db
-  const result = await withFileIndexPersistenceRetry(async () => {
-    return await workerDb.run(sql`
+  const workerClient = client
+  const result = await withFileIndexPersistenceRetry(
+    async () => {
+      return await workerDb.run(sql`
         DELETE FROM keyword_mappings
         WHERE provider_id = ${sourceId}
           AND item_id NOT IN (
             SELECT item_id FROM search_index WHERE provider = ${sourceId}
           )
       `)
-  }, 'worker.cleanupOrphanKeywords')
+    },
+    'worker.cleanupOrphanKeywords',
+    workerClient
+  )
 
   const deletedCount = result.rowsAffected ?? 0
   searchIndexWorkerLog.info('Cleaned orphan keywords', {

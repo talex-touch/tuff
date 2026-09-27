@@ -96,6 +96,14 @@
   - 修复：改为 `O_NOFOLLOW` 打开、句柄 `fstat`、32 MiB 预分配上限、1 MiB 分块读取及读前/读后 dev/ino/size/mtime 复核；超限或漂移保留有界 preview，不物化原图。图片插件随后只接收 activation-local opaque token，Sharp 在可终止 Worker 内执行。
   - 验证：边界内/超限 sparse file 回归、图片 capability/renderer 测试、Node/Web typecheck、Electron production build 与独立 plugin-host smoke。
 
+- [x] **B8 — 每个 `db.transaction()` 泄漏一个 SQLite 连接** ✅ 已修（2026-09-27）
+  - 根因：`@libsql/client@0.17.4` 把每个事务的原生连接从 client 脱离，`commit()` / `rollback()` 后未关闭；真实写路径 60 次 `upsertFiles()` 将目标库句柄从 **1 增到 61**，长跑 worker 在 `search-index.db` 上累积到 **1,696** 个句柄。
+  - 依赖修复：CoreApp 升到 `@libsql/client@0.18.0`；新版连接池在事务结束后回收连接。启动期 `PRAGMA busy_timeout` 改为 `createClient({ timeout })`，覆盖池中每根 primary / aux / search / worker 连接；跨 `execute()` 的裸 `BEGIN` / `COMMIT` 全部迁到正式 interactive transaction 或 `batch(..., 'write')`。
+  - 忙锁恢复：0.18.0 仍受上游 [libsql-client-ts#352](https://github.com/tursodatabase/libsql-client-ts/issues/352) 影响——原生 statement 在 `SQLITE_BUSY` 后要等 GC 才 finalize，脏连接会让后续 `COMMIT` 报 `SQL statements in progress`。worker 直写与主进程 primary / aux 调度器现在都在 busy retry 前 `reconnect()`；主辅库随后重放 WAL / foreign_keys / synchronous / locking / mmap 配置。锁释放恢复契约重新 2/2 通过。
+  - 永久回归：`file-index-persistence-repository.connection.test.ts` 对真实 libSQL 文件执行 60 次写路径，句柄增长阈值 ≤2；同时锁定 file-only pending fence 与 drizzle 映射结果。0.18.0 下 3/3 通过。
+  - 写路径 A/B（同机、真实 repository、每轮 100 次 × 12 行）：0.17.4 **65.79ms / 1519.95 iter/s / +100 handles**；0.18.0 **56.74ms / 1762.50 iter/s / +0 handles**，吞吐约 **+16%**，没有以性能换资源收敛。
+  - 验证：数据库/索引 18 files / 203 tests、插件 SQLite worker 7 tests、启动扫描一致性 3 files / 81 tests、Node typecheck、Electron Vite production build 全通过。开发与生产启动扫描走同一 eligibility gate，不再携带 dev-only force 分支。
+
 ### 🟠 高危工程风险
 
 - [ ] **R1 — Rust 截图模块已接入 CI/安装构建链** ⚠️ **契约测试已接入，发布路径未接入**（2026-08-07 复验，原判「已修 / #321 已关闭」不成立——[#321](https://github.com/talex-touch/tuff/issues/321) 仍 open）
