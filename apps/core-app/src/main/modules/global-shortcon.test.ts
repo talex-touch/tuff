@@ -1280,3 +1280,71 @@ describe('ShortcutModule reports two spellings of one key as a conflict', () => 
     )
   })
 })
+
+describe('ShortcutModule with global shortcut registration disabled by environment', () => {
+  /**
+   * An isolated Electron probe that coexists with another Tuff instance sets
+   * `TUFF_DISABLE_GLOBAL_SHORTCUTS=1`, and the module reads the variable at import: a fresh
+   * instance is the only way to see the gate, hence the dynamic import after the stub. The
+   * process must still start (storage, transport, teardown wiring) - only the OS registration
+   * pass is off, and `enableAll()` may not switch it back on.
+   */
+  const liveModules: Array<{ onDestroy: () => unknown }> = []
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+    for (const module of liveModules.splice(0)) module.onDestroy()
+  })
+
+  async function gatedModule(): Promise<ShortcutModuleHarness> {
+    vi.stubEnv('TUFF_DISABLE_GLOBAL_SHORTCUTS', '1')
+    vi.resetModules()
+    const { ShortcutModule: Module } = await import('./global-shortcon')
+    const module = new Module() as unknown as ShortcutModuleHarness
+    module.storage = new InMemoryShortcutStorage()
+    liveModules.push(module)
+    return module
+  }
+
+  function registered(): string[] {
+    return electronMocks.register.mock.calls.map(([accelerator]) => accelerator)
+  }
+
+  it('registers nothing at init or on a later pass, and enableAll cannot override the gate', async () => {
+    const id = 'core.test.gated'
+    const accelerator = 'CommandOrControl+Shift+G'
+    const module = await gatedModule()
+
+    // The callback has to be in the registry for a pass to treat the stored record as live, so a
+    // gate that is missing shows up as a real registration rather than as `runtime-missing`.
+    module.registerMainShortcut(id, accelerator, vi.fn())
+    mainStorageMocks.getConfig.mockReturnValue([
+      {
+        id,
+        accelerator,
+        type: ShortcutType.MAIN,
+        meta: { creationTime: 0, modificationTime: 0, author: 'system', enabled: true }
+      }
+    ])
+
+    electronMocks.register.mockClear()
+    module.onInit({
+      app: {},
+      runtime: { channel: {} }
+    } as unknown as Parameters<ShortcutModule['onInit']>[0])
+
+    // Init ran the registration pass and called Electron no more than the disabled pass may.
+    expect(registered()).toEqual([])
+
+    // A later registration runs another pass; the process-level gate still holds.
+    module.registerMainShortcut('core.test.gated.later', 'CommandOrControl+Shift+H', vi.fn())
+    expect(registered()).toEqual([])
+
+    // enableAll() re-enables and re-registers in a normal process; under the gate it must not.
+    module.enableAll()
+    expect(registered()).toEqual([])
+    expect(module.getEffectiveAccelerator(id)).toBeNull()
+    expect(noticeMocks.showInternalSystemNotification).not.toHaveBeenCalled()
+  })
+})
