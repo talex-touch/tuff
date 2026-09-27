@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
-import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import {
+  IntelligenceProviderType,
+  type IntelligenceProviderConfig
+} from '@talex-touch/tuff-intelligence'
 import {
   ON_DEVICE_ASR_CHANNEL_TYPE,
   TUFF_LOCAL_ASR_PROVIDER_ID
@@ -45,6 +47,10 @@ vi.mock('@talex-touch/utils/renderer', async (importOriginal) => ({
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({ send: vi.fn() })
 }))
+const managerMocks = vi.hoisted(() => ({
+  providers: [] as IntelligenceProviderConfig[],
+  updateProvider: vi.fn()
+}))
 
 /**
  * The provider set the mocked manager hands the page. The mock cannot close over a fixture declared
@@ -65,7 +71,7 @@ vi.mock('~/modules/hooks/useIntelligenceManager', async () => {
       selectedProviderId: ref<string | null>(null),
       selectedProvider: computed<IntelligenceProviderConfig | null>(() => null),
       addProvider: vi.fn(),
-      updateProvider: vi.fn(),
+      updateProvider: managerMocks.updateProvider,
       removeProvider: vi.fn()
     })
   }
@@ -193,6 +199,32 @@ describe('IntelligenceChannelsPage shell', () => {
       'DashScope'
     ])
     expect(enabledCountBadge(aside).text()).toBe('1')
+
+    wrapper.unmount()
+  })
+
+  it('displays the CLI guidance banner when a disabled CLI provider is detected and enables it on click', async () => {
+    manager.providers.value = [
+      {
+        id: 'pi-cli-default',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Pi (local CLI)',
+        enabled: false,
+        metadata: { isLocalCli: true, origin: 'pi-cli' }
+      }
+    ]
+    const wrapper = mountPage()
+    await nextTick()
+
+    const banner = wrapper.find('.cli-guide-banner')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).toContain('settings.intelligence.cliDetectedTitle')
+
+    const enableButton = banner.find('button')
+    expect(enableButton.exists()).toBe(true)
+    await enableButton.trigger('click')
+
+    expect(managerMocks.updateProvider).toHaveBeenCalledWith('pi-cli-default', { enabled: true })
 
     wrapper.unmount()
   })

@@ -7,7 +7,14 @@ import { computed, inject, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import HelloData from '~/assets/lotties/hello.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
-import { SUPPORTED_LANGUAGES, useLanguage } from '~/modules/lang'
+import {
+  BOOT_LANGUAGE_PREFERENCE,
+  readLanguagePreference,
+  SUPPORTED_LANGUAGES,
+  useLanguage
+} from '~/modules/lang'
+import { appSetting } from '~/modules/storage/app-storage'
+import { createRendererLogger } from '~/utils/renderer-log'
 import AccountDo from './AccountDo.vue'
 
 type StepFunction = (call: { comp: Component; rect?: { width: number; height: number } }) => void
@@ -17,9 +24,20 @@ const { t } = useI18n()
 const { currentLanguage, switchLanguage, setFollowSystemLanguage, getSystemLanguage } =
   useLanguage()
 
+const languageSetupLog = createRendererLogger('LanguageSetup')
 const isLanguageListVisible = ref(false)
-const followSystem = ref(true)
-const selectedLanguage = ref<SupportedLanguage>(getSystemLanguage())
+/**
+ * 首启向导答的是产品默认语言，而不是把系统语言当成用户已经做出的选择：在英文 macOS 上，旧写法
+ * 预选「跟随系统」＋系统语言，用户点一下「下一步」就把 en-US 存成了自己的语言，界面随即整窗变英文。
+ *
+ * 已经选过语言的用户重开向导时（设置页可以重开），初值仍应是他现在的选择。`beginner.init` 正是
+ * 「首启是否已经走完」这个持久标志：设置里区分不出「没选过」和「选了跟随系统」（两者逐字相同），
+ * 所以这里只能靠它分支。
+ */
+const hasStoredChoice = appSetting?.beginner?.init === true
+const initialPreference = hasStoredChoice ? readLanguagePreference() : BOOT_LANGUAGE_PREFERENCE
+const followSystem = ref(initialPreference.followSystem)
+const selectedLanguage = ref<SupportedLanguage>(initialPreference.locale)
 const STARTUP_SOUND_URL = new URL('../../../../assets/sounds/startup.m4a', import.meta.url).href
 let startupAudio: HTMLAudioElement | null = null
 let removeAudioRetryListeners: (() => void) | null = null
@@ -29,27 +47,23 @@ const LANGUAGE_ICONS: Record<SupportedLanguage, string> = {
 }
 
 const systemLanguage = computed(() => getSystemLanguage())
-const systemLanguageName = computed(
-  () =>
-    SUPPORTED_LANGUAGES.find((lang) => lang.key === systemLanguage.value)?.name ??
-    systemLanguage.value
-)
-const systemLanguageIcon = computed(() => LANGUAGE_ICONS[systemLanguage.value] ?? '🌐')
 const selectedLanguageName = computed(
   () =>
     SUPPORTED_LANGUAGES.find((lang) => lang.key === selectedLanguage.value)?.name ??
     selectedLanguage.value
 )
+const selectedLanguageIcon = computed(() => LANGUAGE_ICONS[selectedLanguage.value] ?? '🌐')
 
 function handleOpenLanguageList(): void {
   isLanguageListVisible.value = true
 }
 
-async function handleBackToDefault(): Promise<void> {
+/**
+ * 返回＝取消这次挑选，回到卡片原本的答案。旧实现顺手把偏好改成「跟随系统」，而卡片的答案现在由
+ * `selectedLanguage` 表示，所以这里不再动它。
+ */
+function handleCloseLanguageList(): void {
   isLanguageListVisible.value = false
-  selectedLanguage.value = systemLanguage.value
-  followSystem.value = true
-  await setFollowSystemLanguage(true)
 }
 
 async function handleSelectLanguage(lang: (typeof SUPPORTED_LANGUAGES)[number]): Promise<void> {
@@ -60,6 +74,25 @@ async function handleSelectLanguage(lang: (typeof SUPPORTED_LANGUAGES)[number]):
   await setFollowSystemLanguage(shouldFollowSystem)
   if (!shouldFollowSystem) {
     await switchLanguage(lang.key)
+  }
+}
+
+/**
+ * 让这一步用「它正在问的语言」显示。
+ *
+ * 首启在英文系统上，卡片答的是产品默认的简体中文；页面若还停在系统语言，屏幕就成了「英文文案 ＋
+ * 中文答案」。从列表里挑语言本来就会立刻切换界面，这里只是把同一件事做在初值上。已经选过语言的
+ * 用户重开向导时，初值与当前语言一致，不会触发。
+ */
+async function previewPendingLanguage(): Promise<void> {
+  if (selectedLanguage.value === currentLanguage.value) {
+    return
+  }
+
+  try {
+    await switchLanguage(selectedLanguage.value)
+  } catch (error) {
+    languageSetupLog.error('Failed to preview the pending language', error)
   }
 }
 
@@ -110,6 +143,7 @@ async function playStartupAudio(fromInteraction = false): Promise<void> {
 }
 
 onMounted(() => {
+  void previewPendingLanguage()
   startupAudio = new Audio(STARTUP_SOUND_URL)
   startupAudio.volume = 0.65
   startupAudio.preload = 'auto'
@@ -146,10 +180,10 @@ onUnmounted(() => {
         :padding="0"
       >
         <div class="LanguageSetup-CurrentMain w-full flex items-center gap-2 pr-4">
-          <span class="LanguageSetup-LangAvatar">{{ systemLanguageIcon }}</span>
+          <span class="LanguageSetup-LangAvatar">{{ selectedLanguageIcon }}</span>
           <div class="LanguageSetup-CurrentInfo">
-            <strong>{{ systemLanguageName }}</strong>
-            <small>{{ t('beginner.language.systemTag') }}</small>
+            <strong>{{ selectedLanguageName }}</strong>
+            <small v-if="followSystem">{{ t('beginner.language.systemTag') }}</small>
           </div>
           <div class="LanguageSetup-CurrentCheck ml-auto bg-brand-primary rounded-full">
             <div class="i-carbon-checkmark text-white" />
@@ -159,7 +193,7 @@ onUnmounted(() => {
 
       <div v-else key="list-select" class="LanguageSetup-ListPanel w-full">
         <div class="LanguageSetup-ListHeader">
-          <TxButton variant="bare" class="LanguageSetup-Back" @click="handleBackToDefault">
+          <TxButton variant="bare" class="LanguageSetup-Back" @click="handleCloseLanguageList">
             <i class="i-ri-arrow-left-s-line" />
             <span>{{ t('layout.back') }}</span>
           </TxButton>

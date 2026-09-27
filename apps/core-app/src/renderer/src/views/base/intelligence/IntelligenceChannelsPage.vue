@@ -41,6 +41,7 @@ import {
   getRuntimeProviderType,
   PROVIDER_CHANNEL_TYPE_OPTIONS,
   ProviderChannelType,
+  isLocalCliProvider,
   type ProviderChannelKind
 } from '~/modules/intelligence/provider-channel-type'
 import { getRuntimeNexusBaseUrl } from '~/modules/nexus/runtime-base'
@@ -98,8 +99,23 @@ const basicDraft = ref<{
 })
 
 const canEditSelectedProvider = computed(
-  () => !!selectedProvider.value && !isNexusManagedProvider(selectedProvider.value)
+  () =>
+    !!selectedProvider.value &&
+    !isNexusManagedProvider(selectedProvider.value) &&
+    !isLocalCliProvider(selectedProvider.value)
 )
+
+const detectedDisabledClis = computed(() => {
+  return providers.value.filter((p) => isLocalCliProvider(p) && !p.enabled)
+})
+
+function handleEnableAllClis(): void {
+  const count = detectedDisabledClis.value.length
+  for (const cli of detectedDisabledClis.value) {
+    updateProvider(cli.id, { enabled: true })
+  }
+  toast.success(t('settings.intelligence.clisBatchEnabledToast', { count }))
+}
 
 /**
  * The channels this page manages.
@@ -304,7 +320,12 @@ function createProviderCopy(provider: IntelligenceProviderConfig): IntelligenceP
 }
 
 function handleDuplicateProvider(): void {
-  if (!selectedProvider.value || isNexusManagedProvider(selectedProvider.value)) return
+  if (
+    !selectedProvider.value ||
+    isNexusManagedProvider(selectedProvider.value) ||
+    isLocalCliProvider(selectedProvider.value)
+  )
+    return
   const copied = createProviderCopy(selectedProvider.value)
   addProvider(copied)
   selectedProviderId.value = copied.id
@@ -471,14 +492,39 @@ useKeyboardNavigation({
     :main-aria-live="selectedProvider ? 'polite' : 'off'"
   >
     <template #aside>
-      <IntelligenceList
-        class="h-full w-full"
-        aria-label="AI Provider List"
-        :providers="visibleProviders"
-        :selected-id="selectedProviderId"
-        :search-query="searchQuery"
-        @select="handleSelectProvider"
-      />
+      <div class="h-full w-full flex flex-col overflow-hidden">
+        <div
+          v-if="detectedDisabledClis.length > 0"
+          class="cli-guide-banner mb-3 p-3 rounded-lg border border-[var(--tx-color-primary-light)] bg-[var(--tx-color-primary-soft)] text-xs flex flex-col gap-2 shrink-0"
+        >
+          <div class="flex items-center gap-1.5 font-semibold text-[var(--tx-color-primary)]">
+            <i class="i-carbon-terminal" aria-hidden="true" />
+            <span>{{ t('settings.intelligence.cliDetectedTitle') }}</span>
+          </div>
+          <p class="text-[var(--tx-text-color-secondary)] leading-relaxed">
+            {{ t('settings.intelligence.cliDetectedDesc') }}
+          </p>
+          <div class="flex justify-end pt-1">
+            <TxButton
+              size="sm"
+              variant="flat"
+              type="primary"
+              native-type="button"
+              @click="handleEnableAllClis"
+            >
+              <span>{{ t('settings.intelligence.enableCliAction') }}</span>
+            </TxButton>
+          </div>
+        </div>
+        <IntelligenceList
+          class="flex-1 min-h-0 w-full"
+          aria-label="AI Provider List"
+          :providers="visibleProviders"
+          :selected-id="selectedProviderId"
+          :search-query="searchQuery"
+          @select="handleSelectProvider"
+        />
+      </div>
     </template>
 
     <template #aside-footer>

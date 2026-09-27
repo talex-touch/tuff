@@ -91,13 +91,14 @@ const OMP_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: OMP_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
   name: 'OMP (local CLI)',
-  enabled: true,
-  priority: 0,
+  enabled: false,
+  priority: 10,
   models: [],
   timeout: 120000,
   capabilities: ['text.chat'],
   metadata: {
     internal: true,
+    isLocalCli: true,
     origin: OMP_CLI_ORIGIN
   }
 }
@@ -106,13 +107,14 @@ const PI_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: PI_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
   name: 'Pi (local CLI)',
-  enabled: true,
-  priority: 0,
+  enabled: false,
+  priority: 10,
   models: [],
   timeout: 120000,
   capabilities: ['text.chat'],
   metadata: {
     internal: true,
+    isLocalCli: true,
     origin: PI_CLI_ORIGIN
   }
 }
@@ -121,13 +123,14 @@ const CODEX_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: CODEX_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
   name: 'Codex (local CLI)',
-  enabled: true,
-  priority: 0,
+  enabled: false,
+  priority: 10,
   models: [],
   timeout: 120000,
   capabilities: ['text.chat'],
   metadata: {
     internal: true,
+    isLocalCli: true,
     origin: CODEX_CLI_ORIGIN
   }
 }
@@ -136,13 +139,14 @@ const CLAUDE_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: CLAUDE_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
   name: 'Claude Code (local CLI)',
-  enabled: true,
-  priority: 0,
+  enabled: false,
+  priority: 10,
   models: [],
   timeout: 120000,
   capabilities: ['text.chat'],
   metadata: {
     internal: true,
+    isLocalCli: true,
     origin: CLAUDE_CLI_ORIGIN
   }
 }
@@ -1369,25 +1373,41 @@ function applyNexusProviderAuthState(signedIn: boolean): boolean {
   // `enabled: false`, which would otherwise undo the enablement below on the next reload.
   if (patchStoredConfigDefaults(stored)) changed = true
 
+  const wasEnabled = provider.enabled === true
   if (!userDisabled) {
-    if (provider.enabled !== true) {
+    if (!wasEnabled) {
       provider.enabled = true
       changed = true
     }
 
-    for (const capability of Object.values(stored.capabilities ?? {})) {
+    for (const [capabilityId, capability] of Object.entries(stored.capabilities ?? {})) {
+      const userReordered = capability.metadata?.userReordered === true
       for (const binding of capability.providers ?? []) {
         if (binding.providerId === TUFF_NEXUS_PROVIDER_ID && binding.enabled === false) {
           binding.enabled = true
           changed = true
         }
       }
+
+      if (!wasEnabled && !userReordered && Array.isArray(capability.providers)) {
+        const nexusBinding = capability.providers.find(
+          (b) => b.providerId === TUFF_NEXUS_PROVIDER_ID
+        )
+        if (nexusBinding && capabilityId === 'text.chat') {
+          if (nexusBinding.priority !== 1) {
+            nexusBinding.priority = 1
+            changed = true
+          }
+          for (const binding of capability.providers) {
+            if (binding.providerId !== TUFF_NEXUS_PROVIDER_ID && (binding.priority ?? 999) <= 1) {
+              binding.priority = 2
+              changed = true
+            }
+          }
+        }
+      }
     }
   }
-
-  // Observed before the write, for the same reason as the disabling branch above: only a change this
-  // module did not make is the user's, and only that one may set or clear the override.
-  observedNexusEnabled = provider.enabled === true
   if (!changed) return false
 
   saveMainConfig(StorageList.IntelligenceConfig, stored)

@@ -2,6 +2,7 @@ export { loadLocaleMessages, setI18nLanguage, setupI18n } from './i18n'
 export { readLanguagePreference, setupLanguageFollow, useLanguage } from './useLanguage'
 export type { I18nInstance } from './i18n'
 export {
+  BOOT_LANGUAGE_PREFERENCE,
   resolveInitialLanguagePreference,
   resolveSupportedLocale,
   SUPPORTED_LANGUAGES,
