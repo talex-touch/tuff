@@ -207,8 +207,7 @@
         "win": "win",
         "super": "super",
         "hint": "Press {shortcut} to quickly open Tuff",
-        "changeInSettings": "You can change this shortcut in Settings",
-        "conflictHint": "If it opens another app instead (such as Raycast, Alfred or ChatGPT), that app holds the key: pick a different one in Settings."
+        "changeInSettings": "You can change this shortcut in Settings"
       }
     },
     "forbidden": {
@@ -437,6 +436,8 @@
     "autoContextGroupDesc": "Controls which local information the model may reach for during a conversation.",
     "autoContext": "Auto Context",
     "autoContextDesc": "Lets the model pull web results, file search, clipboard and related data on demand instead of picking tools per message. Off means specifying them every time.",
+    "homeRecommendations": "Home recommendations",
+    "homeRecommendationsDesc": "Shows an opening greeting and \"For you\" suggestion cards on blank Home conversations. Off by default (Beta).",
     "homeAiOpening": "AI opening line",
     "homeAiOpeningDesc": "When a blank conversation opens, the model writes a greeting from your recent conversations and project names. Each one runs on the model the composer has selected and uses its quota; off shows a local template and sends nothing.",
     "groupTitle": "Utilities",

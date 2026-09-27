@@ -298,20 +298,6 @@ describe('onboarding shortcut keys', () => {
     ])
   })
 
-  it.each(['darwin', 'win32', 'linux'])(
-    'warns under the keys on %s that another app may already answer them',
-    (os) => {
-      // macOS registers the key even while Raycast, Alfred or ChatGPT holds it, so the page is the
-      // only place the user hears about it; shown on every platform, whatever the key.
-      platform.value = os
-      const wrapper = mountDone()
-
-      const hint = wrapper.find('.Done-Shortcut .Done-ShortcutConflict')
-      expect(hint.exists()).toBe(true)
-      expect(hint.text()).toBe('beginner.done.shortcut.conflictHint')
-    }
-  )
-
   it('lights each key while it is held', async () => {
     const wrapper = mountDone()
     const option = () => wrapper.findAll('.BeginShortcutKey')[0]!.attributes('aria-pressed')

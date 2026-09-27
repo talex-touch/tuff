@@ -1,3 +1,5 @@
+import type * as PermissionRequestCardModule from '~/modules/permission/permission-request-card'
+import { INSTALL_CONFIRM_BUDGET_MS } from '@talex-touch/utils/plugin/install-budgets'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const pluginSdkState = vi.hoisted(() => ({
@@ -47,7 +49,12 @@ vi.mock('~/modules/mention/dialog-mention', () => ({
   forTouchTip: vi.fn().mockResolvedValue(undefined)
 }))
 
-vi.mock('~/modules/permission/permission-request-card', () => ({
+vi.mock('~/modules/permission/permission-request-card', async (importOriginal) => ({
+  // The card's identity is a pure function of the plugin and its permission set, and the install
+  // manager now calls it: stubbing the module down to `showPermissionRequestCard` left that import
+  // undefined, so the confirmation threw before it could answer. Take the real module and override
+  // only what this test is about.
+  ...(await importOriginal<typeof PermissionRequestCardModule>()),
   PERMISSION_REQUEST_TIMEOUT_MS: 30_000,
   showPermissionRequestCard: permissionCardState.showPermissionRequestCard
 }))
@@ -158,5 +165,22 @@ describe('install-manager task indexing', () => {
         ]
       })
     )
+  })
+})
+
+/**
+ * The install's transport wall is derived from `INSTALL_CONFIRM_BUDGET_MS`, which is how long the
+ * main process waits for the user. A card that auto-denies later than that budget lets the main
+ * process give up first, so the install is reported as failed even though the user did answer.
+ */
+describe('install permission budget coupling', () => {
+  it('auto-denies the permission card within the confirm budget the install deadline was sized for', async () => {
+    // The module is mocked above for the task-indexing specs; read the real export so a drifted
+    // card budget is caught instead of the mock's stand-in value.
+    const { PERMISSION_REQUEST_TIMEOUT_MS } = await vi.importActual<
+      typeof PermissionRequestCardModule
+    >('~/modules/permission/permission-request-card')
+
+    expect(PERMISSION_REQUEST_TIMEOUT_MS).toBeLessThanOrEqual(INSTALL_CONFIRM_BUDGET_MS)
   })
 })

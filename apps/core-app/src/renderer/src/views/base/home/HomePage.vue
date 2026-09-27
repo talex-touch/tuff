@@ -698,7 +698,7 @@ async function submit(): Promise<void> {
   // awaits, so no opening can start or land between the press and the append. The greeting keeps
   // showing what it showed until it has left (`openingHold`).
   let lead: string | undefined
-  if (opening) {
+  if (opening && homeRecommendationsEnabled.value) {
     openingHold.value = {
       phase: openingPhase.value,
       text: openingText.value,
@@ -1172,8 +1172,15 @@ watch(
  * project, so the first entry is already the right one. Only plain `/home` counts — `/home/c/:id` is
  * empty too while its thread loads, and must not pay for an opening it is about to replace.
  */
+/** Whether Home personal-assistant recommendations are enabled (`appSetting.tools.homeRecommendations`, off by default, Beta). */
+const homeRecommendationsEnabled = computed(() => appSetting.tools?.homeRecommendations === true)
+
 const push = useHomePush({
-  active: () => route.path === '/home' && isEmpty.value && conversationId.value === null,
+  active: () =>
+    homeRecommendationsEnabled.value &&
+    route.path === '/home' &&
+    isEmpty.value &&
+    conversationId.value === null,
   projectId: () => projectId.value,
   // The opening takes the route the chat turns take — a local CLI there answers in ten-odd seconds,
   // so the template stands in meanwhile (`modules/home-push/opening.ts`).
@@ -1425,7 +1432,12 @@ onBeforeUnmount(disposeCommands)
               </h1>
               <!-- The assistant speaks first. Three lines tall whatever it holds — skeleton, a
                    stream, or nothing — so the composer and the card below never move for it. -->
-              <div class="HomePage-Opening" role="status" :aria-busy="openingBusy || undefined">
+              <div
+                v-if="homeRecommendationsEnabled"
+                class="HomePage-Opening"
+                role="status"
+                :aria-busy="openingBusy || undefined"
+              >
                 <template v-if="openingPhase === 'pending'">
                   <span class="sr-only">{{ pushLabels.openingLoading }}</span>
                   <div class="HomePage-OpeningSkeleton" aria-hidden="true">
@@ -1795,7 +1807,7 @@ onBeforeUnmount(disposeCommands)
               appear-from-class="home-card-appear-from"
               appear-active-class="home-card-appear-active"
             >
-              <div v-if="isEmpty" class="HomePage-Push">
+              <div v-if="isEmpty && homeRecommendationsEnabled" class="HomePage-Push">
                 <div class="HomePage-PushSlot" :style="pushSlotStyle">
                   <TxChoiceCard
                     v-model:step="pushStep"

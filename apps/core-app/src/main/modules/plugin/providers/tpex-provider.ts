@@ -9,18 +9,14 @@ import type { TpexDetailResponse } from '@talex-touch/utils/plugin/providers/tpe
 import os from 'node:os'
 import path from 'node:path'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
+import { resolvePackageDownloadTimeout } from '@talex-touch/utils/plugin/install-budgets'
 import compressing from 'compressing'
 import fse from 'fs-extra'
 import { getEnabledApiSources } from '../../../service/store-api.service'
 import { getNetworkService } from '../../network'
 import { getRuntimeNexusBaseUrl } from '../../nexus/runtime-base'
 import { createProviderLogger } from './logger'
-import {
-  downloadToTempFile,
-  mergeHeadersCaseInsensitive,
-  resolvePackageDownloadTimeout,
-  stripAuthorizationHeader
-} from './utils'
+import { downloadToTempFile, mergeHeadersCaseInsensitive, stripAuthorizationHeader } from './utils'
 
 const tpexProviderLog = createProviderLogger(PluginProviderType.TPEX)
 
