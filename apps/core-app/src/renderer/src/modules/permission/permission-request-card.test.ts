@@ -113,4 +113,78 @@ describe('permission request card', () => {
     expect(toastState.dismiss).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
   })
+
+  describe('coalescing duplicate permission requests', () => {
+    const installMessage = '插件「touch-intelligence」请求以下权限：'
+
+    const promptOptions = (message: string) => ({
+      title: '权限请求',
+      message,
+      permissions: [{ id: 'intelligence.basic', reason: '调用智能能力完成问答' }],
+      actionLabels: {
+        deny: '拒绝',
+        session: '仅本次允许',
+        always: '始终允许'
+      },
+      timeoutMs: 30_000,
+      t: (key: string) => key
+    })
+
+    it('asks the user once when the install confirm and the startup gate ask the same question', async () => {
+      vi.useFakeTimers()
+      const { showPermissionRequestCard } = await import('./permission-request-card')
+
+      const fromInstallConfirm = showPermissionRequestCard(promptOptions(installMessage))
+      const fromStartupGate = showPermissionRequestCard(promptOptions(installMessage))
+
+      expect(toastState.custom).toHaveBeenCalledTimes(1)
+      expect(fromStartupGate.result).toBe(fromInstallConfirm.result)
+
+      toastState.custom.mock.calls[0][1].componentProps.actions[2].onSelect()
+
+      await expect(fromInstallConfirm.result).resolves.toBe('always')
+      await expect(fromStartupGate.result).resolves.toBe('always')
+      expect(toastState.dismiss).toHaveBeenCalledTimes(1)
+      vi.useRealTimers()
+    })
+
+    it('keeps another plugin question on its own card', async () => {
+      vi.useFakeTimers()
+      const { showPermissionRequestCard } = await import('./permission-request-card')
+
+      const first = showPermissionRequestCard(promptOptions(installMessage))
+      const other = showPermissionRequestCard(promptOptions('插件「other-plugin」请求以下权限：'))
+
+      expect(toastState.custom).toHaveBeenCalledTimes(2)
+
+      toastState.custom.mock.calls[0][1].componentProps.actions[0].onSelect()
+      toastState.custom.mock.calls[1][1].componentProps.actions[2].onSelect()
+
+      await expect(first.result).resolves.toBe('deny')
+      await expect(other.result).resolves.toBe('always')
+      vi.useRealTimers()
+    })
+
+    it('asks again once the settled card is gone', async () => {
+      vi.useFakeTimers()
+      const { showPermissionRequestCard } = await import('./permission-request-card')
+
+      const first = showPermissionRequestCard(promptOptions(installMessage))
+      const joined = showPermissionRequestCard(promptOptions(installMessage))
+      expect(toastState.custom).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(30_000)
+      await expect(first.result).resolves.toBe('deny')
+
+      const laterAsk = showPermissionRequestCard(promptOptions(installMessage))
+
+      expect(toastState.custom).toHaveBeenCalledTimes(2)
+      expect(laterAsk.result).not.toBe(joined.result)
+
+      toastState.custom.mock.calls[1][1].componentProps.actions[1].onSelect()
+      await expect(laterAsk.result).resolves.toBe('session')
+      await expect(joined.result).resolves.toBe('deny')
+      vi.useRealTimers()
+    })
+  })
 })

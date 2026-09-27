@@ -322,6 +322,13 @@ const _appSettingOriginData = {
      */
     autoContext: true,
     /**
+     * Whether a blank Home conversation shows personal-assistant recommendations: the opening
+     * greeting line under the header and the suggestion cards under the composer (the guide or
+     * 「为你准备」). Off by default (Beta): users must explicitly opt in. Only an explicit `true`
+     * turns it on — a config saved before the key existed reads as off.
+     */
+    homeRecommendations: false,
+    /**
      * Whether a blank Home conversation opens with a line the model writes from recent titles and
      * project names. Off by default: it is a model call on the composer's route every time Home is
      * blank, paid from the user's quota without them asking. Off means the local template. Only an

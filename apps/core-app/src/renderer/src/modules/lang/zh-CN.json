@@ -207,8 +207,7 @@
         "win": "win",
         "super": "super",
         "hint": "按下 {shortcut} 可快速唤起 Tuff",
-        "changeInSettings": "可在设置中修改快捷键",
-        "conflictHint": "如果按下后打开的是别的应用（例如 Raycast、Alfred、ChatGPT），说明这个键已被占用，去设置里换一个即可。"
+        "changeInSettings": "可在设置中修改快捷键"
       }
     },
     "forbidden": {
@@ -437,6 +436,8 @@
     "autoContextGroupDesc": "控制模型在对话中可以自动取用哪些本机信息。",
     "autoContext": "自动上下文",
     "autoContextDesc": "开启后模型按需自动取用联网、文件检索、剪贴板与关联数据，无需逐条挑选工具；关闭后每次都要手动指定。",
+    "homeRecommendations": "主页推荐",
+    "homeRecommendationsDesc": "在主页空白对话中展示问候开场白与「为你准备」建议卡片。默认关闭，开启后可体验个性化推荐（Beta）。",
     "homeAiOpening": "AI 开场白",
     "homeAiOpeningDesc": "进入空白对话时，由模型根据最近的对话和项目名写一句开场白。每次都会走输入框选择的模型、消耗对应额度；关闭时显示本地模板，不发请求。",
     "groupTitle": "实用工具",

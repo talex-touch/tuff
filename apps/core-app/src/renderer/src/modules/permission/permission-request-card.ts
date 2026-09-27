@@ -1,5 +1,6 @@
 import { markRaw } from 'vue'
 import { toast } from 'vue-sonner'
+import { INSTALL_CONFIRM_BUDGET_MS } from '@talex-touch/utils/plugin/install-budgets'
 import PermissionRequestToast, {
   type PermissionRequestToastAction,
   type PermissionRequestToastItem
@@ -30,7 +31,11 @@ export interface PermissionRequestCardResult {
   result: Promise<PermissionRequestDecision>
 }
 
-export const PERMISSION_REQUEST_TIMEOUT_MS = 120_000
+/**
+ * The install confirmation budget: the main process waits for this prompt, so the install's
+ * transport deadline is derived from it (see `install-budgets.ts` in `@talex-touch/utils/plugin`).
+ */
+export const PERMISSION_REQUEST_TIMEOUT_MS = INSTALL_CONFIRM_BUDGET_MS
 
 export function resolvePermissionDisplayName(permissionId: string, t: Translate): string {
   const key = `plugin.permissions.registry.${permissionId}.name`
@@ -49,9 +54,30 @@ export function buildPermissionRequestItems(
   }))
 }
 
+/**
+ * Prompts that are on screen right now, keyed by the question they ask.
+ *
+ * Two flows ask about one plugin's permissions: the install confirmation
+ * (`kind: 'permissions'` in the install manager) and the enable-time startup gate
+ * (`permission:startup-request`). They arrive over different transports and neither knows about the
+ * other, so both used to build a card: the user saw the same question twice, each counting down on
+ * its own, and answering one left the other standing.
+ *
+ * The identity is the question itself, because the copy already names the plugin. A second ask for
+ * the same plugin joins the open card and both callers read the one decision, which is also what
+ * each of them wants: the install confirm needs the grant mode, and the gate needs the grant.
+ */
+const openRequests = new Map<string, PermissionRequestCardResult>()
+
 export function showPermissionRequestCard(
   options: PermissionRequestCardOptions
 ): PermissionRequestCardResult {
+  const requestKey = `${options.title}\u0000${options.message}`
+  const openRequest = openRequests.get(requestKey)
+  if (openRequest) {
+    return openRequest
+  }
+
   let resolved = false
   let toastId: string | number
   let timeoutId: ReturnType<typeof setTimeout> | undefined
@@ -64,6 +90,7 @@ export function showPermissionRequestCard(
   const finish = (value: PermissionRequestDecision) => {
     if (resolved) return
     resolved = true
+    openRequests.delete(requestKey)
     if (timeoutId) {
       clearTimeout(timeoutId)
       timeoutId = undefined
@@ -112,5 +139,7 @@ export function showPermissionRequestCard(
     }, options.timeoutMs)
   }
 
-  return { id: toastId, result }
+  const handle: PermissionRequestCardResult = { id: toastId, result }
+  openRequests.set(requestKey, handle)
+  return handle
 }

@@ -378,3 +378,73 @@ settleReasoningDecision(plan, reported)                 // what `end` / the resu
   non-streaming fallback, clone-safe turn meta), `turn-info-rows.test.ts`, `HomeModelMenu.test.ts`.
 - Nexus: `tuffIntelligenceReasoningEffort.test.ts`, `tuffIntelligenceLangChainProviderAdapters.test.ts`,
   `test/api/v1/intelligence/stream.post.test.ts`.
+
+## Scenario: A Transport Deadline Must Cover Every Main-Side Budget It Spans
+
+### 1. Scope / Trigger
+
+Any `transport.send` whose main-side handler spends more than one budget: waiting on the user, a
+size-dependent transfer, or a long post-processing step. Getting the wall shorter than the sum of
+those budgets reports a failure for work that is still running.
+
+### 2. Signatures
+
+```ts
+// packages/utils/plugin/install-budgets.ts
+export function resolvePackageDownloadTimeout(packageSize?: number): number
+export const INSTALL_CONFIRM_BUDGET_MS: number
+export const INSTALL_UNPACK_BUDGET_MS: number
+export const INSTALL_TRANSPORT_TIMEOUT_MS: number
+```
+
+### 3. Contracts
+
+- `plugin:install-source` and `plugin:api:install` both route into the same main-side install queue
+  and span three budgets: the package download (sized from the registry's advertised `packageSize`),
+  the permission/confirmation prompt (bounded only by the renderer card's auto-deny), and unpack +
+  signature verification + registration.
+- Both transport deadlines are the sum of the worst case of each — `INSTALL_TRANSPORT_TIMEOUT_MS` —
+  so they can only fire when the main process stopped answering. Every stage inside enforces its own
+  tighter deadline; the outer wall is a backstop, never the liveness control. `plugin:api:install`
+  used the 60s transport default, which is *shorter* than the permission card's own 120s budget: a
+  user who answered after a minute got a failure report for an install that was still running.
+- The budgets live in one shared module. The renderer's `PERMISSION_REQUEST_TIMEOUT_MS` is that
+  module's `INSTALL_CONFIRM_BUDGET_MS`: raising the card's auto-deny without raising the wall
+  reintroduces the false failure below.
+- A fixed 3-minute wall here is wrong by construction — verified 2026-09-26: the 14 MB JSON
+  Formatter download succeeded in 59s, the permission card went unanswered, and at 180s the store
+  reported `安装失败 ... Channel request "plugin:install-source" timed out after 180000ms` while the
+  main process was still holding the prepared install.
+- Residual gap (not fixed, needs a product decision): the *plain* confirmation dialog
+  (`install-manager.handleConfirm`, non-permission branch) waits for the user with no budget of its
+  own, so only the 780 s wall bounds it. Bounding it needs the mention dialog to auto-dismiss,
+  which is a UX decision rather than a contract fix.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required outcome |
+|---|---|
+| User answers the permission card within the budget | install proceeds; the wall is never reached |
+| User ignores the permission card | the card auto-denies at `INSTALL_CONFIRM_BUDGET_MS`; the install fails with the rejection reason, not a transport timeout |
+| Advertised `packageSize` unknown | download keeps the 30s floor; the transport wall still uses the ceiling-based budget |
+| Package larger than the ceiling can cover | download dies with `NETWORK_TIMEOUT` at the ceiling; the wall still outlasts it |
+| Main process stops answering entirely | the wall fires `channel.send.timeout` — the only case where it should |
+
+### 5. Tests Required
+
+- `packages/utils/__tests__/install-budgets.test.ts`: the wall covers download ceiling + confirm +
+  unpack for every sampled size, and is strictly larger than the old flat 3 minutes.
+- `packages/utils/__tests__/plugin-install-deadline.test.ts`: `installFromSource` and `install`
+  send with the derived budget.
+- Renderer guard: `PERMISSION_REQUEST_TIMEOUT_MS <= INSTALL_CONFIRM_BUDGET_MS`.
+
+### 6. Wrong vs Correct
+
+```ts
+// Wrong: a flat wall shorter than the budgets the call spans.
+transport.send(PluginEvents.install.source, payload, { timeout: 3 * 60 * 1000 })
+
+// Correct: the wall is the sum of the worst case of every budget inside the call.
+transport.send(PluginEvents.install.source, payload, { timeout: INSTALL_TRANSPORT_TIMEOUT_MS })
+```
+
