@@ -1816,8 +1816,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private async persistAndPublishFullScanBatch(
     records: UpsertFileRecord[],
     options?: FileIndexRunOptions
-  ): Promise<Array<typeof filesSchema.$inferSelect>> {
-    if (records.length === 0) return []
+  ): Promise<number> {
+    if (records.length === 0) return 0
 
     // Custom sinks are an explicit escape hatch used by tests/streaming callers. Preserve their
     // existing two-step behavior; only the normal consumer path uses the fused worker request.
@@ -1832,11 +1832,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           options
         )
       }
-      return persisted
+      return persisted.length
     }
 
     const acceptedRecords = this.filterSearchIndexUpsertRecords(records)
-    if (acceptedRecords.length === 0) return []
+    if (acceptedRecords.length === 0) return 0
     if (!(await this.ensureSearchIndexWorkerReady('full-scan.fused'))) {
       throw new Error('FILE_PERSISTENCE_PORT_UNAVAILABLE')
     }
