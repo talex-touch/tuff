@@ -211,6 +211,10 @@ function applyRequestedEntry(): void {
   const target = requestedEntry.value
   if (!target || loading.value) return
 
+  // A load that failed leaves no list to look the request up in, and reporting the entry as
+  // missing would put a second, wrong error on screen next to the load failure.
+  if (loadFailed.value) return
+
   const entry = entries.value.find((candidate) => candidate.path === target)
   if (!entry) {
     log.warn('Requested application is not in the index', { path: target })
@@ -461,10 +465,17 @@ async function handleCopyDiagnostic(entry: AppIndexManagedEntry): Promise<void> 
   }
 }
 
-onMounted(async () => {
+/**
+ * Loads the list, then honours a pending request — including after a retry, which is the one path
+ * where the request would otherwise be dropped: the click reloads the entries and nothing else.
+ * Skipping the request when the load failed is `applyRequestedEntry`'s own guard.
+ */
+async function reloadEntries(): Promise<void> {
   await loadEntries()
   applyRequestedEntry()
-})
+}
+
+onMounted(reloadEntries)
 
 // The page is reused when only its query changes — the panel's row navigates here on every app —
 // so the request is honoured on arrival rather than only on the first mount. The query object,
@@ -492,7 +503,7 @@ watch(() => route.query, applyRequestedEntry)
         :usage-degraded="summariesDegraded"
         :searched="searchQuery.trim().length > 0"
         @select="handleSelect"
-        @retry="loadEntries"
+        @retry="reloadEntries"
       />
     </template>
 
