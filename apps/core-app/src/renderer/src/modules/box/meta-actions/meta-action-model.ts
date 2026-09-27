@@ -9,6 +9,7 @@ import { isPluginFooterItem } from '~/components/render/coreBoxFooterHints'
 import { shortcutChordLabel, shortcutChordMatches } from '~/modules/shortcuts/shortcut-chord'
 import { isSameShortcutChord, parseShortcutString } from '~/modules/shortcuts/shortcut-string'
 import {
+  COREBOX_APP_BIND_SHORTCUT_ACTION_ID,
   COREBOX_PRIMARY_ACTION_ID,
   COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
   COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID
@@ -59,6 +60,7 @@ export type MetaActionGlyph =
   | 'folder'
   | 'pin'
   | 'unpin'
+  | 'shortcut'
   | 'flow'
   | 'translate'
   | 'translate-pin'
@@ -187,6 +189,15 @@ const BUILTIN_SPECS: Readonly<Record<string, HostActionSpec>> = {
     // ⌘. on macOS. Windows and Linux add Shift: Ctrl+. is the Chinese IMEs' punctuation-width
     // toggle (Microsoft Pinyin, Sogou, fcitx), and with one on the page never sees the key.
     chord: { mac: { code: 'Period' }, other: { code: 'Period', shift: true } }
+  },
+  [COREBOX_APP_BIND_SHORTCUT_ACTION_ID]: {
+    slot: 'open',
+    rank: 30,
+    label: key('corebox.actions.bindShortcut'),
+    glyph: glyph('shortcut'),
+    // No chord of its own, and no list path: main opens the applications page on the app, which
+    // is where a launch key is bound — the row answers ↵ like every other row in this group.
+    runsFromList: false
   },
   [COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID]: {
     slot: 'flow',
@@ -437,6 +448,12 @@ export function generateBuiltinActions(item: TuffItem): MetaAction[] {
   ]
   if ((item.kind === 'app' || item.kind === 'file') && isRevealablePath(resolveRevealPath(item))) {
     actions.push(builtin('reveal-in-finder', 'Reveal in file manager', 'open'))
+  }
+  // An app's launch key is bound on the applications page, which lists every indexed entry — so
+  // this row is offered for any app that has a path, including a Store app whose
+  // `shell:AppsFolder\…` id the reveal above cannot use but the page can still bind.
+  if (item.kind === 'app' && resolveRevealPath(item)) {
+    actions.push(builtin(COREBOX_APP_BIND_SHORTCUT_ACTION_ID, 'Bind shortcut', 'open'))
   }
   if (item.render?.basic?.title) {
     actions.push(builtin('copy-title', 'Copy name', 'copy'))

@@ -12,7 +12,10 @@ import {
   TUFF_NEXUS_PROVIDER_ICON
 } from '~/modules/intelligence/nexus-provider'
 import { resolveProviderIcon } from '~/modules/intelligence/provider-icon-override'
-import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
+import {
+  getProviderChannelType,
+  isLocalCliProvider
+} from '~/modules/intelligence/provider-channel-type'
 
 enum IntelligenceProviderType {
   OPENAI = 'openai',
@@ -61,9 +64,12 @@ watch(
   }
 )
 
+const isCli = computed(() => isLocalCliProvider(props.provider))
+
 // Check if provider has configuration errors
 const hasConfigError = computed(() => {
   if (!props.provider.enabled) return false
+  if (isCli.value) return false
 
   // Check for missing API key (except for local models)
   if (
@@ -144,6 +150,15 @@ function handleClick() {
         {{ nexusBadge.text }}
       </span>
     </template>
+    <template v-else-if="isCli" #title-badge>
+      <span
+        class="cli-title-badge"
+        :class="{ 'is-ready': localEnabled }"
+        :title="t('settings.intelligence.localCliBadge')"
+      >
+        {{ t('settings.intelligence.localCliBadge') }}
+      </span>
+    </template>
   </TuffItemTemplate>
 </template>
 
@@ -180,6 +195,25 @@ function handleClick() {
   line-height: 16px;
   color: var(--tx-color-primary);
   background: var(--tx-color-primary-soft);
+  white-space: nowrap;
+
+  &.is-ready {
+    color: var(--tx-color-success);
+    background: color-mix(in srgb, var(--tx-color-success) 14%, transparent);
+  }
+}
+.cli-title-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--tx-color-info);
+  background: color-mix(in srgb, var(--tx-color-info) 14%, transparent);
   white-space: nowrap;
 
   &.is-ready {

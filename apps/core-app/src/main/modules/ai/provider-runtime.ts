@@ -2,7 +2,7 @@ import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { getAuthToken } from '../auth'
 import { resolveProviderCredential } from './provider-credential-runtime'
-import { getVoiceAsrMetadata } from '@talex-touch/utils/intelligence/voice-asr'
+import { isOnDeviceAsrProvider } from '@talex-touch/utils/intelligence/voice-asr'
 import {
   isNexusManagedProvider,
   TUFF_NEXUS_PROVIDER_ID
@@ -38,7 +38,7 @@ function projectRuntimeChannelType(
 ): IntelligenceProviderConfig {
   if (provider.type !== IntelligenceProviderType.CUSTOM) return provider
   if (!provider.capabilities?.includes('audio.asr')) return provider
-  if (getVoiceAsrMetadata(provider.metadata)?.protocol !== 'local-offline') return provider
+  if (!isOnDeviceAsrProvider(provider)) return provider
   return { ...provider, type: IntelligenceProviderType.LOCAL }
 }
 

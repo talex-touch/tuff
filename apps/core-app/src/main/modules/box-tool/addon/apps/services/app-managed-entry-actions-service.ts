@@ -18,6 +18,7 @@ import {
 } from '../../../search-engine/app-launch-recorder'
 import { resolveManagedEntryItemId } from '../app-index-metadata'
 import { launchApp } from '../app-launcher'
+import { putAwayApplicationInFront } from '../app-hide-adapter'
 import { normalizeOptionalString } from '../app-provider-path-utils'
 
 type DbAppRecord = typeof filesSchema.$inferSelect
@@ -58,8 +59,8 @@ export class AppManagedEntryActionsService {
     this.launchRecorder = new AppLaunchRecorder({ getDbUtils: options.getDbUtils })
     this.shortcuts = new AppShortcutService({
       getDbUtils: options.getDbUtils,
-      launch: async (path) => {
-        await this.launch(path, 'shortcut')
+      press: async (path) => {
+        await this.pressShortcut(path)
       }
     })
   }
@@ -223,6 +224,35 @@ export class AppManagedEntryActionsService {
     })
 
     return { success: true }
+  }
+
+  /**
+   * What the bound key does, as opposed to what the settings page's Open button does.
+   *
+   * A press summons the application when it is somewhere else, and puts it away when it is already
+   * in front — one OS call answers both, so the key is a toggle rather than a summon followed by a
+   * press that visibly does nothing.
+   *
+   * A press that puts the application away is deliberately not recorded: the usage table counts
+   * summons, and counting the dismissal too would inflate "times launched" by however often the
+   * user pressed the key twice.
+   */
+  private async pressShortcut(pathValue: string): Promise<void> {
+    const target = normalizeOptionalString(pathValue)
+    if (!target) return
+
+    const entry = await this.resolveEntry(target)
+    if (!entry) return
+
+    const outcome = await putAwayApplicationInFront({
+      bundleId: entry.bundleId,
+      path: entry.path
+    })
+    if (outcome.hidden) return
+
+    // Not in front, not running, or nothing on this platform could put it away: the press is a
+    // summon, exactly as before.
+    await this.launch(entry.path, 'shortcut')
   }
 
   public async queryUsage(pathValue: string): Promise<AppIndexUsageResult> {
