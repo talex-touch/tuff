@@ -13,7 +13,8 @@ export const ProviderChannelType = {
    * Speech recognition that runs on this machine. It shares no endpoint and no credential with
    * any of the above, which is why it is its own channel type rather than a flavour of one.
    */
-  ON_DEVICE: 'on-device'
+  ON_DEVICE: 'on-device',
+  LOCAL_CLI: 'local-cli'
 } as const
 
 export type ProviderChannelKind = (typeof ProviderChannelType)[keyof typeof ProviderChannelType]
@@ -27,7 +28,8 @@ const PROVIDER_CHANNEL_TYPE_VALUES: Record<ProviderChannelKind, true> = {
   [ProviderChannelType.COMPATIBLE]: true,
   [ProviderChannelType.BAILIAN]: true,
   [ProviderChannelType.VOLCENGINE]: true,
-  [ProviderChannelType.ON_DEVICE]: true
+  [ProviderChannelType.ON_DEVICE]: true,
+  [ProviderChannelType.LOCAL_CLI]: true
 }
 
 export const PROVIDER_CHANNEL_TYPE_OPTIONS = Object.values(ProviderChannelType)
@@ -40,11 +42,35 @@ export function normalizeProviderChannelType(value: unknown): ProviderChannelKin
   return ProviderChannelType.COMPATIBLE
 }
 
+export function isLocalCliProvider(provider?: {
+  id?: string
+  metadata?: Record<string, unknown>
+}): boolean {
+  if (!provider) return false
+  const origin = provider.metadata?.origin
+  return (
+    provider.metadata?.isLocalCli === true ||
+    origin === 'omp-cli' ||
+    origin === 'pi-cli' ||
+    origin === 'codex-cli' ||
+    origin === 'claude-cli' ||
+    provider.id === 'omp-cli' ||
+    provider.id === 'pi-cli-default' ||
+    provider.id === 'codex-cli' ||
+    provider.id === 'claude-cli'
+  )
+}
+
 export function getProviderChannelType(provider: {
+  id?: string
   type: string
   baseUrl?: string
   metadata?: Record<string, unknown>
 }): ProviderChannelKind {
+  if (isLocalCliProvider(provider)) {
+    return ProviderChannelType.LOCAL_CLI
+  }
+
   const selected = provider.metadata?.channelType
   if (selected !== undefined) {
     return normalizeProviderChannelType(selected)
@@ -104,6 +130,7 @@ export function getRuntimeProviderType(channelType: ProviderChannelKind): Intell
      * never see it.
      */
     case ProviderChannelType.ON_DEVICE:
+    case ProviderChannelType.LOCAL_CLI:
       return IntelligenceProviderType.LOCAL
     default:
       return channelType

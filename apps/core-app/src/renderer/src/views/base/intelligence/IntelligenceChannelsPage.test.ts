@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
-import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
+import {
+  IntelligenceProviderType,
+  type IntelligenceProviderConfig
+} from '@talex-touch/tuff-intelligence'
 import type * as RendererUtils from '@talex-touch/utils/renderer'
 import type * as Vue from 'vue'
 import { mount } from '@vue/test-utils'
@@ -39,16 +42,20 @@ vi.mock('@talex-touch/utils/renderer', async (importOriginal) => ({
 vi.mock('@talex-touch/utils/transport', () => ({
   useTuffTransport: () => ({ send: vi.fn() })
 }))
+const managerMocks = vi.hoisted(() => ({
+  providers: [] as IntelligenceProviderConfig[],
+  updateProvider: vi.fn()
+}))
 
 vi.mock('~/modules/hooks/useIntelligenceManager', async () => {
   const { computed, ref } = await vi.importActual<typeof Vue>('vue')
   return {
     useIntelligenceManager: () => ({
-      providers: ref<IntelligenceProviderConfig[]>([]),
+      providers: ref(managerMocks.providers),
       selectedProviderId: ref<string | null>(null),
       selectedProvider: computed<IntelligenceProviderConfig | null>(() => null),
       addProvider: vi.fn(),
-      updateProvider: vi.fn(),
+      updateProvider: managerMocks.updateProvider,
       removeProvider: vi.fn()
     })
   }
@@ -114,6 +121,32 @@ describe('IntelligenceChannelsPage shell', () => {
     // Nothing is selected, so the detail pane owns the empty state.
     expect(detail.findComponent({ name: 'IntelligenceEmptyState' }).exists()).toBe(true)
     expect(detail.findComponent({ name: 'IntelligenceList' }).exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('displays the CLI guidance banner when a disabled CLI provider is detected and enables it on click', async () => {
+    managerMocks.providers = [
+      {
+        id: 'pi-cli-default',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Pi (local CLI)',
+        enabled: false,
+        metadata: { isLocalCli: true, origin: 'pi-cli' }
+      }
+    ]
+    const wrapper = mountPage()
+    await nextTick()
+
+    const banner = wrapper.find('.cli-guide-banner')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).toContain('settings.intelligence.cliDetectedTitle')
+
+    const enableButton = banner.find('button')
+    expect(enableButton.exists()).toBe(true)
+    await enableButton.trigger('click')
+
+    expect(managerMocks.updateProvider).toHaveBeenCalledWith('pi-cli-default', { enabled: true })
 
     wrapper.unmount()
   })

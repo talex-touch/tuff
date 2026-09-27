@@ -128,7 +128,7 @@ function isProvider(item: unknown): item is IntelligenceProviderConfig {
           v-if="isProvider(item)"
           :provider="item"
           :is-selected="item.id === selectedId"
-          :is-logged-in="isLoggedIn"
+          :is-logged-in="Boolean(isLoggedIn)"
           role="listitem"
           @click="handleItemClick(item.id)"
         />

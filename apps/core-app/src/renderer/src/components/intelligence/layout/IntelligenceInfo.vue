@@ -33,6 +33,7 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { isNexusManagedProvider as checkNexusManagedProvider } from '~/modules/intelligence/nexus-provider'
+import { isLocalCliProvider } from '~/modules/intelligence/provider-channel-type'
 import IntelligenceAdvancedConfig from '../config/IntelligenceAdvancedConfig.vue'
 import IntelligenceApiConfig from '../config/IntelligenceApiConfig.vue'
 import IntelligenceModelConfig from '../config/IntelligenceModelConfig.vue'
@@ -75,6 +76,9 @@ const isNexusManagedProvider = computed(() => {
   return checkNexusManagedProvider(localProvider.value)
 })
 
+const isCliProvider = computed(() => {
+  return isLocalCliProvider(localProvider.value)
+})
 const nexusStatusTitle = computed(() =>
   isLoggedIn.value
     ? t('settings.intelligence.nexusInvokeReadyTitle')
@@ -163,6 +167,13 @@ async function handleLogin() {
 function handleSyncFromNexus() {
   emits('syncNexus')
 }
+
+function handleToggleCliEnabled() {
+  const next = !localProvider.value.enabled
+  localProvider.value.enabled = next
+  intelligenceSettings.updateProvider(localProvider.value.id, { enabled: next })
+  emits('update', localProvider.value)
+}
 </script>
 
 <template>
@@ -230,7 +241,57 @@ function handleSyncFromNexus() {
         </TuffBlockSlot>
       </TuffGroupBlock>
 
-      <template v-if="!isNexusManagedProvider">
+      <TuffGroupBlock
+        v-if="isCliProvider"
+        :name="t('settings.intelligence.cliStatusTitle')"
+        :description="t('settings.intelligence.cliStatusDesc')"
+        default-icon="i-carbon-terminal"
+        active-icon="i-carbon-terminal"
+        memory-name="aisdk-cli-status"
+      >
+        <TuffBlockSlot
+          :title="
+            localProvider.enabled
+              ? t('settings.intelligence.cliEnabledTitle')
+              : t('settings.intelligence.cliDisabledTitle')
+          "
+          :description="
+            localProvider.enabled
+              ? t('settings.intelligence.cliEnabledDesc')
+              : t('settings.intelligence.cliDisabledDesc')
+          "
+          :default-icon="
+            localProvider.enabled ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'
+          "
+          :active-icon="
+            localProvider.enabled ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'
+          "
+          :active="localProvider.enabled"
+          :icon-size="18"
+        >
+          <TxButton
+            variant="flat"
+            size="sm"
+            :type="localProvider.enabled ? 'danger' : 'primary'"
+            native-type="button"
+            @click="handleToggleCliEnabled"
+          >
+            <span>{{
+              localProvider.enabled
+                ? t('intelligence.status.disabled')
+                : t('settings.intelligence.enableCliAction')
+            }}</span>
+          </TxButton>
+        </TuffBlockSlot>
+        <TuffBlockSlot
+          :title="t('settings.intelligence.cliModelInfoTitle')"
+          :description="t('settings.intelligence.cliModelInfoDesc')"
+          default-icon="i-carbon-model"
+          active-icon="i-carbon-model"
+        />
+      </TuffGroupBlock>
+
+      <template v-if="!isNexusManagedProvider && !isCliProvider">
         <TuffGroupBlock
           :name="t('intelligence.config.api.title')"
           :description="t('intelligence.config.api.description')"
