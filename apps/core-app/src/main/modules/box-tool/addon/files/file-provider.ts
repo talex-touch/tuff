@@ -117,6 +117,7 @@ import {
 } from '@talex-touch/utils/search'
 import type { FilePersistencePort, UpsertFileRecord } from '../../search-engine/search-index-writer'
 import { searchIndexWriter } from '../../search-engine/search-index-writer'
+import { isIndexingSourceMutationLeaseInvalidError } from '../../search-engine/indexing-source-mutation-gate'
 import {
   getProgressStreamFlushDelayMs,
   shouldEmitProgressStreamImmediately
@@ -2029,13 +2030,32 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         })
         continue
       }
-      const summary = await this.requireRuntimeMutationDelegate().applyBatch({
-        sourceId: this.id,
-        records: group.map((entry) => this.mapWorkerResultToIndexedSourceRecord(entry)),
-        mutationLeaseId
-      })
-      if (summary && typeof summary === 'object' && 'indexedItemCount' in summary) {
-        indexedItems += Number(summary.indexedItemCount) || 0
+      try {
+        const summary = await this.requireRuntimeMutationDelegate().applyBatch({
+          sourceId: this.id,
+          records: group.map((entry) => this.mapWorkerResultToIndexedSourceRecord(entry)),
+          mutationLeaseId
+        })
+        if (summary && typeof summary === 'object' && 'indexedItemCount' in summary) {
+          indexedItems += Number(summary.indexedItemCount) || 0
+        }
+      } catch (error) {
+        if (!mutationLeaseId || !isIndexingSourceMutationLeaseInvalidError(error, this.id)) {
+          throw error
+        }
+
+        // Persistence runs before publication. A stale lease must not leave the
+        // durable progress row completed while the source index misses the
+        // enrichment; re-arm it for a fresh mutation lease.
+        await this.markContentEnrichmentPending(group.map((entry) => ({ id: entry.fileId })))
+        this.logWarn('Re-armed worker enrichment after mutation lease expiry', error, {
+          mutationLeaseId,
+          entries: group.length,
+          recoveryReason: 'stale-mutation-lease'
+        })
+        if (!this.shuttingDown) {
+          this.enrichmentResumeService.resume('recovery.stale-mutation-lease')
+        }
       }
     }
     return indexedItems

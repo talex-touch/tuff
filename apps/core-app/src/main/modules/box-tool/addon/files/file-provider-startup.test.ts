@@ -2315,6 +2315,130 @@ describe('file-provider startup readiness', () => {
     expect(runtimeApplyBatch).not.toHaveBeenCalled()
   })
 
+  it('re-arms a stale mutation lease publication instead of retrying it forever', async () => {
+    const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalShuttingDown = provider.shuttingDown
+    const markPending = vi.fn(async () => undefined)
+    const resume = vi
+      .spyOn(FileProviderEnrichmentResumeService.prototype, 'resume')
+      .mockImplementation(() => undefined)
+    // The durable rearm the recovery performs is an observable write.
+    provider.dbUtils = { markFileEnrichmentPending: markPending }
+    provider.shuttingDown = false
+    runtimeApplyBatch.mockRejectedValue(
+      new Error('INDEXING_SOURCE_MUTATION_LEASE_INVALID:file-provider')
+    )
+
+    try {
+      // The lease the worker enriched under is already gone, so the runtime refuses the batch.
+      // A flush that kept the group would re-dispatch it under the same dead lease forever:
+      // the publication has to absorb the rejection, resolve, and hand the group back for a
+      // fresh lease while the rest of the index keeps moving.
+      const committed = await provider.publishCommittedWorkerRecords([
+        createWorkerResult(1, 'lease-expired')
+      ])
+      expect(committed).toBe(0)
+      expect(runtimeApplyBatch).toHaveBeenCalledTimes(1)
+
+      // Re-armed before the resume: the row the worker had completed is flipped back to pending
+      // so the next recovery round can find it.
+      expect(markPending).toHaveBeenCalledWith([1])
+      expect(resume).toHaveBeenCalledWith('recovery.stale-mutation-lease')
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.shuttingDown = originalShuttingDown
+      resume.mockRestore()
+    }
+  })
+
+  it('re-arms only the expired lease group while publishing a healthy group in the same flush', async () => {
+    const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalShuttingDown = provider.shuttingDown
+    const markPending = vi.fn(async () => undefined)
+    const resume = vi
+      .spyOn(FileProviderEnrichmentResumeService.prototype, 'resume')
+      .mockImplementation(() => undefined)
+    provider.dbUtils = { markFileEnrichmentPending: markPending }
+    provider.shuttingDown = false
+    // The lease a group was enriched under decides its outcome, not the order the groups are
+    // visited in.
+    runtimeApplyBatch.mockImplementation(async (batch?: { mutationLeaseId?: string }) => {
+      if (batch?.mutationLeaseId === 'lease-expired') {
+        throw new Error('INDEXING_SOURCE_MUTATION_LEASE_INVALID:file-provider')
+      }
+      return { indexedItemCount: 1 }
+    })
+
+    try {
+      const committed = await provider.publishCommittedWorkerRecords([
+        createWorkerResult(1, 'lease-expired'),
+        createWorkerResult(2, 'lease-healthy')
+      ])
+      // Recovery is scoped to the expired group: the healthy lease still commits, and only its
+      // count is what the flush reports.
+      expect(committed).toBe(1)
+      expect(runtimeApplyBatch).toHaveBeenCalledTimes(2)
+      expect(runtimeApplyBatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceId: 'file-provider',
+          mutationLeaseId: 'lease-healthy',
+          records: [expect.objectContaining({ recordId: '/tmp/lease-2.txt' })]
+        })
+      )
+
+      // Exactly the expired group is re-armed, and nothing is lost with it.
+      expect(markPending).toHaveBeenCalledTimes(1)
+      expect(markPending).toHaveBeenCalledWith([1])
+      expect(resume).toHaveBeenCalledWith('recovery.stale-mutation-lease')
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.shuttingDown = originalShuttingDown
+      resume.mockRestore()
+    }
+  })
+
+  it('propagates publication errors that are not a stale mutation lease of this source', async () => {
+    const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalShuttingDown = provider.shuttingDown
+    const markPending = vi.fn(async () => undefined)
+    const resume = vi
+      .spyOn(FileProviderEnrichmentResumeService.prototype, 'resume')
+      .mockImplementation(() => undefined)
+    provider.dbUtils = { markFileEnrichmentPending: markPending }
+    // Not shutting down, so a recovered publication WOULD resume: the assertions below only
+    // hold if the failure really propagates.
+    provider.shuttingDown = false
+
+    try {
+      // A real write failure is not recoverable enrichment: laundering it into a recovery round
+      // would leave the row marked as the worker left it and hide the failure from the flush.
+      const failure = new Error('SQLITE_BUSY: unrelated publish failure')
+      runtimeApplyBatch.mockRejectedValue(failure)
+      await expect(
+        provider.publishCommittedWorkerRecords([createWorkerResult(1, 'lease-busy')])
+      ).rejects.toBe(failure)
+      expect(markPending).not.toHaveBeenCalled()
+      expect(resume).not.toHaveBeenCalled()
+
+      // The recovery guard is source-scoped; another source's expired lease is not this
+      // source's to re-arm.
+      const foreignLease = new Error('INDEXING_SOURCE_MUTATION_LEASE_INVALID:search-engine')
+      runtimeApplyBatch.mockRejectedValue(foreignLease)
+      await expect(
+        provider.publishCommittedWorkerRecords([createWorkerResult(2, 'lease-foreign')])
+      ).rejects.toBe(foreignLease)
+      expect(markPending).not.toHaveBeenCalled()
+      expect(resume).not.toHaveBeenCalled()
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.shuttingDown = originalShuttingDown
+      resume.mockRestore()
+    }
+  })
+
   it('keeps an unscoped content request durably pending and deferred instead of dispatching it', async () => {
     const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
     const originalScheduler = provider.indexSchedulerService
