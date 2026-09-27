@@ -1231,11 +1231,15 @@ export default defineComponent({
   min-height: 0;
   height: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .tx-tabs--top .tx-tabs__main,
 .tx-tabs--bottom .tx-tabs__main {
-  height: auto;
+  flex: 1 1 0%;
+  min-height: 0;
+  height: 100%;
 }
 
 .tx-tabs--auto-height {
@@ -1280,18 +1284,25 @@ export default defineComponent({
 
 .tx-tabs__auto-sizer--fill {
   height: 100%;
+  flex: 1 1 0%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .tx-tabs__auto-sizer--fill :deep(.tx-tabs__auto-sizer-inner--fill) {
   height: 100%;
   min-height: 0;
+  flex: 1 1 0%;
+  display: flex !important;
+  flex-direction: column;
 }
 
 .tx-tabs__content-scroll {
   width: 100%;
   height: 100%;
   overflow: auto;
-  flex: 1;
+  flex: 1 1 0%;
   min-height: 0;
 }
 
