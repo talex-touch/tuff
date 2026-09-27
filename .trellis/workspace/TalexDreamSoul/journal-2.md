@@ -1185,3 +1185,47 @@ Home session polish program: 13 child tasks archived; lift send, assistant push 
 ### Next Steps
 
 - None - task complete
+
+
+
+## Session 79: Channel 错误回复契约修复 + beta.45 发布修复
+
+**Date**: 2026-09-26
+**Task**: 09-26-channel-error-reply-contract
+**Branch**: `task/fix/channel-error-reply`（PR #1977，已 CLEAN，待合）
+
+### Summary
+
+修掉「channel 的错误回复被当成数据」这一根因（图标那类报不出原因的崩溃），并救回卡住的 beta.45 发布。
+
+### Main Changes
+
+- **契约修正**：被拒绝的 channel 请求现在带着真实原因返回失败，而不是让调用方拿到一个没有 payload 的「成功」再自行崩掉。改动 3 个文件。
+- **验证**：真实 Electron 前后对比复现（修复前崩、修复后给出真实错误），渲染层全量用例，CI 必过上下文全绿；PR #1977 现为 `CLEAN`。
+- **beta.45 救援**：macOS job 卡住 → 取消整跑 → 只重跑 macOS job → 三平台绿 → release 上线（26 个产物，arm64/x64 双架构 dmg/zip/app.zip 及 `.sig`，`prerelease=true`）。
+- **交付物持久化**：切版驱动与发布文案从 `/tmp` 挪到 `~/.cache/tuff-tools/`（`/tmp` 本会话实测已被清空）；另存一份旁路会话工作区快照（1201 行 diff + 2 个未跟踪文件，基线 `da7004ecf`）。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `109988881` | fix(core-app): reject channel replies that are not SUCCESS |
+
+### Testing
+
+- [OK] 真实 Electron 复现对比 + 渲染层用例 + CI 必过全绿
+
+### Status
+
+[OK] **已完成代码与验证；PR 待合并**
+
+### Next Steps
+
+- 老板合 #1977 → 归档任务卡与会话记录
+- #1965（另一会话）与 master 冲突 2 处（sentry-service.ts / 其用例），需回炉 rebase
+- 切 beta.46：`python3 ~/.cache/tuff-tools/beta-cut.py 2.4.14-beta.46 1977 1965`
+
+### 已知旁路问题（未修，越界）
+
+- 插件侧 transport 存在同源缺陷（R3）：错误回复非 SUCCESS 时同样会被当数据，待办已列
+- 全仓另有 46 处「回复非 SUCCESS 未校验」的 fire-and-forget 调用点，未纳入本单
