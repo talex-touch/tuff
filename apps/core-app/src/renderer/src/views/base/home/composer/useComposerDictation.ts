@@ -2,6 +2,7 @@ import type { StreamController } from '@talex-touch/utils/transport'
 import type {
   VoiceAsrStreamEvent,
   VoiceAsrStreamPayload,
+  VoiceCaptureStatus,
   VoiceRecognitionStatus,
   VoiceSdk
 } from '@talex-touch/utils/transport/sdk/domains/voice'
@@ -22,7 +23,7 @@ import {
   shallowRef
 } from 'vue'
 import { COMPOSER_MOTION } from './composer-motion'
-import { classifyDictationFailure, notReadyNotice } from './dictation-notice'
+import { captureNoticeKind, classifyDictationFailure, notReadyNotice } from './dictation-notice'
 import { mergeTranscript, spliceDictation, spokenSegment } from './dictation-text'
 import { createLevelNormalizer } from './voice-level'
 
@@ -48,7 +49,8 @@ export interface UseComposerDictationOptions {
   language?: () => string | undefined
   /** After every draft write — the page's auto-grow. */
   onTextChange?: () => void
-  onNotice?: (kind: DictationNoticeKind) => void
+  /** What to tell the user: the notice kind, and the failure's own sentence when it had one. */
+  onNotice?: (kind: DictationNoticeKind, detail?: string) => void
   sdk?: ComposerDictationSdk
 }
 
@@ -62,6 +64,11 @@ export interface UseComposerDictationReturn {
   outcome: Readonly<Ref<DictationOutcome | null>>
   /** A session is starting, listening or finishing: the field is read-only meanwhile. */
   active: ComputedRef<boolean>
+  /**
+   * This build has no audio component, so the microphone entry is withheld rather than offered.
+   * False whenever the status could not be read — an unanswerable question is not a verdict.
+   */
+  captureBlocked: Readonly<Ref<boolean>>
   /** The microphone key: start when idle, stop while starting or listening. */
   toggle: () => void
   start: () => Promise<void>
@@ -115,6 +122,7 @@ export function useComposerDictation(
   const sdk = options.sdk ?? createVoiceSdk(useTuffTransport())
   const { mic } = COMPOSER_MOTION
 
+  const captureBlocked = ref(false)
   const state = ref<DictationState>('idle')
   const levels = shallowRef<readonly number[]>(new Array<number>(mic.levelHistory).fill(0))
   const elapsedMs = ref(0)
@@ -124,6 +132,12 @@ export function useComposerDictation(
   let session: Session | null = null
   let nextGeneration = 0
   let readiness: VoiceRecognitionStatus | null = null
+  /**
+   * Whether this build can capture at all, as of the last status read. Separate from `readiness`,
+   * which is about the recogniser: a build can have both and still fail, which is exactly what a
+   * package without its audio addon looks like from here.
+   */
+  let capture: VoiceCaptureStatus | undefined
   let watchdog: ReturnType<typeof setTimeout> | null = null
   let clock: ReturnType<typeof setInterval> | null = null
 
@@ -275,14 +289,20 @@ export function useComposerDictation(
     if (session !== current) return
     // What the user has already seen stays in the draft; only the notice is new.
     finish(current, 'failed')
-    const kind = classifyDictationFailure(error)
-    if (kind) options.onNotice?.(kind)
+    const notice = classifyDictationFailure(error)
+    if (notice) options.onNotice?.(notice.kind, notice.detail)
   }
 
   async function start(): Promise<void> {
     if (session) return
     if (readiness && !readiness.ready) {
       options.onNotice?.(notReadyNotice(readiness.reason))
+      return
+    }
+    // A recogniser can be perfectly configured on a build that cannot open a microphone. Saying
+    // so before the stream is attempted is the difference between a reason and a generic failure.
+    if (capture && !capture.ready) {
+      options.onNotice?.(captureNoticeKind(capture.reason))
       return
     }
 
@@ -381,10 +401,20 @@ export function useComposerDictation(
 
   async function refreshReadiness(): Promise<void> {
     try {
-      readiness = (await sdk.getRecognitionStatus()).asr
+      const snapshot = await sdk.getRecognitionStatus()
+      readiness = snapshot.asr
+      capture = snapshot.capture
+      // Only the component-absent class withholds the entry: every other capture failure leaves a
+      // button that can at least explain itself, and a user who fixed their device should find the
+      // button where it was.
+      captureBlocked.value =
+        capture?.ready === false &&
+        captureNoticeKind(capture.reason) === 'capture-component-missing'
     } catch {
       // Could not ask is not "not ready": the press still tries, and a failure is classified.
       readiness = null
+      capture = undefined
+      captureBlocked.value = false
     }
   }
 
@@ -415,6 +445,7 @@ export function useComposerDictation(
     elapsedMs: readonly(elapsedMs),
     outcome: readonly(outcome),
     active,
+    captureBlocked: readonly(captureBlocked),
     toggle,
     start,
     stop,

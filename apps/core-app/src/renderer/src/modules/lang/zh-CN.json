@@ -665,6 +665,13 @@
       "title": "无法读取识别状态",
       "description": ""
     },
+    "capture": {
+      "title": "语音输入不可用",
+      "componentMissing": "本机应用缺少录音组件，语音识别再正常也无法录音；请更新到最新版本或重新安装。",
+      "noDevice": "找不到可用的麦克风，请接入设备后重试。",
+      "platformUnsupported": "这个系统不支持语音输入。",
+      "disabled": "语音录音已被环境变量关闭（TUFF_DISABLE_NATIVE_AUDIO），去掉后重启即可。"
+    },
     "reasons": {
       "credentialMissing": "所选渠道没有凭据",
       "unavailable": "识别暂时不可用",
@@ -3441,7 +3448,7 @@
     "restart_now": "立即重启",
     "restart_later": "稍后重启",
     "no_release_notes": "暂无更新说明",
-    "download_started": "更新包下载已开始，请查看下载中心",
+    "download_started": "已开始下载更新",
     "download_failed_with_reason": "下载失败：{reason}",
     "remind_later_success": "已为您延后提醒，{hours}小时后再次提示",
     "remind_later_failed": "设置稍后提醒失败，请稍后重试",
@@ -4851,11 +4858,7 @@
       }
     },
     "settingUpdate": {
-      "groupTitle": "应用更新",
-      "groupDesc": "管理应用更新下载、状态与检查操作。",
       "channelTitle": "更新渠道",
-      "channelDescRelease": "稳定版为默认；Beta 可提前体验新功能但可能不稳定。切换渠道后会立即检查更新。",
-      "channelDescBeta": "提前接收 Beta 及后续稳定版本，可能存在不稳定问题；切换后会立即检查更新。",
       "channelSnapshotLocked": "Snapshot 构建会按 Beta 渠道接收更新。",
       "channels": {
         "release": "稳定版（Release）",
@@ -4863,7 +4866,6 @@
         "snapshot": "每日构建（Snapshot）"
       },
       "frequencyTitle": "检查频率",
-      "frequencyDesc": "应用启动后按照该频率自动轮询更新。",
       "frequency": {
         "everyday": "每 12 小时",
         "daily": "每天一次",
@@ -4874,15 +4876,10 @@
       },
       "autoDownloadDesc": "发现新版本时自动下载更新包",
       "autoDownloadDescManual": "发现新版本时自动下载安装包，后续仍需通过系统安装器完成更新",
-      "autoDownloadDescMac": "自动下载 macOS 更新包；应用更新时会通过重启完成接管。",
-      "autoDownloadDescWindows": "自动下载 Windows 安装器；后续仍会明确启动 Windows 安装器。",
-      "autoDownloadDescLinux": "自动下载 Linux 安装包；打开并完成安装仍需手动操作。",
-      "installOnNormalQuitLocked": "该版本没有权威 N/N-1 降级兼容证据，已锁定正常退出安装；更新就绪后仍可手动立即安装。",
       "rendererOverrideTitle": "Renderer Override（实验性）",
       "rendererOverrideDesc": "实验性能力，仅在以 TUFF_ENABLE_RENDERER_OVERRIDE=1 启动时可见；关闭后需重新以该变量启动才能再次开启。",
       "statusTitle": "状态",
       "status": {
-        "loading": "正在加载更新状态…",
         "never": "尚未检查过更新",
         "lastChecked": "上次检查：{time}",
         "updateAvailable": "发现新版本，请关注弹出的更新提示。",
@@ -4890,10 +4887,24 @@
         "downloadReady": "更新包 {version} 已下载完成，可立即重启并完成更新。",
         "downloadReadyManual": "安装包 {version} 已下载完成，请打开安装包继续更新。",
         "unknownVersion": "该版本",
-        "cachedRelease": "缓存更新：{version}"
+        "cachedRelease": "缓存更新：{version}",
+        "latest": "已是最新版本",
+        "currentVersion": "当前版本 {version}",
+        "checking": "正在检查更新…",
+        "available": "发现新版本 {version}",
+        "preparing": "正在准备下载 {version}",
+        "downloading": "正在下载 {version}",
+        "verifying": "正在校验 {version}",
+        "ready": "{version} 已就绪",
+        "readyOnQuit": "退出 Tuff 时会自动安装",
+        "readyBlocked": "非官方版本无法自动安装，请从官网下载",
+        "installing": "正在安装 {version}",
+        "finishing": "正在完成更新",
+        "recovering": "更新未完成，正在恢复上一版本",
+        "failed": "更新失败",
+        "progressDetail": "{downloaded} / {total} · {speed}/s"
       },
       "lifecycle": {
-        "loadingDescription": "正在从更新服务加载权威生命周期快照。",
         "unavailable": "不可用",
         "boolean": {
           "yes": "是",
@@ -4913,64 +4924,6 @@
           "none": "无",
           "retryable": "该错误可以重试。",
           "notRetryable": "重试前需要先进行人工诊断。"
-        },
-        "phases": {
-          "idle": {
-            "label": "空闲",
-            "description": "当前没有进行中的更新尝试。"
-          },
-          "checking": {
-            "label": "正在检查更新",
-            "description": "更新服务正在检查所选渠道。"
-          },
-          "available": {
-            "label": "发现可用更新",
-            "description": "已发现可下载的新版本。"
-          },
-          "downloading": {
-            "label": "正在下载更新",
-            "description": "正在下载当前平台对应的安装包。"
-          },
-          "verifying": {
-            "label": "正在验证更新",
-            "description": "正在验证完整性和发布元数据。"
-          },
-          "ready": {
-            "label": "可以安装",
-            "description": "安装包已通过验证，可以由用户明确触发安装。"
-          },
-          "install-scheduled": {
-            "label": "已计划安装",
-            "description": "兼容的更新已计划在下次正常退出时安装。"
-          },
-          "handoff-started": {
-            "label": "已开始安装接管",
-            "description": "正在把控制权交给平台安装程序。"
-          },
-          "awaiting-health": {
-            "label": "等待健康确认",
-            "description": "更新后的应用已启动，仍需报告健康状态。"
-          },
-          "healthy": {
-            "label": "更新运行正常",
-            "description": "已安装版本通过生命周期健康确认。"
-          },
-          "recovery-required": {
-            "label": "需要恢复",
-            "description": "更新未能进入健康状态，请先检查恢复元数据。"
-          },
-          "recovering": {
-            "label": "正在恢复上一版本",
-            "description": "权威恢复流程正在还原上一兼容版本。"
-          },
-          "recovered": {
-            "label": "已恢复上一版本",
-            "description": "恢复完成，上一版本已重新启用。"
-          },
-          "failed": {
-            "label": "更新失败",
-            "description": "本次更新尝试失败，请查看下方稳定错误码和消息。"
-          }
         }
       },
       "actionsTitle": "操作",
@@ -4980,21 +4933,15 @@
         "installNow": "立即重启更新",
         "openInstaller": "打开安装包",
         "restartMac": "重启并更新",
-        "restartMacDesc": "重启 macOS 版 Tuff，并把已验证更新包交给更新程序；native trust 状态以当前官方构建验证结果为准。",
         "startWindowsInstaller": "启动安装器",
-        "startWindowsInstallerDesc": "启动已下载的 Windows 安装器，并按照 Windows 安装提示继续。",
         "openLinuxPackage": "打开安装包",
-        "openLinuxPackageDesc": "使用系统软件包处理程序打开已下载的 Linux 安装包。",
         "downloadAvailable": "下载更新",
-        "downloadAvailableDesc": "为当前权威 available 尝试下载与本机匹配的安装包。",
         "manualCheck": "检查更新",
-        "manualCheckDesc": "立即检查当前渠道是否有新版本。",
-        "lifecycleInProgressDesc": "更新服务正在处理本次尝试；到达可操作阶段之前，操作保持锁定。",
-        "waitForLifecycle": "等待更新生命周期推进",
+        "retry": "重试",
+        "openDownloadPage": "前往官网下载",
         "clearCache": "清空缓存"
       },
       "assetsTitle": "GitHub 下载包",
-      "assetsDesc": "查看当前缓存版本的安装包并手动下载。",
       "assetsEmpty": "暂无缓存版本，请先检查更新。",
       "assetsOpen": "查看下载包",
       "assetsCount": "共 {count} 个",
@@ -5008,28 +4955,16 @@
       "assetsCompatibilityNoUrl": "缺少下载链接",
       "assetsCompatibilityMissingChecksum": "缺少校验信息",
       "evidenceTitle": "诊断证据",
-      "evidenceDesc": "导出权威生命周期快照、降级/恢复元数据、缓存版本、平台接管模式，以及明确的 macOS native trust 验证状态。",
       "evidenceMissing": "请先加载更新状态",
       "evidenceCopied": "更新诊断证据已复制",
       "evidenceCopyFailed": "复制更新诊断证据失败",
       "evidenceSaved": "更新诊断证据已保存",
       "nativeTrust": {
-        "passedTitle": "macOS native trust 已通过",
-        "passedDescription": "当前官方构建已通过 Developer ID 签名、Gatekeeper 与公证发布门禁。",
-        "verifiedBadge": "官方认证",
-        "unverifiedTitle": "macOS native trust 未验证",
-        "unavailableRisk": "当前安装缺少可验证的官方构建证明，无法确认 Developer ID、Gatekeeper 与公证信任。",
-        "verificationFailedRisk": "当前安装的官方构建验证失败，文件可能已损坏或被修改，无法确认其原生可信链。",
-        "securityWarning": "严重安全警告",
-        "criticalTitle": "当前 macOS 构建无法建立原生信任",
-        "criticalDescription": "此警告不可忽略：当前应用进程本身未建立官方信任；更新包下载校验不能替代当前安装的 Developer ID、Gatekeeper 与公证可信链。",
-        "notApplicableTitle": "macOS native trust 不适用",
-        "notApplicableDescription": "当前运行平台不是 macOS。",
-        "risks": {
-          "origin": "无法确认当前 app.asar 来自官方发布且未被修改。",
-          "nativeChain": "无法确认 Developer ID 签名、Gatekeeper 评估和 Apple 公证票据。",
-          "reinstall": "请从官方发布页重新下载安装；完成前不要把当前安装视为可信。"
-        }
+        "securityWarning": "严重安全警告"
+      },
+      "authenticity": {
+        "title": "当前不是官方正版 Tuff",
+        "description": "无法确认它来自官方发布且未被修改，请从官网重新下载安装。"
       },
       "assets": {
         "download": "下载",
@@ -5061,16 +4996,21 @@
         "macSilentUpdateUntrusted": "当前 Tuff 不是经过官方验证的 macOS 构建，已阻止静默更新。",
         "cacheCleared": "更新缓存已清空",
         "cacheClearFailed": "清空更新缓存失败",
-        "installModeSaved": "安装方式已保存",
-        "notifyOnUpdateSaved": "通知设置已保存"
+        "notifyOnUpdateSaved": "通知设置已保存",
+        "autoUpdateSaved": "自动更新设置已保存"
       },
       "notifyOnUpdate": "有新版本时通知",
-      "notifyOnUpdateDesc": "检查到可用更新或下载完成时发送系统通知。",
-      "installMode": {
-        "title": "安装方式",
-        "manual": "仅提醒",
-        "onQuit": "自动下载，退出时安装",
-        "immediate": "自动下载并立即安装"
+      "autoUpdate": "自动更新",
+      "advancedTitle": "高级",
+      "history": {
+        "title": "更新历史",
+        "outcome": {
+          "updated": "已更新",
+          "rolledBack": "已回滚",
+          "failed": "失败"
+        },
+        "showMore": "显示更多",
+        "showLess": "收起"
       },
       "exportEvidence": "导出诊断"
     },
@@ -5490,7 +5430,7 @@
       "voiceRecognitionNotConfigured": "尚未配置语音识别",
       "voiceRecognitionUnavailable": "语音识别不可用",
       "voiceCaptureUnavailable": "录音组件不可用，请查看提示详情或重装应用",
-      "voiceCaptureComponentMissing": "本机应用缺少录音组件，无法使用语音输入",
+      "voiceCaptureComponentMissing": "本机应用缺少录音组件，语音输入不可用；请更新到最新版本或重新安装",
       "voiceCapturePlatformUnsupported": "这个系统不支持语音输入",
       "voiceTranscribeEmpty": "未识别到语音内容，请重新录制",
       "voiceListening": "正在聆听…",

@@ -1,12 +1,43 @@
-import type { GitHubRelease, UpdateLifecycleSnapshot } from '@talex-touch/utils'
+import type { GitHubRelease, UpdateHistoryEntry, UpdateLifecycleSnapshot } from '@talex-touch/utils'
 import { AppPreviewChannel } from '@talex-touch/utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
+type TimeoutErrorClass = new (message?: string) => Error
+
 interface LoadTargetOptions {
-  withTimeoutImpl?: (promise: Promise<unknown>, timeout: number) => Promise<unknown>
+  withTimeoutImpl?: (
+    promise: Promise<unknown>,
+    timeout: number,
+    timeoutError: TimeoutErrorClass
+  ) => Promise<unknown>
   installImpl?: ReturnType<typeof vi.fn>
   isMainWindow?: boolean
+}
+
+/** Behaves like the real `withTimeout`, so a test can advance a fake clock past a deadline. */
+function raceTimeout(
+  promise: Promise<unknown>,
+  timeout: number,
+  timeoutError: TimeoutErrorClass
+): Promise<unknown> {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new timeoutError('timeout')), timeout))
+  ])
+}
+
+function buildHistoryEntry(overrides: Partial<UpdateHistoryEntry> = {}): UpdateHistoryEntry {
+  return {
+    attemptId: 'attempt-9',
+    fromVersion: '2.4.9',
+    toVersion: 'v2.4.10',
+    channel: AppPreviewChannel.RELEASE,
+    outcome: 'updated',
+    finishedAt: 1_700_000_000_000,
+    error: null,
+    ...overrides
+  }
 }
 
 function buildSnapshot(overrides: Partial<UpdateLifecycleSnapshot> = {}): UpdateLifecycleSnapshot {
@@ -58,6 +89,7 @@ async function loadTarget(options: LoadTargetOptions = {}) {
     updateSettings: vi.fn(),
     getStatus: vi.fn(),
     getCachedRelease: vi.fn(),
+    getHistory: vi.fn(),
     recordAction: vi.fn(),
     clearCache: vi.fn(),
     check: vi.fn(),
@@ -81,11 +113,10 @@ async function loadTarget(options: LoadTargetOptions = {}) {
 
   vi.doMock('@talex-touch/utils/common/utils/time', () => ({
     TimeoutError: MockTimeoutError,
-    withTimeout:
-      options.withTimeoutImpl ??
-      ((promise: Promise<unknown>) => {
-        return promise
-      })
+    withTimeout: (promise: Promise<unknown>, timeout: number) =>
+      options.withTimeoutImpl
+        ? options.withTimeoutImpl(promise, timeout, MockTimeoutError)
+        : promise
   }))
 
   vi.doMock('@talex-touch/utils/renderer', () => ({
@@ -283,5 +314,143 @@ describe('useUpdateRuntime', () => {
 
     expect(result).toBeUndefined()
     expect(updateSdk.check).not.toHaveBeenCalled()
+  })
+
+  describe('a forced check that finds an update', () => {
+    const release = { tag_name: 'v2.4.11', body: '' } as GitHubRelease
+    const available = buildSnapshot({
+      phase: 'available',
+      revision: 2,
+      targetVersion: 'v2.4.11',
+      releaseTag: 'v2.4.11'
+    })
+
+    async function loadWithUpdate() {
+      const target = await loadTarget()
+      target.updateSdk.check.mockResolvedValue({
+        success: true,
+        data: { hasUpdate: true, release, source: 'nexus' },
+        snapshot: available
+      })
+      target.updateSdk.getStatus.mockResolvedValue({ success: true, data: available })
+      target.updateSdk.recordAction.mockResolvedValue({ success: true })
+      return target
+    }
+
+    it('returns without a dialog when the caller renders the result itself', async () => {
+      const { useUpdateRuntime, updateSdk, blowMention } = await loadWithUpdate()
+      const runtime = useUpdateRuntime()
+
+      const result = await runtime.checkApplicationUpgrade(true, { presentDialog: false })
+
+      expect(result).toMatchObject({ hasUpdate: true, release })
+      expect(updateSdk.check).toHaveBeenCalledWith({ force: true })
+      expect(blowMention).not.toHaveBeenCalled()
+      expect(runtime.lifecycleSnapshot.value).toEqual(available)
+    })
+
+    it('still presents the dialog when the caller does not opt out', async () => {
+      const { useUpdateRuntime, blowMention } = await loadWithUpdate()
+      const runtime = useUpdateRuntime()
+
+      await runtime.checkApplicationUpgrade(true)
+
+      expect(blowMention).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe('starting a download', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('waits out the manifest fetch instead of reporting a failure the main process never had', async () => {
+      vi.useFakeTimers()
+      const { useUpdateRuntime, updateSdk, toast } = await loadTarget({
+        withTimeoutImpl: raceTimeout
+      })
+      let answer: (value: unknown) => void = () => {}
+      updateSdk.download.mockReturnValue(new Promise((resolve) => (answer = resolve)))
+
+      const runtime = useUpdateRuntime()
+      const started = runtime.handleDownloadUpdate({ tag_name: 'v2.4.10' } as GitHubRelease)
+      // The main process may spend up to 8s fetching the manifest before it answers.
+      await vi.advanceTimersByTimeAsync(9_000)
+      expect(toast.error).not.toHaveBeenCalled()
+
+      answer({ success: true, snapshot: buildSnapshot({ phase: 'downloading', revision: 2 }) })
+      await expect(started).resolves.toBe(true)
+      expect(toast.success).toHaveBeenCalledWith('update.download_started')
+      expect(toast.error).not.toHaveBeenCalled()
+      expect(runtime.lifecycleSnapshot.value?.phase).toBe('downloading')
+    })
+
+    it('still gives up on a download request that never answers', async () => {
+      vi.useFakeTimers()
+      const { useUpdateRuntime, updateSdk, toast } = await loadTarget({
+        withTimeoutImpl: raceTimeout
+      })
+      updateSdk.download.mockReturnValue(new Promise(() => {}))
+
+      const runtime = useUpdateRuntime()
+      const started = runtime.handleDownloadUpdate({ tag_name: 'v2.4.10' } as GitHubRelease)
+      await vi.advanceTimersByTimeAsync(29_999)
+      expect(toast.error).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+
+      await expect(started).resolves.toBe(false)
+      expect(toast.error).toHaveBeenCalledOnce()
+    })
+  })
+
+  describe('reading the update history', () => {
+    it('passes the limit through and returns the entries', async () => {
+      const { useUpdateRuntime, updateSdk } = await loadTarget()
+      const entries = [
+        buildHistoryEntry(),
+        buildHistoryEntry({ attemptId: 'attempt-8', toVersion: 'v2.4.9', outcome: 'rolled-back' })
+      ]
+      updateSdk.getHistory.mockResolvedValue({ success: true, data: entries })
+
+      const runtime = useUpdateRuntime()
+
+      await expect(runtime.getUpdateHistory(20)).resolves.toEqual(entries)
+      expect(updateSdk.getHistory).toHaveBeenCalledWith({ limit: 20 })
+    })
+
+    it('drops rows it cannot render', async () => {
+      const { useUpdateRuntime, updateSdk } = await loadTarget()
+      const valid = buildHistoryEntry()
+      updateSdk.getHistory.mockResolvedValue({
+        success: true,
+        data: [valid, null, { ...valid, outcome: 'idle' }, { ...valid, finishedAt: 'yesterday' }]
+      })
+
+      const runtime = useUpdateRuntime()
+
+      await expect(runtime.getUpdateHistory()).resolves.toEqual([valid])
+      expect(updateSdk.getHistory).toHaveBeenCalledWith({})
+    })
+
+    it.each([
+      {
+        name: 'the request rejects',
+        arrange: (getHistory: ReturnType<typeof vi.fn>) =>
+          getHistory.mockRejectedValue(new Error('No handler registered'))
+      },
+      {
+        name: 'the main process reports a failure',
+        arrange: (getHistory: ReturnType<typeof vi.fn>) =>
+          getHistory.mockResolvedValue({ success: false, error: 'database closed' })
+      }
+    ])('returns an empty history and logs when $name', async ({ arrange }) => {
+      const { useUpdateRuntime, updateSdk, logger } = await loadTarget()
+      arrange(updateSdk.getHistory)
+
+      const runtime = useUpdateRuntime()
+
+      await expect(runtime.getUpdateHistory()).resolves.toEqual([])
+      expect(logger.error).toHaveBeenCalledWith('Failed to get update history', expect.any(Error))
+    })
   })
 })

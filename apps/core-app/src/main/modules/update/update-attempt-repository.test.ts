@@ -1,5 +1,7 @@
 import type { Client } from '@libsql/client'
+import type { UpdateLifecyclePhase, UpdateLifecycleSnapshot } from '@talex-touch/utils'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type { UpdateLifecyclePatch } from './update-lifecycle'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -217,5 +219,82 @@ describe('updateAttemptRepository', () => {
       })
     ).rejects.toMatchObject({ code: 'UPDATE_LIFECYCLE_CONFLICT' })
     expect(onCommitted.mock.calls.map(([snapshot]) => snapshot)).toEqual([created, available])
+  })
+
+  it('lists finished attempts that named a target version, newest first', async () => {
+    const runAttempt = async (
+      id: string,
+      steps: ReadonlyArray<readonly [UpdateLifecyclePhase, UpdateLifecyclePatch?]>,
+      startedAt: number
+    ): Promise<UpdateLifecycleSnapshot> => {
+      let snapshot = await repository.createChecking({
+        id,
+        currentVersion: '2.4.9',
+        channel: AppPreviewChannel.RELEASE,
+        installOnNormalQuit: true,
+        now: startedAt
+      })
+      for (const [index, [to, patch]] of steps.entries()) {
+        snapshot = await repository.transition({
+          attemptId: id,
+          expectedRevision: snapshot.revision,
+          expectedPhase: snapshot.phase,
+          to,
+          patch,
+          now: startedAt + index + 1
+        })
+      }
+      return snapshot
+    }
+    const target = (version: string): UpdateLifecyclePatch => ({
+      targetVersion: version,
+      releaseTag: version,
+      source: 'nexus'
+    })
+    const failure = (code: string): UpdateLifecyclePatch => ({
+      error: { code, message: `${code} message`, retryable: true }
+    })
+    const installed = [
+      ['downloading', { taskId: 'task' }],
+      ['verifying'],
+      ['ready'],
+      ['install-scheduled'],
+      ['handoff-started']
+    ] as const
+
+    await runAttempt('no-update', [['idle']], 100)
+    await runAttempt('check-failed', [['failed', failure('UPDATE_CHECK_FAILED')]], 200)
+    const downloadFailed = await runAttempt(
+      'download-failed',
+      [
+        ['available', target('v2.5.0')],
+        ['failed', failure('UPDATE_DOWNLOAD_FAILED')]
+      ],
+      300
+    )
+    const updated = await runAttempt(
+      'updated',
+      [['available', target('v2.5.1')], ...installed, ['awaiting-health'], ['healthy']],
+      400
+    )
+    const rolledBack = await runAttempt(
+      'rolled-back',
+      [
+        ['available', target('v2.5.2')],
+        ...installed,
+        ['recovery-required'],
+        ['recovering'],
+        ['recovered']
+      ],
+      500
+    )
+    await runAttempt('in-flight', [['available', target('v2.5.3')]], 600)
+
+    await expect(repository.listTerminalAttempts()).resolves.toEqual([
+      rolledBack,
+      updated,
+      downloadFailed
+    ])
+    await expect(repository.listTerminalAttempts(2)).resolves.toEqual([rolledBack, updated])
   })
 })

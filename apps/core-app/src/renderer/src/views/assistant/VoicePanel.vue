@@ -10,7 +10,11 @@ import type {
   VoiceAsrStreamEvent,
   VoiceDeliveryResult
 } from '@talex-touch/utils/transport/sdk/domains/voice'
-import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
+import {
+  createVoiceSdk,
+  isVoiceCaptureUnavailableCode,
+  VOICE_CAPTURE_UNAVAILABLE_CODES
+} from '@talex-touch/utils/transport/sdk/domains/voice'
 import { DEFAULT_VOICE_POLISH_STRENGTH } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { ORB_STATES, TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
@@ -114,7 +118,18 @@ type NoticeAction = 'undo' | 'retry' | 'settings' | 'asrSettings'
  * and no button: offering a control that opens nothing is worse than offering none.
  */
 const MIC_SETTINGS_PLATFORMS = new Set(['darwin', 'win32'])
-type Notice = { message: string; tone: NoticeTone; action?: NoticeAction; icon?: string }
+/**
+ * `retry` defaults to the tone rule (a danger notice offers one) and exists to deny it: some
+ * failures are classified well enough to know that asking again cannot help, and a button that
+ * re-runs a deterministic failure is worse than no button.
+ */
+type Notice = {
+  message: string
+  tone: NoticeTone
+  action?: NoticeAction
+  icon?: string
+  retry?: boolean
+}
 
 /**
  * The one failure class that has a picture worth drawing.
@@ -895,6 +910,55 @@ function classifyFailure(error: unknown): Notice {
   const code = ((error as { code?: unknown })?.code ?? '').toString()
   const haystack = `${code} ${raw}`.toUpperCase()
 
+  // Capture failures come first, and before the device heuristic below, because that heuristic
+  // reads "Cannot find module .../tuff_native_audio.node" as a missing microphone — the addon
+  // absent from the build, misreported as absent hardware. The code is what separates them; the
+  // wording alone cannot. The gate is the whole code set, so a specific code with no sentence
+  // classifies as well as a generic one quoting a reason.
+  const captureFailure =
+    isVoiceCaptureUnavailableCode(code) ||
+    /VOICE_ASR_CAPTURE_UNAVAILABLE|VOICE_ASR_CAPTURE_DRAIN_UNAVAILABLE/.test(haystack)
+  if (captureFailure) {
+    // A specific code wins over the sentence; the text is what a generic code or a bare message
+    // falls back to. The order is deliberate: the reason text is what an older host sends.
+    const componentGone =
+      code === VOICE_CAPTURE_UNAVAILABLE_CODES.componentMissing ||
+      code === VOICE_CAPTURE_UNAVAILABLE_CODES.drainUnavailable ||
+      /VOICE_ASR_CAPTURE_DRAIN_UNAVAILABLE|CANNOT FIND MODULE|DLOPEN|MISSING EXPORT/.test(haystack)
+    if (componentGone)
+      // No retry either: the retry re-enters the same session setup, which reads the same absent
+      // module. The component is fixed by updating the app, not by pressing the button again.
+      return {
+        message: t('assistant.voicePanel.voiceCaptureComponentMissing'),
+        tone: 'danger',
+        retry: false
+      }
+    if (
+      code === VOICE_CAPTURE_UNAVAILABLE_CODES.deviceUnavailable ||
+      /NO-INPUT-DEVICE|INPUT-?PROBE-?FAILED/.test(haystack)
+    )
+      return {
+        message: t('assistant.voicePanel.microphoneMissing'),
+        tone: 'warning',
+        icon: MIC_FAILURE_ICON,
+        ...(canOpenMicSettings ? { action: 'settings' as const } : {})
+      }
+    if (
+      code === VOICE_CAPTURE_UNAVAILABLE_CODES.platformUnsupported ||
+      /PLATFORM-NOT-SUPPORTED|UNSUPPORTED PLATFORM/.test(haystack)
+    )
+      return {
+        message: t('assistant.voicePanel.voiceCapturePlatformUnsupported'),
+        tone: 'danger',
+        retry: false
+      }
+    return {
+      message: t('assistant.voicePanel.voiceCaptureUnavailable'),
+      tone: 'danger',
+      retry: false
+    }
+  }
+
   // Device and permission failures are the ones the provider describes worst: its sentence is
   // English, truncated by the width, and offers no way out. They are entirely classifiable, so
   // they get our own copy and no retry — retrying finds the same missing microphone.
@@ -1172,8 +1236,9 @@ function showVoiceSessionError(generation: number, error: unknown): void {
   const classified = classifyFailure(error)
   // Quota and congestion get no retry button: retrying is still out of credit, still busy.
   // A classified failure knows better than the tone rule what can be done about it: a missing
-  // microphone is fixed in Settings, not by asking the same provider again.
-  const retryable = classified.tone === 'danger'
+  // microphone is fixed in Settings, not by asking the same provider again, and a build without
+  // its audio component fails identically on every attempt.
+  const retryable = classified.retry ?? classified.tone === 'danger'
   showNotice(
     classified.message,
     classified.tone,

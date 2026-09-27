@@ -815,7 +815,7 @@ export class ContextHygieneService {
   }
 
   private async persistMemory(
-    client: Client,
+    client: Pick<Client, 'execute'>,
     memory: MemoryItem,
     allowUpdate: boolean
   ): Promise<void> {
@@ -1744,16 +1744,16 @@ export class ContextHygieneService {
 
     const client = this.requireClient()
     return this.withDbWrite('intelligence.context.createCompressionSnapshot', async () => {
-      await client.execute('BEGIN IMMEDIATE')
+      const transaction = await client.transaction('write')
       try {
-        const sessionResult = await client.execute({
+        const sessionResult = await transaction.execute({
           sql: 'SELECT * FROM intelligence_context_sessions WHERE id = ? LIMIT 1',
           args: [sessionId]
         })
         const session = sessionResult.rows[0] as unknown as SessionRow | undefined
         if (!session || session.status === 'expired') throw compressionSnapshotError('session')
         if (session.updated_at !== input.expectedSessionUpdatedAt) {
-          await client.execute('ROLLBACK')
+          await transaction.rollback()
           return {
             status: 'degraded',
             degradedReason: 'cas-conflict',
@@ -1761,7 +1761,7 @@ export class ContextHygieneService {
           }
         }
 
-        const endpointsResult = await client.execute({
+        const endpointsResult = await transaction.execute({
           sql: `
             SELECT id, privacy_level, created_at
             FROM intelligence_context_turns
@@ -1776,7 +1776,7 @@ export class ContextHygieneService {
         if (sourceFrom.id !== sourceTo.id && sourceFrom.created_at >= sourceTo.created_at)
           throw compressionSnapshotError('source-range-order')
 
-        const rangeResult = await client.execute({
+        const rangeResult = await transaction.execute({
           sql: `
             SELECT id, privacy_level, created_at
             FROM intelligence_context_turns
@@ -1831,7 +1831,7 @@ export class ContextHygieneService {
           }
         }
 
-        await client.execute({
+        await transaction.execute({
           sql: `
             INSERT INTO intelligence_compression_snapshots
               (id, session_id, goal, current_state, decisions, constraints, artifacts,
@@ -1853,7 +1853,7 @@ export class ContextHygieneService {
             snapshot.createdAt
           ]
         })
-        await client.execute({
+        await transaction.execute({
           sql: `
             INSERT INTO intelligence_context_checkpoints
               (id, session_id, type, reason, summary, context_scope, metadata, created_at)
@@ -1870,7 +1870,7 @@ export class ContextHygieneService {
             checkpoint.createdAt
           ]
         })
-        const casResult = await client.execute({
+        const casResult = await transaction.execute({
           sql: `
             UPDATE intelligence_context_sessions
             SET summary = ?, metadata = ?, updated_at = ?
@@ -1885,7 +1885,7 @@ export class ContextHygieneService {
           ]
         })
         if (Number(casResult.rowsAffected ?? 0) !== 1) {
-          await client.execute('ROLLBACK')
+          await transaction.rollback()
           return {
             status: 'degraded',
             degradedReason: 'cas-conflict',
@@ -1893,7 +1893,7 @@ export class ContextHygieneService {
           }
         }
 
-        await client.execute('COMMIT')
+        await transaction.commit()
         return {
           status: 'created',
           snapshot,
@@ -1901,8 +1901,10 @@ export class ContextHygieneService {
           sessionUpdatedAt
         }
       } catch (error) {
-        await client.execute('ROLLBACK').catch(() => undefined)
+        await transaction.rollback().catch(() => undefined)
         throw error
+      } finally {
+        transaction.close()
       }
     })
   }
@@ -2123,9 +2125,9 @@ export class ContextHygieneService {
     const client = this.requireClient()
 
     await this.withDbWrite('intelligence.context.replaceMemory', async () => {
-      await client.execute('BEGIN IMMEDIATE')
+      const transaction = await client.transaction('write')
       try {
-        const currentResult = await client.execute({
+        const currentResult = await transaction.execute({
           sql: `
             SELECT m.*
             FROM intelligence_memory_items m
@@ -2140,22 +2142,24 @@ export class ContextHygieneService {
           throw new Error('MEMORY_REPLACE_CONFLICT')
         }
 
-        await this.persistMemory(client, replacement, false)
-        await client.execute({
+        await this.persistMemory(transaction, replacement, false)
+        await transaction.execute({
           sql: 'UPDATE intelligence_memory_items SET enabled = 0, updated_at = ? WHERE id = ?',
           args: [now, memoryId]
         })
-        await client.execute({
+        await transaction.execute({
           sql: `
             INSERT INTO intelligence_memory_tombstones (id, memory_id, reason, created_at)
             VALUES (?, ?, ?, ?)
           `,
           args: [tombstone.id, tombstone.memoryId, tombstone.reason, tombstone.createdAt]
         })
-        await client.execute('COMMIT')
+        await transaction.commit()
       } catch (error) {
-        await client.execute('ROLLBACK').catch(() => undefined)
+        await transaction.rollback().catch(() => undefined)
         throw error
+      } finally {
+        transaction.close()
       }
     })
 

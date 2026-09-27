@@ -9,6 +9,7 @@ import { AppPreviewChannel, UpdateProviderType } from '@talex-touch/utils'
 import { describe, expect, it } from 'vitest'
 import {
   buildUpdateDiagnosticEvidencePayload,
+  resolveBuildAuthenticity,
   resolveMacNativeTrust,
   resolveUpdateLifecycleDisplay
 } from './update-diagnostic-evidence'
@@ -263,6 +264,60 @@ describe('update diagnostic evidence', () => {
 
   it.each([
     {
+      name: 'an attested official build',
+      verificationStatus: {
+        isOfficialBuild: true,
+        hasOfficialKey: true,
+        verificationFailed: false
+      },
+      expected: 'official'
+    },
+    {
+      name: 'a build whose attestation failed to verify',
+      verificationStatus: { isOfficialBuild: true, hasOfficialKey: true, verificationFailed: true },
+      expected: 'unofficial'
+    },
+    {
+      name: 'a build without an official attestation (dev or third-party)',
+      verificationStatus: {
+        isOfficialBuild: false,
+        hasOfficialKey: true,
+        verificationFailed: false
+      },
+      expected: 'unofficial'
+    },
+    {
+      name: 'an official build missing the official key',
+      verificationStatus: {
+        isOfficialBuild: true,
+        hasOfficialKey: false,
+        verificationFailed: false
+      },
+      expected: 'unofficial'
+    },
+    {
+      name: 'a status that has not loaded yet',
+      verificationStatus: null,
+      expected: 'unknown'
+    }
+  ])('resolves build authenticity for $name', ({ verificationStatus, expected }) => {
+    expect(resolveBuildAuthenticity(verificationStatus)).toBe(expected)
+  })
+
+  it('judges authenticity the same way on every desktop platform', () => {
+    // The banner covers Windows and Linux as well as macOS; unlike the native-trust projection
+    // there is no platform in which an unattested build reads as not-applicable.
+    const unattested = { isOfficialBuild: false, hasOfficialKey: false, verificationFailed: false }
+    for (const platform of ['darwin', 'win32', 'linux']) {
+      expect(resolveMacNativeTrust(platform, unattested).status).toBe(
+        platform === 'darwin' ? 'unverified' : 'not-applicable'
+      )
+    }
+    expect(resolveBuildAuthenticity(unattested)).toBe('unofficial')
+  })
+
+  it.each([
+    {
       name: 'official attested macOS release',
       platform: 'darwin',
       verificationStatus: {
@@ -364,62 +419,55 @@ describe('update diagnostic evidence', () => {
   it.each([
     {
       phase: 'recovery-required' as UpdateLifecyclePhase,
-      tone: 'warning',
       canCheck: false,
       error: { code: 'RECOVERY_REQUIRED', message: 'previous version required', retryable: false }
     },
     {
       phase: 'recovering' as UpdateLifecyclePhase,
-      tone: 'warning',
       canCheck: false,
       error: null
     },
     {
       phase: 'recovered' as UpdateLifecyclePhase,
-      tone: 'success',
       canCheck: true,
       error: null
     },
     {
       phase: 'failed' as UpdateLifecyclePhase,
-      tone: 'danger',
       canCheck: true,
       error: { code: 'UPDATE_INSTALL_FAILED', message: 'handoff failed', retryable: true }
     }
-  ])(
-    'keeps $phase recovery state and diagnostics authoritative',
-    ({ phase, tone, canCheck, error }) => {
-      const snapshot = buildSnapshot({
-        phase,
-        taskId: null,
-        previousVersion: '2.4.8',
-        recoveryAvailable: phase !== 'failed',
-        error
-      })
-      const payload = buildUpdateDiagnosticEvidencePayload({
-        settings: buildSettings(),
-        snapshot,
-        cachedRelease: null,
-        cachedAssets: [],
-        platform: 'win32',
-        arch: 'x64',
-        isMacAutoInstallPlatform: false,
-        createdAt: '2026-05-10T11:00:00.000Z'
-      })
+  ])('keeps $phase recovery state and diagnostics authoritative', ({ phase, canCheck, error }) => {
+    const snapshot = buildSnapshot({
+      phase,
+      taskId: null,
+      previousVersion: '2.4.8',
+      recoveryAvailable: phase !== 'failed',
+      error
+    })
+    const payload = buildUpdateDiagnosticEvidencePayload({
+      settings: buildSettings(),
+      snapshot,
+      cachedRelease: null,
+      cachedAssets: [],
+      platform: 'win32',
+      arch: 'x64',
+      isMacAutoInstallPlatform: false,
+      createdAt: '2026-05-10T11:00:00.000Z'
+    })
 
-      expect(resolveUpdateLifecycleDisplay(snapshot)).toMatchObject({ phase, tone, canCheck })
-      expect(payload.lifecycle).toEqual(snapshot)
-      expect(payload.manualRegression.suggestedEvidenceFields).toMatchObject({
-        phase,
-        previousVersion: '2.4.8',
-        recoveryAvailable: phase !== 'failed',
-        error
-      })
-      expect(payload.verdict).toMatchObject({
-        readyToInstall: false,
-        evidenceComplete: false,
-        blocker: 'lifecycle-not-ready'
-      })
-    }
-  )
+    expect(resolveUpdateLifecycleDisplay(snapshot)).toMatchObject({ phase, canCheck })
+    expect(payload.lifecycle).toEqual(snapshot)
+    expect(payload.manualRegression.suggestedEvidenceFields).toMatchObject({
+      phase,
+      previousVersion: '2.4.8',
+      recoveryAvailable: phase !== 'failed',
+      error
+    })
+    expect(payload.verdict).toMatchObject({
+      readyToInstall: false,
+      evidenceComplete: false,
+      blocker: 'lifecycle-not-ready'
+    })
+  })
 })

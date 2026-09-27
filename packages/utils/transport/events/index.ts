@@ -564,6 +564,8 @@ import type {
   UpdateDownloadResponse,
   UpdateGetBundledReleaseNotesResponse,
   UpdateGetCachedReleaseResponse,
+  UpdateGetHistoryRequest,
+  UpdateGetHistoryResponse,
   UpdateGetSettingsResponse,
   UpdateGetStatusResponse,
   UpdateIgnoreVersionRequest,
@@ -781,6 +783,12 @@ export const UpdateEvents = {
     .module('service')
     .event('get-cached-release')
     .define<UpdateCachedReleaseRequest, UpdateGetCachedReleaseResponse>(),
+
+  /** This device's finished update attempts, read from the local attempt store. */
+  getHistory: defineEvent('update')
+    .module('service')
+    .event('get-history')
+    .define<UpdateGetHistoryRequest, UpdateGetHistoryResponse>(),
 
   getBundledReleaseNotes: defineEvent('update')
     .module('release-notes')

@@ -2,6 +2,8 @@
 import { TxButton } from '@talex-touch/tuffex/button'
 import {
   createVoiceSdk,
+  VOICE_CAPTURE_UNAVAILABLE_CODES,
+  type VoiceCaptureStatus,
   type VoiceRecognitionStatus
 } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -26,6 +28,7 @@ const router = useRouter()
 const voiceSdk = createVoiceSdk(useTuffTransport())
 
 const status = ref<VoiceRecognitionStatus | null>(null)
+const captureStatus = ref<VoiceCaptureStatus | undefined>(undefined)
 const loading = ref(true)
 const loadFailed = ref(false)
 let disposed = false
@@ -37,11 +40,40 @@ let disposed = false
  * unreadable case keeps its own sentence and offers a retry rather than a trip to Settings.
  */
 const unreadable = computed(() => loadFailed.value)
-const visible = computed(() => !loading.value && (unreadable.value || status.value?.ready !== true))
+/**
+ * A build that cannot capture at all outranks everything this component used to say.
+ *
+ * Without this, a package missing its audio addon reported "speech recognition is unavailable"
+ * and sent the reader to the Intelligence channels — a place where nothing was wrong, because the
+ * recogniser was fine and the microphone could never open (#322). The capture state is a fact
+ * about this install, so it is reported first and its own sentence says what to do about it.
+ */
+const captureUnavailable = computed(() => captureStatus.value?.ready === false)
+const captureNeedsDifferentAction = computed(
+  () =>
+    captureUnavailable.value &&
+    captureStatus.value?.reason !== VOICE_CAPTURE_UNAVAILABLE_CODES.deviceUnavailable
+)
+const visible = computed(
+  () =>
+    !loading.value && (unreadable.value || captureUnavailable.value || status.value?.ready !== true)
+)
 const catalogFailure = computed(() => status.value?.reason?.startsWith('VOICE_ASR_PACK_') === true)
 
 const message = computed(() => {
   if (unreadable.value) return t('settingSpeechRecognition.unavailable.description')
+  if (captureUnavailable.value) {
+    switch (captureStatus.value?.reason) {
+      case VOICE_CAPTURE_UNAVAILABLE_CODES.deviceUnavailable:
+        return t('settingSpeechRecognition.capture.noDevice')
+      case VOICE_CAPTURE_UNAVAILABLE_CODES.platformUnsupported:
+        return t('settingSpeechRecognition.capture.platformUnsupported')
+      case VOICE_CAPTURE_UNAVAILABLE_CODES.disabled:
+        return t('settingSpeechRecognition.capture.disabled')
+      default:
+        return t('settingSpeechRecognition.capture.componentMissing')
+    }
+  }
   switch (status.value?.reason) {
     case 'VOICE_ASR_NOT_CONFIGURED':
       return t('settingSpeechRecognition.asr.notConfigured')
@@ -61,11 +93,11 @@ const message = computed(() => {
   }
 })
 
-const title = computed(() =>
-  unreadable.value
-    ? t('settingSpeechRecognition.unavailable.title')
-    : t('settingSpeechRecognition.asr.notReady')
-)
+const title = computed(() => {
+  if (unreadable.value) return t('settingSpeechRecognition.unavailable.title')
+  if (captureUnavailable.value) return t('settingSpeechRecognition.capture.title')
+  return t('settingSpeechRecognition.asr.notReady')
+})
 
 async function loadStatus(): Promise<void> {
   loading.value = true
@@ -74,7 +106,10 @@ async function loadStatus(): Promise<void> {
     const next = await voiceSdk.getRecognitionStatus()
     // Only ASR decides this. File transcription is not on this page, so an STT binding nobody
     // asked for must not raise an alert over a dictation setup that works.
-    if (!disposed) status.value = next.asr
+    if (!disposed) {
+      status.value = next.asr
+      captureStatus.value = next.capture
+    }
   } catch {
     if (!disposed) loadFailed.value = true
   } finally {
@@ -83,6 +118,8 @@ async function loadStatus(): Promise<void> {
 }
 
 function openRecovery(): void {
+  // The channels page cannot fix a missing audio component, so the button only appears where it
+  // leads somewhere useful (`captureNeedsDifferentAction`), and this is the branch it covers.
   if (catalogFailure.value) {
     const target = document.querySelector<HTMLElement>(
       '[data-testid="voice-provider-catalog-status"]'
@@ -128,7 +165,7 @@ onBeforeUnmount(() => {
       {{ t('settingSpeechRecognition.refresh') }}
     </TxButton>
     <TxButton
-      v-else
+      v-else-if="!captureNeedsDifferentAction"
       size="sm"
       variant="ghost"
       :data-testid="catalogFailure ? 'voice-status-catalog' : 'voice-status-configure'"

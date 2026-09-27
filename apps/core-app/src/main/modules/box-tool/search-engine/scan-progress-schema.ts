@@ -145,7 +145,10 @@ export interface ScanProgressSourceScopeMigrationResult {
   backupTable: string | null
 }
 
-type ScanProgressMigrationDb = Pick<LibSQLDatabase<typeof schema>, 'all' | 'run'>
+type ScanProgressMigrationDb = Pick<
+  LibSQLDatabase<Record<string, unknown>>,
+  'all' | 'run' | 'transaction'
+>
 
 function toCount(value: unknown): number {
   const count = Number(value)
@@ -319,35 +322,33 @@ export async function runScanProgressSourceScopeMigration(
     }
   }
 
-  await db.run(sql`BEGIN IMMEDIATE`)
-  try {
-    if (plan.tableExists) {
-      await createSourceScopedScanProgressTable(db, SOURCE_SCOPED_SCAN_PROGRESS_STAGING_TABLE)
-      await db.run(sql`
-        INSERT INTO scan_progress_source_scope_new (source_id, path, last_scanned)
-        SELECT ${plan.sourceId}, path, last_scanned
-        FROM scan_progress
+  await db.transaction(
+    async (tx) => {
+      if (plan.tableExists) {
+        await createSourceScopedScanProgressTable(tx, SOURCE_SCOPED_SCAN_PROGRESS_STAGING_TABLE)
+        await tx.run(sql`
+          INSERT INTO scan_progress_source_scope_new (source_id, path, last_scanned)
+          SELECT ${plan.sourceId}, path, last_scanned
+          FROM scan_progress
+        `)
+        await tx.run(sql`
+          ALTER TABLE scan_progress
+          RENAME TO scan_progress_path_only_backup
+        `)
+        await tx.run(sql`
+          ALTER TABLE scan_progress_source_scope_new
+          RENAME TO scan_progress
+        `)
+      } else {
+        await createSourceScopedScanProgressTable(tx, 'scan_progress')
+      }
+      await tx.run(sql`
+        CREATE INDEX IF NOT EXISTS idx_scan_progress_path
+        ON scan_progress (path)
       `)
-      await db.run(sql`
-        ALTER TABLE scan_progress
-        RENAME TO scan_progress_path_only_backup
-      `)
-      await db.run(sql`
-        ALTER TABLE scan_progress_source_scope_new
-        RENAME TO scan_progress
-      `)
-    } else {
-      await createSourceScopedScanProgressTable(db, 'scan_progress')
-    }
-    await db.run(sql`
-      CREATE INDEX IF NOT EXISTS idx_scan_progress_path
-      ON scan_progress (path)
-    `)
-    await db.run(sql`COMMIT`)
-  } catch (error) {
-    await db.run(sql`ROLLBACK`).catch(() => undefined)
-    throw error
-  }
+    },
+    { behavior: 'immediate' }
+  )
 
   return {
     plan,

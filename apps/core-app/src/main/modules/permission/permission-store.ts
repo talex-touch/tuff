@@ -212,58 +212,55 @@ class SqlitePermissionBackend {
 
   async persist(data: PermissionData): Promise<void> {
     const client = this.ensureClient()
-    await client.execute('BEGIN IMMEDIATE')
-    try {
-      await client.execute('DELETE FROM permission_grants')
-      for (const [pluginId, grants] of Object.entries(data.grants)) {
-        for (const grant of Object.values(grants)) {
-          await client.execute({
-            sql: `
-              INSERT INTO permission_grants (plugin_id, permission_id, granted_at, granted_by)
-              VALUES (?, ?, ?, ?)
-            `,
-            args: [
-              pluginId,
-              normalizePermissionId(grant.permissionId),
-              grant.grantedAt,
-              grant.grantedBy
-            ] as InValue[]
-          })
-        }
-      }
+    const statements: Array<{ sql: string; args: InValue[] }> = [
+      { sql: 'DELETE FROM permission_grants', args: [] }
+    ]
 
-      await client.execute('DELETE FROM permission_audit_logs')
-      for (const log of data.auditLogs || []) {
-        await client.execute({
+    for (const [pluginId, grants] of Object.entries(data.grants)) {
+      for (const grant of Object.values(grants)) {
+        statements.push({
           sql: `
-            INSERT INTO permission_audit_logs (id, timestamp, plugin_id, action, permission_id, context_json)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO permission_grants (plugin_id, permission_id, granted_at, granted_by)
+            VALUES (?, ?, ?, ?)
           `,
           args: [
-            log.id,
-            log.timestamp,
-            log.pluginId,
-            log.action,
-            normalizePermissionId(log.permissionId),
-            log.context ? JSON.stringify(log.context) : null
-          ] as InValue[]
+            pluginId,
+            normalizePermissionId(grant.permissionId),
+            grant.grantedAt,
+            grant.grantedBy
+          ]
         })
       }
-
-      await client.execute({
-        sql: `
-          INSERT INTO permission_meta (key, value)
-          VALUES (?, ?)
-          ON CONFLICT(key) DO UPDATE SET value = excluded.value
-        `,
-        args: ['version', String(data.version)]
-      })
-
-      await client.execute('COMMIT')
-    } catch (error) {
-      await client.execute('ROLLBACK').catch(() => {})
-      throw error
     }
+
+    statements.push({ sql: 'DELETE FROM permission_audit_logs', args: [] })
+    for (const log of data.auditLogs || []) {
+      statements.push({
+        sql: `
+          INSERT INTO permission_audit_logs (id, timestamp, plugin_id, action, permission_id, context_json)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        args: [
+          log.id,
+          log.timestamp,
+          log.pluginId,
+          log.action,
+          normalizePermissionId(log.permissionId),
+          log.context ? JSON.stringify(log.context) : null
+        ]
+      })
+    }
+
+    statements.push({
+      sql: `
+        INSERT INTO permission_meta (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `,
+      args: ['version', String(data.version)]
+    })
+
+    await client.batch(statements, 'write')
   }
 
   async close(): Promise<void> {

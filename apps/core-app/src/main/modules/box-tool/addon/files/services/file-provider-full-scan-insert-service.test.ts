@@ -100,13 +100,14 @@ describe('file-provider-full-scan-insert-service', () => {
     )
     expect(emitProgress).toHaveBeenNthCalledWith(1, 0, 2)
     expect(emitProgress).toHaveBeenLastCalledWith(2, 2)
+    // Only the count survives the run; the per-chunk rows handed back by `upsertFiles`
+    // (still needed for the legacy publication below) must not be retained on the result.
     expect(result).toEqual({
-      inserted,
       insertedCount: 2
     })
   })
 
-  it('returns the rows persisted by the fused batch callback and never touches the normal emit path', async () => {
+  it('sums the fused batch counts across chunks without retaining rows or republishing them', async () => {
     const records = [
       {
         path: '/tmp/a.txt',
@@ -129,21 +130,75 @@ describe('file-provider-full-scan-insert-service', () => {
         lastIndexedAt: new Date(2000),
         isDir: false,
         type: 'file'
+      },
+      {
+        path: '/tmp/c.txt',
+        name: 'c.txt',
+        extension: '.txt',
+        size: 3,
+        mtime: new Date(3000),
+        ctime: new Date(3000),
+        lastIndexedAt: new Date(3000),
+        isDir: false,
+        type: 'file'
+      },
+      {
+        path: '/tmp/d.txt',
+        name: 'd.txt',
+        extension: '.txt',
+        size: 4,
+        mtime: new Date(4000),
+        ctime: new Date(4000),
+        lastIndexedAt: new Date(4000),
+        isDir: false,
+        type: 'file'
+      },
+      {
+        path: '/tmp/e.txt',
+        name: 'e.txt',
+        extension: '.txt',
+        size: 5,
+        mtime: new Date(5000),
+        ctime: new Date(5000),
+        lastIndexedAt: new Date(5000),
+        isDir: false,
+        type: 'file'
       }
     ]
-    const persisted = records.map((record, index) => ({ ...record, id: index + 1 }))
-    // The fused callback owns persistence *and* publication, so the non-fused pair must
-    // never be reached: a regression that keeps emitting would double-publish the chunk,
-    // and one that keeps upserting would double-write the file rows.
-    const upsertFiles = vi.fn(async () => [] as typeof persisted)
+
+    // Chunks are [a,b] [c,d] [e]; the per-chunk counts are deliberately neither the chunk
+    // sizes (2, 2, 1) nor the scanned record count (5). Only a service that accumulates the
+    // number the fused dependency returns can land on 4, so a regression that reports the
+    // scanned row count instead -- or that drops a chunk's count -- reddens here.
+    const fusedCounts = [2, 1, 1]
+
+    const events: string[] = []
+    let releaseFirstFused = () => {}
+    const firstFusedGate = new Promise<void>((resolve) => {
+      releaseFirstFused = resolve
+    })
+
+    let fusedCall = 0
+    const persistAndEmitBatch = vi.fn(async (_chunk: Array<{ path: string }>) => {
+      fusedCall += 1
+      const current = fusedCall
+      events.push(`fused:start:${current}`)
+      if (current === 1) {
+        await firstFusedGate
+      }
+      events.push(`fused:end:${current}`)
+      return fusedCounts[current - 1]
+    })
+    // The fused dependency owns persistence *and* publication, so the row-returning upsert
+    // and the separate batch emitter must never be reached: a regression that keeps them
+    // would double-write and double-publish every chunk. The mock still declares the
+    // persisted-row shape (what `mapRecord` reads) because that is `TInserted` here.
+    const upsertFiles = vi.fn(async () => [] as Array<(typeof records)[number]>)
     const emitRecordBatch = vi.fn(async () => {})
-    const persistAndEmitBatch = vi.fn(async (chunk: Array<{ path: string }>) =>
-      persisted.filter((record) => chunk.some((item) => item.path === record.path))
-    )
     const emitProgress = vi.fn()
     const service = new FileProviderFullScanInsertService({
       sourceId: 'file-provider',
-      getBatchSize: () => 1,
+      getBatchSize: () => 2,
       recordBatchDuration: vi.fn(),
       waitForIdle: vi.fn(async () => {}),
       upsertFiles,
@@ -166,17 +221,39 @@ describe('file-provider-full-scan-insert-service', () => {
     })
 
     const context = { runId: 'full-scan' }
-    const result = await service.execute('/tmp', records, context)
+    const execution = service.execute('/tmp', records, context)
 
-    expect(persistAndEmitBatch).toHaveBeenNthCalledWith(1, [records[0]], context)
-    expect(persistAndEmitBatch).toHaveBeenNthCalledWith(2, [records[1]], context)
+    await flushMicrotasks()
+
+    // The first chunk's fused persistence/publication is admitted but gated. Because the
+    // fused path carries no rows between chunks, each chunk must fully settle before the
+    // next one starts -- so exactly one fused call is observed here, in chunk order.
+    expect(events).toEqual(['fused:start:1'])
     expect(upsertFiles).not.toHaveBeenCalled()
     expect(emitRecordBatch).not.toHaveBeenCalled()
-    expect(result).toEqual({
-      inserted: persisted,
-      insertedCount: 2
-    })
-    expect(emitProgress).toHaveBeenLastCalledWith(2, 2)
+
+    releaseFirstFused()
+    const result = await execution
+
+    expect(events).toEqual([
+      'fused:start:1',
+      'fused:end:1',
+      'fused:start:2',
+      'fused:end:2',
+      'fused:start:3',
+      'fused:end:3'
+    ])
+    // Each chunk is handed to the fused dependency exactly once, in source order, with the
+    // original rows -- the count-only contract must not perturb chunking.
+    expect(persistAndEmitBatch).toHaveBeenNthCalledWith(1, [records[0], records[1]], context)
+    expect(persistAndEmitBatch).toHaveBeenNthCalledWith(2, [records[2], records[3]], context)
+    expect(persistAndEmitBatch).toHaveBeenNthCalledWith(3, [records[4]], context)
+    expect(upsertFiles).not.toHaveBeenCalled()
+    expect(emitRecordBatch).not.toHaveBeenCalled()
+    // The result exposes the summed count and nothing else: no row array is accumulated.
+    expect(result).toEqual({ insertedCount: 4 })
+    expect(emitProgress).toHaveBeenNthCalledWith(1, 0, 5)
+    expect(emitProgress).toHaveBeenLastCalledWith(5, 5)
   })
 
   it('returns empty result without work for empty input', async () => {
@@ -198,7 +275,6 @@ describe('file-provider-full-scan-insert-service', () => {
     })
 
     await expect(service.execute('/tmp', [], {})).resolves.toEqual({
-      inserted: [],
       insertedCount: 0
     })
     expect(upsertFiles).not.toHaveBeenCalled()
@@ -355,7 +431,6 @@ describe('file-provider-full-scan-insert-service', () => {
     )
 
     expect(result).toEqual({
-      inserted,
       insertedCount: 3
     })
     expect(emitProgress).toHaveBeenLastCalledWith(3, 3)
@@ -485,7 +560,6 @@ describe('file-provider-full-scan-insert-service', () => {
       context
     )
     expect(result).toEqual({
-      inserted,
       insertedCount: 2
     })
     expect(emitProgress).toHaveBeenLastCalledWith(2, 2)

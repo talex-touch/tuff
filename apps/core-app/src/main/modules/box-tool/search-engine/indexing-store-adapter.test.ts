@@ -123,13 +123,10 @@ describe('SearchIndexStoreAdapter', () => {
     )
   })
 
-  it('fuses file-row persistence with the index mutation and forwards the persisted rows', async () => {
-    const persisted: Array<Record<string, unknown>> = [
-      { id: 41, path: '/tmp/report.txt', name: 'report.txt' }
-    ]
+  it('fuses file-row persistence with the index mutation and forwards the persisted count', async () => {
     const persistAndIndexFiles = vi.fn(
       async (): Promise<SearchIndexPersistAndIndexResult> => ({
-        persisted,
+        persistedCount: 1,
         commit: {
           sourceId: 'file-provider',
           kind: 'index',
@@ -191,7 +188,7 @@ describe('SearchIndexStoreAdapter', () => {
       indexedItemCount: 1,
       done: true,
       cursor: undefined,
-      persisted
+      persistedCount: 1
     })
     expect(onBatchApplied).toHaveBeenCalledWith(summary, batch)
     // The fused call owns the index mutation; a second, separate index write would

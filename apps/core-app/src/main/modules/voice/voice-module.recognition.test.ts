@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   register: vi.fn(),
   unregister: vi.fn(),
   getRecognitionStatus: vi.fn(),
+  captureUnavailableCode: vi.fn<() => string | null>(),
   getSpeechModelProgress: vi.fn(),
   installSpeechModel: vi.fn(),
   projectSpeechCatalogApiError: vi.fn(),
@@ -71,6 +72,7 @@ vi.mock('./global-dictation', () => ({
   globalDictationController: { register: mocks.register, unregister: mocks.unregister }
 }))
 vi.mock('./voice-service', () => ({
+  captureUnavailableCode: mocks.captureUnavailableCode,
   voiceService: {
     dictate: vi.fn(),
     transcribeUpload: vi.fn(),
@@ -304,4 +306,53 @@ describe('VoiceModule speech model route adoption', () => {
     expect(mocks.ensureLocalAsrRoute).toHaveBeenCalledWith([])
     await module.onDestroy()
   })
+})
+
+/**
+ * The status read is the only place a renderer can learn that this build cannot capture at all,
+ * and it has to learn it in the same answer as the recogniser half — a build whose recogniser is
+ * configured and whose microphone can never open is what #322 was, and a status that reported
+ * only the first half left the UI offering an entry point that could only fail.
+ */
+describe('VoiceModule recognition status capture readiness', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.handlers.clear()
+  })
+
+  /** The recogniser half, which the projection has to carry through beside the capture half. */
+  const recogniserStatus = { asr: { ready: true }, stt: { ready: true } }
+
+  it.each([
+    {
+      // `null` is what the mapper reads out of a probe that reports a loaded component.
+      name: 'a host whose capture component is present',
+      captureCode: null,
+      capture: { ready: true }
+    },
+    {
+      // The code an absent addon is mapped to; that mapping is pinned reason-by-reason in
+      // voice-service.stream-provider.test.ts.
+      name: 'a build shipped without its capture addon',
+      captureCode: 'VOICE_ASR_CAPTURE_COMPONENT_MISSING',
+      capture: { ready: false, reason: 'VOICE_ASR_CAPTURE_COMPONENT_MISSING' }
+    }
+  ])(
+    'answers $name with its capture readiness beside the recogniser status',
+    async ({ captureCode, capture }) => {
+      // `captureCode` drives the mapper stub; `capture` is this test's own expectation of what the
+      // handler must project from it, written out rather than derived so a reshaped projection
+      // (a dropped `reason`, a `ready: true` beside one) fails instead of tracking the source.
+      mocks.captureUnavailableCode.mockReturnValue(captureCode)
+      mocks.getRecognitionStatus.mockReturnValue(recogniserStatus)
+      const module = registerModule()
+      const handler = mocks.handlers.get(voiceApiEvents.getRecognitionStatus.toEventName())
+      if (!handler) throw new Error('Missing recognition status handler')
+
+      const status = handler(undefined, hostContext())
+
+      expect(status).toEqual({ ...recogniserStatus, capture })
+      await module.onDestroy()
+    }
+  )
 })

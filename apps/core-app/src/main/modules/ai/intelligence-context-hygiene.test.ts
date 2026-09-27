@@ -16,7 +16,8 @@ interface FakeRow extends Record<string, unknown> {}
 
 const dbMock = vi.hoisted(() => ({
   client: {
-    execute: vi.fn()
+    execute: vi.fn(),
+    transaction: vi.fn()
   }
 }))
 
@@ -132,6 +133,20 @@ describe('contextHygieneService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     dbMock.client.execute.mockReset()
+    dbMock.client.transaction.mockReset()
+    dbMock.client.transaction.mockImplementation(async () => {
+      await dbMock.client.execute('BEGIN IMMEDIATE')
+      return {
+        execute: dbMock.client.execute,
+        commit: vi.fn(async () => {
+          await dbMock.client.execute('COMMIT')
+        }),
+        rollback: vi.fn(async () => {
+          await dbMock.client.execute('ROLLBACK')
+        }),
+        close: vi.fn()
+      }
+    })
     delete process.env.TUFF_INTELLIGENCE_CONTEXT_COREBOX_ONLY
   })
 

@@ -140,13 +140,12 @@ describe('SourceScopedIndexWriterRouter visibility publication', () => {
     const sequence: string[] = []
     const commitHub = new SearchIndexCommitHub()
     commitHub.subscribe(() => sequence.push('generation'))
-    const persisted: Array<Record<string, unknown>> = [{ id: 7, path: '/tmp/one.txt' }]
     const persistAndApplyProviderItems = vi.fn(
       async (): Promise<SearchIndexPersistAndApplyResult> => {
         sequence.push('persist')
         // A count that cannot be derived from the items: the published commit must carry
         // what the physical writer reported, not a recomputed item total.
-        return { persisted, affectedItems: 5 }
+        return { persistedCount: 12, affectedItems: 5 }
       }
     )
     const runtime: SearchIndexPhysicalWriter = {
@@ -190,7 +189,7 @@ describe('SourceScopedIndexWriterRouter visibility publication', () => {
       [expect.objectContaining({ itemId: 'file:/tmp/one.txt' })],
       ['legacy:one']
     )
-    expect(result.persisted).toBe(persisted)
+    expect(result.persistedCount).toBe(12)
     expect(result.commit).toMatchObject({
       sourceId: 'file-provider',
       kind: 'index',
@@ -332,34 +331,73 @@ describe('SearchIndexWriter file persistence port', () => {
 })
 
 describe('SearchIndexWriter shutdown recovery', () => {
-  it('keeps shutdown pending for drain settlement and closes the client exactly once on retry', async () => {
-    let rejectDrain!: (reason?: unknown) => void
-    const unresolvedDrain = new Promise<void>((_resolve, reject) => {
-      rejectDrain = reject
+  it('begins client shutdown before a blocked admission drain and settles the same promise for both callers', async () => {
+    let releaseAdmission!: () => void
+    const admissionGate = new Promise<void>((resolve) => {
+      releaseAdmission = resolve
     })
-    const client: Pick<SearchIndexWorkerClient, 'drain' | 'shutdown'> = {
-      drain: vi.fn().mockReturnValueOnce(unresolvedDrain).mockResolvedValueOnce(undefined),
-      shutdown: vi.fn(async () => undefined)
+    let resolveShutdown!: () => void
+    const clientShutdown = new Promise<void>((resolve) => {
+      resolveShutdown = resolve
+    })
+    const client: Pick<
+      SearchIndexWorkerClient,
+      'init' | 'applyProviderItems' | 'drain' | 'getPendingCount' | 'shutdown'
+    > = {
+      init: vi.fn(async () => undefined),
+      applyProviderItems: vi.fn(async () => {
+        await admissionGate
+        return { removedItems: 0, indexedItems: 1 }
+      }),
+      // The worker is wedged inside a native call, so its own drain never returns.
+      drain: vi.fn(() => new Promise<void>(() => undefined)),
+      getPendingCount: vi.fn(() => 0),
+      shutdown: vi.fn(() => clientShutdown)
+    }
+    const writer = new SearchIndexWriter({ client: client as unknown as SearchIndexWorkerClient })
+    await writer.initialize('/tmp/search-index-writer-test.db')
+
+    const blockedWrite = writer.indexItems('file-provider', [indexedItem('file:/tmp/wedged.txt')])
+    await vi.waitFor(() => expect(client.applyProviderItems).toHaveBeenCalledTimes(1))
+
+    const first = writer.beginShutdown()
+    // The client teardown is the abort that rejects the in-flight persistence promise; making
+    // callers wait on a drain the wedged worker can never satisfy would hang every quit.
+    expect(client.shutdown).toHaveBeenCalledTimes(1)
+    expect(client.drain).not.toHaveBeenCalled()
+
+    await expect(
+      writer.indexItems('file-provider', [indexedItem('file:/tmp/late.txt')])
+    ).rejects.toThrow('SEARCH_INDEX_WRITER_CLOSED')
+
+    const second = writer.shutdown()
+    expect(second).toBe(first)
+
+    resolveShutdown()
+    await expect(first).resolves.toBeUndefined()
+    await expect(second).resolves.toBeUndefined()
+    expect(client.shutdown).toHaveBeenCalledTimes(1)
+    expect(writer.getStatus().readiness).toBe('closed')
+    await expect(writer.beginShutdown()).resolves.toBeUndefined()
+    expect(client.shutdown).toHaveBeenCalledTimes(1)
+
+    releaseAdmission()
+    await blockedWrite.catch(() => undefined)
+  })
+
+  it('retries the client shutdown after a rejected attempt instead of caching the failure', async () => {
+    const client: Pick<SearchIndexWorkerClient, 'shutdown'> = {
+      shutdown: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('worker termination unconfirmed'))
+        .mockResolvedValueOnce(undefined)
     }
     const writer = new SearchIndexWriter({ client: client as unknown as SearchIndexWorkerClient })
 
-    const firstShutdown = writer.shutdown(1)
-    void firstShutdown.catch(() => undefined)
-    await vi.waitFor(() => expect(client.drain).toHaveBeenCalledTimes(1))
-    expect(client.shutdown).not.toHaveBeenCalled()
+    await expect(writer.beginShutdown()).rejects.toThrow('worker termination unconfirmed')
+    await expect(writer.beginShutdown()).resolves.toBeUndefined()
 
-    rejectDrain(new Error('SEARCH_INDEX_WRITER_DRAIN_TIMEOUT'))
-    await expect(firstShutdown).rejects.toThrow('SEARCH_INDEX_WRITER_DRAIN_TIMEOUT')
-    expect(client.shutdown).not.toHaveBeenCalled()
-    await expect(
-      writer.indexItems('file-provider', [indexedItem('file:/tmp/closed.txt')])
-    ).rejects.toThrow('SEARCH_INDEX_WRITER_CLOSED')
-
-    await writer.shutdown(1)
-    await writer.shutdown(1)
-
-    expect(client.drain).toHaveBeenCalledTimes(2)
-    expect(client.shutdown).toHaveBeenCalledTimes(1)
+    expect(client.shutdown).toHaveBeenCalledTimes(2)
   })
 })
 

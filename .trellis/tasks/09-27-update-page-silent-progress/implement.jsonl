@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend conventions incl. line 91: skeleton is the default loading state (SettingSkeleton + useDeferredLoading), must mirror loaded layout"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "TuffGroupBlock/CoreApp wrappers delegate primitives to TuffEx; SettingSkeleton usage for settings pages"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Composable conventions for the new useUpdateDownloadProgress and useUpdateRuntime additions"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Typing rules for new shared UpdateHistoryEntry contract and renderer view-model"}
+{"file": ".trellis/spec/frontend/release-testing.md", "reason": "Section 3 line 212 native-trust UI contract that this task rewrites to a three-platform authenticity banner"}
+{"file": ".trellis/spec/main-process/channel-transport-contracts.md", "reason": "Rules for adding the request-response UpdateEvents.getHistory event"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Change spans utils types/transport, main UpdateService/repository and renderer; native-trust example at line 129"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "Shared checkout with concurrent sessions: locale JSON edits, CDP ownership, commit staging"}
+{"file": ".trellis/tasks/archive/2026-07/07-31-remove-version-history/prd.md", "reason": "Research: remote release-notes history was deliberately removed; update history here must stay local-only"}
