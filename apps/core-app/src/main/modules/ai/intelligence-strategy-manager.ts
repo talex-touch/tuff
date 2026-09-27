@@ -29,11 +29,21 @@ function normalizeStrategyId(strategyId?: string | null): string {
   return strategyId
 }
 
-function sortByPriority(providers: IntelligenceProviderConfig[]): IntelligenceProviderConfig[] {
+function sortByPriority(
+  providers: IntelligenceProviderConfig[],
+  allowedProviderIds?: string[]
+): IntelligenceProviderConfig[] {
   return [...providers].sort((a, b) => {
     const priorityA = a.priority ?? 999
     const priorityB = b.priority ?? 999
     if (priorityA !== priorityB) return priorityA - priorityB
+    if (allowedProviderIds && allowedProviderIds.length > 0) {
+      const indexA = allowedProviderIds.indexOf(a.id)
+      const indexB = allowedProviderIds.indexOf(b.id)
+      if (indexA !== -1 && indexB !== -1 && indexA !== indexB) {
+        return indexA - indexB
+      }
+    }
     return a.id.localeCompare(b.id)
   })
 }
@@ -64,7 +74,7 @@ class DefaultStrategyManager implements StrategyManager {
       throw new Error('No providers available for selection')
     }
 
-    const sortedProviders = sortByPriority(availableProviders)
+    const sortedProviders = sortByPriority(availableProviders, options.allowedProviderIds)
 
     // Handle explicit provider preference.
     if (options.preferredProviderId) {

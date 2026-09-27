@@ -89,13 +89,14 @@ const OMP_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: OMP_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
   name: 'OMP (local CLI)',
-  enabled: true,
-  priority: 0,
+  enabled: false,
+  priority: 10,
   models: [],
   timeout: 120000,
   capabilities: ['text.chat'],
   metadata: {
     internal: true,
+    isLocalCli: true,
     origin: OMP_CLI_ORIGIN
   }
 }
@@ -104,13 +105,14 @@ const PI_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: PI_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
   name: 'Pi (local CLI)',
-  enabled: true,
-  priority: 0,
+  enabled: false,
+  priority: 10,
   models: [],
   timeout: 120000,
   capabilities: ['text.chat'],
   metadata: {
     internal: true,
+    isLocalCli: true,
     origin: PI_CLI_ORIGIN
   }
 }
@@ -119,13 +121,14 @@ const CODEX_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: CODEX_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
   name: 'Codex (local CLI)',
-  enabled: true,
-  priority: 0,
+  enabled: false,
+  priority: 10,
   models: [],
   timeout: 120000,
   capabilities: ['text.chat'],
   metadata: {
     internal: true,
+    isLocalCli: true,
     origin: CODEX_CLI_ORIGIN
   }
 }
@@ -134,13 +137,14 @@ const CLAUDE_CLI_PROVIDER: IntelligenceProviderConfig = {
   id: CLAUDE_CLI_PROVIDER_ID,
   type: IntelligenceProviderType.LOCAL,
   name: 'Claude Code (local CLI)',
-  enabled: true,
-  priority: 0,
+  enabled: false,
+  priority: 10,
   models: [],
   timeout: 120000,
   capabilities: ['text.chat'],
   metadata: {
     internal: true,
+    isLocalCli: true,
     origin: CLAUDE_CLI_ORIGIN
   }
 }
@@ -1417,10 +1421,28 @@ function applyNexusProviderAuthState(signedIn: boolean): boolean {
     }
 
     for (const capability of Object.values(stored.capabilities ?? {})) {
+      const userReordered = capability.metadata?.userReordered === true
+      let foundNexus = false
       for (const binding of capability.providers ?? []) {
-        if (binding.providerId === TUFF_NEXUS_PROVIDER_ID && binding.enabled === false) {
-          binding.enabled = true
-          changed = true
+        if (binding.providerId === TUFF_NEXUS_PROVIDER_ID) {
+          foundNexus = true
+          if (binding.enabled === false) {
+            binding.enabled = true
+            changed = true
+          }
+          if (!userReordered && binding.priority !== 1) {
+            binding.priority = 1
+            changed = true
+          }
+        }
+      }
+
+      if (!userReordered && foundNexus && Array.isArray(capability.providers)) {
+        for (const binding of capability.providers) {
+          if (binding.providerId !== TUFF_NEXUS_PROVIDER_ID && (binding.priority ?? 999) <= 1) {
+            binding.priority = 2
+            changed = true
+          }
         }
       }
     }
