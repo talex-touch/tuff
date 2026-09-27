@@ -8,7 +8,10 @@ const workerMock = vi.hoisted(() => {
   class MockWorker {
     readonly threadId = 1
     readonly messages: unknown[] = []
+    readonly lifecycle: string[] = []
     terminateCalls = 0
+    unrefCalls = 0
+    ackShutdown = true
     private readonly handlers = new Map<string, Handler[]>()
 
     constructor(readonly workerPath: string) {
@@ -32,9 +35,18 @@ const workerMock = vi.hoisted(() => {
 
     postMessage(message: unknown): void {
       this.messages.push(message)
+      if (
+        message &&
+        typeof message === 'object' &&
+        'type' in message &&
+        typeof message.type === 'string'
+      ) {
+        this.lifecycle.push(message.type)
+      }
       // Model the real worker acking a graceful-shutdown request so teardown
       // resolves promptly instead of waiting for the timeout fallback.
       if (
+        this.ackShutdown &&
         message &&
         typeof message === 'object' &&
         (message as { type?: unknown }).type === 'shutdown'
@@ -50,8 +62,15 @@ const workerMock = vi.hoisted(() => {
       }
     }
 
+    unref(): this {
+      this.unrefCalls += 1
+      this.lifecycle.push('unref')
+      return this
+    }
+
     terminate(): Promise<number> {
       this.terminateCalls += 1
+      this.lifecycle.push('terminate')
       return Promise.resolve(0)
     }
   }
@@ -306,7 +325,10 @@ describe('SearchIndexWorkerClient init gate', () => {
       result: combined
     })
 
-    await expect(persistPromise).resolves.toEqual(combined)
+    await expect(persistPromise).resolves.toEqual({
+      ...combined,
+      metrics: { ...combined.metrics, roundTripDurationMs: expect.any(Number) }
+    })
   })
 
   it('rejects pending atomic provider writes on init failure and allows init retry', async () => {
@@ -632,6 +654,79 @@ describe('SearchIndexWorkerClient init gate', () => {
     const messageTypes = worker.messages.map((message) => (message as { type: string }).type)
     expect(messageTypes).toContain('shutdown')
     expect(worker.terminateCalls).toBe(1)
+  })
+
+  it('detaches the writer before a graceful close so shutdown stays bounded', async () => {
+    vi.useFakeTimers()
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    // An uninterruptible native SQLite call never acks the close request, so the
+    // client must not keep the process alive waiting on it.
+    worker.ackShutdown = false
+    const shutdown = client.shutdown()
+
+    expect(worker.unrefCalls).toBe(1)
+    expect(worker.terminateCalls).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(500)
+    await expect(shutdown).resolves.toBeUndefined()
+    expect(worker.terminateCalls).toBe(1)
+    // Detach and close request precede the hard terminate.
+    expect(worker.lifecycle).toEqual(['init', 'unref', 'shutdown', 'terminate'])
+
+    // Shutdown is terminal: no replacement worker, and later writes are refused.
+    expect(workerMock.workers).toHaveLength(1)
+    await expect(
+      client.applyProviderItems(
+        'file-provider',
+        [
+          {
+            itemId: 'file:/tmp/after-close.txt',
+            providerId: 'file-provider',
+            type: 'file',
+            name: 'after-close.txt'
+          }
+        ],
+        []
+      )
+    ).rejects.toThrow('SEARCH_INDEX_WRITER_CLOSED')
+    expect(workerMock.workers).toHaveLength(1)
+  })
+
+  it('resolves shutdown at the close deadline without awaiting termination confirmation', async () => {
+    vi.useFakeTimers()
+    // A long termination deadline is the witness: if shutdown still awaited the
+    // confirmation, resolution would be gated on this bound instead of the close.
+    const client = new SearchIndexWorkerClient({ terminationTimeoutMs: 5_000 })
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    // terminate() never settles and the worker never acks the close, so only the
+    // bounded close grace can settle shutdown.
+    worker.ackShutdown = false
+    const terminate = vi
+      .spyOn(worker, 'terminate')
+      .mockReturnValue(new Promise<number>(() => undefined))
+    let settled = false
+    const shutdown = client.shutdown().then(() => {
+      settled = true
+    })
+
+    await vi.advanceTimersByTimeAsync(499)
+    expect(settled).toBe(false)
+    expect(terminate).toHaveBeenCalledTimes(0)
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(terminate).toHaveBeenCalledTimes(1)
+    await expect(shutdown).resolves.toBeUndefined()
+    expect(settled).toBe(true)
+    expect(workerMock.workers).toHaveLength(1)
   })
 
   it('dispatches provider-scoped item removal and returns removed count', async () => {

@@ -52,6 +52,7 @@ const DEFAULT_TERMINATION_TIMEOUT_MS = 1_000
 // Bound the wait for the worker to checkpoint + close its DB before we hard
 // terminate it. Always falls through to terminate() so teardown can't hang.
 const GRACEFUL_CLOSE_TIMEOUT_MS = 2_000
+const SHUTDOWN_GRACEFUL_CLOSE_TIMEOUT_MS = 500
 
 function resolveSearchIndexWorkerPath(): string {
   const candidates = new Set<string>([
@@ -693,15 +694,25 @@ export class SearchIndexWorkerClient {
 
   async shutdown(): Promise<void> {
     this.shuttingDown = true
-    // shuttingDown blocks new work, so there is no race — close gracefully first,
-    // then terminate under the normal (short) termination deadline.
+    // A native libSQL call cannot process the close message until it returns. Detach first so an
+    // uninterruptible SQLite wait cannot keep Electron alive, then give healthy writes a short
+    // grace period before requesting termination.
     const worker = this.worker
-    if (worker) await this.requestWorkerGracefulClose(worker)
+    worker?.unref()
+    if (worker) {
+      await this.requestWorkerGracefulClose(worker, SHUTDOWN_GRACEFUL_CLOSE_TIMEOUT_MS)
+    }
     const termination = this.beginWorkerTermination({ keepInitState: false })
     this.rejectPendingTasks(new Error('SEARCH_INDEX_WRITER_CLOSED'))
     this.resolvePendingMetrics()
     this.replacementSessions.clear()
-    await this.awaitWorkerTermination(termination)
+    void this.awaitWorkerTermination(termination).catch((error) => {
+      log.warn('[SearchIndexWorkerClient] Writer termination did not settle after shutdown', {
+        error
+      })
+    })
+    // Dispatch `worker.terminate()` before reporting shutdown complete; do not await confirmation.
+    await Promise.resolve()
   }
 
   // ---------- Internal ----------
@@ -1020,7 +1031,10 @@ export class SearchIndexWorkerClient {
    * dead worker just falls through to the hard terminate() that follows. Uses a
    * dedicated listener so it never disturbs the pending-task map.
    */
-  private requestWorkerGracefulClose(worker: Worker): Promise<void> {
+  private requestWorkerGracefulClose(
+    worker: Worker,
+    timeoutMs = GRACEFUL_CLOSE_TIMEOUT_MS
+  ): Promise<void> {
     return new Promise<void>((resolve) => {
       const taskId = this.generateTaskId('shutdown')
       let settled = false
@@ -1040,7 +1054,7 @@ export class SearchIndexWorkerClient {
           finish()
         }
       }
-      const timer = setTimeout(finish, GRACEFUL_CLOSE_TIMEOUT_MS)
+      const timer = setTimeout(finish, timeoutMs)
       timer.unref?.()
       worker.on('message', onMessage)
       try {

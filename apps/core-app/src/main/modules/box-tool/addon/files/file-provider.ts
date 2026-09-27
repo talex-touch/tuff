@@ -1850,17 +1850,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const startedAt = performance.now()
     try {
       const result = await mutation(batch, acceptedRecords)
-      const persisted = result.persisted as Array<typeof filesSchema.$inferSelect>
+      const persistedCount = result.persistedCount
       const metrics = result.metrics
       recordRuntimeWriteSnapshot(this.ftsWriteSnapshotService, {
-        entries: persisted.length,
+        entries: persistedCount,
         reason: 'full-scan.upsert.fused',
         durationMs: performance.now() - startedAt,
         metadata: {
           writeMode: 'fused',
           requestedRows: records.length,
           acceptedRows: acceptedRecords.length,
-          persistedRows: persisted.length,
+          persistedRows: persistedCount,
           indexedItems: metrics?.indexedItems,
           removedItems: metrics?.removedItems,
           legacyItemIds: metrics?.legacyItemIds,
@@ -1872,7 +1872,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           storeBoundary: 'file-persistence-fts'
         }
       })
-      return persisted
+      return persistedCount
     } catch (error) {
       recordRuntimeWriteFailureSnapshot(this.ftsWriteSnapshotService, {
         error,

@@ -208,7 +208,8 @@ import { operationalErrorService } from '../../../observability'
 import { FileProviderEnrichmentResumeService } from './services/file-provider-enrichment-resume-service'
 import {
   FileProviderIndexSchedulerService,
-  type FileProviderIndexSchedulerDeps
+  type FileProviderIndexSchedulerDeps,
+  type FileProviderIndexSchedulerFile
 } from './services/file-provider-index-scheduler-service'
 import { fileProvider, resolveFileProviderBaseWatchPaths } from './file-provider'
 import { recordRuntimeWriteSnapshot } from './services/file-provider-runtime-evidence'
@@ -462,7 +463,7 @@ type FileProviderLeaseRecoveryTestApi = FileProviderIndexingLifecycleTestApi & {
     drain: (timeoutMs?: number, mutationLeaseId?: string) => Promise<void>
     cancelLease: (mutationLeaseId: string) => void
     schedule: (
-      files: unknown[],
+      files: FileProviderIndexSchedulerFile[],
       reason: string,
       mutationLeaseId?: string
     ) => { accepted: number; deferred: number }
@@ -864,43 +865,165 @@ describe('file-provider startup readiness', () => {
     }
   })
 
-  it('bounds shutdown producer waits and succeeds on retry after indexing settles', async () => {
-    vi.useFakeTimers()
-    const provider = fileProvider as unknown as FileProviderShutdownTestApi
+  /**
+   * Shutdown must stop admitting content enrichment BEFORE it waits on any producer. A blocked
+   * indexing run (a parser/publication barrier) is the worst case: on beta.47 the enrichment
+   * scheduler and its read-only worker stayed alive behind that barrier, and admission only closed
+   * in the `finally`, i.e. after the wait resolved. The durable pending markers written before
+   * admission make closing early recoverable — the next launch resumes every unfinished row — so
+   * this asserts the gate is already shut while the producer is still blocked.
+   */
+  it('closes enrichment admission and its worker before waiting on a blocked indexing producer', async () => {
+    const provider = fileProvider as unknown as FileProviderShutdownTestApi &
+      FileProviderLeaseRecoveryTestApi
+    const originalScheduler = provider.indexSchedulerService
+    const originalWorker = provider.fileIndexWorker
     const originalIsInitializing = provider.isInitializing
     const indexing = createDeferred<void>()
-    const scanWorkerShutdown = vi.spyOn(provider.fileScanWorker, 'shutdown')
-    const indexWorkerShutdown = vi.spyOn(provider.fileIndexWorker, 'shutdown')
-    const reconcileWorkerShutdown = vi.spyOn(provider.reconcileWorker, 'shutdown')
+    const workerShutdown = vi.fn()
+    const indexFiles = vi.fn(
+      async (
+        _dbPath: string,
+        _providerId: string,
+        _providerType: string,
+        files: Array<{ id: number; path: string; name: string }>
+      ) => ({ processed: files.length, failed: 0 })
+    )
+    // Driven through a fresh scheduler carrying the production dispatch closure, so this proves the
+    // gate the provider closes at shutdown rather than leftover state from an earlier test.
+    const scheduler = new FileProviderIndexSchedulerService({
+      getDatabaseFilePath: () => '/tmp/tuff-file-provider-admission-db',
+      getProviderId: () => 'file-provider',
+      getProviderType: () => 'file',
+      getWatchPaths: () => ['/tmp'],
+      indexFiles: dispatchClosureOf(originalScheduler),
+      logWarn: vi.fn()
+    })
 
     resetProviderState(provider)
+    provider.indexSchedulerService = scheduler
+    provider.fileIndexWorker = {
+      indexFiles,
+      shutdown: workerShutdown,
+      cancelLease: vi.fn(() => 0)
+    } as unknown as typeof provider.fileIndexWorker
     provider.isInitializing = indexing.promise
 
+    let prepared = false
+    const probeFiles = [{ id: 1, path: '/tmp/admission-probe.txt', name: 'admission-probe.txt' }]
     try {
-      const firstPrepare = provider.prepareForSearchIndexShutdown()
-      const firstFailure = expect(firstPrepare).rejects.toThrow(
-        'FILE_PROVIDER_SHUTDOWN_PRODUCER_TIMEOUT:indexing'
-      )
+      // Calibration: this exact probe is admitted while the gate is open, so the rejection below can
+      // only be the shutdown gate closing — not path filtering or an exhausted capacity budget.
+      expect(scheduler.schedule(probeFiles, 'probe', 'lease-before-shutdown')).toEqual({
+        accepted: 1,
+        deferred: 0
+      })
 
-      await vi.advanceTimersByTimeAsync(30_000)
-      await firstFailure
+      const prepare = provider.prepareForSearchIndexShutdown().then(() => {
+        prepared = true
+      })
 
-      expect(scanWorkerShutdown).toHaveBeenCalledTimes(1)
-      expect(indexWorkerShutdown).toHaveBeenCalledTimes(1)
-      expect(reconcileWorkerShutdown).toHaveBeenCalledTimes(1)
+      // prepareForSearchIndexShutdown's prologue is synchronous: the gates must already be down even
+      // though the producer it waits on has not settled.
+      expect(prepared).toBe(false)
+      expect(workerShutdown).toHaveBeenCalledTimes(1)
+      expect(scheduler.schedule(probeFiles, 'probe', 'lease-after-shutdown')).toEqual({
+        accepted: 0,
+        deferred: 0
+      })
 
       indexing.resolve(undefined)
-      await expect(provider.prepareForSearchIndexShutdown()).resolves.toBeUndefined()
-
-      expect(scanWorkerShutdown).toHaveBeenCalledTimes(2)
-      expect(indexWorkerShutdown).toHaveBeenCalledTimes(2)
-      expect(reconcileWorkerShutdown).toHaveBeenCalledTimes(2)
+      await prepare
+      expect(prepared).toBe(true)
+      // The drain that follows prepare's producer wait must not reopen admission.
+      expect(scheduler.schedule(probeFiles, 'probe', 'lease-after-drain')).toEqual({
+        accepted: 0,
+        deferred: 0
+      })
     } finally {
       indexing.resolve(undefined)
+      provider.indexSchedulerService = originalScheduler
+      provider.fileIndexWorker = originalWorker
       provider.isInitializing = originalIsInitializing
-      scanWorkerShutdown.mockRestore()
-      indexWorkerShutdown.mockRestore()
-      reconcileWorkerShutdown.mockRestore()
+    }
+  })
+
+  it('does not report or retain an indexing failure that shutdown cancelled', async () => {
+    const provider = fileProvider as unknown as FileProviderShutdownTestApi & {
+      startIndexing: (
+        source: 'auto' | 'manual',
+        runOptions?: { throwOnFailure?: boolean }
+      ) => Promise<{ errors: number }>
+      dbUtils: unknown
+    }
+    const originalDbUtils = provider.dbUtils
+    const reportSpy = vi.spyOn(operationalErrorService, 'report')
+    const failure = new Error('Failed query: UPDATE files SET name = ? params: /tmp/private.txt')
+
+    resetProviderState(provider)
+    // The run is genuinely failing; only the shutdown state decides how that failure is treated.
+    provider.dbUtils = {
+      getFileIndexReadDb: () => {
+        throw failure
+      }
+    }
+    provider.shuttingDown = true
+
+    try {
+      await expect(provider.startIndexing('auto')).resolves.toEqual(
+        expect.objectContaining({ errors: 0 })
+      )
+      // A cancelled run is recoverable, not a degraded startup: nothing may be reported and no
+      // failure may be left behind for the next status poll.
+      expect(reportSpy).not.toHaveBeenCalled()
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({ initializationFailed: false, errorCode: null, reportId: null })
+      )
+
+      // The runtime path passes throwOnFailure, and it must still observe the cancellation.
+      await expect(provider.startIndexing('auto', { throwOnFailure: true })).rejects.toBe(failure)
+      expect(reportSpy).not.toHaveBeenCalled()
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({ initializationFailed: false, errorCode: null })
+      )
+    } finally {
+      provider.dbUtils = originalDbUtils
+      reportSpy.mockRestore()
+    }
+  })
+
+  it('does not report or retain an indexing failure cancelled by an aborted scan signal', async () => {
+    const provider = fileProvider as unknown as FileProviderShutdownTestApi & {
+      startIndexing: (
+        source: 'auto' | 'manual',
+        runOptions?: { throwOnFailure?: boolean; signal?: AbortSignal }
+      ) => Promise<{ errors: number }>
+    }
+    const reportSpy = vi.spyOn(operationalErrorService, 'report')
+    const controller = new AbortController()
+    const abortReason = new Error('INDEXED_SOURCE_SCAN_ABORTED:file-provider')
+    controller.abort(abortReason)
+
+    resetProviderState(provider)
+
+    try {
+      await expect(provider.startIndexing('auto', { signal: controller.signal })).resolves.toEqual(
+        expect.objectContaining({ errors: 0 })
+      )
+      expect(reportSpy).not.toHaveBeenCalled()
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({ initializationFailed: false, errorCode: null })
+      )
+
+      await expect(
+        provider.startIndexing('auto', { signal: controller.signal, throwOnFailure: true })
+      ).rejects.toBe(abortReason)
+      expect(reportSpy).not.toHaveBeenCalled()
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({ initializationFailed: false, errorCode: null })
+      )
+    } finally {
+      reportSpy.mockRestore()
     }
   })
 

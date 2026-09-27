@@ -263,6 +263,36 @@ describe("indexing-worker-scheduler-service", () => {
     });
   });
 
+  it("does not report the shutdown rejection of a dispatch that was already in flight", async () => {
+    const inFlight = Promise.withResolvers<void>();
+    const rejection = new Error("worker terminated by shutdown");
+    const dispatch = vi.fn(async (_context: string, payload: number[]) => {
+      if (payload[0] === 0) await inFlight.promise;
+      throw rejection;
+    });
+    const logWarn = vi.fn();
+    const service = new IndexedWorkerSchedulerService<number>({
+      getWorkerContext: () => "worker-context",
+      dispatch,
+      logWarn,
+      config: { chunkSize: 1, maxInFlight: 1, maxPendingBatches: 2 },
+    });
+
+    service.schedule({ payload: [0], reason: "shutdown" });
+    await settleMicrotasks();
+    expect(dispatch).toHaveBeenCalledTimes(1);
+
+    // Closing mid-flight is exactly what a quit does: the batch the shutdown itself killed is
+    // the one whose dispatch promise then rejects. It is not an operational failure.
+    service.close();
+    inFlight.resolve();
+    await settleMicrotasks();
+
+    await expect(service.drain(1_000)).resolves.toBeUndefined();
+    expect(logWarn).not.toHaveBeenCalled();
+    expect(service.hasPendingWork()).toBe(false);
+  });
+
   it("settles a failed batch, advances the queue, and leaves no retained backlog", async () => {
     const failure = new Error("worker failed");
     const dispatch = vi.fn(async (_context: string, payload: number[]) => {

@@ -347,42 +347,50 @@ export class FileProviderWatchService {
           SELECT path, last_scanned AS lastScanned
           FROM scan_progress
         `)
-    const completedScans = this.foldScanProgressOntoWatchRoots(progressRows)
+    const evidence = this.resolveScanProgressEvidence(progressRows)
+    const eligibility = resolveIndexedScanEligibility({
+      watchPaths: this.watchPaths,
+      completedScans: evidence.completedScans,
+      intervalMs: this.fileIndexSettings.autoScanIntervalMs,
+      normalizePath: this.normalizePath
+    })
 
     return {
-      ...resolveIndexedScanEligibility({
-        watchPaths: this.watchPaths,
-        completedScans,
-        intervalMs: this.fileIndexSettings.autoScanIntervalMs,
-        normalizePath: this.normalizePath
-      }),
-      hasScanEvidence: completedScans.length > 0
+      ...eligibility,
+      lastScannedAt: evidence.lastScannedAt ?? eligibility.lastScannedAt,
+      hasScanEvidence: evidence.hasScanEvidence
     }
   }
 
   /**
-   * Scan progress is recorded per resumable unit: a root writes its own path once the whole tree
-   * is walked, and each completed child while the walk is still in flight. Keeping only the rows
-   * that are watch roots themselves discarded that partial progress, so a half-walked root looked
-   * untouched and every boot started it over. Fold each row onto the root that owns it, newest
-   * timestamp wins.
+   * Child rows are resumable checkpoints, not proof that their owning root finished. They count as
+   * scan evidence (so a restart still obeys the idle gate) and update the observed timestamp, while
+   * only an exact root row closes that root's eligibility. The next scan then resumes past the
+   * completed children instead of suppressing the incomplete root for a full auto-scan interval.
    */
-  private foldScanProgressOntoWatchRoots(
+  private resolveScanProgressEvidence(
     rows: ReadonlyArray<{ path: string; lastScanned: unknown }>
-  ): Array<{ path: string; lastScanned: unknown }> {
-    const newestByRoot = new Map<string, number>()
-    const rowByRoot = new Map<string, { path: string; lastScanned: unknown }>()
+  ): {
+    completedScans: Array<{ path: string; lastScanned: unknown }>
+    lastScannedAt: number | null
+    hasScanEvidence: boolean
+  } {
+    const completedScans: Array<{ path: string; lastScanned: unknown }> = []
+    let lastScannedAt: number | null = null
     for (const row of rows) {
       const root = this.resolveOwningWatchRoot(row.path)
       if (!root) continue
       const timestamp = toIndexedScanTimestamp(row.lastScanned)
       if (timestamp === null) continue
-      const known = newestByRoot.get(root)
-      if (known !== undefined && known >= timestamp) continue
-      newestByRoot.set(root, timestamp)
-      rowByRoot.set(root, { path: root, lastScanned: row.lastScanned })
+      lastScannedAt = lastScannedAt === null ? timestamp : Math.max(lastScannedAt, timestamp)
+      if (this.normalizePath(row.path) !== this.normalizePath(root)) continue
+      completedScans.push({ path: root, lastScanned: row.lastScanned })
     }
-    return Array.from(rowByRoot.values())
+    return {
+      completedScans,
+      lastScannedAt,
+      hasScanEvidence: lastScannedAt !== null
+    }
   }
 
   /** The most specific watch root containing `rawPath`, or null when no root owns it. */

@@ -305,9 +305,12 @@ describe('file-provider-watch-service', () => {
   })
 
   // Regression: progress is written per resumable unit, so a half-walked root only has checkpoint
-  // rows for its children. Those must count as the root's progress, newest checkpoint winning —
-  // otherwise every boot restarted the walk from scratch.
-  it('folds child checkpoint rows onto their watch root', async () => {
+  // rows for its children. A checkpoint proves the walk is under way — it feeds the idle gate and
+  // the observed timestamp, with the newest checkpoint winning — but it is not the root's
+  // completion, so the owning root must stay eligible. Folding the checkpoint onto the root (the
+  // beta.47 behavior) dropped the root from `newPaths` and parked the rest of the walk for a whole
+  // auto-scan interval.
+  it('keeps a root that only has child checkpoints eligible while reporting scan evidence', async () => {
     const checkpointTimestamp = Date.now() - 60 * 1000
     const olderCheckpointTimestamp = Date.now() - 2 * 60 * 60 * 1000
     const { dbUtils } = createDbUtils([
@@ -318,7 +321,50 @@ describe('file-provider-watch-service', () => {
 
     const eligibility = await service.getScanEligibility()
 
+    expect(eligibility.newPaths).toEqual(['/tmp/tuff-index-a', '/tmp/tuff-index-b'])
+    expect(eligibility.stalePaths).toEqual([])
+    expect(eligibility.lastScannedAt).toBe(checkpointTimestamp)
+    expect(eligibility.hasScanEvidence).toBe(true)
+  })
+
+  // Only a row for the root path itself closes that root. A checkpoint under a sibling root is not
+  // the sibling's completion, and it must not leak onto the root that did finish.
+  it('closes a root only for its own progress row', async () => {
+    const rootTimestamp = Date.now() - 30 * 60 * 1000
+    const checkpointTimestamp = Date.now() - 60 * 1000
+    const { dbUtils } = createDbUtils([
+      { path: '/tmp/tuff-index-a', lastScanned: rootTimestamp },
+      { path: '/tmp/tuff-index-b/sub', lastScanned: checkpointTimestamp }
+    ])
+    const service = createService({ dbUtils })
+
+    const eligibility = await service.getScanEligibility()
+
     expect(eligibility.newPaths).toEqual(['/tmp/tuff-index-b'])
+    expect(eligibility.stalePaths).toEqual([])
+    expect(eligibility.lastScannedAt).toBe(checkpointTimestamp)
+    expect(eligibility.hasScanEvidence).toBe(true)
+  })
+
+  // Ownership is segment-aware and picks the most specific root: a checkpoint under
+  // `/tmp/tuff-index-a2` belongs to that root, not to its string-prefix sibling. It therefore
+  // neither closes the longer root nor counts as the shorter root's completion — the short root is
+  // closed by its own row only.
+  it('assigns a child checkpoint to its most specific segment-prefix root', async () => {
+    const rootTimestamp = Date.now() - 30 * 60 * 1000
+    const checkpointTimestamp = Date.now() - 60 * 1000
+    const { dbUtils } = createDbUtils([
+      { path: '/tmp/tuff-index-a', lastScanned: rootTimestamp },
+      { path: '/tmp/tuff-index-a2/sub', lastScanned: checkpointTimestamp }
+    ])
+    const service = createService({
+      baseWatchPaths: ['/tmp/tuff-index-a', '/tmp/tuff-index-a2'],
+      dbUtils
+    })
+
+    const eligibility = await service.getScanEligibility()
+
+    expect(eligibility.newPaths).toEqual(['/tmp/tuff-index-a2'])
     expect(eligibility.stalePaths).toEqual([])
     expect(eligibility.lastScannedAt).toBe(checkpointTimestamp)
     expect(eligibility.hasScanEvidence).toBe(true)
