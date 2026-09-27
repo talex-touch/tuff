@@ -31,6 +31,10 @@ import {
   providerConfigDocumentContainsCredential,
   redactProviderConfigDocument
 } from '../ai/provider-credential-service'
+import {
+  describeIntelligenceWriteRegression,
+  reportIntelligenceWriteRegression
+} from '../ai/intelligence-config-write-probe'
 import { StorageCache } from './storage-cache'
 import { StorageFrequencyMonitor } from './storage-frequency-monitor'
 import { StorageLRUManager } from './storage-lru-manager'
@@ -543,6 +547,23 @@ export class StorageModule extends BaseModule {
         }
 
         const previousValue = request.persist === true ? this.getConfig(request.key) : null
+        // Instrumentation only: it compares the document this renderer write is about to replace
+        // against the one arriving, and logs what the write loses. The renderer holds its own copy
+        // and commits it wholesale, so a copy taken before one of main's own writes would take that
+        // write with it — the case that needs field evidence rather than another guess. `peekRaw` is
+        // the passive read (an observation must not move an entry in the LRU), and a miss falls back
+        // to the repository read: an evicted cache is not evidence of an empty document. A write the
+        // conflict gate below is about to reject changes nothing and is already logged there.
+        const serverVersion = this.cache.getVersion(request.key)
+        const willBeApplied = request.version === undefined || request.version >= serverVersion
+        if (request.key === StorageList.IntelligenceConfig && willBeApplied) {
+          const previousDocument = this.cache.peekRaw(request.key) ?? this.getConfig(request.key)
+          const regression = describeIntelligenceWriteRegression(previousDocument, payload, {
+            clientVersion: request.version,
+            serverVersion
+          })
+          if (regression) reportIntelligenceWriteRegression(regression)
+        }
         const result = this.saveConfig(
           request.key,
           payload,

@@ -1,4 +1,5 @@
 import type { AppIndexManagedEntry } from '@talex-touch/utils/transport/events/types'
+import type { AppPutAwayOutcome } from '../app-hide-adapter'
 import type { DbUtils } from '../../../../../db/utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -8,6 +9,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * everything else on the module is a stub so the import graph stays out of this suite.
  */
 const shortcutStore = vi.hoisted(() => new Map<string, string>())
+
+/**
+ * The callback `AppShortcutService` hands the OS. Captured so a test can press the key the way the
+ * OS would, instead of reaching into the service for a private method.
+ */
+const pressCallbacks = vi.hoisted(() => new Map<string, () => void | Promise<void>>())
+
+const hideAdapter = vi.hoisted(() => ({
+  putAwayApplicationInFront: vi.fn(async (): Promise<AppPutAwayOutcome> => ({ hidden: true }))
+}))
+
+/**
+ * The launch recorder, mocked at this boundary: what a press records is part of this service's
+ * contract, while which stats rows a launch writes is the recorder's own.
+ */
+const launchRecorder = vi.hoisted(() => ({
+  record: vi.fn(async () => undefined),
+  previousAppContext: vi.fn(async () => ({}))
+}))
+const launcher = vi.hoisted(() => ({
+  launchApp: vi.fn(async () => ({ status: 'success' as const }))
+}))
 
 vi.mock('electron', () => ({
   app: { getLocale: vi.fn(() => 'zh-CN') },
@@ -21,13 +44,42 @@ vi.mock('../../../../global-shortcon', () => ({
     getShortcutAccelerator: (shortcutId: string) => shortcutStore.get(shortcutId) ?? null,
     // Stateful rather than a bare `() => true`, so a rollback asserts "the store holds what it
     // held before" rather than "some mock was called".
-    setAppShortcut: (shortcutId: string, accelerator: string) => {
+    setAppShortcut: (
+      shortcutId: string,
+      accelerator: string,
+      press?: () => void | Promise<void>
+    ) => {
       shortcutStore.set(shortcutId, accelerator)
+      if (press) pressCallbacks.set(shortcutId, press)
       return true
     },
-    removeAppShortcut: (shortcutId: string) => shortcutStore.delete(shortcutId)
+    removeAppShortcut: (shortcutId: string) => {
+      pressCallbacks.delete(shortcutId)
+      return shortcutStore.delete(shortcutId)
+    }
   }
 }))
+
+vi.mock('../app-hide-adapter', () => ({
+  putAwayApplicationInFront: hideAdapter.putAwayApplicationInFront
+}))
+
+vi.mock('../app-launcher', () => ({
+  launchApp: launcher.launchApp
+}))
+
+vi.mock('../../../search-engine/app-launch-recorder', async (importOriginal) => {
+  // Partial: `AppUsageQueryService` reads `APP_PROVIDER_SOURCE_ID` from this module, and a bare
+  // replacement would take the usage counts down with it.
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    AppLaunchRecorder: class {
+      record = launchRecorder.record
+    },
+    resolvePreviousAppContext: launchRecorder.previousAppContext
+  }
+})
 
 import { AppManagedEntryActionsService } from './app-managed-entry-actions-service'
 import { AppUserAliasService } from './app-user-alias-service'
@@ -99,7 +151,9 @@ function createService(options: {
 
 /**
  * The config table as `AppShortcutService` uses it: `restore()` reads the shortcutId → path map
- * through `…where().limit(1)`, and `save()` writes it back through an upsert that fails here.
+ * through `…where().limit(1)`, and `save()` writes it back through an upsert that fails when asked.: which stats row a launch
+ * produces is `AppLaunchRecorder`'s contract, and a stub that raised would turn that into noise on
+ * every press this suite exercises.
  */
 function shortcutConfigDb(seed: Record<string, string>, failWrite: boolean): DbUtils {
   return {
@@ -130,6 +184,14 @@ async function boundButUnwritableService(
 
 beforeEach(() => {
   shortcutStore.clear()
+  pressCallbacks.clear()
+  hideAdapter.putAwayApplicationInFront.mockReset()
+  hideAdapter.putAwayApplicationInFront.mockResolvedValue({ hidden: true })
+  launcher.launchApp.mockReset()
+  launcher.launchApp.mockResolvedValue({ status: 'success' })
+  launchRecorder.record.mockReset()
+  launchRecorder.previousAppContext.mockReset()
+  launchRecorder.previousAppContext.mockResolvedValue({})
 })
 
 describe('AppManagedEntryActionsService.listSummaries', () => {
@@ -215,5 +277,90 @@ describe('AppManagedEntryActionsService.setShortcut', () => {
       reason: 'shortcut-persist-failed'
     })
     expect(shortcutStore.get(toShortcutId(ALPHA_PATH))).toBe('Alt+P')
+  })
+})
+
+/**
+ * One live binding for Alpha, exercised the way the OS would exercise it: by pressing the key.
+ *
+ * `entries` is held by reference so a test can drop the application out of the catalog between the
+ * bind and the press.
+ */
+async function boundService(
+  entries: AppIndexManagedEntry[] = [managedEntry(ALPHA_PATH, 'com.example.alpha')]
+): Promise<AppManagedEntryActionsService> {
+  const service = createService({
+    getDbUtils: () => shortcutConfigDb({}, false),
+    entries
+  })
+  await service.setShortcut(ALPHA_PATH, 'Alt+A')
+  return service
+}
+
+async function pressAlphaShortcut(): Promise<void> {
+  const press = pressCallbacks.get(toShortcutId(ALPHA_PATH))
+  if (!press) throw new Error('Alpha has no bound shortcut callback')
+  // The OS hands the key to a callback nothing awaits; the service returns that press so a test
+  // can wait for the outcome instead of guessing how long it takes.
+  await press()
+}
+
+describe('AppManagedEntryActionsService shortcut press', () => {
+  /**
+   * The key is a toggle. A shortcut that can only summon turns a second press into a no-op the
+   * user cannot read: the application is already in front, so nothing moves and the key looks
+   * broken.
+   */
+  it('puts the bound application away when the adapter finds it in front', async () => {
+    await boundService()
+    await pressAlphaShortcut()
+
+    expect(hideAdapter.putAwayApplicationInFront).toHaveBeenCalledWith({
+      bundleId: 'com.example.alpha',
+      path: ALPHA_PATH
+    })
+    expect(launcher.launchApp).not.toHaveBeenCalled()
+    // Putting an application away is not a launch, and the usage table counts launches.
+    expect(launchRecorder.record).not.toHaveBeenCalled()
+  })
+
+  it('launches when the bound application is not the one in front', async () => {
+    hideAdapter.putAwayApplicationInFront.mockResolvedValue({
+      hidden: false,
+      reason: 'not-frontmost'
+    })
+
+    await boundService()
+    await pressAlphaShortcut()
+
+    expect(launcher.launchApp).toHaveBeenCalledTimes(1)
+    expect(launchRecorder.record).toHaveBeenCalledWith(
+      expect.objectContaining({ entryPoint: 'shortcut' })
+    )
+  })
+
+  /** Nothing on this platform could put it away: the press still has to summon something. */
+  it('launches when the application refuses to be put away', async () => {
+    hideAdapter.putAwayApplicationInFront.mockResolvedValue({
+      hidden: false,
+      reason: 'command-failed'
+    })
+
+    await boundService()
+    await pressAlphaShortcut()
+
+    expect(launcher.launchApp).toHaveBeenCalledTimes(1)
+  })
+
+  /** A path the catalog no longer holds has nothing to hide, and nothing to launch either. */
+  it('answers a binding whose application left the index without launching anything', async () => {
+    const entries = [managedEntry(ALPHA_PATH, 'com.example.alpha')]
+    await boundService(entries)
+    entries.length = 0
+
+    await pressAlphaShortcut()
+
+    expect(launcher.launchApp).not.toHaveBeenCalled()
+    expect(hideAdapter.putAwayApplicationInFront).not.toHaveBeenCalled()
   })
 })

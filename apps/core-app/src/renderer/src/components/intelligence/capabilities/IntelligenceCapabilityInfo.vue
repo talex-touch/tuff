@@ -7,7 +7,10 @@ import type {
 import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
-import { getVoiceCapabilityRecommendedModels } from '@talex-touch/utils/intelligence/voice-asr'
+import {
+  getVoiceCapabilityRecommendedModels,
+  isOnDeviceAsrBinding
+} from '@talex-touch/utils/intelligence/voice-asr'
 import { useI18n } from 'vue-i18n'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
@@ -113,6 +116,18 @@ const enabledBindings = computed<CapabilityBinding[]>(() => {
       provider: providerMetaMap.value.get(binding.providerId)
     }))
 })
+
+/**
+ * The bindings this editor shows: everything bound except the program-owned on-device channel, which
+ * main seeds and binds from the installed speech models and which offers nothing to configure.
+ *
+ * `enabledBindings` stays complete on purpose. It is the array a reorder writes back, so filtering it
+ * there would unbind the installed models from dictation the first time the user touched any other
+ * channel; only the lists the user reads, tests, and edits lose the entry.
+ */
+const shownBindings = computed<CapabilityBinding[]>(() =>
+  enabledBindings.value.filter((binding) => !isOnDeviceAsrBinding(binding))
+)
 
 const disabledProviders = computed<CapabilityBinding[]>(() => {
   const enabledIds = new Set(enabledBindings.value.map((binding) => binding.providerId))
@@ -348,7 +363,7 @@ onBeforeUnmount(() => {
               class="capability-info__test-button"
               variant="flat"
               type="primary"
-              :disabled="activeBindingCount === 0"
+              :disabled="shownBindings.length === 0"
               @click="openTestDrawer"
             >
               <i class="i-carbon-play-filled" aria-hidden="true" />
@@ -393,7 +408,7 @@ onBeforeUnmount(() => {
       >
         <template #default>
           <TuffBlockSlot
-            v-for="binding in enabledBindings"
+            v-for="binding in shownBindings"
             :key="`model-${binding.providerId}`"
             :title="binding.provider?.name || binding.providerId"
             :description="getBindingModelSummary(binding)"
@@ -412,7 +427,7 @@ onBeforeUnmount(() => {
           </TuffBlockSlot>
 
           <TuffBlockSlot
-            v-if="enabledBindings.length === 0"
+            v-if="shownBindings.length === 0"
             :title="t('settings.intelligence.capabilityBindingModelsTitle')"
             :description="t('settings.intelligence.capabilityBindingModelsDesc')"
             default-icon="i-carbon-model"
@@ -475,9 +490,9 @@ onBeforeUnmount(() => {
       <TestSection
         :capability-id="capability.id"
         :is-testing="isTesting"
-        :disabled="activeBindingCount === 0"
+        :disabled="shownBindings.length === 0"
         :test-result="testResult"
-        :enabled-bindings="enabledBindings"
+        :enabled-bindings="shownBindings"
         :binding-only="isBindingOnlyTest"
         @test="handleTest"
       />
