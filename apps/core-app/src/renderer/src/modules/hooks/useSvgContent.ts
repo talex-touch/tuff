@@ -38,18 +38,6 @@ const pendingTasks = new Map<
 let downloadListenerRegistered = false
 const downloadDisposers: Array<() => void> = []
 
-/** The reason out of a channel error payload (`{ message, reason }` or an `Error`-shaped reply). */
-function describeChannelFailure(payload: unknown): string {
-  if (typeof payload === 'object' && payload !== null && 'message' in payload) {
-    const message = payload.message
-    if (typeof message === 'string' && message.trim()) {
-      return message.trim()
-    }
-  }
-
-  return String(payload)
-}
-
 export function useSvgContent(
   tempUrl: string = '',
   autoFetch = true,
@@ -517,12 +505,6 @@ export function useSvgContent(
 
     try {
       const text = await fetchWithRetry()
-      // A failed read crosses the channel as a resolved error payload rather than a rejection, so
-      // without this check the payload reaches `text.trim()` and the icon dies on a TypeError
-      // instead of reporting why the read failed.
-      if (typeof text !== 'string') {
-        throw new Error(`Icon content request failed: ${describeChannelFailure(text)}`)
-      }
       if (!text || text.trim().length === 0) {
         throw new Error('Empty content received')
       }

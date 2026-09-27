@@ -53,19 +53,20 @@ describe('useSvgContent local reads', () => {
 
   it.each([
     {
-      name: 'an error payload',
-      payload: { message: 'ENOENT: no such file or directory' },
-      message: 'Icon content request failed: ENOENT: no such file or directory'
+      name: 'a rejected Error',
+      reason: new Error('ENOENT: no such file or directory'),
+      message: 'ENOENT: no such file or directory'
     },
     {
-      name: 'an undefined payload',
-      payload: undefined,
-      message: 'Icon content request failed: undefined'
+      name: 'a rejected non-Error reason',
+      reason: undefined,
+      // Non-Error rejections are surfaced through `new Error(String(err))`.
+      message: 'undefined'
     }
-  ])('reports a described error for $name instead of crashing on .trim()', async (row) => {
-    // A failed readText resolves this payload rather than rejecting, so the value reached
-    // `text.trim()` and the icon died on `TypeError: text.trim is not a function`.
-    mocks.readText.mockResolvedValue(row.payload)
+  ])('surfaces $name as the hook error instead of crashing on .trim()', async (row) => {
+    // A failed readText rejects, so the reason reaches the hook's `catch` and the rejected
+    // payload never lands in `text.trim()` (which used to die with `text.trim is not a function`).
+    mocks.readText.mockRejectedValue(row.reason)
     const hook = useSvgContent(ICON_PATH, false)
 
     await hook.fetchSvgContent()
