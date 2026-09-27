@@ -1,3 +1,15 @@
+export const INDEXING_SOURCE_MUTATION_LEASE_INVALID = 'INDEXING_SOURCE_MUTATION_LEASE_INVALID'
+
+export function isIndexingSourceMutationLeaseInvalidError(
+  error: unknown,
+  sourceId: string
+): boolean {
+  return (
+    error instanceof Error &&
+    error.message === `${INDEXING_SOURCE_MUTATION_LEASE_INVALID}:${sourceId}`
+  )
+}
+
 export interface IndexingSourceMutationLease {
   sourceId: string
   epoch: number
@@ -55,7 +67,7 @@ export class IndexingSourceMutationGate {
   ): Promise<T> {
     const state = this.getState(sourceId)
     if (!state.activeLeaseIds.has(leaseId)) {
-      throw new Error(`INDEXING_SOURCE_MUTATION_LEASE_INVALID:${sourceId}`)
+      throw new Error(`${INDEXING_SOURCE_MUTATION_LEASE_INVALID}:${sourceId}`)
     }
 
     state.active += 1

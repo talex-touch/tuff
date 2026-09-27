@@ -2051,11 +2051,11 @@ onBeforeUnmount(disposeCommands)
   }
 }
 
-/* 48px rather than the artboard's 64: the hero now carries the opening too, and has to fit a 600px
-   window with the guide under the composer. */
+/* Scaled up 20% (48px * 1.2 = 57.6px ≈ 58px) and lifted 30% for visual breathing room */
 .HomePage-Mark {
-  width: 48px;
-  height: 48px;
+  width: 58px;
+  height: 58px;
+  transform: translateY(-30%);
 }
 
 .HomePage-Greeting {
