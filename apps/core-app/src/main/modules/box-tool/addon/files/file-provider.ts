@@ -1074,6 +1074,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   public async prepareForSearchIndexShutdown(): Promise<void> {
     this.workerStatusService.stopDiagnostics()
     this.shuttingDown = true
+    // Content enrichment is durably marked pending before admission. Stop accepting work and
+    // terminate its read-only worker now, rather than letting a parser/publication barrier consume
+    // the app's entire quit budget. A later launch resumes every unfinished row.
+    this.indexSchedulerService.close()
+    this.fileIndexWorker.shutdown()
     this.disposeAssetBridge?.()
     this.disposeAssetBridge = null
     this.watchService.dispose()
@@ -1129,9 +1134,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
       throw error
     } finally {
-      this.indexSchedulerService.close()
       this.fileScanWorker.shutdown()
-      this.fileIndexWorker.shutdown()
       this.reconcileWorker.shutdown()
     }
   }
