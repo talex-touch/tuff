@@ -5,9 +5,10 @@ import type {
   PluginProviderContext
 } from '@talex-touch/utils/plugin/providers'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
+import { resolvePackageDownloadTimeout } from '@talex-touch/utils/plugin/install-budgets'
 import { getNetworkService } from '../../network'
 import { createProviderLogger } from './logger'
-import { downloadToTempFile, ensureRiskAccepted, resolvePackageDownloadTimeout } from './utils'
+import { downloadToTempFile, ensureRiskAccepted } from './utils'
 
 interface ParsedNpmSource {
   name: string

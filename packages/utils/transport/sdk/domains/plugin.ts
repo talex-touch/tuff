@@ -57,6 +57,7 @@ import {
 } from '../../events/types'
 import type { ITuffTransport } from '../../types'
 import { PluginEvents } from '../../events'
+import { INSTALL_TRANSPORT_TIMEOUT_MS } from '../../../plugin/install-budgets'
 
 export interface PluginSdk {
   list: (request?: PluginApiListRequest) => Promise<PluginApiListResponse>
@@ -99,8 +100,6 @@ export interface PluginSdk {
   installFromSource: (payload: PluginInstallSourceRequest) => Promise<PluginInstallSourceResponse>
   installContent: (payload: PluginContentInstallRequest) => Promise<PluginContentInstallResponse>
 }
-
-const PLUGIN_INSTALL_TIMEOUT_MS = 3 * 60 * 1000
 
 export function createPluginSdk(transport: ITuffTransport): PluginSdk {
   return {
@@ -158,8 +157,13 @@ export function createPluginSdk(transport: ITuffTransport): PluginSdk {
       await transport.send(PluginEvents.install.confirmResponse, payload)
     },
 
+    /**
+     * Spans the whole main-side install: download, permission/confirmation prompt and unpack. The
+     * deadline therefore has to outlast the sum of those budgets (see `install-budgets.ts`) — a
+     * shorter wall reports a failure for an install that is still running.
+     */
     installFromSource: async payload =>
-      transport.send(PluginEvents.install.source, payload, { timeout: PLUGIN_INSTALL_TIMEOUT_MS }),
+      transport.send(PluginEvents.install.source, payload, { timeout: INSTALL_TRANSPORT_TIMEOUT_MS }),
     installContent: async payload => transport.send(PluginEvents.content.install, payload),
   }
 }

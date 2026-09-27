@@ -1,5 +1,6 @@
 import { markRaw } from 'vue'
 import { toast } from 'vue-sonner'
+import { INSTALL_CONFIRM_BUDGET_MS } from '@talex-touch/utils/plugin/install-budgets'
 import PermissionRequestToast, {
   type PermissionRequestToastAction,
   type PermissionRequestToastItem
@@ -30,7 +31,11 @@ export interface PermissionRequestCardResult {
   result: Promise<PermissionRequestDecision>
 }
 
-export const PERMISSION_REQUEST_TIMEOUT_MS = 120_000
+/**
+ * The install confirmation budget: the main process waits for this prompt, so the install's
+ * transport deadline is derived from it (see `install-budgets.ts` in `@talex-touch/utils/plugin`).
+ */
+export const PERMISSION_REQUEST_TIMEOUT_MS = INSTALL_CONFIRM_BUDGET_MS
 
 export function resolvePermissionDisplayName(permissionId: string, t: Translate): string {
   const key = `plugin.permissions.registry.${permissionId}.name`
