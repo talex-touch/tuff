@@ -16,6 +16,7 @@ const reopenBrowserLoginMock = vi.hoisted(() => vi.fn())
 const cancelPendingBrowserLoginMock = vi.hoisted(() => vi.fn())
 const signOutMock = vi.hoisted(() => vi.fn())
 
+const runtimeEnvMock = vi.hoisted(() => ({ isDev: true }))
 /**
  * The Nexus address the renderer resolves, plus the two save entry points the settings block calls.
  * `effectiveUrl` is what the page must show as in effect, whichever address is stored.
@@ -162,7 +163,7 @@ vi.mock('@talex-touch/utils/env', () => ({
   isElectronRuntime: () => false,
   isElectronRenderer: () => false,
   isElectronMain: () => false,
-  isDevEnv: () => false,
+  isDevEnv: () => runtimeEnvMock.isDev,
   isProdEnv: () => false,
   normalizeBaseUrl: (input: string) => input.trim().replace(/\/+$/, ''),
   resolveTuffNexusBaseUrl: () => 'https://tuff.tagzxia.com',
@@ -263,6 +264,10 @@ async function openLoginRecoveryDialog(wrapper: ReturnType<typeof mountSettingUs
   await loginButton.trigger('click')
   await nextTick()
 }
+
+beforeEach(() => {
+  runtimeEnvMock.isDev = true
+})
 
 describe('SettingUser login recovery', () => {
   beforeEach(() => {
@@ -415,6 +420,15 @@ describe('SettingUser nexus base url', () => {
     toastMock.info.mockReset()
     appSettingMock.auth.nexusBaseUrl = ''
     authStateMock.isLoggedIn.value = false
+  })
+
+  it('omits the Nexus service address outside development builds', () => {
+    runtimeEnvMock.isDev = false
+    const wrapper = mountSettingUser()
+
+    expect(wrapper.find('[data-testid="nexus-base-url-edit"]').exists()).toBe(false)
+    expect(wrapper.find('.nexus-endpoint').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Nexus 服务地址')
   })
 
   /**
