@@ -134,6 +134,26 @@ It resolves darker in light themes and lighter in dark ones. P is 45 for success
 
 ---
 
+### Grain belongs in the mask of a faint tint
+
+Noise blended over a tint (`overlay`, `soft-light`) moves each pixel in proportion to how dense the tint is. Over a wash at about 16% it moves pixels by roughly 1%, which stays invisible even at 2x. Put the noise into the tint's alpha instead: mask the wash with a gradient intersected with fractal noise, so the grain exists only inside the tint and adds no grey to the surface underneath.
+
+```scss
+// Correct — TxStatusHint's wash: the tone's colour, shown through gradient ∩ noise
+@supports (mask-composite: intersect) {
+  .tx-status-hint__wash {
+    background-color: var(--tx-status-hint-accent, #67c23a);
+    mask-image: linear-gradient(to right, rgb(0 0 0 / var(--tx-status-hint-wash-strength, 0.26)), transparent), $grain;
+    mask-size: 100% 100%, 140px 140px;
+    mask-composite: intersect;
+  }
+}
+```
+
+- `$grain` is `feTurbulence type='fractalNoise'` with its alpha spread by `feFuncA` (slope 1.6, intercept −0.2); the noise alpha then averages about 0.6, so size the edge strength against that.
+- Keep the fill inside the `@supports` block. Without compositing the two mask layers do not intersect, and the tint paints as a solid block behind the text.
+- A dense surface is different: `TxStatCard`'s blurred aura is strong enough for an `overlay` grain at 14%. Decide on a still frame at 2x, as the `TxStatusHint` calibration did (task `09-27-corebox-action-feedback-hint`, `research/visual-calibration.md`).
+
 ## Motion
 
 ### Hover colour changes are immediate
@@ -180,6 +200,23 @@ The inverse form is equally valid and smaller: declare the animation **only** in
 ### Collapsing content keeps its size while it closes
 
 A collapse that shrinks its content box during the close animation makes the text reflow on the way out, which reads as a glitch rather than a transition. Animate the container; leave the content at its measured size until the animation ends. See `bui-disclosure-collapse` in `style/mixins.scss`.
+
+### A replay restarts on a second keyframe name
+
+Adding a class that is already on the element does not restart its CSS animation, and forcing a reflow (`void el.offsetWidth`) spends a layout on a decorative beat. To replay an emphasis on demand, flip between two classes whose keyframe sets have identical bodies and different names: changing `animation-name` starts the animation over. Make the replay rule more specific than the entrance, so a replay takes over a running entrance.
+
+```scss
+// Wrong — the second replay never plays: the class is already on the element
+.tx-x.is-pulse .tx-x__text { animation: tx-x-pulse 460ms; }
+
+// Correct — two names, one body, flipped per replay
+@each $r in (a, b) {
+  @keyframes tx-x-pulse-#{$r} { 30% { scale: 1.12; } }
+  .tx-x.is-animated.is-pulse-#{$r} .tx-x__text { animation: tx-x-pulse-#{$r} 460ms; }
+}
+```
+
+Worked example: `TxStatusHint` (2026-09-27). One watcher over `text` and `pulseKey` flips `is-pulse-a` / `is-pulse-b`, so a message that changes both in one update replays once; nothing flips on mount (the entrance plays) or while `animated` is false.
 
 ### A looping effect runs on the compositor, with its parameters outside the keyframes
 
