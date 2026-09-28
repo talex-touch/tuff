@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { TxButton } from "@talex-touch/tuffex/button"
-import { TxCard } from "@talex-touch/tuffex/card"
-import { TxCheckbox } from "@talex-touch/tuffex/checkbox"
-import { TxEmptyState } from "@talex-touch/tuffex/empty-state"
-import { TuffInput } from "@talex-touch/tuffex/input"
-import { TxProgressBar } from "@talex-touch/tuffex/progress-bar"
-import { TuffSelect, TuffSelectItem } from "@talex-touch/tuffex/select"
-import { TxSkeleton } from "@talex-touch/tuffex/skeleton"
-import { TxSpinner } from "@talex-touch/tuffex/spinner"
-import { TxStatusBadge } from "@talex-touch/tuffex/status-badge"
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCard } from '@talex-touch/tuffex/card'
+import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
+import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
+import { TuffInput } from '@talex-touch/tuffex/input'
+import { TxProgressBar } from '@talex-touch/tuffex/progress-bar'
+import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { defineAsyncComponent } from 'vue'
 import { useAdminAnalyticsData } from '~/composables/useAdminAnalyticsData'
 import type { GeoAnalyticsData, GeoMapPoint } from '~/types/admin-analytics'
@@ -634,93 +634,101 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </TxCard>
 
       <!-- UI & Main Performance -->
-      <div v-if="activeSection === 'performance'" class="grid gap-4 lg:grid-cols-4">
-        <div class="rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 p-4">
-          <div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-            <span class="i-carbon-time text-lg" />
-            <span class="text-xs font-medium">Long Tasks</span>
+      <div v-if="activeSection === 'performance'" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-emerald-600 dark:text-emerald-400">Long Tasks</span>
+            <span class="i-carbon-time text-base text-emerald-500" />
           </div>
           <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.performance.longTaskAvgMs }}ms
           </p>
-          <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+          <p class="mt-1 text-xs text-black/45 dark:text-white/45">
             max {{ analytics.summary.performance.longTaskMaxMs }}ms · {{ formatNumber(analytics.summary.performance.longTaskCount) }} tasks
           </p>
-        </div>
+        </TxCard>
 
-        <div class="rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 p-4">
-          <div class="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-            <span class="i-carbon-chart-line-smooth text-lg" />
-            <span class="text-xs font-medium">Frame Jank</span>
+        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-blue-600 dark:text-blue-400">Frame Jank</span>
+            <span class="i-carbon-chart-line-smooth text-base text-blue-500" />
           </div>
           <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.performance.rafJankAvgMs }}ms
           </p>
-          <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+          <p class="mt-1 text-xs text-black/45 dark:text-white/45">
             max {{ analytics.summary.performance.rafJankMaxMs }}ms · {{ formatNumber(analytics.summary.performance.rafJankCount) }} frames
           </p>
-        </div>
+        </TxCard>
 
-        <div class="rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 p-4">
-          <div class="flex items-center gap-2 text-purple-600 dark:text-purple-400">
-            <span class="i-carbon-activity text-lg" />
-            <span class="text-xs font-medium">Main Loop Delay (p95)</span>
+        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-purple-600 dark:text-purple-400">Main Loop Delay (p95)</span>
+            <span class="i-carbon-activity text-base text-purple-500" />
           </div>
           <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.performance.eventLoopDelayP95AvgMs }}ms
           </p>
-          <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+          <p class="mt-1 text-xs text-black/45 dark:text-white/45">
             max {{ analytics.summary.performance.eventLoopDelayMaxMs }}ms
           </p>
-        </div>
+        </TxCard>
 
-        <div class="rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 p-4">
-          <div class="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-            <span class="i-carbon-warning-alt text-lg" />
-            <span class="text-xs font-medium">Unresponsive</span>
+        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-amber-600 dark:text-amber-400">Unresponsive</span>
+            <span class="i-carbon-warning-alt text-base text-amber-500" />
           </div>
           <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.performance.unresponsiveAvgMs }}ms
           </p>
-          <p class="mt-1 text-xs text-black/50 dark:text-white/50">
+          <p class="mt-1 text-xs text-black/45 dark:text-white/45">
             max {{ analytics.summary.performance.unresponsiveMaxMs }}ms · {{ formatNumber(analytics.summary.performance.unresponsiveCount) }} times
           </p>
-        </div>
+        </TxCard>
       </div>
 
       <!-- Module Load Performance -->
-      <div v-if="activeSection === 'performance'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+      <TxCard v-if="activeSection === 'performance'" variant="plain" background="mask" :radius="18" :padding="20">
         <div class="mb-4 flex items-center justify-between">
-          <h3 class="font-semibold text-black dark:text-white">
-            Module Load Performance
-          </h3>
+          <div>
+            <h3 class="font-semibold text-black dark:text-white">
+              Module Load Performance
+            </h3>
+            <p class="text-xs text-black/45 dark:text-white/45">
+              Detailed execution time and load ratio by module
+            </p>
+          </div>
           <span class="text-xs text-black/40 dark:text-white/40">avg / max / min / ratio</span>
         </div>
-        <div v-if="topModuleLoads.length === 0" class="text-sm text-black/40 dark:text-white/40">
-          No module load metrics yet
-        </div>
-        <div v-else class="space-y-3">
+        <TxEmptyState
+          v-if="topModuleLoads.length === 0"
+          variant="no-data"
+          size="small"
+          description="No module load metrics yet"
+        />
+        <div v-else class="space-y-2.5">
           <div
             v-for="item in topModuleLoads"
             :key="item.module"
-            class="flex items-center justify-between gap-4 rounded-xl bg-black/[0.04] px-4 py-3 text-sm dark:bg-white/[0.04]"
+            class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/[0.04] bg-black/[0.02] px-4 py-3 text-sm dark:border-white/[0.05] dark:bg-white/[0.03]"
           >
             <div class="min-w-0">
               <p class="truncate font-medium text-black dark:text-white">
                 {{ item.module }}
               </p>
-              <p class="text-xs text-black/40 dark:text-white/40">
+              <p class="text-xs text-black/45 dark:text-white/45 font-mono">
                 ratio {{ item.ratio.toFixed(2) }}x
               </p>
             </div>
-            <div class="flex items-center gap-4 text-xs text-black/60 dark:text-white/60">
+            <div class="flex items-center gap-4 font-mono text-xs text-black/60 dark:text-white/60">
               <span>avg {{ item.avgDuration }}ms</span>
               <span>max {{ item.maxDuration }}ms</span>
               <span>min {{ item.minDuration }}ms</span>
             </div>
           </div>
         </div>
-      </div>
+      </TxCard>
 
       <!-- Device & Region Distribution -->
       <div v-if="activeSection === 'overview'" class="grid gap-4 lg:grid-cols-2">
@@ -862,16 +870,21 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </TxCard>
 
       <!-- Search Term Collection Disabled -->
-      <div v-if="activeSection === 'search'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
-        <h3 class="mb-2 font-semibold text-black dark:text-white">
-          Search Terms
-        </h3>
-        <p class="text-sm text-black/50 dark:text-white/50">
-          Disabled by privacy policy. Only length, type, and timing metrics are recorded.
-        </p>
-      </div>
+      <TxCard v-if="activeSection === 'search'" variant="plain" background="mask" :radius="18" :padding="20">
+        <div class="flex items-start gap-3">
+          <span class="i-carbon-locked text-xl text-black/45 dark:text-white/45 mt-0.5" />
+          <div>
+            <h3 class="font-semibold text-black dark:text-white">
+              Search Terms
+            </h3>
+            <p class="mt-1 text-sm text-black/50 dark:text-white/50">
+              Disabled by privacy policy. Only length, type, and timing metrics are recorded.
+            </p>
+          </div>
+        </div>
+      </TxCard>
 
-      <div v-if="activeSection === 'search'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+      <TxCard v-if="activeSection === 'search'" variant="plain" background="mask" :radius="18" :padding="20">
         <div class="mb-4 flex items-center justify-between">
           <div>
             <h3 class="font-semibold text-black dark:text-white">
@@ -881,13 +894,14 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               Anonymous timings grouped by provider. P95 is computed from recent search events.
             </p>
           </div>
-          <span class="text-xs text-black/40 dark:text-white/40">
-            {{ selectedDays }}d
-          </span>
+          <TxStatusBadge :text="`${selectedDays}d`" status="info" size="sm" />
         </div>
-        <div v-if="topProviderMetrics.length === 0" class="py-4 text-sm text-black/40 dark:text-white/40">
-          No provider telemetry yet
-        </div>
+        <TxEmptyState
+          v-if="topProviderMetrics.length === 0"
+          variant="no-data"
+          size="small"
+          description="No provider telemetry yet"
+        />
         <div v-else class="overflow-x-auto">
           <table class="w-full min-w-[760px] text-left text-sm">
             <thead class="text-xs uppercase text-black/40 dark:text-white/40">
@@ -959,11 +973,11 @@ Slow
             </tbody>
           </table>
         </div>
-      </div>
+      </TxCard>
 
       <!-- Secondary Insights -->
       <div v-if="activeSection === 'search' || activeSection === 'usage'" class="grid gap-4 lg:grid-cols-3">
-        <div v-if="activeSection === 'search'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        <TxCard v-if="activeSection === 'search'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               Search Scenes
@@ -975,11 +989,11 @@ Slow
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
             <div v-for="item in toSortedList(analytics.summary.searchSceneDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
               <span class="capitalize">{{ item[0].replace('-', ' ') }}</span>
-              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+              <span class="font-mono text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
             </div>
           </div>
-        </div>
-        <div v-if="activeSection === 'search'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        </TxCard>
+        <TxCard v-if="activeSection === 'search'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               Result Categories
@@ -991,11 +1005,11 @@ Slow
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
             <div v-for="item in toSortedList(analytics.summary.searchResultCategoryDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
               <span class="capitalize">{{ item[0] }}</span>
-              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+              <span class="font-mono text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
             </div>
           </div>
-        </div>
-        <div v-if="activeSection === 'usage'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        </TxCard>
+        <TxCard v-if="activeSection === 'usage'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               Top Categories
@@ -1009,11 +1023,11 @@ Slow
               <span class="truncate">
                 {{ formatCategoryKey(item[0]).level1 }} · {{ formatCategoryKey(item[0]).level2 }}
               </span>
-              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+              <span class="font-mono text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
             </div>
           </div>
-        </div>
-        <div v-if="activeSection === 'usage'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        </TxCard>
+        <TxCard v-if="activeSection === 'usage'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               Update Actions
@@ -1025,11 +1039,11 @@ Slow
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
             <div v-for="item in toSortedList(analytics.summary.updateActionDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
               <span class="capitalize">{{ formatCategoryLabel(item[0]) }}</span>
-              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+              <span class="font-mono text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
             </div>
           </div>
-        </div>
-        <div v-if="activeSection === 'usage'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        </TxCard>
+        <TxCard v-if="activeSection === 'usage'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               Update Results
@@ -1041,11 +1055,11 @@ Slow
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
             <div v-for="item in toSortedList(analytics.summary.updateResultDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
               <span class="capitalize">{{ formatCategoryLabel(item[0]) }}</span>
-              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+              <span class="font-mono text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
             </div>
           </div>
-        </div>
-        <div v-if="activeSection === 'usage'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        </TxCard>
+        <TxCard v-if="activeSection === 'usage'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               Update Channels
@@ -1057,11 +1071,11 @@ Slow
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
             <div v-for="item in toSortedList(analytics.summary.updateChannelDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
               <span class="capitalize">{{ item[0] }}</span>
-              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+              <span class="font-mono text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
             </div>
           </div>
-        </div>
-        <div v-if="activeSection === 'usage'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        </TxCard>
+        <TxCard v-if="activeSection === 'usage'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               Update Sources
@@ -1073,11 +1087,11 @@ Slow
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
             <div v-for="item in toSortedList(analytics.summary.updateSourceDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
               <span class="capitalize">{{ item[0] }}</span>
-              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+              <span class="font-mono text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
             </div>
           </div>
-        </div>
-        <div v-if="activeSection === 'usage'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        </TxCard>
+        <TxCard v-if="activeSection === 'usage'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
               Update Tags
@@ -1089,26 +1103,31 @@ Slow
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
             <div v-for="item in toSortedList(analytics.summary.updateTagDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
               <span class="truncate">{{ item[0] }}</span>
-              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+              <span class="font-mono text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
             </div>
           </div>
-        </div>
+        </TxCard>
       </div>
 
-      <div v-if="activeSection === 'intelligence'" class="space-y-4">
-        <div v-if="intelligenceLoading" class="flex items-center justify-center rounded-2xl bg-black/[0.02] py-10 dark:bg-white/[0.03]">
-          <TxSpinner :size="18" />
-        </div>
-        <div v-else-if="intelligenceError" class="rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
-          {{ intelligenceError }}
-        </div>
+      <!-- Intelligence / AI Analytics -->
+      <div v-if="activeSection === 'intelligence'" class="space-y-5">
+        <TxCard v-if="intelligenceLoading" variant="plain" background="mask" :radius="18" :padding="24" class="flex items-center justify-center">
+          <TxSpinner :size="20" />
+        </TxCard>
+        <TxCard v-else-if="intelligenceError" variant="plain" background="mask" :radius="18" :padding="24">
+          <TxEmptyState
+            variant="error"
+            :title="t('common.error', 'Error')"
+            :description="intelligenceError"
+          />
+        </TxCard>
         <template v-else-if="intelligenceAnalytics">
-          <div class="grid gap-4 lg:grid-cols-4">
-            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-              <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
                 Runs
               </h3>
-              <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+              <p class="mt-2 text-2xl font-bold text-black dark:text-white">
                 {{ formatNumber(intelligenceAnalytics.summary.totalRuns) }}
               </p>
               <p class="mt-1 text-xs text-black/45 dark:text-white/45">
@@ -1117,12 +1136,12 @@ Slow
               <p class="text-xs text-black/45 dark:text-white/45">
                 disconnect pause {{ intelligenceAnalytics.summary.disconnectPauseRate }}%
               </p>
-            </div>
-            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-              <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+            </TxCard>
+            <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
                 Fallback
               </h3>
-              <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+              <p class="mt-2 text-2xl font-bold text-black dark:text-white">
                 {{ intelligenceAnalytics.summary.fallbackRate }}%
               </p>
               <p class="mt-1 text-xs text-black/45 dark:text-white/45">
@@ -1131,12 +1150,12 @@ Slow
               <p class="text-xs text-black/45 dark:text-white/45">
                 retry run {{ intelligenceAnalytics.summary.retryRunRate }}%
               </p>
-            </div>
-            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-              <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+            </TxCard>
+            <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
                 Approval Hit
               </h3>
-              <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+              <p class="mt-2 text-2xl font-bold text-black dark:text-white">
                 {{ intelligenceAnalytics.summary.approvalHitRate }}%
               </p>
               <p class="mt-1 text-xs text-black/45 dark:text-white/45">
@@ -1145,12 +1164,12 @@ Slow
               <p class="text-xs text-black/45 dark:text-white/45">
                 checkpoint loss {{ intelligenceAnalytics.summary.checkpointLossRate }}%
               </p>
-            </div>
-            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-              <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+            </TxCard>
+            <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
                 Stream Coverage
               </h3>
-              <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+              <p class="mt-2 text-2xl font-bold text-black dark:text-white">
                 {{ intelligenceAnalytics.summary.streamCoverageRate }}%
               </p>
               <p class="mt-1 text-xs text-black/45 dark:text-white/45">
@@ -1159,11 +1178,11 @@ Slow
               <p class="text-xs text-black/45 dark:text-white/45">
                 avg {{ intelligenceAnalytics.summary.avgDurationMs }}ms
               </p>
-            </div>
+            </TxCard>
           </div>
 
           <div class="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <div class="mb-3 flex items-center justify-between">
                 <h3 class="font-semibold text-black dark:text-white">
                   Runtime Status Distribution
@@ -1173,14 +1192,18 @@ Slow
                 </span>
               </div>
               <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
-                <div v-for="item in Object.entries(intelligenceAnalytics.statusDistribution)" :key="item[0]" class="flex items-center justify-between rounded-xl bg-black/[0.03] px-3 py-2 dark:bg-white/[0.04]">
+                <div
+                  v-for="item in Object.entries(intelligenceAnalytics.statusDistribution)"
+                  :key="item[0]"
+                  class="flex items-center justify-between rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 dark:border-white/[0.05] dark:bg-white/[0.03]"
+                >
                   <span class="capitalize">{{ item[0].replace('_', ' ') }}</span>
-                  <span class="text-xs text-black/45 dark:text-white/45">{{ item[1] }}</span>
+                  <span class="font-mono text-xs text-black/50 dark:text-white/50">{{ item[1] }}</span>
                 </div>
               </div>
-            </div>
+            </TxCard>
 
-            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <div class="mb-3 flex items-center justify-between">
                 <h3 class="font-semibold text-black dark:text-white">
                   Tool Failures
@@ -1189,27 +1212,41 @@ Slow
                   Refresh
                 </TxButton>
               </div>
-              <div v-if="intelligenceAnalytics.toolFailureDistribution.length === 0" class="text-sm text-black/45 dark:text-white/45">
-                No tool failures in selected period.
-              </div>
+              <TxEmptyState
+                v-if="intelligenceAnalytics.toolFailureDistribution.length === 0"
+                variant="no-data"
+                size="small"
+                description="No tool failures in selected period."
+              />
               <div v-else class="space-y-2 text-sm text-black/70 dark:text-white/70">
-                <div v-for="tool in intelligenceAnalytics.toolFailureDistribution.slice(0, 8)" :key="tool.toolId" class="flex items-center justify-between rounded-xl bg-black/[0.03] px-3 py-2 dark:bg-white/[0.04]">
-                  <span class="truncate">{{ tool.toolId }}</span>
-                  <span class="text-xs text-black/45 dark:text-white/45">{{ tool.count }}</span>
+                <div
+                  v-for="tool in intelligenceAnalytics.toolFailureDistribution.slice(0, 8)"
+                  :key="tool.toolId"
+                  class="flex items-center justify-between rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 dark:border-white/[0.05] dark:bg-white/[0.03]"
+                >
+                  <span class="truncate font-mono">{{ tool.toolId }}</span>
+                  <span class="font-mono text-xs text-black/50 dark:text-white/50">{{ tool.count }}</span>
                 </div>
               </div>
-            </div>
+            </TxCard>
           </div>
 
-          <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+          <TxCard variant="plain" background="mask" :radius="18" :padding="20">
             <h3 class="mb-3 font-semibold text-black dark:text-white">
               Recent Intelligence Runs
             </h3>
-            <div v-if="intelligenceAnalytics.recentRuns.length === 0" class="text-sm text-black/45 dark:text-white/45">
-              No runtime records.
-            </div>
+            <TxEmptyState
+              v-if="intelligenceAnalytics.recentRuns.length === 0"
+              variant="no-data"
+              size="small"
+              description="No runtime records."
+            />
             <div v-else class="space-y-2 text-sm text-black/70 dark:text-white/70">
-              <div v-for="run in intelligenceAnalytics.recentRuns" :key="run.sessionId + run.createdAt" class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-black/[0.03] px-3 py-2 dark:bg-white/[0.04]">
+              <div
+                v-for="run in intelligenceAnalytics.recentRuns"
+                :key="run.sessionId + run.createdAt"
+                class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 dark:border-white/[0.05] dark:bg-white/[0.03]"
+              >
                 <div class="min-w-0">
                   <p class="truncate font-medium text-black dark:text-white">
                     {{ run.sessionId }}
@@ -1218,97 +1255,110 @@ Slow
                     {{ run.providerName || 'runtime' }} · {{ run.model }}
                   </p>
                 </div>
-                <div class="flex items-center gap-3 text-xs text-black/45 dark:text-white/45">
-                  <span class="capitalize">{{ run.status }}</span>
-                  <span>{{ run.durationMs }}ms</span>
+                <div class="flex items-center gap-3 text-xs text-black/50 dark:text-white/50">
+                  <TxStatusBadge
+                    :text="run.status"
+                    :status="run.status === 'success' ? 'success' : run.status === 'failed' ? 'danger' : 'info'"
+                    size="sm"
+                  />
+                  <span class="font-mono">{{ run.durationMs }}ms</span>
                   <span>fallback {{ run.fallbackCount }}</span>
                   <span>approval {{ run.approvalHitCount }}</span>
                 </div>
               </div>
             </div>
-          </div>
+          </TxCard>
         </template>
       </div>
 
-      <div v-if="activeSection === 'docs'" class="space-y-4">
-        <div class="grid gap-4 lg:grid-cols-4">
-          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+      <!-- Docs Analytics -->
+      <div v-if="activeSection === 'docs'" class="space-y-5">
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               Docs
             </h3>
-            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+            <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber(docsAnalytics?.overview.docCount || 0) }}
             </p>
-          </div>
-          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+          </TxCard>
+          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               Views
             </h3>
-            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+            <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber(docsAnalytics?.overview.totalViews || 0) }}
             </p>
-          </div>
-          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+          </TxCard>
+          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               Active Read Time
             </h3>
-            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+            <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatDuration(docsAnalytics?.overview.totalActiveMs || 0) }}
             </p>
-          </div>
-          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+          </TxCard>
+          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               Copy / Select
             </h3>
-            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+            <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber((docsAnalytics?.overview.totalCopyCount || 0) + (docsAnalytics?.overview.totalSelectCount || 0)) }}
             </p>
+          </TxCard>
+        </div>
+
+        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <div class="flex flex-wrap items-center gap-3">
+            <TuffInput
+              v-model="docsPath"
+              type="text"
+              placeholder="Filter path (e.g. docs/dev/components/button)"
+              class="w-72"
+            />
+            <TuffSelect v-model="docsSource" class="w-44">
+              <TuffSelectItem value="all" label="All sources" />
+              <TuffSelectItem value="docs_page" label="Docs page" />
+              <TuffSelectItem value="doc_comments_admin" label="Doc comments admin" />
+            </TuffSelect>
+            <TxButton variant="secondary" size="sm" native-type="button" @click="fetchDocsAnalytics">
+              Refresh
+            </TxButton>
+            <TxButton
+              v-if="docsPath"
+              variant="ghost"
+              size="sm"
+              native-type="button"
+              @click="docsPath = ''"
+            >
+              Clear
+            </TxButton>
           </div>
-        </div>
+        </TxCard>
 
-        <div class="flex flex-wrap items-center gap-3 rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-          <TuffInput
-            v-model="docsPath"
-            type="text"
-            placeholder="Filter path (e.g. docs/dev/components/button)"
-            class="w-72"
-          />
-          <TuffSelect v-model="docsSource" class="w-44">
-            <TuffSelectItem value="all" label="All sources" />
-            <TuffSelectItem value="docs_page" label="Docs page" />
-            <TuffSelectItem value="doc_comments_admin" label="Doc comments admin" />
-          </TuffSelect>
-          <TxButton variant="bare" size="sm" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70" @click="fetchDocsAnalytics">
-            Refresh
-          </TxButton>
-          <TxButton
-            v-if="docsPath"
-            variant="bare"
-            size="sm"
-            native-type="button"
-            class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70"
-            @click="docsPath = ''"
-          >
-            Clear
-          </TxButton>
-        </div>
-
-        <div v-if="docsLoading" class="flex items-center gap-2 rounded-2xl bg-black/[0.02] p-4 text-sm text-black/45 dark:bg-white/[0.03] dark:text-white/50">
+        <TxCard v-if="docsLoading" variant="plain" background="mask" :radius="18" :padding="24" class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
           <TxSpinner :size="16" />
           Loading docs analytics...
-        </div>
-        <div v-else-if="docsError" class="rounded-2xl bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-300">
-          {{ docsError }}
-        </div>
+        </TxCard>
+        <TxCard v-else-if="docsError" variant="plain" background="mask" :radius="18" :padding="24">
+          <TxEmptyState
+            variant="error"
+            :title="t('common.error', 'Error')"
+            :description="docsError"
+          />
+        </TxCard>
         <template v-else-if="docsAnalytics">
           <div class="grid gap-4 lg:grid-cols-2">
-            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
                 Docs summary
               </h3>
-              <div v-if="docsSummaryRows.length === 0" class="text-sm text-black/45 dark:text-white/50">
-                No docs data in current range.
-              </div>
+              <TxEmptyState
+                v-if="docsSummaryRows.length === 0"
+                variant="no-data"
+                size="small"
+                description="No docs data in current range."
+              />
               <div v-else class="space-y-2">
                 <TxButton
                   v-for="item in docsSummaryRows"
@@ -1316,90 +1366,99 @@ Slow
                   variant="bare"
                   block
                   native-type="button"
-                  class="w-full flex items-center justify-between rounded-xl bg-black/[0.04] px-3 py-2 text-left text-sm transition hover:bg-black/[0.08] dark:bg-white/[0.05] dark:hover:bg-white/[0.09]"
+                  class="w-full flex items-center justify-between rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 text-left text-sm transition hover:bg-black/[0.05] dark:border-white/[0.05] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
                   @click="openDocAnalyticsPath(item.path)"
                 >
                   <div class="min-w-0">
-                    <p class="truncate text-black/75 dark:text-white/75">
+                    <p class="truncate font-medium text-black/80 dark:text-white/80">
                       {{ item.path }}
                     </p>
                     <p class="truncate text-xs text-black/45 dark:text-white/50">
                       {{ item.title || 'Untitled' }}
                     </p>
                   </div>
-                  <div class="text-right text-xs text-black/45 dark:text-white/50">
+                  <div class="text-right font-mono text-xs text-black/50 dark:text-white/50">
                     <p>{{ formatNumber(item.views) }} views</p>
                     <p>{{ formatDuration(item.activeMs) }}</p>
                   </div>
                 </TxButton>
               </div>
-            </div>
+            </TxCard>
 
-            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
                 Action evidence
               </h3>
-              <div v-if="!docsDetail || docsDetail.evidence.length === 0" class="text-sm text-black/45 dark:text-white/50">
-                No action evidence in current range.
-              </div>
+              <TxEmptyState
+                v-if="!docsDetail || docsDetail.evidence.length === 0"
+                variant="no-data"
+                size="small"
+                description="No action evidence in current range."
+              />
               <div v-else class="space-y-2">
                 <div
                   v-for="item in docsDetail.evidence.slice(0, 12)"
                   :key="`${item.sourceType}:${item.actionType}:${item.textHash}:${item.sectionId}:${item.anchorBucket}`"
-                  class="rounded-xl bg-black/[0.04] px-3 py-2 text-xs dark:bg-white/[0.05]"
+                  class="rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 text-xs dark:border-white/[0.05] dark:bg-white/[0.03]"
                 >
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-black/75 dark:text-white/75">{{ item.actionType }} · {{ item.actionSource }}</span>
-                    <span class="text-black/45 dark:text-white/50">{{ formatNumber(item.count) }}</span>
+                    <span class="font-medium text-black/80 dark:text-white/80">{{ item.actionType }} · {{ item.actionSource }}</span>
+                    <span class="font-mono text-black/45 dark:text-white/50">{{ formatNumber(item.count) }}</span>
                   </div>
                   <p class="mt-1 truncate text-black/45 dark:text-white/50">
                     {{ item.sectionId }} · bucket {{ item.anchorBucket }} · {{ item.sourceType }}
                   </p>
-                  <p v-if="item.textHash" class="mt-1 truncate text-black/40 dark:text-white/45">
+                  <p v-if="item.textHash" class="mt-1 truncate font-mono text-black/40 dark:text-white/45">
                     {{ item.textHash }}
                   </p>
                 </div>
               </div>
-            </div>
+            </TxCard>
           </div>
 
           <div v-if="docsDetail" class="grid gap-4 lg:grid-cols-2">
-            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
                 Sections · {{ docsDetail.path }}
               </h3>
-              <div v-if="docsDetail.sections.length === 0" class="text-sm text-black/45 dark:text-white/50">
-                No section heat data.
-              </div>
+              <TxEmptyState
+                v-if="docsDetail.sections.length === 0"
+                variant="no-data"
+                size="small"
+                description="No section heat data."
+              />
               <div v-else class="space-y-2">
                 <div
                   v-for="section in docsDetail.sections.slice(0, 20)"
                   :key="section.sectionId"
-                  class="rounded-xl bg-black/[0.04] px-3 py-2 text-sm dark:bg-white/[0.05]"
+                  class="rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 text-sm dark:border-white/[0.05] dark:bg-white/[0.03]"
                 >
                   <div class="flex items-center justify-between gap-2">
-                    <span class="truncate text-black/75 dark:text-white/75">{{ section.sectionId }}</span>
-                    <span class="text-xs text-black/45 dark:text-white/50">{{ formatDuration(section.activeMs) }}</span>
+                    <span class="truncate font-medium text-black/80 dark:text-white/80">{{ section.sectionId }}</span>
+                    <span class="font-mono text-xs text-black/45 dark:text-white/50">{{ formatDuration(section.activeMs) }}</span>
                   </div>
                   <p class="truncate text-xs text-black/45 dark:text-white/50">
                     {{ section.sectionTitle || '-' }}
                   </p>
                 </div>
               </div>
-            </div>
+            </TxCard>
 
-            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
                 Heat buckets (0-19)
               </h3>
-              <div v-if="!docsDetail || docsDetail.heatmap.length === 0" class="text-sm text-black/45 dark:text-white/50">
-                No heat buckets yet.
-              </div>
+              <TxEmptyState
+                v-if="!docsDetail || docsDetail.heatmap.length === 0"
+                variant="no-data"
+                size="small"
+                description="No heat buckets yet."
+              />
               <div v-else class="space-y-3">
                 <div
                   v-for="section in docsDetail.sections.slice(0, 8)"
                   :key="`heat-${section.sectionId}`"
-                  class="rounded-xl bg-black/[0.04] px-3 py-3 text-xs dark:bg-white/[0.05]"
+                  class="rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 text-xs dark:border-white/[0.05] dark:bg-white/[0.03]"
                 >
                   <p class="mb-2 truncate text-black/70 dark:text-white/70">
                     {{ section.sectionId }}
@@ -1408,99 +1467,107 @@ Slow
                     <div
                       v-for="bucket in docsHeatmapBySection.get(section.sectionId) || []"
                       :key="`${section.sectionId}:${bucket.bucket}:${bucket.sourceType}`"
-                      class="h-14 w-2 rounded bg-emerald-500/60"
+                      class="h-14 w-2 rounded bg-emerald-500/70"
                       :style="{ height: `${Math.max(8, (bucket.activeMs / maxHeatValue) * 56)}px` }"
                       :title="`bucket ${bucket.bucket} · ${bucket.sourceType} · ${bucket.activeMs}ms`"
                     />
                   </div>
                 </div>
               </div>
-            </div>
+            </TxCard>
           </div>
         </template>
       </div>
 
       <!-- Geo Analytics -->
-      <div v-if="activeSection === 'geo'" class="space-y-4">
-        <div class="grid gap-4 lg:grid-cols-4">
-          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+      <div v-if="activeSection === 'geo'" class="space-y-5">
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               Searches
             </h3>
-            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+            <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber(geoAnalytics?.summary.totalSearches || 0) }}
             </p>
-          </div>
-          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+          </TxCard>
+          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               Unique IPs
             </h3>
-            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+            <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber(geoAnalytics?.summary.uniqueIps || 0) }}
             </p>
-          </div>
-          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+          </TxCard>
+          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               Countries
             </h3>
-            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+            <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber(geoAnalytics?.summary.countryCount || 0) }}
             </p>
-          </div>
-          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+          </TxCard>
+          <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
               Subdivisions
             </h3>
-            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+            <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber(geoAnalytics?.summary.subdivisionCount || 0) }}
             </p>
-          </div>
+          </TxCard>
         </div>
 
-        <div class="flex items-center justify-between rounded-2xl bg-black/[0.02] px-4 py-3 text-sm dark:bg-white/[0.03]">
-          <div class="flex items-center gap-2">
-            <span class="text-black/60 dark:text-white/60">Scope:</span>
-            <span class="font-medium text-black dark:text-white">Global</span>
-            <span v-if="selectedGeoCountry" class="text-black/40 dark:text-white/40">></span>
-            <span v-if="selectedGeoCountry" class="font-medium text-black dark:text-white">{{ resolveCountryLabel(selectedGeoCountry) }}</span>
+        <TxCard variant="plain" background="mask" :radius="16" :padding="14">
+          <div class="flex items-center justify-between text-sm">
+            <div class="flex items-center gap-2">
+              <span class="text-black/60 dark:text-white/60">Scope:</span>
+              <span class="font-medium text-black dark:text-white">Global</span>
+              <span v-if="selectedGeoCountry" class="text-black/40 dark:text-white/40">></span>
+              <span v-if="selectedGeoCountry" class="font-medium text-black dark:text-white">{{ resolveCountryLabel(selectedGeoCountry) }}</span>
+            </div>
+            <TxButton
+              v-if="selectedGeoCountry"
+              variant="secondary"
+              size="sm"
+              native-type="button"
+              @click="resetGeoDrilldown"
+            >
+              Back to Global
+            </TxButton>
           </div>
-          <TxButton
-            v-if="selectedGeoCountry"
-            variant="bare"
-            size="sm"
-            native-type="button"
-            class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70"
-            @click="resetGeoDrilldown"
-          >
-            Back to Global
-          </TxButton>
-        </div>
+        </TxCard>
 
-        <div v-if="geoLoading" class="flex items-center gap-2 rounded-2xl bg-black/[0.02] p-4 text-sm text-black/45 dark:bg-white/[0.03] dark:text-white/50">
+        <TxCard v-if="geoLoading" variant="plain" background="mask" :radius="18" :padding="24" class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
           <TxSpinner :size="16" />
           Loading geo analytics...
-        </div>
-        <div v-else-if="geoError" class="rounded-2xl bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-300">
-          {{ geoError }}
-        </div>
+        </TxCard>
+        <TxCard v-else-if="geoError" variant="plain" background="mask" :radius="18" :padding="24">
+          <TxEmptyState
+            variant="error"
+            :title="t('common.error', 'Error')"
+            :description="geoError"
+          />
+        </TxCard>
 
         <template v-else-if="geoAnalytics">
-          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <TxCard variant="plain" background="mask" :radius="18" :padding="16">
             <LazyGeoLeafletMap
               :points="geoMapPoints"
               :height="320"
               @point-click="handleMapPointClick"
             />
-          </div>
+          </TxCard>
 
           <div class="grid gap-4 lg:grid-cols-2">
-            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
                 {{ selectedGeoCountry ? 'State / Province Breakdown' : 'Country Breakdown' }}
               </h3>
-              <div v-if="selectedGeoCountry ? geoSubdivisions.length === 0 : geoCountries.length === 0" class="text-sm text-black/45 dark:text-white/50">
-                No data in current range
-              </div>
+              <TxEmptyState
+                v-if="selectedGeoCountry ? geoSubdivisions.length === 0 : geoCountries.length === 0"
+                variant="no-data"
+                size="small"
+                description="No data in current range"
+              />
               <div v-else class="space-y-2">
                 <template v-if="selectedGeoCountry">
                   <TxButton
@@ -1509,12 +1576,12 @@ Slow
                     variant="bare"
                     block
                     native-type="button"
-                    class="w-full flex items-center justify-between rounded-xl bg-black/[0.04] px-3 py-2 text-left text-sm transition hover:bg-black/[0.08] dark:bg-white/[0.05] dark:hover:bg-white/[0.09]"
+                    class="w-full flex items-center justify-between rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 text-left text-sm transition hover:bg-black/[0.05] dark:border-white/[0.05] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
                   >
-                    <span class="truncate text-black/75 dark:text-white/75">
+                    <span class="truncate font-medium text-black/75 dark:text-white/75">
                       {{ resolveSubdivisionLabel(item) }}
                     </span>
-                    <span class="text-xs text-black/45 dark:text-white/50">
+                    <span class="font-mono text-xs text-black/45 dark:text-white/50">
                       {{ formatNumber(item.count) }}
                     </span>
                   </TxButton>
@@ -1526,90 +1593,99 @@ Slow
                     variant="bare"
                     block
                     native-type="button"
-                    class="w-full flex items-center justify-between rounded-xl bg-black/[0.04] px-3 py-2 text-left text-sm transition hover:bg-black/[0.08] dark:bg-white/[0.05] dark:hover:bg-white/[0.09]"
+                    class="w-full flex items-center justify-between rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 text-left text-sm transition hover:bg-black/[0.05] dark:border-white/[0.05] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
                     @click="drilldownCountry(item.countryCode)"
                   >
-                    <span class="truncate text-black/75 dark:text-white/75">
+                    <span class="truncate font-medium text-black/75 dark:text-white/75">
                       {{ resolveCountryLabel(item.countryCode) }}
                     </span>
-                    <span class="text-xs text-black/45 dark:text-white/50">
+                    <span class="font-mono text-xs text-black/45 dark:text-white/50">
                       {{ formatNumber(item.count) }}
                     </span>
                   </TxButton>
                 </template>
               </div>
-            </div>
+            </TxCard>
 
-            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
                 Top IPs
               </h3>
-              <div v-if="geoTopIps.length === 0" class="text-sm text-black/45 dark:text-white/50">
-                No IP data in current range
-              </div>
+              <TxEmptyState
+                v-if="geoTopIps.length === 0"
+                variant="no-data"
+                size="small"
+                description="No IP data in current range"
+              />
               <div v-else class="space-y-2">
                 <div
                   v-for="item in geoTopIps"
                   :key="`${item.ip}:${item.lastSeenAt}`"
-                  class="rounded-xl bg-black/[0.04] px-3 py-2 text-sm dark:bg-white/[0.05]"
+                  class="rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 text-sm dark:border-white/[0.05] dark:bg-white/[0.03]"
                 >
                   <div class="flex items-center justify-between gap-2">
-                    <span class="font-medium text-black/80 dark:text-white/80">{{ item.ip }}</span>
-                    <span class="text-xs text-black/45 dark:text-white/50">{{ formatNumber(item.count) }}</span>
+                    <span class="font-mono font-medium text-black/80 dark:text-white/80">{{ item.ip }}</span>
+                    <span class="font-mono text-xs text-black/45 dark:text-white/50">{{ formatNumber(item.count) }}</span>
                   </div>
                   <p class="mt-1 text-xs text-black/45 dark:text-white/50">
                     {{ resolveCountryLabel(item.countryCode) }} · {{ item.regionCode || '-' }} · {{ item.city || '-' }}
                   </p>
                 </div>
               </div>
-            </div>
+            </TxCard>
           </div>
         </template>
       </div>
 
-      <!-- Telemetry Messages -->
-      <div v-if="activeSection === 'messages'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+      <!-- Telemetry Messages (告警) -->
+      <TxCard v-if="activeSection === 'messages'" variant="plain" background="mask" :radius="18" :padding="20">
         <div class="mb-4 flex items-center justify-between">
-          <h3 class="font-semibold text-black dark:text-white">
-            Telemetry Messages
-          </h3>
-          <TxButton variant="bare" size="sm" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.04] dark:text-white/70" @click="fetchMessages">
+          <div>
+            <h3 class="font-semibold text-black dark:text-white">
+              Telemetry Messages
+            </h3>
+            <p class="text-xs text-black/45 dark:text-white/45">
+              System alerts, warnings, and runtime event notifications
+            </p>
+          </div>
+          <TxButton variant="secondary" size="sm" native-type="button" @click="fetchMessages">
             Refresh
           </TxButton>
         </div>
-        <div v-if="messagesLoading" class="flex items-center gap-2 text-sm text-black/40 dark:text-white/40">
+        <div v-if="messagesLoading" class="flex items-center gap-2 py-8 justify-center text-sm text-black/40 dark:text-white/40">
           <TxSpinner :size="16" />
           Loading messages...
         </div>
         <div v-else-if="messagesError" class="rounded-lg bg-red-500/10 p-3 text-sm text-red-500">
           {{ messagesError }}
         </div>
-        <div v-else-if="messages.length === 0" class="text-sm text-black/40 dark:text-white/40">
-          No messages yet
-        </div>
+        <TxEmptyState
+          v-else-if="messages.length === 0"
+          variant="no-data"
+          size="small"
+          description="No messages yet"
+        />
         <div v-else class="space-y-3">
           <div
             v-for="item in messages"
             :key="item.id"
-            class="rounded-xl border border-black/[0.04] bg-black/[0.02] p-4 text-sm dark:border-white/[0.06] dark:bg-white/[0.04]"
+            class="rounded-xl border border-black/[0.04] bg-black/[0.02] p-4 text-sm dark:border-white/[0.06] dark:bg-white/[0.03]"
           >
             <div class="flex items-start justify-between gap-4">
               <div>
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-semibold uppercase text-black/40 dark:text-white/40">{{ item.source }}</span>
-                  <span
-                    class="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                    :class="item.severity === 'error'
-                      ? 'bg-red-500/15 text-red-500'
-                      : item.severity === 'warn'
-                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                        : 'bg-blue-500/15 text-blue-500'"
-                  >
-                    {{ item.severity }}
-                  </span>
-                  <span v-if="item.status === 'unread'" class="rounded-full bg-black/[0.04] px-2 py-0.5 text-[10px] text-black/60 dark:bg-white/[0.08] dark:text-white/60">
-                    unread
-                  </span>
+                  <TxStatusBadge
+                    :text="item.severity"
+                    :status="item.severity === 'error' ? 'danger' : item.severity === 'warn' ? 'warning' : 'info'"
+                    size="sm"
+                  />
+                  <TxStatusBadge
+                    v-if="item.status === 'unread'"
+                    text="unread"
+                    status="warning"
+                    size="sm"
+                  />
                 </div>
                 <p class="mt-2 font-semibold text-black dark:text-white">
                   {{ item.title }}
@@ -1618,14 +1694,14 @@ Slow
                   {{ item.message }}
                 </p>
               </div>
-              <span class="text-xs text-black/40 dark:text-white/40">{{ formatMessageTime(item.createdAt) }}</span>
+              <span class="font-mono text-xs text-black/40 dark:text-white/40">{{ formatMessageTime(item.createdAt) }}</span>
             </div>
           </div>
         </div>
-      </div>
+      </TxCard>
 
       <!-- Exchange Rate History -->
-      <div v-if="activeSection === 'exchange'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+      <TxCard v-if="activeSection === 'exchange'" variant="plain" background="mask" :radius="18" :padding="20">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 class="font-semibold text-black dark:text-white">
@@ -1635,11 +1711,11 @@ Slow
               Non-free users only. USD base.
             </p>
           </div>
-          <TxButton variant="bare" size="sm" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.04] dark:text-white/70" @click="fetchExchangeHistory">
+          <TxButton variant="secondary" size="sm" native-type="button" @click="fetchExchangeHistory">
             Refresh
           </TxButton>
         </div>
-        <div class="mb-4 flex flex-wrap items-center gap-3 rounded-2xl bg-black/[0.02] p-4 text-xs dark:bg-white/[0.03]">
+        <div class="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-black/[0.04] bg-black/[0.02] p-3 text-xs dark:border-white/[0.05] dark:bg-white/[0.03]">
           <TuffSelect v-model="exchangeView" class="w-40">
             <TuffSelectItem value="history" label="Target history" />
             <TuffSelectItem value="snapshots" label="Snapshots" />
@@ -1662,35 +1738,41 @@ Slow
             Include payload (admin)
           </label>
         </div>
-        <div v-if="exchangeLoading" class="flex items-center gap-2 text-sm text-black/40 dark:text-white/40">
+        <div v-if="exchangeLoading" class="flex items-center gap-2 py-6 justify-center text-sm text-black/40 dark:text-white/40">
           <TxSpinner :size="16" />
           Loading exchange history...
         </div>
         <div v-else-if="exchangeError" class="rounded-lg bg-red-500/10 p-3 text-sm text-red-500">
           {{ exchangeError }}
         </div>
-        <div v-else-if="exchangeView === 'history' && exchangeHistory.length === 0" class="text-sm text-black/40 dark:text-white/40">
-          No history data
-        </div>
-        <div v-else-if="exchangeView === 'snapshots' && exchangeSnapshots.length === 0" class="text-sm text-black/40 dark:text-white/40">
-          No snapshot data
-        </div>
+        <TxEmptyState
+          v-else-if="exchangeView === 'history' && exchangeHistory.length === 0"
+          variant="no-data"
+          size="small"
+          description="No history data"
+        />
+        <TxEmptyState
+          v-else-if="exchangeView === 'snapshots' && exchangeSnapshots.length === 0"
+          variant="no-data"
+          size="small"
+          description="No snapshot data"
+        />
         <div v-else class="space-y-3">
           <template v-if="exchangeView === 'history'">
             <div
               v-for="item in exchangeHistory"
               :key="`${item.targetCurrency}:${item.fetchedAt}`"
-              class="rounded-xl border border-black/[0.04] bg-black/[0.02] p-4 text-sm dark:border-white/[0.06] dark:bg-white/[0.04]"
+              class="rounded-xl border border-black/[0.04] bg-black/[0.02] p-4 text-sm dark:border-white/[0.06] dark:bg-white/[0.03]"
             >
               <div class="flex items-center justify-between gap-4">
                 <div class="font-semibold text-black dark:text-white">
                   USD → {{ item.targetCurrency }}
                 </div>
-                <div class="text-xs text-black/40 dark:text-white/40">
+                <div class="font-mono text-xs text-black/40 dark:text-white/40">
                   {{ formatExchangeTime(item.fetchedAt) }}
                 </div>
               </div>
-              <div class="mt-2 text-xs text-black/60 dark:text-white/60">
+              <div class="mt-2 font-mono text-xs text-black/60 dark:text-white/60">
                 Rate: {{ formatRate(item.rate) }}
               </div>
             </div>
@@ -1699,26 +1781,26 @@ Slow
             <div
               v-for="item in exchangeSnapshots"
               :key="item.id"
-              class="rounded-xl border border-black/[0.04] bg-black/[0.02] p-4 text-sm dark:border-white/[0.06] dark:bg-white/[0.04]"
+              class="rounded-xl border border-black/[0.04] bg-black/[0.02] p-4 text-sm dark:border-white/[0.06] dark:bg-white/[0.03]"
             >
               <div class="flex items-center justify-between gap-4">
                 <div class="font-semibold text-black dark:text-white">
                   Snapshot · {{ item.baseCurrency }}
                 </div>
-                <div class="text-xs text-black/40 dark:text-white/40">
+                <div class="font-mono text-xs text-black/40 dark:text-white/40">
                   {{ formatExchangeTime(item.fetchedAt) }}
                 </div>
               </div>
               <div class="mt-2 text-xs text-black/60 dark:text-white/60">
                 Provider updated: {{ formatExchangeTime(item.providerUpdatedAt) }}
               </div>
-              <div v-if="item.payload" class="mt-2 rounded-lg bg-black/[0.03] p-3 text-[11px] text-black/60 dark:bg-white/[0.05] dark:text-white/60">
+              <div v-if="item.payload" class="mt-2 rounded-lg bg-black/[0.03] p-3 font-mono text-[11px] text-black/60 dark:bg-white/[0.05] dark:text-white/60">
                 {{ formatPayloadPreview(item.payload) }}
               </div>
             </div>
           </template>
         </div>
-      </div>
+      </TxCard>
 
       <!-- Breakdown Drawer -->
       <div v-if="showBreakdown" class="fixed inset-0 z-40 flex justify-end bg-black/30 p-4" @click.self="showBreakdown = false">
@@ -1732,16 +1814,26 @@ Slow
                 Secondary distributions and deep-dive signals
               </p>
             </div>
-            <TxButton variant="bare" circle size="sm" native-type="button" class="bg-black/[0.04] text-black/60 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70" @click="showBreakdown = false">
-              <span class="i-carbon-close" />
+            <TxButton variant="ghost" circle size="sm" native-type="button" @click="showBreakdown = false">
+              <span class="i-carbon-close text-base" />
             </TxButton>
           </div>
 
-          <div class="mb-4 flex gap-2">
-            <TxButton variant="bare" native-type="button" class="text-xs" :class="activeBreakdownTab === 'search' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 dark:bg-white/[0.08] dark:text-white/60'" @click="activeBreakdownTab = 'search'">
+          <div class="mb-5 flex gap-2">
+            <TxButton
+              :variant="activeBreakdownTab === 'search' ? 'primary' : 'secondary'"
+              size="sm"
+              native-type="button"
+              @click="activeBreakdownTab = 'search'"
+            >
               Search
             </TxButton>
-            <TxButton variant="bare" native-type="button" class="text-xs" :class="activeBreakdownTab === 'usage' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 dark:bg-white/[0.08] dark:text-white/60'" @click="activeBreakdownTab = 'usage'">
+            <TxButton
+              :variant="activeBreakdownTab === 'usage' ? 'primary' : 'secondary'"
+              size="sm"
+              native-type="button"
+              @click="activeBreakdownTab = 'usage'"
+            >
               Usage
             </TxButton>
           </div>
