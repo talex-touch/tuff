@@ -21,6 +21,10 @@
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "Issue: https://github.com/talex-touch/tuff/issues/2005. Draft PR: https://github.com/talex-touch/tuff/pull/2006. Module-level acceptance passed; packaged candidate startup and app-level energy comparison remain incomplete and are documented as partial evidence.",
-  "meta": {}
+  "notes": "Issue: https://github.com/talex-touch/tuff/issues/2005. PR: https://github.com/talex-touch/tuff/pull/2006. Source-built runtime acceptance passed; signed packaged-app startup and app-level energy comparison remain explicitly unverified.",
+  "meta": {
+    "blocker": "PR #2006 is awaiting required GitHub checks after maintainer integration; signed packaged-app startup and app-level energy acceptance remain unverified.",
+    "evidence": "Source-built Electron watcher add/delete smoke passed; isolated 3,000-file A/B reduced busy CPU median from 125.05% to 60.7% with no Perf:EventLoop warning. Final review hardening passes 90 focused CoreApp tests, 18 utils tests with 1 skipped, node typecheck, scoped ESLint, CoreApp Vite build, docs verification, module-size ratchet and its 28 self-tests.",
+    "nextAction": "Push the final review-hardening commit, approve fork workflow runs, then merge only after all required GitHub checks pass."
+  }
 }
