@@ -1,4 +1,5 @@
 import { computed, ref, watch, type ComputedRef } from 'vue'
+import { isTimeoutLikeError, isTransportFailureError } from '@talex-touch/utils/network'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { useAuth } from '~/modules/auth/useAuth'
@@ -30,6 +31,19 @@ function resolveCreditsError(status: number, statusText: string): string {
     return '登录状态已失效，请重新登录后刷新。'
   }
   return statusText ? `Credits 信息获取失败：${status} ${statusText}` : 'Credits 信息获取失败。'
+}
+
+function resolveCreditsRequestError(error: unknown): string {
+  if (isTimeoutLikeError(error) || isTransportFailureError(error)) {
+    return 'Credits 信息获取失败。'
+  }
+  if (
+    error instanceof Error &&
+    /NETWORK_COOLDOWN_ACTIVE|Network guard cooldown active/i.test(error.message)
+  ) {
+    return 'Credits 信息获取失败。'
+  }
+  return error instanceof Error && error.message ? error.message : 'Credits 信息获取失败。'
 }
 
 const rawSummary = ref<CreditSummary | null>(null)
@@ -106,7 +120,7 @@ export function useCreditsSummary(): CreditSummaryState {
       } catch (err) {
         if (requestId !== activeRequestId) return
         rawSummary.value = null
-        error.value = err instanceof Error && err.message ? err.message : 'Credits 信息获取失败。'
+        error.value = resolveCreditsRequestError(err)
       } finally {
         if (requestId === activeRequestId) {
           loading.value = false

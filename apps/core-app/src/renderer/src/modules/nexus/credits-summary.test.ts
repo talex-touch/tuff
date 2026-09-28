@@ -113,6 +113,27 @@ describe('useCreditsSummary', () => {
    */
   const FAILED_SUMMARY: Array<{ name: string; route: Route; error: string }> = [
     {
+      name: 'a timeout',
+      route: () => {
+        throw new Error('request timeout')
+      },
+      error: 'Credits 信息获取失败。'
+    },
+    {
+      name: 'a transport failure',
+      route: () => {
+        throw new Error('net::ERR_CONNECTION_CLOSED')
+      },
+      error: 'Credits 信息获取失败。'
+    },
+    {
+      name: 'an active network cooldown',
+      route: () => {
+        throw new Error('Network guard cooldown active for key "credits"')
+      },
+      error: 'Credits 信息获取失败。'
+    },
+    {
       name: 'an expired session',
       route: () => nexusResponse(401, { message: 'unauthenticated' }, 'Unauthorized'),
       error: '登录状态已失效，请重新登录后刷新。'

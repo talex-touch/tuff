@@ -17,17 +17,23 @@ function nativeAddonReleaseDir(projectRoot) {
  * presence check that follows. Keep a copy across the rebuild and put back what it dropped.
  *
  * Only addons that are already there are kept: a run that never built them must still fail the
- * check, with the message that says which step produces them.
+ * check, with the message that says which step produces them. A copy that fails part way takes
+ * the half-filled backup with it, so an unreadable addon tree leaves nothing behind either.
  */
 function preserveRequiredNativeAddons({ projectRoot, target, tempRoot = os.tmpdir() }) {
   const releaseDir = nativeAddonReleaseDir(projectRoot)
   const backupDir = fs.mkdtempSync(path.join(tempRoot, 'tuff-native-addons-'))
   const kept = []
-  for (const moduleName of requiredNativeAddonNames(target)) {
-    const source = path.join(releaseDir, moduleName)
-    if (!fs.existsSync(source)) continue
-    fs.copyFileSync(source, path.join(backupDir, moduleName))
-    kept.push(moduleName)
+  try {
+    for (const moduleName of requiredNativeAddonNames(target)) {
+      const source = path.join(releaseDir, moduleName)
+      if (!fs.existsSync(source)) continue
+      fs.copyFileSync(source, path.join(backupDir, moduleName))
+      kept.push(moduleName)
+    }
+  } catch (error) {
+    fs.rmSync(backupDir, { recursive: true, force: true })
+    throw error
   }
   return { backupDir, kept }
 }
