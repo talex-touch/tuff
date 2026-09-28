@@ -45,6 +45,7 @@ const CURSOR = /cursor\s*:/
 const REVIEWED = {
   'agents': 'renders TxCardItem :clickable — inherits .tx-card-item--clickable',
   'base-anchor': 'reference wrapper only delegates; the clickable element is host slot content',
+  'bot-avatar': 'the click is pointer play (a hop and a turn), not an affordance; the canvas is role="img" and upstream sets no cursor',
   'cell-link': '<a> with a required `href` prop — UA supplies the pointer',
   'dialog': 'all four dialogs render TxButton',
   'dropdown-menu': 'items and submenu triggers render TxDropdownItem -> TxCardItem :clickable',

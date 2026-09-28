@@ -2154,33 +2154,6 @@ export interface IntelligencePromptBindingListResponse {
   bindings: IntelligencePromptBinding[]
 }
 
-export const TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION = 1 as const
-
-export interface IntelligenceProviderSyncRecord {
-  id: string
-  type: string
-  name: string
-  enabled: boolean
-  hasApiKey: boolean
-  baseUrl: string | null
-  models: string[]
-  defaultModel: string | null
-  instructions: string | null
-  timeout: number
-  priority: number
-  rateLimit: Record<string, number> | null
-  capabilities: string[] | null
-  metadata: Record<string, unknown> | null
-  updatedAt: string
-}
-
-export interface IntelligenceProviderSyncPayload {
-  schemaVersion: typeof TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION
-  source: 'nexus'
-  exportedAt: string
-  providers: IntelligenceProviderSyncRecord[]
-}
-
 export const TUFF_INTELLIGENCE_AGENT_TRACE_CONTRACT_VERSION = 3 as const
 
 export interface PromptStep {

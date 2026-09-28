@@ -1,8 +1,14 @@
 import type { H3Event } from 'h3'
+import { toRegistryCapabilityId, toRuntimeCapabilityId } from '@talex-touch/tuff-intelligence/light'
 import type { ProviderRegistryRecord } from './providerRegistryStore'
 import type { SceneRegistryRecord, SceneStrategyBindingInput } from './sceneRegistryStore'
-import { createProviderRegistryEntry, listProviderRegistryEntries } from './providerRegistryStore'
+import { createProviderRegistryEntry, listProviderRegistryEntries, updateProviderRegistryEntry } from './providerRegistryStore'
 import { createSceneRegistryEntry, getSceneRegistryEntry, updateSceneRegistryEntry } from './sceneRegistryStore'
+import {
+  isKnownSceneCapabilityAdapterKey,
+  normalizeSceneCapabilityAdapterKey,
+  sceneCapabilityAdapterSupports,
+} from './sceneCapabilityAdapterRegistry'
 
 const SEED_CREATED_BY = 'system:nexus-provider-scene-seed'
 const SEED_SOURCE = 'nexus-provider-scene-seed'
@@ -10,12 +16,14 @@ const OVERLAY_PROVIDER_NAME = 'custom-local-overlay'
 const COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID = 'corebox.screenshot.translate'
 const SCREENSHOT_TRANSLATE_REQUIRED_CAPABILITIES = ['vision.ocr', 'text.translate', 'overlay.render'] as const
 const SCREENSHOT_TRANSLATE_DIRECT_CAPABILITIES = ['image.translate.e2e'] as const
+const CANONICAL_CAPABILITY_PREFIXES = ['audio.', 'chat.', 'code.', 'content.', 'image.', 'intent.', 'keywords.', 'text.', 'vision.'] as const
 
 interface ProviderSceneSeedResult {
   overlayProviderId: string | null
   createdOverlayProvider: boolean
   createdScreenshotScene: boolean
   updatedScreenshotScene: boolean
+  createdCanonicalScenes: string[]
 }
 
 function hasCapability(provider: ProviderRegistryRecord, capability: string): boolean {
@@ -48,6 +56,91 @@ function providerPriority(provider: ProviderRegistryRecord, capability: string):
   if (typeof providerPriority === 'number' && Number.isFinite(providerPriority))
     return providerPriority
   return 100
+}
+
+function providerModels(provider: ProviderRegistryRecord): string[] {
+  const value = provider.metadata?.models
+  return Array.isArray(value)
+    ? value.filter((model): model is string => typeof model === 'string' && model.trim().length > 0)
+    : []
+}
+
+function inferProviderAdapterKey(provider: ProviderRegistryRecord): string | null {
+  const existing = normalizeSceneCapabilityAdapterKey(provider.metadata?.adapterKey)
+    ?? normalizeSceneCapabilityAdapterKey(provider.metadata?.adapter)
+  if (existing && isKnownSceneCapabilityAdapterKey(existing))
+    return existing
+
+  const transport = typeof provider.metadata?.transport === 'string' ? provider.metadata.transport : ''
+  const candidate = provider.vendor === 'tencent-cloud'
+    ? 'tencent-translation'
+    : provider.vendor === 'exchange-rate'
+      ? 'exchange-rate'
+      : provider.vendor === 'dashscope'
+        ? transport === 'filetrans' ? 'dashscope-filetrans-asr' : 'dashscope-qwen-audio-asr'
+        : provider.vendor === 'custom' && hasCapability(provider, 'overlay.render')
+          ? 'local-overlay'
+          : transport === 'responses' ? 'openai-responses' : 'openai-compatible'
+  return provider.capabilities.every(capability => sceneCapabilityAdapterSupports(candidate, capability.capability))
+    ? candidate
+    : null
+}
+
+async function migrateProviderRoutingMetadata(
+  event: H3Event,
+  providers: ProviderRegistryRecord[],
+): Promise<ProviderRegistryRecord[]> {
+  const migrated: ProviderRegistryRecord[] = []
+  for (const provider of providers) {
+    const adapterKey = inferProviderAdapterKey(provider)
+    if (!adapterKey) {
+      migrated.push(provider)
+      continue
+    }
+    const models = providerModels(provider)
+    const normalizedCapabilities = provider.capabilities.map(capability => ({
+      capability: toRegistryCapabilityId(toRuntimeCapabilityId(capability.capability)),
+      schemaRef: capability.schemaRef,
+      metering: capability.metering,
+      constraints: capability.constraints,
+      metadata: capability.metadata,
+    }))
+    const capabilitiesChanged = normalizedCapabilities.some((capability, index) =>
+      capability.capability !== provider.capabilities[index]?.capability)
+    const configuredDefault = typeof provider.metadata?.defaultModel === 'string'
+      ? provider.metadata.defaultModel.trim()
+      : ''
+    const defaultModel = configuredDefault && models.includes(configuredDefault)
+      ? configuredDefault
+      : models[0] ?? null
+    const metadata: Record<string, unknown> = {
+      ...(provider.metadata ?? {}),
+      adapterKey,
+      ...(models.length > 0 ? { models } : {}),
+      ...(defaultModel ? { defaultModel } : {}),
+    }
+    if (typeof metadata.adapter === 'string')
+      delete metadata.adapter
+    const currentDefaultModel = typeof provider.metadata?.defaultModel === 'string'
+      ? provider.metadata.defaultModel
+      : null
+    const hasLegacyMetadata = provider.metadata?.intelligenceProviderId !== undefined
+      || provider.metadata?.source === 'intelligence'
+    delete metadata.intelligenceProviderId
+    if (metadata.source === 'intelligence')
+      metadata.source = 'provider-registry'
+    const unchanged = provider.metadata?.adapterKey === adapterKey
+      && currentDefaultModel === defaultModel
+      && provider.metadata?.adapter === undefined
+      && !capabilitiesChanged
+      && !hasLegacyMetadata
+    if (unchanged) {
+      migrated.push(provider)
+      continue
+    }
+    migrated.push(await updateProviderRegistryEntry(event, provider.id, { metadata, capabilities: normalizedCapabilities }) ?? provider)
+  }
+  return migrated
 }
 
 function sortProvidersBySeedPreference(capability: string, providers: ProviderRegistryRecord[]) {
@@ -113,6 +206,9 @@ function buildSystemBinding(
     providerId: provider.id,
     capability,
     priority,
+    model: providerModels(provider).includes(String(provider.metadata?.defaultModel ?? ''))
+      ? String(provider.metadata?.defaultModel)
+      : providerModels(provider)[0] ?? null,
     status: 'enabled',
     metadata: {
       source: SEED_SOURCE,
@@ -147,6 +243,7 @@ function mergeSeedBindings(
   const merged: SceneStrategyBindingInput[] = scene.bindings.map(binding => ({
     providerId: binding.providerId,
     capability: binding.capability,
+    model: binding.model,
     priority: binding.priority,
     weight: binding.weight,
     status: binding.status,
@@ -189,6 +286,7 @@ async function ensureLocalOverlayProvider(
       source: SEED_SOURCE,
       seedId: OVERLAY_PROVIDER_NAME,
       localOnly: true,
+      adapterKey: 'local-overlay',
     },
     capabilities: [
       {
@@ -272,16 +370,77 @@ async function ensureScreenshotTranslateScene(
   return { created: false, updated: true }
 }
 
+function isCanonicalCapability(capability: string): boolean {
+  return CANONICAL_CAPABILITY_PREFIXES.some(prefix => capability.startsWith(prefix))
+}
+
+async function ensureCanonicalCapabilityScenes(
+  event: H3Event,
+  providers: ProviderRegistryRecord[],
+): Promise<string[]> {
+  const capabilities = [...new Set(
+    providers
+      .filter(provider => provider.status === 'enabled' && provider.ownerScope === 'system')
+      .flatMap(provider => provider.capabilities.map(capability => capability.capability))
+      .filter(isCanonicalCapability),
+  )].sort()
+  const created: string[] = []
+
+  for (const capability of capabilities) {
+    const sceneId = `nexus.intelligence.${capability}`
+    if (await getSceneRegistryEntry(event, sceneId))
+      continue
+    const bindings = sortProvidersBySeedPreference(
+      capability,
+      providers.filter(provider =>
+        provider.status === 'enabled'
+        && provider.ownerScope === 'system'
+        && hasCapability(provider, capability),
+      ),
+    ).map((provider, index) => ({
+      providerId: provider.id,
+      capability,
+      model: providerModels(provider).includes(String(provider.metadata?.defaultModel ?? ''))
+        ? String(provider.metadata?.defaultModel)
+        : providerModels(provider)[0] ?? null,
+      priority: (index + 1) * 10,
+      status: 'enabled' as const,
+      metadata: { source: SEED_SOURCE },
+    }))
+    if (bindings.length === 0)
+      continue
+    await createSceneRegistryEntry(event, {
+      id: sceneId,
+      displayName: `Nexus ${capability}`,
+      owner: 'nexus',
+      ownerScope: 'system',
+      status: 'enabled',
+      requiredCapabilities: [capability],
+      strategyMode: 'priority',
+      fallback: 'enabled',
+      meteringPolicy: { source: 'credit-pricing' },
+      auditPolicy: { persistInput: false, persistOutput: false, persistTrace: true },
+      metadata: { source: SEED_SOURCE, seedId: sceneId, canonicalCapability: capability },
+      bindings,
+    }, SEED_CREATED_BY)
+    created.push(sceneId)
+  }
+  return created
+}
+
 export async function ensureDefaultProviderSceneSeed(event: H3Event): Promise<ProviderSceneSeedResult> {
-  const providers = await listProviderRegistryEntries(event)
+  const existingProviders = await listProviderRegistryEntries(event)
+  const providers = await migrateProviderRoutingMetadata(event, existingProviders)
   const overlay = await ensureLocalOverlayProvider(event, providers)
   const effectiveProviders = overlay.created ? [overlay.provider, ...providers] : providers
   const scene = await ensureScreenshotTranslateScene(event, effectiveProviders, overlay.provider)
+  const createdCanonicalScenes = await ensureCanonicalCapabilityScenes(event, effectiveProviders)
 
   return {
     overlayProviderId: overlay.provider.id,
     createdOverlayProvider: overlay.created,
     createdScreenshotScene: scene.created,
     updatedScreenshotScene: scene.updated,
+    createdCanonicalScenes,
   }
 }

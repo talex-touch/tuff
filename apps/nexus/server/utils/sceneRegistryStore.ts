@@ -3,7 +3,13 @@ import type { H3Event } from 'h3'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
-import { PROVIDER_REGISTRY_OWNER_SCOPES, type ProviderRegistryOwnerScope } from './providerRegistryStore'
+import {
+  getProviderRegistryEntry,
+  PROVIDER_REGISTRY_OWNER_SCOPES,
+  type ProviderRegistryOwnerScope,
+  type ProviderRegistryRecord,
+} from './providerRegistryStore'
+import { resolveProviderSceneAdapterKey, sceneCapabilityAdapterSupports } from './sceneCapabilityAdapterRegistry'
 
 const SCENES_TABLE = 'scene_registry'
 const BINDINGS_TABLE = 'scene_strategy_bindings'
@@ -26,6 +32,7 @@ export interface SceneStrategyBindingRecord {
   sceneId: string
   providerId: string
   capability: string
+  model: string | null
   priority: number
   weight: number | null
   status: SceneBindingStatus
@@ -54,6 +61,21 @@ export interface SceneRegistryRecord {
   updatedAt: string
 }
 
+export interface SceneRegistryReadiness {
+  status: 'ready' | 'degraded' | 'disabled'
+  missingCapabilities: string[]
+  invalidBindings: Array<{
+    bindingId: string
+    providerId: string
+    capability: string
+    code: 'PROVIDER_MISSING' | 'CAPABILITY_MISSING' | 'ADAPTER_MISSING' | 'MODEL_INVALID'
+  }>
+}
+
+export interface SceneRegistryEntryWithReadiness extends SceneRegistryRecord {
+  readiness: SceneRegistryReadiness
+}
+
 interface SceneRegistryRow {
   id: string
   display_name: string
@@ -77,6 +99,7 @@ interface SceneStrategyBindingRow {
   scene_id: string
   provider_id: string
   capability: string
+  model: string | null
   priority: number
   weight: number | null
   status: string
@@ -89,6 +112,7 @@ interface SceneStrategyBindingRow {
 export interface SceneStrategyBindingInput {
   providerId: unknown
   capability: unknown
+  model?: unknown
   priority?: unknown
   weight?: unknown
   status?: unknown
@@ -150,6 +174,7 @@ interface NormalizedSceneInput {
 interface NormalizedSceneStrategyBindingInput {
   providerId: string
   capability: string
+  model: string | null
   priority: number
   weight: number | null
   status: SceneBindingStatus
@@ -203,6 +228,7 @@ async function ensureSceneRegistrySchema(db: D1Database) {
       scene_id TEXT NOT NULL,
       provider_id TEXT NOT NULL,
       capability TEXT NOT NULL,
+      model TEXT,
       priority INTEGER NOT NULL DEFAULT 100,
       weight REAL,
       status TEXT NOT NULL,
@@ -214,6 +240,10 @@ async function ensureSceneRegistrySchema(db: D1Database) {
       FOREIGN KEY (scene_id) REFERENCES ${SCENES_TABLE}(id) ON DELETE CASCADE
     );
   `).run()
+
+  const { results: bindingColumns } = await db.prepare(`PRAGMA table_info(${BINDINGS_TABLE});`).all<{ name?: string }>()
+  if (!(bindingColumns ?? []).some(column => column.name === 'model'))
+    await db.prepare(`ALTER TABLE ${BINDINGS_TABLE} ADD COLUMN model TEXT;`).run()
 
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_scene_registry_owner ON ${SCENES_TABLE}(owner);`).run()
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_scene_registry_status ON ${SCENES_TABLE}(status);`).run()
@@ -354,6 +384,7 @@ function normalizeBindings(value: unknown): NormalizedSceneStrategyBindingInput[
     return {
       providerId,
       capability,
+      model: normalizeOptionalString(input.model, `bindings[${index}].model`, 160),
       priority: normalizeInteger(input.priority, `bindings[${index}].priority`, 100),
       weight: normalizeWeight(input.weight, `bindings[${index}].weight`),
       status: input.status == null
@@ -420,6 +451,7 @@ function normalizeScenePatch(existing: SceneRegistryRecord, input: UpdateSceneRe
       ? existing.bindings.map(binding => ({
           providerId: binding.providerId,
           capability: binding.capability,
+          model: binding.model,
           priority: binding.priority,
           weight: binding.weight,
           status: binding.status,
@@ -436,6 +468,7 @@ function mapBinding(row: SceneStrategyBindingRow): SceneStrategyBindingRecord {
     sceneId: row.scene_id,
     providerId: row.provider_id,
     capability: row.capability,
+    model: row.model,
     priority: row.priority,
     weight: row.weight,
     status: row.status as SceneBindingStatus,
@@ -496,7 +529,7 @@ async function listBindingsForScenes(db: D1Database, sceneIds: string[]): Promis
 
   const placeholders = sceneIds.map(() => '?').join(', ')
   const { results } = await db.prepare(`
-    SELECT id, scene_id, provider_id, capability, priority, weight, status, constraints_json,
+    SELECT id, scene_id, provider_id, capability, model, priority, weight, status, constraints_json,
       metadata, created_at, updated_at
     FROM ${BINDINGS_TABLE}
     WHERE scene_id IN (${placeholders})
@@ -517,15 +550,16 @@ async function replaceSceneBindings(
   for (const binding of bindings) {
     await db.prepare(`
       INSERT INTO ${BINDINGS_TABLE} (
-        id, scene_id, provider_id, capability, priority, weight, status, constraints_json,
+        id, scene_id, provider_id, capability, model, priority, weight, status, constraints_json,
         metadata, created_at, updated_at
       )
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);
     `).bind(
       randomUUID(),
       sceneId,
       binding.providerId,
       binding.capability,
+      binding.model,
       binding.priority,
       binding.weight,
       binding.status,
@@ -584,6 +618,94 @@ export async function getSceneRegistryEntry(event: H3Event, id: string): Promise
   return mapScene(scene, bindings)
 }
 
+function providerModels(provider: ProviderRegistryRecord): string[] {
+  const value = provider.metadata?.models
+  return Array.isArray(value)
+    ? value.filter((model): model is string => typeof model === 'string' && model.trim().length > 0)
+    : []
+}
+
+async function assertSceneBindingsValid(
+  event: H3Event,
+  bindings: NormalizedSceneStrategyBindingInput[],
+): Promise<void> {
+  const providers = new Map<string, ProviderRegistryRecord>()
+  for (const [index, binding] of bindings.entries()) {
+    let provider = providers.get(binding.providerId)
+    if (!provider) {
+      provider = await getProviderRegistryEntry(event, binding.providerId) ?? undefined
+      if (provider)
+        providers.set(binding.providerId, provider)
+    }
+    if (!provider)
+      continue
+    if (!provider.capabilities.some(item => item.capability === binding.capability))
+      continue
+    const adapterKey = resolveProviderSceneAdapterKey(provider)
+    if (!adapterKey || !sceneCapabilityAdapterSupports(adapterKey, binding.capability))
+      continue
+    if (binding.model && !providerModels(provider).includes(binding.model)) {
+      throw createError({ statusCode: 400, statusMessage: `bindings[${index}].model is not declared by the provider.` })
+    }
+  }
+}
+
+export async function resolveSceneRegistryReadiness(
+  event: H3Event,
+  scene: SceneRegistryRecord,
+): Promise<SceneRegistryReadiness> {
+  if (scene.status === 'disabled') {
+    return { status: 'disabled', missingCapabilities: [], invalidBindings: [] }
+  }
+
+  const invalidBindings: SceneRegistryReadiness['invalidBindings'] = []
+  const validCapabilities = new Set<string>()
+  const providers = new Map<string, ProviderRegistryRecord | null>()
+
+  for (const binding of scene.bindings) {
+    if (binding.status !== 'enabled')
+      continue
+    if (!providers.has(binding.providerId))
+      providers.set(binding.providerId, await getProviderRegistryEntry(event, binding.providerId))
+    const provider = providers.get(binding.providerId) ?? null
+    if (!provider) {
+      invalidBindings.push({ bindingId: binding.id, providerId: binding.providerId, capability: binding.capability, code: 'PROVIDER_MISSING' })
+      continue
+    }
+    if (provider.status !== 'enabled' || !provider.capabilities.some(item => item.capability === binding.capability)) {
+      invalidBindings.push({ bindingId: binding.id, providerId: binding.providerId, capability: binding.capability, code: 'CAPABILITY_MISSING' })
+      continue
+    }
+    const adapterKey = resolveProviderSceneAdapterKey(provider)
+    if (!adapterKey || !sceneCapabilityAdapterSupports(adapterKey, binding.capability)) {
+      invalidBindings.push({ bindingId: binding.id, providerId: binding.providerId, capability: binding.capability, code: 'ADAPTER_MISSING' })
+      continue
+    }
+    if (binding.model && !providerModels(provider).includes(binding.model)) {
+      invalidBindings.push({ bindingId: binding.id, providerId: binding.providerId, capability: binding.capability, code: 'MODEL_INVALID' })
+      continue
+    }
+    validCapabilities.add(binding.capability)
+  }
+
+  const missingCapabilities = scene.requiredCapabilities.filter(capability => !validCapabilities.has(capability))
+  return {
+    status: missingCapabilities.length > 0 || invalidBindings.length > 0 ? 'degraded' : 'ready',
+    missingCapabilities,
+    invalidBindings,
+  }
+}
+
+export async function withSceneRegistryReadiness(
+  event: H3Event,
+  scene: SceneRegistryRecord,
+): Promise<SceneRegistryEntryWithReadiness> {
+  return {
+    ...scene,
+    readiness: await resolveSceneRegistryReadiness(event, scene),
+  }
+}
+
 export async function createSceneRegistryEntry(
   event: H3Event,
   input: CreateSceneRegistryInput,
@@ -593,6 +715,7 @@ export async function createSceneRegistryEntry(
   await ensureSceneRegistrySchema(db)
 
   const normalized = normalizeSceneInput(input)
+  await assertSceneBindingsValid(event, normalized.bindings)
   const now = new Date().toISOString()
   const safeCreatedBy = assertNonEmptyString(createdBy, 'createdBy', 120)
 
@@ -642,6 +765,7 @@ export async function updateSceneRegistryEntry(
   await ensureSceneRegistrySchema(db)
 
   const normalized = normalizeScenePatch(existing, input)
+  await assertSceneBindingsValid(event, normalized.bindings)
   const now = new Date().toISOString()
 
   await db.prepare(`

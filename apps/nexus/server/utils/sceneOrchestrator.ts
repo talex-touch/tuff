@@ -4,7 +4,7 @@ import type { SceneRegistryRecord, SceneStrategyBindingRecord } from './sceneReg
 import { Buffer } from 'node:buffer'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
-import { toRuntimeCapabilityId, type IntelligenceMessage } from '@talex-touch/tuff-intelligence/light'
+import { toRegistryCapabilityId, toRuntimeCapabilityId, type IntelligenceMessage } from '@talex-touch/tuff-intelligence/light'
 import { networkClient } from '@talex-touch/utils/network'
 import { getLatestProviderHealthChecks, type ProviderHealthCheckEntry } from './providerHealthStore'
 import { completeUploadGovernance, failUploadGovernance, startUploadGovernance } from './uploadGovernance'
@@ -18,6 +18,7 @@ import { invokeIntelligenceVisionOcr } from './intelligenceVisionOcrProvider'
 import { buildCapabilityMessages } from './tuffIntelligenceCapabilityMessages'
 import { buildOpenAiCompatBaseUrls, resolveProviderBaseUrl } from './intelligenceModels'
 import { invokeTencentImageTranslate, invokeTencentTextTranslate } from './tencentMachineTranslationProvider'
+import { ensureDefaultProviderSceneSeed } from './providerSceneSeed'
 import { convertUsd, getUsdRates } from './exchangeRateService'
 import { consumeCredits, releaseConsumedCredits } from './creditsStore'
 import {
@@ -32,7 +33,10 @@ import {
 import {
   clearSceneCapabilityAdapterRegistryForTest,
   registerSceneCapabilityAdapterRegistryEntry,
+  resolveProviderSceneAdapterKey,
   resolveSceneCapabilityAdapterEntry,
+  SCENE_CAPABILITY_ADAPTER_CATALOG,
+  sceneCapabilityAdapterSupports,
 } from './sceneCapabilityAdapterRegistry'
 
 export type { SceneCapabilityAdapterRegistryReadiness as SceneCapabilityAdapterReadiness } from './sceneCapabilityAdapterRegistry'
@@ -85,6 +89,7 @@ export interface SceneRunCandidate {
   capability: string
   priority: number
   weight: number | null
+  model: string | null
   bindingId: string
 }
 
@@ -162,6 +167,8 @@ export interface SceneAdapterContext {
   runId: string
   scene: SceneRegistryRecord
   provider: ProviderRegistryRecord
+  binding: SceneStrategyBindingRecord
+  model: string | null
   capability: string
   input: unknown
   originalInput: unknown
@@ -440,15 +447,16 @@ function extractOpenAiResponsesUsage(data: unknown): SceneRunUsage {
   }
 }
 
-function resolveOpenAiSceneModel(provider: ProviderRegistryRecord, input: unknown): string {
+function resolveOpenAiSceneModel(provider: ProviderRegistryRecord, input: unknown, bindingModel: string | null): string {
   const record = isRecord(input) ? input : {}
-  const model = readString(record.model)
+  const model = bindingModel
+    ?? readString(record.model)
     ?? readMetadataString(provider, 'defaultModel')
     ?? readMetadataStringArray(provider, 'models')[0]
   if (!model) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'OpenAI Responses model is missing.',
+      statusMessage: 'OpenAI model is missing.',
     })
   }
   return model
@@ -477,6 +485,7 @@ async function invokeOpenAiResponsesSceneAdapter(
   provider: ProviderRegistryRecord,
   capability: string,
   input: unknown,
+  bindingModel: string | null,
 ): Promise<SceneAdapterResult> {
   const apiKey = await resolveProviderApiKey(event, provider)
   const intelligenceType = readMetadataString(provider, 'intelligenceType') ?? provider.vendor
@@ -484,7 +493,7 @@ async function invokeOpenAiResponsesSceneAdapter(
   const compatBaseUrl = buildOpenAiCompatBaseUrls(baseUrl)[0] ?? baseUrl.replace(/\/+$/, '')
   const endpoint = `${compatBaseUrl}/responses`
   const normalizedInput = normalizeIntelligenceScenePayload(capability, input)
-  const model = resolveOpenAiSceneModel(provider, normalizedInput)
+  const model = resolveOpenAiSceneModel(provider, normalizedInput, bindingModel)
   const messages = buildSceneIntelligenceMessages(capability, normalizedInput)
   const instructions = buildOpenAiResponsesInstructions(messages, normalizedInput)
   const timeoutMs = typeof provider.metadata?.timeout === 'number' ? provider.metadata.timeout : 45000
@@ -566,6 +575,7 @@ async function invokeOpenAiCompatibleSceneAdapter(
   provider: ProviderRegistryRecord,
   capability: string,
   input: unknown,
+  bindingModel: string | null,
 ): Promise<SceneAdapterResult> {
   const apiKey = await resolveProviderApiKey(event, provider)
   const intelligenceType = readMetadataString(provider, 'intelligenceType') ?? provider.vendor
@@ -573,7 +583,7 @@ async function invokeOpenAiCompatibleSceneAdapter(
   const compatBaseUrl = buildOpenAiCompatBaseUrls(baseUrl)[0] ?? baseUrl.replace(/\/+$/, '')
   const endpoint = `${compatBaseUrl}/chat/completions`
   const normalizedInput = normalizeIntelligenceScenePayload(capability, input)
-  const model = resolveOpenAiSceneModel(provider, normalizedInput)
+  const model = resolveOpenAiSceneModel(provider, normalizedInput, bindingModel)
   const messages = buildSceneIntelligenceMessages(capability, normalizedInput)
   const timeoutMs = typeof provider.metadata?.timeout === 'number' ? provider.metadata.timeout : 45000
   const startedAt = Date.now()
@@ -624,12 +634,12 @@ async function invokeOpenAiCompatibleSceneAdapter(
   }
 }
 
-const intelligenceTextAdapter: SceneCapabilityAdapter = async ({ event, provider, input, capability }) => {
-  if (readMetadataString(provider, 'transport') === 'responses') {
-    return await invokeOpenAiResponsesSceneAdapter(event, provider, capability, input)
-  }
+const openAiCompatibleTextAdapter: SceneCapabilityAdapter = async ({ event, provider, input, capability, model }) => {
+  return await invokeOpenAiCompatibleSceneAdapter(event, provider, capability, input, model)
+}
 
-  return await invokeOpenAiCompatibleSceneAdapter(event, provider, capability, input)
+const openAiResponsesTextAdapter: SceneCapabilityAdapter = async ({ event, provider, input, capability, model }) => {
+  return await invokeOpenAiResponsesSceneAdapter(event, provider, capability, input, model)
 }
 
 function normalizeFxConvertInput(input: unknown) {
@@ -908,23 +918,25 @@ const localOverlayRenderAdapter: SceneCapabilityAdapter = async ({ input, origin
   }
 }
 
+function registerTextAdapterFamily(adapterKey: 'openai-compatible' | 'openai-responses', adapter: SceneCapabilityAdapter) {
+  const catalog = SCENE_CAPABILITY_ADAPTER_CATALOG.find(entry => entry.key === adapterKey)
+  if (!catalog)
+    throw new Error(`Missing adapter catalog entry: ${adapterKey}`)
+  for (const capability of catalog.capabilities) {
+    registerSceneCapabilityAdapter(
+      `${adapterKey}:${capability}`,
+      capability === 'vision.ocr' ? intelligenceVisionOcrAdapter : adapter,
+    )
+  }
+}
+
 function registerDefaultSceneCapabilityAdapters() {
-  registerSceneCapabilityAdapter('tencent-cloud:text.translate', tencentTextTranslateAdapter)
-  registerSceneCapabilityAdapter('tencent-cloud:image.translate', tencentImageTranslateAdapter)
-  registerSceneCapabilityAdapter('tencent-cloud:image.translate.e2e', tencentImageTranslateAdapter)
-  registerSceneCapabilityAdapter('openai:chat.completion', intelligenceTextAdapter)
-  registerSceneCapabilityAdapter('openai:text.summarize', intelligenceTextAdapter)
-  registerSceneCapabilityAdapter('openai:content.extract', intelligenceTextAdapter)
-  registerSceneCapabilityAdapter('openai:vision.ocr', intelligenceVisionOcrAdapter)
-  registerSceneCapabilityAdapter('deepseek:chat.completion', intelligenceTextAdapter)
-  registerSceneCapabilityAdapter('deepseek:text.summarize', intelligenceTextAdapter)
-  registerSceneCapabilityAdapter('deepseek:content.extract', intelligenceTextAdapter)
-  registerSceneCapabilityAdapter('deepseek:vision.ocr', intelligenceVisionOcrAdapter)
-  registerSceneCapabilityAdapter('custom:chat.completion', intelligenceTextAdapter)
-  registerSceneCapabilityAdapter('custom:text.summarize', intelligenceTextAdapter)
-  registerSceneCapabilityAdapter('custom:content.extract', intelligenceTextAdapter)
-  registerSceneCapabilityAdapter('custom:vision.ocr', intelligenceVisionOcrAdapter)
-  registerSceneCapabilityAdapter('custom:overlay.render', localOverlayRenderAdapter)
+  registerSceneCapabilityAdapter('tencent-translation:text.translate', tencentTextTranslateAdapter)
+  registerSceneCapabilityAdapter('tencent-translation:image.translate', tencentImageTranslateAdapter)
+  registerSceneCapabilityAdapter('tencent-translation:image.translate.e2e', tencentImageTranslateAdapter)
+  registerTextAdapterFamily('openai-compatible', openAiCompatibleTextAdapter)
+  registerTextAdapterFamily('openai-responses', openAiResponsesTextAdapter)
+  registerSceneCapabilityAdapter('local-overlay:overlay.render', localOverlayRenderAdapter)
   registerSceneCapabilityAdapter('exchange-rate:fx.rate.latest', fxRateLatestAdapter)
   registerSceneCapabilityAdapter('exchange-rate:fx.convert', fxConvertAdapter)
 }
@@ -975,6 +987,15 @@ function readOptionalString(value: unknown, maxLength = 160): string | null {
   if (!trimmed || trimmed.length > maxLength)
     return null
   return trimmed
+}
+
+function isRetrySafeProviderFailure(error: unknown): boolean {
+  if (!error || typeof error !== 'object')
+    return false
+  const statusCode = 'statusCode' in error && typeof error.statusCode === 'number'
+    ? error.statusCode
+    : null
+  return statusCode != null && [400, 401, 403, 404, 409, 422, 429].includes(statusCode)
 }
 
 function readRecord(value: unknown): Record<string, unknown> | null {
@@ -1637,6 +1658,7 @@ async function resolveCandidatesForCapability(
   event: H3Event,
   scene: SceneRegistryRecord,
   capability: string,
+  ownerId: string | null,
   providerCache: Map<string, ProviderRegistryRecord | null>,
   trace: SceneRunTraceStep[],
   fallbackTrail: SceneRunFallbackTrailItem[],
@@ -1656,7 +1678,7 @@ async function resolveCandidatesForCapability(
       continue
     }
 
-    const rejectReason = resolveBindingRejectReason(binding, provider, capability)
+    const rejectReason = resolveBindingRejectReason(binding, provider, capability, ownerId)
     if (rejectReason) {
       fallbackTrail.push({
         providerId: provider.id,
@@ -1672,6 +1694,7 @@ async function resolveCandidatesForCapability(
       providerName: provider.displayName,
       vendor: provider.vendor,
       capability,
+      model: binding.model,
       priority: binding.priority,
       weight: binding.weight,
       bindingId: binding.id,
@@ -1696,13 +1719,24 @@ function resolveBindingRejectReason(
   binding: SceneStrategyBindingRecord,
   provider: ProviderRegistryRecord,
   capability: string,
+  ownerId: string | null,
 ): string | null {
   if (binding.status !== 'enabled')
     return 'binding_disabled'
+  if (provider.ownerScope === 'user' && (!ownerId || provider.ownerId !== ownerId))
+    return 'provider_owner_mismatch'
+  if (provider.ownerScope === 'workspace')
+    return 'workspace_scope_unresolved'
   if (provider.status !== 'enabled')
     return `provider_${provider.status}`
   if (!providerHasCapability(provider, capability))
     return 'provider_capability_missing'
+  const adapterKey = resolveProviderSceneAdapterKey(provider)
+  const registeredAdapter = resolveSceneCapabilityAdapterEntry<SceneCapabilityAdapter>(provider, capability)
+  if ((!adapterKey || !sceneCapabilityAdapterSupports(adapterKey, capability)) && !registeredAdapter)
+    return 'provider_adapter_missing'
+  if (binding.model && !readMetadataStringArray(provider, 'models').includes(binding.model))
+    return 'provider_model_missing'
   return null
 }
 
@@ -2132,6 +2166,79 @@ async function throwRunError(
   throw createRunError(statusCode, code, message, run)
 }
 
+export interface ResolvedSceneProviderCandidate {
+  provider: ProviderRegistryRecord
+  binding: SceneStrategyBindingRecord
+  capability: string
+  model: string | null
+  adapterKey: string
+}
+
+export interface SceneProviderResolution {
+  scene: SceneRegistryRecord
+  capability: string
+  candidates: ResolvedSceneProviderCandidate[]
+  trace: SceneRunTraceStep[]
+  fallbackTrail: SceneRunFallbackTrailItem[]
+}
+
+export function resolveCapabilitySceneId(capabilityId: string): string {
+  const capability = toRegistryCapabilityId(toRuntimeCapabilityId(capabilityId))
+  return `nexus.intelligence.${capability}`
+}
+
+export async function resolveSceneProviderCandidates(
+  event: H3Event,
+  options: {
+    sceneId: string
+    capability: string
+    ownerId: string
+    providerId?: string
+  },
+): Promise<SceneProviderResolution> {
+  let scene = await getSceneRegistryEntry(event, options.sceneId)
+  if (!scene && options.sceneId.startsWith('nexus.intelligence.')) {
+    await ensureDefaultProviderSceneSeed(event)
+    scene = await getSceneRegistryEntry(event, options.sceneId)
+  }
+  if (!scene || scene.status !== 'enabled') {
+    throw createError({ statusCode: 409, statusMessage: 'Scene is unavailable.' })
+  }
+
+  const capability = toRegistryCapabilityId(toRuntimeCapabilityId(options.capability))
+  const trace: SceneRunTraceStep[] = []
+  const fallbackTrail: SceneRunFallbackTrailItem[] = []
+  const candidates = await resolveCandidatesForCapability(
+    event,
+    scene,
+    capability,
+    options.ownerId,
+    new Map<string, ProviderRegistryRecord | null>(),
+    trace,
+    fallbackTrail,
+  )
+  const filtered = options.providerId
+    ? candidates.filter(candidate => candidate.provider.id === options.providerId)
+    : candidates
+  if (filtered.length === 0) {
+    throw createError({ statusCode: 409, statusMessage: `No configured provider is available for ${capability}.` })
+  }
+
+  return {
+    scene,
+    capability,
+    candidates: filtered.map(({ provider, binding }) => ({
+      provider,
+      binding,
+      capability,
+      model: binding.model,
+      adapterKey: resolveProviderSceneAdapterKey(provider)!,
+    })),
+    trace,
+    fallbackTrail,
+  }
+}
+
 export async function runSceneOrchestrator(
   event: H3Event,
   sceneId: string,
@@ -2206,9 +2313,10 @@ export async function runSceneOrchestrator(
 
   const providerCache = new Map<string, ProviderRegistryRecord | null>()
   const requestedProviderId = readOptionalString(request.providerId, 160)
+  const ownerId = readOptionalString(request.ownerId, 180)
 
   for (const capability of requestedCapabilities) {
-    const resolvedCandidates = await resolveCandidatesForCapability(event, scene, capability, providerCache, trace, fallbackTrail)
+    const resolvedCandidates = await resolveCandidatesForCapability(event, scene, capability, ownerId, providerCache, trace, fallbackTrail)
     candidates.push(...resolvedCandidates.map(item => item.candidate))
 
     const scopedCandidates = requestedProviderId
@@ -2267,7 +2375,6 @@ export async function runSceneOrchestrator(
   // Same shape as an intelligence invoke: hold the estimated price of every capability
   // before the provider is called, settle against the usage the provider reported and
   // hand the unused part back. A dry run returned above and never reaches this block.
-  const ownerId = readOptionalString(request.ownerId, 180)
   const creditContext = ownerId ? { ownerId, sceneId: scene.id, runId } : null
   let reservation: SceneRunCreditReservation | null = null
   if (creditContext) {
@@ -2363,6 +2470,8 @@ export async function runSceneOrchestrator(
             input: adapterInput,
             originalInput: request.input,
             outputs,
+            binding,
+            model: binding.model,
             adapterConfig,
           })
           const assetResult = await uploadSceneAdapterAssets({
@@ -2388,22 +2497,24 @@ export async function runSceneOrchestrator(
           break
         }
         catch (error) {
-          const message = error && typeof error === 'object' && 'statusMessage' in error && typeof error.statusMessage === 'string'
-            ? error.statusMessage
-            : error instanceof Error ? error.message : 'Provider adapter failed.'
+          const retrySafe = isRetrySafeProviderFailure(error)
           lastFailure = {
             statusCode: 502,
             code: 'PROVIDER_ADAPTER_FAILED',
-            message,
+            message: retrySafe
+              ? 'Provider rejected the request before acceptance.'
+              : 'Provider dispatch failed or acceptance is uncertain.',
           }
           fallbackTrail.push({
             providerId: provider.id,
             capability: plan.capability,
             status: 'failed',
-            reason: message,
+            reason: retrySafe ? 'provider_rejected_pre_acceptance' : 'provider_failed_uncertain',
           })
-          addTrace(trace, 'adapter.dispatch', 'failed', `Provider adapter failed ${plan.capability}.`, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig))
-          if (scene.fallback !== 'enabled')
+          addTrace(trace, 'adapter.dispatch', 'failed', `Provider adapter failed ${plan.capability}.`, buildAdapterTraceMetadata(provider.id, plan.capability, adapterConfig, {
+            retrySafe,
+          }))
+          if (scene.fallback !== 'enabled' || !retrySafe)
             break
         }
       }

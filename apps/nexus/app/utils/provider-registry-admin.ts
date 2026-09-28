@@ -1,4 +1,4 @@
-import { pickTuffIntelligenceBuiltinAbilities } from '@talex-touch/tuff-intelligence/light'
+import { listTuffIntelligenceBuiltinAbilities, pickTuffIntelligenceBuiltinAbilities } from '@talex-touch/tuff-intelligence/light'
 
 export type ProviderVendor = 'tencent-cloud' | 'openai' | 'deepseek' | 'dashscope' | 'exchange-rate' | 'custom'
 export type ProviderServiceCategory = 'ai' | 'exchange' | 'screenshot' | 'translation'
@@ -22,10 +22,11 @@ export interface ProviderCapabilityRecord {
     providerId: string
     vendor: string
     capability: string
+    adapterKey: string | null
     ready: boolean
     matchedKey: string | null
     fallbackKey: string | null
-    reason: 'adapter-ready' | 'provider-capability-missing' | 'adapter-missing'
+    reason: 'adapter-ready' | 'provider-capability-missing' | 'adapter-key-missing' | 'adapter-missing'
   }
   createdAt: string
   updatedAt: string
@@ -56,6 +57,7 @@ export interface SceneStrategyBindingRecord {
   sceneId: string
   providerId: string
   capability: string
+  model: string | null
   priority: number
   weight: number | null
   status: BindingStatus
@@ -78,6 +80,16 @@ export interface SceneRegistryRecord {
   meteringPolicy: Record<string, unknown> | null
   auditPolicy: Record<string, unknown> | null
   metadata: Record<string, unknown> | null
+  readiness?: {
+    status: 'ready' | 'degraded' | 'disabled'
+    missingCapabilities: string[]
+    invalidBindings: Array<{
+      bindingId: string
+      providerId: string
+      capability: string
+      code: 'PROVIDER_MISSING' | 'CAPABILITY_MISSING' | 'ADAPTER_MISSING' | 'MODEL_INVALID'
+    }>
+  }
   bindings: SceneStrategyBindingRecord[]
   createdBy: string
   createdAt: string
@@ -88,6 +100,13 @@ export interface CapabilityFormRow {
   capability: string
   schemaRef: string
   meteringUnit: string
+}
+
+export interface SceneCapabilityAdapterCatalogEntry {
+  key: string
+  label: string
+  capabilities: string[]
+  supportsStreaming: boolean
 }
 
 export type ProviderRegistryTemplateId =
@@ -106,6 +125,7 @@ export interface ProviderRegistryTemplate {
   vendor: ProviderVendor
   name: string
   displayName: string
+  adapterKey: string
   authType: ProviderAuthType
   authRef: string
   endpoint: string
@@ -119,6 +139,7 @@ export interface ProviderRegistryTemplate {
 export interface BindingFormRow {
   providerId: string
   capability: string
+  model: string
   priority: number
 }
 
@@ -140,6 +161,7 @@ export interface ProviderEditPanelState {
   name: string
   displayName: string
   vendor: ProviderVendor
+  adapterKey: string
   status: ProviderStatus
   authType: ProviderAuthType
   authRef: string
@@ -197,6 +219,7 @@ export interface ProviderQuotaSummary {
 export interface BindingEditRow {
   providerId: string
   capability: string
+  model: string
   priority: number
   weightText: string
   status: BindingStatus
@@ -398,6 +421,12 @@ function builtinCapabilityRows(ids: readonly string[]): CapabilityFormRow[] {
   }))
 }
 
+export const providerCapabilityCatalogOptions: CapabilityFormRow[] = listTuffIntelligenceBuiltinAbilities().map(ability => ({
+  capability: ability.id,
+  schemaRef: ability.schemaRef,
+  meteringUnit: ability.meteringUnit,
+}))
+
 export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
   {
     id: 'tencent-translation',
@@ -410,9 +439,11 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     endpoint: 'https://tmt.tencentcloudapi.com',
     region: 'ap-shanghai',
     capabilities: builtinCapabilityRows(['text.translate', 'image.translate', 'image.translate.e2e']),
+    adapterKey: 'tencent-translation',
     metadata: {
       source: 'provider-registry',
       template: 'tencent-translation',
+      adapterKey: 'tencent-translation',
     },
   },
   {
@@ -428,13 +459,13 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     models: ['gpt-4.1-mini'],
     defaultModel: 'gpt-4.1-mini',
     capabilities: builtinCapabilityRows(['text.chat', 'text.summarize', 'content.extract', 'vision.ocr']),
+    adapterKey: 'openai-compatible',
     metadata: {
-      source: 'intelligence',
-      adapter: 'openai-compatible',
+      source: 'provider-registry',
+      adapterKey: 'openai-compatible',
       routingShape: 'providers-scenes',
       template: 'openai-compatible-ai',
       transport: 'chat.completions',
-      intelligenceProviderId: 'openai-compatible-ai-main',
       intelligenceType: 'openai',
       defaultModel: 'gpt-4.1-mini',
     },
@@ -452,13 +483,13 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     models: ['gpt-4.1-mini'],
     defaultModel: 'gpt-4.1-mini',
     capabilities: builtinCapabilityRows(['text.chat', 'text.summarize', 'content.extract', 'vision.ocr']),
+    adapterKey: 'openai-responses',
     metadata: {
-      source: 'intelligence',
-      adapter: 'openai-responses',
+      source: 'provider-registry',
+      adapterKey: 'openai-responses',
       routingShape: 'providers-scenes',
       template: 'openai-responses-ai',
       transport: 'responses',
-      intelligenceProviderId: 'openai-responses-ai-main',
       intelligenceType: 'openai',
       defaultModel: 'gpt-4.1-mini',
     },
@@ -476,13 +507,13 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     models: ['deepseek-chat'],
     defaultModel: 'deepseek-chat',
     capabilities: builtinCapabilityRows(['text.chat', 'text.summarize', 'content.extract']),
+    adapterKey: 'openai-compatible',
     metadata: {
-      source: 'intelligence',
-      adapter: 'openai-compatible',
+      source: 'provider-registry',
+      adapterKey: 'openai-compatible',
       routingShape: 'providers-scenes',
       template: 'deepseek-ai',
       transport: 'chat.completions',
-      intelligenceProviderId: 'deepseek-ai-main',
       intelligenceType: 'deepseek',
       defaultModel: 'deepseek-chat',
     },
@@ -500,9 +531,10 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     models: ['qwen-audio-3.0-asr-flash-filetrans'],
     defaultModel: 'qwen-audio-3.0-asr-flash-filetrans',
     capabilities: builtinCapabilityRows(['audio.transcribe']),
+    adapterKey: 'dashscope-filetrans-asr',
     metadata: {
       source: 'provider-registry',
-      adapter: 'dashscope-filetrans-asr',
+      adapterKey: 'dashscope-filetrans-asr',
       transport: 'filetrans',
       defaultModel: 'qwen-audio-3.0-asr-flash-filetrans',
       inputUnit: 'audio_second',
@@ -521,9 +553,10 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     models: ['qwen-audio-3.0-asr-flash'],
     defaultModel: 'qwen-audio-3.0-asr-flash',
     capabilities: builtinCapabilityRows(['audio.transcribe']),
+    adapterKey: 'dashscope-qwen-audio-asr',
     metadata: {
       source: 'provider-registry',
-      adapter: 'dashscope-qwen-audio-asr',
+      adapterKey: 'dashscope-qwen-audio-asr',
       transport: 'qwen-audio-sync',
       defaultModel: 'qwen-audio-3.0-asr-flash',
       inputUnit: 'audio_second',
@@ -541,9 +574,10 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     endpoint: 'https://v6.exchangerate-api.com/v6',
     region: 'global',
     capabilities: builtinCapabilityRows(['fx.rate.latest', 'fx.convert']),
+    adapterKey: 'exchange-rate',
     metadata: {
       source: 'provider-registry',
-      adapter: 'exchange-rate',
+      adapterKey: 'exchange-rate',
       template: 'exchange-rate',
     },
   },
@@ -558,9 +592,10 @@ export const providerRegistryTemplates: ProviderRegistryTemplate[] = [
     endpoint: 'local://overlay-render',
     region: 'local',
     capabilities: builtinCapabilityRows(['overlay.render']),
+    adapterKey: 'local-overlay',
     metadata: {
       source: 'provider-registry',
-      adapter: 'local-overlay',
+      adapterKey: 'local-overlay',
       template: 'screenshot-overlay',
     },
   },
@@ -1263,9 +1298,10 @@ export function createProviderEditPanel(provider: ProviderRegistryRecord): Provi
     description: provider.description ?? '',
     endpoint: provider.endpoint ?? '',
     region: provider.region ?? '',
+    adapterKey: readStringField(provider.metadata, 'adapterKey') || readStringField(provider.metadata, 'adapter'),
     modelsText: readStringArrayField(provider.metadata, 'models').join('\n'),
     defaultModel: readStringField(provider.metadata, 'defaultModel'),
-    metadataText: formatEditJson(omitFields(provider.metadata, ['models', 'defaultModel'])),
+    metadataText: formatEditJson(omitFields(provider.metadata, ['adapterKey', 'adapter', 'models', 'defaultModel'])),
     capabilities: provider.capabilities.map(capability => ({
       id: capability.id,
       capability: capability.capability,
@@ -1346,6 +1382,7 @@ export function createSceneEditPanel(scene: SceneRegistryRecord): SceneEditPanel
     bindings: scene.bindings.map(binding => ({
       providerId: binding.providerId,
       capability: binding.capability,
+      model: binding.model ?? '',
       priority: binding.priority,
       weightText: binding.weight == null ? '' : String(binding.weight),
       status: binding.status,

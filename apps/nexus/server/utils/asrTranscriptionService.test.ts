@@ -35,6 +35,11 @@ const registryMocks = vi.hoisted(() => ({
   listProviderRegistryEntries: vi.fn(),
 }))
 
+const sceneMocks = vi.hoisted(() => ({
+  resolveCapabilitySceneId: vi.fn((capability: string) => `nexus.intelligence.${capability}`),
+  resolveSceneProviderCandidates: vi.fn(),
+}))
+
 const pricingMocks = vi.hoisted(() => ({
   resolveCreditPricingRule: vi.fn(),
 }))
@@ -74,6 +79,7 @@ vi.mock('#imports', () => ({
 }))
 vi.mock('./creditsStore', () => creditsMocks)
 vi.mock('./providerRegistryStore', () => registryMocks)
+vi.mock('./sceneOrchestrator', () => sceneMocks)
 // Only the stored price list needs a database; the pricing math stays real so the
 // settled credits are the shipped ASR price rather than a fixture.
 vi.mock('./creditPricingStore', async importOriginal => {
@@ -108,7 +114,7 @@ const provider: ProviderRegistryRecord = {
   description: null,
   endpoint: 'https://dashscope.example.com/api/v1',
   region: null,
-  metadata: null,
+  metadata: { adapterKey: 'dashscope-filetrans-asr', transport: 'filetrans', models: ['qwen-audio-3.0-asr-flash-filetrans'], defaultModel: 'qwen-audio-3.0-asr-flash-filetrans' },
   capabilities: [
     {
       id: 'audio-transcribe',
@@ -172,7 +178,7 @@ function adapter(task: DashScopeFiletransTask | Error): DashScopeFiletransAdapte
 }
 
 const QWEN_METADATA = {
-  adapter: 'dashscope-qwen-audio-asr',
+  adapterKey: 'dashscope-qwen-audio-asr',
   transport: 'qwen-audio-sync',
   defaultModel: 'qwen-audio-3.0-asr-flash',
   models: ['qwen-audio-3.0-asr-flash'],
@@ -214,6 +220,24 @@ beforeEach(() => {
   )
   registryMocks.listProviderRegistryEntries.mockResolvedValue([provider])
   registryMocks.getProviderRegistryEntry.mockResolvedValue(provider)
+  sceneMocks.resolveSceneProviderCandidates.mockImplementation(async () => {
+    const [resolvedProvider] = await registryMocks.listProviderRegistryEntries()
+    return {
+      scene: { id: 'nexus.intelligence.audio.transcribe' },
+      capability: 'audio.transcribe',
+      candidates: resolvedProvider
+        ? [{
+            provider: resolvedProvider,
+            binding: { priority: 10, model: null },
+            capability: 'audio.transcribe',
+            model: null,
+            adapterKey: String(resolvedProvider.metadata?.adapterKey ?? 'dashscope-qwen-audio-asr'),
+          }]
+        : [],
+      trace: [],
+      fallbackTrail: [],
+    }
+  })
   // `consumeCredits` returns the team ledger row the hold was written to; the service persists
   // its id on the request and releases against it later.
   creditsMocks.consumeCredits.mockResolvedValue({ ledgerId: RESERVATION_LEDGER_ID })

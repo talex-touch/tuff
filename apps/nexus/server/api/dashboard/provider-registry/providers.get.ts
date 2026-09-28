@@ -2,7 +2,7 @@ import type { ProviderRegistryOwnerScope, ProviderRegistryStatus, ProviderRegist
 import { getQuery } from 'h3'
 import { requireAdmin } from '../../../utils/auth'
 import { listProviderRegistryEntries } from '../../../utils/providerRegistryStore'
-import { resolveSceneCapabilityAdapterReadiness } from '../../../utils/sceneCapabilityAdapterRegistry'
+import { listSceneCapabilityAdapterCatalog, resolveSceneCapabilityAdapterReadiness } from '../../../utils/sceneCapabilityAdapterRegistry'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -22,5 +22,8 @@ export default defineEventHandler(async (event) => {
     })),
   }))
 
-  return { providers: providersWithAdapterReadiness }
+  return {
+    providers: providersWithAdapterReadiness,
+    adapters: listSceneCapabilityAdapterCatalog(),
+  }
 })

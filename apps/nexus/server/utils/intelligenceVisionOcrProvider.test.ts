@@ -32,8 +32,8 @@ function provider(overrides: Partial<ProviderRegistryRecord> = {}): ProviderRegi
     endpoint: 'https://api.openai.com/v1',
     region: null,
     metadata: {
-      source: 'intelligence',
-      intelligenceProviderId: 'ip_ai_vision',
+      source: 'provider-registry',
+      adapterKey: 'openai-compatible',
       intelligenceType: 'openai',
       defaultModel: 'gpt-4.1-mini',
       models: ['gpt-4.1-mini'],
@@ -177,12 +177,12 @@ describe('intelligenceVisionOcrProvider', () => {
       },
     })
 
-    const result = await invokeIntelligenceVisionOcr({} as any, provider({
+    const result = await invokeIntelligenceVisionOcr({} as never, provider({
       vendor: 'deepseek',
       endpoint: 'https://api.deepseek.com',
       metadata: {
-        source: 'intelligence',
-        intelligenceProviderId: 'ip_deepseek_vision',
+        source: 'provider-registry',
+        adapterKey: 'openai-compatible',
         intelligenceType: 'deepseek',
         defaultModel: 'deepseek-chat',
       },
@@ -213,20 +213,20 @@ describe('intelligenceVisionOcrProvider', () => {
     expect(networkMocks.request).not.toHaveBeenCalled()
   })
 
-  it('拒绝非 OpenAI-compatible intelligence provider', async () => {
-    await expect(invokeIntelligenceVisionOcr({} as any, provider({
+  it('拒绝不受支持的 Intelligence provider type', async () => {
+    await expect(invokeIntelligenceVisionOcr({} as never, provider({
       vendor: 'custom',
       metadata: {
-        source: 'intelligence',
-        intelligenceProviderId: 'ip_local_vision',
-        intelligenceType: 'local',
-        defaultModel: 'llava',
+        source: 'provider-registry',
+        adapterKey: 'openai-compatible',
+        intelligenceType: 'anthropic',
+        defaultModel: 'claude-haiku',
       },
     }), {
       source: { type: 'data-url', dataUrl: 'data:image/png;base64,abc123' },
     })).rejects.toMatchObject({
-      statusCode: 501,
-      statusMessage: 'Intelligence vision OCR adapter only supports OpenAI-compatible providers.',
+      statusCode: 400,
+      statusMessage: 'Provider Intelligence type is not supported.',
     })
 
     expect(networkMocks.request).not.toHaveBeenCalled()
