@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { TxButton } from '@talex-touch/tuffex/button'
-import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
-import { TuffInput } from '@talex-touch/tuffex/input'
-import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
-import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxButton } from "@talex-touch/tuffex/button"
+import { TxCard } from "@talex-touch/tuffex/card"
+import { TxCheckbox } from "@talex-touch/tuffex/checkbox"
+import { TxEmptyState } from "@talex-touch/tuffex/empty-state"
+import { TuffInput } from "@talex-touch/tuffex/input"
+import { TxProgressBar } from "@talex-touch/tuffex/progress-bar"
+import { TuffSelect, TuffSelectItem } from "@talex-touch/tuffex/select"
+import { TxSkeleton } from "@talex-touch/tuffex/skeleton"
+import { TxSpinner } from "@talex-touch/tuffex/spinner"
+import { TxStatusBadge } from "@talex-touch/tuffex/status-badge"
 import { defineAsyncComponent } from 'vue'
 import { useAdminAnalyticsData } from '~/composables/useAdminAnalyticsData'
 import type { GeoAnalyticsData, GeoMapPoint } from '~/types/admin-analytics'
@@ -456,151 +460,178 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       </ClientOnly>
     </header>
 
-    <div v-if="loading" class="apple-card-lg p-6 space-y-5">
+    <div v-if="loading" class="space-y-5">
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div
+        <TxCard
           v-for="card in 4"
           :key="`realtime-skeleton-${card}`"
-          class="rounded-2xl border border-black/[0.04] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.03]"
+          variant="plain"
+          background="mask"
+          :radius="16"
+          :padding="16"
         >
           <TxSkeleton :loading="true" :lines="2" />
-        </div>
+        </TxCard>
       </div>
       <div class="grid gap-4 lg:grid-cols-4">
-        <div
+        <TxCard
           v-for="card in 4"
           :key="`overview-skeleton-${card}`"
-          class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]"
+          variant="plain"
+          background="mask"
+          :radius="16"
+          :padding="16"
         >
           <TxSkeleton :loading="true" :lines="2" />
-        </div>
+        </TxCard>
       </div>
-      <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+      <TxCard variant="plain" background="mask" :radius="18" :padding="20">
         <TxSkeleton :loading="true" :lines="6" />
+      </TxCard>
+    </div>
+
+    <TxCard v-else-if="error" variant="plain" background="mask" :radius="18" :padding="24" class="text-center">
+      <TxEmptyState
+        variant="error"
+        :title="t('common.error', 'Error')"
+        :description="error"
+      />
+      <div class="mt-4 flex justify-center">
+        <TxButton variant="secondary" size="sm" native-type="button" @click="fetchAnalytics">
+          {{ t('common.retry', 'Retry') }}
+        </TxButton>
       </div>
-    </div>
+    </TxCard>
 
-    <div v-else-if="error" class="apple-card-lg p-6 text-center space-y-3">
-      <p class="text-sm text-red-500">
-        {{ error }}
-      </p>
-      <TxButton variant="secondary" size="sm" native-type="button" @click="fetchAnalytics">
-        {{ t('common.retry', 'Retry') }}
-      </TxButton>
-    </div>
-
-    <section v-else-if="analytics" class="apple-card-lg p-6">
+    <section v-else-if="analytics" class="space-y-6">
+      <!-- Realtime KPI Cards -->
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div
+        <TxCard
           v-for="card in realtimeStatCards"
           :key="card.key"
-          class="rounded-2xl border border-black/[0.04] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.03]"
+          variant="plain"
+          background="mask"
+          :radius="16"
+          :padding="16"
+          class="transition-all duration-200 hover:-translate-y-0.5"
         >
-          <div class="flex items-center gap-2" :class="card.accent">
-            <span :class="[card.icon, 'text-lg']" aria-hidden="true" />
-            <span class="text-xs font-medium">{{ card.label }}</span>
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-black/60 dark:text-white/60">{{ card.label }}</span>
+            <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-black/[0.04] dark:bg-white/[0.06]" :class="card.accent">
+              <span :class="[card.icon, 'text-base']" aria-hidden="true" />
+            </div>
           </div>
-          <p class="mt-3 text-2xl font-semibold text-black dark:text-white">
+          <p class="mt-3 text-2xl font-bold tracking-tight text-black dark:text-white">
             {{ card.value }}
           </p>
-        </div>
+        </TxCard>
       </div>
 
-
-      <div class="mt-5 space-y-5">
+      <div class="space-y-5">
       <!-- Summary Stats -->
-      <div v-if="activeSection === 'overview'" class="grid gap-4 lg:grid-cols-4">
-        <div
+      <div v-if="activeSection === 'overview'" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <TxCard
           v-for="card in overviewStatCards"
           :key="card.key"
-          class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]"
+          variant="plain"
+          background="mask"
+          :radius="16"
+          :padding="16"
+          class="transition-all duration-200 hover:-translate-y-0.5"
         >
-          <h3 class="text-sm font-medium text-black/55 dark:text-white/55">
+          <h3 class="text-xs font-medium text-black/50 dark:text-white/50">
             {{ card.label }}
           </h3>
-          <p class="mt-2 text-3xl font-semibold text-black dark:text-white">
+          <p class="mt-2 text-3xl font-bold tracking-tight text-black dark:text-white">
             {{ card.value }}
           </p>
-        </div>
+        </TxCard>
       </div>
 
       <!-- Search Quality -->
-      <div v-if="activeSection === 'search'" class="grid gap-4 lg:grid-cols-4">
-        <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+      <div v-if="activeSection === 'search'" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
             First Result
           </h3>
-          <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+          <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.avgFirstResultMs }}ms
           </p>
-        </div>
-        <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+        </TxCard>
+        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
             Slow Searches
           </h3>
-          <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-            {{ formatNumber(analytics.summary.searchSlowCount) }}
-            <span class="text-sm font-medium text-black/45 dark:text-white/45">{{ searchSlowRate }}%</span>
-          </p>
-        </div>
-        <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+          <div class="mt-2 flex items-baseline gap-2">
+            <span class="text-2xl font-bold text-black dark:text-white">{{ formatNumber(analytics.summary.searchSlowCount) }}</span>
+            <TxStatusBadge :text="`${searchSlowRate}%`" :status="searchSlowRate > 5 ? 'warning' : 'success'" size="sm" />
+          </div>
+        </TxCard>
+        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
             Avg Results
           </h3>
-          <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+          <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.avgResultCount }}
           </p>
-        </div>
-        <div class="rounded-2xl bg-gradient-to-br from-slate-200/70 to-white/40 p-4 dark:from-slate-900/70 dark:to-dark/30">
-          <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+        </TxCard>
+        <TxCard variant="plain" background="mask" :radius="16" :padding="16">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
             Avg Sorting
           </h3>
-          <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+          <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.avgSortingDuration }}ms
           </p>
-        </div>
+        </TxCard>
       </div>
 
-      <!-- Daily Trend Chart (simplified bar representation) -->
-      <div v-if="activeSection === 'overview'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
-        <h3 class="mb-4 font-semibold text-black dark:text-white">
-          Daily Activity
-        </h3>
-        <div class="space-y-2">
+      <!-- Daily Trend Chart -->
+      <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="20">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="font-semibold text-black dark:text-white">
+              Daily Activity
+            </h3>
+            <p class="text-xs text-black/45 dark:text-white/45">
+              Visits and search frequency across recent days
+            </p>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-black/60 dark:text-white/60">
+            <span class="flex items-center gap-1.5">
+              <span class="h-2.5 w-2.5 rounded-full bg-blue-500" /> Visits
+            </span>
+            <span class="flex items-center gap-1.5">
+              <span class="h-2.5 w-2.5 rounded-full bg-purple-500" /> Searches
+            </span>
+          </div>
+        </div>
+        <div class="space-y-2.5">
           <div
             v-for="day in analytics.summary.dailyStats.slice(0, 14)"
             :key="day.date"
-            class="flex items-center gap-3"
+            class="flex items-center gap-3 text-xs"
           >
-            <span class="w-20 text-xs text-black/50 dark:text-white/50">{{ day.date.slice(5) }}</span>
+            <span class="w-16 font-mono text-black/50 dark:text-white/50">{{ day.date.slice(5) }}</span>
             <div class="flex-1">
-              <div class="flex gap-1">
+              <div class="flex h-3.5 gap-1 overflow-hidden rounded-full bg-black/[0.04] p-0.5 dark:bg-white/[0.06]">
                 <div
-                  class="h-4 rounded bg-blue-500/60"
+                  class="h-full rounded-full bg-blue-500 transition-all duration-300"
                   :style="{ width: `${Math.min(100, (day.visits / Math.max(...analytics.summary.dailyStats.map(d => d.visits), 1)) * 50)}%` }"
                   :title="`${day.visits} visits`"
                 />
                 <div
-                  class="h-4 rounded bg-purple-500/60"
+                  class="h-full rounded-full bg-purple-500 transition-all duration-300"
                   :style="{ width: `${Math.min(100, (day.searches / Math.max(...analytics.summary.dailyStats.map(d => d.searches), 1)) * 50)}%` }"
                   :title="`${day.searches} searches`"
                 />
               </div>
             </div>
-            <span class="w-16 text-right text-xs text-black/40 dark:text-white/40">
+            <span class="w-16 text-right font-mono text-black/40 dark:text-white/40">
               {{ day.avgDuration }}ms
             </span>
           </div>
         </div>
-        <div class="mt-3 flex gap-4 text-xs text-black/50 dark:text-white/50">
-          <span class="flex items-center gap-1">
-            <span class="h-2 w-2 rounded bg-blue-500/60" /> Visits
-          </span>
-          <span class="flex items-center gap-1">
-            <span class="h-2 w-2 rounded bg-purple-500/60" /> Searches
-          </span>
-        </div>
-      </div>
+      </TxCard>
 
       <!-- UI & Main Performance -->
       <div v-if="activeSection === 'performance'" class="grid gap-4 lg:grid-cols-4">
@@ -694,76 +725,82 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <!-- Device & Region Distribution -->
       <div v-if="activeSection === 'overview'" class="grid gap-4 lg:grid-cols-2">
         <!-- Device Distribution -->
-        <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        <TxCard variant="plain" background="mask" :radius="18" :padding="20">
           <h3 class="mb-4 font-semibold text-black dark:text-white">
             Device Distribution
           </h3>
-          <div class="space-y-3">
+          <div class="space-y-3.5">
             <div
               v-for="(count, device) in analytics.summary.deviceDistribution"
               :key="device"
-              class="flex items-center gap-3"
+              class="flex items-center gap-3 text-xs"
             >
-              <span class="w-16 text-xs font-medium text-black/60 dark:text-white/60">
+              <span class="w-16 font-medium text-black/70 dark:text-white/70">
                 {{ device === 'darwin' ? 'macOS' : device === 'win32' ? 'Windows' : device }}
               </span>
               <div class="flex-1">
-                <div class="h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/[0.08]">
-                  <div
-                    class="h-full rounded-full" :class="[deviceColors[device] || 'bg-black/40']"
-                    :style="{ width: `${(count / Object.values(analytics.summary.deviceDistribution).reduce((a, b) => a + b, 0)) * 100}%` }"
-                  />
-                </div>
+                <TxProgressBar
+                  :percentage="Math.round((count / Math.max(Object.values(analytics.summary.deviceDistribution).reduce((a, b) => a + b, 0), 1)) * 100)"
+                  :show-text="false"
+                  height="8px"
+                  color="#3b82f6"
+                />
               </div>
-              <span class="w-12 text-right text-xs text-black/40 dark:text-white/40">
+              <span class="w-12 text-right font-mono text-black/50 dark:text-white/50">
                 {{ count }}
               </span>
             </div>
           </div>
-        </div>
+        </TxCard>
 
         <!-- Region Distribution -->
-        <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        <TxCard variant="plain" background="mask" :radius="18" :padding="20">
           <h3 class="mb-4 font-semibold text-black dark:text-white">
             Region Distribution
           </h3>
-          <div v-if="Object.keys(analytics.summary.regionDistribution).length === 0" class="py-4 text-center text-sm text-black/40 dark:text-white/40">
-            No region data yet
-          </div>
+          <TxEmptyState
+            v-if="Object.keys(analytics.summary.regionDistribution).length === 0"
+            variant="no-data"
+            size="small"
+            description="No region data yet"
+          />
           <div v-else class="space-y-4">
             <WorldBubbleMap :distribution="analytics.summary.regionDistribution" />
             <div
               v-for="region in topRegions"
               :key="region.code"
-              class="flex items-center gap-3"
+              class="flex items-center gap-3 text-xs"
             >
-              <span class="w-20 truncate text-xs font-medium text-black/60 dark:text-white/60">
+              <span class="w-20 truncate font-medium text-black/70 dark:text-white/70">
                 {{ region.label }}
               </span>
               <div class="flex-1">
-                <div class="h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/[0.08]">
-                  <div
-                    class="h-full rounded-full bg-emerald-500"
-                    :style="{ width: `${regionTotal ? (region.count / regionTotal) * 100 : 0}%` }"
-                  />
-                </div>
+                <TxProgressBar
+                  :percentage="regionTotal ? Math.round((region.count / regionTotal) * 100) : 0"
+                  :show-text="false"
+                  height="8px"
+                  color="#10b981"
+                />
               </div>
-              <span class="w-12 text-right text-xs text-black/40 dark:text-white/40">
+              <span class="w-12 text-right font-mono text-black/50 dark:text-white/50">
                 {{ regionTotal ? ((region.count / regionTotal) * 100).toFixed(1) : '0.0' }}%
               </span>
             </div>
           </div>
-        </div>
+        </TxCard>
       </div>
 
       <!-- Version Distribution -->
-      <div v-if="activeSection === 'overview'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+      <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="20">
         <h3 class="mb-4 font-semibold text-black dark:text-white">
           Version Distribution
         </h3>
-        <div v-if="!versionSegments.total" class="py-4 text-center text-sm text-black/40 dark:text-white/40">
-          No version data yet
-        </div>
+        <TxEmptyState
+          v-if="!versionSegments.total"
+          variant="no-data"
+          size="small"
+          description="No version data yet"
+        />
         <div v-else class="flex flex-col gap-6 sm:flex-row sm:items-center">
           <div
             class="h-32 w-32 rounded-full border border-black/5 dark:border-white/10"
@@ -777,35 +814,36 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             >
               <div class="flex min-w-0 items-center gap-2">
                 <span class="h-2 w-2 rounded-full" :style="{ background: segment.color }" />
-                <span class="truncate">{{ segment.key }}</span>
+                <span class="truncate font-mono">{{ segment.key }}</span>
               </div>
-              <span class="text-xs text-black/40 dark:text-white/40">
+              <span class="font-mono text-xs text-black/50 dark:text-white/50">
                 {{ segment.count }} · {{ (segment.ratio * 100).toFixed(1) }}%
               </span>
             </div>
           </div>
         </div>
-      </div>
+      </TxCard>
 
       <!-- Hourly Distribution -->
-      <div v-if="activeSection === 'overview'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+      <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="20">
         <h3 class="mb-4 font-semibold text-black dark:text-white">
           Hourly Distribution (UTC)
         </h3>
-        <div v-if="!hasHourlyData" class="py-4 text-center text-sm text-black/40 dark:text-white/40">
-          No hourly data yet
-        </div>
+        <TxEmptyState
+          v-if="!hasHourlyData"
+          variant="no-data"
+          size="small"
+          description="No hourly data yet"
+        />
         <div v-else>
           <div class="flex items-end gap-1" style="height: 100px">
-            <!-- h-full is load-bearing: the bar's percentage height resolves
-                 against this column, and an auto-height column collapses it to 0. -->
             <div
               v-for="hour in hourlySeries.series"
               :key="hour.key"
               class="h-full flex-1 flex items-end"
             >
               <div
-                class="w-full rounded-t bg-blue-500/60 transition-all"
+                class="w-full rounded-t bg-blue-500/70 transition-all hover:bg-blue-500"
                 :style="{
                   height: `${Math.max(4, hourlySeries.max ? (hour.count / hourlySeries.max) * 100 : 0)}%`,
                 }"
@@ -813,7 +851,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               />
             </div>
           </div>
-          <div class="mt-2 flex justify-between text-[10px] text-black/40 dark:text-white/40">
+          <div class="mt-2 flex justify-between font-mono text-[10px] text-black/40 dark:text-white/40">
             <span>00:00</span>
             <span>06:00</span>
             <span>12:00</span>
@@ -821,7 +859,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <span>24:00</span>
           </div>
         </div>
-      </div>
+      </TxCard>
 
       <!-- Search Term Collection Disabled -->
       <div v-if="activeSection === 'search'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
