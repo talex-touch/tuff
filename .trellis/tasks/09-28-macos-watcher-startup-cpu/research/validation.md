@@ -45,7 +45,7 @@ The six module windows completed. `powermetrics` recorded 10 of 12 target PID sa
 
 The installed `tuff` 2.4.14-beta.50 binary was launched once with a generated isolated user-data directory and the startup benchmark environment. It exited normally after 6.073 s and emitted `Startup health check passed` at 2.091 s; sampled peak main-process CPU was 145.9% and RSS was 485,984 KiB.
 
-A candidate full-app bundle could not be produced with `electron-builder --dir` because the local Electron 41.10.4 download remained pending. A temporary shadow bundle built from the installed runtime then crashed in Electron/V8 during native startup, so it is excluded from product conclusions. The installed app and persistent user data were left unchanged.
+A candidate full-app bundle could not be produced with `electron-builder --dir` because the local Electron 41.10.4 download remained pending. A targeted `pnpm -C apps/core-app rebuild electron` attempt also remained in the postinstall download for more than five minutes and was stopped; the local Electron `dist` remained absent. A temporary shadow bundle built from the installed runtime then crashed in Electron/V8 during native startup, so it is excluded from product conclusions. The installed app and persistent user data were left unchanged.
 
 ## Scope limits
 
