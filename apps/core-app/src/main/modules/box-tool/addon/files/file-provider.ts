@@ -38,6 +38,8 @@ import type * as schema from '../../../../db/schema'
 import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
 import type { FileIndexSettings, ScannedFileInfo } from './types'
+import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-constants'
+import { FILE_SCAN_MAX_DEPTH } from '@talex-touch/utils/common/file-scan-constants'
 import type { IndexWorkerFileResult } from './workers/file-index-worker-client'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -58,7 +60,7 @@ import {
   mapIndexedFileSourceRecord,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
-import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, lte, or, sql } from 'drizzle-orm'
 import { app, shell } from 'electron'
 import { notificationModule } from '../../../notification'
 import { operationalErrorService } from '../../../observability'
@@ -128,6 +130,8 @@ import {
   normalizeWatchPath
 } from './services/file-provider-path-service'
 import { FileProviderWatchService } from './services/file-provider-watch-service'
+import { FILE_WATCH_SUBTREE_RECONCILE_REASON } from './services/file-watch-subtree-service'
+import { FileWatchSubtreeService } from './services/file-watch-subtree-service'
 import {
   FileProviderOpenerService,
   type ResolvedOpener
@@ -2456,6 +2460,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     request: IndexedSourceReconcileRequest
   ): Promise<IndexedSourceReconcileResult> {
     if (this.shuttingDown) throw new Error('FILE_PROVIDER_SHUTTING_DOWN')
+    if (request.reason === FILE_WATCH_SUBTREE_RECONCILE_REASON) {
+      return await this.reconcileIndexedSubtree(request)
+    }
     const startedAt = Date.now()
     await this.ensureFileSystemWatchers()
     const deltas: IndexedSourceDelta[] = []
@@ -2482,6 +2489,192 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       completedAt: Date.now(),
       reason: request.reason ?? 'file-index-reconciliation'
     }
+  }
+
+  private async reconcileIndexedSubtree(
+    request: IndexedSourceReconcileRequest
+  ): Promise<IndexedSourceReconcileResult> {
+    const startedAt = Date.now()
+    await this.ensureFileSystemWatchers()
+    const deltas: IndexedSourceDelta[] = []
+    let added = 0
+    let changed = 0
+    let deleted = 0
+    let skipped = 0
+    for (const root of request.roots ?? []) {
+      if (root.sourceId !== this.id || !this.isWithinWatchRoots(root.path)) {
+        skipped += 1
+        continue
+      }
+      const result = await this.createFileWatchSubtreeService(request, deltas).execute(root.path, {
+        signal: request.signal,
+        batchSize: 256
+      })
+      added += result.added
+      changed += result.changed
+      deleted += result.deleted
+      skipped += result.skipped
+    }
+    return {
+      sourceId: this.id,
+      added,
+      changed,
+      deleted,
+      skipped,
+      errors: 0,
+      deltas,
+      startedAt,
+      completedAt: Date.now(),
+      reason: request.reason
+    }
+  }
+
+  private createFileWatchSubtreeService(
+    request: IndexedSourceReconcileRequest,
+    deltas: IndexedSourceDelta[]
+  ): FileWatchSubtreeService<ScannedFileInfo> {
+    return new FileWatchSubtreeService<ScannedFileInfo>({
+      normalizePath: (rawPath) => this.normalizePath(rawPath),
+      isAdmitted: (rawPath) =>
+        this.isWithinWatchRoots(rawPath) &&
+        fileFilterService.getTraversalExclusionReason(path.dirname(rawPath)) === null,
+      pathExists: async (rawPath, signal) => {
+        signal?.throwIfAborted()
+        try {
+          await fs.stat(rawPath)
+          return true
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException).code
+          if (code === 'ENOENT' || code === 'ENOTDIR') return false
+          throw error
+        }
+      },
+      scan: (scope, signal) => this.scanFileWatchSubtree(scope, signal),
+      upsert: async (_scope, records, signal) => {
+        signal?.throwIfAborted()
+        const result = await this.incrementalWriteService.execute(
+          records.map(
+            (record) => [record.path, { action: 'change', rawPath: record.path }] as const
+          ),
+          { dispatchSideEffects: false }
+        )
+        const changedRecords = [...result.inserted, ...result.updated]
+        if (changedRecords.length > 0) {
+          const batch = {
+            sourceId: this.id,
+            records: changedRecords.map((record) => this.mapFileToIndexedSourceRecord(record))
+          }
+          if (request.onRecordBatch) {
+            await request.onRecordBatch(batch)
+          } else {
+            const insertedIds = new Set(result.inserted.map((record) => record.id))
+            for (const record of changedRecords) {
+              const delta = this.watchRuntimeEmitter.buildDelta(record, {
+                action: insertedIds.has(record.id) ? 'add' : 'change',
+                reason: FILE_WATCH_SUBTREE_RECONCILE_REASON
+              })
+              if (request.onDelta) await request.onDelta(delta)
+              else deltas.push(delta)
+            }
+          }
+        }
+        return { added: result.inserted.length, changed: result.updated.length }
+      },
+      getHighWaterMark: async (scope, signal) => {
+        signal?.throwIfAborted()
+        if (!this.dbUtils) return 0
+        const rows = await this.dbUtils
+          .getFileIndexReadDb()
+          .select({ id: filesSchema.id })
+          .from(filesSchema)
+          .where(and(eq(filesSchema.type, 'file'), this.fileWatchScopeCondition(scope)))
+          .orderBy(desc(filesSchema.id))
+          .limit(1)
+        return rows[0]?.id ?? 0
+      },
+      readPage: async (scope, afterId, throughId, limit, signal) => {
+        signal?.throwIfAborted()
+        if (!this.dbUtils) return []
+        return await this.dbUtils
+          .getFileIndexReadDb()
+          .select({ id: filesSchema.id, path: filesSchema.path })
+          .from(filesSchema)
+          .where(
+            and(
+              eq(filesSchema.type, 'file'),
+              this.fileWatchScopeCondition(scope),
+              gt(filesSchema.id, afterId),
+              lte(filesSchema.id, throughId)
+            )
+          )
+          .orderBy(filesSchema.id)
+          .limit(limit)
+      },
+      deleteRecords: async (records, signal) => {
+        signal?.throwIfAborted()
+        const deletedResult = await this.deleteReconciledRecords(records)
+        for (const record of deletedResult.deletedPaths) {
+          const delta = this.watchRuntimeEmitter.buildDeleteDelta(record, {
+            reason: FILE_WATCH_SUBTREE_RECONCILE_REASON
+          })
+          if (request.onDelta) await request.onDelta(delta)
+          else deltas.push(delta)
+        }
+      }
+    })
+  }
+
+  private fileWatchScopeCondition(scope: string) {
+    const normalizedScope = path.normalize(scope)
+    const descendantPrefix = normalizedScope.endsWith(path.sep)
+      ? normalizedScope
+      : `${normalizedScope}${path.sep}`
+    const escapedPrefix = descendantPrefix
+      .replace(/!/g, '!!')
+      .replace(/%/g, '!%')
+      .replace(/_/g, '!_')
+    const escapedLike = `${escapedPrefix}%`
+    return or(
+      eq(filesSchema.path, normalizedScope),
+      sql`${filesSchema.path} LIKE ${escapedLike} ESCAPE '!'`
+    )
+  }
+
+  private async *scanFileWatchSubtree(
+    scope: string,
+    signal?: AbortSignal
+  ): AsyncIterable<ScannedFileInfo[]> {
+    signal?.throwIfAborted()
+    let stats
+    try {
+      stats = await fs.stat(scope)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT' || code === 'ENOTDIR') return
+      throw error
+    }
+    if (!stats.isDirectory()) {
+      const record = await this.buildFileRecord(scope)
+      if (record) yield [record as ScannedFileInfo]
+      return
+    }
+    yield* this.scanDirectoryBatchesWithWorker(scope, undefined, signal, undefined, {
+      maxDepth: this.getRemainingWatchDepth(scope)
+    })
+  }
+
+  private getRemainingWatchDepth(scope: string): number {
+    const normalizedScope = path.resolve(scope)
+    let remainingDepth = FILE_SCAN_MAX_DEPTH
+    for (const watchRoot of this.watchPaths) {
+      const relative = path.relative(path.resolve(watchRoot), normalizedScope)
+      if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
+        continue
+      const rootDepth = this.getWatchDepthForPath(watchRoot)
+      const scopeDepth = relative === '' ? 0 : relative.split(path.sep).length
+      remainingDepth = Math.min(remainingDepth, Math.max(0, rootDepth - scopeDepth))
+    }
+    return remainingDepth
   }
 
   public async handleIndexedSourceWatchEvent(
@@ -3015,7 +3208,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     dirPath: string,
     excludePathsSet?: Set<string>,
     signal?: AbortSignal,
-    onStats?: (stats: FileScanRunStats) => void
+    onStats?: (stats: FileScanRunStats) => void,
+    options?: FileScanOptions
   ): AsyncIterable<ScannedFileInfo[]> {
     await appTaskGate.waitForIdle()
     let yielded = false
@@ -3025,7 +3219,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         excludePathsSet,
         500,
         signal,
-        onStats
+        onStats,
+        options
       )) {
         yielded = true
         yield batch
@@ -3036,7 +3231,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.logWarn('File scan worker failed before its first batch; using direct scan', error, {
         path: dirPath
       })
-      yield* this.scanDirectoryBatchesDirectStream(dirPath, excludePathsSet, signal, onStats)
+      yield* this.scanDirectoryBatchesDirectStream(
+        dirPath,
+        excludePathsSet,
+        signal,
+        onStats,
+        options
+      )
     }
   }
 
@@ -3044,7 +3245,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     dirPath: string,
     excludePathsSet?: Set<string>,
     signal?: AbortSignal,
-    onStats?: (stats: FileScanRunStats) => void
+    onStats?: (stats: FileScanRunStats) => void,
+    options?: FileScanOptions
   ): AsyncIterable<ScannedFileInfo[]> {
     const controller = new AbortController()
     const abort = (): void => controller.abort(signal?.reason)
@@ -3073,7 +3275,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         consumerWake?.()
       },
       excludePathsSet,
-      undefined,
+      options,
       controller.signal,
       500
     )

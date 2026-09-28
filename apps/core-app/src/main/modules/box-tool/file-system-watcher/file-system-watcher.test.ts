@@ -9,6 +9,9 @@ const fsStat = vi.hoisted(() => vi.fn())
 const watcherAdd = vi.hoisted(() => vi.fn())
 const chokidarWatch = vi.hoisted(() => vi.fn())
 const chokidarFseventsWatch = vi.hoisted(() => vi.fn())
+const nativeWatcher = vi.hoisted(() => vi.fn())
+const watcherClose = vi.hoisted(() => vi.fn())
+const nativeHandlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => void>())
 const probeFileAccessStatus = vi.hoisted(() => vi.fn())
 
 // `file-system-watcher` and the scan constants both capture `process.platform` at module load, so
@@ -70,6 +73,10 @@ vi.mock('chokidar-fsevents', () => ({
   watch: chokidarFseventsWatch
 }))
 
+vi.mock('./macos-file-watcher', () => ({
+  MacOSFileWatcher: nativeWatcher
+}))
+
 vi.mock('../../../core/eventbus/touch-event', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../core/eventbus/touch-event')>()
   return {
@@ -85,6 +92,7 @@ vi.mock('../../../core/eventbus/touch-event', async (importOriginal) => {
 describe('FileSystemWatcherModule', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    nativeHandlers.clear()
     const watcher = {
       add: watcherAdd,
       close: vi.fn(),
@@ -92,10 +100,33 @@ describe('FileSystemWatcherModule', () => {
     }
     chokidarWatch.mockReturnValue(watcher)
     chokidarFseventsWatch.mockReturnValue(watcher)
+    nativeWatcher.mockImplementation(function () {
+      return {
+        add: watcherAdd,
+        close: watcherClose,
+        on: vi.fn().mockImplementation(function (this: unknown, event, handler) {
+          nativeHandlers.set(event, handler)
+          return this
+        })
+      }
+    })
+    watcherAdd.mockResolvedValue(undefined)
+    watcherClose.mockResolvedValue(undefined)
     fsStat.mockResolvedValue({ isDirectory: () => true })
     fsAccess.mockResolvedValue(undefined)
     fsReaddir.mockResolvedValue([])
     probeFileAccessStatus.mockReturnValue('granted')
+  })
+
+  it('does not enumerate a deep macOS file root through Chokidar during registration', async () => {
+    const watcher = new FileSystemWatcherModule()
+
+    await watcher.addPath('/Users/demo', FILE_SCAN_MAX_DEPTH)
+
+    expect(chokidarFseventsWatch).not.toHaveBeenCalled()
+    expect(chokidarWatch).not.toHaveBeenCalled()
+    expect(nativeWatcher).toHaveBeenCalledOnce()
+    await watcher.onDestroy()
   })
 
   it('emits a recovered watch-root event when a pending path becomes accessible', async () => {
@@ -142,7 +173,7 @@ describe('FileSystemWatcherModule', () => {
       expect.objectContaining({ filePath: '/tmp/reconcile' })
     )
 
-    watcher.onDestroy()
+    await watcher.onDestroy()
     expect(touchEventBus.off).toHaveBeenCalledWith(
       TalexEvents.PERMISSIONS_REFRESHED,
       expect.any(Function)
@@ -154,12 +185,9 @@ describe('FileSystemWatcherModule', () => {
 
     await watcher.addPath('/tmp/freshness', 24)
 
-    const watchCall = chokidarFseventsWatch.mock.calls[0] ?? chokidarWatch.mock.calls[0]
-    expect(watchCall?.[1]).toMatchObject({
-      awaitWriteFinish: {
-        stabilityThreshold: 500,
-        pollInterval: 100
-      }
+    expect(nativeWatcher.mock.calls[0]?.[0]).toMatchObject({
+      stabilityThresholdMs: 500,
+      pollIntervalMs: 100
     })
   })
 
@@ -168,8 +196,9 @@ describe('FileSystemWatcherModule', () => {
 
     await watcher.addPath('/Users/demo', FILE_SCAN_MAX_DEPTH)
 
-    const watchCall = chokidarFseventsWatch.mock.calls[0] ?? chokidarWatch.mock.calls[0]
-    const { ignored } = watchCall?.[1] as { ignored: (watchPath: string) => boolean }
+    const { ignored } = nativeWatcher.mock.calls[0]?.[0] as {
+      ignored: (watchPath: string) => boolean
+    }
 
     // Chokidar asks about each directory before descending, so the subtree root is cut; the walk
     // upward must also reject a leaf path whose excluded ancestor was never surfaced.
@@ -191,5 +220,68 @@ describe('FileSystemWatcherModule', () => {
       ignored('/Users/demo/Workspace/Projects/file.txt'),
       ignored('/Users/demo/Documents/build/note.txt')
     ]).toEqual([false, false])
+  })
+
+  it('keeps shallow app watches on the existing backend', async () => {
+    const watcher = new FileSystemWatcherModule()
+    await watcher.addPath('/Applications', 1)
+    expect(chokidarFseventsWatch).toHaveBeenCalledOnce()
+    expect(nativeWatcher).not.toHaveBeenCalled()
+    await watcher.onDestroy()
+  })
+
+  it('routes native subtree invalidation separately from permission recovery', async () => {
+    const watcher = new FileSystemWatcherModule()
+    await watcher.addPath('/Users/demo', FILE_SCAN_MAX_DEPTH)
+    nativeHandlers.get('invalidate')?.({
+      path: '/Users/demo/Documents/moved',
+      rootPath: '/Users/demo',
+      reason: 'directory-change'
+    })
+    expect(touchEventBus.emit).toHaveBeenCalledWith(
+      TalexEvents.FILE_WATCH_SUBTREE_INVALIDATED,
+      expect.objectContaining({ filePath: '/Users/demo/Documents/moved', rootPath: '/Users/demo' })
+    )
+    expect(touchEventBus.emit).not.toHaveBeenCalledWith(
+      TalexEvents.FILE_WATCH_ROOT_RECOVERED,
+      expect.anything()
+    )
+    await watcher.onDestroy()
+    vi.mocked(touchEventBus.emit).mockClear()
+    nativeHandlers.get('add')?.('/Users/demo/late.txt')
+    expect(touchEventBus.emit).not.toHaveBeenCalled()
+  })
+
+  it('awaits native shutdown and refuses registration after destruction', async () => {
+    const watcher = new FileSystemWatcherModule()
+    await watcher.addPath('/Users/demo', FILE_SCAN_MAX_DEPTH)
+    let release: () => void = () => undefined
+    watcherClose.mockReturnValue(
+      new Promise<void>((resolve) => {
+        release = resolve
+      })
+    )
+    let destroyed = false
+    const closing = watcher.onDestroy().then(() => {
+      destroyed = true
+    })
+    await Promise.resolve()
+    expect(destroyed).toBe(false)
+    release()
+    await closing
+    await watcher.addPath('/Users/demo/other', FILE_SCAN_MAX_DEPTH)
+    expect(watcherAdd).toHaveBeenCalledOnce()
+  })
+
+  it('does not silently fall back to recursive traversal when native loading fails', async () => {
+    const watcher = new FileSystemWatcherModule()
+    watcherAdd.mockRejectedValueOnce(new Error('FSEVENTS_UNAVAILABLE'))
+    await expect(watcher.addPath('/Users/demo', FILE_SCAN_MAX_DEPTH)).rejects.toThrow(
+      'FSEVENTS_UNAVAILABLE'
+    )
+    expect(chokidarFseventsWatch).not.toHaveBeenCalled()
+    await watcher.addPath('/Users/demo', FILE_SCAN_MAX_DEPTH)
+    expect(watcherAdd).toHaveBeenCalledTimes(2)
+    await watcher.onDestroy()
   })
 })

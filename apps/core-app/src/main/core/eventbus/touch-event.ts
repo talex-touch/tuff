@@ -37,6 +37,7 @@ export enum TalexEvents {
   DIRECTORY_ADDED = 'file-system/directory-added',
   DIRECTORY_UNLINKED = 'file-system/directory-unlinked',
   FILE_WATCH_ROOT_RECOVERED = 'file-system/watch-root-recovered',
+  FILE_WATCH_SUBTREE_INVALIDATED = 'file-system/watch-subtree-invalidated',
 
   // System permission signal — emitted when permissions are (re)checked so the
   // file-system watcher can reconcile roots that just became accessible.
@@ -429,6 +430,16 @@ export class FileWatchRootRecoveredEvent implements ITouchEvent<TalexEvents> {
   constructor(filePath: string) {
     this.filePath = filePath
   }
+}
+
+export class FileWatchSubtreeInvalidatedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.FILE_WATCH_SUBTREE_INVALIDATED
+
+  constructor(
+    public readonly filePath: string,
+    public readonly rootPath: string,
+    public readonly reason: 'directory-change' | 'event-loss' | 'overflow' | 'symlink-change'
+  ) {}
 }
 
 export class PermissionsRefreshedEvent implements ITouchEvent<TalexEvents> {

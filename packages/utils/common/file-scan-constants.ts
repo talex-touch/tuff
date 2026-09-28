@@ -589,6 +589,8 @@ export const PATH_PATTERNS = {
  * @description 用于配置文件扫描行为的选项集合，支持跨平台使用
  */
 export interface FileScanOptions {
+  /** Maximum depth relative to the requested scan root. */
+  maxDepth?: number;
   /**
    * 是否启用 Photos Library 智能过滤
    * @description 仅在 macOS 上有效，自动过滤 Photos Library 的缓存和数据库目录
