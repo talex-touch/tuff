@@ -3,9 +3,9 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCard } from '@talex-touch/tuffex/card'
 import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
-import { TuffInput } from '@talex-touch/tuffex/input'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { TxProgressBar } from '@talex-touch/tuffex/progress-bar'
-import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import { TxSelect, TxSelectItem } from '@talex-touch/tuffex/select'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
@@ -447,11 +447,11 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </p>
       </div>
       <ClientOnly>
-        <TuffSelect v-model="selectedDays" class="w-44">
-          <TuffSelectItem :value="7" :label="t('dashboard.sections.analytics.last7Days', 'Last 7 days')" />
-          <TuffSelectItem :value="30" :label="t('dashboard.sections.analytics.last30Days', 'Last 30 days')" />
-          <TuffSelectItem :value="90" :label="t('dashboard.sections.analytics.last90Days', 'Last 90 days')" />
-        </TuffSelect>
+        <TxSelect v-model="selectedDays" class="w-44">
+          <TxSelectItem :value="7" :label="t('dashboard.sections.analytics.last7Days', 'Last 7 days')" />
+          <TxSelectItem :value="30" :label="t('dashboard.sections.analytics.last30Days', 'Last 30 days')" />
+          <TxSelectItem :value="90" :label="t('dashboard.sections.analytics.last90Days', 'Last 90 days')" />
+        </TxSelect>
         <template #fallback>
           <div class="w-full rounded-xl bg-black/[0.04] px-3 py-2 text-xs text-black/60 dark:bg-white/[0.08] dark:text-white/60 sm:w-44">
             {{ t('dashboard.sections.analytics.last30Days', 'Last 30 days') }}
@@ -613,18 +613,15 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           >
             <span class="w-16 font-mono text-black/50 dark:text-white/50">{{ day.date.slice(5) }}</span>
             <div class="flex-1">
-              <div class="flex h-3.5 gap-1 overflow-hidden rounded-full bg-black/[0.04] p-0.5 dark:bg-white/[0.06]">
-                <div
-                  class="h-full rounded-full bg-blue-500 transition-all duration-300"
-                  :style="{ width: `${Math.min(100, (day.visits / Math.max(...analytics.summary.dailyStats.map(d => d.visits), 1)) * 50)}%` }"
-                  :title="`${day.visits} visits`"
-                />
-                <div
-                  class="h-full rounded-full bg-purple-500 transition-all duration-300"
-                  :style="{ width: `${Math.min(100, (day.searches / Math.max(...analytics.summary.dailyStats.map(d => d.searches), 1)) * 50)}%` }"
-                  :title="`${day.searches} searches`"
-                />
-              </div>
+              <TxProgressBar
+                :segments="[
+                  { value: day.visits, color: '#3b82f6', label: `Visits: ${day.visits}` },
+                  { value: day.searches, color: '#a855f7', label: `Searches: ${day.searches}` },
+                ]"
+                :segments-total="Math.max(...analytics.summary.dailyStats.map(d => d.visits + d.searches), 1)"
+                :show-text="false"
+                height="8px"
+              />
             </div>
             <span class="w-16 text-right font-mono text-black/40 dark:text-white/40">
               {{ day.avgDuration }}ms
@@ -809,24 +806,33 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           size="small"
           description="No version data yet"
         />
-        <div v-else class="flex flex-col gap-6 sm:flex-row sm:items-center">
-          <div
-            class="h-32 w-32 rounded-full border border-black/5 dark:border-white/10"
-            :style="{ background: versionSegments.gradient }"
+        <div v-else class="space-y-6">
+          <TxProgressBar
+            :segments="versionSegments.segments.map(s => ({ value: s.count, color: s.color, label: `${s.key}: ${s.count} (${(s.ratio * 100).toFixed(1)}%)` }))"
+            :segments-total="versionSegments.total"
+            :show-text="false"
+            height="8px"
+            class="w-full"
           />
-          <div class="flex-1 space-y-2 text-sm text-black/70 dark:text-white/70">
+          <div class="flex flex-col gap-6 sm:flex-row sm:items-center">
             <div
-              v-for="segment in versionSegments.segments"
-              :key="segment.key"
-              class="flex items-center justify-between gap-4"
-            >
-              <div class="flex min-w-0 items-center gap-2">
-                <span class="h-2 w-2 rounded-full" :style="{ background: segment.color }" />
-                <span class="truncate font-mono">{{ segment.key }}</span>
+              class="h-28 w-28 shrink-0 rounded-full border border-black/5 dark:border-white/10"
+              :style="{ background: versionSegments.gradient }"
+            />
+            <div class="flex-1 grid grid-cols-1 gap-2.5 sm:grid-cols-2 text-sm text-black/70 dark:text-white/70">
+              <div
+                v-for="segment in versionSegments.segments"
+                :key="segment.key"
+                class="flex items-center justify-between gap-4 rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 dark:border-white/[0.05] dark:bg-white/[0.03]"
+              >
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ background: segment.color }" />
+                  <span class="truncate font-mono">{{ segment.key }}</span>
+                </div>
+                <span class="font-mono text-xs text-black/50 dark:text-white/50">
+                  {{ segment.count }} · {{ (segment.ratio * 100).toFixed(1) }}%
+                </span>
               </div>
-              <span class="font-mono text-xs text-black/50 dark:text-white/50">
-                {{ segment.count }} · {{ (segment.ratio * 100).toFixed(1) }}%
-              </span>
             </div>
           </div>
         </div>
@@ -1310,17 +1316,17 @@ Slow
 
         <TxCard variant="plain" background="mask" :radius="16" :padding="16">
           <div class="flex flex-wrap items-center gap-3">
-            <TuffInput
+            <TxInput
               v-model="docsPath"
               type="text"
               placeholder="Filter path (e.g. docs/dev/components/button)"
               class="w-72"
             />
-            <TuffSelect v-model="docsSource" class="w-44">
-              <TuffSelectItem value="all" label="All sources" />
-              <TuffSelectItem value="docs_page" label="Docs page" />
-              <TuffSelectItem value="doc_comments_admin" label="Doc comments admin" />
-            </TuffSelect>
+            <TxSelect v-model="docsSource" class="w-44">
+              <TxSelectItem value="all" label="All sources" />
+              <TxSelectItem value="docs_page" label="Docs page" />
+              <TxSelectItem value="doc_comments_admin" label="Doc comments admin" />
+            </TxSelect>
             <TxButton variant="secondary" size="sm" native-type="button" @click="fetchDocsAnalytics">
               Refresh
             </TxButton>
@@ -1716,17 +1722,17 @@ Slow
           </TxButton>
         </div>
         <div class="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-black/[0.04] bg-black/[0.02] p-3 text-xs dark:border-white/[0.05] dark:bg-white/[0.03]">
-          <TuffSelect v-model="exchangeView" class="w-40">
-            <TuffSelectItem value="history" label="Target history" />
-            <TuffSelectItem value="snapshots" label="Snapshots" />
-          </TuffSelect>
-          <TuffInput
+          <TxSelect v-model="exchangeView" class="w-40">
+            <TxSelectItem value="history" label="Target history" />
+            <TxSelectItem value="snapshots" label="Snapshots" />
+          </TxSelect>
+          <TxInput
             v-model="exchangeTarget"
             type="text"
             placeholder="Target (e.g. CNY)"
             class="w-28 uppercase"
           />
-          <TuffInput
+          <TxInput
             v-model.number="exchangeLimit"
             type="number"
             min="1"
