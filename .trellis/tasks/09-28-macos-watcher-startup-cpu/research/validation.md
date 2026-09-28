@@ -39,7 +39,7 @@ Command:
 pnpm -C apps/core-app exec tsx scripts/file-watch-startup-benchmark.mjs --counts 20000 --repeats 3 --window-seconds 10 --energy
 ```
 
-The six module windows completed. `powermetrics` recorded 10 of 12 target PID samples in every window; the missing samples were the sampler lead-in and tail where the short-lived child was not yet or no longer present. Aggregated observed Energy Impact medians were 0.800 for the baseline and 0.875 for the candidate. Whole-SoC CPU power medians were 7,313.5 mW and 9,086.0 mW respectively, but this includes unrelated host activity and is not app power. These samples establish sampler capability and preserve the observed values; they do not establish a candidate energy reduction. The redacted sampler output is in `watcher-energy-benchmark-summary.json`.
+The six module windows completed. The aggregate medians pool samples across all six windows for each backend rather than aggregating per-run medians: 30 non-null child Energy Impact samples (missing child samples excluded) and all 36 whole-SoC CPU samples. `powermetrics` recorded 10 of 12 target PID samples in every window; the missing samples were the sampler lead-in and tail where the short-lived child was not yet or no longer present. Aggregated observed Energy Impact medians were 0.800 for the baseline and 0.875 for the candidate. Whole-SoC CPU power medians were 7,313.5 mW and 9,086.0 mW respectively, but this includes unrelated host activity and is not app power. These samples establish sampler capability and preserve the observed values; they do not establish a candidate energy reduction. The redacted sampler output is in `watcher-energy-benchmark-summary.json`.
 
 ## Full application smoke
 

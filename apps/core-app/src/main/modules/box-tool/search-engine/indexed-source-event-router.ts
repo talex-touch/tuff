@@ -295,7 +295,15 @@ export class IndexedSourceEventRouter {
       .then(async () => {
         for (const entry of pending) {
           for (const subtreePath of entry.scopes) {
-            await this.reconcileInvalidatedSubtree(subtreePath, entry.rootPath)
+            try {
+              await this.reconcileInvalidatedSubtree(subtreePath, entry.rootPath)
+            } catch (error) {
+              log.warn('Invalidated file watch subtree reconcile failed', {
+                error,
+                rootPath: entry.rootPath,
+                subtreePath
+              })
+            }
           }
         }
       })

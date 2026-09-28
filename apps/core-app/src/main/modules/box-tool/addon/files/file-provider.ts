@@ -2534,7 +2534,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     deltas: IndexedSourceDelta[]
   ): FileWatchSubtreeService<ScannedFileInfo> {
     return new FileWatchSubtreeService<ScannedFileInfo>({
-      normalizePath: (rawPath) => this.normalizePath(rawPath),
+      normalizePath: (rawPath) => normalizeFsPath(path.resolve(rawPath)),
       isAdmitted: (rawPath) => this.isAdmittedFileWatchSubtreePath(rawPath),
       pathExists: async (rawPath, signal) => {
         signal?.throwIfAborted()
