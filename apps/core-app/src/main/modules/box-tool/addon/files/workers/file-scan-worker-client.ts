@@ -1,4 +1,5 @@
 import type { ScannedFileInfo } from '../types'
+import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-constants'
 import type {
   WorkerMetricsPayload,
   WorkerMetricsResponse,
@@ -68,7 +69,8 @@ export class FileScanWorkerClient {
     excludePaths?: Set<string>,
     batchSize?: number,
     signal?: AbortSignal,
-    onStats?: (stats: FileScanRunStats) => void
+    onStats?: (stats: FileScanRunStats) => void,
+    options?: FileScanOptions
   ): AsyncIterable<ScannedFileInfo[]> {
     const taskId = `scan-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const worker = this.ensureWorker()
@@ -95,7 +97,8 @@ export class FileScanWorkerClient {
       taskId,
       paths,
       excludePaths: excludePaths ? Array.from(excludePaths) : undefined,
-      batchSize
+      batchSize,
+      options
     })
 
     try {

@@ -17,6 +17,12 @@ export interface FileProviderFullScanInsertResult {
  */
 const FULL_SCAN_CHUNK_BACKOFF_MS = 250
 const FULL_SCAN_CHUNK_BACKOFF_MAX_MS = 1_000
+/**
+ * Full scans are background maintenance, not an interactive throughput benchmark. A short
+ * cooperative park after every persisted chunk keeps the scanner's acknowledgement chain
+ * backpressured, lowers sustained CPU/disk pressure, and gives renderer/IPC work regular gaps.
+ */
+const FULL_SCAN_COOPERATIVE_PAUSE_MS = 100
 
 export interface FileProviderFullScanInsertDeps<TInserted, TContext> {
   sourceId: string
@@ -195,15 +201,16 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
           current: indexedFiles,
           total: records.length
         })
-        // `recordBatchDuration` feeds the AIMD window (targetMs=300) and the two
-        // awaited worker round-trips above already hand the event loop back, so a
-        // fixed floor here is a second, redundant pacer — and a throughput cap:
-        // measured 607 chunks x ~177ms for a 10.6k-file scan, of which ~100ms per
-        // chunk (56%) was this timer. Only back off when the chunk itself ran long
-        // enough that the next one would compound the backlog.
-        if (batchMs >= FULL_SCAN_CHUNK_BACKOFF_MS) {
-          await this.sleep(Math.min(Math.round(batchMs), FULL_SCAN_CHUNK_BACKOFF_MAX_MS))
-        }
+        // Full scans deliberately trade completion time for foreground responsiveness. The
+        // scanner cannot run far ahead because each 500-record scan batch waits for this write
+        // chain to acknowledge it, so this pause also bounds traversal pressure without another
+        // queue or an unbounded in-memory buffer. Slow chunks retain the existing proportional
+        // congestion backoff; fast chunks still yield a fixed 100ms window to interactive work.
+        const pacingMs =
+          batchMs >= FULL_SCAN_CHUNK_BACKOFF_MS
+            ? Math.min(Math.round(batchMs), FULL_SCAN_CHUNK_BACKOFF_MAX_MS)
+            : FULL_SCAN_COOPERATIVE_PAUSE_MS
+        await this.sleep(pacingMs)
       }
     } finally {
       if (pendingChunk) await pendingChunk.result.catch(() => undefined)

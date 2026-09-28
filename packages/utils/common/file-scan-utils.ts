@@ -362,7 +362,7 @@ async function scanDirectoryInto(
   siblingNames?: readonly string[],
 ): Promise<void> {
   sink?.signal?.throwIfAborted();
-  if (depth > FILE_SCAN_MAX_DEPTH) return;
+  if (depth > (opts.maxDepth ?? FILE_SCAN_MAX_DEPTH)) return;
   if (excludePaths?.has(dirPath)) return;
   if (
     fileFilterService.getTraversalExclusionReason(dirPath, opts, {

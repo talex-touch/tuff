@@ -186,6 +186,27 @@ function verifyNativeModules(strict, target) {
 
   console.warn(`Warning: ${message}`)
 }
+function verifyMacFileEventsBackend(target) {
+  if (target !== 'mac') return
+
+  try {
+    const modulePath = require.resolve('fsevents', { paths: [projectRoot] })
+    const backend = require(modulePath)
+    if (
+      typeof backend.watch !== 'function' ||
+      typeof backend.getInfo !== 'function' ||
+      !backend.constants
+    ) {
+      throw new Error('module does not expose watch, getInfo, and constants')
+    }
+    console.log(`✓ macOS file events backend loaded: ${modulePath}`)
+  } catch (error) {
+    throw new Error(
+      'Required macOS file events backend is unavailable. Reinstall dependencies on macOS before packaging.',
+      { cause: error }
+    )
+  }
+}
 
 function ensureBuildNodeOptions(buildEnv) {
   const defaultHeapSize = process.env.BUILD_HEAP_MB || '6144'
@@ -536,6 +557,7 @@ function build() {
     console.log(
       `Setting BUILD_TARGET=${normalizedTarget}, BUILD_ARCH=${effectiveArch}, ELECTRON_PLATFORM=${electronPlatform}`
     )
+    verifyMacFileEventsBackend(normalizedTarget)
 
     const officialPluginBuildOrder = buildOfficialPluginPackages({ projectRoot, workspaceRoot })
     console.log(
@@ -682,7 +704,10 @@ function build() {
         })
         console.log('✓ electron-builder install-app-deps completed\n')
         console.timeEnd('build-target:install-app-deps')
-        const restoredAddons = restorePreservedNativeAddons({ projectRoot, preserved: preservedAddons })
+        const restoredAddons = restorePreservedNativeAddons({
+          projectRoot,
+          preserved: preservedAddons
+        })
         if (restoredAddons.length > 0) {
           console.log(
             `[build-target] Restored the Cargo-built addons install-app-deps removed: ${restoredAddons.join(', ')}\n`

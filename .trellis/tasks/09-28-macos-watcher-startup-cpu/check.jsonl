@@ -1,0 +1,8 @@
+{"file": "apps/core-app/AGENTS.md", "reason": "CoreApp platform, data ownership and lifecycle constraints"}
+{"file": ".trellis/spec/main-process/index.md", "reason": "Main-process spec map and affected boundaries"}
+{"file": ".trellis/spec/main-process/search-hotpath-contracts.md", "reason": "Avoid main-thread and per-row cleanup regressions"}
+{"file": ".trellis/tasks/07-13-search-crossplatform-audit/prd.md", "reason": "Do not duplicate or regress existing scan/reconcile findings"}
+{"file": ".trellis/tasks/09-28-macos-watcher-startup-cpu/design.md", "reason": "Proposed scoped backend, subtree correctness and approval boundaries"}
+{"file": ".trellis/tasks/09-28-macos-watcher-startup-cpu/research/local-evidence.md", "reason": "Measured baseline, probe limitations and unsafe reconciliation shortcut"}
+{"file": ".trellis/tasks/09-28-macos-watcher-startup-cpu/research/upstream-overlap.md", "reason": "Current related issues, competing fixes and honest publication scope"}
+{"file": ".trellis/spec/guides/branch-and-release.md", "reason": "Enforced task branch and master PR target; no release authorization"}

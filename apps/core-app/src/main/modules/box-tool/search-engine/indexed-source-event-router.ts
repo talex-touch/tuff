@@ -1,4 +1,5 @@
 import process from 'node:process'
+import path from 'node:path'
 import type { ITouchEvent } from '@talex-touch/utils'
 import type {
   IndexingWatchDeltaAction,
@@ -12,6 +13,7 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import { APP_INDEXED_SOURCE_ID } from './app-indexed-source'
 import { FILE_INDEXED_SOURCE_ID } from './file-indexed-source'
+import { FILE_WATCH_SUBTREE_RECONCILE_REASON } from '../addon/files/services/file-watch-subtree-service'
 import { IndexingWatchDeltaQueueService } from './indexing-watch-delta-queue-service'
 import type { IndexingRuntime } from './indexing-runtime'
 
@@ -28,6 +30,15 @@ export const APP_WATCH_COALESCE_WINDOW_MS = 400
 export const FILE_WATCH_COALESCE_WINDOW_MS = 300
 
 const MACOS_BUNDLE_SUFFIX = '.app'
+const MAX_PENDING_INVALIDATION_SCOPES = 128
+
+interface PendingSubtreeInvalidation {
+  rootPath: string
+  scopes: Set<string>
+  reasons: Map<string, MacOSInvalidationReason>
+}
+
+type MacOSInvalidationReason = 'directory-change' | 'event-loss' | 'overflow' | 'symlink-change'
 
 type RuntimeAccessor = () => IndexingRuntime | null
 
@@ -56,6 +67,9 @@ export class IndexedSourceEventRouter {
   private appRootsFailureLogged = false
   private readonly appQueue: IndexingWatchDeltaQueueService<WatchDeltaPayload>
   private readonly fileQueue: IndexingWatchDeltaQueueService<WatchDeltaPayload>
+  private readonly subtreeInvalidations = new Map<string, PendingSubtreeInvalidation>()
+  private subtreeInvalidationTimer: ReturnType<typeof setTimeout> | null = null
+  private subtreeInvalidationChain: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly getRuntime: RuntimeAccessor,
@@ -154,6 +168,10 @@ export class IndexedSourceEventRouter {
     touchEventBus.on(TalexEvents.FILE_CHANGED, this.handleFileAddedOrChanged)
     touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleFileUnlinked)
     touchEventBus.on(TalexEvents.FILE_WATCH_ROOT_RECOVERED, this.handleFileWatchRootRecovered)
+    touchEventBus.on(
+      TalexEvents.FILE_WATCH_SUBTREE_INVALIDATED,
+      this.handleFileWatchSubtreeInvalidated
+    )
     touchEventBus.on(TalexEvents.FILE_CHANGED, this.handleAppAddedOrChanged)
     touchEventBus.on(TalexEvents.FILE_ADDED, this.handleAppAddedOrChanged)
     touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleAppUnlinked)
@@ -170,6 +188,10 @@ export class IndexedSourceEventRouter {
     touchEventBus.off(TalexEvents.FILE_CHANGED, this.handleFileAddedOrChanged)
     touchEventBus.off(TalexEvents.FILE_UNLINKED, this.handleFileUnlinked)
     touchEventBus.off(TalexEvents.FILE_WATCH_ROOT_RECOVERED, this.handleFileWatchRootRecovered)
+    touchEventBus.off(
+      TalexEvents.FILE_WATCH_SUBTREE_INVALIDATED,
+      this.handleFileWatchSubtreeInvalidated
+    )
     touchEventBus.off(TalexEvents.FILE_CHANGED, this.handleAppAddedOrChanged)
     touchEventBus.off(TalexEvents.FILE_ADDED, this.handleAppAddedOrChanged)
     touchEventBus.off(TalexEvents.FILE_UNLINKED, this.handleAppUnlinked)
@@ -180,10 +202,15 @@ export class IndexedSourceEventRouter {
     // above, so no next enqueue can ever come. An app dropped into /Applications
     // within the 400ms coalescing window was discarded outright, with no reconcile
     // marker, leaving the index stale until the next full scan (#676).
-    await Promise.all([this.appQueue.drain(), this.fileQueue.drain()])
+    this.subscribed = false
+    await Promise.all([
+      this.appQueue.drain(),
+      this.fileQueue.drain(),
+      this.drainSubtreeInvalidations()
+    ])
     this.appQueue.dispose()
     this.fileQueue.dispose()
-    this.subscribed = false
+    this.subtreeInvalidations.clear()
   }
 
   private readonly handleFileAddedOrChanged = (event: ITouchEvent): void => {
@@ -199,6 +226,123 @@ export class IndexedSourceEventRouter {
   private readonly handleFileWatchRootRecovered = (event: ITouchEvent): void => {
     const path = this.resolvePath(event)
     if (path) void this.reconcileRecoveredRoot(path)
+  }
+
+  private readonly handleFileWatchSubtreeInvalidated = (event: ITouchEvent): void => {
+    if (!this.subscribed) return
+    if (!('rootPath' in event) || !('reason' in event)) return
+    const subtreePath = this.resolvePath(event)
+    const rootPath = typeof event.rootPath === 'string' ? event.rootPath : null
+    const reason = event.reason
+    if (!subtreePath || !rootPath || !this.isSubtreeInsideRoot(subtreePath, rootPath)) return
+    if (
+      reason !== 'directory-change' &&
+      reason !== 'event-loss' &&
+      reason !== 'overflow' &&
+      reason !== 'symlink-change'
+    )
+      return
+
+    const normalizedRoot = path.resolve(rootPath)
+    const normalizedSubtree = path.resolve(subtreePath)
+    let pending = this.subtreeInvalidations.get(normalizedRoot)
+    if (!pending) {
+      pending = { rootPath: normalizedRoot, scopes: new Set(), reasons: new Map() }
+      this.subtreeInvalidations.set(normalizedRoot, pending)
+    }
+    if (pending.scopes.has(normalizedRoot)) return
+    for (const existing of pending.scopes) {
+      if (this.isSubtreeInsideRoot(normalizedSubtree, existing)) return
+    }
+    for (const existing of pending.scopes) {
+      if (this.isSubtreeInsideRoot(existing, normalizedSubtree)) {
+        pending.scopes.delete(existing)
+        pending.reasons.delete(existing)
+      }
+    }
+    pending.scopes.add(normalizedSubtree)
+    pending.reasons.set(normalizedSubtree, reason)
+    if (pending.scopes.size > MAX_PENDING_INVALIDATION_SCOPES) {
+      pending.scopes.clear()
+      pending.reasons.clear()
+      pending.scopes.add(normalizedRoot)
+      pending.reasons.set(normalizedRoot, 'overflow')
+    }
+    this.scheduleSubtreeInvalidations()
+  }
+
+  private isSubtreeInsideRoot(candidate: string, root: string): boolean {
+    const relative = path.relative(path.resolve(root), path.resolve(candidate))
+    return (
+      relative === '' ||
+      (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
+    )
+  }
+
+  private scheduleSubtreeInvalidations(): void {
+    if (this.subtreeInvalidationTimer || this.subtreeInvalidations.size === 0) return
+    this.subtreeInvalidationTimer = setTimeout(() => {
+      this.subtreeInvalidationTimer = null
+      this.flushSubtreeInvalidations()
+    }, FILE_WATCH_COALESCE_WINDOW_MS)
+  }
+
+  private flushSubtreeInvalidations(): void {
+    if (this.subtreeInvalidations.size === 0) return
+    const pending = Array.from(this.subtreeInvalidations.values())
+    this.subtreeInvalidations.clear()
+    this.subtreeInvalidationChain = this.subtreeInvalidationChain
+      .then(async () => {
+        for (const entry of pending) {
+          for (const subtreePath of entry.scopes) {
+            try {
+              await this.reconcileInvalidatedSubtree(subtreePath, entry.rootPath)
+            } catch (error) {
+              log.warn('Invalidated file watch subtree reconcile failed', {
+                error,
+                rootPath: entry.rootPath,
+                subtreePath
+              })
+            }
+          }
+        }
+      })
+      .catch((error) => {
+        log.warn('Invalidated file watch subtree reconcile failed', { error })
+      })
+  }
+
+  private async drainSubtreeInvalidations(): Promise<void> {
+    if (this.subtreeInvalidationTimer) {
+      clearTimeout(this.subtreeInvalidationTimer)
+      this.subtreeInvalidationTimer = null
+    }
+    this.flushSubtreeInvalidations()
+    await this.subtreeInvalidationChain
+  }
+
+  private async reconcileInvalidatedSubtree(subtreePath: string, rootPath: string): Promise<void> {
+    const runtime = this.getRuntime()
+    if (!runtime || runtime.isShuttingDown?.()) return
+    const event = {
+      sourceId: FILE_INDEXED_SOURCE_ID,
+      action: 'change' as const,
+      path: subtreePath,
+      rootPath,
+      occurredAt: Date.now()
+    }
+    if (runtime.getSource(FILE_INDEXED_SOURCE_ID)?.shouldHandleWatchEvent?.(event) === false) return
+    await runtime.reconcileSource(FILE_INDEXED_SOURCE_ID, {
+      reason: FILE_WATCH_SUBTREE_RECONCILE_REASON,
+      roots: [
+        {
+          sourceId: FILE_INDEXED_SOURCE_ID,
+          path: subtreePath,
+          permissionState: 'granted',
+          reason: FILE_WATCH_SUBTREE_RECONCILE_REASON
+        }
+      ]
+    })
   }
 
   private readonly handleAppAddedOrChanged = (event: ITouchEvent): void => {

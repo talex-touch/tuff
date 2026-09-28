@@ -25,6 +25,7 @@ const { touchEventBusMock, TalexEventsMock } = vi.hoisted(() => ({
     FILE_CHANGED: 'FILE_CHANGED',
     FILE_UNLINKED: 'FILE_UNLINKED',
     FILE_WATCH_ROOT_RECOVERED: 'FILE_WATCH_ROOT_RECOVERED',
+    FILE_WATCH_SUBTREE_INVALIDATED: 'FILE_WATCH_SUBTREE_INVALIDATED',
     DIRECTORY_ADDED: 'DIRECTORY_ADDED',
     DIRECTORY_UNLINKED: 'DIRECTORY_UNLINKED'
   }
@@ -69,10 +70,11 @@ async function createRouter(options: { getAppWatchRoots?: () => readonly string[
   const router = new IndexedSourceEventRouter(() => runtime as never, options)
   router.subscribe()
 
-  const emit = (eventName: string, filePath: string): void => {
+  const emit = (eventName: string, filePath: string, extra: Record<string, unknown> = {}): void => {
     for (const [subscribedEvent, handler] of touchEventBusMock.on.mock.calls) {
       if (subscribedEvent !== eventName) continue
-      ;(handler as (event: unknown) => void)({ name: eventName, filePath })
+      if (typeof handler !== 'function') continue
+      ;(handler as (event: unknown) => void)({ name: eventName, filePath, ...extra })
     }
   }
 
@@ -86,6 +88,7 @@ async function createRouter(options: { getAppWatchRoots?: () => readonly string[
     emit,
     routedTo,
     routeWatchEventWithResult,
+    runtime,
     appWindowMs: APP_WATCH_COALESCE_WINDOW_MS,
     fileWindowMs: FILE_WATCH_COALESCE_WINDOW_MS
   }
@@ -93,6 +96,7 @@ async function createRouter(options: { getAppWatchRoots?: () => readonly string[
 
 async function settleWindows(windowMs: number): Promise<void> {
   await vi.advanceTimersByTimeAsync(windowMs)
+  await vi.runOnlyPendingTimersAsync()
   for (let index = 0; index < 4; index += 1) await Promise.resolve()
 }
 
@@ -109,6 +113,81 @@ describe('IndexedSourceEventRouter watch coalescing', () => {
   afterEach(() => {
     restorePlatform()
     vi.useRealTimers()
+  })
+
+  it('coalesces invalidated subtrees without requesting a provider-wide scan', async () => {
+    const { router, emit, runtime, fileWindowMs } = await createRouter()
+    emit('FILE_WATCH_SUBTREE_INVALIDATED', '/fixture/docs/child', {
+      rootPath: '/fixture',
+      reason: 'directory-change'
+    })
+    emit('FILE_WATCH_SUBTREE_INVALIDATED', '/fixture/docs', {
+      rootPath: '/fixture',
+      reason: 'directory-change'
+    })
+    emit('FILE_WATCH_SUBTREE_INVALIDATED', '/fixture/other', {
+      rootPath: '/fixture',
+      reason: 'directory-change'
+    })
+    await settleWindows(fileWindowMs)
+    expect(runtime.reconcileSource).toHaveBeenCalledTimes(2)
+    expect(runtime.reconcileSource).toHaveBeenCalledWith(FILE_SOURCE_ID, {
+      reason: 'file-watch-subtree',
+      roots: [
+        {
+          sourceId: FILE_SOURCE_ID,
+          path: '/fixture/docs',
+          permissionState: 'granted',
+          reason: 'file-watch-subtree'
+        }
+      ]
+    })
+    await router.unsubscribe()
+  })
+
+  it('bounds an invalidation burst to its configured root', async () => {
+    const { router, emit, runtime, fileWindowMs } = await createRouter()
+    for (let index = 0; index < 300; index += 1) {
+      emit('FILE_WATCH_SUBTREE_INVALIDATED', `/fixture/dir-${index}`, {
+        rootPath: '/fixture',
+        reason: 'directory-change'
+      })
+    }
+    await settleWindows(fileWindowMs)
+    expect(runtime.reconcileSource).toHaveBeenCalledOnce()
+    expect(runtime.reconcileSource.mock.calls[0]).toEqual([
+      FILE_SOURCE_ID,
+      {
+        reason: 'file-watch-subtree',
+        roots: [
+          {
+            sourceId: FILE_SOURCE_ID,
+            path: '/fixture',
+            permissionState: 'granted',
+            reason: 'file-watch-subtree'
+          }
+        ]
+      }
+    ])
+    await router.unsubscribe()
+  })
+
+  it('rejects unrelated invalidations and drains admitted ones before teardown', async () => {
+    const { router, emit, runtime } = await createRouter()
+    emit('FILE_WATCH_SUBTREE_INVALIDATED', '/fixture-other/docs', {
+      rootPath: '/fixture',
+      reason: 'directory-change'
+    })
+    emit('FILE_WATCH_SUBTREE_INVALIDATED', '/fixture/../outside', {
+      rootPath: '/fixture',
+      reason: 'directory-change'
+    })
+    emit('FILE_WATCH_SUBTREE_INVALIDATED', '/fixture/docs', {
+      rootPath: '/fixture',
+      reason: 'directory-change'
+    })
+    await router.unsubscribe()
+    expect(runtime.reconcileSource).toHaveBeenCalledOnce()
   })
 
   it('collapses an app install burst into one resolution pass for the bundle', async () => {
