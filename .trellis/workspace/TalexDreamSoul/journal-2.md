@@ -1229,3 +1229,38 @@ Home session polish program: 13 child tasks archived; lift send, assistant push 
 
 - 插件侧 transport 存在同源缺陷（R3）：错误回复非 SUCCESS 时同样会被当数据，待办已列
 - 全仓另有 46 处「回复非 SUCCESS 未校验」的 fire-and-forget 调用点，未纳入本单
+
+
+## Session 79: CoreBox action feedback: TxStatusHint with rising grainy wash and morphing words
+
+**Date**: 2026-09-27
+**Task**: CoreBox action feedback: TxStatusHint with rising grainy wash and morphing words
+**Branch**: `task/chore/2.4.14-beta.49`
+
+### Summary
+
+New TuffEx TxStatusHint (tone wash rising from the leading edge, grain in the mask, text lands from 1.18x, morph via TxTextTransformer, pulseKey replay, animated/live switches, leave transition) with zh/en Nexus docs and 3 demos; CoreBox footer/header feedback now render it through CoreBoxActionFeedback, kept mounted across messages, gated by shouldAnimate(), one announcer unchanged. Calibrated with a prototype (G1b grain, 0.26 light / 0.20 dark), verified frame-exact on an isolated dev instance in light and dark; spec updated (corebox feedback contract, text-motion consequences, grain-in-mask and replay patterns).
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1e56340be` | (see git log) |
+| `9572393c4` | (see git log) |
+| `f68e10df1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
