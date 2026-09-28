@@ -35,6 +35,10 @@ export const DEV_BLACKLISTED_DIRS = new Set([
   ".npm",
   ".yarn",
   ".m2",
+  // Generated Python dependency/cache trees; filenames inside are not user-authored search data.
+  "__pycache__",
+  "site-packages",
+  "uvcache",
   "dist",
   "build",
   "target",

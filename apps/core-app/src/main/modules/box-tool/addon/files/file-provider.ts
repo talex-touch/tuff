@@ -2535,9 +2535,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   ): FileWatchSubtreeService<ScannedFileInfo> {
     return new FileWatchSubtreeService<ScannedFileInfo>({
       normalizePath: (rawPath) => this.normalizePath(rawPath),
-      isAdmitted: (rawPath) =>
-        this.isWithinWatchRoots(rawPath) &&
-        fileFilterService.getTraversalExclusionReason(path.dirname(rawPath)) === null,
+      isAdmitted: (rawPath) => this.isAdmittedFileWatchSubtreePath(rawPath),
       pathExists: async (rawPath, signal) => {
         signal?.throwIfAborted()
         try {
@@ -2622,6 +2620,28 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }
       }
     })
+  }
+
+  private isAdmittedFileWatchSubtreePath(rawPath: string): boolean {
+    if (!this.isWithinWatchRoots(rawPath)) return false
+
+    let candidate = path.resolve(rawPath)
+    while (true) {
+      // An invalidation can arrive for a deep leaf without any ancestor event. Apply the same
+      // context-free ancestor policy as the watcher: unconditional generated/cache names stay
+      // excluded, while ordinary folders such as `build` are left for the real walker to judge
+      // from their sibling project markers.
+      if (
+        fileFilterService.getTraversalExclusionReason(candidate, undefined, {
+          siblingNames: []
+        }) !== null
+      ) {
+        return false
+      }
+      const parent = path.dirname(candidate)
+      if (parent === candidate) return true
+      candidate = parent
+    }
   }
 
   private fileWatchScopeCondition(scope: string) {
