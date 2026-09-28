@@ -85,10 +85,14 @@
   ],
   "peerDependencies": {
     "echarts": "^6.1.0",
+    "three": ">=0.149.0",
     "vue": "^3.5.27"
   },
   "peerDependenciesMeta": {
     "echarts": {
+      "optional": true
+    },
+    "three": {
       "optional": true
     }
   },
@@ -111,6 +115,7 @@
     "@lezer/highlight": "^1.2.3",
     "@shikijs/engine-javascript": "^4.4.2",
     "@talex-touch/utils": "workspace:^",
+    "@types/three": "^0.186.0",
     "@vue/reactivity": "^3.5.27",
     "@vueuse/core": "^14.4.0",
     "d3-array": "^3.2.4",
@@ -149,6 +154,7 @@
     "postcss": "8.5.23",
     "sass": "^1.101.0",
     "sucrase": "^3.35.1",
+    "three": "catalog:",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "vite": "^7.3.6",
