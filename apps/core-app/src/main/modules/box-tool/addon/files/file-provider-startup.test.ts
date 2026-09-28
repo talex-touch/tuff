@@ -461,6 +461,7 @@ type FileProviderLeaseRecoveryTestApi = FileProviderIndexingLifecycleTestApi & {
   publishCommittedWorkerRecords: (entries: unknown[]) => Promise<number>
   indexSchedulerService: {
     drain: (timeoutMs?: number, mutationLeaseId?: string) => Promise<void>
+    getDrainTimeoutMs: (scoped: boolean) => number
     cancelLease: (mutationLeaseId: string) => void
     schedule: (
       files: FileProviderIndexSchedulerFile[],
@@ -2024,6 +2025,7 @@ describe('file-provider startup readiness', () => {
           cancellationBegan.resolve(undefined)
           await activeDispatchSettled.promise
         }),
+      getDrainTimeoutMs: vi.fn(() => 60_000),
       cancelLease: vi.fn((leaseId: string) => events.push(`scheduler-cancel:${leaseId}`))
     } as unknown as typeof provider.indexSchedulerService
     provider.fileIndexWorker = {
@@ -2108,6 +2110,7 @@ describe('file-provider startup readiness', () => {
     const cancelLease = vi.fn()
     provider.indexSchedulerService = {
       drain: vi.fn().mockRejectedValue(unexpected),
+      getDrainTimeoutMs: vi.fn(() => 60_000),
       cancelLease
     } as unknown as typeof provider.indexSchedulerService
 
@@ -2144,6 +2147,7 @@ describe('file-provider startup readiness', () => {
 
     provider.indexSchedulerService = {
       drain,
+      getDrainTimeoutMs: vi.fn(() => 60_000),
       hasPendingWork: vi.fn((leaseId?: string) => leaseId === undefined),
       cancelLease: vi.fn(),
       cancelPending: vi.fn()
@@ -2160,6 +2164,7 @@ describe('file-provider startup readiness', () => {
       // This lease owns nothing, so the drain neither waits on the global scheduler
       // flush nor enters the flush loop; the foreign lease's results stay its own.
       expect(drain.mock.calls.every((call) => call[1] === 'lease-scoped')).toBe(true)
+      expect(drain).toHaveBeenCalledWith(60_000, 'lease-scoped')
       expect(unscopedDrain).not.toHaveBeenCalled()
       expect(scheduleFlush).not.toHaveBeenCalled()
       expect(provider.pendingIndexWorkerResults.get(1)).toEqual({
@@ -2201,6 +2206,7 @@ describe('file-provider startup readiness', () => {
 
     provider.indexSchedulerService = {
       drain: vi.fn(async (_timeoutMs?: number, _leaseId?: string) => undefined),
+      getDrainTimeoutMs: vi.fn(() => 60_000),
       hasPendingWork: vi.fn(() => false),
       cancelLease: vi.fn(),
       cancelPending: vi.fn()
