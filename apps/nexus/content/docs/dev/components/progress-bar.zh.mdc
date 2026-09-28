@@ -3,7 +3,7 @@ title: ProgressBar 进度条
 description: 支持确定进度、不确定加载、分段进度与状态反馈的进度条。
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [progress, bar, loading]
 syncStatus: reviewed
 verified: true

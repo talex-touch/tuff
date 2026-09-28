@@ -3,7 +3,7 @@ title: "ContextMenu"
 description: "General menu surface for right-click, controlled coordinates, and Popover composition."
 category: Navigation
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [context, menu, popover]
 syncStatus: reviewed
 verified: true

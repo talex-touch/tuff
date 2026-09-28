@@ -3,7 +3,7 @@ title: "ErrorState 错误状态"
 description: "错误场景的快捷空态组件，基于 TxEmptyState 的 `variant=\"error\"` 预设。"
 category: Status
 status: beta
-since: 2.4.7
+since: 0.3.4
 tags: [empty, state, error, feedback]
 syncStatus: reviewed
 verified: true

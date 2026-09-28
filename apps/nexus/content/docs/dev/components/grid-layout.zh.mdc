@@ -3,7 +3,7 @@ title: "GridLayout 网格布局"
 description: "带 auto-fit 列和可选鼠标光斑效果的响应式 CSS Grid 辅助容器。"
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [grid, layout, responsive]
 syncStatus: reviewed
 verified: true

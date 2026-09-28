@@ -3,7 +3,7 @@ title: Drawer 抽屉
 description: 侧滑面板与表单承载
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [drawer, panel, overlay]
 syncStatus: reviewed
 verified: true

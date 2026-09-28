@@ -3,7 +3,7 @@ title: "GridLayout"
 description: "Responsive CSS Grid helper with auto-fit columns and an optional cursor-following item spotlight."
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [grid, layout, responsive]
 syncStatus: reviewed
 verified: true

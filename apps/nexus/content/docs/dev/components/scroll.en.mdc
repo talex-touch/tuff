@@ -3,7 +3,7 @@ title: "Scroll"
 description: "`@better-scroll/scroll-bar` powered `TxScroll` container."
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [scroll, layout, better-scroll]
 syncStatus: reviewed
 verified: true

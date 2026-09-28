@@ -3,7 +3,7 @@ title: "EdgeFadeMask 边缘渐隐遮罩"
 description: "滚动容器包装器，仅在存在隐藏溢出内容时为前后边缘添加 CSS mask 渐隐。"
 category: Effects
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [scroll, mask, fade]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: "Radio"
 description: "Single-choice controls with button, standard, and card presentations, keyboard navigation, disabled states, and animated button indicators."
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [radio, form, selection]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: "Transition 动效"
 description: "用于带 key 内容切换、列表动效与平滑尺寸变化的通用过渡封装。"
 category: Effects
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [transition, motion, list, auto-size]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: Collapse
 description: Expandable content panels with controlled active names, accordion mode, semantic headers, and keyboard-friendly buttons.
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [collapse, disclosure, layout]
 syncStatus: reviewed
 verified: true

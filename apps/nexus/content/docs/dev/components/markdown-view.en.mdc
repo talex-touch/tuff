@@ -3,7 +3,7 @@ title: "MarkdownView Markdown"
 description: "GitHub-flavored Markdown renderer with explicit sanitization and light/dark theme modes."
 category: Data
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [markdown, sanitize, theme]
 syncStatus: reviewed
 verified: true

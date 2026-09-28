@@ -3,7 +3,7 @@ title: "Stack"
 description: "Direction-first Flexbox wrapper for evenly spaced vertical or horizontal layouts."
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [stack, flex, layout]
 syncStatus: reviewed
 verified: true

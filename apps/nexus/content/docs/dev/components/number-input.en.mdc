@@ -3,7 +3,7 @@ title: NumberInput
 description: Numeric input with step controls, clamping, and precision normalization.
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.7
 tags: [number, input, form]
 syncStatus: reviewed
 verified: true

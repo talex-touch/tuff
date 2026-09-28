@@ -3,7 +3,7 @@ title: Switch 开关
 description: 轻触反馈与状态切换
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [switch, toggle, state]
 syncStatus: reviewed
 verified: true

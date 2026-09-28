@@ -3,7 +3,7 @@ title: Icon
 description: UnoCSS icon system and TuffIcon component
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [icon, glyph, visual]
 syncStatus: reviewed
 verified: true

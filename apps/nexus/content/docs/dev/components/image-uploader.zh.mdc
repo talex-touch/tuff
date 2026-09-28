@@ -3,7 +3,7 @@ title: "ImageUploader 图片上传"
 description: "受控图片选择器，支持本地预览、最大数量限制、删除控件和 object URL 清理。"
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [image, upload, form]
 syncStatus: reviewed
 verified: true

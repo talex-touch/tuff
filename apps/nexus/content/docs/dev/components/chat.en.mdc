@@ -3,7 +3,7 @@ title: "Chat"
 description: "AI message list and message primitives with Markdown, image attachments, staggered entry, and image click events."
 category: AiChat
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [chat, ai, markdown]
 syncStatus: reviewed
 verified: true

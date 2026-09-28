@@ -3,7 +3,7 @@ title: "Tabs"
 description: "Composable tab navigation with placement, grouped items, animated indicators, and measured content panels."
 category: Navigation
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [navigation, tabs, layout]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: "FileUploader 文件上传"
 description: "受控文件选择与拖拽上传组件，支持最大数量限制、文件列表渲染和删除事件。"
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [upload, file, form]
 syncStatus: reviewed
 verified: true

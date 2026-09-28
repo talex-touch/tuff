@@ -3,7 +3,7 @@ title: "Splitter"
 description: "Resizable two-pane layout with pointer and keyboard controls, clamped ratios, snapping, and horizontal or vertical direction."
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [layout, resize, panels]
 syncStatus: reviewed
 verified: true

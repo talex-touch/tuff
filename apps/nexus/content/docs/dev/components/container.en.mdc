@@ -3,7 +3,7 @@ title: Container
 description: Layout container with flexible options and responsive support
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [container, layout, grid]
 syncStatus: reviewed
 verified: true

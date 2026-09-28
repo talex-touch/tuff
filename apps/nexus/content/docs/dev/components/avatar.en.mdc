@@ -3,7 +3,7 @@ title: Avatar
 description: User avatars, identity fallbacks, status dots, custom shapes, and stacked avatar groups.
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [avatar, identity, profile]
 syncStatus: reviewed
 verified: true

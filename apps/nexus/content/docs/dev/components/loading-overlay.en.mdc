@@ -3,7 +3,7 @@ title: "LoadingOverlay"
 description: "A loading mask for blocking a container or the full screen while async work is running."
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [loading, overlay, mask]
 syncStatus: reviewed
 verified: true

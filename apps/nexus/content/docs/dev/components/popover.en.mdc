@@ -3,7 +3,7 @@ title: "Popover"
 description: "Semantic popover built directly on BaseAnchor."
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [popover, overlay, floating]
 syncStatus: reviewed
 verified: true

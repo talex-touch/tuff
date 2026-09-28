@@ -3,7 +3,7 @@ title: Tag
 description: Compact labels for categories, filters, semantic states, and removable metadata.
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [tag, label, badge]
 syncStatus: reviewed
 verified: true

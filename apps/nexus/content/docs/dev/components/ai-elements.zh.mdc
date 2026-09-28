@@ -3,7 +3,7 @@ title: AI Elements
 description: 用于 AI 对话界面的会话与消息基础组件。
 category: AiReasoning
 status: beta
-since: 1.0.0
+since: 0.3.9
 tags: [ai, conversation, message]
 syncStatus: reviewed
 verified: true

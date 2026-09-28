@@ -3,7 +3,7 @@ title: Dialog 对话框
 description: 关键确认与多形态对话框
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [dialog, modal, confirm]
 syncStatus: reviewed
 verified: true

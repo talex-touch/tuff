@@ -3,7 +3,7 @@ title: "FlatRadio 平铺选择器"
 description: "用于 2-5 个选项的平铺选择（`TxFlatRadio` + `TxFlatRadioItem`）。提供指示器滑动动画、键盘导航和完整的 TypeScript 类型支持。"
 category: Form
 status: beta
-since: 2.4.7
+since: 0.3.4
 tags: [select, flat, form, selection, inline]
 syncStatus: reviewed
 verified: true

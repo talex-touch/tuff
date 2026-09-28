@@ -3,7 +3,7 @@ title: "FlatRadio"
 description: "Inline flat selector for 2-5 options (`TxFlatRadio` + `TxFlatRadioItem`). Provides sliding indicator animation, keyboard navigation, and full TypeScript support."
 category: Form
 status: beta
-since: 2.4.7
+since: 0.3.4
 tags: [select, flat, form, selection, inline]
 syncStatus: reviewed
 verified: true
