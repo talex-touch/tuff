@@ -11,7 +11,7 @@ const SAFE_IDENTIFIER = /^[a-zA-Z0-9_.:-]{1,96}$/
 const SENSITIVE_CONTEXT_KEY =
   /(query|text|keyword|path|file|folder|url|email|token|secret|password|credential|clipboard|content|prompt|response|html|image|screenshot|body|payload|stack|trace|request|headers|cookie|sql|params)/i
 const UNSAFE_PUBLIC_MESSAGE =
-  /(\bselect\b|\binsert\b|\bdelete\b|\bupdate\b|\bparams?:|\/Users\/|\/home\/|[a-zA-Z]:\\)/i
+  /(\bselect\b|\binsert\b|\bdelete\b|\bupdate\s+[`"]?\w+[`"]?\s+set\b|\bparams?:|\/Users\/|\/home\/|[a-zA-Z]:\\)/i
 const DEFAULT_DEDUPE_WINDOW_MS = 60_000
 const MAX_DEDUPE_ENTRIES = 128
 

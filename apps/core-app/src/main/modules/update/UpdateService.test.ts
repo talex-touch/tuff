@@ -6,6 +6,7 @@ import { TalexEvents } from '../../core/eventbus/touch-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppPreviewChannel, UpdateProviderType } from '@talex-touch/utils'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
+import { UpdateLifecycleConflictError } from './update-lifecycle'
 
 type UpdateHandler = (payload?: unknown) => unknown | Promise<unknown>
 const originalResourcesPathDescriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
@@ -45,21 +46,37 @@ const mocks = vi.hoisted(() => {
       }))
     }))
   }
-  let activeLifecycle: Record<string, unknown> | null = null
-  let latestLifecycle: Record<string, unknown> | null = null
+  type MockLifecycleRecord = Record<string, unknown> & {
+    attemptId: string
+    revision: number
+    phase: string
+    error?: unknown
+    currentVersion?: string
+    targetVersion?: string | null
+    releaseTag?: string | null
+    taskId?: string | null
+    channel?: unknown
+    source?: unknown
+    installOnNormalQuit?: boolean
+    updatedAt?: number
+  }
+  const lifecyclesById = new Map<string, MockLifecycleRecord>()
+  let activeLifecycle: MockLifecycleRecord | null = null
+  let latestLifecycle: MockLifecycleRecord | null = null
   const lifecycleRepository = {
     reset: () => {
+      lifecyclesById.clear()
       activeLifecycle = null
       latestLifecycle = null
     },
     getActive: vi.fn(async () => activeLifecycle),
     getLatest: vi.fn(async () => latestLifecycle),
-    getById: vi.fn(async (attemptId: string) =>
-      latestLifecycle?.attemptId === attemptId ? latestLifecycle : null
-    ),
+    getById: vi.fn(async (attemptId: string) => lifecyclesById.get(attemptId) ?? null),
     getByDownloadTaskId: vi.fn(async (taskId: string) => {
-      const lifecycle = activeLifecycle ?? latestLifecycle
-      return lifecycle?.taskId === taskId ? lifecycle : null
+      for (const lifecycle of lifecyclesById.values()) {
+        if (lifecycle.taskId === taskId) return lifecycle
+      }
+      return null
     }),
     listTerminalAttempts: vi.fn(async (): Promise<Record<string, unknown>[]> => []),
     createChecking: vi.fn(
@@ -90,6 +107,7 @@ const mocks = vi.hoisted(() => {
           createdAt: now,
           updatedAt: now
         }
+        lifecyclesById.set(lifecycle.attemptId, lifecycle)
         activeLifecycle = lifecycle
         latestLifecycle = lifecycle
         return lifecycle
@@ -102,22 +120,26 @@ const mocks = vi.hoisted(() => {
         patch?: Record<string, unknown>
         now?: number
       }) => {
-        if (!latestLifecycle || latestLifecycle.attemptId !== input.attemptId) {
+        const existing = lifecyclesById.get(input.attemptId)
+        if (!existing) {
           throw new Error('Lifecycle attempt not found')
         }
         const now = input.now ?? Date.now()
         const lifecycle = {
-          ...latestLifecycle,
+          ...existing,
           ...input.patch,
-          revision: Number(latestLifecycle.revision) + 1,
+          revision: Number(existing.revision) + 1,
           phase: input.to,
-          error: input.to === 'failed' ? (input.patch?.error ?? latestLifecycle.error) : null,
+          error: input.to === 'failed' ? (input.patch?.error ?? existing.error) : null,
           updatedAt: now
         }
+        lifecyclesById.set(lifecycle.attemptId, lifecycle)
         latestLifecycle = lifecycle
-        activeLifecycle = ['idle', 'healthy', 'recovered', 'failed'].includes(input.to)
-          ? null
-          : lifecycle
+        if (activeLifecycle?.attemptId === lifecycle.attemptId) {
+          activeLifecycle = ['idle', 'healthy', 'recovered', 'failed'].includes(input.to)
+            ? null
+            : lifecycle
+        }
         return lifecycle
       }
     )
@@ -656,6 +678,182 @@ describe('UpdateServiceModule facade', () => {
         expect.objectContaining({ phase: 'ready', taskId: 'task-ready' })
       )
       expect(showUpdateReadyNotification).toHaveBeenCalledOnce()
+    } finally {
+      await service.onDestroy()
+    }
+  })
+
+  it('restores and fails an active attempt from a different application version', async () => {
+    const service = await createService()
+    const internal = service as unknown as {
+      restoreLifecycleState: () => Promise<void>
+    }
+    const created = await mocks.lifecycleRepository.createChecking({
+      id: 'attempt-stale-version',
+      currentVersion: '0.9.0',
+      channel: AppPreviewChannel.RELEASE,
+      installOnNormalQuit: true,
+      now: 100
+    })
+    await mocks.lifecycleRepository.transition({
+      attemptId: created.attemptId,
+      to: 'available',
+      patch: { targetVersion: '0.9.5', releaseTag: 'v0.9.5' }
+    })
+
+    try {
+      await internal.restoreLifecycleState()
+      const active = await mocks.lifecycleRepository.getActive()
+      expect(active).toBeNull()
+      const latest = await mocks.lifecycleRepository.getLatest()
+      expect(latest).toMatchObject({
+        attemptId: 'attempt-stale-version',
+        phase: 'failed',
+        error: expect.objectContaining({ code: 'UPDATE_ATTEMPT_STALE' })
+      })
+    } finally {
+      await service.onDestroy()
+    }
+  })
+
+  it('restores and fails an obsolete available attempt whose version is no longer a candidate', async () => {
+    const service = await createService()
+    const internal = service as unknown as {
+      restoreLifecycleState: () => Promise<void>
+    }
+    const created = await mocks.lifecycleRepository.createChecking({
+      id: 'attempt-obsolete-available',
+      currentVersion: '1.0.0',
+      channel: AppPreviewChannel.RELEASE,
+      installOnNormalQuit: true,
+      now: 100
+    })
+    // 1.0.0 is not a candidate for current version 1.0.0
+    await mocks.lifecycleRepository.transition({
+      attemptId: created.attemptId,
+      to: 'available',
+      patch: { targetVersion: '1.0.0', releaseTag: 'v1.0.0' }
+    })
+
+    try {
+      await internal.restoreLifecycleState()
+      const active = await mocks.lifecycleRepository.getActive()
+      expect(active).toBeNull()
+      const latest = await mocks.lifecycleRepository.getLatest()
+      expect(latest).toMatchObject({
+        attemptId: 'attempt-obsolete-available',
+        phase: 'failed',
+        error: expect.objectContaining({ code: 'UPDATE_ATTEMPT_OBSOLETE' })
+      })
+    } finally {
+      await service.onDestroy()
+    }
+  })
+
+  it('automatically supersedes a stale available attempt when marking a newer release available', async () => {
+    const service = await createService()
+    const internal = service as unknown as {
+      markAvailableLifecycle: (
+        release: { tag_name: string; source?: string },
+        channel: AppPreviewChannel
+      ) => Promise<{ attemptId: string; phase: string; releaseTag: string | null }>
+    }
+    const oldAttempt = await mocks.lifecycleRepository.createChecking({
+      id: 'old-available-attempt',
+      currentVersion: '1.0.0',
+      channel: AppPreviewChannel.RELEASE,
+      installOnNormalQuit: true,
+      now: 100
+    })
+    await mocks.lifecycleRepository.transition({
+      attemptId: oldAttempt.attemptId,
+      to: 'available',
+      patch: { targetVersion: '1.0.1', releaseTag: 'v1.0.1' }
+    })
+
+    try {
+      // Now a newer release arrives: v1.1.0
+      const nextAvailable = await internal.markAvailableLifecycle(
+        { tag_name: 'v1.1.0', source: 'nexus' },
+        AppPreviewChannel.RELEASE
+      )
+
+      expect(nextAvailable).toMatchObject({
+        phase: 'available',
+        releaseTag: 'v1.1.0'
+      })
+      expect(nextAvailable.attemptId).not.toBe('old-available-attempt')
+
+      // The old attempt must have been superseded to failed
+      const oldRecord = await mocks.lifecycleRepository.getById('old-available-attempt')
+      expect(oldRecord).toMatchObject({
+        phase: 'failed',
+        error: expect.objectContaining({ code: 'UPDATE_ATTEMPT_SUPERSEDED' })
+      })
+    } finally {
+      await service.onDestroy()
+    }
+  })
+
+  it('does not supersede a newer available attempt with an older release', async () => {
+    const service = await createService()
+    const internal = service as unknown as {
+      markAvailableLifecycle: (
+        release: { tag_name: string; source?: string },
+        channel: AppPreviewChannel
+      ) => Promise<unknown>
+    }
+    const current = await mocks.lifecycleRepository.createChecking({
+      id: 'newer-available-attempt',
+      currentVersion: '1.0.0',
+      channel: AppPreviewChannel.RELEASE,
+      installOnNormalQuit: true,
+      now: 100
+    })
+    await mocks.lifecycleRepository.transition({
+      attemptId: current.attemptId,
+      to: 'available',
+      patch: { targetVersion: '1.1.0', releaseTag: 'v1.1.0' }
+    })
+
+    try {
+      await expect(
+        internal.markAvailableLifecycle(
+          { tag_name: 'v1.0.5', source: 'nexus' },
+          AppPreviewChannel.RELEASE
+        )
+      ).rejects.toBeInstanceOf(UpdateLifecycleConflictError)
+      await expect(mocks.lifecycleRepository.getActive()).resolves.toMatchObject({
+        attemptId: 'newer-available-attempt',
+        phase: 'available',
+        releaseTag: 'v1.1.0'
+      })
+    } finally {
+      await service.onDestroy()
+    }
+  })
+
+  it('reports human-readable public error messages without falling back to generic redacted error', async () => {
+    const service = await createService()
+    const internal = service as unknown as {
+      reportUpdateError: (action: string, error: unknown) => string
+    }
+
+    try {
+      const conflictMsg = internal.reportUpdateError(
+        'download',
+        new UpdateLifecycleConflictError('internal compare-and-transition details')
+      )
+      expect(conflictMsg).toBe('Update lifecycle conflict. Please retry or check for updates.')
+
+      const networkMsg = internal.reportUpdateError('check', new Error('Network timeout'))
+      expect(networkMsg).toBe('Network timeout')
+
+      const sqlMsg = internal.reportUpdateError(
+        'check',
+        new Error('UPDATE public.accounts SET secret = 1')
+      )
+      expect(sqlMsg).toBe('Update check failed. Please retry.')
     } finally {
       await service.onDestroy()
     }
