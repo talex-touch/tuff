@@ -647,9 +647,8 @@ describe('useKeyboard ⌘K request', () => {
     expect(event.defaultPrevented).toBe(true)
     const request = lastShowRequest()
     expect(request.anchor).toBe('footer')
-    // Seven rows in six sections, five titled — more than the panel maximum, so the request
-    // reports the cap the window grows to.
-    expect(request.desiredPanelHeight).toBe(420)
+    // Seven rows in three sections, two titled.
+    expect(request.desiredPanelHeight).toBe(372)
     expect((request.builtinActions as Array<{ id: string }>).map((action) => action.id)).toEqual([
       '__corebox_primary__',
       'reveal-in-finder',

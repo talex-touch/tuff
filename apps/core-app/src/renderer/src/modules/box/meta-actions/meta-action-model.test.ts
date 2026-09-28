@@ -212,20 +212,18 @@ describe('buildMetaActionModel — one row per action', () => {
 
     expect(model.sections.map((section) => section.key)).toEqual([
       'primary',
+      'open',
       'group:open:常用设置',
-      'copy',
-      'flow',
-      'organize',
       'host'
     ])
-    expect(model.sections[1]!.title).toEqual({ text: '常用设置' })
+    expect(model.sections[2]!.title).toEqual({ text: '常用设置' })
     // A settings list is not an alternate way to run this item, so it has no ⌘↵.
     expect(model.rows.some((row) => row.role === 'secondary')).toBe(false)
   })
 })
 
 describe('buildMetaActionModel — groups, labels and icons', () => {
-  it('orders the groups primary / open / copy / flow / organize / host / plugin', () => {
+  it('orders the groups primary / open / host / plugin', () => {
     const request = {
       ...buildMetaShowRequest(APP_ITEM),
       pluginActions: [
@@ -241,18 +239,12 @@ describe('buildMetaActionModel — groups, labels and icons', () => {
     expect(model.sections.map((section) => section.slot)).toEqual([
       'primary',
       'open',
-      'copy',
-      'flow',
-      'organize',
       'host',
       'plugin'
     ])
     expect(model.sections.map((section) => section.title)).toEqual([
       null,
       { key: 'corebox.actions.groups.open' },
-      { key: 'corebox.actions.groups.copy' },
-      { key: 'corebox.actions.groups.flow' },
-      { key: 'corebox.actions.groups.organize' },
       { key: 'corebox.actions.groups.host' },
       { key: 'corebox.actions.groups.plugin' }
     ])
@@ -599,11 +591,11 @@ describe('resolveMetaActionShortcut', () => {
 
 describe('estimateMetaActionPanelHeight', () => {
   it('counts rows, titled sections and gaps with the shared geometry', () => {
-    // Clipboard: six rows in five sections, four of them titled.
-    // 40 header + (6 + 6 × 32 + 4 × 24 + 4 × 4 + 6) list + 40 filter.
+    // Clipboard: six rows in three sections, two of them titled.
+    // 40 header + (6 + 6 × 32 + 2 × 24 + 2 × 4 + 6) list + 40 filter.
     // Not the app item: its action list now needs more than the panel maximum, so it only
     // exercises the cap below.
-    expect(estimateMetaActionPanelHeight(build(CLIPBOARD_ITEM))).toBe(396)
+    expect(estimateMetaActionPanelHeight(build(CLIPBOARD_ITEM))).toBe(340)
   })
 
   it('caps a long action list at the panel maximum, where the list scrolls', () => {

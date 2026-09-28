@@ -31,21 +31,14 @@ import { CLIPBOARD_HISTORY_SOURCE_ID } from '../adapter/hooks/clipboard-history-
  */
 
 /** The panel's groups, in display order. The primary group carries no title. */
-export type MetaActionSlot = 'primary' | 'open' | 'copy' | 'organize' | 'flow' | 'host' | 'plugin'
+export type MetaActionSlot = 'primary' | 'open' | 'host' | 'plugin'
 
 /**
- * Section order in the panel: the row that runs the item, the commands that only read or copy it,
- * then the ones that change it, and last the app-level rows and whatever the plugin brings.
+ * Section order in the panel: the row that runs the item, everything the item can be asked to do
+ * under it, then the app-level rows and whatever the plugin brings. Item commands share one
+ * section — sub-grouping them by verb split four rows across four headings.
  */
-export const META_ACTION_SLOTS: readonly MetaActionSlot[] = [
-  'primary',
-  'open',
-  'copy',
-  'flow',
-  'organize',
-  'host',
-  'plugin'
-]
+export const META_ACTION_SLOTS: readonly MetaActionSlot[] = ['primary', 'open', 'host', 'plugin']
 
 export type MetaActionLabel = { key: string } | { text: string }
 
@@ -173,21 +166,21 @@ function isPinned(item: TuffItem): boolean {
 const BUILTIN_SPECS: Readonly<Record<string, HostActionSpec>> = {
   'reveal-in-finder': {
     slot: 'open',
-    rank: 10,
+    rank: 20,
     label: revealLabel,
     glyph: ({ platform }) => (platform === 'darwin' ? 'finder' : 'folder-open'),
     chord: { code: 'KeyO' }
   },
   'copy-title': {
-    slot: 'copy',
-    rank: 20,
+    slot: 'open',
+    rank: 60,
     label: key('corebox.actions.copyTitle'),
     glyph: glyph('copy-name'),
     chord: { code: 'KeyC', alt: true }
   },
   'toggle-pin': {
-    slot: 'organize',
-    rank: 10,
+    slot: 'open',
+    rank: 140,
     label: ({ item }) => ({
       key: isPinned(item) ? 'corebox.actions.unpin' : 'corebox.actions.pin'
     }),
@@ -197,22 +190,22 @@ const BUILTIN_SPECS: Readonly<Record<string, HostActionSpec>> = {
     chord: { mac: { code: 'Period' }, other: { code: 'Period', shift: true } }
   },
   [COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID]: {
-    slot: 'flow',
-    rank: 10,
+    slot: 'open',
+    rank: 110,
     label: key('corebox.actions.translateImage'),
     glyph: glyph('translate'),
     chord: { code: 'KeyT', shift: true }
   },
   [COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID]: {
-    slot: 'flow',
-    rank: 11,
+    slot: 'open',
+    rank: 120,
     label: key('corebox.actions.translateImagePin'),
     glyph: glyph('translate-pin'),
     chord: { code: 'KeyT', alt: true }
   },
   'flow-transfer': {
-    slot: 'flow',
-    rank: 20,
+    slot: 'open',
+    rank: 130,
     label: key('corebox.actions.flowTransfer'),
     glyph: glyph('flow'),
     chord: { code: 'KeyD', shift: true },
@@ -248,66 +241,66 @@ const PROVIDER_ACTION_SPECS: Readonly<Record<string, HostActionSpec>> = {
   // Primary actions. They are merged into the primary row when the request carries one.
   'open-file': {
     slot: 'open',
-    rank: 5,
+    rank: 10,
     label: key('corebox.actions.open'),
     glyph: glyph('external')
   },
-  'open-app': { slot: 'open', rank: 5, label: key('corebox.actions.open'), glyph: glyph('play') },
+  'open-app': { slot: 'open', rank: 10, label: key('corebox.actions.open'), glyph: glyph('play') },
   'open-url': {
     slot: 'open',
-    rank: 5,
+    rank: 10,
     label: key('corebox.actions.open'),
     glyph: glyph('external')
   },
-  open: { slot: 'open', rank: 5, label: key('corebox.actions.open'), glyph: glyph('external') },
-  paste: { slot: 'open', rank: 5, label: key('corebox.actions.paste'), glyph: glyph('paste') },
+  open: { slot: 'open', rank: 10, label: key('corebox.actions.open'), glyph: glyph('external') },
+  paste: { slot: 'open', rank: 10, label: key('corebox.actions.paste'), glyph: glyph('paste') },
   'preview-copy-primary': {
-    slot: 'copy',
-    rank: 5,
+    slot: 'open',
+    rank: 40,
     label: key('corebox.actions.copyResult'),
     glyph: glyph('copy')
   },
   'open-folder': {
     slot: 'open',
-    rank: 20,
+    rank: 30,
     label: key('corebox.actions.openFolder'),
     glyph: glyph('folder')
   },
   'file-copy-path': {
-    slot: 'copy',
-    rank: 10,
+    slot: 'open',
+    rank: 50,
     label: key('corebox.actions.copyPath'),
     glyph: glyph('copy-path'),
     chord: { code: 'KeyC', shift: true }
   },
-  copy: { slot: 'copy', rank: 10, label: key('corebox.actions.copy'), glyph: glyph('copy') },
+  copy: { slot: 'open', rank: 50, label: key('corebox.actions.copy'), glyph: glyph('copy') },
   'copy-url': {
-    slot: 'copy',
-    rank: 10,
+    slot: 'open',
+    rank: 50,
     label: key('corebox.actions.copyLink'),
     glyph: glyph('copy-link')
   },
   'file-copy-shell-path': {
-    slot: 'copy',
-    rank: 30,
+    slot: 'open',
+    rank: 70,
     label: key('corebox.actions.copyShellPath'),
     glyph: glyph('terminal')
   },
   'file-copy-url': {
-    slot: 'copy',
-    rank: 31,
+    slot: 'open',
+    rank: 80,
     label: key('corebox.actions.copyFileUrl'),
     glyph: glyph('copy-link')
   },
   'file-copy-windows-path': {
-    slot: 'copy',
-    rank: 32,
+    slot: 'open',
+    rank: 90,
     label: key('corebox.actions.copyWindowsPath'),
     glyph: glyph('copy-path')
   },
   'file-copy-wsl-path': {
-    slot: 'copy',
-    rank: 33,
+    slot: 'open',
+    rank: 100,
     label: key('corebox.actions.copyWslPath'),
     glyph: glyph('copy-path')
   }
@@ -317,18 +310,6 @@ const PROVIDER_ACTION_SPECS: Readonly<Record<string, HostActionSpec>> = {
 const PRIMARY_ALIAS_IDS = new Set(['preview-copy-primary'])
 
 type ActionType = TuffAction['type']
-
-const TYPE_SLOTS: Readonly<Record<ActionType, MetaActionSlot>> = {
-  execute: 'open',
-  open: 'open',
-  navigate: 'open',
-  preview: 'open',
-  custom: 'open',
-  copy: 'copy',
-  edit: 'organize',
-  delete: 'organize',
-  share: 'flow'
-}
 
 const TYPE_GLYPHS: Readonly<Record<ActionType, MetaActionGlyph>> = {
   execute: 'play',
@@ -356,9 +337,6 @@ const TYPE_LABEL_KEYS: Readonly<Record<ActionType, string>> = {
 
 const SLOT_TITLE_KEYS: Readonly<Record<Exclude<MetaActionSlot, 'primary'>, string>> = {
   open: 'corebox.actions.groups.open',
-  copy: 'corebox.actions.groups.copy',
-  organize: 'corebox.actions.groups.organize',
-  flow: 'corebox.actions.groups.flow',
   host: 'corebox.actions.groups.host',
   plugin: 'corebox.actions.groups.plugin'
 }
@@ -469,17 +447,17 @@ export function generateBuiltinActions(item: TuffItem): MetaAction[] {
   // this row is offered for any app that has a path, including a Store app whose
   // `shell:AppsFolder\…` id the reveal above cannot use but the page can still bind.
   if (item.kind === 'app' && resolveRevealPath(item)) {
-    actions.push(builtin(COREBOX_APP_BIND_SHORTCUT_ACTION_ID, 'Bind shortcut', 'open'))
+    actions.push(builtin(COREBOX_APP_BIND_SHORTCUT_ACTION_ID, 'Bind shortcut', 'host'))
   }
   if (item.render?.basic?.title) {
-    actions.push(builtin('copy-title', 'Copy name', 'copy'))
+    actions.push(builtin('copy-title', 'Copy name', 'open'))
   }
-  actions.push(builtin('toggle-pin', isPinned(item) ? 'Unpin' : 'Pin', 'organize'))
+  actions.push(builtin('toggle-pin', isPinned(item) ? 'Unpin' : 'Pin', 'open'))
   if (item.kind === 'image') {
-    actions.push(builtin(COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID, 'Translate image', 'flow'))
-    actions.push(builtin(COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID, 'Translate and pin', 'flow'))
+    actions.push(builtin(COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID, 'Translate image', 'open'))
+    actions.push(builtin(COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID, 'Translate and pin', 'open'))
   }
-  actions.push(builtin('flow-transfer', 'Transfer to plugin', 'flow'))
+  actions.push(builtin('flow-transfer', 'Transfer to plugin', 'open'))
   // Every item offers it: settings are about the app, not about whatever the row holds.
   actions.push(builtin('open-settings', 'Open settings', 'host'))
   return actions
@@ -668,7 +646,7 @@ export function buildMetaActionModel(
     const raw = findRaw(action.id)
     const spec = fromPlugin ? undefined : PROVIDER_ACTION_SPECS[action.id]
     const type = raw?.type
-    const slot = spec?.slot ?? (type ? TYPE_SLOTS[type] : undefined) ?? 'open'
+    const slot = spec?.slot ?? 'open'
     const group = text(raw?.group ?? action.render.group)
     const sectionKey = group ? `group:${slot}:${group}` : slot
     const ownIcon = fromPlugin ? (raw?.icon ?? action.render.basic.icon) : undefined

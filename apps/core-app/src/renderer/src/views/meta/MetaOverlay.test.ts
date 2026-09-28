@@ -413,9 +413,6 @@ describe('MetaOverlay panel', () => {
     ])
     expect(wrapper.findAll('.MetaPanel-SectionTitle').map((title) => title.text())).toEqual([
       'corebox.actions.groups.open',
-      'corebox.actions.groups.copy',
-      'corebox.actions.groups.flow',
-      'corebox.actions.groups.organize',
       'corebox.actions.groups.host'
     ])
     const panel = wrapper.get('.MetaPanel').element

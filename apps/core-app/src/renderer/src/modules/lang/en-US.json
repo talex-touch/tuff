@@ -6398,9 +6398,6 @@
       "failed": "Action failed",
       "groups": {
         "open": "Basic",
-        "copy": "Copy",
-        "organize": "Organize",
-        "flow": "Flow",
         "host": "App settings",
         "plugin": "Plugins"
       }

@@ -6398,9 +6398,6 @@
       "failed": "操作失败",
       "groups": {
         "open": "基本操作",
-        "copy": "复制",
-        "organize": "整理",
-        "flow": "流转",
         "host": "应用设置",
         "plugin": "插件"
       }
