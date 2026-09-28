@@ -234,7 +234,10 @@ export default defineConfig({
           // （darwin 上会先误加载 win32 的 .node，报 "slice is not valid mach-o file" 而回退到轮询）。
           // 外部化后交由 node_modules 里的运行时按平台加载正确的二进制。
           '@crosscopy/clipboard',
-          'extract-file-icon'
+          'extract-file-icon',
+          // fsevents wraps a native addon. Bundling its CommonJS loader converts that addon into
+          // an ESM namespace and leaves `flags.SinceNow` undefined at watcher registration.
+          'fsevents'
         ],
         exclude: [
           'chalk', // Chalk 5 为 ESM-only，主进程 CJS 必须内联以保留 default export

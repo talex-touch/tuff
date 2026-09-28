@@ -142,6 +142,13 @@ zero. Traversal exclusions apply at listing time, and `DEV_PATHS` are anchored t
 segments (`(^|/)out/`, not `out/`), with `~/go/pkg` and `~/OrbStack` excluded as
 home-anchored toolchain caches.
 
+Cold full scans prioritize foreground responsiveness over minimum completion time. After every
+persisted chunk, `FileProviderFullScanInsertService` yields at least 100 ms; a chunk at or above
+the existing 250 ms congestion threshold instead keeps the proportional capped backoff. The
+scanner's 500-record acknowledgement boundary carries this backpressure upstream, so do not add
+a second pending persistence chunk, remove the pause based only on throughput, or change ordered
+publication without a new isolated CPU/lag A/B. The AIMD ceiling remains independently measured.
+
 ### 10. Result rows obey the context-free directory rules at read time
 
 `fileFilterService.filterSearchItems` (applied to every provider's batch in the gather)
@@ -151,3 +158,7 @@ locations (minus `~/Library/Mobile Documents`, iCloud Drive). Context-dependent 
 (`build`, `dist`, `out`, …) are a walker's decision and are not judged here. This is
 what hides rows indexed under an older rule set while the budgeted cleanup (contract 8)
 retires them; do not "fix" a stale-row sighting by widening the cleanup budget.
+
+Generated Python dependency/cache directory names (`uvcache`, `__pycache__`, `site-packages`) are
+unconditional dev exclusions across traversal, watcher admission, writes, and read-time filtering.
+Ordinary context-dependent names such as `build` keep the sibling project-marker rule.

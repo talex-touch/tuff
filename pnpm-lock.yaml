@@ -618,6 +618,9 @@ importers:
       extract-file-icon:
         specifier: ^0.3.2
         version: 0.3.2
+      fsevents:
+        specifier: 2.3.3
+        version: 2.3.3
       uiohook-napi:
         specifier: ^1.5.5
         version: 1.5.5
