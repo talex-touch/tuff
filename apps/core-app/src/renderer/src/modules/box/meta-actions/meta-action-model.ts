@@ -31,7 +31,7 @@ import { CLIPBOARD_HISTORY_SOURCE_ID } from '../adapter/hooks/clipboard-history-
  */
 
 /** The panel's groups, in display order. The primary group carries no title. */
-export type MetaActionSlot = 'primary' | 'open' | 'copy' | 'organize' | 'flow' | 'plugin'
+export type MetaActionSlot = 'primary' | 'open' | 'copy' | 'organize' | 'flow' | 'host' | 'plugin'
 
 export const META_ACTION_SLOTS: readonly MetaActionSlot[] = [
   'primary',
@@ -39,6 +39,7 @@ export const META_ACTION_SLOTS: readonly MetaActionSlot[] = [
   'copy',
   'organize',
   'flow',
+  'host',
   'plugin'
 ]
 
@@ -62,6 +63,7 @@ export type MetaActionGlyph =
   | 'unpin'
   | 'shortcut'
   | 'flow'
+  | 'settings'
   | 'translate'
   | 'translate-pin'
   | 'navigate'
@@ -221,6 +223,15 @@ const BUILTIN_SPECS: Readonly<Record<string, HostActionSpec>> = {
     chord: { code: 'KeyD', shift: true },
     // Mod⇧D already opens Flow from the result list (`useKeyboard` → `corebox:flow-item`).
     runsFromList: false
+  },
+  'open-settings': {
+    slot: 'host',
+    rank: 10,
+    label: key('corebox.actions.openSettings'),
+    glyph: glyph('settings'),
+    // The MainWindow binds the same key to the same command (`main-window-command-catalog`), so the
+    // two windows agree on it; there it is a window-local chord, here CoreBox's own.
+    chord: { code: 'Comma' }
   }
 }
 
@@ -344,6 +355,7 @@ const SLOT_TITLE_KEYS: Readonly<Record<Exclude<MetaActionSlot, 'primary'>, strin
   copy: 'corebox.actions.groups.copy',
   organize: 'corebox.actions.groups.organize',
   flow: 'corebox.actions.groups.flow',
+  host: 'corebox.actions.groups.host',
   plugin: 'corebox.actions.groups.plugin'
 }
 
@@ -464,6 +476,8 @@ export function generateBuiltinActions(item: TuffItem): MetaAction[] {
     actions.push(builtin(COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID, 'Translate and pin', 'flow'))
   }
   actions.push(builtin('flow-transfer', 'Transfer to plugin', 'flow'))
+  // Every item offers it: settings are about the app, not about whatever the row holds.
+  actions.push(builtin('open-settings', 'Open settings', 'host'))
   return actions
 }
 

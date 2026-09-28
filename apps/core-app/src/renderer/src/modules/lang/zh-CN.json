@@ -6376,6 +6376,7 @@
       "translateImagePin": "翻译并置顶",
       "flowTransfer": "流转到其他插件",
       "bindShortcut": "绑定快捷键",
+      "openSettings": "打开设置",
       "open": "打开",
       "paste": "粘贴",
       "execute": "执行",
@@ -6400,6 +6401,7 @@
         "copy": "复制",
         "organize": "整理",
         "flow": "流转",
+        "host": "Tuff",
         "plugin": "插件"
       }
     },

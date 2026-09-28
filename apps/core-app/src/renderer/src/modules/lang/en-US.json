@@ -6376,6 +6376,7 @@
       "translateImagePin": "Translate and Pin",
       "flowTransfer": "Transfer to Plugin",
       "bindShortcut": "Bind Shortcut",
+      "openSettings": "Open Settings",
       "open": "Open",
       "paste": "Paste",
       "execute": "Run",
@@ -6400,6 +6401,7 @@
         "copy": "Copy",
         "organize": "Organize",
         "flow": "Flow",
+        "host": "Tuff",
         "plugin": "Plugins"
       }
     },

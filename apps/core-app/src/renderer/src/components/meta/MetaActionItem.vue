@@ -34,6 +34,7 @@ const GLYPH_CLASSES: Readonly<Record<MetaActionGlyph, string>> = {
   unpin: 'i-ri-unpin-line',
   shortcut: 'i-ri-keyboard-line',
   flow: 'i-ri-share-forward-line',
+  settings: 'i-ri-settings-3-line',
   translate: 'i-ri-translate-2',
   'translate-pin': 'i-ri-window-line',
   navigate: 'i-ri-arrow-right-up-line',
