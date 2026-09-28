@@ -1,0 +1,289 @@
+---
+title: "StatusHint 状态提示"
+description: "一行操作结果提示：带颗粒的语气色带从左缘涌现、向右渐隐，文字轻微放大后落定，换消息时逐字变换"
+category: Feedback
+status: beta
+since: 0.6.0
+tags: [hint, outcome, tone, morph, grain]
+syncStatus: reviewed
+verified: true
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxStatusHint } from '@talex-touch/tuffex/status-hint'
+  import '@talex-touch/tuffex/status-hint/style.css'
+  // 组件内部渲染 TxTextTransformer（它又渲染 TxTextMorph）和 TxIcon，它们的样式表需单独引入
+  import '@talex-touch/tuffex/text-transformer/style.css'
+  import '@talex-touch/tuffex/text-morph/style.css'
+  import '@talex-touch/tuffex/icon/style.css'
+  import '@talex-touch/tuffex/base.css' // 设计令牌与重置样式，全应用引入一次
+---
+:::
+
+## 用法
+
+`TxStatusHint` 用一行字说明操作的结果，比如「已复制」「已固定」「固定失败」。语气色带从左缘在文字背后涌现，文字轻微放大后落定，换消息时新文字从旧文字里逐字变换出来。
+
+### StatusHint
+
+三个按钮对应消息变化的三种情况：
+- 换成另一条消息：新文字从旧文字里逐字变换出来；
+- 同一条消息再来一次：每条消息都带新的 `pulseKey`，所以强调动画会重放；
+- 失败：色调切到 `danger`。
+
+每条消息 1.2 秒后清除，`<Transition name="tx-status-hint">` 让提示淡出：文字先走，色带随后。
+
+:::TuffDemoWrapper{demo="StatusHintStatusHintDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { onBeforeUnmount, ref } from 'vue'
+
+  interface Feedback { id: number, tone: 'success' | 'danger', message: string }
+
+  const pinned = ref(false)
+  const feedback = ref<Feedback | null>(null)
+  let lastId = 0
+  let timer: number | undefined
+
+  // 新消息替换当前消息，并重新开始 1.2 秒计时
+  function show(message: string, tone: Feedback['tone'] = 'success') {
+    feedback.value = { id: ++lastId, tone, message }
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => { feedback.value = null }, 1200)
+  }
+
+  function togglePin() {
+    pinned.value = !pinned.value
+    show(pinned.value ? '已固定' : '已取消固定')
+  }
+
+  onBeforeUnmount(() => window.clearTimeout(timer))
+  </script>
+
+  <template>
+    <TxButton size="sm" @click="togglePin">{{ pinned ? '取消固定' : '固定' }}</TxButton>
+    <TxButton size="sm" @click="show('已复制')">复制</TxButton>
+    <TxButton size="sm" @click="show('固定失败', 'danger')">模拟失败</TxButton>
+
+    <!-- 不按消息设 :key：提示保持挂载，新消息才会逐字变换 -->
+    <Transition name="tx-status-hint">
+      <TxStatusHint
+        v-if="feedback"
+        :text="feedback.message"
+        :tone="feedback.tone"
+        :pulse-key="feedback.id"
+        :live="false"
+      />
+    </Transition>
+    <!-- 提示和消息同时挂载，由常驻的播报区负责播报 -->
+    <span class="sr-only" role="status">{{ feedback?.message ?? '' }}</span>
+  </template>
+---
+:::
+
+### 色调
+
+- `success`、`warning`、`danger` 各取自己的 `--tx-color-*` 色相；`info` 用主色（primary）色相，和 `TxStatusBadge` 一致；`muted` 是中性灰，没有图标。
+- 色调只作用于色带和图标。文字在所有色调下都用主墨色，四套主题里对色带最浓处的对比度都不低于 9.79:1。
+- `md` 独占一行显示状态：13px 文字、16px 图标。`sm` 放在工具栏或顶栏里，和其他控件并排：12px 文字、14px 图标。
+
+:::TuffDemoWrapper{demo="StatusHintTonesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <!-- 静态陈列：没有会变化的消息要播报，所以关掉播报区 -->
+    <TxStatusHint tone="success" text="已复制" :live="false" />
+    <TxStatusHint tone="warning" text="仅保存在本地" :live="false" />
+    <TxStatusHint tone="danger" text="固定失败" :live="false" />
+    <TxStatusHint tone="info" text="已在浏览器中打开" :live="false" />
+    <TxStatusHint tone="muted" text="没有变化" :live="false" />
+
+    <TxStatusHint size="sm" tone="success" text="已复制" :live="false" />
+  </template>
+---
+:::
+
+### 摆放
+
+提示的宽度跟着文字走，最宽不超过容器。要让它贴着一条栏的边缘铺开，给组件加一个类，由它负责定位，并设置两个变量：
+- `--tx-status-hint-radius: 0`：色带和栏的边缘以直角相接；
+- `--tx-status-hint-pad-x`：让文字和栏自己的内边距对齐；它同时是末端淡出区的宽度。
+
+CoreBox 底栏就是这样摆的：提示覆盖 44px 底栏的左半边，消失时在回来的条目信息之上淡出，右侧的快捷键提示始终不动。顶栏里则用 `sm` 尺寸，行内排在行尾那组控件的最前面、按钮之前。这个类的权重要高于一个类，因为根元素以一个类的权重声明了 `position` 和 `--tx-status-hint-pad-x`；scoped 类的权重就够。
+
+:::TuffDemoWrapper{demo="StatusHintPlacementDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="footer">
+      <div v-if="!feedback" class="footer__item">备忘录 · 应用</div>
+      <Transition name="tx-status-hint">
+        <TxStatusHint
+          v-if="feedback"
+          class="footer__feedback"
+          :text="feedback.message"
+          :tone="feedback.tone"
+          :pulse-key="feedback.id"
+          :live="false"
+        />
+      </Transition>
+      <div class="footer__keys"><TxKbd>⌘K</TxKbd> 操作</div>
+    </div>
+  </template>
+
+  <style scoped>
+  /* 底栏是提示的包含块，并按自己的圆角裁切色带 */
+  .footer {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 44px;
+    padding: 0 12px;
+    overflow: hidden;
+    border-radius: 10px;
+  }
+
+  /* scoped 类的权重高于根元素的单类规则，与样式表的加载顺序无关 */
+  .footer__feedback {
+    --tx-status-hint-radius: 0;
+    --tx-status-hint-pad-x: 12px;
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 50%;
+    pointer-events: none;
+  }
+
+  /* 用 auto 外边距而不是 space-between：条目被换下时，快捷键保持原位 */
+  .footer__keys {
+    margin-left: auto;
+  }
+  </style>
+---
+:::
+
+### 最佳实践
+
+- 消息变化期间保持挂载。按消息设 `:key` 会让每条消息都重新挂载一次：入场重放，文字永远不会逐字变换。`v-if` 只用来表示「没有消息」，并包在 `<Transition name="tx-status-hint">` 里。
+- 把每条消息的 id 传给 `pulseKey`。不传的话，同一段文字连着出现两次，屏幕上毫无变化，第二次操作看起来像没生效。
+- 只放一行短文案，两到四个词。它不换行，更长的值会在末端内边距里淡出；很长的细节（比如 provider 返回的错误信息）放到能换行的地方。
+- 宿主让提示和消息一起挂载，或者已经有自己的播报区时，传 `live=false`，并从一个常驻的 `role="status"` 区域播报消息：挂载时就已经带着内容的 live region，不是每个读屏器都会播报。
+- 不要在组件上加 `role` 或 `aria-live`：透传属性落在根元素上，会把文字自己的播报区包在里面。用 `live`。
+- 把宿主自己的动效开关（低电量、应用设置）接到 `animated` 上。`prefers-reduced-motion: reduce` 不用额外接。
+- 让文字说清状态，色调和图标只是重复一遍。完成用 `success`，失败用 `danger`，没带来任何变化用 `muted`。
+- 一个界面只放一处。它不排队、不堆叠，也不会自己消失；需要这些时用 [Toast 提示](/docs/dev/components/toast)。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `text` | `string \| number` | - | 消息，一行短文案；必填。`animated` 时经 `TxTextTransformer` 的形变（380ms）渲染，新值从旧值里逐字变换出来；否则是纯文本 |
+| `tone` | `'success' \| 'warning' \| 'danger' \| 'info' \| 'muted'` | `'success'` | 色带和图标的颜色，复用 `StatusTone`。`info` 用主色色相；`muted` 是中性灰，没有默认图标 |
+| `size` | `'sm' \| 'md'` | `'md'` | `md`：13px 文字、16px 图标、`padding: 6px 10px`。`sm`：12px 文字、14px 图标、`padding: 3px 8px` |
+| `pulseKey` | `string \| number` | - | 挂载后它一变就重放强调。传每条消息的 id，同一段文字再次出现时也能看出是新消息。`text` 变化同样会重放；两者在同一次更新里一起变，只重放一次 |
+| `animated` | `boolean` | `true` | `false` 时直接显示终态：没有入场、没有重放、没有离场淡出，文字是纯文本，不启动形变引擎。`prefers-reduced-motion: reduce` 对动效有同样的效果，不需要额外设置 |
+| `live` | `boolean` | `true` | `true`：文字是 polite 播报区（`role="status"`、`aria-live="polite"`）。`false`：文字带 `aria-live="off"`，组件里不存在任何播报区，包括 `TxTextTransformer` 写死的那个 |
+
+### 事件
+
+没有自定义事件。其余属性和监听器都透传到根元素 `div` 上。
+
+### 插槽
+
+| 插槽 | 说明 |
+|------|------|
+| `icon` | 替换色调图标。渲染在同一个 `aria-hidden` 方框里，按图标尺寸定大小，以 `currentColor` 取色调颜色，入场和重放动画照常播放。这是给 `muted` 加图标的唯一方式 |
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `--tx-status-hint-radius` | `8px` | 提示及其色带的圆角；贴边摆放时设为 `0` |
+| `--tx-status-hint-pad-x` | `10px`；`sm` 为 `8px` | 左右内边距，也是末端淡出区的宽度 |
+| `--tx-status-hint-accent` | 色调颜色 | 色带和图标的颜色：`--tx-color-success`、`-warning` 或 `-danger`；`info` 用 `--tx-color-primary`；`muted` 用 `--tx-text-color-secondary` |
+| `--tx-status-hint-wash-strength` | `0.26`；暗色主题下 `0.2` | 色带左缘的不透明度（叠加颗粒之前）；38% 处降到它的 0.45 倍，右端为零 |
+
+- 组件自己从不设置 `--tx-status-hint-radius`，所以写在提示本身或任意祖先上的规则都会生效。
+- 其余三个由根元素以一个类的权重设置，色调规则和暗色主题规则则是两个类的权重。权重高于一个类的规则（scoped 类就够）在任何加载顺序下都能改写 `--tx-status-hint-pad-x`；`--tx-status-hint-accent` 和 `--tx-status-hint-wash-strength` 请用内联 `style`，或权重高于两个类的选择器。
+- `size` 还会设置 `--tx-status-hint-pad-y`（`6px` / `3px`）和 `--tx-status-hint-icon-size`（`16px` / `14px`）。它们属于尺寸档位，不供宿主使用。
+- `--tx-status-hint-spring` 和 `--tx-status-hint-spring-duration` 由组件在挂载后写到根元素上，宿主不要设置。
+
+## 概述
+
+- 根元素是 `div.tx-status-hint`，带 `tx-status-hint--{size}` 和 `is-{tone}`；`animated` 时另带 `is-animated`，每次重放在 `is-pulse-a` / `is-pulse-b` 之间交替。它是 `inline-flex`，并设了 `isolation: isolate`。
+- 内部依次是：
+  - 色带 `span.tx-status-hint__wash`：空元素，`aria-hidden="true"`，以 `z-index: -1`、`pointer-events: none` 铺满提示，画在根元素自身的背景之上、图标和文字之下；
+  - 图标框 `span.tx-status-hint__icon`，`aria-hidden="true"`；`muted` 没传 `icon` 插槽时不渲染；
+  - 文字 `.tx-status-hint__text`：`animated` 时是 `TxTextTransformer` 的根元素，否则是普通 `span`。两者都以左缘为原点缩放，朝图标方向落定。
+- 色带是色调颜色加一层遮罩：一道渐变（左缘为完整强度，38% 处为它的 0.45 倍，右端透明）与 140px 平铺的分形噪点求交。颗粒因此只存在于色带内部，不会给底色蒙上一层灰。只有支持 `mask-composite: intersect` 的环境才画色带；其他环境里没有色带，图标和文字照常渲染。
+- 文字 13px（`sm` 为 12px）、字重 600，不论什么色调都用 `--tx-text-color-primary`。
+- 提示不换行，也不加省略号。它最宽等于容器：更长的值会延伸进末端内边距，在那里淡出到透明，并在边缘被裁掉。
+- 挂载时（`animated` 且 `prefers-reduced-motion` 为 `no-preference`）：
+  - 色带从左缘由 0.3 倍宽度展开并淡入，680ms（`--tx-ease-out-strong`）；
+  - 图标从 0.4 倍放大、从 −30° 转正，走 bouncy 弹簧（746ms，过冲约 18%）；
+  - 文字从 1.18 倍落定，走同一个弹簧。第一帧就可读：文字不会从透明或模糊开始，淡入的只有装饰性的色带。
+- 挂载后 `text` 或 `pulseKey` 变化会重放强调：
+  - 文字在 460ms 的 30% 处放大到 1.12 倍、图标放大到 1.22 倍，然后回落；
+  - 色带从 0.45 的不透明度、0.72 倍宽度重新涌出，560ms；
+  - `is-pulse-a` 与 `is-pulse-b` 交替，所以每次变化都从头播放；同一次更新里两个属性都变，只重放一次；
+  - 入场途中到来的重放会接管入场。
+- `text` 变化时，文字还会经 `TxTextTransformer` 逐字形变（380ms），和重放同时进行。形变会动画文字的宽度，所以行内的提示会跟着伸缩；给定了宽度的提示不会。
+- 离场：样式表为用 `<Transition name="tx-status-hint">` 包裹提示的宿主准备了离场类。图标和文字 120ms 淡出，整个提示 240ms 淡出，文字先走，色带随后。只动不透明度：离场中的提示是否继续占着布局位置，由宿主决定。没有进场类，入场就是挂载动画本身。
+- `animated=false` 和 `prefers-reduced-motion: reduce` 都直接显示终态：
+  - 所有动画和过渡都写在 `@media (prefers-reduced-motion: no-preference)` 里、挂在 `.is-animated` 下，所有静止样式都是终帧，所以提示一出现就是完成态，离场时立即消失；
+  - `animated=false` 时文字是纯文本，也不会重放；只开减弱动效时，形变引擎仍然挂载，但每个新值都直接写入。
+  - 提示显示期间把 `animated` 从 `false` 切回 `true`，入场会重放一次，文字也从纯文本换回形变引擎。宿主的动效开关随电量翻转时就会遇到。
+- 播报：
+  - `live`（默认）：文字带 `role="status"` 和 `aria-live="polite"`，是组件里唯一的播报区；
+  - `live=false`：文字带 `aria-live="off"`、没有 role，组件内不存在任何播报区。`TxTextTransformer` 在根元素上写死了 `aria-live="polite"`，组件传下去的 `off` 会覆盖它，因为透传属性最后合并。
+- 暗色主题下（祖先带 `[data-theme='dark']` 或 `.dark`），色带强度降到 0.2。组件没有主题属性。
+- 服务端渲染：标记里有色调、尺寸、图标和文字，但没有弹簧，弹簧在挂载后才写到根元素上；在那之前样式表回退到 `620ms cubic-bezier(0.34, 1.56, 0.64, 1)`。水合结果一致。
+- 色带、颗粒和末端淡出都按物理方向从左往右画：从右到左排版的页面看到的是同一幅画面，不会镜像。
+
+## 技术实现
+
+- 源码：`packages/tuffex/packages/components/src/status-hint/src/TxStatusHint.vue`；`StatusHintProps`、`StatusHintSize` 在 `types.ts`；`StatusTone` 来自 `status-badge`。
+- 文字：`TxTextTransformer` 的默认形变模式，`durationMs` 为 380，没有另写一套文字动画引擎。`animated=false` 时换成普通 `span`，形变引擎和 Web Animations 都不会运行。
+- 弹簧：`liquid/src/spring.ts` 的 `resolveTransition('bouncy')`，也就是本库唯一的弹簧编译器（刚度 320、阻尼 17，编译成 746ms 的 `linear()` 曲线）。它在挂载后才解析，因为结果取决于 `CSS.supports`；在 setup 里解析的话，服务端标记和客户端首次渲染会写出不同的样式。
+- 重放不需要强制回流：`is-pulse-a` 与 `is-pulse-b` 指向两套内容相同的关键帧，动画名一变，CSS 动画就从头播放。
+- 颗粒：SVG `feTurbulence` 分形噪点（基频 0.85、3 个八度），用 `feFuncA`（斜率 1.6、截距 −0.2）拉开 alpha，140px 平铺，经 `mask-composite` 与渐变求交。噪点 alpha 平均约 0.6，所以 0.26 的左缘强度在亮色主题下读起来约 16%；暗色主题取 0.2，因为同样的色带在深色页面上更显眼。
+- 组件自身的动效只动合成层：`opacity`、`scale`、`rotate` 这几个独立属性，关键帧里不读自定义属性。唯一的尺寸动画来自形变引擎，作用在文字宽度上。
+- 动效只有一种写法：全部声明在 `@media (prefers-reduced-motion: no-preference)` 内、挂在 `.is-animated` 下，没有 `reduce` 块。每套关键帧只写起始帧或 30% 处的峰值，所以都结束在静止样式上。
+- 样式表不带 scoped。每个选择器和关键帧名都带 `tx-status-hint` 前缀，影响不到组件以外的元素；省掉 scope 属性和关键帧后缀，在 CSS 体积门禁下省出约 0.5 KiB，也让根规则保持一个类的权重：宿主权重高于一个类的规则（scoped 类就够）在任何加载顺序下都能覆盖它。
+- 对比度：文字始终用 `--tx-text-color-primary`。以色带最浓处为底（色调颜色按左缘强度叠在 `--tx-bg-color` 上，噪点取满 alpha），四套主题里最低是 9.79:1，出现在暗色主题的 `warning`。完整数据表写在源码注释里。
+- 这些数值于 2026-09-27 按同一 DOM 的原型，在亮、暗两种主题下标定。标定时否决过：
+  - 用 `soft-light` 把颗粒叠在色带上（`TxStatCard` 用 `overlay` 叠同一张噪点图）：在这个强度下像素只变化约 1%，放大到 2 倍也看不出；
+  - 噪点 alpha 保持原样（太弱），或拉得更开（斜率 2.4，像沙子）；
+  - 亮色左缘强度 0.12（几乎看不见）和 0.32（开始和文字抢眼），暗色 0.26（偏重）；
+  - 文字从 0.84 倍经 1.07 倍弹出（放大感弱），或走 smooth 弹簧从 1.10 倍落定（太轻）。
+- **实测覆盖：** 共 34 个用例。
+  - `status-hint/__tests__/status-hint.test.ts`（21 个）：尺寸与色调类；色带排在最前且对读屏隐藏；每种色调的内置图标、`muted` 没有图标、`icon` 插槽放在同一个隐藏方框里；数字作为 `text`；默认只有一个 polite 播报区，`live=false` 时一个都没有（包括覆盖掉 transformer 自带的 `aria-live`）；`animated` 时走形变引擎、跨消息保持同一个 transformer、`animated=false` 时是纯文本；每个新的 `pulseKey` 和每次 `text` 变化都会重放，两者同时变只重放一次，挂载时和非动画状态下不重放；弹簧在挂载后写入、不进服务端标记、水合没有不匹配。
+  - `status-hint/__tests__/status-hint-motion.test.ts`（13 个），基于 sass 编译后的样式：所有动画和过渡都在 `no-preference` 与 `.is-animated` 之下；静止样式都是终帧，唯一的隐藏态是离场的最后一帧；只动合成层属性，关键帧里没有 `var()`；两套重放关键帧完全相同；标定过的入场、重放与离场数值；色带的渐变加颗粒遮罩及其 `@supports` 条件；末端淡出；每个选择器和关键帧都带前缀；各色调取自对应 token；每个 `var()` 都有兜底值；两档尺寸；字重 600、无字距调整。
+
+## 使用场景
+
+- 在操作发生的地方说明结果：「已复制」「已固定」「固定失败」。
+- CoreBox 的操作反馈：显示在底栏，底栏不在屏时显示在顶栏。它就是为此设计的。
+
+## 相关组件
+
+- [Toast 提示](/docs/dev/components/toast)：全局通知队列，由一个宿主绘制，会堆叠、会定时消失；消息需要排队，或者要比触发它的界面留得更久时用它。
+- [Alert 警告](/docs/dev/components/alert)：带标题、正文和关闭按钮的行内横幅，以 `role="alert"` 播报；用于处理之后才该消失的状态。
+- [StatusBadge 状态徽标](/docs/dev/components/status-badge)：常驻屏幕的状态胶囊；StatusHint 沿用它的 `StatusTone` 取值。
+- [TextTransformer 文本变换](/docs/dev/components/text-transformer)：提示文字背后的文本引擎。
+
+<TuffDocSourceLink />

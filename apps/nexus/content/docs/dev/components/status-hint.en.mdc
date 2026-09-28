@@ -1,0 +1,289 @@
+---
+title: "StatusHint"
+description: "A one-line action outcome over a faint, grainy wash of its tone, whose words land from a slight scale-up and morph from one message to the next"
+category: Feedback
+status: beta
+since: 0.6.0
+tags: [hint, outcome, tone, morph, grain]
+syncStatus: reviewed
+verified: true
+---
+
+## Installation
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxStatusHint } from '@talex-touch/tuffex/status-hint'
+  import '@talex-touch/tuffex/status-hint/style.css'
+  // It renders TxTextTransformer (which renders TxTextMorph) and TxIcon, whose sheets are separate
+  import '@talex-touch/tuffex/text-transformer/style.css'
+  import '@talex-touch/tuffex/text-morph/style.css'
+  import '@talex-touch/tuffex/icon/style.css'
+  import '@talex-touch/tuffex/base.css' // tokens + resets, once per app
+---
+:::
+
+## Usage
+
+`TxStatusHint` says how an action went, in one line: "Copied", "Pinned", "Could not pin". A faint wash of its tone rises from the left edge behind the words, the words land from a slight scale-up, and a new message morphs out of the old one.
+
+### StatusHint
+
+The buttons show the three ways a message can change:
+- a different message morphs out of the old one, character by character;
+- the same message again replays the emphasis, because every message brings a new `pulseKey`;
+- a failure switches the tone to `danger`.
+
+Each message clears after 1.2s, and `<Transition name="tx-status-hint">` fades the hint out: the words first, then the wash.
+
+:::TuffDemoWrapper{demo="StatusHintStatusHintDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { onBeforeUnmount, ref } from 'vue'
+
+  interface Feedback { id: number, tone: 'success' | 'danger', message: string }
+
+  const pinned = ref(false)
+  const feedback = ref<Feedback | null>(null)
+  let lastId = 0
+  let timer: number | undefined
+
+  // A new message replaces the one on screen and restarts the 1.2s clock
+  function show(message: string, tone: Feedback['tone'] = 'success') {
+    feedback.value = { id: ++lastId, tone, message }
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => { feedback.value = null }, 1200)
+  }
+
+  function togglePin() {
+    pinned.value = !pinned.value
+    show(pinned.value ? 'Pinned' : 'Unpinned')
+  }
+
+  onBeforeUnmount(() => window.clearTimeout(timer))
+  </script>
+
+  <template>
+    <TxButton size="sm" @click="togglePin">{{ pinned ? 'Unpin' : 'Pin' }}</TxButton>
+    <TxButton size="sm" @click="show('Copied')">Copy</TxButton>
+    <TxButton size="sm" @click="show('Could not pin', 'danger')">Simulate a failure</TxButton>
+
+    <!-- No :key per message: the hint stays mounted, so a new message morphs -->
+    <Transition name="tx-status-hint">
+      <TxStatusHint
+        v-if="feedback"
+        :text="feedback.message"
+        :tone="feedback.tone"
+        :pulse-key="feedback.id"
+        :live="false"
+      />
+    </Transition>
+    <!-- The hint mounts with its message, so an always-mounted region announces it -->
+    <span class="sr-only" role="status">{{ feedback?.message ?? '' }}</span>
+  </template>
+---
+:::
+
+### Tones
+
+- `success`, `warning` and `danger` read their own `--tx-color-*` hue; `info` reads the primary hue, as `TxStatusBadge` does; `muted` is a neutral grey and has no icon.
+- The tone colours the wash and the icon only. The words keep the primary ink in every tone, at 9.79:1 or better against the densest part of the wash in all four theme blocks.
+- `md` is a status line of its own: 13px words and a 16px icon. `sm` sits in a toolbar or a header beside other controls: 12px words and a 14px icon.
+
+:::TuffDemoWrapper{demo="StatusHintTonesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <!-- A static gallery: no message changes to announce, so no live regions -->
+    <TxStatusHint tone="success" text="Copied" :live="false" />
+    <TxStatusHint tone="warning" text="Saved locally" :live="false" />
+    <TxStatusHint tone="danger" text="Could not pin" :live="false" />
+    <TxStatusHint tone="info" text="Opened in browser" :live="false" />
+    <TxStatusHint tone="muted" text="Nothing changed" :live="false" />
+
+    <TxStatusHint size="sm" tone="success" text="Copied" :live="false" />
+  </template>
+---
+:::
+
+### Placement
+
+The hint is as wide as its words and never wider than its container. To lay it flush along a bar, give the component a class that positions it and sets two properties:
+- `--tx-status-hint-radius: 0`, so the wash meets the bar's edge square;
+- `--tx-status-hint-pad-x`, to line the words up with the bar's own inset. It is also the width of the fade at the end.
+
+CoreBox's footer is laid out this way: the hint covers the left half of the 44px bar, fades out over the item it stood in for, and never moves the key hints on the right. In the header, the `sm` hint sits inline at the start of the row's trailing controls, ahead of its buttons. The class needs more weight than one class, because the root sets `position` and `--tx-status-hint-pad-x` at one class; a scoped class has it.
+
+:::TuffDemoWrapper{demo="StatusHintPlacementDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="footer">
+      <div v-if="!feedback" class="footer__item">Notes · Application</div>
+      <Transition name="tx-status-hint">
+        <TxStatusHint
+          v-if="feedback"
+          class="footer__feedback"
+          :text="feedback.message"
+          :tone="feedback.tone"
+          :pulse-key="feedback.id"
+          :live="false"
+        />
+      </Transition>
+      <div class="footer__keys"><TxKbd>⌘K</TxKbd> Actions</div>
+    </div>
+  </template>
+
+  <style scoped>
+  /* The bar is the hint's containing block, and clips the wash to its corners */
+  .footer {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 44px;
+    padding: 0 12px;
+    overflow: hidden;
+    border-radius: 10px;
+  }
+
+  /* A scoped class outweighs the root's one-class rule in any load order */
+  .footer__feedback {
+    --tx-status-hint-radius: 0;
+    --tx-status-hint-pad-x: 12px;
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 50%;
+    pointer-events: none;
+  }
+
+  /* An auto margin, not space-between, keeps the keys put while the item is swapped out */
+  .footer__keys {
+    margin-left: auto;
+  }
+  </style>
+---
+:::
+
+### Best Practices
+
+- Keep it mounted while messages change. A `:key` per message remounts it for every message, so the entrance plays again and the words never morph. Put `v-if` on it only for "no message", inside `<Transition name="tx-status-hint">`.
+- Pass each message's id as `pulseKey`. Without it, the same text arriving twice changes nothing on screen, and the second action looks as if it did nothing.
+- One short line, two to four words. It never wraps, and a longer value dissolves into the end padding; put long detail, such as a provider's error text, somewhere it can wrap.
+- Pass `live=false` when the host mounts the hint together with its message, or already has an announcer, and announce the message from a `role="status"` region that is always mounted. A live region inserted already filled is not announced by every screen reader.
+- Do not put `role` or `aria-live` on the component: attributes land on the root, around the words' own region. Use `live`.
+- Wire the host's own motion switch (low battery, an app setting) to `animated`. `prefers-reduced-motion: reduce` is honoured without it.
+- Let the words carry the state; the tone and its icon only repeat it. `success` for an action that completed, `danger` for one that failed, `muted` for one that changed nothing.
+- One hint per surface. It does not queue, stack or time out by itself; when messages have to, use [Toast](/docs/dev/components/toast).
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `text` | `string \| number` | - | The message, one short line. Required. While `animated`, it renders through `TxTextTransformer`'s morph (380ms), so a new value morphs out of the old one; otherwise it is plain text |
+| `tone` | `'success' \| 'warning' \| 'danger' \| 'info' \| 'muted'` | `'success'` | Colour of the wash and the icon, reusing `StatusTone`. `info` reads the primary hue; `muted` is a neutral grey with no default icon |
+| `size` | `'sm' \| 'md'` | `'md'` | `md`: 13px words, a 16px icon, `padding: 6px 10px`. `sm`: 12px words, a 14px icon, `padding: 3px 8px` |
+| `pulseKey` | `string \| number` | - | Replays the emphasis when it changes after mount. Pass each message's id, so the same text arriving again still reads as new. A `text` change replays it too; both changing in one update replay it once |
+| `animated` | `boolean` | `true` | `false` shows the end state at once: no entrance, no replay, no leave fade, and the words as plain text without the morph engine. `prefers-reduced-motion: reduce` has the same effect on the motion without it |
+| `live` | `boolean` | `true` | `true`: the words are a polite live region (`role="status"`, `aria-live="polite"`). `false`: they carry `aria-live="off"`, and the component contains no live region at all, including the one `TxTextTransformer` hard-codes |
+
+### Events
+
+No custom events. Other attributes and listeners fall through to the root `div`.
+
+### Slots
+
+| Slot | Description |
+|------|-------------|
+| `icon` | Replaces the tone's icon. It renders in the same `aria-hidden` box, sized to the icon size, takes the tone's colour as `currentColor`, and plays the same entrance and replay. It is the only way to give `muted` an icon |
+
+### CSS Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--tx-status-hint-radius` | `8px` | Corner radius of the hint and its wash; `0` for a hint laid flush along an edge |
+| `--tx-status-hint-pad-x` | `10px`; `sm` `8px` | Inline padding, and the width of the fade at the end |
+| `--tx-status-hint-accent` | the tone's colour | Colour of the wash and the icon: `--tx-color-success`, `-warning` or `-danger`; `--tx-color-primary` for `info`; `--tx-text-color-secondary` for `muted` |
+| `--tx-status-hint-wash-strength` | `0.26`; `0.2` under a dark theme | Alpha of the wash at its left edge, before the grain; 0.45 of it at 38%, and none at the right end |
+
+- The component never sets `--tx-status-hint-radius`, so a rule on the hint or on any ancestor applies.
+- The root sets the other three at one class's weight, and the tone and dark-theme rules at two. A class with more weight than one class (a scoped class counts) sets `--tx-status-hint-pad-x` in any load order; for `--tx-status-hint-accent` and `--tx-status-hint-wash-strength`, use an inline `style` or a selector heavier than two classes.
+- `size` also sets `--tx-status-hint-pad-y` (`6px` / `3px`) and `--tx-status-hint-icon-size` (`16px` / `14px`). They belong to the size tiers and are not meant for hosts.
+- The component writes `--tx-status-hint-spring` and `--tx-status-hint-spring-duration` onto the root after mount; hosts do not set them.
+
+## Overview
+
+- The root is `div.tx-status-hint` with `tx-status-hint--{size}` and `is-{tone}`, plus `is-animated` while `animated` and `is-pulse-a` / `is-pulse-b` on alternate replays. It is `inline-flex`, with `isolation: isolate`.
+- Inside it, in order:
+  - the wash, `span.tx-status-hint__wash`: empty and `aria-hidden="true"`, it fills the hint at `z-index: -1` with `pointer-events: none`, over anything painted on the root and under the icon and the words;
+  - the icon box, `span.tx-status-hint__icon`, `aria-hidden="true"`; absent for `muted` unless the `icon` slot is used;
+  - the words, `.tx-status-hint__text`: the `TxTextTransformer` root while `animated`, a plain `span` otherwise. Both scale from their left edge, towards the icon.
+- The wash is the tone's colour behind a mask: a gradient (full wash strength at the left edge, 0.45 of it at 38%, transparent at the right end) intersected with a 140px tile of fractal noise. The grain therefore exists only inside the tint and lays no grey veil over the surface. The wash is drawn only where `mask-composite: intersect` is supported; elsewhere there is none, and the icon and the words render as usual.
+- The words are 13px (`sm` 12px) at weight 600, in `--tx-text-color-primary` whatever the tone.
+- The hint never wraps and adds no ellipsis. It is at most as wide as its container: a longer value runs into the end padding, which fades to transparent, and is clipped at the edge.
+- On mount, while `animated` and `prefers-reduced-motion` is `no-preference`:
+  - the wash fades in and widens out of the left edge from 0.3× over 680ms (`--tx-ease-out-strong`);
+  - the icon grows from 0.4× and turns from −30° on the bouncy spring (746ms, overshooting by about 18%);
+  - the words land from 1.18× on the same spring. They are readable from the first frame: the words never start transparent or blurred; only the decorative wash fades in.
+- After mount, a change to `text` or `pulseKey` replays the emphasis:
+  - the words swell to 1.12× and the icon to 1.22× at 30% of 460ms, then settle;
+  - the wash blooms back from 0.45 opacity and 0.72× width over 560ms;
+  - `is-pulse-a` and `is-pulse-b` alternate, so every change restarts the animations; one update that changes both props replays once;
+  - a replay that lands during the entrance takes over from it.
+- A `text` change also morphs the words through `TxTextTransformer` (380ms, character by character), alongside the replay. The morph animates the width of the words, so an inline hint resizes with them; a hint given a fixed width does not.
+- Leaving: the stylesheet has leave classes for a host that wraps the hint in `<Transition name="tx-status-hint">`. The icon and the words fade out over 120ms and the whole hint over 240ms, so the words go first and the wash follows. It is opacity only: whether the leaving hint keeps its place in the layout is the host's call. There are no enter classes; the entrance is the mount animation.
+- `animated=false` and `prefers-reduced-motion: reduce` both show the end state:
+  - every animation and transition sits under `.is-animated` inside `@media (prefers-reduced-motion: no-preference)`, and every resting style is an end frame, so the hint appears complete and leaves at once;
+  - with `animated=false` the words are plain text and nothing replays; under reduced motion alone the morph engine stays mounted and writes each new value directly.
+  - Switching `animated` from `false` back to `true` while a hint is showing replays the entrance once and swaps the plain text back for the morph engine, as a host motion switch that follows the battery does.
+- Announcing:
+  - `live` (the default): the words carry `role="status"` and `aria-live="polite"`, the only live region in the component;
+  - `live=false`: they carry `aria-live="off"` and no role, and there is no live region anywhere inside. `TxTextTransformer` hard-codes `aria-live="polite"` on its root; the component's `off` replaces it, because fallthrough attributes are merged last.
+- Under a dark theme (an ancestor with `[data-theme='dark']` or `.dark`), the wash strength drops to 0.2. There is no theme prop.
+- Server rendering: the markup carries the tone, size, icon and words but no spring, which is written onto the root after mount. Until then the stylesheet falls back to `620ms cubic-bezier(0.34, 1.56, 0.64, 1)`. Hydration matches.
+- The wash, its grain and the end fade are drawn left to right in physical terms: a right-to-left page gets the same drawing, not a mirrored one.
+
+## Technologies
+
+- Source: `packages/tuffex/packages/components/src/status-hint/src/TxStatusHint.vue`; `StatusHintProps` and `StatusHintSize` in `types.ts`; `StatusTone` comes from `status-badge`.
+- Words: `TxTextTransformer` in its default morph mode, with `durationMs` 380; there is no second text-animation engine. `animated=false` swaps in a plain `span`, so no morph engine and no Web Animations run at all.
+- Spring: `resolveTransition('bouncy')` from `liquid/src/spring.ts`, the library's one spring compiler (stiffness 320, damping 17: a 746ms `linear()` curve). It resolves after mount because the result depends on `CSS.supports`; resolved during setup, it would put a different style into the server markup than into the first client render.
+- Replays restart without forcing a reflow: `is-pulse-a` and `is-pulse-b` name two keyframe sets with identical bodies, and a new animation name restarts a CSS animation.
+- Grain: SVG `feTurbulence` fractal noise (base frequency 0.85, three octaves), its alpha spread by `feFuncA` (slope 1.6, intercept −0.2), tiled at 140px and intersected with the gradient through `mask-composite`. The noise alpha averages about 0.6, so the 0.26 edge strength reads as roughly 16% in light themes; dark themes take 0.2, because the same tint reads louder on a dark page.
+- The component's own motion is compositor-only: `opacity`, `scale` and `rotate` as individual properties, and no keyframe reads a custom property. The one size animation is the morph engine's, on the width of the words.
+- One motion form: everything is declared inside `@media (prefers-reduced-motion: no-preference)` under `.is-animated`, with no `reduce` block. Each keyframe set names only its start frame or its 30% peak, so it ends on the resting style.
+- The stylesheet is not scoped. Every selector and keyframe name carries the `tx-status-hint` prefix, so nothing reaches past the component; leaving out the scope attribute and the keyframe suffixes saves about 0.5 KiB against the CSS size gate, and keeps the root rule at one class, which a host rule heavier than one class (a scoped class counts) outweighs in any load order.
+- Contrast: the words stay `--tx-text-color-primary`. Against the densest wash pixel (the edge strength of the accent over `--tx-bg-color`, noise at full alpha), the lowest across the four theme blocks is 9.79:1, `warning` in the dark theme. The table is in a source comment.
+- The values were calibrated on 2026-09-27 against a prototype of this DOM, in light and dark. Rejected there:
+  - grain blended over the tint with `soft-light` (`TxStatCard` blends the same noise tile with `overlay`): at this strength it moves the pixels by about 1% and cannot be seen even at 2×;
+  - the noise alpha left as generated (too faint), or spread harder with slope 2.4 (reads as sand);
+  - edge strengths of 0.12 (barely visible) and 0.32 (starts to compete with the words) in light, and 0.26 in dark (too heavy);
+  - the words popping in from 0.84× through 1.07× (the enlargement barely reads), or landing from 1.10× on the smooth spring (too faint).
+- **Verified coverage:** 34 tests.
+  - `status-hint/__tests__/status-hint.test.ts` (21): size and tone classes; the wash first and hidden; each tone's built-in icon, none for `muted`, and the `icon` slot in the same hidden box; a number as `text`; one polite region by default, and none at all with `live=false`, over the transformer's own `aria-live` too; the morph engine while `animated`, one transformer across messages, and plain text with `animated=false`; a replay on each new `pulseKey` and on a `text` change, once when both change, and none on mount or while not animated; the spring written after mount, kept out of server markup, and hydration without a mismatch.
+  - `status-hint/__tests__/status-hint-motion.test.ts` (13), on the sass-compiled style: every animation and transition under `no-preference` and `.is-animated`; resting styles as end frames, with the leave's last frame the only hidden state; only compositor properties, and no `var()` in keyframes; the two replay sets identical; the calibrated entrance, replay and leave; the wash's gradient-and-grain mask behind its `@supports`; the end fade; every selector and keyframe prefixed; each tone's token; a fallback on every `var()`; both size tiers; weight 600 and no tracking.
+
+## Use cases
+
+- The outcome of an action, shown where the action happened: "Copied", "Pinned", "Could not pin".
+- CoreBox's action feedback, in its footer, or in its header when the footer is not showing. It was built for this.
+
+## Related components
+
+- [Toast](/docs/dev/components/toast): a global queue of notifications that stack and time out, drawn by one host; for messages that have to queue, or outlive the surface that raised them.
+- [Alert](/docs/dev/components/alert): an inline banner with a title, a body and a close button, announced with `role="alert"`; for a state that stays until someone deals with it.
+- [StatusBadge](/docs/dev/components/status-badge): a status pill that stays on screen; StatusHint reuses its `StatusTone` names.
+- [TextTransformer](/docs/dev/components/text-transformer): the text engine behind the hint's words.
+
+<TuffDocSourceLink />

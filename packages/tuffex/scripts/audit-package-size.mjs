@@ -166,7 +166,15 @@ const LIMITS = {
   // (`borrowedStyleDeps` in packages/script/build/component-styles.ts). So the full bundle grew
   // by the new components alone while the on-demand set came down. Measured 615.9 KiB. Same
   // contract as every note above: actuals plus minimal headroom, growth from here fails.
-  fullCssBytes: 618 * 1024,
+  // 618 -> 623 on 2026-09-27: `status-hint` (TxStatusHint, .trellis/tasks/09-27-corebox-action-
+  // feedback-hint) ships its own stylesheet, 4.9 KiB (5054 B), and the full bundle went 616.1 ->
+  // 621.0 KiB with it and nothing else (the on-demand set moved by the same 4.9 KiB, 163 -> 164
+  // stylesheets, and stays under its limit). Checked for the inlining this limit exists to catch:
+  // the sheet carries only `.tx-status-hint*` rules and its own `tx-status-hint-*` keyframes, none
+  // of the text-transformer, text-morph or icon rules it reaches through style-deps. It slimmed
+  // before asking, 5.7 -> 4.9 KiB: unscoped as TxChoiceCard is, and no `-webkit-` mask duplicate.
+  // Same contract as every note above: actuals plus minimal headroom, growth from here fails.
+  fullCssBytes: 623 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
