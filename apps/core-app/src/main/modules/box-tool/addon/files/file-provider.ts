@@ -3626,8 +3626,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     options?: { manualForce?: boolean }
   ): Promise<typeof filesSchema.$inferInsert | null> {
     try {
-      const stats = await fs.stat(rawPath)
-      if (!stats.isFile()) return null
+      const stats = await fs.lstat(rawPath)
+      if (stats.isSymbolicLink() || !stats.isFile()) return null
 
       const manualForce = options?.manualForce === true
       const name = path.basename(rawPath)

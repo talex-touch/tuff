@@ -174,7 +174,8 @@ export class MacOSFileWatcher extends EventEmitter {
   private async loadNative(): Promise<NativeFileEvents> {
     if (process.platform !== 'darwin') throw new Error('Native file events require macOS')
     try {
-      return await import('fsevents')
+      const moduleName = 'fsevents'
+      return (await import(moduleName)) as NativeFileEvents
     } catch (cause) {
       const nestedCause =
         cause instanceof Error && cause.cause instanceof Error ? cause.cause : cause

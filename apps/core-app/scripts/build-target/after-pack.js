@@ -296,6 +296,25 @@ function verifyPackagedEverythingNative(context) {
     )}`
   )
 }
+function verifyPackagedMacFileEvents(context) {
+  if (context.electronPlatformName !== 'darwin') return
+
+  const resourcesDir = findPackagedResourcesDir(context.appOutDir, '[afterPack]')
+  if (!resourcesDir) {
+    throw new Error('[afterPack] Unable to locate packaged Resources for fsevents verification')
+  }
+  const nativePath = path.join(
+    resourcesDir,
+    'app.asar.unpacked',
+    'node_modules',
+    'fsevents',
+    'fsevents.node'
+  )
+  if (!fs.existsSync(nativePath)) {
+    throw new Error(`[afterPack] Packaged macOS file events backend is missing: ${nativePath}`)
+  }
+  console.log(`[afterPack] Verified packaged macOS file events backend: ${nativePath}`)
+}
 
 module.exports = async function afterPack(context) {
   ensureMacMainAppLsuiElement(context)
@@ -311,6 +330,7 @@ module.exports = async function afterPack(context) {
   })
   verifyPackagedEverythingNative(context)
   verifyPackagedNativeAddons(context)
+  verifyPackagedMacFileEvents(context)
   verifyPackagedOfficialPluginSeeds(context)
   pruneCrossPlatformFfprobeBinaries(context)
 
@@ -339,3 +359,4 @@ module.exports.pruneCrossPlatformFfprobeBinaries = pruneCrossPlatformFfprobeBina
 module.exports.verifyPackagedOfficialPluginSeeds = verifyPackagedOfficialPluginSeeds
 module.exports.verifyPackagedEverythingNative = verifyPackagedEverythingNative
 module.exports.verifyPackagedNativeAddons = verifyPackagedNativeAddons
+module.exports.verifyPackagedMacFileEvents = verifyPackagedMacFileEvents

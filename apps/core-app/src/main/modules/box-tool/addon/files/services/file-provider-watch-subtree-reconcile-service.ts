@@ -184,17 +184,7 @@ export class FileProviderWatchSubtreeReconcileService {
     return new FileWatchSubtreeService<ScannedFileInfo>({
       normalizePath: (rawPath) => normalizeCasePreservingPath(rawPath),
       isAdmitted: (rawPath) => this.isAdmittedFileWatchSubtreePath(rawPath),
-      pathExists: async (rawPath, signal) => {
-        signal?.throwIfAborted()
-        try {
-          await fs.stat(rawPath)
-          return true
-        } catch (error) {
-          const code = (error as NodeJS.ErrnoException).code
-          if (code === 'ENOENT' || code === 'ENOTDIR') return false
-          throw error
-        }
-      },
+      pathExists: (rawPath, signal) => this.pathExistsWithoutFinalSymlink(rawPath, signal),
       scan: (scope, signal) => this.scanFileWatchSubtree(scope, signal),
       upsert: async (_scope, records, signal) => {
         signal?.throwIfAborted()
@@ -313,12 +303,13 @@ export class FileProviderWatchSubtreeReconcileService {
     signal?.throwIfAborted()
     let stats
     try {
-      stats = await fs.stat(scope)
+      stats = await fs.lstat(scope)
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
       if (code === 'ENOENT' || code === 'ENOTDIR') return
       throw error
     }
+    if (stats.isSymbolicLink()) return
     if (!stats.isDirectory()) {
       const record = await this.buildFileRecord(scope)
       if (record) yield [record as ScannedFileInfo]
@@ -327,6 +318,20 @@ export class FileProviderWatchSubtreeReconcileService {
     yield* this.scanDirectoryBatchesWithWorker(scope, undefined, signal, undefined, {
       maxDepth: this.getRemainingWatchDepth(scope)
     })
+  }
+  private async pathExistsWithoutFinalSymlink(
+    rawPath: string,
+    signal?: AbortSignal
+  ): Promise<boolean> {
+    signal?.throwIfAborted()
+    try {
+      const stats = await fs.lstat(rawPath)
+      return !stats.isSymbolicLink()
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT' || code === 'ENOTDIR') return false
+      throw error
+    }
   }
 
   private getRemainingWatchDepth(scope: string): number {

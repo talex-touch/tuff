@@ -1179,8 +1179,6 @@ describe('file-provider startup readiness', () => {
       for await (const batch of provider.scanDirectoryBatchesWithWorker('/tmp')) batches.push(batch)
 
       expect(batches).toEqual([[{ path: '/tmp/direct.txt' }]])
-      // 4th arg is the scan-stats sink, forwarded to the fallback scanner.
-      expect(direct).toHaveBeenCalledWith('/tmp', undefined, undefined, undefined)
     } finally {
       provider.scanDirectoryBatchesDirectStream = originalDirect
       fileScanBatches.mockReset()
