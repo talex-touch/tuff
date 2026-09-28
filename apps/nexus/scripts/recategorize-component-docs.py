@@ -227,6 +227,9 @@ TAXONOMY: dict[str, list[str]] = {
         "fusion-surface",
         "liquid",
         "flip-overlay",
+        "image-generation",
+        "metal-fx",
+        "voice-beam",
     ],
     # Infrastructure that other components are built on; rarely used directly.
     "Primitives": [
@@ -262,6 +265,7 @@ TAXONOMY: dict[str, list[str]] = {
         "tool-confirmation",
         "approval-card",
         "working-indicator",
+        "bot-avatar",
     ],
     "AiReasoning": [
         "ai-elements",

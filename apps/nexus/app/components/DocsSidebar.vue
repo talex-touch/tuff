@@ -375,6 +375,9 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/fusion-surface',
     '/docs/dev/components/liquid',
     '/docs/dev/components/flip-overlay',
+    '/docs/dev/components/image-generation',
+    '/docs/dev/components/metal-fx',
+    '/docs/dev/components/voice-beam',
     // pro — Primitives
     '/docs/dev/components/base-surface',
     '/docs/dev/components/base-anchor',
@@ -404,6 +407,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/tool-confirmation',
     '/docs/dev/components/approval-card',
     '/docs/dev/components/working-indicator',
+    '/docs/dev/components/bot-avatar',
     // ai — AiReasoning
     '/docs/dev/components/ai-elements',
     '/docs/dev/components/chain-of-thought',

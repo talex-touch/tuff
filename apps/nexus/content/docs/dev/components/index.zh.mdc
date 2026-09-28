@@ -268,6 +268,9 @@ code: |
 - [FusionSurface 融合表面](./fusion-surface.zh.mdc)
 - [Liquid 液态流体](./liquid.zh.mdc)
 - [FlipOverlay 翻转遮罩](./flip-overlay.zh.mdc)
+- [ImageGeneration 生图占位](./image-generation.zh.mdc)
+- [MetalFx 液态金属](./metal-fx.zh.mdc)
+- [VoiceBeam 语音光束](./voice-beam.zh.mdc)
 
 ### 底层原语
 
@@ -305,6 +308,7 @@ AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifulu
 - [ToolConfirmation 工具授权](./tool-confirmation.zh.mdc)
 - [ApprovalCard 澄清问卷卡](./approval-card.zh.mdc)
 - [WorkingIndicator 工作指示器](./working-indicator.zh.mdc)
+- [BotAvatar 机器人头像](./bot-avatar.zh.mdc)
 
 ### 推理与生成
 
