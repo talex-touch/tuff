@@ -903,7 +903,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         return current
       }
 
-      if (current.phase === 'available') {
+      if (
+        current.phase === 'available' &&
+        (!current.releaseTag ||
+          this.compareSemverVersions(release.tag_name, current.releaseTag) === 1)
+      ) {
         updateLog.info(
           `Superseding stale available update attempt ${current.attemptId} (tag: ${current.releaseTag}) with newer release ${release.tag_name}`
         )
@@ -1685,7 +1689,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       if (
         msg.length > 0 &&
         msg.length <= 120 &&
-        !/(\/Users\/|\/home\/|[a-zA-Z]:\\|\bselect\b|\binsert\b|\bdelete\b|\bupdate\s+[`"]?\w+[`"]?\s+set\b)/i.test(
+        !/(\/Users\/|\/home\/|[a-zA-Z]:\\|\bselect\b|\binsert\b|\bdelete\b|\bupdate\s+(?:[`"]?\w+[`"]?\.)*[`"]?\w+[`"]?\s+set\b)/i.test(
           msg
         )
       ) {
