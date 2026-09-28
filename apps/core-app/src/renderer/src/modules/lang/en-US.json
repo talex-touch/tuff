@@ -6397,11 +6397,11 @@
       "empty": "No matching actions",
       "failed": "Action failed",
       "groups": {
-        "open": "Open",
+        "open": "Basic",
         "copy": "Copy",
         "organize": "Organize",
         "flow": "Flow",
-        "host": "Tuff",
+        "host": "App settings",
         "plugin": "Plugins"
       }
     },

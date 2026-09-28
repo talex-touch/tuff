@@ -147,8 +147,8 @@ describe('buildMetaActionModel — one row per action', () => {
       'copy-title',
       'file-copy-shell-path',
       'file-copy-url',
-      'toggle-pin',
       'flow-transfer',
+      'toggle-pin',
       'open-settings'
     ])
     // The provider's "Open" is not a second row: it merged, and the merged row runs the main
@@ -180,8 +180,8 @@ describe('buildMetaActionModel — one row per action', () => {
       COREBOX_PRIMARY_ACTION_ID,
       'copy',
       'copy-title',
-      'toggle-pin',
       'flow-transfer',
+      'toggle-pin',
       'open-settings'
     ])
     expect(model.rows[0]!.label).toEqual({ key: 'corebox.actions.paste' })
@@ -214,8 +214,8 @@ describe('buildMetaActionModel — one row per action', () => {
       'primary',
       'group:open:常用设置',
       'copy',
-      'organize',
       'flow',
+      'organize',
       'host'
     ])
     expect(model.sections[1]!.title).toEqual({ text: '常用设置' })
@@ -225,7 +225,7 @@ describe('buildMetaActionModel — one row per action', () => {
 })
 
 describe('buildMetaActionModel — groups, labels and icons', () => {
-  it('orders the groups primary / open / copy / organize / flow / host / plugin', () => {
+  it('orders the groups primary / open / copy / flow / organize / host / plugin', () => {
     const request = {
       ...buildMetaShowRequest(APP_ITEM),
       pluginActions: [
@@ -242,8 +242,8 @@ describe('buildMetaActionModel — groups, labels and icons', () => {
       'primary',
       'open',
       'copy',
-      'organize',
       'flow',
+      'organize',
       'host',
       'plugin'
     ])
@@ -251,11 +251,21 @@ describe('buildMetaActionModel — groups, labels and icons', () => {
       null,
       { key: 'corebox.actions.groups.open' },
       { key: 'corebox.actions.groups.copy' },
-      { key: 'corebox.actions.groups.organize' },
       { key: 'corebox.actions.groups.flow' },
+      { key: 'corebox.actions.groups.organize' },
       { key: 'corebox.actions.groups.host' },
       { key: 'corebox.actions.groups.plugin' }
     ])
+  })
+
+  it('files the app-level rows under the app settings group, not the open one', () => {
+    const model = build(APP_ITEM)
+    const sectionOf = (id: string) =>
+      model.sections.find((section) => section.rows.some((row) => row.id === id))?.slot
+
+    expect(sectionOf('app-bind-shortcut')).toBe('host')
+    expect(sectionOf('open-settings')).toBe('host')
+    expect(sectionOf('reveal-in-finder')).toBe('open')
   })
 
   it('shows host provider labels in the interface language and plugin labels as written', () => {

@@ -6397,11 +6397,11 @@
       "empty": "没有匹配的操作",
       "failed": "操作失败",
       "groups": {
-        "open": "打开",
+        "open": "基本操作",
         "copy": "复制",
         "organize": "整理",
         "flow": "流转",
-        "host": "Tuff",
+        "host": "应用设置",
         "plugin": "插件"
       }
     },

@@ -33,12 +33,16 @@ import { CLIPBOARD_HISTORY_SOURCE_ID } from '../adapter/hooks/clipboard-history-
 /** The panel's groups, in display order. The primary group carries no title. */
 export type MetaActionSlot = 'primary' | 'open' | 'copy' | 'organize' | 'flow' | 'host' | 'plugin'
 
+/**
+ * Section order in the panel: the row that runs the item, the commands that only read or copy it,
+ * then the ones that change it, and last the app-level rows and whatever the plugin brings.
+ */
 export const META_ACTION_SLOTS: readonly MetaActionSlot[] = [
   'primary',
   'open',
   'copy',
-  'organize',
   'flow',
+  'organize',
   'host',
   'plugin'
 ]
@@ -192,15 +196,6 @@ const BUILTIN_SPECS: Readonly<Record<string, HostActionSpec>> = {
     // toggle (Microsoft Pinyin, Sogou, fcitx), and with one on the page never sees the key.
     chord: { mac: { code: 'Period' }, other: { code: 'Period', shift: true } }
   },
-  [COREBOX_APP_BIND_SHORTCUT_ACTION_ID]: {
-    slot: 'open',
-    rank: 30,
-    label: key('corebox.actions.bindShortcut'),
-    glyph: glyph('shortcut'),
-    // No chord of its own, and no list path: main opens the applications page on the app, which
-    // is where a launch key is bound — the row answers ↵ like every other row in this group.
-    runsFromList: false
-  },
   [COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID]: {
     slot: 'flow',
     rank: 10,
@@ -224,9 +219,18 @@ const BUILTIN_SPECS: Readonly<Record<string, HostActionSpec>> = {
     // Mod⇧D already opens Flow from the result list (`useKeyboard` → `corebox:flow-item`).
     runsFromList: false
   },
-  'open-settings': {
+  [COREBOX_APP_BIND_SHORTCUT_ACTION_ID]: {
+    // App-level, not a way to run this item: main opens the applications page on the app, which
+    // is where a launch key is bound. No chord of its own, and no list path either.
     slot: 'host',
     rank: 10,
+    label: key('corebox.actions.bindShortcut'),
+    glyph: glyph('shortcut'),
+    runsFromList: false
+  },
+  'open-settings': {
+    slot: 'host',
+    rank: 20,
     label: key('corebox.actions.openSettings'),
     glyph: glyph('settings'),
     // The MainWindow binds the same key to the same command (`main-window-command-catalog`), so the
