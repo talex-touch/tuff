@@ -196,16 +196,17 @@ import { FileProviderScanStrategyService } from './services/file-provider-scan-s
 import { FileProviderAssetService } from './services/file-provider-asset-service'
 import { FileProviderSearchResultService } from './services/file-provider-search-result-service'
 import FileSystemWatcher from '../../file-system-watcher'
-import type {
-  FileIndexedSourceRuntimeMutationDelegate,
-  FileIndexedSourceRuntimeResetDelegate,
-  FileIndexedSourceScanResult,
-  FileIndexRunOptions,
-  FileIndexSyncStats,
-  FileProviderRuntimeWriteSnapshot,
-  FileUpdateRecord
+import {
+  createFileIndexSyncStats,
+  filterFileIndexCandidatesByProgress,
+  type FileIndexedSourceRuntimeMutationDelegate,
+  type FileIndexedSourceRuntimeResetDelegate,
+  type FileIndexedSourceScanResult,
+  type FileIndexRunOptions,
+  type FileIndexSyncStats,
+  type FileProviderRuntimeWriteSnapshot,
+  type FileUpdateRecord
 } from './file-provider-index-contracts'
-import { createFileIndexSyncStats } from './file-provider-index-contracts'
 import { resolveFileProviderBaseWatchPaths } from './file-provider-watch-paths'
 
 const fileProviderLog = getLogger('file-provider')
@@ -1171,11 +1172,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const progressRows = await this.dbUtils.getFileIndexProgressByFileIds(
       files.map((file) => file.id)
     )
-    const progressByFileId = new Map(progressRows.map((row) => [row.fileId, row.status]))
-    const indexingFiles = files.filter((file) => {
-      const status = progressByFileId.get(file.id)
-      return status === undefined || status === 'pending' || status === 'processing'
-    })
+    const indexingFiles = filterFileIndexCandidatesByProgress(files, progressRows)
     await this.writeSideEffectService.dispatch(
       files,
       {
