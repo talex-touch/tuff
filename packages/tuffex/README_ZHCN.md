@@ -143,6 +143,7 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 
 - 在线文档：[tuffex.tagzxia.com/docs/dev/tuffex](https://tuffex.tagzxia.com/docs/dev/tuffex)
 - 本地文档预览：`pnpm -C "apps/nexus" run dev`
+- 组件更新日志与引入版本索引：[CHANGELOG.md](./CHANGELOG.md)
 
 ## 开发
 
@@ -155,6 +156,7 @@ pnpm -C "packages/tuffex" run build
 pnpm -C "packages/tuffex" run audit:size
 pnpm -C "packages/tuffex" run audit:exports
 pnpm -C "packages/tuffex" run audit:types
+pnpm -C "packages/tuffex" run audit:changelog
 ```
 
 ## 与 Tuff 的关系

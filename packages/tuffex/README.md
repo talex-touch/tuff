@@ -147,6 +147,7 @@ Reference:
 
 - Online docs: [tuffex.tagzxia.com/docs/dev/tuffex](https://tuffex.tagzxia.com/docs/dev/tuffex)
 - Local docs preview: `pnpm -C "apps/nexus" run dev`
+- Component Changelog & Since Index: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Development
 
@@ -159,6 +160,7 @@ pnpm -C "packages/tuffex" run build
 pnpm -C "packages/tuffex" run audit:size
 pnpm -C "packages/tuffex" run audit:exports
 pnpm -C "packages/tuffex" run audit:types
+pnpm -C "packages/tuffex" run audit:changelog
 ```
 
 ## Integration with Tuff
