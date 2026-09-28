@@ -2,7 +2,7 @@ import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
 import type { CoreBoxMetaActionEventDetail } from '../../meta-actions/meta-action-model'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showCoreBoxFooterFeedback } from '../../meta-actions/footer-feedback'
@@ -158,6 +158,17 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
       case 'flow-transfer':
         if (openFlowSelector) openFlowSelector(targetItem)
         break
+      case 'open-settings': {
+        // Settings live in the main window, which main reveals and routes; CoreBox then hides so
+        // the reveal is what the user sees. Asked for first, so the reveal is already in flight
+        // when the search window goes away.
+        const opened = await transport
+          .send(AppEvents.window.openSettings, undefined)
+          .catch(() => false)
+        if (!opened) actionPanelLog.error('Settings destination unavailable')
+        await transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
+        break
+      }
       case COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID: {
         const response = await transport.send(coreBoxImageTranslateEvent, {
           item: JSON.parse(JSON.stringify(targetItem)),

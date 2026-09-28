@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>TxStatusHint prototype — CoreBox action feedback</title>
+<!--
+  Calibration prototype for 09-27-corebox-action-feedback-hint (planning research, not shipped).
+  Mirrors the proposed TxStatusHint DOM/CSS so the numbers chosen here carry over verbatim.
+  Frames are frozen with a negative animation-delay + paused play state, so one screenshot
+  shows a whole entrance. The spring curves are compiled by a copy of liquid/src/spring.ts
+  simulate(), so they match what the component will get from resolveTransition().
+  Theme values: tuffex style/variables.scss `:root` and `.dark` blocks.
+-->
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased; }
+.cols { display: grid; grid-template-columns: 760px 760px; }
+.theme { padding: 12px 20px 24px; }
+.light {
+  background: #e6e6ea; color: #303133;
+  --tx-color-success: #67c23a; --tx-color-danger: #f56c6c; --tx-color-warning: #e6a23c; --tx-color-primary: #409eff;
+  --tx-text-color-primary: #303133; --tx-text-color-secondary: #909399;
+  --footer-bg: #fafafa; --line: #ebeef5; --key-bg: #f0f2f5; --header-bg: #ffffff;
+}
+.dark {
+  background: #0e0e10; color: #e5eaf3;
+  --tx-color-success: #4ade80; --tx-color-danger: #f87171; --tx-color-warning: #fbbf24; --tx-color-primary: #409eff;
+  --tx-text-color-primary: #e5eaf3; --tx-text-color-secondary: #a3a6ad;
+  --footer-bg: #1d1d1d; --line: #363637; --key-bg: #303030; --header-bg: #262727;
+}
+section { margin-top: 10px; }
+h2 { font-size: 12px; font-weight: 600; margin: 10px 0 6px; opacity: .8; }
+.cap { font-size: 10px; opacity: .55; margin: 0 0 2px; font-variant-numeric: tabular-nums; }
+.row { margin-bottom: 6px; }
+
+/* CoreBox footer mock: 720 x 44, px-3, hints on the right */
+.footer {
+  position: relative; width: 720px; height: 44px; overflow: hidden;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px;
+  background: var(--footer-bg); border-top: 1px solid var(--line); border-radius: 0 0 10px 10px;
+  font-size: 12px; color: var(--tx-text-color-secondary);
+}
+.hints { display: flex; gap: 12px; align-items: center; margin-left: auto; }
+.hint { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+.key { min-width: 24px; padding: 2px 6px; border-radius: 6px; background: var(--key-bg); color: var(--tx-text-color-primary); font-weight: 600; font-size: 12px; text-align: center; }
+.item { display: flex; align-items: center; gap: 8px; }
+.item-icon { width: 20px; height: 20px; border-radius: 5px; background: linear-gradient(135deg, #5ac8fa, #007aff); }
+.item-title { font-weight: 600; color: var(--tx-text-color-primary); }
+
+/* CoreBox header mock (plugin UI mode): input on the left, Configure on the right */
+.header {
+  width: 720px; height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 12px;
+  background: var(--header-bg); border-radius: 10px; font-size: 16px;
+}
+.header .input { flex: 1; color: var(--tx-text-color-secondary); }
+.header .configure { display: flex; align-items: center; gap: 4px; min-width: 0; }
+
+/* ===================== proposed TxStatusHint ===================== */
+.tx-status-hint {
+  --tx-status-hint-accent: var(--tx-color-success, #67c23a);
+  --tx-status-hint-wash-strength: 0.16;
+  --tx-status-hint-grain: 0.5;
+  --tx-status-hint-pad-x: 10px;
+  --tx-status-hint-pad-y: 6px;
+  position: relative; isolation: isolate;
+  display: inline-flex; align-items: center; gap: 6px;
+  max-width: 100%;
+  padding: var(--tx-status-hint-pad-y) var(--tx-status-hint-pad-x);
+  border-radius: var(--tx-status-hint-radius, 8px);
+  overflow: hidden;
+  /* The end padding fades: a value too long for the box dissolves instead of being cut. */
+  -webkit-mask-image: linear-gradient(to left, transparent, #000 var(--tx-status-hint-pad-x));
+  mask-image: linear-gradient(to left, transparent, #000 var(--tx-status-hint-pad-x));
+  color: var(--tx-text-color-primary);
+  font-size: 13px; line-height: 18px; font-weight: 600; white-space: nowrap;
+}
+.tx-status-hint.is-danger { --tx-status-hint-accent: var(--tx-color-danger, #f56c6c); }
+.tx-status-hint--sm { --tx-status-hint-pad-x: 8px; --tx-status-hint-pad-y: 3px; gap: 5px; font-size: 12px; line-height: 16px; }
+
+.tx-status-hint__wash {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit;
+  background-color: var(--tx-status-hint-accent);
+  -webkit-mask-image: linear-gradient(to right,
+    rgb(0 0 0 / var(--tx-status-hint-wash-strength)) 0%,
+    rgb(0 0 0 / calc(var(--tx-status-hint-wash-strength) * 0.45)) 38%,
+    transparent 100%);
+  mask-image: linear-gradient(to right,
+    rgb(0 0 0 / var(--tx-status-hint-wash-strength)) 0%,
+    rgb(0 0 0 / calc(var(--tx-status-hint-wash-strength) * 0.45)) 38%,
+    transparent 100%);
+  transform-origin: 0 50%;
+}
+/* Grain rides the hue: soft-light over the opaque accent inside the masked group. */
+.tx-status-hint__wash::after {
+  content: ''; position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+  opacity: var(--tx-status-hint-grain);
+  mix-blend-mode: soft-light;
+}
+.no-grain .tx-status-hint__wash::after { display: none; }
+
+/* G1: the grain is the wash's own alpha — gradient ∩ noise — so it lives only inside the tint
+   and adds no grey veil. The noise's alpha is pushed apart by feFuncA (slope/intercept). */
+.g1 .tx-status-hint__wash::after { display: none; }
+.g1 .tx-status-hint__wash {
+  mask-image:
+    linear-gradient(to right,
+      rgb(0 0 0 / var(--tx-status-hint-wash-strength)) 0%,
+      rgb(0 0 0 / calc(var(--tx-status-hint-wash-strength) * 0.45)) 38%,
+      transparent 100%),
+    var(--noise);
+  mask-size: 100% 100%, 140px 140px;
+  mask-repeat: no-repeat, repeat;
+  mask-composite: intersect;
+}
+.g1a { --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.g1b { --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='1.6' intercept='-0.2'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.g1c { --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='2.4' intercept='-0.6'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
+.tx-status-hint__icon { display: inline-flex; flex: none; width: 16px; height: 16px; color: var(--tx-status-hint-accent); }
+.tx-status-hint--sm .tx-status-hint__icon { width: 14px; height: 14px; }
+.tx-status-hint__icon svg { width: 100%; height: 100%; fill: currentColor; }
+.tx-status-hint__text { display: inline-block; min-width: 0; transform-origin: 0 50%; }
+
+@keyframes tx-status-hint-wash-in { from { opacity: 0; scale: 0.3 1; } to { opacity: 1; scale: 1 1; } }
+@keyframes tx-status-hint-icon-in { from { scale: 0.4; rotate: -30deg; } to { scale: 1; rotate: 0deg; } }
+@keyframes tx-status-hint-text-land { from { scale: 1.18; } to { scale: 1; } }
+@keyframes tx-status-hint-text-land-soft { from { scale: 1.1; } to { scale: 1; } }
+@keyframes tx-status-hint-text-pop { 0% { scale: 0.84; } 55% { scale: 1.07; } 100% { scale: 1; } }
+@keyframes tx-status-hint-text-pulse { 0% { scale: 1; } 30% { scale: 1.12; } 100% { scale: 1; } }
+@keyframes tx-status-hint-icon-pulse { 0% { scale: 1; } 30% { scale: 1.22; } 100% { scale: 1; } }
+@keyframes tx-status-hint-wash-bloom { from { opacity: 0.45; scale: 0.72 1; } to { opacity: 1; scale: 1 1; } }
+
+.is-animated .tx-status-hint__wash { animation: tx-status-hint-wash-in 680ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.is-animated .tx-status-hint__icon { animation: tx-status-hint-icon-in var(--bouncy-ms) var(--bouncy) both; }
+.is-animated.v-land .tx-status-hint__text { animation: tx-status-hint-text-land var(--bouncy-ms) var(--bouncy) both; }
+.is-animated.v-soft .tx-status-hint__text { animation: tx-status-hint-text-land-soft var(--smooth-ms) var(--smooth) both; }
+.is-animated.v-pop .tx-status-hint__text { animation: tx-status-hint-text-pop 420ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.is-animated.is-pulse .tx-status-hint__text { animation: tx-status-hint-text-pulse 460ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.is-animated.is-pulse .tx-status-hint__icon { animation: tx-status-hint-icon-pulse 460ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+.is-animated.is-pulse .tx-status-hint__wash { animation: tx-status-hint-wash-bloom 560ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+
+/* Recommended (calibrated 2026-09-27): G1b noise-in-the-mask, strength 0.26 light / 0.20 dark. */
+.light .tx-status-hint { --tx-status-hint-wash-strength: 0.26; }
+.dark .tx-status-hint { --tx-status-hint-wash-strength: 0.2; }
+.rec .tx-status-hint__wash::after { display: none; }
+.rec .tx-status-hint__wash {
+  mask-image:
+    linear-gradient(to right,
+      rgb(0 0 0 / var(--tx-status-hint-wash-strength)) 0%,
+      rgb(0 0 0 / calc(var(--tx-status-hint-wash-strength) * 0.45)) 38%,
+      transparent 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='linear' slope='1.6' intercept='-0.2'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mask-size: 100% 100%, 140px 140px;
+  mask-repeat: no-repeat, repeat;
+  mask-composite: intersect;
+}
+
+/* A frozen frame at --t. */
+.frame * { animation-play-state: paused !important; animation-delay: calc(var(--t) * -1) !important; }
+
+/* CoreBox wrapper placement: the footer copy is an overlay on the footer's left half. */
+.footer > .cb-hint { position: absolute; inset-block: 0; left: 0; width: 50%; --tx-status-hint-radius: 0px; --tx-status-hint-pad-x: 12px; }
+</style>
+</head>
+<body>
+<div class="cols" id="cols"></div>
+<script>
+// Copy of packages/tuffex/packages/components/src/liquid/src/spring.ts simulate().
+const DT = 1 / 240
+function simulate(c) {
+  let x = 0, v = 0, t = 0, settledAt = -1, max = 0
+  const xs = [0]
+  while (t < 10) {
+    const a = (-c.stiffness * (x - 1) - c.damping * v) / c.mass
+    v += a * DT; x += v * DT; t += DT
+    xs.push(x)
+    if (x > max) max = x
+    if (Math.abs(x - 1) < 0.001 && Math.abs(v) < 0.02) {
+      if (settledAt < 0) settledAt = t
+      if (t - settledAt >= 0.064) break
+    } else settledAt = -1
+  }
+  const duration = settledAt > 0 ? settledAt : t
+  const n = Math.round(Math.min(120, Math.max(24, duration * 90)))
+  const lastIdx = Math.min(xs.length - 1, duration / DT)
+  const values = []
+  for (let i = 0; i <= n; i++) {
+    const idx = Math.min(xs.length - 1, Math.round((i / n) * lastIdx))
+    values.push(Math.round(xs[idx] * 1e4) / 1e4)
+  }
+  values[values.length - 1] = 1
+  return { ms: Math.round(duration * 1000), easing: `linear(${values.join(', ')})`, peak: max }
+}
+const bouncy = simulate({ stiffness: 320, damping: 17, mass: 1 })
+const smooth = simulate({ stiffness: 190, damping: 26, mass: 1 })
+const root = document.documentElement.style
+root.setProperty('--bouncy', bouncy.easing); root.setProperty('--bouncy-ms', bouncy.ms + 'ms')
+root.setProperty('--smooth', smooth.easing); root.setProperty('--smooth-ms', smooth.ms + 'ms')
+window.__springs = { bouncy: { ms: bouncy.ms, peak: bouncy.peak }, smooth: { ms: smooth.ms, peak: smooth.peak } }
+
+// Remix icons, as CoreBox passes them through the icon slot.
+const ICON = {
+  success: '<svg viewBox="0 0 24 24"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10Zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm-.997-4L6.76 11.757l1.414-1.414 2.829 2.829 5.656-5.657 1.415 1.414L11.003 16Z"/></svg>',
+  danger: '<svg viewBox="0 0 24 24"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10Zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm-1-5h2v2h-2v-2Zm0-8h2v6h-2V7Z"/></svg>',
+}
+
+function hint({ tone = 'success', text = '已取消固定', size = 'md', variant = 'v-land', animated = true, pulse = false, strength, grain = true, g = '', cls = '' }) {
+  const style = strength == null ? '' : `style="--tx-status-hint-wash-strength:${strength}"`
+  return `<div class="tx-status-hint tx-status-hint--${size} is-${tone} ${variant} ${animated ? 'is-animated' : ''} ${pulse ? 'is-pulse' : ''} ${grain ? '' : 'no-grain'} ${g} ${cls}" ${style}>`
+    + `<span class="tx-status-hint__wash"></span>`
+    + `<span class="tx-status-hint__icon">${ICON[tone]}</span>`
+    + `<span class="tx-status-hint__text">${text}</span></div>`
+}
+const HINTS = `<div class="hints"><div class="hint"><span class="key">↵</span><span>打开</span></div><div class="hint"><span class="key">⌘K</span><span>操作</span></div><div class="hint"><span class="key">⌘1-0</span><span>快速选择</span></div></div>`
+const footer = inner => `<div class="footer">${inner}${HINTS}</div>`
+const footerHint = opts => footer(hint({ ...opts, cls: 'cb-hint' }))
+const header = inner => `<div class="header"><span class="input">翻译…</span><span class="configure">${inner}</span></div>`
+
+const FRAMES = [0, 40, 80, 130, 200, 300, 440, 700]
+function strip(title, render) {
+  return `<section data-section="${title}"><h2>${title}</h2>` + FRAMES.map(t =>
+    `<div class="row frame" style="--t:${t}ms"><div class="cap">t = ${t}ms</div>${render()}</div>`).join('') + `</section>`
+}
+
+function column(theme) {
+  let html = `<div class="theme ${theme}">`
+  // The recommendation, frozen at a few instants of the entrance, then at rest.
+  html += `<section data-section="recommended" class="rec"><h2>${theme} · 推荐方案（G1b 颗粒 · 强度 ${theme === 'light' ? '0.26' : '0.20'} · 文字 1.18→1 落定）</h2>`
+  html += `<div class="row"><div class="cap">原来：条目信息</div>${footer('<div class="item"><span class="item-icon"></span><span class="item-title">Safari</span><span>应用</span></div>')}</div>`
+  for (const t of [0, 80, 200, 440])
+    html += `<div class="row frame" style="--t:${t}ms"><div class="cap">入场 t = ${t}ms</div>${footerHint({})}</div>`
+  html += `<div class="row"><div class="cap">静止 · 成功</div>${footerHint({ animated: false })}</div>`
+  html += `<div class="row"><div class="cap">静止 · 失败</div>${footerHint({ animated: false, tone: 'danger', text: '固定失败' })}</div>`
+  html += `<div class="row"><div class="cap">顶栏（底栏不在屏时）· 成功 / 失败</div>${header(hint({ animated: false, size: 'sm', text: '已复制' }))}</div>`
+  html += `<div class="row">${header(hint({ animated: false, size: 'sm', tone: 'danger', text: '操作失败' }))}</div>`
+  html += `</section>`
+  // Grain study. G1 halves the average alpha (noise alpha ~0.5), so its strengths run ~2x.
+  const G = theme === 'light'
+    ? [['G0 soft-light · 0.16', { strength: 0.16 }], ['G1a · 0.30', { g: 'g1 g1a', strength: 0.3 }], ['G1b · 0.26', { g: 'g1 g1b', strength: 0.26 }], ['G1c · 0.24', { g: 'g1 g1c', strength: 0.24 }], ['G1b · 0.32', { g: 'g1 g1b', strength: 0.32 }]]
+    : [['G0 soft-light · 0.12', { strength: 0.12 }], ['G1a · 0.24', { g: 'g1 g1a', strength: 0.24 }], ['G1b · 0.20', { g: 'g1 g1b', strength: 0.2 }], ['G1c · 0.18', { g: 'g1 g1c', strength: 0.18 }], ['G1b · 0.26', { g: 'g1 g1b', strength: 0.26 }]]
+  html += `<section data-section="grain"><h2>${theme} · 颗粒对照</h2>`
+  for (const [label, o] of G)
+    html += `<div class="row"><div class="cap">${label}</div>${footerHint({ animated: false, ...o })}</div>`
+  html += `<div class="row"><div class="cap">失败 · G1b</div>${footerHint({ animated: false, tone: 'danger', text: '固定失败', g: 'g1 g1b', strength: theme === 'light' ? 0.26 : 0.2 })}</div>`
+  html += `<div class="row"><div class="cap">顶栏 sm · G1b</div>${header(hint({ animated: false, size: 'sm', text: '已复制', g: 'g1 g1b', strength: theme === 'light' ? 0.26 : 0.2 }))}</div>`
+  html += `</section>`
+  html += `<section data-section="rest"><h2>${theme} · 静止 · 参照：原来的条目信息</h2>`
+  html += `<div class="row">${footer('<div class="item"><span class="item-icon"></span><span class="item-title">Safari</span><span>应用</span></div>')}</div>`
+  for (const s of [0.12, 0.16, 0.22])
+    html += `<div class="row"><div class="cap">成功 · 强度 ${s}</div>${footerHint({ animated: false, strength: s })}</div>`
+  html += `<div class="row"><div class="cap">成功 · 强度 0.16 · 无颗粒（对照）</div>${footerHint({ animated: false, grain: false })}</div>`
+  html += `<div class="row"><div class="cap">失败 · 强度 0.16</div>${footerHint({ animated: false, tone: 'danger', text: '固定失败' })}</div>`
+  html += `<div class="row"><div class="cap">超长文案（末端淡出）</div>${footerHint({ animated: false, tone: 'danger', text: '图片翻译失败：Request failed with status code 500 (upstream timeout)' })}</div>`
+  html += `<div class="row"><div class="cap">顶栏 · sm · 成功 / 失败</div>${header(hint({ animated: false, size: 'sm', text: '已复制' }))}</div>`
+  html += `<div class="row">${header(hint({ animated: false, size: 'sm', tone: 'danger', text: '操作失败' }))}</div>`
+  html += `</section>`
+  html += strip(`${theme} · 入场 A：文字落定 1.18→1（bouncy ${bouncy.ms}ms）`, () => footerHint({ variant: 'v-land' }))
+  html += strip(`${theme} · 入场 B：文字弹出 0.84→1.07→1（420ms）`, () => footerHint({ variant: 'v-pop' }))
+  html += strip(`${theme} · 入场 C：轻落定 1.10→1（smooth ${smooth.ms}ms）`, () => footerHint({ variant: 'v-soft' }))
+  html += strip(`${theme} · 同文案重放（pulse）`, () => footerHint({ pulse: true, text: '已复制' }))
+  html += strip(`${theme} · 顶栏 sm 入场 A`, () => header(hint({ size: 'sm', text: '已复制' })))
+  return html + `</div>`
+}
+document.getElementById('cols').innerHTML = column('light') + column('dark')
+</script>
+</body>
+</html>

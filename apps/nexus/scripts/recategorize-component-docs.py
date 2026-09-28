@@ -172,6 +172,7 @@ TAXONOMY: dict[str, list[str]] = {
         "toast",
         "toast-panel",
         "alert",
+        "status-hint",
         "progress",
         "progress-bar",
         "spinner",

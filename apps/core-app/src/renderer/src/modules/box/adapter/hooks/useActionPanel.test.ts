@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { TuffItem } from '@talex-touch/utils'
-import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { onBeforeUnmount } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { COREBOX_PRIMARY_ACTION_ID } from '../../../../../../shared/events/corebox-scenes'
@@ -484,5 +484,32 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
       code: 'CLIPBOARD_WRITE_DENIED'
     })
     expect(JSON.stringify(state.logError.mock.calls)).not.toContain('/Users/me')
+  })
+
+  it('asks main for the settings surface, then hides CoreBox, and logs a refused reveal', async () => {
+    state.send.mockResolvedValue(true)
+    useActionPanel()
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({
+      actionId: 'open-settings',
+      item: createItem()
+    })
+    await settle()
+
+    // The reveal is requested first: it is what the user should see once the search window goes.
+    const sentEvents = (): unknown[] => state.send.mock.calls.map(([event]) => event)
+    expect(sentEvents()).toEqual([AppEvents.window.openSettings, CoreBoxEvents.ui.hide])
+
+    state.send.mockClear()
+    state.send.mockResolvedValue(false)
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({
+      actionId: 'open-settings',
+      item: createItem()
+    })
+    await settle()
+
+    expect(state.logError).toHaveBeenCalledExactlyOnceWith('Settings destination unavailable')
+    // The search window still goes away: nothing would clear it if the reveal failed.
+    expect(sentEvents()).toContain(CoreBoxEvents.ui.hide)
   })
 })
