@@ -37,6 +37,7 @@ const state = vi.hoisted(() => {
     incrementUsageTrendDaily: vi.fn(() => Promise.resolve()),
     indexingRuntimeBeginShutdown: vi.fn(),
     indexingRuntimeDrainAdmittedTasks: vi.fn(async () => undefined),
+    indexingRuntimeDrainTaskStateWrites: vi.fn(async () => undefined),
     indexingRuntimeSetStore: vi.fn(),
     indexingRuntimeSetTaskStateStore: vi.fn(),
     indexingRuntimeSetWriterRouter: vi.fn(),
@@ -236,6 +237,7 @@ vi.mock('./indexing-runtime', () => ({
     beginShutdown: state.indexingRuntimeBeginShutdown,
     clear: state.clearIndexingRuntime,
     drainAdmittedTasks: state.indexingRuntimeDrainAdmittedTasks,
+    drainTaskStateWrites: state.indexingRuntimeDrainTaskStateWrites,
     drainSourceMutations: state.appRuntimeDrainMutations,
     resetSourceRuntimeState: vi.fn(),
     setSourceWriterRouter: state.indexingRuntimeSetWriterRouter,
@@ -1603,6 +1605,9 @@ describe('SearchEngineCore facade contracts', () => {
       lifecycle.push('admitted-drain-finished')
       admittedDrainFinished.resolve()
     })
+    state.indexingRuntimeDrainTaskStateWrites.mockImplementationOnce(async () => {
+      lifecycle.push('task-state-drained')
+    })
     state.appRuntimeDrainMutations
       .mockImplementationOnce(recordSourceDrain)
       .mockImplementationOnce(recordSourceDrain)
@@ -1626,9 +1631,13 @@ describe('SearchEngineCore facade contracts', () => {
     expect(lifecycle).toContain('app-producer-stopped')
     expect(lifecycle).toContain('app-scan-stopped')
     expect(state.appRuntimeDrainMutations).not.toHaveBeenCalled()
+    expect(state.indexingRuntimeDrainTaskStateWrites).not.toHaveBeenCalled()
 
     releaseAdmittedDrain.resolve()
     await admittedDrainFinished.promise
+    await vi.waitFor(() =>
+      expect(state.indexingRuntimeDrainTaskStateWrites).toHaveBeenCalledTimes(1)
+    )
     expect(state.appRuntimeDrainMutations).not.toHaveBeenCalled()
     expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
 
@@ -1645,6 +1654,12 @@ describe('SearchEngineCore facade contracts', () => {
     expect(lifecycle.slice(-1)).toEqual(['runtime-cleared'])
     expect(lifecycle.indexOf('writer-shutdown-started')).toBeLessThan(
       lifecycle.indexOf('admitted-drain-started')
+    )
+    expect(lifecycle.indexOf('admitted-drain-finished')).toBeLessThan(
+      lifecycle.indexOf('task-state-drained')
+    )
+    expect(lifecycle.indexOf('task-state-drained')).toBeLessThan(
+      lifecycle.indexOf('runtime-cleared')
     )
   })
 
