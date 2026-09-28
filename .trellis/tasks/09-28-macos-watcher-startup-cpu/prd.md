@@ -23,6 +23,7 @@ Reduce sustained macOS startup CPU use and multi-second main-thread stalls witho
 - **R4 — Local safety:** do not delete/rebuild the user's database, change permanent app settings, replace the signed installed app, read secrets, or include personal paths/content in public artifacts. Any app experiment must have an isolated data directory or an explicitly verified non-destructive path and a documented rollback.
 - **R5 — Platform boundary:** focus real-host validation on this Apple Silicon macOS host. Preserve Windows/Linux behavior and report untested platforms honestly.
 - **R6 — Upstream delivery:** follow the issue/PR templates, disclose related existing reports rather than claiming no similar issue exists, add regression coverage, and publish the authorized issue and matching PR only after implementation review and local validation.
+- **R7 — Cold-scan responsiveness:** the intentional initial full scan may take longer, but it must yield a bounded foreground window between persistence chunks. Generated Python dependency/cache trees (`uvcache`, `__pycache__`, `site-packages`) are not user search data and must be excluded by the shared scan/watch/read-time policy.
 
 ## Acceptance Criteria
 
@@ -32,6 +33,7 @@ Reduce sustained macOS startup CPU use and multi-second main-thread stalls witho
 - [ ] **AC4 / R4:** experiments leave the user's installed application, existing configuration and databases untouched; temporary watchers/processes are closed and rollback is verified.
 - [ ] **AC5 / R5:** focused tests, applicable lint/type checks and a real macOS integration probe pass; unsupported or unexecuted checks are listed without extrapolating cross-platform success.
 - [ ] **AC6 / R6:** the issue and PR contain redacted reproduction steps, linked regression evidence, scope/risks and exact local test commands, and link to each other.
+- [x] **AC7 / R7:** an isolated 3,000-file cold-index A/B uses the same root/profile shape and demonstrates a lower sustained process-group CPU median for the candidate; the final index contains all 3,000 admitted fixture files, while the shared filter rejects the three generated Python directory classes and preserves an ordinary `Documents/build` path.
 
 ## Out Of Scope
 

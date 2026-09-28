@@ -6,6 +6,8 @@ These contracts define the deep macOS file watcher boundary and its indexed-file
 
 The macOS watcher used for `FILE_SCAN_MAX_DEPTH` roots registers an FSEvents stream against the canonical root without recursively enumerating existing descendants. Shallow application watches and non-macOS watchers retain their existing Chokidar selection. The native module loads `fsevents` lazily and treats an unavailable optional binary as an explicit registration error.
 
+`fsevents` is a CommonJS wrapper around a native addon and MUST stay external in the main-process Electron Vite build. If Rollup bundles it, the addon becomes an ESM namespace and `flags.SinceNow` is undefined at runtime even though source-level tests pass. Keep it in `externalizeDepsPlugin.include` and verify the built output retains `import("fsevents")` plus one real Electron registration/add/delete smoke.
+
 The application may still schedule its independent initial index scan. That scan is separate from watcher registration and must not be used to justify recursive work performed by the watcher constructor or `add` method.
 
 ## 2. Logical paths remain stable

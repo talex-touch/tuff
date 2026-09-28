@@ -8,6 +8,15 @@ Preserve the existing file-search roots and move macOS depth-24 file-watch regis
 
 This is a candidate design, not a claim that the raw native research probe is a complete fix. The first implementation gate must verify the real watcher/consumer contract; if achieving parity requires a broader indexing redesign, stop and return with a revised scope rather than weakening freshness or widening this PR.
 
+### Integration amendment: prefer foreground responsiveness over cold-scan throughput
+
+The live beta investigation separated two costs: watcher registration is avoidable duplicate traversal, while the intentional cold full scan remains sustained background work. The integrated candidate therefore keeps the event-only watcher and also restores one fixed 100 ms cooperative pause after every persisted full-scan chunk. The existing proportional backoff still wins for chunks at or above 250 ms. Because the scan worker waits for each 500-record batch acknowledgement, this single pause backpressures traversal and writes without adding a queue or retaining another batch.
+
+The shared directory vocabulary also excludes `uvcache`, `__pycache__`, and `site-packages` at traversal, watcher, write, and read-time boundaries. These are generated Python dependency/cache trees; ordinary context-dependent folders such as `build` retain the sibling-marker rule.
+
+This deliberately increases first-index wall time. It does not change mutation ordering, the max-size 10 AIMD ceiling, the 250 ms congestion threshold, or the single-writer topology.
+
+
 ### Alternatives
 
 - **Narrow the default roots:** low engineering cost, but silently reduces the current searchable/watchable scope. Rejected as the production fix; permitted only as a diagnostic comparison.

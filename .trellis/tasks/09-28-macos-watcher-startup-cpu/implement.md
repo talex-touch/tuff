@@ -18,6 +18,8 @@ Status: **implementation complete; acceptance partial**. The bounded watcher fix
 - [x] Implement only the minimum directory/event-loss subtree bridge; prove it does not call provider-wide indexing for an ordinary scoped event.
 - [x] Cover pending permissions, unsupported native loading, repeated registration, revocation, cancellation, queue overflow, late callbacks and awaited shutdown.
 - [x] Keep backend/interface and consumer/test write scopes distinct if using the upstream implement/check helpers; the main agent owns integration decisions and final evidence.
+- [x] Add a fixed 100 ms cooperative full-scan pause while retaining the existing proportional slow-chunk backoff and ordered publication contract.
+- [x] Extend the shared unconditional generated-directory filter with `uvcache`, `__pycache__`, and `site-packages`; verify read-time exclusion and the ordinary `Documents/build` carve-out.
 
 ## 3. Focused checks and actual macOS evidence
 
@@ -47,6 +49,7 @@ git diff --check
 - [x] Validate packaging/native dependency availability on this macOS host and run broader core type/build gates proportional to the final patch.
 - [x] Stop all owned test processes/watchers and verify no changes to the installed application or ordinary user configuration/database were made by this task.
 - [x] Record unrelated failing checks, skipped platforms and incomplete evidence explicitly. A lower-bound research improvement is not an application fix verdict.
+- [x] Run an isolated 3,000-file cold-index A/B against current `master` and the integrated candidate, starting the sampler before Electron so startup and the complete 0→3,000 transition are captured.
 
 ## 4. Review and authorized upstream publication
 

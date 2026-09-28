@@ -45,10 +45,25 @@ The six module windows completed. `powermetrics` recorded 10 of 12 target PID sa
 
 The installed `tuff` 2.4.14-beta.50 binary was launched once with a generated isolated user-data directory and the startup benchmark environment. It exited normally after 6.073 s and emitted `Startup health check passed` at 2.091 s; sampled peak main-process CPU was 145.9% and RSS was 485,984 KiB.
 
-A candidate full-app bundle could not be produced with `electron-builder --dir` because the local Electron 41.10.4 download remained pending. A targeted `pnpm -C apps/core-app rebuild electron` attempt also remained in the postinstall download for more than five minutes and was stopped; the local Electron `dist` remained absent. A temporary shadow bundle built from the installed runtime then crashed in Electron/V8 during native startup, so it is excluded from product conclusions. The installed app and persistent user data were left unchanged.
+At draft creation, `electron-builder --dir` could not produce a packaged candidate because the Electron 41.10.4 download remained pending, and a temporary shadow bundle was discarded after a native startup crash. During integration review the locked dependencies became available: `pnpm -C apps/core-app run build:vite` completed, and that source-built Electron candidate supplied the cold-index and FSEvents runtime evidence below. This is still not a signed packaged-app acceptance result. The installed app and persistent user data were left unchanged.
+
+## Integrated cold-index responsiveness A/B
+
+Current `master` (`69b755528`) and the rebased integrated candidate indexed the same 3,000 generated Markdown files from `/Users/Shared/tuff-low-energy-bench` into separate `/tmp` profiles. The sampler started before Electron and recorded the whole process group every 500 ms. Both runs reached exactly 3,000 file rows.
+
+| Build | Index phase | Busy CPU median | Busy CPU p95 | Busy RSS median | Event-loop lag |
+| --- | ---: | ---: | ---: | ---: | --- |
+| current `master` | 10.26 s | 125.05% | 243.1% | 1,529.87 MiB | one 593 ms lag plus 616–652 ms renderer IPC delays |
+| integrated candidate | 38.57 s | 60.7% | 80.3% | 1,564.51 MiB | no `Perf:EventLoop` warning in the measured run |
+
+The candidate deliberately took 3.76× longer to finish the cold index. In exchange, median process-group CPU fell 51.5% and p95 fell 67.0%. Peak startup CPU was effectively unchanged (261.6% baseline, 260.1% candidate), so this evidence supports lower sustained indexing pressure, not a lower startup peak or lower memory use.
+
+The same runtime exposed a packaging bug in the draft: bundling `fsevents` converted its native addon into an ESM namespace and left `flags.SinceNow` undefined. `electron.vite.config.ts` now externalizes `fsevents`; the rebuilt output retains `import("fsevents")`. The final isolated Electron smoke registered the depth-24 watcher without errors, indexed a newly created file in 1,280 ms, removed it in 514 ms, and exited cleanly. After indexing, five one-second main-process samples were 0.0–1.0% CPU / power.
+
+The shared filter smoke returned `development-path` for `uvcache`, `__pycache__`, and `site-packages`, and `null` for `/Users/me/Documents/build/2026/report.pdf`.
 
 ## Scope limits
 
 - The module benchmark is a lower-level watcher comparison; it does not measure database indexing, Electron renderer startup, or idle whole-app power.
 - Symlink parity and FSEvents overflow recovery are covered by injected-backend tests; they were not exercised against a live symlink-heavy home tree.
-- The existing installed-app smoke is baseline evidence only. Candidate full-app startup remains blocked by the local packaging/runtime limitation described above.
+- Signed packaged-candidate startup and app-level energy comparison remain unverified. The source-built isolated Electron runtime, cold-index A/B, externalized native load, real FSEvents add/delete delivery, and post-index idle CPU were verified.
