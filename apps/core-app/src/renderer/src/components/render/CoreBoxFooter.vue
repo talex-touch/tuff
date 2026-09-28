@@ -8,6 +8,7 @@ import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { useCoreBoxFooterFeedback } from '~/modules/box/meta-actions/footer-feedback'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import CoreBoxActionFeedback from './CoreBoxActionFeedback.vue'
 import { resolveCoreBoxFooterTitle } from './coreBoxFooterDisplay'
 import {
   isPluginFooterItem,
@@ -23,16 +24,21 @@ import {
 } from './icon-color-mode'
 import { resolveSourceMeta } from './sourceMeta'
 
-const props = defineProps<{
-  display: boolean
-  item: TuffItem | null
-  /** 当前激活的 providers，用于判断是否在搜索结果模式 */
-  activeActivations?: IProviderActivate[] | null
-  /** 搜索结果数量，用于判断是否显示快速选择 */
-  resultCount?: number
-  /** 是否在推荐模式 */
-  isRecommendation?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    display: boolean
+    item: TuffItem | null
+    /** 当前激活的 providers，用于判断是否在搜索结果模式 */
+    activeActivations?: IProviderActivate[] | null
+    /** 搜索结果数量，用于判断是否显示快速选择 */
+    resultCount?: number
+    /** 是否在推荐模式 */
+    isRecommendation?: boolean
+    /** CoreBox's motion gate (`shouldAnimate()`): false lands an action's outcome in place. */
+    animated?: boolean
+  }>(),
+  { animated: true }
+)
 
 const displayValue = computed(() => props.display)
 const debouncedDisplay = useDebounce(displayValue, 100)
@@ -196,28 +202,27 @@ const keyHints = computed(() => {
     :class="{ display: onScreen }"
     class="CoreBoxFooter transition-cubic fake-background flex-shrink-0 absolute overflow-hidden z-0 flex items-center justify-between gap-3 h-44px px-3 border-t border-[var(--tx-border-color-lighter)] bg-transparent text-12px text-[color:var(--tx-text-color-secondary)]"
   >
-    <div class="FooterInfo">
-      <span
+    <!-- What the last action did, over the footer's left half. Kept mounted while messages change,
+         not keyed by id: the next message's words morph out of the last one's, and a new id replays
+         the emphasis. When it clears, the item is back in the same render and the hint fades out
+         over it. -->
+    <Transition name="tx-status-hint">
+      <CoreBoxActionFeedback
         v-if="shownFeedback"
-        :key="shownFeedback.id"
         class="FooterFeedback"
-        :class="shownFeedback.tone === 'error' ? 'is-error' : 'is-success'"
-      >
-        <i
-          class="FooterFeedback-Icon"
-          :class="
-            shownFeedback.tone === 'error' ? 'i-ri-error-warning-line' : 'i-ri-checkbox-circle-line'
-          "
-          aria-hidden="true"
-        />
-        <span class="FooterFeedback-Text">{{ shownFeedback.message }}</span>
-      </span>
+        placement="footer"
+        :feedback="shownFeedback"
+        :animated="animated"
+      />
+    </Transition>
+    <!-- Empty while an outcome covers it, but kept: it holds the hints on the right. -->
+    <div class="FooterInfo">
       <!-- Indexing indicator takes priority when no search results -->
-      <template v-else-if="isIndexing && !debouncedDisplay">
+      <template v-if="!shownFeedback && isIndexing && !debouncedDisplay">
         <span class="IndexingDot" />
         <span class="IndexingLabel">{{ indexingLabel }}</span>
       </template>
-      <template v-else>
+      <template v-else-if="!shownFeedback">
         <TuffIcon
           :icon="displayIcon"
           :alt="title"
@@ -308,39 +313,6 @@ const keyHints = computed(() => {
   font-size: 10px;
   font-weight: 500;
   text-transform: uppercase;
-}
-
-// The glyph and the words together: colour alone never carries the outcome.
-.FooterFeedback {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  color: var(--tx-text-color-primary);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.FooterFeedback-Icon {
-  flex: none;
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  font-size: 16px;
-}
-
-.FooterFeedback.is-success .FooterFeedback-Icon {
-  color: var(--tx-color-success);
-}
-
-.FooterFeedback.is-error .FooterFeedback-Icon {
-  color: var(--tx-color-danger);
-}
-
-.FooterFeedback-Text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .FooterHints {

@@ -6376,6 +6376,7 @@
       "translateImagePin": "Translate and Pin",
       "flowTransfer": "Transfer to Plugin",
       "bindShortcut": "Bind Shortcut",
+      "openSettings": "Open Settings",
       "open": "Open",
       "paste": "Paste",
       "execute": "Run",
@@ -6396,10 +6397,8 @@
       "empty": "No matching actions",
       "failed": "Action failed",
       "groups": {
-        "open": "Open",
-        "copy": "Copy",
-        "organize": "Organize",
-        "flow": "Flow",
+        "open": "Basic",
+        "host": "App settings",
         "plugin": "Plugins"
       }
     },

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import type { TuffItem } from '@talex-touch/utils'
 import type { Ref } from 'vue'
+import { TxStatusHint } from '@talex-touch/tuffex/status-hint'
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, defineComponent, h, nextTick, shallowRef } from 'vue'
@@ -73,6 +74,24 @@ const widgetItem = {
   meta: { pluginName: 'touch-weather' }
 } as unknown as TuffItem
 
+/**
+ * The text a screen reader reads. While the hint animates, the morph engine draws the message
+ * twice, as a hidden copy plus aria-hidden segments, so `.text()` would read it twice.
+ */
+function accessibleText(wrapper: { element: Node }): string {
+  const read = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
+    if (node instanceof Element && node.getAttribute('aria-hidden') === 'true') return ''
+    return Array.from(node.childNodes, read).join('')
+  }
+  return read(wrapper.element).trim()
+}
+
+/** The hint's replay class: none for the first message, then `a` and `b` in turn. */
+function replayClasses(wrapper: { classes: () => string[] }): string[] {
+  return wrapper.classes().filter((name) => name.startsWith('is-pulse'))
+}
+
 describe('CoreBox footer feedback', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -85,8 +104,8 @@ describe('CoreBox footer feedback', () => {
     vi.useRealTimers()
   })
 
-  function mountFooter() {
-    return mount(CoreBoxFooter, { props: { display: true, item, resultCount: 1 } })
+  function mountFooter(props: { animated?: boolean } = {}) {
+    return mount(CoreBoxFooter, { props: { display: true, item, resultCount: 1, ...props } })
   }
 
   it('shows what an action did in place of the item, then gives the item back', async () => {
@@ -98,11 +117,17 @@ describe('CoreBox footer feedback', () => {
 
     expect(wrapper.find('.FooterTitle').exists()).toBe(false)
     const feedback = wrapper.get('.FooterFeedback')
-    expect(feedback.text()).toBe('已复制')
+    expect(accessibleText(feedback)).toBe('已复制')
     expect(feedback.classes()).toContain('is-success')
-    expect(feedback.get('.FooterFeedback-Icon').classes()).toContain('i-ri-checkbox-circle-line')
+    expect(feedback.get('.CoreBoxActionFeedback-Icon').classes()).toContain(
+      'i-ri-checkbox-circle-line'
+    )
+    expect(wrapper.getComponent(TxStatusHint).props()).toMatchObject({
+      tone: 'success',
+      size: 'md'
+    })
     // CoreBox owns the one announcer, which says it wherever it shows; the footer adds none.
-    expect(wrapper.find('[aria-live], [role="status"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-live]:not([aria-live="off"]), [role="status"]').exists()).toBe(false)
 
     vi.advanceTimersByTime(COREBOX_FOOTER_FEEDBACK_MS)
     await nextTick()
@@ -121,7 +146,11 @@ describe('CoreBox footer feedback', () => {
 
     const feedback = wrapper.get('.FooterFeedback')
     expect(feedback.classes()).toContain('is-error')
-    expect(feedback.get('.FooterFeedback-Icon').classes()).toContain('i-ri-error-warning-line')
+    expect(feedback.get('.CoreBoxActionFeedback-Icon').classes()).toContain(
+      'i-ri-error-warning-line'
+    )
+    // The wash and the glyph take the danger hue.
+    expect(wrapper.getComponent(TxStatusHint).props('tone')).toBe('danger')
 
     wrapper.unmount()
   })
@@ -134,12 +163,85 @@ describe('CoreBox footer feedback', () => {
     vi.advanceTimersByTime(COREBOX_FOOTER_FEEDBACK_MS - 100)
     showCoreBoxFooterFeedback('已复制')
 
-    // Same words, new event: a keyed element restarts rather than sitting still.
+    // Same words, new event: the new id replays the hint's emphasis rather than sitting still.
     expect(feedback.value?.id).not.toBe(first)
     vi.advanceTimersByTime(COREBOX_FOOTER_FEEDBACK_MS - 100)
     expect(feedback.value?.message).toBe('已复制')
     vi.advanceTimersByTime(100)
     expect(feedback.value).toBeNull()
+  })
+
+  it('keeps one hint across messages, so the next words morph out of the last', async () => {
+    const wrapper = mountFooter()
+
+    showCoreBoxFooterFeedback('已固定')
+    await nextTick()
+    const before = wrapper.getComponent(TxStatusHint)
+    // By uid: VTU hands out a fresh `vm` proxy on every lookup.
+    const uid = before.vm.$.uid
+    const element = before.element
+    expect(before.props('text')).toBe('已固定')
+
+    showCoreBoxFooterFeedback('已取消固定')
+    await nextTick()
+
+    const after = wrapper.getComponent(TxStatusHint)
+    expect(after.vm.$.uid).toBe(uid)
+    expect(after.element === element, 'the same root element').toBe(true)
+    expect(after.props('text')).toBe('已取消固定')
+    // Through the morph engine, which changes the words in place.
+    expect(after.find('[tx-morph-root]').exists()).toBe(true)
+    expect(accessibleText(wrapper.get('.FooterFeedback'))).toBe('已取消固定')
+
+    wrapper.unmount()
+  })
+
+  it('replays the emphasis when the same words come again', async () => {
+    const wrapper = mountFooter()
+
+    showCoreBoxFooterFeedback('已复制')
+    await nextTick()
+    // The entrance plays on mount; a replay class there would cut it short.
+    expect(replayClasses(wrapper.get('.FooterFeedback'))).toEqual([])
+
+    showCoreBoxFooterFeedback('已复制')
+    await nextTick()
+    expect(replayClasses(wrapper.get('.FooterFeedback'))).toEqual(['is-pulse-a'])
+
+    showCoreBoxFooterFeedback('已复制')
+    await nextTick()
+    expect(replayClasses(wrapper.get('.FooterFeedback'))).toEqual(['is-pulse-b'])
+
+    wrapper.unmount()
+  })
+
+  it('moves by default, and lands in place when CoreBox’s motion gate is closed', async () => {
+    const moving = mountFooter()
+    showCoreBoxFooterFeedback('已固定')
+    await nextTick()
+    expect(moving.get('.FooterFeedback').classes()).toContain('is-animated')
+    expect(moving.find('[tx-morph-root]').exists()).toBe(true)
+    moving.unmount()
+    clearCoreBoxFooterFeedback()
+
+    const still = mountFooter({ animated: false })
+    showCoreBoxFooterFeedback('已固定')
+    await nextTick()
+    const feedback = still.get('.FooterFeedback')
+    expect(feedback.classes()).not.toContain('is-animated')
+    // Plain text: no morph engine, so the words are drawn once.
+    expect(still.find('[tx-morph-root]').exists()).toBe(false)
+    expect(feedback.text()).toBe('已固定')
+
+    showCoreBoxFooterFeedback('已固定')
+    await nextTick()
+    showCoreBoxFooterFeedback('已取消固定')
+    await nextTick()
+    expect(replayClasses(still.get('.FooterFeedback'))).toEqual([])
+    expect(still.find('[tx-morph-root]').exists()).toBe(false)
+    expect(still.get('.FooterFeedback').text()).toBe('已取消固定')
+
+    still.unmount()
   })
 })
 
@@ -184,7 +286,7 @@ describe('CoreBox footer on screen', () => {
 
     showCoreBoxFooterFeedback('已复制')
     await nextTick()
-    expect(host.wrapper.get('.FooterFeedback').text()).toBe('已复制')
+    expect(accessibleText(host.wrapper.get('.FooterFeedback'))).toBe('已复制')
     host.wrapper.unmount()
   })
 

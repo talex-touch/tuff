@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-2.md`
-- **Total Sessions**: 78
-- **Last Active**: 2026-09-26
+- **Total Sessions**: 79
+- **Last Active**: 2026-09-27
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-2.md` | ~1187 | Active |
+| `journal-2.md` | ~1266 | Active |
 | `journal-1.md` | ~2005 | Archived |
 <!-- @@@/auto:active-documents -->
 
@@ -31,6 +31,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 79 | 2026-09-27 | CoreBox action feedback: TxStatusHint with rising grainy wash and morphing words | `1e56340be`, `9572393c4`, `f68e10df1` | `task/chore/2.4.14-beta.49` |
 | 78 | 2026-09-26 | Home 会话打磨：托起发送、助理推送、工具栏与听写、推理强度 | `6a6de895c`, `02fd57ba5`, `792aa7c8e`, `c470ae610`, `0ef4b4209`, `1cf1eee71`, `3f403ac82`, `0c421e4d5`, `90b73f918`, `2248298de`, `d08d08a04`, `ca7a7d4ef`, `f1b01e934`, `3b0b3485b` | `master` |
 | 77 | 2026-09-24 | Nexus docs static delivery closeout: real 404, static redirects, edge Cache Rule | `f7f158048`, `1839bcd10`, `3b7021cb9`, `4570dac51`, `fb5cc8746` | `master` |
 | 76 | 2026-09-24 | Composer motion from the @flohoeller reference: tray swap, ink-only hover, TxModeChip | `e43fa1190`, `0e5b9e33f`, `55bbc5039`, `a23b7266e`, `558d6ce82` | `master` |

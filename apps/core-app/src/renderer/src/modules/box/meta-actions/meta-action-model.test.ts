@@ -147,8 +147,9 @@ describe('buildMetaActionModel — one row per action', () => {
       'copy-title',
       'file-copy-shell-path',
       'file-copy-url',
+      'flow-transfer',
       'toggle-pin',
-      'flow-transfer'
+      'open-settings'
     ])
     // The provider's "Open" is not a second row: it merged, and the merged row runs the main
     // list's Enter path (which truly opens), under the provider's label in the interface language.
@@ -179,8 +180,9 @@ describe('buildMetaActionModel — one row per action', () => {
       COREBOX_PRIMARY_ACTION_ID,
       'copy',
       'copy-title',
+      'flow-transfer',
       'toggle-pin',
-      'flow-transfer'
+      'open-settings'
     ])
     expect(model.rows[0]!.label).toEqual({ key: 'corebox.actions.paste' })
     // Raycast's clipboard history: ↵ pastes, ⌘↵ copies.
@@ -210,19 +212,18 @@ describe('buildMetaActionModel — one row per action', () => {
 
     expect(model.sections.map((section) => section.key)).toEqual([
       'primary',
+      'open',
       'group:open:常用设置',
-      'copy',
-      'organize',
-      'flow'
+      'host'
     ])
-    expect(model.sections[1]!.title).toEqual({ text: '常用设置' })
+    expect(model.sections[2]!.title).toEqual({ text: '常用设置' })
     // A settings list is not an alternate way to run this item, so it has no ⌘↵.
     expect(model.rows.some((row) => row.role === 'secondary')).toBe(false)
   })
 })
 
 describe('buildMetaActionModel — groups, labels and icons', () => {
-  it('orders the groups primary / open / copy / organize / flow / plugin', () => {
+  it('orders the groups primary / open / host / plugin', () => {
     const request = {
       ...buildMetaShowRequest(APP_ITEM),
       pluginActions: [
@@ -238,19 +239,25 @@ describe('buildMetaActionModel — groups, labels and icons', () => {
     expect(model.sections.map((section) => section.slot)).toEqual([
       'primary',
       'open',
-      'copy',
-      'organize',
-      'flow',
+      'host',
       'plugin'
     ])
     expect(model.sections.map((section) => section.title)).toEqual([
       null,
       { key: 'corebox.actions.groups.open' },
-      { key: 'corebox.actions.groups.copy' },
-      { key: 'corebox.actions.groups.organize' },
-      { key: 'corebox.actions.groups.flow' },
+      { key: 'corebox.actions.groups.host' },
       { key: 'corebox.actions.groups.plugin' }
     ])
+  })
+
+  it('files the app-level rows under the app settings group, not the open one', () => {
+    const model = build(APP_ITEM)
+    const sectionOf = (id: string) =>
+      model.sections.find((section) => section.rows.some((row) => row.id === id))?.slot
+
+    expect(sectionOf('app-bind-shortcut')).toBe('host')
+    expect(sectionOf('open-settings')).toBe('host')
+    expect(sectionOf('reveal-in-finder')).toBe('open')
   })
 
   it('shows host provider labels in the interface language and plugin labels as written', () => {
@@ -558,13 +565,37 @@ describe('resolveMetaActionShortcut', () => {
     // ⌘⇧D in the list already opens Flow through `corebox:flow-item`.
     expect(resolveMetaActionShortcut(model, flowKey, { isMac: true, scope: 'list' })).toBeNull()
   })
+
+  it('binds the settings row to ⌘, in the panel and in the result list', () => {
+    const model = build(FILE_ITEM)
+    const comma = press('Comma', { metaKey: true })
+
+    expect(resolveMetaActionShortcut(model, comma, { isMac: true, scope: 'panel' })?.id).toBe(
+      'open-settings'
+    )
+    expect(resolveMetaActionShortcut(model, comma, { isMac: true, scope: 'list' })?.id).toBe(
+      'open-settings'
+    )
+    // Ctrl is the command key off macOS, so the same physical key runs it there.
+    expect(
+      resolveMetaActionShortcut(model, press('Comma', { ctrlKey: true }), {
+        isMac: false,
+        scope: 'list'
+      })?.id
+    ).toBe('open-settings')
+
+    // Every item carries it, including one whose own actions are all it has.
+    expect(build(PREVIEW_ITEM).rows.some((row) => row.id === 'open-settings')).toBe(true)
+  })
 })
 
 describe('estimateMetaActionPanelHeight', () => {
   it('counts rows, titled sections and gaps with the shared geometry', () => {
-    // App: six rows in five sections, four of them titled.
-    // 40 header + (6 + 6 × 32 + 4 × 24 + 4 × 4 + 6) list + 40 filter.
-    expect(estimateMetaActionPanelHeight(build(APP_ITEM))).toBe(396)
+    // Clipboard: six rows in three sections, two of them titled.
+    // 40 header + (6 + 6 × 32 + 2 × 24 + 2 × 4 + 6) list + 40 filter.
+    // Not the app item: its action list now needs more than the panel maximum, so it only
+    // exercises the cap below.
+    expect(estimateMetaActionPanelHeight(build(CLIPBOARD_ITEM))).toBe(340)
   })
 
   it('caps a long action list at the panel maximum, where the list scrolls', () => {
