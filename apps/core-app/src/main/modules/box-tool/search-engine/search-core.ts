@@ -2434,12 +2434,18 @@ export class SearchEngineCore
         fileProvider.prepareForSearchIndexShutdown(),
         'Failed to drain FileProvider before writer shutdown'
       )
+      const admittedTaskDrainPromise = runtime?.drainAdmittedTasks()
       const admittedTaskDrain = trackDrain(
-        runtime?.drainAdmittedTasks(),
+        admittedTaskDrainPromise,
         'Failed to drain admitted Runtime indexing tasks'
       )
+      const drainTaskStateWrites = async (): Promise<void> => {
+        await runtime?.drainTaskStateWrites()
+      }
       const taskStateDrain = trackDrain(
-        runtime?.drainTaskStateWrites(),
+        admittedTaskDrainPromise
+          ? admittedTaskDrainPromise.then(drainTaskStateWrites, drainTaskStateWrites)
+          : drainTaskStateWrites(),
         'Failed to drain deferred indexed source task state writes'
       )
       this.usageSummaryService?.stop()
@@ -2494,7 +2500,7 @@ export class SearchEngineCore
       fileProvider.setIndexedSourceRuntimeResetDelegate(null)
       fileProvider.setIndexedSourceRuntimeMutationDelegate(null)
       fileProvider.setFilePersistencePort(null)
-      this.indexingRuntime?.clear()
+      await this.indexingRuntime?.clear()
       this.indexingRuntime = null
       this.indexWriterRouter = null
 
