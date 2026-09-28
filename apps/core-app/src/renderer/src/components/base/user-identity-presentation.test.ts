@@ -94,7 +94,8 @@ vi.mock('@talex-touch/utils/transport', () => ({
   })
 }))
 
-vi.mock('@talex-touch/utils/env', () => ({
+vi.mock('@talex-touch/utils/env', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@talex-touch/utils/env')>()),
   isDevEnv: () => false
 }))
 
