@@ -224,6 +224,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/accessibility',
     '/docs/dev/components/utils',
     '/docs/dev/components/sound',
+    '/docs/dev/components/changelog',
     // ── suite: templates — no overview; the tab lands on the first template
     // templates — App shells
     '/docs/dev/components/template-shell',
@@ -518,6 +519,7 @@ const SUITES = computed<SuiteDef[]>(() => [
       '/docs/dev/components/accessibility',
       '/docs/dev/components/utils',
       '/docs/dev/components/sound',
+      '/docs/dev/components/changelog',
     ],
   },
   {

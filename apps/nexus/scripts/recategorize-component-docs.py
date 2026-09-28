@@ -54,6 +54,7 @@ TAXONOMY: dict[str, list[str]] = {
         "accessibility",
         "utils",
         "sound",
+        "changelog",
     ],
     # ── suite: templates 模板 ──────────────────────────────────────────────
     # No overview page; the sidebar tab lands on template-shell.
