@@ -196,16 +196,17 @@ import { FileProviderScanStrategyService } from './services/file-provider-scan-s
 import { FileProviderAssetService } from './services/file-provider-asset-service'
 import { FileProviderSearchResultService } from './services/file-provider-search-result-service'
 import FileSystemWatcher from '../../file-system-watcher'
-import type {
-  FileIndexedSourceRuntimeMutationDelegate,
-  FileIndexedSourceRuntimeResetDelegate,
-  FileIndexedSourceScanResult,
-  FileIndexRunOptions,
-  FileIndexSyncStats,
-  FileProviderRuntimeWriteSnapshot,
-  FileUpdateRecord
+import {
+  createFileIndexSyncStats,
+  filterFileIndexCandidatesByProgress,
+  type FileIndexedSourceRuntimeMutationDelegate,
+  type FileIndexedSourceRuntimeResetDelegate,
+  type FileIndexedSourceScanResult,
+  type FileIndexRunOptions,
+  type FileIndexSyncStats,
+  type FileProviderRuntimeWriteSnapshot,
+  type FileUpdateRecord
 } from './file-provider-index-contracts'
-import { createFileIndexSyncStats } from './file-provider-index-contracts'
 import { resolveFileProviderBaseWatchPaths } from './file-provider-watch-paths'
 
 const fileProviderLog = getLogger('file-provider')
@@ -334,7 +335,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   /** AIMD adaptive batch scheduler for fullScan upsert — persists across scans. */
   private readonly upsertBatchScheduler = new AdaptiveBatchScheduler({
     initialSize: 5,
-    maxSize: 20,
+    maxSize: 10,
     targetMs: 300,
     minSize: 2,
     ssthresh: 10
@@ -1168,11 +1169,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .from(filesSchema)
       .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, paths)))
     if (files.length === 0) return
-    await this.writeSideEffectService.dispatch(files, {
-      extensionContext: 'runtime-writer-ack',
-      indexReason: 'runtime-writer-ack',
-      mutationLeaseId
-    })
+    const progressRows = await this.dbUtils.getFileIndexProgressByFileIds(
+      files.map((file) => file.id)
+    )
+    const indexingFiles = filterFileIndexCandidatesByProgress(files, progressRows)
+    await this.writeSideEffectService.dispatch(
+      files,
+      {
+        extensionContext: 'runtime-writer-ack',
+        indexReason: 'runtime-writer-ack',
+        mutationLeaseId
+      },
+      indexingFiles
+    )
   }
 
   private requireFilePersistencePort(): FilePersistencePort {
@@ -3962,24 +3971,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     try {
       const desiredKeywordExtensions = new Map<number, string>()
 
-      await runAdaptiveTaskQueue(
-        files,
-        async (file) => {
-          const fileId = typeof file.id === 'number' ? file.id : null
-
-          const fileExtension = file.extension || path.extname(file.name).toLowerCase()
-          const keywords = KEYWORD_MAP[fileExtension]
-          if (keywords) {
-            if (fileId) {
-              desiredKeywordExtensions.set(fileId, JSON.stringify(keywords))
-            }
-          }
-        },
-        {
-          estimatedTaskTimeMs: 3,
-          label: 'FileProvider::processFileExtensions'
+      for (const file of files) {
+        const fileId = typeof file.id === 'number' ? file.id : null
+        const fileExtension = file.extension || path.extname(file.name).toLowerCase()
+        const keywords = KEYWORD_MAP[fileExtension]
+        if (keywords && fileId) {
+          desiredKeywordExtensions.set(fileId, JSON.stringify(keywords))
         }
-      )
+      }
 
       if (desiredKeywordExtensions.size > 0) {
         const fileIds = Array.from(desiredKeywordExtensions.keys())

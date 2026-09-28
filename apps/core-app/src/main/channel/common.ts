@@ -1938,11 +1938,29 @@ export class CommonChannelModule extends BaseModule {
         AppEvents.indexedSource.diagnostics,
         async (payload) => {
           const sourceId = getOptionalStringProp(payload, 'sourceId')?.trim()
-          let diagnostics: IndexedSourceDiagnosticsResponse
           try {
-            diagnostics = sanitizeFileIndexDiagnosticsSnapshot(
-              await indexingRuntime.getDiagnostics()
-            )
+            if (sourceId) {
+              const source = await indexingRuntime.getSourceDiagnostics(sourceId)
+              const sources = source ? [source] : []
+              const ready = sources.filter((entry) => entry.health.status === 'ready').length
+              const degraded = sources.filter((entry) => entry.health.status === 'degraded').length
+              return sanitizeFileIndexDiagnosticsSnapshot({
+                generatedAt: Date.now(),
+                summary: {
+                  total: sources.length,
+                  byStatus: sources.reduce<Record<string, number>>((summary, entry) => {
+                    summary[entry.health.status] = (summary[entry.health.status] ?? 0) + 1
+                    return summary
+                  }, {}),
+                  ready,
+                  degraded,
+                  unavailable: sources.length - ready - degraded
+                },
+                sources
+              })
+            }
+
+            return sanitizeFileIndexDiagnosticsSnapshot(await indexingRuntime.getDiagnostics())
           } catch (error) {
             reportIndexedSourceTransportFailure('DIAGNOSTICS', sourceId ?? '', error)
             return {
@@ -1950,27 +1968,6 @@ export class CommonChannelModule extends BaseModule {
               summary: { total: 0, byStatus: {}, ready: 0, degraded: 0, unavailable: 0 },
               sources: []
             }
-          }
-          if (!sourceId) {
-            return diagnostics
-          }
-          const sources = diagnostics.sources.filter((source) => source.descriptor.id === sourceId)
-          const ready = sources.filter((source) => source.health.status === 'ready').length
-          const degraded = sources.filter((source) => source.health.status === 'degraded').length
-
-          return {
-            ...diagnostics,
-            summary: {
-              total: sources.length,
-              byStatus: sources.reduce<Record<string, number>>((summary, source) => {
-                summary[source.health.status] = (summary[source.health.status] ?? 0) + 1
-                return summary
-              }, {}),
-              ready,
-              degraded,
-              unavailable: sources.length - ready - degraded
-            },
-            sources
           }
         }
       ),

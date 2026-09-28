@@ -437,6 +437,7 @@ describe('search-core search-trace', () => {
         beginShutdown: () => void
         abortAndDrainSourceScans: (sourceId: string) => Promise<void>
         drainAdmittedTasks: () => Promise<void>
+        drainTaskStateWrites: () => Promise<void>
         drainSourceMutations: (sourceId: string) => Promise<void>
         clear: () => void
       }
@@ -450,6 +451,7 @@ describe('search-core search-trace', () => {
       beginShutdown: vi.fn(),
       abortAndDrainSourceScans: vi.fn(async () => undefined),
       drainAdmittedTasks: vi.fn(async () => undefined),
+      drainTaskStateWrites: vi.fn(async () => undefined),
       drainSourceMutations: vi.fn(async () => undefined),
       clear: vi.fn()
     }

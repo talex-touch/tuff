@@ -130,6 +130,13 @@ interface ActiveIndexedSourceScan {
   completion: Promise<void>
   resolveCompletion: () => void
 }
+const INDEXING_WATCH_TASK_STATE_DEBOUNCE_MS = 1_000
+
+interface DeferredTaskStateWrite {
+  state: IndexedSourceRuntimeTaskState
+  timer: NodeJS.Timeout | null
+  flush: Promise<void> | null
+}
 
 export class IndexingRuntime {
   private readonly sourceMutationGate: IndexingSourceMutationGate
@@ -147,6 +154,9 @@ export class IndexingRuntime {
   private readonly rootPolicy: IndexingRootPolicy
   private taskStateStore: IndexingTaskStateStore
   private readonly activeScans = new Map<string, Set<ActiveIndexedSourceScan>>()
+  private readonly deferredTaskStateWrites = new Map<string, DeferredTaskStateWrite>()
+  private readonly taskStateCleanupSources = new Set<string>()
+  private taskStateStoreClearInProgress = false
   private taskAdmissionClosed = false
   private activeAdmittedTasks = 0
   private readonly admittedTaskIdleWaiters = new Set<() => void>()
@@ -174,6 +184,17 @@ export class IndexingRuntime {
     this.taskAdmissionClosed = true
   }
 
+  /** Flushes coalesced watch history before the writer/profile is torn down. */
+  async drainTaskStateWrites(): Promise<void> {
+    while (this.deferredTaskStateWrites.size > 0) {
+      await Promise.all(
+        [...this.deferredTaskStateWrites.keys()].map((sourceId) =>
+          this.flushDeferredTaskStateWrite(sourceId, false)
+        )
+      )
+    }
+  }
+
   isShuttingDown(): boolean {
     return this.taskAdmissionClosed
   }
@@ -195,6 +216,10 @@ export class IndexingRuntime {
       this.admittedTaskIdleWaiters.add(waiter)
     })
   }
+  private async waitForAdmittedTasksIdle(): Promise<void> {
+    if (this.activeAdmittedTasks === 0) return
+    await new Promise<void>((resolve) => this.admittedTaskIdleWaiters.add(resolve))
+  }
 
   private async runAdmittedTask<T>(operation: () => Promise<T>): Promise<T> {
     if (this.taskAdmissionClosed) throw new Error('INDEXING_RUNTIME_SHUTTING_DOWN')
@@ -212,6 +237,10 @@ export class IndexingRuntime {
 
   registerSource(source: IndexedSource): boolean {
     const sourceId = source.descriptor.id
+    if (this.taskStateStoreClearInProgress || this.taskStateCleanupSources.has(sourceId)) {
+      indexingRuntimeLog.warn(`Indexed source '${sourceId}' task state is being cleared`)
+      return false
+    }
     if (this.sources.has(sourceId)) {
       indexingRuntimeLog.warn(`Indexed source '${sourceId}' is already registered`)
       return false
@@ -245,19 +274,26 @@ export class IndexingRuntime {
     return true
   }
 
-  unregisterSource(sourceId: string): boolean {
+  async unregisterSource(sourceId: string): Promise<boolean> {
     const deleted = this.sources.delete(sourceId)
-    if (deleted) {
+    if (!deleted) return false
+
+    this.taskStateCleanupSources.add(sourceId)
+    try {
+      await this.waitForAdmittedTasksIdle()
+      await this.cancelDeferredTaskStateWrite(sourceId)
       this.taskState.delete(sourceId)
-      void this.taskStateStore.delete(sourceId).catch((error) => {
+      await this.taskStateStore.delete(sourceId).catch((error) => {
         indexingRuntimeLog.warn(`Failed to delete indexed source task state '${sourceId}'`, {
           error
         })
       })
       this.rootPolicy.clearSource(sourceId)
       indexingRuntimeLog.info(`Indexed source '${sourceId}' unregistered`)
+      return true
+    } finally {
+      this.taskStateCleanupSources.delete(sourceId)
     }
-    return deleted
   }
 
   getSource(sourceId: string): IndexedSource | undefined {
@@ -521,7 +557,21 @@ export class IndexingRuntime {
   }
 
   async getDiagnostics(): Promise<IndexingRuntimeDiagnostics> {
-    const sources = this.listSources()
+    return await this.getDiagnosticsForSources(this.listSources())
+  }
+
+  async getSourceDiagnostics(
+    sourceId: string
+  ): Promise<IndexingRuntimeSourceDiagnostics | undefined> {
+    const source = this.sources.get(sourceId)
+    if (!source) return undefined
+    const diagnostics = await this.getDiagnosticsForSources([source])
+    return diagnostics.sources[0]
+  }
+
+  private async getDiagnosticsForSources(
+    sources: IndexedSource[]
+  ): Promise<IndexingRuntimeDiagnostics> {
     const disposeDiagnostics = enterPerfContext(
       'IndexingRuntime.getDiagnostics',
       { sourceCount: sources.length },
@@ -1024,13 +1074,6 @@ export class IndexingRuntime {
     return source
   }
 
-  private async getSourceDiagnostics(
-    sourceId: string
-  ): Promise<IndexingRuntimeSourceDiagnostics | undefined> {
-    const diagnostics = await this.getDiagnostics()
-    return diagnostics.sources.find((source) => source.descriptor.id === sourceId)
-  }
-
   private getEligibleSources(
     sources: IndexedSource[],
     diagnostics: IndexingRuntimeDiagnostics,
@@ -1145,15 +1188,30 @@ export class IndexingRuntime {
     }
   }
 
-  clear(options: { clearTaskStateStore?: boolean } = {}): void {
-    this.sources.clear()
-    this.taskState.clear()
-    this.runGate.clear()
-    this.rootPolicy.clear()
-    if (!options.clearTaskStateStore) return
-    void this.taskStateStore.clear().catch((error) => {
-      indexingRuntimeLog.warn('Failed to clear indexed source task state store', { error })
-    })
+  async clear(options: { clearTaskStateStore?: boolean } = {}): Promise<void> {
+    this.taskStateStoreClearInProgress = true
+    try {
+      await this.waitForAdmittedTasksIdle()
+      if (options.clearTaskStateStore) {
+        await Promise.all(
+          [...this.deferredTaskStateWrites.keys()].map((sourceId) =>
+            this.cancelDeferredTaskStateWrite(sourceId)
+          )
+        )
+      } else {
+        await this.drainTaskStateWrites()
+      }
+      this.sources.clear()
+      this.taskState.clear()
+      this.runGate.clear()
+      this.rootPolicy.clear()
+      if (!options.clearTaskStateStore) return
+      await this.taskStateStore.clear().catch((error) => {
+        indexingRuntimeLog.warn('Failed to clear indexed source task state store', { error })
+      })
+    } finally {
+      this.taskStateStoreClearInProgress = false
+    }
   }
 
   private updateRootPolicy(diagnostics: IndexingRuntimeDiagnostics): void {
@@ -1208,8 +1266,10 @@ export class IndexingRuntime {
     sourceId: string,
     key: TKey,
     value: NonNullable<IndexedSourceRuntimeTaskState[TKey]>,
-    historyEntry: IndexedSourceTaskHistoryEntry
+    historyEntry: IndexedSourceTaskHistoryEntry,
+    options: { deferPersistence?: boolean } = {}
   ): Promise<void> {
+    if (this.taskStateStoreClearInProgress || this.taskStateCleanupSources.has(sourceId)) return
     const next = updateIndexedSourceTaskState({
       state: this.ensureTaskState(sourceId),
       key,
@@ -1218,6 +1278,11 @@ export class IndexingRuntime {
       historyLimit: DEFAULT_INDEXED_SOURCE_TASK_HISTORY_LIMIT
     })
     this.taskState.set(sourceId, next)
+    if (options.deferPersistence) {
+      this.deferTaskStateWrite(sourceId, next)
+      return
+    }
+    await this.flushDeferredTaskStateWrite(sourceId, false)
     try {
       await this.taskStateStore.save(sourceId, next)
     } catch (error) {
@@ -1225,6 +1290,68 @@ export class IndexingRuntime {
         error
       })
     }
+  }
+
+  private deferTaskStateWrite(sourceId: string, state: IndexedSourceRuntimeTaskState): void {
+    const pending = this.deferredTaskStateWrites.get(sourceId) ?? {
+      state: cloneRuntimeTaskState(state),
+      timer: null,
+      flush: null
+    }
+    pending.state = cloneRuntimeTaskState(state)
+    this.deferredTaskStateWrites.set(sourceId, pending)
+    if (pending.timer || pending.flush) return
+    pending.timer = setTimeout(() => {
+      pending.timer = null
+      void this.flushDeferredTaskStateWrite(sourceId, true)
+    }, INDEXING_WATCH_TASK_STATE_DEBOUNCE_MS)
+    pending.timer.unref?.()
+  }
+
+  private async cancelDeferredTaskStateWrite(sourceId: string): Promise<void> {
+    const pending = this.deferredTaskStateWrites.get(sourceId)
+    if (!pending) return
+    clearTimeout(pending.timer ?? undefined)
+    this.deferredTaskStateWrites.delete(sourceId)
+    await pending.flush
+  }
+
+  private async flushDeferredTaskStateWrite(
+    sourceId: string,
+    rescheduleChangedState: boolean
+  ): Promise<void> {
+    const pending = this.deferredTaskStateWrites.get(sourceId)
+    if (!pending) return
+    if (pending.timer) {
+      clearTimeout(pending.timer)
+      pending.timer = null
+    }
+    if (pending.flush) {
+      await pending.flush
+      if (this.deferredTaskStateWrites.get(sourceId) === pending) {
+        await this.flushDeferredTaskStateWrite(sourceId, rescheduleChangedState)
+      }
+      return
+    }
+    const state = pending.state
+    const flush = this.taskStateStore.save(sourceId, state).catch((error) => {
+      indexingRuntimeLog.warn(`Failed to persist indexed source task state '${sourceId}'`, {
+        error
+      })
+    })
+    pending.flush = flush
+    await flush
+    if (this.deferredTaskStateWrites.get(sourceId) !== pending) return
+    pending.flush = null
+    if (pending.state === state) {
+      this.deferredTaskStateWrites.delete(sourceId)
+      return
+    }
+    if (rescheduleChangedState) {
+      this.deferTaskStateWrite(sourceId, pending.state)
+      return
+    }
+    await this.flushDeferredTaskStateWrite(sourceId, false)
   }
 
   private async loadTaskState(
@@ -1403,7 +1530,8 @@ export class IndexingRuntime {
         taskState.sourceId,
         taskState.key,
         taskState.value,
-        taskState.historyEntry
+        taskState.historyEntry,
+        { deferPersistence: true }
       )
     }
 
@@ -1438,7 +1566,8 @@ export class IndexingRuntime {
         taskState.sourceId,
         taskState.key,
         taskState.value,
-        taskState.historyEntry
+        taskState.historyEntry,
+        { deferPersistence: true }
       )
     }
 
@@ -1468,7 +1597,8 @@ export class IndexingRuntime {
         taskState.sourceId,
         taskState.key,
         taskState.value,
-        taskState.historyEntry
+        taskState.historyEntry,
+        { deferPersistence: true }
       )
     }
   }

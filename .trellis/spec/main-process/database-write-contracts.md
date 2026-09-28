@@ -102,6 +102,7 @@ const rows = await resolveCurrentAuxDb()?.select(...)  // reads: same live home
   The writer gets a short graceful-close window, then is terminated and detached; an unconfirmed
   termination during app exit is diagnostic evidence, not a reason to exceed the outer quit budget.
   Ordinary runtime termination timeouts remain failures.
+- Watch-event task history is diagnostic state, not indexing correctness: update it in memory immediately, coalesce durable saves in a bounded leading-edge window, and flush the latest snapshot during shutdown. Scan/reconcile/reset task state remains awaited and durable before the operation returns; never apply the watch coalescing rule to those terminal records.
 
 ### 7. Boot-time maintenance writers
 
