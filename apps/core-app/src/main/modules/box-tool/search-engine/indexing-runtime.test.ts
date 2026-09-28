@@ -2825,6 +2825,97 @@ describe('indexingRuntime', () => {
       vi.useRealTimers()
     }
   })
+  it('does not recreate task state after unregistering a source with an admitted watch', async () => {
+    const watchStarted = Promise.withResolvers<void>()
+    const releaseWatch = Promise.withResolvers<void>()
+    const save = vi.fn(async () => {})
+    const deleteTaskState = vi.fn(async () => {})
+    runtime = new IndexingRuntime({
+      store,
+      taskStateStore: {
+        load: vi.fn(async () => undefined),
+        save,
+        delete: deleteTaskState,
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(
+      buildSource({
+        handleWatchEvent: vi.fn(async (event: { path: string }) => {
+          watchStarted.resolve()
+          await releaseWatch.promise
+          return [{ sourceId: 'test-source', action: 'change' as const, path: event.path }]
+        })
+      })
+    )
+
+    const routed = runtime.routeWatchEvent({
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/deferred.txt',
+      occurredAt: 1700000000000
+    })
+    await watchStarted.promise
+    const unregister = runtime.unregisterSource('test-source')
+
+    releaseWatch.resolve()
+    await routed
+    await expect(unregister).resolves.toBe(true)
+
+    expect(save).not.toHaveBeenCalled()
+    expect(deleteTaskState).toHaveBeenCalledOnce()
+  })
+
+  it('awaits an in-flight deferred save before clearing the task state store', async () => {
+    vi.useFakeTimers()
+    try {
+      const saveStarted = Promise.withResolvers<void>()
+      const releaseSave = Promise.withResolvers<void>()
+      const save = vi.fn(async () => {
+        saveStarted.resolve()
+        await releaseSave.promise
+      })
+      const clearTaskState = vi.fn(async () => {})
+      runtime = new IndexingRuntime({
+        store,
+        taskStateStore: {
+          load: vi.fn(async () => undefined),
+          save,
+          delete: vi.fn(async () => {}),
+          clear: clearTaskState
+        }
+      })
+      runtime.registerSource(
+        buildSource({
+          handleWatchEvent: vi.fn(async (event: { path: string }) => [
+            { sourceId: 'test-source', action: 'change' as const, path: event.path }
+          ])
+        })
+      )
+      await runtime.routeWatchEvent({
+        sourceId: 'test-source',
+        action: 'change',
+        path: '/tmp/tuff-source/in-flight.txt',
+        occurredAt: 1700000000000
+      })
+
+      const timerAdvance = vi.advanceTimersByTimeAsync(1_000)
+      await saveStarted.promise
+      const clearing = runtime.clear({ clearTaskStateStore: true })
+      expect(clearTaskState).not.toHaveBeenCalled()
+
+      releaseSave.resolve()
+      await timerAdvance
+      await clearing
+
+      expect(save).toHaveBeenCalledOnce()
+      expect(clearTaskState).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(save).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
   it.each([
     {
@@ -3597,10 +3688,10 @@ describe('indexingRuntime', () => {
       }
     })
 
-    runtime.clear({ clearTaskStateStore: false })
+    await runtime.clear({ clearTaskStateStore: false })
     expect(clear).not.toHaveBeenCalled()
 
-    runtime.clear({ clearTaskStateStore: true })
+    await runtime.clear({ clearTaskStateStore: true })
     expect(clear).toHaveBeenCalledTimes(1)
   })
 
@@ -4370,7 +4461,7 @@ describe('indexingRuntime', () => {
       deleted: 0
     })
   })
-  it('clears registered sources and persisted task state during explicit runtime cleanup', () => {
+  it('clears registered sources and persisted task state during explicit runtime cleanup', async () => {
     const clearTaskState = vi.fn(async () => undefined)
     runtime = new IndexingRuntime({
       store: store,
@@ -4378,7 +4469,7 @@ describe('indexingRuntime', () => {
     })
     runtime.registerSource(buildSource())
 
-    runtime.clear({ clearTaskStateStore: true })
+    await runtime.clear({ clearTaskStateStore: true })
 
     expect(runtime.listDescriptors()).toEqual([])
     expect(clearTaskState).toHaveBeenCalledTimes(1)
@@ -5080,7 +5171,7 @@ describe('indexingRuntime', () => {
   it('keeps shutdown admission closed permanently after runtime clear', async () => {
     runtime.registerSource(buildSource())
     runtime.beginShutdown()
-    runtime.clear()
+    await runtime.clear()
 
     expect(runtime.listDescriptors()).toEqual([])
     await expect(
