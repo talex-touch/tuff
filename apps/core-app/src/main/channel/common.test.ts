@@ -23,6 +23,7 @@ const {
   getEverythingCapabilityPatchMock,
   getTuffCliCapabilityPatchMock,
   indexedRuntimeGetDiagnosticsMock,
+  indexedRuntimeGetSourceDiagnosticsMock,
   indexedRuntimeResetSourceRuntimeStateMock,
   indexedRuntimeReconcileSourceMock,
   indexedRuntimeScanSourceMock,
@@ -67,6 +68,7 @@ const {
   getEverythingCapabilityPatchMock: vi.fn(() => ({ supportLevel: 'unsupported' })),
   getTuffCliCapabilityPatchMock: vi.fn(async () => ({ supportLevel: 'unsupported' })),
   indexedRuntimeGetDiagnosticsMock: vi.fn(),
+  indexedRuntimeGetSourceDiagnosticsMock: vi.fn(),
   indexedRuntimeResetSourceRuntimeStateMock: vi.fn(),
   indexedRuntimeReconcileSourceMock: vi.fn(),
   indexedRuntimeScanSourceMock: vi.fn(),
@@ -309,13 +311,15 @@ vi.mock('../modules/box-tool/addon/files/file-provider', () => ({
     addWatchPath: vi.fn(),
     rebuildIndex: vi.fn(),
     resolvePreviewResourcePath: vi.fn(),
-    registerProgressStream: vi.fn()
+    registerProgressStream: vi.fn(),
+    registerOpenersChannel: vi.fn()
   }
 }))
 
 vi.mock('../modules/box-tool/search-engine/indexing-runtime', () => ({
   indexingRuntime: {
     getDiagnostics: indexedRuntimeGetDiagnosticsMock,
+    getSourceDiagnostics: indexedRuntimeGetSourceDiagnosticsMock,
     resetSourceRuntimeState: indexedRuntimeResetSourceRuntimeStateMock,
     reconcileSource: indexedRuntimeReconcileSourceMock,
     scanSource: indexedRuntimeScanSourceMock
@@ -2069,6 +2073,9 @@ describe('CommonChannelModule private helpers', () => {
     }
 
     getTuffTransportMainMock.mockReturnValue(transport as never)
+    // The all-source report is the wrong path for a source-scoped request. Leaving it configured
+    // with a two-source snapshot makes a regression back to it fail loudly: the old flow still
+    // filtered the response down to one source, so only the call contract catches it.
     indexedRuntimeGetDiagnosticsMock.mockResolvedValue({
       generatedAt: 1700000000000,
       summary: {
@@ -2090,6 +2097,11 @@ describe('CommonChannelModule private helpers', () => {
           roots: []
         }
       ]
+    })
+    indexedRuntimeGetSourceDiagnosticsMock.mockResolvedValue({
+      descriptor: { id: 'browser-bookmarks' },
+      health: { status: 'disabled' },
+      roots: []
     })
     indexedRuntimeResetSourceRuntimeStateMock.mockResolvedValue({
       sourceId: 'browser-bookmarks',
@@ -2142,6 +2154,8 @@ describe('CommonChannelModule private helpers', () => {
       },
       sources: [{ descriptor: { id: 'browser-bookmarks' } }]
     })
+    expect(indexedRuntimeGetSourceDiagnosticsMock).toHaveBeenCalledWith('browser-bookmarks')
+    expect(indexedRuntimeGetDiagnosticsMock).not.toHaveBeenCalled()
     await expect(
       resetHandler?.(
         {
@@ -2196,6 +2210,99 @@ describe('CommonChannelModule private helpers', () => {
     expect(indexedRuntimeScanSourceMock).toHaveBeenCalledWith('browser-bookmarks', 'manual-rebuild')
   })
 
+  /**
+   * A caller that names one source must not pay for the other sources' health/roots reads — that
+   * is the entire point of the scoped path. The no-source request keeps the full snapshot, and an
+   * unknown source answers empty instead of quietly falling back to the all-source report.
+   */
+  it('answers a source-scoped diagnostics request without the all-source report', async () => {
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+    indexedRuntimeGetSourceDiagnosticsMock.mockResolvedValue({
+      descriptor: { id: 'browser-bookmarks' },
+      health: { status: 'degraded' },
+      roots: []
+    })
+    indexedRuntimeGetDiagnosticsMock.mockResolvedValue({
+      generatedAt: 1700000000000,
+      summary: {
+        total: 2,
+        byStatus: { ready: 1, degraded: 1 },
+        ready: 1,
+        degraded: 1,
+        unavailable: 0
+      },
+      sources: [
+        { descriptor: { id: 'file-provider' }, health: { status: 'ready' }, roots: [] },
+        { descriptor: { id: 'browser-bookmarks' }, health: { status: 'degraded' }, roots: [] }
+      ]
+    })
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {}, onMaximizedChanged: () => () => {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    const diagnosticsHandler = handlers.get(AppEvents.indexedSource.diagnostics.toEventName())
+
+    await expect(
+      diagnosticsHandler?.({ sourceId: 'browser-bookmarks' }, {})
+    ).resolves.toMatchObject({
+      summary: {
+        total: 1,
+        byStatus: { degraded: 1 },
+        ready: 0,
+        degraded: 1,
+        unavailable: 0
+      },
+      sources: [{ descriptor: { id: 'browser-bookmarks' }, health: { status: 'degraded' } }]
+    })
+    expect(indexedRuntimeGetSourceDiagnosticsMock).toHaveBeenCalledWith('browser-bookmarks')
+    expect(indexedRuntimeGetDiagnosticsMock).not.toHaveBeenCalled()
+
+    // An unknown source is still a one-source question, so it must not buy the all-source report.
+    indexedRuntimeGetSourceDiagnosticsMock.mockResolvedValue(undefined)
+    await expect(diagnosticsHandler?.({ sourceId: 'missing-source' }, {})).resolves.toMatchObject({
+      summary: { total: 0, byStatus: {}, ready: 0, degraded: 0, unavailable: 0 },
+      sources: []
+    })
+    expect(indexedRuntimeGetSourceDiagnosticsMock).toHaveBeenCalledWith('missing-source')
+    expect(indexedRuntimeGetDiagnosticsMock).not.toHaveBeenCalled()
+
+    await expect(diagnosticsHandler?.({}, {})).resolves.toMatchObject({
+      summary: {
+        total: 2,
+        byStatus: { ready: 1, degraded: 1 },
+        ready: 1,
+        degraded: 1,
+        unavailable: 0
+      },
+      sources: [
+        { descriptor: { id: 'file-provider' }, health: { status: 'ready' } },
+        { descriptor: { id: 'browser-bookmarks' }, health: { status: 'degraded' } }
+      ]
+    })
+    expect(indexedRuntimeGetDiagnosticsMock).toHaveBeenCalledTimes(1)
+    expect(indexedRuntimeGetSourceDiagnosticsMock).toHaveBeenCalledTimes(2)
+  })
+
   it('projects file index handler failures and diagnostics to safe public results', async () => {
     const SQL_CANARY = 'Failed query: update "files" set "name" = ?'
     const PARAMS_CANARY = 'params: locked.md,.md,2,3'
@@ -2238,6 +2345,7 @@ describe('CommonChannelModule private helpers', () => {
       getFailedFiles: ReturnType<typeof vi.fn>
       addWatchPath: ReturnType<typeof vi.fn>
       rebuildIndex: ReturnType<typeof vi.fn>
+      registerOpenersChannel: ReturnType<typeof vi.fn>
     }
     fileProviderMock.getIndexingStatus.mockImplementation(() => {
       throw canaryError
@@ -2345,6 +2453,7 @@ describe('CommonChannelModule private helpers', () => {
         app: { addListener: vi.fn() }
       }
     } as never)
+    expect(fileProviderMock.registerOpenersChannel).toHaveBeenCalledWith(transport)
 
     // --- File index handlers: every failure returns a stable projected result.
     const statusHandler = handlers.get(AppEvents.fileIndex.status.toEventName())
@@ -2711,6 +2820,77 @@ describe('CommonChannelModule destination readiness handshake', () => {
         )
       ).rejects.toThrow('HOST_ONLY_HANDLER')
       expect(markPrimaryRendererReadyMock).toHaveBeenCalledTimes(1)
+    } finally {
+      Reflect.deleteProperty(process, 'getCreationTime')
+    }
+  })
+})
+
+/**
+ * CoreBox runs the settings entry as its own ⌘K row, but settings live in the main window. Main
+ * owns the reveal and the route, so the row's request goes through the destination catalog by id
+ * and answers whether anything actually moved — a window that cannot take the request must report
+ * `false` rather than a success the search window would trust.
+ */
+describe('CommonChannelModule open settings request', () => {
+  it('reveals the settings destination and reports an unavailable window', async () => {
+    const module = new CommonChannelModule() as unknown as CommonChannelModuleTestInstance
+    const handlers = new Map<
+      string,
+      (payload: unknown, context: unknown) => Promise<unknown> | unknown
+    >()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown> | unknown
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      sendTo: vi.fn(async () => undefined)
+    }
+    // The packaged runtime patches this clock onto `process`; plain Node has no such function.
+    Object.defineProperty(process, 'getCreationTime', {
+      configurable: true,
+      writable: true,
+      value: () => 1_000
+    })
+    const touchApp = {
+      app,
+      version: '2.4.9-test',
+      rootPath: '/tmp/tuff-root',
+      window: {
+        window: { webContents: { id: 42 } },
+        onMaximizedChanged: vi.fn(() => () => {})
+      }
+    }
+
+    module.registerSystemTransportHandlers(transport, touchApp, vi.fn())
+
+    try {
+      const open = vi.fn()
+      getAppDestinationNavigationServiceMock.mockReturnValue({ open })
+      const openSettings = handlers.get(AppEvents.window.openSettings.toEventName())
+      expect(openSettings).toBeTypeOf('function')
+
+      open.mockReturnValue({ destinationId: 'settings-overview', status: 'opened' })
+      expect(openSettings!(undefined, {})).toBe(true)
+      expect(open).toHaveBeenCalledExactlyOnceWith('settings-overview')
+
+      open.mockReturnValue({
+        destinationId: 'settings-overview',
+        status: 'unavailable',
+        reason: 'window-unavailable'
+      })
+      expect(openSettings!(undefined, {})).toBe(false)
+
+      await expect(
+        Promise.resolve().then(() => openSettings!(undefined, { plugin: { name: 'hostile' } }))
+      ).rejects.toThrow('HOST_ONLY_HANDLER')
+      expect(open).toHaveBeenCalledTimes(2)
     } finally {
       Reflect.deleteProperty(process, 'getCreationTime')
     }

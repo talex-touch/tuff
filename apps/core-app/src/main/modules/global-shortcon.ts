@@ -124,6 +124,7 @@ type MainTriggerRegisterOptions = {
 }
 
 const isMacPlatform = process.platform === 'darwin'
+const GLOBAL_SHORTCUT_REGISTRATION_DISABLED = process.env.TUFF_DISABLE_GLOBAL_SHORTCUTS === '1'
 /** Canonical token Escape normalises to; reserved as cancel, so it is never a binding. */
 const ESCAPE_ACCELERATOR_TOKEN = 'Esc'
 const acceleratorTokenAlias = new Map<string, string>([
@@ -195,7 +196,7 @@ export class ShortcutModule extends BaseModule {
 
   private storage?: ShortcutStorage
   private shortcutStatusMap = new Map<string, ShortcutStatus>()
-  private isEnabled: boolean = true
+  private isEnabled: boolean = !GLOBAL_SHORTCUT_REGISTRATION_DISABLED
   private disposeBeforeQuitListener: (() => void) | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   /** Ids of the shortcuts this launch has already told the user are left without a key. */
@@ -806,6 +807,10 @@ export class ShortcutModule extends BaseModule {
    * Enables and registers all shortcuts from storage.
    */
   enableAll(): void {
+    if (GLOBAL_SHORTCUT_REGISTRATION_DISABLED) {
+      shortconLog.debug('Global shortcut registration disabled by environment')
+      return
+    }
     if (this.isEnabled) return
     this.isEnabled = true
     this.reregisterAllShortcuts()

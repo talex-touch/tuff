@@ -1,4 +1,5 @@
 import type { IndexedSourceRuntimeTaskState } from '@talex-touch/utils/search'
+import type * as sqliteRetry from '../../../db/sqlite-retry'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MemoryIndexingTaskStateStore,
@@ -11,7 +12,10 @@ vi.mock('../../../db/db-write-scheduler', () => ({
   }
 }))
 
-vi.mock('../../../db/sqlite-retry', () => ({
+vi.mock('../../../db/sqlite-retry', async (importOriginal) => ({
+  // Only the retry wrapper is stubbed: the store classifies errors with the real
+  // isSqliteBusyError, and a mock that omits it fails the module shape check.
+  ...(await importOriginal<typeof sqliteRetry>()),
   withSqliteRetry: vi.fn(async (operation: () => Promise<unknown>) => operation())
 }))
 

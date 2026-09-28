@@ -1,4 +1,4 @@
-import type { GitHubRelease } from '@talex-touch/utils'
+import type { GitHubRelease, UpdateCheckResult } from '@talex-touch/utils'
 import type { ModuleInitContext } from '@talex-touch/utils/types/modules'
 import type { PathLike } from 'node:fs'
 import { resetQuitIntentForTest, setQuitIntent } from '../../core/quit-intent'
@@ -6,6 +6,7 @@ import { TalexEvents } from '../../core/eventbus/touch-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppPreviewChannel, UpdateProviderType } from '@talex-touch/utils'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
+import { UpdateLifecycleConflictError } from './update-lifecycle'
 
 type UpdateHandler = (payload?: unknown) => unknown | Promise<unknown>
 const originalResourcesPathDescriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
@@ -45,22 +46,39 @@ const mocks = vi.hoisted(() => {
       }))
     }))
   }
-  let activeLifecycle: Record<string, unknown> | null = null
-  let latestLifecycle: Record<string, unknown> | null = null
+  type MockLifecycleRecord = Record<string, unknown> & {
+    attemptId: string
+    revision: number
+    phase: string
+    error?: unknown
+    currentVersion?: string
+    targetVersion?: string | null
+    releaseTag?: string | null
+    taskId?: string | null
+    channel?: unknown
+    source?: unknown
+    installOnNormalQuit?: boolean
+    updatedAt?: number
+  }
+  const lifecyclesById = new Map<string, MockLifecycleRecord>()
+  let activeLifecycle: MockLifecycleRecord | null = null
+  let latestLifecycle: MockLifecycleRecord | null = null
   const lifecycleRepository = {
     reset: () => {
+      lifecyclesById.clear()
       activeLifecycle = null
       latestLifecycle = null
     },
     getActive: vi.fn(async () => activeLifecycle),
     getLatest: vi.fn(async () => latestLifecycle),
-    getById: vi.fn(async (attemptId: string) =>
-      latestLifecycle?.attemptId === attemptId ? latestLifecycle : null
-    ),
+    getById: vi.fn(async (attemptId: string) => lifecyclesById.get(attemptId) ?? null),
     getByDownloadTaskId: vi.fn(async (taskId: string) => {
-      const lifecycle = activeLifecycle ?? latestLifecycle
-      return lifecycle?.taskId === taskId ? lifecycle : null
+      for (const lifecycle of lifecyclesById.values()) {
+        if (lifecycle.taskId === taskId) return lifecycle
+      }
+      return null
     }),
+    listTerminalAttempts: vi.fn(async (): Promise<Record<string, unknown>[]> => []),
     createChecking: vi.fn(
       async (input: {
         id: string
@@ -89,6 +107,7 @@ const mocks = vi.hoisted(() => {
           createdAt: now,
           updatedAt: now
         }
+        lifecyclesById.set(lifecycle.attemptId, lifecycle)
         activeLifecycle = lifecycle
         latestLifecycle = lifecycle
         return lifecycle
@@ -101,22 +120,26 @@ const mocks = vi.hoisted(() => {
         patch?: Record<string, unknown>
         now?: number
       }) => {
-        if (!latestLifecycle || latestLifecycle.attemptId !== input.attemptId) {
+        const existing = lifecyclesById.get(input.attemptId)
+        if (!existing) {
           throw new Error('Lifecycle attempt not found')
         }
         const now = input.now ?? Date.now()
         const lifecycle = {
-          ...latestLifecycle,
+          ...existing,
           ...input.patch,
-          revision: Number(latestLifecycle.revision) + 1,
+          revision: Number(existing.revision) + 1,
           phase: input.to,
-          error: input.to === 'failed' ? (input.patch?.error ?? latestLifecycle.error) : null,
+          error: input.to === 'failed' ? (input.patch?.error ?? existing.error) : null,
           updatedAt: now
         }
+        lifecyclesById.set(lifecycle.attemptId, lifecycle)
         latestLifecycle = lifecycle
-        activeLifecycle = ['idle', 'healthy', 'recovered', 'failed'].includes(input.to)
-          ? null
-          : lifecycle
+        if (activeLifecycle?.attemptId === lifecycle.attemptId) {
+          activeLifecycle = ['idle', 'healthy', 'recovered', 'failed'].includes(input.to)
+            ? null
+            : lifecycle
+        }
         return lifecycle
       }
     )
@@ -267,6 +290,7 @@ vi.mock('./update-attempt-repository', () => ({
     getLatest = mocks.lifecycleRepository.getLatest
     getById = mocks.lifecycleRepository.getById
     getByDownloadTaskId = mocks.lifecycleRepository.getByDownloadTaskId
+    listTerminalAttempts = mocks.lifecycleRepository.listTerminalAttempts
     createChecking = mocks.lifecycleRepository.createChecking
     transition = mocks.lifecycleRepository.transition
   }
@@ -337,6 +361,63 @@ async function useGitHubSource(): Promise<void> {
   })
 }
 
+const HOUR_IN_MS = 60 * 60 * 1000
+
+async function checkWithoutForce(service: object): Promise<UpdateCheckResult> {
+  const internal = service as { checkForUpdates: (force: boolean) => Promise<UpdateCheckResult> }
+  return await internal.checkForUpdates(false)
+}
+
+/** The release record a previous run fetched and stored, `fetchedAgoMs` before now. */
+function persistPendingRelease(tag: string, fetchedAgoMs: number): void {
+  mocks.repository.getLatestRecord.mockResolvedValue({
+    id: 1,
+    tag,
+    channel: AppPreviewChannel.RELEASE,
+    name: `Tuff ${tag}`,
+    source: 'Nexus Releases',
+    publishedAt: null,
+    fetchedAt: Date.now() - fetchedAgoMs,
+    payload: JSON.stringify(release(tag)),
+    status: 'pending',
+    snoozeUntil: null,
+    lastActionAt: null
+  } as never)
+}
+
+/** Drives an attempt for `tag` through the lifecycle until it rests at `phase`. */
+async function activeAttemptAt(
+  tag: string,
+  phase: 'downloading' | 'ready'
+): Promise<Record<string, unknown>> {
+  const created = await mocks.lifecycleRepository.createChecking({
+    id: `attempt-${tag}`,
+    currentVersion: '1.0.0',
+    channel: AppPreviewChannel.RELEASE,
+    installOnNormalQuit: true,
+    now: 100
+  })
+  let lifecycle: Record<string, unknown> = created
+  for (const [to, patch] of [
+    ['available', { targetVersion: tag, releaseTag: tag, source: 'nexus' }],
+    ['downloading', { taskId: `task-${tag}` }],
+    ['verifying', undefined],
+    ['ready', undefined]
+  ] as const) {
+    lifecycle = await mocks.lifecycleRepository.transition({
+      attemptId: created.attemptId,
+      to,
+      patch
+    })
+    if (to === phase) break
+  }
+  return lifecycle
+}
+
+async function settle(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve))
+}
+
 describe('UpdateServiceModule facade', () => {
   beforeEach(() => {
     Object.defineProperty(process, 'resourcesPath', {
@@ -351,6 +432,8 @@ describe('UpdateServiceModule facade', () => {
     mocks.request.mockReset()
     mocks.repository.getLatestRecord.mockResolvedValue(null)
     mocks.repository.getRecordByTag.mockResolvedValue(null)
+    mocks.lifecycleRepository.listTerminalAttempts.mockResolvedValue([])
+    mocks.updateSystem.downloadUpdate.mockResolvedValue('download-task')
     mocks.app.isPackaged = true
   })
 
@@ -598,5 +681,344 @@ describe('UpdateServiceModule facade', () => {
     } finally {
       await service.onDestroy()
     }
+  })
+
+  it('restores and fails an active attempt from a different application version', async () => {
+    const service = await createService()
+    const internal = service as unknown as {
+      restoreLifecycleState: () => Promise<void>
+    }
+    const created = await mocks.lifecycleRepository.createChecking({
+      id: 'attempt-stale-version',
+      currentVersion: '0.9.0',
+      channel: AppPreviewChannel.RELEASE,
+      installOnNormalQuit: true,
+      now: 100
+    })
+    await mocks.lifecycleRepository.transition({
+      attemptId: created.attemptId,
+      to: 'available',
+      patch: { targetVersion: '0.9.5', releaseTag: 'v0.9.5' }
+    })
+
+    try {
+      await internal.restoreLifecycleState()
+      const active = await mocks.lifecycleRepository.getActive()
+      expect(active).toBeNull()
+      const latest = await mocks.lifecycleRepository.getLatest()
+      expect(latest).toMatchObject({
+        attemptId: 'attempt-stale-version',
+        phase: 'failed',
+        error: expect.objectContaining({ code: 'UPDATE_ATTEMPT_STALE' })
+      })
+    } finally {
+      await service.onDestroy()
+    }
+  })
+
+  it('restores and fails an obsolete available attempt whose version is no longer a candidate', async () => {
+    const service = await createService()
+    const internal = service as unknown as {
+      restoreLifecycleState: () => Promise<void>
+    }
+    const created = await mocks.lifecycleRepository.createChecking({
+      id: 'attempt-obsolete-available',
+      currentVersion: '1.0.0',
+      channel: AppPreviewChannel.RELEASE,
+      installOnNormalQuit: true,
+      now: 100
+    })
+    // 1.0.0 is not a candidate for current version 1.0.0
+    await mocks.lifecycleRepository.transition({
+      attemptId: created.attemptId,
+      to: 'available',
+      patch: { targetVersion: '1.0.0', releaseTag: 'v1.0.0' }
+    })
+
+    try {
+      await internal.restoreLifecycleState()
+      const active = await mocks.lifecycleRepository.getActive()
+      expect(active).toBeNull()
+      const latest = await mocks.lifecycleRepository.getLatest()
+      expect(latest).toMatchObject({
+        attemptId: 'attempt-obsolete-available',
+        phase: 'failed',
+        error: expect.objectContaining({ code: 'UPDATE_ATTEMPT_OBSOLETE' })
+      })
+    } finally {
+      await service.onDestroy()
+    }
+  })
+
+  it('automatically supersedes a stale available attempt when marking a newer release available', async () => {
+    const service = await createService()
+    const internal = service as unknown as {
+      markAvailableLifecycle: (
+        release: { tag_name: string; source?: string },
+        channel: AppPreviewChannel
+      ) => Promise<{ attemptId: string; phase: string; releaseTag: string | null }>
+    }
+    const oldAttempt = await mocks.lifecycleRepository.createChecking({
+      id: 'old-available-attempt',
+      currentVersion: '1.0.0',
+      channel: AppPreviewChannel.RELEASE,
+      installOnNormalQuit: true,
+      now: 100
+    })
+    await mocks.lifecycleRepository.transition({
+      attemptId: oldAttempt.attemptId,
+      to: 'available',
+      patch: { targetVersion: '1.0.1', releaseTag: 'v1.0.1' }
+    })
+
+    try {
+      // Now a newer release arrives: v1.1.0
+      const nextAvailable = await internal.markAvailableLifecycle(
+        { tag_name: 'v1.1.0', source: 'nexus' },
+        AppPreviewChannel.RELEASE
+      )
+
+      expect(nextAvailable).toMatchObject({
+        phase: 'available',
+        releaseTag: 'v1.1.0'
+      })
+      expect(nextAvailable.attemptId).not.toBe('old-available-attempt')
+
+      // The old attempt must have been superseded to failed
+      const oldRecord = await mocks.lifecycleRepository.getById('old-available-attempt')
+      expect(oldRecord).toMatchObject({
+        phase: 'failed',
+        error: expect.objectContaining({ code: 'UPDATE_ATTEMPT_SUPERSEDED' })
+      })
+    } finally {
+      await service.onDestroy()
+    }
+  })
+
+  it('does not supersede a newer available attempt with an older release', async () => {
+    const service = await createService()
+    const internal = service as unknown as {
+      markAvailableLifecycle: (
+        release: { tag_name: string; source?: string },
+        channel: AppPreviewChannel
+      ) => Promise<unknown>
+    }
+    const current = await mocks.lifecycleRepository.createChecking({
+      id: 'newer-available-attempt',
+      currentVersion: '1.0.0',
+      channel: AppPreviewChannel.RELEASE,
+      installOnNormalQuit: true,
+      now: 100
+    })
+    await mocks.lifecycleRepository.transition({
+      attemptId: current.attemptId,
+      to: 'available',
+      patch: { targetVersion: '1.1.0', releaseTag: 'v1.1.0' }
+    })
+
+    try {
+      await expect(
+        internal.markAvailableLifecycle(
+          { tag_name: 'v1.0.5', source: 'nexus' },
+          AppPreviewChannel.RELEASE
+        )
+      ).rejects.toBeInstanceOf(UpdateLifecycleConflictError)
+      await expect(mocks.lifecycleRepository.getActive()).resolves.toMatchObject({
+        attemptId: 'newer-available-attempt',
+        phase: 'available',
+        releaseTag: 'v1.1.0'
+      })
+    } finally {
+      await service.onDestroy()
+    }
+  })
+
+  it('reports human-readable public error messages without falling back to generic redacted error', async () => {
+    const service = await createService()
+    const internal = service as unknown as {
+      reportUpdateError: (action: string, error: unknown) => string
+    }
+
+    try {
+      const conflictMsg = internal.reportUpdateError(
+        'download',
+        new UpdateLifecycleConflictError('internal compare-and-transition details')
+      )
+      expect(conflictMsg).toBe('Update lifecycle conflict. Please retry or check for updates.')
+
+      const networkMsg = internal.reportUpdateError('check', new Error('Network timeout'))
+      expect(networkMsg).toBe('Network timeout')
+
+      const sqlMsg = internal.reportUpdateError(
+        'check',
+        new Error('UPDATE public.accounts SET secret = 1')
+      )
+      expect(sqlMsg).toBe('Update check failed. Please retry.')
+    } finally {
+      await service.onDestroy()
+    }
+  })
+
+  describe('automatic download from a cached check result', () => {
+    it.each([
+      { path: 'a persisted result inside the cache TTL', fetchedAgoMs: 0, lastCheckedAgoMs: null },
+      {
+        path: 'a restart inside the check-frequency window',
+        fetchedAgoMs: 2 * HOUR_IN_MS,
+        lastCheckedAgoMs: HOUR_IN_MS
+      }
+    ])('starts the download for $path', async ({ fetchedAgoMs, lastCheckedAgoMs }) => {
+      if (lastCheckedAgoMs !== null) {
+        mocks.fs.existsSync.mockImplementation((file) =>
+          String(file).endsWith('update-settings.json')
+        )
+        mocks.fs.readFileSync.mockReturnValue(
+          JSON.stringify({ lastCheckedAt: Date.now() - lastCheckedAgoMs })
+        )
+      }
+      persistPendingRelease('v1.1.0', fetchedAgoMs)
+      mocks.updateSystem.downloadUpdate.mockResolvedValue({
+        taskId: 'auto-task',
+        rollbackFromVersion: '1.0.0',
+        rollbackCompatible: false
+      } as never)
+      const service = await createService()
+
+      try {
+        await expect(checkWithoutForce(service)).resolves.toMatchObject({
+          hasUpdate: true,
+          release: { tag_name: 'v1.1.0' }
+        })
+        await vi.waitFor(() =>
+          expect(mocks.lifecycleRepository.getActive()).resolves.toMatchObject({
+            phase: 'downloading',
+            releaseTag: 'v1.1.0',
+            taskId: 'auto-task'
+          })
+        )
+        expect(mocks.updateSystem.downloadUpdate).toHaveBeenCalledOnce()
+        expect(mocks.updateSystem.downloadUpdate).toHaveBeenCalledWith(
+          expect.objectContaining({ tag_name: 'v1.1.0' })
+        )
+        expect(mocks.request).not.toHaveBeenCalled()
+      } finally {
+        await service.onDestroy()
+      }
+    })
+
+    it('leaves the update at available when automatic download is off', async () => {
+      persistPendingRelease('v1.1.0', 0)
+      const service = await createService()
+
+      try {
+        await invoke(UpdateEvents.updateSettings, { settings: { autoDownload: false } })
+        await expect(checkWithoutForce(service)).resolves.toMatchObject({ hasUpdate: true })
+        await settle()
+
+        await expect(mocks.lifecycleRepository.getActive()).resolves.toMatchObject({
+          phase: 'available',
+          releaseTag: 'v1.1.0'
+        })
+        expect(mocks.updateSystem.downloadUpdate).not.toHaveBeenCalled()
+      } finally {
+        await service.onDestroy()
+      }
+    })
+
+    it.each([
+      { active: 'another release is already downloading', tag: 'v1.0.5', phase: 'downloading' },
+      { active: 'the cached release is already ready', tag: 'v1.1.0', phase: 'ready' }
+    ] as const)('does not start a download when $active', async ({ tag, phase }) => {
+      persistPendingRelease('v1.1.0', 0)
+      const service = await createService()
+      const active = await activeAttemptAt(tag, phase)
+
+      try {
+        await expect(checkWithoutForce(service)).resolves.toMatchObject({ hasUpdate: true })
+        await settle()
+
+        await expect(mocks.lifecycleRepository.getActive()).resolves.toEqual(active)
+        expect(mocks.updateSystem.downloadUpdate).not.toHaveBeenCalled()
+      } finally {
+        await service.onDestroy()
+      }
+    })
+  })
+
+  describe('update history', () => {
+    function finishedAttempt(
+      attemptId: string,
+      phase: 'healthy' | 'recovered' | 'failed',
+      targetVersion: string,
+      updatedAt: number
+    ): Record<string, unknown> {
+      return {
+        attemptId,
+        revision: 8,
+        phase,
+        currentVersion: '1.0.0',
+        targetVersion,
+        source: 'nexus',
+        channel: AppPreviewChannel.RELEASE,
+        releaseTag: targetVersion,
+        taskId: `task-${attemptId}`,
+        installMode: null,
+        installOnNormalQuit: true,
+        rollbackCompatible: false,
+        rollbackFromVersion: null,
+        previousVersion: null,
+        recoveryAvailable: false,
+        lastCheckAt: null,
+        error: null,
+        createdAt: updatedAt - 10,
+        updatedAt
+      }
+    }
+
+    it('answers with the finished attempts projected into history rows', async () => {
+      mocks.lifecycleRepository.listTerminalAttempts.mockResolvedValue([
+        finishedAttempt('updated', 'healthy', 'v1.1.0', 300),
+        finishedAttempt('rolled-back', 'recovered', 'v1.0.9', 200)
+      ])
+      const service = await createService()
+
+      try {
+        await expect(invoke(UpdateEvents.getHistory, { limit: 1 })).resolves.toEqual({
+          success: true,
+          data: [
+            {
+              attemptId: 'updated',
+              fromVersion: '1.0.0',
+              toVersion: 'v1.1.0',
+              channel: AppPreviewChannel.RELEASE,
+              outcome: 'updated',
+              finishedAt: 300,
+              error: null
+            }
+          ]
+        })
+      } finally {
+        await service.onDestroy()
+      }
+    })
+
+    it('reports an unreadable history as a failure rather than an empty one', async () => {
+      mocks.lifecycleRepository.listTerminalAttempts.mockRejectedValue(
+        new Error('database is locked')
+      )
+      const service = await createService()
+
+      try {
+        await expect(invoke(UpdateEvents.getHistory)).resolves.toEqual({
+          success: false,
+          error: 'database is locked'
+        })
+        expect(mocks.logger.warn).toHaveBeenCalledWith('Failed to load update history', {
+          error: expect.any(Error)
+        })
+      } finally {
+        await service.onDestroy()
+      }
+    })
   })
 })

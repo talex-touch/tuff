@@ -197,6 +197,11 @@
       "description": "You're all set. Let's get started.",
       "action": "Get Started",
       "persistFailed": "Could not save onboarding completion. Try again before closing this guide.",
+      "completionChoice": {
+        "prompt": "The shortcut works. Hide the main window and use CoreBox, or keep exploring here?",
+        "hide": "Hide and open CoreBox",
+        "continue": "Keep exploring"
+      },
       "shortcut": {
         "command": "command",
         "ctrl": "ctrl",
@@ -659,6 +664,13 @@
     "unavailable": {
       "title": "Recognition status could not be read",
       "description": ""
+    },
+    "capture": {
+      "title": "Voice input is unavailable",
+      "componentMissing": "This build is missing its audio component, so no recogniser can record; update to the latest version or reinstall.",
+      "noDevice": "No microphone is available. Connect one and try again.",
+      "platformUnsupported": "Voice input is not supported on this system.",
+      "disabled": "Recording is switched off by the TUFF_DISABLE_NATIVE_AUDIO environment variable; remove it and restart."
     },
     "reasons": {
       "credentialMissing": "The selected channel has no credential",
@@ -3436,7 +3448,7 @@
     "restart_now": "Restart Now",
     "restart_later": "Restart Later",
     "no_release_notes": "No release notes available",
-    "download_started": "Update download started. Check the Download Center for progress.",
+    "download_started": "Update download started",
     "download_failed_with_reason": "Download failed: {reason}",
     "remind_later_success": "We'll remind you again in {hours} hours.",
     "remind_later_failed": "Failed to set a reminder. Please try again later.",
@@ -4846,11 +4858,7 @@
       }
     },
     "settingUpdate": {
-      "groupTitle": "Application Updates",
-      "groupDesc": "Manage update downloads, status, and checks.",
       "channelTitle": "Update Channel",
-      "channelDescRelease": "Stable is the default. Beta offers earlier features but may be unstable. Switching channels checks for updates immediately.",
-      "channelDescBeta": "Receive Beta builds and subsequent stable releases earlier. Beta builds may be unstable; switching channels checks immediately.",
       "channelSnapshotLocked": "Snapshot builds receive updates through the Beta channel.",
       "channels": {
         "release": "Stable (Release)",
@@ -4858,7 +4866,6 @@
         "snapshot": "Snapshot (nightly)"
       },
       "frequencyTitle": "Check Frequency",
-      "frequencyDesc": "Automatic polling interval after the app starts.",
       "frequency": {
         "everyday": "Every 12 hours",
         "daily": "Every day",
@@ -4869,15 +4876,10 @@
       },
       "autoDownloadDesc": "Automatically download updates when available",
       "autoDownloadDescManual": "Automatically download the installer when available; system installation still remains manual",
-      "autoDownloadDescMac": "Download the macOS update package automatically; applying it uses a restart handoff.",
-      "autoDownloadDescWindows": "Download the Windows installer automatically; Windows still shows the installer handoff.",
-      "autoDownloadDescLinux": "Download the Linux package automatically; opening and installing the package remains manual.",
-      "installOnNormalQuitLocked": "Normal-quit installation is locked because this release has no authoritative N/N-1 rollback compatibility evidence. Install Now remains available when ready.",
       "rendererOverrideTitle": "Renderer Override (Experimental)",
       "rendererOverrideDesc": "Experimental. Only shown when launched with TUFF_ENABLE_RENDERER_OVERRIDE=1; relaunch with that variable to turn it back on.",
       "statusTitle": "Status",
       "status": {
-        "loading": "Loading update status…",
         "never": "Never checked for updates",
         "lastChecked": "Last check: {time}",
         "updateAvailable": "A new version is available. See the popup dialog.",
@@ -4885,10 +4887,24 @@
         "downloadReady": "Update package {version} is ready. Restart now to finish installing.",
         "downloadReadyManual": "Installer package {version} is ready. Open it to continue the update.",
         "unknownVersion": "this version",
-        "cachedRelease": "Cached release: {version}"
+        "cachedRelease": "Cached release: {version}",
+        "latest": "You're up to date",
+        "currentVersion": "Version {version}",
+        "checking": "Checking for updates…",
+        "available": "{version} is available",
+        "preparing": "Preparing to download {version}",
+        "downloading": "Downloading {version}",
+        "verifying": "Verifying {version}",
+        "ready": "{version} is ready",
+        "readyOnQuit": "Installs when you quit Tuff",
+        "readyBlocked": "Unofficial builds can't install updates. Get the official build instead.",
+        "installing": "Installing {version}",
+        "finishing": "Finishing the update",
+        "recovering": "Update didn't finish — restoring the previous version",
+        "failed": "Update failed",
+        "progressDetail": "{downloaded} of {total} · {speed}/s"
       },
       "lifecycle": {
-        "loadingDescription": "Loading the authoritative lifecycle snapshot from the update service.",
         "unavailable": "Not available",
         "boolean": {
           "yes": "Yes",
@@ -4908,64 +4924,6 @@
           "none": "None",
           "retryable": "This error can be retried.",
           "notRetryable": "This error requires manual diagnosis before retrying."
-        },
-        "phases": {
-          "idle": {
-            "label": "Idle",
-            "description": "No update attempt is active."
-          },
-          "checking": {
-            "label": "Checking for updates",
-            "description": "The update service is checking the selected channel."
-          },
-          "available": {
-            "label": "Update available",
-            "description": "A release is available and can be downloaded."
-          },
-          "downloading": {
-            "label": "Downloading update",
-            "description": "The selected platform package is downloading."
-          },
-          "verifying": {
-            "label": "Verifying update",
-            "description": "Integrity and release metadata are being verified."
-          },
-          "ready": {
-            "label": "Ready to install",
-            "description": "The verified package is ready for an explicit install action."
-          },
-          "install-scheduled": {
-            "label": "Install scheduled",
-            "description": "A compatible install is scheduled for the next normal quit."
-          },
-          "handoff-started": {
-            "label": "Installer handoff started",
-            "description": "Control is being handed to the platform installer."
-          },
-          "awaiting-health": {
-            "label": "Awaiting health confirmation",
-            "description": "The updated app has started and must still report healthy."
-          },
-          "healthy": {
-            "label": "Update healthy",
-            "description": "The installed version passed lifecycle health confirmation."
-          },
-          "recovery-required": {
-            "label": "Recovery required",
-            "description": "The update did not become healthy; review recovery metadata before proceeding."
-          },
-          "recovering": {
-            "label": "Recovering previous version",
-            "description": "The authoritative recovery flow is restoring the previous compatible version."
-          },
-          "recovered": {
-            "label": "Previous version recovered",
-            "description": "Recovery completed; the previous version is active again."
-          },
-          "failed": {
-            "label": "Update failed",
-            "description": "The update attempt failed. Review the stable error code and message below."
-          }
         }
       },
       "actionsTitle": "Actions",
@@ -4975,21 +4933,15 @@
         "installNow": "Restart to Update",
         "openInstaller": "Open Installer",
         "restartMac": "Restart to Update",
-        "restartMacDesc": "Restart macOS Tuff and hand the verified package to the updater. Native trust follows the current official-build verification result.",
         "startWindowsInstaller": "Start Installer",
-        "startWindowsInstallerDesc": "Start the downloaded Windows installer and follow the Windows installation prompts.",
         "openLinuxPackage": "Open Package",
-        "openLinuxPackageDesc": "Open the downloaded Linux package with the system package handler.",
         "downloadAvailable": "Download Update",
-        "downloadAvailableDesc": "Download the matching package for this authoritative available attempt.",
         "manualCheck": "Check Now",
-        "manualCheckDesc": "Check the current channel for a new version.",
-        "lifecycleInProgressDesc": "The update service is processing this attempt; actions remain locked until the lifecycle reaches an actionable phase.",
-        "waitForLifecycle": "Waiting for the update lifecycle",
+        "retry": "Try again",
+        "openDownloadPage": "Get the official build",
         "clearCache": "Clear Cache"
       },
       "assetsTitle": "GitHub Packages",
-      "assetsDesc": "Review cached release packages and download manually.",
       "assetsEmpty": "No cached release yet. Run a manual check first.",
       "assetsOpen": "View packages",
       "assetsCount": "{count} assets",
@@ -5003,28 +4955,16 @@
       "assetsCompatibilityNoUrl": "Missing download URL",
       "assetsCompatibilityMissingChecksum": "Missing checksum",
       "evidenceTitle": "Diagnostic Evidence",
-      "evidenceDesc": "Export the authoritative lifecycle snapshot, rollback/recovery metadata, cached release, platform handoff mode, and explicit macOS native-trust verification status.",
       "evidenceMissing": "Load update status first",
       "evidenceCopied": "Update diagnostic evidence copied",
       "evidenceCopyFailed": "Failed to copy update diagnostic evidence",
       "evidenceSaved": "Update diagnostic evidence saved",
       "nativeTrust": {
-        "passedTitle": "macOS native trust passed",
-        "passedDescription": "This official build passed the Developer ID signing, Gatekeeper, and notarization release gates.",
-        "verifiedBadge": "Verified build",
-        "unverifiedTitle": "macOS native trust is unverified",
-        "unavailableRisk": "This installation has no verifiable official-build attestation, so Developer ID, Gatekeeper, and notarization trust cannot be confirmed.",
-        "verificationFailedRisk": "Official-build verification failed for this installation. Files may be damaged or modified, and the native trust chain cannot be confirmed.",
-        "securityWarning": "CRITICAL SECURITY WARNING",
-        "criticalTitle": "This macOS build has no established native trust",
-        "criticalDescription": "Do not ignore this warning: the current application process has no established official trust. Download verification cannot replace the Developer ID, Gatekeeper, and notarization trust chain of the current installation.",
-        "notApplicableTitle": "macOS native trust is not applicable",
-        "notApplicableDescription": "The current runtime platform is not macOS.",
-        "risks": {
-          "origin": "The current app.asar cannot be confirmed as an unmodified official release.",
-          "nativeChain": "Developer ID signing, Gatekeeper assessment, and the Apple notarization ticket cannot be confirmed.",
-          "reinstall": "Reinstall from the official release page. Until then, do not treat this installation as trusted."
-        }
+        "securityWarning": "CRITICAL SECURITY WARNING"
+      },
+      "authenticity": {
+        "title": "This isn't an official Tuff build",
+        "description": "Tuff can't confirm this copy came unmodified from an official release. Download it again from the official site."
       },
       "assets": {
         "download": "Download",
@@ -5056,16 +4996,21 @@
         "macSilentUpdateUntrusted": "Silent update is blocked because this Tuff build is not an officially verified macOS package.",
         "cacheCleared": "Update cache cleared",
         "cacheClearFailed": "Failed to clear cache",
-        "installModeSaved": "Install mode saved",
-        "notifyOnUpdateSaved": "Notification preference saved"
+        "notifyOnUpdateSaved": "Notification preference saved",
+        "autoUpdateSaved": "Automatic update setting saved"
       },
       "notifyOnUpdate": "Notify on new version",
-      "notifyOnUpdateDesc": "Send a system notification when an update is found or finishes downloading.",
-      "installMode": {
-        "title": "Install mode",
-        "manual": "Notify only",
-        "onQuit": "Download, install on quit",
-        "immediate": "Download and install now"
+      "autoUpdate": "Automatic updates",
+      "advancedTitle": "Advanced",
+      "history": {
+        "title": "Update history",
+        "outcome": {
+          "updated": "Updated",
+          "rolledBack": "Rolled back",
+          "failed": "Failed"
+        },
+        "showMore": "Show more",
+        "showLess": "Show less"
       },
       "exportEvidence": "Export diagnostics"
     },
@@ -5484,6 +5429,9 @@
       "voiceTranscribeUnavailable": "AI voice transcription is unavailable. Check login, quota, or provider status.",
       "voiceRecognitionNotConfigured": "Speech recognition is not set up",
       "voiceRecognitionUnavailable": "Speech recognition is unavailable",
+      "voiceCaptureUnavailable": "The audio component is unavailable — see the details or reinstall",
+      "voiceCaptureComponentMissing": "This build is missing its audio component, so voice input cannot run — update to the latest version or reinstall",
+      "voiceCapturePlatformUnsupported": "Voice input is not supported on this system",
       "voiceTranscribeEmpty": "No speech was detected. Record it again.",
       "voiceListening": "Listening…",
       "voiceTranscribeFailed": "Voice transcription failed",
@@ -6428,6 +6376,7 @@
       "translateImagePin": "Translate and Pin",
       "flowTransfer": "Transfer to Plugin",
       "bindShortcut": "Bind Shortcut",
+      "openSettings": "Open Settings",
       "open": "Open",
       "paste": "Paste",
       "execute": "Run",
@@ -6448,10 +6397,8 @@
       "empty": "No matching actions",
       "failed": "Action failed",
       "groups": {
-        "open": "Open",
-        "copy": "Copy",
-        "organize": "Organize",
-        "flow": "Flow",
+        "open": "Basic",
+        "host": "App settings",
         "plugin": "Plugins"
       }
     },

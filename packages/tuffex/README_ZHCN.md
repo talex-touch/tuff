@@ -85,7 +85,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## 组件梳理
 
-当前源码导出模块总数：**164**。
+当前源码导出模块总数：**165**。
 
 全部模块按三大套件划分，每个套件都有独立的分类入口：
 
@@ -104,7 +104,7 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 - `布局 (11)`: `container`, `flex`, `grid`, `grid-layout`, `stack`, `splitter`, `scroll`, `collapse`, `card`, `card-item`, `group-block`
 - `导航 (10)`: `tabs`, `tab-bar`, `nav-bar`, `sidebar-nav`, `breadcrumb`, `steps`, `pagination`, `dropdown-menu`, `flat-dropdown`, `context-menu`
 - `数据展示 (11)`: `data-table`, `tree`, `sortable-list`, `timeline`, `transfer`, `stat-card`, `cell-link`, `dot-indicator`, `filter-chips`, `markdown-view`, `image-gallery`
-- `反馈 (13)`: `dialog`, `modal`, `drawer`, `popover`, `tooltip`, `toast`, `toast-panel`, `alert`, `progress`, `progress-bar`, `spinner`, `loading-overlay`, `selection-actions`
+- `反馈 (14)`: `dialog`, `modal`, `drawer`, `popover`, `tooltip`, `toast`, `toast-panel`, `alert`, `status-hint`, `progress`, `progress-bar`, `spinner`, `loading-overlay`, `selection-actions`
 - `状态占位 (13)`: `empty`, `empty-state`, `no-data`, `no-selection`, `search-empty`, `error-state`, `offline-state`, `permission-state`, `guide-state`, `blank-slate`, `loading-state`, `skeleton`, `layout-skeleton`
 
 ### pro 进阶套件

@@ -1,7 +1,10 @@
 import type { Mock } from 'vitest'
 import type { IndexWorkerBatchResult, IndexWorkerFile } from '../workers/file-index-worker-client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { FileProviderIndexSchedulerService } from './file-provider-index-scheduler-service'
+import {
+  FILE_INDEX_SCHEDULER_DRAIN_PER_BATCH_MS,
+  FileProviderIndexSchedulerService
+} from './file-provider-index-scheduler-service'
 
 interface SchedulerFile {
   id: number
@@ -83,6 +86,7 @@ describe('file-provider-index-scheduler-service', () => {
 
     expect(indexFiles).not.toHaveBeenCalled()
     expect(service.hasPendingWork()).toBe(false)
+    expect(service.getDrainTimeoutMs(true)).toBe(FILE_INDEX_SCHEDULER_DRAIN_PER_BATCH_MS)
   })
 
   it('maps files and chunks immediate worker payloads', async () => {
@@ -208,6 +212,8 @@ describe('file-provider-index-scheduler-service', () => {
     // The shared scheduler retains one active plus one queued batch; the overflow is returned to
     // the caller (which persists it durably) instead of being queued in memory.
     expect(result).toEqual({ accepted: 2, deferred: 3 })
+    expect(service.getDrainTimeoutMs(false)).toBe(FILE_INDEX_SCHEDULER_DRAIN_PER_BATCH_MS)
+    expect(service.getDrainTimeoutMs(true)).toBe(2 * FILE_INDEX_SCHEDULER_DRAIN_PER_BATCH_MS)
 
     await service.drain()
     expect(dispatchedIds(indexFiles)).toEqual([1, 2])

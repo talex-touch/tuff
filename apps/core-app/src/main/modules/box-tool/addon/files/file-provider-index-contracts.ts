@@ -51,7 +51,7 @@ export interface FileIndexedSourceRuntimeMutationDelegate {
     batch: IndexedSourceRecordBatch,
     records: UpsertFileRecord[]
   ) => Promise<{
-    persisted: Array<Record<string, unknown>>
+    persistedCount: number
     metrics?: PersistAndApplyProviderItemsMetrics
   }>
   applyDelta: (delta: IndexedSourceDelta) => Promise<unknown>
@@ -68,6 +68,17 @@ export interface FileIndexedSourceScanResult {
 export type FileIndexedSourceRuntimeResetDelegate = (
   request: IndexedSourceResetRequest
 ) => Promise<IndexedSourceResetResult>
+
+export function filterFileIndexCandidatesByProgress<TFile extends { id: number }>(
+  files: readonly TFile[],
+  progressRows: ReadonlyArray<{ fileId: number; status: string }>
+): TFile[] {
+  const progressByFileId = new Map(progressRows.map((row) => [row.fileId, row.status]))
+  return files.filter((file) => {
+    const status = progressByFileId.get(file.id)
+    return status === undefined || status === 'pending' || status === 'processing'
+  })
+}
 
 export function createFileIndexSyncStats(): FileIndexSyncStats {
   return {

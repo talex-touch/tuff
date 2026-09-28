@@ -86,7 +86,11 @@ export class IndexedSourceEventRouter {
       shouldAccept,
       // The source itself decides what is in scope; a missing runtime means the same drop as
       // before this queue existed, so nothing accumulates while the engine is not up.
-      prepareFlush: async () => true,
+      prepareFlush: async () => {
+        const runtime = this.getRuntime()
+        if (!runtime || runtime.isShuttingDown?.()) return false
+        return true
+      },
       processEntries: async (entries) => {
         for (const [, payload] of entries) {
           await this.route(sourceId, payload.rawPath, payload.action)
@@ -223,10 +227,13 @@ export class IndexedSourceEventRouter {
     action: 'add' | 'change' | 'delete'
   ): Promise<void> {
     const runtime = this.getRuntime()
-    if (!runtime) return
+    if (!runtime || runtime.isShuttingDown?.()) return
     try {
       await runtime.routeWatchEventWithResult({ sourceId, action, path, occurredAt: Date.now() })
     } catch (error) {
+      if (error instanceof Error && error.message === 'INDEXING_RUNTIME_SHUTTING_DOWN') {
+        return
+      }
       log.warn('Indexed source fs event route failed', { error, sourceId, path, action })
     }
   }

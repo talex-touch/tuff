@@ -203,6 +203,33 @@ export interface UpdateLifecycleSnapshot {
   updatedAt: number
 }
 
+/**
+ * How one finished update attempt ended, as shown in the local update history.
+ * Mirrors the terminal lifecycle phases that follow an `available` update:
+ * `healthy` → `updated`, `recovered` → `rolled-back`, `failed` → `failed`.
+ */
+export type UpdateHistoryOutcome = 'updated' | 'rolled-back' | 'failed'
+
+/**
+ * One row of this device's update history, read from the local attempt store.
+ * Local only: it carries no release notes, and nothing here is fetched remotely.
+ */
+export interface UpdateHistoryEntry {
+  attemptId: string
+  /** App version that was running when the attempt started, without a `v` prefix (`2.4.14-beta.46`). */
+  fromVersion: string
+  /**
+   * Release tag the attempt tried to install, as stored on the attempt — it keeps the tag's `v`
+   * prefix (`v2.4.14-beta.47`). Normalise both fields before showing or comparing them.
+   */
+  toVersion: string
+  channel: AppPreviewChannel
+  outcome: UpdateHistoryOutcome
+  /** When the attempt reached its terminal phase (epoch ms). */
+  finishedAt: number
+  error: UpdateLifecycleError | null
+}
+
 export function isUpdateLifecyclePhase(
   value: unknown,
 ): value is UpdateLifecyclePhase {

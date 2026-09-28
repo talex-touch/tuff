@@ -407,14 +407,13 @@ describe('MetaOverlay panel', () => {
       'corebox.actions.openFolder',
       'corebox.actions.copyPath',
       'corebox.actions.copyTitle',
+      'corebox.actions.flowTransfer',
       'corebox.actions.pin',
-      'corebox.actions.flowTransfer'
+      'corebox.actions.openSettings'
     ])
     expect(wrapper.findAll('.MetaPanel-SectionTitle').map((title) => title.text())).toEqual([
       'corebox.actions.groups.open',
-      'corebox.actions.groups.copy',
-      'corebox.actions.groups.organize',
-      'corebox.actions.groups.flow'
+      'corebox.actions.groups.host'
     ])
     const panel = wrapper.get('.MetaPanel').element
     expect(panel.lastElementChild?.classList.contains('MetaPanel-Filter')).toBe(true)
@@ -476,7 +475,7 @@ describe('MetaOverlay panel', () => {
     keydown('ArrowUp')
     keydown('ArrowUp')
     await nextTick()
-    expect(activeLabel(wrapper)).toBe('corebox.actions.flowTransfer')
+    expect(activeLabel(wrapper)).toBe('corebox.actions.openSettings')
 
     unmountPanel(wrapper)
   })

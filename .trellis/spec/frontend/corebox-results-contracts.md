@@ -4,7 +4,8 @@
 > rows and the highlight. Established 2026-09-25/26 by `09-25-corebox-keyboard-jump`,
 > `09-25-corebox-list-motion`, `09-26-corebox-refresh-churn` (renderer half),
 > `09-25-corebox-search-pulse-beam`, `09-26-corebox-pulse-semantics` and
-> `09-26-corebox-meta-overlay` (feedback placement), under `09-25-corebox-ux-polish`.
+> `09-26-corebox-meta-overlay` (feedback placement), under `09-25-corebox-ux-polish`; the
+> feedback's look by `09-27-corebox-action-feedback-hint` (2026-09-27).
 
 ---
 
@@ -17,7 +18,10 @@
   selection stays on row 0, the preview pane waits before it closes.
 - **Compositor properties only.** Motion is `transform`, `translate` or `opacity`. Nothing
   transitions width, height, padding, `filter` or a custom property, and keyboard navigation never
-  scrolls smoothly.
+  scrolls smoothly. One sanctioned exception: an action's outcome morphs through
+  `TxTextTransformer`, whose engine tweens its own container's width (WAAPI) while one message
+  replaces another. It stays inside the feedback hint (the footer copy is a fixed-width absolute
+  overlay) and asks the gate like every script motion ("Action feedback placement").
 - **One gate for script motion.** See "One motion gate" below.
 
 ```
@@ -32,6 +36,7 @@ box/CoreBox.vue
   useListFlip               rows an update moved slide                → List FLIP
   addonType / addonItem     the preview pane's hold                   → Preview pane
   footerRef.onScreen        where an action's outcome shows           → Feedback placement
+render/CoreBoxActionFeedback    the outcome's look (TxStatusHint)       → Feedback placement
 render/BoxItem · ItemSubtitle   row paint, hover, same-name folders   → Selection block, names
 ```
 
@@ -575,6 +580,7 @@ const { lowBatteryMode, shouldAnimate } = useMotionGate()
 | List FLIP | `useListFlip` | `enabled` (the setting, never on low battery) and `shouldAnimate` |
 | Preview pane slide | CSS `addon-slide-in` | reduce media query; the low-battery attribute |
 | Result-layout and stagger entrances | CSS | classes off on low battery; reduce media query |
+| Action feedback hint | `TxStatusHint`: CSS entrance and replay, `TxTextMorph` WAAPI for the words | `animated = shouldAnimate()` on `CoreBoxFooter` and on the header copy; `false` drops `.is-animated` and renders the words as plain text, so no engine runs |
 
 ### 4. Validation & Error Matrix
 
@@ -1053,35 +1059,74 @@ addonCloseTimer = setTimeout(closeAddon, PREVIEW_CLOSE_DELAY_MS)
 
 ## Scenario: Action feedback placement (renderer side)
 
-- **Trigger.** Changing where CoreBox shows or announces an action's outcome: `CoreBoxFooter`'s
-  `onScreen` or `.FooterFeedback`, CoreBox's `footerOnScreen` / `headerActionFeedback`,
-  `.CoreBox-ActionFeedback`, `.CoreBox-ActionFeedback-Live`, or
-  `renderer/modules/box/meta-actions/footer-feedback.ts`. Who writes the feedback, and how failures
-  are logged, is [corebox-meta-overlay-contracts.md](../main-process/corebox-meta-overlay-contracts.md),
-  "Keys, execution failures and feedback".
+- **Trigger.** Changing where CoreBox shows or announces an action's outcome, or how it looks:
+  `CoreBoxFooter`'s `onScreen` or `.FooterFeedback`, CoreBox's `footerOnScreen` /
+  `headerActionFeedback`, `.CoreBox-ActionFeedback`, `.CoreBox-ActionFeedback-Live`,
+  `render/CoreBoxActionFeedback.vue`, or `renderer/modules/box/meta-actions/footer-feedback.ts`.
+  Who writes the feedback, and how failures are logged, is
+  [corebox-meta-overlay-contracts.md](../main-process/corebox-meta-overlay-contracts.md), "Keys,
+  execution failures and feedback". The look itself is TuffEx's `TxStatusHint`
+  (`packages/tuffex/.../status-hint`, docs `status-hint.{zh,en}.mdc`); established by
+  `09-27-corebox-action-feedback-hint`.
 - **One message.** `showCoreBoxFooterFeedback(message, tone)` holds it for
   `COREBOX_FOOTER_FEEDBACK_MS` (1200); a newer one replaces it and restarts the clock. No toast:
   CoreBox mounts no toast host.
+- **One component for both copies.** `CoreBoxActionFeedback` renders `TxStatusHint` from the
+  on-demand subpath `@talex-touch/tuffex/status-hint`:
+
+  | `CoreBoxActionFeedback` prop | `TxStatusHint` |
+  | --- | --- |
+  | `feedback.message` | `text` |
+  | `feedback.tone`: `error` / anything else | `tone`: `danger` / `success` |
+  | `feedback.id` | `pulse-key` |
+  | `placement`: `footer` / `header` | `size`: `md` / `sm` |
+  | `animated` | `animated` |
+  | — | `live=false` (the one announcer is on the wrapper) |
+
+  The icon slot keeps the Remix glyphs (`.CoreBoxActionFeedback-Icon`). Root classes:
+  `CoreBoxActionFeedback is-footer|is-header is-success|is-error`, plus the parent's `FooterFeedback`
+  or `CoreBox-ActionFeedback`.
+- **Mounted across messages.** Neither copy is keyed per message. A new message changes `text`, so
+  the words morph out of the last ones ("已固定" → "已取消固定" grows "取消" in place), and changes
+  `pulse-key`, so the emphasis replays even when the words are the same. Keyed by `id`, every
+  message remounted `TxTextTransformer`, whose engine never animates a first render.
 - **The footer while it is on screen.** `CoreBoxFooter` exposes `onScreen` (`defineExpose`): slid
   in, or a file index building. It draws the outcome only then. A footer parked below the results
   (a plugin widget, an item hiding every hint) draws nothing, and says it left only when it slides
-  out, after its 100ms debounce.
+  out, after its 100ms debounce. The copy is a direct child of `.CoreBoxFooter` (its containing
+  block), laid over the footer's left half: `position: absolute; inset-block: 0;
+  inset-inline-start: 0; width: 50%; pointer-events: none`, `--tx-status-hint-radius: 0`,
+  `--tx-status-hint-pad-x: 12px` (the footer's `px-3`). `.FooterInfo` stays mounted and empty
+  while it shows, so `justify-between` keeps the key hints where they are. When the outcome clears,
+  the item comes back in the same render and the hint fades out over it through
+  `<Transition name="tx-status-hint">` (words 120ms, wash 240ms).
 - **The header otherwise.** `headerActionFeedback = footerOnScreen ? null : actionFeedback` draws
-  `.CoreBox-ActionFeedback` first in `.CoreBox-Configure`, when there is no footer (plugin UI mode,
-  no rows) or a parked one.
+  the copy first in `.CoreBox-Configure`, `sm`, in the same Transition, when there is no footer
+  (plugin UI mode, no rows) or a parked one.
+- **Motion.** `CoreBox.vue` passes `shouldAnimate()` to `<CoreBoxFooter :animated>` and to the
+  header copy. With it false the hint shows its end state and renders the words as plain text, so
+  neither the CSS entrance nor the morph engine's WAAPI runs (see "One motion gate").
 - **One announcer.** `.CoreBox-ActionFeedback-Live` (`sr-only`, `role="status"`,
   `aria-live="polite"`) is a direct child of `.CoreBox-Wrapper`, before `div.CoreBox`. It is always
   mounted, because a live region only announces changes to an element that already exists, and it
   sits outside the header because a header-less DivisionBox hides `div.CoreBox`. The footer and
   header copies are visual only, so a message moving between them is not announced twice.
+  "Visual only" now means: no `role="status"` and no `aria-live` other than `off` inside a copy —
+  `live=false` also overrides the `aria-live="polite"` that `TxTextTransformer` hard-codes.
 - **Not colour alone.** Each copy pairs the glyph (`i-ri-checkbox-circle-line` or
   `i-ri-error-warning-line`) with the words.
-- **Tests.** `render/CoreBoxFooter.feedback.test.ts` (the outcome replaces the item and gives it
-  back; a failure carries the error glyph; replacement restarts the clock; `onScreen` for a shown
-  item, false when parked, true at once while indexing, false only after the slide-out).
-  `box/CoreBox.search-status.test.ts` › "CoreBox action feedback" and "… with the real footer"
-  (header in plugin UI mode, with no rows and behind a parked footer; exactly one live region says
-  the message, outside the header; moving it does not announce it again).
+- **Tests.** `render/CoreBoxFooter.feedback.test.ts`: the outcome replaces the item and gives it
+  back; a failure carries the error glyph and the danger tone; replacement restarts the clock; one
+  hint across two messages (same uid and root element, the text morphs); the same words again
+  replay (`is-pulse-a`, then `is-pulse-b`); `animated=false` has no `.is-animated` and no
+  `[tx-morph-root]`; `onScreen` for a shown item, false when parked, true at once while indexing,
+  false only after the slide-out. `box/CoreBox.search-status.test.ts` › "CoreBox action feedback"
+  and "… with the real footer": header in plugin UI mode, with no rows and behind a parked footer;
+  exactly one live region says the message, outside the header; moving it does not announce it
+  again; the header copy stays mounted across messages and follows the gate live on low battery;
+  the real footer follows the gate (open, low battery, reduced motion). Both files read text
+  through an `accessibleText` helper that skips `aria-hidden` subtrees (the morph DOM holds the
+  message twice), and count live regions as `[aria-live]:not([aria-live="off"])`.
 
 ```vue
 <!-- Wrong: a live region in the header (hidden with it in a DivisionBox), or on each copy (announced twice) -->
@@ -1089,6 +1134,16 @@ addonCloseTimer = setTimeout(closeAddon, PREVIEW_CLOSE_DELAY_MS)
 
 <!-- Correct: one always-mounted announcer on the wrapper; the copies are visual -->
 <span class="CoreBox-ActionFeedback-Live sr-only" role="status" aria-live="polite">{{ actionFeedback?.message ?? '' }}</span>
+```
+
+```vue
+<!-- Wrong: keyed per message — each message remounts the transformer, whose first render never morphs -->
+<CoreBoxActionFeedback v-if="shownFeedback" :key="shownFeedback.id" class="FooterFeedback" placement="footer" :feedback="shownFeedback" :animated="animated" />
+
+<!-- Correct: one hint across messages; the words morph and `pulse-key` replays the emphasis -->
+<Transition name="tx-status-hint">
+  <CoreBoxActionFeedback v-if="shownFeedback" class="FooterFeedback" placement="footer" :feedback="shownFeedback" :animated="animated" />
+</Transition>
 ```
 
 ## Rejected designs: do not reintroduce
@@ -1106,6 +1161,7 @@ addonCloseTimer = setTimeout(closeAddon, PREVIEW_CLOSE_DELAY_MS)
 | `animation.coreBoxResize` on by default | Main drives it with a 16ms poll that inherits every main-loop stall |
 | Re-ranking rows across batches in the renderer | User decision 2026-09-26: rows on screen keep their place |
 | A spring (`useJellyIndicator`) for the selection block | Lags behind key repeat; see the selection block scenario |
+| Keying an action-feedback copy by message id | Remounts `TxTextTransformer` per message, and its engine never animates a first render, so "已固定" → "已取消固定" swapped instead of morphing (2026-09-27) |
 
 ## Verification
 

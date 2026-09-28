@@ -2401,6 +2401,13 @@ export class SearchEngineCore
               }
             )
           : Promise.resolve()
+      // The worker may be blocked inside a synchronous SQLite call. Begin its bounded graceful
+      // close before waiting for scans: terminating that writer is what rejects the in-flight
+      // persistence promise and lets the scan release its source-mutation lease.
+      const writerShutdownDrain = trackDrain(
+        searchIndexWriter.beginShutdown(),
+        'Failed to stop search index writer during destroy'
+      )
       // Cancellation and producer shutdown all start here, synchronously, before this method
       // awaits anything. A coalesced watcher delta already being routed holds the per-source
       // mutation gate that an in-flight scan owns, so awaiting the router drain (or search session
@@ -2427,9 +2434,17 @@ export class SearchEngineCore
         fileProvider.prepareForSearchIndexShutdown(),
         'Failed to drain FileProvider before writer shutdown'
       )
+      const admittedTaskDrainPromise = runtime?.drainAdmittedTasks() ?? Promise.resolve()
       const admittedTaskDrain = trackDrain(
-        runtime?.drainAdmittedTasks(),
+        admittedTaskDrainPromise,
         'Failed to drain admitted Runtime indexing tasks'
+      )
+      const drainTaskStateWrites = async (): Promise<void> => {
+        await runtime?.drainTaskStateWrites()
+      }
+      const taskStateDrain = trackDrain(
+        admittedTaskDrainPromise.then(drainTaskStateWrites, drainTaskStateWrites),
+        'Failed to drain deferred indexed source task state writes'
       )
       this.usageSummaryService?.stop()
       this.stopMaintenance()
@@ -2445,9 +2460,11 @@ export class SearchEngineCore
         'Failed to drain coalesced indexed-source watcher events'
       )
       await Promise.all([
+        writerShutdownDrain,
         appProducerDrain,
         appRuntimeDrain,
         initialAppScanDrain,
+        taskStateDrain,
         fileRuntimeDrain,
         admittedTaskDrain,
         fileDrain,
@@ -2481,15 +2498,9 @@ export class SearchEngineCore
       fileProvider.setIndexedSourceRuntimeResetDelegate(null)
       fileProvider.setIndexedSourceRuntimeMutationDelegate(null)
       fileProvider.setFilePersistencePort(null)
-      this.indexingRuntime?.clear()
+      await this.indexingRuntime?.clear()
       this.indexingRuntime = null
       this.indexWriterRouter = null
-      try {
-        await searchIndexWriter.shutdown()
-      } catch (error) {
-        searchEngineLog.error('Failed to drain search index writer on destroy', { error })
-        throw error
-      }
 
       await this.searchUsageService.flush().catch((error) => {
         searchEngineLog.error('Failed to flush usage stats queue on destroy', { error })

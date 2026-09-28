@@ -91,6 +91,18 @@ const rows = await resolveCurrentAuxDb()?.select(...)  // reads: same live home
   migrations alone are NOT primary-parity — the V1 `no such column` lesson).
 - An empty worker-owned `search_index` with providers present triggers the
   once-per-boot bootstrap reindex (`file-provider-bootstrap-reindex.ts`).
+- `scan_progress` child rows are resumable checkpoints, **not root completion**. They count as scan
+  evidence (so restart obeys the idle gate), but only an exact watch-root row closes that root's
+  eligibility. A restart re-enters the incomplete root and the checkpoint planner skips completed
+  children; folding a child row into a synthetic root completion suppresses coverage for 24 hours.
+- Shutdown is cancellation-first. `SearchEngineCore.destroy()` starts the writer close before it
+  waits for source scans, because a scan blocked in synchronous worker-side libSQL cannot release
+  its mutation lease until that write rejects. File content enrichment is already marked `pending`
+  before admission, so shutdown may cancel its worker/queued batches and resume them next launch.
+  The writer gets a short graceful-close window, then is terminated and detached; an unconfirmed
+  termination during app exit is diagnostic evidence, not a reason to exceed the outer quit budget.
+  Ordinary runtime termination timeouts remain failures.
+- Watch-event task history is diagnostic state, not indexing correctness: update it in memory immediately, coalesce durable saves in a bounded leading-edge window, and flush the latest snapshot during shutdown. Scan/reconcile/reset task state remains awaited and durable before the operation returns; never apply the watch coalescing rule to those terminal records.
 
 ### 7. Boot-time maintenance writers
 

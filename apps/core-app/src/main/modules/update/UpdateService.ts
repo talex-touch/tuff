@@ -51,6 +51,7 @@ import {
 import { compareUpdateVersions, parseComparableUpdateVersion } from '../../../shared/update/version'
 import { UpdateRecordStatus, UpdateRepository } from './update-repository'
 import { UpdateAttemptRepository } from './update-attempt-repository'
+import { buildUpdateHistory } from './update-history'
 import { UpdateLifecycleConflictError } from './update-lifecycle'
 import { resolveUpdateInstallSettingsMigration } from './update-settings-migration'
 import { ReleaseFetchService } from './services/release-fetch-service'
@@ -624,6 +625,23 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         }
       }),
 
+      tx.on(UpdateEvents.getHistory, async (payload) => {
+        const repository = this.updateAttemptRepository
+        if (!repository) {
+          return { success: true, data: [] }
+        }
+        try {
+          const attempts = await repository.listTerminalAttempts()
+          return { success: true, data: buildUpdateHistory(attempts, payload?.limit) }
+        } catch (error) {
+          updateLog.warn('Failed to load update history', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Update history is unavailable'
+          }
+        }
+      }),
+
       tx.on(UpdateEvents.getBundledReleaseNotes, async () => {
         try {
           return {
@@ -816,7 +834,26 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     const active = await repository.getActive()
     if (active) {
-      return active.phase === 'checking' ? active : null
+      if (active.phase === 'checking') {
+        return active
+      }
+      const candidateTag = active.releaseTag ?? active.targetVersion ?? ''
+      const isStaleVersion = Boolean(
+        active.currentVersion && active.currentVersion !== this.currentVersion
+      )
+      const isObsoleteCandidate =
+        active.phase === 'available' && (!candidateTag || !this.isUpdateCandidate(candidateTag))
+
+      if (isStaleVersion || isObsoleteCandidate) {
+        await this.failLifecycle(
+          active,
+          isStaleVersion ? 'UPDATE_ATTEMPT_STALE' : 'UPDATE_ATTEMPT_SUPERSEDED',
+          'Previous update attempt superseded by new check',
+          true
+        )
+      } else {
+        return null
+      }
     }
 
     try {
@@ -851,14 +888,58 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     if (!current) {
       throw new UpdateLifecycleConflictError('Unable to create an update lifecycle attempt')
     }
-    if (current.phase === 'available' && current.releaseTag === release.tag_name) {
+    if (
+      current.phase === 'available' &&
+      current.releaseTag === release.tag_name &&
+      (!current.currentVersion || current.currentVersion === this.currentVersion)
+    ) {
       return current
     }
     if (current.phase !== 'checking') {
-      if (current.releaseTag === release.tag_name) {
+      if (
+        current.releaseTag === release.tag_name &&
+        (!current.currentVersion || current.currentVersion === this.currentVersion)
+      ) {
         return current
       }
-      throw new UpdateLifecycleConflictError('Another update lifecycle attempt is already active')
+
+      if (
+        current.phase === 'available' &&
+        (!current.releaseTag ||
+          this.compareSemverVersions(release.tag_name, current.releaseTag) === 1)
+      ) {
+        updateLog.info(
+          `Superseding stale available update attempt ${current.attemptId} (tag: ${current.releaseTag}) with newer release ${release.tag_name}`
+        )
+        await this.failLifecycle(
+          current,
+          'UPDATE_ATTEMPT_SUPERSEDED',
+          `Superseded by release ${release.tag_name}`,
+          true
+        )
+        try {
+          current = await repository.createChecking({
+            id: randomUUID(),
+            currentVersion: this.currentVersion,
+            channel,
+            installOnNormalQuit: this.settings.installOnNormalQuit
+          })
+        } catch (error) {
+          if (error instanceof UpdateLifecycleConflictError) {
+            current = await repository.getActive()
+          } else {
+            throw error
+          }
+        }
+        if (!current) {
+          throw new UpdateLifecycleConflictError('Unable to create an update lifecycle attempt')
+        }
+        if (current.phase === 'available' && current.releaseTag === release.tag_name) {
+          return current
+        }
+      } else {
+        throw new UpdateLifecycleConflictError('Another update lifecycle attempt is already active')
+      }
     }
 
     return await repository.transition({
@@ -974,7 +1055,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return
     }
     try {
-      await this.markAvailableLifecycle(result.release, channel)
+      const lifecycle = await this.markAvailableLifecycle(result.release, channel)
+      // Cached and persisted results used to stop at `available`, so after a restart inside the
+      // check-frequency window an auto-download user was left looking at "update available".
+      if (lifecycle.phase === 'available') {
+        void this.maybeAutoDownloadLifecycle(result.release)
+      }
     } catch (error) {
       if (!(error instanceof UpdateLifecycleConflictError)) {
         throw error
@@ -1184,6 +1270,48 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     if (!active) {
       return
     }
+
+    if (active.currentVersion && active.currentVersion !== this.currentVersion) {
+      await this.failLifecycle(
+        active,
+        'UPDATE_ATTEMPT_STALE',
+        'Application version changed while update attempt was active',
+        true
+      )
+      return
+    }
+
+    if (active.phase === 'available') {
+      const candidateTag = active.releaseTag ?? active.targetVersion ?? ''
+      if (!candidateTag || !this.isUpdateCandidate(candidateTag)) {
+        await this.failLifecycle(
+          active,
+          'UPDATE_ATTEMPT_OBSOLETE',
+          'Available update is no longer a candidate for the current version',
+          true
+        )
+        return
+      }
+      this.publishLifecycleSnapshot(active)
+      return
+    }
+
+    if (active.phase === 'ready') {
+      const candidateTag = active.releaseTag ?? active.targetVersion ?? ''
+      if (!candidateTag || !this.isUpdateCandidate(candidateTag)) {
+        await this.failLifecycle(
+          active,
+          'UPDATE_ATTEMPT_OBSOLETE',
+          'Ready update is no longer a candidate for the current version',
+          true
+        )
+        return
+      }
+      this.publishLifecycleSnapshot(active)
+      this.maybeShowReadyNotification(active)
+      return
+    }
+
     this.publishLifecycleSnapshot(active)
 
     if (active.phase === 'checking') {
@@ -1552,17 +1680,37 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       meta
     })
   }
+  private resolveSafeUpdateErrorMessage(action: string, error: unknown): string {
+    if (error instanceof UpdateLifecycleConflictError) {
+      return 'Update lifecycle conflict. Please retry or check for updates.'
+    }
+    if (error instanceof Error) {
+      const msg = error.message.trim()
+      if (
+        msg.length > 0 &&
+        msg.length <= 120 &&
+        !/(\/Users\/|\/home\/|[a-zA-Z]:\\|\bselect\b|\binsert\b|\bdelete\b|\bupdate\s+(?:[`"]?\w+[`"]?\.)*[`"]?\w+[`"]?\s+set\b)/i.test(
+          msg
+        )
+      ) {
+        return msg
+      }
+    }
+    return `Update ${action} failed. Please retry.`
+  }
 
   private reportUpdateError(
     action: string,
     error: unknown,
     meta?: Record<string, unknown>
   ): string {
+    const publicMessage = this.resolveSafeUpdateErrorMessage(action, error)
     const report = operationalErrorService.report({
       domain: 'update',
       operation: action,
       error,
       code: 'UPDATE_OPERATION_FAILED',
+      publicMessage,
       retryable: action === 'check' || action === 'download',
       userImpact: action === 'install' ? 'blocked' : 'degraded'
     })

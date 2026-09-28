@@ -208,7 +208,8 @@ import { operationalErrorService } from '../../../observability'
 import { FileProviderEnrichmentResumeService } from './services/file-provider-enrichment-resume-service'
 import {
   FileProviderIndexSchedulerService,
-  type FileProviderIndexSchedulerDeps
+  type FileProviderIndexSchedulerDeps,
+  type FileProviderIndexSchedulerFile
 } from './services/file-provider-index-scheduler-service'
 import { fileProvider, resolveFileProviderBaseWatchPaths } from './file-provider'
 import { recordRuntimeWriteSnapshot } from './services/file-provider-runtime-evidence'
@@ -460,9 +461,10 @@ type FileProviderLeaseRecoveryTestApi = FileProviderIndexingLifecycleTestApi & {
   publishCommittedWorkerRecords: (entries: unknown[]) => Promise<number>
   indexSchedulerService: {
     drain: (timeoutMs?: number, mutationLeaseId?: string) => Promise<void>
+    getDrainTimeoutMs: (scoped: boolean) => number
     cancelLease: (mutationLeaseId: string) => void
     schedule: (
-      files: unknown[],
+      files: FileProviderIndexSchedulerFile[],
       reason: string,
       mutationLeaseId?: string
     ) => { accepted: number; deferred: number }
@@ -864,43 +866,165 @@ describe('file-provider startup readiness', () => {
     }
   })
 
-  it('bounds shutdown producer waits and succeeds on retry after indexing settles', async () => {
-    vi.useFakeTimers()
-    const provider = fileProvider as unknown as FileProviderShutdownTestApi
+  /**
+   * Shutdown must stop admitting content enrichment BEFORE it waits on any producer. A blocked
+   * indexing run (a parser/publication barrier) is the worst case: on beta.47 the enrichment
+   * scheduler and its read-only worker stayed alive behind that barrier, and admission only closed
+   * in the `finally`, i.e. after the wait resolved. The durable pending markers written before
+   * admission make closing early recoverable — the next launch resumes every unfinished row — so
+   * this asserts the gate is already shut while the producer is still blocked.
+   */
+  it('closes enrichment admission and its worker before waiting on a blocked indexing producer', async () => {
+    const provider = fileProvider as unknown as FileProviderShutdownTestApi &
+      FileProviderLeaseRecoveryTestApi
+    const originalScheduler = provider.indexSchedulerService
+    const originalWorker = provider.fileIndexWorker
     const originalIsInitializing = provider.isInitializing
     const indexing = createDeferred<void>()
-    const scanWorkerShutdown = vi.spyOn(provider.fileScanWorker, 'shutdown')
-    const indexWorkerShutdown = vi.spyOn(provider.fileIndexWorker, 'shutdown')
-    const reconcileWorkerShutdown = vi.spyOn(provider.reconcileWorker, 'shutdown')
+    const workerShutdown = vi.fn()
+    const indexFiles = vi.fn(
+      async (
+        _dbPath: string,
+        _providerId: string,
+        _providerType: string,
+        files: Array<{ id: number; path: string; name: string }>
+      ) => ({ processed: files.length, failed: 0 })
+    )
+    // Driven through a fresh scheduler carrying the production dispatch closure, so this proves the
+    // gate the provider closes at shutdown rather than leftover state from an earlier test.
+    const scheduler = new FileProviderIndexSchedulerService({
+      getDatabaseFilePath: () => '/tmp/tuff-file-provider-admission-db',
+      getProviderId: () => 'file-provider',
+      getProviderType: () => 'file',
+      getWatchPaths: () => ['/tmp'],
+      indexFiles: dispatchClosureOf(originalScheduler),
+      logWarn: vi.fn()
+    })
 
     resetProviderState(provider)
+    provider.indexSchedulerService = scheduler
+    provider.fileIndexWorker = {
+      indexFiles,
+      shutdown: workerShutdown,
+      cancelLease: vi.fn(() => 0)
+    } as unknown as typeof provider.fileIndexWorker
     provider.isInitializing = indexing.promise
 
+    let prepared = false
+    const probeFiles = [{ id: 1, path: '/tmp/admission-probe.txt', name: 'admission-probe.txt' }]
     try {
-      const firstPrepare = provider.prepareForSearchIndexShutdown()
-      const firstFailure = expect(firstPrepare).rejects.toThrow(
-        'FILE_PROVIDER_SHUTDOWN_PRODUCER_TIMEOUT:indexing'
-      )
+      // Calibration: this exact probe is admitted while the gate is open, so the rejection below can
+      // only be the shutdown gate closing — not path filtering or an exhausted capacity budget.
+      expect(scheduler.schedule(probeFiles, 'probe', 'lease-before-shutdown')).toEqual({
+        accepted: 1,
+        deferred: 0
+      })
 
-      await vi.advanceTimersByTimeAsync(30_000)
-      await firstFailure
+      const prepare = provider.prepareForSearchIndexShutdown().then(() => {
+        prepared = true
+      })
 
-      expect(scanWorkerShutdown).toHaveBeenCalledTimes(1)
-      expect(indexWorkerShutdown).toHaveBeenCalledTimes(1)
-      expect(reconcileWorkerShutdown).toHaveBeenCalledTimes(1)
+      // prepareForSearchIndexShutdown's prologue is synchronous: the gates must already be down even
+      // though the producer it waits on has not settled.
+      expect(prepared).toBe(false)
+      expect(workerShutdown).toHaveBeenCalledTimes(1)
+      expect(scheduler.schedule(probeFiles, 'probe', 'lease-after-shutdown')).toEqual({
+        accepted: 0,
+        deferred: 0
+      })
 
       indexing.resolve(undefined)
-      await expect(provider.prepareForSearchIndexShutdown()).resolves.toBeUndefined()
-
-      expect(scanWorkerShutdown).toHaveBeenCalledTimes(2)
-      expect(indexWorkerShutdown).toHaveBeenCalledTimes(2)
-      expect(reconcileWorkerShutdown).toHaveBeenCalledTimes(2)
+      await prepare
+      expect(prepared).toBe(true)
+      // The drain that follows prepare's producer wait must not reopen admission.
+      expect(scheduler.schedule(probeFiles, 'probe', 'lease-after-drain')).toEqual({
+        accepted: 0,
+        deferred: 0
+      })
     } finally {
       indexing.resolve(undefined)
+      provider.indexSchedulerService = originalScheduler
+      provider.fileIndexWorker = originalWorker
       provider.isInitializing = originalIsInitializing
-      scanWorkerShutdown.mockRestore()
-      indexWorkerShutdown.mockRestore()
-      reconcileWorkerShutdown.mockRestore()
+    }
+  })
+
+  it('does not report or retain an indexing failure that shutdown cancelled', async () => {
+    const provider = fileProvider as unknown as FileProviderShutdownTestApi & {
+      startIndexing: (
+        source: 'auto' | 'manual',
+        runOptions?: { throwOnFailure?: boolean }
+      ) => Promise<{ errors: number }>
+      dbUtils: unknown
+    }
+    const originalDbUtils = provider.dbUtils
+    const reportSpy = vi.spyOn(operationalErrorService, 'report')
+    const failure = new Error('Failed query: UPDATE files SET name = ? params: /tmp/private.txt')
+
+    resetProviderState(provider)
+    // The run is genuinely failing; only the shutdown state decides how that failure is treated.
+    provider.dbUtils = {
+      getFileIndexReadDb: () => {
+        throw failure
+      }
+    }
+    provider.shuttingDown = true
+
+    try {
+      await expect(provider.startIndexing('auto')).resolves.toEqual(
+        expect.objectContaining({ errors: 0 })
+      )
+      // A cancelled run is recoverable, not a degraded startup: nothing may be reported and no
+      // failure may be left behind for the next status poll.
+      expect(reportSpy).not.toHaveBeenCalled()
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({ initializationFailed: false, errorCode: null, reportId: null })
+      )
+
+      // The runtime path passes throwOnFailure, and it must still observe the cancellation.
+      await expect(provider.startIndexing('auto', { throwOnFailure: true })).rejects.toBe(failure)
+      expect(reportSpy).not.toHaveBeenCalled()
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({ initializationFailed: false, errorCode: null })
+      )
+    } finally {
+      provider.dbUtils = originalDbUtils
+      reportSpy.mockRestore()
+    }
+  })
+
+  it('does not report or retain an indexing failure cancelled by an aborted scan signal', async () => {
+    const provider = fileProvider as unknown as FileProviderShutdownTestApi & {
+      startIndexing: (
+        source: 'auto' | 'manual',
+        runOptions?: { throwOnFailure?: boolean; signal?: AbortSignal }
+      ) => Promise<{ errors: number }>
+    }
+    const reportSpy = vi.spyOn(operationalErrorService, 'report')
+    const controller = new AbortController()
+    const abortReason = new Error('INDEXED_SOURCE_SCAN_ABORTED:file-provider')
+    controller.abort(abortReason)
+
+    resetProviderState(provider)
+
+    try {
+      await expect(provider.startIndexing('auto', { signal: controller.signal })).resolves.toEqual(
+        expect.objectContaining({ errors: 0 })
+      )
+      expect(reportSpy).not.toHaveBeenCalled()
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({ initializationFailed: false, errorCode: null })
+      )
+
+      await expect(
+        provider.startIndexing('auto', { signal: controller.signal, throwOnFailure: true })
+      ).rejects.toBe(abortReason)
+      expect(reportSpy).not.toHaveBeenCalled()
+      expect(provider.getIndexingStatus()).toEqual(
+        expect.objectContaining({ initializationFailed: false, errorCode: null })
+      )
+    } finally {
+      reportSpy.mockRestore()
     }
   })
 
@@ -1901,6 +2025,7 @@ describe('file-provider startup readiness', () => {
           cancellationBegan.resolve(undefined)
           await activeDispatchSettled.promise
         }),
+      getDrainTimeoutMs: vi.fn(() => 60_000),
       cancelLease: vi.fn((leaseId: string) => events.push(`scheduler-cancel:${leaseId}`))
     } as unknown as typeof provider.indexSchedulerService
     provider.fileIndexWorker = {
@@ -1985,6 +2110,7 @@ describe('file-provider startup readiness', () => {
     const cancelLease = vi.fn()
     provider.indexSchedulerService = {
       drain: vi.fn().mockRejectedValue(unexpected),
+      getDrainTimeoutMs: vi.fn(() => 60_000),
       cancelLease
     } as unknown as typeof provider.indexSchedulerService
 
@@ -2021,6 +2147,7 @@ describe('file-provider startup readiness', () => {
 
     provider.indexSchedulerService = {
       drain,
+      getDrainTimeoutMs: vi.fn(() => 60_000),
       hasPendingWork: vi.fn((leaseId?: string) => leaseId === undefined),
       cancelLease: vi.fn(),
       cancelPending: vi.fn()
@@ -2037,6 +2164,7 @@ describe('file-provider startup readiness', () => {
       // This lease owns nothing, so the drain neither waits on the global scheduler
       // flush nor enters the flush loop; the foreign lease's results stay its own.
       expect(drain.mock.calls.every((call) => call[1] === 'lease-scoped')).toBe(true)
+      expect(drain).toHaveBeenCalledWith(60_000, 'lease-scoped')
       expect(unscopedDrain).not.toHaveBeenCalled()
       expect(scheduleFlush).not.toHaveBeenCalled()
       expect(provider.pendingIndexWorkerResults.get(1)).toEqual({
@@ -2078,6 +2206,7 @@ describe('file-provider startup readiness', () => {
 
     provider.indexSchedulerService = {
       drain: vi.fn(async (_timeoutMs?: number, _leaseId?: string) => undefined),
+      getDrainTimeoutMs: vi.fn(() => 60_000),
       hasPendingWork: vi.fn(() => false),
       cancelLease: vi.fn(),
       cancelPending: vi.fn()
@@ -2531,21 +2660,17 @@ describe('file-provider startup readiness', () => {
       emit: (payload: FileIndexProgressPayload) => void
       isCancelled: () => boolean
     }
-    const provider = fileProvider as unknown as {
-      progressStreamContexts: Set<ProgressStream>
-      lastProgressStreamPayload: FileIndexProgressPayload | null
-      lastProgressStreamEmitAt: number
-      pendingProgressStreamPayload: FileIndexProgressPayload | null
-      progressStreamFlushTimer: NodeJS.Timeout | null
-      registerProgressStream: (context: ProgressStream) => void
-      emitProgressStream: (payload: FileIndexProgressPayload) => void
-      clearProgressCleanupTimer: () => void
-    }
-    const originalLastPayload = provider.lastProgressStreamPayload
-    const originalLastEmitAt = provider.lastProgressStreamEmitAt
-    const originalPendingPayload = provider.pendingProgressStreamPayload
-    const originalFlushTimer = provider.progressStreamFlushTimer
-    const originalContexts = new Set(provider.progressStreamContexts)
+    // The publisher is the only thing that holds stream state now, so a test drives it directly
+    // through its own seams and resets it afterwards instead of reaching for the provider's fields.
+    const publisher = (
+      fileProvider as unknown as {
+        progressStream: {
+          register: (context: ProgressStream) => void
+          emit: (payload: FileIndexProgressPayload) => void
+          reset: () => void
+        }
+      }
+    ).progressStream
     const now = new Date('2026-09-03T00:00:00.000Z')
     vi.useFakeTimers()
     vi.setSystemTime(now)
@@ -2566,18 +2691,13 @@ describe('file-provider startup readiness', () => {
 
     try {
       for (const terminalStage of ['completed', 'idle'] as const) {
-        provider.progressStreamContexts.clear()
-        provider.lastProgressStreamPayload = null
-        provider.lastProgressStreamEmitAt = 0
-        provider.pendingProgressStreamPayload = null
-        if (provider.progressStreamFlushTimer) clearTimeout(provider.progressStreamFlushTimer)
-        provider.progressStreamFlushTimer = null
+        publisher.reset()
 
         const subscriber: ProgressStream = { emit: vi.fn(), isCancelled: vi.fn(() => false) }
-        provider.registerProgressStream(subscriber)
-        provider.emitProgressStream(payload('indexing', 10, 0.1))
-        provider.emitProgressStream(payload('indexing', 11, 0.1))
-        provider.emitProgressStream(payload(terminalStage, 100, 1))
+        publisher.register(subscriber)
+        publisher.emit(payload('indexing', 10, 0.1))
+        publisher.emit(payload('indexing', 11, 0.1))
+        publisher.emit(payload(terminalStage, 100, 1))
 
         expect(vi.mocked(subscriber.emit).mock.calls.map(([update]) => update.stage)).toEqual([
           'indexing',
@@ -2588,22 +2708,17 @@ describe('file-provider startup readiness', () => {
           'indexing',
           terminalStage
         ])
-      }
 
-      const lateSubscriber: ProgressStream = { emit: vi.fn(), isCancelled: vi.fn(() => false) }
-      provider.registerProgressStream(lateSubscriber)
-      await vi.advanceTimersByTimeAsync(0)
-      expect(vi.mocked(lateSubscriber.emit)).toHaveBeenCalledWith(
-        expect.objectContaining({ stage: 'idle', progress: 1 })
-      )
+        // A subscriber that arrives after the run ended replays the last payload, whatever it was.
+        const lateSubscriber: ProgressStream = { emit: vi.fn(), isCancelled: vi.fn(() => false) }
+        publisher.register(lateSubscriber)
+        await vi.advanceTimersByTimeAsync(0)
+        expect(vi.mocked(lateSubscriber.emit)).toHaveBeenCalledWith(
+          expect.objectContaining({ stage: terminalStage, progress: 1 })
+        )
+      }
     } finally {
-      provider.clearProgressCleanupTimer()
-      provider.progressStreamContexts.clear()
-      for (const context of originalContexts) provider.progressStreamContexts.add(context)
-      provider.lastProgressStreamPayload = originalLastPayload
-      provider.lastProgressStreamEmitAt = originalLastEmitAt
-      provider.pendingProgressStreamPayload = originalPendingPayload
-      provider.progressStreamFlushTimer = originalFlushTimer
+      publisher.reset()
     }
   })
 })
@@ -2829,5 +2944,162 @@ describe('path normalization migration scheduling', () => {
 
     expect(provider.keywordBackfillScheduled).toBe(!armsMigration)
     expect(provider.keywordBackfillTimer === null).toBe(armsMigration)
+  })
+})
+
+interface RuntimeAckFileRow {
+  id: number
+  path: string
+  name: string
+  type: string
+}
+
+interface FileProviderRuntimeAckTestApi extends FileProviderIndexingLifecycleTestApi {
+  handleIndexedSourceRuntimeRecordsApplied: (
+    records: ReadonlyArray<{ path: string; metadata?: Record<string, unknown> }>,
+    mutationLeaseId?: string
+  ) => Promise<void>
+  processFileExtensions: (files: RuntimeAckFileRow[]) => Promise<void>
+  scheduleIndexing: (
+    files: RuntimeAckFileRow[],
+    reason: string,
+    mutationLeaseId?: string
+  ) => Promise<unknown>
+}
+
+function runtimeAckFile(id: number, filePath: string): RuntimeAckFileRow {
+  return { id, path: filePath, name: path.basename(filePath), type: 'file' }
+}
+
+function createRuntimeAckDbUtils(
+  files: RuntimeAckFileRow[],
+  progress: Array<{ fileId: number; status: string }>
+) {
+  return {
+    getFileIndexReadDb: () => ({
+      select: () => ({ from: () => ({ where: vi.fn(async () => files) }) })
+    }),
+    getFileIndexProgressByFileIds: vi.fn(async () => progress)
+  }
+}
+
+/**
+ * The runtime writer's ack fires for a committed base batch, and it decides
+ * re-admission from the durable `file_index_progress` rows: a file that already
+ * reached a terminal status must not be flipped back to pending by the ack, or
+ * every ack re-queues work the worker already finished (the re-admission loop).
+ * The extension refresh is NOT that decision — it is a per-row side effect and
+ * still has to cover the whole acknowledged batch.
+ */
+describe('runtime writer ack re-admission', () => {
+  it('schedules only files without terminal progress while refreshing extensions for the whole batch', async () => {
+    const provider = fileProvider as unknown as FileProviderRuntimeAckTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalProcessFileExtensions = provider.processFileExtensions
+    const originalScheduleIndexing = provider.scheduleIndexing
+    const records = [
+      { path: '/tmp/ack-completed.txt', metadata: { runtimePublication: 'base' } },
+      { path: '/tmp/ack-skipped.txt', metadata: { runtimePublication: 'base' } },
+      { path: '/tmp/ack-failed.txt', metadata: { runtimePublication: 'base' } },
+      { path: '/tmp/ack-pending.txt', metadata: { runtimePublication: 'base' } },
+      { path: '/tmp/ack-processing.txt', metadata: { runtimePublication: 'base' } },
+      // No progress row at all: never enriched, so it is a candidate.
+      { path: '/tmp/ack-unenriched.txt', metadata: { runtimePublication: 'base' } }
+    ]
+    const files = records.map((record, index) => runtimeAckFile(index + 1, record.path))
+    provider.dbUtils = createRuntimeAckDbUtils(files, [
+      { fileId: 1, status: 'completed' },
+      { fileId: 2, status: 'skipped' },
+      { fileId: 3, status: 'failed' },
+      { fileId: 4, status: 'pending' },
+      { fileId: 5, status: 'processing' }
+    ])
+    const scheduledCalls: Array<{ ids: number[]; reason: string; mutationLeaseId?: string }> = []
+    const extensionBatches: number[][] = []
+    provider.scheduleIndexing = vi.fn(
+      async (batch: RuntimeAckFileRow[], reason: string, mutationLeaseId?: string) => {
+        scheduledCalls.push({ ids: batch.map((file) => file.id), reason, mutationLeaseId })
+      }
+    )
+    provider.processFileExtensions = vi.fn(async (batch: RuntimeAckFileRow[]) => {
+      extensionBatches.push(batch.map((file) => file.id))
+    })
+
+    try {
+      await provider.handleIndexedSourceRuntimeRecordsApplied(records, 'lease-ack')
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.processFileExtensions = originalProcessFileExtensions
+      provider.scheduleIndexing = originalScheduleIndexing
+    }
+
+    expect(scheduledCalls).toEqual([
+      { ids: [4, 5, 6], reason: 'runtime-writer-ack', mutationLeaseId: 'lease-ack' }
+    ])
+    expect(extensionBatches).toEqual([[1, 2, 3, 4, 5, 6]])
+  })
+
+  it('keeps an all-terminal batch out of the scheduler but still refreshes its extensions', async () => {
+    const provider = fileProvider as unknown as FileProviderRuntimeAckTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalProcessFileExtensions = provider.processFileExtensions
+    const originalScheduleIndexing = provider.scheduleIndexing
+    const records = [
+      { path: '/tmp/ack-completed.txt', metadata: { runtimePublication: 'base' } },
+      { path: '/tmp/ack-skipped.txt', metadata: { runtimePublication: 'base' } },
+      { path: '/tmp/ack-failed.txt', metadata: { runtimePublication: 'base' } }
+    ]
+    const files = records.map((record, index) => runtimeAckFile(index + 1, record.path))
+    provider.dbUtils = createRuntimeAckDbUtils(files, [
+      { fileId: 1, status: 'completed' },
+      { fileId: 2, status: 'skipped' },
+      { fileId: 3, status: 'failed' }
+    ])
+    const scheduleIndexing = vi.fn(async () => undefined)
+    const extensionBatches: number[][] = []
+    provider.scheduleIndexing = scheduleIndexing
+    provider.processFileExtensions = vi.fn(async (batch: RuntimeAckFileRow[]) => {
+      extensionBatches.push(batch.map((file) => file.id))
+    })
+
+    try {
+      await provider.handleIndexedSourceRuntimeRecordsApplied(records, 'lease-ack')
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.processFileExtensions = originalProcessFileExtensions
+      provider.scheduleIndexing = originalScheduleIndexing
+    }
+
+    expect(scheduleIndexing).not.toHaveBeenCalled()
+    expect(extensionBatches).toEqual([[1, 2, 3]])
+  })
+
+  it('ignores records that were not published as the base batch', async () => {
+    const provider = fileProvider as unknown as FileProviderRuntimeAckTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalProcessFileExtensions = provider.processFileExtensions
+    const originalScheduleIndexing = provider.scheduleIndexing
+    const records = [
+      { path: '/tmp/ack-enriched.txt', metadata: { runtimePublication: 'worker-enrichment' } }
+    ]
+    const files = [runtimeAckFile(1, records[0].path)]
+    provider.dbUtils = createRuntimeAckDbUtils(files, [])
+    const scheduleIndexing = vi.fn(async () => undefined)
+    const extensionBatches: number[][] = []
+    provider.scheduleIndexing = scheduleIndexing
+    provider.processFileExtensions = vi.fn(async (batch: RuntimeAckFileRow[]) => {
+      extensionBatches.push(batch.map((file) => file.id))
+    })
+
+    try {
+      await provider.handleIndexedSourceRuntimeRecordsApplied(records)
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.processFileExtensions = originalProcessFileExtensions
+      provider.scheduleIndexing = originalScheduleIndexing
+    }
+
+    expect(scheduleIndexing).not.toHaveBeenCalled()
+    expect(extensionBatches).toEqual([])
   })
 })

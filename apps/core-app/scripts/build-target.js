@@ -9,12 +9,18 @@ const {
   syncOfficialPluginBundledRuntimes
 } = require('./lib/touch-translation-runtime-sync')
 const {
+  nativeAddonReleaseDir,
+  preserveRequiredNativeAddons,
+  restorePreservedNativeAddons
+} = require('./build-target/native-addons')
+const {
   PACKAGED_RUNTIME_MODULES,
   collectPackagedRuntimeModuleEntries,
   collectResourceModuleClosure,
   collectResourceResolvableRuntimeModuleEntries,
   findPackagedResourcesDir: resolvePackagedResourcesDir,
   getPlatformRuntimeRootModules,
+  requiredNativeAddonNames,
   verifyPackagedEsbuildBinaries
 } = require('./build-target/runtime-modules')
 
@@ -147,29 +153,18 @@ function resolveBuilderBin() {
   return binPath
 }
 
+/**
+ * The addons a package cannot be built without live in runtime-modules.js, shared with
+ * after-pack, which asserts the same list against the packaged tree.
+ */
 // Presence check only. It stands in for electron-builder's install-app-deps on the macOS
 // legs, which set SKIP_INSTALL_APP_DEPS=true, and that substitution is sound because every
 // @talex-touch/tuff-native addon is N-API (node-addon-api): `nm -u` shows napi_ imports and
 // no v8/node symbols, so a Node-targeted build is ABI-compatible with Electron. CI says the
 // same thing out loud - the Windows rebuild step is named "for Node.js".
-//
-// Not covered: tuff_native_screenshot.node, which screenshot-protocol.js loads on every
-// platform. It is deliberately left out because that loader degrades gracefully
-// (`binding-unavailable`) rather than throwing, so requiring it here would turn a soft
-// capability loss into a hard build failure.
 function verifyNativeModules(strict, target) {
-  const releaseDir = path.join(
-    projectRoot,
-    'node_modules',
-    '@talex-touch',
-    'tuff-native',
-    'build',
-    'Release'
-  )
-  const requiredModuleNames = ['tuff_native_ocr.node']
-  if (target === 'win') {
-    requiredModuleNames.push('tuff_native_everything.node')
-  }
+  const releaseDir = nativeAddonReleaseDir(projectRoot)
+  const requiredModuleNames = requiredNativeAddonNames(target)
 
   const missingModuleNames = requiredModuleNames.filter(
     (moduleName) => !fs.existsSync(path.join(releaseDir, moduleName))
@@ -672,6 +667,10 @@ function build() {
       }
       const builderBinForShell = process.platform === 'win32' ? `"${builderBin}"` : builderBin
       const installCommand = `${builderBinForShell} ${installAppDepsArgs.join(' ')}`.trim()
+      const preservedAddons = preserveRequiredNativeAddons({
+        projectRoot,
+        target: normalizedTarget
+      })
 
       try {
         execSync(installCommand, {
@@ -683,9 +682,16 @@ function build() {
         })
         console.log('✓ electron-builder install-app-deps completed\n')
         console.timeEnd('build-target:install-app-deps')
+        const restoredAddons = restorePreservedNativeAddons({ projectRoot, preserved: preservedAddons })
+        if (restoredAddons.length > 0) {
+          console.log(
+            `[build-target] Restored the Cargo-built addons install-app-deps removed: ${restoredAddons.join(', ')}\n`
+          )
+        }
         verifyNativeModules(process.env.CI === 'true', normalizedTarget)
       } catch (error) {
         console.timeEnd('build-target:install-app-deps')
+        fs.rmSync(preservedAddons.backupDir, { recursive: true, force: true })
         console.error('\n❌ electron-builder install-app-deps failed!')
         throw error
       }

@@ -13,7 +13,7 @@ const {
   fileProviderSetResetDelegateSpy,
   infoSpy,
   searchIndexWriterGetFilePersistencePortSpy,
-  searchIndexWriterShutdownSpy,
+  searchIndexWriterBeginShutdownSpy,
   transportOnSpy,
   warnSpy
 } = vi.hoisted(() => ({
@@ -25,7 +25,7 @@ const {
   fileProviderSetResetDelegateSpy: vi.fn(),
   infoSpy: vi.fn(),
   searchIndexWriterGetFilePersistencePortSpy: vi.fn(() => null),
-  searchIndexWriterShutdownSpy: vi.fn(async () => undefined),
+  searchIndexWriterBeginShutdownSpy: vi.fn(async () => undefined),
   transportOnSpy: vi.fn(),
   warnSpy: vi.fn()
 }))
@@ -271,8 +271,8 @@ vi.mock('./search-index-writer', () => ({
   LegacySearchIndexWriter: class {},
   SourceScopedIndexWriterRouter: class {},
   searchIndexWriter: {
-    getFilePersistencePort: searchIndexWriterGetFilePersistencePortSpy,
-    shutdown: searchIndexWriterShutdownSpy
+    beginShutdown: searchIndexWriterBeginShutdownSpy,
+    getFilePersistencePort: searchIndexWriterGetFilePersistencePortSpy
   }
 }))
 
@@ -397,7 +397,7 @@ describe('search-core search-trace', () => {
     fileProviderSetPersistencePortSpy.mockClear()
     fileProviderSetResetDelegateSpy.mockClear()
     searchIndexWriterGetFilePersistencePortSpy.mockClear()
-    searchIndexWriterShutdownSpy.mockClear()
+    searchIndexWriterBeginShutdownSpy.mockClear()
     vi.mocked(touchEventBus.on).mockClear()
     vi.mocked(touchEventBus.off).mockClear()
   })
@@ -437,6 +437,7 @@ describe('search-core search-trace', () => {
         beginShutdown: () => void
         abortAndDrainSourceScans: (sourceId: string) => Promise<void>
         drainAdmittedTasks: () => Promise<void>
+        drainTaskStateWrites: () => Promise<void>
         drainSourceMutations: (sourceId: string) => Promise<void>
         clear: () => void
       }
@@ -450,6 +451,7 @@ describe('search-core search-trace', () => {
       beginShutdown: vi.fn(),
       abortAndDrainSourceScans: vi.fn(async () => undefined),
       drainAdmittedTasks: vi.fn(async () => undefined),
+      drainTaskStateWrites: vi.fn(async () => undefined),
       drainSourceMutations: vi.fn(async () => undefined),
       clear: vi.fn()
     }

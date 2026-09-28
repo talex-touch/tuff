@@ -1,4 +1,5 @@
 import { Notification } from 'electron'
+import { isVoiceCaptureUnavailableCode } from '@talex-touch/utils/transport/sdk/domains/voice'
 import type { VoiceDictateResult } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { createLogger } from '../../utils/logger'
 import { shortcutModule } from '../global-shortcon'
@@ -124,7 +125,14 @@ export class GlobalDictationController {
       if (this.activeSessionId) voiceService.cancelSession(this.activeSessionId)
       this.activeSessionId = null
       this.activeGesture = null
-      this.notify('语音手势失败', '请检查麦克风权限与语音服务配置')
+      // A build without the audio component is not a permission problem, and telling the user to
+      // go check their microphone sends them somewhere nothing is wrong. The code is what tells
+      // the two apart; the notification is the only surface this gesture has.
+      if (isVoiceCaptureUnavailableCode((error as { code?: unknown } | null)?.code)) {
+        this.notify('语音输入不可用', '本机应用缺少录音组件，请更新或重新安装后再试')
+      } else {
+        this.notify('语音手势失败', '请检查麦克风权限与语音服务配置')
+      }
     } finally {
       this.busy = false
       if (this.pendingStop) {

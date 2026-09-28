@@ -37,6 +37,7 @@ const state = vi.hoisted(() => {
     incrementUsageTrendDaily: vi.fn(() => Promise.resolve()),
     indexingRuntimeBeginShutdown: vi.fn(),
     indexingRuntimeDrainAdmittedTasks: vi.fn(async () => undefined),
+    indexingRuntimeDrainTaskStateWrites: vi.fn(async () => undefined),
     indexingRuntimeSetStore: vi.fn(),
     indexingRuntimeSetTaskStateStore: vi.fn(),
     indexingRuntimeSetWriterRouter: vi.fn(),
@@ -54,7 +55,7 @@ const state = vi.hoisted(() => {
     touchEventOff: vi.fn(),
     touchEventOn: vi.fn(),
     usageQueueEnqueue: vi.fn(),
-    writerShutdown: vi.fn(async () => undefined)
+    writerBeginShutdown: vi.fn(async () => undefined)
   }
 })
 
@@ -236,6 +237,7 @@ vi.mock('./indexing-runtime', () => ({
     beginShutdown: state.indexingRuntimeBeginShutdown,
     clear: state.clearIndexingRuntime,
     drainAdmittedTasks: state.indexingRuntimeDrainAdmittedTasks,
+    drainTaskStateWrites: state.indexingRuntimeDrainTaskStateWrites,
     drainSourceMutations: state.appRuntimeDrainMutations,
     resetSourceRuntimeState: vi.fn(),
     setSourceWriterRouter: state.indexingRuntimeSetWriterRouter,
@@ -250,9 +252,9 @@ vi.mock('./search-index-writer', () => ({
   LegacySearchIndexWriter: class {},
   SourceScopedIndexWriterRouter: class {},
   searchIndexWriter: {
+    beginShutdown: state.writerBeginShutdown,
     getFilePersistencePort: vi.fn(() => null),
-    initialize: vi.fn(async () => undefined),
-    shutdown: state.writerShutdown
+    initialize: vi.fn(async () => undefined)
   }
 }))
 vi.mock('./indexing-store-adapter', () => ({ SearchIndexStoreAdapter: class {} }))
@@ -1343,7 +1345,9 @@ describe('SearchEngineCore facade contracts', () => {
       expect(state.fileProviderMutationDelegate).not.toHaveBeenCalledWith(null)
       expect(state.fileProviderPersistencePort).not.toHaveBeenCalledWith(null)
       expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
-      expect(state.writerShutdown).not.toHaveBeenCalled()
+      // The writer begins its bounded close independently of these drains: it is the abort that
+      // releases a scan parked on the writer, so it must not be sequenced behind them.
+      expect(state.writerBeginShutdown).toHaveBeenCalledTimes(1)
 
       await core.destroy()
 
@@ -1353,7 +1357,7 @@ describe('SearchEngineCore facade contracts', () => {
       expect(state.fileProviderMutationDelegate).toHaveBeenCalledWith(null)
       expect(state.fileProviderPersistencePort).toHaveBeenCalledWith(null)
       expect(state.clearIndexingRuntime).toHaveBeenCalledTimes(1)
-      expect(state.writerShutdown).toHaveBeenCalledTimes(1)
+      expect(state.writerBeginShutdown).toHaveBeenCalledTimes(2)
       providerRegistryDestroy.mockRestore()
     }
   )
@@ -1377,7 +1381,7 @@ describe('SearchEngineCore facade contracts', () => {
       state.fileProviderMutationDelegate.mockClear()
       state.fileProviderPersistencePort.mockClear()
       state.clearIndexingRuntime.mockClear()
-      state.writerShutdown.mockClear()
+      state.writerBeginShutdown.mockClear()
       state.appRuntimeAbortAndDrain.mockImplementation(async (drainedSourceId: string) => {
         if (drainedSourceId !== sourceId) return
         if (!retryAfterRelease) {
@@ -1394,6 +1398,9 @@ describe('SearchEngineCore facade contracts', () => {
 
         expect(state.appRuntimeAbortAndDrain).toHaveBeenNthCalledWith(1, 'app-provider')
         expect(state.appRuntimeAbortAndDrain).toHaveBeenNthCalledWith(2, 'file-provider')
+        // The scan drain here is parked on a writer the blocked scan is holding: the writer's
+        // bounded close must already have begun, or destroy would wait on its own abort.
+        expect(state.writerBeginShutdown).toHaveBeenCalledTimes(1)
 
         releaseTimedOutDrain.resolve()
         await expect(destroy).rejects.toThrow('SEARCH_CORE_INDEX_DRAIN_FAILED')
@@ -1404,7 +1411,6 @@ describe('SearchEngineCore facade contracts', () => {
         expect(state.fileProviderMutationDelegate).not.toHaveBeenCalledWith(null)
         expect(state.fileProviderPersistencePort).not.toHaveBeenCalledWith(null)
         expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
-        expect(state.writerShutdown).not.toHaveBeenCalled()
 
         retryAfterRelease = true
         scanReleased.resolve()
@@ -1412,7 +1418,9 @@ describe('SearchEngineCore facade contracts', () => {
 
         expect(providerRegistryDestroy).toHaveBeenCalledTimes(1)
         expect(state.clearIndexingRuntime).toHaveBeenCalledTimes(1)
-        expect(state.writerShutdown).toHaveBeenCalledTimes(1)
+        // One begin per destroy attempt; the writer's own promise caching is what makes the
+        // second attempt a no-op, and that is covered against the real writer.
+        expect(state.writerBeginShutdown).toHaveBeenCalledTimes(2)
       } finally {
         state.appRuntimeAbortAndDrain.mockImplementation(async () => undefined)
         providerRegistryDestroy.mockRestore()
@@ -1420,7 +1428,7 @@ describe('SearchEngineCore facade contracts', () => {
     }
   )
 
-  it('stops App producers, aborts active App scans, and drains App mutations before clearing Runtime or shutting down the writer', async () => {
+  it('starts the writer shutdown before awaiting producers while App producers, scan aborts, and mutation drains run concurrently', async () => {
     const lifecycle: string[] = []
     const appProducerStopStarted = Promise.withResolvers<void>()
     const appProducerStop = Promise.withResolvers<void>()
@@ -1480,8 +1488,8 @@ describe('SearchEngineCore facade contracts', () => {
     state.clearIndexingRuntime.mockImplementationOnce(() => {
       lifecycle.push('runtime-cleared')
     })
-    state.writerShutdown.mockImplementationOnce(async () => {
-      lifecycle.push('writer-shut-down')
+    state.writerBeginShutdown.mockImplementationOnce(async () => {
+      lifecycle.push('writer-shutdown-started')
     })
 
     const destroy = core.destroy()
@@ -1491,7 +1499,11 @@ describe('SearchEngineCore facade contracts', () => {
       fileShutdownPreparationStarted.promise
     ])
 
+    // The writer's bounded close is the abort that releases a scan parked on a wedged worker, so
+    // it starts before this method awaits anything -- not after every producer has drained.
+    expect(lifecycle[0]).toBe('writer-shutdown-started')
     expect(lifecycle).toEqual([
+      'writer-shutdown-started',
       'app-producer-stop-started',
       'app-scan-aborted',
       'app-runtime-drain-started',
@@ -1506,7 +1518,6 @@ describe('SearchEngineCore facade contracts', () => {
     await Promise.all([appProducerStopped.promise, fileShutdownPrepared.promise])
 
     expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
-    expect(state.writerShutdown).not.toHaveBeenCalled()
     expect(state.appRuntimeDrainMutations).not.toHaveBeenCalled()
 
     appRuntimeDrain.resolve()
@@ -1514,12 +1525,12 @@ describe('SearchEngineCore facade contracts', () => {
 
     expect(state.appRuntimeDrainMutations).toHaveBeenCalledWith('app-provider')
     expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
-    expect(state.writerShutdown).not.toHaveBeenCalled()
 
     appMutationDrain.resolve()
     await destroy
 
     expect(lifecycle).toEqual([
+      'writer-shutdown-started',
       'app-producer-stop-started',
       'app-scan-aborted',
       'app-runtime-drain-started',
@@ -1529,8 +1540,7 @@ describe('SearchEngineCore facade contracts', () => {
       'app-runtime-drained',
       'app-mutation-drain-started',
       'app-mutation-drained',
-      'runtime-cleared',
-      'writer-shut-down'
+      'runtime-cleared'
     ])
   })
 
@@ -1540,7 +1550,7 @@ describe('SearchEngineCore facade contracts', () => {
     expect(() => core.init({ app: { channel: {} } } as never)).toThrow('SEARCH_CORE_DESTROYED')
   })
 
-  it('closes Runtime admission before producer shutdown and waits for admitted tasks and both source drains before clearing Runtime or its writer', async () => {
+  it('closes Runtime admission before producer shutdown and waits for admitted tasks and both source drains before clearing Runtime', async () => {
     const lifecycle: string[] = []
     const appScanController = new AbortController()
     const appScanSettled = Promise.withResolvers<void>()
@@ -1595,14 +1605,17 @@ describe('SearchEngineCore facade contracts', () => {
       lifecycle.push('admitted-drain-finished')
       admittedDrainFinished.resolve()
     })
+    state.indexingRuntimeDrainTaskStateWrites.mockImplementationOnce(async () => {
+      lifecycle.push('task-state-drained')
+    })
     state.appRuntimeDrainMutations
       .mockImplementationOnce(recordSourceDrain)
       .mockImplementationOnce(recordSourceDrain)
     state.clearIndexingRuntime.mockImplementationOnce(() => {
       lifecycle.push('runtime-cleared')
     })
-    state.writerShutdown.mockImplementationOnce(async () => {
-      lifecycle.push('writer-shut-down')
+    state.writerBeginShutdown.mockImplementationOnce(async () => {
+      lifecycle.push('writer-shutdown-started')
     })
 
     const destroy = core.destroy()
@@ -1614,15 +1627,19 @@ describe('SearchEngineCore facade contracts', () => {
     ])
 
     expect(lifecycle[0]).toBe('admission-closed')
+    expect(lifecycle).toContain('writer-shutdown-started')
     expect(lifecycle).toContain('app-producer-stopped')
     expect(lifecycle).toContain('app-scan-stopped')
     expect(state.appRuntimeDrainMutations).not.toHaveBeenCalled()
+    expect(state.indexingRuntimeDrainTaskStateWrites).not.toHaveBeenCalled()
 
     releaseAdmittedDrain.resolve()
     await admittedDrainFinished.promise
+    await vi.waitFor(() =>
+      expect(state.indexingRuntimeDrainTaskStateWrites).toHaveBeenCalledTimes(1)
+    )
     expect(state.appRuntimeDrainMutations).not.toHaveBeenCalled()
     expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
-    expect(state.writerShutdown).not.toHaveBeenCalled()
 
     releaseFileShutdown.resolve()
     await Promise.all([fileShutdownPrepared.promise, sourceDrainsStarted.promise])
@@ -1630,11 +1647,20 @@ describe('SearchEngineCore facade contracts', () => {
     expect(state.appRuntimeDrainMutations).toHaveBeenNthCalledWith(1, 'app-provider')
     expect(state.appRuntimeDrainMutations).toHaveBeenNthCalledWith(2, 'file-provider')
     expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
-    expect(state.writerShutdown).not.toHaveBeenCalled()
 
     await destroy
 
-    expect(lifecycle.slice(-2)).toEqual(['runtime-cleared', 'writer-shut-down'])
+    // Runtime stays alive until every source drain settles; the writer began long before that.
+    expect(lifecycle.slice(-1)).toEqual(['runtime-cleared'])
+    expect(lifecycle.indexOf('writer-shutdown-started')).toBeLessThan(
+      lifecycle.indexOf('admitted-drain-started')
+    )
+    expect(lifecycle.indexOf('admitted-drain-finished')).toBeLessThan(
+      lifecycle.indexOf('task-state-drained')
+    )
+    expect(lifecycle.indexOf('task-state-drained')).toBeLessThan(
+      lifecycle.indexOf('runtime-cleared')
+    )
   })
 
   it('initiates source-scan cancellation before awaiting session destruction so a blocked session drain cannot deadlock destroy', async () => {
@@ -1662,8 +1688,8 @@ describe('SearchEngineCore facade contracts', () => {
     state.clearIndexingRuntime.mockImplementation(() => {
       lifecycle.push('runtime-cleared')
     })
-    state.writerShutdown.mockImplementation(async () => {
-      lifecycle.push('writer-shut-down')
+    state.writerBeginShutdown.mockImplementation(async () => {
+      lifecycle.push('writer-shutdown-started')
     })
 
     try {
@@ -1675,18 +1701,20 @@ describe('SearchEngineCore facade contracts', () => {
       expect(state.appProviderPrepareForShutdown).toHaveBeenCalledTimes(1)
       expect(state.appRuntimeAbortAndDrain).toHaveBeenNthCalledWith(1, 'app-provider')
       expect(state.appRuntimeAbortAndDrain).toHaveBeenNthCalledWith(2, 'file-provider')
+      // The writer's close is one of those aborts: it is initiated before this await, never after.
+      expect(lifecycle[0]).toBe('writer-shutdown-started')
 
       await destroy
 
       expect(lifecycle.indexOf('scan-abort-initiated:app-provider')).toBeLessThan(
         lifecycle.indexOf('session-destroyed')
       )
-      // The writer still closes only after every started drain (session included) has settled.
-      expect(lifecycle.slice(-2)).toEqual(['runtime-cleared', 'writer-shut-down'])
+      // Runtime is cleared only after every started drain (session included) has settled.
+      expect(lifecycle.slice(-1)).toEqual(['runtime-cleared'])
     } finally {
       state.appRuntimeAbortAndDrain.mockImplementation(async () => undefined)
       state.clearIndexingRuntime.mockImplementation(() => undefined)
-      state.writerShutdown.mockImplementation(async () => undefined)
+      state.writerBeginShutdown.mockImplementation(async () => undefined)
       sessionDestroy.mockRestore()
     }
   })
@@ -1706,28 +1734,29 @@ describe('SearchEngineCore facade contracts', () => {
 
       expect(providerRegistryDestroy).not.toHaveBeenCalled()
       expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
-      expect(state.writerShutdown).not.toHaveBeenCalled()
 
       await expect(core.destroy()).resolves.toBeUndefined()
 
       expect(providerRegistryDestroy).toHaveBeenCalledTimes(1)
       expect(state.clearIndexingRuntime).toHaveBeenCalledTimes(1)
-      expect(state.writerShutdown).toHaveBeenCalledTimes(1)
+      // One begin per destroy attempt: the writer's own promise caching, not this call count, is
+      // what makes the second attempt idempotent.
+      expect(state.writerBeginShutdown).toHaveBeenCalledTimes(2)
     } finally {
       unsubscribe.mockRestore()
       providerRegistryDestroy.mockRestore()
     }
   })
 
-  it('rethrows a writer shutdown failure and retries the terminal teardown', async () => {
-    state.writerShutdown.mockRejectedValueOnce(new Error('writer shutdown failed'))
+  it('fails closed when the writer shutdown rejects and retries the terminal teardown', async () => {
+    state.writerBeginShutdown.mockRejectedValueOnce(new Error('writer shutdown failed'))
 
-    await expect(core.destroy()).rejects.toThrow('writer shutdown failed')
+    await expect(core.destroy()).rejects.toThrow('SEARCH_CORE_INDEX_DRAIN_FAILED')
 
-    expect(state.writerShutdown).toHaveBeenCalledTimes(1)
+    expect(state.writerBeginShutdown).toHaveBeenCalledTimes(1)
 
     await expect(core.destroy()).resolves.toBeUndefined()
 
-    expect(state.writerShutdown).toHaveBeenCalledTimes(2)
+    expect(state.writerBeginShutdown).toHaveBeenCalledTimes(2)
   })
 })

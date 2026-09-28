@@ -226,14 +226,18 @@ const dictation = useComposerDictation({
   input: () => inputRef.value,
   language: () => appSetting.voiceInput?.language,
   onTextChange: autoGrow,
-  onNotice: (kind) =>
-    showDictationNotice(kind, {
-      t,
-      openRecognitionSettings: () => void router.push('/setting/intelligence/capabilities'),
-      openMicrophoneSettings: micSettingsAvailable
-        ? () => void dictation.openMicrophoneSettings()
-        : undefined
-    })
+  onNotice: (kind, detail) =>
+    showDictationNotice(
+      kind,
+      {
+        t,
+        openRecognitionSettings: () => void router.push('/setting/intelligence/capabilities'),
+        openMicrophoneSettings: micSettingsAvailable
+          ? () => void dictation.openMicrophoneSettings()
+          : undefined
+      },
+      detail
+    )
 })
 
 // A plain send waits for dictation to finish; while it runs the send key means 「结束并发送」 (D10-d).
@@ -1780,6 +1784,7 @@ onBeforeUnmount(disposeCommands)
                   :model="composerModel"
                   :send-state="sendState"
                   :mic-state="dictation.state.value"
+                  :mic-blocked="dictation.captureBlocked.value"
                   :mic-levels="dictation.levels.value"
                   :mic-elapsed-ms="dictation.elapsedMs.value"
                   :mic-outcome="dictation.outcome.value"

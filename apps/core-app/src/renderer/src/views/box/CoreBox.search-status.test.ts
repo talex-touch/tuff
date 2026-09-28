@@ -5,6 +5,7 @@ import type * as VueUse from '@vueuse/core'
 import type * as Vue from 'vue'
 import type { Ref } from 'vue'
 import { TxPrismGlow } from '@talex-touch/tuffex/prism-glow'
+import { TxStatusHint } from '@talex-touch/tuffex/status-hint'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { computed, defineComponent, h, nextTick, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -686,16 +687,32 @@ function headerFeedback(coreBox: VueWrapper) {
   return coreBox.find('.CoreBox .CoreBox-ActionFeedback')
 }
 
+/**
+ * The text a screen reader reads. While an outcome's hint animates, the morph engine draws the
+ * message twice, as a hidden copy plus aria-hidden segments, so `.text()` would read it twice.
+ */
+function accessibleText(wrapper: { element: Node }): string {
+  const read = (node: Node): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
+    if (node instanceof Element && node.getAttribute('aria-hidden') === 'true') return ''
+    return Array.from(node.childNodes, read).join('')
+  }
+  return read(wrapper.element).trim()
+}
+
 /** The one live region an action's outcome is announced from. */
 function announcer(coreBox: VueWrapper) {
   return coreBox.get('.CoreBox-Wrapper > .CoreBox-ActionFeedback-Live')
 }
 
-/** Every live region saying `message`: an outcome is announced by exactly one. */
+/**
+ * Every live region saying `message`: an outcome is announced by exactly one. `aria-live="off"`
+ * marks a node that is not one (the outcome's visual copies carry it).
+ */
 function announcing(coreBox: VueWrapper, message: string) {
   return coreBox
-    .findAll('[aria-live], [role="status"], [role="alert"]')
-    .filter((region) => region.text() === message)
+    .findAll('[aria-live]:not([aria-live="off"]), [role="status"], [role="alert"]')
+    .filter((region) => accessibleText(region) === message)
 }
 
 /**
@@ -736,7 +753,7 @@ describe('CoreBox action feedback', () => {
     showCoreBoxFooterFeedback('已复制')
     await flush()
 
-    expect(headerFeedback(coreBox).text()).toBe('已复制')
+    expect(accessibleText(headerFeedback(coreBox))).toBe('已复制')
     expect(headerFeedback(coreBox).classes()).toContain('is-success')
     expect(announcing(coreBox, '已复制')).toHaveLength(1)
     expect(announcer(coreBox).text()).toBe('已复制')
@@ -754,10 +771,47 @@ describe('CoreBox action feedback', () => {
     await flush()
 
     expect(headerFeedback(coreBox).classes()).toContain('is-error')
-    expect(headerFeedback(coreBox).get('.CoreBox-ActionFeedback-Icon').classes()).toContain(
+    expect(headerFeedback(coreBox).get('.CoreBoxActionFeedback-Icon').classes()).toContain(
       'i-ri-error-warning-line'
     )
+    // The footer's hint, header-sized, in the danger hue.
+    expect(coreBox.getComponent(TxStatusHint).props()).toMatchObject({ tone: 'danger', size: 'sm' })
     expect(announcer(coreBox).text()).toBe('操作失败')
+  })
+
+  it('keeps the header’s outcome mounted while messages change', async () => {
+    const coreBox = await openPluginView()
+
+    showCoreBoxFooterFeedback('已固定')
+    await flush()
+    const element = headerFeedback(coreBox).element
+
+    showCoreBoxFooterFeedback('已取消固定')
+    await flush()
+    // The same element, so the new words morph out of the old ones.
+    expect(headerFeedback(coreBox).element === element, 'the same element').toBe(true)
+    expect(accessibleText(headerFeedback(coreBox))).toBe('已取消固定')
+    expect(announcer(coreBox).text()).toBe('已取消固定')
+  })
+
+  it('lands the outcome in place once CoreBox’s motion gate closes', async () => {
+    const coreBox = await openPluginView()
+    showCoreBoxFooterFeedback('已固定')
+    await flush()
+    expect(headerFeedback(coreBox).classes()).toContain('is-animated')
+    expect(headerFeedback(coreBox).find('[tx-morph-root]').exists()).toBe(true)
+
+    // The battery runs low while it is up: it stops where it is, and the next one never moves.
+    state.lowBatteryMode.value = true
+    await flush()
+    expect(headerFeedback(coreBox).classes()).not.toContain('is-animated')
+    expect(headerFeedback(coreBox).find('[tx-morph-root]').exists()).toBe(false)
+
+    showCoreBoxFooterFeedback('已取消固定')
+    await flush()
+    expect(headerFeedback(coreBox).classes()).not.toContain('is-animated')
+    expect(headerFeedback(coreBox).find('[tx-morph-root]').exists()).toBe(false)
+    expect(accessibleText(headerFeedback(coreBox))).toBe('已取消固定')
   })
 
   it('leaves the outcome to the footer while the footer is on screen, announced once', async () => {
@@ -778,7 +832,7 @@ describe('CoreBox action feedback', () => {
     showCoreBoxFooterFeedback('已复制')
     await flush()
 
-    expect(headerFeedback(coreBox).text()).toBe('已复制')
+    expect(accessibleText(headerFeedback(coreBox))).toBe('已复制')
     expect(announcing(coreBox, '已复制')).toHaveLength(1)
   })
 
@@ -793,7 +847,7 @@ describe('CoreBox action feedback', () => {
     showCoreBoxFooterFeedback('已复制')
     await flush()
 
-    expect(headerFeedback(coreBox).text()).toBe('已复制')
+    expect(accessibleText(headerFeedback(coreBox))).toBe('已复制')
     expect(announcing(coreBox, '已复制')).toHaveLength(1)
   })
 
@@ -802,7 +856,7 @@ describe('CoreBox action feedback', () => {
     const coreBox = await openList()
     showCoreBoxFooterFeedback('已复制')
     await flush()
-    expect(headerFeedback(coreBox).text()).toBe('已复制')
+    expect(accessibleText(headerFeedback(coreBox))).toBe('已复制')
 
     const changes: MutationRecord[] = []
     const observer = new MutationObserver((records) => changes.push(...records))
@@ -818,7 +872,7 @@ describe('CoreBox action feedback', () => {
     expect(headerFeedback(coreBox).exists()).toBe(false)
     footerOnScreen.value = false
     await flush()
-    expect(headerFeedback(coreBox).text()).toBe('已复制')
+    expect(accessibleText(headerFeedback(coreBox))).toBe('已复制')
 
     changes.push(...observer.takeRecords())
     observer.disconnect()
@@ -869,7 +923,7 @@ describe('CoreBox action feedback with the real footer', () => {
     showCoreBoxFooterFeedback('已复制')
     await flush()
 
-    expect(coreBox.get('.CoreBoxFooter .FooterFeedback').text()).toBe('已复制')
+    expect(accessibleText(coreBox.get('.CoreBoxFooter .FooterFeedback'))).toBe('已复制')
     expect(headerFeedback(coreBox).exists()).toBe(false)
     expect(announcing(coreBox, '已复制')).toHaveLength(1)
   })
@@ -881,8 +935,37 @@ describe('CoreBox action feedback with the real footer', () => {
     showCoreBoxFooterFeedback('已复制')
     await flush()
 
-    expect(headerFeedback(coreBox).text()).toBe('已复制')
+    expect(accessibleText(headerFeedback(coreBox))).toBe('已复制')
     expect(coreBox.find('.CoreBoxFooter .FooterFeedback').exists()).toBe(false)
     expect(announcing(coreBox, '已复制')).toHaveLength(1)
   })
+
+  it.each([
+    { gate: 'open', lowBattery: false, reducedMotion: false },
+    { gate: 'closed by low battery', lowBattery: true, reducedMotion: false },
+    { gate: 'closed by reduced motion', lowBattery: false, reducedMotion: true }
+  ])(
+    'moves the footer’s outcome only with the motion gate $gate',
+    async ({ lowBattery, reducedMotion }) => {
+      state.lowBatteryMode.value = lowBattery
+      if (reducedMotion) {
+        vi.stubGlobal('matchMedia', (query: string) => ({
+          matches: query.includes('prefers-reduced-motion: reduce'),
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {}
+        }))
+      }
+      const coreBox = await openListWith([row('wechat')])
+
+      showCoreBoxFooterFeedback('已复制')
+      await flush()
+
+      const moves = !lowBattery && !reducedMotion
+      const feedback = coreBox.get('.CoreBoxFooter .FooterFeedback')
+      expect(feedback.classes().includes('is-animated')).toBe(moves)
+      expect(feedback.find('[tx-morph-root]').exists()).toBe(moves)
+      expect(accessibleText(feedback)).toBe('已复制')
+    }
+  )
 })

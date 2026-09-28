@@ -35,9 +35,9 @@
     },
     {
       "file": "apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts",
-      "ceiling": 3703,
+      "ceiling": 3630,
       "issue": "#343",
-      "note": "~3,604 when #343 was filed. +694 since — the largest growth of the four files here."
+      "note": "~3,604 when #343 was filed. +694 since — the largest growth of the four files here. 2026-09-27: the progress stream's publish state (subscriptions, replay, flush timer) moved to services/file-provider-progress-stream-service.ts, 3,735 -> 3,630."
     }
   ]
 }

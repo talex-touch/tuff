@@ -211,7 +211,7 @@ export class IndexedWorkerSchedulerService<TPayload> {
       })
       .then(() => undefined)
       .catch(error => {
-        if (scopeId !== undefined && this.cancelledScopes.has(scopeId)) return
+        if (this.closed || (scopeId !== undefined && this.cancelledScopes.has(scopeId))) return
         this.dispatchFailures.push({ scopeId, error })
         this.deps.logWarn('Index worker failed', error, {
           reason,

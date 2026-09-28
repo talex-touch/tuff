@@ -1572,6 +1572,13 @@ export class CommonChannelModule extends BaseModule {
         touchApp.window.window.show()
         touchApp.window.window.focus()
       }),
+      // CoreBox is a separate window with its own renderer, so its ⌘K row cannot navigate the
+      // main window itself: main reveals it and delivers the route.
+      transport.on(AppEvents.window.openSettings, (_payload, context) => {
+        this.assertHostOnly(context, 'window.openSettings')
+        const result = getAppDestinationNavigationService(touchApp).open('settings-overview')
+        return result.status !== 'unavailable'
+      }),
       transport.on(AppEvents.debug.openDevTools, (payload, context) => {
         // DevTools runs arbitrary JS in the main renderer and exposes everything it holds, so a
         // plugin view reaching this handler is a way out of the plugin sandbox (#783).
@@ -1718,6 +1725,8 @@ export class CommonChannelModule extends BaseModule {
   private registerIndexSettingsTransportHandlers(
     transport: NonNullable<CommonChannelModule['transport']>
   ): void {
+    fileProvider.registerOpenersChannel?.(transport)
+
     this.transportDisposers.push(
       transport.on(AppEvents.fileIndex.status, () => {
         try {
@@ -1936,11 +1945,29 @@ export class CommonChannelModule extends BaseModule {
         AppEvents.indexedSource.diagnostics,
         async (payload) => {
           const sourceId = getOptionalStringProp(payload, 'sourceId')?.trim()
-          let diagnostics: IndexedSourceDiagnosticsResponse
           try {
-            diagnostics = sanitizeFileIndexDiagnosticsSnapshot(
-              await indexingRuntime.getDiagnostics()
-            )
+            if (sourceId) {
+              const source = await indexingRuntime.getSourceDiagnostics(sourceId)
+              const sources = source ? [source] : []
+              const ready = sources.filter((entry) => entry.health.status === 'ready').length
+              const degraded = sources.filter((entry) => entry.health.status === 'degraded').length
+              return sanitizeFileIndexDiagnosticsSnapshot({
+                generatedAt: Date.now(),
+                summary: {
+                  total: sources.length,
+                  byStatus: sources.reduce<Record<string, number>>((summary, entry) => {
+                    summary[entry.health.status] = (summary[entry.health.status] ?? 0) + 1
+                    return summary
+                  }, {}),
+                  ready,
+                  degraded,
+                  unavailable: sources.length - ready - degraded
+                },
+                sources
+              })
+            }
+
+            return sanitizeFileIndexDiagnosticsSnapshot(await indexingRuntime.getDiagnostics())
           } catch (error) {
             reportIndexedSourceTransportFailure('DIAGNOSTICS', sourceId ?? '', error)
             return {
@@ -1948,27 +1975,6 @@ export class CommonChannelModule extends BaseModule {
               summary: { total: 0, byStatus: {}, ready: 0, degraded: 0, unavailable: 0 },
               sources: []
             }
-          }
-          if (!sourceId) {
-            return diagnostics
-          }
-          const sources = diagnostics.sources.filter((source) => source.descriptor.id === sourceId)
-          const ready = sources.filter((source) => source.health.status === 'ready').length
-          const degraded = sources.filter((source) => source.health.status === 'degraded').length
-
-          return {
-            ...diagnostics,
-            summary: {
-              total: sources.length,
-              byStatus: sources.reduce<Record<string, number>>((summary, source) => {
-                summary[source.health.status] = (summary[source.health.status] ?? 0) + 1
-                return summary
-              }, {}),
-              ready,
-              degraded,
-              unavailable: sources.length - ready - degraded
-            },
-            sources
           }
         }
       ),

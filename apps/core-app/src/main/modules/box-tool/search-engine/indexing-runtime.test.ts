@@ -331,6 +331,158 @@ describe('indexingRuntime', () => {
     ])
   })
 
+  it('scopes source diagnostics and root policy to the requested source only', async () => {
+    const rootPolicy = new IndexingRootPolicy()
+    runtime = new IndexingRuntime({ store: store, rootPolicy })
+    const unrelatedGetHealth = vi.fn(async () => readyHealth)
+    const targetRoots: IndexedSourceRoot[] = [
+      {
+        sourceId: 'file-provider',
+        path: '/tmp/target',
+        permissionState: 'granted'
+      }
+    ]
+    runtime.registerSource(
+      buildSource({
+        descriptor: { ...descriptor, id: 'file-provider' },
+        health: {
+          status: 'degraded',
+          permissionState: 'promptable',
+          itemCount: 3,
+          watchState: 'pending-permission',
+          reconcileState: 'scheduled',
+          reason: 'target-needs-permission'
+        },
+        roots: targetRoots,
+        getEvidence: async () => [
+          {
+            id: 'target:sub-source',
+            label: 'Target sub source',
+            status: 'ready',
+            itemCount: 3
+          }
+        ]
+      })
+    )
+    runtime.registerSource(
+      buildSource({
+        descriptor: { ...descriptor, id: 'browser-bookmarks', kind: 'browser-bookmark' },
+        getHealth: unrelatedGetHealth,
+        roots: [
+          {
+            sourceId: 'browser-bookmarks',
+            path: '/tmp/unrelated',
+            permissionState: 'granted'
+          }
+        ]
+      })
+    )
+
+    const diagnostics = await runtime.getSourceDiagnostics('file-provider')
+
+    expect(diagnostics?.descriptor.id).toBe('file-provider')
+    expect(diagnostics?.health).toMatchObject({
+      status: 'degraded',
+      reason: 'target-needs-permission'
+    })
+    expect(diagnostics?.roots).toEqual(targetRoots)
+    expect(diagnostics?.evidence).toEqual([
+      expect.objectContaining({ id: 'target:sub-source', itemCount: 3 })
+    ])
+    // The point of a scoped request: no other source is read at all.
+    expect(unrelatedGetHealth).not.toHaveBeenCalled()
+    // Only the requested source's roots may reach the shared search-root policy.
+    expect(rootPolicy.resolveFileSearchRoots().roots).toEqual([
+      expect.objectContaining({
+        sourceId: 'file-provider',
+        path: '/tmp/target'
+      })
+    ])
+    expect(rootPolicy.resolveSourceRoots('browser-bookmarks').roots).toEqual([])
+  })
+
+  it('returns nothing for an unregistered source without reading the registered ones', async () => {
+    const getHealth = vi.fn(async () => readyHealth)
+    runtime.registerSource(buildSource({ getHealth }))
+
+    await expect(runtime.getSourceDiagnostics('missing-source')).resolves.toBeUndefined()
+
+    expect(getHealth).not.toHaveBeenCalled()
+  })
+
+  it('hydrates scoped source diagnostics with the requested source task state', async () => {
+    runtime.registerSource(
+      buildSource({
+        descriptor: { ...descriptor, id: 'target' },
+        async *scan() {
+          throw new Error('target-scan-failure')
+        }
+      })
+    )
+    runtime.registerSource(buildSource({ descriptor: { ...descriptor, id: 'unrelated' } }))
+
+    await expect(
+      runtime.scanSource('target', IndexedSourceScanReasons.ManualRebuild)
+    ).rejects.toThrow('target-scan-failure')
+
+    const diagnostics = await runtime.getSourceDiagnostics('target')
+
+    expect(diagnostics?.lastScan).toMatchObject({ error: 'target-scan-failure' })
+    expect(diagnostics?.recentTasks?.[0]).toMatchObject({
+      kind: 'scan',
+      status: 'failed',
+      error: 'target-scan-failure'
+    })
+  })
+
+  it('carries the requested source run-gate state into scoped diagnostics', async () => {
+    let releaseReset!: () => void
+    const resetBlocked = new Promise<void>((resolve) => {
+      releaseReset = resolve
+    })
+    runtime.registerSource(
+      buildSource({
+        descriptor: { ...descriptor, id: 'target' },
+        resetIndex: async () => {
+          await resetBlocked
+          return {
+            sourceId: 'target',
+            reason: IndexedSourceResetReasons.HealthRepair,
+            clearedSearchIndex: false,
+            clearedScanProgress: true,
+            startedAt: 1700000000000,
+            completedAt: 1700000000100
+          }
+        }
+      })
+    )
+
+    const inFlight = runtime.resetSourceRuntimeState('target', {
+      reason: IndexedSourceResetReasons.HealthRepair,
+      clearScanProgress: true
+    })
+    const gated = await runtime.resetSourceRuntimeState('target', {
+      reason: IndexedSourceResetReasons.UserClear,
+      clearSearchIndex: true
+    })
+
+    expect(gated).toMatchObject({ error: 'reset-already-running' })
+
+    const diagnostics = await runtime.getSourceDiagnostics('target')
+
+    expect(diagnostics?.taskRunGate).toEqual([
+      expect.objectContaining({
+        sourceId: 'target',
+        kind: 'reset',
+        blockedCount: 1,
+        lastBlockedReason: 'already-running'
+      })
+    ])
+
+    releaseReset()
+    await inFlight
+  })
+
   it('converts health failures into source-level error diagnostics', async () => {
     runtime.registerSource(
       buildSource({
@@ -453,8 +605,9 @@ describe('indexingRuntime', () => {
     expect(handleWatchEvent).not.toHaveBeenCalled()
     expect(taskStateStore.save).not.toHaveBeenCalled()
 
-    // An event inside the root still reads current health and records its outcome, which also
-    // shows the task-state spy above can observe a write.
+    // An event inside the root still reads current health and records its outcome in memory, but a
+    // watch result no longer writes task history inline: the durable write is coalesced and shows
+    // up only once the runtime drains its deferred task-state writes.
     await runtime.routeWatchEventWithResult({
       sourceId: 'apps',
       action: 'change',
@@ -464,6 +617,8 @@ describe('indexingRuntime', () => {
 
     expect(getHealth).toHaveBeenCalledTimes(1)
     expect(handleWatchEvent).toHaveBeenCalledTimes(1)
+    expect(taskStateStore.save).not.toHaveBeenCalled()
+    await runtime.drainTaskStateWrites()
     expect(taskStateStore.save).toHaveBeenCalledTimes(1)
   })
 
@@ -2441,9 +2596,11 @@ describe('indexingRuntime', () => {
       path: '/tmp/tuff-source/a.txt',
       occurredAt: 1700000000200
     })
+    await runtime.drainTaskStateWrites()
 
     // The scoped watch path must hydrate prior scan history before recording the watch; otherwise the
     // first watcher event after a restart overwrites the persisted state with only its own entry.
+    // Watch persistence is coalesced, so the merged history reaches the store at drain time.
     expect(save).toHaveBeenCalledWith(
       'test-source',
       expect.objectContaining({
@@ -2484,6 +2641,344 @@ describe('indexingRuntime', () => {
       }
     ])
   })
+
+  it('coalesces a burst of watch task-state writes while diagnostics follow the latest event', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(1700000010000))
+    try {
+      const save = vi.fn(async () => {})
+      runtime = new IndexingRuntime({
+        store: store,
+        taskStateStore: {
+          load: vi.fn(async () => undefined),
+          save,
+          delete: vi.fn(async () => {}),
+          clear: vi.fn(async () => {})
+        }
+      })
+      runtime.registerSource(
+        buildSource({
+          handleWatchEvent: vi.fn(async (event: { path: string }) => [
+            { sourceId: 'test-source', action: 'change' as const, path: event.path }
+          ])
+        })
+      )
+
+      for (const index of [1, 2, 3, 4, 5]) {
+        await runtime.routeWatchEvent({
+          sourceId: 'test-source',
+          action: 'change',
+          path: `/tmp/tuff-source/file-${index}.txt`,
+          occurredAt: 1700000000000 + index
+        })
+      }
+
+      // Every event lands in in-memory diagnostics immediately...
+      const diagnostics = await runtime.getDiagnostics()
+      expect(diagnostics.sources[0].lastWatch).toMatchObject({
+        jobId: 'test-source:watch:5',
+        path: '/tmp/tuff-source/file-5.txt',
+        occurredAt: 1700000000005
+      })
+      expect(
+        diagnostics.sources[0].recentTasks?.filter((task) => task.kind === 'watch')
+      ).toHaveLength(5)
+      // ...while the burst buys no durable write until the coalescing window closes. The window
+      // length is deliberately not pinned here (no source-text coupling): any sane window is far
+      // below this advance, and the contract is "one coalesced write carrying the latest state".
+      expect(save).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      expect(save).toHaveBeenCalledTimes(1)
+      expect(save).toHaveBeenCalledWith(
+        'test-source',
+        expect.objectContaining({
+          lastWatch: expect.objectContaining({
+            jobId: 'test-source:watch:5',
+            path: '/tmp/tuff-source/file-5.txt',
+            occurredAt: 1700000000005
+          }),
+          recentTasks: expect.arrayContaining([
+            expect.objectContaining({ kind: 'watch', jobId: 'test-source:watch:5' })
+          ])
+        })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds durable watch task-state writes by coalescing window rather than by event count', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(1700000010000))
+    try {
+      const save = vi.fn(async () => {})
+      runtime = new IndexingRuntime({
+        store: store,
+        taskStateStore: {
+          load: vi.fn(async () => undefined),
+          save,
+          delete: vi.fn(async () => {}),
+          clear: vi.fn(async () => {})
+        }
+      })
+      runtime.registerSource(
+        buildSource({
+          handleWatchEvent: vi.fn(async (event: { path: string }) => [
+            { sourceId: 'test-source', action: 'change' as const, path: event.path }
+          ])
+        })
+      )
+
+      let index = 0
+      for (let window = 0; window < 3; window += 1) {
+        for (let burst = 0; burst < 4; burst += 1) {
+          index += 1
+          await runtime.routeWatchEvent({
+            sourceId: 'test-source',
+            action: 'change',
+            path: `/tmp/tuff-source/file-${index}.txt`,
+            occurredAt: 1700000000000 + index
+          })
+        }
+        await vi.advanceTimersByTimeAsync(5_000)
+      }
+
+      // Twelve watch results across three windows buy three durable writes: the rate is bounded by
+      // time, so a sustained watch storm cannot write once per event.
+      expect(save).toHaveBeenCalledTimes(3)
+      expect(save).toHaveBeenLastCalledWith(
+        'test-source',
+        expect.objectContaining({
+          lastWatch: expect.objectContaining({ jobId: 'test-source:watch:12' })
+        })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('survives shutdown by flushing the latest coalesced watch state through drainTaskStateWrites', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(1700000010000))
+    try {
+      const saveStarted = Promise.withResolvers<void>()
+      const saveReleased = Promise.withResolvers<void>()
+      const save = vi.fn(async () => {
+        saveStarted.resolve()
+        await saveReleased.promise
+      })
+      runtime = new IndexingRuntime({
+        store: store,
+        taskStateStore: {
+          load: vi.fn(async () => undefined),
+          save,
+          delete: vi.fn(async () => {}),
+          clear: vi.fn(async () => {})
+        }
+      })
+      runtime.registerSource(
+        buildSource({
+          handleWatchEvent: vi.fn(async (event: { path: string }) => [
+            { sourceId: 'test-source', action: 'change' as const, path: event.path }
+          ])
+        })
+      )
+
+      for (const index of [1, 2, 3]) {
+        await runtime.routeWatchEvent({
+          sourceId: 'test-source',
+          action: 'change',
+          path: `/tmp/tuff-source/file-${index}.txt`,
+          occurredAt: 1700000000000 + index
+        })
+      }
+      expect(save).not.toHaveBeenCalled()
+
+      let drained = false
+      const drain = runtime.drainTaskStateWrites().then(() => {
+        drained = true
+      })
+      await saveStarted.promise
+      // Shutdown must be able to wait for the coalesced history to reach the store.
+      expect(drained).toBe(false)
+
+      saveReleased.resolve()
+      await drain
+
+      expect(save).toHaveBeenCalledTimes(1)
+      expect(save).toHaveBeenCalledWith(
+        'test-source',
+        expect.objectContaining({
+          lastWatch: expect.objectContaining({
+            jobId: 'test-source:watch:3',
+            path: '/tmp/tuff-source/file-3.txt',
+            occurredAt: 1700000000003
+          })
+        })
+      )
+      // Draining clears the coalescing timer instead of rescheduling it: nothing fires after.
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(save).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('does not recreate task state after unregistering a source with an admitted watch', async () => {
+    const watchStarted = Promise.withResolvers<void>()
+    const releaseWatch = Promise.withResolvers<void>()
+    const save = vi.fn(async () => {})
+    const deleteTaskState = vi.fn(async () => {})
+    runtime = new IndexingRuntime({
+      store,
+      taskStateStore: {
+        load: vi.fn(async () => undefined),
+        save,
+        delete: deleteTaskState,
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(
+      buildSource({
+        handleWatchEvent: vi.fn(async (event: { path: string }) => {
+          watchStarted.resolve()
+          await releaseWatch.promise
+          return [{ sourceId: 'test-source', action: 'change' as const, path: event.path }]
+        })
+      })
+    )
+
+    const routed = runtime.routeWatchEvent({
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/deferred.txt',
+      occurredAt: 1700000000000
+    })
+    await watchStarted.promise
+    const unregister = runtime.unregisterSource('test-source')
+
+    releaseWatch.resolve()
+    await routed
+    await expect(unregister).resolves.toBe(true)
+
+    expect(save).not.toHaveBeenCalled()
+    expect(deleteTaskState).toHaveBeenCalledOnce()
+  })
+
+  it('awaits an in-flight deferred save before clearing the task state store', async () => {
+    vi.useFakeTimers()
+    try {
+      const saveStarted = Promise.withResolvers<void>()
+      const releaseSave = Promise.withResolvers<void>()
+      const save = vi.fn(async () => {
+        saveStarted.resolve()
+        await releaseSave.promise
+      })
+      const clearTaskState = vi.fn(async () => {})
+      runtime = new IndexingRuntime({
+        store,
+        taskStateStore: {
+          load: vi.fn(async () => undefined),
+          save,
+          delete: vi.fn(async () => {}),
+          clear: clearTaskState
+        }
+      })
+      runtime.registerSource(
+        buildSource({
+          handleWatchEvent: vi.fn(async (event: { path: string }) => [
+            { sourceId: 'test-source', action: 'change' as const, path: event.path }
+          ])
+        })
+      )
+      await runtime.routeWatchEvent({
+        sourceId: 'test-source',
+        action: 'change',
+        path: '/tmp/tuff-source/in-flight.txt',
+        occurredAt: 1700000000000
+      })
+
+      const timerAdvance = vi.advanceTimersByTimeAsync(1_000)
+      await saveStarted.promise
+      const clearing = runtime.clear({ clearTaskStateStore: true })
+      expect(clearTaskState).not.toHaveBeenCalled()
+
+      releaseSave.resolve()
+      await timerAdvance
+      await clearing
+
+      expect(save).toHaveBeenCalledOnce()
+      expect(clearTaskState).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(save).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    {
+      task: 'scan',
+      setup: () => runtime.registerSource(buildSource()),
+      run: () => runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
+    },
+    {
+      task: 'reconcile',
+      setup: () =>
+        runtime.registerSource(
+          buildSource({
+            reconcile: vi.fn(async () => ({
+              sourceId: 'test-source',
+              added: 0,
+              changed: 0,
+              deleted: 0,
+              skipped: 0,
+              errors: 0,
+              startedAt: 1700000000000,
+              completedAt: 1700000000100
+            }))
+          })
+        ),
+      run: () => runtime.reconcileSource('test-source')
+    }
+  ])(
+    'awaits the durable $task task-state write instead of deferring it',
+    async ({ setup, run }) => {
+      const saveStarted = Promise.withResolvers<void>()
+      const saveReleased = Promise.withResolvers<void>()
+      const save = vi.fn(async () => {
+        saveStarted.resolve()
+        await saveReleased.promise
+      })
+      runtime = new IndexingRuntime({
+        store: store,
+        taskStateStore: {
+          load: vi.fn(async () => undefined),
+          save,
+          delete: vi.fn(async () => {}),
+          clear: vi.fn(async () => {})
+        }
+      })
+      setup()
+
+      let returned = false
+      const task = (async () => {
+        const result = await run()
+        returned = true
+        return result
+      })()
+
+      // A scan or reconcile result owns durable history before its runtime call returns; only the
+      // watch hot path coalesces.
+      await saveStarted.promise
+      expect(returned).toBe(false)
+
+      saveReleased.resolve()
+      const result = await task
+      expect(result).toMatchObject({ sourceId: 'test-source' })
+    }
+  )
 
   it('collects a SchemaMigration snapshot through one staged replacement transaction', async () => {
     const order: string[] = []
@@ -3193,10 +3688,10 @@ describe('indexingRuntime', () => {
       }
     })
 
-    runtime.clear({ clearTaskStateStore: false })
+    await runtime.clear({ clearTaskStateStore: false })
     expect(clear).not.toHaveBeenCalled()
 
-    runtime.clear({ clearTaskStateStore: true })
+    await runtime.clear({ clearTaskStateStore: true })
     expect(clear).toHaveBeenCalledTimes(1)
   })
 
@@ -3966,7 +4461,7 @@ describe('indexingRuntime', () => {
       deleted: 0
     })
   })
-  it('clears registered sources and persisted task state during explicit runtime cleanup', () => {
+  it('clears registered sources and persisted task state during explicit runtime cleanup', async () => {
     const clearTaskState = vi.fn(async () => undefined)
     runtime = new IndexingRuntime({
       store: store,
@@ -3974,7 +4469,7 @@ describe('indexingRuntime', () => {
     })
     runtime.registerSource(buildSource())
 
-    runtime.clear({ clearTaskStateStore: true })
+    await runtime.clear({ clearTaskStateStore: true })
 
     expect(runtime.listDescriptors()).toEqual([])
     expect(clearTaskState).toHaveBeenCalledTimes(1)
@@ -4676,7 +5171,7 @@ describe('indexingRuntime', () => {
   it('keeps shutdown admission closed permanently after runtime clear', async () => {
     runtime.registerSource(buildSource())
     runtime.beginShutdown()
-    runtime.clear()
+    await runtime.clear()
 
     expect(runtime.listDescriptors()).toEqual([])
     await expect(

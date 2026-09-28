@@ -12,6 +12,7 @@ import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type {
   VoiceAsrStreamEvent,
   VoiceAsrStreamPayload,
+  VoiceCaptureUnavailableCode,
   VoiceDeliveryResult,
   VoiceDictatePayload,
   VoiceDictateResult,
@@ -33,6 +34,7 @@ import type { VoiceRecognitionRecordInput } from './voice-recognition-store'
 import { randomUUID } from 'node:crypto'
 import * as nativeAudio from '@talex-touch/tuff-native/audio'
 import { assertVoiceUploadUrl } from '@talex-touch/tuff-voice'
+import { VOICE_CAPTURE_UNAVAILABLE_CODES } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { StorageList } from '@talex-touch/utils'
 import {
   DEFAULT_VOICE_POLISH_STRENGTH,
@@ -547,6 +549,35 @@ function dataUrlToBuffer(dataUrl: string): Buffer | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Why this build cannot capture audio, or null when it can.
+ *
+ * One answer for two consumers — the failure a session throws and the readiness the UI reads —
+ * because a build whose readiness check and whose actual session disagree is worse than either
+ * being wrong: the UI would offer a microphone it cannot open, which is the shape of #322.
+ *
+ * The mapping is over the native reasons the audio addon reports (`native-audio/src/lib.rs`,
+ * `build_native_audio_support`) and the loader failure the JS wrapper substitutes when the binding
+ * is absent. Everything the wrapper says in that case is a missing component; the reasons the
+ * module itself reports are the device's and the platform's. The result is a code, never the
+ * reason string: the reason names a module path.
+ */
+export function captureUnavailableCode(): VoiceCaptureUnavailableCode | null {
+  const support = nativeAudio.getNativeAudioSupport()
+  if (support.supported) return null
+  const reason = (support.reason ?? '').toLowerCase()
+  if (!reason || /cannot find module|dlopen|native-module-not-loaded|missing export/.test(reason)) {
+    return VOICE_CAPTURE_UNAVAILABLE_CODES.componentMissing
+  }
+  if (/disabled-by-env/.test(reason)) return VOICE_CAPTURE_UNAVAILABLE_CODES.disabled
+  if (/no-input-device|input-probe-failed/.test(reason)) {
+    return VOICE_CAPTURE_UNAVAILABLE_CODES.deviceUnavailable
+  }
+  if (/platform-not-supported/.test(reason))
+    return VOICE_CAPTURE_UNAVAILABLE_CODES.platformUnsupported
+  return VOICE_CAPTURE_UNAVAILABLE_CODES.unavailable
 }
 
 /**
@@ -2017,11 +2048,23 @@ export class VoiceService {
     }
   }
 
+  /**
+   * The capture addon is load-bearing: with it absent no session can open on any platform, and
+   * every entry point (the Fn gesture, the HUD, the composer mic) dies on this one line.
+   *
+   * The stable code is the part renderers classify on — a plain sentence is all they can see
+   * across the stream boundary, and "Cannot find module .../tuff_native_audio.node" matched none
+   * of their failure heuristics, so a build missing the addon surfaced as a bare "transcription
+   * failed". The sentence keeps the addon's own reason (a missing module, `disabled-by-env`, an
+   * unsupported platform) because the log is where the path belongs.
+   */
   private assertSupported(): void {
     const support = nativeAudio.getNativeAudioSupport()
-    if (!support.supported) {
-      throw new Error(`Voice capture is unavailable: ${support.reason ?? 'unsupported platform'}`)
-    }
+    if (support.supported) return
+    throw Object.assign(
+      new Error(`Voice capture is unavailable: ${support.reason ?? 'unsupported platform'}`),
+      { code: captureUnavailableCode() ?? VOICE_CAPTURE_UNAVAILABLE_CODES.unavailable }
+    )
   }
 
   /**

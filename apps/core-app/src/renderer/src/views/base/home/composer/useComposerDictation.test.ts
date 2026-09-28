@@ -66,6 +66,8 @@ async function settle(): Promise<void> {
 
 let fake: ReturnType<typeof createFakeSdk>
 let notices: DictationNoticeKind[]
+/** The descriptions that rode along, one slot per notice: the sentence the toast would show. */
+let noticeDetails: (string | undefined)[]
 let input: HTMLTextAreaElement
 let micButton: HTMLButtonElement
 let scope: ReturnType<typeof effectScope>
@@ -81,7 +83,10 @@ function setup(initialDraft = ''): { draft: Ref<string>; dictation: UseComposerD
       draft,
       input: () => input,
       language: () => 'zh',
-      onNotice: (kind) => notices.push(kind),
+      onNotice: (kind, detail) => {
+        notices.push(kind)
+        noticeDetails.push(detail)
+      },
       sdk: fake.sdk
     })
   })
@@ -96,6 +101,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   fake = createFakeSdk()
   notices = []
+  noticeDetails = []
   scope = effectScope()
   document.body.innerHTML = ''
   const composer = document.createElement('div')
@@ -329,6 +335,9 @@ describe('useComposerDictation', () => {
     expect(draft.value).toBe('half a sentence')
     expect(dictation.outcome.value).toBe('failed')
     expect(notices).toEqual(['microphone-denied'])
+    // The description rides along: it is the only thing that tells an absent audio addon apart
+    // from a permission the user can actually grant.
+    expect(noticeDetails).toEqual(['denied'])
   })
 
   it('says nothing for a cancellation error', async () => {
@@ -356,6 +365,69 @@ describe('useComposerDictation', () => {
     fake.state.statusFails = true
     const { dictation } = setup()
     await dictation.refreshReadiness()
+    await dictation.start()
+    expect(fake.sdk.asrStream).toHaveBeenCalledOnce()
+  })
+
+  it('never opens a stream on a build without its audio addon', async () => {
+    fake.state.status = {
+      asr: { ready: true },
+      stt: { ready: true },
+      capture: { ready: false, reason: 'VOICE_ASR_CAPTURE_COMPONENT_MISSING' }
+    }
+    const { dictation } = setup()
+    await dictation.refreshReadiness()
+    expect(dictation.captureBlocked.value).toBe(true)
+
+    await dictation.start()
+    // The point of the gate: nothing is attempted, so main never has to fail a capture this
+    // install cannot perform, and the entry point is withheld rather than offered.
+    expect(fake.sdk.asrStream).not.toHaveBeenCalled()
+    expect(notices).toEqual(['capture-component-missing'])
+    expect(dictation.state.value).toBe('idle')
+  })
+
+  it('keeps offering the microphone for a device problem, and names it on the press', async () => {
+    fake.state.status = {
+      asr: { ready: true },
+      stt: { ready: true },
+      capture: { ready: false, reason: 'VOICE_ASR_CAPTURE_DEVICE_UNAVAILABLE' }
+    }
+    const { dictation } = setup()
+    await dictation.refreshReadiness()
+    // A microphone the user can plug back in is not a reason to hide the button.
+    expect(dictation.captureBlocked.value).toBe(false)
+
+    await dictation.start()
+    expect(fake.sdk.asrStream).not.toHaveBeenCalled()
+    expect(notices).toEqual(['microphone-missing'])
+  })
+
+  it('opens the stream when the build can capture', async () => {
+    fake.state.status = { asr: { ready: true }, stt: { ready: true }, capture: { ready: true } }
+    const { dictation } = setup()
+    await dictation.refreshReadiness()
+    expect(dictation.captureBlocked.value).toBe(false)
+    await dictation.start()
+    expect(fake.sdk.asrStream).toHaveBeenCalledOnce()
+  })
+
+  it('puts the microphone back, and tries the stream, when a later status read fails', async () => {
+    fake.state.status = {
+      asr: { ready: true },
+      stt: { ready: true },
+      capture: { ready: false, reason: 'VOICE_ASR_CAPTURE_COMPONENT_MISSING' }
+    }
+    const { dictation } = setup()
+    await dictation.refreshReadiness()
+    expect(dictation.captureBlocked.value).toBe(true)
+
+    // Could not ask is not a verdict: the entry comes back, and the press classifies whatever
+    // fails on its own rather than on a stale answer from the read that worked.
+    fake.state.statusFails = true
+    await dictation.refreshReadiness()
+    expect(dictation.captureBlocked.value).toBe(false)
+
     await dictation.start()
     expect(fake.sdk.asrStream).toHaveBeenCalledOnce()
   })
