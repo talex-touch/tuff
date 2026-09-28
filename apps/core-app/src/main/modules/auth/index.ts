@@ -1,7 +1,7 @@
 import type { AuthState, AuthUser } from '@talex-touch/utils/auth'
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
-import type { NetworkMethod } from '@talex-touch/utils/network'
+import type { NetworkMethod, NetworkRetryPolicy } from '@talex-touch/utils/network'
 import type { PlanQuota, Subscription, UsageStats, UserProfile } from '@talex-touch/utils/account'
 import type {
   AuthAvatarUpdateRequest,
@@ -58,6 +58,12 @@ const MACHINE_CODE_VERSION = 'mc_v1'
 const STEP_UP_TOKEN_TTL_MS = 10 * 60 * 1000
 const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 12_000
 const AUTH_PROFILE_REQUEST_RETRY_DELAY_MS = 800
+const AUTH_NETWORK_NO_RETRY_POLICY: NetworkRetryPolicy = Object.freeze({
+  maxRetries: 0,
+  retryOnNetworkError: false,
+  retryOnTimeout: false,
+  retryableStatusCodes: []
+})
 const AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS = 6_000
 const AUTH_CREDENTIAL_BUNDLE_VERSION = 1
 const AUTH_ACCESS_TOKEN_REFRESH_SKEW_MS = 5 * 60 * 1000
@@ -1019,6 +1025,7 @@ async function fetchRemoteUser(
       headers: { Authorization: normalizeBearerToken(token) },
       signal,
       timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
+      retryPolicy: AUTH_NETWORK_NO_RETRY_POLICY,
       responseType: 'json',
       validateStatus: [200, 401, 403]
     })
@@ -1172,6 +1179,7 @@ async function refreshAccessToken(reason: string): Promise<AccessTokenRefreshRes
         headers: { Authorization: normalizeBearerToken(refreshToken) },
         responseType: 'json',
         timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
+        retryPolicy: AUTH_NETWORK_NO_RETRY_POLICY,
         validateStatus: [200, 400, 401, 403, 404, 429, 500, 502, 503, 504]
       })
 
@@ -1274,7 +1282,9 @@ async function patchRemoteUserProfile(
       Authorization: normalizeBearerToken(token)
     },
     body: payload,
-    responseType: 'json'
+    responseType: 'json',
+    timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
+    retryPolicy: AUTH_NETWORK_NO_RETRY_POLICY
   })
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}`)
@@ -1356,6 +1366,7 @@ async function startDeviceAuthRequest(): Promise<DeviceAuthStartResponse> {
     },
     responseType: 'json',
     timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
+    retryPolicy: AUTH_NETWORK_NO_RETRY_POLICY,
     validateStatus: [200, 400, 403, 429]
   })
 
@@ -1459,6 +1470,7 @@ async function pollDeviceAuth(
         },
         responseType: 'json',
         timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
+        retryPolicy: AUTH_NETWORK_NO_RETRY_POLICY,
         validateStatus: [200, 400, 410, 429]
       })
 
@@ -1510,6 +1522,7 @@ async function abortDeviceAuth(deviceCode: string): Promise<void> {
       },
       body: { deviceCode },
       timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
+      retryPolicy: AUTH_NETWORK_NO_RETRY_POLICY,
       validateStatus: [200, 400, 404, 410]
     })
   } catch (error) {
@@ -1723,13 +1736,18 @@ function shouldClearAuthStateForNexusUnauthorized(context?: string): boolean {
   return normalizedContext === 'auth-profile' || normalizedContext.startsWith('auth:')
 }
 
+interface NexusRequestExecutionOptions {
+  readonly timeoutMs?: number
+  readonly bodyFactory?: () => unknown
+}
+
 async function executeNexusRequest(
   url: string,
   method: NetworkMethod,
   headers: Headers,
   body: unknown,
   context?: string,
-  bodyFactory?: () => unknown
+  options: NexusRequestExecutionOptions = {}
 ): Promise<NexusResponsePayload> {
   const startedAt = Date.now()
   authLog.debug('Executing Nexus request', {
@@ -1738,7 +1756,7 @@ async function executeNexusRequest(
       method,
       url,
       hasAuthorization: headers.has('Authorization'),
-      hasBody: Boolean(body || bodyFactory)
+      hasBody: Boolean(body || options.bodyFactory)
     }
   })
 
@@ -1747,8 +1765,10 @@ async function executeNexusRequest(
       method,
       url,
       headers: Object.fromEntries(headers.entries()),
-      body: bodyFactory ? bodyFactory() : body,
+      body: options.bodyFactory ? options.bodyFactory() : body,
       responseType: 'text',
+      timeoutMs: options.timeoutMs,
+      retryPolicy: AUTH_NETWORK_NO_RETRY_POLICY,
       validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
     })
 
@@ -1825,7 +1845,9 @@ async function performNexusRequest(
     const headers = new Headers(payload.headers ?? {})
     headers.set('Authorization', normalizeBearerToken(token))
 
-    return executeNexusRequest(url, method, headers, payload.body, payload.context)
+    return executeNexusRequest(url, method, headers, payload.body, payload.context, {
+      timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS
+    })
   }
 
   if (inFlightKey) {
@@ -1940,9 +1962,9 @@ async function performNexusUpload(
   headers.delete('content-type')
   headers.set('Authorization', normalizeBearerToken(token))
 
-  return executeNexusRequest(url, method, headers, null, payload.context, () =>
-    buildNexusUploadFormData(payload)
-  )
+  return executeNexusRequest(url, method, headers, null, payload.context, {
+    bodyFactory: () => buildNexusUploadFormData(payload)
+  })
 }
 
 function parseTimestampToMillis(value?: string | null): number {
@@ -2170,7 +2192,9 @@ async function attestCurrentDevice(): Promise<boolean> {
       'x-device-id': deviceId
     },
     body: payload,
-    responseType: 'text'
+    responseType: 'text',
+    timeoutMs: AUTH_PROFILE_REQUEST_TIMEOUT_MS,
+    retryPolicy: AUTH_NETWORK_NO_RETRY_POLICY
   })
 
   if (!response.ok) {
