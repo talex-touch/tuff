@@ -86,12 +86,12 @@ const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
 const versionPalette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
 const analyticsSections = [
-  { id: 'overview', label: 'Overview', icon: 'i-carbon-dashboard' },
+  { id: 'overview', label: 'Data Overview', icon: 'i-carbon-dashboard' },
+  { id: 'usage', label: 'Usage', icon: 'i-carbon-chart-line-smooth' },
   { id: 'performance', label: 'Performance', icon: 'i-carbon-meter' },
   { id: 'search', label: 'Search', icon: 'i-carbon-search' },
-  { id: 'usage', label: 'Usage', icon: 'i-carbon-chart-line-smooth' },
-  { id: 'intelligence', label: 'Intelligence', icon: 'i-carbon-ai-status' },
-  { id: 'docs', label: 'Docs', icon: 'i-carbon-document' },
+  { id: 'intelligence', label: 'AI Analytics', icon: 'i-carbon-ai-status' },
+  { id: 'docs', label: 'Docs Analytics', icon: 'i-carbon-document' },
   { id: 'geo', label: 'Geo', icon: 'i-carbon-earth-americas' },
   { id: 'exchange', label: 'Exchange', icon: 'i-carbon-currency' },
   { id: 'messages', label: 'Alerts', icon: 'i-carbon-warning' },
