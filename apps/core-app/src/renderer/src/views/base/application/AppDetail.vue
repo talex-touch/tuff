@@ -369,6 +369,47 @@ function removeAlias(alias: string): void {
           </TuffBlockSlot>
         </TuffGroupBlock>
 
+        <!--
+          Keywords and a shortcut are the same question asked two ways: how this application gets
+          summoned. Splitting them into separate groups made the panel read as a list of unrelated
+          settings.
+        -->
+        <TuffGroupBlock
+          :name="t('appDetail.invokeTitle')"
+          default-icon="i-carbon-tag"
+          memory-name="app-detail-invoke"
+        >
+          <TuffBlockSlot
+            :title="t('appDetail.shortcutTitle')"
+            default-icon="i-carbon-keyboard"
+            active-icon="i-carbon-keyboard"
+          >
+            <FlatKeyInput
+              :model-value="shortcut ?? ''"
+              clearable
+              @update:model-value="
+                (value) => entry && emit('update-shortcut', entry, String(value))
+              "
+            />
+          </TuffBlockSlot>
+
+          <TuffBlockSlot
+            :title="t('appDetail.aliasTitle')"
+            default-icon="i-carbon-tag"
+            active-icon="i-carbon-tag"
+          >
+            <div class="AppDetail-AliasSummary">
+              <span v-if="aliases?.length" class="AppDetail-AliasCount">
+                {{ t('appDetail.aliasCount', { count: aliases.length }) }}
+              </span>
+              <span v-else class="AppDetail-AliasEmpty">{{ t('appDetail.aliasNone') }}</span>
+              <TxButton variant="flat" size="sm" :disabled="busy" @click="openAliasDialog">
+                {{ t('appDetail.aliasManage') }}
+              </TxButton>
+            </div>
+          </TuffBlockSlot>
+        </TuffGroupBlock>
+
         <TuffGroupBlock
           :name="t('appDetail.usageTitle')"
           default-icon="i-carbon-chart-line"
@@ -481,47 +522,6 @@ function removeAlias(alias: string): void {
               </ul>
             </section>
           </template>
-        </TuffGroupBlock>
-
-        <!--
-          Keywords and a shortcut are the same question asked two ways: how this application gets
-          summoned. Splitting them into separate groups made the panel read as a list of unrelated
-          settings.
-        -->
-        <TuffGroupBlock
-          :name="t('appDetail.invokeTitle')"
-          default-icon="i-carbon-tag"
-          memory-name="app-detail-invoke"
-        >
-          <TuffBlockSlot
-            :title="t('appDetail.shortcutTitle')"
-            default-icon="i-carbon-keyboard"
-            active-icon="i-carbon-keyboard"
-          >
-            <FlatKeyInput
-              :model-value="shortcut ?? ''"
-              clearable
-              @update:model-value="
-                (value) => entry && emit('update-shortcut', entry, String(value))
-              "
-            />
-          </TuffBlockSlot>
-
-          <TuffBlockSlot
-            :title="t('appDetail.aliasTitle')"
-            default-icon="i-carbon-tag"
-            active-icon="i-carbon-tag"
-          >
-            <div class="AppDetail-AliasSummary">
-              <span v-if="aliases?.length" class="AppDetail-AliasCount">
-                {{ t('appDetail.aliasCount', { count: aliases.length }) }}
-              </span>
-              <span v-else class="AppDetail-AliasEmpty">{{ t('appDetail.aliasNone') }}</span>
-              <TxButton variant="flat" size="sm" :disabled="busy" @click="openAliasDialog">
-                {{ t('appDetail.aliasManage') }}
-              </TxButton>
-            </div>
-          </TuffBlockSlot>
         </TuffGroupBlock>
 
         <TuffGroupBlock
