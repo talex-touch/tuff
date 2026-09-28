@@ -154,4 +154,3 @@ Commits: `1e56340be` (TxStatusHint + Nexus docs), `9572393c4` (CoreApp integrati
 
 Left open, reported to TalexDreamSoul: the hub's Basics count trails the barrel by one (predates this
 task, 2e155706f); no RTL mirroring; flipping `animated` back on while a hint shows replays the entrance.
-
