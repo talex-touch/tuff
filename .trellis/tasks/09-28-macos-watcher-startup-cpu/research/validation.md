@@ -17,6 +17,20 @@ The harness ran `chokidar-fsevents@3.6.0` and the production `MacOSFileWatcher` 
 
 All 6 watcher windows completed and all 18 file mutations were delivered. The registration CPU ratio was `0.0085348354`, meeting the benchmark budget of `<= 0.1` with `<= 64` registration fs calls. The JSON summary is in `watcher-module-benchmark-summary.json`.
 
+## Resource and capability rerun
+
+Command:
+
+```text
+pnpm -C apps/core-app exec tsx scripts/file-watch-startup-benchmark.mjs --counts 2000,20000 --repeats 3 --window-seconds 10
+```
+
+This second run covered 12 alternating windows across both fixture sizes. Every window completed, and every backend delivered all three create/change/delete probes. The candidate registration CPU medians were 3.944 ms at 2,000 files and 3.838 ms at 20,000 files, with zero instrumented registration filesystem calls. The baseline medians were 61.046 ms and 455.598 ms, with 2,055 and 20,451 calls respectively.
+
+The candidate's observed peak RSS during the 10-second windows was 85.8–86.8 MiB at 2,000 files and 84.2–85.9 MiB at 20,000 files. The baseline was 91.6–93.0 MiB and 104.0–111.0 MiB for the same sizes. Candidate window CPU medians were 59.207 ms and 59.651 ms; baseline medians were 114.561 ms and 505.497 ms. Candidate event-loop p99 stayed between 11.4 and 12.3 ms, with a maximum observed delay of 18.7 ms. These are isolated watcher-process measurements, so they do not establish whole-app memory or energy usage.
+
+All 12 runs and the per-run memory, CPU, event-loop, and delivery fields are in `watcher-resource-benchmark-summary.json`.
+
 ## Energy sampler
 
 Command:

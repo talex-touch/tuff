@@ -54,9 +54,9 @@ git diff --check
 - [x] Add a user-facing sentence in the PR for the next release. Do not bump versions, tag, publish a release, or edit old versioned release notes; an actual release's bilingual note pair belongs to separately authorized release work. Run the existing `quality:pr` gate and distinguish pre-existing release-note failures if any.
 - [ ] Prepare a redacted bug report using `.github/ISSUE_TEMPLATE/bug_report.md`, with beta.50 environment, actual measurements and a clear relation to earlier issues. Do not falsely tick “no similar issues”.
 - [ ] Prepare the matching PR with `.github/PULL_REQUEST_TEMPLATE/en.md`: implementation summary, linked issue, exact test commands/results, this-host-only evidence, directory/symlink/event-loss risks and rollback.
-- [ ] Follow the upstream Phase 3.4 grouped commit-plan confirmation gate; create Conventional Commit work changes only after that review. No amend, merge or release.
+- [x] Follow the upstream Phase 3.4 grouped commit-plan confirmation gate; create Conventional Commit work changes only after that review. No amend, merge or release.
 - [x] Run `pnpm check branch-policy` before the first push. Publish through the user's fork and open the issue/PR as already requested by the user. Use a draft PR if full local acceptance is still incomplete; do not mark unchecked boxes as passed or present a draft as a verified fix.
-- [ ] Keep issue/PR links in task metadata and final handoff; use the prescribed archive/journal flow once the work actually completes.
+- [x] Keep issue/PR links in task metadata and final handoff; use the prescribed archive/journal flow once the work actually completes.
 
 ## Checkpoints and rollback
 
