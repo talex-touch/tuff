@@ -170,6 +170,60 @@ describe('preserveRequiredNativeAddons', () => {
   })
 })
 
+describe('a preservation that fails part way', () => {
+  it('takes the half-filled backup with it and leaves the addon tree it was reading intact', () => {
+    // The forcing function is a *directory* where an addon file should be: `existsSync` still
+    // reports the addon as present, so the loop enters `copyFileSync`, which refuses to copy a
+    // directory ("EISDIR" on Linux, "ENOTSUP" on macOS). Do not "fix" this fixture back into a
+    // file — a file copies fine and the failure path goes untested. `tuff_native_audio.node` is
+    // second on the win list, so `tuff_native_ocr.node` is already in the backup when the throw
+    // lands: the half-filled backup this cleanup exists to remove.
+    const fixture = createNativeAddonsFixture([
+      ...WINDOWS_ADDONS.filter((addonName) => addonName !== AUDIO_ADDON),
+      UNREQUESTED_ADDON
+    ])
+    mkdirSync(path.join(fixture.releaseDir, AUDIO_ADDON), { recursive: true })
+
+    // Its own tempRoot, so a backup left behind shows up here and nowhere else.
+    const failureTempRoot = mkdtempSync(path.join(tmpdir(), 'native-addons-failure-'))
+    fixtureRoots.push(failureTempRoot)
+
+    expect(() =>
+      preserveRequiredNativeAddons({
+        projectRoot: fixture.projectRoot,
+        target: 'win',
+        tempRoot: failureTempRoot
+      })
+    ).toThrow()
+
+    expect(
+      readdirSync(failureTempRoot).filter((entry) => entry.startsWith('tuff-native-addons-'))
+    ).toEqual([])
+    // Copying out was the only thing the failure was allowed to disturb.
+    expect(readdirSync(fixture.releaseDir).sort()).toEqual(
+      [...WINDOWS_ADDONS, UNREQUESTED_ADDON].sort()
+    )
+
+    // Positive control, in the same tempRoot: once the tree is readable again the same call
+    // backs up and reports — and tempRoot holds exactly the one backup it just made, so a
+    // backup the failed call had leaked would show up as a second entry here.
+    const audioAddonPath = path.join(fixture.releaseDir, AUDIO_ADDON)
+    rmSync(audioAddonPath, { recursive: true, force: true })
+    writeFileSync(audioAddonPath, `cargo-built:${AUDIO_ADDON}\n`)
+    const { backupDir, kept } = preserveRequiredNativeAddons({
+      projectRoot: fixture.projectRoot,
+      target: 'win',
+      tempRoot: failureTempRoot
+    })
+
+    expect(path.dirname(backupDir)).toBe(failureTempRoot)
+    expect(
+      readdirSync(failureTempRoot).filter((entry) => entry.startsWith('tuff-native-addons-'))
+    ).toEqual([path.basename(backupDir)])
+    expect([...kept].sort()).toEqual([...WINDOWS_ADDONS].sort())
+  })
+})
+
 describe('restorePreservedNativeAddons', () => {
   it('puts back the addon the rebuild dropped and leaves the addons it rebuilt', () => {
     const fixture = createNativeAddonsFixture(WINDOWS_ADDONS)

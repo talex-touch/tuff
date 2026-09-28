@@ -461,6 +461,7 @@ type FileProviderLeaseRecoveryTestApi = FileProviderIndexingLifecycleTestApi & {
   publishCommittedWorkerRecords: (entries: unknown[]) => Promise<number>
   indexSchedulerService: {
     drain: (timeoutMs?: number, mutationLeaseId?: string) => Promise<void>
+    getDrainTimeoutMs: (scoped: boolean) => number
     cancelLease: (mutationLeaseId: string) => void
     schedule: (
       files: FileProviderIndexSchedulerFile[],
@@ -2024,6 +2025,7 @@ describe('file-provider startup readiness', () => {
           cancellationBegan.resolve(undefined)
           await activeDispatchSettled.promise
         }),
+      getDrainTimeoutMs: vi.fn(() => 60_000),
       cancelLease: vi.fn((leaseId: string) => events.push(`scheduler-cancel:${leaseId}`))
     } as unknown as typeof provider.indexSchedulerService
     provider.fileIndexWorker = {
@@ -2108,6 +2110,7 @@ describe('file-provider startup readiness', () => {
     const cancelLease = vi.fn()
     provider.indexSchedulerService = {
       drain: vi.fn().mockRejectedValue(unexpected),
+      getDrainTimeoutMs: vi.fn(() => 60_000),
       cancelLease
     } as unknown as typeof provider.indexSchedulerService
 
@@ -2144,6 +2147,7 @@ describe('file-provider startup readiness', () => {
 
     provider.indexSchedulerService = {
       drain,
+      getDrainTimeoutMs: vi.fn(() => 60_000),
       hasPendingWork: vi.fn((leaseId?: string) => leaseId === undefined),
       cancelLease: vi.fn(),
       cancelPending: vi.fn()
@@ -2160,6 +2164,7 @@ describe('file-provider startup readiness', () => {
       // This lease owns nothing, so the drain neither waits on the global scheduler
       // flush nor enters the flush loop; the foreign lease's results stay its own.
       expect(drain.mock.calls.every((call) => call[1] === 'lease-scoped')).toBe(true)
+      expect(drain).toHaveBeenCalledWith(60_000, 'lease-scoped')
       expect(unscopedDrain).not.toHaveBeenCalled()
       expect(scheduleFlush).not.toHaveBeenCalled()
       expect(provider.pendingIndexWorkerResults.get(1)).toEqual({
@@ -2201,6 +2206,7 @@ describe('file-provider startup readiness', () => {
 
     provider.indexSchedulerService = {
       drain: vi.fn(async (_timeoutMs?: number, _leaseId?: string) => undefined),
+      getDrainTimeoutMs: vi.fn(() => 60_000),
       hasPendingWork: vi.fn(() => false),
       cancelLease: vi.fn(),
       cancelPending: vi.fn()
@@ -2938,5 +2944,162 @@ describe('path normalization migration scheduling', () => {
 
     expect(provider.keywordBackfillScheduled).toBe(!armsMigration)
     expect(provider.keywordBackfillTimer === null).toBe(armsMigration)
+  })
+})
+
+interface RuntimeAckFileRow {
+  id: number
+  path: string
+  name: string
+  type: string
+}
+
+interface FileProviderRuntimeAckTestApi extends FileProviderIndexingLifecycleTestApi {
+  handleIndexedSourceRuntimeRecordsApplied: (
+    records: ReadonlyArray<{ path: string; metadata?: Record<string, unknown> }>,
+    mutationLeaseId?: string
+  ) => Promise<void>
+  processFileExtensions: (files: RuntimeAckFileRow[]) => Promise<void>
+  scheduleIndexing: (
+    files: RuntimeAckFileRow[],
+    reason: string,
+    mutationLeaseId?: string
+  ) => Promise<unknown>
+}
+
+function runtimeAckFile(id: number, filePath: string): RuntimeAckFileRow {
+  return { id, path: filePath, name: path.basename(filePath), type: 'file' }
+}
+
+function createRuntimeAckDbUtils(
+  files: RuntimeAckFileRow[],
+  progress: Array<{ fileId: number; status: string }>
+) {
+  return {
+    getFileIndexReadDb: () => ({
+      select: () => ({ from: () => ({ where: vi.fn(async () => files) }) })
+    }),
+    getFileIndexProgressByFileIds: vi.fn(async () => progress)
+  }
+}
+
+/**
+ * The runtime writer's ack fires for a committed base batch, and it decides
+ * re-admission from the durable `file_index_progress` rows: a file that already
+ * reached a terminal status must not be flipped back to pending by the ack, or
+ * every ack re-queues work the worker already finished (the re-admission loop).
+ * The extension refresh is NOT that decision — it is a per-row side effect and
+ * still has to cover the whole acknowledged batch.
+ */
+describe('runtime writer ack re-admission', () => {
+  it('schedules only files without terminal progress while refreshing extensions for the whole batch', async () => {
+    const provider = fileProvider as unknown as FileProviderRuntimeAckTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalProcessFileExtensions = provider.processFileExtensions
+    const originalScheduleIndexing = provider.scheduleIndexing
+    const records = [
+      { path: '/tmp/ack-completed.txt', metadata: { runtimePublication: 'base' } },
+      { path: '/tmp/ack-skipped.txt', metadata: { runtimePublication: 'base' } },
+      { path: '/tmp/ack-failed.txt', metadata: { runtimePublication: 'base' } },
+      { path: '/tmp/ack-pending.txt', metadata: { runtimePublication: 'base' } },
+      { path: '/tmp/ack-processing.txt', metadata: { runtimePublication: 'base' } },
+      // No progress row at all: never enriched, so it is a candidate.
+      { path: '/tmp/ack-unenriched.txt', metadata: { runtimePublication: 'base' } }
+    ]
+    const files = records.map((record, index) => runtimeAckFile(index + 1, record.path))
+    provider.dbUtils = createRuntimeAckDbUtils(files, [
+      { fileId: 1, status: 'completed' },
+      { fileId: 2, status: 'skipped' },
+      { fileId: 3, status: 'failed' },
+      { fileId: 4, status: 'pending' },
+      { fileId: 5, status: 'processing' }
+    ])
+    const scheduledCalls: Array<{ ids: number[]; reason: string; mutationLeaseId?: string }> = []
+    const extensionBatches: number[][] = []
+    provider.scheduleIndexing = vi.fn(
+      async (batch: RuntimeAckFileRow[], reason: string, mutationLeaseId?: string) => {
+        scheduledCalls.push({ ids: batch.map((file) => file.id), reason, mutationLeaseId })
+      }
+    )
+    provider.processFileExtensions = vi.fn(async (batch: RuntimeAckFileRow[]) => {
+      extensionBatches.push(batch.map((file) => file.id))
+    })
+
+    try {
+      await provider.handleIndexedSourceRuntimeRecordsApplied(records, 'lease-ack')
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.processFileExtensions = originalProcessFileExtensions
+      provider.scheduleIndexing = originalScheduleIndexing
+    }
+
+    expect(scheduledCalls).toEqual([
+      { ids: [4, 5, 6], reason: 'runtime-writer-ack', mutationLeaseId: 'lease-ack' }
+    ])
+    expect(extensionBatches).toEqual([[1, 2, 3, 4, 5, 6]])
+  })
+
+  it('keeps an all-terminal batch out of the scheduler but still refreshes its extensions', async () => {
+    const provider = fileProvider as unknown as FileProviderRuntimeAckTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalProcessFileExtensions = provider.processFileExtensions
+    const originalScheduleIndexing = provider.scheduleIndexing
+    const records = [
+      { path: '/tmp/ack-completed.txt', metadata: { runtimePublication: 'base' } },
+      { path: '/tmp/ack-skipped.txt', metadata: { runtimePublication: 'base' } },
+      { path: '/tmp/ack-failed.txt', metadata: { runtimePublication: 'base' } }
+    ]
+    const files = records.map((record, index) => runtimeAckFile(index + 1, record.path))
+    provider.dbUtils = createRuntimeAckDbUtils(files, [
+      { fileId: 1, status: 'completed' },
+      { fileId: 2, status: 'skipped' },
+      { fileId: 3, status: 'failed' }
+    ])
+    const scheduleIndexing = vi.fn(async () => undefined)
+    const extensionBatches: number[][] = []
+    provider.scheduleIndexing = scheduleIndexing
+    provider.processFileExtensions = vi.fn(async (batch: RuntimeAckFileRow[]) => {
+      extensionBatches.push(batch.map((file) => file.id))
+    })
+
+    try {
+      await provider.handleIndexedSourceRuntimeRecordsApplied(records, 'lease-ack')
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.processFileExtensions = originalProcessFileExtensions
+      provider.scheduleIndexing = originalScheduleIndexing
+    }
+
+    expect(scheduleIndexing).not.toHaveBeenCalled()
+    expect(extensionBatches).toEqual([[1, 2, 3]])
+  })
+
+  it('ignores records that were not published as the base batch', async () => {
+    const provider = fileProvider as unknown as FileProviderRuntimeAckTestApi
+    const originalDbUtils = provider.dbUtils
+    const originalProcessFileExtensions = provider.processFileExtensions
+    const originalScheduleIndexing = provider.scheduleIndexing
+    const records = [
+      { path: '/tmp/ack-enriched.txt', metadata: { runtimePublication: 'worker-enrichment' } }
+    ]
+    const files = [runtimeAckFile(1, records[0].path)]
+    provider.dbUtils = createRuntimeAckDbUtils(files, [])
+    const scheduleIndexing = vi.fn(async () => undefined)
+    const extensionBatches: number[][] = []
+    provider.scheduleIndexing = scheduleIndexing
+    provider.processFileExtensions = vi.fn(async (batch: RuntimeAckFileRow[]) => {
+      extensionBatches.push(batch.map((file) => file.id))
+    })
+
+    try {
+      await provider.handleIndexedSourceRuntimeRecordsApplied(records)
+    } finally {
+      provider.dbUtils = originalDbUtils
+      provider.processFileExtensions = originalProcessFileExtensions
+      provider.scheduleIndexing = originalScheduleIndexing
+    }
+
+    expect(scheduleIndexing).not.toHaveBeenCalled()
+    expect(extensionBatches).toEqual([])
   })
 })

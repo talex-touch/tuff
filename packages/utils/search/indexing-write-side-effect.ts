@@ -19,12 +19,18 @@ export class IndexedWriteSideEffectService<TRecord> {
       deps.formatExtensionFailureMessage ?? (context => `processExtensions failed (${context})`)
   }
 
-  async dispatch(records: TRecord[], options: IndexedWriteSideEffectOptions): Promise<void> {
+  async dispatch(
+    records: TRecord[],
+    options: IndexedWriteSideEffectOptions,
+    indexingRecords: TRecord[] = records,
+  ): Promise<void> {
     if (records.length === 0) {
       return
     }
 
-    await this.deps.scheduleIndexing(records, options.indexReason, options.mutationLeaseId)
+    if (indexingRecords.length > 0) {
+      await this.deps.scheduleIndexing(indexingRecords, options.indexReason, options.mutationLeaseId)
+    }
     await this.deps
       .processExtensions(records)
       .catch(error => this.deps.logWarn(this.formatExtensionFailureMessage(options.extensionContext), error))
