@@ -1572,6 +1572,13 @@ export class CommonChannelModule extends BaseModule {
         touchApp.window.window.show()
         touchApp.window.window.focus()
       }),
+      // CoreBox is a separate window with its own renderer, so its ⌘K row cannot navigate the
+      // main window itself: main reveals it and delivers the route.
+      transport.on(AppEvents.window.openSettings, (_payload, context) => {
+        this.assertHostOnly(context, 'window.openSettings')
+        const result = getAppDestinationNavigationService(touchApp).open('settings-overview')
+        return result.status !== 'unavailable'
+      }),
       transport.on(AppEvents.debug.openDevTools, (payload, context) => {
         // DevTools runs arbitrary JS in the main renderer and exposes everything it holds, so a
         // plugin view reaching this handler is a way out of the plugin sandbox (#783).
