@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "evidence": "Provider Registry + Scene unification verified with 91 admin routing and reachability tests, live ego-browser verification, and clean exports audit.",
+    "blocker": "none",
+    "nextAction": "Publish PR to master and stage to complete remote integration."
+  }
 }
