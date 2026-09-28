@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "nextAction": "Reproduce the remaining split-off / legacy opener icon lane only if it can be isolated safely; otherwise close this R10 round with the measured source-scoped diagnostics and per-batch query evidence.",
-    "blocker": "Default split-on icon lane, task-state coalescing, fullScan batch ceiling, source-scoped diagnostics, three-hour residency, and replay-loop fix are verified. Remaining evidence is limited to the emergency split-off topology and legacy opener icon lane; no live or real profile may be touched.",
-    "evidence": "research/verification-2026-09-26.md: 100k/three-hour evidence, maxSize 10 A/B, post-scan replay fix, watch task-state save coalescing, source-scoped diagnostics (7.48 GiB clone: 1,237ms all-source timeout versus 10.9ms scoped), and per-batch acknowledgement query A/B (44.25ms current versus 43.55ms LEFT JOIN)."
+    "nextAction": "R10 is closed; keep the bounded indexing changes on the verified branch and proceed only through normal integration/release workflow.",
+    "blocker": "None for Issue 1964 / R10. The emergency split-off and legacy opener icon lanes were reproduced in isolation and did not reproduce the historical writer storm.",
+    "evidence": "research/verification-2026-09-26.md: 100k/three-hour evidence, maxSize 10 A/B, replay-loop fix, watch task-state coalescing, source-scoped diagnostics, acknowledgement query A/B, and both split-on plus split-off/opener icon writer-lane runtime probes."
   }
 }

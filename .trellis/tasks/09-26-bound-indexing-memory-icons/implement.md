@@ -15,6 +15,7 @@
 
 - [x] Reduce watch-event task-state write fan-out without weakening durability. (2026-09-27: watch task history now uses a 1s leading-edge coalescing window; 200-file isolated storm reduced `indexing.task-state.save` from 191 to 49 writes, while `drainTaskStateWrites()` flushes the latest state during shutdown. Scan/reconcile writes remain immediate. `indexing-runtime.test.ts` 102/102, node typecheck, targeted ESLint, Electron build, and `git diff --check` passed.)
 - [x] Scope indexed-source diagnostics by requested source. (2026-09-27: explicit `sourceId` requests now avoid building unrelated source reports; a 7.48 GiB cloned-index probe measured 1,237ms pre-fix all-source startup timeout versus 10.9ms post-fix file-provider scoped request. Focused runtime/channel tests 143/143, node typecheck, targeted ESLint, and Electron build passed.)
+- [x] Reproduce emergency split-off and legacy opener icon writer lanes. (2026-09-27: `TUFF_DB_SEARCH_SPLIT_ENABLED=0` wrote the ordinary file's `icon`/`iconMeta` into primary `database.db`; the opener path wrote the Free Download Manager `file-icons` path into both its app row and `openers.json.torrent`. Each lane wrote once, neither appeared as a scheduler Top-5 slow label, and neither write window had event-loop lag. No production change was justified.)
 
 ## Ownership (first wave)
 
