@@ -4177,8 +4177,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async waitForSearchIndexDrain(reason: string, mutationLeaseId?: string): Promise<void> {
-    const startedAt = Date.now()
-    const deadline = startedAt + FILE_INDEX_SEARCH_DRAIN_TIMEOUT_MS
+    const timeoutMs = this.indexSchedulerService.getDrainTimeoutMs(mutationLeaseId !== undefined)
+    const deadline = Date.now() + timeoutMs
     await this.indexSchedulerService.drain(Math.max(1, deadline - Date.now()), mutationLeaseId)
 
     while (true) {
@@ -4197,7 +4197,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.logWarn('Search index drain timed out after indexed-source scan', undefined, {
       reason,
-      timeoutMs: FILE_INDEX_SEARCH_DRAIN_TIMEOUT_MS,
+      timeoutMs,
       busy: this.isSearchIndexWorkerBusy(mutationLeaseId),
       mutationLeaseId
     })

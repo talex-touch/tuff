@@ -10,6 +10,8 @@ import {
   mapIndexedWriteWorkerFilePayload,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
+/** One bounded drain window for each worker batch retained by a scoped mutation lease. */
+export const FILE_INDEX_SCHEDULER_DRAIN_PER_BATCH_MS = 30_000
 
 export interface FileProviderIndexSchedulerFile {
   id?: number | null
@@ -176,6 +178,13 @@ export class FileProviderIndexSchedulerService {
 
   getSnapshot(): IndexedWorkerSchedulerSnapshot {
     return this.scheduler.getSnapshot()
+  }
+
+  getDrainTimeoutMs(scoped: boolean): number {
+    if (!scoped) return FILE_INDEX_SCHEDULER_DRAIN_PER_BATCH_MS
+    const snapshot = this.scheduler.getSnapshot()
+    const retainedBatches = Math.max(1, snapshot.activeBatches + snapshot.queuedBatches)
+    return retainedBatches * FILE_INDEX_SCHEDULER_DRAIN_PER_BATCH_MS
   }
 
   hasPendingWork(mutationLeaseId?: string): boolean {
