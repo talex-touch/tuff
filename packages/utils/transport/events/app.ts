@@ -194,6 +194,13 @@ export const AppEvents = {
      * Request renderer to open download center.
      */
     openDownloadCenter: defineEvent('app').module('window').event('open-download-center').define<void, void>(),
+
+    /**
+     * Reveal the main window on the settings surface. Sent by a surface that is not the main
+     * renderer — CoreBox runs the entry as a ⌘K row — so main owns the reveal and the route.
+     * `false` when the window or its renderer could not take the request.
+     */
+    openSettings: defineEvent('app').module('window').event('open-settings').define<void, boolean>(),
   },
 
   /**

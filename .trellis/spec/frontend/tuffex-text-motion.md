@@ -121,6 +121,7 @@ Two rules there are load-bearing and must not be simplified:
 | `TxBadge` | Numeric values render through `TxTextMorph`. |
 | `TxSwitch` | Labels go through `TxTextTransformer`, so they morph. |
 | `TxModeChip` | Label goes through `TxTextTransformer mode="fade"` (a whole-label blur crossfade, as in its motion reference), 50ms behind the icon; the chip FLIPs its own width, and narrows the layers' transition to `opacity, filter` so an inherited ink change never eases. |
+| `TxStatusHint` | Words go through `TxTextTransformer` (morph, `durationMs` 380), so a new message grows out of the last one. `animated=false` swaps in a plain `span`, so no engine and no WAAPI run; `live=false` passes `aria-live="off"` onto the transformer. |
 
 `TxTextTransformer` forces `fade` regardless of `mode` in two cases, both structural rather
 than stylistic: the default slot is in play (a slot renders arbitrary nodes and the engine
@@ -130,6 +131,18 @@ measured against). Neither is negotiable from the call site.
 
 ## Consequences to plan around
 
+- **A morph only runs on a value that changes under a mounted engine.** The engine never animates
+  its first render (`isInitialRender`), so a host that keys the transformer (or its parent) per
+  value — `:key="message.id"` — remounts it every time and swaps the text instead of morphing it.
+  Keep it mounted and change `text`; replay any emphasis with a separate key (`TxStatusHint`'s
+  `pulseKey`).
+- **`TxTextTransformer` is a live region unless told otherwise.** Its root hard-codes
+  `aria-live="polite"`. A host that already announces the value from its own always-mounted region
+  passes `aria-live="off"`: fallthrough attributes are merged last, so the host's value wins. A test
+  that asserts "no live region here" must then match `[aria-live]:not([aria-live="off"])`.
+- **The morph DOM holds the value twice.** The root carries a clipped `[tx-morph-sr]` copy plus the
+  aria-hidden segments, so `.text()` on any ancestor reads the value twice. Tests read the
+  accessible text (skip `aria-hidden` subtrees) or the component's `text` prop instead.
 - **No truncation under morph.** `.tx-text-transformer.is-morph` sets `overflow: visible`,
   because exiting segments sit wherever the old value put them — routinely past the new
   width — and clipping cuts the exit in half. A value that must ellipsise wants `mode="fade"`.

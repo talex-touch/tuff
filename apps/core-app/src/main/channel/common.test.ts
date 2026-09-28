@@ -2825,3 +2825,74 @@ describe('CommonChannelModule destination readiness handshake', () => {
     }
   })
 })
+
+/**
+ * CoreBox runs the settings entry as its own ⌘K row, but settings live in the main window. Main
+ * owns the reveal and the route, so the row's request goes through the destination catalog by id
+ * and answers whether anything actually moved — a window that cannot take the request must report
+ * `false` rather than a success the search window would trust.
+ */
+describe('CommonChannelModule open settings request', () => {
+  it('reveals the settings destination and reports an unavailable window', async () => {
+    const module = new CommonChannelModule() as unknown as CommonChannelModuleTestInstance
+    const handlers = new Map<
+      string,
+      (payload: unknown, context: unknown) => Promise<unknown> | unknown
+    >()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown> | unknown
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      sendTo: vi.fn(async () => undefined)
+    }
+    // The packaged runtime patches this clock onto `process`; plain Node has no such function.
+    Object.defineProperty(process, 'getCreationTime', {
+      configurable: true,
+      writable: true,
+      value: () => 1_000
+    })
+    const touchApp = {
+      app,
+      version: '2.4.9-test',
+      rootPath: '/tmp/tuff-root',
+      window: {
+        window: { webContents: { id: 42 } },
+        onMaximizedChanged: vi.fn(() => () => {})
+      }
+    }
+
+    module.registerSystemTransportHandlers(transport, touchApp, vi.fn())
+
+    try {
+      const open = vi.fn()
+      getAppDestinationNavigationServiceMock.mockReturnValue({ open })
+      const openSettings = handlers.get(AppEvents.window.openSettings.toEventName())
+      expect(openSettings).toBeTypeOf('function')
+
+      open.mockReturnValue({ destinationId: 'settings-overview', status: 'opened' })
+      expect(openSettings!(undefined, {})).toBe(true)
+      expect(open).toHaveBeenCalledExactlyOnceWith('settings-overview')
+
+      open.mockReturnValue({
+        destinationId: 'settings-overview',
+        status: 'unavailable',
+        reason: 'window-unavailable'
+      })
+      expect(openSettings!(undefined, {})).toBe(false)
+
+      await expect(
+        Promise.resolve().then(() => openSettings!(undefined, { plugin: { name: 'hostile' } }))
+      ).rejects.toThrow('HOST_ONLY_HANDLER')
+      expect(open).toHaveBeenCalledTimes(2)
+    } finally {
+      Reflect.deleteProperty(process, 'getCreationTime')
+    }
+  })
+})

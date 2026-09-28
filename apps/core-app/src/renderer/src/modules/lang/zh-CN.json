@@ -6376,6 +6376,7 @@
       "translateImagePin": "翻译并置顶",
       "flowTransfer": "流转到其他插件",
       "bindShortcut": "绑定快捷键",
+      "openSettings": "打开设置",
       "open": "打开",
       "paste": "粘贴",
       "execute": "执行",
@@ -6396,10 +6397,8 @@
       "empty": "没有匹配的操作",
       "failed": "操作失败",
       "groups": {
-        "open": "打开",
-        "copy": "复制",
-        "organize": "整理",
-        "flow": "流转",
+        "open": "基本操作",
+        "host": "应用设置",
         "plugin": "插件"
       }
     },

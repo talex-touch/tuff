@@ -327,6 +327,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/toast',
     '/docs/dev/components/toast-panel',
     '/docs/dev/components/alert',
+    '/docs/dev/components/status-hint',
     '/docs/dev/components/progress',
     '/docs/dev/components/progress-bar',
     '/docs/dev/components/spinner',

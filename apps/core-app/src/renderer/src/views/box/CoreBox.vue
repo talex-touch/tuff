@@ -30,6 +30,7 @@ import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import FlowSelector from '~/components/flow/FlowSelector.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
 import BoxGrid from '~/components/render/BoxGrid.vue'
+import CoreBoxActionFeedback from '~/components/render/CoreBoxActionFeedback.vue'
 import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
 import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
 import CoreBoxSelectionBlock from '~/components/render/CoreBoxSelectionBlock.vue'
@@ -1224,23 +1225,16 @@ const customCss = computed(() => {
           :class="{ 'CoreBox-Configure--input-hidden': !shouldShowInput }"
           :style="getCanvasAreaStyle('actions')"
         >
-          <span
-            v-if="headerActionFeedback"
-            :key="headerActionFeedback.id"
-            class="CoreBox-ActionFeedback"
-            :class="headerActionFeedback.tone === 'error' ? 'is-error' : 'is-success'"
-          >
-            <i
-              class="CoreBox-ActionFeedback-Icon"
-              :class="
-                headerActionFeedback.tone === 'error'
-                  ? 'i-ri-error-warning-line'
-                  : 'i-ri-checkbox-circle-line'
-              "
-              aria-hidden="true"
+          <!-- The footer's outcome, header-sized. Kept mounted while messages change, as there. -->
+          <Transition name="tx-status-hint">
+            <CoreBoxActionFeedback
+              v-if="headerActionFeedback"
+              class="CoreBox-ActionFeedback"
+              placement="header"
+              :feedback="headerActionFeedback"
+              :animated="shouldAnimate()"
             />
-            <span class="CoreBox-ActionFeedback-Text">{{ headerActionFeedback.message }}</span>
-          </span>
+          </Transition>
           <div
             v-if="shouldShowInput && searchError"
             class="CoreBox-SearchStatus CoreBox-SearchStatus--error"
@@ -1406,6 +1400,7 @@ const customCss = computed(() => {
             :active-activations="activeActivations"
             :result-count="res.length"
             :is-recommendation="!searchVal && !activeActivations?.length"
+            :animated="shouldAnimate()"
             :class="[
               'CoreBoxFooter-Sticky',
               { 'CoreBoxFooter-Canvas': isCanvasLayout, 'CoreBoxFooter-Widget': isWidgetMode }
@@ -1609,41 +1604,10 @@ const customCss = computed(() => {
   }
 
   // An action's outcome where there is no footer to show it: the footer's feedback, header-sized.
-  // The glyph and the words together, as there: colour alone never carries the outcome.
+  // CoreBoxActionFeedback draws and places it; it is not a control, so it keeps the default cursor
+  // over the Configure row's pointer.
   .CoreBox-ActionFeedback {
-    flex: 0 1 auto;
-    display: inline-flex;
-    min-width: 0;
-    align-items: center;
-    gap: var(--shell-space-1);
-    padding-inline: var(--shell-space-1);
-    color: var(--shell-text-primary);
-    font-size: var(--shell-fs-sm);
-    font-weight: 600;
-    white-space: nowrap;
     cursor: default;
-  }
-
-  .CoreBox-ActionFeedback-Icon {
-    flex: none;
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    font-size: 14px;
-  }
-
-  .CoreBox-ActionFeedback.is-success .CoreBox-ActionFeedback-Icon {
-    color: var(--shell-success);
-  }
-
-  .CoreBox-ActionFeedback.is-error .CoreBox-ActionFeedback-Icon {
-    color: var(--shell-danger);
-  }
-
-  .CoreBox-ActionFeedback-Text {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
   .CoreBox-SearchRetry {
