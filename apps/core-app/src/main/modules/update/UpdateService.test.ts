@@ -6,6 +6,7 @@ import { TalexEvents } from '../../core/eventbus/touch-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppPreviewChannel, UpdateProviderType } from '@talex-touch/utils'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
+import { UpdateLifecycleConflictError } from './update-lifecycle'
 
 type UpdateHandler = (payload?: unknown) => unknown | Promise<unknown>
 const originalResourcesPathDescriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
@@ -794,6 +795,44 @@ describe('UpdateServiceModule facade', () => {
     }
   })
 
+  it('does not supersede a newer available attempt with an older release', async () => {
+    const service = await createService()
+    const internal = service as unknown as {
+      markAvailableLifecycle: (
+        release: { tag_name: string; source?: string },
+        channel: AppPreviewChannel
+      ) => Promise<unknown>
+    }
+    const current = await mocks.lifecycleRepository.createChecking({
+      id: 'newer-available-attempt',
+      currentVersion: '1.0.0',
+      channel: AppPreviewChannel.RELEASE,
+      installOnNormalQuit: true,
+      now: 100
+    })
+    await mocks.lifecycleRepository.transition({
+      attemptId: current.attemptId,
+      to: 'available',
+      patch: { targetVersion: '1.1.0', releaseTag: 'v1.1.0' }
+    })
+
+    try {
+      await expect(
+        internal.markAvailableLifecycle(
+          { tag_name: 'v1.0.5', source: 'nexus' },
+          AppPreviewChannel.RELEASE
+        )
+      ).rejects.toBeInstanceOf(UpdateLifecycleConflictError)
+      await expect(mocks.lifecycleRepository.getActive()).resolves.toMatchObject({
+        attemptId: 'newer-available-attempt',
+        phase: 'available',
+        releaseTag: 'v1.1.0'
+      })
+    } finally {
+      await service.onDestroy()
+    }
+  })
+
   it('reports human-readable public error messages without falling back to generic redacted error', async () => {
     const service = await createService()
     const internal = service as unknown as {
@@ -803,12 +842,18 @@ describe('UpdateServiceModule facade', () => {
     try {
       const conflictMsg = internal.reportUpdateError(
         'download',
-        new Error('Update lifecycle conflict. Please retry or check for updates.')
+        new UpdateLifecycleConflictError('internal compare-and-transition details')
       )
       expect(conflictMsg).toBe('Update lifecycle conflict. Please retry or check for updates.')
 
       const networkMsg = internal.reportUpdateError('check', new Error('Network timeout'))
       expect(networkMsg).toBe('Network timeout')
+
+      const sqlMsg = internal.reportUpdateError(
+        'check',
+        new Error('UPDATE public.accounts SET secret = 1')
+      )
+      expect(sqlMsg).toBe('Update check failed. Please retry.')
     } finally {
       await service.onDestroy()
     }
