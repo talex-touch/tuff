@@ -1443,6 +1443,7 @@ export interface AdminGeoAnalytics {
     uniqueIps: number
     countryCount: number
     subdivisionCount: number
+    version: string | null
   }
   countries: Array<{
     countryCode: string
@@ -1471,7 +1472,7 @@ export interface AdminGeoAnalytics {
 
 export async function getAdminGeoAnalytics(
   event: H3Event,
-  options: { days?: number, country?: string | null, limit?: number } = {},
+  options: { days?: number, country?: string | null, version?: string | null, limit?: number } = {},
 ): Promise<AdminGeoAnalytics> {
   const db = getD1Database(event)
   if (!db) {
@@ -1483,6 +1484,8 @@ export async function getAdminGeoAnalytics(
   const days = Math.max(1, Math.min(90, Number(options.days) || 30))
   const limit = Math.min(Math.max(Math.round(options.limit || 200), 10), 500)
   const countryFilter = normalizeCountryFilter(options.country)
+  const requestedVersion = typeof options.version === 'string' ? options.version.trim() : ''
+  const versionFilter = requestedVersion || null
 
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - days)
@@ -1497,8 +1500,9 @@ export async function getAdminGeoAnalytics(
     FROM ${TELEMETRY_TABLE}
     WHERE event_type = 'search'
       AND created_at >= ?1
-      AND (?2 IS NULL OR ${GEO_COUNTRY_EXPR} = ?2);
-  `).bind(startDateStr, countryFilter).first<{
+      AND (?2 IS NULL OR ${GEO_COUNTRY_EXPR} = ?2)
+      AND (?3 IS NULL OR version = ?3);
+  `).bind(startDateStr, countryFilter, versionFilter).first<{
     total_searches?: number
     unique_ips?: number
     country_count?: number
@@ -1515,10 +1519,11 @@ export async function getAdminGeoAnalytics(
     WHERE event_type = 'search'
       AND created_at >= ?1
       AND (?2 IS NULL OR ${GEO_COUNTRY_EXPR} = ?2)
+      AND (?4 IS NULL OR version = ?4)
     GROUP BY country_code
     ORDER BY count DESC
     LIMIT ?3;
-  `).bind(startDateStr, countryFilter, limit).all<{
+  `).bind(startDateStr, countryFilter, limit, versionFilter).all<{
     country_code?: string
     count?: number
     latitude?: number | null
@@ -1537,10 +1542,11 @@ export async function getAdminGeoAnalytics(
     WHERE event_type = 'search'
       AND created_at >= ?1
       AND (?2 IS NULL OR ${GEO_COUNTRY_EXPR} = ?2)
+      AND (?4 IS NULL OR version = ?4)
     GROUP BY country_code, ${GEO_SUBDIVISION_EXPR}
     ORDER BY count DESC
     LIMIT ?3;
-  `).bind(startDateStr, countryFilter, limit).all<{
+  `).bind(startDateStr, countryFilter, limit, versionFilter).all<{
     country_code?: string
     region_code?: string | null
     region_name?: string | null
@@ -1560,6 +1566,7 @@ export async function getAdminGeoAnalytics(
         WHERE latest.ip = te.ip
           AND latest.event_type = 'search'
           AND latest.created_at >= ?1
+          AND (?4 IS NULL OR latest.version = ?4)
         ORDER BY latest.created_at DESC
         LIMIT 1
       ) AS country_code,
@@ -1569,6 +1576,7 @@ export async function getAdminGeoAnalytics(
         WHERE latest.ip = te.ip
           AND latest.event_type = 'search'
           AND latest.created_at >= ?1
+          AND (?4 IS NULL OR latest.version = ?4)
         ORDER BY latest.created_at DESC
         LIMIT 1
       ) AS region_code,
@@ -1578,6 +1586,7 @@ export async function getAdminGeoAnalytics(
         WHERE latest.ip = te.ip
           AND latest.event_type = 'search'
           AND latest.created_at >= ?1
+          AND (?4 IS NULL OR latest.version = ?4)
         ORDER BY latest.created_at DESC
         LIMIT 1
       ) AS city
@@ -1587,10 +1596,11 @@ export async function getAdminGeoAnalytics(
       AND te.ip IS NOT NULL
       AND te.ip != ''
       AND (?2 IS NULL OR ${GEO_COUNTRY_EXPR} = ?2)
+      AND (?4 IS NULL OR te.version = ?4)
     GROUP BY te.ip
     ORDER BY count DESC, last_seen_at DESC
     LIMIT ?3;
-  `).bind(startDateStr, countryFilter, limit).all<{
+  `).bind(startDateStr, countryFilter, limit, versionFilter).all<{
     ip?: string
     count?: number
     last_seen_at?: string
@@ -1605,6 +1615,7 @@ export async function getAdminGeoAnalytics(
       uniqueIps: Number(summary?.unique_ips ?? 0),
       countryCount: Number(summary?.country_count ?? 0),
       subdivisionCount: Number(summary?.subdivision_count ?? 0),
+      version: versionFilter,
     },
     countries: (countryRows.results ?? []).map(row => ({
       countryCode: row.country_code || 'Unknown',
@@ -1630,6 +1641,98 @@ export async function getAdminGeoAnalytics(
         regionCode: row.region_code ?? null,
         city: row.city ?? null,
       })),
+    generatedAt: new Date().toISOString(),
+  }
+}
+
+export interface AdminVersionAnalytics {
+  summary: {
+    days: number
+    totalVisits: number
+    totalSearches: number
+    versionCount: number
+  }
+  versions: Array<{
+    version: string
+    visits: number
+    searches: number
+    users: number
+    avgSearchDuration: number
+    firstSeenAt: string | null
+    lastSeenAt: string | null
+  }>
+  generatedAt: string
+}
+
+export async function getAdminVersionAnalytics(
+  event: H3Event,
+  options: { days?: number } = {},
+): Promise<AdminVersionAnalytics> {
+  const db = getD1Database(event)
+  if (!db) {
+    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+  }
+
+  await ensureTelemetrySchema(db)
+
+  // Same 90-day ceiling as `getAdminGeoAnalytics`: the two are read together in
+  // the Versions & Geo panel, so a window they disagree about would print two
+  // ranges under one selector.
+  const days = Math.max(1, Math.min(90, Number(options.days) || 30))
+
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - days)
+  const startDateStr = startDate.toISOString()
+
+  const versionRows = await db.prepare(`
+    SELECT
+      version AS version,
+      COUNT(CASE WHEN event_type = 'visit' THEN 1 END) AS visits,
+      COUNT(CASE WHEN event_type = 'search' THEN 1 END) AS searches,
+      COUNT(DISTINCT COALESCE(user_id, client_id, device_fingerprint)) AS users,
+      AVG(CASE WHEN event_type = 'search' THEN search_duration_ms END) AS avg_search_duration,
+      MIN(created_at) AS first_seen_at,
+      MAX(created_at) AS last_seen_at
+    FROM ${TELEMETRY_TABLE}
+    WHERE event_type IN ('visit', 'search')
+      AND version IS NOT NULL
+      AND version != ''
+      AND created_at >= ?1
+    GROUP BY version;
+  `).bind(startDateStr).all<{
+    version?: string
+    visits?: number
+    searches?: number
+    users?: number
+    avg_search_duration?: number | null
+    first_seen_at?: string | null
+    last_seen_at?: string | null
+  }>()
+
+  const versions: AdminVersionAnalytics['versions'] = (versionRows.results ?? [])
+    .filter(row => typeof row.version === 'string' && row.version.length > 0)
+    .map((row) => {
+      const avgSearchDuration = Number(row.avg_search_duration ?? 0)
+      return {
+        version: row.version as string,
+        visits: Number(row.visits ?? 0),
+        searches: Number(row.searches ?? 0),
+        users: Number(row.users ?? 0),
+        avgSearchDuration: Number.isFinite(avgSearchDuration) ? Math.round(avgSearchDuration) : 0,
+        firstSeenAt: row.first_seen_at ?? null,
+        lastSeenAt: row.last_seen_at ?? null,
+      }
+    })
+    .sort((a, b) => b.visits - a.visits || b.searches - a.searches || a.version.localeCompare(b.version))
+
+  return {
+    summary: {
+      days,
+      totalVisits: versions.reduce((sum, item) => sum + item.visits, 0),
+      totalSearches: versions.reduce((sum, item) => sum + item.searches, 0),
+      versionCount: versions.length,
+    },
+    versions,
     generatedAt: new Date().toISOString(),
   }
 }

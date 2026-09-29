@@ -69,40 +69,20 @@ function mapItems(items: Array<{ id: string, label: string, icon: string }>): Na
 }
 
 /**
- * The analytics panels, mirroring `analyticsSections` in
- * `app/pages/admin/analytics.vue`. The labels are English there because that
- * page renders them untranslated; the `t()` call below prefers a locale entry
- * and falls back to the same string, so the rail is translated even while the
- * page's own copy is not.
- *
- * `AdminNav.routing.test.ts` pins this list against the page so a panel added
- * to one and not the other fails instead of silently going unnavigable.
- */
-const ANALYTICS_SECTIONS = [
-  { id: 'overview', label: 'Data Overview', icon: 'i-carbon-dashboard' },
-  { id: 'usage', label: 'Usage', icon: 'i-carbon-chart-line-smooth' },
-  { id: 'performance', label: 'Performance', icon: 'i-carbon-meter' },
-  { id: 'search', label: 'Search', icon: 'i-carbon-search' },
-  { id: 'intelligence', label: 'AI Analytics', icon: 'i-carbon-ai-status' },
-  { id: 'docs', label: 'Docs Analytics', icon: 'i-carbon-document' },
-  { id: 'geo', label: 'Geo', icon: 'i-carbon-earth-americas' },
-  { id: 'exchange', label: 'Exchange', icon: 'i-carbon-currency' },
-  { id: 'messages', label: 'Alerts', icon: 'i-carbon-warning' },
-] as const
-
-/**
- * The rail is the console's only navigation surface: every destination is one
- * entry, and nothing is reachable solely through an in-page tab strip.
+ * The rail carries one entry per destination. A page whose panels share one
+ * payload keeps its own strip — `analytics.vue` is that page: the address stays
+ * `/admin/analytics` and the panel rides in `?section=`, so the nine panels are
+ * links you can bookmark, share or land on. The rail lists the page once, and
+ * the strip inside names the panels.
  *
  * Before this, four screens hid behind tabs — Intelligence carried Tuff AI,
  * overview, service channels and audits; Users and Subscriptions shared one
- * strip, as did the two comment queues. That meant two different controls for
- * the same kind of move (rail for some destinations, tabs for others) and made
- * the hidden ones unlinkable and invisible to anyone reading the rail.
+ * strip, as did the two comment queues. That was tabs *instead of* addresses.
+ * The distinction that matters is not tab-or-no-tab, it is whether the strip
+ * has an address behind it.
  *
- * The groups keep the complete destination list legible. They are labels only
- * — no collapsing, no state — because a console rail that hides its own entries
- * reintroduces exactly the problem the tabs had.
+ * A group with a single destination renders that destination and skips the
+ * caption, which would only repeat it.
  */
 const menuGroups = computed<NavGroup[]>(() => {
   if (!isAdmin.value)
@@ -112,16 +92,14 @@ const menuGroups = computed<NavGroup[]>(() => {
     {
       id: 'analytics',
       label: t('dashboard.sections.menu.groups.analytics', 'Analytics'),
-      // The nine analytics panels. They address themselves with `?section=`
-      // rather than nine routes because they are one page's worth of state on
-      // one payload — `analytics.vue` loads its data once and switches panels
-      // over it, so nine files would be nine copies of the same fetch.
-      items: ANALYTICS_SECTIONS.map(section => ({
-        id: `analytics:${section.id}`,
-        label: t(`dashboard.sections.analytics.sections.${section.id}`, section.label),
-        icon: section.icon,
-        to: `/admin/analytics?section=${section.id}`,
-      })),
+      items: [
+        {
+          id: 'analytics',
+          label: t('dashboard.sections.menu.groups.analytics', 'Analytics'),
+          icon: 'i-carbon-meter',
+          to: '/admin/analytics',
+        },
+      ],
     },
     {
       id: 'content',
@@ -299,14 +277,10 @@ const activeSection = computed(() => {
     return 'users'
   if (route.path.startsWith('/admin/audits'))
     return 'audits'
-  if (route.path.startsWith('/admin/analytics')) {
-    // The analytics entries are one route with nine `?section=` addresses, so
-    // the query — not the path — decides which of them is lit. A bare
-    // `/admin/analytics` is the overview, matching the page's own default.
-    const section = typeof route.query.section === 'string' ? route.query.section : ''
-    const known = ANALYTICS_SECTIONS.some(entry => entry.id === section)
-    return `analytics:${known ? section : 'overview'}`
-  }
+  if (route.path.startsWith('/admin/analytics'))
+    // One rail entry for the page. The `?section=` panels are the page's own
+    // strip, so they do not each light a rail row of their own.
+    return 'analytics'
   if (route.path.startsWith('/admin/governance'))
     return 'governance'
   if (route.path.startsWith('/admin/risk'))
@@ -348,7 +322,9 @@ useHead(() => ({
     </summary>
     <nav class="relative p-4 space-y-5" aria-label="Admin console sections">
       <section v-for="group in menuGroups" :key="group.id">
-        <p class="admin-nav-section-title mb-2 px-3">
+        <!-- A lone destination is its own caption; printing both would just
+             repeat the same words one line apart. -->
+        <p v-if="group.items.length > 1" class="admin-nav-section-title mb-2 px-3">
           {{ group.label }}
         </p>
         <ul class="flex flex-col list-none gap-1 p-0 text-sm" role="listbox" :aria-label="group.label">

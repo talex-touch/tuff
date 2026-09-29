@@ -89,6 +89,8 @@ export interface GeoAnalyticsData {
     uniqueIps: number
     countryCount: number
     subdivisionCount: number
+    /** Version scope the rows were filtered by; `null` means every version. */
+    version?: string | null
   }
   countries: Array<{
     countryCode: string
@@ -132,14 +134,6 @@ export interface ExchangeRateSnapshotSummary {
   payload?: Record<string, unknown>
 }
 
-export interface GeoMapPoint {
-  id: string
-  label: string
-  latitude: number | null
-  longitude: number | null
-  value: number
-}
-
 export interface TelemetryMessage {
   id: string
   source: string
@@ -148,6 +142,27 @@ export interface TelemetryMessage {
   message: string
   status: string
   createdAt: string
+}
+
+export interface VersionAnalyticsEntry {
+  version: string
+  visits: number
+  searches: number
+  users: number
+  avgSearchDuration: number
+  firstSeenAt: string | null
+  lastSeenAt: string | null
+}
+
+export interface VersionAnalyticsData {
+  summary: {
+    days: number
+    totalVisits: number
+    totalSearches: number
+    versionCount: number
+  }
+  versions: VersionAnalyticsEntry[]
+  generatedAt: string
 }
 
 export interface IntelligenceAnalyticsData {
