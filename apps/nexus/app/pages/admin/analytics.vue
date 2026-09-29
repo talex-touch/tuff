@@ -1,24 +1,24 @@
 <script setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCard } from '@talex-touch/tuffex/card'
+import { TxBarChart, TxBubbleMap, TxChoroplethMap, TxChartLegendItem, TxPieChart } from '@talex-touch/tuffex/charts'
+import type { MapGeoJson } from '@talex-touch/tuffex/charts'
 import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
+import { TxFlatRadio, TxFlatRadioItem } from '@talex-touch/tuffex/flat-radio'
 import { TxInput } from '@talex-touch/tuffex/input'
-import { TxProgressBar } from '@talex-touch/tuffex/progress-bar'
 import { TxSelect, TxSelectItem } from '@talex-touch/tuffex/select'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxStatCard } from '@talex-touch/tuffex/stat-card'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
-import { defineAsyncComponent } from 'vue'
 import { useAdminAnalyticsData } from '~/composables/useAdminAnalyticsData'
-import type { GeoAnalyticsData, GeoMapPoint } from '~/types/admin-analytics'
+import type { GeoAnalyticsData } from '~/types/admin-analytics'
 import {
   formatAnalyticsCategoryKey, formatAnalyticsCategoryLabel, formatAnalyticsDateTime, formatAnalyticsDuration,
   formatAnalyticsNumber, formatExchangeRate, formatPayloadPreview, toSortedAnalyticsList,
 } from '~/utils/admin-analytics'
 import { requestJson } from '~/utils/request'
-
-const LazyGeoLeafletMap = defineAsyncComponent(() => import('~/components/dashboard/GeoLeafletMap.client.vue'))
 
 definePageMeta({
   layout: 'admin',
@@ -46,6 +46,13 @@ watch(isAdmin, (admin) => {
 
 const selectedDays = ref(30)
 const selectedGeoCountry = ref<string | null>(null)
+/**
+ * `TxSelect` values are `string | number`, so "every version" is a sentinel
+ * rather than `null`; `versionScope` is the value the API and the map read.
+ */
+const ALL_VERSIONS = '__all__'
+const selectedVersion = ref<string>(ALL_VERSIONS)
+const versionScope = computed<string | null>(() => (selectedVersion.value === ALL_VERSIONS ? null : selectedVersion.value))
 const exchangeTarget = ref('CNY')
 const exchangeLimit = ref(20)
 const exchangeView = ref<'history' | 'snapshots'>('history')
@@ -54,24 +61,24 @@ const docsPath = ref('')
 const docsSource = ref<'all' | 'docs_page' | 'doc_comments_admin'>('all')
 const {
   analytics, loading, error, geoAnalytics, geoLoading, geoError, messages, messagesLoading, messagesError,
+  versionAnalytics, versionLoading, versionError,
   docsAnalytics, docsLoading, docsError, intelligenceAnalytics, intelligenceLoading, intelligenceError,
   exchangeHistory, exchangeSnapshots, exchangeLoading, exchangeError,
-  fetchAnalytics: loadAnalytics, fetchGeoAnalytics: loadGeoAnalytics, fetchDocsAnalytics: loadDocsAnalytics,
+  fetchAnalytics: loadAnalytics, fetchGeoAnalytics: loadGeoAnalytics, fetchVersionAnalytics: loadVersionAnalytics,
+  fetchDocsAnalytics: loadDocsAnalytics,
   fetchIntelligenceAnalytics: loadIntelligenceAnalytics, fetchMessages: loadMessages, fetchExchangeHistory: loadExchangeHistory,
 } = useAdminAnalyticsData({ request: requestJson })
 /**
- * The section is in the URL, not in local state. It used to be a tab strip
- * under the header: nine panels the rail never named, none of them linkable,
- * and a second navigation control for the same kind of move the rail already
- * handles. The strip is gone — `AdminNav` lists the nine as entries and each
- * one is a real address you can bookmark, share, or land on from a redirect.
+ * The section lives in the URL, not in local state: `route.query` is the single
+ * source of truth, so back/forward work, a deep link lands on its panel, and the
+ * tab strip below the header cannot disagree with the address bar.
  *
- * `route.query` is the single source of truth rather than a ref synced to it,
- * so back/forward work and two copies of "where am I" cannot disagree.
+ * The nine panels are one page's worth of state over one payload, so the strip
+ * switches panels instead of navigating somewhere else.
  */
-type AnalyticsSection = 'overview' | 'performance' | 'search' | 'usage' | 'intelligence' | 'docs' | 'geo' | 'messages' | 'exchange'
+type AnalyticsSection = 'overview' | 'usage' | 'performance' | 'search' | 'intelligence' | 'docs' | 'versions' | 'exchange' | 'messages'
 
-const ANALYTICS_SECTIONS = ['overview', 'performance', 'search', 'usage', 'intelligence', 'docs', 'geo', 'messages', 'exchange'] as const
+const ANALYTICS_SECTIONS = ['overview', 'usage', 'performance', 'search', 'intelligence', 'docs', 'versions', 'exchange', 'messages'] as const
 
 const activeSection = computed<AnalyticsSection>({
   get() {
@@ -86,6 +93,19 @@ const activeSection = computed<AnalyticsSection>({
     navigateTo({ query: { ...route.query, section: value } }, { replace: true })
   },
 })
+/**
+ * The radio emits `string | number` and, because the component also serves
+ * multi-select callers, a possible array; the section union narrows the single
+ * value and the array is ignored (this group is single-select). Unknown values
+ * fall back to `overview` in the setter's `get`, so an out-of-range value cannot
+ * put the page on a panel that does not exist.
+ */
+function setActiveSection(value: string | number | (string | number)[]): void {
+  if (Array.isArray(value))
+    return
+  activeSection.value = value as AnalyticsSection
+}
+
 const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
 const versionPalette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
@@ -96,18 +116,28 @@ const analyticsSections = [
   { id: 'search', label: 'Search', icon: 'i-carbon-search' },
   { id: 'intelligence', label: 'AI Analytics', icon: 'i-carbon-ai-status' },
   { id: 'docs', label: 'Docs Analytics', icon: 'i-carbon-document' },
-  { id: 'geo', label: 'Geo', icon: 'i-carbon-earth-americas' },
+  { id: 'versions', label: 'Versions & Geo', icon: 'i-carbon-version' },
   { id: 'exchange', label: 'Exchange', icon: 'i-carbon-currency' },
   { id: 'messages', label: 'Alerts', icon: 'i-carbon-warning' },
 ] as const
 
 /**
- * The heading names the panel you are on. With the tab strip gone it was the
- * only thing still saying "Analytics Dashboard" on all nine of them, which
- * made the rail entry and the page title disagree.
- *
- * Same key the rail uses, so the two cannot drift; the hardcoded English in
- * `analyticsSections` is the fallback rather than the source.
+ * One entry per panel for the header selector. The rail links this page once
+ * (`/admin/analytics`) instead of per panel, and `AdminNav.routing.test.ts`
+ * pins exactly that one entry, so a panel removed here cannot leave a rail
+ * link pointing at a section the page no longer accepts.
+ */
+const analyticsTabs = computed(() => analyticsSections.map(section => ({
+  value: section.id as AnalyticsSection,
+  label: t(`dashboard.sections.analytics.sections.${section.id}`, section.label),
+  icon: section.icon,
+})))
+
+/**
+ * The heading names the panel you are on, next to the tab strip that switches
+ * it. Both read the same key the rail uses, so the three cannot drift; the
+ * hardcoded English in `analyticsSections` is the fallback rather than the
+ * source.
  */
 const activeSectionLabel = computed(() => {
   const section = analyticsSections.find(entry => entry.id === activeSection.value)
@@ -116,67 +146,45 @@ const activeSectionLabel = computed(() => {
   return t(`dashboard.sections.analytics.sections.${section.id}`, section.label)
 })
 const topModuleLoads = computed(() => analytics.value?.summary.moduleLoadMetrics.slice(0, 10) ?? [])
-const realtimeStatCards = computed(() => {
+/**
+ * One card per metric: the 24h figure is the headline and the rolling-window
+ * total sits next to it. Eight tiles (four 24h + four 30d) said the same thing
+ * twice and pushed the charts below the fold.
+ */
+const kpiCards = computed(() => {
   const realtime = analytics.value?.realtime
+  const summary = analytics.value?.summary
   return [
     {
       key: 'active-users',
       label: 'Active Users (24h)',
-      icon: 'i-carbon-user-multiple',
-      accent: 'text-blue-600 dark:text-blue-400',
+      icon: 'i-carbon-user-multiple text-[var(--tx-color-info)]',
       value: formatNumber(realtime?.activeUsers ?? 0),
+      total: `${formatNumber(summary?.totalUsers ?? 0)} total users`,
     },
     {
       key: 'visits',
       label: 'Visits (24h)',
-      icon: 'i-carbon-view',
-      accent: 'text-emerald-600 dark:text-emerald-400',
+      icon: 'i-carbon-view text-[var(--tx-color-success)]',
       value: formatNumber(realtime?.visitsLast24h ?? 0),
+      total: `${formatNumber(summary?.totalEvents ?? 0)} uploaded events`,
     },
     {
       key: 'searches',
       label: 'Searches (24h)',
-      icon: 'i-carbon-search',
-      accent: 'text-violet-600 dark:text-violet-300',
+      icon: 'i-carbon-search text-[var(--tx-color-warning)]',
       value: formatNumber(realtime?.searchesLast24h ?? 0),
+      total: `${formatNumber(summary?.totalSearches ?? 0)} total searches`,
     },
     {
       key: 'avg-latency',
-      label: 'Avg Latency',
-      icon: 'i-carbon-time',
-      accent: 'text-amber-600 dark:text-amber-400',
+      label: 'Avg Latency (24h)',
+      icon: 'i-carbon-time text-[var(--tx-color-danger)]',
       value: `${realtime?.avgLatency ?? 0}ms`,
+      total: `${summary?.avgSearchDuration ?? 0}ms avg search`,
     },
   ]
 })
-const overviewStatCards = computed(() => {
-  const summary = analytics.value?.summary
-  return [
-    {
-      key: 'uploaded-events',
-      label: 'Uploaded Events',
-      value: formatNumber(summary?.totalEvents ?? 0),
-    },
-    {
-      key: 'total-users',
-      label: 'Total Users',
-      value: formatNumber(summary?.totalUsers ?? 0),
-    },
-    {
-      key: 'total-searches',
-      label: 'Total Searches',
-      value: formatNumber(summary?.totalSearches ?? 0),
-    },
-    {
-      key: 'avg-search-duration',
-      label: 'Avg Search Duration',
-      value: `${summary?.avgSearchDuration ?? 0}ms`,
-    },
-  ]
-})
-const regionTotal = computed(() =>
-  Object.values(analytics.value?.summary.regionDistribution ?? {}).reduce((sum, count) => sum + count, 0),
-)
 const regionDisplayNames = computed(() => {
   try {
     return new Intl.DisplayNames([locale.value], { type: 'region' })
@@ -184,17 +192,6 @@ const regionDisplayNames = computed(() => {
   catch {
     return null
   }
-})
-const topRegions = computed(() => {
-  const distribution = analytics.value?.summary.regionDistribution ?? {}
-  return Object.entries(distribution)
-    .map(([code, count]) => ({
-      code,
-      count,
-      label: regionDisplayNames.value?.of(code.toUpperCase()) ?? code,
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10)
 })
 const hourlySeries = computed(() => {
   const distribution = analytics.value?.summary.hourlyDistribution ?? {}
@@ -206,8 +203,7 @@ const hourlySeries = computed(() => {
       count: Number(distribution[key] || 0),
     }
   })
-  const max = Math.max(0, ...series.map(item => item.count))
-  return { series, max }
+  return { series }
 })
 const hasHourlyData = computed(() => hourlySeries.value.series.some(item => item.count > 0))
 const versionSegments = computed(() => {
@@ -215,7 +211,7 @@ const versionSegments = computed(() => {
   const entries = Object.entries(distribution).filter(([, count]) => count > 0)
   const total = entries.reduce((sum, [, count]) => sum + count, 0)
   if (!total) {
-    return { total: 0, segments: [], gradient: '' }
+    return { total: 0, segments: [] }
   }
 
   const maxSegments = 6
@@ -224,27 +220,14 @@ const versionSegments = computed(() => {
   const remainder = sorted.slice(maxSegments).reduce((sum, [, count]) => sum + count, 0)
   const segments = remainder > 0 ? [...main, ['others', remainder] as [string, number]] : main
 
-  let cursor = 0
-  const mapped = segments.map(([key, count], index) => {
-    const ratio = count / total
-    const start = cursor
-    const end = cursor + ratio * 360
-    cursor = end
-    return {
-      key,
-      count,
-      ratio,
-      start,
-      end,
-      color: versionPalette[index % versionPalette.length]
-    }
-  })
+  const mapped = segments.map(([key, count], index) => ({
+    key,
+    count,
+    ratio: count / total,
+    color: versionPalette[index % versionPalette.length],
+  }))
 
-  const gradient = mapped
-    .map((segment) => `${segment.color} ${segment.start}deg ${segment.end}deg`)
-    .join(', ')
-
-  return { total, segments: mapped, gradient: gradient ? `conic-gradient(${gradient})` : '' }
+  return { total, segments: mapped }
 })
 const topProviderMetrics = computed(() => analytics.value?.summary.providerMetrics.slice(0, 12) ?? [])
 const searchSlowRate = computed(() => {
@@ -253,31 +236,161 @@ const searchSlowRate = computed(() => {
     return 0
   return Number((((analytics.value?.summary.searchSlowCount ?? 0) / searches) * 100).toFixed(1))
 })
-const geoMapPoints = computed<GeoMapPoint[]>(() => {
-  if (!geoAnalytics.value) {
-    return []
+/**
+ * Chart inputs for the overview panels. Every panel below renders a tuffex
+ * chart component, so the page owns data shaping and nothing else.
+ */
+const dailyActivityChart = computed(() => {
+  // Charts read left→right, so oldest first — the list this replaced was newest first.
+  const days = [...(analytics.value?.summary.dailyStats ?? [])].sort((a, b) => a.date.localeCompare(b.date))
+  return {
+    categories: days.map(day => day.date.slice(5)),
+    series: [
+      { name: 'Visits', data: days.map(day => day.visits), color: '#3b82f6' },
+      { name: 'Searches', data: days.map(day => day.searches), color: '#a855f7' },
+    ],
   }
-  if (selectedGeoCountry.value) {
-    return geoAnalytics.value.subdivisions.map(item => ({
-      id: `${item.countryCode}:${item.regionCode || item.regionName || 'unknown'}`,
-      label: [item.countryCode, item.regionName || item.regionCode || 'Unknown'].join(' · '),
-      latitude: item.latitude,
-      longitude: item.longitude,
-      value: item.count,
-    }))
-  }
+})
+const versionChartData = computed(() =>
+  versionSegments.value.segments.map(segment => ({ name: segment.key, value: segment.count })),
+)
+const hourlyChart = computed(() => ({
+  categories: hourLabels,
+  series: [{ name: 'Events', data: hourlySeries.value.series.map(item => item.count) }],
+}))
 
-  return geoAnalytics.value.countries.map(item => ({
-    id: item.countryCode,
-    label: item.countryCode,
-    latitude: item.latitude,
-    longitude: item.longitude,
-    value: item.count,
-  }))
+/**
+ * The tuffex maps join regions on a GeoJSON feature property, and the vendored
+ * collection (`public/geo`, so no third-party origin at render time) only
+ * carries `name` — a country code therefore has to be resolved to that exact
+ * spelling before it can colour a region.
+ */
+const worldGeoJson = shallowRef<MapGeoJson | null>(null)
+const worldGeoJsonFailed = ref(false)
+const geoJsonNameIndex = computed(() => {
+  const index = new Map<string, string>()
+  for (const feature of worldGeoJson.value?.features ?? []) {
+    const name = feature.properties?.name
+    if (typeof name === 'string')
+      index.set(name.toLowerCase(), name)
+  }
+  return index
+})
+/** Codes whose `Intl.DisplayNames` label is not the GeoJSON spelling. */
+const REGION_NAME_ALIASES: Record<string, string> = {
+  US: 'United States of America',
+  GB: 'United Kingdom',
+  KR: 'South Korea',
+  RU: 'Russia',
+  CZ: 'Czechia',
+  VN: 'Vietnam',
+}
+function resolveGeoJsonName(code: string): string | null {
+  const upper = code.toUpperCase()
+  let display: string | null = null
+  try {
+    display = new Intl.DisplayNames(['en'], { type: 'region' }).of(upper) ?? null
+  }
+  catch {
+    display = null
+  }
+  for (const candidate of [REGION_NAME_ALIASES[upper], display, upper]) {
+    if (!candidate)
+      continue
+    const hit = geoJsonNameIndex.value.get(candidate.toLowerCase())
+    if (hit)
+      return hit
+  }
+  return null
+}
+interface RegionMapRow {
+  code: string
+  label: string
+  count: number
+  geoName: string
+}
+interface CountryMapRow extends RegionMapRow {
+  countryCode: string
+}
+const geoCountryMapRows = computed<CountryMapRow[]>(() =>
+  geoCountries.value
+    .map(country => ({
+      countryCode: country.countryCode,
+      code: country.countryCode.toUpperCase(),
+      label: country.countryCode,
+      count: country.count,
+      geoName: resolveGeoJsonName(country.countryCode),
+    }))
+    .filter((row): row is CountryMapRow => Boolean(row.geoName)),
+)
+interface GeoMapPoint {
+  id: string
+  label: string
+  countryCode: string
+  latitude: number | null
+  longitude: number | null
+  value: number
+}
+interface PlacedGeoMapPoint extends GeoMapPoint {
+  latitude: number
+  longitude: number
+}
+const geoMapPoints = computed<PlacedGeoMapPoint[]>(() => {
+  const points: GeoMapPoint[] = selectedGeoCountry.value
+    ? geoSubdivisions.value.map(item => ({
+        id: `${item.countryCode}:${item.regionCode || item.regionName || 'unknown'}`,
+        label: resolveSubdivisionLabel(item),
+        countryCode: item.countryCode,
+        latitude: item.latitude,
+        longitude: item.longitude,
+        value: item.count,
+      }))
+    : geoCountries.value.map(item => ({
+        id: item.countryCode,
+        label: item.countryCode,
+        countryCode: item.countryCode,
+        latitude: item.latitude,
+        longitude: item.longitude,
+        value: item.count,
+      }))
+  // Bubbles with no coordinates cannot be placed; dropping them here keeps the
+  // "no data" state honest instead of drawing an empty map.
+  return points.filter((point): point is PlacedGeoMapPoint =>
+    Number.isFinite(point.latitude) && Number.isFinite(point.longitude),
+  )
 })
 const geoCountries = computed(() => geoAnalytics.value?.countries ?? [])
 const geoSubdivisions = computed(() => geoAnalytics.value?.subdivisions ?? [])
 const geoTopIps = computed(() => geoAnalytics.value?.topIps.slice(0, 12) ?? [])
+/**
+ * The version panel's selector, chart and rows all read one response, so the
+ * three cannot disagree about which versions exist.
+ */
+const versionOptions = computed(() => (versionAnalytics.value?.versions ?? []).map(row => ({
+  value: row.version,
+  label: `${row.version} · ${formatNumber(row.visits)}`,
+})))
+const versionScopeLabel = computed(() => versionScope.value ?? 'All versions')
+const allVersionsLabel = computed(() => `All versions (${formatNumber(versionAnalytics.value?.summary.versionCount ?? 0)})`)
+const versionUsageChart = computed(() => {
+  // Top slice only: past a dozen bars the labels stop being readable, and the
+  // list below carries every version in range anyway.
+  const rows = (versionAnalytics.value?.versions ?? []).slice(0, 12)
+  return {
+    categories: rows.map(row => row.version),
+    series: [
+      { name: 'Visits', data: rows.map(row => row.visits), color: '#3b82f6' },
+      { name: 'Searches', data: rows.map(row => row.searches), color: '#a855f7' },
+    ],
+  }
+})
+/** Clicking the scoped row again clears the scope, the way a chip toggles. */
+function selectVersion(version: string): void {
+  selectedVersion.value = selectedVersion.value === version ? ALL_VERSIONS : version
+}
+function formatCompactDate(value: string | null): string {
+  return value ? value.slice(0, 10) : '—'
+}
 const docsSummaryRows = computed(() => docsAnalytics.value?.docs ?? [])
 const docsDetail = computed(() => docsAnalytics.value?.detail ?? null)
 const docsHeatmapBySection = computed(() => {
@@ -317,7 +430,11 @@ async function fetchAnalytics(): Promise<void> {
 }
 
 async function fetchGeoAnalytics(): Promise<void> {
-  await loadGeoAnalytics(selectedDays.value, selectedGeoCountry.value)
+  await loadGeoAnalytics(selectedDays.value, selectedGeoCountry.value, versionScope.value)
+}
+
+async function fetchVersionAnalytics(): Promise<void> {
+  await loadVersionAnalytics(selectedDays.value)
 }
 
 async function fetchDocsAnalytics(): Promise<void> {
@@ -347,21 +464,35 @@ onMounted(() => {
   if (initialSource === 'docs_page' || initialSource === 'doc_comments_admin')
     docsSource.value = initialSource
 
-  fetchAnalytics()
-  fetchGeoAnalytics()
-  fetchDocsAnalytics()
-  fetchIntelligenceAnalytics()
-  fetchMessages()
+  // Only the groups the open section actually renders. The KPI row and most
+  // panels read the summary, everything else is per-section — fetching every
+  // group made each section wait on responses it never used (extra D1 round
+  // trips before the skeletons could clear).
+  void fetchAnalytics()
+  if (activeSection.value === 'versions') {
+    void fetchVersionAnalytics()
+    void fetchGeoAnalytics()
+    void fetchWorldGeoJson()
+  }
+  if (activeSection.value === 'docs')
+    void fetchDocsAnalytics()
+  if (activeSection.value === 'intelligence')
+    void fetchIntelligenceAnalytics()
+  if (activeSection.value === 'messages')
+    void fetchMessages()
 })
 
 watch(selectedDays, () => {
   fetchAnalytics()
   fetchGeoAnalytics()
+  fetchVersionAnalytics()
   fetchDocsAnalytics()
   fetchIntelligenceAnalytics()
 })
 
-watch(selectedGeoCountry, () => {
+// Both scopes feed the same `geo` response, so one refetch covers country and
+// version selection.
+watch([selectedGeoCountry, selectedVersion], () => {
   fetchGeoAnalytics()
 })
 
@@ -379,6 +510,15 @@ watch(activeSection, (section) => {
     fetchDocsAnalytics()
   if (section === 'intelligence' && !intelligenceAnalytics.value && !intelligenceLoading.value)
     fetchIntelligenceAnalytics()
+  if (section === 'versions') {
+    if (!versionAnalytics.value && !versionLoading.value)
+      fetchVersionAnalytics()
+    if (!geoAnalytics.value && !geoLoading.value)
+      fetchGeoAnalytics()
+    void fetchWorldGeoJson()
+  }
+  if (section === 'messages' && !messages.value?.length && !messagesLoading.value)
+    fetchMessages()
   if (section === 'exchange' && !exchangeLoading.value)
     fetchExchangeHistory()
 })
@@ -414,9 +554,27 @@ function resetGeoDrilldown() {
   selectedGeoCountry.value = null
 }
 
-function handleMapPointClick(point: { id: string }) {
-  if (!selectedGeoCountry.value) {
-    drilldownCountry(point.id)
+function handleMapPointClick(point: { countryCode: string }) {
+  // Country view drills in; subdivision view toggles back out.
+  if (selectedGeoCountry.value && selectedGeoCountry.value === point.countryCode) {
+    resetGeoDrilldown()
+    return
+  }
+  drilldownCountry(point.countryCode)
+}
+
+// Plain-function view of `$fetch`: Nitro's typed-route inference explodes on
+// arbitrary static assets (TS2589), and the GeoJSON is a plain file.
+const fetchGeoJson = $fetch as (url: string) => Promise<MapGeoJson>
+async function fetchWorldGeoJson() {
+  // Section switches call this repeatedly; the file never changes at runtime.
+  if (worldGeoJson.value || worldGeoJsonFailed.value)
+    return
+  try {
+    worldGeoJson.value = await fetchGeoJson('/geo/world-countries.geo.json')
+  }
+  catch {
+    worldGeoJsonFailed.value = true
   }
 }
 
@@ -424,12 +582,6 @@ function handleMapPointClick(point: { id: string }) {
 function openDocAnalyticsPath(path: string) {
   docsPath.value = path
   activeSection.value = 'docs'
-}
-
-const deviceColors: Record<string, string> = {
-  darwin: 'bg-blue-500',
-  win32: 'bg-green-500',
-  linux: 'bg-orange-500',
 }
 
 const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`)
@@ -459,6 +611,30 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </template>
       </ClientOnly>
     </header>
+
+    <!--
+      One radio for all nine panels, over data this page already holds: the rail
+      links into the page once, and once you are here this selector is the cheap
+      move — the address stays on this page and back/forward still work because
+      the section lives in `?section=`. The box scrolls rather than wraps at
+      narrow widths, and its negative margins hand the thumb's shadow back the
+      room `overflow-x` would otherwise clip.
+    -->
+    <div class="-mx-1 -my-2 overflow-x-auto px-1 py-2">
+      <TxFlatRadio
+        :model-value="activeSection"
+        size="md"
+        @update:model-value="setActiveSection"
+      >
+        <TxFlatRadioItem
+          v-for="item in analyticsTabs"
+          :key="item.value"
+          :value="item.value"
+          :label="item.label"
+          :icon="item.icon"
+        />
+      </TxFlatRadio>
+    </div>
 
     <div v-if="loading" class="space-y-5">
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -504,50 +680,25 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
     </TxCard>
 
     <section v-else-if="analytics" class="space-y-6">
-      <!-- Realtime KPI Cards -->
+      <!-- KPI Cards: the 24h figure is the headline, the rolling total sits beside it -->
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <TxCard
-          v-for="card in realtimeStatCards"
+        <TxStatCard
+          v-for="card in kpiCards"
           :key="card.key"
-          variant="plain"
-          background="mask"
-          :radius="16"
-          :padding="16"
-          class="transition-all duration-200 hover:-translate-y-0.5"
+          :label="card.label"
+          :icon-class="card.icon"
+          :value="card.value"
         >
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-medium text-black/60 dark:text-white/60">{{ card.label }}</span>
-            <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-black/[0.04] dark:bg-white/[0.06]" :class="card.accent">
-              <span :class="[card.icon, 'text-base']" aria-hidden="true" />
+          <template #value>
+            <div class="flex flex-wrap items-baseline gap-x-2">
+              <span>{{ card.value }}</span>
+              <span class="text-xs font-medium text-black/45 dark:text-white/45">{{ card.total }}</span>
             </div>
-          </div>
-          <p class="mt-3 text-2xl font-bold tracking-tight text-black dark:text-white">
-            {{ card.value }}
-          </p>
-        </TxCard>
+          </template>
+        </TxStatCard>
       </div>
 
       <div class="space-y-5">
-      <!-- Summary Stats -->
-      <div v-if="activeSection === 'overview'" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <TxCard
-          v-for="card in overviewStatCards"
-          :key="card.key"
-          variant="plain"
-          background="mask"
-          :radius="16"
-          :padding="16"
-          class="transition-all duration-200 hover:-translate-y-0.5"
-        >
-          <h3 class="text-xs font-medium text-black/50 dark:text-white/50">
-            {{ card.label }}
-          </h3>
-          <p class="mt-2 text-3xl font-bold tracking-tight text-black dark:text-white">
-            {{ card.value }}
-          </p>
-        </TxCard>
-      </div>
-
       <!-- Search Quality -->
       <div v-if="activeSection === 'search'" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <TxCard variant="plain" background="mask" :radius="16" :padding="16">
@@ -587,47 +738,21 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
       <!-- Daily Trend Chart -->
       <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="20">
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 class="font-semibold text-black dark:text-white">
-              Daily Activity
-            </h3>
-            <p class="text-xs text-black/45 dark:text-white/45">
-              Visits and search frequency across recent days
-            </p>
-          </div>
-          <div class="flex items-center gap-3 text-xs text-black/60 dark:text-white/60">
-            <span class="flex items-center gap-1.5">
-              <span class="h-2.5 w-2.5 rounded-full bg-blue-500" /> Visits
-            </span>
-            <span class="flex items-center gap-1.5">
-              <span class="h-2.5 w-2.5 rounded-full bg-purple-500" /> Searches
-            </span>
-          </div>
+        <div class="mb-4">
+          <h3 class="font-semibold text-black dark:text-white">
+            Daily Activity
+          </h3>
+          <p class="text-xs text-black/45 dark:text-white/45">
+            Visits and search frequency across recent days
+          </p>
         </div>
-        <div class="space-y-2.5">
-          <div
-            v-for="day in analytics.summary.dailyStats.slice(0, 14)"
-            :key="day.date"
-            class="flex items-center gap-3 text-xs"
-          >
-            <span class="w-16 font-mono text-black/50 dark:text-white/50">{{ day.date.slice(5) }}</span>
-            <div class="flex-1">
-              <TxProgressBar
-                :segments="[
-                  { value: day.visits, color: '#3b82f6', label: `Visits: ${day.visits}` },
-                  { value: day.searches, color: '#a855f7', label: `Searches: ${day.searches}` },
-                ]"
-                :segments-total="Math.max(...analytics.summary.dailyStats.map(d => d.visits + d.searches), 1)"
-                :show-text="false"
-                height="8px"
-              />
-            </div>
-            <span class="w-16 text-right font-mono text-black/40 dark:text-white/40">
-              {{ day.avgDuration }}ms
-            </span>
-          </div>
-        </div>
+        <TxBarChart
+          :series="dailyActivityChart.series"
+          :categories="dailyActivityChart.categories"
+          :stacked="true"
+          :show-legend="true"
+          :height="320"
+        />
       </TxCard>
 
       <!-- UI & Main Performance -->
@@ -727,74 +852,6 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </div>
       </TxCard>
 
-      <!-- Device & Region Distribution -->
-      <div v-if="activeSection === 'overview'" class="grid gap-4 lg:grid-cols-2">
-        <!-- Device Distribution -->
-        <TxCard variant="plain" background="mask" :radius="18" :padding="20">
-          <h3 class="mb-4 font-semibold text-black dark:text-white">
-            Device Distribution
-          </h3>
-          <div class="space-y-3.5">
-            <div
-              v-for="(count, device) in analytics.summary.deviceDistribution"
-              :key="device"
-              class="flex items-center gap-3 text-xs"
-            >
-              <span class="w-16 font-medium text-black/70 dark:text-white/70">
-                {{ device === 'darwin' ? 'macOS' : device === 'win32' ? 'Windows' : device }}
-              </span>
-              <div class="flex-1">
-                <TxProgressBar
-                  :percentage="Math.round((count / Math.max(Object.values(analytics.summary.deviceDistribution).reduce((a, b) => a + b, 0), 1)) * 100)"
-                  :show-text="false"
-                  height="8px"
-                  color="#3b82f6"
-                />
-              </div>
-              <span class="w-12 text-right font-mono text-black/50 dark:text-white/50">
-                {{ count }}
-              </span>
-            </div>
-          </div>
-        </TxCard>
-
-        <!-- Region Distribution -->
-        <TxCard variant="plain" background="mask" :radius="18" :padding="20">
-          <h3 class="mb-4 font-semibold text-black dark:text-white">
-            Region Distribution
-          </h3>
-          <TxEmptyState
-            v-if="Object.keys(analytics.summary.regionDistribution).length === 0"
-            variant="no-data"
-            size="small"
-            description="No region data yet"
-          />
-          <div v-else class="space-y-4">
-            <WorldBubbleMap :distribution="analytics.summary.regionDistribution" />
-            <div
-              v-for="region in topRegions"
-              :key="region.code"
-              class="flex items-center gap-3 text-xs"
-            >
-              <span class="w-20 truncate font-medium text-black/70 dark:text-white/70">
-                {{ region.label }}
-              </span>
-              <div class="flex-1">
-                <TxProgressBar
-                  :percentage="regionTotal ? Math.round((region.count / regionTotal) * 100) : 0"
-                  :show-text="false"
-                  height="8px"
-                  color="#10b981"
-                />
-              </div>
-              <span class="w-12 text-right font-mono text-black/50 dark:text-white/50">
-                {{ regionTotal ? ((region.count / regionTotal) * 100).toFixed(1) : '0.0' }}%
-              </span>
-            </div>
-          </div>
-        </TxCard>
-      </div>
-
       <!-- Version Distribution -->
       <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="20">
         <h3 class="mb-4 font-semibold text-black dark:text-white">
@@ -806,34 +863,23 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           size="small"
           description="No version data yet"
         />
-        <div v-else class="space-y-6">
-          <TxProgressBar
-            :segments="versionSegments.segments.map(s => ({ value: s.count, color: s.color, label: `${s.key}: ${s.count} (${(s.ratio * 100).toFixed(1)}%)` }))"
-            :segments-total="versionSegments.total"
-            :show-text="false"
-            height="8px"
-            class="w-full"
+        <div v-else class="flex flex-col gap-6 sm:flex-row sm:items-center">
+          <TxPieChart
+            :data="versionChartData"
+            :donut="true"
+            :show-legend="false"
+            center-label="Active users"
+            :height="260"
+            class="w-full sm:max-w-[360px]"
           />
-          <div class="flex flex-col gap-6 sm:flex-row sm:items-center">
-            <div
-              class="h-28 w-28 shrink-0 rounded-full border border-black/5 dark:border-white/10"
-              :style="{ background: versionSegments.gradient }"
+          <div class="flex-1 grid grid-cols-1 gap-1 sm:grid-cols-2">
+            <TxChartLegendItem
+              v-for="segment in versionSegments.segments"
+              :key="segment.key"
+              :name="segment.key"
+              :color="segment.color"
+              :value="`${segment.count} · ${(segment.ratio * 100).toFixed(1)}%`"
             />
-            <div class="flex-1 grid grid-cols-1 gap-2.5 sm:grid-cols-2 text-sm text-black/70 dark:text-white/70">
-              <div
-                v-for="segment in versionSegments.segments"
-                :key="segment.key"
-                class="flex items-center justify-between gap-4 rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 dark:border-white/[0.05] dark:bg-white/[0.03]"
-              >
-                <div class="flex min-w-0 items-center gap-2">
-                  <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ background: segment.color }" />
-                  <span class="truncate font-mono">{{ segment.key }}</span>
-                </div>
-                <span class="font-mono text-xs text-black/50 dark:text-white/50">
-                  {{ segment.count }} · {{ (segment.ratio * 100).toFixed(1) }}%
-                </span>
-              </div>
-            </div>
           </div>
         </div>
       </TxCard>
@@ -849,30 +895,12 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           size="small"
           description="No hourly data yet"
         />
-        <div v-else>
-          <div class="flex items-end gap-1" style="height: 100px">
-            <div
-              v-for="hour in hourlySeries.series"
-              :key="hour.key"
-              class="h-full flex-1 flex items-end"
-            >
-              <div
-                class="w-full rounded-t bg-blue-500/70 transition-all hover:bg-blue-500"
-                :style="{
-                  height: `${Math.max(4, hourlySeries.max ? (hour.count / hourlySeries.max) * 100 : 0)}%`,
-                }"
-                :title="`${hour.label} - ${hour.count}`"
-              />
-            </div>
-          </div>
-          <div class="mt-2 flex justify-between font-mono text-[10px] text-black/40 dark:text-white/40">
-            <span>00:00</span>
-            <span>06:00</span>
-            <span>12:00</span>
-            <span>18:00</span>
-            <span>24:00</span>
-          </div>
-        </div>
+        <TxBarChart
+          v-else
+          :series="hourlyChart.series"
+          :categories="hourlyChart.categories"
+          :height="220"
+        />
       </TxCard>
 
       <!-- Search Term Collection Disabled -->
@@ -1485,8 +1513,88 @@ Slow
         </template>
       </div>
 
-      <!-- Geo Analytics -->
-      <div v-if="activeSection === 'geo'" class="space-y-5">
+      <!-- Versions & Geo: one scope, two readings -->
+      <div v-if="activeSection === 'versions'" class="space-y-5">
+        <TxCard variant="plain" background="mask" :radius="18" :padding="20">
+          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 class="font-semibold text-black dark:text-white">
+                Version Usage
+              </h3>
+              <p class="text-xs text-black/45 dark:text-white/45">
+                Sessions and searches per client version. The region block below reads the same version.
+              </p>
+            </div>
+            <ClientOnly>
+              <TxSelect v-model="selectedVersion" class="w-60">
+                <TxSelectItem :value="ALL_VERSIONS" :label="allVersionsLabel" />
+                <TxSelectItem
+                  v-for="item in versionOptions"
+                  :key="item.value"
+                  :value="item.value"
+                  :label="item.label"
+                />
+              </TxSelect>
+              <template #fallback>
+                <div class="w-full rounded-xl bg-black/[0.04] px-3 py-2 text-xs text-black/60 dark:bg-white/[0.08] dark:text-white/60 sm:w-60">
+                  {{ versionScopeLabel }}
+                </div>
+              </template>
+            </ClientOnly>
+          </div>
+
+          <div v-if="versionLoading" class="flex items-center justify-center gap-2 py-10 text-sm text-black/50 dark:text-white/50">
+            <TxSpinner :size="16" />
+            Loading version analytics...
+          </div>
+          <TxEmptyState
+            v-else-if="versionError"
+            variant="error"
+            :title="t('common.error', 'Error')"
+            :description="versionError"
+          />
+          <TxEmptyState
+            v-else-if="!versionAnalytics?.versions.length"
+            variant="no-data"
+            size="small"
+            description="No version data in range"
+          />
+          <template v-else>
+            <TxBarChart
+              :series="versionUsageChart.series"
+              :categories="versionUsageChart.categories"
+              :horizontal="true"
+              :height="Math.max(180, versionUsageChart.categories.length * 34)"
+            />
+            <!-- Every version in range, not just the chart's top slice: the rows
+                 and the selector write the same scope, so a row is a shortcut
+                 for scoping the map rather than a second kind of filter. -->
+            <div class="mt-4 max-h-72 space-y-2 overflow-y-auto pr-1">
+              <TxButton
+                v-for="row in versionAnalytics.versions"
+                :key="row.version"
+                variant="bare"
+                block
+                native-type="button"
+                class="w-full flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left text-sm transition"
+                :class="row.version === versionScope
+                  ? 'border-blue-500/40 bg-blue-500/10'
+                  : 'border-black/[0.04] bg-black/[0.02] hover:bg-black/[0.05] dark:border-white/[0.05] dark:bg-white/[0.03] dark:hover:bg-white/[0.06]'"
+                @click="selectVersion(row.version)"
+              >
+                <span class="min-w-0 truncate font-medium text-black/80 dark:text-white/80">{{ row.version }}</span>
+                <span class="flex shrink-0 items-center gap-3 font-mono text-xs text-black/45 dark:text-white/50">
+                  <span>{{ formatNumber(row.visits) }} visits</span>
+                  <span>{{ formatNumber(row.searches) }} searches</span>
+                  <span>{{ formatNumber(row.users) }} users</span>
+                  <span>{{ row.avgSearchDuration }}ms</span>
+                  <span>{{ formatCompactDate(row.lastSeenAt) }}</span>
+                </span>
+              </TxButton>
+            </div>
+          </template>
+        </TxCard>
+
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <TxCard variant="plain" background="mask" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
@@ -1523,9 +1631,13 @@ Slow
         </div>
 
         <TxCard variant="plain" background="mask" :radius="16" :padding="14">
-          <div class="flex items-center justify-between text-sm">
-            <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
+            <div class="flex flex-wrap items-center gap-2">
               <span class="text-black/60 dark:text-white/60">Scope:</span>
+              <span class="rounded-lg bg-black/[0.05] px-2 py-0.5 font-medium text-black dark:bg-white/[0.08] dark:text-white">
+                {{ versionScopeLabel }}
+              </span>
+              <span class="text-black/40 dark:text-white/40">·</span>
               <span class="font-medium text-black dark:text-white">Global</span>
               <span v-if="selectedGeoCountry" class="text-black/40 dark:text-white/40">></span>
               <span v-if="selectedGeoCountry" class="font-medium text-black dark:text-white">{{ resolveCountryLabel(selectedGeoCountry) }}</span>
@@ -1556,10 +1668,34 @@ Slow
 
         <template v-else-if="geoAnalytics">
           <TxCard variant="plain" background="mask" :radius="18" :padding="16">
-            <LazyGeoLeafletMap
-              :points="geoMapPoints"
+            <TxEmptyState
+              v-if="!worldGeoJson || (selectedGeoCountry ? geoMapPoints.length === 0 : geoCountryMapRows.length === 0)"
+              variant="no-data"
+              size="small"
+              :description="worldGeoJsonFailed ? 'World map data failed to load' : 'No geolocated rows for this version and range'"
+            />
+            <TxChoroplethMap
+              v-else-if="!selectedGeoCountry"
+              :geo-json="worldGeoJson"
+              :data="geoCountryMapRows"
+              name="geoName"
+              value="count"
+              :value-format="formatNumber"
+              show-legend
               :height="320"
-              @point-click="handleMapPointClick"
+              @region-click="handleMapPointClick($event)"
+            />
+            <TxBubbleMap
+              v-else
+              :geo-json="worldGeoJson"
+              :data="geoMapPoints"
+              lng="longitude"
+              lat="latitude"
+              value="value"
+              name="label"
+              :value-format="formatNumber"
+              :height="320"
+              @bubble-click="handleMapPointClick($event)"
             />
           </TxCard>
 
