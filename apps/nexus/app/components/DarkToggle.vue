@@ -42,9 +42,10 @@ function optionLabel(option: ThemeOption) {
 }
 
 /**
- * TxDropdownItem's own `select` event carries no payload, but `toggleDark`
- * needs the click coordinates to originate the View Transition ripple — so read
- * them off the native click, which Vue merges alongside the item's handler.
+ * Theme switching needs the native click coordinates for the View Transition
+ * ripple. That ripple is already the stronger immediate confirmation, so this
+ * item explicitly skips the menu-row blink instead of changing the theme under
+ * a menu that stays open for another 180 ms.
  */
 function selectTheme(mode: ThemeMode, event: MouseEvent) {
   toggleDark(mode, event)
@@ -78,6 +79,7 @@ function selectTheme(mode: ThemeMode, event: MouseEvent) {
           :key="option.value"
           role="menuitemradio"
           :aria-checked="selectedMode === option.value"
+          :activation-feedback="false"
           @click="selectTheme(option.value, $event)"
         >
           {{ optionLabel(option) }}

@@ -23,6 +23,11 @@ export interface DropdownMenuProps {
   offset?: number
   closeOnSelect?: boolean
   /**
+   * Briefly clears then confirms a closing item before `select` and close.
+   * Reduced-motion users keep the immediate path.
+   */
+  activationFeedback?: boolean
+  /**
    * Where focus lands when the menu opens. `'first-item'` moves it to the
    * first enabled item, which is what a plain command list wants. `'none'`
    * leaves focus alone for a host that places it itself — a panel that opens
@@ -45,6 +50,12 @@ export interface DropdownMenuProps {
   panelPadding?: number
 }
 
+export interface DropdownMenuContext {
+  close: () => void
+  closeOnSelect: boolean
+  activationFeedback: boolean
+}
+
 export interface DropdownItemProps {
   disabled?: boolean
   danger?: boolean
@@ -55,6 +66,8 @@ export interface DropdownItemProps {
    * row so clicking the row opens the nested panel instead of closing the menu.
    */
   closeOnSelect?: boolean
+  /** Per-item override of the menu-level activation feedback. */
+  activationFeedback?: boolean
 }
 
 export interface DropdownSubmenuProps {
@@ -74,3 +87,5 @@ export interface DropdownSubmenuProps {
   panelRadius?: number
   panelPadding?: number
 }
+
+export const TX_DROPDOWN_MENU_INJECTION_KEY = 'txDropdownMenu'

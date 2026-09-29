@@ -35,6 +35,11 @@ export interface ContextMenuProps {
   closeOnTriggerPointerDown?: boolean
   closeOnAnyPointerDown?: boolean
   closeOnSelect?: boolean
+  /**
+   * Briefly clears then confirms a closing item before `select` and close.
+   * Reduced-motion users keep the immediate path.
+   */
+  activationFeedback?: boolean
   showArrow?: boolean
   arrowSize?: number
   animation?: BaseAnchorAnimationOptions
@@ -50,6 +55,7 @@ export interface ContextMenuProps {
 export interface ContextMenuContext {
   close: () => void
   closeOnSelect: boolean
+  activationFeedback: boolean
 }
 
 export interface ContextMenuPanelProps {
@@ -58,6 +64,7 @@ export interface ContextMenuPanelProps {
   maxWidth?: number | string
   maxHeight?: number | string
   closeOnSelect?: boolean
+  activationFeedback?: boolean
   close?: () => void
   dense?: boolean
   outsideGuard?: boolean
@@ -72,6 +79,8 @@ export interface ContextMenuItemProps {
   shortcut?: string
   submenu?: boolean
   closeOnSelect?: boolean
+  /** Per-item override of the panel-level activation feedback. */
+  activationFeedback?: boolean
 }
 
 export interface ContextMenuSubmenuProps {

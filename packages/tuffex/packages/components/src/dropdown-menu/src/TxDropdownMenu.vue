@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { DropdownMenuProps } from './types'
+import type { DropdownMenuContext, DropdownMenuProps } from './types'
 import { computed, nextTick, provide, ref, watch } from 'vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
+import { TX_DROPDOWN_MENU_INJECTION_KEY } from './types'
 
 defineOptions({ name: 'TxDropdownMenu' })
 
@@ -11,6 +12,7 @@ const props = withDefaults(defineProps<DropdownMenuProps>(), {
   trigger: 'click',
   offset: 6,
   closeOnSelect: true,
+  activationFeedback: true,
   initialFocus: 'first-item',
   animation: () => ({}),
 
@@ -129,10 +131,13 @@ watch(
   { immediate: true },
 )
 
-provide('txDropdownMenu', {
+provide<DropdownMenuContext>(TX_DROPDOWN_MENU_INJECTION_KEY, {
   close,
   get closeOnSelect() {
     return props.closeOnSelect
+  },
+  get activationFeedback() {
+    return props.activationFeedback
   },
 })
 </script>
