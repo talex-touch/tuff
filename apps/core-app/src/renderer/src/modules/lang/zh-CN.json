@@ -449,6 +449,10 @@
     "groupDesc": "实用工具为您提供统一的快速桌面启动器。",
     "customPlaceholder": "自定义占位文本",
     "customPlaceholderDesc": "自定义 CoreBox 输入框的占位提示文本，留空使用默认。",
+    "quickSelectAction": "数字键行为",
+    "quickSelectActionDesc": "在 CoreBox 中按下 Command/Ctrl + 1-0 时，直接执行对应结果，或只把选中项移到它上面。",
+    "quickSelectExecute": "执行",
+    "quickSelectLocate": "仅定位",
     "usage": "使用引导",
     "usageDesc": "重新播放首次启动时的引导流程。",
     "usageAction": "重新运行",
@@ -2767,7 +2771,8 @@
       "open": "打开",
       "execute": "执行",
       "actions": "操作",
-      "quickSelect": "快速选择"
+      "quickSelect": "快速选择",
+      "quickSelectExecute": "快速执行"
     },
     "footer": {
       "indexing": "索引中 {progress}%"
@@ -3096,7 +3101,10 @@
     "aliasTitle": "自定义关键词",
     "invokeTitle": "唤起方式",
     "shortcutTitle": "快捷键",
-    "shortcutConflict": "该快捷键已被系统或其他绑定占用",
+    "shortcutConflictTitle": "该快捷键已被占用",
+    "shortcutConflictHeld": "{shortcut} 已被 {holders} 占用。仍然绑定的话，这个键会改由本应用接管。",
+    "shortcutConflictRefused": "系统没有接受 {shortcut}，绑定后可能不会生效。仍然绑定吗？",
+    "shortcutConflictOverride": "仍然绑定",
     "aliasDesc": "为该应用添加别名，搜索这些词也能召回它；重建索引后依然保留",
     "aliasPlaceholder": "输入关键词后回车",
     "aliasAdd": "添加",

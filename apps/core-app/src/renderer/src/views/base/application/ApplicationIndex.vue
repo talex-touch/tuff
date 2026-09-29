@@ -4,9 +4,11 @@ import type {
   AppIndexDiagnoseResult,
   AppIndexEntrySummary,
   AppIndexManagedEntry,
+  AppIndexShortcutHolder,
   AppIndexUsageResult
 } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxModal } from '@talex-touch/tuffex/modal'
 import { toTfileUrl } from '@talex-touch/utils/network'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -15,6 +17,8 @@ import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
 import { APPLICATION_ROUTE_ENTRY_PARAM } from '../../../../../shared/app-surface-routes'
+import { acceleratorLabel } from '../../../../../shared/accelerator-label'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import AppDetail from './AppDetail.vue'
 import AppIndexLaunchZoneDrawer from './AppIndexLaunchZoneDrawer.vue'
 import AppList from './AppList.vue'
@@ -32,6 +36,7 @@ import { createRendererLogger } from '~/utils/renderer-log'
 const { t } = useI18n()
 const settingsSdk = useSettingsSdk()
 const route = useRoute()
+const { platform } = useRendererPlatform()
 const log = createRendererLogger('ApplicationIndex')
 
 const entries = ref<AppIndexManagedEntry[]>([])
@@ -239,21 +244,53 @@ async function loadShortcut(path: string): Promise<void> {
   }
 }
 
+/**
+ * A bind the shortcut store would not write, held until the user answers for the key it costs.
+ *
+ * The refusal arrives with nothing written, so the field has to stop showing the key the user just
+ * pressed while the question is on screen — otherwise a "no" leaves a binding on display that does
+ * not exist.
+ */
+const pendingShortcut = ref<{
+  entry: AppIndexManagedEntry
+  accelerator: string
+  holders: AppIndexShortcutHolder[]
+} | null>(null)
+
 async function handleUpdateShortcut(
   entry: AppIndexManagedEntry,
   accelerator: string
 ): Promise<void> {
+  await applyShortcut(entry, accelerator, false)
+}
+
+/**
+ * Writes the binding, or asks about the key it would take.
+ *
+ * `force` is only ever the user's answer to that question: a first attempt is refused when another
+ * binding holds the key, which is what the dialog is about.
+ */
+async function applyShortcut(
+  entry: AppIndexManagedEntry,
+  accelerator: string,
+  force: boolean
+): Promise<void> {
   busyPath.value = entry.path
   try {
-    const result = await settingsSdk.appIndex.setShortcut({ path: entry.path, accelerator })
+    const result = await settingsSdk.appIndex.setShortcut({ path: entry.path, accelerator, force })
     if (!result.success) {
-      // The accelerator was refused by the OS, so the previous binding still stands: re-read
-      // rather than showing the key the user just pressed as if it had taken.
-      toast.error(
-        result.reason === 'shortcut-conflict'
-          ? t('appDetail.shortcutConflict')
-          : t('settings.settingFileIndex.appIndexManagerUpdateFailed')
-      )
+      // Nothing was written either way, so the field goes back to what is really bound — a key the
+      // user just pressed must not stay on display as if it had taken.
+      if (result.reason === 'shortcut-conflict' && !force) {
+        pendingShortcut.value = {
+          entry,
+          accelerator,
+          holders: result.shortcutConflict?.holders ?? []
+        }
+      } else {
+        // The OS refused the key, or the write itself failed after the user confirmed the warning.
+        toast.error(t('settings.settingFileIndex.appIndexManagerUpdateFailed'))
+      }
       await loadShortcut(entry.path)
       return
     }
@@ -267,6 +304,33 @@ async function handleUpdateShortcut(
     if (busyPath.value === entry.path) busyPath.value = null
   }
 }
+
+/** Takes the key the dialog warned about. */
+async function confirmShortcutOverride(): Promise<void> {
+  const pending = pendingShortcut.value
+  pendingShortcut.value = null
+  if (pending) await applyShortcut(pending.entry, pending.accelerator, true)
+}
+
+function cancelShortcutOverride(): void {
+  pendingShortcut.value = null
+}
+
+/**
+ * What the dialog names as the key's current holder.
+ *
+ * Main answers with the label the shortcut list prints, falling back to the shortcut id — which is
+ * what an application binding is keyed by, so a path is the honest name for one.
+ */
+const pendingShortcutHolderText = computed(() =>
+  (pendingShortcut.value?.holders ?? []).map((holder) => holder.label).join(' / ')
+)
+
+/** The key as a person reads it: `⌘1`, not `Command+1`. */
+const pendingShortcutLabel = computed(() => {
+  const accelerator = pendingShortcut.value?.accelerator
+  return accelerator ? acceleratorLabel(accelerator, platform.value) : ''
+})
 
 async function loadAliases(path: string): Promise<void> {
   try {
@@ -543,6 +607,37 @@ watch(() => route.query, applyRequestedEntry)
 
     <template #overlay>
       <AppIndexLaunchZoneDrawer v-model:visible="launchZoneOpen" @changed="loadEntries" />
+
+      <!--
+        The second half of "you may bind a taken key, but we will say so first". Nothing was
+        written on the refusal, so answering "cancel" leaves the previous binding exactly as it
+        was, and the field has already gone back to it.
+      -->
+      <TxModal
+        :model-value="pendingShortcut !== null"
+        :title="t('appDetail.shortcutConflictTitle')"
+        width="420px"
+        @update:model-value="(value: boolean) => !value && cancelShortcutOverride()"
+      >
+        <p class="m-0 text-[13px] leading-relaxed text-[color:var(--tx-text-color-secondary)]">
+          {{
+            pendingShortcutHolderText
+              ? t('appDetail.shortcutConflictHeld', {
+                  shortcut: pendingShortcutLabel,
+                  holders: pendingShortcutHolderText
+                })
+              : t('appDetail.shortcutConflictRefused', { shortcut: pendingShortcutLabel })
+          }}
+        </p>
+        <template #footer>
+          <TxButton variant="flat" native-type="button" @click="cancelShortcutOverride">
+            {{ t('common.cancel') }}
+          </TxButton>
+          <TxButton type="warning" native-type="button" @click="confirmShortcutOverride">
+            {{ t('appDetail.shortcutConflictOverride') }}
+          </TxButton>
+        </template>
+      </TxModal>
     </template>
   </SettingsPage>
 </template>

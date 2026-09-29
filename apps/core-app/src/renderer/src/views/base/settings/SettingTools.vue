@@ -7,7 +7,11 @@
 <script setup lang="ts" name="SettingTools">
 import type { ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 
-import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
+import {
+  appSettingOriginData,
+  normalizeCoreBoxQuickSelectAction,
+  type CoreBoxQuickSelectAction
+} from '@talex-touch/utils/common/storage/entity/app-settings'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
@@ -76,6 +80,17 @@ const homeAiOpeningEnabled = computed({
   get: () => appSetting.tools?.homeAiOpening === true,
   set: (value: boolean) => {
     if (appSetting.tools) appSetting.tools.homeAiOpening = value
+  }
+})
+/**
+ * What ⌘1–⌘0 does in CoreBox. Read through the normaliser because the stored settings object is
+ * merged shallowly: a profile that predates the key keeps `coreBox` as it was saved, so the field
+ * has to fall back to the default rather than show an empty select.
+ */
+const quickSelectAction = computed({
+  get: () => normalizeCoreBoxQuickSelectAction(appSetting.coreBox?.quickSelectAction),
+  set: (value: CoreBoxQuickSelectAction) => {
+    appSetting.coreBox.quickSelectAction = value
   }
 })
 const saveStateMap = reactive(new Map<string, SaveState>())
@@ -757,6 +772,23 @@ onBeforeUnmount(() => {
         />
       </template>
     </TuffBlockInput>
+
+    <!--
+      What ⌘1–⌘0 does with the numbered result. Both readings are defensible, so it is a choice
+      rather than a rule; the default is stated in `appSettingOriginData`.
+    -->
+    <TuffBlockSelect
+      v-model="quickSelectAction"
+      :title="t('settingTools.quickSelectAction')"
+      :description="t('settingTools.quickSelectActionDesc')"
+    >
+      <TxSelectItem :value="'execute'">
+        {{ t('settingTools.quickSelectExecute') }}
+      </TxSelectItem>
+      <TxSelectItem :value="'locate'">
+        {{ t('settingTools.quickSelectLocate') }}
+      </TxSelectItem>
+    </TuffBlockSelect>
 
     <!--
       Rerunning the guide, not a raw `beginner.init` switch: that flag also admits CoreBox and

@@ -110,6 +110,26 @@ interface ShortcutStatus {
 }
 
 type ShortcutWithStatus = Shortcut & { status?: ShortcutStatus }
+
+/** One shortcut that already holds a key an app bind asked for. */
+export interface AppShortcutHolder {
+  id: string
+  /** What to call it in a sentence: its settings label, or the id when settings has none. */
+  label: string
+}
+
+/**
+ * What came of binding one app to a key.
+ *
+ * `ok` says the binding was kept, not that the key fires. A forced bind keeps a key something else
+ * holds — the point of forcing it — and one the OS refuses outright; the registration pass settles
+ * which binding owns the key, and settings prints the verdict.
+ */
+export type AppShortcutBindResult =
+  | { ok: true }
+  | { ok: false; reason: 'conflict'; holders: AppShortcutHolder[] }
+  | { ok: false; reason: 'unavailable' }
+
 type MainShortcutRegisterOptions = {
   enabled?: boolean
   owner?: string
@@ -502,12 +522,32 @@ export class ShortcutModule extends BaseModule {
    * id: that is right for a fixed system action wired once at boot, but an app binding is user
    * state — it gets rebound to a different key and unbound entirely, at runtime. Rebinding a
    * live id here replaces the accelerator and the callback rather than failing.
+   *
+   * A key something else holds is refused and named, unless `force` says the user was asked and
+   * chose to take it anyway. Nothing is written on a refusal: the caller needs the previous
+   * binding untouched to put in front of the user along with the question.
    */
-  setAppShortcut(id: string, accelerator: string, callback: () => void): boolean {
+  setAppShortcut(
+    id: string,
+    accelerator: string,
+    callback: () => void,
+    options?: { force?: boolean }
+  ): AppShortcutBindResult {
     const normalized = this.normalizeAccelerator(accelerator)
     if (!normalized) {
       shortconLog.error(`Invalid accelerator for app shortcut ${id}: ${accelerator}`)
-      return false
+      return { ok: false, reason: 'unavailable' }
+    }
+
+    // Asked of the store, not of the last registration pass. The recorder releasing its keys is
+    // what runs that pass, so while a field is capturing the map still holds the verdict from
+    // before the key the user just pressed existed.
+    const holders = options?.force ? [] : this.findAcceleratorHolders(id, normalized)
+    if (holders.length > 0) {
+      shortconLog.info(
+        `Refused ${id}: ${normalized} is held by ${holders.map((h) => h.id).join(', ')}`
+      )
+      return { ok: false, reason: 'conflict', holders }
     }
 
     // Snapshotted before the first write. A rebind that the OS refuses has to leave the previous
@@ -539,17 +579,52 @@ export class ShortcutModule extends BaseModule {
     }
 
     this.reregisterAllShortcuts()
+
+    if (options?.force) {
+      // Kept whatever the pass decided: the user has already been told what this key costs.
+      return { ok: true }
+    }
+
     // The accelerator may be taken by the system or another binding; the caller needs to know,
-    // and `reregisterAllShortcuts` has just recomputed that verdict.
+    // and `reregisterAllShortcuts` has just recomputed that verdict. With shortcuts disabled the
+    // pass returns before judging, and the pass the recorder triggers on release reports it.
     const state = this.shortcutStatusMap.get(id)?.state
     if (state === 'conflict' || state === 'unavailable') {
       this.restoreAppShortcut(id, previousCallback, previous)
-      return false
+      return state === 'conflict'
+        ? { ok: false, reason: 'conflict', holders: this.findAcceleratorHolders(id, normalized) }
+        : { ok: false, reason: 'unavailable' }
     }
 
     // `disabled` is the global shortcut switch rather than this key: the binding is stored and
     // becomes live again when the user re-enables shortcuts.
-    return true
+    return { ok: true }
+  }
+
+  /**
+   * The other shortcuts that already hold `accelerator`.
+   *
+   * Filtered the way the registration pass filters before it groups: a disabled record and a
+   * trigger never register, and a main record no one registered a callback for is skipped there
+   * too. A key this calls free is therefore a key the pass will register.
+   */
+  private findAcceleratorHolders(id: string, accelerator: string): AppShortcutHolder[] {
+    const holders: AppShortcutHolder[] = []
+    for (const shortcut of this.storage?.getAllShortcuts() ?? []) {
+      if (shortcut.id === id) continue
+      if (shortcut.meta?.enabled === false) continue
+      if (shortcut.type === ShortcutType.TRIGGER) continue
+      if (shortcut.type === ShortcutType.MAIN && !mainCallbackRegistry.has(shortcut.id)) continue
+
+      const held = this.normalizeAccelerator(shortcut.accelerator)
+      if (!held || !acceleratorsMatch(held, accelerator, process.platform)) continue
+
+      holders.push({
+        id: shortcut.id,
+        label: this.resolveShortcutLabel(shortcut.id) ?? shortcut.id
+      })
+    }
+    return holders
   }
 
   /**
@@ -1123,7 +1198,7 @@ export class ShortcutModule extends BaseModule {
       const pluginShortcuts = shortcuts.filter((shortcut) => !this.isSystemShortcut(shortcut))
 
       if (systemShortcuts.length > 0) {
-        const [primary, ...rest] = systemShortcuts
+        const [primary, ...rest] = this.orderByOwnership(systemShortcuts)
         statusMap.set(primary.id, { state: 'active' })
         for (const shortcut of rest) {
           statusMap.set(shortcut.id, {
@@ -1159,6 +1234,41 @@ export class ShortcutModule extends BaseModule {
         statusMap.set(pluginShortcuts[0].id, { state: 'active' })
       }
     }
+  }
+
+  /**
+   * Orders one accelerator's system bindings with the one that gets the key first.
+   *
+   * A key the user chose outranks a system default. Binding an app to a key a built-in default
+   * sits on is a deliberate act, and the user confirms it when the app surface warns that the key
+   * is taken; the default is a starting value nobody picked. Between two of the same kind the most
+   * recently bound one wins — that is what makes taking a key from another app work instead of
+   * leaving the new binding stored and dead in the iteration order the store happens to keep.
+   *
+   * A registration with no default of its own is a user binding by construction: the app-launch
+   * path registers callbacks without one.
+   */
+  private orderByOwnership(shortcuts: Shortcut[]): Shortcut[] {
+    const isUserChosen = (shortcut: Shortcut): boolean => {
+      const registration = mainCallbackRegistry.get(shortcut.id)
+      if (!registration) return false
+      if (!registration.defaultAccelerator) return true
+      return shortcut.accelerator !== this.normalizeAccelerator(registration.defaultAccelerator)
+    }
+
+    const userChosen = shortcuts
+      .map((shortcut, position) => ({ shortcut, position }))
+      .filter((entry) => isUserChosen(entry.shortcut))
+      .sort(
+        (a, b) =>
+          (b.shortcut.meta?.modificationTime ?? 0) - (a.shortcut.meta?.modificationTime ?? 0) ||
+          // One millisecond apart is not a guarantee two binds did not land in the same one, and
+          // records are appended, so the later position is the later write.
+          b.position - a.position
+      )
+      .map((entry) => entry.shortcut)
+
+    return [...userChosen, ...shortcuts.filter((shortcut) => !isUserChosen(shortcut))]
   }
 
   private buildShortcutSnapshot(): ShortcutWithStatus[] {

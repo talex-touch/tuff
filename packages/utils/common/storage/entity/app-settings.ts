@@ -34,6 +34,21 @@ export function normalizeVoiceAsrSource(value: unknown): VoiceAsrSource {
     : DEFAULT_VOICE_ASR_SOURCE
 }
 
+/**
+ * What CoreBox's ⌘1–⌘0 does with the numbered result.
+ *
+ * `execute` runs it; `locate` only moves the selection onto it. Both are reasonable, so it is a
+ * preference rather than a fixed rule, and the default is `execute`: the digits name a single
+ * result, and a gesture that names one thing reads as "this one", not "highlight this one".
+ */
+export const CORE_BOX_QUICK_SELECT_ACTIONS = ['execute', 'locate'] as const
+export type CoreBoxQuickSelectAction = typeof CORE_BOX_QUICK_SELECT_ACTIONS[number]
+export const DEFAULT_CORE_BOX_QUICK_SELECT_ACTION: CoreBoxQuickSelectAction = 'execute'
+
+export function normalizeCoreBoxQuickSelectAction(value: unknown): CoreBoxQuickSelectAction {
+  return value === 'execute' || value === 'locate' ? value : DEFAULT_CORE_BOX_QUICK_SELECT_ACTION
+}
+
 /** Default layout atom for 'simple' preset */
 const defaultLayoutAtomSimple: LayoutAtomConfig = {
   preset: 'simple',
@@ -525,6 +540,11 @@ const _appSettingOriginData = {
   coreBox: {
     /** 自定义 placeholder 文本，空则使用默认 */
     customPlaceholder: '',
+    /**
+     * ⌘1–⌘0 的行为：执行对应结果，或只把选中项移过去。读的地方要过
+     * {@link normalizeCoreBoxQuickSelectAction}：旧配置没有这个键，手改的配置也可能是别的值。
+     */
+    quickSelectAction: DEFAULT_CORE_BOX_QUICK_SELECT_ACTION as CoreBoxQuickSelectAction,
   },
   window: {
     closeToTray: true,

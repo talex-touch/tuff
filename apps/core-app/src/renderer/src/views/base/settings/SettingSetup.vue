@@ -741,6 +741,20 @@ function getStatusIconClass(status: string): string {
       "
     >
       <TxSkeleton v-if="!permissions.notifications.checked" :width="86" :height="22" :radius="8" />
+      <TxButton
+        v-else-if="
+          permissions.notifications.status !== 'granted' && permissions.notifications.canRequest
+        "
+        variant="flat"
+        type="primary"
+        size="sm"
+        :aria-label="`${getStatusText(permissions.notifications.status)} — ${t('setupPermissions.openSettings')}`"
+        @click="requestPermission('notifications')"
+      >
+        <i :class="getStatusIconClass(permissions.notifications.status)" aria-hidden="true" />
+        {{ getStatusText(permissions.notifications.status) }} ·
+        {{ t('setupPermissions.openSettings') }}
+      </TxButton>
       <TuffStatusBadge
         v-else
         size="md"
@@ -749,11 +763,7 @@ function getStatusIconClass(status: string): string {
         :text="getStatusText(permissions.notifications.status)"
       />
       <TxButton
-        v-if="
-          permissions.notifications.checked &&
-          permissions.notifications.status !== 'granted' &&
-          permissions.notifications.canRequest
-        "
+        v-if="permissions.notifications.checked && permissions.notifications.status !== 'granted'"
         variant="flat"
         type="primary"
         size="sm"

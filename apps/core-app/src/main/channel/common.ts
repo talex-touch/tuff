@@ -2316,7 +2316,8 @@ export class CommonChannelModule extends BaseModule {
           }
           return appProvider.entryActions.setShortcut(
             inputPath,
-            getOptionalStringProp(payload, 'accelerator') ?? ''
+            getOptionalStringProp(payload, 'accelerator') ?? '',
+            getOptionalBooleanProp(payload, 'force') === true
           )
         }
       )

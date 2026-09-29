@@ -294,6 +294,94 @@ const taken = nativeProbe.registerExclusive('Alt+Space') === EVENT_HOT_KEY_EXIST
      answer either; see the paragraph above. -->
 ```
 
+## Scenario: Application shortcut conflicts require explicit force
+
+### 1. Scope / Trigger
+
+- Changing `ShortcutModule.setAppShortcut`, `AppShortcutService.set`,
+  `AppManagedEntryActionsService.setShortcut`, `AppIndexSetShortcutRequest.force`, or the
+  application detail confirmation surface.
+- Changing which system shortcut wins when several records share one accelerator.
+
+### 2. Signatures
+
+```ts
+interface AppShortcutHolder { id: string; label: string }
+type AppShortcutBindResult =
+  | { ok: true }
+  | { ok: false; reason: 'conflict'; holders: AppShortcutHolder[] }
+  | { ok: false; reason: 'unavailable' }
+
+setAppShortcut(id, accelerator, callback, options?: { force?: boolean }): AppShortcutBindResult
+AppShortcutService.set(path, accelerator, options?: { force?: boolean }):
+  Promise<{ outcome: 'bound' | 'conflict' | 'persist-failed'; holders?: AppShortcutHolder[] }>
+
+interface AppIndexSetShortcutRequest {
+  path: string
+  accelerator: string
+  force?: boolean
+}
+```
+
+### 3. Contracts
+
+- **A refusal writes nothing.** Without `force`, an in-app holder returns `reason: 'conflict'`
+  with every holder's settings label (or raw id when no label exists). An OS refusal returns
+  `reason: 'unavailable'`. The previous accelerator, callback and persisted app-path binding stay
+  intact so the confirmation describes a real choice and cancel is lossless.
+- **`force` means the user already confirmed.** It bypasses only the pre-write holder refusal,
+  stores the requested accelerator and lets the normal registration pass publish the resulting
+  status. No background caller may manufacture `force: true` as a retry policy.
+- **The transport preserves the distinction.** `shortcutConflict.holders` is empty for an OS
+  refusal and populated for an in-app conflict, so the renderer uses different copy. The second
+  request carries the same path/accelerator plus `force: true` only after the user accepts.
+- **Persistence remains transactional at the service boundary.** If the app-path map cannot be
+  saved after a live bind, `AppShortcutService` restores the prior accelerator, callback and path
+  and returns `persist-failed`.
+- **Ownership is deterministic.** A user-chosen system binding outranks a system default. Between
+  user-chosen bindings, the newest `meta.modificationTime` wins; storage position breaks a
+  same-millisecond tie. This makes a confirmed takeover live instead of merely stored.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result | Stored/live state |
+| --- | --- | --- |
+| another Tuff binding holds the key, no force | `conflict`, named holders | previous app binding unchanged |
+| OS refuses the key, no force | `unavailable`, no holders | previous app binding unchanged |
+| user confirms and retries with force | `ok: true` / `bound` | requested key stored; ownership pass decides the live winner |
+| forced key still cannot register at OS level | bind is kept | settings exposes the unavailable status; no fake success key |
+| app-path persistence fails | `persist-failed` | accelerator, callback and path rolled back |
+| empty accelerator | clear the app binding | no shortcut remains for that app |
+
+### 5. Good / Base / Bad Cases
+
+- Good: an app asks for the screenshot shortcut's key, receives the localized screenshot holder,
+  shows one confirmation, then retries with `force: true`; the app's newer user binding wins.
+- Base: a free key binds once without a dialog and survives restart through the app-path map.
+- Bad: overwrite on the first request, retry every conflict with force, return a bare boolean, or
+  persist a refused key while reporting success.
+
+### 6. Tests Required
+
+- `main/modules/global-shortcon.test.ts`: free bind, in-app holder labels, OS refusal, forced
+  takeover, user-vs-default ownership, newest-user ownership and same-millisecond tie.
+- `addon/apps/services/app-managed-entry-actions-service.test.ts`: conflict payload and forced
+  retry mapping.
+- `renderer/views/base/application/ApplicationIndex.vue` tests: cancel sends no second request;
+  accept repeats the same request with `force: true`; OS and named-holder copy stay distinct.
+
+### 7. Wrong vs Correct
+
+```ts
+// Wrong: the first attempt silently steals the key, so cancel cannot restore the old owner.
+shortcutModule.setAppShortcut(id, accelerator, callback, { force: true })
+
+// Correct: refuse with evidence, ask once, then force only after explicit confirmation.
+const first = shortcutModule.setAppShortcut(id, accelerator, callback)
+if (first.ok || !(await confirmShortcutTakeover(first))) return first
+return shortcutModule.setAppShortcut(id, accelerator, callback, { force: true })
+```
+
 ## Scenario: No fallback: CoreBox without a registered default shows one notice and no stand-in key
 
 ### 1. Scope / Trigger

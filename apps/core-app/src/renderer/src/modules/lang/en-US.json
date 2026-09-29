@@ -449,6 +449,10 @@
     "groupDesc": "Practical tools provide a unified fast desktop arbitrary promoter for you to use.",
     "customPlaceholder": "Custom Placeholder",
     "customPlaceholderDesc": "Customize the CoreBox input placeholder text. Leave empty for default.",
+    "quickSelectAction": "Number key behavior",
+    "quickSelectActionDesc": "In CoreBox, Command/Ctrl + 1-0 either runs the numbered result or only moves the selection onto it.",
+    "quickSelectExecute": "Run it",
+    "quickSelectLocate": "Only select it",
     "usage": "Usage Guide",
     "usageDesc": "Replay the first-launch onboarding walkthrough.",
     "usageAction": "Rerun",
@@ -2767,7 +2771,8 @@
       "open": "Open",
       "execute": "Execute",
       "actions": "Actions",
-      "quickSelect": "Quick Select"
+      "quickSelect": "Quick Select",
+      "quickSelectExecute": "Quick Run"
     },
     "footer": {
       "indexing": "Indexing {progress}%"
@@ -3096,7 +3101,10 @@
     "aliasTitle": "Custom keywords",
     "invokeTitle": "How to summon",
     "shortcutTitle": "Shortcut",
-    "shortcutConflict": "That shortcut is taken by the system or another binding",
+    "shortcutConflictTitle": "That shortcut is taken",
+    "shortcutConflictHeld": "{holders} already uses {shortcut}. Binding it anyway hands the key to this application.",
+    "shortcutConflictRefused": "The system did not accept {shortcut}, so it may not fire. Bind it anyway?",
+    "shortcutConflictOverride": "Bind anyway",
     "aliasDesc": "Aliases that also match this application in search. They survive a reindex",
     "aliasPlaceholder": "Type a keyword and press Enter",
     "aliasAdd": "Add",
