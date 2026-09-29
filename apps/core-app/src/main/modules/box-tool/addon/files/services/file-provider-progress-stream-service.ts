@@ -1,4 +1,9 @@
-import type { FileIndexProgress as FileIndexProgressPayload } from '@talex-touch/utils/transport/events/types'
+import type {
+  FileIndexEstimateBasis,
+  FileIndexEstimateStatus,
+  FileIndexProgress as FileIndexProgressPayload,
+  FileIndexStage
+} from '@talex-touch/utils/transport/events/types'
 import type { StreamContext } from '@talex-touch/utils/transport/main'
 import type { IndexingProgressStreamThrottleConfig } from '@talex-touch/utils/search'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -7,6 +12,7 @@ import {
   INDEXING_PROGRESS_STREAM_DEFAULT_CONFIG,
   shouldEmitIndexingProgressStreamImmediately
 } from '@talex-touch/utils/search'
+import { FileProviderProgressEstimatorService } from './file-provider-progress-estimator-service'
 
 export type FileProviderProgressStreamThrottleConfig = Omit<
   IndexingProgressStreamThrottleConfig,
@@ -218,5 +224,142 @@ export class FileProviderProgressStreamPublisher {
     pollingService.unregister(FILE_PROVIDER_PROGRESS_TASK_ID)
     this.clearFlushTimer()
     this.pendingPayload = null
+  }
+}
+
+export interface FileProviderProgressStatusSnapshot {
+  progress: {
+    stage: FileIndexStage
+    current: number
+    total: number
+    progress: number
+  }
+  startTime: number | null
+  estimatedCompletion: number | null
+  estimatedRemainingMs: number | null
+  averageItemsPerSecond: number
+  estimateStatus: FileIndexEstimateStatus
+  speedSampleCount: number
+  estimateBasis: FileIndexEstimateBasis
+}
+
+/** Owns whole-run progress, estimation and stream publication for one FileProvider. */
+export class FileProviderProgressStateService {
+  private readonly estimator = new FileProviderProgressEstimatorService()
+  private progress = { stage: 'idle' as FileIndexStage, current: 0, total: 0 }
+  private overallProgress = 0
+  private startTime: number | null = null
+  private stats = this.initialStats('idle')
+
+  constructor(
+    private readonly publisher: FileProviderProgressStreamPublisher,
+    private readonly now: () => number = Date.now
+  ) {}
+
+  register(context: StreamContext<FileIndexProgressPayload>): void {
+    this.publisher.register(context)
+  }
+
+  reset(): void {
+    this.publisher.reset()
+    this.resetRun()
+  }
+
+  resetRun(): void {
+    this.progress = { stage: 'idle', current: 0, total: 0 }
+    this.overallProgress = 0
+    this.startTime = null
+    this.stats = this.initialStats('idle')
+    this.estimator.reset()
+  }
+
+  getSnapshot(isIndexing: boolean): FileProviderProgressStatusSnapshot {
+    let estimatedCompletion: number | null = null
+    let estimatedRemainingMs: number | null = null
+    if (isIndexing && this.startTime) {
+      const estimate = this.estimator.getEstimate()
+      estimatedRemainingMs = estimate.estimatedRemainingMs
+      this.applyEstimate(estimate)
+      if (estimatedRemainingMs != null) estimatedCompletion = this.now() + estimatedRemainingMs
+    } else if (!isIndexing) {
+      estimatedRemainingMs = 0
+    }
+
+    return {
+      progress: { ...this.progress, progress: this.overallProgress },
+      startTime: this.startTime,
+      estimatedCompletion,
+      estimatedRemainingMs,
+      averageItemsPerSecond: this.stats.averageItemsPerSecond,
+      estimateStatus: this.stats.estimateStatus,
+      speedSampleCount: this.stats.speedSampleCount,
+      estimateBasis: this.stats.estimateBasis
+    }
+  }
+
+  emit(stage: FileIndexStage, current: number, total: number): void {
+    const now = this.now()
+    this.overallProgress = resolveFileProviderOverallProgress({
+      stage,
+      current,
+      total,
+      previousStage: this.progress.stage,
+      previousProgress: this.overallProgress
+    })
+
+    if (stage !== 'idle' && stage !== 'completed' && !this.startTime) {
+      this.startTime = now
+      this.stats.startTime = now
+      this.stats.processedItems = 0
+      this.stats.lastUpdateTime = now
+    }
+    if (this.startTime && stage !== 'idle' && stage !== 'completed') {
+      const elapsed = (now - this.stats.startTime) / 1_000
+      if (elapsed > 0 && current > 0) this.stats.averageItemsPerSecond = current / elapsed
+      this.stats.processedItems = current
+      this.stats.lastUpdateTime = now
+    }
+    if (stage === 'completed' || stage === 'idle') {
+      this.startTime = null
+      this.stats = this.initialStats(stage)
+      this.estimator.reset()
+    }
+
+    this.progress = { stage, current, total }
+    const estimate = this.estimator.update({ stage, current, total, now })
+    this.applyEstimate(estimate)
+    this.publisher.emit({
+      stage,
+      current,
+      total,
+      progress: this.overallProgress,
+      startTime: this.startTime,
+      estimatedRemainingMs: estimate.estimatedRemainingMs,
+      averageItemsPerSecond: this.stats.averageItemsPerSecond,
+      estimateStatus: estimate.status,
+      speedSampleCount: estimate.speedSampleCount,
+      estimateBasis: estimate.estimateBasis
+    })
+  }
+
+  private applyEstimate(
+    estimate: ReturnType<FileProviderProgressEstimatorService['getEstimate']>
+  ): void {
+    this.stats.averageItemsPerSecond = estimate.averageItemsPerSecond
+    this.stats.estimateStatus = estimate.status
+    this.stats.speedSampleCount = estimate.speedSampleCount
+    this.stats.estimateBasis = estimate.estimateBasis
+  }
+
+  private initialStats(stage: FileIndexStage) {
+    return {
+      processedItems: 0,
+      startTime: 0,
+      lastUpdateTime: 0,
+      averageItemsPerSecond: 0,
+      estimateStatus: (stage === 'completed' ? 'complete' : 'unknown') as FileIndexEstimateStatus,
+      speedSampleCount: 0,
+      estimateBasis: (stage === 'completed' ? 'complete' : 'none') as FileIndexEstimateBasis
+    }
   }
 }

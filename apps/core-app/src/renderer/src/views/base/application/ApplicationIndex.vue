@@ -277,7 +277,11 @@ async function applyShortcut(
 ): Promise<void> {
   busyPath.value = entry.path
   try {
-    const result = await settingsSdk.appIndex.setShortcut({ path: entry.path, accelerator, force })
+    const result = await settingsSdk.appIndex.setShortcut({
+      path: entry.path,
+      accelerator,
+      ...(force ? { force: true } : {})
+    })
     if (!result.success) {
       // Nothing was written either way, so the field goes back to what is really bound — a key the
       // user just pressed must not stay on display as if it had taken.

@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Investigate the renderer/GPU idle CPU baseline before closing strict AC7.",
+    "blocker": "Strict AC7 idle CPU <=5% remains blocked by the renderer/GPU baseline while indexing workers are offline.",
+    "evidence": "PR #2019; focused tests, typechecks, production build, bundled fd smoke, and packaged arm64 100k scan evidence are recorded in prd.md."
+  }
 }

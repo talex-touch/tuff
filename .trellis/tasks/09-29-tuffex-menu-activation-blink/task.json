@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Merge PR #2019 and archive the task after the integration lands on master.",
+    "blocker": "Awaiting required PR checks and master integration.",
+    "evidence": "PR #2019; 69 component tests, TuffEx typecheck/build/audits, Nexus docs checks, and real browser evidence are recorded in the task artifacts."
+  }
 }
