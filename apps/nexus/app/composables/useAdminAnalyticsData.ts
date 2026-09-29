@@ -7,6 +7,7 @@ import type {
   GeoAnalyticsData,
   IntelligenceAnalyticsData,
   TelemetryMessage,
+  VersionAnalyticsData,
 } from '~/types/admin-analytics'
 import { requestJson as defaultRequestJson } from '~/utils/request'
 
@@ -35,6 +36,9 @@ export function useAdminAnalyticsData(options: AdminAnalyticsDataOptions = {}) {
   const geoAnalytics = ref<GeoAnalyticsData | null>(null)
   const geoLoading = ref(false)
   const geoError = ref<string | null>(null)
+  const versionAnalytics = ref<VersionAnalyticsData | null>(null)
+  const versionLoading = ref(false)
+  const versionError = ref<string | null>(null)
   const messages = ref<TelemetryMessage[]>([])
   const messagesLoading = ref(false)
   const messagesError = ref<string | null>(null)
@@ -63,12 +67,12 @@ export function useAdminAnalyticsData(options: AdminAnalyticsDataOptions = {}) {
     }
   }
 
-  async function fetchGeoAnalytics(days: number, country: string | null): Promise<void> {
+  async function fetchGeoAnalytics(days: number, country: string | null, version: string | null = null): Promise<void> {
     geoLoading.value = true
     geoError.value = null
     try {
       geoAnalytics.value = await request<GeoAnalyticsData>('/api/admin/analytics/geo', {
-        query: { days, country: country || undefined, limit: 240 },
+        query: { days, country: country || undefined, limit: 240, version: version || undefined },
       })
     }
     catch (cause) {
@@ -76,6 +80,21 @@ export function useAdminAnalyticsData(options: AdminAnalyticsDataOptions = {}) {
     }
     finally {
       geoLoading.value = false
+    }
+  }
+
+  async function fetchVersionAnalytics(days: number): Promise<void> {
+    versionLoading.value = true
+    versionError.value = null
+    try {
+      versionAnalytics.value = await request<VersionAnalyticsData>('/api/admin/analytics/versions', { query: { days } })
+    }
+    catch (cause) {
+      versionError.value = errorMessage(cause, 'Failed to load version analytics')
+      versionAnalytics.value = null
+    }
+    finally {
+      versionLoading.value = false
     }
   }
 
@@ -166,6 +185,9 @@ export function useAdminAnalyticsData(options: AdminAnalyticsDataOptions = {}) {
     geoAnalytics,
     geoLoading,
     geoError,
+    versionAnalytics,
+    versionLoading,
+    versionError,
     messages,
     messagesLoading,
     messagesError,
@@ -181,6 +203,7 @@ export function useAdminAnalyticsData(options: AdminAnalyticsDataOptions = {}) {
     exchangeError,
     fetchAnalytics,
     fetchGeoAnalytics,
+    fetchVersionAnalytics,
     fetchDocsAnalytics,
     fetchIntelligenceAnalytics,
     fetchMessages,
