@@ -1,77 +1,52 @@
-# Intelligence Unified Schema & Migration
+# Intelligence Provider Registry and Scene Routing
 
-This page defines a unified model for providers/capabilities/prompts and the migration path from scattered Core-App + Nexus settings.
+Nexus uses one server-owned configuration model for AI, translation, OCR, image composition, and speech providers.
 
-## Why Unify
+## Source of truth
 
-Current settings are split across multiple stores:
+- `provider_registry`: aggregation channels, explicit adapter format, scope, endpoint, safe metadata, and `authRef`.
+- `provider_capabilities`: capabilities declared by each channel.
+- `provider_secure_store`: encrypted credentials referenced by `authRef`.
+- `scene_registry`: product scenes and their required capabilities.
+- `scene_strategy_bindings`: ordered channel/model bindings and fallback order for each scene capability.
 
-- Core-App main config: `StorageList.IntelligenceConfig` (providers/capabilities/globalConfig)
-- Core-App prompt library: `intelligence/prompt-library` (renderer custom prompts)
-- Core-App DB adapter keys: `intelligence/providers`, `intelligence/capabilities`, `intelligence/prompts`
-- Nexus D1 tables: `intelligence_providers`, `intelligence_settings` (plus runtime audits)
+The retired `intelligence_providers` table, provider mirror bridge, dashboard provider CRUD, migration endpoint, and CoreApp provider-sync endpoint are not runtime configuration sources.
 
-This causes field drift, duplicated migration logic, and inconsistent runtime behavior.
+## Runtime contract
 
-## Unified Schema (proposed v1)
+Clients send a capability ID and input. They do not select a provider, endpoint, adapter, credential, price, or model. Nexus resolves the canonical scene, then selects its ordered binding:
 
-:::TuffCodeBlock{lang="typescript"}
----
-code: |
-  interface IntelligenceUnifiedConfigV1 {
-    schemaVersion: 1
-    updatedAt: number
-    providers: IntelligenceProviderPersisted[]
-    capabilities: Record<string, IntelligenceCapabilityConfig>
-    prompts: PromptTemplate[]
-    globalConfig: IntelligenceGlobalConfig
-    governance: {
-      defaultTimeoutMs: number
-      fallbackPolicy: 'next-available' | 'fail-fast' | 'round-robin'
-      approvalEnabled: boolean
-      auditEnabled: boolean
-    }
-  }
+```text
+capability request
+  -> canonical scene
+  -> binding (provider + adapter + model + priority)
+  -> protected credential
+  -> provider adapter
+  -> credit settlement + safe usage trace
+```
 
-  interface IntelligenceProviderPersisted extends Omit<IntelligenceProviderConfig, 'apiKey'> {
-    auth?: {
-      mode: 'secret-ref' | 'token-ref' | 'none'
-      secretRef?: string
-    }
-  }
----
-:::
+Fallback is sequential. Nexus tries the next binding only after a definitive pre-acceptance rejection. An accepted, uncertain, cancelled-after-send, or partially streamed request is never replayed through another upstream.
 
-> Note: `apiKey` must not be persisted as plaintext in unified config. Runtime injects decrypted secrets via `secretRef`.
+## Configuration rules
 
-## Security Constraints
+- `metadata.adapterKey` is mandatory when a provider declares capabilities and must name a registered adapter.
+- `metadata.defaultModel`, when present, must be included in `metadata.models`.
+- A scene binding may select a model only from its provider model list.
+- System providers are available to authenticated users and remain credit-gated. User providers are owner-only; unresolved workspace scope fails closed.
+- Missing provider/capability/adapter/model bindings project the scene as `degraded`; an incomplete scene must not appear healthy.
+- Credentials, prompts, media, transcripts, upstream response bodies, and native errors never enter ordinary provider metadata or usage ledgers.
 
-- SQLite is the local SoT; JSON is sync payload only and must be encrypted (`payload_enc` / `payload_ref`).
-- `deviceId` is identifier-only and cannot be used as key material.
-- Provider credentials must live in system secure storage.
+## Speech
 
-## Field Mapping
+Nexus-owned buffered `audio.stt` and uploaded `audio.transcribe` use the same Scene + Provider Registry selection. Direct realtime voice transports remain CoreApp-owned. Nexus speech services retain media validation, idempotency, accepted/uncertain dispatch fencing, transcript privacy, and durable credit settlement.
 
-| Source | Field | Target |
-| --- | --- | --- |
-| Core-App `providers[]` | `id/type/name/enabled/baseUrl/models/defaultModel` | `providers[]` same fields |
-| Core-App `providers[].apiKey` | plaintext / transient token | `providers[].auth.secretRef` |
-| Core-App `capabilities` | `providers/promptTemplate` | `capabilities` |
-| Core-App prompt library | `customPrompts[]` | `prompts[]` (append + dedupe) |
-| Nexus `intelligence_settings` | `default_strategy/enable_audit/...` | `globalConfig + governance` |
+## Legacy table removal
 
-## Recommended Migration Flow
+Application startup never runs destructive DDL. Operators use the guarded `provider:legacy:drop` command only after it:
 
-1. **Read**: snapshot Core-App/Nexus config in read-only mode.
-2. **Normalize**: align provider IDs, capability IDs, prompt IDs, and defaults.
-3. **Secure Rewrite**: convert credential fields to `secretRef` and clean plaintext residues.
-4. **Write**: persist unified config with `schemaVersion` and rollback snapshot.
-5. **Dual-Read Rollout**: prefer new schema, fallback to old schema read-only.
-6. **Converge**: remove old write paths after compatibility window.
+1. exports a D1 backup;
+2. confirms enabled registry providers and scenes exist;
+3. confirms every enabled credentialed provider has a secure-store row;
+4. receives both `--execute` and the explicit destructive acknowledgement environment variable.
 
-## Validation Criteria
-
-- Provider/capability/prompt counts remain consistent post-migration.
-- Capability routing result parity before/after migration (ordering differences allowed).
-- No plaintext API key remains in JSON, logs, or sync payload.
-- Nexus and Core-App render the same effective configuration.
+Prompts, prompt bindings, audits, IP bans, runtime sessions/traces, provider health, usage ledgers, and credit records are independent of the retired provider table and remain available.

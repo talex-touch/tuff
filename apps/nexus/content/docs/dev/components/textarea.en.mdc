@@ -3,7 +3,7 @@ title: Textarea
 description: Standalone multiline text field with count, resize, and status states.
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.7
 tags: [textarea, form, multiline]
 syncStatus: reviewed
 verified: true

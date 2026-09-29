@@ -3,6 +3,7 @@ import type {
   ProviderCheckResult,
   ProviderQuotaRecord,
   ProviderRegistryRecord,
+  SceneCapabilityAdapterCatalogEntry,
 } from '~/utils/provider-registry-admin'
 
 function providerCapabilityCollectionUrl(providerId: string): string {
@@ -15,7 +16,7 @@ function providerCapabilityUrl(providerId: string, capabilityId: string): string
 
 export function createProviderRegistryCrudService(fetcher: typeof rawFetch = rawFetch) {
   async function listProviders(vendor?: string) {
-    return await fetcher<{ providers: ProviderRegistryRecord[] }>('/api/dashboard/provider-registry/providers', {
+    return await fetcher<{ providers: ProviderRegistryRecord[], adapters: SceneCapabilityAdapterCatalogEntry[] }>('/api/dashboard/provider-registry/providers', {
       query: vendor ? { vendor } : undefined,
     })
   }

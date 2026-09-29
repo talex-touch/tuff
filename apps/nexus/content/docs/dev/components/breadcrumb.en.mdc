@@ -3,7 +3,7 @@ title: "Breadcrumb"
 description: "Accessible breadcrumb navigation with item icons, separators, href links, and manual click events."
 category: Navigation
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [breadcrumb, navigation, hierarchy]
 syncStatus: reviewed
 verified: true

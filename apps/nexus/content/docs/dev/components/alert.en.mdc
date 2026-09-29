@@ -3,7 +3,7 @@ title: Alert
 description: Inline status banner for contextual feedback, semantic alert messaging, and dismissible notices.
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [alert, feedback, status]
 syncStatus: reviewed
 verified: true

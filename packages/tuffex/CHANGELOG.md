@@ -2,13 +2,35 @@
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-09-28
+
+### 📦 组件变动 (Components)
+
+- **新增组件 (Since 0.6.2)**: `bot-avatar`, `image-generation`, `metal-fx`, `voice-beam`
+- **更新组件 (Updated)**: `card`, `empty-state`, `progress-bar`, `status-badge`
+
+### ✨ 组件增强与生态收敛
+
+- 深度适配并导出四大交互视觉特效套件：`TxImageGeneration` 图像生成占位揭示、`TxMetalFx` 金属质感物理悬浮徽标、`TxVoiceBeam` 语音声波光束与 `TxBotAvatar` 智能体动态头像。
+- `TxProgressBar` 进度条增强多段聚合 (`segments`) 支持：支持自定义各段值、颜色与浮动标签，完美适配业务每日活动趋势图与版本分布多维度对比展示。
+- `TxCard` 优化无遮挡悬浮体验与平滑背景阴影切换，与 `TxEmptyState`、`TxStatusBadge` 等全面覆盖系统后台与数据看板容器规范。
 ## [0.6.1] - 2026-09-28
+
+### 📦 组件变动 (Components)
+
+- **新增组件 (Since 0.6.1)**: `status-hint`
 
 ### ✨ 组件增强
 
 - 新增 `TxStatusHint` 状态操作反馈组件：用于在操作完成后以涌现色带、文字字符级形变过渡与再次触发脉冲强调展示操作反馈（例如“已复制”、“固定失败”）；自带微弱噪点遮罩层，支持深浅色模式与无障碍单 live region 模式；完全支持并遵循用户 reduced motion 偏好。
 
 ## [0.6.0] - 2026-09-12
+
+### 📦 组件变动 (Components)
+
+- **新增组件 (Since 0.6.0)**: `agent-screen`, `charts`, `choice-card`, `flowchart`, `fusion-surface`, `icon-morph`, `icon-picker`, `mode-chip`, `prism-glow`, `sensitive-input`, `text-morph`, `toast-panel`
+- **更新组件 (Updated)**: `alert`, `badge`, `cascader`, `date-picker`, `flat-radio`, `group-block`, `picker`, `progress-bar`, `slider`, `sortable-list`, `stream-markdown`, `tab-bar`, `text-transformer`, `toast`, `toast-panel`, `transfer`, `tree`
+
 
 ### ✨ 组件增强
 
@@ -52,6 +74,11 @@
 
 ## [0.5.0] - 2026-09-07
 
+### 📦 组件变动 (Components)
+
+- **更新组件 (Updated)**: `card-item`, `dropdown-menu`, `filter-chips`, `slider`, `stream-markdown`
+
+
 ### ✨ 组件增强
 
 - `TxFilterChips` 增加滑动填充、图标与 icon-only 模式。
@@ -73,6 +100,11 @@
 
 ## [0.4.0] - 2026-09-01
 
+### 📦 组件变动 (Components)
+
+- **组件架构收拢 (Updated)**: `button`, `icon` (移除冗余子路径与 `flat-button`)
+
+
 ### 💥 破坏性变更
 
 - 收拢 button / icon 组件族：`TxIconButton`、`TxCopyButton` 移入 `@talex-touch/tuffex/button`，`TxOsIcon` 移入 `@talex-touch/tuffex/icon`；深子路径 `./flat-button`、`./icon-button`、`./copy-button`、`./os-icon`（含各自 `style.css`）随之移除。根入口导出的组件名与类型不变，仅深子路径消费方需要改导入来源。
@@ -84,6 +116,12 @@
 - 运行时 Demo 与公开文档统一迁移到 Nexus 承载，本地预览改为 `pnpm -C "apps/nexus" run dev`。
 
 ## [0.3.9] - 2026-06-12
+
+### 📦 组件变动 (Components)
+
+- **新增组件 (Since 0.3.9)**: `agent-trace`, `ai-elements`, `allocation-bar`, `approval-card`, `attachment-tray`, `border-beam`, `cell-link`, `chain-of-thought`, `code-stream`, `context-cards`, `context-indicator`, `conversation-stream`, `diff-table`, `dot-indicator`, `filter-chips`, `fine-tune-card`, `flat-dropdown`, `icon-chip`, `inline-citation`, `insight-cards`, `liquid`, `markdown-editor`, `message-actions`, `prompt-bar`, `reasoning-disclosure`, `recommendation-card`, `resize-box`, `scrub-field`, `search-panel`, `selection-actions`, `sidebar-nav`, `signal-meter`, `sources`, `spark-chart`, `stream-markdown`, `suggestion-chips`, `task-rows`, `thinking-orb`, `tool-call-card`, `tool-chips`, `tool-confirmation`, `version-capsule`, `working-indicator`
+- **更新组件 (Updated)**: `base-anchor`, `base-surface`, `code-editor`, `empty-state`, `flip-overlay`, `radio`, `scroll`, `tabs`
+
 
 ### 🧩 组件导出
 
@@ -313,3 +351,170 @@ const handleClick = () => {
   useVibrate('heavy')
 }
 ```
+
+
+## 📋 组件引入版本总览 (Component Since Index)
+
+| 组件 (Slug) | 所属套件 (Suite) | 引入版本 (Since) |
+|---|---|---|
+| `agent-screen` | ai | **0.6.0** |
+| `agent-trace` | ai | **0.3.9** |
+| `agents` | ai | **0.3.4** |
+| `ai-elements` | ai | **0.3.9** |
+| `alert` | base | **0.3.4** |
+| `allocation-bar` | pro | **0.3.9** |
+| `approval-card` | ai | **0.3.9** |
+| `attachment-tray` | ai | **0.3.9** |
+| `auto-sizer` | pro | **0.3.4** |
+| `avatar` | base | **0.3.4** |
+| `badge` | base | **0.3.4** |
+| `base-anchor` | pro | **0.3.4** |
+| `base-surface` | pro | **0.3.4** |
+| `blank-slate` | base | **0.3.4** |
+| `border-beam` | pro | **0.3.9** |
+| `breadcrumb` | base | **0.3.4** |
+| `button` | base | **0.3.4** |
+| `card` | base | **0.3.4** |
+| `card-item` | base | **0.3.4** |
+| `cascader` | base | **0.3.4** |
+| `cell-link` | base | **0.3.9** |
+| `chain-of-thought` | ai | **0.3.9** |
+| `charts` | pro | **0.6.0** |
+| `chat` | ai | **0.3.4** |
+| `checkbox` | base | **0.3.4** |
+| `choice-card` | ai | **0.6.0** |
+| `code-editor` | pro | **0.3.4** |
+| `code-stream` | ai | **0.3.9** |
+| `collapse` | base | **0.3.4** |
+| `command-palette` | pro | **0.3.4** |
+| `container` | base | **0.3.4** |
+| `context-cards` | ai | **0.3.9** |
+| `context-indicator` | ai | **0.3.9** |
+| `context-menu` | base | **0.3.4** |
+| `conversation-stream` | ai | **0.3.9** |
+| `corner-overlay` | pro | **0.3.4** |
+| `data-table` | base | **0.3.4** |
+| `date-picker` | base | **0.3.4** |
+| `dialog` | base | **0.3.4** |
+| `diff-table` | pro | **0.3.9** |
+| `divider` | base | **0.3.7** |
+| `dot-indicator` | base | **0.3.9** |
+| `drawer` | base | **0.3.4** |
+| `dropdown-menu` | base | **0.3.4** |
+| `edge-fade-mask` | pro | **0.3.4** |
+| `empty` | base | **0.3.4** |
+| `empty-state` | base | **0.3.4** |
+| `error-state` | base | **0.3.4** |
+| `file-uploader` | base | **0.3.4** |
+| `filter-chips` | base | **0.3.9** |
+| `fine-tune-card` | ai | **0.3.9** |
+| `flat-dropdown` | base | **0.3.9** |
+| `flat-input` | base | **0.3.4** |
+| `flat-radio` | base | **0.3.4** |
+| `flat-select` | base | **0.3.4** |
+| `flex` | base | **0.3.4** |
+| `flip-overlay` | pro | **0.3.4** |
+| `floating` | pro | **0.3.4** |
+| `flowchart` | ai | **0.6.0** |
+| `form` | base | **0.3.4** |
+| `fusion` | pro | **0.3.4** |
+| `fusion-surface` | pro | **0.6.0** |
+| `glass-surface` | pro | **0.3.4** |
+| `glow-text` | pro | **0.3.4** |
+| `gradient-border` | pro | **0.3.4** |
+| `gradual-blur` | pro | **0.3.4** |
+| `grid` | base | **0.3.4** |
+| `grid-layout` | base | **0.3.4** |
+| `group-block` | base | **0.3.4** |
+| `guide-state` | base | **0.3.4** |
+| `icon` | base | **0.3.4** |
+| `icon-chip` | base | **0.3.9** |
+| `icon-morph` | pro | **0.6.0** |
+| `icon-picker` | base | **0.6.0** |
+| `image-gallery` | base | **0.3.4** |
+| `image-uploader` | base | **0.3.4** |
+| `inline-citation` | ai | **0.3.9** |
+| `input` | base | **0.3.4** |
+| `insight-cards` | ai | **0.3.9** |
+| `kbd` | base | **0.3.7** |
+| `keyframe-stroke-text` | pro | **0.3.4** |
+| `layout-skeleton` | base | **0.3.4** |
+| `liquid` | pro | **0.3.9** |
+| `loading-overlay` | base | **0.3.4** |
+| `loading-state` | base | **0.3.4** |
+| `markdown-editor` | pro | **0.3.9** |
+| `markdown-view` | base | **0.3.4** |
+| `message-actions` | ai | **0.3.9** |
+| `modal` | base | **0.3.4** |
+| `mode-chip` | ai | **0.6.0** |
+| `nav-bar` | base | **0.3.4** |
+| `no-data` | base | **0.3.4** |
+| `no-selection` | base | **0.3.4** |
+| `number-input` | base | **0.3.7** |
+| `offline-state` | base | **0.3.4** |
+| `outline-border` | pro | **0.3.4** |
+| `pagination` | base | **0.3.4** |
+| `permission-state` | base | **0.3.4** |
+| `picker` | base | **0.3.4** |
+| `popover` | base | **0.3.4** |
+| `prism-glow` | pro | **0.6.0** |
+| `progress` | base | **0.3.4** |
+| `progress-bar` | base | **0.3.4** |
+| `prompt-bar` | ai | **0.3.9** |
+| `radio` | base | **0.3.4** |
+| `rating` | base | **0.3.4** |
+| `reasoning-disclosure` | ai | **0.3.9** |
+| `recommendation-card` | ai | **0.3.9** |
+| `resize-box` | pro | **0.3.9** |
+| `scroll` | base | **0.3.4** |
+| `scrub-field` | base | **0.3.9** |
+| `search-empty` | base | **0.3.4** |
+| `search-input` | base | **0.3.4** |
+| `search-panel` | pro | **0.3.9** |
+| `search-select` | base | **0.3.4** |
+| `segmented-slider` | base | **0.3.4** |
+| `select` | base | **0.3.4** |
+| `selection-actions` | base | **0.3.9** |
+| `sensitive-input` | base | **0.6.0** |
+| `sidebar-nav` | base | **0.3.9** |
+| `signal-meter` | pro | **0.3.9** |
+| `skeleton` | base | **0.3.4** |
+| `slider` | base | **0.3.4** |
+| `sortable-list` | base | **0.3.4** |
+| `sources` | ai | **0.3.9** |
+| `spark-chart` | pro | **0.3.9** |
+| `spinner` | base | **0.3.4** |
+| `splitter` | base | **0.3.4** |
+| `stack` | base | **0.3.4** |
+| `stagger` | pro | **0.3.4** |
+| `stat-card` | base | **0.3.4** |
+| `status-badge` | base | **0.3.4** |
+| `status-hint` | base | **0.6.0** |
+| `steps` | base | **0.3.4** |
+| `stream-markdown` | ai | **0.3.9** |
+| `suggestion-chips` | ai | **0.3.9** |
+| `switch` | base | **0.3.4** |
+| `tab-bar` | base | **0.3.4** |
+| `tabs` | base | **0.3.4** |
+| `tag` | base | **0.3.4** |
+| `tag-input` | base | **0.3.4** |
+| `task-rows` | ai | **0.3.9** |
+| `text-morph` | pro | **0.6.0** |
+| `text-transformer` | pro | **0.3.4** |
+| `textarea` | base | **0.3.7** |
+| `thinking-orb` | ai | **0.3.9** |
+| `timeline` | base | **0.3.4** |
+| `toast` | base | **0.3.4** |
+| `toast-panel` | base | **0.6.0** |
+| `tool-call-card` | ai | **0.3.9** |
+| `tool-chips` | ai | **0.3.9** |
+| `tool-confirmation` | ai | **0.3.9** |
+| `tooltip` | base | **0.3.4** |
+| `transfer` | base | **0.3.4** |
+| `transition` | pro | **0.3.4** |
+| `tree` | base | **0.3.4** |
+| `tree-select` | base | **0.3.4** |
+| `tuff-logo-stroke` | pro | **0.3.4** |
+| `version-capsule` | pro | **0.3.9** |
+| `virtual-list` | pro | **0.3.4** |
+| `working-indicator` | ai | **0.3.9** |

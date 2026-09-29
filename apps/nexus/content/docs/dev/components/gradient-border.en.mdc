@@ -3,7 +3,7 @@ title: "GradientBorder"
 description: "Animated gradient border wrapper for highlighting cards, hero panels, and callout containers."
 category: Effects
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [border, gradient, highlight]
 syncStatus: reviewed
 verified: true

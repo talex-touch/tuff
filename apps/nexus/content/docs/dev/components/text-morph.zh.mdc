@@ -3,7 +3,7 @@ title: "TextMorph 文本形变"
 description: "把字符串切成有身份的段再 diff，只让真正变化的部分动起来；数字按位值滚动，容器宽高与字符同曲线过渡，支持弹簧缓动与打断续跑。"
 category: Effects
 status: beta
-since: 2.4.14
+since: 0.6.0
 tags: [text, morph, number, spring, live-region]
 syncStatus: reviewed
 verified: true

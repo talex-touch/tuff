@@ -1,0 +1,187 @@
+---
+title: "VoiceBeam"
+description: "Audio-reactive glow along the bottom edge of the element it wraps, for voice input, dictation and post-speech processing"
+category: Effects
+status: beta
+since: 0.6.2
+tags: [voice, audio, glow, mic, dictation, waveform]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+`TxVoiceBeam` wraps exactly one element that carries its own corner radius, clips it, and paints a sound-reactive beam along its bottom edge. Feed it a `MediaStream` from the microphone, or drive it manually with `level`.
+
+:::TuffDemoWrapper{demo="VoiceBeamShowcaseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const colorMode = useColorMode()
+  const beamTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
+
+  // Without a microphone, drive the beam with a per-frame level getter.
+  const level = ref(0.5)
+  let raf = 0
+  let t = 0
+  function tick() {
+    t += 0.016
+    level.value = 0.35 + 0.32 * Math.abs(Math.sin(t * 1.7))
+    raf = requestAnimationFrame(tick)
+  }
+  raf = requestAnimationFrame(tick)
+  onBeforeUnmount(() => cancelAnimationFrame(raf))
+  </script>
+
+  <template>
+    <TxVoiceBeam :theme="beamTheme" :level="() => level" :border-radius="16">
+      <TxCard :radius="16" :padding="24" shadow="none">Ask anything…</TxCard>
+    </TxVoiceBeam>
+
+    <TxVoiceBeam :theme="beamTheme" :level="() => level" processing :border-radius="16">
+      <TxCard :radius="16" :padding="24" shadow="none">Transcribing…</TxCard>
+    </TxVoiceBeam>
+  </template>
+---
+:::
+
+### Microphone Input
+
+`useMicrophone()` produces the stream. It requests `getUserMedia` with echo cancellation, noise suppression and auto gain turned off, so the glow sees the real dynamics of the voice. Call `start()` from a click; browsers only grant the mic inside a user gesture.
+
+```vue
+<script setup lang="ts">
+import { useMicrophone } from '@talex-touch/tuffex/pro'
+
+const mic = useMicrophone()
+const live = computed(() => mic.state.value === 'live')
+</script>
+
+<template>
+  <TxVoiceBeam :stream="mic.stream.value" :processing="transcribing">
+    <TxCard :radius="16" :padding="24" shadow="none">Ask anything…</TxCard>
+  </TxVoiceBeam>
+  <TxButton :aria-pressed="live" @click="live ? mic.stop() : mic.start()">
+    {{ live ? 'Stop' : 'Listen' }}
+  </TxButton>
+</template>
+```
+
+### Types and Palettes
+
+`type` picks the host preset (`default` for a ~350 px chat input, `pill` for a recording pill, `mobile` for the bottom of a phone screen); every geometry prop still wins over it. `colorVariant` selects the palette and `colors` overrides individual lobes.
+
+```vue
+<template>
+  <TxVoiceBeam type="pill" color-variant="ocean" :scale="0.9">
+    <div class="pill">Recording…</div>
+  </TxVoiceBeam>
+
+  <TxVoiceBeam type="mobile" color-variant="candy" :level="() => 0.8">
+    <div class="screen">Listening</div>
+  </TxVoiceBeam>
+</template>
+```
+
+### Best Practices
+
+- Never rely on the glow as the only sign that the mic is live: keep a text status and a visible mic button state (`aria-pressed`), and announce changes with `role="status"`.
+- Pass a **getter** (`:level="() => meter.value"`), not a reactive number read 60 times a second — the getter is sampled once per frame with no re-render.
+- `stream` wins over `level`: a stream with an audio track always drives the beam.
+- Wrap exactly one element that carries the radius, and put content that must stay crisp at `position: relative; z-index: 5`. Anything with its own overlay (popovers, menus) inside the wrapped element gets clipped — portal it out.
+- Call `mic.stop()` when the voice UI closes; the composable only stops tracks on unmount.
+- Keep instances few. Each one runs blurred layers and a canvas; the component is not for dense lists.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `type` | `'default' \| 'pill' \| 'mobile'` | `'default'` | Host preset that seeds the geometry props. |
+| `stream` | `MediaStream \| null` | `null` | Live audio to react to; wins over `level`. |
+| `level` | `number \| () => number` | `0` | Manual drive (0-1) used when there is no stream. |
+| `sensitivity` | `number` | `3.1` | Input gain on the analysed audio. |
+| `threshold` | `number` | `0.015` | Noise gate (0-1); levels below it read as silence. |
+| `attack` | `number` | `0.325` | Seconds the glow takes to rise. |
+| `release` | `number` | `0.86` | Seconds the glow takes to settle. |
+| `idle` | `number` | `0.23` | Resting presence (0-1) so the beam never looks dead. |
+| `breatheDuration` | `number` | `5.2` | Period of the idle breathing in seconds. |
+| `reach` | `number` | `1.2` | How tall the glow grows at full level. |
+| `spread` | `number` | `1.05` | How far the glow widens at full level. |
+| `bands` | `boolean` | `true` | Let low / mid / high bands move the lobes independently. |
+| `flow` | `number` | `48` | Sideways travel of the spectrum in px/s at full level. |
+| `processing` | `boolean` | `false` | Gathers the glow into a travelling beam and holds it lit. |
+| `processingDuration` | `number` | `1.1` | Seconds for one pass of the processing beam. |
+| `processingLevel` | `number` | `0.55` | How lit the glow is held while processing. |
+| `processingEase` | `number` | `0.6` | Seconds of the morph in either direction. |
+| `processingTravel` | `number` | `1.55` | How far the processing beam travels to each side. |
+| `processingCurve` | `number` | `2.1` | How the sweep eases into each turn. |
+| `cornerFollow` | `number` | `0.45` | How much the glow rides the corner arcs while processing. |
+| `colorVariant` | `'colorful' \| 'mono' \| 'ocean' \| 'sunset' \| …` | `'colorful'` | Palette for the lobes. |
+| `colors` | `string[]` | none | Up to seven lobe colours, centre first. |
+| `bandColors` | `{ core?, above?, mid?, below? }` | theme defaults | Colours of the band's ridge and chromatic fringes. |
+| `theme` | `'dark' \| 'light' \| 'auto'` | `'dark'` | Background adaptation; `auto` follows the system preference. |
+| `staticColors` | `boolean` | `false` | Disables the slow hue drift. |
+| `hueRange` | `number` | `24` / `40` | Hue drift range in degrees. |
+| `hueDuration` | `number` | `12` / `8.5` | Period of the hue drift in seconds. |
+| `active` | `boolean` | `true` | Off fades the beam out and stops the audio analysis. |
+| `paused` | `boolean` | `false` | Freezes glow, band and analysis on their last frame. |
+| `borderRadius` | `number` | auto-detected | Corner radius in px. |
+| `brightness` / `saturation` | `number` | theme defaults | Glow multipliers. |
+| `glowSize` | `number` | `1` | Bloom blur radius multiplier. |
+| `strokeOpacity` / `innerOpacity` / `bloomOpacity` | `number` | `1` | Per-layer opacity multipliers. |
+| `scale` | `number` | `1` | Multiplies every pixel dimension at once. |
+| `bend`, `bandStrength`, `bandWidth`, `bandPosition`, `bandCurve`, `bandSpread`, `bandSkew`, `bandOffset`, `bandTail`, `bandTailPosition`, `bandTailCurve`, `bandTailOverflow`, `bandAberration` | `number` | tuned | Shape of the glow's contour and the band along it. |
+| `distortion`, `distortionDetail` | `number` | `0.62`, `2.3` | Horizontal warp of the light under the band line. |
+| `glowWidth`, `glowHeight`, `lobeSpacing`, `rangeWidth`, `rangeHeight`, `softness`, `coreSize`, `coreLight`, `coreLightWidth`, `coreLightHeight`, `strokeScale`, `innerScale`, `innerHeight`, `bloomScale`, `bloomHeight` | `number` | tuned | Lobes, visible range, core and halo geometry. |
+| `strength` | `number` | `1` | Overall effect opacity (0-1); the children are untouched. |
+| `css` | `string` | none | Extra CSS appended after the generated stylesheet; `{id}` is substituted per instance. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | The wrapped element; the beam layers render behind and above it. |
+
+### Events
+
+| Event | Payload | Description |
+|------|------|-------------|
+| `level` | `(level: number)` | Fired every frame with the smoothed level the beam is showing. |
+| `activate` | - | Fired when the fade-in completes. |
+| `deactivate` | - | Fired when the fade-out completes. |
+
+### Exposed Methods
+
+No public instance methods.
+
+### CSS Variables
+
+| Variable | Source | Description |
+|------|------|-------------|
+| `--voice-strength` | `strength` | Beam-layer opacity (0-1). |
+| `--voice-stroke-opacity` / `--voice-inner-opacity` / `--voice-bloom-opacity` | `strokeOpacity` / `innerOpacity` / `bloomOpacity` | Per-layer opacity multipliers. |
+
+## Overview
+
+- The component wraps its slot content and clips it to the child's `border-top-left-radius` (16 px when none is found), so the beam hugs the element edge.
+- One shared `requestAnimationFrame` loop drives every instance, capped at about 60 fps; an instance scrolled offscreen (256 px margin) unregisters and releases its analyser.
+- One `AudioContext` is shared per page, one source node per stream (reference-counted) and one analyser per instance. Audio is analysed, never played.
+- `prefers-reduced-motion: reduce` stops the idle breathing, the colour flow, the hue drift, the distortion warp and the processing sweep; the reaction to sound stays, since it is a meter.
+- Under `stream`, the analyser reads the RMS level plus three voice bands (80-300, 300-2000, 2000-6000 Hz).
+
+## Technologies
+
+- Manually verified against `index.ts`, `TxVoiceBeam.vue`, `types.ts` and `voice-beam.test.ts` under `packages/tuffex/packages/components/src/voice-beam/`.
+- `styles.ts`, `presets.ts`, `voice-driver.ts`, `audio.ts` and `color.ts` are verbatim ports of upstream `voice-glow` (MIT © Jakub Antalik) with strict-TS index hardening only; the Vue shell mirrors the upstream wrapper's fade lifecycle, offscreen pause and radius detection.
+- `useMicrophone` is the Vue port of the upstream React hook, with the same constraints and track lifecycle.
+
+- Component source: `packages/tuffex/packages/components/src/voice-beam/src/TxVoiceBeam.vue`.
+- Types: `packages/tuffex/packages/components/src/voice-beam/src/types.ts`.
+- Upstream: [Jakubantalik/Libraries · voice-glow](https://github.com/Jakubantalik/Libraries/tree/main/packages/voice-glow) (MIT).
+- **Coverage:** `packages/tuffex/packages/components/src/voice-beam/__tests__/voice-beam.test.ts` verifies preset resolution, unknown-type fallback, the microphone state machine and the manual-level path.
+
+<TuffDocSourceLink />

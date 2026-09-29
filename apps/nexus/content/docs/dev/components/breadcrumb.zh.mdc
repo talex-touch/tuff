@@ -3,7 +3,7 @@ title: "Breadcrumb 面包屑"
 description: "可访问的层级导航，支持条目图标、分隔符、href 链接与手动点击事件。"
 category: Navigation
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [breadcrumb, navigation, hierarchy]
 syncStatus: reviewed
 verified: true

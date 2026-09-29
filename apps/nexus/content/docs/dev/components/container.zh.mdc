@@ -3,7 +3,7 @@ title: Container 容器
 description: 容器组件是页面布局的基础，提供灵活的布局选项与响应式支持
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [container, layout, grid]
 syncStatus: reviewed
 verified: true

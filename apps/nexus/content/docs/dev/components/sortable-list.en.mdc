@@ -3,7 +3,7 @@ title: "SortableList"
 description: "Reorderable list where the carried row follows the pointer, the others spring aside, and it lands with a bounce — with stable IDs, optional handles, keyboard reordering, and a native drag mode for moves between lists."
 category: Data
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [sortable, drag-drop, list]
 syncStatus: reviewed
 verified: true

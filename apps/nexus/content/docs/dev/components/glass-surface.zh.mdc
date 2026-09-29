@@ -3,7 +3,7 @@ title: "GlassSurface 玻璃拟态"
 description: "带 SVG displacement、backdrop-filter 与纯色兜底路径的折射玻璃容器。"
 category: Effects
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [glass, blur, refraction]
 syncStatus: reviewed
 verified: true

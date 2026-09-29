@@ -1,7 +1,7 @@
 # PRD: Nexus Provider 聚合与 Scene 编排重构
 
-> 状态：Architecture PRD / Partial Implementation
-> 更新时间：2026-06-21
+> 状态：Implemented / Production DDL Pending
+> 更新时间：2026-09-28
 
 ## 1. 最终目标
 
@@ -26,20 +26,18 @@ Nexus 升级为统一 Provider 聚合中心：Provider 独立声明 `Capability`
 - Dashboard Admin 默认 seed：系统级本地 `custom-local-overlay` provider 与 `corebox.screenshot.translate` Scene。
 - 腾讯云 `text.translate` check 与图片翻译最小 adapter。
 - 汇率 `fx.rate.latest` / `fx.convert` Scene adapter，CoreBox 汇率预览与 `/api/exchange/*` Scene 优先链路。
-- Intelligence provider mirror 到通用 Provider Registry，能力归一为 `chat.completion` / `text.summarize` / `vision.ocr`。
-- Provider Registry check 对 AI mirror 执行 `chat.completion` / `vision.ocr` 探活并写入 health 历史。
-- OpenAI-compatible AI mirror 默认 `vision.ocr` adapter。
+- Provider Registry 已成为唯一 Provider 事实源；旧 `intelligence_providers` runtime、镜像桥与旧 CRUD/同步接口已删除。
+- Provider 显式声明 `metadata.adapterKey`，默认模型必须属于模型列表；Scene binding 持久化所选模型。
+- Generic invoke/stream、管理台 Chat、Docs Assistant 与 DashScope ASR 均从 Scene + Registry 解析渠道。
+- system scope 对已登录用户开放并统一扣 Credits；user scope 限 owner；workspace scope 未有权威身份时关闭失败。
 - composed capability 链式编排：`vision.ocr -> text.translate -> overlay.render`。
-- `provider_usage_ledger` 与 `provider_health_checks` 查询视图。
-- 最小策略路由：`priority/manual`、`least_cost`、`lowest_latency`、`balanced`。
+- `provider_usage_ledger`、`provider_health_checks`、Scene readiness/degraded reason 与安全串行 fallback 已落地。
 
-## 4. 未闭环
+## 4. 剩余运维闭环
 
-- 旧 `intelligence_providers` 表退场已纳入 Nexus Governance evidence 口径；后续以 `../04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md` 为准。
-- user-scope AI mirror OCR 自动绑定策略。
-- success rate、quota、dynamic pricingRef 成本估算等高级策略。
-- 真实 provider 端到端验证与生产配置检查。
-- 细化 Scene 级 metering/audit policy 与 Dashboard 可观测性。
+- 生产 D1 在备份与 Registry/Scene/credential readiness 门禁通过后，使用受保护脚本单独删除旧 `intelligence_providers` 表；应用启动不执行破坏性 DDL。
+- 对生产聚合上游执行一次真实 text.chat、text.translate、vision.ocr 与 audio.transcribe 验收及 Credits 对账。
+- success rate、quota、dynamic pricingRef 等高级自动策略不属于本次范围；Nexus 仅保留 Scene priority + 安全串行 fallback。
 
 ## 5. Scope / Non-goals
 
@@ -51,10 +49,10 @@ Nexus 升级为统一 Provider 聚合中心：Provider 独立声明 `Capability`
 
 ### Non-goals
 
-- 不重写 Intelligence runtime。
-- 不改变当前 Nexus 线上计费策略。
-- 不把 `overlay.render` 绑定为云端能力；它可以是本地 capability。
-- 不在 `2.4.10` 阶段抢占 Windows release evidence gate。
+- 不在 Nexus 内实现加权、随机、并发、成本或延迟负载均衡；聚合上游自行处理其内部负载。
+- 不改变当前 Nexus Credits 价格与支付策略。
+- 不把 `overlay.render` 变成云端能力；它保持本地 capability。
+- 不在应用启动时自动删除生产 D1 旧表。
 
 ## 6. 质量约束
 
@@ -66,13 +64,13 @@ Nexus 升级为统一 Provider 聚合中心：Provider 独立声明 `Capability`
 
 ## 7. 验收清单
 
-- [ ] Provider registry 支持新增/编辑/禁用/删除 provider 与 capability。
-- [ ] Scene 支持 binding、strategy、dry-run、execute。
-- [ ] Secret 不进入普通 DB metadata 或日志。
-- [ ] AI mirror、汇率、文本翻译、图片/截图翻译至少各有一条可复核路径。
-- [ ] Health / Usage ledger 可查询 latency、error、degraded reason 与 usage metadata。
-- [ ] 旧 AI provider 表退场方案明确，含迁移与回滚。
-- [ ] 最近路径 typecheck/test 通过或记录既有失败项。
+- [x] Provider registry 支持新增/编辑/禁用/删除 provider 与 capability。
+- [x] Scene 支持 binding model、priority、fallback、dry-run、execute 与 degraded readiness。
+- [x] Secret 只进入 secure store / `authRef`，不进入普通 metadata 或日志。
+- [x] AI、汇率、文本翻译、图片/截图翻译与 ASR 进入 Registry + Scene 路由。
+- [x] Health / Usage ledger 可查询 latency、稳定 error、degraded reason 与 usage metadata。
+- [x] 旧 AI Provider runtime、镜像桥、旧 CRUD/同步接口退场；生产 DROP 由单独受保护脚本执行。
+- [ ] 生产聚合上游真实调用与 Credits 对账完成。
 
 ## 8. 关联入口
 

@@ -3,7 +3,7 @@ title: "Select 选择器"
 description: "基于 Popover 的原始值选择器，支持单选、多选标签、本地过滤、远程搜索、自助创建、分组、图标与描述选项和自定义下拉内容。"
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [select, form, dropdown]
 syncStatus: reviewed
 verified: true

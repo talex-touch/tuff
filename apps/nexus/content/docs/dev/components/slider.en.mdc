@@ -3,7 +3,7 @@ title: "Slider"
 description: "Range input with value display and optional elastic tooltip feedback."
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [slider, form, input]
 syncStatus: reviewed
 verified: true

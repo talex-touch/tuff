@@ -3,7 +3,7 @@ title: Avatar 头像
 description: 用户头像、身份 fallback、状态点、自定义形状和叠放头像组。
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [avatar, identity, profile]
 syncStatus: reviewed
 verified: true

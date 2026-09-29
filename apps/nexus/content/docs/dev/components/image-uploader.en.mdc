@@ -3,7 +3,7 @@ title: "ImageUploader"
 description: "Controlled image picker with local previews, max-count limiting, remove controls, and object URL cleanup."
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [image, upload, form]
 syncStatus: reviewed
 verified: true

@@ -1,0 +1,1138 @@
+{
+  "$schema": "./components-lifecycle.schema.json",
+  "currentVersion": "0.6.2",
+  "totalComponents": 165,
+  "versions": [
+    {
+      "version": "0.6.2",
+      "date": "2026-09-28",
+      "title": "交互视觉特效套件 (Interactive Visual Effects Suite)",
+      "newComponents": [
+        "bot-avatar",
+        "image-generation",
+        "metal-fx",
+        "voice-beam"
+      ],
+      "updatedComponents": [
+        "card",
+        "empty-state",
+        "progress-bar",
+        "status-badge"
+      ],
+      "summary": "新增图像生成揭示、液态金属、语音光束与机器人头像组件，并增强进度条和后台数据容器。"
+    },
+    {
+      "version": "0.6.1",
+      "date": "2026-09-28",
+      "title": "操作反馈状态提示 (Operation Feedback Status Hint)",
+      "newComponents": [
+        "status-hint"
+      ],
+      "updatedComponents": [],
+      "summary": "新增 TxStatusHint 状态操作反馈组件，支持语气色带、文字形变、重复触发强调、减少动态效果偏好与无障碍 live region。"
+    },
+    {
+      "version": "0.6.0",
+      "date": "2026-09-12",
+      "title": "触感系统重构与视觉特效套件 (Tactile & Effects Refresh)",
+      "newComponents": [
+        "agent-screen",
+        "charts",
+        "choice-card",
+        "flowchart",
+        "fusion-surface",
+        "icon-morph",
+        "icon-picker",
+        "mode-chip",
+        "prism-glow",
+        "sensitive-input",
+        "text-morph",
+        "toast-panel"
+      ],
+      "updatedComponents": [
+        "alert",
+        "badge",
+        "cascader",
+        "date-picker",
+        "flat-radio",
+        "group-block",
+        "picker",
+        "progress-bar",
+        "slider",
+        "sortable-list",
+        "stream-markdown",
+        "tab-bar",
+        "text-transformer",
+        "toast",
+        "toast-panel",
+        "transfer",
+        "tree"
+      ],
+      "summary": "新增 TxTextMorph 字符形变、TxPrismGlow 棱镜光效、TxToastHost 堆叠通知栈，全面升级拖拽重排与日期范围选择。"
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-09-07",
+      "title": "交互反馈打磨与性能优化 (Interaction & Performance)",
+      "newComponents": [],
+      "updatedComponents": [
+        "card-item",
+        "dropdown-menu",
+        "filter-chips",
+        "slider",
+        "stream-markdown"
+      ],
+      "summary": "TxFilterChips 增加滑动填充与 icon-only 模式，浮层面板改为 transform 定位，优化交互 cursor 契约。"
+    },
+    {
+      "version": "0.4.0",
+      "date": "2026-09-01",
+      "title": "组件族收拢与架构解耦 (Architecture & Button Family Unification)",
+      "newComponents": [],
+      "updatedComponents": [
+        "button",
+        "icon"
+      ],
+      "summary": "收拢 button / icon 组件族，移除冗余子路径与 TuffFlatButton，文档与展示全面迁移 Nexus。"
+    },
+    {
+      "version": "0.3.9",
+      "date": "2026-06-12",
+      "title": "AI 原生套件与按需子路径样式 (AI Suite & On-Demand Subpaths)",
+      "newComponents": [
+        "agent-trace",
+        "ai-elements",
+        "allocation-bar",
+        "approval-card",
+        "attachment-tray",
+        "border-beam",
+        "cell-link",
+        "chain-of-thought",
+        "code-stream",
+        "context-cards",
+        "context-indicator",
+        "conversation-stream",
+        "diff-table",
+        "dot-indicator",
+        "filter-chips",
+        "fine-tune-card",
+        "flat-dropdown",
+        "icon-chip",
+        "inline-citation",
+        "insight-cards",
+        "liquid",
+        "markdown-editor",
+        "message-actions",
+        "prompt-bar",
+        "reasoning-disclosure",
+        "recommendation-card",
+        "resize-box",
+        "scrub-field",
+        "search-panel",
+        "selection-actions",
+        "sidebar-nav",
+        "signal-meter",
+        "sources",
+        "spark-chart",
+        "stream-markdown",
+        "suggestion-chips",
+        "task-rows",
+        "thinking-orb",
+        "tool-call-card",
+        "tool-chips",
+        "tool-confirmation",
+        "version-capsule",
+        "working-indicator"
+      ],
+      "updatedComponents": [
+        "base-anchor",
+        "base-surface",
+        "code-editor",
+        "empty-state",
+        "flip-overlay",
+        "radio",
+        "scroll",
+        "tabs"
+      ],
+      "summary": "新增 43 个 AI 与高阶视觉动效组件，支持 @talex-touch/tuffex/<component> 子路径按需导出与 base.css。"
+    },
+    {
+      "version": "0.3.8",
+      "date": "2026-05-29",
+      "title": "抽屉与分割线组件增强 (Drawer & Divider Enhancement)",
+      "newComponents": [],
+      "updatedComponents": [
+        "divider",
+        "drawer"
+      ],
+      "summary": "TxDrawer 支持四方向与全屏，TxDivider 支持渐变透明衰减模式。"
+    },
+    {
+      "version": "0.3.7",
+      "date": "2026-05-28",
+      "title": "基础录入与排版组件补齐 (Foundational Input & Layout Batch)",
+      "newComponents": [
+        "divider",
+        "kbd",
+        "number-input",
+        "textarea"
+      ],
+      "updatedComponents": [
+        "avatar",
+        "chat",
+        "flat-input",
+        "flat-radio",
+        "flat-select",
+        "flip-overlay",
+        "glass-surface",
+        "group-block",
+        "icon",
+        "input",
+        "scroll",
+        "slider",
+        "stagger",
+        "stat-card",
+        "tabs",
+        "transfer"
+      ],
+      "summary": "补齐 TxTextarea、TxNumberInput、TxDivider、TxKbd、TxTransfer 等基础输入组件并修复 SSR hydration 问题。"
+    },
+    {
+      "version": "0.3.4",
+      "date": "2026-03-08",
+      "title": "TuffEx 独立包初始基线 (Initial Standalone Baseline)",
+      "newComponents": [
+        "agents",
+        "alert",
+        "auto-sizer",
+        "avatar",
+        "badge",
+        "base-anchor",
+        "base-surface",
+        "blank-slate",
+        "breadcrumb",
+        "button",
+        "card",
+        "card-item",
+        "cascader",
+        "chat",
+        "checkbox",
+        "code-editor",
+        "collapse",
+        "command-palette",
+        "container",
+        "context-menu",
+        "corner-overlay",
+        "data-table",
+        "date-picker",
+        "dialog",
+        "drawer",
+        "dropdown-menu",
+        "edge-fade-mask",
+        "empty",
+        "empty-state",
+        "error-state",
+        "file-uploader",
+        "flat-input",
+        "flat-radio",
+        "flat-select",
+        "flex",
+        "flip-overlay",
+        "floating",
+        "form",
+        "fusion",
+        "glass-surface",
+        "glow-text",
+        "gradient-border",
+        "gradual-blur",
+        "grid",
+        "grid-layout",
+        "group-block",
+        "guide-state",
+        "icon",
+        "image-gallery",
+        "image-uploader",
+        "input",
+        "keyframe-stroke-text",
+        "layout-skeleton",
+        "loading-overlay",
+        "loading-state",
+        "markdown-view",
+        "modal",
+        "nav-bar",
+        "no-data",
+        "no-selection",
+        "offline-state",
+        "outline-border",
+        "pagination",
+        "permission-state",
+        "picker",
+        "popover",
+        "progress",
+        "progress-bar",
+        "radio",
+        "rating",
+        "scroll",
+        "search-empty",
+        "search-input",
+        "search-select",
+        "segmented-slider",
+        "select",
+        "skeleton",
+        "slider",
+        "sortable-list",
+        "spinner",
+        "splitter",
+        "stack",
+        "stagger",
+        "stat-card",
+        "status-badge",
+        "steps",
+        "switch",
+        "tab-bar",
+        "tabs",
+        "tag",
+        "tag-input",
+        "text-transformer",
+        "timeline",
+        "toast",
+        "tooltip",
+        "transfer",
+        "transition",
+        "tree",
+        "tree-select",
+        "tuff-logo-stroke",
+        "virtual-list"
+      ],
+      "updatedComponents": [],
+      "summary": "TuffEx 作为独立包建立初始导出基线，首批导出 101 个核心基础与交互组件。"
+    }
+  ],
+  "components": {
+    "agent-screen": {
+      "slug": "agent-screen",
+      "since": "0.6.0",
+      "suite": "ai"
+    },
+    "agent-trace": {
+      "slug": "agent-trace",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "agents": {
+      "slug": "agents",
+      "since": "0.3.4",
+      "suite": "ai"
+    },
+    "ai-elements": {
+      "slug": "ai-elements",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "alert": {
+      "slug": "alert",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "allocation-bar": {
+      "slug": "allocation-bar",
+      "since": "0.3.9",
+      "suite": "pro"
+    },
+    "approval-card": {
+      "slug": "approval-card",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "attachment-tray": {
+      "slug": "attachment-tray",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "auto-sizer": {
+      "slug": "auto-sizer",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "avatar": {
+      "slug": "avatar",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "badge": {
+      "slug": "badge",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "base-anchor": {
+      "slug": "base-anchor",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "base-surface": {
+      "slug": "base-surface",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "blank-slate": {
+      "slug": "blank-slate",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "border-beam": {
+      "slug": "border-beam",
+      "since": "0.3.9",
+      "suite": "pro"
+    },
+    "bot-avatar": {
+      "slug": "bot-avatar",
+      "since": "0.6.2",
+      "suite": "ai"
+    },
+    "breadcrumb": {
+      "slug": "breadcrumb",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "button": {
+      "slug": "button",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "card-item": {
+      "slug": "card-item",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "card": {
+      "slug": "card",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "charts": {
+      "slug": "charts",
+      "since": "0.6.0",
+      "suite": "pro"
+    },
+    "cascader": {
+      "slug": "cascader",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "cell-link": {
+      "slug": "cell-link",
+      "since": "0.3.9",
+      "suite": "base"
+    },
+    "chain-of-thought": {
+      "slug": "chain-of-thought",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "chat": {
+      "slug": "chat",
+      "since": "0.3.4",
+      "suite": "ai"
+    },
+    "checkbox": {
+      "slug": "checkbox",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "choice-card": {
+      "slug": "choice-card",
+      "since": "0.6.0",
+      "suite": "ai"
+    },
+    "code-editor": {
+      "slug": "code-editor",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "code-stream": {
+      "slug": "code-stream",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "collapse": {
+      "slug": "collapse",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "command-palette": {
+      "slug": "command-palette",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "container": {
+      "slug": "container",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "context-cards": {
+      "slug": "context-cards",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "context-indicator": {
+      "slug": "context-indicator",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "context-menu": {
+      "slug": "context-menu",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "conversation-stream": {
+      "slug": "conversation-stream",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "corner-overlay": {
+      "slug": "corner-overlay",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "data-table": {
+      "slug": "data-table",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "date-picker": {
+      "slug": "date-picker",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "dialog": {
+      "slug": "dialog",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "diff-table": {
+      "slug": "diff-table",
+      "since": "0.3.9",
+      "suite": "pro"
+    },
+    "divider": {
+      "slug": "divider",
+      "since": "0.3.7",
+      "suite": "base"
+    },
+    "dot-indicator": {
+      "slug": "dot-indicator",
+      "since": "0.3.9",
+      "suite": "base"
+    },
+    "drawer": {
+      "slug": "drawer",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "dropdown-menu": {
+      "slug": "dropdown-menu",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "edge-fade-mask": {
+      "slug": "edge-fade-mask",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "empty-state": {
+      "slug": "empty-state",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "empty": {
+      "slug": "empty",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "error-state": {
+      "slug": "error-state",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "file-uploader": {
+      "slug": "file-uploader",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "filter-chips": {
+      "slug": "filter-chips",
+      "since": "0.3.9",
+      "suite": "base"
+    },
+    "fine-tune-card": {
+      "slug": "fine-tune-card",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "flat-dropdown": {
+      "slug": "flat-dropdown",
+      "since": "0.3.9",
+      "suite": "base"
+    },
+    "flat-input": {
+      "slug": "flat-input",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "flat-radio": {
+      "slug": "flat-radio",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "flat-select": {
+      "slug": "flat-select",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "flex": {
+      "slug": "flex",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "flip-overlay": {
+      "slug": "flip-overlay",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "floating": {
+      "slug": "floating",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "flowchart": {
+      "slug": "flowchart",
+      "since": "0.6.0",
+      "suite": "ai"
+    },
+    "form": {
+      "slug": "form",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "fusion": {
+      "slug": "fusion",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "fusion-surface": {
+      "slug": "fusion-surface",
+      "since": "0.6.0",
+      "suite": "pro"
+    },
+    "glass-surface": {
+      "slug": "glass-surface",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "glow-text": {
+      "slug": "glow-text",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "gradient-border": {
+      "slug": "gradient-border",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "gradual-blur": {
+      "slug": "gradual-blur",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "grid-layout": {
+      "slug": "grid-layout",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "grid": {
+      "slug": "grid",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "group-block": {
+      "slug": "group-block",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "guide-state": {
+      "slug": "guide-state",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "icon-chip": {
+      "slug": "icon-chip",
+      "since": "0.3.9",
+      "suite": "base"
+    },
+    "icon-morph": {
+      "slug": "icon-morph",
+      "since": "0.6.0",
+      "suite": "pro"
+    },
+    "icon-picker": {
+      "slug": "icon-picker",
+      "since": "0.6.0",
+      "suite": "base"
+    },
+    "icon": {
+      "slug": "icon",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "image-gallery": {
+      "slug": "image-gallery",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "image-generation": {
+      "slug": "image-generation",
+      "since": "0.6.2",
+      "suite": "pro"
+    },
+    "image-uploader": {
+      "slug": "image-uploader",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "inline-citation": {
+      "slug": "inline-citation",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "input": {
+      "slug": "input",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "insight-cards": {
+      "slug": "insight-cards",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "kbd": {
+      "slug": "kbd",
+      "since": "0.3.7",
+      "suite": "base"
+    },
+    "keyframe-stroke-text": {
+      "slug": "keyframe-stroke-text",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "layout-skeleton": {
+      "slug": "layout-skeleton",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "liquid": {
+      "slug": "liquid",
+      "since": "0.3.9",
+      "suite": "pro"
+    },
+    "loading-overlay": {
+      "slug": "loading-overlay",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "loading-state": {
+      "slug": "loading-state",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "markdown-editor": {
+      "slug": "markdown-editor",
+      "since": "0.3.9",
+      "suite": "pro"
+    },
+    "markdown-view": {
+      "slug": "markdown-view",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "message-actions": {
+      "slug": "message-actions",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "metal-fx": {
+      "slug": "metal-fx",
+      "since": "0.6.2",
+      "suite": "pro"
+    },
+    "modal": {
+      "slug": "modal",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "mode-chip": {
+      "slug": "mode-chip",
+      "since": "0.6.0",
+      "suite": "ai"
+    },
+    "nav-bar": {
+      "slug": "nav-bar",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "no-data": {
+      "slug": "no-data",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "no-selection": {
+      "slug": "no-selection",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "number-input": {
+      "slug": "number-input",
+      "since": "0.3.7",
+      "suite": "base"
+    },
+    "offline-state": {
+      "slug": "offline-state",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "outline-border": {
+      "slug": "outline-border",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "pagination": {
+      "slug": "pagination",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "permission-state": {
+      "slug": "permission-state",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "picker": {
+      "slug": "picker",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "popover": {
+      "slug": "popover",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "prism-glow": {
+      "slug": "prism-glow",
+      "since": "0.6.0",
+      "suite": "pro"
+    },
+    "progress-bar": {
+      "slug": "progress-bar",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "progress": {
+      "slug": "progress",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "prompt-bar": {
+      "slug": "prompt-bar",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "radio": {
+      "slug": "radio",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "rating": {
+      "slug": "rating",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "reasoning-disclosure": {
+      "slug": "reasoning-disclosure",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "recommendation-card": {
+      "slug": "recommendation-card",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "resize-box": {
+      "slug": "resize-box",
+      "since": "0.3.9",
+      "suite": "pro"
+    },
+    "scroll": {
+      "slug": "scroll",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "scrub-field": {
+      "slug": "scrub-field",
+      "since": "0.3.9",
+      "suite": "base"
+    },
+    "search-empty": {
+      "slug": "search-empty",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "search-input": {
+      "slug": "search-input",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "search-panel": {
+      "slug": "search-panel",
+      "since": "0.3.9",
+      "suite": "pro"
+    },
+    "search-select": {
+      "slug": "search-select",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "segmented-slider": {
+      "slug": "segmented-slider",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "select": {
+      "slug": "select",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "selection-actions": {
+      "slug": "selection-actions",
+      "since": "0.3.9",
+      "suite": "base"
+    },
+    "sensitive-input": {
+      "slug": "sensitive-input",
+      "since": "0.6.0",
+      "suite": "base"
+    },
+    "sidebar-nav": {
+      "slug": "sidebar-nav",
+      "since": "0.3.9",
+      "suite": "base"
+    },
+    "signal-meter": {
+      "slug": "signal-meter",
+      "since": "0.3.9",
+      "suite": "pro"
+    },
+    "skeleton": {
+      "slug": "skeleton",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "slider": {
+      "slug": "slider",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "sortable-list": {
+      "slug": "sortable-list",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "sources": {
+      "slug": "sources",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "spark-chart": {
+      "slug": "spark-chart",
+      "since": "0.3.9",
+      "suite": "pro"
+    },
+    "spinner": {
+      "slug": "spinner",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "splitter": {
+      "slug": "splitter",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "stack": {
+      "slug": "stack",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "stagger": {
+      "slug": "stagger",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "stat-card": {
+      "slug": "stat-card",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "status-badge": {
+      "slug": "status-badge",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "status-hint": {
+      "slug": "status-hint",
+      "since": "0.6.1",
+      "suite": "base"
+    },
+    "steps": {
+      "slug": "steps",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "stream-markdown": {
+      "slug": "stream-markdown",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "suggestion-chips": {
+      "slug": "suggestion-chips",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "switch": {
+      "slug": "switch",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "tab-bar": {
+      "slug": "tab-bar",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "tabs": {
+      "slug": "tabs",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "tag-input": {
+      "slug": "tag-input",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "tag": {
+      "slug": "tag",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "task-rows": {
+      "slug": "task-rows",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "text-morph": {
+      "slug": "text-morph",
+      "since": "0.6.0",
+      "suite": "pro"
+    },
+    "text-transformer": {
+      "slug": "text-transformer",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "textarea": {
+      "slug": "textarea",
+      "since": "0.3.7",
+      "suite": "base"
+    },
+    "thinking-orb": {
+      "slug": "thinking-orb",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "timeline": {
+      "slug": "timeline",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "toast": {
+      "slug": "toast",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "toast-panel": {
+      "slug": "toast-panel",
+      "since": "0.6.0",
+      "suite": "base"
+    },
+    "tool-call-card": {
+      "slug": "tool-call-card",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "tool-chips": {
+      "slug": "tool-chips",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "tool-confirmation": {
+      "slug": "tool-confirmation",
+      "since": "0.3.9",
+      "suite": "ai"
+    },
+    "tooltip": {
+      "slug": "tooltip",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "transfer": {
+      "slug": "transfer",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "transition": {
+      "slug": "transition",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "tree-select": {
+      "slug": "tree-select",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "tree": {
+      "slug": "tree",
+      "since": "0.3.4",
+      "suite": "base"
+    },
+    "tuff-logo-stroke": {
+      "slug": "tuff-logo-stroke",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "version-capsule": {
+      "slug": "version-capsule",
+      "since": "0.3.9",
+      "suite": "pro"
+    },
+    "virtual-list": {
+      "slug": "virtual-list",
+      "since": "0.3.4",
+      "suite": "pro"
+    },
+    "voice-beam": {
+      "slug": "voice-beam",
+      "since": "0.6.2",
+      "suite": "pro"
+    },
+    "working-indicator": {
+      "slug": "working-indicator",
+      "since": "0.3.9",
+      "suite": "ai"
+    }
+  }
+}

@@ -3,7 +3,7 @@ title: NumberInput
 description: 带步进控制、范围限制与精度归一化的数字输入。
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.7
 tags: [number, input, form]
 syncStatus: reviewed
 verified: true

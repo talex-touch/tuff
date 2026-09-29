@@ -3,7 +3,7 @@ title: "Select"
 description: "Popover-backed primitive select with single select, multi-tag select, local filtering, remote search, creation, grouping, icon and description options, and custom dropdown content."
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [select, form, dropdown]
 syncStatus: reviewed
 verified: true

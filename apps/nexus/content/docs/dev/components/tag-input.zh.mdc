@@ -4,7 +4,7 @@ description: "用于快速录入标签，支持分隔符与回车确认。"
 category: Form
 syncStatus: reviewed
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [tag, input, form]
 verified: true
 ---

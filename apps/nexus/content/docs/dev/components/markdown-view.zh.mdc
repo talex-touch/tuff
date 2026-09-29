@@ -3,7 +3,7 @@ title: "MarkdownView Markdown 渲染"
 description: "基于 GitHub-flavored Markdown 的渲染组件，支持显式 sanitize 与亮/暗主题模式。"
 category: Data
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [markdown, sanitize, theme]
 syncStatus: reviewed
 verified: true

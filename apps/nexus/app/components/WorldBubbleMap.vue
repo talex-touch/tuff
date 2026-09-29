@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { TxCard } from '@talex-touch/tuffex/card'
+import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { computed, ref } from 'vue'
-
 interface Props {
   distribution: Record<string, number>
   maxCountries?: number
@@ -150,7 +151,7 @@ function clearActive() {
 </script>
 
 <template>
-  <div class="relative overflow-hidden rounded-xl bg-black/5 p-3 dark:bg-light/5">
+  <TxCard variant="plain" background="mask" :radius="14" :padding="12" class="relative overflow-hidden">
     <svg viewBox="0 0 1000 500" class="h-44 w-full">
       <defs>
         <linearGradient id="bubble" x1="0" x2="1" y1="0" y2="1">
@@ -185,7 +186,7 @@ function clearActive() {
           stroke="white"
           stroke-opacity="0.4"
           :stroke-width="activeCode === item.code ? 2 : 1"
-          class="cursor-pointer transition-all"
+          class="cursor-pointer transition-all duration-300 hover:opacity-90"
           @mouseenter="setActive(item.code)"
           @mouseleave="clearActive"
         />
@@ -194,23 +195,23 @@ function clearActive() {
 
     <div
       v-if="activeBubble"
-      class="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-lg border border-black/10 bg-white/90 px-3 py-2 text-xs text-black shadow-md backdrop-blur dark:border-white/10 dark:bg-black/70 dark:text-light"
+      class="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-xl border border-black/10 bg-white/95 px-3 py-2 text-xs text-black shadow-lg backdrop-blur-md dark:border-white/10 dark:bg-black/80 dark:text-light"
       :style="tooltipStyle"
     >
       <p class="font-semibold">
         {{ activeBubble.name }}
       </p>
-      <p class="text-[11px] text-black/60 dark:text-light/60">
+      <p class="font-mono text-[11px] text-black/60 dark:text-light/60">
         {{ activeBubble.count }} · {{ activeBubble.pct.toFixed(1) }}%
       </p>
     </div>
 
     <div class="mt-2 flex items-center justify-between text-[11px] text-black/50 dark:text-light/50">
-      <span class="flex items-center gap-1">
-        <span class="i-carbon-earth-americas text-xs" />
+      <span class="flex items-center gap-1.5 font-medium">
+        <span class="i-carbon-earth-americas text-xs text-blue-500" />
         Global distribution
       </span>
-      <span v-if="total">Total {{ total }}</span>
+      <TxStatusBadge v-if="total" :text="`Total ${total}`" status="info" size="sm" />
     </div>
-  </div>
+  </TxCard>
 </template>

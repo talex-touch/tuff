@@ -3,7 +3,7 @@ title: Tag 标签
 description: 用于分类、筛选、语义状态和可移除元数据的紧凑标签。
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [tag, label, badge]
 syncStatus: reviewed
 verified: true

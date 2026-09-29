@@ -111,6 +111,7 @@ function binding(capabilityName: string, priority: number): SceneRegistryRecord[
     sceneId: SCENE_ID,
     providerId: PROVIDER_ID,
     capability: capabilityName,
+    model: null,
     priority,
     weight: null,
     status: 'enabled',
@@ -438,7 +439,7 @@ describe('runSceneOrchestrator credit metering', () => {
 
     expect(failure).toMatchObject({
       statusCode: 502,
-      statusMessage: 'provider exploded',
+      statusMessage: 'Provider dispatch failed or acceptance is uncertain.',
       data: { code: 'PROVIDER_ADAPTER_FAILED' },
     })
     expect(failure.data.run.billing).toEqual({

@@ -3,7 +3,7 @@ title: Button
 description: Tactile button system with flat variants
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [action, tactile, primary]
 syncStatus: reviewed
 verified: true

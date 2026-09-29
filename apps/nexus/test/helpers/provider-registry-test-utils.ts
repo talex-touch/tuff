@@ -72,25 +72,6 @@ export interface GovernanceEventRow {
   created_at: string
 }
 
-export interface IntelligenceProviderRow {
-  id: string
-  user_id: string
-  type: string
-  name: string
-  enabled: number
-  api_key_encrypted: string | null
-  base_url: string | null
-  models: string | null
-  default_model: string | null
-  instructions: string | null
-  timeout: number
-  priority: number
-  rate_limit: string | null
-  capabilities: string | null
-  metadata: string | null
-  created_at: string
-  updated_at: string
-}
 
 class MockStatement {
   private args: any[] = []
@@ -124,15 +105,11 @@ export class MockD1Database {
   credentials = new Map<string, CredentialRow>()
   governanceConfigs = new Map<string, GovernanceConfigRow>()
   governanceEvents: GovernanceEventRow[] = []
-  intelligenceProviders = new Map<string, IntelligenceProviderRow>()
 
   prepare(sql: string) {
     return new MockStatement(this, sql)
   }
 
-  seedIntelligenceProvider(row: IntelligenceProviderRow) {
-    this.intelligenceProviders.set(row.id, row)
-  }
 
   run(sql: string, args: any[]) {
     if (sql.includes('CREATE TABLE') || sql.includes('CREATE INDEX')) {
@@ -422,16 +399,6 @@ export class MockD1Database {
     if (sql.includes('FROM provider_secure_store')) {
       return this.credentials.get(`${String(args[0])}:${String(args[1])}`) ?? null
     }
-    if (sql.includes('FROM intelligence_providers') && sql.includes('SELECT api_key_encrypted')) {
-      const row = this.intelligenceProviders.get(String(args[0]))
-      return row?.user_id === String(args[1])
-        ? { api_key_encrypted: row.api_key_encrypted }
-        : null
-    }
-    if (sql.includes('FROM intelligence_providers') && sql.includes('WHERE id = ? AND user_id = ?')) {
-      const row = this.intelligenceProviders.get(String(args[0]))
-      return row?.user_id === String(args[1]) ? row : null
-    }
     return null
   }
 
@@ -452,15 +419,6 @@ export class MockD1Database {
       return this.filterCapabilities(sql, args)
     }
 
-    if (sql.includes('FROM intelligence_providers')) {
-      const userId = String(args[0])
-      return [...this.intelligenceProviders.values()]
-        .filter(row => row.user_id === userId)
-        .sort((a, b) => {
-          const priorityDiff = a.priority - b.priority
-          return priorityDiff || a.created_at.localeCompare(b.created_at)
-        })
-    }
 
     return []
   }
@@ -572,31 +530,6 @@ export function makeProviderRegistryEvent() {
   }
 }
 
-export function seedOpenAiIntelligenceProvider(
-  db: MockD1Database,
-  overrides: Partial<IntelligenceProviderRow> = {},
-) {
-  db.seedIntelligenceProvider({
-    id: 'ip_local_dry_run',
-    user_id: 'admin-user-1',
-    type: 'openai',
-    name: 'OpenAI Main',
-    enabled: 1,
-    api_key_encrypted: 'encrypted-local-secret-placeholder',
-    base_url: 'https://api.openai.com/v1/',
-    models: JSON.stringify(['gpt-4.1-mini']),
-    default_model: 'gpt-4.1-mini',
-    instructions: null,
-    timeout: 30000,
-    priority: 20,
-    rate_limit: null,
-    capabilities: JSON.stringify(['text.chat', 'text.summarize']),
-    metadata: null,
-    created_at: '2026-05-17T00:00:00.000Z',
-    updated_at: '2026-05-17T00:00:00.000Z',
-    ...overrides,
-  })
-}
 
 export function tencentTranslateProviderBody() {
   return {
@@ -610,6 +543,7 @@ export function tencentTranslateProviderBody() {
     endpoint: 'https://tmt.tencentcloudapi.com',
     region: 'ap-shanghai',
     metadata: {
+      adapterKey: 'tencent-translation',
       prdScene: 'screenshot-translation',
     },
     capabilities: [

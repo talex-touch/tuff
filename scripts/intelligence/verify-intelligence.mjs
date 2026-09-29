@@ -51,7 +51,7 @@ function runParallel(groups) {
 function dev() {
   runParallel([
     ['pnpm', ['-C', 'packages/tuff-intelligence', 'exec', 'vitest', 'run', 'src/resolvers/intelligence-resolvers.test.ts']],
-    ['pnpm', ['-C', 'apps/nexus', 'exec', 'vitest', 'run', 'server/utils/intelligenceProviderRegistryBridge.test.ts', 'server/utils/tuffIntelligenceLabService.invoke.test.ts', 'server/utils/tuffIntelligenceAbilityAggregation.test.ts', 'server/utils/tuffIntelligenceProviderAdapters.test.ts', 'server/utils/__tests__/intelligence-agent-runtime-bridge.test.ts']],
+    ['pnpm', ['-C', 'apps/nexus', 'exec', 'vitest', 'run', 'server/utils/providerSceneSeed.test.ts', 'server/utils/sceneOrchestrator.test.ts', 'server/utils/sceneOrchestrator.billing.test.ts', 'server/utils/asrTranscriptionService.test.ts', 'server/utils/tuffIntelligenceLabService.invoke.test.ts', 'server/utils/tuffIntelligenceAbilityAggregation.test.ts', 'server/utils/tuffIntelligenceProviderAdapters.test.ts', 'server/utils/__tests__/intelligence-agent-runtime-bridge.test.ts']],
     ['pnpm', ['-C', 'apps/core-app', 'exec', 'vitest', 'run', 'src/main/modules/ai/intelligence-config.test.ts', 'src/main/modules/ai/intelligence-sdk.test.ts', 'src/main/modules/ai/intelligence-shared-resolver-contract.test.ts']],
   ])
 }
@@ -63,7 +63,7 @@ function changed() {
 
 function release() {
   run('pnpm', ['-C', 'packages/tuff-intelligence', 'exec', 'tsc', '--noEmit'])
-  run('pnpm', ['-C', 'apps/nexus', 'exec', 'vitest', 'run', 'server/utils/intelligenceProviderRegistryBridge.test.ts', 'server/utils/tuffIntelligenceLabService.invoke.test.ts', 'server/utils/tuffIntelligenceAbilityAggregation.test.ts', 'server/utils/tuffIntelligenceProviderAdapters.test.ts', 'server/utils/__tests__/intelligence-agent-graph-runner.test.ts', 'server/utils/__tests__/intelligence-agent-runtime-bridge.test.ts'])
+  run('pnpm', ['-C', 'apps/nexus', 'exec', 'vitest', 'run', 'server/utils/providerSceneSeed.test.ts', 'server/utils/sceneOrchestrator.test.ts', 'server/utils/sceneOrchestrator.billing.test.ts', 'server/utils/asrTranscriptionService.test.ts', 'server/utils/tuffIntelligenceLabService.invoke.test.ts', 'server/utils/tuffIntelligenceAbilityAggregation.test.ts', 'server/utils/tuffIntelligenceProviderAdapters.test.ts', 'server/utils/__tests__/intelligence-agent-graph-runner.test.ts', 'server/utils/__tests__/intelligence-agent-runtime-bridge.test.ts'])
   run('pnpm', ['-C', 'apps/core-app', 'exec', 'vitest', 'run', 'src/main/modules/ai/intelligence-config.test.ts', 'src/main/modules/ai/intelligence-sdk.test.ts', 'src/main/modules/ai/intelligence-shared-resolver-contract.test.ts'])
 }
 

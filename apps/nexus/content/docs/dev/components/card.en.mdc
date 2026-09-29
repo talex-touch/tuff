@@ -3,7 +3,7 @@ title: "Card"
 description: "Surface container with slots, material backgrounds, loading, clickable, inertial, and refraction modes."
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [card, surface, layout]
 syncStatus: reviewed
 verified: true

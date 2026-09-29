@@ -44,9 +44,6 @@ const props = defineProps<{
   provider: IntelligenceProviderConfig
   testResult?: TestResult | null
   isTesting?: boolean
-  isSyncingFromNexus?: boolean
-  syncMessage?: string
-  syncError?: string
 }>()
 
 const emits = defineEmits<{
@@ -55,7 +52,6 @@ const emits = defineEmits<{
   delete: []
   duplicate: []
   editBasic: []
-  syncNexus: []
 }>()
 
 const { t } = useI18n()
@@ -96,16 +92,6 @@ const nexusCallStateText = computed(() =>
     ? t('settings.intelligence.nexusInvokeAutoCall')
     : t('settings.intelligence.nexusInvokeFallback')
 )
-
-/**
- * The row's description carries the sync outcome rather than repeating the group's own copy —
- * the group header already says what a signed-in Nexus route does. Empty when there is nothing
- * to report, so `TuffBlockSlot` drops the line instead of reserving a blank one.
- */
-const nexusSyncResultText = computed(() => {
-  if (!isLoggedIn.value) return ''
-  return props.syncError || props.syncMessage || ''
-})
 
 watch(
   () => props.provider,
@@ -164,10 +150,6 @@ async function handleLogin() {
   await loginWithBrowser()
 }
 
-function handleSyncFromNexus() {
-  emits('syncNexus')
-}
-
 function handleToggleCliEnabled() {
   const next = !localProvider.value.enabled
   localProvider.value.enabled = next
@@ -198,13 +180,11 @@ function handleToggleCliEnabled() {
       >
         <TuffBlockSlot
           :title="nexusCallStateText"
-          :description="nexusSyncResultText"
           :default-icon="isLoggedIn ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'"
           :active-icon="isLoggedIn ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'"
           :active="isLoggedIn"
           :icon-size="18"
           class="nexus-status-slot"
-          :class="{ 'is-error': !!syncError }"
         >
           <TxButton
             v-if="!isLoggedIn"
@@ -218,25 +198,6 @@ function handleToggleCliEnabled() {
           >
             <i v-if="!authLoadingState.isLoggingIn" class="i-carbon-login" aria-hidden="true" />
             <span>{{ t('settings.intelligence.nexusInvokeLoginAction') }}</span>
-          </TxButton>
-          <TxButton
-            v-else
-            class="nexus-status__action"
-            variant="flat"
-            size="sm"
-            native-type="button"
-            :disabled="isSyncingFromNexus"
-            :loading="isSyncingFromNexus"
-            @click.stop="handleSyncFromNexus"
-          >
-            <i v-if="!isSyncingFromNexus" class="i-carbon-cloud-download" aria-hidden="true" />
-            <span>
-              {{
-                isSyncingFromNexus
-                  ? t('settings.intelligence.syncingFromNexus')
-                  : t('settings.intelligence.syncFromNexus')
-              }}
-            </span>
           </TxButton>
         </TuffBlockSlot>
       </TuffGroupBlock>

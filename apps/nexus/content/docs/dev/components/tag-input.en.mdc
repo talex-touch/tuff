@@ -4,7 +4,7 @@ description: "Input component for quickly adding tags with separators and Enter 
 category: Form
 syncStatus: reviewed
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [tag, input, form]
 verified: true
 ---

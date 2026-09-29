@@ -3,7 +3,7 @@ title: "TextTransformer"
 description: "Short-text transition helper: morphs per character through the text-morph engine by default (numbers roll by place value), and keeps the original whole-string blur crossfade as a mode, with a scoped text slot."
 category: Effects
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [text, transition, autosize, live-region]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: Modal 模态框
 description: 基于 Teleport 的轻量对话框，适合短阻塞任务，支持焦点恢复、Escape/遮罩关闭和头尾插槽。
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [modal, dialog, overlay]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: "TreeSelect"
 description: "Tree-backed select control with single and multiple selection, search, clear, and Popover placement controls."
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [tree-select, form, hierarchy]
 syncStatus: reviewed
 verified: true

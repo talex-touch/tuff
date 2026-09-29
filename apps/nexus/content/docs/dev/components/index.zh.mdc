@@ -19,6 +19,7 @@ Tuffex（`@talex-touch/tuffex`）是服务 Talex Touch 生态的 Vue 3 组件库
 
 - 交互标本：每个套件页开头都有一块组件预览——《[基础套件](./base-suite.zh.mdc)》《[进阶套件](./pro-suite.zh.mdc)》《[AI 套件](./ai-suite.zh.mdc)》《[数据套件](./data-suite.zh.mdc)》《[流程套件](./flow-suite.zh.mdc)》——每个格子都是可交互的真实组件，点名称直达文档。
 - 分套件引入：`@talex-touch/tuffex/base`、`/pro`、`/ai` 三个分类入口按需加载；图表族在同包的 `@talex-touch/tuffex/charts` 子路径下。
+- 版本演进与变更日志：详见《[组件变更历程](./changelog.zh.mdc)》，记录每个组件的引入版本（Since xx）、每次发版更新的组件清单与版本门禁。
 
 ## Design Foundations 设计基础
 
@@ -269,6 +270,9 @@ code: |
 - [FusionSurface 融合表面](./fusion-surface.zh.mdc)
 - [Liquid 液态流体](./liquid.zh.mdc)
 - [FlipOverlay 翻转遮罩](./flip-overlay.zh.mdc)
+- [ImageGeneration 生图占位](./image-generation.zh.mdc)
+- [MetalFx 液态金属](./metal-fx.zh.mdc)
+- [VoiceBeam 语音光束](./voice-beam.zh.mdc)
 
 ### 底层原语
 
@@ -306,6 +310,7 @@ AI 原生界面组件族，部分移植自 [Beautiful UI](https://www.beautifulu
 - [ToolConfirmation 工具授权](./tool-confirmation.zh.mdc)
 - [ApprovalCard 澄清问卷卡](./approval-card.zh.mdc)
 - [WorkingIndicator 工作指示器](./working-indicator.zh.mdc)
+- [BotAvatar 机器人头像](./bot-avatar.zh.mdc)
 
 ### 推理与生成
 

@@ -1,0 +1,162 @@
+---
+title: "BotAvatar"
+description: "Animated canvas bot avatars for agents and assistants, with idle and working states, pointer play and per-type bodies"
+category: AiAgent
+status: beta
+since: 0.6.2
+tags: [avatar, agent, bot, animation, canvas]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+`TxBotAvatar` draws a glossy bot on a 2D canvas. Drive `state` from the agent's real status: `working` while it streams or runs, `default` when idle.
+
+:::TuffDemoWrapper{demo="BotAvatarShowcaseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const working = ref(true)
+  const TYPES = ['clover', 'flower', 'star', 'ghost', 'mech', 'circle', 'hexagon', 'square']
+  </script>
+
+  <template>
+    <TxBotAvatar
+      v-for="type in TYPES"
+      :key="type"
+      :type="type"
+      :state="working ? 'working' : 'default'"
+      :size="64"
+    />
+
+    <TxBotAvatar type="clover" :size="96" />
+    <TxBotAvatar type="clover" :size="32" />
+
+    <TxSwitch v-model="working" />
+  </template>
+---
+:::
+
+### In a chat reply
+
+```vue
+<template>
+  <div class="msg msg--bot">
+    <TxBotAvatar type="clover" :state="streaming ? 'working' : 'default'" :size="32" />
+    <div class="msg-body">
+      {{ streaming ? 'Thinking…' : content }}
+    </div>
+  </div>
+</template>
+```
+
+### Agent roster
+
+One body per agent, each showing whether it is busy. Instances offset their blink timing so a row never blinks in unison.
+
+```vue
+<template>
+  <ul class="roster">
+    <li v-for="agent in agents" :key="agent.id">
+      <TxBotAvatar :type="agent.avatar" :state="agent.busy ? 'working' : 'default'" :size="32" aria-hidden />
+      <span>{{ agent.name }}</span>
+      <span class="muted">{{ agent.status }}</span>
+    </li>
+  </ul>
+</template>
+```
+
+### Still avatar in a settings card
+
+```vue
+<template>
+  <TxBotAvatar type="hexagon" :size="96" paused />
+</template>
+```
+
+### Best Practices
+
+- Set `size`, never `width` / `height` / `margin` in `style` or a class — those override the overscan box and the negative margins, and the avatar shifts or crops.
+- The canvas is drawn 1.5× the `size` box and pulls itself back, so a hop or flip goes outside the layout box. Leave room above the avatar; a tight parent with `overflow: hidden` crops the jump.
+- Map your own statuses: `running` / `streaming` / `pending` / `busy` → `working`; `idle` / `ready` / `online` → `default`; `offline` / `away` / `disabled` → `default` with `paused`.
+- When the agent's name and status are already shown as text beside the avatar, mark it decorative with `aria-hidden`.
+- An unknown `state` falls back to `default` silently; an unknown `type` falls back to the palette default.
+- These are bots, not people: use a photo or initials for human avatars.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `type` | `'clover' \| 'flower' \| 'star' \| 'ghost' \| 'mech' \| 'circle' \| 'hexagon' \| 'square'` | `'clover'` | Body shape; each has its own palette colour. |
+| `face` | `BotAvatarFace` | type's own | Face kind. |
+| `state` | `'default' \| 'working' \| 'sleeping'` | `'default'` | Idle (looks around, blinks, occasional jump) or working (hops, spins, smiles). |
+| `size` | `number \| string` | `64` | Layout size of the avatar box; also accepts any CSS length. |
+| `color` | `string` | type palette | Body colour. |
+| `ink` | `string` | auto | Face ink; dark by default, light on a dark body. |
+| `brightness` / `saturation` | `number` | `1` / `1.5` | Lightness and vividness of the body colour. |
+| `speed` | `number` | `1` | Multiplier on every animation. |
+| `paused` | `boolean` | `false` | Freezes the animation on its current frame. |
+| `seed` | `number` | derived from instance | Offsets blink and glance timing so a row does not blink in unison. |
+| `shading` | `'plastic' \| 'crisp' \| 'smooth' \| 'flat' \| boolean` | `'plastic'` | How the body is lit; `true` is `crisp`, `false` is `flat`. |
+| `shadow` / `highlight` | `number` | `0.35` / `1.3` | Strength of the shadow and lit side. |
+| `depth` | `number` | `0.65` | Thickness of the body, 0.2-2. |
+| `light` | `number` | `265` | Light direction in degrees clockwise from the top. |
+| `rim` | `number` | `0.5` | Lit rim width (crisp) or Fresnel strength (plastic). |
+| `spread` | `number` | `1.55` | Reach of the soft shading or width of the highlight. |
+| `interactive` | `boolean` | `true` | Eyes and head follow a nearby pointer; a click makes it hop and turn. |
+| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | The surface the avatar sits on; `auto` reads an ancestor `data-theme` attribute or class, then the OS. |
+| `turn` | `number` | `1` | How far the head turns side to side while idle. |
+| `whirl` | `number` | `0` | Strength of the whirl ring round a spin. |
+| `whirlSize` / `whirlWidth` / `whirlLength` / `whirlTilt` | `number` | `1` | Whirl ring geometry. |
+| `jumpHeight` | `number` | `26` | How high a jump goes, in body units (the body is 100 tall). |
+| `jumpTime` | `number` | `0.68` | Seconds a jump spends in the air. |
+| `jumpStretch` / `jumpSquash` | `number` | `1` / `1.15` | Stretch in the air and squash on the ground. |
+| `jumpSquashTime` / `jumpSquashEase` / `jumpGroundTime` / `jumpGroundEase` / `jumpRiseTime` / `jumpRiseEase` | — | tuned | Landing squash shape, hold and rise. |
+| `jumpClickSquashTime` | `number` | `0.24` | Landing squash time for a click's jump. |
+| `jumpSpin` | `number` | `1` | Whole turns made in the air. |
+| `jumpLean` | `number` | `6` | Degrees of lean into a jump. |
+| `jumpEvery` | `number` | `8` | Seconds between idle jumps, ±40%; `0` disables them. |
+| `jumpLand` | `number` | `0` | When the landing squash begins relative to touch-down (seconds). |
+
+### Slots
+
+None. The avatar is a single canvas.
+
+### Events
+
+No component events. `click`, `pointerenter` and every other DOM handler pass straight through to the canvas.
+
+### Exposed Methods
+
+No public instance methods.
+
+### CSS Variables
+
+None. Colours come from props.
+
+## Overview
+
+- The canvas has `role="img"` and a per-state `aria-label` ("Clover bot, idle" / "Clover bot, working"); pass your own `aria-label` to replace it.
+- Every other attribute is passed straight to the `<canvas>`, so `class`, `style`, `data-*` and event handlers work as usual.
+- One shared `requestAnimationFrame` loop serves every avatar; each leaves it when scrolled offscreen (`IntersectionObserver`) and the loop stops while the tab is hidden.
+- Device pixel ratio is capped at 2. The default look is a per-pixel material whose form is baked on idle time the first time a body type appears; a softer look stands in for those frames.
+- `prefers-reduced-motion: reduce` draws the still pose of the current state and starts no loop. The media query is read at render time, not watched live.
+- State changes are cross-animated, so toggling `state` on every token or tool call is safe.
+
+## Technologies
+
+- Manually verified against `index.ts`, `TxBotAvatar.vue`, `types.ts` and `bot-avatar.test.ts` under `packages/tuffex/packages/components/src/bot-avatar/`.
+- `engine.ts`, `draw.ts`, `plastic.ts`, `color.ts`, `ticker.ts`, `presets.ts` and `shapes.ts` are verbatim ports of upstream `bot-avatars` (MIT © Jakub Antalik) with strict-TS index hardening only.
+- The Vue shell mirrors the upstream React component's canvas lifecycle, overscan box, shared ticker and pointer interaction. The upstream package also ships React Native and SwiftUI ports; those are out of scope here.
+
+- Component source: `packages/tuffex/packages/components/src/bot-avatar/src/TxBotAvatar.vue`.
+- Types: `packages/tuffex/packages/components/src/bot-avatar/src/types.ts`.
+- Upstream: [Jakubantalik/Libraries · bot-avatars](https://github.com/Jakubantalik/Libraries/tree/main/packages/bot-avatars) (MIT).
+- **Coverage:** `packages/tuffex/packages/components/src/bot-avatar/__tests__/bot-avatar.test.ts` verifies the type/shape presets, state fallback, size parsing, colour helpers, the per-state label and the paused path.
+
+<TuffDocSourceLink />

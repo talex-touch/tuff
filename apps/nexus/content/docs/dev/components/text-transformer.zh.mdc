@@ -3,7 +3,7 @@ title: "TextTransformer 文本变换"
 description: "短文本变化组件：默认走文本形变引擎逐字 diff（数字按位值滚动），也保留原来的 fade + blur 整串交叉淡化模式，暴露 scoped text slot。"
 category: Effects
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [text, transition, autosize, live-region]
 syncStatus: reviewed
 verified: true

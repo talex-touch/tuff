@@ -3,7 +3,7 @@ title: ProgressBar
 description: Determinate, indeterminate, segmented, and stateful progress feedback.
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [progress, bar, loading]
 syncStatus: reviewed
 verified: true

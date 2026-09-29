@@ -16,7 +16,7 @@
  * the one thing here that still needs maintaining, and it is short enough to see.
  */
 
-export type * from "@talex-touch/utils/types/intelligence";
+export type * from '@talex-touch/utils/types/intelligence'
 
 export {
   DEFAULT_CAPABILITIES,
@@ -30,5 +30,4 @@ export {
   NEXUS_AUDIO_TRANSCRIBE_MODEL,
   PI_CLI_PROVIDER_ID,
   TUFF_INTELLIGENCE_AGENT_TRACE_CONTRACT_VERSION,
-  TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION
-} from "@talex-touch/utils/types/intelligence";
+} from '@talex-touch/utils/types/intelligence'

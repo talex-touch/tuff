@@ -1,12 +1,9 @@
 <script setup lang="ts">
 definePageMeta({
-  layout: 'admin',
-  requiresAuth: true,
+  redirect: '/admin/users',
 })
 
 defineI18nRoute(false)
-
-await navigateTo('/admin/users', { replace: true })
 </script>
 
 <template>

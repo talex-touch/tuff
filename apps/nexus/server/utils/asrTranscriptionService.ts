@@ -18,7 +18,8 @@ import {
   type DashScopeQwenAudioAsrAdapter,
   type DashScopeQwenAudioAsrTranscription,
 } from './dashscopeAsrProvider'
-import { getProviderRegistryEntry, listProviderRegistryEntries } from './providerRegistryStore'
+import { getProviderRegistryEntry } from './providerRegistryStore'
+import { resolveCapabilitySceneId, resolveSceneProviderCandidates } from './sceneOrchestrator'
 import {
   ASR_AUDIO_MAX_BYTES,
   calculateFiletransCredits,
@@ -77,22 +78,37 @@ function asClientResponse(request: AsrRequestRecord, transcript?: string): AsrTr
   }
 }
 
-async function resolveDashScopeAsrProvider(event: H3Event) {
-  const providers = await listProviderRegistryEntries(event, { vendor: 'dashscope', status: 'enabled' })
-  const candidates = providers.filter(
-    provider =>
-      provider.authType === 'api_key' &&
-      Boolean(provider.authRef) &&
-      provider.capabilities.some(capability => capability.capability === 'audio.transcribe'),
-  )
-  const [candidate] = candidates
-  if (candidates.length !== 1 || !candidate) throw createAsrServiceError('ASR_ROUTE_UNAVAILABLE', 503)
-  const provider = assertDashScopeProvider(candidate)
-  const transport = resolveDashScopeAsrTransport(provider)
-  if (!transport) throw createAsrServiceError('ASR_PROVIDER_CONFIGURATION_INVALID', 503)
-  const model = resolveDashScopeAsrModel(provider, transport)
-  if (!model) throw createAsrServiceError('ASR_PROVIDER_CONFIGURATION_INVALID', 503)
-  return { provider, transport, model }
+async function resolveDashScopeAsrProvider(event: H3Event, userId: string) {
+  const resolution = await resolveSceneProviderCandidates(event, {
+    sceneId: resolveCapabilitySceneId('audio.transcribe'),
+    capability: 'audio.transcribe',
+    ownerId: userId,
+  })
+  let invalidConfiguration = false
+  for (const candidate of resolution.candidates) {
+    if (!candidate.adapterKey.startsWith('dashscope-'))
+      continue
+    try {
+      const provider = assertDashScopeProvider(candidate.provider)
+      const transport = resolveDashScopeAsrTransport(provider)
+      if (!transport) {
+        invalidConfiguration = true
+        continue
+      }
+      const model = candidate.model ?? resolveDashScopeAsrModel(provider, transport)
+      if (!model) {
+        invalidConfiguration = true
+        continue
+      }
+      return { provider, transport, model }
+    }
+    catch {
+      invalidConfiguration = true
+      // Invalid provider configuration is a safe pre-dispatch rejection. Try the
+      // next scene binding; accepted or uncertain dispatches are fenced below.
+    }
+  }
+  throw createAsrServiceError(invalidConfiguration ? 'ASR_PROVIDER_CONFIGURATION_INVALID' : 'ASR_ROUTE_UNAVAILABLE', 503)
 }
 function resolveHandoffUrl(event: H3Event, requestId: string, deliveryToken: string): string {
   const configuredOrigin = useRuntimeConfig(event).auth?.origin
@@ -364,7 +380,7 @@ export async function startAsrTranscription(
   const existing = await getAsrRequestByIdempotency(event, requestIdentity)
   if (existing) return await resumeExistingAsrRequest(event, existing)
 
-  const route = await resolveDashScopeAsrProvider(event)
+  const route = await resolveDashScopeAsrProvider(event, userId)
   if (route.transport === QWEN_AUDIO_ASR_TRANSPORT) {
     if (durationSeconds > QWEN_AUDIO_ASR_MAX_DURATION_SECONDS)
       throw createAsrServiceError('ASR_AUDIO_DURATION_UNSUPPORTED', 400)
