@@ -10,6 +10,23 @@ type LocaleSource = 'profile' | 'cookie' | 'browser' | 'manual'
 
 const LOG_PREFIX = '[i18n/orchestrator]'
 
+/**
+ * SSR runs this composable for every render, so an unconditional `console.info` here
+ * wrote one identical line per request — 16,654 of them in one dev log whose only
+ * traffic was the supervisor's health probe. Report each (runtime, source, locale)
+ * resolution once per process and drop the repeats.
+ */
+const loggedLocaleResolutions = new Set<string>()
+
+function logLocaleInitialized(source: LocaleSource, locale: SupportedLocale, extra?: Record<string, unknown>) {
+  const key = `${import.meta.server ? 'server' : 'client'}:${source}:${locale}`
+  if (loggedLocaleResolutions.has(key))
+    return
+
+  loggedLocaleResolutions.add(key)
+  console.info(`${LOG_PREFIX} initialized`, { source, locale, ...extra })
+}
+
 let localeSetQueue: Promise<void> = Promise.resolve()
 let localeInitQueue: Promise<SupportedLocale | null> | null = null
 
@@ -195,11 +212,7 @@ export function useLocaleOrchestrator() {
     clientInitDone.value = true
     initDone.value = true
 
-    console.info(`${LOG_PREFIX} initialized`, {
-      source,
-      locale: target,
-      clientReconciled: true,
-    })
+    logLocaleInitialized(source, target, { clientReconciled: true })
 
     return target
   }
@@ -237,10 +250,7 @@ export function useLocaleOrchestrator() {
       if (import.meta.client)
         clientInitDone.value = true
 
-      console.info(`${LOG_PREFIX} initialized`, {
-        source,
-        locale: target,
-      })
+      logLocaleInitialized(source, target)
 
       return target
     })()

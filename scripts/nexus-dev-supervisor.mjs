@@ -14,6 +14,20 @@
  *     (default 4600 MB ≈ ~2.8 GB V8 heap) so the fatal GC-thrash window never hits;
  *   - restarts it when it stops answering HTTP for a few consecutive checks
  *     (covers the "process alive, port dark / serving 503 forever" zombie state);
+ *   - checks liveness against a static file instead of rendering the app root. Every
+ *     SSR render in dev grows the process's *native* memory by 2-4.6 MB and gives none
+ *     of it back to the OS, so probing `/` was itself what ratcheted an idle server
+ *     into the RSS ceiling after 4-6 hours (one such idle session's log held 16,654
+ *     `[i18n/orchestrator] initialized` lines whose only source was this probe).
+ *     Measured 2026-09-29, Nuxt 4.4.8 / Vite 7.3.6, RSS over 60-render blocks: `/`
+ *     4.6 MB, `/docs/...` 4.1 MB, `/privacy` 3.3 MB, `/pricing` 2.0 MB per render —
+ *     against 26 KB for `/favicon.ico` and 80 KB for an API route. It is *not* a JS
+ *     leak: with `HeapProfiler.collectGarbage` the used heap held at 671 MB across 300
+ *     renders, while `vmmap` attributed the growth to V8's app-specific tag and malloc
+ *     regions. `/` is still rendered at startup and once every `--deep-probe-every`
+ *     checks, so a broken render path is caught too, just minutes later than a dark
+ *     port would be — at the default 15-minute cadence that is ~96 renders/day
+ *     (~0.3 GB/day) instead of 4 renders/minute.
  *   - reclaims the port from a stale listener of the same app before listening;
  *   - reaps orphaned `workerd` / esbuild helpers left by previous incarnations;
  *   - rotates the log file so a long-lived server cannot fill the disk.
@@ -29,6 +43,9 @@
  *   --rss-limit <mb>     proactive restart threshold for the whole tree (default 4600)
  *   --log <file>         log file (default /tmp/nexus-dev-<port>.log)
  *   --health-interval <s> health probe period (default 15)
+ *   --liveness-path <path> static path used for the periodic check (default /favicon.ico)
+ *   --deep-probe-every <n> render the app root once every n checks; 0 = startup only
+ *                        (default 60 = one render every 15 min at the default cadence)
  *   --unhealthy-limit <n> consecutive failed probes before restart (default 4)
  *   --startup-timeout <s> how long a fresh child may take to answer (default 300)
  *   --cloudflare-env <e> CLOUDFLARE_DEV_ENVIRONMENT (default preview)
@@ -54,6 +71,8 @@ const healthIntervalS = Number(opts['health-interval'] ?? 15)
 const unhealthyLimit = Number(opts['unhealthy-limit'] ?? 4)
 const startupTimeoutS = Number(opts['startup-timeout'] ?? 300)
 const cloudflareEnv = opts['cloudflare-env'] ?? 'preview'
+const livenessPath = opts['liveness-path'] ?? '/favicon.ico'
+const deepProbeEvery = Number(opts['deep-probe-every'] ?? 60)
 const once = opts.once === true
 
 const nuxtBin = join(appDir, 'node_modules/nuxt/bin/nuxt.mjs')
@@ -292,29 +311,44 @@ function reapOrphans() {
 /**
  * The dev server binds the IPv6 loopback only (`[::1]`), so probe every loopback
  * spelling — remembering the one that worked so a healthy check stays cheap.
+ *
+ * Liveness fetches `livenessPath` rather than the app root, because rendering `/` costs
+ * RSS this dev server never releases (see the header). Any answer below 500 counts: the
+ * point is "the server is routing", and a missing static file must not read as a hang.
  */
 let healthyBase = null
-async function probe(base) {
-  try {
-    const res = await fetch(base, { signal: AbortSignal.timeout(5000) })
-    return res.status < 400
-  }
-  catch {
-    return false
-  }
-}
+let checksSinceRender = 0
 
-async function httpServing() {
+async function fetchOnSomeBase(path, acceptable) {
   const bases = [`http://localhost:${port}/`, `http://[::1]:${port}/`, `http://127.0.0.1:${port}/`]
   const ordered = healthyBase ? [healthyBase, ...bases.filter(base => base !== healthyBase)] : bases
   for (const base of ordered) {
-    if (await probe(base)) {
-      healthyBase = base
-      return true
+    try {
+      const res = await fetch(`${base}${path}`, { signal: AbortSignal.timeout(5000) })
+      if (acceptable(res.status)) {
+        healthyBase = base
+        return true
+      }
     }
+    catch {}
   }
   healthyBase = null
   return false
+}
+
+const livenessServing = () => fetchOnSomeBase(livenessPath, status => status < 500)
+
+/** The app root must actually render — a 404/503 there is a dev server nobody can use. */
+const renderServing = () => fetchOnSomeBase('', status => status < 400)
+
+async function httpServing({ deep = false } = {}) {
+  if (!(await livenessServing()))
+    return false
+  checksSinceRender += 1
+  if (!deep && !(deepProbeEvery > 0 && checksSinceRender >= deepProbeEvery))
+    return true
+  checksSinceRender = 0
+  return await renderServing()
 }
 
 /** Runs one incarnation and resolves with the reason it must be replaced. */
@@ -328,15 +362,15 @@ async function supervise(proc) {
   while (Date.now() < startupDeadline) {
     if (exit)
       return `exited during startup (${exit})`
-    if (await httpServing())
+    if (await httpServing({ deep: true }))
       break
     await sleepMs(2000)
   }
   if (exit)
     return `exited during startup (${exit})`
-  if (!(await httpServing()))
+  if (!(await httpServing({ deep: true })))
     return `never served within ${startupTimeoutS}s`
-  log(`up on http://localhost:${port}/ (heap ceiling ${heapMb} MB, restart at ${rssLimitMb} MB RSS)`)
+  log(`up on http://localhost:${port}/ (heap ceiling ${heapMb} MB, restart at ${rssLimitMb} MB RSS, liveness ${livenessPath} every ${healthIntervalS}s, app root every ${deepProbeEvery} checks)`)
 
   let unhealthy = 0
   while (!isStopping()) {
