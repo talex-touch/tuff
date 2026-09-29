@@ -14,6 +14,7 @@ import {
   FileAddedEvent,
   FileChangedEvent,
   FileWatchRootRecoveredEvent,
+  FileWatchSubtreeInvalidatedEvent,
   FileUnlinkedEvent,
   TalexEvents,
   touchEventBus
@@ -23,6 +24,7 @@ import {
   PermissionStatus,
   platformPermissionService
 } from '../../system/platform-permission-service'
+import { MacOSFileWatcher } from './macos-file-watcher'
 
 const isMac = process.platform === 'darwin'
 const MAC_PHOTOS_LIBRARY_MARKER = 'Photos Library.photoslibrary'
@@ -61,10 +63,11 @@ function isExcludedFileWatchPath(watchPath: string): boolean {
 export class FileSystemWatcherModule extends BaseModule {
   static key: symbol = Symbol.for('FileSystemWatcher')
   name: ModuleKey = FileSystemWatcherModule.key
-  private watchers: Map<number, chokidar.FSWatcher> = new Map()
+  private watchers: Map<number, chokidar.FSWatcher | MacOSFileWatcher> = new Map()
   private watchedPaths: Set<string> = new Set()
   private pendingPaths: Map<string, PendingPath> = new Map()
   private pendingAdditions: Set<string> = new Set()
+  private destroyed = false
 
   // Bound so the same reference is used for both on() and off().
   private readonly handlePermissionsRefreshed = (): Promise<string[]> => this.tryPendingPaths()
@@ -100,7 +103,7 @@ export class FileSystemWatcherModule extends BaseModule {
     return this.pendingPaths.size > 0
   }
 
-  private getOrCreateWatcher(depth: number): chokidar.FSWatcher {
+  private getOrCreateWatcher(depth: number): chokidar.FSWatcher | MacOSFileWatcher {
     if (this.watchers.has(depth)) {
       return this.watchers.get(depth)!
     }
@@ -124,46 +127,74 @@ export class FileSystemWatcherModule extends BaseModule {
         pollInterval: FILE_WATCH_POLL_INTERVAL_MS
       }
     }
-    // Chokidar 4 removed its FSEvents backend and opens one fs.watch descriptor per discovered
-    // file. Keep v4 on Windows/Linux, but use the v3 FSEvents adapter for macOS directory trees.
-    const newWatcher = (isMac
-      ? chokidarFsevents.watch([], options)
-      : chokidar.watch([], options)) as unknown as chokidar.FSWatcher
+    const newWatcher =
+      isMac && depth === FILE_SCAN_MAX_DEPTH
+        ? new MacOSFileWatcher({
+            depth,
+            ignored: options.ignored,
+            stabilityThresholdMs: FILE_WATCH_STABILITY_THRESHOLD_MS,
+            pollIntervalMs: FILE_WATCH_POLL_INTERVAL_MS
+          })
+        : ((isMac
+            ? chokidarFsevents.watch([], options)
+            : chokidar.watch([], options)) as unknown as chokidar.FSWatcher)
 
-    newWatcher
-      .on('add', (filePath: string) => {
-        fileSystemWatcherLog.debug(`Raw 'add' event from chokidar for path: ${filePath}`)
-        touchEventBus.emit(TalexEvents.FILE_ADDED, new FileAddedEvent(filePath))
-      })
-      .on('addDir', (dirPath: string) => {
-        fileSystemWatcherLog.debug(`Raw 'addDir' event from chokidar for path: ${dirPath}`)
-        touchEventBus.emit(TalexEvents.DIRECTORY_ADDED, new DirectoryAddedEvent(dirPath))
-      })
-      .on('change', (filePath: string) => {
-        fileSystemWatcherLog.debug(`Raw 'change' event from chokidar for path: ${filePath}`)
-        touchEventBus.emit(TalexEvents.FILE_CHANGED, new FileChangedEvent(filePath))
-      })
-      .on('unlink', (filePath: string) => {
-        fileSystemWatcherLog.debug(`Raw 'unlink' event from chokidar for path: ${filePath}`)
-        touchEventBus.emit(TalexEvents.FILE_UNLINKED, new FileUnlinkedEvent(filePath))
-      })
-      .on('unlinkDir', (dirPath: string) => {
-        fileSystemWatcherLog.debug(`Raw 'unlinkDir' event from chokidar for path: ${dirPath}`)
-        touchEventBus.emit(TalexEvents.DIRECTORY_UNLINKED, new DirectoryUnlinkedEvent(dirPath))
-      })
-      .on('ready', () => {
-        fileSystemWatcherLog.debug(`Watcher with depth ${depth} is ready.`)
-      })
-      .on('error', (error: unknown) => {
-        const errorCode = (error as { code?: string }).code
-        if (errorCode === 'EPERM' || errorCode === 'EACCES') {
-          fileSystemWatcherLog.info(
-            `Permission-limited watcher ${depth}, path will be retried when available`
-          )
-          return
-        }
-        fileSystemWatcherLog.error(`Watcher error with depth ${depth}`, { error })
-      })
+    const eventSource = newWatcher as unknown as {
+      on: (event: string, handler: (...args: never[]) => void) => void
+    }
+    eventSource.on(
+      'invalidate',
+      (event: {
+        path: string
+        rootPath: string
+        reason: 'directory-change' | 'event-loss' | 'overflow' | 'symlink-change'
+      }) => {
+        if (this.destroyed) return
+        touchEventBus.emit(
+          TalexEvents.FILE_WATCH_SUBTREE_INVALIDATED,
+          new FileWatchSubtreeInvalidatedEvent(event.path, event.rootPath, event.reason)
+        )
+      }
+    )
+
+    eventSource.on('add', (filePath: string) => {
+      if (this.destroyed) return
+      fileSystemWatcherLog.debug(`Raw 'add' event from chokidar for path: ${filePath}`)
+      touchEventBus.emit(TalexEvents.FILE_ADDED, new FileAddedEvent(filePath))
+    })
+    eventSource.on('addDir', (dirPath: string) => {
+      if (this.destroyed) return
+      fileSystemWatcherLog.debug(`Raw 'addDir' event from chokidar for path: ${dirPath}`)
+      touchEventBus.emit(TalexEvents.DIRECTORY_ADDED, new DirectoryAddedEvent(dirPath))
+    })
+    eventSource.on('change', (filePath: string) => {
+      if (this.destroyed) return
+      fileSystemWatcherLog.debug(`Raw 'change' event from chokidar for path: ${filePath}`)
+      touchEventBus.emit(TalexEvents.FILE_CHANGED, new FileChangedEvent(filePath))
+    })
+    eventSource.on('unlink', (filePath: string) => {
+      if (this.destroyed) return
+      fileSystemWatcherLog.debug(`Raw 'unlink' event from chokidar for path: ${filePath}`)
+      touchEventBus.emit(TalexEvents.FILE_UNLINKED, new FileUnlinkedEvent(filePath))
+    })
+    eventSource.on('unlinkDir', (dirPath: string) => {
+      if (this.destroyed) return
+      fileSystemWatcherLog.debug(`Raw 'unlinkDir' event from chokidar for path: ${dirPath}`)
+      touchEventBus.emit(TalexEvents.DIRECTORY_UNLINKED, new DirectoryUnlinkedEvent(dirPath))
+    })
+    eventSource.on('ready', () => {
+      fileSystemWatcherLog.debug(`Watcher with depth ${depth} is ready.`)
+    })
+    eventSource.on('error', (error: unknown) => {
+      const errorCode = (error as { code?: string }).code
+      if (errorCode === 'EPERM' || errorCode === 'EACCES') {
+        fileSystemWatcherLog.info(
+          `Permission-limited watcher ${depth}, path will be retried when available`
+        )
+        return
+      }
+      fileSystemWatcherLog.error(`Watcher error with depth ${depth}`, { error })
+    })
 
     this.watchers.set(depth, newWatcher)
     return newWatcher
@@ -174,7 +205,7 @@ export class FileSystemWatcherModule extends BaseModule {
    * Returns the list of paths that were successfully added.
    */
   public async tryPendingPaths(): Promise<string[]> {
-    if (this.pendingPaths.size === 0) {
+    if (this.destroyed || this.pendingPaths.size === 0) {
       return []
     }
 
@@ -185,6 +216,7 @@ export class FileSystemWatcherModule extends BaseModule {
       if (await this.hasAccess(path)) {
         try {
           await this.addPathInternal(path, pending.depth)
+          if (this.destroyed) return recovered
           this.pendingPaths.delete(path)
           recovered.push(path)
           touchEventBus.emit(
@@ -220,19 +252,29 @@ export class FileSystemWatcherModule extends BaseModule {
    * Internal method to add path to watcher (assumes permission check passed)
    */
   private async addPathInternal(p: string, depth: number): Promise<void> {
+    if (this.destroyed) return
     const watcher = this.getOrCreateWatcher(depth)
-    watcher.add(p)
+    await watcher.add(p)
+    if (this.destroyed) return
     this.watchedPaths.add(p)
     fileSystemWatcherLog.info(`Now watching path: ${p} with depth: ${depth}`)
   }
 
   public async addPath(p: string, depth: number = isMac ? 1 : 4): Promise<void> {
-    if (this.watchedPaths.has(p) || this.pendingAdditions.has(p)) {
+    if (this.destroyed || this.watchedPaths.has(p) || this.pendingAdditions.has(p)) {
       fileSystemWatcherLog.debug(`Path already being watched: ${p}`)
       return
     }
     this.pendingAdditions.add(p)
 
+    try {
+      await this.registerPath(p, depth)
+    } finally {
+      this.pendingAdditions.delete(p)
+    }
+  }
+
+  private async registerPath(p: string, depth: number): Promise<void> {
     try {
       if (isMac && p.includes(MAC_PHOTOS_LIBRARY_MARKER)) {
         fileSystemWatcherLog.info(`Skip restricted photos library path: ${p}`)
@@ -251,7 +293,7 @@ export class FileSystemWatcherModule extends BaseModule {
 
     // Check access permissions silently -- never show system dialogs on startup
     if (!(await this.hasAccess(p))) {
-      this.pendingPaths.set(p, { path: p, depth })
+      if (!this.destroyed) this.pendingPaths.set(p, { path: p, depth })
       fileSystemWatcherLog.info(`No access to ${p}, silently queued for later`)
       return
     }
@@ -264,15 +306,13 @@ export class FileSystemWatcherModule extends BaseModule {
       const errorCode = (error as { code?: string }).code
       const errorMessage = error instanceof Error ? error.message : String(error)
       if (errorCode === 'EPERM' || errorCode === 'EACCES') {
-        this.pendingPaths.set(p, { path: p, depth })
+        if (!this.destroyed) this.pendingPaths.set(p, { path: p, depth })
         fileSystemWatcherLog.info(
           `Permission denied for ${p}, added to pending queue: ${errorMessage}`
         )
       } else {
         throw error
       }
-    } finally {
-      this.pendingAdditions.delete(p)
     }
   }
 
@@ -299,7 +339,8 @@ export class FileSystemWatcherModule extends BaseModule {
     )
   }
 
-  onDestroy(): void {
+  async onDestroy(): Promise<void> {
+    this.destroyed = true
     fileSystemWatcherLog.info('Destroying...')
 
     touchEventBus.off(TalexEvents.PERMISSIONS_REFRESHED, this.handlePermissionsRefreshed)
@@ -311,12 +352,10 @@ export class FileSystemWatcherModule extends BaseModule {
     this.pendingPaths.clear()
 
     // Close all watchers
-    this.watchers.forEach((watcher, depth) => {
-      watcher.close()
-      fileSystemWatcherLog.info(`Watcher with depth ${depth} stopped.`)
-    })
+    await Promise.all(Array.from(this.watchers.values(), (watcher) => watcher.close()))
     this.watchers.clear()
     this.watchedPaths.clear()
+    this.pendingAdditions.clear()
   }
 }
 

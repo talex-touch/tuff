@@ -100,6 +100,12 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   `message` verbatim; classification degrades class → code → message because IPC
   strips identity.
 
+- [file-watcher-subtree-contracts.md](file-watcher-subtree-contracts.md)
+  — deep macOS watcher registration without recursive startup enumeration,
+  logical/canonical path handling, bounded settled file events, typed subtree
+  invalidation, scoped high-water reconciliation, and awaited shutdown; records
+  the remaining live-host evidence limits.
+
 ## Quality Check
 
 Before committing main-process DB changes:

@@ -38,6 +38,7 @@ import type * as schema from '../../../../db/schema'
 import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
 import type { FileIndexSettings, ScannedFileInfo } from './types'
+import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-constants'
 import type { IndexWorkerFileResult } from './workers/file-index-worker-client'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -54,7 +55,6 @@ import {
   IndexedWriteFlushSnapshotService,
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
-  IndexedWriteRuntimeEmitterService,
   mapIndexedFileSourceRecord,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
@@ -128,10 +128,9 @@ import {
   normalizeWatchPath
 } from './services/file-provider-path-service'
 import { FileProviderWatchService } from './services/file-provider-watch-service'
-import {
-  FileProviderOpenerService,
-  type ResolvedOpener
-} from './services/file-provider-opener-service'
+import { FILE_WATCH_SUBTREE_RECONCILE_REASON } from './services/file-watch-subtree-service'
+import { FileProviderWatchSubtreeReconcileService } from './services/file-provider-watch-subtree-reconcile-service'
+import { FileProviderOpenerService } from './services/file-provider-opener-service'
 import {
   FileProviderIncrementalQueueService,
   type FileProviderIncrementalAction,
@@ -415,6 +414,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly enableFileIconExtraction =
     (process.env.TALEX_FILE_PROVIDER_EXTRACT_ICONS ?? 'true').toLowerCase() !== 'false'
   private readonly watchService: FileProviderWatchService
+  private readonly watchSubtreeReconcileService: FileProviderWatchSubtreeReconcileService
   private readonly openerService: FileProviderOpenerService
   private readonly indexRuntimeService: FileProviderIndexRuntimeService
   private readonly integrityService: FileProviderIntegrityService
@@ -539,12 +539,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     logInfo: (message, meta) => this.logInfo(message, meta),
     logWarn: (message, error, meta) => this.logWarn(message, error, meta)
   })
-  private readonly watchRuntimeEmitter =
-    new IndexedWriteRuntimeEmitterService<IndexedFileSourceRecordRow>({
-      sourceId: this.id,
-      mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
-      getPath: (record) => record.path
-    })
 
   constructor() {
     this.baseWatchPaths = resolveFileProviderBaseWatchPaths({
@@ -564,7 +558,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.watchService = new FileProviderWatchService({
       baseWatchPaths: this.baseWatchPaths,
       getDbUtils: () => this.dbUtils,
-      getWatchDepthForPath: (watchPath) => this.getWatchDepthForPath(watchPath),
+      getWatchDepthForPath: resolveWatchDepthForPath,
       normalizePath: (rawPath) => this.normalizePath(rawPath),
       runAutoIndexing: () => this.runAutoIndexing(),
       logDebug: (message, meta) => this.logDebug(message, meta),
@@ -713,6 +707,25 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       updateRecords: (records) => this._processFileUpdates(records, 10),
       logDebug: (message, meta) => this.logDebug(message, meta),
       logInfo: (message, meta) => this.logInfo(message, meta)
+    })
+    this.watchSubtreeReconcileService = new FileProviderWatchSubtreeReconcileService({
+      sourceId: this.id,
+      getDbUtils: () => this.dbUtils,
+      getWatchPaths: () => this.watchPaths,
+      isShuttingDown: () => this.shuttingDown,
+      ensureFileSystemWatchers: () => this.ensureFileSystemWatchers(),
+      isWithinWatchRoots: (rawPath) => this.isWithinWatchRoots(rawPath),
+      getWatchDepthForPath: resolveWatchDepthForPath,
+      incrementalWriteService: this.incrementalWriteService,
+      mapFileToIndexedSourceRecord: (record) => this.mapFileToIndexedSourceRecord(record),
+      scanDirectoryBatchesWithWorker: (dirPath, excludePathsSet, signal, onStats, options) =>
+        this.scanDirectoryBatchesWithWorker(dirPath, excludePathsSet, signal, onStats, options),
+      buildFileRecord: (rawPath, options) => this.buildFileRecord(rawPath, options),
+      handleIncrementalDeletes: (paths, applyRuntime) =>
+        this.handleIncrementalDeletes(paths, applyRuntime),
+      handleIncrementalAddsOrChanges: (entries, options) =>
+        this.handleIncrementalAddsOrChanges(entries, options),
+      deleteReconciledRecords: (records) => this.deleteReconciledRecords(records)
     })
     this.writeSideEffectService = new FileProviderWriteSideEffectService({
       processFileExtensions: (files) => this.processFileExtensions(files),
@@ -2456,6 +2469,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     request: IndexedSourceReconcileRequest
   ): Promise<IndexedSourceReconcileResult> {
     if (this.shuttingDown) throw new Error('FILE_PROVIDER_SHUTTING_DOWN')
+    if (request.reason === FILE_WATCH_SUBTREE_RECONCILE_REASON) {
+      return await this.watchSubtreeReconcileService.reconcile(request)
+    }
     const startedAt = Date.now()
     await this.ensureFileSystemWatchers()
     const deltas: IndexedSourceDelta[] = []
@@ -2487,32 +2503,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   public async handleIndexedSourceWatchEvent(
     event: IndexedSourceWatchEvent
   ): Promise<IndexedSourceDelta[]> {
-    if (this.shuttingDown) return []
-    if (!this.isWithinWatchRoots(event.path)) return []
-
-    if (event.action === 'delete') {
-      const deleted = await this.handleIncrementalDeletes([event.path], false)
-      if (deleted.deletedPaths.length === 0) return []
-      return [
-        this.watchRuntimeEmitter.buildDeleteDelta(event.path, {
-          reason: 'file-provider-watch-delete'
-        })
-      ]
-    }
-
-    await this.handleIncrementalAddsOrChanges(
-      [[event.path, { action: event.action, rawPath: event.path }]],
-      { dispatchSideEffects: false }
-    )
-    const record = await this.buildFileRecord(event.path)
-    return record
-      ? [
-          this.watchRuntimeEmitter.buildDelta(record, {
-            action: event.action,
-            reason: 'file-provider-watch-event'
-          })
-        ]
-      : []
+    return await this.watchSubtreeReconcileService.handleWatchEvent(event)
   }
 
   private toTimestamp(value: Date | number | string | null | undefined): number | null {
@@ -2643,7 +2634,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
 
       try {
-        return await this.getOpenerForExtension(extension)
+        return await this.openerService.getOpenerForExtension(extension)
       } catch (error) {
         this.logError('Failed to resolve opener for extension', error, {
           extension
@@ -2972,7 +2963,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     if (this.watchPathsRegistered) {
       try {
-        await FileSystemWatcher.addPath(watchPath, this.getWatchDepthForPath(watchPath))
+        await FileSystemWatcher.addPath(watchPath, resolveWatchDepthForPath(watchPath))
       } catch (error) {
         this.logWarn('Failed to register extra watch path', error, { path: watchPath })
       }
@@ -3015,7 +3006,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     dirPath: string,
     excludePathsSet?: Set<string>,
     signal?: AbortSignal,
-    onStats?: (stats: FileScanRunStats) => void
+    onStats?: (stats: FileScanRunStats) => void,
+    options?: FileScanOptions
   ): AsyncIterable<ScannedFileInfo[]> {
     await appTaskGate.waitForIdle()
     let yielded = false
@@ -3025,7 +3017,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         excludePathsSet,
         500,
         signal,
-        onStats
+        onStats,
+        options
       )) {
         yielded = true
         yield batch
@@ -3036,7 +3029,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.logWarn('File scan worker failed before its first batch; using direct scan', error, {
         path: dirPath
       })
-      yield* this.scanDirectoryBatchesDirectStream(dirPath, excludePathsSet, signal, onStats)
+      yield* this.scanDirectoryBatchesDirectStream(
+        dirPath,
+        excludePathsSet,
+        signal,
+        onStats,
+        options
+      )
     }
   }
 
@@ -3044,7 +3043,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     dirPath: string,
     excludePathsSet?: Set<string>,
     signal?: AbortSignal,
-    onStats?: (stats: FileScanRunStats) => void
+    onStats?: (stats: FileScanRunStats) => void,
+    options?: FileScanOptions
   ): AsyncIterable<ScannedFileInfo[]> {
     const controller = new AbortController()
     const abort = (): void => controller.abort(signal?.reason)
@@ -3073,7 +3073,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         consumerWake?.()
       },
       excludePathsSet,
-      undefined,
+      options,
       controller.signal,
       500
     )
@@ -3291,14 +3291,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         mutationLeaseId
       })
     }
-  }
-
-  private async getOpenerForExtension(rawExtension: string): Promise<ResolvedOpener | null> {
-    return this.openerService.getOpenerForExtension(rawExtension)
-  }
-
-  private getWatchDepthForPath(watchPath: string): number {
-    return resolveWatchDepthForPath(watchPath)
   }
 
   private normalizePath(p: string): string {
@@ -3634,8 +3626,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     options?: { manualForce?: boolean }
   ): Promise<typeof filesSchema.$inferInsert | null> {
     try {
-      const stats = await fs.stat(rawPath)
-      if (!stats.isFile()) return null
+      const stats = await fs.lstat(rawPath)
+      if (stats.isSymbolicLink() || !stats.isFile()) return null
 
       const manualForce = options?.manualForce === true
       const name = path.basename(rawPath)
