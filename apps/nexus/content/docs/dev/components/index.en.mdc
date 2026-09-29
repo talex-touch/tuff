@@ -269,6 +269,9 @@ Rich interaction, visual effects and low-level primitives, importable through th
 - [FusionSurface](./fusion-surface.en.mdc)
 - [Liquid](./liquid.en.mdc)
 - [FlipOverlay](./flip-overlay.en.mdc)
+- [ImageGeneration](./image-generation.en.mdc)
+- [MetalFx](./metal-fx.en.mdc)
+- [VoiceBeam](./voice-beam.en.mdc)
 
 ### Primitives
 
@@ -306,6 +309,7 @@ AI-native interface components, partly adapted from [Beautiful UI](https://www.b
 - [ToolConfirmation](./tool-confirmation.en.mdc)
 - [ApprovalCard](./approval-card.en.mdc)
 - [WorkingIndicator](./working-indicator.en.mdc)
+- [BotAvatar](./bot-avatar.en.mdc)
 
 ### Reasoning
 

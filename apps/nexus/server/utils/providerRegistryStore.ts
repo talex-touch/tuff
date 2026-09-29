@@ -4,6 +4,11 @@ import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 import { normalizeProviderAuthRef } from './providerCredentialStore'
+import {
+  isKnownSceneCapabilityAdapterKey,
+  normalizeSceneCapabilityAdapterKey,
+  sceneCapabilityAdapterSupports,
+} from './sceneCapabilityAdapterRegistry'
 
 const PROVIDERS_TABLE = 'provider_registry'
 const CAPABILITIES_TABLE = 'provider_capabilities'
@@ -305,6 +310,66 @@ function normalizeOptionalJsonObject(value: unknown, field: string): { data: Rec
 
   return { data: value as Record<string, unknown>, json }
 }
+function normalizeProviderModels(value: unknown): string[] {
+  if (value == null)
+    return []
+  if (!Array.isArray(value)) {
+    throw createError({ statusCode: 400, statusMessage: 'metadata.models must be an array.' })
+  }
+
+  const seen = new Set<string>()
+  return value.map((item, index) => {
+    const model = assertNonEmptyString(item, `metadata.models[${index}]`, 160)
+    if (seen.has(model)) {
+      throw createError({ statusCode: 400, statusMessage: `metadata.models[${index}] is duplicated.` })
+    }
+    seen.add(model)
+    return model
+  })
+}
+
+function normalizeProviderMetadata(
+  value: unknown,
+  capabilities: NormalizedProviderCapabilityInput[],
+): { data: Record<string, unknown> | null, json: string | null } {
+  const raw = normalizeOptionalJsonObject(value, 'metadata')
+  const data = raw.data ? { ...raw.data } : {}
+  const adapterKey = normalizeSceneCapabilityAdapterKey(data.adapterKey)
+    ?? normalizeSceneCapabilityAdapterKey(data.adapter)
+
+  if (capabilities.length > 0 && !adapterKey) {
+    throw createError({ statusCode: 400, statusMessage: 'metadata.adapterKey is required when capabilities are configured.' })
+  }
+  if (adapterKey && !isKnownSceneCapabilityAdapterKey(adapterKey)) {
+    throw createError({ statusCode: 400, statusMessage: 'metadata.adapterKey is not registered.' })
+  }
+  if (adapterKey) {
+    const unsupported = capabilities.find(capability => !sceneCapabilityAdapterSupports(adapterKey, capability.capability))
+    if (unsupported) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `metadata.adapterKey does not support capability ${unsupported.capability}.`,
+      })
+    }
+    data.adapterKey = adapterKey
+    if (typeof data.adapter === 'string')
+      delete data.adapter
+  }
+
+  const models = normalizeProviderModels(data.models)
+  const defaultModel = normalizeOptionalString(data.defaultModel, 'metadata.defaultModel', 160)
+  if (defaultModel && !models.includes(defaultModel)) {
+    throw createError({ statusCode: 400, statusMessage: 'metadata.defaultModel must be included in metadata.models.' })
+  }
+  if (data.models !== undefined || defaultModel)
+    data.models = models
+  if (defaultModel)
+    data.defaultModel = defaultModel
+  else
+    delete data.defaultModel
+
+  return normalizeOptionalJsonObject(Object.keys(data).length > 0 ? data : null, 'metadata')
+}
 
 function parseJsonObject(value: string | null): Record<string, unknown> | null {
   if (!value)
@@ -391,7 +456,8 @@ function normalizeProviderInput(input: CreateProviderRegistryInput): NormalizedP
     throw createError({ statusCode: 400, statusMessage: 'authRef is required for credentialed providers.' })
   }
 
-  const metadata = normalizeOptionalJsonObject(input.metadata, 'metadata')
+  const capabilities = normalizeCapabilities(input.capabilities)
+  const metadata = normalizeProviderMetadata(input.metadata, capabilities)
 
   return {
     name,
@@ -409,7 +475,7 @@ function normalizeProviderInput(input: CreateProviderRegistryInput): NormalizedP
     region: normalizeOptionalString(input.region, 'region', 80),
     metadata: metadata.data,
     metadataJson: metadata.json,
-    capabilities: normalizeCapabilities(input.capabilities),
+    capabilities,
   }
 }
 
@@ -782,6 +848,14 @@ export async function listProviderCapabilities(
   return (results ?? []).map(mapCapability)
 }
 
+function assertProviderAdapterSupportsCapability(provider: ProviderRegistryRecord, capability: string): void {
+  const adapterKey = normalizeSceneCapabilityAdapterKey(provider.metadata?.adapterKey)
+    ?? normalizeSceneCapabilityAdapterKey(provider.metadata?.adapter)
+  if (!adapterKey || !isKnownSceneCapabilityAdapterKey(adapterKey) || !sceneCapabilityAdapterSupports(adapterKey, capability)) {
+    throw createError({ statusCode: 400, statusMessage: `Provider adapter does not support capability ${capability}.` })
+  }
+}
+
 export async function createProviderCapability(
   event: H3Event,
   providerId: string,
@@ -795,6 +869,7 @@ export async function createProviderCapability(
   await ensureProviderRegistrySchema(db)
 
   const normalized = normalizeProviderCapabilityInput(input, 'capability')
+  assertProviderAdapterSupportsCapability(existingProvider, normalized.capability)
   await assertProviderCapabilityNotDuplicated(event, existingProvider.id, normalized.capability)
 
   const id = randomUUID()
@@ -839,6 +914,7 @@ export async function updateProviderCapability(
     return null
 
   const normalized = normalizeProviderCapabilityPatch(existing, input)
+  assertProviderAdapterSupportsCapability(existingProvider, normalized.capability)
   await assertProviderCapabilityNotDuplicated(event, existingProvider.id, normalized.capability, existing.id)
 
   const now = new Date().toISOString()

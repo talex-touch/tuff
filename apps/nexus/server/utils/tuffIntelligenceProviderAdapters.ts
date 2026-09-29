@@ -4,13 +4,32 @@ import type {
   IntelligenceUsageInfo,
 } from "@talex-touch/tuff-intelligence/light";
 import type { ReasoningEffortPlan } from "@talex-touch/utils/intelligence/reasoning-effort";
-import type { IntelligenceProviderRecord } from "./intelligenceStore";
 import {
   invokeAnthropicProviderAdapter,
   invokeOpenAiCompatibleProviderAdapter,
   streamAnthropicProviderAdapter,
   streamOpenAiCompatibleProviderAdapter,
 } from "./tuffIntelligenceLangChainProviderAdapters";
+
+export interface IntelligenceProviderRecord {
+  id: string;
+  userId: string;
+  type: string;
+  name: string;
+  enabled: boolean;
+  hasApiKey: boolean;
+  baseUrl: string | null;
+  models: string[];
+  defaultModel: string | null;
+  instructions: string | null;
+  timeout: number;
+  priority: number;
+  rateLimit: Record<string, number> | null;
+  capabilities: string[] | null;
+  metadata: Record<string, any> | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 const OPENAI_COMPATIBLE_TYPES = new Set([
   IntelligenceProviderType.OPENAI,

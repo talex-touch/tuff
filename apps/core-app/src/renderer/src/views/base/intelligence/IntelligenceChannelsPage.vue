@@ -1,10 +1,5 @@
 <script lang="ts" name="IntelligenceChannelsPage" setup>
-import type {
-  IntelligenceProviderConfig,
-  IntelligenceProviderSyncPayload,
-  IntelligenceProviderSyncRecord,
-  TestResult
-} from '@talex-touch/tuff-intelligence'
+import type { IntelligenceProviderConfig, TestResult } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxIconPicker, type IconPickerShape } from '@talex-touch/tuffex/icon-picker'
@@ -27,10 +22,7 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import { useKeyboardNavigation } from '~/composables/useKeyboardNavigation'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
-import {
-  isNexusManagedProvider,
-  TUFF_NEXUS_PROVIDER_ID
-} from '~/modules/intelligence/nexus-provider'
+import { isNexusManagedProvider } from '~/modules/intelligence/nexus-provider'
 import {
   PROVIDER_ICON_METADATA_KEY,
   PROVIDER_ICON_SHAPE_METADATA_KEY,
@@ -44,8 +36,6 @@ import {
   isLocalCliProvider,
   type ProviderChannelKind
 } from '~/modules/intelligence/provider-channel-type'
-import { getRuntimeNexusBaseUrl } from '~/modules/nexus/runtime-base'
-import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const channelsLog = createRendererLogger('IntelligenceChannelsPage')
@@ -80,9 +70,6 @@ const {
 const testResult = ref<TestResult | null>(null)
 const isTesting = ref(false)
 const searchQuery = ref('')
-const isSyncingFromNexus = ref(false)
-const syncError = ref('')
-const syncMessage = ref('')
 const basicEditorVisible = ref(false)
 const basicDraft = ref<{
   id: string
@@ -148,155 +135,6 @@ const providerIconLabels = computed(() => ({
   shapeRounded: t('settings.intelligence.providerIconLabels.shapeRounded'),
   shapeSquare: t('settings.intelligence.providerIconLabels.shapeSquare')
 }))
-
-function normalizeProviderType(type: string): IntelligenceProviderType {
-  switch (type) {
-    case IntelligenceProviderType.OPENAI:
-    case IntelligenceProviderType.ANTHROPIC:
-    case IntelligenceProviderType.DEEPSEEK:
-    case IntelligenceProviderType.SILICONFLOW:
-    case IntelligenceProviderType.LOCAL:
-      return type
-    default:
-      return IntelligenceProviderType.CUSTOM
-  }
-}
-
-function toNexusFallbackProvider(): IntelligenceProviderConfig {
-  const baseUrl = `${getRuntimeNexusBaseUrl().replace(/\/+$/, '')}/v1`
-  return {
-    id: TUFF_NEXUS_PROVIDER_ID,
-    type: IntelligenceProviderType.CUSTOM,
-    name: 'Tuff Nexus',
-    enabled: true,
-    priority: 1,
-    baseUrl,
-    models: ['gpt-4o-mini'],
-    defaultModel: 'gpt-4o-mini',
-    timeout: 30000,
-    rateLimit: {},
-    metadata: {
-      origin: 'tuff-nexus',
-      source: 'core-fallback',
-      syncedFromNexus: true
-    }
-  }
-}
-
-function mergeProviderFromNexus(record: IntelligenceProviderSyncRecord): void {
-  const normalizedType = normalizeProviderType(record.type)
-  const nexusPreferred = isNexusManagedProvider(record)
-  const resolvedProviderId = nexusPreferred ? TUFF_NEXUS_PROVIDER_ID : record.id
-  const existing = providers.value.find((item) => item.id === resolvedProviderId)
-  const hasCredential =
-    normalizedType === IntelligenceProviderType.LOCAL ||
-    nexusPreferred ||
-    Boolean(existing?.hasCredential)
-
-  const nextProvider: IntelligenceProviderConfig = {
-    id: resolvedProviderId,
-    type: normalizedType,
-    name: record.name || record.id,
-    enabled: record.enabled && hasCredential,
-    hasCredential: existing?.hasCredential,
-    authRef: existing?.authRef,
-    baseUrl: record.baseUrl || undefined,
-    models: Array.isArray(record.models) ? record.models : [],
-    defaultModel: record.defaultModel || undefined,
-    instructions: record.instructions || undefined,
-    timeout: typeof record.timeout === 'number' ? record.timeout : 30000,
-    priority: nexusPreferred ? 1 : typeof record.priority === 'number' ? record.priority : 3,
-    rateLimit: record.rateLimit || {},
-    capabilities: Array.isArray(record.capabilities) ? record.capabilities : [],
-    metadata: {
-      ...(record.metadata || {}),
-      source: 'nexus-dashboard',
-      syncedFromNexus: true,
-      hasApiKey: record.hasApiKey,
-      nexusPreferred,
-      syncedAt: Date.now()
-    }
-  }
-
-  if (nexusPreferred) {
-    nextProvider.enabled = true
-    nextProvider.priority = 1
-    nextProvider.metadata = {
-      ...(nextProvider.metadata || {}),
-      origin: 'tuff-nexus'
-    }
-  }
-
-  if (existing) {
-    updateProvider(nextProvider.id, nextProvider)
-    return
-  }
-
-  addProvider(nextProvider)
-}
-
-function ensureNexusPreferredProvider(): void {
-  const existing = providers.value.find((item) => item.id === TUFF_NEXUS_PROVIDER_ID)
-  if (!existing) {
-    addProvider(toNexusFallbackProvider())
-    return
-  }
-  updateProvider(TUFF_NEXUS_PROVIDER_ID, {
-    enabled: true,
-    priority: 1,
-    metadata: {
-      ...(existing.metadata || {}),
-      origin: 'tuff-nexus',
-      syncedFromNexus: true,
-      syncedAt: Date.now()
-    }
-  })
-}
-
-async function syncProvidersFromNexus(): Promise<void> {
-  if (isSyncingFromNexus.value) return
-  isSyncingFromNexus.value = true
-  syncError.value = ''
-  syncMessage.value = ''
-
-  try {
-    const response = await fetchNexusWithAuth(
-      '/api/dashboard/intelligence/providers/sync',
-      {
-        method: 'GET',
-        headers: { Accept: 'application/json' }
-      },
-      'intelligence:sync-providers'
-    )
-
-    if (!response) {
-      throw new Error(t('settings.intelligence.syncFromNexusAuthRequired'))
-    }
-
-    if (!response.ok) {
-      throw new Error(`${t('settings.intelligence.syncFromNexusFailed')} (HTTP ${response.status})`)
-    }
-
-    const payload = await response.json<IntelligenceProviderSyncPayload>()
-    const incomingProviders = Array.isArray(payload.providers) ? payload.providers : []
-    for (const provider of incomingProviders) {
-      mergeProviderFromNexus(provider)
-    }
-    ensureNexusPreferredProvider()
-    if (!selectedProviderId.value) {
-      selectedProviderId.value = TUFF_NEXUS_PROVIDER_ID
-    }
-
-    syncMessage.value = t('settings.intelligence.syncFromNexusSuccess', {
-      count: incomingProviders.length
-    })
-  } catch (error) {
-    syncError.value =
-      error instanceof Error ? error.message : t('settings.intelligence.syncFromNexusFailed')
-  } finally {
-    isSyncingFromNexus.value = false
-  }
-}
 
 function createProviderCopy(provider: IntelligenceProviderConfig): IntelligenceProviderConfig {
   const id = `custom-${Date.now()}`
@@ -559,15 +397,11 @@ useKeyboardNavigation({
           :provider="selectedProvider"
           :test-result="testResult"
           :is-testing="isTesting"
-          :is-syncing-from-nexus="isSyncingFromNexus"
-          :sync-message="syncMessage"
-          :sync-error="syncError"
           @update="handleUpdateProvider"
           @test="handleTestProvider"
           @delete="handleDeleteProvider"
           @duplicate="handleDuplicateProvider"
           @edit-basic="handleOpenBasicEditor"
-          @sync-nexus="syncProvidersFromNexus"
         />
         <IntelligenceEmptyState v-else />
       </div>

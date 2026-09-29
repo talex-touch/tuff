@@ -1,7 +1,7 @@
 <template>
   <div class="admin-shell h-screen flex flex-col overflow-hidden from-white via-white to-slate-100 bg-gradient-to-br text-black dark:from-dark dark:via-dark/95 dark:to-dark/85 dark:text-light">
     <TheHeader class="admin-shell-header z-10" />
-    <div class="admin-shell-body min-h-0 w-full flex flex-1 flex-col pt-22 lg:flex-row">
+    <div class="admin-shell-body min-h-0 w-full flex flex-1 flex-col pt-11 lg:flex-row">
       <AdminNav />
       <main class="admin-shell-main min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-6 lg:px-8">
         <slot />
@@ -48,14 +48,20 @@
 }
 
 /*
- * The divider sits on the header *band*, not on the pill: the pill is a
- * floating rounded card, so a border on it draws a line that stops short of
- * both edges and follows the corner radius. `.TuffHeader` is the full-width
- * fixed band the pill floats inside, and `pt-22` on the body is measured to it,
- * so a bottom border there is exactly where the content starts.
+ * The console uses a compact 44px application bar: exactly half the public
+ * site's 88px floating-header band. The main scroll surface starts at the
+ * same 44px boundary, so the divider, rail and content remain aligned.
  */
 .admin-shell .TuffHeader {
+  height: 44px;
   border-bottom: 1px solid rgb(0 0 0 / 6%);
+}
+
+.admin-shell .TuffHeader-Main {
+  top: 0;
+  height: 44px;
+  min-height: 44px;
+  padding-block: 0.25rem;
 }
 
 :root.dark .admin-shell .TuffHeader {

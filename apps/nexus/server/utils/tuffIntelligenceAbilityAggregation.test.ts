@@ -1,14 +1,13 @@
-import type { IntelligenceProviderRecord } from './intelligenceStore'
+import type { IntelligenceProviderRecord } from './tuffIntelligenceProviderAdapters'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { invokeIntelligenceCapability } from './tuffIntelligenceLabService'
 
 const storeMocks = vi.hoisted(() => ({
   createAudit: vi.fn(),
-  getSettings: vi.fn(),
 }))
-const providerBridgeMocks = vi.hoisted(() => ({
-  getIntelligenceProviderApiKeyWithRegistryFallback: vi.fn(),
-  listIntelligenceProvidersWithRegistryMirrors: vi.fn(),
+const registryRuntimeMocks = vi.hoisted(() => ({
+  getProviderApiKey: vi.fn(),
+  listRegistryRuntimeProviders: vi.fn(),
 }))
 const langchainMocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -23,9 +22,36 @@ const creditMocks = vi.hoisted(() => ({
 
 vi.mock('./intelligenceStore', async () => {
   const actual = await vi.importActual<typeof import('./intelligenceStore')>('./intelligenceStore')
-  return { ...actual, createAudit: storeMocks.createAudit, getSettings: storeMocks.getSettings }
+  return { ...actual, createAudit: storeMocks.createAudit }
 })
-vi.mock('./intelligenceProviderRegistryBridge', () => providerBridgeMocks)
+vi.mock('./sceneOrchestrator', () => ({
+  resolveCapabilitySceneId: (capability: string) => `nexus.intelligence.${capability}`,
+  resolveSceneProviderCandidates: async (event: unknown, options: { capability: string, ownerId: string }) => {
+    const providers: IntelligenceProviderRecord[] = await registryRuntimeMocks.listRegistryRuntimeProviders(event, options.ownerId)
+    const candidates = providers
+      .filter(provider => provider.enabled && (provider.capabilities ?? []).includes(options.capability))
+      .map(provider => ({
+        provider: {
+          id: provider.id, name: provider.id, displayName: provider.name, vendor: 'custom', status: 'enabled',
+          authType: provider.type === 'local' ? 'none' : 'api_key', authRef: provider.type === 'local' ? null : `secure://providers/${provider.id}`,
+          ownerScope: 'system', ownerId: null, description: null, endpoint: provider.baseUrl, region: null,
+          metadata: { ...(provider.metadata ?? {}), adapterKey: 'openai-compatible', models: provider.models, defaultModel: provider.defaultModel, intelligenceType: provider.type },
+          capabilities: (provider.capabilities ?? []).map(capability => ({ id: `${provider.id}:${capability}`, providerId: provider.id, capability, schemaRef: null, metering: null, constraints: null, metadata: null, createdAt: provider.createdAt, updatedAt: provider.updatedAt })),
+          createdBy: provider.userId, createdAt: provider.createdAt, updatedAt: provider.updatedAt,
+        },
+        binding: { id: `binding:${provider.id}`, sceneId: `nexus.intelligence.${options.capability}`, providerId: provider.id, capability: options.capability, model: provider.defaultModel, priority: provider.priority, weight: null, status: 'enabled', constraints: null, metadata: null, createdAt: provider.createdAt, updatedAt: provider.updatedAt },
+        capability: options.capability, model: provider.defaultModel, adapterKey: 'openai-compatible',
+      }))
+    return { scene: { id: `nexus.intelligence.${options.capability}`, auditPolicy: { persistTrace: true } }, capability: options.capability, candidates, trace: [], fallbackTrail: [] }
+  },
+}))
+vi.mock('./providerCredentialStore', () => ({
+  getProviderCredential: async (event: unknown, authRef: string) => {
+    const providerId = authRef.split('/').pop() ?? ''
+    const apiKey = await registryRuntimeMocks.getProviderApiKey(event, 'user_1', providerId)
+    return apiKey ? { apiKey } : null
+  },
+}))
 vi.mock('./creditsStore', async () => {
   // Same shape as the adapter boundary suite: the price table needs a D1 handle, and the
   // in-memory pricing fake seeds itself with the shipped table. Loaded lazily because a
@@ -93,8 +119,7 @@ async function invoke(capabilityId: string, payload: Record<string, unknown>) {
 describe('Nexus intelligence ability aggregation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    storeMocks.getSettings.mockResolvedValue({ defaultStrategy: 'priority', enableAudit: false })
-    providerBridgeMocks.getIntelligenceProviderApiKeyWithRegistryFallback.mockResolvedValue('sk-test')
+    registryRuntimeMocks.getProviderApiKey.mockResolvedValue('sk-test')
     usageLedgerMocks.recordProviderUsageLedger.mockResolvedValue([])
     creditMocks.consumeCredits.mockImplementation(
       async (_event: unknown, _userId: unknown, amount: number) => ({
@@ -112,7 +137,7 @@ describe('Nexus intelligence ability aggregation', () => {
   })
 
   it('builds keyword extraction messages through direct invoke', async () => {
-    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValue([
+    registryRuntimeMocks.listRegistryRuntimeProviders.mockResolvedValue([
       provider(['keywords.extract']),
     ])
 
@@ -125,7 +150,7 @@ describe('Nexus intelligence ability aggregation', () => {
   })
 
   it('builds intent detection messages through direct invoke', async () => {
-    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValue([
+    registryRuntimeMocks.listRegistryRuntimeProviders.mockResolvedValue([
       provider(['intent.detect']),
     ])
 
@@ -138,7 +163,7 @@ describe('Nexus intelligence ability aggregation', () => {
   })
 
   it('fails closed for non-chat provider shapes without model calls', async () => {
-    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValue([
+    registryRuntimeMocks.listRegistryRuntimeProviders.mockResolvedValue([
       provider(['image.generate', 'image.edit', 'audio.tts', 'embedding.generate']),
     ])
 

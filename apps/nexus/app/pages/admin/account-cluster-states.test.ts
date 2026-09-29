@@ -144,7 +144,7 @@ describe('account cluster redirects leave history usable', () => {
   })
 
   it('credits.vue replaces itself in history', () => {
-    expect(credits).toContain("navigateTo('/admin/users', { replace: true })")
+    expect(credits).toContain("redirect: '/admin/users'")
   })
 })
 

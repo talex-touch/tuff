@@ -79,12 +79,12 @@ function mapItems(items: Array<{ id: string, label: string, icon: string }>): Na
  * to one and not the other fails instead of silently going unnavigable.
  */
 const ANALYTICS_SECTIONS = [
-  { id: 'overview', label: 'Overview', icon: 'i-carbon-dashboard' },
+  { id: 'overview', label: 'Data Overview', icon: 'i-carbon-dashboard' },
+  { id: 'usage', label: 'Usage', icon: 'i-carbon-chart-line-smooth' },
   { id: 'performance', label: 'Performance', icon: 'i-carbon-meter' },
   { id: 'search', label: 'Search', icon: 'i-carbon-search' },
-  { id: 'usage', label: 'Usage', icon: 'i-carbon-chart-line-smooth' },
-  { id: 'intelligence', label: 'Intelligence', icon: 'i-carbon-ai-status' },
-  { id: 'docs', label: 'Docs', icon: 'i-carbon-document' },
+  { id: 'intelligence', label: 'AI Analytics', icon: 'i-carbon-ai-status' },
+  { id: 'docs', label: 'Docs Analytics', icon: 'i-carbon-document' },
   { id: 'geo', label: 'Geo', icon: 'i-carbon-earth-americas' },
   { id: 'exchange', label: 'Exchange', icon: 'i-carbon-currency' },
   { id: 'messages', label: 'Alerts', icon: 'i-carbon-warning' },
@@ -100,9 +100,9 @@ const ANALYTICS_SECTIONS = [
  * the same kind of move (rail for some destinations, tabs for others) and made
  * the hidden ones unlinkable and invisible to anyone reading the rail.
  *
- * The groups are what keeps a flat list of thirteen legible. They are labels
- * only — no collapsing, no state — because a console rail that hides its own
- * entries reintroduces exactly the problem the tabs had.
+ * The groups keep the complete destination list legible. They are labels only
+ * — no collapsing, no state — because a console rail that hides its own entries
+ * reintroduces exactly the problem the tabs had.
  */
 const menuGroups = computed<NavGroup[]>(() => {
   if (!isAdmin.value)
@@ -110,8 +110,22 @@ const menuGroups = computed<NavGroup[]>(() => {
 
   const groups: NavGroup[] = [
     {
+      id: 'analytics',
+      label: t('dashboard.sections.menu.groups.analytics', 'Analytics'),
+      // The nine analytics panels. They address themselves with `?section=`
+      // rather than nine routes because they are one page's worth of state on
+      // one payload — `analytics.vue` loads its data once and switches panels
+      // over it, so nine files would be nine copies of the same fetch.
+      items: ANALYTICS_SECTIONS.map(section => ({
+        id: `analytics:${section.id}`,
+        label: t(`dashboard.sections.analytics.sections.${section.id}`, section.label),
+        icon: section.icon,
+        to: `/admin/analytics?section=${section.id}`,
+      })),
+    },
+    {
       id: 'content',
-      label: t('dashboard.sections.menu.groups.content', '内容'),
+      label: t('dashboard.sections.menu.groups.content', 'Content Operations'),
       items: mapItems([
         {
           id: 'updates',
@@ -120,7 +134,7 @@ const menuGroups = computed<NavGroup[]>(() => {
         },
         {
           id: 'images',
-          label: t('dashboard.sections.menu.images', 'Resources'),
+          label: t('dashboard.sections.menu.images', 'Asset Library'),
           icon: 'i-carbon-image',
         },
         {
@@ -136,39 +150,8 @@ const menuGroups = computed<NavGroup[]>(() => {
       ]),
     },
     {
-      id: 'intelligence',
-      label: t('dashboard.sections.menu.intelligence', '实验场'),
-      items: mapItems([
-        {
-          id: 'intelligence',
-          label: t('dashboard.sections.menu.intelligenceLab', 'Tuff AI'),
-          icon: 'i-carbon-machine-learning',
-        },
-        {
-          id: 'intelligence-overview',
-          label: t('dashboard.sections.menu.intelligenceOverview', '概览'),
-          icon: 'i-carbon-dashboard',
-        },
-        {
-          id: 'intelligence-chat',
-          label: t('dashboard.sections.menu.intelligenceChat', '对话探针'),
-          icon: 'i-carbon-chat-bot',
-        },
-        {
-          id: 'provider-registry',
-          label: t('dashboard.sections.menu.providerRegistry', 'Provider Registry'),
-          icon: 'i-carbon-cloud-service-management',
-        },
-        {
-          id: 'intelligence-audits',
-          label: t('dashboard.sections.menu.intelligenceAudits', 'AI 调用审计'),
-          icon: 'i-carbon-document',
-        },
-      ]),
-    },
-    {
       id: 'accounts',
-      label: t('dashboard.sections.menu.accounts', 'Account Management'),
+      label: t('dashboard.sections.menu.groups.accounts', 'Users & Billing'),
       items: mapItems([
         {
           id: 'users',
@@ -183,22 +166,39 @@ const menuGroups = computed<NavGroup[]>(() => {
       ]),
     },
     {
-      id: 'analytics',
-      label: t('dashboard.sections.menu.analytics', 'Analytics'),
-      // The nine analytics panels. They address themselves with `?section=`
-      // rather than nine routes because they are one page's worth of state on
-      // one payload — `analytics.vue` loads its data once and switches panels
-      // over it, so nine files would be nine copies of the same fetch.
-      items: ANALYTICS_SECTIONS.map(section => ({
-        id: `analytics:${section.id}`,
-        label: t(`dashboard.sections.analytics.sections.${section.id}`, section.label),
-        icon: section.icon,
-        to: `/admin/analytics?section=${section.id}`,
-      })),
+      id: 'intelligence',
+      label: t('dashboard.sections.menu.groups.intelligence', 'AI Services'),
+      items: mapItems([
+        {
+          id: 'intelligence-overview',
+          label: t('dashboard.sections.menu.intelligenceOverview', 'AI Overview'),
+          icon: 'i-carbon-dashboard',
+        },
+        {
+          id: 'provider-registry',
+          label: t('dashboard.sections.menu.providerRegistry', 'Provider Registry'),
+          icon: 'i-carbon-cloud-service-management',
+        },
+        {
+          id: 'intelligence',
+          label: t('dashboard.sections.menu.intelligenceLab', 'Tuff AI'),
+          icon: 'i-carbon-machine-learning',
+        },
+        {
+          id: 'intelligence-chat',
+          label: t('dashboard.sections.menu.intelligenceChat', 'Chat Probe'),
+          icon: 'i-carbon-chat-bot',
+        },
+        {
+          id: 'intelligence-audits',
+          label: t('dashboard.sections.menu.intelligenceAudits', 'AI Call Audits'),
+          icon: 'i-carbon-document',
+        },
+      ]),
     },
     {
       id: 'operations',
-      label: t('dashboard.sections.menu.groups.operations', '运营'),
+      label: t('dashboard.sections.menu.groups.operations', 'System Governance'),
       items: mapItems([
         {
           id: 'governance',

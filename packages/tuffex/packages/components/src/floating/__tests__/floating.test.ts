@@ -212,7 +212,7 @@ describe('txFloating', () => {
     const observe = vi.fn()
     const disconnect = vi.fn()
     globalThis.IntersectionObserver = class {
-      constructor(callback: IntersectionObserverCallback) {
+      constructor(callback: IntersectionObserverCallback, _options?: IntersectionObserverInit) {
         observerCallback = callback
       }
 

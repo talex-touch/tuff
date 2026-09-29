@@ -5,20 +5,9 @@ import { TxPagination } from '@talex-touch/tuffex/pagination'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { $fetch as rawFetch } from 'ofetch'
 
-/**
- * AI call audit log, previously the `audits` tab of `IntelligenceAdminPanel`.
- *
- * `fetchSettings` is here rather than in a shared parent because the only thing
- * this view reads from it is `enableAudit`, and it reads it to answer one
- * question: an empty list means "auditing is off", not "nothing happened".
- * `settingsLoaded` stays false when that request fails, so a failed settings
- * fetch never renders as a confirmed configuration state.
- */
+/** AI call audit log, backed by scene-level audit policies. */
 const { t } = useI18n()
 
-interface Settings {
-  enableAudit: boolean
-}
 
 interface AuditLog {
   id: string
@@ -36,10 +25,6 @@ interface AuditLog {
   createdAt: string
 }
 
-const settingsLoaded = ref(false)
-const settings = ref<Settings>({
-  enableAudit: false,
-})
 
 const auditLogs = ref<AuditLog[]>([])
 const auditLoading = ref(false)
@@ -49,19 +34,6 @@ const auditPageSize = ref(20)
 const auditTotal = ref(0)
 const auditUserId = ref('')
 
-async function fetchSettings() {
-  try {
-    const data = await rawFetch<{ settings: Settings }>('/api/dashboard/intelligence/settings')
-    if (data.settings)
-      settings.value = { ...settings.value, ...data.settings }
-    settingsLoaded.value = true
-  }
-  catch {
-    // enableAudit stays at its `false` default here, so claiming "auditing is off"
-    // would report our own fetch failure as a confirmed configuration state.
-    settingsLoaded.value = false
-  }
-}
 
 async function fetchAudits() {
   auditLoading.value = true
@@ -118,7 +90,6 @@ function formatEndpointCandidates(list?: string[]) {
 }
 
 onMounted(() => {
-  fetchSettings()
   fetchAudits()
 })
 
@@ -164,12 +135,6 @@ watch([auditPage, auditPageSize], () => {
         </TxButton>
       </div>
 
-      <div
-        v-if="settingsLoaded && !settings.enableAudit"
-        class="rounded-xl bg-black/[0.02] px-4 py-3 text-xs text-black/40 dark:bg-white/[0.04] dark:text-white/40"
-      >
-        {{ t('dashboard.sections.intelligence.audit.disabledHint') }}
-      </div>
 
       <div v-if="auditError" class="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-500">
         {{ auditError }}

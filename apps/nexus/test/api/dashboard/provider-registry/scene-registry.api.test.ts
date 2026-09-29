@@ -23,6 +23,7 @@ interface BindingRow {
   scene_id: string
   provider_id: string
   capability: string
+  model: string | null
   priority: number
   weight: number | null
   status: string
@@ -110,12 +111,13 @@ class MockD1Database {
     }
 
     if (sql.includes('INSERT INTO scene_strategy_bindings')) {
-      const [id, sceneId, providerId, capability, priority, weight, status, constraintsJson, metadata, createdAt, updatedAt] = args
+      const [id, sceneId, providerId, capability, model, priority, weight, status, constraintsJson, metadata, createdAt, updatedAt] = args
       this.bindings.set(String(id), {
         id: String(id),
         scene_id: String(sceneId),
         provider_id: String(providerId),
         capability: String(capability),
+        model: model == null ? null : String(model),
         priority: Number(priority),
         weight: weight == null ? null : Number(weight),
         status: String(status),

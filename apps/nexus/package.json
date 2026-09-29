@@ -1,7 +1,7 @@
 {
   "name": "@talex-touch/tuff-nexus",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "packageManager": "pnpm@10.34.4",
   "description": "Documentation for Tuff project",
@@ -15,6 +15,7 @@
     "check:demo-registry": "node build/check-demo-registry-orphans.mjs",
     "check:icon-collections": "node build/check-icon-collections.mjs",
     "check:deployment-secrets": "node scripts/deployment-secret-preflight.mjs",
+    "provider:legacy:drop": "node scripts/drop-legacy-intelligence-providers.mjs",
     "check:runtime-evidence": "node build/check-runtime-evidence.mjs",
     "check:runtime-evidence:deployed": "node build/check-runtime-evidence.mjs --require-deployed-preview",
     "check:runtime-evidence:template": "node build/check-runtime-evidence.mjs --print-deployed-preview-template",

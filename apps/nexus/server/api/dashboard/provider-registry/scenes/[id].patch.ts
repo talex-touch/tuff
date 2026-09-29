@@ -1,6 +1,6 @@
 import { createError, getRouterParam, readBody } from 'h3'
 import { requireAdmin } from '../../../../utils/auth'
-import { updateSceneRegistryEntry } from '../../../../utils/sceneRegistryStore'
+import { updateSceneRegistryEntry, withSceneRegistryReadiness } from '../../../../utils/sceneRegistryStore'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -30,5 +30,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Scene registry entry not found.' })
   }
 
-  return { scene }
+  return { scene: await withSceneRegistryReadiness(event, scene) }
 })

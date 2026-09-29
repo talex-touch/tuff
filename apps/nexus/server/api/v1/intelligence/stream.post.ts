@@ -22,17 +22,6 @@ function readOptionalNumber(value: unknown): number | undefined {
     : undefined
 }
 
-function readStringList(value: unknown): string[] | undefined {
-  if (!Array.isArray(value))
-    return undefined
-  const values = value
-    .filter(
-      (item): item is string =>
-        typeof item === 'string' && Boolean(item.trim()),
-    )
-    .map(item => item.trim())
-  return values.length > 0 ? values : undefined
-}
 
 function parseRequest(value: unknown): NexusIntelligenceInvokePayload {
   if (!isRecord(value)) {
@@ -54,14 +43,6 @@ function parseRequest(value: unknown): NexusIntelligenceInvokePayload {
     payload: value.payload,
     options: rawOptions
       ? {
-          providerId: readOptionalString(rawOptions.providerId),
-          preferredProviderId: readOptionalString(
-            rawOptions.preferredProviderId,
-          ),
-          model: readOptionalString(rawOptions.model),
-          timeoutMs: readOptionalNumber(rawOptions.timeoutMs),
-          modelPreference: readStringList(rawOptions.modelPreference),
-          allowedProviderIds: readStringList(rawOptions.allowedProviderIds),
           metadata: isRecord(rawOptions.metadata)
             ? rawOptions.metadata
             : undefined,
