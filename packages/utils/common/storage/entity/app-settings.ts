@@ -479,9 +479,9 @@ const _appSettingOriginData = {
     viewMode: 'detailed' as 'detailed' | 'compact',
   },
   animation: {
-    listItemStagger: false,
-    resultTransition: false,
-    coreBoxResize: false,
+    listItemStagger: true,
+    resultTransition: true,
+    coreBoxResize: true,
     autoDisableOnLowBattery: true,
   },
   viewCache: {
