@@ -26,7 +26,6 @@ const HOP_SPIN_H = 26
    that, in the working state, the previous landing leaves), the hop, and
    the landing's recovery after — measured in hop periods */
 const FLIP_PRE = 0.2
-const FLIP_POST = 0.66
 /** The jump's numbers: an idle flip's and a click's. */
 export interface JumpConfig {
   /** how high, in body units (the body is 100 tall) */

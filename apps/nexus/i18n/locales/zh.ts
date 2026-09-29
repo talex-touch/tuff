@@ -47,6 +47,7 @@ export default {
     delete: '删除',
     cancel: '取消',
     close: '关闭',
+    error: '错误',
   },
   notFound: {
     title: '页面未找到',

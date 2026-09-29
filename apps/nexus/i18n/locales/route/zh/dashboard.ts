@@ -162,6 +162,7 @@ export default {
         output: '输出',
         selection: '命中选择',
         fallbackTrail: '降级链路',
+        missingCapabilities: '缺失能力',
         empty: '暂无能力路由',
       },
       usage: {
@@ -243,6 +244,7 @@ export default {
         meteringUnit: '计量单位',
         meteringPolicyJson: '计量策略 JSON',
         maxImageBytes: '最大图片字节',
+        model: '模型',
         models: '模型列表',
         name: '名称',
         owner: '归属方',
@@ -251,6 +253,7 @@ export default {
         provider: '服务渠道',
         providerId: '服务渠道 ID',
         providerModel: '模型',
+        preset: '预设',
         region: '地域',
         requiredCapabilities: '必需能力',
         routeId: '路由 ID',

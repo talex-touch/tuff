@@ -165,6 +165,7 @@ export default {
         output: 'Output',
         selection: 'Selection',
         fallbackTrail: 'Fallback trail',
+        missingCapabilities: 'Missing capabilities',
         empty: 'No capability routes configured yet.',
       },
       usage: {
@@ -246,6 +247,7 @@ export default {
         meteringUnit: 'Metering unit',
         meteringPolicyJson: 'Metering policy JSON',
         maxImageBytes: 'Max image bytes',
+        model: 'Model',
         models: 'Models',
         name: 'Name',
         owner: 'Owner',
@@ -254,6 +256,7 @@ export default {
         provider: 'Provider',
         providerId: 'Provider ID',
         providerModel: 'Model',
+        preset: 'Preset',
         region: 'Region',
         requiredCapabilities: 'Required capabilities',
         routeId: 'Route ID',

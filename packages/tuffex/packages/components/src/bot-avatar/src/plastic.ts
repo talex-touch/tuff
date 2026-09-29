@@ -909,7 +909,7 @@ export function drawPlasticCap(
     }
     if (st.spriteVersion !== st.version) {
       const k = px / SPAN
-      for (let i = 0; i < 3 && fast; i++) {
+      for (let i = 0; i < 3; i++) {
         let spr = st.sprites[i]
         if (!spr) {
           const c = makeCanvas(px)

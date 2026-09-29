@@ -29,7 +29,6 @@ const RADIUS = 55.556
 const W = 45
 const H = 25
 const TEXT_W = 26.667
-const TEXT_H = 13.333
 const PAD_X = (W - TEXT_W) / 2
 
 const LAYER = { position: 'absolute', inset: 0, pointerEvents: 'none' } as const
@@ -118,8 +117,8 @@ const labelStyle = computed<CSSProperties>(() => ({
 // `children` stays supported because it is the upstream React prop and its
 // documented default (`New`) lives there.
 const slots = useSlots()
-const slotText = computed<string>(() => (slots.default?.() ?? [])
-  .map(node => (typeof node.children === 'string' ? node.children : ''))
+const slotText = computed<string>(() => ((slots as any).default?.() ?? [])
+  .map((node: any) => (typeof node?.children === 'string' ? node.children : ''))
   .join(''))
 const label = computed<string>(() => slotText.value.trim() || props.children || '')
 </script>
