@@ -96,7 +96,6 @@ const LIFTED = [
   'isAdmin',
   'riskControlEnabled',
   'sectionPaths',
-  'ANALYTICS_SECTIONS',
   'mapItems',
   'menuGroups',
   'menuItems',
@@ -128,8 +127,9 @@ return {
     // Returning the key keeps assertions locale-independent; the locale files
     // are covered by dashboard-admin-i18n-coverage / i18n-key-existence.
     t: (key: string) => key,
-    // `query` matters as much as `path` now: the analytics panels are one
-    // route addressed nine ways, so the section they light comes from here.
+    // `query` no longer moves the highlight — the analytics panels are one
+    // route addressed nine ways, and the rail lists that page once — but the
+    // harness still threads it through so that negative stays testable.
     route: { path: state.path ?? '/admin/updates', query: state.query ?? {} },
     mounted: ref(state.mounted ?? true),
     // The component resolves the role through useAccountRole(); injecting the
@@ -159,7 +159,7 @@ const SECTION_FOR_PATH: Record<string, string> = {
   '/admin/audits': 'audits',
   '/admin/reviews': 'reviews',
   '/admin/doc-comments': 'doc-comments',
-  '/admin/analytics': 'analytics:overview',
+  '/admin/analytics': 'analytics',
   '/admin/governance': 'governance',
   '/admin/risk': 'risk',
   '/admin/intelligence': 'intelligence',
@@ -173,22 +173,22 @@ const SECTION_FOR_PATH: Record<string, string> = {
 }
 
 /**
- * The analytics panels are the one place where the query, not the path,
- * decides the section. A bare `/admin/analytics` and an unrecognised
- * `?section=` both fall back to the overview, matching the page's own default.
+ * The analytics page addresses its panels with `?section=`, but the rail lists
+ * the page once. So the query cannot move the highlight: every panel — and a
+ * value that names no panel at all — lights the same single entry.
  */
-const SECTION_FOR_ANALYTICS_QUERY: Record<string, string> = {
-  overview: 'analytics:overview',
-  performance: 'analytics:performance',
-  search: 'analytics:search',
-  usage: 'analytics:usage',
-  intelligence: 'analytics:intelligence',
-  docs: 'analytics:docs',
-  geo: 'analytics:geo',
-  exchange: 'analytics:exchange',
-  messages: 'analytics:messages',
-  'not-a-panel': 'analytics:overview',
-}
+const ANALYTICS_PANEL_QUERIES: string[] = [
+  'overview',
+  'usage',
+  'performance',
+  'search',
+  'intelligence',
+  'docs',
+  'versions',
+  'exchange',
+  'messages',
+  'not-a-panel',
+]
 
 /** Splits a menu href into the shape `evaluateNav` wants. */
 function routeOf(href: string): { path: string, query: Record<string, string> } {
@@ -216,8 +216,8 @@ describe('activeSection routing', () => {
     expect(evaluateNav({ path: routePath }).activeSection).toBe(section)
   })
 
-  it.each(Object.entries(SECTION_FOR_ANALYTICS_QUERY))('maps ?section=%s to %s', (query, expected) => {
-    expect(evaluateNav({ path: '/admin/analytics', query: { section: query } }).activeSection).toBe(expected)
+  it.each(ANALYTICS_PANEL_QUERIES)('keeps ?section=%s on the analytics entry', (query) => {
+    expect(evaluateNav({ path: '/admin/analytics', query: { section: query } }).activeSection).toBe('analytics')
   })
 
   it('keeps the intelligence prefixes ordered so the -agent branch wins', () => {
@@ -243,11 +243,24 @@ describe('menu / sectionPaths agreement', () => {
     // mapItems falls back to /admin/updates for an unknown id, so a typo'd id
     // produces a link that silently goes to the wrong page.
     const nav = evaluateNav({ role: 'admin', riskFlag: true })
-    // The analytics entries carry their own hrefs rather than going through
-    // sectionPaths, so they are exempt by construction - `keeps every href
-    // inside the console namespace` below still covers where they point.
-    const unmapped = nav.menuItems.filter(item => !item.id.startsWith('analytics:') && !nav.sectionPaths[item.id])
+    // The analytics entry is no longer exempt: the rail lists the page itself,
+    // so it goes through the same table as every other destination.
+    const unmapped = nav.menuItems.filter(item => !nav.sectionPaths[item.id])
     expect(unmapped.map(item => item.id)).toEqual([])
+  })
+
+  it('lists the analytics console exactly once', () => {
+    // The nine panels used to be nine rail entries (`analytics:overview`,
+    // `analytics:geo`, …). They are one destination now — the page owns the
+    // strip over `?section=` — so the rail must name the page exactly once, and
+    // an `analytics:*` id coming back means the panels split off again.
+    const nav = evaluateNav({ role: 'admin', riskFlag: true })
+    const entries = nav.menuItems.filter(item => item.id.startsWith('analytics') || item.to === '/admin/analytics')
+
+    expect(entries.map(item => `${item.id} -> ${item.to}`)).toEqual(['analytics -> /admin/analytics'])
+
+    const group = nav.menuGroups.find(candidate => candidate.id === 'analytics')
+    expect(group?.items.map(item => item.id), 'the analytics group should hold its one destination').toEqual(['analytics'])
   })
 
   it('round-trips every menu href back to the same section', () => {
@@ -269,14 +282,8 @@ describe('menu / sectionPaths agreement', () => {
 
   it('labels every entry from the dashboard.sections.menu namespace', () => {
     const nav = evaluateNav({ role: 'admin', riskFlag: true })
-    for (const item of nav.menuItems) {
-      // The analytics panels name themselves from their own page's namespace,
-      // sharing the key with the heading so the two cannot drift.
-      const namespace = item.id.startsWith('analytics:')
-        ? /^dashboard\.sections\.analytics\.sections\./
-        : /^dashboard\.sections\.menu\./
-      expect(item.label, item.id).toMatch(namespace)
-    }
+    for (const item of nav.menuItems)
+      expect(item.label, item.id).toMatch(/^dashboard\.sections\.menu\./)
   })
 })
 
@@ -384,9 +391,11 @@ describe('mobile disclosure', () => {
   })
 
   it('labels the collapsed summary with the active section', () => {
-    // Collapsed, the summary is the only thing naming where you are.
+    // Collapsed, the summary is the only thing naming where you are. The
+    // analytics page names its single rail entry from the group key it shares
+    // with the group caption.
     expect(evaluateNav({ path: '/admin/analytics', role: 'admin' }).activeLabel)
-      .toBe('dashboard.sections.analytics.sections.overview')
+      .toBe('dashboard.sections.menu.groups.analytics')
     expect(NAV_SOURCE).toContain('{{ activeLabel }}')
   })
 })
@@ -412,7 +421,7 @@ type Reachability =
   | { via: 'link', from: string }
 
 const REACHABILITY: Record<string, Reachability> = {
-  'analytics.vue': { via: 'menu', section: 'analytics:overview' },
+  'analytics.vue': { via: 'menu', section: 'analytics' },
   'audits.vue': { via: 'menu', section: 'audits' },
   'governance.vue': { via: 'menu', section: 'governance' },
   'images.vue': { via: 'menu', section: 'images' },
@@ -465,10 +474,6 @@ describe('admin route reachability', () => {
       if (entry.via !== 'menu')
         continue
       expect(ids, file).toContain(entry.section)
-      // The analytics entries address their page with `?section=`, so their
-      // hrefs are their own rather than a sectionPaths row.
-      if (entry.section.startsWith('analytics:'))
-        continue
       expect(nav.sectionPaths[entry.section]).toBe(`/admin/${file.replace('.vue', '')}`)
     }
   })

@@ -1651,7 +1651,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           search: 'Search',
           intelligence: 'AI Analytics',
           docs: 'Docs Analytics',
-          geo: 'Geo',
+          versions: 'Versions & Geo',
           exchange: 'Exchange',
           messages: 'Alerts',
         },

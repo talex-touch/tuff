@@ -8,7 +8,9 @@ import {
   nextTick,
   onBeforeUnmount,
   onMounted,
+  reactive,
   ref,
+  shallowRef,
   watch,
 } from 'vue'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -45,10 +47,25 @@ interface GeoAnalyticsValue {
   topIps: unknown[]
 }
 
-interface AnalyticsRegion {
-  code: string
-  count: number
-  label: string
+interface VersionAnalyticsRow {
+  version: string
+  visits: number
+  searches: number
+  users: number
+  avgSearchDuration: number
+  firstSeenAt: string | null
+  lastSeenAt: string | null
+}
+
+interface VersionAnalyticsValue {
+  summary: {
+    days: number
+    totalVisits: number
+    totalSearches: number
+    versionCount: number
+  }
+  versions: VersionAnalyticsRow[]
+  generatedAt: string
 }
 
 interface AnalyticsFacade {
@@ -63,6 +80,10 @@ interface AnalyticsFacade {
   messages: Ref<Array<Record<string, unknown>>>
   messagesLoading: Ref<boolean>
   messagesError: Ref<string | null>
+  versionAnalytics: Ref<VersionAnalyticsValue | null>
+  versionLoading: Ref<boolean>
+  versionError: Ref<string | null>
+  versionScope: ComputedRef<string | null>
   docsAnalytics: Ref<{ docs: unknown[] } | null>
   docsLoading: Ref<boolean>
   docsError: Ref<string | null>
@@ -80,9 +101,13 @@ interface AnalyticsFacade {
   activeSection: Ref<string>
   docsPath: Ref<string>
   docsSource: Ref<'all' | 'docs_page' | 'doc_comments_admin'>
-  topRegions: ComputedRef<AnalyticsRegion[]>
+  worldGeoJson: Ref<unknown>
+  selectVersion: (version: string) => void
+  setActiveSection: (value: string | number) => void
+  resolveCountryLabel: (countryCode: string | null) => string
   fetchAnalytics: () => Promise<void>
   fetchGeoAnalytics: () => Promise<void>
+  fetchVersionAnalytics: () => Promise<void>
   fetchDocsAnalytics: () => Promise<void>
   fetchIntelligenceAnalytics: () => Promise<void>
   fetchMessages: () => Promise<void>
@@ -125,9 +150,11 @@ interface AnalyticsExecutionDependencies {
     onBeforeUnmount: typeof onBeforeUnmount
     onMounted: typeof onMounted
     ref: typeof ref
+    shallowRef: typeof shallowRef
     watch: typeof watch
   }
   nuxt: {
+    $fetch: (url: string) => Promise<unknown>
     defineAsyncComponent: () => Record<string, never>
     defineI18nRoute: () => void
     definePageMeta: () => void
@@ -176,8 +203,8 @@ const scriptWithoutImports = scriptSetup.replace(/^import[\s\S]*?from [^\n]+\n/g
 async function compileFacade(): Promise<AnalyticsFacadeSetup> {
   const executable = `
 export function setupAnalyticsFacade(dependencies) {
-  const { ref, computed, watch, onMounted, onBeforeUnmount } = dependencies.vue
-  const { defineAsyncComponent, definePageMeta, defineI18nRoute, useI18n, useAuthUser, useAccountRole, useRoute, navigateTo, requestJson } = dependencies.nuxt
+  const { ref, shallowRef, computed, watch, onMounted, onBeforeUnmount } = dependencies.vue
+  const { $fetch, defineAsyncComponent, definePageMeta, defineI18nRoute, useI18n, useAuthUser, useAccountRole, useRoute, navigateTo, requestJson } = dependencies.nuxt
   const { useAdminAnalyticsData, formatAnalyticsCategoryKey, formatAnalyticsCategoryLabel, formatAnalyticsDateTime, formatAnalyticsDuration, formatAnalyticsNumber, formatExchangeRate, formatPayloadPreview, toSortedAnalyticsList } = dependencies.analyticsDependencies
 ${scriptWithoutImports}
   return {
@@ -192,6 +219,10 @@ ${scriptWithoutImports}
     messages,
     messagesLoading,
     messagesError,
+    versionAnalytics,
+    versionLoading,
+    versionError,
+    versionScope,
     docsAnalytics,
     docsLoading,
     docsError,
@@ -209,9 +240,13 @@ ${scriptWithoutImports}
     activeSection,
     docsPath,
     docsSource,
-    topRegions,
+    worldGeoJson,
+    selectVersion,
+    setActiveSection,
+    resolveCountryLabel,
     fetchAnalytics,
     fetchGeoAnalytics,
+    fetchVersionAnalytics,
     fetchDocsAnalytics,
     fetchIntelligenceAnalytics,
     fetchMessages,
@@ -250,9 +285,11 @@ ${scriptWithoutImports}
       onBeforeUnmount,
       onMounted,
       ref,
+      shallowRef,
       watch,
     },
     nuxt: {
+      $fetch: () => Promise.resolve({ type: 'FeatureCollection', features: [] }),
       defineAsyncComponent: () => ({}),
       defineI18nRoute: () => undefined,
       definePageMeta: () => undefined,
@@ -286,11 +323,38 @@ function analyticsPayload(regionDistribution: Record<string, number> = {}) {
   }
 }
 
+function versionAnalyticsPayload(versions: VersionAnalyticsRow[] = []): VersionAnalyticsValue {
+  return {
+    summary: {
+      days: 30,
+      totalVisits: versions.reduce((sum, row) => sum + row.visits, 0),
+      totalSearches: versions.reduce((sum, row) => sum + row.searches, 0),
+      versionCount: versions.length,
+    },
+    versions,
+    generatedAt: '2026-01-01T00:00:00.000Z',
+  }
+}
+
+function versionRow(version: string, visits = 5): VersionAnalyticsRow {
+  return {
+    version,
+    visits,
+    searches: 2,
+    users: 1,
+    avgSearchDuration: 120,
+    firstSeenAt: '2026-01-01T00:00:00.000Z',
+    lastSeenAt: '2026-01-02T00:00:00.000Z',
+  }
+}
+
 function successfulRequest(path: string): Promise<unknown> {
   if (path.startsWith('/api/admin/analytics?'))
     return Promise.resolve(analyticsPayload())
   if (path === '/api/admin/analytics/geo')
     return Promise.resolve({ countries: [], subdivisions: [], topIps: [] })
+  if (path === '/api/admin/analytics/versions')
+    return Promise.resolve(versionAnalyticsPayload())
   if (path === '/api/admin/analytics/docs')
     return Promise.resolve({ docs: [] })
   if (path === '/api/admin/analytics/intelligence')
@@ -318,13 +382,23 @@ interface MountAnalyticsPageOptions {
 
 async function mountAnalyticsPage(options: MountAnalyticsPageOptions = {}) {
   let facade: AnalyticsFacade | undefined
-  const navigateTo = vi.fn()
+  // The page keeps its section in the address rather than in local state, so
+  // the harness mirrors that: an object target handed to `navigateTo` updates
+  // the same reactive route the page reads back, which is how a section switch
+  // becomes testable at all.
+  const route = reactive<AnalyticsRoute>({ query: { ...(options.query ?? {}) } })
+  const navigateTo = vi.fn((target: unknown) => {
+    // The page navigates by handing `navigateTo` a `{ query }` object; the
+    // harness applies it so the address the page reads back changes with it.
+    if (typeof target === 'object' && target !== null && 'query' in target)
+      Object.assign(route.query, target.query)
+  })
   const locale = ref(options.locale ?? 'en')
   const PageHost = defineComponent({
     setup() {
       facade = setupFacade({
         locale,
-        route: { query: options.query ?? {} },
+        route,
         user: ref(options.role === null ? null : { role: options.role ?? 'admin' }),
         navigateTo,
         requestJson: options.requestJson ?? successfulRequest,
@@ -410,11 +484,15 @@ describe('dashboard admin analytics facade', () => {
     expect(requestPaths(requestJson)).toEqual([
       '/api/admin/analytics?days=90',
       '/api/admin/analytics/geo',
+      '/api/admin/analytics/versions',
       '/api/admin/analytics/docs',
       '/api/admin/analytics/intelligence',
     ])
     expect(requestFor(requestJson, '/api/admin/analytics/geo')[1]).toEqual({
-      query: { days: 90, country: undefined, limit: 240 },
+      query: { days: 90, country: undefined, limit: 240, version: undefined },
+    })
+    expect(requestFor(requestJson, '/api/admin/analytics/versions')[1]).toEqual({
+      query: { days: 90 },
     })
     expect(requestFor(requestJson, '/api/admin/analytics/docs')[1]).toEqual({
       query: { days: 90, path: undefined, source: undefined },
@@ -446,6 +524,14 @@ describe('dashboard admin analytics facade', () => {
         error: page.facade.geoError,
         seed: () => { page.facade.geoAnalytics.value = { countries: [{ countryCode: 'US' }], subdivisions: [], topIps: [] } },
         assertCleanup: () => expect(page.facade.geoAnalytics.value).toEqual({ countries: [{ countryCode: 'US' }], subdivisions: [], topIps: [] }),
+      },
+      {
+        name: 'version analytics',
+        invoke: () => page.facade.fetchVersionAnalytics(),
+        loading: page.facade.versionLoading,
+        error: page.facade.versionError,
+        seed: () => { page.facade.versionAnalytics.value = versionAnalyticsPayload([versionRow('2.0.0')]) },
+        assertCleanup: () => expect(page.facade.versionAnalytics.value).toBeNull(),
       },
       {
         name: 'docs analytics',
@@ -513,21 +599,112 @@ describe('dashboard admin analytics facade', () => {
     page.app.unmount()
   })
 
-  it('recomputes region labels for the active locale while retaining the source region code', async () => {
-    const requestJson = vi.fn((path: string) => {
-      if (path.startsWith('/api/admin/analytics?'))
-        return Promise.resolve(analyticsPayload({ de: 5, US: 3 }))
-      return successfulRequest(path)
-    })
-    const page = await mountAnalyticsPage({ locale: 'de', requestJson })
-    const expectedGerman = new Intl.DisplayNames(['de'], { type: 'region' }).of('DE')
+  it('resolves a region label in the active locale instead of a frozen one', async () => {
+    const page = await mountAnalyticsPage({ locale: 'de' })
 
-    expect(page.facade.topRegions.value).toContainEqual({ code: 'de', count: 5, label: expectedGerman })
+    // One code, two locales: the label is read through the page's own display
+    // names, so switching the locale re-renders it without a refetch. The codes
+    // reaching it are upper-cased upstream (`requestGeo` normalises them), which
+    // is why `Intl.DisplayNames` resolves rather than echoing the input.
+    expect(page.facade.resolveCountryLabel('DE')).toBe('Deutschland')
+
     page.locale.value = 'en'
     await nextTick()
 
-    const expectedEnglish = new Intl.DisplayNames(['en'], { type: 'region' }).of('DE')
-    expect(page.facade.topRegions.value).toContainEqual({ code: 'de', count: 5, label: expectedEnglish })
+    expect(page.facade.resolveCountryLabel('DE')).toBe('Germany')
+
+    page.app.unmount()
+  })
+
+  it('keeps an unlisted country readable instead of sending it through Intl.DisplayNames', async () => {
+    // The geo query coalesces missing geolocation to the literal 'Unknown', and
+    // `Intl.DisplayNames.of('Unknown')` throws, so the guard is load-bearing for
+    // every anonymous or un-geolocated visitor.
+    const page = await mountAnalyticsPage()
+
+    expect(page.facade.resolveCountryLabel(null)).toBe('Unknown')
+    expect(page.facade.resolveCountryLabel('Unknown')).toBe('Unknown')
+
+    page.app.unmount()
+  })
+
+  it('scopes the geo request to the selected version and clears the scope when the version is toggled off', async () => {
+    const requestJson = vi.fn(successfulRequest)
+    const page = await mountAnalyticsPage({ requestJson })
+
+    expect(page.facade.versionScope.value).toBeNull()
+
+    requestJson.mockClear()
+    page.facade.selectVersion('2.0.0')
+    await settle()
+
+    expect(page.facade.versionScope.value).toBe('2.0.0')
+    expect(requestPaths(requestJson)).toEqual(['/api/admin/analytics/geo'])
+    expect(requestFor(requestJson, '/api/admin/analytics/geo')[1]).toEqual({
+      query: { days: 30, country: undefined, limit: 240, version: '2.0.0' },
+    })
+
+    requestJson.mockClear()
+    // Selecting the row that is already in scope means "all versions", the way
+    // a chip toggles; the sentinel must not leak to the API as `'__all__'`.
+    page.facade.selectVersion('2.0.0')
+    await settle()
+
+    expect(page.facade.versionScope.value).toBeNull()
+    expect(requestFor(requestJson, '/api/admin/analytics/geo')[1]).toEqual({
+      query: { days: 30, country: undefined, limit: 240, version: undefined },
+    })
+
+    page.app.unmount()
+  })
+
+  it('fetches only the versions panel groups on a ?section=versions deep link', async () => {
+    const requestJson = vi.fn(successfulRequest)
+    const page = await mountAnalyticsPage({ query: { section: 'versions' }, requestJson })
+
+    // The KPI row reads the summary; `versions` and `geo` are what the open
+    // panel renders. Docs, intelligence, alerts and exchange belong to other
+    // panels and are fetched when those open.
+    expect(page.facade.activeSection.value).toBe('versions')
+    expect(requestPaths(requestJson)).toEqual([
+      '/api/admin/analytics?days=30',
+      '/api/admin/analytics/versions',
+      '/api/admin/analytics/geo',
+    ])
+    // The world geojson belongs to the map inside this panel, so arriving on
+    // any other section no longer pays for it.
+    expect(page.facade.worldGeoJson.value).not.toBeNull()
+
+    page.app.unmount()
+  })
+
+  it('loads the versions panel groups on first arrival and leaves the loaded ones alone afterwards', async () => {
+    const requestJson = vi.fn(successfulRequest)
+    const page = await mountAnalyticsPage({ requestJson })
+
+    // Overview: the summary alone, and no map asset.
+    expect(requestPaths(requestJson)).toEqual(['/api/admin/analytics?days=30'])
+    expect(page.facade.worldGeoJson.value).toBeNull()
+
+    requestJson.mockClear()
+    page.facade.setActiveSection('versions')
+    await settle()
+
+    expect(requestPaths(requestJson)).toEqual([
+      '/api/admin/analytics/versions',
+      '/api/admin/analytics/geo',
+    ])
+    expect(page.facade.worldGeoJson.value).not.toBeNull()
+
+    requestJson.mockClear()
+    page.facade.setActiveSection('overview')
+    await settle()
+    page.facade.setActiveSection('versions')
+    await settle()
+
+    // Both groups already hold data, so re-entering the panel must not
+    // round-trip again.
+    expect(requestPaths(requestJson)).toEqual([])
 
     page.app.unmount()
   })
