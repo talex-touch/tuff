@@ -32,6 +32,23 @@ const detail = computed(() => {
 })
 
 /**
+ * Keep a visible indeterminate bar for the downloading phase before the first task-progress
+ * payload arrives. The lifecycle phase is authoritative; byte progress only controls the fill.
+ */
+const showProgress = computed(
+  () => Boolean(props.view.progress) || props.view.phase === 'downloading'
+)
+const progressIsIndeterminate = computed(() => props.view.progress?.kind !== 'determinate')
+const progressPercentage = computed(() =>
+  props.view.progress?.kind === 'determinate' ? props.view.progress.percentage : 0
+)
+const progressStatus = computed(() =>
+  props.view.progress?.kind === 'indeterminate' && props.view.progress.tone === 'warning'
+    ? 'warning'
+    : ''
+)
+
+/**
  * Byte progress changes every second. Inside the live region a screen reader would re-read it on
  * every tick, so it sits beside the region; the bar itself still reports its value.
  */
@@ -43,7 +60,7 @@ function handleAction(): void {
 </script>
 
 <template>
-  <TuffBlockSlot class="update-status" :class="{ 'has-progress': view.progress }">
+  <TuffBlockSlot class="update-status" :class="{ 'has-progress': showProgress }">
     <template #label>
       <div class="update-status__text">
         <div class="update-status__live" aria-live="polite">
@@ -58,17 +75,13 @@ function handleAction(): void {
         </div>
         <span v-if="detail && !detailIsLive" class="update-status__detail">{{ detail }}</span>
         <TxProgressBar
-          v-if="view.progress"
+          v-if="showProgress"
           class="update-status__progress"
-          height="4px"
+          height="6px"
           :aria-label="title"
-          :indeterminate="view.progress.kind === 'indeterminate'"
-          :percentage="view.progress.kind === 'determinate' ? view.progress.percentage : 0"
-          :status="
-            view.progress.kind === 'indeterminate' && view.progress.tone === 'warning'
-              ? 'warning'
-              : ''
-          "
+          :indeterminate="progressIsIndeterminate"
+          :percentage="progressPercentage"
+          :status="progressStatus"
         />
       </div>
     </template>
