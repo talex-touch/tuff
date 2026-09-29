@@ -85,6 +85,8 @@ import type {
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
   FileIndexBatteryStatus,
+  FileIndexContentSettings,
+  FileIndexContentSettingsUpdate,
   FileIndexFailedFilesResult,
   FileIndexProgress,
   FileIndexDefaultApplicationRequest,
@@ -372,6 +374,15 @@ export const AppEvents = {
      * Get indexing statistics.
      */
     stats: defineEvent('app').module('file-index').event('stats').define<void, FileIndexStats>(),
+
+    /** Read the main-owned content indexing setting and transition state. */
+    settingsGet: defineEvent('app').module('file-index').event('settings-get').define<void, FileIndexContentSettings>(),
+
+    /** Enable content enrichment or disable it after its durable cleanup finishes. */
+    settingsUpdate: defineEvent('app')
+      .module('file-index')
+      .event('settings-update')
+      .define<FileIndexContentSettingsUpdate, FileIndexContentSettings>(),
 
     /**
      * Trigger a full index rebuild.

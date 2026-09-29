@@ -13,10 +13,10 @@ import { createFailedFilesCleanupTask } from '../../../../../service/failed-file
 import type * as schema from '../../../../../db/schema'
 import type { DbUtils } from '../../../../../db/utils'
 import { formatDuration } from '../../../../../utils/logger'
-import { getMainConfig, saveMainConfig } from '../../../../storage'
+import { getMainConfig, saveMainConfig, saveMainConfigDurable } from '../../../../storage'
 import FileSystemWatcher from '../../../file-system-watcher'
 import { isSearchRecentlyActive } from '../../../search-engine/search-activity'
-import type { FileIndexSettings } from '../types'
+import { DEFAULT_FILE_INDEX_SETTINGS, type FileIndexSettings } from '../types'
 import {
   filterIndexedWatchPendingPermissionPaths,
   isIndexedWatchPathOwned,
@@ -28,13 +28,6 @@ import {
 import { sql } from 'drizzle-orm'
 import { resolveScanProgressSchemaShape } from '../../../search-engine/scan-progress-schema'
 
-const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
-  autoScanEnabled: true,
-  autoScanIntervalMs: 24 * 60 * 60 * 1000,
-  autoScanIdleThresholdMs: 60 * 60 * 1000,
-  autoScanCheckIntervalMs: 5 * 60 * 1000,
-  extraPaths: []
-}
 /** How long after boot the first scan check runs — a check, not a forced scan. */
 const STARTUP_SCAN_CHECK_DELAY_MS = 2_500
 
@@ -166,6 +159,7 @@ export class FileProviderWatchService {
       return value
     }
 
+    const hasStoredSettings = Object.keys(data).length > 0
     const rawExtraPaths = Array.isArray(data.extraPaths)
       ? data.extraPaths.filter((value): value is string => typeof value === 'string')
       : []
@@ -203,6 +197,18 @@ export class FileProviderWatchService {
         data.autoScanCheckIntervalMs,
         DEFAULT_FILE_INDEX_SETTINGS.autoScanCheckIntervalMs
       ),
+      contentIndexingEnabled:
+        typeof data.contentIndexingEnabled === 'boolean'
+          ? data.contentIndexingEnabled
+          : DEFAULT_FILE_INDEX_SETTINGS.contentIndexingEnabled,
+      contentIndexCleanupVersion:
+        typeof data.contentIndexCleanupVersion === 'number' &&
+        Number.isInteger(data.contentIndexCleanupVersion) &&
+        data.contentIndexCleanupVersion >= 0
+          ? data.contentIndexCleanupVersion
+          : hasStoredSettings
+            ? 0
+            : DEFAULT_FILE_INDEX_SETTINGS.contentIndexCleanupVersion,
       extraPaths: normalizedExtraPaths
     }
   }
@@ -225,7 +231,12 @@ export class FileProviderWatchService {
       this.fileIndexSettings = this.normalizeFileIndexSettings(raw)
       this.applyWatchPaths(this.fileIndexSettings.extraPaths)
 
-      if (!raw || Object.keys(raw).length === 0) {
+      if (
+        !raw ||
+        Object.keys(raw).length === 0 ||
+        typeof raw.contentIndexingEnabled !== 'boolean' ||
+        typeof raw.contentIndexCleanupVersion !== 'number'
+      ) {
         saveMainConfig(StorageList.FILE_INDEX_SETTINGS, this.fileIndexSettings)
       }
     } catch (error) {
@@ -233,6 +244,15 @@ export class FileProviderWatchService {
       this.applyWatchPaths(this.fileIndexSettings.extraPaths)
       this.logWarn('Failed to load file index settings, using defaults', error)
     }
+  }
+
+  async updateFileIndexSettings(patch: Partial<FileIndexSettings>): Promise<FileIndexSettings> {
+    const next = this.normalizeFileIndexSettings({ ...this.fileIndexSettings, ...patch })
+    const result = await saveMainConfigDurable(StorageList.FILE_INDEX_SETTINGS, next)
+    if (!result.success) throw new Error('FILE_INDEX_SETTINGS_PERSIST_FAILED')
+    this.fileIndexSettings = next
+    this.applyWatchPaths(next.extraPaths)
+    return next
   }
 
   initializeBackgroundTaskService(): void {

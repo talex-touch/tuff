@@ -343,6 +343,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.4.3)
+      '@prebuilt-binary/fd':
+        specifier: 10.4.2
+        version: 10.4.2
       '@sentry/electron':
         specifier: ^7.16.0
         version: 7.16.0(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(supports-color@10.2.2)
@@ -5330,6 +5333,34 @@ packages:
 
   '@poppinss/exception@1.2.2':
     resolution: {integrity: sha512-m7bpKCD4QMlFCjA/nKTs23fuvoVFoA83brRKmObCUNmi/9tVu8Ve3w4YQAnJu4q3Tjf5fr685HYIC/IA2zHRSg==}
+
+  '@prebuilt-binary/fd-darwin-arm64@10.4.2':
+    resolution: {integrity: sha512-5XmSvpC+WLXJy911GspUUoZmKX7M30doBPVZKHs2R922qI6WrF8zOvocmvKs9kUcc0mxBumIxKhmXIWmk/7x2A==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@prebuilt-binary/fd-linux-arm64@10.4.2':
+    resolution: {integrity: sha512-oMIIxYe3ons+twbeFDjSw059dZkWDQFVsDTihbNv3xaEuY+1CyWd29MNrBU9w44CddQCBTaZ6tSdDy+hy1KuHg==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@prebuilt-binary/fd-linux-x64@10.4.2':
+    resolution: {integrity: sha512-nLMJ3XThrEl/0N5mqA2qI5010xL+9H/dMzl9L5xVg7jq3r2GraD4sotzJrmkze06TQpvHR+csbDOvSeqUYN2Bg==}
+    cpu: [x64]
+    os: [linux]
+
+  '@prebuilt-binary/fd-win32-arm64@10.4.2':
+    resolution: {integrity: sha512-Ox19KXxlPA+Zf88/w4jGO1XYNMj/gRu7BBoFAnbFktG6u1cVgoZN1k2faLAupyxc0VtICqgeKXQQCu7y/wgMKg==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@prebuilt-binary/fd-win32-x64@10.4.2':
+    resolution: {integrity: sha512-uc0bxC8M+bJ29kMPPxwPTUQQTUsrAbSeaGeOewpk34MNUXrGA/Kp2awpOUQCx6VGxwGcqg+RNvCN53qEkMAbEw==}
+    cpu: [x64]
+    os: [win32]
+
+  '@prebuilt-binary/fd@10.4.2':
+    resolution: {integrity: sha512-iqfDph7t5FxUYwerGfcJkthe3fOd19fS8j+JPMgodiUmlkeR6FSP7Lc1zkm3qs05+RpdzUQu9W39PFrzAmTD4Q==}
 
   '@protobufjs/aspromise@1.1.2':
     resolution: {integrity: sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ==}
@@ -18636,6 +18667,29 @@ snapshots:
       supports-color: 10.2.2
 
   '@poppinss/exception@1.2.2': {}
+
+  '@prebuilt-binary/fd-darwin-arm64@10.4.2':
+    optional: true
+
+  '@prebuilt-binary/fd-linux-arm64@10.4.2':
+    optional: true
+
+  '@prebuilt-binary/fd-linux-x64@10.4.2':
+    optional: true
+
+  '@prebuilt-binary/fd-win32-arm64@10.4.2':
+    optional: true
+
+  '@prebuilt-binary/fd-win32-x64@10.4.2':
+    optional: true
+
+  '@prebuilt-binary/fd@10.4.2':
+    optionalDependencies:
+      '@prebuilt-binary/fd-darwin-arm64': 10.4.2
+      '@prebuilt-binary/fd-linux-arm64': 10.4.2
+      '@prebuilt-binary/fd-linux-x64': 10.4.2
+      '@prebuilt-binary/fd-win32-arm64': 10.4.2
+      '@prebuilt-binary/fd-win32-x64': 10.4.2
 
   '@protobufjs/aspromise@1.1.2': {}
 

@@ -316,6 +316,71 @@ function verifyPackagedMacFileEvents(context) {
   console.log(`[afterPack] Verified packaged macOS file events backend: ${nativePath}`)
 }
 
+function verifyPackagedFdBinary(context) {
+  const targetArch = resolveTargetArchNames(context)[0]
+  const platformKey = context.electronPlatformName
+  const supported = {
+    'darwin-arm64': true,
+    'linux-x64': true,
+    'linux-arm64': true,
+    'win32-x64': true,
+    'win32-arm64': true
+  }
+  const targetKey = `${platformKey}-${targetArch}`
+  if (!Object.prototype.hasOwnProperty.call(supported, targetKey)) {
+    console.warn(`[afterPack] Bundled fd unavailable for ${targetKey}; legacy walker will be used`)
+    return
+  }
+
+  const resourcesDir = findPackagedResourcesDir(context.appOutDir, '[afterPack]')
+  if (!resourcesDir) {
+    throw new Error('[afterPack] Unable to locate packaged Resources for fd verification')
+  }
+  const packageName = `fd-${targetKey}`
+  const binaryName = platformKey === 'win32' ? 'fd.exe' : 'fd'
+  const candidates = [
+    path.join(
+      resourcesDir,
+      'app.asar.unpacked',
+      'node_modules',
+      '@prebuilt-binary',
+      packageName,
+      'bin',
+      binaryName
+    ),
+    path.join(
+      resourcesDir,
+      'app.asar.unpacked',
+      'node_modules',
+      '@prebuilt-binary',
+      'fd',
+      'node_modules',
+      '@prebuilt-binary',
+      packageName,
+      'bin',
+      binaryName
+    )
+  ]
+  const binaryPath = candidates.find((candidate) => fs.existsSync(candidate))
+  if (!binaryPath) {
+    throw new Error(
+      `[afterPack] Packaged fd binary is missing for ${targetKey}: ${candidates.join(', ')}`
+    )
+  }
+  if (platformKey !== 'win32') {
+    fs.chmodSync(binaryPath, 0o755)
+    fs.accessSync(binaryPath, fs.constants.X_OK)
+  }
+
+  for (const licenseName of ['fd-LICENSE-MIT.txt', 'fd-LICENSE-APACHE.txt']) {
+    const licensePath = path.join(resourcesDir, 'licenses', licenseName)
+    if (!fs.existsSync(licensePath)) {
+      throw new Error(`[afterPack] Packaged fd license is missing: ${licensePath}`)
+    }
+  }
+  console.log(`[afterPack] Verified packaged fd backend: ${binaryPath}`)
+}
+
 module.exports = async function afterPack(context) {
   ensureMacMainAppLsuiElement(context)
   const targetArch = resolveTargetArchNames(context)[0]
@@ -331,6 +396,7 @@ module.exports = async function afterPack(context) {
   verifyPackagedEverythingNative(context)
   verifyPackagedNativeAddons(context)
   verifyPackagedMacFileEvents(context)
+  verifyPackagedFdBinary(context)
   verifyPackagedOfficialPluginSeeds(context)
   pruneCrossPlatformFfprobeBinaries(context)
 
@@ -360,3 +426,4 @@ module.exports.verifyPackagedOfficialPluginSeeds = verifyPackagedOfficialPluginS
 module.exports.verifyPackagedEverythingNative = verifyPackagedEverythingNative
 module.exports.verifyPackagedNativeAddons = verifyPackagedNativeAddons
 module.exports.verifyPackagedMacFileEvents = verifyPackagedMacFileEvents
+module.exports.verifyPackagedFdBinary = verifyPackagedFdBinary

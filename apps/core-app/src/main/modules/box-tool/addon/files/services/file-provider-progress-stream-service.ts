@@ -50,6 +50,31 @@ export function getProgressStreamFlushDelayMs(
   return getIndexingProgressStreamFlushDelayMs(now, lastEmitAt, toSharedConfig(config))
 }
 
+export function resolveFileProviderOverallProgress(input: {
+  stage: string
+  current: number
+  total: number
+  previousStage: string
+  previousProgress: number
+}): number {
+  if (input.stage === 'idle') return 0
+  if (input.stage === 'completed') return 100
+
+  const stageWeights: Record<string, { start: number; weight: number }> = {
+    cleanup: { start: 0, weight: 5 },
+    scanning: { start: 5, weight: 20 },
+    indexing: { start: 25, weight: 60 },
+    reconciliation: { start: 85, weight: 15 }
+  }
+  const stageInfo = stageWeights[input.stage] ?? { start: 0, weight: 0 }
+  const stageProgress =
+    input.total > 0 ? Math.min(100, Math.max(0, (input.current / input.total) * 100)) : 0
+  const candidate = stageInfo.start + (stageProgress / 100) * stageInfo.weight
+  const previousProgress = input.previousStage === 'idle' ? 0 : input.previousProgress
+
+  return Math.max(previousProgress, Math.min(100, Math.max(0, candidate)))
+}
+
 const FILE_PROVIDER_PROGRESS_TASK_ID = 'file-provider.progress-cleanup'
 const pollingService = PollingService.getInstance()
 

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { IndexedSourceRecordBatch } from '@talex-touch/utils/search'
-import { FileProviderFullScanInsertService } from './file-provider-full-scan-insert-service'
+import {
+  FileProviderFullScanInsertService,
+  resolveFullScanPacingMs
+} from './file-provider-full-scan-insert-service'
 
 /**
  * Yield microtask turns so the persistence/publication chain can run up to the point
@@ -187,7 +190,7 @@ describe('file-provider-full-scan-insert-service', () => {
         await firstFusedGate
       }
       events.push(`fused:end:${current}`)
-      return fusedCounts[current - 1]
+      return { insertedCount: fusedCounts[current - 1] ?? 0 }
     })
     // The fused dependency owns persistence *and* publication, so the row-returning upsert
     // and the separate batch emitter must never be reached: a regression that keeps them
@@ -563,5 +566,132 @@ describe('file-provider-full-scan-insert-service', () => {
       insertedCount: 2
     })
     expect(emitProgress).toHaveBeenLastCalledWith(2, 2)
+  })
+
+  it('parks long enough to hold the reported worker CPU to the 35% duty cycle', async () => {
+    const records = [
+      {
+        path: '/tmp/a.txt',
+        name: 'a.txt',
+        extension: '.txt',
+        size: 1,
+        mtime: new Date(1000),
+        ctime: new Date(1000),
+        lastIndexedAt: new Date(1000),
+        isDir: false,
+        type: 'file'
+      }
+    ]
+    const sleep = vi.fn(async () => {})
+    const recordBatchDuration = vi.fn()
+    // The fused path never calls this, but its declared row shape is what types `mapRecord`.
+    const upsertFiles = vi.fn(async () => [] as typeof records)
+    // `now` is called as [waitStart, waitEnd, chunkStart, chunkEnd], so the chunk's own wall
+    // time is 100ms while its worker reported 140ms of CPU inside that window.
+    const ticks = [0, 0, 100, 200]
+    let tickIndex = 0
+    const service = new FileProviderFullScanInsertService({
+      sourceId: 'file-provider',
+      getBatchSize: () => 1,
+      recordBatchDuration,
+      waitForIdle: vi.fn(async () => {}),
+      upsertFiles,
+      persistAndEmitBatch: vi.fn(async () => ({
+        insertedCount: 1,
+        workerCpuMicros: 140_000
+      })),
+      emitRecordBatch: vi.fn(async () => {}),
+      mapRecord: (record) => ({
+        sourceId: 'file-provider',
+        recordId: record.path,
+        stableKey: record.path,
+        kind: 'file',
+        title: record.name,
+        path: record.path
+      }),
+      emitProgress: vi.fn(),
+      sleep,
+      now: () => ticks[Math.min(tickIndex++, ticks.length - 1)] ?? 0,
+      formatDuration: (durationMs) => `${durationMs}ms`,
+      logInfo: vi.fn(),
+      logDebug: vi.fn()
+    })
+
+    await expect(service.execute('/tmp', records, { runId: 'full-scan' })).resolves.toEqual({
+      insertedCount: 1
+    })
+
+    expect(recordBatchDuration).toHaveBeenCalledWith(100)
+    // required period = 140ms / 0.35 = 400ms, minus the 100ms the chunk already spent. The
+    // 300ms park is above the cooperative floor, so only the reported CPU can produce it.
+    expect(sleep).toHaveBeenCalledWith(300)
+  })
+
+  it('paces by the cooperative window, the proportional backoff or the CPU budget, whichever is largest', () => {
+    const cases: Array<{
+      name: string
+      batchMs: number
+      workerCpuMicros?: number
+      expected: number
+    }> = [
+      {
+        name: 'a fast chunk with no worker CPU metrics still yields the cooperative window',
+        batchMs: 10,
+        expected: 250
+      },
+      {
+        name: 'a chunk one millisecond under the slow threshold still yields the cooperative window',
+        batchMs: 249,
+        workerCpuMicros: 0,
+        expected: 250
+      },
+      {
+        name: 'a chunk at the slow threshold backs off by its own duration',
+        batchMs: 250,
+        expected: 250
+      },
+      {
+        name: 'a very slow chunk is clamped at the backoff ceiling',
+        batchMs: 2_600,
+        expected: 1_000
+      },
+      {
+        name: 'worker CPU whose duty cycle fits inside the cooperative window keeps the window',
+        batchMs: 100,
+        workerCpuMicros: 100_000,
+        expected: 250
+      },
+      {
+        name: 'worker CPU beyond the cooperative window extends the park (140ms CPU in a 100ms chunk -> 300ms)',
+        batchMs: 100,
+        workerCpuMicros: 140_000,
+        expected: 300
+      },
+      {
+        name: 'worker CPU exactly at the 35% budget adds nothing to the slow-chunk backoff',
+        batchMs: 1_000,
+        workerCpuMicros: 350_000,
+        expected: 1_000
+      },
+      {
+        name: 'a negligible CPU reading cannot shorten the cooperative window',
+        batchMs: 100,
+        workerCpuMicros: 1_000,
+        expected: 250
+      },
+      {
+        name: 'a non-numeric CPU reading cannot lengthen the park',
+        batchMs: 250,
+        workerCpuMicros: Number.NaN,
+        expected: 250
+      }
+    ]
+
+    for (const testCase of cases) {
+      expect(
+        resolveFullScanPacingMs(testCase.batchMs, testCase.workerCpuMicros),
+        testCase.name
+      ).toBe(testCase.expected)
+    }
   })
 })

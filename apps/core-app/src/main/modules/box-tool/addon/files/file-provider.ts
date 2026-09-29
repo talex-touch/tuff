@@ -11,6 +11,8 @@ import type { StreamContext } from '@talex-touch/utils/transport/main'
 import type {
   FileIndexAddPathResult,
   FileIndexBatteryStatus,
+  FileContentIndexingState,
+  FileIndexContentSettings,
   FileIndexEstimateBasis,
   FileIndexEstimateStatus,
   FileIndexFailedFilesResult,
@@ -37,7 +39,12 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../db/schema'
 import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
-import type { FileIndexSettings, ScannedFileInfo } from './types'
+import {
+  DEFAULT_FILE_INDEX_SETTINGS,
+  FILE_CONTENT_INDEX_POLICY_VERSION,
+  type FileIndexSettings,
+  type ScannedFileInfo
+} from './types'
 import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-constants'
 import type { IndexWorkerFileResult } from './workers/file-index-worker-client'
 import fs from 'node:fs/promises'
@@ -117,7 +124,10 @@ import {
 import type { FilePersistencePort, UpsertFileRecord } from '../../search-engine/search-index-writer'
 import { searchIndexWriter } from '../../search-engine/search-index-writer'
 import { isIndexingSourceMutationLeaseInvalidError } from '../../search-engine/indexing-source-mutation-gate'
-import { FileProviderProgressStreamPublisher } from './services/file-provider-progress-stream-service'
+import {
+  FileProviderProgressStreamPublisher,
+  resolveFileProviderOverallProgress
+} from './services/file-provider-progress-stream-service'
 import { FileProviderProgressEstimatorService } from './services/file-provider-progress-estimator-service'
 import {
   FileProviderWorkerStatusService,
@@ -177,7 +187,10 @@ import type { FileProviderIndexSchedulerFile } from './services/file-provider-in
 import { isIndexWorkerFileMissing } from './workers/index-worker-read-failure'
 import { FileProviderReconciliationInsertService } from './services/file-provider-reconciliation-insert-service'
 import { FileProviderCleanupDeleteService } from './services/file-provider-cleanup-delete-service'
-import { FileProviderFullScanInsertService } from './services/file-provider-full-scan-insert-service'
+import {
+  FileProviderFullScanInsertService,
+  type FileProviderFullScanPersistResult
+} from './services/file-provider-full-scan-insert-service'
 import { FileProviderFullScanRunService } from './services/file-provider-full-scan-run-service'
 import {
   FileProviderFullScanCheckpointService,
@@ -236,13 +249,6 @@ function chunkArray<T>(items: T[], chunkSize: number): T[][] {
   return chunks
 }
 
-const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
-  autoScanEnabled: true,
-  autoScanIntervalMs: 24 * 60 * 60 * 1000,
-  autoScanIdleThresholdMs: 60 * 60 * 1000,
-  autoScanCheckIntervalMs: 5 * 60 * 1000,
-  extraPaths: []
-}
 const FILE_PROVIDER_BASE_WATCH_PATHS_ENV = 'TUFF_FILE_PROVIDER_BASE_WATCH_PATHS'
 
 const EMPTY_OPENER_LOGO = `data:image/svg+xml;utf8,${encodeURIComponent(emptyOpenerSvg.trim())}`
@@ -349,6 +355,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly fileScanWorker = new FileScanWorkerClient()
   private readonly reconcileWorker = new FileReconcileWorkerClient()
   private readonly fileIndexWorker: FileIndexWorkerClient
+  private fileScanBackendLogged = false
+  private fileScanFallbackLogged = false
   private readonly thumbnailWorker = new ThumbnailWorkerClient()
   private disposeAssetBridge: (() => void) | null = null
 
@@ -383,11 +391,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     null
 
   private fileIndexSettings: FileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
+  private contentIndexingSuppressed = false
+  private contentIndexingTransition: 'idle' | 'clearing' = 'idle'
+  private contentIndexSettingsQueue: Promise<void> = Promise.resolve()
   private indexingProgress = {
     current: 0,
     total: 0,
     stage: 'idle' as 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
   }
+  /** Overall run percentage. Stage callbacks are local to a root/batch and may restart at zero. */
+  private overallIndexingProgress = 0
 
   private async waitForCacheWriteCapacity(maxQueued: number, label: string): Promise<boolean> {
     try {
@@ -958,6 +971,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getDbUtils: () => this.dbUtils,
       isSearchIndexAvailable: () => Boolean(this.searchIndex),
       isShuttingDown: () => this.shuttingDown,
+      isEnabled: () => this.isContentIndexingEnabled(),
       withMutationLease: async (operation) =>
         await this.requireRuntimeMutationDelegate().withMutationLease(operation),
       scheduleIndexing: (files, reason, leaseId) => this.scheduleIndexing(files, reason, leaseId),
@@ -977,7 +991,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getSearchIndexWorker: () => this.requireFilePersistencePort(),
       buildPersistEntries: (entries) => this.indexPersistEntryMapper.map(entries),
       publishRecords: (entries) => this.publishCommittedWorkerRecords(entries),
-      indexEmbeddings: (entries) => this.embeddingIndexService.indexCommittedEntries(entries),
+      indexEmbeddings: (entries) =>
+        this.isContentIndexingEnabled()
+          ? this.embeddingIndexService.indexCommittedEntries(entries)
+          : Promise.resolve(),
       logDebug: (message, meta) => this.logDebug(message, meta),
       logWarn: (message, error, meta) => this.logWarn(message, error, meta)
     })
@@ -997,6 +1014,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       providerId: this.id,
       getDbUtils: () => this.dbUtils,
       getSearchIndex: () => this.searchIndex,
+      isContentIndexingEnabled: () => this.isContentIndexingEnabled(),
       buildItem: (file, extensions) => this.createFileSearchItem(file, extensions),
       normalizeItem: (item, file, extensions, reason) =>
         this.normalizeFileSearchItem(item, file, extensions, { reason }),
@@ -1091,6 +1109,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // Content enrichment is durably marked pending before admission. Stop accepting work and
     // terminate its read-only worker now, rather than letting a parser/publication barrier consume
     // the app's entire quit budget. A later launch resumes every unfinished row.
+    this.enrichmentResumeService.stop()
     this.indexSchedulerService.close()
     this.fileIndexWorker.shutdown()
     this.disposeAssetBridge?.()
@@ -1841,8 +1860,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private async persistAndPublishFullScanBatch(
     records: UpsertFileRecord[],
     options?: FileIndexRunOptions
-  ): Promise<number> {
-    if (records.length === 0) return 0
+  ): Promise<FileProviderFullScanPersistResult> {
+    if (records.length === 0) return { insertedCount: 0 }
 
     // Custom sinks are an explicit escape hatch used by tests/streaming callers. Preserve their
     // existing two-step behavior; only the normal consumer path uses the fused worker request.
@@ -1857,11 +1876,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           options
         )
       }
-      return persisted.length
+      return { insertedCount: persisted.length }
     }
 
     const acceptedRecords = this.filterSearchIndexUpsertRecords(records)
-    if (acceptedRecords.length === 0) return 0
+    if (acceptedRecords.length === 0) return { insertedCount: 0 }
     if (!(await this.ensureSearchIndexWorkerReady('full-scan.fused'))) {
       throw new Error('FILE_PERSISTENCE_PORT_UNAVAILABLE')
     }
@@ -1891,13 +1910,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           legacyItemIds: metrics?.legacyItemIds,
           workerDurationMs: metrics?.workerDurationMs,
           persistDurationMs: metrics?.persistDurationMs,
+          workerCpuMicros: metrics?.workerCpuMicros,
           applyDurationMs: metrics?.applyDurationMs,
           roundTripDurationMs: metrics?.roundTripDurationMs,
           visibilityDurationMs: metrics?.visibilityDurationMs,
           storeBoundary: 'file-persistence-fts'
         }
       })
-      return persistedCount
+      return { insertedCount: persistedCount, workerCpuMicros: metrics?.workerCpuMicros }
     } catch (error) {
       recordRuntimeWriteFailureSnapshot(this.ftsWriteSnapshotService, {
         error,
@@ -1929,7 +1949,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const startedAt = performance.now()
     try {
       const persisted = (await this.requireFilePersistencePort().upsertFiles(
-        acceptedRecords
+        acceptedRecords,
+        reason.startsWith('full-scan.') ? 'background' : 'normal'
       )) as unknown as Array<typeof filesSchema.$inferSelect>
       recordRuntimeWriteSnapshot(this.ftsWriteSnapshotService, {
         entries: persisted.length,
@@ -2116,6 +2137,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         const workerReady = await this.ensureSearchIndexWorkerReady('startup.background')
         if (this.shuttingDown) return
         this.initializeBackgroundTaskService()
+        if (workerReady) {
+          await this.reconcileContentIndexingPolicyAtStartup()
+          if (this.shuttingDown) return
+        }
         await this.ensureFileSystemWatchers()
         if (this.shuttingDown) return
 
@@ -2230,6 +2255,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.initializationFailed = false
     this.initializationFailure = null
+    this.resetIndexingProgressForRun()
     const run = this._initialize(options)
       .then(async (stats) => {
         if (!options?.onRecordBatch && !options?.onDelta) {
@@ -2558,6 +2584,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       ? path.join(databaseDir, 'database.db')
       : path.join(app.getPath('userData'), 'database.db')
 
+    this.watchService.loadFileIndexSettings()
+    this.syncWatchServiceState()
+
     this.logDebug('FileProvider.onLoad called', {
       watchPathsCount: this.watchPaths.length,
       watchPaths: JSON.stringify(this.watchPaths.slice(0, 3))
@@ -2648,6 +2677,143 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.openersChannelRegistered = true
   }
 
+  private isContentIndexingEnabled(): boolean {
+    return this.fileIndexSettings.contentIndexingEnabled && !this.contentIndexingSuppressed
+  }
+
+  private resolveContentIndexingState(): FileContentIndexingState {
+    if (this.contentIndexingTransition === 'clearing') return 'clearing'
+    if (!this.fileIndexSettings.contentIndexingEnabled) return 'disabled'
+    const scheduler = this.indexSchedulerService.getSnapshot()
+    return scheduler.activeBatches > 0 ||
+      scheduler.queuedBatches > 0 ||
+      this.enrichmentResumeService.isActive()
+      ? 'indexing'
+      : 'idle'
+  }
+
+  public getContentIndexSettings(): FileIndexContentSettings {
+    return {
+      contentIndexingEnabled: this.fileIndexSettings.contentIndexingEnabled,
+      state: this.resolveContentIndexingState()
+    }
+  }
+
+  public async updateContentIndexSettings(
+    contentIndexingEnabled: boolean
+  ): Promise<FileIndexContentSettings> {
+    let releaseQueue!: () => void
+    const previous = this.contentIndexSettingsQueue
+    this.contentIndexSettingsQueue = new Promise<void>((resolve) => {
+      releaseQueue = resolve
+    })
+    await previous
+
+    try {
+      if (contentIndexingEnabled === this.fileIndexSettings.contentIndexingEnabled) {
+        return this.getContentIndexSettings()
+      }
+
+      if (contentIndexingEnabled) {
+        await this.watchService.updateFileIndexSettings({ contentIndexingEnabled: true })
+        this.syncWatchServiceState()
+        this.contentIndexingSuppressed = false
+        this.enrichmentResumeService.resume('settings-enabled')
+        return this.getContentIndexSettings()
+      }
+
+      this.contentIndexingSuppressed = true
+      this.contentIndexingTransition = 'clearing'
+      this.enrichmentResumeService.stop()
+      this.indexSchedulerService.cancelPending()
+      try {
+        await this.clearContentIndexingDataWithLease()
+        await this.watchService.updateFileIndexSettings({
+          contentIndexingEnabled: false,
+          contentIndexCleanupVersion: FILE_CONTENT_INDEX_POLICY_VERSION
+        })
+        this.syncWatchServiceState()
+        this.contentIndexingSuppressed = false
+        this.contentIndexingTransition = 'idle'
+        return this.getContentIndexSettings()
+      } catch (error) {
+        this.contentIndexingSuppressed = false
+        this.enrichmentResumeService.resume('settings-disable-recovery')
+        throw error
+      } finally {
+        this.contentIndexingTransition = 'idle'
+      }
+    } finally {
+      releaseQueue()
+    }
+  }
+
+  private async reconcileContentIndexingPolicyAtStartup(): Promise<void> {
+    if (this.fileIndexSettings.contentIndexingEnabled) {
+      this.enrichmentResumeService.resume('startup')
+      return
+    }
+    if (this.fileIndexSettings.contentIndexCleanupVersion >= FILE_CONTENT_INDEX_POLICY_VERSION) {
+      return
+    }
+
+    this.contentIndexingSuppressed = true
+    this.contentIndexingTransition = 'clearing'
+    try {
+      await this.clearContentIndexingDataWithLease()
+      await this.watchService.updateFileIndexSettings({
+        contentIndexCleanupVersion: FILE_CONTENT_INDEX_POLICY_VERSION
+      })
+      this.syncWatchServiceState()
+    } finally {
+      this.contentIndexingSuppressed = false
+      this.contentIndexingTransition = 'idle'
+    }
+  }
+
+  private async clearContentIndexingDataWithLease(): Promise<void> {
+    const delegate = this.requireRuntimeMutationDelegate()
+    await delegate.withMutationLease(async () => {
+      this.indexSchedulerService.cancelPending()
+      await this.indexSchedulerService.drain(this.indexSchedulerService.getDrainTimeoutMs(false))
+      await this.indexRuntimeService.waitForPersisted()
+      const affectedItems = await this.clearContentIndexingData()
+      await delegate.publishContentCleared(affectedItems)
+    })
+    this.indexStatsCache = null
+  }
+
+  private async clearContentIndexingData(): Promise<number> {
+    if (!this.dbUtils) return 0
+    const statements = [
+      {
+        sql: "UPDATE files SET content = NULL WHERE type = 'file' AND content IS NOT NULL",
+        args: []
+      },
+      { sql: "DELETE FROM embeddings WHERE source_type = 'file'", args: [] },
+      { sql: 'DELETE FROM file_index_progress', args: [] },
+      { sql: "UPDATE search_index SET content = '' WHERE provider = ?", args: [this.id] }
+    ]
+
+    if (this.isSearchSplitEnabledNow()) {
+      const results = await searchIndexWriter.execWrite(statements, 'transaction')
+      return Number(results[3]?.rowsAffected ?? results[0]?.rowsAffected ?? 0)
+    }
+
+    const db = this.dbUtils.getFileIndexReadDb()
+    return await scheduleDbWrite('file-index.content.clear', async () => {
+      return await db.transaction(async (tx) => {
+        await tx.run(sql.raw(statements[0]!.sql))
+        await tx.run(sql.raw(statements[1]!.sql))
+        await tx.run(sql.raw(statements[2]!.sql))
+        const result = await tx.run(
+          sql`UPDATE search_index SET content = '' WHERE provider = ${this.id}`
+        )
+        return Number(result.rowsAffected ?? 0)
+      })
+    })
+  }
+
   /**
    * 获取索引状态。公共边界只暴露稳定分类（errorCode/retryable/reportId）；
    * 原始 Error 保留在主进程本地诊断（logError / operationalErrorService）。
@@ -2683,14 +2849,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       startupReady: this.backgroundStartupReady,
       startupPending: this.backgroundStartupPromise !== null,
       startupErrorCode: this.backgroundStartupFailure?.code ?? null,
-      progress: { ...this.indexingProgress },
+      progress: { ...this.indexingProgress, progress: this.overallIndexingProgress },
       startTime: this.indexingStartTime,
       estimatedCompletion,
       estimatedRemainingMs,
       averageItemsPerSecond: this.indexingStats.averageItemsPerSecond,
       estimateStatus: this.indexingStats.estimateStatus,
       speedSampleCount: this.indexingStats.speedSampleCount,
-      estimateBasis: this.indexingStats.estimateBasis
+      estimateBasis: this.indexingStats.estimateBasis,
+      contentIndexingEnabled: this.fileIndexSettings.contentIndexingEnabled,
+      contentIndexingState: this.resolveContentIndexingState()
     }
   }
 
@@ -3017,7 +3185,22 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         excludePathsSet,
         500,
         signal,
-        onStats,
+        (stats) => {
+          const meta = { backend: stats.backend ?? 'legacy' }
+          if (stats.fdFallback && !this.fileScanFallbackLogged) {
+            this.fileScanFallbackLogged = true
+            this.logWarn(
+              'Bundled fd scan unavailable or failed; legacy walker completed',
+              undefined,
+              meta
+            )
+          }
+          if (!this.fileScanBackendLogged) {
+            this.fileScanBackendLogged = true
+            if (!stats.fdFallback) this.logInfo('File scan backend completed', meta)
+          }
+          onStats?.(stats)
+        },
         options
       )) {
         yielded = true
@@ -3234,7 +3417,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     reason: string,
     mutationLeaseId?: string
   ): Promise<IndexedWorkerScheduleResult> {
-    if (!this.searchIndex || files.length === 0) {
+    if (!this.isContentIndexingEnabled() || !this.searchIndex || files.length === 0) {
       return Promise.resolve({ accepted: 0, deferred: 0 })
     }
     if (this.shuttingDown && !this.isInitializing && !mutationLeaseId) {
@@ -3255,6 +3438,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     mutationLeaseId?: string
   ): Promise<IndexedWorkerScheduleResult> {
     await this.markContentEnrichmentPending(files, mutationLeaseId)
+    if (!this.isContentIndexingEnabled() || this.isInitializing) {
+      return { accepted: 0, deferred: files.length }
+    }
     if (this.shuttingDown && !this.isInitializing && !mutationLeaseId) {
       return { accepted: 0, deferred: 0 }
     }
@@ -3677,12 +3863,35 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+  private resetIndexingProgressForRun(): void {
+    this.indexingProgress = { stage: 'idle', current: 0, total: 0 }
+    this.overallIndexingProgress = 0
+    this.indexingStartTime = null
+    this.indexingStats = {
+      processedItems: 0,
+      startTime: 0,
+      lastUpdateTime: 0,
+      averageItemsPerSecond: 0,
+      estimateStatus: 'unknown',
+      speedSampleCount: 0,
+      estimateBasis: 'none'
+    }
+    this.progressEstimator.reset()
+  }
+
   private emitIndexingProgress(
     stage: typeof this.indexingProgress.stage,
     current: number,
     total: number
   ): void {
     const now = Date.now()
+    this.overallIndexingProgress = resolveFileProviderOverallProgress({
+      stage,
+      current,
+      total,
+      previousStage: this.indexingProgress.stage,
+      previousProgress: this.overallIndexingProgress
+    })
 
     // Track start time when indexing begins
     if (stage !== 'idle' && stage !== 'completed' && !this.indexingStartTime) {
@@ -3734,7 +3943,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       stage,
       current,
       total,
-      progress: total > 0 ? Math.round((current / total) * 100) : 0,
+      progress: this.overallIndexingProgress,
       startTime: this.indexingStartTime,
       estimatedRemainingMs: estimate.estimatedRemainingMs,
       averageItemsPerSecond: this.indexingStats.averageItemsPerSecond,

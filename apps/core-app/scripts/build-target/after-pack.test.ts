@@ -7,12 +7,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const require = createRequire(import.meta.url)
 const {
   verifyPackagedEverythingNative,
+  verifyPackagedFdBinary,
   verifyPackagedNativeAddons,
   verifyPackagedOfficialPluginSeeds
 } = require('./after-pack.js') as {
   verifyPackagedEverythingNative: (context: {
     appOutDir: string
     electronPlatformName: string
+  }) => void
+  verifyPackagedFdBinary: (context: {
+    appOutDir: string
+    electronPlatformName: string
+    arch: number
   }) => void
   verifyPackagedNativeAddons: (
     context: { appOutDir: string; electronPlatformName: string },
@@ -327,5 +333,126 @@ describe('verifyPackagedNativeAddons', () => {
     expect(() =>
       verifyPackagedNativeAddons({ appOutDir, electronPlatformName: 'win32' }, { strict: true })
     ).toThrow(/Packaged native addons missing from .*: tuff_native_everything\.node\./)
+  })
+})
+
+type PackagedFdFixture = {
+  appOutDir: string
+  binaryPath: string
+  resourcesDir: string
+}
+
+/**
+ * The packaged layout electron-builder produces for an unpacked platform binary. `nested` is the
+ * pnpm spelling, where the platform package sits under the wrapper package instead of beside it.
+ */
+const FD_BINARY_LAYOUTS = {
+  flat: ['node_modules', '@prebuilt-binary', 'fd-darwin-arm64', 'bin', 'fd'],
+  nested: [
+    'node_modules',
+    '@prebuilt-binary',
+    'fd',
+    'node_modules',
+    '@prebuilt-binary',
+    'fd-darwin-arm64',
+    'bin',
+    'fd'
+  ]
+} as const
+
+async function createPackagedFdFixture(
+  options: {
+    layout?: keyof typeof FD_BINARY_LAYOUTS
+    licenses?: readonly string[]
+  } = {}
+): Promise<PackagedFdFixture> {
+  const workspaceRoot = await fs.mkdtemp(path.join(tmpdir(), 'after-pack-fd-'))
+  fixtureRoots.push(workspaceRoot)
+
+  const appOutDir = path.join(workspaceRoot, 'packaged-app')
+  const resourcesDir = path.join(appOutDir, 'Tuff.app', 'Contents', 'Resources')
+  const unpackedRoot = path.join(resourcesDir, 'app.asar.unpacked')
+  await fs.mkdir(unpackedRoot, { recursive: true })
+  await fs.writeFile(path.join(resourcesDir, 'app.asar'), 'fixture')
+
+  for (const licenseName of options.licenses ?? []) {
+    const licensePath = path.join(resourcesDir, 'licenses', licenseName)
+    await fs.mkdir(path.dirname(licensePath), { recursive: true })
+    await fs.writeFile(licensePath, 'fixture license')
+  }
+
+  const binaryPath = path.join(unpackedRoot, ...FD_BINARY_LAYOUTS[options.layout ?? 'flat'])
+  if (options.layout !== undefined) {
+    await fs.mkdir(path.dirname(binaryPath), { recursive: true })
+    // 0o644 like a package manager that dropped the executable bit, so the verifier's chmod is
+    // the only thing that can make the X_OK probe pass.
+    await fs.writeFile(binaryPath, 'fixture fd', { mode: 0o644 })
+  }
+
+  return { appOutDir, binaryPath, resourcesDir }
+}
+
+const FD_LICENSES = ['fd-LICENSE-MIT.txt', 'fd-LICENSE-APACHE.txt'] as const
+
+describe('verifyPackagedFdBinary', () => {
+  it('marks the unpacked fd binary executable and accepts its archived licenses', async () => {
+    const { appOutDir, binaryPath } = await createPackagedFdFixture({
+      layout: 'flat',
+      licenses: FD_LICENSES
+    })
+
+    expect(() =>
+      verifyPackagedFdBinary({ appOutDir, electronPlatformName: 'darwin', arch: 3 })
+    ).not.toThrow()
+
+    // The package that ships must be runnable: spawn() fails on a binary without the exec bit.
+    expect(((await fs.stat(binaryPath)).mode & 0o777).toString(8)).toBe('755')
+  })
+
+  it('accepts the pnpm-nested platform package layout', async () => {
+    const { appOutDir, binaryPath } = await createPackagedFdFixture({
+      layout: 'nested',
+      licenses: FD_LICENSES
+    })
+
+    expect(() =>
+      verifyPackagedFdBinary({ appOutDir, electronPlatformName: 'darwin', arch: 3 })
+    ).not.toThrow()
+    expect(((await fs.stat(binaryPath)).mode & 0o777).toString(8)).toBe('755')
+  })
+
+  it('fails the package when the fd binary is missing from every known layout', async () => {
+    const { appOutDir } = await createPackagedFdFixture({ licenses: FD_LICENSES })
+
+    expect(() =>
+      verifyPackagedFdBinary({ appOutDir, electronPlatformName: 'darwin', arch: 3 })
+    ).toThrow(/Packaged fd binary is missing for darwin-arm64/)
+  })
+
+  it('fails the package when only one of the two fd license texts was archived', async () => {
+    const { appOutDir } = await createPackagedFdFixture({
+      layout: 'flat',
+      licenses: ['fd-LICENSE-MIT.txt']
+    })
+
+    expect(() =>
+      verifyPackagedFdBinary({ appOutDir, electronPlatformName: 'darwin', arch: 3 })
+    ).toThrow(/Packaged fd license is missing: .*fd-LICENSE-APACHE\.txt/)
+  })
+
+  it('skips verification for a target with no bundled fd and leaves the package build intact', async () => {
+    // darwin-x64 has no platform package: packaging must succeed and the runtime falls back to
+    // the legacy walker rather than failing the build for a binary that does not exist.
+    const { appOutDir } = await createPackagedFdFixture()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      expect(() =>
+        verifyPackagedFdBinary({ appOutDir, electronPlatformName: 'darwin', arch: 1 })
+      ).not.toThrow()
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('darwin-x64'))
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

@@ -34,6 +34,8 @@ import type {
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
   FileIndexDefaultApplicationRequest,
+  FileIndexContentSettings,
+  FileIndexContentSettingsUpdate,
   FileIndexDefaultApplicationResult,
   FileIndexOpenWithRequest,
   FileIndexOpenWithResult,
@@ -1767,6 +1769,23 @@ export class CommonChannelModule extends BaseModule {
           }
         }
       }),
+      transport.on<void, FileIndexContentSettings>(
+        AppEvents.fileIndex.settingsGet,
+        (_payload, context) => {
+          this.assertHostOnly(context, 'fileIndex.settingsGet')
+          return fileProvider.getContentIndexSettings()
+        }
+      ),
+      transport.on<FileIndexContentSettingsUpdate, FileIndexContentSettings>(
+        AppEvents.fileIndex.settingsUpdate,
+        async (payload, context) => {
+          this.assertHostOnly(context, 'fileIndex.settingsUpdate')
+          if (typeof payload?.contentIndexingEnabled !== 'boolean') {
+            throw new Error('FILE_INDEX_CONTENT_SETTING_INVALID')
+          }
+          return await fileProvider.updateContentIndexSettings(payload.contentIndexingEnabled)
+        }
+      ),
       transport.on(AppEvents.fileIndex.failedFiles, async () => {
         try {
           return await fileProvider.getFailedFiles()
