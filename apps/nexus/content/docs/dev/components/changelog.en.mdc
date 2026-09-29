@@ -11,18 +11,28 @@ verified: true
 
 # Component Changelog & Lifecycle
 
-Since its standalone release, all 161 exported components in TuffEx maintain an authoritative Since version. Every version bump is verified by an automated gate (`audit:changelog`), requiring an explicit declaration of impacted components and change notes.
+Since its standalone release, all 165 exported components in TuffEx maintain an authoritative Since version. Every version bump is verified by an automated gate (`audit:changelog`), requiring an explicit declaration of impacted components and change notes.
 
 ## Overview
 
-The current latest release of TuffEx is **v0.6.1**, exporting a total of **161** components.
+The current latest release of TuffEx is **v0.6.2**, exporting a total of **165** components.
 
-- **Base Suite**: 93 general, form, layout, and navigation components
-- **Pro Suite**: 30 advanced interaction, effect, and primitive components
-- **AI Suite**: 38 AI chat, agent, reasoning, and context components
+- **Base Suite**: 94 general, form, layout, and navigation components
+- **Pro Suite**: 39 advanced interaction, effect, and primitive components
+- **AI Suite**: 32 AI chat, agent, reasoning, and context components
 - **Gate Protection**: Bumping package version without a version chapter or component breakdown will fail CI audits
 
 ## Release History
+
+### Version 0.6.2 (2026-09-28)
+
+Interactive visual effects suite and admin data-container enhancements.
+
+- **New Components (4)**: [bot-avatar](./bot-avatar.en.mdc), [image-generation](./image-generation.en.mdc), [metal-fx](./metal-fx.en.mdc), [voice-beam](./voice-beam.en.mdc)
+- **Updated Components (4)**: [card](./card.en.mdc), [empty-state](./empty-state.en.mdc), [progress-bar](./progress-bar.en.mdc), [status-badge](./status-badge.en.mdc)
+- **Key Features**:
+  - Added agent avatars, image-generation reveals, liquid metal effects, and audio-reactive voice beams;
+  - TxProgressBar now supports segmented values, while admin cards and empty states share one container system.
 
 ### Version 0.6.1 (2026-09-28)
 
@@ -123,6 +133,7 @@ The following table lists the introduction version (Since) and suite for all 161
 | `base-surface` | pro | **0.3.4** | [Read Docs](./base-surface.en.mdc) |
 | `blank-slate` | base | **0.3.4** | [Read Docs](./blank-slate.en.mdc) |
 | `border-beam` | pro | **0.3.9** | [Read Docs](./border-beam.en.mdc) |
+| `bot-avatar` | ai | **0.6.2** | [Read Docs](./bot-avatar.en.mdc) |
 | `breadcrumb` | base | **0.3.4** | [Read Docs](./breadcrumb.en.mdc) |
 | `button` | base | **0.3.4** | [Read Docs](./button.en.mdc) |
 | `card` | base | **0.3.4** | [Read Docs](./card.en.mdc) |
@@ -183,6 +194,7 @@ The following table lists the introduction version (Since) and suite for all 161
 | `icon-morph` | pro | **0.6.0** | [Read Docs](./icon-morph.en.mdc) |
 | `icon-picker` | base | **0.6.0** | [Read Docs](./icon-picker.en.mdc) |
 | `image-gallery` | base | **0.3.4** | [Read Docs](./image-gallery.en.mdc) |
+| `image-generation` | pro | **0.6.2** | [Read Docs](./image-generation.en.mdc) |
 | `image-uploader` | base | **0.3.4** | [Read Docs](./image-uploader.en.mdc) |
 | `inline-citation` | ai | **0.3.9** | [Read Docs](./inline-citation.en.mdc) |
 | `input` | base | **0.3.4** | [Read Docs](./input.en.mdc) |
@@ -196,6 +208,7 @@ The following table lists the introduction version (Since) and suite for all 161
 | `markdown-editor` | pro | **0.3.9** | [Read Docs](./markdown-editor.en.mdc) |
 | `markdown-view` | base | **0.3.4** | [Read Docs](./markdown-view.en.mdc) |
 | `message-actions` | ai | **0.3.9** | [Read Docs](./message-actions.en.mdc) |
+| `metal-fx` | pro | **0.6.2** | [Read Docs](./metal-fx.en.mdc) |
 | `modal` | base | **0.3.4** | [Read Docs](./modal.en.mdc) |
 | `mode-chip` | ai | **0.6.0** | [Read Docs](./mode-chip.en.mdc) |
 | `nav-bar` | base | **0.3.4** | [Read Docs](./nav-bar.en.mdc) |
@@ -268,6 +281,7 @@ The following table lists the introduction version (Since) and suite for all 161
 | `tuff-logo-stroke` | pro | **0.3.4** | [Read Docs](./tuff-logo-stroke.en.mdc) |
 | `version-capsule` | pro | **0.3.9** | [Read Docs](./version-capsule.en.mdc) |
 | `virtual-list` | pro | **0.3.4** | [Read Docs](./virtual-list.en.mdc) |
+| `voice-beam` | pro | **0.6.2** | [Read Docs](./voice-beam.en.mdc) |
 | `working-indicator` | ai | **0.3.9** | [Read Docs](./working-indicator.en.mdc) |
 
 ## Version Gate and Standards

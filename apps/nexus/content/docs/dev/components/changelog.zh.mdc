@@ -11,18 +11,28 @@ verified: true
 
 # 组件变更历程
 
-TuffEx 组件库自独立发布以来，所有 161 个导出组件均建立明确的生命周期版本追溯（Since Version）。每次新版本发版均受自动化门禁（`audit:changelog`）硬性校验，必须明确声明本次更新所涉及的组件清单与变更详情。
+TuffEx 组件库自独立发布以来，所有 165 个导出组件均建立明确的生命周期版本追溯（Since Version）。每次新版本发版均受自动化门禁（`audit:changelog`）硬性校验，必须明确声明本次更新所涉及的组件清单与变更详情。
 
 ## 版本概览
 
-当前 TuffEx 最新发布版本为 **v0.6.1**，累计导出组件总数为 **161** 个。
+当前 TuffEx 最新发布版本为 **v0.6.2**，累计导出组件总数为 **165** 个。
 
-- **基础套件 (Base)**: 93 个日常通用、表单、布局与导航组件
-- **进阶套件 (Pro)**: 30 个高阶交互、动效与底层原语组件
-- **AI 套件 (Ai)**: 38 个 AI 聊天、智能体、推理与上下文组件
+- **基础套件 (Base)**: 94 个日常通用、表单、布局与导航组件
+- **进阶套件 (Pro)**: 39 个高阶交互、动效与底层原语组件
+- **AI 套件 (Ai)**: 32 个 AI 聊天、智能体、推理与上下文组件
 - **门禁保护**: 新版本发布若未包含版本章节、未声明变动组件或组件 Since 版本缺失，CI 与发布流程将自动拦截阻断
 
 ## 版本更新历程
+
+### 0.6.2 版本 (2026-09-28)
+
+交互视觉特效套件与后台数据容器增强。
+
+- **新增组件 (4 个)**: [bot-avatar](./bot-avatar.zh.mdc), [image-generation](./image-generation.zh.mdc), [metal-fx](./metal-fx.zh.mdc), [voice-beam](./voice-beam.zh.mdc)
+- **更新组件 (4 个)**: [card](./card.zh.mdc), [empty-state](./empty-state.zh.mdc), [progress-bar](./progress-bar.zh.mdc), [status-badge](./status-badge.zh.mdc)
+- **关键特性**:
+  - 提供智能体头像、图像生成揭示、液态金属与语音响应光束；
+  - TxProgressBar 支持多段聚合，后台卡片与空状态容器完成统一。
 
 ### 0.6.1 版本 (2026-09-28)
 
@@ -123,6 +133,7 @@ TuffEx 独立包初始基线建立。
 | `base-surface` | pro | **0.3.4** | [查看文档](./base-surface.zh.mdc) |
 | `blank-slate` | base | **0.3.4** | [查看文档](./blank-slate.zh.mdc) |
 | `border-beam` | pro | **0.3.9** | [查看文档](./border-beam.zh.mdc) |
+| `bot-avatar` | ai | **0.6.2** | [查看文档](./bot-avatar.zh.mdc) |
 | `breadcrumb` | base | **0.3.4** | [查看文档](./breadcrumb.zh.mdc) |
 | `button` | base | **0.3.4** | [查看文档](./button.zh.mdc) |
 | `card` | base | **0.3.4** | [查看文档](./card.zh.mdc) |
@@ -183,6 +194,7 @@ TuffEx 独立包初始基线建立。
 | `icon-morph` | pro | **0.6.0** | [查看文档](./icon-morph.zh.mdc) |
 | `icon-picker` | base | **0.6.0** | [查看文档](./icon-picker.zh.mdc) |
 | `image-gallery` | base | **0.3.4** | [查看文档](./image-gallery.zh.mdc) |
+| `image-generation` | pro | **0.6.2** | [查看文档](./image-generation.zh.mdc) |
 | `image-uploader` | base | **0.3.4** | [查看文档](./image-uploader.zh.mdc) |
 | `inline-citation` | ai | **0.3.9** | [查看文档](./inline-citation.zh.mdc) |
 | `input` | base | **0.3.4** | [查看文档](./input.zh.mdc) |
@@ -196,6 +208,7 @@ TuffEx 独立包初始基线建立。
 | `markdown-editor` | pro | **0.3.9** | [查看文档](./markdown-editor.zh.mdc) |
 | `markdown-view` | base | **0.3.4** | [查看文档](./markdown-view.zh.mdc) |
 | `message-actions` | ai | **0.3.9** | [查看文档](./message-actions.zh.mdc) |
+| `metal-fx` | pro | **0.6.2** | [查看文档](./metal-fx.zh.mdc) |
 | `modal` | base | **0.3.4** | [查看文档](./modal.zh.mdc) |
 | `mode-chip` | ai | **0.6.0** | [查看文档](./mode-chip.zh.mdc) |
 | `nav-bar` | base | **0.3.4** | [查看文档](./nav-bar.zh.mdc) |
@@ -268,6 +281,7 @@ TuffEx 独立包初始基线建立。
 | `tuff-logo-stroke` | pro | **0.3.4** | [查看文档](./tuff-logo-stroke.zh.mdc) |
 | `version-capsule` | pro | **0.3.9** | [查看文档](./version-capsule.zh.mdc) |
 | `virtual-list` | pro | **0.3.4** | [查看文档](./virtual-list.zh.mdc) |
+| `voice-beam` | pro | **0.6.2** | [查看文档](./voice-beam.zh.mdc) |
 | `working-indicator` | ai | **0.3.9** | [查看文档](./working-indicator.zh.mdc) |
 
 ## 版本门禁与规范

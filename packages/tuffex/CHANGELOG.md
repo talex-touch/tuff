@@ -4,6 +4,11 @@
 
 ## [0.6.2] - 2026-09-28
 
+### 📦 组件变动 (Components)
+
+- **新增组件 (Since 0.6.2)**: `bot-avatar`, `image-generation`, `metal-fx`, `voice-beam`
+- **更新组件 (Updated)**: `card`, `empty-state`, `progress-bar`, `status-badge`
+
 ### ✨ 组件增强与生态收敛
 
 - 深度适配并导出四大交互视觉特效套件：`TxImageGeneration` 图像生成占位揭示、`TxMetalFx` 金属质感物理悬浮徽标、`TxVoiceBeam` 语音声波光束与 `TxBotAvatar` 智能体动态头像。

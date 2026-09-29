@@ -3,7 +3,7 @@ title: "MetalFx"
 description: "实时 WebGL2 液态金属材质，用于按钮、圆形图标按钮、文字与徽标，带游走的辉光与邻元素反射"
 category: Effects
 status: beta
-since: 0.6.0
+since: 0.6.2
 tags: [metal, webgl, button, badge, cta, reflection]
 syncStatus: reviewed
 verified: true

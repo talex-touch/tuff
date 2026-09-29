@@ -3,7 +3,7 @@ title: "ImageGeneration"
 description: "WebGL pixel-mosaic placeholder for generated or slow-loading images, with a dissolve reveal and an in-place regenerate churn"
 category: Effects
 status: beta
-since: 0.6.0
+since: 0.6.2
 tags: [image, generation, loading, shader, webgl, placeholder]
 syncStatus: reviewed
 verified: true

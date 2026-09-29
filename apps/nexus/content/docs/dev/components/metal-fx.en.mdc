@@ -3,7 +3,7 @@ title: "MetalFx"
 description: "Real-time WebGL2 liquid metal for buttons, circular icon buttons, text and badges, with a wandering halo and neighbour reflections"
 category: Effects
 status: beta
-since: 0.6.0
+since: 0.6.2
 tags: [metal, webgl, button, badge, cta, reflection]
 syncStatus: reviewed
 verified: true

@@ -1,8 +1,26 @@
 {
   "$schema": "./components-lifecycle.schema.json",
-  "currentVersion": "0.6.1",
-  "totalComponents": 161,
+  "currentVersion": "0.6.2",
+  "totalComponents": 165,
   "versions": [
+    {
+      "version": "0.6.2",
+      "date": "2026-09-28",
+      "title": "交互视觉特效套件 (Interactive Visual Effects Suite)",
+      "newComponents": [
+        "bot-avatar",
+        "image-generation",
+        "metal-fx",
+        "voice-beam"
+      ],
+      "updatedComponents": [
+        "card",
+        "empty-state",
+        "progress-bar",
+        "status-badge"
+      ],
+      "summary": "新增图像生成揭示、液态金属、语音光束与机器人头像组件，并增强进度条和后台数据容器。"
+    },
     {
       "version": "0.6.1",
       "date": "2026-09-28",
@@ -366,6 +384,11 @@
       "since": "0.3.9",
       "suite": "pro"
     },
+    "bot-avatar": {
+      "slug": "bot-avatar",
+      "since": "0.6.2",
+      "suite": "ai"
+    },
     "breadcrumb": {
       "slug": "breadcrumb",
       "since": "0.3.4",
@@ -666,6 +689,11 @@
       "since": "0.3.4",
       "suite": "base"
     },
+    "image-generation": {
+      "slug": "image-generation",
+      "since": "0.6.2",
+      "suite": "pro"
+    },
     "image-uploader": {
       "slug": "image-uploader",
       "since": "0.3.4",
@@ -730,6 +758,11 @@
       "slug": "message-actions",
       "since": "0.3.9",
       "suite": "ai"
+    },
+    "metal-fx": {
+      "slug": "metal-fx",
+      "since": "0.6.2",
+      "suite": "pro"
     },
     "modal": {
       "slug": "modal",
@@ -1089,6 +1122,11 @@
     "virtual-list": {
       "slug": "virtual-list",
       "since": "0.3.4",
+      "suite": "pro"
+    },
+    "voice-beam": {
+      "slug": "voice-beam",
+      "since": "0.6.2",
       "suite": "pro"
     },
     "working-indicator": {
