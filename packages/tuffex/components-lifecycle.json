@@ -1,8 +1,18 @@
 {
   "$schema": "./components-lifecycle.schema.json",
-  "currentVersion": "0.6.0",
+  "currentVersion": "0.6.1",
   "totalComponents": 161,
   "versions": [
+    {
+      "version": "0.6.1",
+      "date": "2026-09-28",
+      "title": "操作反馈状态提示 (Operation Feedback Status Hint)",
+      "newComponents": [
+        "status-hint"
+      ],
+      "updatedComponents": [],
+      "summary": "新增 TxStatusHint 状态操作反馈组件，支持语气色带、文字形变、重复触发强调、减少动态效果偏好与无障碍 live region。"
+    },
     {
       "version": "0.6.0",
       "date": "2026-09-12",
@@ -18,7 +28,6 @@
         "mode-chip",
         "prism-glow",
         "sensitive-input",
-        "status-hint",
         "text-morph",
         "toast-panel"
       ],
@@ -944,7 +953,7 @@
     },
     "status-hint": {
       "slug": "status-hint",
-      "since": "0.6.0",
+      "since": "0.6.1",
       "suite": "base"
     },
     "steps": {

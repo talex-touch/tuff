@@ -15,7 +15,7 @@ TuffEx 组件库自独立发布以来，所有 161 个导出组件均建立明�
 
 ## 版本概览
 
-当前 TuffEx 最新发布版本为 **v0.6.0**，累计导出组件总数为 **161** 个。
+当前 TuffEx 最新发布版本为 **v0.6.1**，累计导出组件总数为 **161** 个。
 
 - **基础套件 (Base)**: 93 个日常通用、表单、布局与导航组件
 - **进阶套件 (Pro)**: 30 个高阶交互、动效与底层原语组件
@@ -24,18 +24,27 @@ TuffEx 组件库自独立发布以来，所有 161 个导出组件均建立明�
 
 ## 版本更新历程
 
+### 0.6.1 版本 (2026-09-28)
+
+操作结果反馈组件发布，为复制、固定、失败等短时状态提供统一的可访问提示。
+
+- **新增组件 (1 个)**: [status-hint](./status-hint.zh.mdc)
+- **关键特性**:
+  - TxStatusHint 支持语气色带、字符级文字形变与重复触发强调；
+  - 支持深浅色、减少动态效果偏好与单一无障碍 live region。
+
 ### 0.6.0 版本 (2026-09-12)
 
 触感系统重构与视觉特效套件发布，重构通知栈并补齐多个交互控件能力。
 
-- **新增组件 (13 个)**: [agent-screen](./agent-screen.zh.mdc), [charts](./charts.zh.mdc), [choice-card](./choice-card.zh.mdc), [flowchart](./flowchart.zh.mdc), [fusion-surface](./fusion-surface.zh.mdc), [icon-morph](./icon-morph.zh.mdc), [icon-picker](./icon-picker.zh.mdc), [mode-chip](./mode-chip.zh.mdc), [prism-glow](./prism-glow.zh.mdc), [sensitive-input](./sensitive-input.zh.mdc), [status-hint](./status-hint.zh.mdc), [text-morph](./text-morph.zh.mdc), [toast-panel](./toast-panel.zh.mdc)
+- **新增组件 (12 个)**: [agent-screen](./agent-screen.zh.mdc), [charts](./charts.zh.mdc), [choice-card](./choice-card.zh.mdc), [flowchart](./flowchart.zh.mdc), [fusion-surface](./fusion-surface.zh.mdc), [icon-morph](./icon-morph.zh.mdc), [icon-picker](./icon-picker.zh.mdc), [mode-chip](./mode-chip.zh.mdc), [prism-glow](./prism-glow.zh.mdc), [sensitive-input](./sensitive-input.zh.mdc), [text-morph](./text-morph.zh.mdc), [toast-panel](./toast-panel.zh.mdc)
 - **更新组件 (17 个)**: [alert](./alert.zh.mdc), [badge](./badge.zh.mdc), [cascader](./cascader.zh.mdc), [date-picker](./date-picker.zh.mdc), [flat-radio](./flat-radio.zh.mdc), [group-block](./group-block.zh.mdc), [picker](./picker.zh.mdc), [progress-bar](./progress-bar.zh.mdc), [slider](./slider.zh.mdc), [sortable-list](./sortable-list.zh.mdc), [stream-markdown](./stream-markdown.zh.mdc), [tab-bar](./tab-bar.zh.mdc), [text-transformer](./text-transformer.zh.mdc), [toast](./toast.zh.mdc), [toast-panel](./toast-panel.zh.mdc), [transfer](./transfer.zh.mdc), [tree](./tree.zh.mdc)
 - **关键特性**:
   - 新增 TxTextMorph 字符形变过渡，移除第三方数字流依赖；
   - TxToastHost 重构为可堆叠通知栈，支持拖拽滑落与倒计时暂停；
   - TxSortableList 支持握柄与键盘排序，增强实时重排反馈；
   - TxDatePicker 与 TxCascader 支持区间选择与多级浮层；
-  - 新增 TxPrismGlow 棱镜光效与 TxStatusHint 状态提示。
+  - 新增 TxPrismGlow 棱镜光效。
 
 ### 0.5.0 版本 (2026-09-07)
 
@@ -231,7 +240,7 @@ TuffEx 独立包初始基线建立。
 | `stagger` | pro | **0.3.4** | [查看文档](./stagger.zh.mdc) |
 | `stat-card` | base | **0.3.4** | [查看文档](./stat-card.zh.mdc) |
 | `status-badge` | base | **0.3.4** | [查看文档](./status-badge.zh.mdc) |
-| `status-hint` | base | **0.6.0** | [查看文档](./status-hint.zh.mdc) |
+| `status-hint` | base | **0.6.1** | [查看文档](./status-hint.zh.mdc) |
 | `steps` | base | **0.3.4** | [查看文档](./steps.zh.mdc) |
 | `stream-markdown` | ai | **0.3.9** | [查看文档](./stream-markdown.zh.mdc) |
 | `suggestion-chips` | ai | **0.3.9** | [查看文档](./suggestion-chips.zh.mdc) |

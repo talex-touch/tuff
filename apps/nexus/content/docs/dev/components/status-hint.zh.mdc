@@ -3,7 +3,7 @@ title: "StatusHint 状态提示"
 description: "一行操作结果提示：带颗粒的语气色带从左缘涌现、向右渐隐，文字轻微放大后落定，换消息时逐字变换"
 category: Feedback
 status: beta
-since: 0.6.0
+since: 0.6.1
 tags: [hint, outcome, tone, morph, grain]
 syncStatus: reviewed
 verified: true

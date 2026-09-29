@@ -15,7 +15,7 @@ Since its standalone release, all 161 exported components in TuffEx maintain an 
 
 ## Overview
 
-The current latest release of TuffEx is **v0.6.0**, exporting a total of **161** components.
+The current latest release of TuffEx is **v0.6.1**, exporting a total of **161** components.
 
 - **Base Suite**: 93 general, form, layout, and navigation components
 - **Pro Suite**: 30 advanced interaction, effect, and primitive components
@@ -24,18 +24,27 @@ The current latest release of TuffEx is **v0.6.0**, exporting a total of **161**
 
 ## Release History
 
+### Version 0.6.1 (2026-09-28)
+
+Operation outcome feedback for short-lived states such as copied, pinned, and failed actions.
+
+- **New Components (1)**: [status-hint](./status-hint.en.mdc)
+- **Key Features**:
+  - TxStatusHint supports tone washes, character-level text morphing, and retrigger emphasis;
+  - Supports light and dark themes, reduced motion, and a single accessible live region.
+
 ### Version 0.6.0 (2026-09-12)
 
 Tactile interaction overhaul and visual effects suite release, with stacked toast rewrite and enhanced controls.
 
-- **New Components (13)**: [agent-screen](./agent-screen.en.mdc), [charts](./charts.en.mdc), [choice-card](./choice-card.en.mdc), [flowchart](./flowchart.en.mdc), [fusion-surface](./fusion-surface.en.mdc), [icon-morph](./icon-morph.en.mdc), [icon-picker](./icon-picker.en.mdc), [mode-chip](./mode-chip.en.mdc), [prism-glow](./prism-glow.en.mdc), [sensitive-input](./sensitive-input.en.mdc), [status-hint](./status-hint.en.mdc), [text-morph](./text-morph.en.mdc), [toast-panel](./toast-panel.en.mdc)
+- **New Components (12)**: [agent-screen](./agent-screen.en.mdc), [charts](./charts.en.mdc), [choice-card](./choice-card.en.mdc), [flowchart](./flowchart.en.mdc), [fusion-surface](./fusion-surface.en.mdc), [icon-morph](./icon-morph.en.mdc), [icon-picker](./icon-picker.en.mdc), [mode-chip](./mode-chip.en.mdc), [prism-glow](./prism-glow.en.mdc), [sensitive-input](./sensitive-input.en.mdc), [text-morph](./text-morph.en.mdc), [toast-panel](./toast-panel.en.mdc)
 - **Updated Components (17)**: [alert](./alert.en.mdc), [badge](./badge.en.mdc), [cascader](./cascader.en.mdc), [date-picker](./date-picker.en.mdc), [flat-radio](./flat-radio.en.mdc), [group-block](./group-block.en.mdc), [picker](./picker.en.mdc), [progress-bar](./progress-bar.en.mdc), [slider](./slider.en.mdc), [sortable-list](./sortable-list.en.mdc), [stream-markdown](./stream-markdown.en.mdc), [tab-bar](./tab-bar.en.mdc), [text-transformer](./text-transformer.en.mdc), [toast](./toast.en.mdc), [toast-panel](./toast-panel.en.mdc), [transfer](./transfer.en.mdc), [tree](./tree.en.mdc)
 - **Key Features**:
   - Added TxTextMorph character-level morphing, replacing third-party dependencies;
   - Rewrote TxToastHost as a stackable toast system with swipe-to-dismiss and countdown pauses;
   - Added handle and keyboard sorting to TxSortableList with live drag preview;
   - TxDatePicker and TxCascader support range selection and chained floating panels;
-  - Added TxPrismGlow visual effect and TxStatusHint status indicators.
+  - Added the TxPrismGlow visual effect.
 
 ### Version 0.5.0 (2026-09-07)
 
@@ -231,7 +240,7 @@ The following table lists the introduction version (Since) and suite for all 161
 | `stagger` | pro | **0.3.4** | [Read Docs](./stagger.en.mdc) |
 | `stat-card` | base | **0.3.4** | [Read Docs](./stat-card.en.mdc) |
 | `status-badge` | base | **0.3.4** | [Read Docs](./status-badge.en.mdc) |
-| `status-hint` | base | **0.6.0** | [Read Docs](./status-hint.en.mdc) |
+| `status-hint` | base | **0.6.1** | [Read Docs](./status-hint.en.mdc) |
 | `steps` | base | **0.3.4** | [Read Docs](./steps.en.mdc) |
 | `stream-markdown` | ai | **0.3.9** | [Read Docs](./stream-markdown.en.mdc) |
 | `suggestion-chips` | ai | **0.3.9** | [Read Docs](./suggestion-chips.en.mdc) |

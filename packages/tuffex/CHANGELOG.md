@@ -4,6 +4,10 @@
 
 ## [0.6.1] - 2026-09-28
 
+### 📦 组件变动 (Components)
+
+- **新增组件 (Since 0.6.1)**: `status-hint`
+
 ### ✨ 组件增强
 
 - 新增 `TxStatusHint` 状态操作反馈组件：用于在操作完成后以涌现色带、文字字符级形变过渡与再次触发脉冲强调展示操作反馈（例如“已复制”、“固定失败”）；自带微弱噪点遮罩层，支持深浅色模式与无障碍单 live region 模式；完全支持并遵循用户 reduced motion 偏好。
@@ -12,7 +16,7 @@
 
 ### 📦 组件变动 (Components)
 
-- **新增组件 (Since 0.6.0)**: `agent-screen`, `charts`, `choice-card`, `flowchart`, `fusion-surface`, `icon-morph`, `icon-picker`, `mode-chip`, `prism-glow`, `sensitive-input`, `status-hint`, `text-morph`, `toast-panel`
+- **新增组件 (Since 0.6.0)**: `agent-screen`, `charts`, `choice-card`, `flowchart`, `fusion-surface`, `icon-morph`, `icon-picker`, `mode-chip`, `prism-glow`, `sensitive-input`, `text-morph`, `toast-panel`
 - **更新组件 (Updated)**: `alert`, `badge`, `cascader`, `date-picker`, `flat-radio`, `group-block`, `picker`, `progress-bar`, `slider`, `sortable-list`, `stream-markdown`, `tab-bar`, `text-transformer`, `toast`, `toast-panel`, `transfer`, `tree`
 
 
