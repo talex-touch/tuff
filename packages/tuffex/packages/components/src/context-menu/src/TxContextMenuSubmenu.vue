@@ -39,6 +39,7 @@ const triggerRef = ref<InstanceType<typeof TxContextMenuItem> | null>(null)
 const panelRef = ref<InstanceType<typeof TxContextMenuPanel> | null>(null)
 
 const rootCloseOnSelect = computed(() => rootCtx?.closeOnSelect ?? true)
+const rootActivationFeedback = computed(() => rootCtx?.activationFeedback ?? true)
 
 function closeRoot() {
   rootCtx?.close?.()
@@ -125,6 +126,7 @@ function onPanelKeydown(event: KeyboardEvent) {
         ref="panelRef"
         :close="closeRoot"
         :close-on-select="rootCloseOnSelect"
+        :activation-feedback="rootActivationFeedback"
         :outside-guard="true"
       >
         <slot name="menu" />

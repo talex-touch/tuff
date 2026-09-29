@@ -51,7 +51,7 @@ vi.mock('../../../../global-shortcon', () => ({
     ) => {
       shortcutStore.set(shortcutId, accelerator)
       if (press) pressCallbacks.set(shortcutId, press)
-      return true
+      return { ok: true }
     },
     removeAppShortcut: (shortcutId: string) => {
       pressCallbacks.delete(shortcutId)

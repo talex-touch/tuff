@@ -196,32 +196,14 @@ const indexingProgress = ref<{
 
 let progressUnsubscribe: (() => void) | null = null
 
-// Calculate overall indexing progress
+// The backend publishes a run-level, monotonic percentage. Stage-local `current/total` values are
+// still shown in the subtitle for diagnostics, but must not drive the bar or reset it per batch.
 const overallProgress = computed(() => {
   if (!indexingProgress.value || indexingProgress.value.stage === 'idle') {
     return 0
   }
 
-  const { stage, progress } = indexingProgress.value
-
-  // Stage weights: cleanup 5%, scanning 20%, indexing 60%, reconciliation 15%
-  const stageWeights: Record<string, { start: number; weight: number }> = {
-    cleanup: { start: 0, weight: 5 },
-    scanning: { start: 5, weight: 20 },
-    indexing: { start: 25, weight: 60 },
-    reconciliation: { start: 85, weight: 15 },
-    completed: { start: 100, weight: 0 }
-  }
-
-  const stageInfo = stageWeights[stage] || { start: 0, weight: 0 }
-
-  if (stage === 'completed') {
-    return 100
-  }
-
-  // Calculate progress within current stage
-  const stageProgress = (progress / 100) * stageInfo.weight
-  return Math.min(100, stageInfo.start + stageProgress)
+  return Math.min(100, Math.max(0, indexingProgress.value.progress))
 })
 
 const verboseWarningDismissed = ref(false)

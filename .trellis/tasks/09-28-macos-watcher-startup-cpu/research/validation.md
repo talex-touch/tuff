@@ -62,8 +62,18 @@ The same runtime exposed a packaging bug in the draft: bundling `fsevents` conve
 
 The shared filter smoke returned `development-path` for `uvcache`, `__pycache__`, and `site-packages`, and `null` for `/Users/me/Documents/build/2026/report.pdf`.
 
+## Signed beta.53 follow-up and FTS cold-insert CPU
+
+The signed arm64 `2.4.14-beta.53` app was installed over a clean profile and sampled every five seconds for 30 minutes. The one initial `FileProvider.fullScan` never completed in that window: 18,906 file/FTS rows had been published, process-group CPU averaged 109.3% (p95 148.3%, final five-minute mean 98.9%), and process-attributed energy averaged 3.82 W (p95 4.54 W). RSS peaked at 1.87 GiB and ended at 789 MiB; 652 MiB was read and 10.8 GiB written. Event-loop lag occurred five times with an 897 ms maximum, improved from the previous packaged beta.47 observation's 3.9 s maximum but still not an idle result.
+
+A 20-second macOS `sample` separated responsiveness from energy: Electron's main thread was only 2.9% on-CPU, while one `WorkerThread` was 99.8% on-CPU; roughly 85% of its samples were the libSQL `index.node` `pread` path. Runtime worker telemetry identified the serialized `search-index` worker as busy. `SearchIndexService.applyDocument()` unconditionally deleted by FTS5 `provider` and `item_id`, both `UNINDEXED`, before every insert. On the live 22k-row database one missing-item FTS probe took 309 ms; this happened even for cold inserts and made the growing scan O(N²).
+
+The fix verifies and caches FTS/meta coverage once per provider. With complete `(provider_id,item_id)` metadata, an item with no meta is new and skips the FTS delete; existing items still delete then insert. Profiles with an FTS row missing metadata retain the legacy safe path until provider replacement repairs coverage. Actual `SearchIndexService.applyProviderItems()` over 20,000 existing documents plus 100 new documents measured 57.30 ms / 60.86 CPU-ms on the complete path versus 938.43 ms / 919.42 CPU-ms with one deliberately missing meta row, a 16.38× wall-time difference. Updating ten existing probes kept exactly 100 rows and 100 distinct IDs.
+
+The source-built isolated Electron acceptance indexed 3,000/3,000 Markdown files in 36.25 s with process-group CPU median 51.44%, p95 80.31%, peak 111.91%, and no `Perf:EventLoop` warning. It published 3,000 FTS rows, 2,655 completed enrichment rows, and logged `Index process complete` at 37 s. The earlier low-impact candidate was 38.57 s / 60.7% median / 80.3% p95; the small fixture is dominated by the intentional 100 ms chunk pauses, so the 20k service A/B is the evidence for the removed asymptotic cost rather than a claim of another large 3k CPU drop.
+
 ## Scope limits
 
 - The module benchmark is a lower-level watcher comparison; it does not measure database indexing, Electron renderer startup, or idle whole-app power.
 - Symlink parity and FSEvents overflow recovery are covered by injected-backend tests; they were not exercised against a live symlink-heavy home tree.
-- Signed packaged-candidate startup and app-level energy comparison remain unverified. The source-built isolated Electron runtime, cold-index A/B, externalized native load, real FSEvents add/delete delivery, and post-index idle CPU were verified.
+- Signed beta.53 startup and app-level energy were measured on a clean real profile. The FTS cold-insert fix itself has source-built isolated Electron evidence only; it has not yet shipped in a signed package. The externalized native load, real FSEvents add/delete delivery, and post-index idle CPU remain verified.

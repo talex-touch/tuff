@@ -302,7 +302,7 @@ watch(
           </template>
         </TxDropdownSubmenu>
 
-        <TxDropdownItem class="header-user-theme-item">
+        <TxDropdownItem class="header-user-theme-item" :activation-feedback="false">
           <span class="header-user-item">
             <span class="i-carbon-moon header-user-item-icon" />
             <span>{{ tSafe('auth.menu.theme', 'Theme') }}</span>

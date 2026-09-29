@@ -93,6 +93,7 @@ function createHarness(options: {
   pages: Array<Array<Record<string, unknown>>>
   scheduleIndexing: (payload: number[], callIndex: number) => ScheduledResult
   isShuttingDown?: boolean
+  isEnabled?: boolean
   waitForSearchIndexDrain?: (callIndex: number, leaseId: string) => Promise<void>
   withMutationLease?: <T>(operation: (leaseId: string) => Promise<T>) => Promise<T>
 }) {
@@ -120,6 +121,7 @@ function createHarness(options: {
     getDbUtils: () => ({ getFileIndexReadDb: readDb.getFileIndexReadDb }),
     isSearchIndexAvailable: () => true,
     isShuttingDown: () => options.isShuttingDown ?? false,
+    isEnabled: () => options.isEnabled ?? true,
     withMutationLease: options.withMutationLease ?? createImmediateLease(),
     scheduleIndexing,
     waitForSearchIndexDrain: async (_reason: string, leaseId: string) => {
@@ -367,6 +369,7 @@ function createDatabaseHarness(
     getDbUtils: () => ({ getFileIndexReadDb: () => database.db }),
     isSearchIndexAvailable: () => true,
     isShuttingDown: () => false,
+    isEnabled: () => true,
     withMutationLease: options.withMutationLease ?? createImmediateLease(),
     scheduleIndexing,
     waitForSearchIndexDrain: async (_reason: string, leaseId: string) => {
@@ -713,5 +716,33 @@ describe('FileProviderEnrichmentResumeService page lease ownership', () => {
     expect(harness.drainLeaseIds).toEqual(['page-lease-1', 'page-lease-2'])
     // ...and the drain runs while that lease is still held, not after it was given back.
     expect(drainHeldLease).toEqual([true, true])
+  })
+})
+
+/**
+ * Content enrichment is the only path that reads file bodies. With the setting off, a resume
+ * request must not even query the pending rows — reading them is what turns into parser work.
+ */
+describe('FileProviderEnrichmentResumeService content indexing gate', () => {
+  it('neither reads pending rows nor schedules work while content indexing is disabled', async () => {
+    const harness = createHarness({
+      pages: [[fileRow(1)]],
+      scheduleIndexing: (payload) => ({ accepted: payload.length, deferred: 0 }),
+      isEnabled: false
+    })
+
+    harness.service.resume('startup')
+    await settleResume()
+
+    expect(harness.queryCount()).toBe(0)
+    expect(harness.scheduleIndexing).not.toHaveBeenCalled()
+    expect(harness.service.isActive()).toBe(false)
+
+    // A later explicit request while the setting is still off must also stay inert.
+    harness.service.resume('settings-enabled')
+    await settleResume()
+
+    expect(harness.queryCount()).toBe(0)
+    expect(harness.scheduleIndexing).not.toHaveBeenCalled()
   })
 })

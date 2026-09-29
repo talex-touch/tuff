@@ -17,6 +17,7 @@ import {
   resolveExtensionsForTypeFilters,
   resolveTypeTag
 } from './file-provider-search-service'
+import { scoreFileFuzzyMatch } from './file-provider-fuzzy-score'
 
 type FileRecord = typeof filesSchema.$inferSelect
 type FileSearchEntry = { file: FileRecord; extensions: Record<string, string> }
@@ -32,6 +33,7 @@ export interface FileProviderSearchResultServiceDeps {
   providerId: string
   getDbUtils: () => DbUtils | null
   getSearchIndex: () => SearchIndexService | null
+  isContentIndexingEnabled: () => boolean
   buildItem: (file: FileRecord, extensions: Record<string, string>) => TuffItem
   normalizeItem: (
     item: TuffItem,
@@ -181,7 +183,9 @@ export class FileProviderSearchResultService {
           )
         : Promise.resolve([]),
       ftsQuery
-        ? searchIndex.search(this.deps.providerId, ftsQuery, 150, signal)
+        ? searchIndex.search(this.deps.providerId, ftsQuery, 150, signal, {
+            includeContent: this.deps.isContentIndexingEnabled()
+          })
         : Promise.resolve([])
     ])
     if (signal.aborted) return this.empty(query)
@@ -241,9 +245,49 @@ export class FileProviderSearchResultService {
     }
 
     const candidateIds = new Set<string>(preciseMatchPaths ? [...preciseMatchPaths] : [])
+    const fuzzyCandidatePaths = new Set<string>()
     for (const match of ftsMatches) {
       if (candidateIds.size >= 120) break
       candidateIds.add(match.itemId)
+    }
+    if (candidateIds.size === 0) {
+      const fallbackTerms = [...normalizedQuery.matchAll(/\p{L}+|\p{N}+/gu)]
+        .map((match) => match[0])
+        .filter((term) => term.length >= 2 && term !== normalizedQuery)
+        .sort((left, right) => {
+          const rightNumeric = /^\p{N}+$/u.test(right) ? 1 : 0
+          const leftNumeric = /^\p{N}+$/u.test(left) ? 1 : 0
+          return rightNumeric - leftNumeric || right.length - left.length
+        })
+        .slice(0, 2)
+      for (const term of fallbackTerms) {
+        const matches = await searchIndex.search(
+          this.deps.providerId,
+          buildFtsQuery([term]),
+          40,
+          signal,
+          { includeContent: this.deps.isContentIndexingEnabled() }
+        )
+        for (const match of matches) {
+          fuzzyCandidatePaths.add(match.itemId)
+          if (candidateIds.size >= 120) continue
+          candidateIds.add(match.itemId)
+        }
+        if (candidateIds.size > 0) break
+      }
+    }
+    if (candidateIds.size === 0 && normalizedQuery.length >= 2) {
+      const ngramMatches = await searchIndex.lookupByNgrams(
+        this.deps.providerId,
+        cleanedQuery || normalizedQuery,
+        80,
+        signal
+      )
+      for (const match of ngramMatches) {
+        fuzzyCandidatePaths.add(match.itemId)
+        if (candidateIds.size >= 120) continue
+        candidateIds.add(match.itemId)
+      }
     }
     if (candidateIds.size === 0) return this.empty(query)
 
@@ -297,34 +341,44 @@ export class FileProviderSearchResultService {
       .map(({ file, extensions }) => {
         const keywordScore = preciseMatchPaths?.has(file.path) ? 1 : 0
         const ftsScore = ftsScoreMap.get(file.path) ?? 0
+        const fuzzyScore = scoreFileFuzzyMatch(normalizedQuery, file.name, file.path)
+        const boundedFuzzyScore = fuzzyCandidatePaths.has(file.path) ? fuzzyScore : fuzzyScore * 0.8
         const lastModifiedScore = Math.exp(
           -0.05 * ((now - new Date(file.mtime).getTime()) / 86_400_000)
         )
         const finalScore =
           0.45 * keywordScore +
-          0.35 * ftsScore +
+          0.3 * ftsScore +
+          0.2 * boundedFuzzyScore +
           0.05 * lastModifiedScore +
           (typeFilters.size > 0 ? 0.15 : 0)
         const sanitizedExtensions = this.deps.sanitizeExtensions(extensions)
         const item = this.deps.buildItem(file, sanitizedExtensions)
         item.scoring = {
           final: finalScore,
-          match: Math.max(keywordScore, ftsScore),
+          match: Math.max(keywordScore, ftsScore, boundedFuzzyScore),
           recency: 0,
           frequency: 0,
           base: lastModifiedScore,
           match_details:
             keywordScore > 0
               ? { type: 'exact', query: rawText }
-              : ftsScore > 0
-                ? { type: 'semantic', query: rawText, confidence: ftsScore }
-                : undefined
+              : boundedFuzzyScore > 0
+                ? { type: 'fuzzy', query: rawText, confidence: boundedFuzzyScore }
+                : ftsScore > 0
+                  ? { type: 'semantic', query: rawText, confidence: ftsScore }
+                  : undefined
         }
         item.meta ??= {}
         item.meta.usage = { clickCount: 0 }
         item.meta.extension = {
           ...(item.meta.extension ?? {}),
-          search: { keywordMatch: keywordScore > 0, ftsScore, semanticScore: 0 }
+          search: {
+            keywordMatch: keywordScore > 0,
+            ftsScore,
+            fuzzyScore: boundedFuzzyScore,
+            semanticScore: 0
+          }
         }
         return this.deps.normalizeItem(item, file, sanitizedExtensions, 'search-result')
       })

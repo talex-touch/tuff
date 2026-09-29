@@ -111,12 +111,7 @@ try {
     }
 
     if (show === true) {
-      setTimeout(() => {
-        const input = document.querySelector('#core-box-input') as HTMLElement
-        input?.focus()
-      }, 100)
-
-      // Dispatch event to trigger recommendation refresh when CoreBox is shown
+      // CoreBox.vue owns the input ref and performs the focus after its next render.
       window.dispatchEvent(new CustomEvent('corebox:shown'))
     }
     // Note: We no longer remove core-box class on hide - the window visibility

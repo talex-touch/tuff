@@ -147,12 +147,14 @@ export class AppManagedEntryActionsService {
   /**
    * Binds or clears the launch shortcut for one entry. An empty accelerator clears it.
    *
-   * Reports `shortcut-conflict` when the OS refused the accelerator — reserved by the system or
-   * already taken — rather than a success the key will not honour.
+   * Reports `shortcut-conflict` when the key cannot be had — another binding holds it, or the OS
+   * reserved it — rather than a success the key will not honour, and names the holders so the
+   * caller can ask the user before writing it anyway with `force`.
    */
   public async setShortcut(
     pathValue: string,
-    accelerator: string
+    accelerator: string,
+    force = false
   ): Promise<AppIndexEntryMutationResult> {
     const target = normalizeOptionalString(pathValue)
     if (!target) return { success: false, status: 'invalid', reason: 'path-empty' }
@@ -170,10 +172,15 @@ export class AppManagedEntryActionsService {
         : { success: false, status: 'error', reason: 'shortcut-persist-failed' }
     }
 
-    const bound = await this.shortcuts.set(target, normalized)
-    if (bound === 'bound') return { success: true, status: 'updated' }
-    return bound === 'conflict'
-      ? { success: false, status: 'invalid', reason: 'shortcut-conflict' }
+    const bound = await this.shortcuts.set(target, normalized, { force })
+    if (bound.outcome === 'bound') return { success: true, status: 'updated' }
+    return bound.outcome === 'conflict'
+      ? {
+          success: false,
+          status: 'invalid',
+          reason: 'shortcut-conflict',
+          shortcutConflict: { holders: bound.holders ?? [] }
+        }
       : { success: false, status: 'error', reason: 'shortcut-persist-failed' }
   }
 

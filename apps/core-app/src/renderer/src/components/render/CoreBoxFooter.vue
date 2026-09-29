@@ -1,6 +1,7 @@
 <script lang="ts" name="CoreBoxFooter" setup>
 import type { IProviderActivate, ITuffIcon, TuffFooterHints, TuffItem } from '@talex-touch/utils'
 import { useDebounce } from '@vueuse/core'
+import { normalizeCoreBoxQuickSelectAction } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
@@ -8,6 +9,7 @@ import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { useCoreBoxFooterFeedback } from '~/modules/box/meta-actions/footer-feedback'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { appSetting } from '~/modules/storage/app-storage'
 import CoreBoxActionFeedback from './CoreBoxActionFeedback.vue'
 import { resolveCoreBoxFooterTitle } from './coreBoxFooterDisplay'
 import {
@@ -162,7 +164,12 @@ const quickSelectVisible = computed(() => {
 })
 
 const keyHints = computed(() => {
-  const quickSelectLabelKey = 'coreBox.hints.quickSelect'
+  // The digits run the numbered result or only move onto it — the setting decides, so the hint has
+  // to name what the key does now; a fixed label teaches half the profiles the wrong gesture.
+  const quickSelectLabelKey =
+    normalizeCoreBoxQuickSelectAction(appSetting.coreBox?.quickSelectAction) === 'execute'
+      ? 'coreBox.hints.quickSelectExecute'
+      : 'coreBox.hints.quickSelect'
   const quickSelectLabel = t(quickSelectLabelKey)
 
   const aiHotkey = isMac.value ? '⌘K' : 'Ctrl+K'
@@ -188,7 +195,7 @@ const keyHints = computed(() => {
   if (quickSelectVisible.value) {
     hints.push({
       key: quickSelectHotkey,
-      label: quickSelectLabel === quickSelectLabelKey ? 'Quick Select' : quickSelectLabel,
+      label: quickSelectLabel === quickSelectLabelKey ? 'Quick Execute' : quickSelectLabel,
       visible: true
     })
   }

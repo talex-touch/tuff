@@ -34,6 +34,7 @@ export interface FileIndexProgress {
   stage: FileIndexStage;
   current: number;
   total: number;
+  /** Monotonic whole-run percentage; `current/total` remain stage-local diagnostics. */
   progress: number;
   startTime: number | null;
   estimatedRemainingMs: number | null;
@@ -42,6 +43,27 @@ export interface FileIndexProgress {
   speedSampleCount?: number;
   estimateBasis?: FileIndexEstimateBasis;
 }
+
+export type FileContentIndexingState =
+  | "disabled"
+  | "idle"
+  | "indexing"
+  | "clearing";
+
+export interface FileIndexContentSettings {
+  contentIndexingEnabled: boolean;
+  state: FileContentIndexingState;
+}
+
+export interface FileIndexContentSettingsUpdate {
+  contentIndexingEnabled: boolean;
+}
+
+export const DEFAULT_FILE_INDEX_CONTENT_SETTINGS: Readonly<FileIndexContentSettings> =
+  Object.freeze({
+    contentIndexingEnabled: false,
+    state: "disabled",
+  });
 
 export interface FileIndexStatus {
   isInitializing: boolean;
@@ -60,6 +82,8 @@ export interface FileIndexStatus {
     stage: FileIndexStage | null;
     current: number;
     total: number;
+    /** Monotonic whole-run percentage; optional for older status snapshots. */
+    progress?: number;
   };
   startTime: number | null;
   estimatedCompletion: number | null;
@@ -68,6 +92,8 @@ export interface FileIndexStatus {
   estimateStatus?: FileIndexEstimateStatus;
   speedSampleCount?: number;
   estimateBasis?: FileIndexEstimateBasis;
+  contentIndexingEnabled?: boolean;
+  contentIndexingState?: FileContentIndexingState;
 }
 
 export interface FileIndexStats {

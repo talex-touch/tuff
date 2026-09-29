@@ -57,6 +57,7 @@ export interface FileIndexedSourceRuntimeMutationDelegate {
   applyDelta: (delta: IndexedSourceDelta) => Promise<unknown>
   cleanupSource: (sourceId: string, mutationLeaseId?: string) => Promise<unknown>
   countSource: (sourceId: string, mutationLeaseId?: string) => Promise<number>
+  publishContentCleared: (affectedItems: number) => Promise<void>
   drainSource: (sourceId: string, timeoutMs?: number) => Promise<void>
   scanSource: (reason: IndexedSourceScanRequest['reason']) => Promise<unknown>
 }

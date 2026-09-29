@@ -301,10 +301,13 @@ function onRenameKeydown(event: KeyboardEvent): void {
                 <template #menu>
                   <template v-if="localAiAgentsPhase === 'ready'">
                     <!-- Every CLI Tuff knows, in the main process's order; a blocked one says why. -->
+                    <!-- Launching the external agent is the visible confirmation, so do not hold it
+                         behind the menu's two-phase close feedback. -->
                     <TxDropdownItem
                       v-for="agent in localAiAgents"
                       :key="agent.id"
                       :disabled="agent.blocker !== null"
+                      :activation-feedback="false"
                       @select="emit('runAgent', agent.id)"
                     >
                       <span class="ShellProjectFolder-Agent">

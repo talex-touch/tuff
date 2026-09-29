@@ -64,6 +64,22 @@ function generateNgrams(word: string, n = 2): string[] {
   return ngrams
 }
 
+function selectNgramSeeds(ngrams: readonly string[], maxSeeds = 8): string[] {
+  const unique = [...new Set(ngrams)]
+  if (unique.length <= maxSeeds) return unique
+  return unique
+    .map((keyword, index) => {
+      const gram = keyword.slice(NGRAM_PREFIX.length)
+      const numeric = /\d/u.test(gram) ? 4 : 0
+      const separator = /[^\p{L}\p{N}]/u.test(gram) ? 2 : 0
+      const edgeDistance = Math.min(index, unique.length - index - 1)
+      return { keyword, index, score: numeric + separator - edgeDistance / unique.length }
+    })
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, maxSeeds)
+    .map((entry) => entry.keyword)
+}
+
 export interface SearchIndexKeyword {
   value: string
   priority?: number
@@ -163,6 +179,12 @@ export class SearchIndexService {
   private readonly readiness?: SearchIndexReadinessGate
   private readonly readExecutor?: SearchIndexReadExecutor
   private readonly zeroResultDiagnosticAt = new Map<string, number>()
+  /**
+   * Provider coverage is stable while this service owns the single writer: every indexed
+   * document has a matching primary-keyed meta row. A false value preserves the legacy
+   * delete-before-insert path for profiles whose FTS rows predate search_index_meta.
+   */
+  private readonly providerMetaCoverageComplete = new Map<string, boolean>()
   private readonly logWindowMs = 12_000
   private readonly slowLogThresholdMs = 1_500
   private readonly indexLogBucket = this.createLogBucket()
@@ -222,6 +244,7 @@ export class SearchIndexService {
     }
     await this.scheduleWrite('search-index.repair', async () => {
       await this.repairSearchIndexFtsTables()
+      this.providerMetaCoverageComplete.clear()
       this.didMigrate = true
       this.initialized = false
       this.initializationPromise = null
@@ -365,6 +388,9 @@ export class SearchIndexService {
     await this.scheduleWrite('search-index.ensure', () => this.ensureInitialized())
 
     const preparedDocs = await this.prepareDocuments(items)
+    const metaCoverageByProvider = await this.scheduleWrite('search-index.metaCoverage', () =>
+      this.resolveProviderMetaCoverage(preparedDocs)
+    )
 
     // Adaptive batching: use AIMD scheduler to find the optimal batch size
     // that keeps each transaction close to the target duration (~500ms).
@@ -381,7 +407,7 @@ export class SearchIndexService {
       await this.scheduleWrite('search-index.indexBatch', () =>
         this.db.transaction(async (tx) => {
           for (const doc of batch) {
-            await this.applyDocument(tx, doc)
+            await this.applyDocument(tx, doc, metaCoverageByProvider.get(doc.providerId) === true)
           }
         })
       )
@@ -421,8 +447,9 @@ export class SearchIndexService {
     const start = performance.now()
     await this.scheduleWrite('search-index.ensure', () => this.ensureInitialized())
     const preparedDocs = await this.prepareDocuments(items)
-    const removedItems = await this.scheduleWrite('search-index.applyProviderItems', () =>
-      this.db.transaction(async (tx) => {
+    const removedItems = await this.scheduleWrite('search-index.applyProviderItems', async () => {
+      const metaCoverageComplete = await this.hasCompleteProviderMetaCoverage(providerId)
+      return await this.db.transaction(async (tx) => {
         let removed = 0
         for (const itemId of retiredItemIds) {
           const result = await tx.run(
@@ -446,10 +473,12 @@ export class SearchIndexService {
               )
             )
         }
-        for (const doc of preparedDocs) await this.applyDocument(tx, doc)
+        for (const doc of preparedDocs) {
+          await this.applyDocument(tx, doc, metaCoverageComplete)
+        }
         return removed
       })
-    )
+    })
     this.recordOperationLog(
       'index',
       preparedDocs.length,
@@ -558,7 +587,7 @@ export class SearchIndexService {
             if (doc.providerId !== providerId) {
               throw new Error(`SEARCH_INDEX_STAGED_PROVIDER_MISMATCH:${providerId}`)
             }
-            await this.applyDocument(tx, doc)
+            await this.applyDocument(tx, doc, true)
             indexedItems += 1
             lastSequence = row.sequence
           }
@@ -575,6 +604,7 @@ export class SearchIndexService {
         return { removedItems, indexedItems }
       })
     )
+    this.providerMetaCoverageComplete.set(providerId, true)
     this.recordOperationLog(
       'index',
       summary.indexedItems,
@@ -724,6 +754,7 @@ export class SearchIndexService {
         return Number(result.rowsAffected ?? 0)
       })
     })
+    this.providerMetaCoverageComplete.set(providerId, true)
     this.recordOperationLog(
       'removeByProvider',
       removedItems,
@@ -737,7 +768,8 @@ export class SearchIndexService {
     providerId: string,
     ftsQuery: string,
     limit = 50,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options: { includeContent?: boolean } = {}
   ): Promise<Array<{ itemId: string; score: number }>> {
     signal?.throwIfAborted()
     const searchLogger = this.runtimeLogger
@@ -752,7 +784,7 @@ export class SearchIndexService {
       return []
     }
 
-    const ftsMatchExpr = this.buildFtsMatchExpr(trimmed)
+    const ftsMatchExpr = this.buildFtsMatchExpr(trimmed, options.includeContent !== false)
     searchLogger.indexSearchExecuting()
     const rows = await this.readAll<{ item_id: string; score: number }>(
       sql`SELECT item_id, bm25(search_index) as score FROM search_index WHERE provider = ${providerId} AND search_index MATCH ${ftsMatchExpr} ORDER BY score LIMIT ${limit}`,
@@ -764,15 +796,10 @@ export class SearchIndexService {
     searchLogger.indexSearchComplete(results.length, performance.now() - start)
 
     if (results.length === 0 && this.shouldEmitZeroResultDiagnostic(providerId)) {
-      const totalRows = await this.readAll<{ cnt: number }>(
-        sql`SELECT count(*) as cnt FROM search_index WHERE provider = ${providerId}`,
-        signal
-      )
       searchIndexLog.warn('FTS search returned zero results', {
         meta: {
           providerId,
-          queryLength: ftsMatchExpr.length,
-          totalRows: totalRows[0]?.cnt ?? 0
+          queryLength: ftsMatchExpr.length
         }
       })
     }
@@ -905,11 +932,16 @@ export class SearchIndexService {
       Math.max(resultLimit, requestedScanLimit)
     )
     const likePattern = buildSubsequenceLikePattern(lowerQuery)
+    const [firstCharacter] = Array.from(lowerQuery)
+    if (!firstCharacter) return []
+    const prefixUpperBound = `${firstCharacter}\uffff`
 
     const rows = await this.readAll<{ item_id: string; keyword: string; priority: number }>(
       sql`SELECT item_id, keyword, priority
           FROM keyword_mappings
           WHERE provider_id = ${providerId}
+            AND keyword >= ${firstCharacter}
+            AND keyword < ${prefixUpperBound}
             AND keyword NOT LIKE 'ng:%'
             AND length(keyword) >= ${lowerQuery.length}
             AND keyword LIKE ${likePattern} ESCAPE ${SUBSEQUENCE_LIKE_ESCAPE_CHAR}
@@ -962,33 +994,37 @@ export class SearchIndexService {
     signal?: AbortSignal
   ): Promise<Array<{ itemId: string; overlapCount: number }>> {
     signal?.throwIfAborted()
-    const queryNgrams = generateNgrams(query.toLowerCase(), 2)
-    if (queryNgrams.length === 0) return []
+    const resultLimit = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 50
+    if (resultLimit === 0) return []
+    const seeds = selectNgramSeeds(generateNgrams(query.toLowerCase(), 2))
+    if (seeds.length === 0) return []
 
     await this.ensureInitialized()
     signal?.throwIfAborted()
 
-    const rows = await this.readAll<{ itemId: string; count: number }>(
-      sql`SELECT item_id AS itemId, count(DISTINCT keyword) AS count
-          FROM keyword_mappings
-          WHERE keyword IN (${sql.join(
-            queryNgrams.map((ngram) => sql`${ngram}`),
-            sql`, `
-          )})
-            AND provider_id = ${providerId}
-          GROUP BY item_id
-          ORDER BY count(DISTINCT keyword) DESC
-          LIMIT ${limit}`,
-      signal
-    )
-    signal?.throwIfAborted()
+    const overlapByItem = new Map<string, number>()
+    for (const seed of seeds) {
+      const rows = await this.readAll<{ itemId: string }>(
+        sql`SELECT item_id AS itemId
+            FROM keyword_mappings INDEXED BY idx_keyword_mappings_provider_keyword
+            WHERE provider_id = ${providerId}
+              AND keyword = ${seed}
+            LIMIT ${resultLimit}`,
+        signal
+      )
+      for (const row of rows) {
+        overlapByItem.set(row.itemId, (overlapByItem.get(row.itemId) ?? 0) + 1)
+      }
+      signal?.throwIfAborted()
+    }
 
-    const minOverlap = Math.max(1, Math.floor(queryNgrams.length * 0.4))
-    const results = rows
-      .filter((row) => row.count >= minOverlap)
-      .map((row) => ({ itemId: row.itemId, overlapCount: row.count }))
-    signal?.throwIfAborted()
-    return results
+    return [...overlapByItem]
+      .map(([itemId, overlapCount]) => ({ itemId, overlapCount }))
+      .sort(
+        (left, right) =>
+          right.overlapCount - left.overlapCount || left.itemId.localeCompare(right.itemId)
+      )
+      .slice(0, resultLimit)
   }
 
   /**
@@ -1009,26 +1045,24 @@ export class SearchIndexService {
    * - Multi-word queries (>3 words): NEAR grouping for proximity relevance
    * - Default (1-3 words): prefix search with implicit AND via FTS5
    */
-  private buildFtsMatchExpr(query: string): string {
+  private buildFtsMatchExpr(query: string, includeContent = true): string {
     // Every token is quoted before it reaches MATCH: this is the only place the
     // query text becomes FTS5 syntax, so quoting here keeps user input out of
     // the operator/column-filter positions regardless of the caller.
     const words = query.split(WORD_SPLIT_REGEX).filter((w) => w.length > 0)
-    if (words.length === 0) return quoteFtsToken(query)
-
-    if (words.length === 1) {
-      // Single word: prefix matching
-      return `${quoteFtsToken(words[0])}*`
-    }
-
-    if (words.length > 3) {
-      // Long multi-word query: use NEAR for proximity relevance with prefix
+    let expression: string
+    if (words.length === 0) {
+      expression = quoteFtsToken(query)
+    } else if (words.length === 1) {
+      expression = `${quoteFtsToken(words[0])}*`
+    } else if (words.length > 3) {
       const escaped = words.map(quoteFtsToken).join(' ')
-      return `NEAR(${escaped}, 10)`
+      expression = `NEAR(${escaped}, 10)`
+    } else {
+      expression = words.map((word) => `${quoteFtsToken(word)}*`).join(' ')
     }
-
-    // 2-3 words: prefix each token for better recall
-    return words.map((w) => `${quoteFtsToken(w)}*`).join(' ')
+    if (includeContent) return expression
+    return `{title title_compact keywords tags path} : (${expression})`
   }
 
   private async ensureInitialized(): Promise<void> {
@@ -1241,12 +1275,23 @@ export class SearchIndexService {
     )
   }
 
-  private async applyDocument(tx: SearchIndexWriteTx, doc: PreparedIndexDocument): Promise<void> {
-    const shouldUpdateKeywords = await this.shouldUpdateKeywordMappings(tx, doc)
+  private async applyDocument(
+    tx: SearchIndexWriteTx,
+    doc: PreparedIndexDocument,
+    metaCoverageComplete: boolean
+  ): Promise<void> {
+    const existingKeywordHash = await this.readExistingKeywordHash(tx, doc)
+    const shouldUpdateKeywords = existingKeywordHash !== doc.keywordHash
 
-    await tx.run(
-      sql`DELETE FROM search_index WHERE provider = ${doc.providerId} AND item_id = ${doc.itemId}`
-    )
+    // provider/item_id are UNINDEXED FTS5 columns. Scanning the growing content table before
+    // every cold insert makes a clean full scan O(N²). Complete meta coverage proves that a
+    // missing primary-keyed meta row also means the FTS document is new; legacy/incomplete
+    // profiles retain delete-before-insert until a provider replacement repairs coverage.
+    if (!metaCoverageComplete || existingKeywordHash !== undefined) {
+      await tx.run(
+        sql`DELETE FROM search_index WHERE provider = ${doc.providerId} AND item_id = ${doc.itemId}`
+      )
+    }
 
     await tx.run(sql`
       INSERT INTO search_index (
@@ -1279,10 +1324,44 @@ export class SearchIndexService {
     await this.upsertSearchIndexMeta(tx, doc)
   }
 
-  private async shouldUpdateKeywordMappings(
+  private async resolveProviderMetaCoverage(
+    docs: readonly PreparedIndexDocument[]
+  ): Promise<Map<string, boolean>> {
+    const coverage = new Map<string, boolean>()
+    for (const doc of docs) {
+      if (coverage.has(doc.providerId)) continue
+      coverage.set(doc.providerId, await this.hasCompleteProviderMetaCoverage(doc.providerId))
+    }
+    return coverage
+  }
+
+  private async hasCompleteProviderMetaCoverage(providerId: string): Promise<boolean> {
+    const cached = this.providerMetaCoverageComplete.get(providerId)
+    if (cached !== undefined) return cached
+
+    const rows = await this.db.all<{ hasMissingMeta: number }>(sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM search_index AS indexed
+        WHERE indexed.provider = ${providerId}
+          AND NOT EXISTS (
+            SELECT 1
+            FROM search_index_meta AS meta
+            WHERE meta.provider_id = indexed.provider
+              AND meta.item_id = indexed.item_id
+          )
+        LIMIT 1
+      ) AS hasMissingMeta
+    `)
+    const complete = Number(rows[0]?.hasMissingMeta ?? 0) === 0
+    this.providerMetaCoverageComplete.set(providerId, complete)
+    return complete
+  }
+
+  private async readExistingKeywordHash(
     tx: SearchIndexWriteTx,
     doc: PreparedIndexDocument
-  ): Promise<boolean> {
+  ): Promise<string | undefined> {
     const existingMeta = await tx
       .select({ keywordHash: schema.searchIndexMeta.keywordHash })
       .from(schema.searchIndexMeta)
@@ -1294,7 +1373,7 @@ export class SearchIndexService {
       )
       .limit(1)
 
-    return existingMeta[0]?.keywordHash !== doc.keywordHash
+    return existingMeta[0]?.keywordHash
   }
 
   private async applyKeywordMappingsDelta(

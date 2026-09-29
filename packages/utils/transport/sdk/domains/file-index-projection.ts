@@ -8,10 +8,13 @@
  * transport handlers and the renderer settings SDK apply these projections so
  * the contract holds at each end of the wire.
  */
+import { DEFAULT_FILE_INDEX_CONTENT_SETTINGS } from '../../events/types/file-index'
 import type {
   FileIndexAddPathResult,
+  FileContentIndexingState,
   FileIndexBatteryStatus,
   FileIndexEstimateBasis,
+  FileIndexContentSettings,
   FileIndexEstimateStatus,
   FileIndexFailedFile,
   FileIndexFailedFilesResult,
@@ -88,9 +91,37 @@ function asNullableIsoTimestamp(value: unknown): string | null {
   return new Date(parsed).toISOString() === value ? value : null
 }
 
+const CONTENT_INDEXING_STATES: Record<FileContentIndexingState, true> = {
+  disabled: true,
+  idle: true,
+  indexing: true,
+  clearing: true,
+}
+
+function asContentIndexingState(value: unknown): FileContentIndexingState | undefined {
+  return typeof value === 'string' &&
+    Object.prototype.hasOwnProperty.call(CONTENT_INDEXING_STATES, value)
+    ? (value as FileContentIndexingState)
+    : undefined
+}
+
+export function projectFileIndexContentSettings(raw: unknown): FileIndexContentSettings {
+  const input = asRecord(raw) ?? {}
+  const contentIndexingEnabled = asBoolean(
+    input.contentIndexingEnabled,
+    DEFAULT_FILE_INDEX_CONTENT_SETTINGS.contentIndexingEnabled,
+  )
+  return {
+    contentIndexingEnabled,
+    state:
+      asContentIndexingState(input.state) ??
+      (contentIndexingEnabled ? 'idle' : DEFAULT_FILE_INDEX_CONTENT_SETTINGS.state),
+  }
+}
 export function projectFileIndexStatus(raw: unknown): FileIndexStatus {
   const input = asRecord(raw) ?? {}
   const progress = asRecord(input.progress) ?? {}
+  const overallProgress = asOptionalFiniteNumber(progress.progress)
   return {
     isInitializing: asBoolean(input.isInitializing),
     initializationFailed: asBoolean(input.initializationFailed),
@@ -104,6 +135,7 @@ export function projectFileIndexStatus(raw: unknown): FileIndexStatus {
       stage: asStage(progress.stage),
       current: asFiniteNumber(progress.current, 0),
       total: asFiniteNumber(progress.total, 0),
+      ...(overallProgress === undefined ? {} : { progress: overallProgress }),
     },
     startTime: asNullableFiniteNumber(input.startTime),
     estimatedCompletion: asNullableFiniteNumber(input.estimatedCompletion),
@@ -112,6 +144,8 @@ export function projectFileIndexStatus(raw: unknown): FileIndexStatus {
     estimateStatus: asEstimateStatus(input.estimateStatus),
     speedSampleCount: asOptionalFiniteNumber(input.speedSampleCount),
     estimateBasis: asEstimateBasis(input.estimateBasis),
+    contentIndexingEnabled: asOptionalBoolean(input.contentIndexingEnabled),
+    contentIndexingState: asContentIndexingState(input.contentIndexingState),
   }
 }
 

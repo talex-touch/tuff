@@ -66,7 +66,7 @@ async function selectLocale(option: LanguageOption) {
           :key="option.code"
           role="menuitemradio"
           :aria-checked="locale === option.code"
-          @click="selectLocale(option)"
+          @select="selectLocale(option)"
         >
           {{ option.label }}
 

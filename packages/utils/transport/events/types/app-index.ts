@@ -107,6 +107,24 @@ export interface AppIndexEntryMutationResult {
   status: "added" | "updated" | "removed" | "invalid" | "not-found" | "error";
   entry?: AppIndexManagedEntry;
   reason?: string;
+  /** Set with `reason: "shortcut-conflict"`: who already holds the key that was asked for. */
+  shortcutConflict?: AppIndexShortcutConflict;
+}
+
+/** A shortcut already holding the key an application asked to be bound to. */
+export interface AppIndexShortcutHolder {
+  id: string;
+  /** What to call it in a sentence: its settings label, or the id when settings has none. */
+  label: string;
+}
+
+/**
+ * Why a shortcut bind was refused. `holders` is empty when nothing in the app holds the key and
+ * the OS turned it down instead, so a caller that offers to override has to word that case
+ * differently.
+ */
+export interface AppIndexShortcutConflict {
+  holders: AppIndexShortcutHolder[];
 }
 
 export interface AppIndexDiagnoseRequest {
@@ -334,4 +352,9 @@ export interface AppIndexSetShortcutRequest {
   path: string;
   /** An empty string clears the binding. */
   accelerator: string;
+  /**
+   * Write the key even though `shortcutConflict` says something else holds it. Only a caller that
+   * has asked the user passes this.
+   */
+  force?: boolean;
 }

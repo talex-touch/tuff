@@ -1,6 +1,7 @@
-import { createClient, type Client } from '@libsql/client'
+import { createClient, type Client, type Value } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
 import type { SQL } from 'drizzle-orm'
+import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,9 +9,21 @@ import { describe, expect, it } from 'vitest'
 import { SearchIndexService, type SearchIndexReadExecutor } from './search-index-service'
 
 const PROVIDER = 'read-worker-parity'
+const dialect = new SQLiteSyncDialect()
+
+interface CompiledRead {
+  sql: string
+  params: Value[]
+}
 
 async function withIsolatedIndex(
-  run: (services: { direct: SearchIndexService; reader: SearchIndexService }) => Promise<void>
+  run: (services: {
+    direct: SearchIndexService
+    reader: SearchIndexService
+    readerClient: Client
+    /** Compiled SQL of every read the reader sent through its executor, in order. */
+    reads: CompiledRead[]
+  }) => Promise<void>
 ): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), 'tuff-search-read-parity-'))
   let writerClient: Client | undefined
@@ -91,9 +104,21 @@ async function withIsolatedIndex(
         args: [keyword, itemId, PROVIDER, priority]
       })
     }
+    // A crowded neighbour sharing two of the same ngram keywords: only the provider predicate
+    // keeps these out of a lookup, and the index has to stay selective over them.
+    await writerClient.execute(`
+      INSERT INTO keyword_mappings (keyword, item_id, provider_id, priority)
+      WITH RECURSIVE noise(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM noise WHERE n < 200)
+      SELECT CASE n % 2 WHEN 0 THEN 'ng:ch' ELSE 'ng:me' END,
+             'noise:item:' || n,
+             'noise-provider',
+             1.0
+      FROM noise
+    `)
 
     readerClient = createClient({ url: `file:${databasePath}` })
     const readerDb = drizzle(readerClient!)
+    const reads: CompiledRead[] = []
     let forbidDirectReads = false
     const schemaReaderDb = {
       all: async <T>(query: SQL): Promise<T[]> => {
@@ -102,7 +127,13 @@ async function withIsolatedIndex(
       }
     }
     const executor: SearchIndexReadExecutor = {
-      all: async <T>(query: SQL): Promise<T[]> => await readerDb.all<T>(query)
+      all: async <T>(query: SQL): Promise<T[]> => {
+        const compiled = dialect.sqlToQuery(query)
+        // Drizzle erases the bound-parameter types; libSQL takes them as values.
+        const params = compiled.params as Value[]
+        reads.push({ sql: compiled.sql, params })
+        return await readerDb.all<T>(query)
+      }
     }
     const reader = new SearchIndexService(schemaReaderDb as never, {
       initializationMode: 'reader',
@@ -111,8 +142,9 @@ async function withIsolatedIndex(
     })
     await reader.warmup()
     forbidDirectReads = true
+    reads.length = 0
 
-    await run({ direct, reader })
+    await run({ direct, reader, readerClient, reads })
   } finally {
     readerClient?.close()
     writerClient?.close()
@@ -174,6 +206,50 @@ describe('SearchIndexService read executor parity', () => {
       expect(readerNgrams).toEqual([{ itemId: 'item:network', overlapCount: 5 }])
       expect(readerCount).toBe(directCount)
       expect(readerCount).toBe(2)
+    })
+  })
+
+  it('keeps typo recall on the pinned ngram index without statistics', async () => {
+    await withIsolatedIndex(async ({ reader, readerClient, reads }) => {
+      // Nothing ever ran ANALYZE here, which is precisely the case where the equality probes
+      // used to fall off the intended index.
+      const stats = await readerClient.execute(
+        `SELECT name FROM sqlite_master WHERE name = 'sqlite_stat1'`
+      )
+      expect(stats.rows).toEqual([])
+
+      // 'chorme' shares only its first and last bigram with the indexed 'chrome' ngrams, so a
+      // transposed query still finds the item through overlap alone.
+      const results = await reader.lookupByNgrams(PROVIDER, 'chorme')
+
+      expect(results).toEqual([{ itemId: 'item:network', overlapCount: 2 }])
+
+      // Five bigrams, five probes: each one pinned to the provider+keyword index, scoped to the
+      // caller's provider, and bounded by the caller's limit.
+      expect(reads).toHaveLength(5)
+      const seeds = reads.map((read) =>
+        read.params.find(
+          (param): param is string => typeof param === 'string' && param.startsWith('ng:')
+        )
+      )
+      expect([...seeds].sort()).toEqual(['ng:ch', 'ng:ho', 'ng:me', 'ng:or', 'ng:rm'])
+      for (const read of reads) {
+        expect(read.sql).toContain('INDEXED BY idx_keyword_mappings_provider_keyword')
+        expect(read.params).toContain(PROVIDER)
+        expect(read.params).toContain(50)
+      }
+
+      // The statement actually executed searches through that index. A plan that walked the
+      // provider is the regression this pin exists to prevent — and the 200 neighbouring rows
+      // sharing these same keywords are what makes dropping the provider scope visible above.
+      const probe = reads[0]!
+      const plan = await readerClient.execute({
+        sql: `EXPLAIN QUERY PLAN ${probe.sql}`,
+        args: probe.params
+      })
+      const details = plan.rows.map((row) => ('detail' in row ? String(row.detail) : '')).join(' ')
+      expect(details).toContain('USING INDEX idx_keyword_mappings_provider_keyword')
+      expect(details).not.toContain('SCAN keyword_mappings')
     })
   })
 })

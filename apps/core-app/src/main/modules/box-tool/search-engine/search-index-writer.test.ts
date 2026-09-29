@@ -588,3 +588,181 @@ describe('SearchIndexWriter paused-window self writes', () => {
     expect(outcome).toBe('reset-done')
   })
 })
+
+/**
+ * Admission barrier probe: the first physical request parks on a gate the test holds, every
+ * later request runs to completion synchronously, and the probe records how many requests the
+ * client saw *inside* one call at the same time (`maxActive`). That is the only place the
+ * "one physical write at a time" contract can be observed.
+ */
+function createBoundedAdmissionProbe() {
+  const calls: string[] = []
+  let active = 0
+  let maxActive = 0
+  let releaseFirst!: () => void
+  const firstGate = new Promise<void>((resolve) => {
+    releaseFirst = resolve
+  })
+
+  const enter = async (label: string): Promise<void> => {
+    calls.push(label)
+    active += 1
+    maxActive = Math.max(maxActive, active)
+    if (calls.length === 1) await firstGate
+    active -= 1
+  }
+
+  const client = {
+    init: vi.fn(async () => undefined),
+    applyProviderItems: vi.fn(async (_sourceId: string, items: SearchIndexItem[]) => {
+      await enter(`normal:${items[0]?.itemId ?? ''}`)
+      return { removedItems: 0, indexedItems: 1 }
+    }),
+    persistAndApplyProviderItems: vi.fn(async () => {
+      await enter('background')
+      return { persistedCount: 0, summary: { removedItems: 0, indexedItems: 0 } }
+    }),
+    drain: vi.fn(async () => undefined),
+    getPendingCount: vi.fn(() => 0),
+    shutdown: vi.fn(async () => undefined)
+  }
+
+  return {
+    client,
+    calls,
+    releaseFirst,
+    get maxActive(): number {
+      return maxActive
+    }
+  }
+}
+
+function fileRecords(paths: string[]): UpsertFileRecord[] {
+  return paths.map((filePath) => ({
+    path: filePath,
+    name: filePath.split('/').at(-1) ?? filePath,
+    mtime: 0,
+    ctime: 0,
+    lastIndexedAt: 0,
+    isDir: false,
+    type: 'file'
+  }))
+}
+
+describe('SearchIndexWriter bounded admission capacity', () => {
+  it('runs one physical request at a time and admits only two waiters ahead of the rest', async () => {
+    const probe = createBoundedAdmissionProbe()
+    const writer = new SearchIndexWriter({
+      client: probe.client as unknown as SearchIndexWorkerClient
+    })
+    await writer.initialize('/tmp/search-index-writer-test.db')
+
+    const writes = Array.from({ length: 6 }, (_unused, index) =>
+      writer.indexItems('file-provider', [indexedItem(`file:/tmp/queued-${index}.txt`)])
+    )
+
+    // Six simultaneous producers: exactly one runs, two hold a queue slot, and the remaining
+    // three wait outside the queue for a capacity pulse instead of piling into the worker.
+    await vi.waitFor(() => {
+      const status = writer.getStatus()
+      expect(status.activeAdmissions).toBe(1)
+      expect(status.waitingAdmissions).toBe(2)
+      expect(status.capacityWaiters).toBe(3)
+    })
+
+    probe.releaseFirst()
+    await expect(Promise.all(writes)).resolves.toEqual([1, 1, 1, 1, 1, 1])
+
+    // Every request reached the client, and the client never saw two of them at once.
+    expect(probe.client.applyProviderItems).toHaveBeenCalledTimes(6)
+    expect(probe.maxActive).toBe(1)
+    expect(probe.calls).toHaveLength(6)
+    expect(writer.getStatus()).toMatchObject({
+      activeAdmissions: 0,
+      waitingAdmissions: 0,
+      capacityWaiters: 0
+    })
+  })
+
+  it('lets queued normal work overtake queued background work without letting background fill the queue', async () => {
+    const probe = createBoundedAdmissionProbe()
+    const writer = new SearchIndexWriter({
+      client: probe.client as unknown as SearchIndexWorkerClient
+    })
+    await writer.initialize('/tmp/search-index-writer-test.db')
+
+    const inFlight = writer.indexItems('file-provider', [indexedItem('file:/tmp/normal-1.txt')])
+    const queuedBackground = writer.persistAndApplyProviderItems(
+      fileRecords(['/tmp/background-1.txt']),
+      'file-provider',
+      [indexedItem('file:/tmp/background-1.txt')]
+    )
+    // Second background producer: the reserved-for-foreground slot cannot be spent on it.
+    const capacityWaitingBackground = writer.persistAndApplyProviderItems(
+      fileRecords(['/tmp/background-2.txt']),
+      'file-provider',
+      [indexedItem('file:/tmp/background-2.txt')]
+    )
+    const queuedNormal = writer.indexItems('file-provider', [indexedItem('file:/tmp/normal-2.txt')])
+
+    await vi.waitFor(() => {
+      const status = writer.getStatus()
+      expect(status.waitingAdmissions).toBe(2)
+      expect(status.capacityWaiters).toBe(1)
+    })
+
+    probe.releaseFirst()
+    await Promise.all([inFlight, queuedBackground, capacityWaitingBackground, queuedNormal])
+
+    // The normal producer that arrived LAST still runs before both background producers.
+    expect(probe.calls).toEqual([
+      'normal:file:/tmp/normal-1.txt',
+      'normal:file:/tmp/normal-2.txt',
+      'background',
+      'background'
+    ])
+    expect(probe.maxActive).toBe(1)
+  })
+
+  it('rejects queued waiters and capacity waiters on shutdown instead of leaving them pending', async () => {
+    const probe = createBoundedAdmissionProbe()
+    const writer = new SearchIndexWriter({
+      client: probe.client as unknown as SearchIndexWorkerClient
+    })
+    await writer.initialize('/tmp/search-index-writer-test.db')
+
+    const inFlight = writer.indexItems('file-provider', [indexedItem('file:/tmp/in-flight.txt')])
+    const queuedBackground = writer.persistAndApplyProviderItems(
+      fileRecords(['/tmp/background-1.txt']),
+      'file-provider',
+      [indexedItem('file:/tmp/background-1.txt')]
+    )
+    const capacityWaitingBackground = writer.persistAndApplyProviderItems(
+      fileRecords(['/tmp/background-2.txt']),
+      'file-provider',
+      [indexedItem('file:/tmp/background-2.txt')]
+    )
+    const queuedNormal = writer.indexItems('file-provider', [indexedItem('file:/tmp/normal-2.txt')])
+
+    await vi.waitFor(() => {
+      const status = writer.getStatus()
+      expect(status.waitingAdmissions).toBe(2)
+      expect(status.capacityWaiters).toBe(1)
+    })
+
+    const shutdown = writer.beginShutdown()
+    expect(probe.client.shutdown).toHaveBeenCalledTimes(1)
+
+    await expect(queuedNormal).rejects.toThrow('SEARCH_INDEX_WRITER_CLOSED')
+    await expect(queuedBackground).rejects.toThrow('SEARCH_INDEX_WRITER_CLOSED')
+    await expect(capacityWaitingBackground).rejects.toThrow('SEARCH_INDEX_WRITER_CLOSED')
+    // Only the request that was already running reached the client.
+    expect(probe.client.applyProviderItems).toHaveBeenCalledTimes(1)
+    expect(probe.client.persistAndApplyProviderItems).not.toHaveBeenCalled()
+
+    probe.releaseFirst()
+    await expect(inFlight).resolves.toBe(1)
+    await expect(shutdown).resolves.toBeUndefined()
+    expect(writer.getStatus().readiness).toBe('closed')
+  })
+})

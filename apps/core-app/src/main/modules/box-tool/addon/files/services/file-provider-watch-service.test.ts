@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { StorageList } from '@talex-touch/utils'
 import { FileProviderWatchService } from './file-provider-watch-service'
+import type { FileIndexSettings } from '../types'
+import { FILE_CONTENT_INDEX_POLICY_VERSION } from '../types'
+import { getMainConfig, saveMainConfig, saveMainConfigDurable } from '../../../../storage'
 import FileSystemWatcher from '../../../file-system-watcher'
 import { appTaskGate } from '../../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../../service/device-idle-service'
@@ -32,7 +36,8 @@ vi.mock('../../../file-system-watcher', () => ({
 
 vi.mock('../../../../storage', () => ({
   getMainConfig: vi.fn(() => ({})),
-  saveMainConfig: vi.fn()
+  saveMainConfig: vi.fn(),
+  saveMainConfigDurable: vi.fn(async () => ({ success: true, version: 1 }))
 }))
 
 vi.mock('../../../../../service/app-task-gate', () => ({
@@ -633,5 +638,119 @@ describe('file-provider-watch-service', () => {
 
     expect(service.getWatchPaths()).toEqual(['/tmp/tuff-index-a', '/tmp/tuff-index-b'])
     expect(service.getNormalizedWatchPaths()).toEqual(['/tmp/tuff-index-a', '/tmp/tuff-index-b'])
+  })
+})
+
+/**
+ * `contentIndexingEnabled` decides whether the app reads file bodies at all, so the resolver
+ * must never turn a missing, historical or malformed value into an enabled one.
+ */
+describe('file-provider-watch-service content indexing setting', () => {
+  it('resolves an absent or non-boolean content flag to off and preserves explicit booleans', () => {
+    const service = createService()
+
+    expect(service.normalizeFileIndexSettings({}).contentIndexingEnabled).toBe(false)
+    expect(service.normalizeFileIndexSettings(null).contentIndexingEnabled).toBe(false)
+    expect(
+      service.normalizeFileIndexSettings({ contentIndexingEnabled: 'on' as never })
+        .contentIndexingEnabled
+    ).toBe(false)
+    expect(
+      service.normalizeFileIndexSettings({ contentIndexingEnabled: 1 as never })
+        .contentIndexingEnabled
+    ).toBe(false)
+    expect(
+      service.normalizeFileIndexSettings({ contentIndexingEnabled: true }).contentIndexingEnabled
+    ).toBe(true)
+    expect(
+      service.normalizeFileIndexSettings({ contentIndexingEnabled: false }).contentIndexingEnabled
+    ).toBe(false)
+  })
+
+  it('writes the normalized content flag back when the stored config predates the field', () => {
+    vi.mocked(getMainConfig).mockReturnValueOnce({ autoScanEnabled: false } as never)
+    const service = createService()
+
+    service.loadFileIndexSettings()
+
+    expect(saveMainConfig).toHaveBeenCalledWith(
+      StorageList.FILE_INDEX_SETTINGS,
+      expect.objectContaining({ autoScanEnabled: false, contentIndexingEnabled: false })
+    )
+  })
+
+  it('round-trips an explicitly enabled setting through storage without drifting back to off', async () => {
+    const writer = createService()
+    await writer.updateFileIndexSettings({ contentIndexingEnabled: true })
+
+    // The durable write is the one that outlives the session: whatever it stored is exactly what
+    // a later boot loads.
+    const persisted = vi.mocked(saveMainConfigDurable).mock.calls.at(-1)?.[1] as
+      | Partial<FileIndexSettings>
+      | undefined
+    expect(persisted?.contentIndexingEnabled).toBe(true)
+
+    vi.mocked(getMainConfig).mockReturnValueOnce(persisted as never)
+    const reader = createService()
+    reader.loadFileIndexSettings()
+
+    expect(reader.getCurrentSettings().contentIndexingEnabled).toBe(true)
+  })
+
+  it('keeps the previous settings and rejects when the durable write fails', async () => {
+    const service = createService()
+    await service.updateFileIndexSettings({ contentIndexingEnabled: true })
+
+    vi.mocked(saveMainConfigDurable).mockResolvedValueOnce({ success: false, version: 0 })
+
+    await expect(
+      service.updateFileIndexSettings({ contentIndexingEnabled: false })
+    ).rejects.toThrow('FILE_INDEX_SETTINGS_PERSIST_FAILED')
+
+    // A failed durable write must not half-apply: an in-memory-only flip would look enabled for
+    // the rest of the session and silently revert on the next boot.
+    expect(service.getCurrentSettings().contentIndexingEnabled).toBe(true)
+  })
+
+  it('treats the cleanup version as fresh only when nothing was stored, and preserves recorded values', () => {
+    const service = createService()
+
+    // Fresh profile: the stored version already satisfies the policy check, so the one-time
+    // content sweep is not re-run on every start.
+    expect(service.normalizeFileIndexSettings(undefined).contentIndexCleanupVersion).toBe(
+      FILE_CONTENT_INDEX_POLICY_VERSION
+    )
+    expect(service.normalizeFileIndexSettings({}).contentIndexCleanupVersion).toBe(
+      FILE_CONTENT_INDEX_POLICY_VERSION
+    )
+
+    // A profile that predates the field has that cleanup outstanding, exactly once.
+    expect(
+      service.normalizeFileIndexSettings({ autoScanEnabled: true }).contentIndexCleanupVersion
+    ).toBe(0)
+    expect(
+      service.normalizeFileIndexSettings({ contentIndexingEnabled: true })
+        .contentIndexCleanupVersion
+    ).toBe(0)
+
+    // What the sweep recorded survives normalization, including a recorded zero.
+    expect(
+      service.normalizeFileIndexSettings({ contentIndexCleanupVersion: 0 })
+        .contentIndexCleanupVersion
+    ).toBe(0)
+    expect(
+      service.normalizeFileIndexSettings({ contentIndexCleanupVersion: 3 })
+        .contentIndexCleanupVersion
+    ).toBe(3)
+
+    // A malformed value must not be able to claim the cleanup already happened.
+    expect(
+      service.normalizeFileIndexSettings({ contentIndexCleanupVersion: -1 })
+        .contentIndexCleanupVersion
+    ).toBe(0)
+    expect(
+      service.normalizeFileIndexSettings({ contentIndexCleanupVersion: 1.5 })
+        .contentIndexCleanupVersion
+    ).toBe(0)
   })
 })

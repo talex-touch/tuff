@@ -13,10 +13,10 @@ Any code that writes to `database.db` (primary), `database-aux.db` (aux), or
 
 ### 2. Topology contract — one writer connection per SQLite file
 
-| File | Sole writer | Writer mechanism |
-|---|---|---|
-| `database.db` | main process | `dbWriteScheduler` primary lane |
-| `database-aux.db` | main process | `dbWriteScheduler` aux lane |
+| File              | Sole writer                | Writer mechanism                            |
+| ----------------- | -------------------------- | ------------------------------------------- |
+| `database.db`     | main process               | `dbWriteScheduler` primary lane             |
+| `database-aux.db` | main process               | `dbWriteScheduler` aux lane                 |
 | `search-index.db` | search-index worker thread | worker port (`searchIndexWriter.execWrite`) |
 
 `DB_SEARCH_SPLIT_ENABLED` default ON since 2026-08-05; `TUFF_DB_SEARCH_SPLIT_ENABLED=0`
@@ -34,6 +34,8 @@ from inside an operation, and do not "fix" the bypass by making it wait: that is
 on its own caller's gate; the reset task gate then stayed running for the session and every
 later file watch event was skipped). Regression anchors:
 `search-index-writer.test.ts` "paused-window self writes".
+
+`SearchIndexWriter` 的 Worker admission 也是单写者边界。物理执行最多 1 个请求，内部最多保留 2 个等待请求；后台 fullScan/enrichment 最多占 1 个等待位，另一个位置留给 watch、checkpoint、reset 和用户设置操作。容量外的生产者只等待共享 capacity pulse，不进入 Worker pending map。关闭必须拒绝队列并唤醒容量等待者。暂停期间不能启动外部排队请求，但 `pausedAdmissionScope` 的自写可在 active 槽空闲时直接执行。
 
 ### 3. Signatures (db/db-write.ts, db/db-write-scheduler.ts)
 
@@ -68,11 +70,14 @@ Aux init is backgrounded; construction-time captures of `getAuxDb()` pin the pri
 fallback for the process lifetime. Reads must target the same live home as writes.
 
 #### Wrong
+
 ```ts
 class Store { constructor(){ this.db = databaseModule.getAuxDb() }  // stale capture
   save(){ return dbWriteScheduler.schedule('x', () => withSqliteRetry(() => this.db.insert(...))) } }
 ```
+
 #### Correct
+
 ```ts
 scheduleAuxWrite('x', (db) => db.insert(...))          // live {db, lane} at enqueue
 const rows = await resolveCurrentAuxDb()?.select(...)  // reads: same live home
@@ -114,14 +119,14 @@ graph (the first gate landed on a dead caller).
 
 ### 8. Validation & error matrix
 
-| Condition | Behavior |
-|---|---|
-| BUSY, retries left | delayed re-enqueue (lane-local), `SQLITE_BUSY_RETRY_COUNT`++ |
-| BUSY, exhausted | notify once → reject original error → circuit accounting |
-| Non-busy error | immediate reject, no retry |
-| Droppable task ages out during backoff | drop error (maxQueueWaitMs vs original enqueuedAt) |
-| Split init/fixup failure | fail-closed to shared-file topology (= flag-off), never dual-writer |
-| Worker init failure | contained retry w/ backoff; NEVER fall back to opening `database.db` |
+| Condition                              | Behavior                                                             |
+| -------------------------------------- | -------------------------------------------------------------------- |
+| BUSY, retries left                     | delayed re-enqueue (lane-local), `SQLITE_BUSY_RETRY_COUNT`++         |
+| BUSY, exhausted                        | notify once → reject original error → circuit accounting             |
+| Non-busy error                         | immediate reject, no retry                                           |
+| Droppable task ages out during backoff | drop error (maxQueueWaitMs vs original enqueuedAt)                   |
+| Split init/fixup failure               | fail-closed to shared-file topology (= flag-off), never dual-writer  |
+| Worker init failure                    | contained retry w/ backoff; NEVER fall back to opening `database.db` |
 
 ### 9. Tests required (existing anchors)
 
@@ -166,11 +171,11 @@ this by running a newer drizzle-kit: it would re-diff the whole schema against 0
 
 ### 4. Validation & error matrix
 
-| Condition | Outcome |
-|---|---|
-| `when` not journal max | migration silently skipped on existing installs |
-| INSERT SELECT without explicit columns | data scrambled if column order drifts |
-| Rebuild of a referenced (non-leaf) table w/o FK check | cascade/constraint breakage |
+| Condition                                             | Outcome                                         |
+| ----------------------------------------------------- | ----------------------------------------------- |
+| `when` not journal max                                | migration silently skipped on existing installs |
+| INSERT SELECT without explicit columns                | data scrambled if column order drifts           |
+| Rebuild of a referenced (non-leaf) table w/o FK check | cascade/constraint breakage                     |
 
 ### 5. Tests required
 
