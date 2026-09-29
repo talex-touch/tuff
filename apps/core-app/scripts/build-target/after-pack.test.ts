@@ -406,7 +406,9 @@ describe('verifyPackagedFdBinary', () => {
     ).not.toThrow()
 
     // The package that ships must be runnable: spawn() fails on a binary without the exec bit.
-    expect(((await fs.stat(binaryPath)).mode & 0o777).toString(8)).toBe('755')
+    if (process.platform !== 'win32') {
+      expect(((await fs.stat(binaryPath)).mode & 0o777).toString(8)).toBe('755')
+    }
   })
 
   it('accepts the pnpm-nested platform package layout', async () => {
@@ -418,7 +420,9 @@ describe('verifyPackagedFdBinary', () => {
     expect(() =>
       verifyPackagedFdBinary({ appOutDir, electronPlatformName: 'darwin', arch: 3 })
     ).not.toThrow()
-    expect(((await fs.stat(binaryPath)).mode & 0o777).toString(8)).toBe('755')
+    if (process.platform !== 'win32') {
+      expect(((await fs.stat(binaryPath)).mode & 0o777).toString(8)).toBe('755')
+    }
   })
 
   it('fails the package when the fd binary is missing from every known layout', async () => {
