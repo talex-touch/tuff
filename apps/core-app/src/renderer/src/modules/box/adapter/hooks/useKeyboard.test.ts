@@ -51,6 +51,16 @@ vi.mock('~/utils/renderer-log', () => ({
   createRendererLogger: () => ({ error: vi.fn() })
 }))
 
+// The ⌘1–⌘0 preference is read from this store on every press, so the mock is one mutable object:
+// a test moves the value between presses without remounting the harness.
+const appSettingMock = vi.hoisted(() => ({
+  appSetting: { coreBox: {} as { quickSelectAction?: unknown } }
+}))
+
+vi.mock('~/modules/storage/app-storage', () => ({
+  appSetting: appSettingMock.appSetting
+}))
+
 function createFocusedItem(): TuffItem {
   return {
     id: 'stale-feature-entry',
@@ -273,6 +283,7 @@ describe('handleCoreBoxEscapeKey', () => {
 
 type GridKeyboardHarness = {
   boxOptions: IBoxOptions
+  select: Ref<number>
   handleExecute: Mock
   cleanup: () => void
 }
@@ -299,6 +310,7 @@ function mountGridKeyboardHarness(
     layout
   }
   const results = ref(items)
+  const select = ref(-1)
   const scrollbar = ref<{
     getScrollInfo: () => { clientHeight: number; scrollTop: number }
     scrollTo: (x: number, y: number) => void
@@ -313,7 +325,7 @@ function mountGridKeyboardHarness(
       useKeyboard(
         boxOptions,
         results,
-        ref(-1),
+        select,
         scrollbar,
         ref(''),
         handleExecute,
@@ -332,6 +344,7 @@ function mountGridKeyboardHarness(
 
   return {
     boxOptions,
+    select,
     handleExecute,
     cleanup: () => {
       app.unmount()
@@ -903,5 +916,120 @@ describe('useKeyboard Enter held over from the ⌘K panel', () => {
     const repeat = pressEnter({ repeat: true })
     expect(repeat.defaultPrevented).toBe(true)
     expect(keyTransportMock.forwardKeyEvent).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * ⌘1–⌘0 on the numbered result. `execute` — the preference's default, and what the digits did
+ * before the preference existed — runs the row; `locate` only moves the selection onto it.
+ */
+describe('useKeyboard ⌘1–⌘0 quick select', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', () => 0)
+    appSettingMock.appSetting.coreBox.quickSelectAction = 'execute'
+  })
+
+  afterEach(() => {
+    activeGridKeyboardHarness?.cleanup()
+    activeGridKeyboardHarness = undefined
+    document.body.classList.remove('core-box')
+    delete appSettingMock.appSetting.coreBox.quickSelectAction
+    vi.unstubAllGlobals()
+  })
+
+  function pressQuickSelect(key: string): KeyboardEvent {
+    return dispatchGridKey(key, { metaKey: true })
+  }
+
+  it('runs the numbered result and hands it over already selected', () => {
+    const items = createGridResults()
+    activeGridKeyboardHarness = mountGridKeyboardHarness(0, undefined, null, items)
+    const harness = activeGridKeyboardHarness
+    // What the executor sees while it runs: a provider that records history or usage reads this.
+    let selectedAtExecute = -1
+    harness.handleExecute.mockImplementation(() => {
+      selectedAtExecute = harness.select.value
+    })
+
+    const event = pressQuickSelect('5')
+
+    expect(harness.boxOptions.focus).toBe(4)
+    expect(harness.handleExecute).toHaveBeenCalledExactlyOnceWith(items[4])
+    expect(selectedAtExecute).toBe(4)
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('only moves the selection when the preference is locate', () => {
+    appSettingMock.appSetting.coreBox.quickSelectAction = 'locate'
+    const items = createGridResults()
+    activeGridKeyboardHarness = mountGridKeyboardHarness(0, undefined, null, items)
+
+    const event = pressQuickSelect('3')
+
+    expect(activeGridKeyboardHarness.boxOptions.focus).toBe(2)
+    expect(activeGridKeyboardHarness.handleExecute).not.toHaveBeenCalled()
+    // Located, not ignored: the digit still belongs to CoreBox, not to the input.
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('reads the preference again on the next press, so a settings change needs no restart', () => {
+    appSettingMock.appSetting.coreBox.quickSelectAction = 'locate'
+    const items = createGridResults()
+    activeGridKeyboardHarness = mountGridKeyboardHarness(0, undefined, null, items)
+
+    pressQuickSelect('2')
+    expect(activeGridKeyboardHarness.boxOptions.focus).toBe(1)
+    expect(activeGridKeyboardHarness.handleExecute).not.toHaveBeenCalled()
+
+    appSettingMock.appSetting.coreBox.quickSelectAction = 'execute'
+    pressQuickSelect('4')
+
+    expect(activeGridKeyboardHarness.boxOptions.focus).toBe(3)
+    expect(activeGridKeyboardHarness.handleExecute).toHaveBeenCalledExactlyOnceWith(items[3])
+  })
+
+  it('maps ⌘0 onto the tenth result', () => {
+    const items = createGridResults()
+    activeGridKeyboardHarness = mountGridKeyboardHarness(0, undefined, null, items)
+
+    pressQuickSelect('0')
+
+    expect(activeGridKeyboardHarness.boxOptions.focus).toBe(9)
+    expect(activeGridKeyboardHarness.handleExecute).toHaveBeenCalledExactlyOnceWith(items[9])
+  })
+
+  it('leaves the key alone when the box holds fewer results than the number names', () => {
+    activeGridKeyboardHarness = mountGridKeyboardHarness(
+      0,
+      undefined,
+      null,
+      createGridResults().slice(0, 3)
+    )
+
+    const event = pressQuickSelect('7')
+
+    expect(activeGridKeyboardHarness.boxOptions.focus).toBe(0)
+    expect(activeGridKeyboardHarness.handleExecute).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false)
+  })
+
+  // What an existing install does: the config predates the preference, and the read site has to
+  // keep the digits running the row rather than silently stopping at the selection.
+  it.each([
+    { name: 'a config written before the preference existed', value: undefined },
+    { name: 'a value the settings never offer', value: 'highlight' }
+  ])('still runs the row for $name', ({ value }) => {
+    if (value === undefined) {
+      delete appSettingMock.appSetting.coreBox.quickSelectAction
+    } else {
+      appSettingMock.appSetting.coreBox.quickSelectAction = value
+    }
+    const items = createGridResults()
+    activeGridKeyboardHarness = mountGridKeyboardHarness(0, undefined, null, items)
+
+    pressQuickSelect('2')
+
+    expect(activeGridKeyboardHarness.boxOptions.focus).toBe(1)
+    expect(activeGridKeyboardHarness.handleExecute).toHaveBeenCalledExactlyOnceWith(items[1])
   })
 })

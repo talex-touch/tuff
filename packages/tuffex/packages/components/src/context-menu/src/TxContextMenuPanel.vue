@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<ContextMenuPanelProps>(), {
   maxWidth: undefined,
   maxHeight: undefined,
   closeOnSelect: true,
+  activationFeedback: true,
   close: undefined,
   dense: false,
   outsideGuard: false,
@@ -82,6 +83,7 @@ function handleKeydown(event: KeyboardEvent): void {
 provide<ContextMenuContext>(TX_CONTEXT_MENU_INJECTION_KEY, reactive({
   close,
   closeOnSelect: toRef(props, 'closeOnSelect'),
+  activationFeedback: toRef(props, 'activationFeedback'),
 }))
 
 defineExpose({ focusFirstItem })

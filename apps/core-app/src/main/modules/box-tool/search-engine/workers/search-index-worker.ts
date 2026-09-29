@@ -60,6 +60,23 @@ import { getWorkerMemorySnapshot } from '../../addon/files/workers/worker-status
 
 const searchIndexWorkerLog = createLogger('SearchIndex').child('Worker')
 
+interface CpuUsageSnapshot {
+  user: number
+  system: number
+}
+
+const threadCpuUsage = (
+  process as unknown as {
+    threadCpuUsage?: (previousValue?: CpuUsageSnapshot) => CpuUsageSnapshot
+  }
+).threadCpuUsage
+
+function readWorkerCpuUsage(previousValue?: CpuUsageSnapshot): CpuUsageSnapshot {
+  return threadCpuUsage
+    ? threadCpuUsage.call(process, previousValue)
+    : process.cpuUsage(previousValue)
+}
+
 export {
   FILE_INDEX_PERSISTENCE_RETRY_LABELS as WORKER_RETRY_LABELS,
   withFileIndexPersistenceRetry as withWorkerWriteRetry
@@ -170,6 +187,7 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         // Both operations run on this worker's serialized queue. They remain separate domain
         // transactions, but the main thread pays one message/clone boundary instead of two.
         const operationStartedAt = performance.now()
+        const cpuStartedAt = readWorkerCpuUsage()
         const persistStartedAt = operationStartedAt
         const persisted = await filePersistenceRepository.upsertFiles(message.records)
         const persistDurationMs = performance.now() - persistStartedAt
@@ -180,6 +198,7 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
           message.legacyItemIds
         )
         const applyDurationMs = performance.now() - applyStartedAt
+        const cpuUsage = readWorkerCpuUsage(cpuStartedAt)
         const metrics = {
           requestedRows: message.records.length,
           persistedRows: persisted.length,
@@ -187,6 +206,7 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
           removedItems: summary.removedItems,
           legacyItemIds: message.legacyItemIds.length,
           workerDurationMs: performance.now() - operationStartedAt,
+          workerCpuMicros: cpuUsage.user + cpuUsage.system,
           persistDurationMs,
           applyDurationMs
         }

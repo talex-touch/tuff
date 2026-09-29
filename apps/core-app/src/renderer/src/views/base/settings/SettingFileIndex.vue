@@ -3,6 +3,7 @@ import type {
   AppIndexSettings,
   DeviceIdleDiagnostic,
   DeviceIdleSettings,
+  FileIndexContentSettings,
   FileIndexStatus,
   FileIndexBatteryStatus,
   FileIndexStats
@@ -24,6 +25,7 @@ import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { sleep } from '@talex-touch/utils/common'
+import { DEFAULT_FILE_INDEX_CONTENT_SETTINGS } from '@talex-touch/utils/transport/events/types'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import type { CoreBoxIndexingDiagnosticsResponse } from '@talex-touch/utils/transport/events/types'
 import { computed, h, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -101,6 +103,24 @@ const estimatedTimeRemaining = ref<number | null>(null)
 const estimatedTimeStatus = ref<string | null>(null)
 const estimatedTimeLabel = useEstimatedCompletionText(estimatedTimeRemaining, estimatedTimeStatus)
 const indexStats = ref<FileIndexStats | null>(null)
+const contentIndexSettings = ref<FileIndexContentSettings>({
+  ...DEFAULT_FILE_INDEX_CONTENT_SETTINGS
+})
+const contentIndexingEnabled = ref(false)
+const contentIndexSettingsSaving = ref(false)
+const contentIndexConfirmVisible = ref(false)
+const contentIndexSwitchRef = ref<{ $el?: Element } | null>(null)
+const contentIndexDialogSource = computed<HTMLElement | null>(() => {
+  const element = contentIndexSwitchRef.value?.$el
+  return element instanceof HTMLElement ? element : null
+})
+const contentIndexDescription = computed(() =>
+  t(
+    contentIndexSettings.value.state === 'indexing'
+      ? 'settings.settingFileIndex.contentIndexingDesc'
+      : 'settings.settingFileIndex.contentIndexDesc'
+  )
+)
 const sourceDiagnostics = ref<CoreBoxIndexingDiagnosticsResponse | null>(null)
 const sourceDiagnosticsLoading = ref(false)
 const sourceDiagnosticsCheckedAt = ref<Date | null>(null)
@@ -256,6 +276,13 @@ function openAppIndexManager() {
 async function checkStatus() {
   try {
     indexStatus.value = await getIndexStatus()
+    if (typeof indexStatus.value?.contentIndexingEnabled === 'boolean') {
+      contentIndexSettings.value = {
+        contentIndexingEnabled: indexStatus.value.contentIndexingEnabled,
+        state: indexStatus.value.contentIndexingState ?? 'disabled'
+      }
+      contentIndexingEnabled.value = indexStatus.value.contentIndexingEnabled
+    }
     lastChecked.value = new Date()
     estimatedTimeRemaining.value = indexStatus.value?.estimatedRemainingMs ?? null
     estimatedTimeStatus.value = indexStatus.value?.estimateStatus ?? null
@@ -562,6 +589,63 @@ function toAppIndexForm(settings: AppIndexSettings): AppIndexForm {
   }
 }
 
+async function loadContentIndexSettings() {
+  try {
+    const settings = await settingsSdk.fileIndex.getSettings()
+    contentIndexSettings.value = settings
+    contentIndexingEnabled.value = settings.contentIndexingEnabled
+  } catch {
+    settingFileIndexLog.error('Failed to load content indexing setting', {
+      operation: 'getContentIndexSettings'
+    })
+    toast.error(t('settings.settingFileIndex.contentIndexLoadFailed'))
+  }
+}
+
+async function saveContentIndexSettings(enabled: boolean) {
+  if (contentIndexSettingsSaving.value) return
+  contentIndexSettingsSaving.value = true
+  const previous = contentIndexSettings.value
+  try {
+    const updated = await settingsSdk.fileIndex.updateSettings({
+      contentIndexingEnabled: enabled
+    })
+    contentIndexSettings.value = updated
+    contentIndexingEnabled.value = updated.contentIndexingEnabled
+    toast.success(
+      t(
+        updated.contentIndexingEnabled
+          ? 'settings.settingFileIndex.contentIndexEnabled'
+          : 'settings.settingFileIndex.contentIndexDisabled'
+      )
+    )
+    await checkStatus()
+  } catch {
+    contentIndexSettings.value = previous
+    contentIndexingEnabled.value = previous.contentIndexingEnabled
+    settingFileIndexLog.error('Failed to update content indexing setting', {
+      operation: 'updateContentIndexSettings'
+    })
+    toast.error(t('settings.settingFileIndex.contentIndexSaveFailed'))
+  } finally {
+    contentIndexSettingsSaving.value = false
+  }
+}
+
+function handleContentIndexChange(enabled: boolean) {
+  if (enabled) {
+    contentIndexingEnabled.value = false
+    contentIndexConfirmVisible.value = true
+    return
+  }
+  void saveContentIndexSettings(false)
+}
+
+function confirmContentIndexing(close: () => void) {
+  close()
+  void saveContentIndexSettings(true)
+}
+
 async function loadDeviceIdleSettings() {
   try {
     const settings = await settingsSdk.deviceIdle.getSettings()
@@ -753,6 +837,7 @@ watch(
 )
 
 onMounted(() => {
+  loadContentIndexSettings()
   checkStatus()
 
   unsubscribeProgress = onProgressUpdate((progress) => {
@@ -832,7 +917,7 @@ const progressText = computed(() => {
   const stageLabel = stage && te(stageKey) ? t(stageKey) : stage || ''
 
   if (total > 0) {
-    const percentage = Math.round((current / total) * 100)
+    const percentage = Math.round(progress.progress ?? (current / total) * 100)
     return `${stageLabel} (${current}/${total}) ${percentage}%`
   }
 
@@ -1232,6 +1317,17 @@ async function triggerRebuild() {
         {{ statusText }}
       </div>
     </TuffBlockSlot>
+
+    <TuffBlockSwitch
+      ref="contentIndexSwitchRef"
+      v-model="contentIndexingEnabled"
+      :title="t('settings.settingFileIndex.contentIndexTitle')"
+      :description="contentIndexDescription"
+      default-icon="i-carbon-document"
+      active-icon="i-carbon-document-view"
+      :loading="contentIndexSettingsSaving || contentIndexSettings.state === 'clearing'"
+      @change="handleContentIndexChange"
+    />
 
     <TuffBlockSlot
       v-if="isIndexing"
@@ -2067,6 +2163,44 @@ async function triggerRebuild() {
 
     <SettingFileIndexAppDiagnostic />
   </TuffGroupBlock>
+
+  <FlipDialog
+    v-model="contentIndexConfirmVisible"
+    :reference="contentIndexDialogSource"
+    :reference-auto-open="false"
+    :hide-reference-on-open="false"
+    :header-title="t('settings.settingFileIndex.contentIndexConfirmTitle')"
+    :header-desc="t('settings.settingFileIndex.contentIndexConfirmDesc')"
+    size="md"
+    width="min(560px, calc(100vw - 40px))"
+  >
+    <template #default="{ close }">
+      <div class="content-index-confirm">
+        <div class="content-index-confirm__points">
+          <p>
+            <span class="i-carbon-document-view" aria-hidden="true" />
+            {{ t('settings.settingFileIndex.contentIndexPrivacy') }}
+          </p>
+          <p>
+            <span class="i-carbon-meter" aria-hidden="true" />
+            {{ t('settings.settingFileIndex.contentIndexResources') }}
+          </p>
+          <p>
+            <span class="i-carbon-clean" aria-hidden="true" />
+            {{ t('settings.settingFileIndex.contentIndexCleanup') }}
+          </p>
+        </div>
+        <div class="content-index-confirm__actions">
+          <TxButton variant="flat" @click="close">
+            {{ t('common.cancel') }}
+          </TxButton>
+          <TxButton type="primary" @click="confirmContentIndexing(close)">
+            {{ t('settings.settingFileIndex.contentIndexConfirmAction') }}
+          </TxButton>
+        </div>
+      </div>
+    </template>
+  </FlipDialog>
 
   <TxDrawer
     v-model:visible="statsDrawerVisible"

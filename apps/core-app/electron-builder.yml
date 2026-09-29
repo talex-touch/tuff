@@ -16,6 +16,7 @@ asarUnpack:
   - '**/node_modules/@img/**'
   - '**/node_modules/ffmpeg-static/**'
   - '**/node_modules/ffprobe-static/**'
+  - '**/node_modules/@prebuilt-binary/fd-*/bin/**'
 directories:
   app: .
   buildResources: build
@@ -23,6 +24,7 @@ directories:
 files:
   - out/**
   - resources/**
+  - '!resources/licenses/**'
   - package.json
   - '!resources/bundled-plugins/**'
   - node_modules/**
@@ -83,6 +85,10 @@ extraResources:
     to: bundled-plugins
     filter:
       - '**/*'
+  - from: resources/licenses/fd-LICENSE-MIT.txt
+    to: licenses/fd-LICENSE-MIT.txt
+  - from: resources/licenses/fd-LICENSE-APACHE.txt
+    to: licenses/fd-LICENSE-APACHE.txt
 
 win:
   target:

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### ✨ 组件增强
+
+- `TxDropdownMenu` 与 `TxContextMenu` 的关闭型菜单项新增统一确认反馈：先清空高亮 90ms、再复用 active 选中态确认 90ms，然后触发 `select` 并关闭；支持菜单/Panel/单项 `activationFeedback` 覆盖，`closeOnSelect=false` 与减少动态效果保持即时路径。
+
 ## [0.6.2] - 2026-09-28
 
 ### 📦 组件变动 (Components)

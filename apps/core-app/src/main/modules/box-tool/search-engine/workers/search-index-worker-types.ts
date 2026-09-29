@@ -51,6 +51,8 @@ export interface PersistAndApplyProviderItemsMetrics {
   workerDurationMs: number
   persistDurationMs: number
   applyDurationMs: number
+  /** Actual CPU consumed by this worker operation via threadCpuUsage(), with process fallback. */
+  workerCpuMicros?: number
   roundTripDurationMs?: number
   visibilityDurationMs?: number
 }

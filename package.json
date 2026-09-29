@@ -48,7 +48,7 @@
   },
   "dependencies": {
     "@sentry/vite-plugin": "^4.9.1",
-    "electron": "^41.10.4",
+    "electron": "^41.10.6",
     "vite-plugin-electron": "^0.29.1"
   },
   "devDependencies": {

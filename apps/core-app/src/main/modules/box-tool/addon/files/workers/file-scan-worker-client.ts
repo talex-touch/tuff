@@ -28,6 +28,8 @@ interface PendingScan {
 export interface FileScanRunStats {
   entryCount: number
   errorCount: number
+  backend?: 'fd' | 'legacy' | 'mixed'
+  fdFallback?: boolean
 }
 
 interface PendingMetrics {
@@ -37,7 +39,14 @@ interface PendingMetrics {
 
 type WorkerMessage =
   | { type: 'batch'; taskId: string; sequence: number; batch: ScannedFileInfo[] }
-  | { type: 'done'; taskId: string; scannedCount: number; errorCount?: number }
+  | {
+      type: 'done'
+      taskId: string
+      scannedCount: number
+      errorCount?: number
+      backend?: 'fd' | 'legacy' | 'mixed'
+      fdFallback?: boolean
+    }
   | { type: 'error'; taskId: string; error: string }
   | WorkerMetricsResponse
 
@@ -217,7 +226,9 @@ export class FileScanWorkerClient {
       pending.done = true
       pending.stats = {
         entryCount: message.scannedCount,
-        errorCount: message.errorCount ?? 0
+        errorCount: message.errorCount ?? 0,
+        backend: message.backend,
+        fdFallback: message.fdFallback
       }
       pending.wake?.()
       this.lastTask = {

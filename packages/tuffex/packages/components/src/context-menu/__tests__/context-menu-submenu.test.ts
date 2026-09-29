@@ -71,13 +71,26 @@ describe('txContextMenuSubmenu', () => {
     expect(submenu.findComponent(PopoverStub).props('modelValue')).toBe(true)
   })
 
-  it('closes the whole chain when a nested item is selected', async () => {
-    const { wrapper, close } = mountPanel()
-    await wrapper.find('.share-mail').trigger('click')
+  it('closes the whole chain after the nested item confirms', async () => {
+    vi.useFakeTimers()
+    try {
+      const { wrapper, close } = mountPanel()
+      await wrapper.find('.share-mail').trigger('click')
+      await nextTick()
 
-    // The nested panel re-provides the root close, so one selection collapses
-    // every level.
-    expect(close).toHaveBeenCalledTimes(1)
+      expect(wrapper.find('.share-mail').classes()).toContain('is-activation-clear')
+      expect(close).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(180)
+      await nextTick()
+
+      // The nested panel re-provides the root close, so the nested item's
+      // confirmation collapses every level.
+      expect(close).toHaveBeenCalledTimes(1)
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 
   it('moves focus into and out of the nested panel with arrow keys', async () => {

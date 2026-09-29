@@ -37,6 +37,23 @@ const searchIndexWriterLog = createLogger('SearchIndex').child('Writer')
 const pausedAdmissionScope = new AsyncLocalStorage<true>()
 const VISIBILITY_RETRY_DELAYS_MS = [100, 500, 2_000] as const
 
+export type SearchIndexAdmissionPriority = 'normal' | 'background'
+
+interface QueuedAdmission {
+  priority: SearchIndexAdmissionPriority
+  resolve: () => void
+  reject: (error: Error) => void
+}
+
+interface AdmissionIdleWaiter {
+  includeQueued: boolean
+  resolve: () => void
+}
+
+const MAX_ACTIVE_ADMISSIONS = 1
+const MAX_QUEUED_ADMISSIONS = 2
+const MAX_BACKGROUND_QUEUED_ADMISSIONS = 1
+
 export type SearchIndexWriterMode = 'runtime' | 'legacy'
 export type SearchIndexMutationKind = 'index' | 'replace' | 'remove' | 'clear' | 'cleanup'
 export type SearchIndexWriterReadiness =
@@ -85,6 +102,10 @@ export interface SearchIndexWriterStatus {
   admissionPaused: boolean
   activeAdmissions: number
   pending: number
+  /** Requests admitted by the Writer but not yet submitted to the Worker. */
+  waitingAdmissions?: number
+  /** Producers waiting outside the bounded admission queue for a shared capacity pulse. */
+  capacityWaiters?: number
 }
 
 export interface SearchIndexPhysicalWriter {
@@ -154,6 +175,12 @@ export interface SearchIndexMutationWriter {
   clearSource(sourceId: string): Promise<SearchIndexWriterCommit>
   cleanupSource(sourceId: string): Promise<SearchIndexWriterCommit>
   countSource(sourceId: string): Promise<number>
+  publishExternalCommit(
+    sourceId: string,
+    kind: SearchIndexMutationKind,
+    affectedItems: number,
+    itemIds?: readonly string[]
+  ): Promise<SearchIndexWriterCommit>
 }
 
 export interface SearchIndexWriterOptions {
@@ -162,8 +189,14 @@ export interface SearchIndexWriterOptions {
 
 export interface FilePersistencePort {
   waitUntilReady(): Promise<void>
-  persistEntries(entries: FilePersistenceEntry[]): Promise<PersistEntriesSummary>
-  upsertFiles(records: UpsertFileRecord[]): Promise<Array<Record<string, unknown>>>
+  persistEntries(
+    entries: FilePersistenceEntry[],
+    priority?: SearchIndexAdmissionPriority
+  ): Promise<PersistEntriesSummary>
+  upsertFiles(
+    records: UpsertFileRecord[],
+    priority?: SearchIndexAdmissionPriority
+  ): Promise<Array<Record<string, unknown>>>
   updateFileMetadata(records: FileMetadataUpdateRecord[]): Promise<FileMetadataUpdateSummary>
   upsertScanProgress(paths: string[], lastScanned: string, sourceId?: string): Promise<number>
   removeFile(path: string): Promise<void>
@@ -186,17 +219,22 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
   private resumeAdmission: (() => void) | null = null
   private pauseQueue: Promise<void> = Promise.resolve()
   private activeAdmissions = 0
-  private readonly admissionIdleWaiters = new Set<() => void>()
+  private backgroundQueuedAdmissions = 0
+  private capacityWaiters = 0
+  private readonly admissionQueue: QueuedAdmission[] = []
+  private capacityPulse: Promise<void> | null = null
+  private resolveCapacityPulse: (() => void) | null = null
+  private readonly admissionIdleWaiters = new Set<AdmissionIdleWaiter>()
 
   private readonly filePersistencePort: FilePersistencePort
   constructor(options: SearchIndexWriterOptions = {}) {
     this.client = options.client ?? new SearchIndexWorkerClient()
     this.filePersistencePort = {
       waitUntilReady: async () => await this.waitUntilReady(),
-      persistEntries: async (entries) =>
-        await this.withAdmission(async () => await this.client.persistEntries(entries)),
-      upsertFiles: async (records) =>
-        await this.withAdmission(async () => await this.client.upsertFiles(records)),
+      persistEntries: async (entries, priority = 'background') =>
+        await this.withAdmission(async () => await this.client.persistEntries(entries), priority),
+      upsertFiles: async (records, priority = 'normal') =>
+        await this.withAdmission(async () => await this.client.upsertFiles(records), priority),
       updateFileMetadata: async (records) =>
         await this.withAdmission(async () => await this.client.updateFileMetadata(records)),
       upsertScanProgress: async (paths, lastScanned, sourceId) =>
@@ -208,7 +246,11 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
       removeFileExtensions: async (fileId, keys) =>
         await this.withAdmission(async () => await this.client.removeFileExtensions(fileId, keys)),
       getStatus: async () => await this.client.getStatus(),
-      hasPendingWork: () => this.client.hasPendingWork(),
+      hasPendingWork: () =>
+        this.activeAdmissions > 0 ||
+        this.admissionQueue.length > 0 ||
+        this.capacityWaiters > 0 ||
+        this.client.hasPendingWork(),
       drain: async (timeoutMs) => await this.drain(timeoutMs)
     }
   }
@@ -256,7 +298,9 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
       readiness: this.readiness.state,
       admissionPaused: this.admissionGate !== null,
       activeAdmissions: this.activeAdmissions,
-      pending: this.client.getPendingCount()
+      pending: this.client.getPendingCount(),
+      waitingAdmissions: this.admissionQueue.length,
+      capacityWaiters: this.capacityWaiters
     }
   }
 
@@ -292,7 +336,7 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
         affectedItems: result.summary.removedItems + result.summary.indexedItems,
         metrics: result.metrics
       }
-    })
+    }, 'background')
   }
 
   async beginSourceReplacement(sourceId: string, replacementId: string): Promise<void> {
@@ -359,7 +403,7 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
   }
 
   async drain(timeoutMs = 5_000): Promise<void> {
-    await this.waitForAdmissionsToIdle(timeoutMs)
+    await this.waitForAdmissionsToIdle(timeoutMs, true)
     await this.client.drain(timeoutMs)
   }
 
@@ -379,7 +423,8 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
       this.resumeAdmission = resolve
     })
     try {
-      await this.drain(timeoutMs)
+      await this.waitForAdmissionsToIdle(timeoutMs, false)
+      await this.client.drain(timeoutMs)
       // The pause exists so that `operation` can mutate the index alone. Its own writes run in
       // this async scope, which `withAdmission` recognises and lets through; every other
       // context still waits at the gate. Without the scope the manual rebuild deadlocked: the
@@ -391,7 +436,9 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
       const resume = this.resumeAdmission
       this.admissionGate = null
       this.resumeAdmission = null
+      this.dispatchNextAdmission()
       resume?.()
+      this.pulseCapacity()
       releasePauseQueue()
     }
   }
@@ -405,6 +452,8 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
     this.admissionGate = null
     this.resumeAdmission = null
     resume?.()
+    this.rejectQueuedAdmissions(new Error('SEARCH_INDEX_WRITER_CLOSED'))
+    this.pulseCapacity()
 
     const shutdown = this.client
       .shutdown()
@@ -424,42 +473,140 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
     return this.beginShutdown()
   }
 
-  private async withAdmission<T>(operation: () => Promise<T>): Promise<T> {
+  private async withAdmission<T>(
+    operation: () => Promise<T>,
+    priority: SearchIndexAdmissionPriority = 'normal'
+  ): Promise<T> {
     if (this.closed) throw new Error('SEARCH_INDEX_WRITER_CLOSED')
-    // A write issued by the operation that is holding the pause is admitted immediately; see
-    // `withPausedAdmission`. The gate is for everyone else.
-    if (!pausedAdmissionScope.getStore()) {
-      while (this.admissionGate) await this.admissionGate
-    }
-    if (this.closed) throw new Error('SEARCH_INDEX_WRITER_CLOSED')
+    const ownsPausedAdmission = pausedAdmissionScope.getStore() === true
+    await this.acquireAdmission(priority, ownsPausedAdmission)
 
-    this.activeAdmissions += 1
     try {
       await this.waitUntilReady()
       return await operation()
     } finally {
-      this.activeAdmissions -= 1
-      if (this.activeAdmissions === 0) {
-        for (const resolve of [...this.admissionIdleWaiters]) resolve()
+      this.releaseAdmission()
+    }
+  }
+
+  private async acquireAdmission(
+    priority: SearchIndexAdmissionPriority,
+    bypassQueue: boolean
+  ): Promise<void> {
+    while (true) {
+      if (this.closed) throw new Error('SEARCH_INDEX_WRITER_CLOSED')
+      if (!bypassQueue && this.admissionGate) {
+        await this.admissionGate
+        continue
+      }
+
+      if (
+        this.activeAdmissions < MAX_ACTIVE_ADMISSIONS &&
+        (bypassQueue || this.admissionQueue.length === 0)
+      ) {
+        this.activeAdmissions += 1
+        return
+      }
+
+      if (this.canQueueAdmission(priority)) {
+        await new Promise<void>((resolve, reject) => {
+          this.admissionQueue.push({ priority, resolve, reject })
+          if (priority === 'background') this.backgroundQueuedAdmissions += 1
+          this.notifyAdmissionIdleWaiters()
+        })
+        return
+      }
+
+      this.capacityWaiters += 1
+      try {
+        await this.getCapacityPulse()
+      } finally {
+        this.capacityWaiters -= 1
+        this.notifyAdmissionIdleWaiters()
       }
     }
   }
 
-  private async waitForAdmissionsToIdle(timeoutMs: number): Promise<void> {
-    if (this.activeAdmissions === 0) return
+  private canQueueAdmission(priority: SearchIndexAdmissionPriority): boolean {
+    if (this.admissionQueue.length >= MAX_QUEUED_ADMISSIONS) return false
+    if (
+      priority === 'background' &&
+      this.backgroundQueuedAdmissions >= MAX_BACKGROUND_QUEUED_ADMISSIONS
+    ) {
+      return false
+    }
+    return true
+  }
+
+  private releaseAdmission(): void {
+    this.activeAdmissions = Math.max(0, this.activeAdmissions - 1)
+    this.dispatchNextAdmission()
+    this.pulseCapacity()
+    this.notifyAdmissionIdleWaiters()
+  }
+
+  private dispatchNextAdmission(): void {
+    if (this.closed || this.admissionGate || this.activeAdmissions >= MAX_ACTIVE_ADMISSIONS) return
+    const normalIndex = this.admissionQueue.findIndex((entry) => entry.priority === 'normal')
+    const index = normalIndex >= 0 ? normalIndex : 0
+    const [next] = this.admissionQueue.splice(index, 1)
+    if (!next) return
+    if (next.priority === 'background') this.backgroundQueuedAdmissions -= 1
+    this.activeAdmissions += 1
+    next.resolve()
+  }
+
+  private rejectQueuedAdmissions(error: Error): void {
+    const queued = this.admissionQueue.splice(0)
+    this.backgroundQueuedAdmissions = 0
+    for (const admission of queued) admission.reject(error)
+    this.notifyAdmissionIdleWaiters()
+  }
+
+  private getCapacityPulse(): Promise<void> {
+    if (this.capacityPulse) return this.capacityPulse
+    this.capacityPulse = new Promise<void>((resolve) => {
+      this.resolveCapacityPulse = resolve
+    })
+    return this.capacityPulse
+  }
+
+  private pulseCapacity(): void {
+    const resolve = this.resolveCapacityPulse
+    this.capacityPulse = null
+    this.resolveCapacityPulse = null
+    resolve?.()
+  }
+
+  private async waitForAdmissionsToIdle(timeoutMs: number, includeQueued: boolean): Promise<void> {
+    if (this.isAdmissionIdle(includeQueued)) return
 
     await new Promise<void>((resolve, reject) => {
-      const onIdle = (): void => {
-        clearTimeout(timeout)
-        this.admissionIdleWaiters.delete(onIdle)
-        resolve()
+      const waiter: AdmissionIdleWaiter = {
+        includeQueued,
+        resolve: () => {
+          clearTimeout(timeout)
+          this.admissionIdleWaiters.delete(waiter)
+          resolve()
+        }
       }
       const timeout: NodeJS.Timeout = setTimeout(() => {
-        this.admissionIdleWaiters.delete(onIdle)
+        this.admissionIdleWaiters.delete(waiter)
         reject(new Error('SEARCH_INDEX_WRITER_ADMISSION_DRAIN_TIMEOUT'))
       }, timeoutMs)
-      this.admissionIdleWaiters.add(onIdle)
+      this.admissionIdleWaiters.add(waiter)
     })
+  }
+
+  private isAdmissionIdle(includeQueued: boolean): boolean {
+    if (this.activeAdmissions > 0) return false
+    return !includeQueued || (this.admissionQueue.length === 0 && this.capacityWaiters === 0)
+  }
+
+  private notifyAdmissionIdleWaiters(): void {
+    for (const waiter of [...this.admissionIdleWaiters]) {
+      if (this.isAdmissionIdle(waiter.includeQueued)) waiter.resolve()
+    }
   }
 }
 
@@ -540,6 +687,16 @@ export class SourceScopedIndexWriterRouter implements SearchIndexMutationWriter 
 
   getMode(sourceId: string): SearchIndexWriterMode {
     return this.modes.get(sourceId) ?? this.options.defaultMode ?? 'runtime'
+  }
+
+  async publishExternalCommit(
+    sourceId: string,
+    kind: SearchIndexMutationKind,
+    affectedItems: number,
+    itemIds: readonly string[] = []
+  ): Promise<SearchIndexWriterCommit> {
+    const writer = this.resolveWriter(sourceId)
+    return await this.publishCommit(sourceId, kind, writer.mode, affectedItems, itemIds)
   }
 
   setMode(sourceId: string, mode: SearchIndexWriterMode): void {

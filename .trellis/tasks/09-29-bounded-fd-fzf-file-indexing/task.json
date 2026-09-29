@@ -1,0 +1,30 @@
+{
+  "id": "bounded-fd-fzf-file-indexing",
+  "name": "bounded-fd-fzf-file-indexing",
+  "title": "Bounded file indexing with fd and fzf",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-29",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Investigate the renderer/GPU idle CPU baseline before closing strict AC7.",
+    "blocker": "Strict AC7 idle CPU <=5% remains blocked by the renderer/GPU baseline while indexing workers are offline.",
+    "evidence": "PR #2019; focused tests, typechecks, production build, bundled fd smoke, and packaged arm64 100k scan evidence are recorded in prd.md."
+  }
+}

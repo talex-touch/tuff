@@ -2208,6 +2208,13 @@ export class SearchEngineCore
         await indexingRuntime.countSource(sourceId, mutationLeaseId),
       drainSource: async (sourceId, timeoutMs) =>
         await indexingRuntime.drainSourceMutations(sourceId, timeoutMs),
+      publishContentCleared: async (affectedItems) => {
+        await instance.indexWriterRouter!.publishExternalCommit(
+          FILE_INDEXED_SOURCE_ID,
+          'clear',
+          affectedItems
+        )
+      },
       scanSource: async (reason) => await indexingRuntime.scanSource(FILE_INDEXED_SOURCE_ID, reason)
     })
     fileProvider.setIndexedSourceRuntimeResetDelegate(

@@ -14,6 +14,7 @@ import {
   THUMBNAIL_JPEG_QUALITY,
   THUMBNAIL_SIZE
 } from './thumbnail-config'
+import { normalizeAsarUnpackedPath } from './native-binary-path'
 
 export interface ThumbnailGeneratedResult {
   status: 'generated'
@@ -57,13 +58,6 @@ const requireFromCwd = createRequire(`${process.cwd()}${path.sep}`)
 
 function buildOutputPath(outputDir: string, prefix = 'thumbnail'): string {
   return path.join(outputDir, `${Date.now()}-${prefix}-${crypto.randomUUID()}.jpg`)
-}
-
-function normalizeAsarUnpackedPath(candidate: unknown): string | null {
-  if (typeof candidate !== 'string' || !candidate.trim()) return null
-  const value = candidate.trim()
-  if (!value.includes('app.asar')) return value
-  return value.replace('app.asar', 'app.asar.unpacked')
 }
 
 function resolveFfmpegPath(override?: string | null): string | null {

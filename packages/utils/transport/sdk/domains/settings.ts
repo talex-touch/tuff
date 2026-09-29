@@ -54,6 +54,8 @@ import type {
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
   FileIndexBatteryStatus,
+  FileIndexContentSettings,
+  FileIndexContentSettingsUpdate,
   FileIndexFailedFilesResult,
   FileIndexProgress,
   FileIndexRebuildRequest,
@@ -83,6 +85,7 @@ import { AppEvents, CatalogEvents } from "../../events";
 import {
   projectFileIndexAddPathResult,
   projectFileIndexBatteryStatus,
+  projectFileIndexContentSettings,
   projectFileIndexFailedFiles,
   projectFileIndexRebuildResult,
   projectFileIndexStats,
@@ -101,6 +104,10 @@ export interface SettingsSdk {
   fileIndex: {
     getStatus: () => Promise<FileIndexStatus>;
     getStats: () => Promise<FileIndexStats>;
+    getSettings: () => Promise<FileIndexContentSettings>;
+    updateSettings: (
+      settings: FileIndexContentSettingsUpdate,
+    ) => Promise<FileIndexContentSettings>;
     getBatteryLevel: () => Promise<FileIndexBatteryStatus | null>;
     rebuild: (
       request?: FileIndexRebuildRequest,
@@ -221,6 +228,14 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
         projectFileIndexStatus(await transport.send(AppEvents.fileIndex.status)),
       getStats: async () =>
         projectFileIndexStats(await transport.send(AppEvents.fileIndex.stats)),
+      getSettings: async () =>
+        projectFileIndexContentSettings(
+          await transport.send(AppEvents.fileIndex.settingsGet),
+        ),
+      updateSettings: async (settings) =>
+        projectFileIndexContentSettings(
+          await transport.send(AppEvents.fileIndex.settingsUpdate, settings),
+        ),
       getBatteryLevel: async () =>
         projectFileIndexBatteryStatus(
           await transport.send(AppEvents.fileIndex.batteryLevel),

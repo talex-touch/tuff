@@ -25,6 +25,7 @@ const labels = computed(() => isZh.value
       popover: '嵌入 Popover 的菜单面板',
       popoverHint: '这个面板没有右键触发器，只复用 ContextMenu 的视觉和 item 行为。',
       action: '最近操作',
+      immediate: '立即执行（关闭反馈）',
       animation: '切换动画',
       anchorMode: '锚点模式',
     }
@@ -36,6 +37,7 @@ const labels = computed(() => isZh.value
       popover: 'ContextMenu panel inside Popover',
       popoverHint: 'This panel has no context trigger; it only reuses the menu surface and item behavior.',
       action: 'Last action',
+      immediate: 'Run immediately (feedback off)',
       animation: 'Animation',
       anchorMode: 'Anchor mode',
     })
@@ -68,7 +70,7 @@ function openClickMenu(event: MouseEvent) {
 </script>
 
 <template>
-  <div class="context-menu-demo">
+  <div class="not-prose context-menu-demo">
     <div class="context-menu-demo__toolbar">
       <TxButton type="primary" @click="openAtCenter">
         {{ labels.openControlled }}
@@ -105,6 +107,9 @@ function openClickMenu(event: MouseEvent) {
       <template #menu>
         <TxContextMenuItem shortcut="⌘C" @select="setAction('Copy')">
           Copy
+        </TxContextMenuItem>
+        <TxContextMenuItem :activation-feedback="false" shortcut="⌥↩" @select="setAction(labels.immediate)">
+          {{ labels.immediate }}
         </TxContextMenuItem>
         <TxContextMenuItem shortcut="⌘V" disabled @select="setAction('Paste')">
           Paste disabled

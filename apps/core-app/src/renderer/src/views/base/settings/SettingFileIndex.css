@@ -449,3 +449,41 @@
   overflow: hidden;
   padding-right: 4px;
 }
+
+.content-index-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 4px 2px 2px;
+}
+
+.content-index-confirm__points {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.content-index-confirm__points p {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  color: var(--tx-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.content-index-confirm__points p span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--tx-color-warning);
+}
+
+.content-index-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

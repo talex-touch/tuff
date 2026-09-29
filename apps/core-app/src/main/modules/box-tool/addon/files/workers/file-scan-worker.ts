@@ -8,6 +8,7 @@ import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
 import { scanDirectoryBatches } from '@talex-touch/utils/common/file-scan-utils'
+import { scanDirectoryBatchesWithFd } from './file-scan-fd-backend'
 import { getWorkerMemorySnapshot } from './worker-status'
 
 interface FileScanRequest {
@@ -43,6 +44,8 @@ interface FileScanDoneMessage {
   scannedCount: number
   /** Directory-read / stat failures across every path of this task. */
   errorCount: number
+  backend: 'fd' | 'legacy' | 'mixed'
+  fdFallback: boolean
 }
 
 interface FileScanErrorMessage {
@@ -99,41 +102,65 @@ async function processQueue(): Promise<void> {
   let scannedCount = 0
   let errorCount = 0
   let sequence = 0
+  let fdRuns = 0
+  let legacyRuns = 0
+  let fdFallback = false
 
   try {
     for (const scanPath of next.paths) {
-      const stats = await scanDirectoryBatches(
-        scanPath,
-        async (batch) => {
-          controller.signal.throwIfAborted()
-          const currentSequence = sequence
-          sequence += 1
-          const ackKey = `${next.taskId}:${String(currentSequence)}`
-          const acknowledged = new Promise<void>((resolve) => {
-            batchAckWaiters.set(ackKey, resolve)
-          })
-          parentPort?.postMessage({
-            type: 'batch',
-            taskId: next.taskId,
-            sequence: currentSequence,
-            batch
-          } satisfies FileScanBatchMessage)
-          await acknowledged
-          controller.signal.throwIfAborted()
-          scannedCount += batch.length
-        },
-        next.options,
-        excludePathsSet,
-        { batchSize, signal: controller.signal }
-      )
+      const emitBatch = async (batch: ScannedFileInfo[]): Promise<void> => {
+        controller.signal.throwIfAborted()
+        const currentSequence = sequence
+        sequence += 1
+        const ackKey = `${next.taskId}:${String(currentSequence)}`
+        const acknowledged = new Promise<void>((resolve) => {
+          batchAckWaiters.set(ackKey, resolve)
+        })
+        parentPort?.postMessage({
+          type: 'batch',
+          taskId: next.taskId,
+          sequence: currentSequence,
+          batch
+        } satisfies FileScanBatchMessage)
+        await acknowledged
+        controller.signal.throwIfAborted()
+        scannedCount += batch.length
+      }
+
+      let stats: Awaited<ReturnType<typeof scanDirectoryBatchesWithFd>> = null
+      try {
+        stats = await scanDirectoryBatchesWithFd(
+          scanPath,
+          emitBatch,
+          next.options ?? {},
+          excludePathsSet,
+          { batchSize, signal: controller.signal }
+        )
+        if (stats) fdRuns += 1
+      } catch (error) {
+        if (controller.signal.aborted) throw controller.signal.reason ?? error
+        fdFallback = true
+        stats = null
+      }
+      if (!stats) {
+        legacyRuns += 1
+        fdFallback = true
+        stats = await scanDirectoryBatches(scanPath, emitBatch, next.options, excludePathsSet, {
+          batchSize,
+          signal: controller.signal
+        })
+      }
       errorCount += stats.errorCount
     }
 
+    const backend = fdRuns > 0 && legacyRuns > 0 ? 'mixed' : fdRuns > 0 ? 'fd' : 'legacy'
     parentPort?.postMessage({
       type: 'done',
       taskId: next.taskId,
       scannedCount,
-      errorCount
+      errorCount,
+      backend,
+      fdFallback
     } satisfies FileScanDoneMessage)
   } catch (error) {
     parentPort?.postMessage({

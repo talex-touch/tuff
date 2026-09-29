@@ -1,6 +1,6 @@
 ---
 title: "ContextMenu 右键菜单"
-description: "可右键、可坐标控制、可嵌入 Popover 的通用菜单面板。"
+description: "可右键、可坐标控制、可嵌入 Popover，并在关闭前提供确认反馈的通用菜单面板。"
 category: Navigation
 status: beta
 since: 0.3.4
@@ -77,6 +77,9 @@ code: |
         <template #menu>
           <TxContextMenuItem shortcut="⌘C" @select="setAction('Copy')">
             Copy
+          </TxContextMenuItem>
+          <TxContextMenuItem :activation-feedback="false" shortcut="⌥↩" @select="setAction('立即执行')">
+            立即执行（关闭反馈）
           </TxContextMenuItem>
           <TxContextMenuItem shortcut="⌘V" disabled>
             Paste disabled
@@ -174,6 +177,7 @@ code: |
 - 真正的右键菜单保持 `anchorMode="pointer"`；只有需要贴齐整个触发元素时才切换为 `reference`。
 - Teleport 出去的子菜单必须在子级 `TxContextMenuPanel` 上设置 `outsideGuard`，否则父菜单的外部点击逻辑可能把子菜单点击当作外部点击。
 - `closeOnSelect=false` 只用于父级二级菜单行或多步骤动作；普通命令选中后应关闭菜单。
+- 默认的 `activationFeedback=true` 会在关闭前先清空高亮 90ms、再用现有选中态确认 90ms，然后触发 `select` 并关闭；减少动态效果会自动跳过，宿主已有更强即时反馈时可在根、Panel 或单项关闭。
 - 破坏性操作使用 `danger` 明确表达风险；`color` 只用于设计系统中已有语义色。
 
 `TxContextMenuSubmenu` 在菜单里嵌套一层子面板，支持任意层级。悬停触发行展开，指针在父子面板之间移动不会误关；子面板里的条目选中后按根菜单的 `closeOnSelect` 关闭整条链。
@@ -228,6 +232,7 @@ code: |
 | `closeOnTriggerPointerDown` | `boolean` | `true` | 菜单打开后点击触发区域也关闭；`click` / `both` 触发模式下自动忽略，避免点击打开后马上关闭 |
 | `closeOnAnyPointerDown` | `boolean` | `false` | 点击任意非菜单区域都关闭，包括触发区域和页面其它区域 |
 | `closeOnSelect` | `boolean` | `true` | 菜单项选中后自动关闭 |
+| `activationFeedback` | `boolean` | `true` | 对会关闭菜单的选择先执行 90ms 清空 + 90ms 确认，再触发 `select` 与关闭；减少动态效果时自动跳过。 |
 | `showArrow` | `boolean` | `false` | 显示指向坐标点的箭头 |
 | `arrowSize` | `number` | `10` | 箭头尺寸 |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | 打开/关闭动画，支持 `transfer` / `boom` / `opacity` / `none` |
@@ -265,6 +270,7 @@ code: |
 | `maxWidth` | `number \| string` | - | 最大宽度 |
 | `maxHeight` | `number \| string` | - | 最大高度 |
 | `closeOnSelect` | `boolean` | `true` | 内部 item 选中后是否关闭 |
+| `activationFeedback` | `boolean` | `true` | 内部 item 的关闭前确认反馈；可由单项覆盖。 |
 | `close` | `() => void` | - | 面板关闭回调，供 item 注入使用 |
 | `dense` | `boolean` | `false` | 更紧凑的 item 间距 |
 | `outsideGuard` | `boolean` | `false` | 标记为 ContextMenu 外部保护层，用于二级菜单/Teleport 组合 |
@@ -287,12 +293,13 @@ code: |
 | `shortcut` | `string` | - | 右侧快捷键提示 |
 | `submenu` | `boolean` | `false` | 显示二级菜单箭头 |
 | `closeOnSelect` | `boolean` | - | 覆盖父级 `closeOnSelect` |
+| `activationFeedback` | `boolean` | - | 覆盖父级确认反馈；未设置时跟随最近的 `TxContextMenuPanel`。 |
 
 ### TxContextMenuItem Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `select` | - | 选中条目；未禁用时触发 |
+| `select` | - | 选中条目；会关闭且启用确认反馈时，在 180ms 确认结束后触发，其余路径立即触发。 |
 
 ### TxContextMenuSubmenu Props
 
@@ -360,17 +367,19 @@ code: |
 - 定位：`TxContextMenu` 通过 `TxBaseAnchor` 用 Floating UI 的 `flip + shift + size` 自动定位，靠近视口边缘时翻转/平移并限制最大高度。
 - 锚点：`anchorMode="pointer"`（默认）跟随鼠标/传入坐标，同一 trigger 连续右键会把 virtual anchor 更新到最新位置；`anchorMode="reference"` 跟随触发区域，更接近 Dropdown。
 - 触发：`trigger` 支持 `contextmenu` / `click` / `both` / `manual`；`manual` 禁用组件内部触发，仅由 `v-model + x/y` 控制打开坐标，适合按钮点击、编辑器快捷键、画布节点菜单。
-- 关闭：默认 ESC、点击外部、选中条目都会关闭；`closeOnSelect=false` 仅用于父级二级菜单行或多步操作。
+- 关闭：默认 ESC、点击外部、选中条目都会关闭；`closeOnSelect=false` 的父级二级菜单行/多步操作保持即时选择且不闪烁。
+- 确认反馈：`activationFeedback` 默认开启，菜单项先清空当前 hover/focus 高亮，再复用 `TxCardItem` active 样式确认，最后触发业务动作并关闭；根配置会透传到嵌套子菜单，Panel/单项可覆盖，`prefers-reduced-motion: reduce` 不增加延迟。
 - 二级菜单：优先使用 `TxContextMenuSubmenu`，它自带悬停展开、键盘巡航、outside-click 豁免和整链关闭；`TxContextMenuPanel` 仍可手动嵌入 `TxPopover` / 自定义 Overlay 复用，此时 Teleport 出去的子面板要加 `outsideGuard`，否则父菜单会把子菜单点击当作外部点击而关闭。
 - 动画：动画直接走 `BaseAnchor`，支持 `transfer` / `boom` / `opacity` / `none`。
 
 ## 技术实现
 
-- 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenu.vue` 确认受控/非受控打开状态、pointer/reference virtual anchor、触发模式、外部点击处理和 BaseAnchor 透传。
-- 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenuPanel.vue` 确认面板布局、`closeOnSelect` / `close` 注入、`dense`、`outsideGuard`、`role` 与 `ariaLabel` 行为。
-- 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenuItem.vue` 确认 `disabled`、`danger`、自定义 `color`、`shortcut`、`submenu`、单项 `closeOnSelect` 和 item 插槽。
-- 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenuSubmenu.vue` 确认悬停展开、键盘巡航、根上下文透传（子项选中关闭整条链）与 `outsideGuard` 自动开启。
-- 类型契约：`packages/tuffex/packages/components/src/context-menu/src/types.ts` 导出触发方式、锚点模式、面板视觉枚举、props 和打开目标类型。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/context-menu/__tests__/context-menu.test.ts` 覆盖受控宽度渲染、右键坐标、受控 x/y 打开、Escape 关闭保护、触发器 pointerdown 关闭行为、pointer/reference 锚点模式、启用/禁用 item 选择、快捷键/自定义颜色/子菜单渲染，以及独立 panel 的 close 注入。
+- 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenu.vue` 确认受控/非受控打开状态、pointer/reference virtual anchor、触发模式、外部点击处理、BaseAnchor 透传和根级 `activationFeedback`。
+- 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenuPanel.vue` 确认面板布局、`closeOnSelect` / `activationFeedback` / `close` 注入、`dense`、`outsideGuard`、`role` 与 `ariaLabel` 行为。
+- 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenuItem.vue` 确认 `disabled`、`danger`、自定义 `color`、`shortcut`、`submenu`、单项 `closeOnSelect` / `activationFeedback`、item 插槽和关闭前确认反馈。
+- 组件源码：`packages/tuffex/packages/components/src/context-menu/src/TxContextMenuSubmenu.vue` 确认悬停展开、键盘巡航、根关闭/确认反馈上下文透传与 `outsideGuard` 自动开启；触发行因 `closeOnSelect=false` 不运行反馈。
+- 共享逻辑：`packages/tuffex/packages/utils/menu-activation-feedback.ts` 统一 90ms 清空 / 90ms 确认状态机、减少动态效果降级、重复激活抑制和卸载清理。
+- 类型契约：`packages/tuffex/packages/components/src/context-menu/src/types.ts` 导出触发方式、锚点模式、面板视觉枚举、确认反馈 props 和打开目标类型。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/context-menu/__tests__/context-menu.test.ts` 覆盖受控宽度、右键/坐标打开、Escape 与 pointerdown 关闭保护、pointer/reference 锚点、鼠标与键盘确认时序、重复激活、根/Panel/单项关闭反馈、减少动态效果、卸载清理、`closeOnSelect=false`、嵌套根关闭，以及快捷键/颜色/子菜单渲染。
 
 <TuffDocSourceLink />

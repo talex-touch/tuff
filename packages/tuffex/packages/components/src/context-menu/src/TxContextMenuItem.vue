@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ContextMenuContext, ContextMenuItemProps } from './types'
 import { computed, inject } from 'vue'
+import { useMenuActivationFeedback } from '../../../../utils/menu-activation-feedback'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import TxIcon from '../../icon/src/TxIcon.vue'
 import { TX_CONTEXT_MENU_INJECTION_KEY } from './types'
@@ -14,6 +15,7 @@ const props = withDefaults(defineProps<ContextMenuItemProps>(), {
   shortcut: undefined,
   submenu: false,
   closeOnSelect: undefined,
+  activationFeedback: undefined,
 })
 
 const emit = defineEmits<{
@@ -30,14 +32,17 @@ const itemStyle = computed(() => {
   } as Record<string, string>
 })
 
+const { activate, phase: activationPhase } = useMenuActivationFeedback({
+  enabled: () => props.activationFeedback ?? ctx?.activationFeedback ?? true,
+  shouldClose: () => Boolean(ctx && (props.closeOnSelect ?? ctx.closeOnSelect)),
+  onSelect: () => emit('select'),
+  onClose: () => ctx?.close(),
+})
+
 function onClick() {
   if (props.disabled)
     return
-  emit('select')
-
-  const shouldClose = props.closeOnSelect ?? ctx?.closeOnSelect ?? true
-  if (shouldClose)
-    ctx?.close?.()
+  activate()
 }
 </script>
 
@@ -45,9 +50,17 @@ function onClick() {
   <TxCardItem
     class="tx-context-menu-item"
     align="center"
-    :class="{ 'is-disabled': disabled, 'is-danger': danger, 'has-custom-color': !!color }"
+    :class="{
+      'is-disabled': disabled,
+      'is-danger': danger,
+      'has-custom-color': !!color,
+      'is-activation-feedback': activationPhase !== 'idle',
+      'is-activation-clear': activationPhase === 'clear',
+      'is-activation-confirm': activationPhase === 'confirm',
+    }"
     :style="itemStyle"
     role="menuitem"
+    :active="activationPhase === 'confirm'"
     :clickable="true"
     :disabled="disabled"
     :aria-disabled="disabled ? 'true' : undefined"
@@ -79,6 +92,16 @@ function onClick() {
   --tx-card-item-padding: 8px 10px;
   --tx-card-item-radius: 10px;
   --tx-card-item-gap: 10px;
+}
+
+.tx-context-menu-item.tx-context-menu-item.is-activation-feedback {
+  transition: none;
+}
+
+.tx-context-menu-item.tx-context-menu-item.is-activation-feedback.is-activation-clear {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .tx-context-menu-item :deep(.tx-card-item__top) {

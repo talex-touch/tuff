@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, nextTick } from 'vue'
 import TxDropdownItem from '../src/TxDropdownItem.vue'
 import TxDropdownMenu from '../src/TxDropdownMenu.vue'
@@ -79,13 +79,26 @@ describe('txDropdownSubmenu', () => {
     expect(wrapper.emitted('update:modelValue') ?? []).not.toContainEqual([false])
   })
 
-  it('closes the whole chain when a nested item is selected', async () => {
-    const wrapper = mountMenu()
-    await wrapper.find('.sub-item-en').trigger('click')
+  it('closes the whole chain after the nested item confirms', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = mountMenu()
+      await wrapper.find('.sub-item-en').trigger('click')
+      await nextTick()
 
-    // The nested item reaches the ROOT menu context straight through the
-    // submenu component, so selecting it closes the root.
-    expect(wrapper.emitted('update:modelValue')).toContainEqual([false])
+      expect(wrapper.find('.sub-item-en').classes()).toContain('is-activation-clear')
+      expect(wrapper.emitted('update:modelValue') ?? []).not.toContainEqual([false])
+
+      vi.advanceTimersByTime(180)
+      await nextTick()
+
+      // The nested item reaches the ROOT menu context straight through the
+      // submenu component, so its confirmation closes the root.
+      expect(wrapper.emitted('update:modelValue')).toContainEqual([false])
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 
   it('honours the per-item closeOnSelect override on plain items', async () => {

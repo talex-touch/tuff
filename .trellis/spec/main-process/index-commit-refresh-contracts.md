@@ -122,25 +122,25 @@ private readonly indexCommitStreams: Map<
   harmless: the renderer re-runs its query when it reconnects or is shown.
 - `invalidateAppRecommendationPresentation()` (hydrated app icons) calls
   `recommendationEngine.invalidateCache()` at once and pushes `{ revision: <current>, providerIds: [],
-  sourceGenerations: {}, recommendationsInvalidated: true }` through the same coalescer; the revision
+sourceGenerations: {}, recommendationsInvalidated: true }` through the same coalescer; the revision
   does not move.
 - A new payload field stays optional and additive, and `mergeIndexCommitPayloads` must say how it
   folds.
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required outcome |
-| --- | --- |
-| One commit, no scan | One notification after 1s, equal to the pushed payload (no `bulk` key) |
-| 100 commits, one per 100ms | 1–4 notifications; revisions strictly increase; the last carries revision 100; the first has no `bulk`, the rest `bulk: true` |
-| Commits every 200ms for 1s | One notification at 1s, carrying the 5th revision |
-| First commit while `isInitializing` | Nothing at 1s; one `bulk: true` notification at 3s |
-| Commits resume after a gap of more than 5s | 1s window, no `bulk` key |
-| `isBulkIndexing` throws | Not bulk; the notification still goes out |
-| `emit` throws | `onEmitError(error)`; nothing escapes the timer |
-| Renderer closes the stream mid-window | Pending notification dropped; coalescer disposed |
-| `dispose()` | Timer cleared; later pushes ignored |
-| Any commit | `searchIndexCommitHub.getRevision()` has moved before the push returns |
+| Condition                                  | Required outcome                                                                                                              |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| One commit, no scan                        | One notification after 1s, equal to the pushed payload (no `bulk` key)                                                        |
+| 100 commits, one per 100ms                 | 1–4 notifications; revisions strictly increase; the last carries revision 100; the first has no `bulk`, the rest `bulk: true` |
+| Commits every 200ms for 1s                 | One notification at 1s, carrying the 5th revision                                                                             |
+| First commit while `isInitializing`        | Nothing at 1s; one `bulk: true` notification at 3s                                                                            |
+| Commits resume after a gap of more than 5s | 1s window, no `bulk` key                                                                                                      |
+| `isBulkIndexing` throws                    | Not bulk; the notification still goes out                                                                                     |
+| `emit` throws                              | `onEmitError(error)`; nothing escapes the timer                                                                               |
+| Renderer closes the stream mid-window      | Pending notification dropped; coalescer disposed                                                                              |
+| `dispose()`                                | Timer cleared; later pushes ignored                                                                                           |
+| Any commit                                 | `searchIndexCommitHub.getRevision()` has moved before the push returns                                                        |
 
 ### 5. Good / Base / Bad Cases
 
@@ -297,23 +297,23 @@ let pendingRefreshReconcile: RefreshReconcile | null
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required outcome |
-| --- | --- |
-| Lone commit, visible, non-empty query | Search 500ms later |
-| Notifications keep arriving | The next searches 2s, then 5s apart |
-| `bulk: true` | The first search waits 2s |
-| No notification for 5s or more | Back to 500ms |
-| Query changes, or CoreBox is shown | Backoff reset; the new search covers every commit so far |
-| Timer fires during a search | Re-poll at 500ms; step unchanged |
-| Hidden when notified | No timer, no search; the refresh stays pending |
-| Hidden after the timer was armed | Timer cleared (native) or the run declines (document); still pending |
-| Shown after commits arrived while hidden | Exactly one search, whichever signal comes first |
-| Refresh snapshot lacks a deferred row | The row stays, and stays selected, until settle; removed then if not delivered again |
-| Completion never arrives | Settled at 3500ms, not at 3499ms |
-| Refresh cancelled | Reset; no reconcile left behind |
-| Refresh fails after its snapshot | Rows kept; `searchError` true; nothing removed after 3500ms |
-| Rows replaced during the refresh | Both settle paths leave them alone |
-| Deferred providers answer in the other order past the cap | Every re-delivered row kept; order and selection unchanged |
+| Condition                                                 | Required outcome                                                                     |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Lone commit, visible, non-empty query                     | Search 500ms later                                                                   |
+| Notifications keep arriving                               | The next searches 2s, then 5s apart                                                  |
+| `bulk: true`                                              | The first search waits 2s                                                            |
+| No notification for 5s or more                            | Back to 500ms                                                                        |
+| Query changes, or CoreBox is shown                        | Backoff reset; the new search covers every commit so far                             |
+| Timer fires during a search                               | Re-poll at 500ms; step unchanged                                                     |
+| Hidden when notified                                      | No timer, no search; the refresh stays pending                                       |
+| Hidden after the timer was armed                          | Timer cleared (native) or the run declines (document); still pending                 |
+| Shown after commits arrived while hidden                  | Exactly one search, whichever signal comes first                                     |
+| Refresh snapshot lacks a deferred row                     | The row stays, and stays selected, until settle; removed then if not delivered again |
+| Completion never arrives                                  | Settled at 3500ms, not at 3499ms                                                     |
+| Refresh cancelled                                         | Reset; no reconcile left behind                                                      |
+| Refresh fails after its snapshot                          | Rows kept; `searchError` true; nothing removed after 3500ms                          |
+| Rows replaced during the refresh                          | Both settle paths leave them alone                                                   |
+| Deferred providers answer in the other order past the cap | Every re-delivered row kept; order and selection unchanged                           |
 
 ### 5. Good / Base / Bad Cases
 
@@ -350,8 +350,8 @@ let pendingRefreshReconcile: RefreshReconcile | null
 // A flat delay per commit, document-only visibility, and a reconcile against the capped rows.
 setTimeout(() => void handleSearchImmediate({ force: true }), 500)
 if (document.hidden) return
-const kept = new Set(reconcile.items.map((item) => item.id))
-const next = current.filter((item) => kept.has(item.id))
+const kept = new Set(reconcile.items.map(item => item.id))
+const next = current.filter(item => kept.has(item.id))
 ```
 
 #### Correct
@@ -360,9 +360,9 @@ const next = current.filter((item) => kept.has(item.id))
 armIndexCommitRefresh(INDEX_COMMIT_REFRESH_STEPS_MS[indexCommitRefreshStep]) // 500 → 2s → 5s
 if (indexCommitRefreshTimer || isCoreBoxHidden()) return // native signal first
 const next = mergeRenderedItems(
-  current.filter((item) => reconcile.deliveredIds.has(item.id)), // ids taken before the cap
+  current.filter(item => reconcile.deliveredIds.has(item.id)), // ids taken before the cap
   reconcile.items,
-  focusedItemId
+  focusedItemId,
 )
 ```
 
@@ -422,7 +422,7 @@ resolveIndexedSourceWatchRootRoute(event, roots, { platform }) // null = outside
   root ownership is decided early. Health, permission and enabled state stay with the runtime's
   diagnostics for in-root events and are not cached either.
 - **Fail open.** Router: a throwing `getAppWatchRoots` warns once per router (`App watch roots
-  unavailable; routing app events unfiltered`) and accepts, because the runtime checks again; a
+unavailable; routing app events unfiltered`) and accepts, because the runtime checks again; a
   closed gate would lose app installs until the next reconcile. Runtime: a throwing `getRoots()`, or
   a source without `handleWatchEvent`, falls through to the full route, which reads health and
   records the outcome as before.
@@ -431,17 +431,17 @@ resolveIndexedSourceWatchRootRoute(event, roots, { platform }) // null = outside
 
 ### 4. Validation & Error Matrix
 
-| Event | Required outcome |
-| --- | --- |
-| `…/Workspace/tuffex/dist/index.mjs`, any action | Not in the app queue, no timer; the file queue routes it |
-| `/Applications/Probe.app/Contents/Info.plist` | Keyed to the bundle, routed to the app source |
-| `/applications/Gone.app` unlinked, darwin | Routed as a delete |
-| `/Applications Backup/Old.app` | Not routed |
-| Roots change between two events | The second event is judged by the new roots |
-| `getAppWatchRoots` throws | Routed; one warning |
-| Scoped runtime event outside `getRoots()` | Filtered result; `getHealth`, `handleWatchEvent`, `IndexingTaskStateStore.save` not called |
-| Scoped runtime event inside the roots | One health read, the handler called, one task-state save |
-| `getRoots()` throws in the runtime | Full route: one health read, `source-watch-filtered` |
+| Event                                           | Required outcome                                                                           |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `…/Workspace/tuffex/dist/index.mjs`, any action | Not in the app queue, no timer; the file queue routes it                                   |
+| `/Applications/Probe.app/Contents/Info.plist`   | Keyed to the bundle, routed to the app source                                              |
+| `/applications/Gone.app` unlinked, darwin       | Routed as a delete                                                                         |
+| `/Applications Backup/Old.app`                  | Not routed                                                                                 |
+| Roots change between two events                 | The second event is judged by the new roots                                                |
+| `getAppWatchRoots` throws                       | Routed; one warning                                                                        |
+| Scoped runtime event outside `getRoots()`       | Filtered result; `getHealth`, `handleWatchEvent`, `IndexingTaskStateStore.save` not called |
+| Scoped runtime event inside the roots           | One health read, the handler called, one task-state save                                   |
+| `getRoots()` throws in the runtime              | Full route: one health read, `source-watch-filtered`                                       |
 
 ### 5. Good / Base / Bad Cases
 
@@ -544,14 +544,14 @@ private getAppSearchIndexHealth(options?: { probeFilesystem?: boolean })
 
 ### 4. Validation & Error Matrix
 
-| State | `countByProviderViaMeta` |
-| --- | --- |
-| Meta and FTS agree | The meta count, in one read whose SQL names `search_index_meta` and never `FROM search_index WHERE provider` |
-| After `removeProviderItems`, then `removeByProvider` | Follows the FTS count (2, then 0) |
-| FTS emptied, meta left behind | 0 |
-| Legacy FTS rows without meta | The exact FTS count (the fallback read is observed) |
-| FTS table dropped, writer initialized again, another provider refilled | 0 for the dropped provider; the refilled provider's own count |
-| Writer initialized again over an existing table | Unchanged |
+| State                                                                  | `countByProviderViaMeta`                                                                                     |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Meta and FTS agree                                                     | The meta count, in one read whose SQL names `search_index_meta` and never `FROM search_index WHERE provider` |
+| After `removeProviderItems`, then `removeByProvider`                   | Follows the FTS count (2, then 0)                                                                            |
+| FTS emptied, meta left behind                                          | 0                                                                                                            |
+| Legacy FTS rows without meta                                           | The exact FTS count (the fallback read is observed)                                                          |
+| FTS table dropped, writer initialized again, another provider refilled | 0 for the dropped provider; the refilled provider's own count                                                |
+| Writer initialized again over an existing table                        | Unchanged                                                                                                    |
 
 ### 5. Good / Base / Bad Cases
 
@@ -623,7 +623,7 @@ class NativeSearchDirectoryFilter {
     normalizeKey: (directoryPath: string) => string,
     readdir?: (directoryPath: string) => Promise<string[]>, // default fs.readdir
     now?: () => number, // default Date.now
-    levelOptionsOf?: (rootKey: string | null) => FileScanOptions | undefined // default: no options
+    levelOptionsOf?: (rootKey: string | null) => FileScanOptions | undefined, // default: no options
   )
   // rootKeyOf?: (filePath: string) => string | null, default () => null
   selectVisible(candidates: readonly string[], limit: number, rootKeyOf?): Promise<string[]>
@@ -634,7 +634,7 @@ class NativeSearchDirectoryFilter {
 export async function getDirectoryLevelExclusionReason(
   directoryPath: string,
   readdir?: (directoryPath: string) => Promise<string[]>, // defaults to fs.readdir
-  options?: FileScanOptions
+  options?: FileScanOptions,
 ): Promise<FileFilterReason | null>
 ```
 
@@ -676,26 +676,26 @@ export async function getDirectoryLevelExclusionReason(
 From the unit tests, including the 14-path leak matrix in "scopes the iCloud Drive exception to that
 one folder, so no other ~/Library path leaks". Home is `/Users/demo`.
 
-| Result | Outcome |
-| --- | --- |
-| `…/core-app/out/renderer/assets/KaTeX…ttf`, `package.json` beside `out` | Hidden |
-| `…/nanobot/web/dist/assets/…` in a project | Hidden |
-| `…/webui/node_modules/wx-sdk/index.js` | Hidden |
-| `~/Library/Application Support/WeChat/wx-cache.json` | Hidden |
-| `~/Documents/build/2026/wx-report.pdf`, no project marker | Visible |
-| `~/Library/Mobile Documents/com~apple~CloudDocs/Plans/wx-plan.md` | Visible |
-| `~/Library/Mobile Documents/iCloud~com~apple~Pages/Documents/wx-brief.pages` | Visible |
-| `~/library/mobile documents/com~apple~CloudDocs/wx-case.md` (case variant) | Visible |
-| `…/CloudDocs/Library/wx-user-folder.md`, `…/CloudDocs/build/2026/wx-report.pdf` | Visible |
-| `…/CloudDocs/.secret/wx-dot.md`, `…/CloudDocs/proj/node_modules/wx/index.js` | Hidden |
-| `~/Library/Mobile Documents Backup/…`, `~/Library/Mobile DocumentsOld/…` (prefix siblings) | Hidden |
-| `~/Library/Mobile Documents/../Application Support/…` (`..` escape) | Hidden |
-| `~/Library/Containers/com.apple.CloudDocs.MobileDocumentsFileProvider/Data/…`, `~/Library/wx-direct.md`, `~/LIBRARY/Caches/…` | Hidden |
-| 60 build-output hits ahead of 10 documents | The 10 documents |
-| 80 visible hits | The first 50 |
-| Three hits under one project's `dist`, two queries | The project folder read once |
-| Folder results `node_modules`, `dist` (in a project), `wx-docs` | `wx-docs` only |
-| Linux: `…/node_modules/…`, `…/app/build/…` (in a project), `~/docs/wx-notes.md` | The document only |
+| Result                                                                                                                        | Outcome                      |
+| ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `…/core-app/out/renderer/assets/KaTeX…ttf`, `package.json` beside `out`                                                       | Hidden                       |
+| `…/nanobot/web/dist/assets/…` in a project                                                                                    | Hidden                       |
+| `…/webui/node_modules/wx-sdk/index.js`                                                                                        | Hidden                       |
+| `~/Library/Application Support/WeChat/wx-cache.json`                                                                          | Hidden                       |
+| `~/Documents/build/2026/wx-report.pdf`, no project marker                                                                     | Visible                      |
+| `~/Library/Mobile Documents/com~apple~CloudDocs/Plans/wx-plan.md`                                                             | Visible                      |
+| `~/Library/Mobile Documents/iCloud~com~apple~Pages/Documents/wx-brief.pages`                                                  | Visible                      |
+| `~/library/mobile documents/com~apple~CloudDocs/wx-case.md` (case variant)                                                    | Visible                      |
+| `…/CloudDocs/Library/wx-user-folder.md`, `…/CloudDocs/build/2026/wx-report.pdf`                                               | Visible                      |
+| `…/CloudDocs/.secret/wx-dot.md`, `…/CloudDocs/proj/node_modules/wx/index.js`                                                  | Hidden                       |
+| `~/Library/Mobile Documents Backup/…`, `~/Library/Mobile DocumentsOld/…` (prefix siblings)                                    | Hidden                       |
+| `~/Library/Mobile Documents/../Application Support/…` (`..` escape)                                                           | Hidden                       |
+| `~/Library/Containers/com.apple.CloudDocs.MobileDocumentsFileProvider/Data/…`, `~/Library/wx-direct.md`, `~/LIBRARY/Caches/…` | Hidden                       |
+| 60 build-output hits ahead of 10 documents                                                                                    | The 10 documents             |
+| 80 visible hits                                                                                                               | The first 50                 |
+| Three hits under one project's `dist`, two queries                                                                            | The project folder read once |
+| Folder results `node_modules`, `dist` (in a project), `wx-docs`                                                               | `wx-docs` only               |
+| Linux: `…/node_modules/…`, `…/app/build/…` (in a project), `~/docs/wx-notes.md`                                               | The document only            |
 
 ### 5. Good / Base / Bad Cases
 
@@ -739,9 +739,7 @@ const inICloud = key.startsWith(`${homeKey}/library/mobile documents`) // "Mobil
 const candidates = hits.filter(passesSearchRule).slice(0, NATIVE_SEARCH_CANDIDATE_POOL)
 const paths = await directoryFilter.selectVisible(candidates, NATIVE_SEARCH_MAX_RESULTS, rootKeyOf)
 const levelOptionsOf = (rootKey: string | null) =>
-  rootKey !== null && rootKey === getMacICloudDriveRootKey()
-    ? { enableSystemPathFilter: false }
-    : undefined
+  rootKey !== null && rootKey === getMacICloudDriveRootKey() ? { enableSystemPathFilter: false } : undefined
 const inICloud = normalizeMacSpotlightPathKey(filePath).startsWith(`${rootKey}/`)
 ```
 
@@ -788,15 +786,19 @@ export function pushIndexWorkerFailureSample(samples: string[], lastError: strin
 
 ### 3. Contracts
 
+- **Content indexing is opt-in.** `contentIndexingEnabled` has one shared default, `false`; missing or invalid historical values normalize to that value. A fresh config records the current `contentIndexCleanupVersion`; a non-empty historical config without the field normalizes to 0, performs one fenced cleanup, then records the current version. This avoids scanning the FTS content column on every disabled startup while retaining retry-after-failure. While disabled, fullScan/watch acknowledgements do not mark progress, schedule the parser or generate file embeddings. File FTS queries exclude the `content` column, so stale pre-policy text cannot match before cleanup finishes.
+- **Base scan and enrichment are separate phases.** While a file scan owns `isInitializing`, base writes may leave durable pending work but cannot dispatch content batches. `drainIndexedSourceMutations` requests resume only after the base snapshot and its ordered publication finish; the resume lease cannot overtake the scan lease.
+- **Disable is a fenced cleanup.** The main process suppresses intake, stops resume timers, cancels queued enrichment and drains committed work. Inside one source mutation lease and one Writer admission, it clears `files.content`, file embeddings, `file_index_progress` and `search_index.content` without deleting file metadata. The SourceScoped writer then crosses the reader visibility barrier and publishes one file-source commit. Only after that succeeds does `saveMainConfigDurable` persist `false`; enabling likewise durably saves `true` before resume starts. Cleanup or durable-save failure leaves the prior setting in memory and on disk, and re-arms resume when that prior setting is enabled, so the UI cannot claim a transition succeeded.
+
 - **No self-excitation.** Each page runs inside `withMutationLease`: `scheduleIndexing(rows, label,
-  leaseId)`, then `waitForSearchIndexDrain(label, leaseId)`. A leased `applySourceBatch` applies
+leaseId)`, then `waitForSearchIndexDrain(label, leaseId)`. A leased `applySourceBatch` applies
   within the lease and never calls `drainMutations`, so the round's own commits never reach
   `drainIndexedSourceMutations` → `resume()`.
 - **Cooldown.** A round starts one cooldown (45s) after the previous one ended. A request during a round
   sets `rerunRequested`; requests during the cooldown are absorbed by the one pending timer
   (`scheduleFollowUp` arms at most one, `unref`'d). A round that ends `paused` or `wrapped`, or with a
   rerun requested, schedules one follow-up. The wait is `min(45s, lastRoundEndedAt + 45s −
-  Date.now())`, so a wall clock set back never holds recovery longer than one cooldown.
+Date.now())`, so a wall clock set back never holds recovery longer than one cooldown.
 - **Cursor.** A keyset cursor on `files.id` survives across rounds. It advances only over a page the
   scheduler admitted entirely (`deferred === 0`); a partly admitted page is queried again. At the end
   of the table it resets to 0, and a round that began mid-table ends `wrapped`, so the head gets its
@@ -806,7 +808,7 @@ export function pushIndexWorkerFailureSample(samples: string[], lastError: strin
   failures are terminal. Stuck-page guard: a partly admitted page whose dispatch failed and that comes
   back identical (`isSamePage`) is stepped past; its rows stay pending for the pass after the wrap.
   Any other error (a drain timeout, a scheduling throw) ends the round `paused` (`Deferred file
-  enrichment recovery paused`), as do five consecutive iterations that admit nothing; the follow-up
+enrichment recovery paused`), as do five consecutive iterations that admit nothing; the follow-up
   retries after the cooldown.
 - **Read-failure classes.** `TextFileParser` returns the errno as `errorCode`, and the worker
   classifies it before counting a failure. Resume selects only rows with no progress or with
@@ -822,7 +824,7 @@ export function pushIndexWorkerFailureSample(samples: string[], lastError: strin
     a metadata-only row that stays searchable by name.
   - Anything else → `failed`, counted. The batch's `done` message carries up to three samples, and
     `FileIndexWorkerBatchFailedError` adds them as `lastErrorSamples` to the `File index worker
-    failed` warning.
+failed` warning.
 - **Samples stay in the local log.** A sample is a raw errno message with an absolute path in it. It
   goes to `fileProviderLog.warn` only: never into transport payloads, dashboards,
   `operationalErrorService.report` context, Sentry or Nexus
@@ -831,16 +833,16 @@ export function pushIndexWorkerFailureSample(samples: string[], lastError: strin
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required outcome |
-| --- | --- |
+| Condition                              | Required outcome                                                                 |
+| -------------------------------------- | -------------------------------------------------------------------------------- |
 | A round ends with requests outstanding | One `unref`'d timer; the follow-up starts at exactly 45s with reason `follow-up` |
-| A request 10s after a round ended | Held 35s, not 45s, then run with its own reason |
-| Clock set back an hour after a round | The follow-up still starts within 45s |
-| Scheduling throws on the third page | Paused; the retry continues after id 400; the next round wraps to id 1 |
-| One page's chunk fails | The round continues; `failedPages` in the completion log |
-| ENOENT, ENOTDIR, EPERM, EACCES reads | `skipped`; `failed: 0`; no `failureSamples` |
-| Four EISDIR reads | `failed: 4`; exactly three samples |
-| A flush of only missing files | No `applyBatch`, no commit |
+| A request 10s after a round ended      | Held 35s, not 45s, then run with its own reason                                  |
+| Clock set back an hour after a round   | The follow-up still starts within 45s                                            |
+| Scheduling throws on the third page    | Paused; the retry continues after id 400; the next round wraps to id 1           |
+| One page's chunk fails                 | The round continues; `failedPages` in the completion log                         |
+| ENOENT, ENOTDIR, EPERM, EACCES reads   | `skipped`; `failed: 0`; no `failureSamples`                                      |
+| Four EISDIR reads                      | `failed: 4`; exactly three samples                                               |
+| A flush of only missing files          | No `applyBatch`, no commit                                                       |
 
 ### 5. Good / Base / Bad Cases
 

@@ -53,6 +53,7 @@ function makeService(): {
   const deps: FileProviderSearchResultServiceDeps = {
     providerId: 'files',
     getDbUtils: () => ({ getDb, getFileIndexReadDb: getDb }) as never,
+    isContentIndexingEnabled: () => false,
     getSearchIndex: () =>
       ({
         lookupByKeywords: async (_providerId: string, terms: string[]) => {
@@ -67,7 +68,9 @@ function makeService(): {
           )
         },
         lookupByKeywordPrefix: async () => [],
-        search: async () => []
+        search: async () => [],
+        lookupBySubsequence: async () => [],
+        lookupByNgrams: async () => []
       }) as never,
     buildItem: (file) =>
       ({

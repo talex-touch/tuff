@@ -9,6 +9,11 @@ export interface FileProviderFullScanInsertResult {
   insertedCount: number
 }
 
+export interface FileProviderFullScanPersistResult {
+  insertedCount: number
+  workerCpuMicros?: number
+}
+
 /**
  * A chunk slower than this means the write path is already behind, so the loop
  * parks for (at most) the chunk's own duration instead of hammering it.
@@ -22,7 +27,25 @@ const FULL_SCAN_CHUNK_BACKOFF_MAX_MS = 1_000
  * cooperative park after every persisted chunk keeps the scanner's acknowledgement chain
  * backpressured, lowers sustained CPU/disk pressure, and gives renderer/IPC work regular gaps.
  */
-const FULL_SCAN_COOPERATIVE_PAUSE_MS = 100
+const FULL_SCAN_COOPERATIVE_PAUSE_MS = 250
+const FULL_SCAN_WORKER_CPU_TARGET = 0.35
+
+export function resolveFullScanPacingMs(batchMs: number, workerCpuMicros?: number): number {
+  const cooperativeMs =
+    batchMs >= FULL_SCAN_CHUNK_BACKOFF_MS
+      ? Math.min(Math.round(batchMs), FULL_SCAN_CHUNK_BACKOFF_MAX_MS)
+      : FULL_SCAN_COOPERATIVE_PAUSE_MS
+  if (
+    typeof workerCpuMicros !== 'number' ||
+    !Number.isFinite(workerCpuMicros) ||
+    workerCpuMicros <= 0
+  ) {
+    return cooperativeMs
+  }
+  const workerCpuMs = workerCpuMicros / 1_000
+  const cpuBudgetMs = Math.max(0, workerCpuMs / FULL_SCAN_WORKER_CPU_TARGET - batchMs)
+  return Math.max(cooperativeMs, Math.ceil(cpuBudgetMs))
+}
 
 export interface FileProviderFullScanInsertDeps<TInserted, TContext> {
   sourceId: string
@@ -31,7 +54,10 @@ export interface FileProviderFullScanInsertDeps<TInserted, TContext> {
   recordBatchDuration: (durationMs: number) => void
   waitForIdle: () => Promise<void>
   upsertFiles: (records: UpsertFileRecord[], reason: string) => Promise<TInserted[]>
-  persistAndEmitBatch?: (records: UpsertFileRecord[], context: TContext) => Promise<number>
+  persistAndEmitBatch?: (
+    records: UpsertFileRecord[],
+    context: TContext
+  ) => Promise<FileProviderFullScanPersistResult>
   emitRecordBatch: (batch: IndexedSourceRecordBatch, context: TContext) => Promise<void>
   emitProgress: (current: number, total: number) => void
   sleep: (durationMs: number) => Promise<void>
@@ -107,6 +133,7 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
         waitForIdleMs: number
         writeMs: number
         published: boolean
+        workerCpuMicros?: number
       }>
     }
 
@@ -118,7 +145,9 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
         const chunkStart = this.now()
         const fused = this.persistAndEmitBatch
         const inserted = fused ? [] : await this.upsertFiles(chunk, 'full-scan.upsert')
-        const chunkInsertedCount = fused ? await fused(chunk, context) : inserted.length
+        const fusedResult = fused ? await fused(chunk, context) : null
+        const chunkInsertedCount = fusedResult?.insertedCount ?? inserted.length
+        const workerCpuMicros = fusedResult?.workerCpuMicros
         const writeMs = this.now() - chunkStart
         return {
           inserted,
@@ -126,7 +155,8 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
           batchMs: writeMs,
           waitForIdleMs,
           writeMs,
-          published: Boolean(fused)
+          published: Boolean(fused),
+          workerCpuMicros
         }
       })()
       // The result is awaited by the next loop turn. Attach a rejection handler now so a
@@ -164,7 +194,8 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
           batchMs,
           waitForIdleMs,
           writeMs,
-          published
+          published,
+          workerCpuMicros
         } = await currentChunk.result
         this.recordBatchDuration(batchMs)
 
@@ -175,7 +206,9 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
           mode: published ? 'fused' : 'legacy',
           waitForIdleMs: Math.round(waitForIdleMs),
           writeDurationMs: Math.round(writeMs),
-          duration: this.formatDuration(batchMs)
+          duration: this.formatDuration(batchMs),
+          workerCpuMs:
+            typeof workerCpuMicros === 'number' ? Math.round(workerCpuMicros / 1_000) : undefined
         })
 
         if (!published) {
@@ -205,11 +238,8 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
         // scanner cannot run far ahead because each 500-record scan batch waits for this write
         // chain to acknowledge it, so this pause also bounds traversal pressure without another
         // queue or an unbounded in-memory buffer. Slow chunks retain the existing proportional
-        // congestion backoff; fast chunks still yield a fixed 100ms window to interactive work.
-        const pacingMs =
-          batchMs >= FULL_SCAN_CHUNK_BACKOFF_MS
-            ? Math.min(Math.round(batchMs), FULL_SCAN_CHUNK_BACKOFF_MAX_MS)
-            : FULL_SCAN_COOPERATIVE_PAUSE_MS
+        // congestion backoff; fast chunks still yield a fixed 250ms window to interactive work.
+        const pacingMs = resolveFullScanPacingMs(batchMs, workerCpuMicros)
         await this.sleep(pacingMs)
       }
     } finally {

@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import type { DropdownItemProps } from './types'
+import type { DropdownItemProps, DropdownMenuContext } from './types'
 import { inject } from 'vue'
+import { useMenuActivationFeedback } from '../../../../utils/menu-activation-feedback'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import TxIcon from '../../icon/src/TxIcon.vue'
+import { TX_DROPDOWN_MENU_INJECTION_KEY } from './types'
 
 defineOptions({ name: 'TxDropdownItem' })
 
@@ -11,21 +13,26 @@ const props = withDefaults(defineProps<DropdownItemProps>(), {
   danger: false,
   arrow: false,
   closeOnSelect: undefined,
+  activationFeedback: undefined,
 })
 
 const emit = defineEmits<{
   (e: 'select'): void
 }>()
 
-const ctx = inject<{ close: () => void, closeOnSelect: boolean }>('txDropdownMenu')
+const ctx = inject<DropdownMenuContext | null>(TX_DROPDOWN_MENU_INJECTION_KEY, null)
+
+const { activate, phase: activationPhase } = useMenuActivationFeedback({
+  enabled: () => props.activationFeedback ?? ctx?.activationFeedback ?? true,
+  shouldClose: () => Boolean(ctx && (props.closeOnSelect ?? ctx.closeOnSelect)),
+  onSelect: () => emit('select'),
+  onClose: () => ctx?.close(),
+})
 
 function onClick() {
   if (props.disabled)
     return
-  emit('select')
-  const shouldClose = props.closeOnSelect ?? ctx?.closeOnSelect
-  if (shouldClose)
-    ctx?.close()
+  activate()
 }
 </script>
 
@@ -33,9 +40,16 @@ function onClick() {
   <TxCardItem
     class="tx-dropdown-item"
     align="center"
-    :class="{ 'is-disabled': disabled, 'is-danger': danger }"
+    :class="{
+      'is-disabled': disabled,
+      'is-danger': danger,
+      'is-activation-feedback': activationPhase !== 'idle',
+      'is-activation-clear': activationPhase === 'clear',
+      'is-activation-confirm': activationPhase === 'confirm',
+    }"
     role="menuitem"
     :clickable="true"
+    :active="activationPhase === 'confirm'"
     :disabled="disabled"
     :aria-disabled="disabled ? 'true' : undefined"
     @click="onClick"
@@ -66,6 +80,16 @@ function onClick() {
 // select, a tree or a cascader, which is the more confusing of the two.
 .tx-dropdown-item.tx-dropdown-item:not(.is-disabled):focus-visible {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 22%, transparent);
+}
+
+.tx-dropdown-item.tx-dropdown-item.is-activation-feedback {
+  transition: none;
+}
+
+.tx-dropdown-item.tx-dropdown-item.is-activation-feedback.is-activation-clear {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .tx-dropdown-item :deep(.tx-card-item__title) {

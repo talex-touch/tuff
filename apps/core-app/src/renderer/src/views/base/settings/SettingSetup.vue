@@ -640,6 +640,20 @@ function getStatusIconClass(status: string): string {
         <TuffMacOSTag />
       </template>
       <TxSkeleton v-if="!permissions.accessibility.checked" :width="86" :height="22" :radius="8" />
+      <TxButton
+        v-else-if="
+          permissions.accessibility.status !== 'granted' && permissions.accessibility.canRequest
+        "
+        variant="flat"
+        type="primary"
+        size="sm"
+        :aria-label="`${getStatusText(permissions.accessibility.status)} — ${t('setupPermissions.openSettings')}`"
+        @click="requestPermission('accessibility')"
+      >
+        <i :class="getStatusIconClass(permissions.accessibility.status)" aria-hidden="true" />
+        {{ getStatusText(permissions.accessibility.status) }} ·
+        {{ t('setupPermissions.openSettings') }}
+      </TxButton>
       <TuffStatusBadge
         v-else
         size="md"
@@ -647,19 +661,6 @@ function getStatusIconClass(status: string): string {
         :icon="getStatusIconClass(permissions.accessibility.status)"
         :text="getStatusText(permissions.accessibility.status)"
       />
-      <TxButton
-        v-if="
-          permissions.accessibility.checked &&
-          permissions.accessibility.status !== 'granted' &&
-          permissions.accessibility.canRequest
-        "
-        variant="flat"
-        type="primary"
-        size="sm"
-        @click="requestPermission('accessibility')"
-      >
-        {{ t('setupPermissions.openSettings') }}
-      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -676,6 +677,20 @@ function getStatusIconClass(status: string): string {
         <TuffMacOSTag />
       </template>
       <TxSkeleton v-if="!permissions.fullDiskAccess.checked" :width="86" :height="22" :radius="8" />
+      <TxButton
+        v-else-if="
+          permissions.fullDiskAccess.status !== 'granted' && permissions.fullDiskAccess.canRequest
+        "
+        variant="flat"
+        type="primary"
+        size="sm"
+        :aria-label="`${getStatusText(permissions.fullDiskAccess.status)} — ${t('setupPermissions.openSettings')}`"
+        @click="requestPermission('fullDiskAccess')"
+      >
+        <i :class="getStatusIconClass(permissions.fullDiskAccess.status)" aria-hidden="true" />
+        {{ getStatusText(permissions.fullDiskAccess.status) }} ·
+        {{ t('setupPermissions.openSettings') }}
+      </TxButton>
       <TuffStatusBadge
         v-else
         size="md"
@@ -683,19 +698,6 @@ function getStatusIconClass(status: string): string {
         :icon="getStatusIconClass(permissions.fullDiskAccess.status)"
         :text="getStatusText(permissions.fullDiskAccess.status)"
       />
-      <TxButton
-        v-if="
-          permissions.fullDiskAccess.checked &&
-          permissions.fullDiskAccess.status !== 'granted' &&
-          permissions.fullDiskAccess.canRequest
-        "
-        variant="flat"
-        type="primary"
-        size="sm"
-        @click="requestPermission('fullDiskAccess')"
-      >
-        {{ t('setupPermissions.openSettings') }}
-      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -708,6 +710,18 @@ function getStatusIconClass(status: string): string {
       "
     >
       <TxSkeleton v-if="!permissions.microphone.checked" :width="86" :height="22" :radius="8" />
+      <TxButton
+        v-else-if="permissions.microphone.status !== 'granted' && permissions.microphone.canRequest"
+        variant="flat"
+        type="primary"
+        size="sm"
+        :aria-label="`${getStatusText(permissions.microphone.status)} — ${t('setupPermissions.openSettings')}`"
+        @click="requestPermission('microphone')"
+      >
+        <i :class="getStatusIconClass(permissions.microphone.status)" aria-hidden="true" />
+        {{ getStatusText(permissions.microphone.status) }} ·
+        {{ t('setupPermissions.openSettings') }}
+      </TxButton>
       <TuffStatusBadge
         v-else
         size="md"
@@ -715,19 +729,6 @@ function getStatusIconClass(status: string): string {
         :icon="getStatusIconClass(permissions.microphone.status)"
         :text="getStatusText(permissions.microphone.status)"
       />
-      <TxButton
-        v-if="
-          permissions.microphone.checked &&
-          permissions.microphone.status !== 'granted' &&
-          permissions.microphone.canRequest
-        "
-        variant="flat"
-        type="primary"
-        size="sm"
-        @click="requestPermission('microphone')"
-      >
-        {{ t('setupPermissions.openSettings') }}
-      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -740,6 +741,20 @@ function getStatusIconClass(status: string): string {
       "
     >
       <TxSkeleton v-if="!permissions.notifications.checked" :width="86" :height="22" :radius="8" />
+      <TxButton
+        v-else-if="
+          permissions.notifications.status !== 'granted' && permissions.notifications.canRequest
+        "
+        variant="flat"
+        type="primary"
+        size="sm"
+        :aria-label="`${getStatusText(permissions.notifications.status)} — ${t('setupPermissions.openSettings')}`"
+        @click="requestPermission('notifications')"
+      >
+        <i :class="getStatusIconClass(permissions.notifications.status)" aria-hidden="true" />
+        {{ getStatusText(permissions.notifications.status) }} ·
+        {{ t('setupPermissions.openSettings') }}
+      </TxButton>
       <TuffStatusBadge
         v-else
         size="md"
@@ -748,11 +763,7 @@ function getStatusIconClass(status: string): string {
         :text="getStatusText(permissions.notifications.status)"
       />
       <TxButton
-        v-if="
-          permissions.notifications.checked &&
-          permissions.notifications.status !== 'granted' &&
-          permissions.notifications.canRequest
-        "
+        v-if="permissions.notifications.checked && permissions.notifications.status !== 'granted'"
         variant="flat"
         type="primary"
         size="sm"

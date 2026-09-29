@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<ContextMenuProps>(), {
   closeOnTriggerPointerDown: true,
   closeOnAnyPointerDown: false,
   closeOnSelect: true,
+  activationFeedback: true,
   showArrow: false,
   arrowSize: 10,
   animation: () => ({}),
@@ -379,6 +380,7 @@ defineExpose({
         ref="panelRef"
         :close="close"
         :close-on-select="closeOnSelect"
+        :activation-feedback="activationFeedback"
         :outside-guard="true"
       >
         <slot name="menu" />
