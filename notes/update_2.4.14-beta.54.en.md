@@ -7,7 +7,7 @@
 - Application shortcuts support conflict confirmation and explicit takeover, while CoreBox number keys can run or only select a result.
 - TuffEx menus now confirm activation before closing, with matching updates across Nexus navigation and theme menus.
 - Nexus analytics adds a unified panel selector plus version-scoped geography, visit, and search metrics.
-- Electron is upgraded to 41.10.7, alongside fixes for CoreBox focus, update progress, and settings interactions.
+- Electron is upgraded to 41.10.7 and undici to 7.29.1, alongside fixes for CoreBox focus, update progress, and settings interactions.
 
 ## What's Changed
 
@@ -21,4 +21,4 @@
 - Nexus analytics navigation is consolidated into one entry, with version, geography, and nine analytics panels sharing a deep-linkable selector.
 - Geography aggregates can be filtered by client version, while version lists and charts expose visits, searches, users, and mean search duration.
 - Nexus development health checks no longer render the application root repeatedly, and identical locale-resolution logs are deduplicated.
-- Electron 41.10.7 addresses three high-severity advisories, while CoreBox refocus, download-progress visibility, settings motion, and native package size are improved.
+- Electron 41.10.7 and undici 7.29.1 address newly disclosed high-severity advisories, while CoreBox refocus, download-progress visibility, settings motion, and native package size are improved.
