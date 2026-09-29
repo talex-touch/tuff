@@ -1,6 +1,6 @@
 # Tuff AI Stable TODO
 
-> 更新时间：2026-07-16
+> 更新时间：2026-09-29
 > 范围：Roadmap R2 / AI 2.5.0 Stable。主验收矩阵以 `04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md` 为准；全局执行顺序服从 [`TODO.md`](./TODO.md)，本文件不单独抢占稳定化窗口。
 
 ## 当前口径
@@ -8,6 +8,24 @@
 - Stable 只覆盖 CoreBox `text.chat`、显式 `vision.ocr -> text.chat`、provider routing 与固定失败路径。
 - OmniPanel Writing Tools、Workflow、Review Queue、Skills、Automation、Assistant 继续按 Beta / Experimental evidence 追踪。
 - focused tests、schema、mock provider、dry-run、CDP raw 诊断不能替代 packaged Electron 体验证据。
+
+## macOS 原生能力渠道化候选
+
+目标：复用现有 Capability / Provider 路由，把通过运行时探针的 macOS 系统能力作为机器本地 provider 自动注入；不把机器可用性持久化或同步到其他设备，也不建立第二套同名能力路由。
+
+- [ ] **原生 OCR / `vision.ocr`**：先确认现有 `local-system-ocr` 的实际底层引擎、语言覆盖、布局数据和取消语义；若未使用 Apple Vision，再评估以 Vision 文本识别作为 macOS provider。已有 provider 不重复注册。
+- [ ] **原生翻译 / `text.translate`**：评估 Apple Translation framework 的系统版本、语言对、语言包下载、用户授权/UI、取消和批量/流式结果。重点验证 `TranslationSession` 生命周期是否能满足当前后台 provider 合同；若必须依附前台视图，则做用户触发的原生操作入口，不伪装成随时可用的后台渠道。
+- [ ] **语言识别**：评估 `NLLanguageRecognizer` 作为翻译前置能力。默认只做内部路由辅助，不单独暴露渠道，除非出现独立消费场景。
+- [ ] **原生语音识别 / `audio.stt`**：评估 Speech framework 的实时/批量、离线能力、语言覆盖、模型下载与权限恢复；只有真实流式延迟和稳定性达到现有语音会话要求时才进入渠道列表。
+- [ ] **OCR → 翻译组合**：允许复用 `vision.ocr` 与 `text.translate` 形成图片文字翻译降级链；不得把“提取文字后翻译”标成保留排版的 `image.translate.e2e`。
+
+接入门禁：
+
+1. provider 仅在平台、系统版本、框架和运行时可用性探针全部通过时注入；不支持的机器不显示可选渠道。
+2. 自动注入沿用 `local-system-ocr` 的 runtime-only 模式；配置同步不得产生另一台机器上的假可用状态。
+3. 每项能力必须定义权限、模型/语言包未安装、用户取消、系统不支持和执行失败的稳定错误语义及云端 fallback。
+4. 明确本地处理与可能触发的系统下载/提示，不因“原生”标签弱化隐私和网络行为说明。
+5. 先完成真实 Mac smoke 与目标系统版本矩阵，再进入默认启用或发布验收。
 
 ## 已完成
 
