@@ -77,6 +77,7 @@ catalog:
   sass: ^1.101.0
   simplex-noise: ^4.0.3
   theme-colors: ^0.1.0
+  three: ^0.186.0
   typeit: ^8.8.7
   uncrypto: ^0.1.3
   vitepress: 2.0.0-alpha.18

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 export interface GeoLeafletPoint {
@@ -208,9 +209,13 @@ onBeforeUnmount(() => {
     />
     <div
       v-if="mapReady && validPoints.length === 0"
-      class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl bg-white/65 text-sm text-black/55 backdrop-blur-sm dark:bg-black/55 dark:text-white/60"
+      class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl bg-white/65 backdrop-blur-sm dark:bg-black/55"
     >
-      No geo data
+      <TxEmptyState
+        variant="no-data"
+        size="small"
+        description="No geo data"
+      />
     </div>
   </div>
 </template>

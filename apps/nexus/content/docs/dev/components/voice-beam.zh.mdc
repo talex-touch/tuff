@@ -1,0 +1,179 @@
+---
+title: "VoiceBeam"
+description: "沿所包裹元素底边律动的音频响应辉光，用于语音输入、听写与语音处理阶段"
+category: Effects
+status: beta
+since: 0.6.0
+tags: [voice, audio, glow, mic, dictation, waveform]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+`TxVoiceBeam` 包裹恰好一个自带圆角的元素，裁剪它，并沿底边绘制随声音律动的光束。可以喂给它麦克风产生的 `MediaStream`，也可以用 `level` 手动驱动。
+
+:::TuffDemoWrapper{demo="VoiceBeamShowcaseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const colorMode = useColorMode()
+  const beamTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
+
+  // 没有麦克风时，用逐帧 level getter 驱动。
+  const level = ref(0.5)
+  let raf = 0
+  let t = 0
+  function tick() {
+    t += 0.016
+    level.value = 0.35 + 0.32 * Math.abs(Math.sin(t * 1.7))
+    raf = requestAnimationFrame(tick)
+  }
+  raf = requestAnimationFrame(tick)
+  onBeforeUnmount(() => cancelAnimationFrame(raf))
+  </script>
+
+  <template>
+    <TxVoiceBeam :theme="beamTheme" :level="() => level" :border-radius="16">
+      <TxCard :radius="16" :padding="24" shadow="none">想问点什么…</TxCard>
+    </TxVoiceBeam>
+
+    <TxVoiceBeam :theme="beamTheme" :level="() => level" processing :border-radius="16">
+      <TxCard :radius="16" :padding="24" shadow="none">转写中…</TxCard>
+    </TxVoiceBeam>
+  </template>
+---
+:::
+
+### 麦克风输入
+
+`useMicrophone()` 产出 stream。它请求 `getUserMedia` 时关闭回声消除、降噪与自动增益，让辉光看到真实的声音动态。必须在点击事件里调用 `start()`——浏览器只在用户手势内授予麦克风权限。
+
+```vue
+<script setup lang="ts">
+import { useMicrophone } from '@talex-touch/tuffex/pro'
+
+const mic = useMicrophone()
+const live = computed(() => mic.state.value === 'live')
+</script>
+
+<template>
+  <TxVoiceBeam :stream="mic.stream.value" :processing="transcribing">
+    <TxCard :radius="16" :padding="24" shadow="none">想问点什么…</TxCard>
+  </TxVoiceBeam>
+  <TxButton :aria-pressed="live" @click="live ? mic.stop() : mic.start()">
+    {{ live ? '停止' : '说话' }}
+  </TxButton>
+</template>
+```
+
+### 宿主预设与配色
+
+`type` 选择宿主预设（`default` 对应约 350 px 的聊天输入框，`pill` 对应录音胶囊，`mobile` 对应手机屏幕底部）；任何几何属性都会覆盖预设值。`colorVariant` 选择调色板，`colors` 覆盖单个色瓣。
+
+```vue
+<template>
+  <TxVoiceBeam type="pill" color-variant="ocean" :scale="0.9">
+    <div class="pill">录音中…</div>
+  </TxVoiceBeam>
+
+  <TxVoiceBeam type="mobile" color-variant="candy" :level="() => 0.8">
+    <div class="screen">正在聆听</div>
+  </TxVoiceBeam>
+</template>
+```
+
+### 最佳实践
+
+- 不要把辉光当作麦克风开着的唯一指示：保留文字状态与可见的麦克风按钮状态（`aria-pressed`），并用 `role="status"` 播报变化。
+- 传 **getter**（`:level="() => meter.value"`），不要传每秒读取 60 次的响应式数字——getter 每帧采样一次且不触发重渲染。
+- `stream` 优先于 `level`：只要 stream 带音轨，就由它驱动。
+- 只包裹一个自带圆角的元素；需要保持清晰的文字与控件放到 `position: relative; z-index: 5`。被包裹元素内部的浮层（popover、菜单）会被裁掉，请用 portal 移出去。
+- 关闭语音界面时调用 `mic.stop()`；组合式函数只会在卸载时停止音轨。
+- 实例要少。每个实例都有模糊图层与画布，不适合密集列表。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `type` | `'default' \| 'pill' \| 'mobile'` | `'default'` | 宿主预设，作为其余几何属性的默认值。 |
+| `stream` | `MediaStream \| null` | `null` | 需要响应的实时音频；优先于 `level`。 |
+| `level` | `number \| () => number` | `0` | 无 stream 时的手动驱动电平（0-1）。 |
+| `sensitivity` | `number` | `3.1` | 分析音频的输入增益。 |
+| `threshold` | `number` | `0.015` | 噪声门（0-1），低于它的电平视为静音。 |
+| `attack` / `release` | `number` | `0.325` / `0.86` | 辉光上升与回落所需秒数。 |
+| `idle` / `breatheDuration` | `number` | `0.23` / `5.2` | 静音时的存在感与呼吸周期。 |
+| `reach` / `spread` | `number` | `1.2` / `1.05` | 满电平时的升高与横向扩张倍数。 |
+| `bands` | `boolean` | `true` | 让低/中/高频段独立驱动各色瓣。 |
+| `flow` | `number` | `48` | 频谱横向流动速度（满电平下 px/s）。 |
+| `processing` | `boolean` | `false` | 收拢为一束往返行进的光束并保持点亮。 |
+| `processingDuration` / `processingLevel` / `processingEase` / `processingTravel` / `processingCurve` | `number` | `1.1` / `0.55` / `0.6` / `1.55` / `2.1` | 处理阶段的往返节奏、保持亮度、形变时长、行程与缓动。 |
+| `cornerFollow` | `number` | `0.45` | 处理阶段辉光沿圆角抬起的程度。 |
+| `colorVariant` | `'colorful' \| 'mono' \| 'ocean' \| 'sunset' \| …` | `'colorful'` | 色瓣调色板。 |
+| `colors` | `string[]` | 无 | 最多七个色瓣颜色，中心优先。 |
+| `bandColors` | `{ core?, above?, mid?, below? }` | 主题默认 | 光束脊线与色边颜色。 |
+| `theme` | `'dark' \| 'light' \| 'auto'` | `'dark'` | 背景适配；`auto` 跟随系统偏好。 |
+| `staticColors` | `boolean` | `false` | 关闭缓慢的色相漂移。 |
+| `hueRange` / `hueDuration` | `number` | `24` / `40`、`12` / `8.5` | 色相漂移范围（度）与周期（秒）。 |
+| `active` | `boolean` | `true` | 关闭时辉光淡出并停止音频分析。 |
+| `paused` | `boolean` | `false` | 把辉光、光束与分析冻结在最后一帧。 |
+| `borderRadius` | `number` | 自动探测 | 圆角半径（px）。 |
+| `brightness` / `saturation` | `number` | 主题默认 | 辉光亮度与饱和度倍数。 |
+| `glowSize` | `number` | `1` | 辉光模糊半径倍数。 |
+| `strokeOpacity` / `innerOpacity` / `bloomOpacity` | `number` | `1` | 各层不透明度倍数。 |
+| `scale` | `number` | `1` | 一次性缩放全部像素尺寸。 |
+| `bend`、`bandStrength`、`bandWidth`、`bandPosition`、`bandCurve`、`bandSpread`、`bandSkew`、`bandOffset`、`bandTail`、`bandTailPosition`、`bandTailCurve`、`bandTailOverflow`、`bandAberration` | `number` | 已调校 | 辉光轮廓与光束的形状参数。 |
+| `distortion` / `distortionDetail` | `number` | `0.62` / `2.3` | 光束下方光的横向扭曲强度与噪声粒度。 |
+| `glowWidth`、`glowHeight`、`lobeSpacing`、`rangeWidth`、`rangeHeight`、`softness`、`coreSize`、`coreLight`、`coreLightWidth`、`coreLightHeight`、`strokeScale`、`innerScale`、`innerHeight`、`bloomScale`、`bloomHeight` | `number` | 已调校 | 色瓣、可见范围、核心与光晕几何。 |
+| `strength` | `number` | `1` | 整体效果不透明度（0-1），不影响子元素。 |
+| `css` | `string` | 无 | 追加在生成样式表之后的 CSS；`{id}` 按实例替换。 |
+
+### 插槽
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | 被包裹的元素；光束图层渲染在它背后与上方。 |
+
+### 事件
+
+| 事件 | 载荷 | 说明 |
+|------|------|------|
+| `level` | `(level: number)` | 每帧触发，携带当前展示的平滑电平。 |
+| `activate` | - | 淡入完成时触发。 |
+| `deactivate` | - | 淡出完成时触发。 |
+
+### 暴露方法
+
+无公开实例方法。
+
+### CSS 变量
+
+| 变量 | 来源 | 说明 |
+|------|------|------|
+| `--voice-strength` | `strength` | 光束图层不透明度（0-1）。 |
+| `--voice-stroke-opacity` / `--voice-inner-opacity` / `--voice-bloom-opacity` | `strokeOpacity` / `innerOpacity` / `bloomOpacity` | 各层不透明度倍数。 |
+
+## 概述
+
+- 组件包裹插槽内容并按子元素的 `border-top-left-radius`（未取到时用 16 px）裁剪，让光束贴合元素边缘。
+- 全页共用一个 `requestAnimationFrame` 循环，上限约 60 fps；实例滚出视口（256 px 边距）后注销并释放分析器。
+- 每页共用一个 `AudioContext`，每个 stream 一个 source 节点（引用计数），每个实例一个分析器。音频只被分析，不会被播放。
+- `prefers-reduced-motion: reduce` 会停止待机呼吸、色彩流动、色相漂移、扭曲与处理阶段扫描；对声音的反应保留，因为它本质是一个电平表。
+- 使用 `stream` 时，分析器读取 RMS 电平以及三个频段（80-300、300-2000、2000-6000 Hz）。
+
+## 技术说明
+
+- 已对照 `packages/tuffex/packages/components/src/voice-beam/` 下的 `index.ts`、`TxVoiceBeam.vue`、`types.ts` 与 `voice-beam.test.ts` 人工核验。
+- `styles.ts`、`presets.ts`、`voice-driver.ts`、`audio.ts`、`color.ts` 是上游 `voice-glow`（MIT © Jakub Antalik）的逐字移植，仅做严格 TS 索引加固；Vue 壳镜像了上游包裹层的淡入淡出生命周期、离屏暂停与半径探测。
+- `useMicrophone` 是上游 React hook 的 Vue 移植，约束与音轨生命周期保持一致。
+
+- 组件源码：`packages/tuffex/packages/components/src/voice-beam/src/TxVoiceBeam.vue`。
+- 类型定义：`packages/tuffex/packages/components/src/voice-beam/src/types.ts`。
+- 上游：[Jakubantalik/Libraries · voice-glow](https://github.com/Jakubantalik/Libraries/tree/main/packages/voice-glow)（MIT）。
+- **覆盖**：`packages/tuffex/packages/components/src/voice-beam/__tests__/voice-beam.test.ts` 验证预设解析、未知类型回退、麦克风状态机与手动 level 通路。
+
+<TuffDocSourceLink />

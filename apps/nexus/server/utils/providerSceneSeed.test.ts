@@ -6,6 +6,7 @@ import { ensureDefaultProviderSceneSeed } from './providerSceneSeed'
 const storeMocks = vi.hoisted(() => ({
   listProviderRegistryEntries: vi.fn(),
   createProviderRegistryEntry: vi.fn(),
+  updateProviderRegistryEntry: vi.fn(),
   getSceneRegistryEntry: vi.fn(),
   createSceneRegistryEntry: vi.fn(),
   updateSceneRegistryEntry: vi.fn(),
@@ -14,6 +15,7 @@ const storeMocks = vi.hoisted(() => ({
 vi.mock('./providerRegistryStore', () => ({
   createProviderRegistryEntry: storeMocks.createProviderRegistryEntry,
   listProviderRegistryEntries: storeMocks.listProviderRegistryEntries,
+  updateProviderRegistryEntry: storeMocks.updateProviderRegistryEntry,
 }))
 
 vi.mock('./sceneRegistryStore', () => ({
@@ -42,7 +44,11 @@ function provider(
     description: null,
     endpoint: null,
     region: null,
-    metadata: null,
+    metadata: {
+      adapterKey: capability === 'overlay.render'
+        ? 'local-overlay'
+        : capability.startsWith('image.') ? 'tencent-translation' : 'openai-compatible',
+    },
     capabilities: [
       {
         id: `${id}:${capability}`,
@@ -84,6 +90,7 @@ function scene(overrides: Partial<SceneRegistryRecord> = {}): SceneRegistryRecor
         providerId: 'prv_existing_image',
         capability: 'image.translate.e2e',
         priority: 5,
+        model: null,
         weight: null,
         status: 'enabled',
         constraints: { maxImageBytes: 1024 },
@@ -116,6 +123,11 @@ describe('providerSceneSeed', () => {
         },
       ],
     }))
+    storeMocks.updateProviderRegistryEntry.mockImplementation(async (_event, id, input) => {
+      const existing = (await storeMocks.listProviderRegistryEntries())
+        .find((candidate: ProviderRegistryRecord) => candidate.id === id)
+      return existing ? { ...existing, ...input, metadata: input.metadata } : null
+    })
   })
 
   it('创建本地 overlay provider 与截图翻译 seed scene', async () => {
@@ -244,7 +256,7 @@ describe('providerSceneSeed', () => {
     )
   })
 
-  it('不会把 user scope 的 AI mirror OCR provider 自动绑定进 system scene', async () => {
+  it('不会把 user scope 的 OCR provider 自动绑定进 system scene', async () => {
     const overlay = provider('prv_overlay', 'overlay.render', {
       name: 'custom-local-overlay',
       metadata: { source: 'nexus-provider-scene-seed', seedId: 'custom-local-overlay' },

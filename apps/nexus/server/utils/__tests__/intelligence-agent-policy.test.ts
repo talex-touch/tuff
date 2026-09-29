@@ -1,12 +1,18 @@
-import { describe, expect, it } from 'vitest'
 import type { IntelligenceLabAction } from '../tuffIntelligenceLabService'
+import { describe, expect, it, vi } from 'vitest'
 import {
-  isRetryableInvokeError,
   isReadOnlyTool,
-  shouldContinueOnActionFailure,
+  isRetryableInvokeError,
   sanitizeLabActions,
+  shouldContinueOnActionFailure,
 } from '../tuffIntelligenceLabService'
 
+vi.mock('nitropack/runtime/internal/storage', () => ({
+  useStorage: () => ({
+    getItem: async () => null,
+    setItem: async () => {},
+  }),
+}))
 function buildToolAction(overrides: Partial<IntelligenceLabAction> = {}): IntelligenceLabAction {
   return {
     id: 'action_1',

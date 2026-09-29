@@ -1,3 +1,4 @@
+import type { ProviderRegistryRecord } from '../../../../server/utils/providerRegistryStore'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MockD1Database,
@@ -36,8 +37,8 @@ const healthMocks = vi.hoisted(() => ({
 }))
 
 const intelligenceHealthMocks = vi.hoisted(() => ({
-  checkIntelligenceProviderRegistryMirror: vi.fn(),
-  isIntelligenceProviderRegistryMirror: vi.fn((provider: any) => provider.metadata?.source === 'intelligence'),
+  checkIntelligenceProviderRegistryEntry: vi.fn(),
+  isIntelligenceProviderRegistryEntry: vi.fn((provider: ProviderRegistryRecord) => provider.metadata?.adapterKey === 'openai-compatible' || provider.metadata?.adapterKey === 'openai-responses'),
 }))
 
 vi.mock('h3', async () => {
@@ -125,10 +126,10 @@ describe('/api/dashboard/provider-registry', () => {
       ok: true,
     })
     healthMocks.recordProviderHealthCheck.mockResolvedValue(null)
-    intelligenceHealthMocks.isIntelligenceProviderRegistryMirror.mockImplementation(
-      (provider: any) => provider.metadata?.source === 'intelligence',
+    intelligenceHealthMocks.isIntelligenceProviderRegistryEntry.mockImplementation(
+      (provider: ProviderRegistryRecord) => provider.metadata?.adapterKey === 'openai-compatible' || provider.metadata?.adapterKey === 'openai-responses',
     )
-    intelligenceHealthMocks.checkIntelligenceProviderRegistryMirror.mockResolvedValue({
+    intelligenceHealthMocks.checkIntelligenceProviderRegistryEntry.mockResolvedValue({
       success: true,
       providerId: 'prv_ai_registry',
       capability: 'chat.completion',
@@ -313,7 +314,7 @@ describe('/api/dashboard/provider-registry', () => {
           capability: 'text.translate',
           adapter: expect.objectContaining({
             ready: true,
-            matchedKey: 'tencent-cloud:text.translate',
+            matchedKey: 'tencent-translation:text.translate',
             reason: 'adapter-ready',
           }),
         }),
@@ -322,7 +323,7 @@ describe('/api/dashboard/provider-registry', () => {
     })
   })
 
-  it('列表接口标出 capability 缺少 scene adapter 的配置风险', async () => {
+  it('创建 provider 时拒绝 adapter 不支持的 capability', async () => {
     h3Mocks.readBody.mockResolvedValue({
       ...tencentTranslateProviderBody(),
       capabilities: [
@@ -333,22 +334,12 @@ describe('/api/dashboard/provider-registry', () => {
         },
       ],
     })
-    await createProviderHandler(makeEvent())
 
-    h3Mocks.getQuery.mockReturnValue({ vendor: 'tencent-cloud' })
-    const result = await listProvidersHandler(makeEvent())
-
-    expect(result.providers[0].capabilities).toEqual([
-      expect.objectContaining({
-        capability: 'speech.transcribe',
-        adapter: expect.objectContaining({
-          ready: false,
-          matchedKey: null,
-          fallbackKey: 'tencent-cloud:speech.transcribe',
-          reason: 'adapter-missing',
-        }),
-      }),
-    ])
+    await expect(createProviderHandler(makeEvent())).rejects.toMatchObject({
+      statusCode: 400,
+      statusMessage: expect.stringContaining('does not support capability'),
+    })
+    expect(state.db?.providers.size).toBe(0)
   })
 
   it('capabilities 接口支持按 vendor 查询', async () => {
@@ -377,7 +368,7 @@ describe('/api/dashboard/provider-registry', () => {
         capability: 'text.translate',
         adapter: expect.objectContaining({
           ready: true,
-          matchedKey: 'tencent-cloud:text.translate',
+          matchedKey: 'tencent-translation:text.translate',
           reason: 'adapter-ready',
         }),
       }),
@@ -646,6 +637,7 @@ describe('/api/dashboard/provider-registry', () => {
       status: 'degraded',
       metadata: {
         prdScene: 'screenshot-translation',
+        adapterKey: 'tencent-translation',
         owner: 'ops',
       },
       capabilities: [
@@ -694,8 +686,19 @@ describe('/api/dashboard/provider-registry', () => {
     expect(result.provider.capabilities).toHaveLength(1)
   })
 
-  it('可以通过独立 API 新增 provider capability', async () => {
-    h3Mocks.readBody.mockResolvedValue(tencentTranslateProviderBody())
+  it('可以通过独立 API 新增 adapter 支持的 provider capability', async () => {
+    h3Mocks.readBody.mockResolvedValue({
+      name: 'openai-capability-provider',
+      displayName: 'OpenAI Capability Provider',
+      vendor: 'openai',
+      status: 'enabled',
+      authType: 'api_key',
+      authRef: 'secure://providers/openai-capability-provider',
+      ownerScope: 'system',
+      endpoint: 'https://api.openai.com/v1',
+      metadata: { adapterKey: 'openai-compatible', models: ['gpt-4.1-mini'], defaultModel: 'gpt-4.1-mini' },
+      capabilities: [],
+    })
     const created = await createProviderHandler(makeEvent())
 
     h3Mocks.getRouterParam.mockImplementation((_event, name) => {
@@ -708,27 +711,18 @@ describe('/api/dashboard/provider-registry', () => {
       schemaRef: 'nexus://schemas/provider/vision-ocr.v1',
       metering: { unit: 'image' },
       constraints: { maxImageBytes: 5_242_880 },
-      metadata: { providerModel: 'ocr-v1' },
+      metadata: { providerModel: 'gpt-4.1-mini' },
     })
 
     const result = await createCapabilityHandler(makeEvent())
-    h3Mocks.getQuery.mockReturnValue({ providerId: created.provider.id })
-    const listed = await listCapabilitiesHandler(makeEvent())
-
     expect(result.capability).toMatchObject({
       providerId: created.provider.id,
       capability: 'vision.ocr',
       schemaRef: 'nexus://schemas/provider/vision-ocr.v1',
       metering: { unit: 'image' },
       constraints: { maxImageBytes: 5_242_880 },
-      metadata: { providerModel: 'ocr-v1' },
+      metadata: { providerModel: 'gpt-4.1-mini' },
     })
-    expect(listed.capabilities.map((item: any) => item.capability)).toEqual([
-      'image.translate',
-      'image.translate.e2e',
-      'text.translate',
-      'vision.ocr',
-    ])
   })
 
   it('独立 capability API 可以局部更新 schemaRef、metering、constraints 与 metadata', async () => {
@@ -1025,7 +1019,7 @@ describe('/api/dashboard/provider-registry', () => {
     })
   })
 
-  it('AI registry mirror provider check 复用 intelligence provider 探活并记录 health', async () => {
+  it('AI registry provider check 复用 Intelligence provider 探活并记录 health', async () => {
     h3Mocks.readBody.mockResolvedValue({
       name: 'ip_ai_provider_1',
       displayName: 'OpenAI Main',
@@ -1037,9 +1031,9 @@ describe('/api/dashboard/provider-registry', () => {
       ownerId: 'admin_1',
       endpoint: 'https://api.openai.com/v1',
       metadata: {
-        source: 'intelligence',
-        intelligenceProviderId: 'ip_ai_provider_1',
+        source: 'provider-registry',
         intelligenceType: 'openai',
+        adapterKey: 'openai-compatible',
       },
       capabilities: [
         {
@@ -1058,7 +1052,7 @@ describe('/api/dashboard/provider-registry', () => {
       prompt: 'ping',
       timeoutMs: 7000,
     })
-    intelligenceHealthMocks.checkIntelligenceProviderRegistryMirror.mockResolvedValueOnce({
+    intelligenceHealthMocks.checkIntelligenceProviderRegistryEntry.mockResolvedValueOnce({
       success: true,
       providerId: created.provider.id,
       capability: 'chat.completion',
@@ -1070,14 +1064,14 @@ describe('/api/dashboard/provider-registry', () => {
 
     const result = await checkProviderHandler(makeEvent())
 
-    expect(intelligenceHealthMocks.checkIntelligenceProviderRegistryMirror).toHaveBeenCalledWith(
+    expect(intelligenceHealthMocks.checkIntelligenceProviderRegistryEntry).toHaveBeenCalledWith(
       expect.anything(),
       'admin_1',
       expect.objectContaining({
         id: created.provider.id,
         metadata: expect.objectContaining({
-          source: 'intelligence',
-          intelligenceProviderId: 'ip_ai_provider_1',
+          source: 'provider-registry',
+          adapterKey: 'openai-compatible',
         }),
       }),
       {
@@ -1117,9 +1111,9 @@ describe('/api/dashboard/provider-registry', () => {
       ownerId: 'admin_1',
       endpoint: 'https://api.openai.com/v1',
       metadata: {
-        source: 'intelligence',
-        intelligenceProviderId: 'ip_ai_models_provider',
+        source: 'provider-registry',
         intelligenceType: 'openai',
+        adapterKey: 'openai-compatible',
       },
       capabilities: [
         {
@@ -1168,7 +1162,7 @@ describe('/api/dashboard/provider-registry', () => {
     expect(JSON.stringify(result)).not.toContain('sk-models-unit-test')
   })
 
-  it('AI registry mirror provider check 支持 vision.ocr probe 输入透传', async () => {
+  it('AI registry provider check 支持 vision.ocr probe 输入透传', async () => {
     h3Mocks.readBody.mockResolvedValue({
       name: 'ip_ai_vision_provider',
       displayName: 'OpenAI Vision',
@@ -1180,9 +1174,9 @@ describe('/api/dashboard/provider-registry', () => {
       ownerId: 'admin_1',
       endpoint: 'https://api.openai.com/v1',
       metadata: {
-        source: 'intelligence',
-        intelligenceProviderId: 'ip_ai_vision_provider',
+        source: 'provider-registry',
         intelligenceType: 'openai',
+        adapterKey: 'openai-compatible',
       },
       capabilities: [
         {
@@ -1202,7 +1196,7 @@ describe('/api/dashboard/provider-registry', () => {
       prompt: 'ocr probe',
       timeoutMs: 7000,
     })
-    intelligenceHealthMocks.checkIntelligenceProviderRegistryMirror.mockResolvedValueOnce({
+    intelligenceHealthMocks.checkIntelligenceProviderRegistryEntry.mockResolvedValueOnce({
       success: true,
       providerId: created.provider.id,
       capability: 'vision.ocr',
@@ -1214,7 +1208,7 @@ describe('/api/dashboard/provider-registry', () => {
 
     const result = await checkProviderHandler(makeEvent())
 
-    expect(intelligenceHealthMocks.checkIntelligenceProviderRegistryMirror).toHaveBeenCalledWith(
+    expect(intelligenceHealthMocks.checkIntelligenceProviderRegistryEntry).toHaveBeenCalledWith(
       expect.anything(),
       'admin_1',
       expect.objectContaining({ id: created.provider.id }),

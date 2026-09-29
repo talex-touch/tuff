@@ -23,7 +23,7 @@ defineI18nRoute(false)
   -->
   <div>
     <ClientOnly>
-      <LazyDashboardIntelligenceIntelligenceAgentWorkspace />
+      <LazyDashboardIntelligenceAgentWorkspace />
       <template #fallback>
         <div class="space-y-6">
           <div class="space-y-3">

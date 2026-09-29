@@ -47,6 +47,7 @@ export default {
     delete: 'Delete',
     cancel: 'Cancel',
     close: 'Close',
+    error: 'Error',
   },
   notFound: {
     title: 'Page not found',

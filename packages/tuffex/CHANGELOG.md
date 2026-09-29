@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-09-28
+
+### ✨ 组件增强与生态收敛
+
+- 深度适配并导出四大交互视觉特效套件：`TxImageGeneration` 图像生成占位揭示、`TxMetalFx` 金属质感物理悬浮徽标、`TxVoiceBeam` 语音声波光束与 `TxBotAvatar` 智能体动态头像。
+- `TxProgressBar` 进度条增强多段聚合 (`segments`) 支持：支持自定义各段值、颜色与浮动标签，完美适配业务每日活动趋势图与版本分布多维度对比展示。
+- `TxCard` 优化无遮挡悬浮体验与平滑背景阴影切换，与 `TxEmptyState`、`TxStatusBadge` 等全面覆盖系统后台与数据看板容器规范。
 ## [0.6.1] - 2026-09-28
 
 ### 📦 组件变动 (Components)

@@ -36,6 +36,7 @@ const {
   applyProviderTemplate,
   authTypeOptions,
   bindingRows,
+  bindingModelOptions,
   bindingStatusOptions,
   capabilities,
   capabilityCount,
@@ -85,6 +86,7 @@ const {
   providerObservabilityFilter,
   providerOptions,
   providerCapabilityTemplateOptions,
+  providerAdapterOptions,
   providerMeteringUnitOptions,
   providerQuotaPanels,
   providerStatusOptions,
@@ -926,7 +928,20 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                   </div>
                 </template>
                 <template #cell-status="{ row: scene }">
-                  <TxStatusBadge :text="valueLabel(scene.status)" :status="statusTone(scene.status)" size="sm" />
+                  <div class="space-y-1">
+                    <TxStatusBadge
+                      :text="valueLabel(scene.readiness?.status ?? scene.status)"
+                      :status="statusTone(scene.readiness?.status ?? scene.status)"
+                      size="sm"
+                    />
+                    <p
+                      v-if="scene.readiness?.missingCapabilities.length"
+                      class="line-clamp-2 max-w-[12rem] text-[11px] text-amber-600 dark:text-amber-300"
+                      :title="scene.readiness.missingCapabilities.join(', ')"
+                    >
+                      {{ t('dashboard.providerRegistry.routes.missingCapabilities', 'Missing') }}: {{ scene.readiness.missingCapabilities.join(', ') }}
+                    </p>
+                  </div>
                 </template>
                 <template #cell-strategy="{ row: scene }">
                   <span class="text-sm text-black/60 dark:text-white/60">
@@ -1283,7 +1298,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                 </TuffSelect>
               </div>
               <div>
-                <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.adapter', 'Adapter') }}</label>
+                <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.preset', 'Preset') }}</label>
                 <TuffSelect v-model="providerTemplateId" class="w-full min-w-0" @change="applyProviderTemplate">
                   <TuffSelectItem v-for="template in providerTemplateOptions" :key="template.value" :value="template.value" :label="template.label" />
                 </TuffSelect>
@@ -1300,6 +1315,12 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                 <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.vendor', 'Vendor') }}</label>
                 <TuffSelect v-model="providerForm.vendor" class="w-full min-w-0">
                   <TuffSelectItem v-for="vendor in providerVendorOptions" :key="vendor" :value="vendor" :label="valueLabel(vendor)" />
+                </TuffSelect>
+              </div>
+              <div>
+                <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.adapter', 'Adapter format') }}</label>
+                <TuffSelect v-model="providerForm.adapterKey" class="w-full min-w-0">
+                  <TuffSelectItem v-for="adapter in providerAdapterOptions" :key="adapter.value" :value="adapter.value" :label="adapter.label" />
                 </TuffSelect>
               </div>
               <div>
@@ -1474,6 +1495,12 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
                 <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.vendor', 'Vendor') }}</label>
                 <TuffSelect v-model="activeProviderEditPanel.vendor" class="w-full">
                   <TuffSelectItem v-for="vendor in providerVendorOptions" :key="vendor" :value="vendor" :label="valueLabel(vendor)" />
+                </TuffSelect>
+              </div>
+              <div>
+                <label class="apple-section-title mb-1 block">{{ t('dashboard.providerRegistry.fields.adapter', 'Adapter format') }}</label>
+                <TuffSelect v-model="activeProviderEditPanel.adapterKey" class="w-full min-w-0">
+                  <TuffSelectItem v-for="adapter in providerAdapterOptions" :key="adapter.value" :value="adapter.value" :label="adapter.label" />
                 </TuffSelect>
               </div>
               <div>
@@ -1827,12 +1854,16 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
             <div
               v-for="(row, index) in bindingRows"
               :key="index"
-              class="grid items-center gap-2 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04] md:grid-cols-[1fr_1fr_100px_36px]"
+              class="grid items-center gap-2 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04] md:grid-cols-2"
             >
               <TuffSelect v-model="row.providerId" class="w-full">
                 <TuffSelectItem v-for="provider in providerOptions" :key="provider.value" :value="provider.value" :label="provider.label" />
               </TuffSelect>
               <TuffInput v-model="row.capability" placeholder="image.translate.e2e" />
+              <TuffSelect v-model="row.model" class="w-full" :placeholder="t('dashboard.providerRegistry.fields.model', 'Model')">
+                <TuffSelectItem value="" :label="t('dashboard.providerRegistry.providers.modelDefault', 'Use default model')" />
+                <TuffSelectItem v-for="model in bindingModelOptions(row.providerId)" :key="model" :value="model" :label="model" />
+              </TuffSelect>
               <TuffInput v-model="row.priority" type="number" placeholder="10" />
               <button
                 type="button"
@@ -1923,11 +1954,15 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
               :key="index"
               class="space-y-2 rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]"
             >
-              <div class="grid items-center gap-2 md:grid-cols-[1fr_1fr_90px_90px_120px_36px]">
+              <div class="grid items-center gap-2 md:grid-cols-2 lg:grid-cols-3">
                 <TuffSelect v-model="row.providerId" class="w-full">
                   <TuffSelectItem v-for="providerOption in providerOptions" :key="providerOption.value" :value="providerOption.value" :label="providerOption.label" />
                 </TuffSelect>
                 <TuffInput v-model="row.capability" placeholder="image.translate.e2e" />
+                <TuffSelect v-model="row.model" class="w-full" :placeholder="t('dashboard.providerRegistry.fields.model', 'Model')">
+                  <TuffSelectItem value="" :label="t('dashboard.providerRegistry.providers.modelDefault', 'Use default model')" />
+                  <TuffSelectItem v-for="model in bindingModelOptions(row.providerId)" :key="model" :value="model" :label="model" />
+                </TuffSelect>
                 <TuffInput v-model="row.priority" type="number" placeholder="100" />
                 <TuffInput v-model="row.weightText" type="number" placeholder="weight" />
                 <TuffSelect v-model="row.status" class="w-full">
