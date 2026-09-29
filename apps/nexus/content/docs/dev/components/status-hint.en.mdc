@@ -3,7 +3,7 @@ title: "StatusHint"
 description: "A one-line action outcome over a faint, grainy wash of its tone, whose words land from a slight scale-up and morph from one message to the next"
 category: Feedback
 status: beta
-since: 0.6.0
+since: 0.6.1
 tags: [hint, outcome, tone, morph, grain]
 syncStatus: reviewed
 verified: true

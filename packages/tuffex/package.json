@@ -78,7 +78,9 @@
     "audit:size": "node ./scripts/audit-package-size.mjs",
     "audit:size:self-test": "node ./scripts/audit-package-size.mjs --self-test",
     "audit:cursor": "node ./scripts/audit-interactive-cursor.mjs",
-    "audit:cursor:self-test": "node ./scripts/audit-interactive-cursor.mjs --self-test"
+    "audit:cursor:self-test": "node ./scripts/audit-interactive-cursor.mjs --self-test",
+    "audit:changelog": "node ./scripts/audit-version-changelog.mjs",
+    "audit:changelog:self-test": "node ./scripts/audit-version-changelog.mjs --self-test"
   },
   "files": [
     "dist"

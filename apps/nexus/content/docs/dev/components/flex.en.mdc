@@ -3,7 +3,7 @@ title: Flex
 description: A low-level Flexbox container with explicit direction, alignment, wrapping, and gap controls.
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [flex, layout]
 syncStatus: reviewed
 verified: true

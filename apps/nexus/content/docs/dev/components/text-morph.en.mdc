@@ -3,7 +3,7 @@ title: "TextMorph"
 description: "Cuts a string into segments with identity, diffs it, and animates only what actually changed; numbers roll by place value, the container transitions on the same curve, and springs and mid-flight interruption are supported."
 category: Effects
 status: beta
-since: 2.4.14
+since: 0.6.0
 tags: [text, morph, number, spring, live-region]
 syncStatus: reviewed
 verified: true

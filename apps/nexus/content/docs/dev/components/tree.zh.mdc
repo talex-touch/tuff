@@ -3,7 +3,7 @@ title: "Tree 树形"
 description: "基础树形组件，支持搜索过滤、单选/多选与展开控制。"
 category: Data
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [tree, data, hierarchy]
 syncStatus: reviewed
 verified: true

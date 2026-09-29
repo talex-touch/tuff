@@ -3,7 +3,7 @@ title: "ImageGeneration"
 description: "用于生图或慢加载图片的 WebGL 像素马赛克占位，带溶入揭示与原地重生成翻涌"
 category: Effects
 status: beta
-since: 0.6.0
+since: 0.6.2
 tags: [image, generation, loading, shader, webgl, placeholder]
 syncStatus: reviewed
 verified: true

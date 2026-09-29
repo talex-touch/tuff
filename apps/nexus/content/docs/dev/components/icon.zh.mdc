@@ -3,7 +3,7 @@ title: Icon 图标
 description: UnoCSS 图标体系与 TuffIcon 组件
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [icon, glyph, visual]
 syncStatus: reviewed
 verified: true

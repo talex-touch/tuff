@@ -3,7 +3,7 @@ title: "Form 表单"
 description: "面向 TuffEx 输入组件的表单容器、字段布局、校验消息与命令式校验流程。"
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [form, validation, input]
 syncStatus: reviewed
 verified: true

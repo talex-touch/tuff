@@ -3,7 +3,7 @@ title: "GroupBlock 分组块"
 description: "用于偏好设置界面的可折叠分组容器与块状行。"
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [group, layout, settings]
 syncStatus: reviewed
 verified: true

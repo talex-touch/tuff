@@ -3,7 +3,7 @@ title: Input 输入
 description: 轻量输入框与搜索态
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [input, field, search]
 syncStatus: reviewed
 verified: true

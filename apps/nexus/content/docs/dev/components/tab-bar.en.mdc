@@ -3,7 +3,7 @@ title: "TabBar"
 description: "Bottom tab navigation with icons, badges, fixed positioning, and safe-area support."
 category: Navigation
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [navigation, tabs, mobile]
 syncStatus: reviewed
 verified: true

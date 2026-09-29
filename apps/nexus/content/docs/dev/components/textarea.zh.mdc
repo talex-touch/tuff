@@ -3,7 +3,7 @@ title: Textarea
 description: 带字数统计、resize 与状态样式的独立多行输入。
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.7
 tags: [textarea, form, multiline]
 syncStatus: reviewed
 verified: true

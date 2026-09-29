@@ -3,7 +3,7 @@ title: Rating 评分
 description: 星级评分输入
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [rating, star, feedback]
 syncStatus: reviewed
 verified: true

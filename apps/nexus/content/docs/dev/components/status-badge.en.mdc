@@ -3,7 +3,7 @@ title: StatusBadge
 description: Status signals and platform-aware system feedback badges.
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [badge, status, signal]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: "BotAvatar"
 description: "面向智能体与助手的 canvas 动画机器人头像，含空闲与工作状态、指针互动与多种体型"
 category: AiAgent
 status: beta
-since: 0.6.0
+since: 0.6.2
 tags: [avatar, agent, bot, animation, canvas]
 syncStatus: reviewed
 verified: true

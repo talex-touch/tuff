@@ -3,7 +3,7 @@ title: "SearchSelect"
 description: "Searchable select input with local filtering, remote search events, and Popover-backed options panel."
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [search, select, form]
 syncStatus: reviewed
 verified: true

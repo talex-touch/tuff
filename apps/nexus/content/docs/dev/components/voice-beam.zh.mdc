@@ -3,7 +3,7 @@ title: "VoiceBeam"
 description: "沿所包裹元素底边律动的音频响应辉光，用于语音输入、听写与语音处理阶段"
 category: Effects
 status: beta
-since: 0.6.0
+since: 0.6.2
 tags: [voice, audio, glow, mic, dictation, waveform]
 syncStatus: reviewed
 verified: true

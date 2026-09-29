@@ -19,6 +19,7 @@ Tuffex (`@talex-touch/tuffex`) is the Vue 3 component family powering the Talex 
 
 - Live specimens: every suite page opens with a preview grid — [Basics](./base-suite.en.mdc), [Pro](./pro-suite.en.mdc), [AI](./ai-suite.en.mdc), [Data](./data-suite.en.mdc), [Flow](./flow-suite.en.mdc) — where each cell is a real, interactive component; click its name to open the docs.
 - Per-suite imports: the `@talex-touch/tuffex/base`, `/pro` and `/ai` entries load on demand; the chart family ships behind the `@talex-touch/tuffex/charts` subpath of the same package.
+- Changelog & Lifecycle: See [Component Changelog & Lifecycle](./changelog.en.mdc) for introduction versions (Since xx), per-release component changes, and release gates.
 
 ## Design Foundations
 

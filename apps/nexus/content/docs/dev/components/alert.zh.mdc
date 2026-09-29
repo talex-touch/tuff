@@ -3,7 +3,7 @@ title: Alert 警告
 description: 用于上下文反馈、语义提示和可关闭通知的内联状态横幅。
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [alert, feedback, status]
 syncStatus: reviewed
 verified: true

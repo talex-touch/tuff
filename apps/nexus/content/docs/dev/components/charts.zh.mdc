@@ -3,7 +3,7 @@ title: "Charts 图表"
 description: "@talex-touch/tuffex/charts 总览：kumo 同构的 API 面，Vue 直渲 SVG，无 echarts。"
 category: Charts
 status: beta
-since: 0.1.0
+since: 0.6.0
 tags: [chart, svg, d3, overview]
 syncStatus: reviewed
 verified: true

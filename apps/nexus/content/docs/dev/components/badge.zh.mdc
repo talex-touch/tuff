@@ -3,7 +3,7 @@ title: Badge 徽标
 description: 用于紧凑界面的内联计数、状态和圆点提示。
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [badge, count, status]
 syncStatus: reviewed
 verified: true

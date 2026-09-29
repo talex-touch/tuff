@@ -3,7 +3,7 @@ title: "IconPicker"
 description: "从内置的表情、通用图标、品牌图标或本地文件中选取图标，得到一个标识符字符串。"
 category: Form
 status: beta
-since: 0.4.0
+since: 0.6.0
 tags: [icon, picker, emoji, brand, file]
 syncStatus: reviewed
 verified: true

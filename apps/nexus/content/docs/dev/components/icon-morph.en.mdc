@@ -3,7 +3,7 @@ title: "IconMorph"
 description: "Universal vector morphing for stroke-based icons with 2D Procrustes alignment and spring physics. Any icon morphs into any other smoothly."
 category: Effects
 status: beta
-since: 2.4.14
+since: 0.6.0
 tags: [icon, morph, vector, animation, spring, svg]
 syncStatus: reviewed
 verified: true

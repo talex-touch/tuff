@@ -3,7 +3,7 @@ title: "BotAvatar"
 description: "Animated canvas bot avatars for agents and assistants, with idle and working states, pointer play and per-type bodies"
 category: AiAgent
 status: beta
-since: 0.6.0
+since: 0.6.2
 tags: [avatar, agent, bot, animation, canvas]
 syncStatus: reviewed
 verified: true

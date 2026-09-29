@@ -3,7 +3,7 @@ title: Grid 栅格
 description: 结构化布局与对齐
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [grid, layout, alignment]
 syncStatus: reviewed
 verified: true

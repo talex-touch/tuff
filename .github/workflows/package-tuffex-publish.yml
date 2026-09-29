@@ -114,7 +114,7 @@ jobs:
 
       - name: Audit built package surface
         if: steps.version_check.outputs.should_publish == 'true'
-        run: pnpm -C "packages/tuffex" audit:exports && pnpm -C "packages/tuffex" audit:readme && pnpm -C "packages/tuffex" audit:types && pnpm -C "packages/tuffex" audit:size
+        run: pnpm -C "packages/tuffex" audit:exports && pnpm -C "packages/tuffex" audit:readme && pnpm -C "packages/tuffex" audit:types && pnpm -C "packages/tuffex" audit:size && pnpm -C "packages/tuffex" audit:changelog
 
       - name: Wait for utils dependency
         if: steps.version_check.outputs.should_publish == 'true'

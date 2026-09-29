@@ -3,7 +3,7 @@ title: "FlatInput"
 description: "Low-emphasis text, password, and textarea input with optional prefix content and Caps Lock hinting."
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [input, form, flat]
 syncStatus: reviewed
 verified: true

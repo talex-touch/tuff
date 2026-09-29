@@ -3,7 +3,7 @@ title: "GlassSurface"
 description: "Refractive glass container with SVG displacement, backdrop-filter, and solid fallback rendering paths."
 category: Effects
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [glass, blur, refraction]
 syncStatus: reviewed
 verified: true

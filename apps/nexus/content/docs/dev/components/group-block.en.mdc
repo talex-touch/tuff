@@ -3,7 +3,7 @@ title: "GroupBlock"
 description: "Collapsible settings groups and block rows for preference surfaces."
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [group, layout, settings]
 syncStatus: reviewed
 verified: true

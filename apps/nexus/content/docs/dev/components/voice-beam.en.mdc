@@ -3,7 +3,7 @@ title: "VoiceBeam"
 description: "Audio-reactive glow along the bottom edge of the element it wraps, for voice input, dictation and post-speech processing"
 category: Effects
 status: beta
-since: 0.6.0
+since: 0.6.2
 tags: [voice, audio, glow, mic, dictation, waveform]
 syncStatus: reviewed
 verified: true

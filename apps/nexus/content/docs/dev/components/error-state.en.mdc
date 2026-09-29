@@ -3,7 +3,7 @@ title: "ErrorState"
 description: "Shortcut empty-state component for error scenarios, based on TxEmptyState with `variant=\"error\"`."
 category: Status
 status: beta
-since: 2.4.7
+since: 0.3.4
 tags: [empty, state, error, feedback]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: "CommandPalette 命令面板"
 description: "用于全局快捷指令、插件入口和搜索动作的命令面板。"
 category: Advanced
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [command, palette, launcher, shortcut]
 syncStatus: reviewed
 verified: true

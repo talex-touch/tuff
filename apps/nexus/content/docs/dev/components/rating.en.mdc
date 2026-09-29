@@ -3,7 +3,7 @@ title: Rating
 description: Star rating input
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [rating, star, feedback]
 syncStatus: reviewed
 verified: true
