@@ -10,10 +10,12 @@ export default defineEventHandler(async (event) => {
   const limitValue = typeof query.limit === 'string' ? Number(query.limit) : 200
   const limit = Number.isFinite(limitValue) ? Math.max(10, Math.min(500, limitValue)) : 200
   const country = typeof query.country === 'string' ? query.country : null
+  const version = typeof query.version === 'string' ? query.version : null
 
   return getAdminGeoAnalytics(event, {
     days,
     country,
+    version,
     limit,
   })
 })
