@@ -3,7 +3,7 @@ title: Badge
 description: Inline count, status, and dot indicators for compact UI surfaces.
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [badge, count, status]
 syncStatus: reviewed
 verified: true

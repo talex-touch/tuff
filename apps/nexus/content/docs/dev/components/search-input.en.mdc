@@ -3,7 +3,7 @@ title: "SearchInput"
 description: "Search input with a built-in icon, clear affordance, Enter search, and optional debounced remote search."
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [search, input, form]
 syncStatus: reviewed
 verified: true

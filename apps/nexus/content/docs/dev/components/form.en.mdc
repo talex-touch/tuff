@@ -3,7 +3,7 @@ title: "Form"
 description: "Validated form container and item layout for TuffEx inputs, field messages, and imperative validation flows."
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [form, validation, input]
 syncStatus: reviewed
 verified: true

@@ -3,7 +3,7 @@ title: "GlowText"
 description: "Animated shine overlay for text and compact UI surfaces."
 category: Effects
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [glow, text, animation, highlight]
 syncStatus: reviewed
 verified: true

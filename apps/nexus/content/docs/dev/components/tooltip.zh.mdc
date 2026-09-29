@@ -3,7 +3,7 @@ title: Tooltip 提示
 description: 轻量提示与信息层级
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [tooltip, hint, overlay]
 syncStatus: reviewed
 verified: true

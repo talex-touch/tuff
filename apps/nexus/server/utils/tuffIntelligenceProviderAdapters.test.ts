@@ -1,4 +1,4 @@
-import type { IntelligenceProviderRecord } from './intelligenceStore'
+import type { IntelligenceProviderRecord } from './tuffIntelligenceProviderAdapters'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CREDIT_PRICING, selectCreditPricingRule } from './creditPricingStore'
 import { invokeIntelligenceCapability, streamIntelligenceCapability } from './tuffIntelligenceLabService'
@@ -10,11 +10,10 @@ import {
 
 const storeMocks = vi.hoisted(() => ({
   createAudit: vi.fn(),
-  getSettings: vi.fn(),
 }))
-const providerBridgeMocks = vi.hoisted(() => ({
-  getIntelligenceProviderApiKeyWithRegistryFallback: vi.fn(),
-  listIntelligenceProvidersWithRegistryMirrors: vi.fn(),
+const registryRuntimeMocks = vi.hoisted(() => ({
+  getProviderApiKey: vi.fn(),
+  listRegistryRuntimeProviders: vi.fn(),
 }))
 const creditStoreMocks = vi.hoisted(() => ({
   consumeCredits: vi.fn(),
@@ -32,9 +31,36 @@ const langchainMocks = vi.hoisted(() => ({
 
 vi.mock('./intelligenceStore', async () => {
   const actual = await vi.importActual<typeof import('./intelligenceStore')>('./intelligenceStore')
-  return { ...actual, createAudit: storeMocks.createAudit, getSettings: storeMocks.getSettings }
+  return { ...actual, createAudit: storeMocks.createAudit }
 })
-vi.mock('./intelligenceProviderRegistryBridge', () => providerBridgeMocks)
+vi.mock('./sceneOrchestrator', () => ({
+  resolveCapabilitySceneId: (capability: string) => `nexus.intelligence.${capability}`,
+  resolveSceneProviderCandidates: async (event: unknown, options: { capability: string, ownerId: string }) => {
+    const providers: IntelligenceProviderRecord[] = await registryRuntimeMocks.listRegistryRuntimeProviders(event, options.ownerId)
+    const candidates = providers
+      .filter(provider => provider.enabled && (provider.capabilities ?? []).includes(options.capability))
+      .map(provider => ({
+        provider: {
+          id: provider.id, name: provider.id, displayName: provider.name, vendor: 'custom', status: 'enabled',
+          authType: provider.type === 'local' ? 'none' : 'api_key', authRef: provider.type === 'local' ? null : `secure://providers/${provider.id}`,
+          ownerScope: 'system', ownerId: null, description: null, endpoint: provider.baseUrl, region: null,
+          metadata: { ...(provider.metadata ?? {}), adapterKey: 'openai-compatible', models: provider.models, defaultModel: provider.defaultModel, intelligenceType: provider.type },
+          capabilities: (provider.capabilities ?? []).map(capability => ({ id: `${provider.id}:${capability}`, providerId: provider.id, capability, schemaRef: null, metering: null, constraints: null, metadata: null, createdAt: provider.createdAt, updatedAt: provider.updatedAt })),
+          createdBy: provider.userId, createdAt: provider.createdAt, updatedAt: provider.updatedAt,
+        },
+        binding: { id: `binding:${provider.id}`, sceneId: `nexus.intelligence.${options.capability}`, providerId: provider.id, capability: options.capability, model: provider.defaultModel, priority: provider.priority, weight: null, status: 'enabled', constraints: null, metadata: null, createdAt: provider.createdAt, updatedAt: provider.updatedAt },
+        capability: options.capability, model: provider.defaultModel, adapterKey: 'openai-compatible',
+      }))
+    return { scene: { id: `nexus.intelligence.${options.capability}`, auditPolicy: { persistTrace: true } }, capability: options.capability, candidates, trace: [], fallbackTrail: [] }
+  },
+}))
+vi.mock('./providerCredentialStore', () => ({
+  getProviderCredential: async (event: unknown, authRef: string) => {
+    const providerId = authRef.split('/').pop() ?? ''
+    const apiKey = await registryRuntimeMocks.getProviderApiKey(event, 'user_1', providerId)
+    return apiKey ? { apiKey } : null
+  },
+}))
 vi.mock('./creditsStore', async () => {
   // The price table is a database read even when these tests price with the shipped rules,
   // and the credits fake above never supplies a binding — so the D1 handle is the in-memory
@@ -106,9 +132,8 @@ describe('Nexus provider adapter boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearIntelligenceProviderAdaptersForTest()
-    storeMocks.getSettings.mockResolvedValue({ defaultStrategy: 'priority', enableAudit: true })
-    providerBridgeMocks.getIntelligenceProviderApiKeyWithRegistryFallback.mockResolvedValue('sk-test')
-    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValue([provider()])
+    registryRuntimeMocks.getProviderApiKey.mockResolvedValue('sk-test')
+    registryRuntimeMocks.listRegistryRuntimeProviders.mockResolvedValue([provider()])
     pricingMocks.resolveCreditPricingRule.mockImplementation(
       async (_event: unknown, capability: string) =>
         selectCreditPricingRule(capability, DEFAULT_CREDIT_PRICING),
@@ -317,13 +342,13 @@ describe('Nexus provider adapter boundary', () => {
   })
 
   it('falls back only when the selected provider fails before yielding a delta', async () => {
-    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValueOnce([
+    registryRuntimeMocks.listRegistryRuntimeProviders.mockResolvedValueOnce([
       provider({ id: 'ip_primary', priority: 1 }),
       provider({ id: 'ip_fallback', priority: 2 }),
     ])
     registerIntelligenceProviderStreamAdapterForTest('openai', async function* ({ context }) {
       if (context.provider.id === 'ip_primary')
-        throw new Error('primary temporarily unavailable')
+        throw Object.assign(new Error('primary temporarily unavailable'), { statusCode: 429 })
       yield {
         delta: 'recovered',
         done: false,
@@ -382,7 +407,7 @@ describe('Nexus provider adapter boundary', () => {
   })
 
   it('fails after the first delta rather than replaying output through a fallback provider', async () => {
-    providerBridgeMocks.listIntelligenceProvidersWithRegistryMirrors.mockResolvedValueOnce([
+    registryRuntimeMocks.listRegistryRuntimeProviders.mockResolvedValueOnce([
       provider({ id: 'ip_primary', priority: 1 }),
       provider({ id: 'ip_fallback', priority: 2 }),
     ])

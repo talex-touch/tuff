@@ -2780,6 +2780,59 @@ async function copyInstall() {
       </section>
 
       <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('metal-fx')">
+          {{ cellLabel('MetalFx', '液态金属') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__stack docs-gallery__stack--center">
+              <TxMetalFx preset="chromatic" theme="auto">
+                <span style="display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: 999px; font-size: 13px">Upgrade to Pro</span>
+              </TxMetalFx>
+              <TxMetalBadge>New</TxMetalBadge>
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('voice-beam')">
+          {{ cellLabel('VoiceBeam', '语音光束') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <TxVoiceBeam color-variant="ocean" theme="auto" :border-radius="14">
+              <div class="docs-gallery__beam-card">
+                Ask anything…
+              </div>
+            </TxVoiceBeam>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('image-generation')">
+          {{ cellLabel('ImageGeneration', '生图占位') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <TxImageGeneration preset="pixels-organic">
+              <div style="width: 180px; height: 120px; border-radius: 14px" />
+            </TxImageGeneration>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('code-editor')">
           {{ cellLabel('CodeEditor', '代码编辑器') }}
         </NuxtLink>
@@ -3749,6 +3802,24 @@ async function copyInstall() {
                 :summary="copy.dialogMessage"
                 :input="toolConfirmationInput"
               />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('bot-avatar')">
+          {{ cellLabel('BotAvatar', '机器人头像') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__stack docs-gallery__stack--center">
+              <TxBotAvatar type="clover" state="working" :size="64" />
+              <TxBotAvatar type="mech" state="default" :size="64" />
+              <TxBotAvatar type="star" state="working" :size="64" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />

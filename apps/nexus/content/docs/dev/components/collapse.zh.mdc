@@ -3,7 +3,7 @@ title: Collapse 折叠面板
 description: 可展开内容面板，支持受控展开项、手风琴模式、语义化标题按钮和键盘友好交互。
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [collapse, disclosure, layout]
 syncStatus: reviewed
 verified: true

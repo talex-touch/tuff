@@ -3,7 +3,7 @@ title: "Charts"
 description: "@talex-touch/tuffex/charts overview: a kumo-shaped API surface, Vue-rendered SVG, no echarts."
 category: Charts
 status: beta
-since: 0.1.0
+since: 0.6.0
 tags: [chart, svg, d3, overview]
 syncStatus: reviewed
 verified: true

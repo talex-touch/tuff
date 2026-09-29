@@ -3,7 +3,7 @@ title: Divider
 description: Content grouping, inline separation, and gradient fade separators
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.7
 tags: [divider, separator, layout]
 syncStatus: reviewed
 verified: true

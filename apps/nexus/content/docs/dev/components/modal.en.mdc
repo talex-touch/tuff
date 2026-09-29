@@ -3,7 +3,7 @@ title: Modal
 description: Lightweight Teleport-backed dialog for short blocking tasks, with focus restore, Escape/backdrop dismissal, and header/footer slots.
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [modal, dialog, overlay]
 syncStatus: reviewed
 verified: true

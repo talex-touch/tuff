@@ -3,7 +3,7 @@ title: "GuideState"
 description: "Onboarding shortcut around TxEmptyState with the guide variant preselected, forwarding copy, actions, layout, surface, and named slots."
 category: Status
 status: beta
-since: 2.4.7
+since: 0.3.4
 tags: [empty, state, guide, onboarding]
 syncStatus: reviewed
 verified: true

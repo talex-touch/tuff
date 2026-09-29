@@ -3,7 +3,7 @@ title: "Card 卡片"
 description: "带插槽、材质背景、加载、点击、惯性和折射模式的 surface 容器。"
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [card, surface, layout]
 syncStatus: reviewed
 verified: true

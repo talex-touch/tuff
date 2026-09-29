@@ -3,9 +3,9 @@ import type { ProviderCheckOptions, ProviderCheckResult } from './providerCheck'
 import type { ProviderRegistryRecord } from './providerRegistryStore'
 import { invokeIntelligenceVisionOcr } from './intelligenceVisionOcrProvider'
 import { probeIntelligenceLabProvider } from './tuffIntelligenceLabService'
+import { resolveProviderSceneAdapterKey } from './sceneCapabilityAdapterRegistry'
 
-const INTELLIGENCE_PROVIDER_SOURCE = 'intelligence'
-const DEFAULT_CHECK_CAPABILITY = 'chat.completion'
+const DEFAULT_CHECK_CAPABILITY = 'text.chat'
 const VISION_OCR_CAPABILITY = 'vision.ocr'
 const DEFAULT_OCR_HEALTHCHECK_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l5IaKQAAAABJRU5ErkJggg=='
 
@@ -18,14 +18,9 @@ interface IntelligenceProviderCheckOptions extends ProviderCheckOptions {
   language?: string
 }
 
-function readStringMetadata(metadata: Record<string, unknown> | null | undefined, key: string): string | null {
-  const value = metadata?.[key]
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
-}
 
 function normalizeCapability(value: string | undefined): string {
-  const capability = value?.trim() || DEFAULT_CHECK_CAPABILITY
-  return capability === 'text.chat' ? DEFAULT_CHECK_CAPABILITY : capability
+  return value?.trim() || DEFAULT_CHECK_CAPABILITY
 }
 
 function providerHasCapability(provider: ProviderRegistryRecord, capability: string) {
@@ -69,11 +64,12 @@ function normalizeErrorDetail(error: unknown) {
   }
 }
 
-export function isIntelligenceProviderRegistryMirror(provider: ProviderRegistryRecord): boolean {
-  return provider.metadata?.source === INTELLIGENCE_PROVIDER_SOURCE
+export function isIntelligenceProviderRegistryEntry(provider: ProviderRegistryRecord): boolean {
+  const adapterKey = resolveProviderSceneAdapterKey(provider)
+  return adapterKey === 'openai-compatible' || adapterKey === 'openai-responses'
 }
 
-export async function checkIntelligenceProviderRegistryMirror(
+export async function checkIntelligenceProviderRegistryEntry(
   event: H3Event,
   userId: string,
   provider: ProviderRegistryRecord,
@@ -94,15 +90,15 @@ export async function checkIntelligenceProviderRegistryMirror(
     }
   }
 
-  if (!isIntelligenceProviderRegistryMirror(provider)) {
+  if (!isIntelligenceProviderRegistryEntry(provider)) {
     return {
       success: false,
       providerId: provider.id,
       capability,
       latency: 0,
       endpoint,
-      message: 'Provider check is not supported for this provider.',
-      error: { code: 'PROVIDER_CHECK_UNSUPPORTED', message: 'Provider check is not supported for this provider.' },
+      message: 'Provider check is not supported for this adapter.',
+      error: { code: 'PROVIDER_CHECK_UNSUPPORTED', message: 'Provider check is not supported for this adapter.' },
     }
   }
 
@@ -118,21 +114,6 @@ export async function checkIntelligenceProviderRegistryMirror(
     }
   }
 
-  const intelligenceProviderId = readStringMetadata(provider.metadata, 'intelligenceProviderId')
-  if (!intelligenceProviderId) {
-    return {
-      success: false,
-      providerId: provider.id,
-      capability,
-      latency: 0,
-      endpoint,
-      message: 'Intelligence provider mirror metadata is incomplete.',
-      error: {
-        code: 'PROVIDER_METADATA_INVALID',
-        message: 'Intelligence provider mirror metadata is incomplete.',
-      },
-    }
-  }
 
   const startedAt = Date.now()
   const effectiveUserId = provider.ownerScope === 'user' && provider.ownerId
@@ -187,7 +168,7 @@ export async function checkIntelligenceProviderRegistryMirror(
 
   try {
     const result = await probeIntelligenceLabProvider(event, effectiveUserId, {
-      providerId: intelligenceProviderId,
+      providerId: provider.id,
       model: options.model,
       prompt: options.prompt,
       timeoutMs: options.timeoutMs,

@@ -3,7 +3,7 @@ title: "Spinner"
 description: "A compact loading indicator for inline, overlay, and fallback loading states."
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [spinner, loading, progress]
 syncStatus: reviewed
 verified: true

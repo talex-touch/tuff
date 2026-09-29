@@ -3,7 +3,7 @@ title: "Tree"
 description: "Tree component with filtering, single/multi select, and expand controls."
 category: Data
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [tree, data, hierarchy]
 syncStatus: reviewed
 verified: true

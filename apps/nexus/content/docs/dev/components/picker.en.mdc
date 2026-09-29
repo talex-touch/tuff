@@ -3,7 +3,7 @@ title: "Picker"
 description: "Column picker with popup or inline rendering, toolbar actions, disabled options, and normalized array values."
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [picker, form, wheel, selection]
 syncStatus: reviewed
 verified: true

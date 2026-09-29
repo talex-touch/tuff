@@ -1,0 +1,159 @@
+---
+title: "MetalFx"
+description: "实时 WebGL2 液态金属材质，用于按钮、圆形图标按钮、文字与徽标，带游走的辉光与邻元素反射"
+category: Effects
+status: beta
+since: 0.6.2
+tags: [metal, webgl, button, badge, cta, reflection]
+syncStatus: reviewed
+verified: true
+---
+
+## 用法
+
+`TxMetalFx` 包裹单个宿主元素，用 WebGL2 画布在其上绘制液态金属环。同一页面所有金属共用一份渲染器与一份材质，最后应用的预设与主题生效，因此每页只挑一个预设。
+
+:::TuffDemoWrapper{demo="MetalFxShowcaseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed } from 'vue'
+
+  const colorMode = useColorMode()
+  const metalTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
+  </script>
+
+  <template>
+    <TxMetalFx preset="chromatic" :theme="metalTheme">
+      <a href="#" class="cta">升级到 Pro</a>
+    </TxMetalFx>
+
+    <TxMetalFx variant="circle" preset="chromatic" :theme="metalTheme" inner-shadow :strength="0.9">
+      <button type="button" aria-label="发送" style="width: 40px; height: 40px; border-radius: 999px">↑</button>
+    </TxMetalFx>
+
+    <span>
+      方案
+      <TxMetalText font="500 28px/1.2 Inter, system-ui, sans-serif" color="#e2e2e2">Pro</TxMetalText>
+    </span>
+
+    <TxMetalBadge>New</TxMetalBadge>
+  </template>
+---
+:::
+
+### 变体
+
+`variant="button"` 是 1 px 环的胶囊；`variant="circle"` 是 2 px 环的圆形图标按钮。环半径取自子元素计算后的 `border-radius`；`circle` 始终使用正圆。
+
+```vue
+<template>
+  <TxMetalFx variant="button" preset="silver" :strength="0.7">
+    <a href="/pricing">升级到 Pro</a>
+  </TxMetalFx>
+
+  <TxMetalFx variant="circle" preset="gold" inner-shadow :scale="1.5">
+    <button type="button" aria-label="发送">↑</button>
+  </TxMetalFx>
+</template>
+```
+
+### 文字与徽标
+
+`TxMetalText` 为单个字符串填充金属材质；`TxMetalBadge` 是 `New` 风格的小胶囊。两者固定使用 `chromatic` 材质，并把 `aria-label` 设为自身文本。
+
+```vue
+<template>
+  <TxMetalText font="600 32px/1.1 Inter, sans-serif" color="#e8e8e8">Pro</TxMetalText>
+  <TxMetalBadge>Beta</TxMetalBadge>
+</template>
+```
+
+### 最佳实践
+
+- 图标类子元素必须显式给出宽高；包裹层是 `inline-flex`，尺寸跟随子元素。
+- 子元素背景保持透明。默认 `normalizeHostStyles` 会剥掉子元素的边框、outline 与 box-shadow 并自绘填充；需要自定义填充时写在 `TxMetalFx` 上。
+- 金属元素要彼此拉开。所有实例共用一份材质，两个不同预设或主题会互相打架，两个金属按钮并排会出现两个视觉焦点。
+- 反射只在暗色主题渲染；`reflectionTargets` 只传你确实能持有引用的稳定邻元素。
+- 着色器自身不响应 `prefers-reduced-motion`，需要你传 `paused`（可选 `disableGlow`）。
+- 依赖 WebGL2。不支持时组件把子元素渲染在 `div.metal-fx-fallback[data-metal-fx-unsupported]` 里，不画环。
+
+## API 参考
+
+### 属性
+
+#### TxMetalFx
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `variant` | `'button' \| 'circle'` | `'button'` | 环基线：胶囊 1 px，圆形 2 px。 |
+| `preset` | `'chromatic' \| 'silver' \| 'gold'` | `'chromatic'` | 金属颜色；每个预设都有明暗两套调校。 |
+| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | 选择预设的明/暗侧；`auto` 实时跟随系统偏好。 |
+| `strength` | `number` | `1` | 同时缩放着色器不透明度与辉光 alpha（0-1）。 |
+| `glowGain` | `number` | `1` | 仅作用于辉光的额外倍数，相乘后钳制到 0-1。 |
+| `paused` | `boolean` | `false` | 把该实例冻结在当前帧。 |
+| `borderRadius` | `number` | 自动探测 | 环半径（CSS px）。 |
+| `normalizeHostStyles` | `boolean` | `true` | 剥离子元素的边框 / outline / box-shadow，避免与金属环冲突。 |
+| `reflectionTargets` | `Array<Element \| { ref, strength }>` | 无 | 接收镜像反射的邻元素（仅暗色主题）。 |
+| `disableGlow` | `boolean` | `false` | 移除游走辉光；金属环仍然渲染。 |
+| `innerShadow` | `boolean \| { offsetY, blur, alpha, color }` | 关 | 环顶部内侧的高光边。 |
+| `shaderScale` | `number` | 变体基线 × `scale` | 覆盖着色器采样尺度。 |
+| `ringCssPx` | `number` | 变体基线 × `scale` | 覆盖环厚度（CSS px）。 |
+| `scale` | `number` | `1` | 引擎内部所有绝对像素常量的总倍数。 |
+| `mask` | `(ctx, size) => void` | 无 | 自定义 alpha 遮罩绘制函数，着色器只保留遮罩覆盖处。 |
+| `glowMode` | `'mask' \| 'ring'` | `'mask'` | 设置 `mask` 后辉光的落位方式。 |
+
+#### TxMetalText
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `font` | `string` | 必填 | CSS `font` 简写。 |
+| `color` | `string` | 必填 | 金属下方的底色。 |
+| `strength` | `number` | `1` | 金属不透明度。 |
+| `reflectionTargets` | `Array<Element \| { ref, strength }>` | 无 | 接收金属反射的邻元素。 |
+
+#### TxMetalBadge
+
+无自有属性，仅转发透传属性。
+
+### 插槽
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | - | `TxMetalFx` 需恰好一个宿主元素；`TxMetalText` / `TxMetalBadge` 为标签文本，`TxMetalBadge` 为空时回退为 `New`。 |
+
+### 事件
+
+无组件事件，被包裹的子元素保留自己的事件处理。
+
+### 暴露方法
+
+无公开实例方法。页面级调校所需的引擎原语（`setGlowConfig`、`setCursorLightConfig`、`setBendConfig`、`isMetalFxSupported` 等）由模块导出。
+
+### CSS 变量
+
+| 变量 | 来源 | 说明 |
+|------|------|------|
+| `--metal-strength` | `strength` | 金属层不透明度（0-1）。 |
+| `--metal-glow` | `glowGain` | 辉光 alpha 倍数。 |
+
+## 概述
+
+- 全页共用一份 WebGL2 上下文与一个 `requestAnimationFrame` 循环；主循环约 15 fps 合成。
+- `IntersectionObserver`（64 px 边距）跳过离屏实例，标签页隐藏时循环停止。
+- 亮色主题下反射完全不做工作——不扫描 DOM，也没有逐帧开销。
+- 首帧金属绘制完成前，包裹层与子元素整体不可见；在那之前不要测量或动画化子元素。
+- 光标反射会用精灵图替换系统指针，需要通过 `setCursorSprite` 注册；未注册时保持关闭，且在 `prefers-reduced-motion`、`forced-colors` 与粗指针设备下自动关闭。
+
+## 技术说明
+
+- 已对照 `packages/tuffex/packages/components/src/metal-fx/` 下的 `index.ts`、`TxMetalFx.vue`、`TxMetalText.vue`、`TxMetalBadge.vue`、`types.ts` 与 `metal-fx.test.ts` 人工核验。
+- 整个 `engine/**` 是上游 `metal-fx` v2（MIT © Jakub Antalik）的逐字移植，仅做严格 TS 索引加固；Vue 壳镜像了 React 包裹层的生命周期、测量与清理行为。
+- 依赖 WebGL2；不支持的浏览器得到上文描述的降级结构。
+
+- 组件源码：`packages/tuffex/packages/components/src/metal-fx/src/TxMetalFx.vue`。
+- 类型定义：`packages/tuffex/packages/components/src/metal-fx/src/types.ts`。
+- 上游：[Jakubantalik/Libraries · metal-fx](https://github.com/Jakubantalik/Libraries/tree/main/packages/metal-fx)（MIT）。
+- **覆盖**：`packages/tuffex/packages/components/src/metal-fx/__tests__/metal-fx.test.ts` 验证三个组件、标签、变体基线与 WebGL2 降级路径。
+
+<TuffDocSourceLink />

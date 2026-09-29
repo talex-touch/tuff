@@ -3,7 +3,7 @@ title: "FlatSelect"
 description: "ComboBox-style dropdown selector (`TxFlatSelect` + `TxFlatSelectItem`). Options overlay the trigger, selected item anchors at trigger position, smooth clip-path expand/collapse animation."
 category: Form
 status: beta
-since: 2.4.7
+since: 0.3.4
 tags: [select, flat, form, combobox]
 syncStatus: reviewed
 verified: true

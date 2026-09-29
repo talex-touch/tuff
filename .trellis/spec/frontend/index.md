@@ -42,6 +42,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Plugin Runtime Security](./plugin-runtime-security.md)       | Privileged plugin handlers, views, preload, and Electron policy                      | Filled |
 | [Privacy Data Lifecycle](./privacy-data-lifecycle.md)         | Typed Privacy transport, retention/export, and main-owned credential transactions    | Filled |
 | [Nexus Deployment Secrets](./nexus-preview-secret-deployment.md) | Cloudflare Preview and Production Secret inventory, deploy preflight, runtime policy, and evidence | Filled |
+| [Nexus Provider + Scene Routing](./nexus-provider-scene-routing.md) | Nexus provider SoT, explicit adapters/models, safe fallback, credits, speech and legacy cutover | Filled |
 | [Nexus Docs Rendering](./nexus-docs-rendering-contract.md)    | Docs HTML always embeds the body; payload-key agreement, body-fetch retry rules       | Filled |
 | [Nexus Docs Static Delivery](./nexus-docs-static-delivery.md) | `<route>.html` layout, `_headers` windows and the zone Cache Rule they need, `404.html` + `_redirects`, i18n preload off the hydration path, one nav request | Filled |
 | [Nexus Docs Templates](./nexus-docs-templates.md)           | Templates tab: registration chain, `TemplateFrame` stage contract (slot size, `@enter`, overlay layers, Esc), template demo rules | Filled |
@@ -68,6 +69,7 @@ Before editing frontend code:
 10. Read [Type Safety](./type-safety.md) before changing payloads, event kinds, SDK domains, manifest shapes, or JSON evidence.
 11. Read [Plugin Runtime Security](./plugin-runtime-security.md) before changing plugin windows, hosted plugin views, permission handlers, preload bridges, or plugin Electron preferences.
 12. Read [Privacy Data Lifecycle](./privacy-data-lifecycle.md) before changing Privacy SDK payloads, retention/export owners, Provider or Plugin credential persistence/runtime resolution, Secret backup envelopes, portable credential catalogs, secure-store batch mutation, the sensitive-data inventory, or the isolated Privacy lifecycle smoke.
+12a. Read [Nexus Provider + Scene Routing](./nexus-provider-scene-routing.md) before changing Nexus Provider Registry, Scene bindings, invoke/stream, OCR, ASR/TTS routing, provider credentials, or the Provider Registry admin UI.
 13. Read [Nexus Deployment Secrets](./nexus-preview-secret-deployment.md) before changing Preview or Production variables, Cloudflare Pages credentials, auth/emergency runtime secrets, deployment commands, or deployment evidence.
 14. Read [Native Resource Protocols](./native-resource-protocols.md) before adding native media/file callbacks, worker/IPC byte payloads, custom protocol consumers, or macOS application-icon extraction.
 15. Read [CoreBox Results Contracts](./corebox-results-contracts.md) before changing CoreBox result rows, the selection, the search status or result motion (`useSearch.ts`, `CoreBox.vue`, `BoxItem.vue`, `useSelectionBlock`, `useListFlip`): rows on screen keep their place, an untouched selection stays on row 0, the glow means no rows yet, and every script-driven motion asks one gate.

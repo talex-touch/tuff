@@ -3,7 +3,7 @@ title: "ResizeBox 显式尺寸动画"
 description: "在显式宽高目标之间过渡，并提供动画生命周期事件与可选溢出裁剪。"
 category: Primitives
 status: beta
-since: 1.0.0
+since: 0.3.9
 tags: [resize, layout, animation]
 syncStatus: reviewed
 verified: true

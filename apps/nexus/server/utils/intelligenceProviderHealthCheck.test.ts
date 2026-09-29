@@ -1,8 +1,8 @@
 import type { ProviderRegistryRecord } from './providerRegistryStore'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  checkIntelligenceProviderRegistryMirror,
-  isIntelligenceProviderRegistryMirror,
+  checkIntelligenceProviderRegistryEntry,
+  isIntelligenceProviderRegistryEntry,
 } from './intelligenceProviderHealthCheck'
 
 const labMocks = vi.hoisted(() => ({
@@ -31,16 +31,16 @@ function provider(overrides: Partial<ProviderRegistryRecord> = {}): ProviderRegi
     endpoint: 'https://api.openai.com/v1',
     region: null,
     metadata: {
-      source: 'intelligence',
-      intelligenceProviderId: 'ip_ai_provider_1',
+      source: 'provider-registry',
       intelligenceType: 'openai',
+      adapterKey: 'openai-compatible',
     },
     capabilities: [
       {
         id: 'cap_chat',
         providerId: 'prv_ai_registry',
-        capability: 'chat.completion',
-        schemaRef: 'nexus://schemas/provider/chat-completion.v1',
+        capability: 'text.chat',
+        schemaRef: 'nexus://schemas/provider/text-chat.v1',
         metering: { unit: 'token' },
         constraints: null,
         metadata: null,
@@ -85,13 +85,13 @@ describe('intelligenceProviderHealthCheck', () => {
     })
   })
 
-  it('识别 intelligence registry mirror', () => {
-    expect(isIntelligenceProviderRegistryMirror(provider())).toBe(true)
-    expect(isIntelligenceProviderRegistryMirror(provider({ metadata: { source: 'translation' } }))).toBe(false)
+  it('识别可探测的 intelligence registry provider', () => {
+    expect(isIntelligenceProviderRegistryEntry(provider())).toBe(true)
+    expect(isIntelligenceProviderRegistryEntry(provider({ metadata: { adapterKey: 'tencent-translation' } }))).toBe(false)
   })
 
   it('将 registry provider check 映射到 intelligence provider probe', async () => {
-    const result = await checkIntelligenceProviderRegistryMirror({} as any, 'request-user', provider(), {
+    const result = await checkIntelligenceProviderRegistryEntry({} as never, 'request-user', provider(), {
       capability: 'text.chat',
       model: 'gpt-4.1-mini',
       prompt: 'ping',
@@ -99,7 +99,7 @@ describe('intelligenceProviderHealthCheck', () => {
     })
 
     expect(labMocks.probeIntelligenceLabProvider).toHaveBeenCalledWith(expect.anything(), 'admin-user-1', {
-      providerId: 'ip_ai_provider_1',
+      providerId: 'prv_ai_registry',
       model: 'gpt-4.1-mini',
       prompt: 'ping',
       timeoutMs: 8000,
@@ -107,7 +107,7 @@ describe('intelligenceProviderHealthCheck', () => {
     expect(result).toMatchObject({
       success: true,
       providerId: 'prv_ai_registry',
-      capability: 'chat.completion',
+      capability: 'text.chat',
       latency: 42,
       endpoint: 'langchain:openai:chat',
       requestId: 'trace_ai_probe_1',
@@ -116,7 +116,7 @@ describe('intelligenceProviderHealthCheck', () => {
   })
 
   it('拒绝未声明能力且不调用 provider probe', async () => {
-    const result = await checkIntelligenceProviderRegistryMirror({} as any, 'admin-user-1', provider(), {
+    const result = await checkIntelligenceProviderRegistryEntry({} as never, 'admin-user-1', provider(), {
       capability: 'vision.ocr',
     })
 
@@ -130,7 +130,7 @@ describe('intelligenceProviderHealthCheck', () => {
   })
 
   it('vision.ocr check 调用默认 OCR adapter 而不是 chat probe', async () => {
-    const result = await checkIntelligenceProviderRegistryMirror({} as any, 'request-user', provider({
+    const result = await checkIntelligenceProviderRegistryEntry({} as never, 'request-user', provider({
       capabilities: [
         {
           id: 'cap_vision_ocr',
@@ -178,12 +178,12 @@ describe('intelligenceProviderHealthCheck', () => {
   it('将 probe 失败映射为 provider health check 失败结果', async () => {
     labMocks.probeIntelligenceLabProvider.mockRejectedValueOnce(new Error('Provider API key is missing.'))
 
-    const result = await checkIntelligenceProviderRegistryMirror({} as any, 'admin-user-1', provider())
+    const result = await checkIntelligenceProviderRegistryEntry({} as never, 'admin-user-1', provider())
 
     expect(result).toMatchObject({
       success: false,
       providerId: 'prv_ai_registry',
-      capability: 'chat.completion',
+      capability: 'text.chat',
       endpoint: 'https://api.openai.com/v1',
       error: {
         code: 'AUTH_REQUIRED',

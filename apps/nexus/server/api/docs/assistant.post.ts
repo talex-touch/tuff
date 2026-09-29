@@ -6,13 +6,10 @@ import { networkClient } from '@talex-touch/utils/network'
 import { requireAuth } from '../../utils/auth'
 import { consumeCredits } from '../../utils/creditsStore'
 import { createAssistantMessage, createAssistantSession, getAssistantSession, getLatestAssistantSessionByDoc, updateAssistantSession } from '../../utils/docAssistantStore'
-import {
-  getIntelligenceProviderApiKeyWithRegistryFallback,
-  listIntelligenceProvidersWithRegistryMirrors,
-} from '../../utils/intelligenceProviderRegistryBridge'
-import { createAudit, getSettings, isIpBanned } from '../../utils/intelligenceStore'
+import { createAudit, isIpBanned } from '../../utils/intelligenceStore'
 import { buildOpenAiCompatBaseUrls, resolveProviderBaseUrl } from '../../utils/intelligenceModels'
 import { resolveAuditMeta } from '../../utils/requestAuditMeta'
+import { resolveIntelligenceProviderRuntimeContexts } from '../../utils/tuffIntelligenceLabService'
 
 interface AssistantMessage { role: 'user' | 'assistant'; content: string }
 interface AssistantDoc { title?: string; path?: string; context?: string }
@@ -65,7 +62,7 @@ type StatusStage = 'analyzing' | 'fetching' | 'generating'
 export default defineEventHandler(async (event) => {
   const auditMeta = resolveAuditMeta(event)
   let provider: any = null
-  let settings: Awaited<ReturnType<typeof getSettings>> | null = null
+  let auditEnabled = false
   let userId: string | null = null
 
   try {
@@ -91,36 +88,17 @@ export default defineEventHandler(async (event) => {
       typeof body?.sessionId === 'string' && body.sessionId.trim().length > 0
         ? body.sessionId.trim()
         : null
-    const preferredProviderId =
-      typeof body?.providerId === 'string' && body.providerId.trim().length > 0
-        ? body.providerId.trim()
-        : null
 
-    const providers = await listIntelligenceProvidersWithRegistryMirrors(event, userId)
-    const enabledProviders = providers.filter(provider => provider.enabled)
-    if (!enabledProviders.length) {
-      return fail(event, 'No enabled intelligence providers.')
-    }
-
-    settings = await getSettings(event, userId)
-    provider = resolveProvider(enabledProviders, settings.defaultStrategy, preferredProviderId)
-    if (!provider) {
-      return fail(event, 'Provider not found.')
-    }
-
-    const apiKey =
-      provider.type === IntelligenceProviderType.LOCAL
-        ? null
-        : await getIntelligenceProviderApiKeyWithRegistryFallback(event, userId, provider.id)
-
-    if (!apiKey && provider.type !== IntelligenceProviderType.LOCAL) {
-      return fail(event, 'Provider API key is missing.')
-    }
-
-    if (provider.type === IntelligenceProviderType.LOCAL && !provider.baseUrl) {
-      return fail(event, 'Local provider base URL is missing.')
-    }
-
+    const [runtimeContext] = await resolveIntelligenceProviderRuntimeContexts(event, userId, {
+      capabilityId: 'text.chat',
+      timeoutMs: DEFAULT_TIMEOUT_MS,
+    })
+    if (!runtimeContext)
+      return fail(event, 'No configured provider is available.')
+    provider = runtimeContext.provider
+    const apiKey = runtimeContext.apiKey
+    const model = runtimeContext.model
+    auditEnabled = runtimeContext.auditEnabled
     let session = sessionIdInput
       ? await getAssistantSession(event, userId, sessionIdInput)
       : null
@@ -152,12 +130,12 @@ export default defineEventHandler(async (event) => {
       return await streamAssistantResponse(event, {
         userId,
         provider,
-        settings,
+        auditEnabled,
         apiKey,
         messages: compressedMessages,
         summary,
         doc,
-        model: resolveProviderModel(provider),
+        model,
         sessionId: session.id,
         locale,
         auditMeta,
@@ -170,7 +148,7 @@ export default defineEventHandler(async (event) => {
       messages: compressedMessages,
       summary,
       doc,
-      model: resolveProviderModel(provider)
+      model,
     })
 
     const usage = resolveUsage(response, compressedMessages, doc, summary)
@@ -187,7 +165,7 @@ export default defineEventHandler(async (event) => {
       idempotencyKey: `docs-assistant:${session.id}:${response.traceId}`,
     })
 
-    if (settings.enableAudit && userId) {
+    if (auditEnabled && userId) {
       await recordAudit(event, {
         userId,
         providerId: provider.id,
@@ -218,7 +196,7 @@ export default defineEventHandler(async (event) => {
   }
   catch (error: any) {
     const auditError = error as ProviderChatError
-    if (settings?.enableAudit && userId && provider && typeof auditError?.model === 'string') {
+    if (auditEnabled && userId && provider && typeof auditError?.model === 'string') {
       await recordAudit(event, {
         userId,
         providerId: provider.id,
@@ -499,7 +477,7 @@ async function streamAssistantResponse(
   params: {
     userId: string
     provider: any
-    settings: Awaited<ReturnType<typeof getSettings>>
+    auditEnabled: boolean
     apiKey: string | null
     messages: AssistantMessage[]
     summary?: string
@@ -535,7 +513,7 @@ async function streamAssistantResponse(
       const sendError = async (error: ProviderChatError) => {
         const message = resolveErrorMessage(error)
         send({ type: 'error', message })
-        if (params.settings.enableAudit) {
+        if (params.auditEnabled) {
           await recordAudit(event, {
             userId: params.userId,
             providerId: params.provider.id,
@@ -608,7 +586,7 @@ async function streamAssistantResponse(
             return close()
           }
 
-          if (params.settings.enableAudit) {
+          if (params.auditEnabled) {
             await recordAudit(event, {
               userId: params.userId,
               providerId: params.provider.id,

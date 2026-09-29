@@ -40,4 +40,4 @@ jobs:
       # over budget -- but the command below has run all four for some time, and as of
       # 2026-08-20 audit:types passes and audit:size is green again (border-beam's
       # measured outlier is recorded as a per-file exception in the audit script).
-      post-build-command: pnpm audit:exports && pnpm audit:exports:self-test && pnpm audit:readme && pnpm audit:readme:self-test && pnpm audit:types && pnpm audit:types:self-test && pnpm audit:size && pnpm audit:size:self-test
+      post-build-command: pnpm audit:exports && pnpm audit:exports:self-test && pnpm audit:readme && pnpm audit:readme:self-test && pnpm audit:types && pnpm audit:types:self-test && pnpm audit:size && pnpm audit:size:self-test && pnpm audit:changelog && pnpm audit:changelog:self-test

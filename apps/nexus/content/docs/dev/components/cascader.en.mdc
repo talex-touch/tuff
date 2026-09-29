@@ -4,7 +4,7 @@ description: "Hierarchical single or multiple selector with local search and laz
 category: Form
 syncStatus: reviewed
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [cascader, form, hierarchy]
 verified: true
 ---

@@ -3,7 +3,7 @@ title: Transfer 穿梭框
 description: 在两个列表之间移动并筛选条目
 category: Data
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [transfer, data, permission]
 syncStatus: reviewed
 verified: true

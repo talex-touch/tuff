@@ -1,0 +1,294 @@
+---
+title: Component Changelog & Lifecycle
+description: TuffEx UI library release history, per-version component updates, and full component since index
+category: Foundations
+status: beta
+since: 0.3.4
+tags: [changelog, versions, lifecycle, since, tuffex]
+syncStatus: reviewed
+verified: true
+---
+
+# Component Changelog & Lifecycle
+
+Since its standalone release, all 165 exported components in TuffEx maintain an authoritative Since version. Every version bump is verified by an automated gate (`audit:changelog`), requiring an explicit declaration of impacted components and change notes.
+
+## Overview
+
+The current latest release of TuffEx is **v0.6.2**, exporting a total of **165** components.
+
+- **Base Suite**: 94 general, form, layout, and navigation components
+- **Pro Suite**: 39 advanced interaction, effect, and primitive components
+- **AI Suite**: 32 AI chat, agent, reasoning, and context components
+- **Gate Protection**: Bumping package version without a version chapter or component breakdown will fail CI audits
+
+## Release History
+
+### Version 0.6.2 (2026-09-28)
+
+Interactive visual effects suite and admin data-container enhancements.
+
+- **New Components (4)**: [bot-avatar](./bot-avatar.en.mdc), [image-generation](./image-generation.en.mdc), [metal-fx](./metal-fx.en.mdc), [voice-beam](./voice-beam.en.mdc)
+- **Updated Components (4)**: [card](./card.en.mdc), [empty-state](./empty-state.en.mdc), [progress-bar](./progress-bar.en.mdc), [status-badge](./status-badge.en.mdc)
+- **Key Features**:
+  - Added agent avatars, image-generation reveals, liquid metal effects, and audio-reactive voice beams;
+  - TxProgressBar now supports segmented values, while admin cards and empty states share one container system.
+
+### Version 0.6.1 (2026-09-28)
+
+Operation outcome feedback for short-lived states such as copied, pinned, and failed actions.
+
+- **New Components (1)**: [status-hint](./status-hint.en.mdc)
+- **Key Features**:
+  - TxStatusHint supports tone washes, character-level text morphing, and retrigger emphasis;
+  - Supports light and dark themes, reduced motion, and a single accessible live region.
+
+### Version 0.6.0 (2026-09-12)
+
+Tactile interaction overhaul and visual effects suite release, with stacked toast rewrite and enhanced controls.
+
+- **New Components (12)**: [agent-screen](./agent-screen.en.mdc), [charts](./charts.en.mdc), [choice-card](./choice-card.en.mdc), [flowchart](./flowchart.en.mdc), [fusion-surface](./fusion-surface.en.mdc), [icon-morph](./icon-morph.en.mdc), [icon-picker](./icon-picker.en.mdc), [mode-chip](./mode-chip.en.mdc), [prism-glow](./prism-glow.en.mdc), [sensitive-input](./sensitive-input.en.mdc), [text-morph](./text-morph.en.mdc), [toast-panel](./toast-panel.en.mdc)
+- **Updated Components (17)**: [alert](./alert.en.mdc), [badge](./badge.en.mdc), [cascader](./cascader.en.mdc), [date-picker](./date-picker.en.mdc), [flat-radio](./flat-radio.en.mdc), [group-block](./group-block.en.mdc), [picker](./picker.en.mdc), [progress-bar](./progress-bar.en.mdc), [slider](./slider.en.mdc), [sortable-list](./sortable-list.en.mdc), [stream-markdown](./stream-markdown.en.mdc), [tab-bar](./tab-bar.en.mdc), [text-transformer](./text-transformer.en.mdc), [toast](./toast.en.mdc), [toast-panel](./toast-panel.en.mdc), [transfer](./transfer.en.mdc), [tree](./tree.en.mdc)
+- **Key Features**:
+  - Added TxTextMorph character-level morphing, replacing third-party dependencies;
+  - Rewrote TxToastHost as a stackable toast system with swipe-to-dismiss and countdown pauses;
+  - Added handle and keyboard sorting to TxSortableList with live drag preview;
+  - TxDatePicker and TxCascader support range selection and chained floating panels;
+  - Added the TxPrismGlow visual effect.
+
+### Version 0.5.0 (2026-09-07)
+
+Interaction feedback refinement and performance optimizations.
+
+- **Updated Components (5)**: [card-item](./card-item.en.mdc), [dropdown-menu](./dropdown-menu.en.mdc), [filter-chips](./filter-chips.en.mdc), [slider](./slider.en.mdc), [stream-markdown](./stream-markdown.en.mdc)
+- **Key Features**:
+  - TxFilterChips supports sliding fill and icon-only modes;
+  - Floating panels migrated to transform-based positioning with sizing middleware;
+  - Standardized interactive cursor styles and clean PostCSS build artifacts.
+
+### Version 0.4.0 (2026-09-01)
+
+Component family consolidation and docs migration.
+
+- **Updated Components (2)**: [button](./button.en.mdc), [icon](./icon.en.mdc)
+- **Key Features**:
+  - Consolidated TxButton and TxIcon families, removing legacy subpaths;
+  - Removed deprecated TuffFlatButton in favor of TxButton variant="flat";
+  - Runtime demos and documentation fully migrated to Nexus.
+
+### Version 0.3.9 (2026-06-12)
+
+AI-native suite and on-demand stylesheet architecture.
+
+- **New Components (43)**: [agent-trace](./agent-trace.en.mdc), [ai-elements](./ai-elements.en.mdc), [allocation-bar](./allocation-bar.en.mdc), [approval-card](./approval-card.en.mdc), [attachment-tray](./attachment-tray.en.mdc), [border-beam](./border-beam.en.mdc), [cell-link](./cell-link.en.mdc), [chain-of-thought](./chain-of-thought.en.mdc), [code-stream](./code-stream.en.mdc), [context-cards](./context-cards.en.mdc), [context-indicator](./context-indicator.en.mdc), [conversation-stream](./conversation-stream.en.mdc), [diff-table](./diff-table.en.mdc), [dot-indicator](./dot-indicator.en.mdc), [filter-chips](./filter-chips.en.mdc), [fine-tune-card](./fine-tune-card.en.mdc), [flat-dropdown](./flat-dropdown.en.mdc), [icon-chip](./icon-chip.en.mdc), [inline-citation](./inline-citation.en.mdc), [insight-cards](./insight-cards.en.mdc), [liquid](./liquid.en.mdc), [markdown-editor](./markdown-editor.en.mdc), [message-actions](./message-actions.en.mdc), [prompt-bar](./prompt-bar.en.mdc), [reasoning-disclosure](./reasoning-disclosure.en.mdc), [recommendation-card](./recommendation-card.en.mdc), [resize-box](./resize-box.en.mdc), [scrub-field](./scrub-field.en.mdc), [search-panel](./search-panel.en.mdc), [selection-actions](./selection-actions.en.mdc), [sidebar-nav](./sidebar-nav.en.mdc), [signal-meter](./signal-meter.en.mdc), [sources](./sources.en.mdc), [spark-chart](./spark-chart.en.mdc), [stream-markdown](./stream-markdown.en.mdc), [suggestion-chips](./suggestion-chips.en.mdc), [task-rows](./task-rows.en.mdc), [thinking-orb](./thinking-orb.en.mdc), [tool-call-card](./tool-call-card.en.mdc), [tool-chips](./tool-chips.en.mdc), [tool-confirmation](./tool-confirmation.en.mdc), [version-capsule](./version-capsule.en.mdc), [working-indicator](./working-indicator.en.mdc)
+- **Updated Components (8)**: [base-anchor](./base-anchor.en.mdc), [base-surface](./base-surface.en.mdc), [code-editor](./code-editor.en.mdc), [empty-state](./empty-state.en.mdc), [flip-overlay](./flip-overlay.en.mdc), [radio](./radio.en.mdc), [scroll](./scroll.en.mdc), [tabs](./tabs.en.mdc)
+- **Key Features**:
+  - Shipped 43 AI chat, agent, and reasoning components;
+  - Added @talex-touch/tuffex/<component> subpath exports;
+  - Introduced base.css for shared token and utility loading.
+
+### Version 0.3.8 (2026-05-29)
+
+Drawer and divider enhancements.
+
+- **Updated Components (2)**: [divider](./divider.en.mdc), [drawer](./drawer.en.mdc)
+- **Key Features**:
+  - TxDrawer supports 4-direction slideout and full-screen modal;
+  - TxDivider introduces gradient alpha fade mode.
+
+### Version 0.3.7 (2026-05-28)
+
+Foundational input and layout batch.
+
+- **New Components (4)**: [divider](./divider.en.mdc), [kbd](./kbd.en.mdc), [number-input](./number-input.en.mdc), [textarea](./textarea.en.mdc)
+- **Updated Components (16)**: [avatar](./avatar.en.mdc), [chat](./chat.en.mdc), [flat-input](./flat-input.en.mdc), [flat-radio](./flat-radio.en.mdc), [flat-select](./flat-select.en.mdc), [flip-overlay](./flip-overlay.en.mdc), [glass-surface](./glass-surface.en.mdc), [group-block](./group-block.en.mdc), [icon](./icon.en.mdc), [input](./input.en.mdc), [scroll](./scroll.en.mdc), [slider](./slider.en.mdc), [stagger](./stagger.en.mdc), [stat-card](./stat-card.en.mdc), [tabs](./tabs.en.mdc), [transfer](./transfer.en.mdc)
+- **Key Features**:
+  - Added TxTextarea, TxNumberInput, TxDivider, TxKbd, and TxTransfer;
+  - Fixed client hydration parity under SSR.
+
+### Version 0.3.4 (2026-03-08)
+
+Initial standalone package baseline.
+
+- **Initial Components (101)**: Established the baseline export of 101 core UI components across basic, form, layout, and navigation categories.
+
+## Component Since Index
+
+The following table lists the introduction version (Since) and suite for all 161 exported TuffEx components.
+
+| Component (Slug) | Suite | Since Version | Documentation |
+|---|---|---|---|
+| `agent-screen` | ai | **0.6.0** | [Read Docs](./agent-screen.en.mdc) |
+| `agent-trace` | ai | **0.3.9** | [Read Docs](./agent-trace.en.mdc) |
+| `agents` | ai | **0.3.4** | [Read Docs](./agents.en.mdc) |
+| `ai-elements` | ai | **0.3.9** | [Read Docs](./ai-elements.en.mdc) |
+| `alert` | base | **0.3.4** | [Read Docs](./alert.en.mdc) |
+| `allocation-bar` | pro | **0.3.9** | [Read Docs](./allocation-bar.en.mdc) |
+| `approval-card` | ai | **0.3.9** | [Read Docs](./approval-card.en.mdc) |
+| `attachment-tray` | ai | **0.3.9** | [Read Docs](./attachment-tray.en.mdc) |
+| `auto-sizer` | pro | **0.3.4** | [Read Docs](./auto-sizer.en.mdc) |
+| `avatar` | base | **0.3.4** | [Read Docs](./avatar.en.mdc) |
+| `badge` | base | **0.3.4** | [Read Docs](./badge.en.mdc) |
+| `base-anchor` | pro | **0.3.4** | [Read Docs](./base-anchor.en.mdc) |
+| `base-surface` | pro | **0.3.4** | [Read Docs](./base-surface.en.mdc) |
+| `blank-slate` | base | **0.3.4** | [Read Docs](./blank-slate.en.mdc) |
+| `border-beam` | pro | **0.3.9** | [Read Docs](./border-beam.en.mdc) |
+| `bot-avatar` | ai | **0.6.2** | [Read Docs](./bot-avatar.en.mdc) |
+| `breadcrumb` | base | **0.3.4** | [Read Docs](./breadcrumb.en.mdc) |
+| `button` | base | **0.3.4** | [Read Docs](./button.en.mdc) |
+| `card` | base | **0.3.4** | [Read Docs](./card.en.mdc) |
+| `card-item` | base | **0.3.4** | [Read Docs](./card-item.en.mdc) |
+| `cascader` | base | **0.3.4** | [Read Docs](./cascader.en.mdc) |
+| `cell-link` | base | **0.3.9** | [Read Docs](./cell-link.en.mdc) |
+| `chain-of-thought` | ai | **0.3.9** | [Read Docs](./chain-of-thought.en.mdc) |
+| `charts` | pro | **0.6.0** | [Read Docs](./charts.en.mdc) |
+| `chat` | ai | **0.3.4** | [Read Docs](./chat.en.mdc) |
+| `checkbox` | base | **0.3.4** | [Read Docs](./checkbox.en.mdc) |
+| `choice-card` | ai | **0.6.0** | [Read Docs](./choice-card.en.mdc) |
+| `code-editor` | pro | **0.3.4** | [Read Docs](./code-editor.en.mdc) |
+| `code-stream` | ai | **0.3.9** | [Read Docs](./code-stream.en.mdc) |
+| `collapse` | base | **0.3.4** | [Read Docs](./collapse.en.mdc) |
+| `command-palette` | pro | **0.3.4** | [Read Docs](./command-palette.en.mdc) |
+| `container` | base | **0.3.4** | [Read Docs](./container.en.mdc) |
+| `context-cards` | ai | **0.3.9** | [Read Docs](./context-cards.en.mdc) |
+| `context-indicator` | ai | **0.3.9** | [Read Docs](./context-indicator.en.mdc) |
+| `context-menu` | base | **0.3.4** | [Read Docs](./context-menu.en.mdc) |
+| `conversation-stream` | ai | **0.3.9** | [Read Docs](./conversation-stream.en.mdc) |
+| `corner-overlay` | pro | **0.3.4** | [Read Docs](./corner-overlay.en.mdc) |
+| `data-table` | base | **0.3.4** | [Read Docs](./data-table.en.mdc) |
+| `date-picker` | base | **0.3.4** | [Read Docs](./date-picker.en.mdc) |
+| `dialog` | base | **0.3.4** | [Read Docs](./dialog.en.mdc) |
+| `diff-table` | pro | **0.3.9** | [Read Docs](./diff-table.en.mdc) |
+| `divider` | base | **0.3.7** | [Read Docs](./divider.en.mdc) |
+| `dot-indicator` | base | **0.3.9** | [Read Docs](./dot-indicator.en.mdc) |
+| `drawer` | base | **0.3.4** | [Read Docs](./drawer.en.mdc) |
+| `dropdown-menu` | base | **0.3.4** | [Read Docs](./dropdown-menu.en.mdc) |
+| `edge-fade-mask` | pro | **0.3.4** | [Read Docs](./edge-fade-mask.en.mdc) |
+| `empty` | base | **0.3.4** | [Read Docs](./empty.en.mdc) |
+| `empty-state` | base | **0.3.4** | [Read Docs](./empty-state.en.mdc) |
+| `error-state` | base | **0.3.4** | [Read Docs](./error-state.en.mdc) |
+| `file-uploader` | base | **0.3.4** | [Read Docs](./file-uploader.en.mdc) |
+| `filter-chips` | base | **0.3.9** | [Read Docs](./filter-chips.en.mdc) |
+| `fine-tune-card` | ai | **0.3.9** | [Read Docs](./fine-tune-card.en.mdc) |
+| `flat-dropdown` | base | **0.3.9** | [Read Docs](./flat-dropdown.en.mdc) |
+| `flat-input` | base | **0.3.4** | [Read Docs](./flat-input.en.mdc) |
+| `flat-radio` | base | **0.3.4** | [Read Docs](./flat-radio.en.mdc) |
+| `flat-select` | base | **0.3.4** | [Read Docs](./flat-select.en.mdc) |
+| `flex` | base | **0.3.4** | [Read Docs](./flex.en.mdc) |
+| `flip-overlay` | pro | **0.3.4** | [Read Docs](./flip-overlay.en.mdc) |
+| `floating` | pro | **0.3.4** | [Read Docs](./floating.en.mdc) |
+| `flowchart` | ai | **0.6.0** | [Read Docs](./flowchart.en.mdc) |
+| `form` | base | **0.3.4** | [Read Docs](./form.en.mdc) |
+| `fusion` | pro | **0.3.4** | [Read Docs](./fusion.en.mdc) |
+| `fusion-surface` | pro | **0.6.0** | [Read Docs](./fusion-surface.en.mdc) |
+| `glass-surface` | pro | **0.3.4** | [Read Docs](./glass-surface.en.mdc) |
+| `glow-text` | pro | **0.3.4** | [Read Docs](./glow-text.en.mdc) |
+| `gradient-border` | pro | **0.3.4** | [Read Docs](./gradient-border.en.mdc) |
+| `gradual-blur` | pro | **0.3.4** | [Read Docs](./gradual-blur.en.mdc) |
+| `grid` | base | **0.3.4** | [Read Docs](./grid.en.mdc) |
+| `grid-layout` | base | **0.3.4** | [Read Docs](./grid-layout.en.mdc) |
+| `group-block` | base | **0.3.4** | [Read Docs](./group-block.en.mdc) |
+| `guide-state` | base | **0.3.4** | [Read Docs](./guide-state.en.mdc) |
+| `icon` | base | **0.3.4** | [Read Docs](./icon.en.mdc) |
+| `icon-chip` | base | **0.3.9** | [Read Docs](./icon-chip.en.mdc) |
+| `icon-morph` | pro | **0.6.0** | [Read Docs](./icon-morph.en.mdc) |
+| `icon-picker` | base | **0.6.0** | [Read Docs](./icon-picker.en.mdc) |
+| `image-gallery` | base | **0.3.4** | [Read Docs](./image-gallery.en.mdc) |
+| `image-generation` | pro | **0.6.2** | [Read Docs](./image-generation.en.mdc) |
+| `image-uploader` | base | **0.3.4** | [Read Docs](./image-uploader.en.mdc) |
+| `inline-citation` | ai | **0.3.9** | [Read Docs](./inline-citation.en.mdc) |
+| `input` | base | **0.3.4** | [Read Docs](./input.en.mdc) |
+| `insight-cards` | ai | **0.3.9** | [Read Docs](./insight-cards.en.mdc) |
+| `kbd` | base | **0.3.7** | [Read Docs](./kbd.en.mdc) |
+| `keyframe-stroke-text` | pro | **0.3.4** | [Read Docs](./keyframe-stroke-text.en.mdc) |
+| `layout-skeleton` | base | **0.3.4** | [Read Docs](./layout-skeleton.en.mdc) |
+| `liquid` | pro | **0.3.9** | [Read Docs](./liquid.en.mdc) |
+| `loading-overlay` | base | **0.3.4** | [Read Docs](./loading-overlay.en.mdc) |
+| `loading-state` | base | **0.3.4** | [Read Docs](./loading-state.en.mdc) |
+| `markdown-editor` | pro | **0.3.9** | [Read Docs](./markdown-editor.en.mdc) |
+| `markdown-view` | base | **0.3.4** | [Read Docs](./markdown-view.en.mdc) |
+| `message-actions` | ai | **0.3.9** | [Read Docs](./message-actions.en.mdc) |
+| `metal-fx` | pro | **0.6.2** | [Read Docs](./metal-fx.en.mdc) |
+| `modal` | base | **0.3.4** | [Read Docs](./modal.en.mdc) |
+| `mode-chip` | ai | **0.6.0** | [Read Docs](./mode-chip.en.mdc) |
+| `nav-bar` | base | **0.3.4** | [Read Docs](./nav-bar.en.mdc) |
+| `no-data` | base | **0.3.4** | [Read Docs](./no-data.en.mdc) |
+| `no-selection` | base | **0.3.4** | [Read Docs](./no-selection.en.mdc) |
+| `number-input` | base | **0.3.7** | [Read Docs](./number-input.en.mdc) |
+| `offline-state` | base | **0.3.4** | [Read Docs](./offline-state.en.mdc) |
+| `outline-border` | pro | **0.3.4** | [Read Docs](./outline-border.en.mdc) |
+| `pagination` | base | **0.3.4** | [Read Docs](./pagination.en.mdc) |
+| `permission-state` | base | **0.3.4** | [Read Docs](./permission-state.en.mdc) |
+| `picker` | base | **0.3.4** | [Read Docs](./picker.en.mdc) |
+| `popover` | base | **0.3.4** | [Read Docs](./popover.en.mdc) |
+| `prism-glow` | pro | **0.6.0** | [Read Docs](./prism-glow.en.mdc) |
+| `progress` | base | **0.3.4** | [Read Docs](./progress.en.mdc) |
+| `progress-bar` | base | **0.3.4** | [Read Docs](./progress-bar.en.mdc) |
+| `prompt-bar` | ai | **0.3.9** | [Read Docs](./prompt-bar.en.mdc) |
+| `radio` | base | **0.3.4** | [Read Docs](./radio.en.mdc) |
+| `rating` | base | **0.3.4** | [Read Docs](./rating.en.mdc) |
+| `reasoning-disclosure` | ai | **0.3.9** | [Read Docs](./reasoning-disclosure.en.mdc) |
+| `recommendation-card` | ai | **0.3.9** | [Read Docs](./recommendation-card.en.mdc) |
+| `resize-box` | pro | **0.3.9** | [Read Docs](./resize-box.en.mdc) |
+| `scroll` | base | **0.3.4** | [Read Docs](./scroll.en.mdc) |
+| `scrub-field` | base | **0.3.9** | [Read Docs](./scrub-field.en.mdc) |
+| `search-empty` | base | **0.3.4** | [Read Docs](./search-empty.en.mdc) |
+| `search-input` | base | **0.3.4** | [Read Docs](./search-input.en.mdc) |
+| `search-panel` | pro | **0.3.9** | [Read Docs](./search-panel.en.mdc) |
+| `search-select` | base | **0.3.4** | [Read Docs](./search-select.en.mdc) |
+| `segmented-slider` | base | **0.3.4** | [Read Docs](./segmented-slider.en.mdc) |
+| `select` | base | **0.3.4** | [Read Docs](./select.en.mdc) |
+| `selection-actions` | base | **0.3.9** | [Read Docs](./selection-actions.en.mdc) |
+| `sensitive-input` | base | **0.6.0** | [Read Docs](./sensitive-input.en.mdc) |
+| `sidebar-nav` | base | **0.3.9** | [Read Docs](./sidebar-nav.en.mdc) |
+| `signal-meter` | pro | **0.3.9** | [Read Docs](./signal-meter.en.mdc) |
+| `skeleton` | base | **0.3.4** | [Read Docs](./skeleton.en.mdc) |
+| `slider` | base | **0.3.4** | [Read Docs](./slider.en.mdc) |
+| `sortable-list` | base | **0.3.4** | [Read Docs](./sortable-list.en.mdc) |
+| `sources` | ai | **0.3.9** | [Read Docs](./sources.en.mdc) |
+| `spark-chart` | pro | **0.3.9** | [Read Docs](./spark-chart.en.mdc) |
+| `spinner` | base | **0.3.4** | [Read Docs](./spinner.en.mdc) |
+| `splitter` | base | **0.3.4** | [Read Docs](./splitter.en.mdc) |
+| `stack` | base | **0.3.4** | [Read Docs](./stack.en.mdc) |
+| `stagger` | pro | **0.3.4** | [Read Docs](./stagger.en.mdc) |
+| `stat-card` | base | **0.3.4** | [Read Docs](./stat-card.en.mdc) |
+| `status-badge` | base | **0.3.4** | [Read Docs](./status-badge.en.mdc) |
+| `status-hint` | base | **0.6.1** | [Read Docs](./status-hint.en.mdc) |
+| `steps` | base | **0.3.4** | [Read Docs](./steps.en.mdc) |
+| `stream-markdown` | ai | **0.3.9** | [Read Docs](./stream-markdown.en.mdc) |
+| `suggestion-chips` | ai | **0.3.9** | [Read Docs](./suggestion-chips.en.mdc) |
+| `switch` | base | **0.3.4** | [Read Docs](./switch.en.mdc) |
+| `tab-bar` | base | **0.3.4** | [Read Docs](./tab-bar.en.mdc) |
+| `tabs` | base | **0.3.4** | [Read Docs](./tabs.en.mdc) |
+| `tag` | base | **0.3.4** | [Read Docs](./tag.en.mdc) |
+| `tag-input` | base | **0.3.4** | [Read Docs](./tag-input.en.mdc) |
+| `task-rows` | ai | **0.3.9** | [Read Docs](./task-rows.en.mdc) |
+| `text-morph` | pro | **0.6.0** | [Read Docs](./text-morph.en.mdc) |
+| `text-transformer` | pro | **0.3.4** | [Read Docs](./text-transformer.en.mdc) |
+| `textarea` | base | **0.3.7** | [Read Docs](./textarea.en.mdc) |
+| `thinking-orb` | ai | **0.3.9** | [Read Docs](./thinking-orb.en.mdc) |
+| `timeline` | base | **0.3.4** | [Read Docs](./timeline.en.mdc) |
+| `toast` | base | **0.3.4** | [Read Docs](./toast.en.mdc) |
+| `toast-panel` | base | **0.6.0** | [Read Docs](./toast-panel.en.mdc) |
+| `tool-call-card` | ai | **0.3.9** | [Read Docs](./tool-call-card.en.mdc) |
+| `tool-chips` | ai | **0.3.9** | [Read Docs](./tool-chips.en.mdc) |
+| `tool-confirmation` | ai | **0.3.9** | [Read Docs](./tool-confirmation.en.mdc) |
+| `tooltip` | base | **0.3.4** | [Read Docs](./tooltip.en.mdc) |
+| `transfer` | base | **0.3.4** | [Read Docs](./transfer.en.mdc) |
+| `transition` | pro | **0.3.4** | [Read Docs](./transition.en.mdc) |
+| `tree` | base | **0.3.4** | [Read Docs](./tree.en.mdc) |
+| `tree-select` | base | **0.3.4** | [Read Docs](./tree-select.en.mdc) |
+| `tuff-logo-stroke` | pro | **0.3.4** | [Read Docs](./tuff-logo-stroke.en.mdc) |
+| `version-capsule` | pro | **0.3.9** | [Read Docs](./version-capsule.en.mdc) |
+| `virtual-list` | pro | **0.3.4** | [Read Docs](./virtual-list.en.mdc) |
+| `voice-beam` | pro | **0.6.2** | [Read Docs](./voice-beam.en.mdc) |
+| `working-indicator` | ai | **0.3.9** | [Read Docs](./working-indicator.en.mdc) |
+
+## Version Gate and Standards
+
+TuffEx enforces pre-publish verification gates to keep releases transparent:
+
+- **Synchronized Version Chapter**: Bumping package.json requires a corresponding chapter in CHANGELOG.md and this page;
+- **Component Breakdown Required**: Each version chapter must state which components were added or modified;
+- **Valid Since Attributes**: Component doc headers and this index must agree, prohibiting speculative future versions;
+- **Cross-Language Parity**: Heading structures between Chinese and English pages are strictly aligned and checked in CI.

@@ -3,7 +3,7 @@ title: "FileUploader"
 description: "Controlled file picker and drag-drop uploader with max-count limiting, file list rendering, and remove events."
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [upload, file, form]
 syncStatus: reviewed
 verified: true

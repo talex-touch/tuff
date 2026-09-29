@@ -32,6 +32,7 @@ import {
   providerServiceCategoryOptions,
   providerStatusOptions,
   providerObservabilityFilters,
+  providerCapabilityCatalogOptions,
   providerRegistryTemplates,
   providerVendorOptions,
   observabilityTone,
@@ -73,6 +74,7 @@ import {
   type ProviderServiceCategory,
   type ProviderRegistryTemplateId,
   type ProviderStatus,
+  type SceneCapabilityAdapterCatalogEntry,
   type ProviderUsageLedgerEntry,
   type SceneEditPanelState,
   type SceneFallback,
@@ -103,6 +105,7 @@ export function useProviderRegistryAdmin() {
 
   const activeTab = ref('providers')
   const providers = ref<ProviderRegistryRecord[]>([])
+  const adapterCatalog = ref<SceneCapabilityAdapterCatalogEntry[]>([])
   const capabilities = ref<ProviderCapabilityRecord[]>([])
   const scenes = ref<SceneRegistryRecord[]>([])
   const usageEntries = ref<ProviderUsageLedgerEntry[]>([])
@@ -133,6 +136,7 @@ export function useProviderRegistryAdmin() {
     name: initialProviderTemplate.name,
     displayName: initialProviderTemplate.displayName,
     vendor: initialProviderTemplate.vendor,
+    adapterKey: initialProviderTemplate.adapterKey,
     status: 'disabled' as ProviderStatus,
     authType: initialProviderTemplate.authType,
     authRef: createProviderAuthRef(initialProviderTemplate.name),
@@ -163,6 +167,7 @@ export function useProviderRegistryAdmin() {
     {
       providerId: '',
       capability: 'image.translate.e2e',
+      model: initialProviderTemplate.defaultModel ?? '',
       priority: 10,
     },
   ])
@@ -255,8 +260,12 @@ export function useProviderRegistryAdmin() {
       label: template.displayName,
     })))
   const activeProviderTemplate = computed(() => providerRegistryTemplates.find(template => template.id === providerTemplateId.value) ?? null)
-  const providerCapabilityTemplateOptions = computed(() => activeProviderTemplate.value?.capabilities.map(row => ({ ...row })) ?? [])
-  const providerMeteringUnitOptions = computed(() => Array.from(new Set(providerCapabilityTemplateOptions.value.map(row => row.meteringUnit))))
+  const providerCapabilityTemplateOptions = computed(() => providerCapabilityCatalogOptions.map(row => ({ ...row })))
+  const providerMeteringUnitOptions = computed(() => Array.from(new Set(providerCapabilityCatalogOptions.map(row => row.meteringUnit))))
+  const providerAdapterOptions = computed(() => adapterCatalog.value.map(adapter => ({
+    value: adapter.key,
+    label: adapter.label,
+  })))
 
   function applyProviderTemplate(templateId: unknown) {
     const template = providerRegistryTemplates.find(item => item.id === String(templateId))
@@ -269,6 +278,7 @@ export function useProviderRegistryAdmin() {
     providerForm.displayName = template.displayName
     providerForm.vendor = template.vendor
     providerForm.status = 'disabled'
+    providerForm.adapterKey = template.adapterKey
     providerForm.authType = template.authType
     providerForm.authRef = createProviderAuthRef(template.name)
     providerForm.ownerScope = 'system'
@@ -325,7 +335,7 @@ export function useProviderRegistryAdmin() {
   }
 
   function addBindingRow() {
-    bindingRows.value.push({ providerId: providers.value[0]?.id ?? '', capability: '', priority: 100 })
+    bindingRows.value.push({ providerId: providers.value[0]?.id ?? '', capability: '', model: '', priority: 100 })
   }
 
   function removeBindingRow(index: number) {
@@ -398,6 +408,7 @@ export function useProviderRegistryAdmin() {
     getSceneEditPanel(scene).bindings.push({
       providerId: providers.value[0]?.id ?? '',
       capability: scene.requiredCapabilities[0] ?? '',
+      model: '',
       priority: 100,
       weightText: '',
       status: 'enabled',
@@ -504,6 +515,23 @@ export function useProviderRegistryAdmin() {
     return providerOptions.value.filter(provider => providerIds.has(provider.value))
   }
 
+  function bindingModelOptions(providerId: string) {
+    const provider = providers.value.find(item => item.id === providerId)
+    const models = provider?.metadata?.models
+    return Array.isArray(models)
+      ? models.filter((model): model is string => typeof model === 'string' && model.trim().length > 0)
+      : []
+  }
+
+  function parseProviderModels(value: string) {
+    return Array.from(new Set(parseCommaList(value.replace(/\n/g, ','))))
+  }
+
+  function assertDefaultModel(models: string[], defaultModel: string) {
+    if (defaultModel && !models.includes(defaultModel))
+      throw new Error('Default model must be included in the provider model list.')
+  }
+
   function getSceneRunPanel(scene: SceneRegistryRecord): SceneRunPanelState {
     let panel = sceneRunPanels[scene.id]
     if (!panel) {
@@ -582,6 +610,7 @@ export function useProviderRegistryAdmin() {
         sceneObservabilityService.loadRegistryCollections(),
       ])
       providers.value = providerResult.providers ?? []
+      adapterCatalog.value = providerResult.adapters ?? []
       capabilities.value = registryData.capabilities
       scenes.value = registryData.scenes
       usageEntries.value = registryData.usageEntries
@@ -619,6 +648,7 @@ export function useProviderRegistryAdmin() {
         && providerForm.secretId.trim()
         && providerForm.secretKey.trim()
       const hasCredentialInput = Boolean(hasApiKeyInput || hasSecretPairInput)
+      assertDefaultModel(parseProviderModels(providerForm.modelsText), providerForm.defaultModel.trim())
       const body = {
         name: providerForm.name.trim(),
         displayName: providerForm.displayName.trim(),
@@ -632,7 +662,8 @@ export function useProviderRegistryAdmin() {
         metadata: mergeJsonObjects(
           providerRegistryTemplates.find(item => item.id === providerTemplateId.value)?.metadata ?? null,
           {
-            models: parseCommaList(providerForm.modelsText.replace(/\n/g, ',')),
+            adapterKey: providerForm.adapterKey,
+            models: parseProviderModels(providerForm.modelsText),
             defaultModel: providerForm.defaultModel.trim() || null,
           },
         ),
@@ -772,6 +803,7 @@ export function useProviderRegistryAdmin() {
     panel.error = null
     error.value = null
     try {
+      assertDefaultModel(parseProviderModels(panel.modelsText), panel.defaultModel.trim())
       const body = {
         name: panel.name.trim(),
         displayName: panel.displayName.trim(),
@@ -787,7 +819,8 @@ export function useProviderRegistryAdmin() {
         metadata: mergeJsonObjects(
           parseJsonObjectField(panel.metadataText, 'provider.metadata'),
           {
-            models: parseCommaList(panel.modelsText.replace(/\n/g, ',')),
+            adapterKey: panel.adapterKey,
+            models: parseProviderModels(panel.modelsText),
             defaultModel: panel.defaultModel.trim() || null,
           },
         ),
@@ -894,6 +927,7 @@ export function useProviderRegistryAdmin() {
           .map(row => ({
             providerId: row.providerId,
             capability: row.capability.trim(),
+            model: row.model.trim() || undefined,
             priority: Number(row.priority) || 100,
           })),
       }
@@ -950,6 +984,7 @@ export function useProviderRegistryAdmin() {
           .map((row, index) => ({
             providerId: row.providerId,
             capability: row.capability.trim(),
+            model: row.model.trim() || undefined,
             priority: Number(row.priority) || 100,
             weight: row.weightText.trim() ? Number(row.weightText) : undefined,
             status: row.status,
@@ -1036,6 +1071,8 @@ export function useProviderRegistryAdmin() {
   })
 
   return {
+    adapterCatalog,
+    bindingModelOptions,
     activeTab,
     actionPending,
     addBindingRow,
@@ -1100,6 +1137,7 @@ export function useProviderRegistryAdmin() {
     providerObservabilityEmptyState,
     providerOptions,
     providerCapabilityTemplateOptions,
+    providerAdapterOptions,
     providerMeteringUnitOptions,
     providerStatusOptions,
     providerServiceCategoryId,

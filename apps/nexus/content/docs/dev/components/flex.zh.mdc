@@ -3,7 +3,7 @@ title: Flex 弹性布局
 description: 低层级 Flexbox 容器，显式控制方向、对齐、换行和间距。
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [flex, layout]
 syncStatus: reviewed
 verified: true

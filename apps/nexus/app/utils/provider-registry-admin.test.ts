@@ -156,6 +156,7 @@ describe('provider registry adapter readiness helpers', () => {
             providerId: 'provider-a',
             vendor: 'openai',
             capability: 'text.translate',
+            adapterKey: 'openai-compatible',
             ready: false,
             matchedKey: null,
             fallbackKey: 'openai:text.translate',
@@ -322,7 +323,7 @@ describe('provider registry capability template UI contract', () => {
 
 describe('provider registry provider templates', () => {
   it('includes AI provider templates so Intelligence configuration starts in Provider Registry', () => {
-    const aiTemplates = providerRegistryTemplates.filter(template => template.metadata.source === 'intelligence')
+    const aiTemplates = providerRegistryTemplates.filter(template => template.serviceCategory === 'ai')
     const chatAbility = getTuffIntelligenceBuiltinAbility('text.chat')
 
     expect(aiTemplates.map(template => template.id)).toEqual(
@@ -340,12 +341,12 @@ describe('provider registry provider templates', () => {
       expect(template.authType).toBe('api_key')
       expect(template.authRef).toMatch(/^secure:\/\/providers\//)
       expect(template.metadata).toMatchObject({
-        source: 'intelligence',
-        routingShape: 'providers-scenes',
+        source: 'provider-registry',
+        adapterKey: template.adapterKey,
       })
     }
     expect(aiTemplates.find(template => template.id === 'openai-responses-ai')?.metadata).toMatchObject({
-      adapter: 'openai-responses',
+      adapterKey: 'openai-responses',
       transport: 'responses',
     })
   })
@@ -379,7 +380,7 @@ describe('provider registry provider templates', () => {
     })
     expect(template?.capabilities.map(row => row.capability)).toEqual(['audio.transcribe'])
     expect(template?.metadata).toMatchObject({
-      adapter: 'dashscope-qwen-audio-asr',
+      adapterKey: 'dashscope-qwen-audio-asr',
       transport: 'qwen-audio-sync',
       defaultModel: 'qwen-audio-3.0-asr-flash',
       maxDurationSeconds: 300,

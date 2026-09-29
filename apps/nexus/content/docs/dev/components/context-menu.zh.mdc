@@ -3,7 +3,7 @@ title: "ContextMenu 右键菜单"
 description: "可右键、可坐标控制、可嵌入 Popover 的通用菜单面板。"
 category: Navigation
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [context, menu, popover]
 syncStatus: reviewed
 verified: true

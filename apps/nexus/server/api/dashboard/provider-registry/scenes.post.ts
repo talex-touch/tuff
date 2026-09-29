@@ -1,6 +1,6 @@
 import { readBody } from 'h3'
 import { requireAdmin } from '../../../utils/auth'
-import { createSceneRegistryEntry } from '../../../utils/sceneRegistryStore'
+import { createSceneRegistryEntry, withSceneRegistryReadiness } from '../../../utils/sceneRegistryStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAdmin(event)
@@ -22,5 +22,5 @@ export default defineEventHandler(async (event) => {
     bindings: body?.bindings,
   }, userId)
 
-  return { scene }
+  return { scene: await withSceneRegistryReadiness(event, scene) }
 })

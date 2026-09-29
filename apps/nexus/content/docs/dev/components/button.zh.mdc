@@ -3,7 +3,7 @@ title: Button 按钮
 description: 触感按钮与扁平按钮的核心交互
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [action, tactile, primary]
 syncStatus: reviewed
 verified: true

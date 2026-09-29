@@ -3,7 +3,7 @@ title: "Transition"
 description: "Preset transition wrapper for keyed content switches, list motion, and smooth size changes."
 category: Effects
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [transition, motion, list, auto-size]
 syncStatus: reviewed
 verified: true

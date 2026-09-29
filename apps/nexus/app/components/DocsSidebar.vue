@@ -224,6 +224,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/accessibility',
     '/docs/dev/components/utils',
     '/docs/dev/components/sound',
+    '/docs/dev/components/changelog',
     // ── suite: templates — no overview; the tab lands on the first template
     // templates — App shells
     '/docs/dev/components/template-shell',
@@ -376,6 +377,9 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/fusion-surface',
     '/docs/dev/components/liquid',
     '/docs/dev/components/flip-overlay',
+    '/docs/dev/components/image-generation',
+    '/docs/dev/components/metal-fx',
+    '/docs/dev/components/voice-beam',
     // pro — Primitives
     '/docs/dev/components/base-surface',
     '/docs/dev/components/base-anchor',
@@ -405,6 +409,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/tool-confirmation',
     '/docs/dev/components/approval-card',
     '/docs/dev/components/working-indicator',
+    '/docs/dev/components/bot-avatar',
     // ai — AiReasoning
     '/docs/dev/components/ai-elements',
     '/docs/dev/components/chain-of-thought',
@@ -518,6 +523,7 @@ const SUITES = computed<SuiteDef[]>(() => [
       '/docs/dev/components/accessibility',
       '/docs/dev/components/utils',
       '/docs/dev/components/sound',
+      '/docs/dev/components/changelog',
     ],
   },
   {

@@ -3,7 +3,7 @@ title: "Splitter 分割面板"
 description: "双面板可拖拽布局，支持指针与键盘调整、比例夹取、吸附步进，以及水平/垂直方向。"
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [layout, resize, panels]
 syncStatus: reviewed
 verified: true

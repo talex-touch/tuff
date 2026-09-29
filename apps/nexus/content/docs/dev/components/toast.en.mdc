@@ -3,7 +3,7 @@ title: Toast
 description: Lightweight notifications and transient feedback
 category: Feedback
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [toast, feedback, status]
 syncStatus: reviewed
 verified: true

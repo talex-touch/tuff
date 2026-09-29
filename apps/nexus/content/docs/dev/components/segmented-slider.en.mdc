@@ -3,7 +3,7 @@ title: "SegmentedSlider"
 description: "Discrete slider for choosing one value from a fixed set."
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [segmented, slider, form]
 syncStatus: reviewed
 verified: true

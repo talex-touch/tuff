@@ -68,6 +68,28 @@
       "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction — a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
       "owner": "#328",
       "expires": "2026-11-09"
+    },
+    {
+      "id": "GHSA-qw65-cvwx-89v3",
+      "module": "fast-uri",
+      "severity": "high",
+      "versions": [
+        "3.1.6"
+      ],
+      "reason": "Reaches --prod through apps/core-app dependencies @modelcontextprotocol/sdk -> ajv -> fast-uri. Disclosed 2026-09-28. Owner #328.",
+      "owner": "#328",
+      "expires": "2026-11-09"
+    },
+    {
+      "id": "GHSA-58mr-gqgx-xq4g",
+      "module": "fast-uri",
+      "severity": "high",
+      "versions": [
+        "3.1.6"
+      ],
+      "reason": "Reaches --prod through apps/core-app dependencies @modelcontextprotocol/sdk -> ajv -> fast-uri. Disclosed 2026-09-28. Owner #328.",
+      "owner": "#328",
+      "expires": "2026-11-09"
     }
   ]
 }

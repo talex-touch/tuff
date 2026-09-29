@@ -3,7 +3,7 @@ title: Kbd
 description: Keyboard shortcut token for command hints and menus.
 category: Basic
 status: beta
-since: 1.0.0
+since: 0.3.7
 tags: [keyboard, shortcut, token]
 syncStatus: reviewed
 verified: true

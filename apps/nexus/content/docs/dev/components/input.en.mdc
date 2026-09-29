@@ -3,7 +3,7 @@ title: Input
 description: Lightweight inputs and search states
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [input, field, search]
 syncStatus: reviewed
 verified: true

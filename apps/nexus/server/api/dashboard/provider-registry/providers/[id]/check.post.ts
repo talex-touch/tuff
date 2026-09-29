@@ -1,12 +1,13 @@
 import { createError, getRouterParam, readBody } from 'h3'
 import { requireAdmin } from '../../../../../utils/auth'
 import {
-  checkIntelligenceProviderRegistryMirror,
-  isIntelligenceProviderRegistryMirror,
+  checkIntelligenceProviderRegistryEntry,
+  isIntelligenceProviderRegistryEntry,
 } from '../../../../../utils/intelligenceProviderHealthCheck'
 import { recordProviderHealthCheck } from '../../../../../utils/providerHealthStore'
 import { getProviderRegistryEntry } from '../../../../../utils/providerRegistryStore'
 import { checkTencentMachineTranslationProvider } from '../../../../../utils/tencentMachineTranslationProvider'
+import { resolveProviderSceneAdapterKey } from '../../../../../utils/sceneCapabilityAdapterRegistry'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAdmin(event)
@@ -41,9 +42,20 @@ export default defineEventHandler(async (event) => {
       ? Math.max(5000, Math.floor(body.timeoutMs))
       : undefined,
   }
-  const result = isIntelligenceProviderRegistryMirror(provider)
-    ? await checkIntelligenceProviderRegistryMirror(event, userId, provider, options)
-    : await checkTencentMachineTranslationProvider(event, provider, options)
+  const adapterKey = resolveProviderSceneAdapterKey(provider)
+  const result = isIntelligenceProviderRegistryEntry(provider)
+    ? await checkIntelligenceProviderRegistryEntry(event, userId, provider, options)
+    : adapterKey === 'tencent-translation'
+      ? await checkTencentMachineTranslationProvider(event, provider, options)
+      : {
+          success: false,
+          providerId: provider.id,
+          capability: options.capability || provider.capabilities[0]?.capability || 'unknown',
+          latency: 0,
+          endpoint: provider.endpoint || '',
+          message: 'Provider check is not supported for this adapter.',
+          error: { code: 'PROVIDER_CHECK_UNSUPPORTED', message: 'Provider check is not supported for this adapter.' },
+        }
 
   try {
     await recordProviderHealthCheck(event, provider, result)

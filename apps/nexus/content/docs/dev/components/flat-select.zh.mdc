@@ -3,7 +3,7 @@ title: "FlatSelect 平铺下拉选择器"
 description: "ComboBox 风格的下拉选择器（`TxFlatSelect` + `TxFlatSelectItem`）。选项覆盖触发器展开，选中项锚定在触发器位置，clip-path 动画丝滑展开/收起。"
 category: Form
 status: beta
-since: 2.4.7
+since: 0.3.4
 tags: [select, flat, form, combobox]
 syncStatus: reviewed
 verified: true

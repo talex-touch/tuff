@@ -3,7 +3,7 @@ title: "DropdownMenu 下拉菜单"
 description: "基于 Popover 的下拉菜单（Windows 风格）。"
 category: Navigation
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [dropdown, menu, popover]
 syncStatus: reviewed
 verified: true

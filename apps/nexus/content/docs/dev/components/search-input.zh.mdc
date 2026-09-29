@@ -3,7 +3,7 @@ title: "SearchInput 搜索输入框"
 description: "基于输入框的搜索组件，内置搜索图标，并在 Enter 时触发 `search` 事件。"
 category: Form
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [search, input, form]
 syncStatus: reviewed
 verified: true

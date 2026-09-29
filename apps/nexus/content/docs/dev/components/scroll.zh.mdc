@@ -3,7 +3,7 @@ title: "Scroll 滚动"
 description: "基于 `@better-scroll/scroll-bar` 的当前 `TxScroll` 滚动容器，提供更一致的滚动条体验。"
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [scroll, layout, better-scroll]
 syncStatus: reviewed
 verified: true

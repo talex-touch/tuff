@@ -1,0 +1,161 @@
+---
+title: "MetalFx"
+description: "Real-time WebGL2 liquid metal for buttons, circular icon buttons, text and badges, with a wandering halo and neighbour reflections"
+category: Effects
+status: beta
+since: 0.6.2
+tags: [metal, webgl, button, badge, cta, reflection]
+syncStatus: reviewed
+verified: true
+---
+
+## Usage
+
+`TxMetalFx` wraps a single host element and paints a liquid-metal ring over it on a WebGL2 canvas. All metal on a page shares one renderer and one material, so the last preset and theme applied win — pick one preset per page.
+
+:::TuffDemoWrapper{demo="MetalFxShowcaseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed } from 'vue'
+
+  const colorMode = useColorMode()
+  const metalTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light'))
+  </script>
+
+  <template>
+    <TxMetalFx preset="chromatic" :theme="metalTheme">
+      <a href="#" class="cta">Upgrade to Pro</a>
+    </TxMetalFx>
+
+    <TxMetalFx variant="circle" preset="chromatic" :theme="metalTheme" inner-shadow :strength="0.9">
+      <button type="button" aria-label="Send" style="width: 40px; height: 40px; border-radius: 999px">↑</button>
+    </TxMetalFx>
+
+    <span>
+      Plan
+      <TxMetalText font="500 28px/1.2 Inter, system-ui, sans-serif" color="#e2e2e2">Pro</TxMetalText>
+    </span>
+
+    <TxMetalBadge>New</TxMetalBadge>
+  </template>
+---
+:::
+
+### Variants
+
+`variant="button"` is a pill with a 1 px ring; `variant="circle"` is a round icon button with a 2 px ring. The ring radius comes from the child's computed `border-radius`; `circle` always uses a true circle.
+
+```vue
+<template>
+  <TxMetalFx variant="button" preset="silver" :strength="0.7">
+    <a href="/pricing">Upgrade to Pro</a>
+  </TxMetalFx>
+
+  <TxMetalFx variant="circle" preset="gold" inner-shadow :scale="1.5">
+    <button type="button" aria-label="Send">↑</button>
+  </TxMetalFx>
+</template>
+```
+
+### Text and Badges
+
+`TxMetalText` fills a single string with the metal material; `TxMetalBadge` is the small `New`-style pill. Both always render the `chromatic` material and set `aria-label` to their text.
+
+```vue
+<template>
+  <TxMetalText font="600 32px/1.1 Inter, sans-serif" color="#e8e8e8">Pro</TxMetalText>
+  <TxMetalBadge>Beta</TxMetalBadge>
+</template>
+```
+
+### Best Practices
+
+- Give icon-only children an explicit width and height; the wrapper is `inline-flex` and sizes itself to the child.
+- Leave the child's background transparent. With `normalizeHostStyles` (default) the wrapper strips the child's border, outline and box-shadow and paints its own fill; put a custom fill on `TxMetalFx` itself.
+- Keep metal elements apart. Every instance shares one material, so two different presets or themes on one page fight, and two metal buttons side by side pull the eye twice.
+- Reflections only render in dark theme; pass `reflectionTargets` only when the neighbours are stable elements you can hold on to.
+- The shader does not honour `prefers-reduced-motion` on its own — pass `paused` (and optionally `disableGlow`) yourself.
+- Requires WebGL2. Without it the component renders the child inside `div.metal-fx-fallback[data-metal-fx-unsupported]`, with no ring.
+
+## API Reference
+
+### Props
+
+#### TxMetalFx
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `variant` | `'button' \| 'circle'` | `'button'` | Ring baseline: pill at 1 px, circle at 2 px. |
+| `preset` | `'chromatic' \| 'silver' \| 'gold'` | `'chromatic'` | Metal colour. Each ships a dark and a light tuning. |
+| `theme` | `'auto' \| 'dark' \| 'light'` | `'auto'` | Picks the preset's dark or light side; `auto` follows `prefers-color-scheme` live. |
+| `strength` | `number` | `1` | Multiplies shader opacity and glow alpha (0-1). |
+| `glowGain` | `number` | `1` | Extra multiplier on the glow only, clamped to 0-1 after multiplying. |
+| `paused` | `boolean` | `false` | Freezes this instance on its current frame. |
+| `borderRadius` | `number` | auto-detected | Ring radius in CSS px. |
+| `normalizeHostStyles` | `boolean` | `true` | Strips the child's border / outline / box-shadow so they do not clash with the ring. |
+| `reflectionTargets` | `Array<Element \| { ref, strength }>` | none | Neighbours that catch a mirrored reflection (dark theme only). |
+| `disableGlow` | `boolean` | `false` | Removes the wandering halo; the ring still renders. |
+| `innerShadow` | `boolean \| { offsetY, blur, alpha, color }` | off | Light rim along the ring's top inside edge. |
+| `shaderScale` | `number` | variant baseline × `scale` | Overrides the shader sampling scale. |
+| `ringCssPx` | `number` | variant baseline × `scale` | Overrides the ring thickness in CSS px. |
+| `scale` | `number` | `1` | Master multiplier on every absolute-pixel constant in the engine. |
+| `mask` | `(ctx, size) => void` | none | Custom alpha-mask painter — keeps the shader only where the mask paints. |
+| `glowMode` | `'mask' \| 'ring'` | `'mask'` | Glow placement when `mask` is set. |
+
+#### TxMetalText
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `font` | `string` | required | CSS `font` shorthand. |
+| `color` | `string` | required | Base text colour behind the metal. |
+| `strength` | `number` | `1` | Metal opacity. |
+| `reflectionTargets` | `Array<Element \| { ref, strength }>` | none | Neighbours that catch the metal. |
+
+#### TxMetalBadge
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| — | — | — | No props beyond the forwarded attributes. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|------|-------------|
+| `default` | - | `TxMetalFx`: exactly one host element. `TxMetalText` / `TxMetalBadge`: the label string. `TxMetalBadge` falls back to `New` when empty. |
+
+### Events
+
+No events. The wrapped child keeps its own handlers.
+
+### Exposed Methods
+
+No public instance methods. Engine primitives (`setGlowConfig`, `setCursorLightConfig`, `setBendConfig`, `isMetalFxSupported`, …) are exported from the module for page-level tuning.
+
+### CSS Variables
+
+| Variable | Source | Description |
+|------|------|-------------|
+| `--metal-strength` | `strength` | Metal layer opacity (0-1). |
+| `--metal-glow` | `glowGain` | Glow alpha multiplier. |
+
+## Overview
+
+- One shared WebGL2 context and one `requestAnimationFrame` loop drive every instance; the main loop composites at about 15 fps.
+- An `IntersectionObserver` (64 px margin) skips offscreen instances, and the loop stops while the tab is hidden.
+- Reflections are skipped entirely in light theme — no DOM scan, no per-frame work.
+- The wrapper, child included, stays invisible until the first metal frame is painted; do not measure or animate the child before then.
+- The cursor reflection swaps the OS pointer for a sprite and needs one registered through `setCursorSprite`; with none registered it stays off. It also turns itself off under `prefers-reduced-motion`, `forced-colors` and coarse pointers.
+
+## Technologies
+
+- Manually verified against `index.ts`, `TxMetalFx.vue`, `TxMetalText.vue`, `TxMetalBadge.vue`, `types.ts` and `metal-fx.test.ts` under `packages/tuffex/packages/components/src/metal-fx/`.
+- The whole `engine/**` tree is a verbatim port of upstream `metal-fx` v2 (MIT © Jakub Antalik) with strict-TS index hardening only; the Vue shells mirror the React wrappers' lifecycle, measurement and cleanup behaviour.
+- Requires WebGL2; browsers without it get the documented fallback markup.
+
+- Component source: `packages/tuffex/packages/components/src/metal-fx/src/TxMetalFx.vue`.
+- Types: `packages/tuffex/packages/components/src/metal-fx/src/types.ts`.
+- Upstream: [Jakubantalik/Libraries · metal-fx](https://github.com/Jakubantalik/Libraries/tree/main/packages/metal-fx) (MIT).
+- **Coverage:** `packages/tuffex/packages/components/src/metal-fx/__tests__/metal-fx.test.ts` verifies the three components, their labels, the variant baselines, and the WebGL2 fallback path.
+
+<TuffDocSourceLink />

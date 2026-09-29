@@ -3,7 +3,7 @@ title: "Stack 堆叠"
 description: "以方向为核心的一维 Flexbox 包装器，用于纵向或横向间距布局。"
 category: Layout
 status: beta
-since: 1.0.0
+since: 0.3.4
 tags: [stack, flex, layout]
 syncStatus: reviewed
 verified: true
