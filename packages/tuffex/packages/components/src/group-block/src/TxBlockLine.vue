@@ -56,9 +56,10 @@ function handleClick(event: MouseEvent): void {
   appearance: none;
   position: relative;
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   align-items: center;
-  padding: 2px 18px 2px 50px;
+  padding: 8px 16px;
   min-height: 30px;
   width: 100%;
   border: 0;
@@ -84,12 +85,13 @@ function handleClick(event: MouseEvent): void {
   }
 
   .tx-block-line__description {
-    flex: 1;
+    flex: 1 1 180px;
     min-width: 0;
     margin: 0;
     font-size: 13px;
     line-height: 20px;
     white-space: pre-line;
+    overflow-wrap: anywhere;
     color: var(--tx-text-color-secondary, #909399);
   }
 

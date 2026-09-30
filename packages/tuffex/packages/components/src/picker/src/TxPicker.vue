@@ -113,20 +113,51 @@ watch(
  * Everything is driven by one number per column: `offset`, the position in rows,
  * fractional while it turns.
  */
-const WHEEL_STEP_DEG = 18
-
-/** r = (itemHeight / 2) / tan(step / 2) puts a row's arc length at its height. */
-const wheelRadiusPx = computed(() => {
-  const half = (WHEEL_STEP_DEG / 2) * (Math.PI / 180)
-  return Math.round(itemHeightPx.value / 2 / Math.tan(half))
-})
 
 /**
- * Rows past a quarter turn face away, so only the ones within that are worth
+ * How far the eye sits in front of the drum, in radii. Close enough that rows
+ * visibly narrow and flatten as they roll back; far enough that the centre row
+ * is not distorted.
+ */
+const PERSPECTIVE_RADII = 3
+
+/**
+ * Where the drum turns out of sight. The eye sits `k + 1` radii from the axis,
+ * so its tangent touches the drum at acos(1 / (k + 1)); past that a row faces
+ * away from the eye and `backface-visibility` drops it.
+ */
+const LIMB_RAD = Math.acos(1 / (PERSPECTIVE_RADII + 1))
+
+/**
+ * Under this perspective the drum's silhouette reaches r * sqrt(k / (k + 2))
+ * from the centre line; that is set to half the column, so the drum fills it
+ * and the outer rows are seen rolling over its rim at any `visibleItemCount`.
+ */
+const LIMB_REACH = Math.sqrt(PERSPECTIVE_RADII / (PERSPECTIVE_RADII + 2))
+
+const wheelRadiusPx = computed(() => {
+  const half = (visibleCount.value * itemHeightPx.value) / 2
+  return Math.round(half / LIMB_REACH)
+})
+
+/** step = 2 * atan((itemHeight / 2) / r): every row is a flat face of the drum, edge to edge with its neighbours. */
+const wheelStepRad = computed(() => 2 * Math.atan(itemHeightPx.value / 2 / wheelRadiusPx.value))
+
+/**
+ * Rows past the limb are never seen, so only the ones before it are worth
  * rendering. A year column runs 1970..2100; drawing all 131 of them to show
  * eleven is what made the wheel stutter.
  */
-const WHEEL_WINDOW = Math.ceil(90 / WHEEL_STEP_DEG)
+const wheelWindow = computed(() => Math.ceil(LIMB_RAD / wheelStepRad.value))
+
+/** Shared by the inline and popup columns so both render the same drum. */
+const columnsStyle = computed(() => ({
+  '--tx-picker-item-height': `${itemHeightPx.value}px`,
+  '--tx-picker-visible-count': `${visibleCount.value}`,
+  '--tx-picker-radius': `${wheelRadiusPx.value}px`,
+  '--tx-picker-perspective': `${wheelRadiusPx.value * PERSPECTIVE_RADII}px`,
+  '--tx-picker-step': `${Number(((wheelStepRad.value * 180) / Math.PI).toFixed(3))}`,
+}))
 
 /** How far a flick coasts: velocity in rows/ms times this, in rows. */
 const MOMENTUM_MS = 260
@@ -137,6 +168,8 @@ const offsets = ref<number[]>([])
 interface WheelState {
   rafId: number | null
   settleId: number | null
+  /** The row the running ease is heading to; meaningful only while `rafId` is set. */
+  target: number
 }
 
 const wheelStates = ref<WheelState[]>([])
@@ -144,7 +177,7 @@ const wheelStates = ref<WheelState[]>([])
 function ensureStates() {
   const n = columns.value.length
   if (wheelStates.value.length !== n)
-    wheelStates.value = Array.from({ length: n }).map(() => ({ rafId: null, settleId: null }))
+    wheelStates.value = Array.from({ length: n }).map(() => ({ rafId: null, settleId: null, target: 0 }))
   if (offsets.value.length !== n)
     offsets.value = Array.from({ length: n }).map((_, i) => offsets.value[i] ?? 0)
 }
@@ -215,6 +248,17 @@ function setValueAt(colIndex: number, v: any) {
 }
 
 /**
+ * Settling and coasting are motion the reader did not make; with reduced
+ * motion the column lands on its row directly. Dragging still follows the
+ * pointer, since that motion is the reader's own.
+ */
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+/**
  * Eases to a row and settles there. Cubic ease-out: quick to leave, slow to
  * arrive, which is the deceleration a flick is supposed to have.
  */
@@ -226,9 +270,10 @@ function goToIndex(colIndex: number, idx: number, animated = true) {
 
   stopWheel(colIndex)
   const to = clampIndex(colIndex, idx)
+  state.target = to
   const from = offsetOf(colIndex)
 
-  if (!animated || Math.abs(to - from) < 0.001) {
+  if (!animated || prefersReducedMotion() || Math.abs(to - from) < 0.001) {
     setOffset(colIndex, to)
     return
   }
@@ -344,12 +389,27 @@ function onPointerMove(colIndex: number, event: PointerEvent) {
 }
 
 /**
- * Which row sits under a point on the drum.
+ * The drum angle drawn at `dy` from the centre line.
  *
- * A row is drawn `radius * sin(angle)` from the centre line, so the angle — and
- * from it the row — comes back with `asin`. Reading the geometry is what lets
- * the rows stay inert: the column hit-tests against what it drew, instead of
- * against transformed boxes that overlap each other.
+ * The front row sits on the screen plane and the eye `k` radii in front of it,
+ * so a row turned by `a` is drawn at
+ *   y = r * sin(a) * k / (k + 1 - cos(a)).
+ * With u = y / r that is k * sin(a) + u * cos(a) = u * (k + 1), a phase-shifted
+ * sine, so the angle comes back in closed form. Points beyond the drum's
+ * silhouette resolve to its limb.
+ */
+function angleAt(dy: number): number {
+  const k = PERSPECTIVE_RADII
+  const u = Math.min(LIMB_REACH, Math.abs(dy) / wheelRadiusPx.value)
+  const phase = Math.atan2(u, k)
+  const ratio = Math.min(1, (u * (k + 1)) / Math.hypot(k, u))
+  return Math.sign(dy) * (Math.asin(ratio) - phase)
+}
+
+/**
+ * Which row sits under a point on the drum. Reading the projected geometry is
+ * what lets the rows stay inert: the column hit-tests against what it drew,
+ * instead of against transformed boxes that overlap each other.
  */
 function pickFromPoint(colIndex: number, event: { clientY: number, currentTarget: EventTarget | null }) {
   if (props.disabled)
@@ -360,8 +420,7 @@ function pickFromPoint(colIndex: number, event: { clientY: number, currentTarget
 
   const rect = el.getBoundingClientRect()
   const dy = event.clientY - (rect.top + rect.height / 2)
-  const ratio = Math.max(-1, Math.min(1, dy / wheelRadiusPx.value))
-  const rows = (Math.asin(ratio) * 180) / (Math.PI * WHEEL_STEP_DEG)
+  const rows = angleAt(dy) / wheelStepRad.value
 
   const opts = columns.value[colIndex]?.options ?? []
   const idx = nearestEnabledIndex(colIndex, Math.round(offsetOf(colIndex) + rows))
@@ -388,7 +447,9 @@ function onPointerUp(colIndex: number, event: PointerEvent) {
   }
 
   const opts = columns.value[colIndex]?.options ?? []
-  const coasted = offsetOf(colIndex) + drag.velocity * MOMENTUM_MS
+  // No coast under reduced motion: it would land rows away with no motion to show why.
+  const velocity = prefersReducedMotion() ? 0 : drag.velocity
+  const coasted = offsetOf(colIndex) + velocity * MOMENTUM_MS
   const idx = nearestEnabledIndex(colIndex, Math.round(coasted))
   if (idx < 0)
     return
@@ -421,8 +482,8 @@ function onColumnClick(colIndex: number, event: MouseEvent) {
 function visibleRows(colIndex: number) {
   const opts = columns.value[colIndex]?.options ?? []
   const offset = offsetOf(colIndex)
-  const first = Math.max(0, Math.floor(offset) - WHEEL_WINDOW)
-  const last = Math.min(opts.length - 1, Math.ceil(offset) + WHEEL_WINDOW)
+  const first = Math.max(0, Math.floor(offset) - wheelWindow.value)
+  const last = Math.min(opts.length - 1, Math.ceil(offset) + wheelWindow.value)
 
   const rows: Array<{ option: PickerColumn['options'][number], index: number }> = []
   for (let i = first; i <= last; i++) {
@@ -504,14 +565,32 @@ function onKeydown(colIndex: number, event: KeyboardEvent) {
   setValueAt(colIndex, opts[target]?.value)
 }
 
-/** Puts every column on its selected row. */
+/**
+ * Whether a column is already turning onto `idx` by itself: easing there, or
+ * held by a drag or a wheel that has committed it. A controlled parent echoes
+ * every value the picker emits back through `modelValue`; re-placing the column
+ * on that echo would cancel the turn that produced it and snap the drum flat.
+ */
+function isTurningTo(colIndex: number, idx: number): boolean {
+  const state = wheelStates.value[colIndex]
+  if (state?.rafId != null)
+    return state.target === idx
+  if (drags.has(colIndex) || state?.settleId != null)
+    return nearestEnabledIndex(colIndex, Math.round(offsetOf(colIndex))) === idx
+  return false
+}
+
+/** Puts every column on its selected row, leaving alone the ones already turning there. */
 async function syncOffsets(animated = false) {
   await nextTick()
   ensureStates()
 
   const v = localValue.value
-  for (let i = 0; i < columns.value.length; i++)
-    goToIndex(i, getIndexForValue(i, v[i]), animated)
+  for (let i = 0; i < columns.value.length; i++) {
+    const idx = getIndexForValue(i, v[i])
+    if (!isTurningTo(i, idx))
+      goToIndex(i, idx, animated)
+  }
 }
 
 watch(
@@ -608,7 +687,7 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-visible-count': `${visibleCount}`, '--tx-picker-radius': `${wheelRadiusPx}px`, '--tx-picker-step': `${WHEEL_STEP_DEG}` }">
+    <div class="tx-picker__columns" :style="columnsStyle">
       <div class="tx-picker__highlight" aria-hidden="true" />
 
       <div v-for="(col, colIndex) in columns" :key="col.key ?? colIndex" class="tx-picker__col">
@@ -665,7 +744,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-visible-count': `${visibleCount}`, '--tx-picker-radius': `${wheelRadiusPx}px`, '--tx-picker-step': `${WHEEL_STEP_DEG}` }">
+          <div class="tx-picker__columns" :style="columnsStyle">
             <div class="tx-picker__highlight" aria-hidden="true" />
 
             <div v-for="(col, colIndex) in columns" :key="col.key ?? colIndex" class="tx-picker__col">
@@ -784,16 +863,20 @@ onBeforeUnmount(() => {
   overflow: hidden;
   touch-action: none;
   cursor: grab;
-  perspective: calc(var(--tx-picker-radius, 114px) * 9);
+  // The eye sits a few radii in front of the drum (set in script, with the
+  // radius), close enough that rows narrow as they roll back over the rim.
+  perspective: var(--tx-picker-perspective, 348px);
   perspective-origin: 50% 50%;
-  // Rows fade as they roll away, which is what reads as a curved surface
-  // rather than a stack of tilted rows.
+  // The drum fills the column, so height here is angle on the drum: the fade
+  // darkens the surface toward its rim instead of cutting the side rows off.
   mask-image: linear-gradient(
     to bottom,
-    transparent 0%,
-    #000 24%,
-    #000 76%,
-    transparent 100%
+    rgb(0 0 0 / 0.1) 0%,
+    rgb(0 0 0 / 0.55) 12%,
+    #000 32%,
+    #000 68%,
+    rgb(0 0 0 / 0.55) 88%,
+    rgb(0 0 0 / 0.1) 100%
   );
 
   &:active {
@@ -807,6 +890,11 @@ onBeforeUnmount(() => {
  * from. `pointer-events: none` is the other half of the fix: transformed rows
  * overlap, and the enlarged centre row used to swallow the clicks meant for its
  * neighbours. The column hit-tests against the geometry instead.
+ *
+ * Read right to left: out to the surface, round by the row's angle, then the
+ * whole drum back by one radius. That last step keeps the front row on the
+ * screen plane — exactly one row high, under the highlight — so the others
+ * recede from it rather than the drum swelling toward the viewer.
  */
 .tx-picker__item {
   position: absolute;
@@ -825,8 +913,9 @@ onBeforeUnmount(() => {
   user-select: none;
   backface-visibility: hidden;
   transform:
-    rotateX(calc((var(--tx-picker-offset, 0) - var(--tx-picker-index, 0)) * var(--tx-picker-step, 18) * 1deg))
-    translateZ(var(--tx-picker-radius, 114px));
+    translateZ(calc(var(--tx-picker-radius, 116px) * -1))
+    rotateX(calc((var(--tx-picker-offset, 0) - var(--tx-picker-index, 0)) * var(--tx-picker-step, 17.641) * 1deg))
+    translateZ(var(--tx-picker-radius, 116px));
   transition: color 0.18s ease, font-weight 0.18s ease;
 
   &.is-selected {

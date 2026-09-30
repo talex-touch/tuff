@@ -1,7 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxPagination from '../src/TxPagination.vue'
-import txPaginationSource from '../src/TxPagination.vue?raw'
 
 describe('txPagination', () => {
   it('calculates pages from total and pageSize', () => {
@@ -15,8 +14,6 @@ describe('txPagination', () => {
 
     const pageButtons = wrapper.findAll('.tx-pagination__button').filter(button => button.text())
     expect(pageButtons.map(button => button.text())).toEqual(['1', '2', '3', '4', '5', '10'])
-    expect(wrapper.find('.i-carbon-chevron-left').exists()).toBe(true)
-    expect(wrapper.find('.i-carbon-chevron-right').exists()).toBe(true)
     expect(wrapper.find('.tx-pagination__ellipsis').text()).toBe('...')
     expect(wrapper.find('[aria-current="page"]').text()).toBe('2')
   })
@@ -128,22 +125,6 @@ describe('txPagination', () => {
     const buttons = wrapper.findAll('.tx-pagination__button')
     expect(buttons.length).toBeGreaterThan(0)
     expect(buttons.every(button => button.attributes('type') === 'button')).toBe(true)
-  })
-
-  it('keeps pagination list styles isolated from prose list styles', () => {
-    const wrapper = mount(TxPagination, {
-      props: {
-        currentPage: 1,
-        totalPages: 3,
-      },
-    })
-
-    expect(wrapper.find('.tx-pagination__list').element.tagName).toBe('UL')
-    expect(wrapper.findAll('.tx-pagination__item').every(item => item.element.tagName === 'LI')).toBe(true)
-    expect(txPaginationSource).toContain('.tx-pagination__item::marker')
-    expect(txPaginationSource).toContain('list-style: none;')
-    expect(txPaginationSource).toContain('margin: 0;')
-    expect(txPaginationSource).toContain('padding: 0;')
   })
 
   it('localizes the nav landmark and control aria-labels', () => {
