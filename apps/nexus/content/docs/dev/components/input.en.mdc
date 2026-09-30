@@ -234,6 +234,21 @@ code: |
 ---
 :::
 
+## Migration from FlatInput
+
+The legacy `FlatInput` / `TxFlatInput` component has been retired; `TxInput` covers every case it served. Migrate the props one-to-one:
+
+| FlatInput | TxInput |
+|-----------|---------|
+| `area` | `type="textarea"` |
+| `password` | `type="password"` |
+| `icon="i-…"` | `prefix-icon="i-…"` |
+| default slot (prefix content) | `#prefix` slot |
+| `disabled` / `readonly` | `disabled` / `readonly` |
+| `nonWin` | dropped — the Windows-underline visual is gone |
+
+`update:modelValue` keeps the same contract, and `focus` / `blur` now come from the native input element. `FlatInput` had no `clear`/`suffixIcon`/`rows` props; adding them replaces the hand-rolled prefix markup callers used to write.
+
 ## Technologies
 
 - **Value contract:** `type="number"` emits `Number(value)` for non-empty input and preserves `''` when cleared, so persistence layers should normalize before saving.

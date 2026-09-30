@@ -130,7 +130,7 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
     <div v-if="tabs === 'store'" flex items-center justify-between gap-4 px-4 py-2>
       <div flex items-center gap-3>
         <FlatCompletion
-          icon="search"
+          icon="i-ri-search-line"
           :fetch="() => []"
           :placeholder="t('store.searchPlaceholder')"
           class="search-input"
@@ -234,7 +234,7 @@ function resolveCategoryLabel(category: { tag: string; label?: string }): string
   -webkit-app-region: no-drag;
 }
 
-.search-input :deep(.FlatInput-Container) {
+.search-input :deep(.tx-input) {
   width: 280px;
   margin: 0;
 }

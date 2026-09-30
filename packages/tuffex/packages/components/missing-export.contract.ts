@@ -67,7 +67,6 @@ import type {
 } from './src/context-menu/index'
 import type { DatePickerVariant } from './src/date-picker/index'
 import type { DividerGradient, DividerProps } from './src/divider/index'
-import type { FlatInputEmits, FlatInputProps, TxFlatInputInstance } from './src/flat-input/index'
 import type { TxFlatRadioContext, TxFlatRadioSize } from './src/flat-radio/index'
 import type {
   GradualBlurAnimated,
@@ -138,10 +137,6 @@ export type MissingExportContract = [
   // divider
   DividerGradient,
   DividerProps,
-  // flat-input
-  FlatInputEmits,
-  FlatInputProps,
-  TxFlatInputInstance,
   // flat-radio
   TxFlatRadioContext,
   TxFlatRadioSize,

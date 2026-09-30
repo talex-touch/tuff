@@ -24,7 +24,7 @@ const beamTheme = computed(() => (colorMode.value === 'dark' ? 'dark' : 'light')
       </TxBorderBeam>
       <TxBorderBeam size="line" :theme="beamTheme" :border-radius="12">
         <div class="beam-showcase__line">
-          <TxFlatInput placeholder="line" />
+          <TxInput placeholder="line" />
         </div>
       </TxBorderBeam>
     </TxFlex>

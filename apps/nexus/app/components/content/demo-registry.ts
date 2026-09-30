@@ -164,7 +164,6 @@ export const demoLoaders: Record<string, DemoLoader> = {
   FilterChipsFilterTableDemo: () => import('./demos/FilterChipsFilterTableDemo.vue'),
   FineTuneCardFineTuneCardDemo: () => import('./demos/FineTuneCardFineTuneCardDemo.vue'),
   FlatDropdownBasicDemo: () => import('./demos/FlatDropdownBasicDemo.vue'),
-  FlatInputFlatInputDemo: () => import('./demos/FlatInputFlatInputDemo.vue'),
   FlatRadioBasicDemo: () => import('./demos/FlatRadioBasicDemo.vue'),
   FlatRadioBorderedDemo: () => import('./demos/FlatRadioBorderedDemo.vue'),
   FlatRadioDisabledDemo: () => import('./demos/FlatRadioDisabledDemo.vue'),

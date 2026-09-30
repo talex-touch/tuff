@@ -88,7 +88,7 @@ code: |
 |------|------|------|
 | `TuffButton` | 带触感反馈的交互按钮 | `button/` |
 | `TuffSwitch` | 流畅动画的开关组件 | `switch/` |
-| `TuffInput` | 输入框，支持 clearable 和 textarea | `flat-input/` |
+| `TuffInput` | 输入框，支持 clearable 和 textarea | `input/` |
 | `TuffCheckbox` | 复选框，SVG 动画勾选效果 | `checkbox/` |
 | `TuffSelect` | 下拉选择器，浮动定位 | `select/` |
 | `TuffSelectItem` | 选择器选项 | `select/` |
