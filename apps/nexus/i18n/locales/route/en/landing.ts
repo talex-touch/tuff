@@ -7,7 +7,7 @@ export default {
         titleLead: 'Your OS,',
         titleAccent: 'programmable.',
         title: 'Your OS, programmable.',
-        copy: 'Nexus is the public entry for Tuff: trusted releases, plugin ecosystem, and developer docs while the desktop app stays light, fast, and extensible.',
+        copy: 'Tuff is the public entry for its own ecosystem: trusted releases, plugins, and developer docs while the desktop app stays light, fast, and extensible.',
         subtitle: 'One entry point to search files, launch apps, and drive agents.',
         primaryCta: 'Get the current build',
         getPlatformVersion: 'Get {platform} version',
@@ -64,7 +64,7 @@ export default {
         items: {
           local: {
             title: 'Local context first',
-            copy: 'Clipboard, files, apps, and desktop state are shaped locally first. Nexus coordinates ecosystem, docs, and trusted releases.',
+            copy: 'Clipboard, files, apps, and desktop state are shaped locally first. Tuff coordinates ecosystem, docs, and trusted releases.',
           },
           intelligence: {
             title: 'Models and tools routed together',
@@ -160,7 +160,7 @@ export default {
           },
           sync: {
             title: 'Less divergence, stronger consistency',
-            copy: 'Stay inside Nexus routing, i18n, and prerender rules so the experiment can replace production cleanly.',
+            copy: 'Stay inside the Tuff routing, i18n, and prerender rules so the experiment can replace production cleanly.',
           },
         },
       },
@@ -177,7 +177,7 @@ export default {
       bullets: {
         cinematic: 'Summon CoreBox with Alt + Space and keep search, execution, and chat in one entry.',
         policy: 'Electron runtime plus plugin SDKs keep extension power controlled, auditable, and typed.',
-        realtime: 'Local state comes first; Nexus coordinates docs, ecosystem, and trusted releases.',
+        realtime: 'Local state comes first; Tuff coordinates docs, ecosystem, and trusted releases.',
       },
       primaryCta: 'Download Tuff',
       secondaryCta: 'Developer docs',

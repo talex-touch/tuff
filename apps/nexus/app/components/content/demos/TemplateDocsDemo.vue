@@ -366,7 +366,7 @@ const ARTICLES: Record<ArticleId, Article> = {
         'tuff scan',
         '```',
         '',
-        '从零开始写插件，见[开发第一个插件](#kb:first-plugin)；完整的清单字段见 [Nexus 开发者文档](https://tuff.tagzxia.com/docs/dev)。',
+        '从零开始写插件，见[开发第一个插件](#kb:first-plugin)；完整的清单字段见 [Tuff 开发者文档](https://tuff.tagzxia.com/docs/dev)。',
       ),
       en: md(
         'Plugins declare the permissions they need in `manifest.json`; you grant them at install time and can revoke them whenever you like. This page covers where permissions come from, how risk is rated, and what each install choice means.',
@@ -425,7 +425,7 @@ const ARTICLES: Record<ArticleId, Article> = {
         'tuff scan',
         '```',
         '',
-        'Starting from scratch? See [Build your first plugin](#kb:first-plugin). Every manifest field is covered in the [Nexus developer docs](https://tuff.tagzxia.com/docs/dev).',
+        'Starting from scratch? See [Build your first plugin](#kb:first-plugin). Every manifest field is covered in the [Tuff developer docs](https://tuff.tagzxia.com/docs/dev).',
       ),
     },
   },

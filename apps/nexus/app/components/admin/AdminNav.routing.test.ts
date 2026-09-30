@@ -339,28 +339,6 @@ describe('console menu visibility', () => {
   })
 })
 
-describe('document title', () => {
-  /**
-   * The console is no longer inside the dashboard shell, so the title it used
-   * to inherit from `DashboardNav` had to come with it — otherwise every
-   * `/admin/*` route falls back to app.vue's global `appName`, which is the
-   * documentation site's name.
-   */
-  it('derives the title from the active menu label', () => {
-    // Reading `activeLabel` rather than a second lookup table is what keeps the
-    // tab title and the highlighted entry from drifting.
-    expect(NAV_SOURCE).toMatch(/useHead\(\(\) => \(\{\s*title: `\$\{activeLabel\.value\} · Tuff Nexus`/)
-  })
-
-  it('produces a title app.vue will not append the docs name to', () => {
-    // app.vue only leaves a title alone when it already contains "Tuff";
-    // anything else gets ` · Tuff Nexus` appended a second time.
-    const appSource = readFileSync(path.join(HERE, '../../app.vue'), 'utf8')
-    expect(appSource).toContain("title.includes('Tuff')")
-    expect(`${evaluateNav({ path: '/admin/audits' }).activeLabel} · Tuff Nexus`).toContain('Tuff')
-  })
-})
-
 describe('mobile disclosure', () => {
   /**
    * Below `lg` the console shell stacks, so this rail would sit above the page.

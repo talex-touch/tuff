@@ -330,7 +330,7 @@ const SEEDS: Seed[] = [
     source: 'updates',
     icon: 'i-carbon-information',
     tone: 'neutral',
-    title: { zh: 'Nexus 计划维护：9 月 28 日 02:00–03:00', en: 'Nexus maintenance: 28 Sep, 02:00–03:00' },
+    title: { zh: 'Tuff 计划维护：9 月 28 日 02:00–03:00', en: 'Tuff maintenance: 28 Sep, 02:00–03:00' },
     body: { zh: '维护期间插件市场只读，已安装的插件不受影响。', en: 'The plugin store is read-only during the window; installed plugins are unaffected.' },
     at: at(21, 12),
     actions: ['view'],

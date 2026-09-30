@@ -54,7 +54,7 @@ export default {
     lastUpdated: 'Last updated',
     section1: {
       title: '1. Scope',
-      content: 'This policy applies to Tuff and Nexus services, products, and related websites.',
+      content: 'This policy applies to Tuff services, products, and related websites.',
     },
     section2: {
       title: '2. Data We Collect',
@@ -78,7 +78,7 @@ export default {
     },
     contact: {
       title: 'Contact',
-      content: 'If you have questions about this policy, please contact us through Nexus official channels.',
+      content: 'If you have questions about this policy, please contact us through Tuff official channels.',
     },
   },
   protocol: {

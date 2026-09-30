@@ -7,7 +7,7 @@ verified: true
 
 # Composing Tuffex Interfaces
 
-This guide targets Nexus / Dashboard / Admin pages. The goal is not to add more components; it is to structure a page as “actions → status → data” so users can understand state and act quickly.
+This guide targets Tuff / Dashboard / Admin pages. The goal is not to add more components; it is to structure a page as “actions → status → data” so users can understand state and act quickly.
 
 ## Component Suites & Imports
 
@@ -54,7 +54,7 @@ code: |
   const query = ref('')
   const selectedKeys = ref<Array<number | string>>([1])
   const rows: Row[] = [
-    { id: 1, task: 'Verify component screenshots', owner: 'Nexus', status: 'review', score: 84 },
+    { id: 1, task: 'Verify component screenshots', owner: 'Tuff', status: 'review', score: 84 },
     { id: 2, task: 'Complete API tables', owner: 'Tuffex', status: 'ready', score: 92 },
     { id: 3, task: 'Dark-mode regression', owner: 'QA', status: 'failed', score: 48 },
   ]
@@ -341,7 +341,7 @@ code: |
 - **Authorization roles**: Tree shows hierarchy, TreeSelect chooses ownership, Transfer assigns resources, and Timeline records audit history.
 - **Configuration layering**: put short actions in menus, short notes in popovers, and long configuration in drawers; do not make one Popover carry a complex form.
 - **Release policy roles**: Cascader owns scope, FlatSelect owns single-choice policy, SegmentedSlider owns discrete risk, Slider owns continuous ratios, and TagInput owns short metadata.
-- **Screenshot evidence**: after adding or changing demos, open the local Nexus page and capture at least one key light/dark/mobile state.
+- **Screenshot evidence**: after adding or changing demos, open the local Tuff page and capture at least one key light/dark/mobile state.
 
 ## 13. Continue Reading
 

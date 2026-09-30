@@ -163,7 +163,7 @@ async function persistOrder({ items }: { items: Array<{ id: string }> }) {
 
 - **可访问性说明:** 重排可以纯键盘完成——一个 tab 停靠点，空格拿起，方向键移动，Escape 取消——每一步都经过 polite live region。两种拖拽都只面向指针，它们是次要路径，不再是唯一路径。
 - **动效说明:** 位移与抬升写在独立的 `translate` / `scale` 属性上而不是 `transform`：被拖的行位移不带过渡、缩放却在走弹簧，两者需要各自的时钟，所以行上的 `transition` 也由脚本逐次写入。弹簧由 `resolveTransition` 编译成 CSS `linear()` 曲线：让位 `{ stiffness: 480, damping: 30 }`，抬升与落位用 `bouncy` 预设。`prefers-reduced-motion: reduce` 下弹簧时长为 0、不抬升；被拖的行仍跟随指针——那是直接操作，不是动画。
-- **变更记录（2026-09-26）:** 默认拖拽从 HTML5 Drag & Drop 换成指针事件。原生拖拽的拖拽图像由浏览器绘制，半透明、无法加弹性，行在指针下瞬间换位，评审反馈"不跟手、不 Q 弹"。需要跨列表的宿主改用 `dragMode="native"`，行为与之前一致（Nexus 的 CMS 看板模板即如此）。
+- **变更记录（2026-09-26）:** 默认拖拽从 HTML5 Drag & Drop 换成指针事件。原生拖拽的拖拽图像由浏览器绘制，半透明、无法加弹性，行在指针下瞬间换位，评审反馈"不跟手、不 Q 弹"。需要跨列表的宿主改用 `dragMode="native"`，行为与之前一致（Tuff 的 CMS 看板模板即如此）。
 - **数据说明:** 重排会发出浅拷贝数组，并保留 item 对象引用。持久化应基于稳定 `id`，不要基于索引或对象身份。
 - **实测覆盖:** `sortable-list.test.ts` 覆盖列表语义、slot props、默认 id 渲染；指针拖拽的阈值、1:1 跟随与让位、只在松手时提交一次、过半换位与两端阻尼、Escape 复原不发事件、吞掉拖拽结束的 click 而不吞普通单击、仅手柄可拖，以及原生模式与禁用下不接管指针；原生拖拽的重排事件、同项 drop 抑制、禁用阻断、仅手柄可拖、dragend 状态清理、`dragover` 期间的实时预览（以及 `reorder` 不会每经过一行就发一次）、拖到列表外结束；内置手柄与插槽拿到的 `handleAttrs`；以及完整键盘路径：拿起（含抬升）、移动、放下、Escape、两端边界、未拿起时的焦点移动、单一 tab 停靠点、播报、`labels` 覆盖与禁用状态。
 
