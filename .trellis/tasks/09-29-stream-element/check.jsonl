@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "quality gates for frontend changes"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "typing rules incl. exposed instance types"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "token, motion and accessibility rules to verify"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "structure, one-writer rule, accessibility, suite taxonomy"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "docs coverage and wrapper docs to verify"}
+{"file": ".trellis/tasks/09-29-stream-element/research/motion-references.md", "reason": "reference numbers to check the implemented motion against"}
+{"file": ".trellis/tasks/09-29-stream-element/research/prior-decisions.md", "reason": "binding rules and rejected designs not to reintroduce"}
