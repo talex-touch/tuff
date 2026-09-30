@@ -3,11 +3,6 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-const workerMocks = vi.hoisted(() => ({
-  instances: [] as Array<{ workerData: unknown; terminateCalls: number }>,
-  terminalMessage: undefined as unknown
-}))
-
 const {
   ensureIntelligenceConfigLoadedMock,
   getCapabilityOptionsMock,
@@ -131,42 +126,6 @@ vi.mock('../ai/intelligence-sdk', () => ({
   }
 }))
 
-vi.mock('node:worker_threads', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:worker_threads')>()
-
-  return {
-    ...actual,
-    Worker: class {
-      private readonly listeners = new Map<string, (payload: unknown) => void>()
-      private readonly instance: { workerData: unknown; terminateCalls: number }
-
-      constructor(_workerPath: string, options: { workerData: { jobId: number } }) {
-        this.instance = { workerData: options.workerData, terminateCalls: 0 }
-        workerMocks.instances.push(this.instance)
-        queueMicrotask(() => {
-          this.listeners.get('message')?.(
-            workerMocks.terminalMessage ?? {
-              status: 'success',
-              jobId: options.workerData.jobId,
-              result: { text: 'worker-path' }
-            }
-          )
-        })
-      }
-
-      once(event: string, listener: (payload: unknown) => void) {
-        this.listeners.set(event, listener)
-        return this
-      }
-
-      terminate() {
-        this.instance.terminateCalls += 1
-        return Promise.resolve(0)
-      }
-    }
-  }
-})
-
 import { ocrService } from './ocr-service'
 
 interface OcrServiceTestAccess {
@@ -191,8 +150,6 @@ interface OcrServiceTestAccess {
   persistAgentSuccess: (...args: unknown[]) => Promise<void>
   deferJob: (...args: unknown[]) => Promise<void>
   failJob: (...args: unknown[]) => Promise<void>
-  invokeWorkerOcr: (...args: unknown[]) => Promise<Record<string, unknown>>
-  shouldUseWorkerPath: (...args: unknown[]) => boolean
   queueDisabledUntil: number | null
   queueDisableReason: string | null
   consecutiveFailureCount: number
@@ -206,8 +163,6 @@ interface OcrServiceTestAccess {
 }
 
 afterEach(() => {
-  workerMocks.instances.length = 0
-  workerMocks.terminalMessage = undefined
   vi.restoreAllMocks()
   ensureIntelligenceConfigLoadedMock.mockReset()
   getCapabilityOptionsMock.mockReset()
@@ -415,198 +370,99 @@ describe('OcrService runAgentJob local-first options', () => {
     }
   })
 
-  it('uses worker invocation path when enabled and source supported', async () => {
-    const service = ocrService as unknown as OcrServiceTestAccess
-    const previousWorkerEnv = process.env.TUFF_OCR_WORKER_ENABLED
-    process.env.TUFF_OCR_WORKER_ENABLED = '1'
+  function stubAgentJobDeps(service: OcrServiceTestAccess, filePath: string) {
+    vi.spyOn(service, 'updateClipboardMeta').mockResolvedValue(undefined)
+    vi.spyOn(service, 'normalizeSourceForAgent').mockResolvedValue({ type: 'file', filePath })
+    vi.spyOn(service, 'buildAgentPrompt').mockReturnValue('prompt-template')
+    const persistSpy = vi.spyOn(service, 'persistAgentSuccess').mockResolvedValue(undefined)
+    const deferSpy = vi.spyOn(service, 'deferJob').mockResolvedValue(undefined)
+    const failSpy = vi.spyOn(service, 'failJob').mockResolvedValue(undefined)
+    return { persistSpy, deferSpy, failSpy }
+  }
 
-    try {
-      getCapabilityOptionsMock.mockReturnValue({
-        allowedProviderIds: ['local-system-ocr'],
-        modelPreference: ['system-ocr']
-      })
-
-      const workerInvokeSpy = vi.spyOn(service, 'invokeWorkerOcr').mockResolvedValue({
-        result: { text: 'worker-path' },
-        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-        model: 'system-ocr-worker',
-        latency: 3,
-        traceId: 'worker-trace',
-        provider: 'local'
-      })
-      vi.spyOn(service, 'updateClipboardMeta').mockResolvedValue(undefined)
-      vi.spyOn(service, 'normalizeSourceForAgent').mockResolvedValue({
-        type: 'file',
-        filePath: '/tmp/ocr-worker-source.png'
-      })
-      vi.spyOn(service, 'buildAgentPrompt').mockReturnValue('prompt-template')
-      const persistSpy = vi.spyOn(service, 'persistAgentSuccess').mockResolvedValue(undefined)
-      vi.spyOn(service, 'deferJob').mockResolvedValue(undefined)
-      vi.spyOn(service, 'failJob').mockResolvedValue(undefined)
-
-      await service.runAgentJob(9, {
-        id: 9,
-        clipboardId: 321,
-        payloadHash: 'hash-worker',
-        meta: JSON.stringify({
-          source: { type: 'clipboard' },
-          options: {}
-        })
-      })
-
-      expect(workerInvokeSpy).toHaveBeenCalledOnce()
-      expect(aiInvokeMock).not.toHaveBeenCalled()
-      expect(persistSpy).toHaveBeenCalledOnce()
-    } finally {
-      if (previousWorkerEnv === undefined) {
-        delete process.env.TUFF_OCR_WORKER_ENABLED
-      } else {
-        process.env.TUFF_OCR_WORKER_ENABLED = previousWorkerEnv
-      }
+  function successfulInvocation(text: string) {
+    return {
+      result: { text },
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      model: 'system-ocr',
+      latency: 6,
+      traceId: 'provider-trace',
+      provider: 'local'
     }
+  }
+
+  it('resolves a supported file job through exactly one route and persists one success', async () => {
+    const service = ocrService as unknown as OcrServiceTestAccess
+    getCapabilityOptionsMock.mockReturnValue({
+      allowedProviderIds: ['local-system-ocr'],
+      modelPreference: ['system-ocr']
+    })
+    aiInvokeMock.mockResolvedValue(successfulInvocation('provider-path'))
+
+    const { persistSpy, deferSpy, failSpy } = stubAgentJobDeps(service, '/tmp/ocr-source.png')
+
+    await service.runAgentJob(9, {
+      id: 9,
+      clipboardId: 321,
+      payloadHash: 'hash-single-route',
+      meta: JSON.stringify({ source: { type: 'clipboard' }, options: {} })
+    })
+
+    // Regression: the removed worker-first path recognised the image natively, timed out after
+    // 30s, then ran the same image a second time through the provider route. That duplicate
+    // native recognition is what aborted the host. A supported job must resolve through one route.
+    expect(aiInvokeMock).toHaveBeenCalledOnce()
+    expect(persistSpy).toHaveBeenCalledOnce()
+    expect(deferSpy).not.toHaveBeenCalled()
+    expect(failSpy).not.toHaveBeenCalled()
   })
 
-  it('lets the worker exit after a success message instead of terminating during N-API completion', async () => {
+  it('defers a retryable provider failure once and never fails the job', async () => {
     const service = ocrService as unknown as OcrServiceTestAccess
+    getCapabilityOptionsMock.mockReturnValue({
+      allowedProviderIds: ['local-system-ocr'],
+      modelPreference: ['system-ocr']
+    })
+    aiInvokeMock.mockRejectedValue(new Error('fetch failed'))
 
-    const response = await service.invokeWorkerOcr(
-      12,
-      {
-        clipboardId: 500,
-        payloadHash: 'worker-unhinted'
-      },
-      {
-        source: { type: 'file', filePath: '/tmp/clipboard-image.png' },
-        options: {}
-      },
-      {
-        type: 'file',
-        filePath: '/tmp/clipboard-image.png'
-      }
-    )
+    const { persistSpy, deferSpy, failSpy } = stubAgentJobDeps(service, '/tmp/ocr-retry.png')
 
-    expect(response).toMatchObject({ result: { text: 'worker-path' } })
-    expect(workerMocks.instances).toHaveLength(1)
-    const workerData = workerMocks.instances[0]?.workerData as {
-      options: { language?: string }
-    }
-    expect(workerData.options.language).toBeUndefined()
-    expect(workerMocks.instances[0]?.terminateCalls).toBe(0)
+    await service.runAgentJob(11, {
+      id: 11,
+      clipboardId: 654,
+      payloadHash: 'hash-retryable',
+      meta: JSON.stringify({ source: { type: 'clipboard' }, options: {} })
+    })
+
+    // A retryable classification must defer (one attempt), not double-run native work and not
+    // burn the job as fatal.
+    expect(aiInvokeMock).toHaveBeenCalledOnce()
+    expect(deferSpy).toHaveBeenCalledOnce()
+    expect(failSpy).not.toHaveBeenCalled()
+    expect(persistSpy).not.toHaveBeenCalled()
   })
 
-  it('rejects malformed success messages without terminating during N-API completion', async () => {
+  it('fails an unclassified provider error once instead of deferring it', async () => {
     const service = ocrService as unknown as OcrServiceTestAccess
-    workerMocks.terminalMessage = {
-      status: 'success',
-      jobId: 13,
-      result: { text: 42 }
-    }
+    getCapabilityOptionsMock.mockReturnValue({
+      allowedProviderIds: ['local-system-ocr'],
+      modelPreference: ['system-ocr']
+    })
+    aiInvokeMock.mockRejectedValue(new Error('image decode exploded'))
 
-    await expect(
-      service.invokeWorkerOcr(
-        13,
-        {
-          clipboardId: 501,
-          payloadHash: 'worker-malformed-success'
-        },
-        {
-          source: { type: 'file', filePath: '/tmp/clipboard-image.png' },
-          options: {}
-        },
-        {
-          type: 'file',
-          filePath: '/tmp/clipboard-image.png'
-        }
-      )
-    ).rejects.toThrow('[OCR Worker] Invalid success response payload')
+    const { persistSpy, deferSpy, failSpy } = stubAgentJobDeps(service, '/tmp/ocr-fatal.png')
 
-    expect(workerMocks.instances).toHaveLength(1)
-    expect(workerMocks.instances[0]?.terminateCalls).toBe(0)
-  })
+    await service.runAgentJob(12, {
+      id: 12,
+      clipboardId: 777,
+      payloadHash: 'hash-fatal',
+      meta: JSON.stringify({ source: { type: 'clipboard' }, options: {} })
+    })
 
-  it('rejects success messages for another job without terminating during N-API completion', async () => {
-    const service = ocrService as unknown as OcrServiceTestAccess
-    workerMocks.terminalMessage = {
-      status: 'success',
-      jobId: 15,
-      result: { text: 'worker-path' }
-    }
-
-    await expect(
-      service.invokeWorkerOcr(
-        14,
-        {
-          clipboardId: 502,
-          payloadHash: 'worker-mismatched-job'
-        },
-        {
-          source: { type: 'file', filePath: '/tmp/clipboard-image.png' },
-          options: {}
-        },
-        {
-          type: 'file',
-          filePath: '/tmp/clipboard-image.png'
-        }
-      )
-    ).rejects.toThrow('[OCR Worker] Invalid worker response payload')
-
-    expect(workerMocks.instances).toHaveLength(1)
-    expect(workerMocks.instances[0]?.terminateCalls).toBe(0)
-  })
-
-  it('falls back to provider invocation when worker path fails', async () => {
-    const service = ocrService as unknown as OcrServiceTestAccess
-    const previousWorkerEnv = process.env.TUFF_OCR_WORKER_ENABLED
-    process.env.TUFF_OCR_WORKER_ENABLED = '1'
-
-    try {
-      getCapabilityOptionsMock.mockReturnValue({
-        allowedProviderIds: ['local-system-ocr'],
-        modelPreference: ['system-ocr']
-      })
-
-      aiInvokeMock.mockResolvedValue({
-        result: { text: 'provider-path' },
-        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-        model: 'system-ocr',
-        latency: 6,
-        traceId: 'provider-trace',
-        provider: 'local'
-      })
-
-      const workerInvokeSpy = vi
-        .spyOn(service, 'invokeWorkerOcr')
-        .mockRejectedValue(new Error('worker unavailable'))
-      vi.spyOn(service, 'updateClipboardMeta').mockResolvedValue(undefined)
-      vi.spyOn(service, 'normalizeSourceForAgent').mockResolvedValue({
-        type: 'file',
-        filePath: '/tmp/ocr-worker-fallback.png'
-      })
-      vi.spyOn(service, 'buildAgentPrompt').mockReturnValue('prompt-template')
-      const persistSpy = vi.spyOn(service, 'persistAgentSuccess').mockResolvedValue(undefined)
-      vi.spyOn(service, 'deferJob').mockResolvedValue(undefined)
-      vi.spyOn(service, 'failJob').mockResolvedValue(undefined)
-
-      await service.runAgentJob(11, {
-        id: 11,
-        clipboardId: 654,
-        payloadHash: 'hash-worker-fallback',
-        meta: JSON.stringify({
-          source: { type: 'clipboard' },
-          options: {}
-        })
-      })
-
-      expect(workerInvokeSpy).toHaveBeenCalledOnce()
-      expect(aiInvokeMock).toHaveBeenCalledOnce()
-      expect(persistSpy).toHaveBeenCalledOnce()
-    } finally {
-      if (previousWorkerEnv === undefined) {
-        delete process.env.TUFF_OCR_WORKER_ENABLED
-      } else {
-        process.env.TUFF_OCR_WORKER_ENABLED = previousWorkerEnv
-      }
-    }
+    expect(aiInvokeMock).toHaveBeenCalledOnce()
+    expect(failSpy).toHaveBeenCalledOnce()
+    expect(deferSpy).not.toHaveBeenCalled()
+    expect(persistSpy).not.toHaveBeenCalled()
   })
 })
 

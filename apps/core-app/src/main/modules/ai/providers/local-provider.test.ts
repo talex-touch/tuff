@@ -7,18 +7,16 @@ import type {
 } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 
-vi.mock('@talex-touch/tuff-native', () => ({
-  getNativeOcrSupport: vi.fn(),
-  recognizeImageText: vi.fn()
+vi.mock('../../ocr/ocr-process-client', () => ({
+  recognizeImageTextIsolated: vi.fn()
 }))
 
-import { getNativeOcrSupport, recognizeImageText } from '@talex-touch/tuff-native'
+import { recognizeImageTextIsolated } from '../../ocr/ocr-process-client'
 import { NetworkHttpStatusError } from '@talex-touch/utils/network'
 import { OpenAiCompatibleLangChainProvider } from './langchain-openai-compatible-provider'
 import { LocalProvider } from './local-provider'
 
-const mockedGetNativeOcrSupport = vi.mocked(getNativeOcrSupport)
-const mockedRecognizeImageText = vi.mocked(recognizeImageText)
+const mockedRecognizeImageTextIsolated = vi.mocked(recognizeImageTextIsolated)
 const networkMocks = vi.hoisted(() => ({
   request: vi.fn(),
   requestStream: vi.fn()
@@ -108,12 +106,12 @@ async function settleWithin<T>(
 }
 
 describe('LocalProvider.visionOcr', () => {
-  it('maps native OCR result into intelligence result', async () => {
-    mockedGetNativeOcrSupport.mockReturnValue({
-      supported: true,
-      platform: 'darwin'
-    })
-    mockedRecognizeImageText.mockResolvedValue({
+  afterEach(() => {
+    mockedRecognizeImageTextIsolated.mockReset()
+  })
+
+  it('maps the isolated native OCR result and bounds the call with the caller deadline', async () => {
+    mockedRecognizeImageTextIsolated.mockResolvedValue({
       text: 'Hello OCR',
       confidence: 0.88,
       language: 'en',
@@ -129,6 +127,7 @@ describe('LocalProvider.visionOcr', () => {
     })
 
     const provider = createProvider()
+    const signal = new AbortController().signal
     const payload: IntelligenceVisionOcrPayload = {
       source: {
         type: 'base64',
@@ -138,8 +137,11 @@ describe('LocalProvider.visionOcr', () => {
       includeKeywords: true,
       language: 'en'
     }
+    // A caller deadline shorter than the 30s isolated default must reach the child, otherwise a
+    // provider-configured timeout silently waits for the client's own bound.
+    const options: IntelligenceInvokeOptions & { signal?: AbortSignal } = { timeout: 4500, signal }
 
-    const result = await provider.visionOcr(payload, {})
+    const result = await provider.visionOcr(payload, options)
 
     expect(result.model).toBe('system-ocr')
     expect(result.provider).toBe(IntelligenceProviderType.LOCAL)
@@ -154,15 +156,20 @@ describe('LocalProvider.visionOcr', () => {
       totalTokens: 0,
       cost: 0
     })
-    expect(mockedRecognizeImageText).toHaveBeenCalledOnce()
+
+    expect(mockedRecognizeImageTextIsolated).toHaveBeenCalledOnce()
+    const [nativeOptions, invocation] = mockedRecognizeImageTextIsolated.mock.calls[0]
+    expect(nativeOptions).toMatchObject({ languageHint: 'en', includeLayout: true })
+    expect(invocation).toMatchObject({ timeoutMs: 4500 })
+    expect(invocation?.signal).toBe(signal)
   })
 
-  it('throws when native OCR is unavailable', async () => {
-    mockedGetNativeOcrSupport.mockReturnValue({
-      supported: false,
-      platform: 'linux',
-      reason: 'platform-not-supported'
-    })
+  it('surfaces the isolated OCR failure instead of a successful empty result', async () => {
+    const failure = Object.assign(
+      new Error('[LocalProvider] Native OCR unavailable on linux: platform-not-supported'),
+      { code: 'OCR_PROCESS_INVALID_RESPONSE' }
+    )
+    mockedRecognizeImageTextIsolated.mockRejectedValue(failure)
 
     const provider = createProvider()
 
@@ -176,7 +183,7 @@ describe('LocalProvider.visionOcr', () => {
         },
         {}
       )
-    ).rejects.toThrow('Native OCR unavailable')
+    ).rejects.toBe(failure)
   })
 })
 
