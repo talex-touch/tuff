@@ -262,7 +262,7 @@ function buildManifest(options: CliOptions): WindowsAcceptanceManifest {
     generatedAt: new Date().toISOString(),
     platform: 'win32',
     verification: {
-      recommendedCommand: `pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "${manifestPath}" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireCompletedManualEvidence --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireEverythingSearchManualChecks --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets ChatApp,Codex,"Apple Music"`
+      recommendedCommand: `pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "${manifestPath}" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireCompletedManualEvidence --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireEverythingSearchManualChecks --requireEverythingSearchUiEvidence --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets ChatApp,Codex,"Apple Music"`
     },
     cases: WINDOWS_REQUIRED_CASE_IDS.map((caseId) => {
       const template = buildCaseTemplate(caseId, evidenceDir, {
@@ -317,6 +317,26 @@ function buildManifest(options: CliOptions): WindowsAcceptanceManifest {
           evidenceDir,
           'windows-everything-file-search-everything-unavailable.json'
         ),
+        coreBoxUiEvidence: {
+          resultEvidencePath: joinEvidencePath(
+            evidenceDir,
+            'windows-everything-file-search-corebox-ui.json'
+          ),
+          resultVerifierCommand: `pnpm -C "apps/core-app" run everything:corebox-ui:verify -- --input "${joinEvidencePath(
+            evidenceDir,
+            'windows-everything-file-search-corebox-ui.json'
+          )}" --requireModes normal,explicit-file,structured-filter --requireBackend sdk-napi --requireAvailable --requireResultRows --requireMarkerMatches --requireScreenshots --requireEmptyState --requirePlatform win32`,
+          degradedEvidencePath: joinEvidencePath(
+            evidenceDir,
+            'windows-everything-file-search-corebox-ui-degraded.json'
+          ),
+          degradedVerifierCommand: `pnpm -C "apps/core-app" run everything:corebox-ui:verify -- --input "${joinEvidencePath(
+            evidenceDir,
+            'windows-everything-file-search-corebox-ui-degraded.json'
+          )}" --requireModes normal,explicit-file,structured-filter --requireBackend unavailable --requireDegraded --requireScreenshots --requirePlatform win32`,
+          notes:
+            'Collect with pnpm windows:corebox-everything:probe on the packaged Windows app: once with the SDK DLL available and once with it pointed at a missing path. Both artifacts must pass their verifier commands before the manual check flips to true.'
+        },
         evidencePath: '<everything-search-screenshot-or-recording>',
         notes:
           'Replace placeholders with real Windows CoreBox searches and packaged backend evidence.'

@@ -139,7 +139,7 @@ describe('compareParity', () => {
       primaryFilesByType: { app: 220, file: 5000 },
       searchFilesByType: {}
     })
-    expect(failing(compareParity(before, after))).toEqual([])
+    expect(failing(compareParity(before, after, 'shared'))).toEqual([])
   })
 
   it('fails when the rollback lost files', () => {
@@ -148,7 +148,9 @@ describe('compareParity', () => {
       primaryFilesByType: { app: 220, file: 4990 },
       searchFilesByType: {}
     })
-    expect(failing(compareParity(before, after))).toContain('file count parity across the rollback')
+    expect(failing(compareParity(before, after, 'shared'))).toContain(
+      'file count parity across the rollback'
+    )
   })
 
   it('fails when the rollback lost apps', () => {
@@ -157,7 +159,34 @@ describe('compareParity', () => {
       primaryFilesByType: { app: 0, file: 5000 },
       searchFilesByType: {}
     })
-    expect(failing(compareParity(before, after))).toContain('app count parity across the rollback')
+    expect(failing(compareParity(before, after, 'shared'))).toContain(
+      'app count parity across the rollback'
+    )
+  })
+
+  /**
+   * The case the union comparison could not see: a rollback that never rebuilt the primary index
+   * while the retired search file still holds every row. Counting both files together reported
+   * 5000 = 5000 and a green run; the live homes are 0 against 5000.
+   */
+  it('fails when the stale search file is counted instead of an empty primary', () => {
+    const before = topology()
+    const after = topology({
+      primaryFilesByType: { app: 220 },
+      searchFilesByType: { file: 5000 }
+    })
+    expect(failing(compareParity(before, after, 'shared'))).toContain(
+      'file count parity across the rollback'
+    )
+  })
+
+  it('compares against the search file when the judged run is split-on', () => {
+    const before = topology()
+    const after = topology({
+      primaryFilesByType: { app: 220 },
+      searchFilesByType: { file: 5000 }
+    })
+    expect(failing(compareParity(before, after, 'split'))).toEqual([])
   })
 })
 

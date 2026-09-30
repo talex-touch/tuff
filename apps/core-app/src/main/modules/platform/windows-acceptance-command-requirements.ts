@@ -308,6 +308,34 @@ export const WINDOWS_ACCEPTANCE_CASE_VERIFIER_COMMAND_REQUIREMENTS = {
   ]
 } satisfies Record<string, VerifierCommandRequirementGroup[]>
 
+export const EVERYTHING_COREBOX_UI_RESULT_VERIFIER_COMMAND_REQUIREMENT: VerifierCommandRequirement =
+  {
+    label: 'Everything packaged CoreBox UI result verifier command',
+    fragments: [
+      'everything:corebox-ui:verify',
+      '--input',
+      '--requireModes normal,explicit-file,structured-filter',
+      '--requireAvailable',
+      '--requireResultRows',
+      '--requireMarkerMatches',
+      '--requireScreenshots',
+      '--requirePlatform win32'
+    ]
+  }
+
+export const EVERYTHING_COREBOX_UI_DEGRADED_VERIFIER_COMMAND_REQUIREMENT: VerifierCommandRequirement =
+  {
+    label: 'Everything packaged CoreBox UI degraded verifier command',
+    fragments: [
+      'everything:corebox-ui:verify',
+      '--input',
+      '--requireModes normal,explicit-file,structured-filter',
+      '--requireDegraded',
+      '--requireScreenshots',
+      '--requirePlatform win32'
+    ]
+  }
+
 export const SEARCH_TRACE_VERIFIER_COMMAND_REQUIREMENT: VerifierCommandRequirement = {
   label: 'search trace verifier command',
   fragments: [
@@ -378,6 +406,8 @@ export const ACCEPTANCE_RECOMMENDED_COMMAND_REQUIREMENT: VerifierCommandRequirem
     '--requireRecommendedCommandInputMatch',
     '--requireSearchTrace',
     '--requireClipboardStress',
+    '--requireEverythingSearchManualChecks',
+    '--requireEverythingSearchUiEvidence',
     '--requireCommonAppLaunchDetails',
     '--requireCopiedAppPathManualChecks',
     '--requireUpdateInstallManualChecks',

@@ -10,7 +10,7 @@ export function buildManifest(
     platform: 'win32',
     verification: {
       recommendedCommand:
-        'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "evidence/windows-acceptance.json" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireCompletedManualEvidence --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets ChatApp,Codex,"Apple Music"'
+        'pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "evidence/windows-acceptance.json" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireCompletedManualEvidence --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireEverythingSearchManualChecks --requireEverythingSearchUiEvidence --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets ChatApp,Codex,"Apple Music"'
     },
     cases: WINDOWS_REQUIRED_CASE_IDS.map((caseId) => ({
       caseId,
