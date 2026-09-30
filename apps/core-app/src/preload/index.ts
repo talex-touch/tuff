@@ -784,7 +784,7 @@ const { appendLoading, removeLoading, handleEvent, updateMessage, markWindowLoad
 })
 
 domReady().then(() => {
-  const info = useInitialize()
+  const info = useInitialize(process.platform)
   const startupContext = startupContextSnapshot ?? resolvePreloadStartupContext(null)
 
   if (isMainWindow()) {

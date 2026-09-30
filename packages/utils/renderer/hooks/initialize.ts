@@ -1,3 +1,6 @@
+import type { RuntimePlatform } from '../../env'
+import { resolveRuntimePlatform } from '../../env'
+
 /**
  * Interface for renderer initialization information
  * @interface IInitializationInfo
@@ -11,8 +14,8 @@ export interface IInitializationInfo {
   userAgent: string
   /** Current URL of the renderer */
   currentUrl: string
-  /** Operating system platform */
-  platform: NodeJS.Platform
+  /** Canonical operating system identity, independent of CPU architecture */
+  platform: RuntimePlatform
   /** Screen resolution information */
   screenResolution: {
     width: number
@@ -96,13 +99,17 @@ function checkServiceWorkerSupport(): boolean {
  * Initializes renderer process with system and performance information
  * @returns Initialization information object
  */
-export function useInitialize(): IInitializationInfo {
+export function useInitialize(electronPlatform?: string): IInitializationInfo {
   if (window.$initInfo) {
     return window.$initInfo
   }
 
   const now = Date.now()
-  const runtimePlatform = (globalThis as any)?.process?.platform ?? navigator.platform
+  const runtimePlatform = resolveRuntimePlatform({
+    electronPlatform: electronPlatform ?? (typeof process !== 'undefined' ? process.platform : null),
+    navigatorPlatform: navigator.platform,
+    userAgent: navigator.userAgent,
+  })
   const initInfo: IInitializationInfo = {
     initTimestamp: now,
     initTime: new Date(now).toISOString(),
