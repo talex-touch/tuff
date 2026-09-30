@@ -1,0 +1,213 @@
+---
+title: "StreamText"
+description: "Text that streams in word by word at a steady pace, each word resolving out of a blur in a colour sweep, with inline citations and the Tuff caret"
+category: AiReasoning
+status: beta
+since: 0.6.3
+tags: [ai, streaming, text, reveal, caret]
+syncStatus: reviewed
+verified: true
+---
+
+## Installation
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxStreamText } from '@talex-touch/tuffex/stream-text'
+  import '@talex-touch/tuffex/stream-text/style.css'
+  // Citation chips are TxInlineCitation, whose sheet is separate
+  import '@talex-touch/tuffex/inline-citation/style.css'
+  import '@talex-touch/tuffex/base.css' // tokens + resets, once per app
+---
+:::
+
+## Usage
+
+`TxStreamText` shows text as it streams in. Pass everything received so far as `content` and keep `streaming` on while the source is live; it releases the words at a steady pace however unevenly they arrive, and each word fades in out of a light blur while its colour sweeps blue → violet → pink onto the ink.
+
+### Streaming
+
+The demo feeds uneven bursts of 1–6 characters every 20–90ms, with one long pause in the middle. The words still come out one every 24ms; during the pause the Tuff caret keeps breathing, and when the stream ends it folds away.
+
+:::TuffDemoWrapper{demo="StreamTextStreamTextDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const reply = ref('')
+  const busy = ref(true)
+
+  for await (const delta of stream)
+    reply.value += delta
+  busy.value = false
+  </script>
+
+  <template>
+    <p>
+      <TxStreamText :content="reply" :streaming="busy" />
+    </p>
+  </template>
+---
+:::
+
+### Reveal presets
+
+`reveal` picks how a word enters: `aurora` (the default) fades in out of a 4px blur in the colour sweep; `hue` is the sweep alone; `blur` drops the colour; `languid` rises slowly out of an 8px blur; `none` shows each word as it is released. With a complete `content`, `replay()` plays it back and `reserve` keeps the lines from moving.
+
+:::TuffDemoWrapper{demo="StreamTextPresetsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import type { TxStreamTextInstance } from '@talex-touch/tuffex/stream-text'
+
+  const text = ref<TxStreamTextInstance | null>(null)
+  </script>
+
+  <template>
+    <TxStreamText ref="text" :content="answer" reveal="blur" reserve />
+    <TxButton @click="text?.replay()">Replay</TxButton>
+  </template>
+---
+:::
+
+### Slots and state
+
+`content` can also be a list of runs: text with marks and links, citations, and custom runs for anything else. Every built-in piece has a slot, and the slots, the `state-change` event and the instance's `state` all say where the stream is.
+
+:::TuffDemoWrapper{demo="StreamTextSlotsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStreamText :content="runs" @state-change="state = $event" @cite="open">
+      <template #caret="{ state }">
+        <span class="my-caret" :data-state="state" />
+      </template>
+      <template #citation="{ source, index }">
+        <sup>{{ index }}</sup>
+      </template>
+      <template #inline="{ name, props }">
+        <MyDelta v-if="name === 'delta'" :value="props.value" />
+      </template>
+    </TxStreamText>
+  </template>
+---
+:::
+
+### Best Practices
+
+- Pass the whole text so far, not the latest delta. The component works out what is new; a rewrite of earlier text re-reveals only what changed.
+- Keep `streaming` true until the source has really finished. While it is true, a last word that may still be growing waits for what follows it (for 200ms at most once the source goes quiet), because a token often ends in the middle of a word.
+- For an answer that is already complete (history, a replay), leave `streaming` off: content present at mount shows at once, and `replay()` is how you play it again.
+- Use `reserve` whenever a complete text plays back inside a layout that must not move, such as a card, a chat bubble or a gallery tile.
+- Copy and share the full text you hold, never what is on screen: the display trails the source by up to `maxLagMs`.
+- Lower `maxLagMs` if the display must keep up closely with a fast model; raise `wordMs` for a calmer pace.
+
+## API Reference
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `content` | `string \| StreamInline[]` | — | Everything received so far: plain text, or runs of text, citations and custom inlines. Required. |
+| `streaming` | `boolean` | `false` | The source is still producing. While true, a last word that may still be growing waits until something follows it or the source has been quiet for 200ms. |
+| `wordMs` | `number` | `24` | Release one word every `wordMs`. |
+| `maxLagMs` | `number` | `600` | Speed up so no word shows later than this after it arrived. |
+| `drainMs` | `number` | `320` | Once `streaming` turns false, release the rest within this. |
+| `pauseMs` | `number` | `400` | Report `paused` after this long without a new word while streaming. |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | How a word enters. |
+| `caret` | `boolean` | `true` | Show the stream caret while the stream is live. Switched off, the caret goes at once; a stream that ends retracts it. |
+| `reserve` | `boolean` | `false` | Hold the final layout with an invisible copy while a complete content plays back. Ignored while `streaming`. |
+| `paced` | `boolean` | `true` | `false` shows each word as it arrives, still animated. `TxStreamElement` paces its parts itself and passes `false`. |
+| `appear` | `boolean` | `false` | Content present at mount enters too, instead of showing as it is. `TxStreamElement` sets it on parts that mount mid-answer. Read at mount. |
+| `tag` | `string` | `'span'` | Root element. |
+| `locale` | `string` | `'zh'` | Word segmentation locale for `Intl.Segmenter`. |
+
+### Events
+
+| Name | Payload | Description |
+|------|---------|-------------|
+| `state-change` | `(state: StreamState)` | The stream moved to another state. |
+| `done` | — | Once per play-through, when the last word is shown and the source has finished. |
+| `cite` | `(source: AiSourceItem)` | A citation chip was opened. The chip never navigates by itself. |
+
+### Slots
+
+| Name | Scope | Description |
+|------|-------|-------------|
+| `caret` | `{ state }` | Replaces the Tuff caret. Rendered only while the stream is live. |
+| `citation` | `{ source, label, index }` | Replaces the citation chip. `index` is the marker's number when there is one. |
+| `inline` | `{ name, props }` | Renders `{ type: 'custom' }` runs. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|-------------|
+| `state` | `StreamState` | Where the stream is. |
+| `replay` | `() => void` | Plays the whole content again from the first word, at `wordMs`. |
+| `skip` | `() => void` | Shows everything now, without entrances. |
+
+### CSS Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `--tx-stream-reveal-1` / `-2` / `-3` | blue / violet / pink, per theme | The colour stops a word sweeps through. The high-contrast themes set all three to the ink. |
+| `--tx-stream-caret-start` / `--tx-stream-caret-end` | `#199ffe` / `#810dc6` | The caret's gradient: the Tuff logo's core colours. |
+| `--tx-stream-reveal-duration` | the preset's | Written by the component onto its root from `reveal`; hosts do not set it. |
+
+### Types
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  type StreamState = 'idle' | 'streaming' | 'paused' | 'draining' | 'done'
+  type StreamRevealPreset = 'aurora' | 'hue' | 'blur' | 'languid' | 'none'
+
+  type StreamInline =
+    | { type: 'text', text: string, marks?: ('strong' | 'em' | 'del' | 'code')[], href?: string }
+    | { type: 'citation', source: AiSourceItem, label?: string, index?: number }
+    | { type: 'custom', name: string, props?: Record<string, unknown> }
+---
+:::
+
+## Overview
+
+- **One word at a time, never far behind.** Words go out every `wordMs`. When a burst would take longer than `maxLagMs` to show at that pace, the release speeds up just enough for the oldest waiting word to make it in time, so a burst reads as a quicker flow rather than a jump. When the source stops, whatever is left drains within `drainMs`.
+- **States.** `idle` (nothing yet) → `streaming` → `paused` (still streaming, nothing new for `pauseMs`) → `draining` (source finished, backlog still going out) → `done`. The caret shows in `streaming`, `paused` and `draining`, and retracts on `done`.
+- **Words, not characters.** Text splits with `Intl.Segmenter`, so Chinese reveals by word. Punctuation stays with the word it belongs to, so a line never starts on a lone `，` or `.`; spaces sit outside the animated word. Without `Intl.Segmenter`, Latin splits on spaces and CJK by character.
+- **Only new text enters.** Content present at mount shows at once; content that arrives later animates. A rewrite of earlier text re-releases from the first changed word, and a word that merely grew keeps its place.
+- **Settled words are plain text.** A word is its own element only while its entrance plays; afterwards it merges into the surrounding text node, so the amount of work per released word does not grow with the length of the answer.
+- **The caret takes no room.** It overhangs the last word, so lines break where they would without it, and where the `reserve` copy breaks.
+- **Links are only for safe URLs.** `href` renders for `http(s)`, `mailto`, `tel`, relative, query and hash URLs; anything else stays text. So does a scheme-relative `//host`: it would take the page's own scheme, which in the desktop app is `file:`. Links carry `rel="noopener noreferrer"` and no `target`.
+- **Reduced motion.** No entrances and no pacing: words show as they arrive, and the caret rests as a still arc around the core.
+- **Server rendering.** Rendered as plain text with no animated elements and no timers; the client takes over from there.
+- **Accessibility.** The root carries `aria-busy="true"` while the stream is live; the caret and the `reserve` copy are hidden from assistive technology, the copy also `inert`. The text itself is not a live region: wrap the conversation in `role="log"` (or your own live region) to announce replies.
+
+## Technologies
+
+- Component sources: `packages/tuffex/packages/components/src/stream-text/src/TxStreamText.vue` and `TxStreamCaret.vue`; the clock is `use-stream-pacer.ts`, the word splitter `segment.ts`, the preset durations `presets.ts`.
+- Reveal keyframes and preset rules: the `stream-reveal-keyframes` and `stream-reveal-presets` mixins in `packages/tuffex/packages/components/style/mixins.scss`, shared by the stream components; colour tokens in `style/variables.scss`.
+- **Tested behaviour:** `stream-text/__tests__/segment.test.ts` (7 cases: Chinese words with their punctuation, spaces, a percentage and a full stop, brackets and quotes, emoji, round trip, the fallback), `pacer.test.ts` (16: content present at mount, entering with `appear`, cadence, even spreading of a burst, the lag bound, drain, pause, the pause clock starting with the source, the full state walk, settling, replay, skip, unpaced release, rewind, no clock, disposal), `stream-text.test.ts` (18: mount without entrance, entrance and settling, the held-back last word, its release on a quiet source and on closing punctuation, caret, a caret switched off going at once, state events, rewrites, citations, the space after a chip, slots, `reserve`, safe links, scheme-relative URLs, reduced motion, SSR, `appear`), `model.test.ts` (7: a prefix of the units rebuilds into exactly those units, across marks and links, citations, custom inlines, Chinese and emoji, with whitespace kept out of the words) and `stream-text-style.test.ts` (10: animations only without reduced motion, preset keyframes, the TS/CSS preset table, the code variant without the sweep, the block variant with only the block fade, the colour sweep, a compositor-only caret, the caret's logo colours, its zero inline size, token coverage per theme).
+- Motion reference: kobra.systems' streaming text (opacity and a three-stop hue sweep, 180ms per word, one word every 16ms — now the `hue` preset) and Beautiful UI's streaming text (opacity and a 4px blur, 420ms — now `blur`); the default `aurora` combines the two over 460ms.
+- The caret is drawn from the Tuff logo (`apps/nexus/public/logo.svg`): its ring as a travelling arc, its core glyph breathing inside it.
+
+<TuffDocSourceLink />
+
+## Use cases
+
+- An AI answer arriving token by token, in a chat, a panel or a notification.
+- Replaying a stored answer, a changelog line or a scripted demo at a readable pace, without moving the layout.
+- A short generated sentence with sources, where citations should land exactly where the claim is made.
+
+## Related components
+
+- [StreamMarkdown](./stream-markdown.en.mdc) renders whole Markdown documents as they stream, with the same reveal presets and caret.
+- [CodeStream](./code-stream.en.mdc) streams code.
+- [InlineCitation](./inline-citation.en.mdc) is the default citation chip.
+- [Sources](./sources.en.mdc) lists the sources at the end of an answer.

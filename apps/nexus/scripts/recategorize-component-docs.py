@@ -273,6 +273,8 @@ TAXONOMY: dict[str, list[str]] = {
         "chain-of-thought",
         "reasoning-disclosure",
         "thinking-orb",
+        "stream-element",
+        "stream-text",
         "stream-markdown",
         "code-stream",
         "inline-citation",

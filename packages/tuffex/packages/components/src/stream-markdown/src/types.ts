@@ -1,4 +1,5 @@
 import type { Component } from 'vue'
+import type { StreamRevealPreset } from '../../stream-text/src/types'
 
 /**
  * A renderable block produced by the incremental stream lexer.
@@ -43,6 +44,14 @@ export interface StreamMarkdownProps {
   content: string
   /** Keeps the tail cursor visible and defers tail-fence rendering while true. */
   streaming?: boolean
+  /**
+   * How newly streamed text enters: the StreamElement family's presets.
+   * `languid` loses its rise here, because a streamed chunk runs across words
+   * and has to stay inline. @default 'aurora'
+   */
+  reveal?: StreamRevealPreset
+  /** Shows the Tuff caret at the write head while streaming. @default true */
+  caret?: boolean
   /** Sanitizes rendered HTML through dompurify. On by default; keep it on. */
   sanitize?: boolean
   theme?: 'light' | 'dark' | 'auto'

@@ -1,5 +1,7 @@
 // Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
+import type { StreamRevealPreset } from '../../stream-text/src/types'
+
 /**
  * How a diff row relates to the previous revision.
  *
@@ -51,7 +53,45 @@ export interface CodeStreamProps {
    * host owns the cadence, the component owns the transition.
    */
   revealedLines?: number
-  /** Draws the accent caret after the last revealed line. @default true */
+  /**
+   * Streams `code` itself: pass everything received so far and keep this true
+   * while the source is live; the component releases it word by word at a
+   * steady pace. Setting it at all — `true` or `false` — without
+   * `revealedLines` or `diff` is what selects this mode; omit it for a plain
+   * listing. `false` shows the code at once and lets `replay()` play it back.
+   */
+  streaming?: boolean
+  /** Streaming mode: how a word enters. @default 'aurora' */
+  reveal?: StreamRevealPreset
+  /** Streaming mode: release one word every `wordMs`. @default 24 */
+  wordMs?: number
+  /** Streaming mode: no word shows later than this after it arrived. @default 600 */
+  maxLagMs?: number
+  /** Streaming mode: once `streaming` turns false, release the rest within this. @default 320 */
+  drainMs?: number
+  /** Streaming mode: report `paused` after this long without a new word. @default 400 */
+  pauseMs?: number
+  /**
+   * Streaming mode: while complete code plays back, hold its full height so
+   * nothing below moves. Ignored while `streaming`.
+   */
+  reserve?: boolean
+  /**
+   * Streaming mode: `false` shows each word the moment it arrives, still with
+   * its entrance. `TxStreamElement` paces its parts itself and passes `false`.
+   * @default true
+   */
+  paced?: boolean
+  /**
+   * Streaming mode: code present at mount enters too, instead of showing as
+   * it is. `TxStreamElement` sets it on code that mounts mid-answer. Read at
+   * mount. @default false
+   */
+  appear?: boolean
+  /**
+   * The caret: after the last revealed line in `revealedLines` mode, the
+   * stream caret while streaming mode is live. @default true
+   */
   caret?: boolean
   /** @default true */
   lineNumbers?: boolean

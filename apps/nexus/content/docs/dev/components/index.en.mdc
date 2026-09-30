@@ -109,7 +109,7 @@ Each suite has one overview page carrying its own live preview and its own compo
 |-------|--------|------------|-------|
 | [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 93 | `@talex-touch/tuffex/base` |
 | [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 27 | `@talex-touch/tuffex/pro` |
-| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 32 | `@talex-touch/tuffex/ai` |
+| [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 34 | `@talex-touch/tuffex/ai` |
 | [Data Suite](./data-suite.en.mdc) | Charts / Visualization | 10 | `@talex-touch/tuffex/pro` (visualization + charts) + `@talex-touch/tuffex/charts` (chart family entry) |
 | [Flow Suite](./flow-suite.en.mdc) | Flow | 1 | `@talex-touch/tuffex/ai` |
 
@@ -317,6 +317,8 @@ AI-native interface components, partly adapted from [Beautiful UI](https://www.b
 - [ChainOfThought](./chain-of-thought.en.mdc)
 - [ReasoningDisclosure](./reasoning-disclosure.en.mdc)
 - [ThinkingOrb](./thinking-orb.en.mdc)
+- [StreamElement](./stream-element.en.mdc)
+- [StreamText](./stream-text.en.mdc)
 - [StreamMarkdown](./stream-markdown.en.mdc)
 - [CodeStream](./code-stream.en.mdc)
 - [InlineCitation](./inline-citation.en.mdc)

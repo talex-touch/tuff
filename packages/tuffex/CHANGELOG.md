@@ -2,8 +2,17 @@
 
 ## [Unreleased]
 
+### 📦 组件变动 (Components)
+
+- **新增组件**: `stream-element`, `stream-text`
+- **更新组件**: `code-stream`, `stream-markdown`
+
 ### ✨ 组件增强
 
+- 新增 `TxStreamElement` 流式回答组件：把一整段回答（Markdown 或结构化 `parts`）放在同一个匀速时钟上逐词显影，标题、段落、列表、引用与代码严格按顺序出现；`[n]` 按 `sources` 解析为引用 chip（代码与链接文字中不解析）；表格、公式、mermaid、原始 HTML 与图片整体委托给 `TxStreamMarkdown` 并逐行显影；支持 `reserve` 回放、`replay()`/`skip()`，`caret`/`citation`/`inline`/`code`/`part-<name>`/`footer` 插槽与 `state-change`/`done`/`cite` 事件。
+- 新增 `TxStreamText` 流式文字组件：逐词匀速放出流式到达的文字，突发内容不会让显示落后源头超过 `maxLagMs`，源头结束后在 `drainMs` 内放完；每个词从轻微模糊中析出并扫过蓝紫粉色带（默认 `aurora`，另有 `hue`/`blur`/`languid`/`none` 预设）；支持行内引用与自定义片段、取材自 Tuff logo 的光标、`caret`/`citation`/`inline` 插槽、`state-change`/`done` 事件与 `replay()`/`skip()`；遵循减少动态效果偏好。新增 `appear` 属性（挂载时已有的内容也播放进场）；关闭 `caret` 时光标立即移除，只有流结束时才收起；修复引用 chip 后紧跟的空格被吞掉。
+- `TxCodeStream` 新增流式模式（设置 `streaming` 即启用）：把目前收到的代码传给 `code`，组件逐词匀速放出，默认每个词在自己的语法颜色里从轻微模糊中析出（`reveal` 可换预设）；增长中的代码按 120ms 合并重新高亮，Tuff 光标跟随正在书写的那一行且换行不重挂载；新增 `reveal`/`wordMs`/`maxLagMs`/`drainMs`/`pauseMs`/`reserve` 属性、`state-change`/`done` 事件、`caret` 插槽与 `state`/`replay()`/`skip()`；并以 `TxStreamCode` 别名导出；另有 `paced`（由父组件统一控制节奏时关闭）与 `appear` 属性；关闭 `caret` 时流式光标立即移除，只有流结束时才收起。`revealedLines` 与 diff 模式行为不变，整个组件的动效统一只在未减弱动效时声明。
+- `TxStreamMarkdown` 换上流式家族的动效：新流入的字符使用 `TxStreamText` 的显影预设（默认 `aurora`，新增可选 `reveal` 属性），新块改用共享的模糊淡入；尾部的渐变光球换成 Tuff 光标，全组件只保留一个、用 `translate` 属性定位（新增可选 `caret` 属性，关闭时光标立即移除，流结束时才收起），段落写到哪里跟到哪里，列表/表格/围栏下方单独一行，换元素不重新挂载；整个组件的动效统一只在未减弱动效时声明（遮罩过渡与表格复制按钮的过渡此前在减弱动效下仍会播放）。
 - `TxDropdownMenu` 与 `TxContextMenu` 的关闭型菜单项新增统一确认反馈：先清空高亮 90ms、再复用 active 选中态确认 90ms，然后触发 `select` 并关闭；支持菜单/Panel/单项 `activationFeedback` 覆盖，`closeOnSelect=false` 与减少动态效果保持即时路径。
 
 ## [0.6.2] - 2026-09-28

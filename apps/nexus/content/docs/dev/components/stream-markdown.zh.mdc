@@ -1,6 +1,6 @@
 ---
 title: Stream Markdown
-description: 面向流式输出的 Markdown 渲染器，尾部带光标，围栏块可按语言接管。
+description: 面向流式输出的 Markdown 渲染器：新文字按 StreamElement 家族的显影进场，Tuff 光标跟随写入位置，围栏块可按语言接管。
 category: AiReasoning
 status: beta
 since: 0.3.9
@@ -46,7 +46,9 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `content` | `string` | — | Markdown 原文。必填。 |
-| `streaming` | `boolean` | `false` | 是否仍在输出；控制尾部光标与尾部围栏的延迟渲染。 |
+| `streaming` | `boolean` | `false` | 是否仍在输出；控制光标、显影与尾部围栏的延迟渲染。 |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | 新流入文字的进场方式，与 `TxStreamText` 使用同一套预设。流式片段会跨越多个词，必须保持行内，所以 `languid` 保留缓慢的模糊析出，但没有上浮。 |
+| `caret` | `boolean` | `true` | `streaming` 时在写入位置显示 Tuff 光标。关闭时光标立即移除；流结束时光标收起。 |
 | `sanitize` | `boolean` | `true` | 是否通过 dompurify 净化 HTML。 |
 | `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | 配色主题。 |
 | `renderers` | `Record<string, StreamMarkdownBlockRenderer>` | — | 按语言注册的围栏块渲染组件，例如 `{ mermaid: TxMermaidBlock }`。 |
@@ -62,7 +64,10 @@ code: |
 ## 概述
 
 - 文档被切成块逐块渲染，因此追加文本不会导致整篇重排——这是流式场景下的关键性质。
-- `streaming` 为真时尾部显示光标，且**尚未闭合的尾部围栏会推迟渲染**：半截的代码块不会先以错误的形态闪现，等闭合后再交给渲染器。
+- `streaming` 为真时，**尚未闭合的尾部围栏会推迟渲染**：半截的代码块不会先以错误的形态闪现，等闭合后再交给渲染器。
+- **光标是 Tuff 光标**，与 `TxStreamText` 的相同。尾部是段落、标题或引用时，它紧跟在最后一个字符之后；尾部是列表、表格或围栏时，它单独位于下方一行。光标只有一个元素，用 `translate` 属性定位：它不占位置，周围不会重排，写入位置在元素之间移动时也不会重新挂载。流式进行时每帧最多重新定位一次，尺寸变化时也会重新定位；`streaming` 变为 false 时收起。（用 `translate` 而不是 `transform`：进场与收起的 `scale` 这样才会原地缩放，而不是从角落飞过来。）
+- **新文字按家族的显影进场。** 新流入的字符使用 `reveal` 预设（默认 `aurora`：从轻微模糊中析出，颜色依次扫过蓝、紫、粉后落到正文色），每个新块只淡入一次。每次增量都会整体重新渲染块，所以正在进场的字符会在每次替换后以负延迟重新包裹，从被打断处继续。
+- 减弱动效下不播放任何进场或缓动：文字到达即显示，光标静止为一段光弧。所有动效都只在 `prefers-reduced-motion: no-preference` 下声明。
 - `fenceClosed` 只对流式文档的尾部围栏为 `false`；缩进代码没有围栏，也报 `false`，组件把任何非尾部块都视作已完成。
 - `sanitize` 默认开启，通过动态 `import('dompurify')` 加载。**请保持开启**——内容来自模型输出。
 - dompurify 加载失败时 `sanitizer` 置空，组件不会因此崩溃；这意味着净化是尽力而为，不能替代服务端的信任边界。
