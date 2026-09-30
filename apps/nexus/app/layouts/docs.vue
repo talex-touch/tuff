@@ -428,7 +428,7 @@ onBeforeUnmount(() => {
       <div class="docs-layout-foreground relative flex flex-1 justify-center pb-20 pt-20">
         <div class="docs-layout-frame min-w-0 w-full flex gap-6 lg:gap-8">
           <aside class="hidden w-[230px] shrink-0 xl:block">
-            <div class="docs-sidebar sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto overflow-x-hidden pb-8 pr-1.5 relative z-30">
+            <div class="docs-sidebar sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto overflow-x-hidden pr-1.5 relative z-30">
               <DocsSidebar />
             </div>
           </aside>
@@ -662,6 +662,8 @@ onBeforeUnmount(() => {
 .docs-layout-root {
   /* The root's own background: `bg-white` / `dark:bg-dark` (#121212 in uno.config.ts). */
   --docs-edge-color: #fff;
+  /* Shared with `.docs-sidebar`, whose list has to scroll clear of this strip. */
+  --docs-edge-bottom-height: 64px;
 }
 
 .dark .docs-layout-root,
@@ -699,7 +701,7 @@ onBeforeUnmount(() => {
 
 .docs-edge-blur--bottom {
   bottom: 0;
-  --docs-edge-height: 64px;
+  --docs-edge-height: var(--docs-edge-bottom-height);
   --docs-edge-dir: to bottom;
 }
 
@@ -848,6 +850,14 @@ onBeforeUnmount(() => {
 .tuffex-docs-hero-bg-fade-leave-to {
   opacity: 0;
   filter: blur(12px);
+}
+
+/* The sidebar reaches the viewport's bottom edge, so the bottom strip — fixed
+   above the whole foreground — covers its end. Padding the end by the strip's
+   height lets the last row scroll clear of it, with the 2rem the list used to
+   end on. */
+.docs-sidebar {
+  padding-bottom: calc(var(--docs-edge-bottom-height) + 2rem);
 }
 
 .docs-sidebar::-webkit-scrollbar {
