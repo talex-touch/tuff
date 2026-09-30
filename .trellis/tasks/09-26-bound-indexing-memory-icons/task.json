@@ -2,7 +2,7 @@
   "id": "bound-indexing-memory-icons",
   "name": "bound-indexing-memory-icons",
   "title": "Bound Tuff indexing memory and icon storage",
-  "description": "Execute the approved Issue 1964 remediation in order: bounded indexing and diagnostics, on-demand path icons, resumable legacy icon migration, native crash delivery evidence, isolated 100k and three-hour acceptance. No real-profile writes, commits, pushes, or releases.",
+  "description": "Residual Issue 1964 work after beta54: bounded indexing, path-backed icons, content-index defaults, fd enumeration and the admission layers already shipped (b3edffef1, 728d251a0, bd86b0af1). Remaining order: cold-scan icon budget probe, legacy icon conversion campaign, native crash delivery re-confirmation on the current Electron, and the 100k/three-hour isolated acceptance re-baseline. No real-profile writes, commits, pushes, or releases.",
   "status": "in_progress",
   "dev_type": null,
   "scope": null,
@@ -20,11 +20,19 @@
   "subtasks": [],
   "children": [],
   "parent": null,
-  "relatedFiles": [],
+  "relatedFiles": [
+    "apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-icon-migration-service.ts",
+    "apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-asset-service.ts",
+    "apps/core-app/src/main/db/utils.ts",
+    "apps/core-app/src/main/service/icon-service.ts",
+    "apps/core-app/src/main/service/file-icon-artifact.ts",
+    "apps/core-app/src/main/core/precore.ts",
+    "apps/core-app/src/main/modules/sentry/sentry-service.ts"
+  ],
   "notes": "",
   "meta": {
-    "nextAction": "R10 is closed; keep the bounded indexing changes on the verified branch and proceed only through normal integration/release workflow.",
-    "blocker": "None for Issue 1964 / R10. The emergency split-off and legacy opener icon lanes were reproduced in isolation and did not reproduce the historical writer storm.",
-    "evidence": "research/verification-2026-09-26.md: 100k/three-hour evidence, maxSize 10 A/B, replay-loop fix, watch task-state coalescing, source-scoped diagnostics, acknowledgement query A/B, and both split-on plus split-off/opener icon writer-lane runtime probes."
+    "nextAction": "Run slice S1 (O1 + O2): isolated cold-scan icon-budget probe plus the legacy conversion campaign (completion, SIGTERM resume, failure preservation, page rate) under /tmp. Contracts, files and probes are in implement.md; expected to require no production edits.",
+    "blocker": "None for S1. O1/O2 need only an isolated profile; O3 needs Sentry receipt access if the transport cannot be observed independently; O4 needs machine time for the three-hour residency.",
+    "evidence": "research/2026-09-29-master-reconciliation.md: per-capability file/symbol map proving admission, byte budgets, afterBatch credits, icon cutover, migration service, default-off content indexing, fd backend and progress services are landed; invalidated assumptions and the four remaining items with owners. research/verification-2026-09-26.md: prior runtime evidence (icon cutover, crash round-trip, 100k campaign, three-hour residency, R10 A/Bs), all recorded on the pre-beta54 pipeline."
   }
 }
