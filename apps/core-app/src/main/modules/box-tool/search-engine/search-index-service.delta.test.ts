@@ -257,7 +257,8 @@ describe('SearchIndexService delta/hash', () => {
     expect(
       runQueries.some(
         (query) =>
-          query.includes('DELETE FROM search_index WHERE provider =') &&
+          query.includes('DELETE FROM search_index WHERE rowid IN') &&
+          query.includes('AND provider =') &&
           query.includes('AND item_id =')
       )
     ).toBe(true)

@@ -1,0 +1,559 @@
+{
+  "date": "2026-09-30",
+  "baseline": "226e8d2fb960c053b3d0dbd6204b1221c1ead217",
+  "verificationNode": "v26.8.2",
+  "runtimeMetadataLimit": "The benchmark did not record Node version per run; verificationNode is the subsequently observed verification runtime, not a per-run attestation.",
+  "platform": "darwin",
+  "arch": "arm64",
+  "kernel": "24.6.0",
+  "measurement": "actual SearchIndexService, synthetic temporary libSQL databases; process CPU-ms, not watts; sequential baseline/candidate, not an isolated host or whole-app A/B",
+  "candidateAppSmoke": {
+    "electron": "41.10.7",
+    "signed": false,
+    "syntheticFiles": 3000,
+    "fileProviderFtsRows": 3000,
+    "coldScanWallMs": 78900.34425,
+    "watchProbeCount": 20,
+    "watchInsertMs": 1279.1515419999923,
+    "watchDeleteMs": 507.4579999999987,
+    "remainingWatchProbeMatches": 0,
+    "postScanObservationSeconds": 60,
+    "mainMedianCpuPercent": 5.963684688363741,
+    "groupMedianCpuPercent": 42.36966719338348,
+    "groupMaxCpuPercent": 48.67952363302235,
+    "longEventLoopWarnings": 0,
+    "measurement": "candidate-only cumulative ps CPU deltas in twelve five-second windows; may miss exited short-lived children; not watts or a matched app A/B",
+    "idleAcceptance": "not established: update download retry and startup maintenance occurred; no confirmed settled-idle group reduction",
+    "priorAttempts": [
+      "temporary-system-path fixture filtered out",
+      "Documents fixture held pending by unresolved TCC determination gate"
+    ],
+    "cleanup": "owned candidate processes stopped and generated profile removed"
+  },
+  "sources": [
+    {
+      "rows": 100000,
+      "coldItems": 20,
+      "baseline": [
+        {
+          "repeat": 1,
+          "rows": 100000,
+          "coldItems": 20,
+          "results": [
+            {
+              "phase": "first-update-including-rowid-discovery",
+              "wallMs": 666.1047500000001,
+              "cpuMs": 659.041
+            },
+            {
+              "phase": "unchanged-update",
+              "wallMs": 694.7118750000002,
+              "cpuMs": 638.34
+            },
+            {
+              "phase": "changed-update",
+              "wallMs": 590.0062909999999,
+              "cpuMs": 570.144
+            },
+            {
+              "phase": "cold-insert",
+              "wallMs": 18.591791999999714,
+              "cpuMs": 23.493
+            },
+            {
+              "phase": "delete",
+              "wallMs": 611.7295410000002,
+              "cpuMs": 591.153
+            }
+          ],
+          "searchMedianMs": 0.17616699999962293,
+          "searchP95Ms": 0.5107080000002497,
+          "remaining": 100000
+        },
+        {
+          "repeat": 2,
+          "rows": 100000,
+          "coldItems": 20,
+          "results": [
+            {
+              "phase": "first-update-including-rowid-discovery",
+              "wallMs": 582.076916,
+              "cpuMs": 578.417
+            },
+            {
+              "phase": "unchanged-update",
+              "wallMs": 544.9951250000004,
+              "cpuMs": 538.25
+            },
+            {
+              "phase": "changed-update",
+              "wallMs": 604.0617500000008,
+              "cpuMs": 566.758
+            },
+            {
+              "phase": "cold-insert",
+              "wallMs": 15.925374999999804,
+              "cpuMs": 15.907
+            },
+            {
+              "phase": "delete",
+              "wallMs": 538.640375,
+              "cpuMs": 525.147
+            }
+          ],
+          "searchMedianMs": 0.1641250000002401,
+          "searchP95Ms": 0.1736670000000231,
+          "remaining": 100000
+        },
+        {
+          "repeat": 3,
+          "rows": 100000,
+          "coldItems": 20,
+          "results": [
+            {
+              "phase": "first-update-including-rowid-discovery",
+              "wallMs": 616.6349579999996,
+              "cpuMs": 599.149
+            },
+            {
+              "phase": "unchanged-update",
+              "wallMs": 525.4596659999997,
+              "cpuMs": 518.093
+            },
+            {
+              "phase": "changed-update",
+              "wallMs": 522.9114589999999,
+              "cpuMs": 516.694
+            },
+            {
+              "phase": "cold-insert",
+              "wallMs": 10.510583000000224,
+              "cpuMs": 11.454
+            },
+            {
+              "phase": "delete",
+              "wallMs": 520.6827499999999,
+              "cpuMs": 521.553
+            }
+          ],
+          "searchMedianMs": 0.16345799999999144,
+          "searchP95Ms": 0.17879199999970297,
+          "remaining": 100000
+        }
+      ],
+      "candidate": [
+        {
+          "repeat": 1,
+          "rows": 100000,
+          "coldItems": 20,
+          "results": [
+            {
+              "phase": "first-update-including-rowid-discovery",
+              "wallMs": 133.06762500000002,
+              "cpuMs": 133.508
+            },
+            {
+              "phase": "unchanged-update",
+              "wallMs": 3.429875000000038,
+              "cpuMs": 4.583
+            },
+            {
+              "phase": "changed-update",
+              "wallMs": 11.875999999999976,
+              "cpuMs": 14.67
+            },
+            {
+              "phase": "cold-insert",
+              "wallMs": 11.736625000000004,
+              "cpuMs": 19.48
+            },
+            {
+              "phase": "delete",
+              "wallMs": 5.2032500000000255,
+              "cpuMs": 7.112
+            }
+          ],
+          "searchMedianMs": 0.4131250000000364,
+          "searchP95Ms": 0.7987499999999272,
+          "remaining": 100000
+        },
+        {
+          "repeat": 2,
+          "rows": 100000,
+          "coldItems": 20,
+          "results": [
+            {
+              "phase": "first-update-including-rowid-discovery",
+              "wallMs": 120.82833299999993,
+              "cpuMs": 113.575
+            },
+            {
+              "phase": "unchanged-update",
+              "wallMs": 3.0511249999999563,
+              "cpuMs": 5.202
+            },
+            {
+              "phase": "changed-update",
+              "wallMs": 6.016875000000027,
+              "cpuMs": 7.88
+            },
+            {
+              "phase": "cold-insert",
+              "wallMs": 23.150875000000042,
+              "cpuMs": 24.517
+            },
+            {
+              "phase": "delete",
+              "wallMs": 4.676749999999856,
+              "cpuMs": 4.699
+            }
+          ],
+          "searchMedianMs": 0.1744579999999587,
+          "searchP95Ms": 0.18770900000004076,
+          "remaining": 100000
+        },
+        {
+          "repeat": 3,
+          "rows": 100000,
+          "coldItems": 20,
+          "results": [
+            {
+              "phase": "first-update-including-rowid-discovery",
+              "wallMs": 121.50608299999999,
+              "cpuMs": 108.841
+            },
+            {
+              "phase": "unchanged-update",
+              "wallMs": 2.7055840000000444,
+              "cpuMs": 2.801
+            },
+            {
+              "phase": "changed-update",
+              "wallMs": 7.071458000000121,
+              "cpuMs": 8.187
+            },
+            {
+              "phase": "cold-insert",
+              "wallMs": 10.247082999999975,
+              "cpuMs": 12.999
+            },
+            {
+              "phase": "delete",
+              "wallMs": 4.485957999999982,
+              "cpuMs": 5.064
+            }
+          ],
+          "searchMedianMs": 0.17224999999984902,
+          "searchP95Ms": 0.18074999999998909,
+          "remaining": 100000
+        }
+      ]
+    },
+    {
+      "rows": 1200000,
+      "coldItems": 1000,
+      "baseline": [
+        {
+          "repeat": 1,
+          "rows": 1200000,
+          "coldItems": 1000,
+          "results": [
+            {
+              "phase": "first-update-including-rowid-discovery",
+              "wallMs": 7780.101834,
+              "cpuMs": 7347.802
+            },
+            {
+              "phase": "unchanged-update",
+              "wallMs": 6844.012291999999,
+              "cpuMs": 6576.173
+            },
+            {
+              "phase": "changed-update",
+              "wallMs": 6941.6676670000015,
+              "cpuMs": 6625.939
+            },
+            {
+              "phase": "cold-insert",
+              "wallMs": 854.7622499999998,
+              "cpuMs": 928.501
+            },
+            {
+              "phase": "delete",
+              "wallMs": 6613.812625000002,
+              "cpuMs": 6426.542
+            }
+          ],
+          "searchMedianMs": 1.5579579999975977,
+          "searchP95Ms": 3.6266670000004524,
+          "remaining": 1200980
+        },
+        {
+          "repeat": 2,
+          "rows": 1200000,
+          "coldItems": 1000,
+          "results": [
+            {
+              "phase": "first-update-including-rowid-discovery",
+              "wallMs": 6956.760917,
+              "cpuMs": 6794.979
+            },
+            {
+              "phase": "unchanged-update",
+              "wallMs": 6873.397749999996,
+              "cpuMs": 6605.021
+            },
+            {
+              "phase": "changed-update",
+              "wallMs": 6968.428540999994,
+              "cpuMs": 6651.969
+            },
+            {
+              "phase": "cold-insert",
+              "wallMs": 968.5323340000032,
+              "cpuMs": 905.132
+            },
+            {
+              "phase": "delete",
+              "wallMs": 6926.365540999999,
+              "cpuMs": 6674.627
+            }
+          ],
+          "searchMedianMs": 1.4442500000004657,
+          "searchP95Ms": 4.8723749999990105,
+          "remaining": 1200980
+        },
+        {
+          "repeat": 3,
+          "rows": 1200000,
+          "coldItems": 1000,
+          "results": [
+            {
+              "phase": "first-update-including-rowid-discovery",
+              "wallMs": 7510.802374999999,
+              "cpuMs": 7172.649
+            },
+            {
+              "phase": "unchanged-update",
+              "wallMs": 6993.180042000007,
+              "cpuMs": 6665.475
+            },
+            {
+              "phase": "changed-update",
+              "wallMs": 6444.849082999994,
+              "cpuMs": 6279.254
+            },
+            {
+              "phase": "cold-insert",
+              "wallMs": 886.3402499999938,
+              "cpuMs": 826.523
+            },
+            {
+              "phase": "delete",
+              "wallMs": 6552.211166999987,
+              "cpuMs": 6356.278
+            }
+          ],
+          "searchMedianMs": 1.2742079999879934,
+          "searchP95Ms": 4.608041999992565,
+          "remaining": 1200980
+        }
+      ],
+      "candidate": [
+        {
+          "repeat": 1,
+          "rows": 1200000,
+          "coldItems": 1000,
+          "results": [
+            {
+              "phase": "first-update-including-rowid-discovery",
+              "wallMs": 1209.6014170000003,
+              "cpuMs": 1149.552
+            },
+            {
+              "phase": "unchanged-update",
+              "wallMs": 3.56775000000016,
+              "cpuMs": 4.663
+            },
+            {
+              "phase": "changed-update",
+              "wallMs": 10.726916999999958,
+              "cpuMs": 14.116
+            },
+            {
+              "phase": "cold-insert",
+              "wallMs": 899.5173329999998,
+              "cpuMs": 982.485
+            },
+            {
+              "phase": "delete",
+              "wallMs": 19.140166999999565,
+              "cpuMs": 9.867
+            }
+          ],
+          "searchMedianMs": 1.2821670000002996,
+          "searchP95Ms": 4.900457999999162,
+          "remaining": 1200980
+        },
+        {
+          "repeat": 2,
+          "rows": 1200000,
+          "coldItems": 1000,
+          "results": [
+            {
+              "phase": "first-update-including-rowid-discovery",
+              "wallMs": 1132.2056670000002,
+              "cpuMs": 1067.915
+            },
+            {
+              "phase": "unchanged-update",
+              "wallMs": 2.7258330000004207,
+              "cpuMs": 2.691
+            },
+            {
+              "phase": "changed-update",
+              "wallMs": 15.015124999999898,
+              "cpuMs": 12.525
+            },
+            {
+              "phase": "cold-insert",
+              "wallMs": 782.9937090000003,
+              "cpuMs": 767.935
+            },
+            {
+              "phase": "delete",
+              "wallMs": 5.415957999999591,
+              "cpuMs": 5.263
+            }
+          ],
+          "searchMedianMs": 1.2424169999994774,
+          "searchP95Ms": 1.6255829999990965,
+          "remaining": 1200980
+        },
+        {
+          "repeat": 3,
+          "rows": 1200000,
+          "coldItems": 1000,
+          "results": [
+            {
+              "phase": "first-update-including-rowid-discovery",
+              "wallMs": 1279.6368750000001,
+              "cpuMs": 1151.029
+            },
+            {
+              "phase": "unchanged-update",
+              "wallMs": 3.2588340000002063,
+              "cpuMs": 3.614
+            },
+            {
+              "phase": "changed-update",
+              "wallMs": 5.614999999997963,
+              "cpuMs": 5.569
+            },
+            {
+              "phase": "cold-insert",
+              "wallMs": 681.7335000000021,
+              "cpuMs": 675.397
+            },
+            {
+              "phase": "delete",
+              "wallMs": 5.605374999999185,
+              "cpuMs": 5.463
+            }
+          ],
+          "searchMedianMs": 1.2442919999994047,
+          "searchP95Ms": 1.455207999999402,
+          "remaining": 1200980
+        }
+      ]
+    }
+  ],
+  "summary": [
+    {
+      "rows": 100000,
+      "coldItems": 20,
+      "phases": [
+        {
+          "phase": "first-update-including-rowid-discovery",
+          "baselineWallMs": 616.6349579999996,
+          "candidateWallMs": 121.50608299999999,
+          "baselineCpuMs": 599.149,
+          "candidateCpuMs": 113.575
+        },
+        {
+          "phase": "unchanged-update",
+          "baselineWallMs": 544.9951250000004,
+          "candidateWallMs": 3.0511249999999563,
+          "baselineCpuMs": 538.25,
+          "candidateCpuMs": 4.583
+        },
+        {
+          "phase": "changed-update",
+          "baselineWallMs": 590.0062909999999,
+          "candidateWallMs": 7.071458000000121,
+          "baselineCpuMs": 566.758,
+          "candidateCpuMs": 8.187
+        },
+        {
+          "phase": "cold-insert",
+          "baselineWallMs": 15.925374999999804,
+          "candidateWallMs": 11.736625000000004,
+          "baselineCpuMs": 15.907,
+          "candidateCpuMs": 19.48
+        },
+        {
+          "phase": "delete",
+          "baselineWallMs": 538.640375,
+          "candidateWallMs": 4.676749999999856,
+          "baselineCpuMs": 525.147,
+          "candidateCpuMs": 5.064
+        }
+      ],
+      "baselineSearchP95Ms": 0.17879199999970297,
+      "candidateSearchP95Ms": 0.18770900000004076
+    },
+    {
+      "rows": 1200000,
+      "coldItems": 1000,
+      "phases": [
+        {
+          "phase": "first-update-including-rowid-discovery",
+          "baselineWallMs": 7510.802374999999,
+          "candidateWallMs": 1209.6014170000003,
+          "baselineCpuMs": 7172.649,
+          "candidateCpuMs": 1149.552
+        },
+        {
+          "phase": "unchanged-update",
+          "baselineWallMs": 6873.397749999996,
+          "candidateWallMs": 3.2588340000002063,
+          "baselineCpuMs": 6605.021,
+          "candidateCpuMs": 3.614
+        },
+        {
+          "phase": "changed-update",
+          "baselineWallMs": 6941.6676670000015,
+          "candidateWallMs": 10.726916999999958,
+          "baselineCpuMs": 6625.939,
+          "candidateCpuMs": 12.525
+        },
+        {
+          "phase": "cold-insert",
+          "baselineWallMs": 886.3402499999938,
+          "candidateWallMs": 782.9937090000003,
+          "baselineCpuMs": 905.132,
+          "candidateCpuMs": 767.935
+        },
+        {
+          "phase": "delete",
+          "baselineWallMs": 6613.812625000002,
+          "candidateWallMs": 5.605374999999185,
+          "baselineCpuMs": 6426.542,
+          "candidateCpuMs": 5.463
+        }
+      ],
+      "baselineSearchP95Ms": 4.608041999992565,
+      "candidateSearchP95Ms": 1.6255829999990965
+    }
+  ]
+}

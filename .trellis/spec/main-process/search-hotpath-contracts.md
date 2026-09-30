@@ -122,15 +122,67 @@ The fast `SearchIndexService` is reader-mode only: never pass it to
 on it. Request ids carry the lane (`search-index-read-<lane>-<n>`), as does the
 retire log.
 
-### 8. Bulk index deletes are O(table) per row — budget them
+### 8. Item mutations use derived identity lookup and FTS rowids
 
-`DELETE FROM search_index WHERE provider = ? AND item_id = ?` scans the FTS content
-table on every call (both columns UNINDEXED): 500 rows ≈ 2 minutes on a 276k-row
-index. `FileProviderCleanupDeleteService` therefore budgets stale-row removal
-(`staleDeleteBudgetMs`, default 8s per pass) and logs what is left for the next boot;
-do not add another unbounded per-row delete loop on the startup path. The fix that
-lifts the budget is writer-side (delete by rowid via `search_index_meta`, or batch
-`item_id IN (…)` per page).
+**Scope / Trigger:** writer-side FTS document apply, item removal, provider
+replacement, repair and whole-index cleanup. Direct equality on the UNINDEXED
+`provider` / `item_id` columns scans the content table per item; never restore that
+per-item discovery path. Existing cleanup budgets remain in place.
+
+**Signatures:** `SearchIndexRowidStore` uses the owning database connection and a
+private, reconstructible table:
+
+```sql
+search_index_rowids(fts_rowid INTEGER PRIMARY KEY, provider_id TEXT, item_id TEXT)
+CREATE INDEX idx_search_index_rowids_provider_item
+  ON search_index_rowids(provider_id, item_id);
+```
+
+**Contracts:**
+
+- Before the first mutation of a provider in a writer lifetime, rebuild its
+  physical addresses in one SQL `INSERT SELECT` transaction, including duplicates
+  and rows without meta. Mark coverage ready only after commit. This is a lazy
+  full-table pass, not a zero-cost startup operation; do not transfer the catalog
+  to JS or mistake Promise syntax for a yield inside native SQL.
+- Read actual FTS columns by guarded rowid, together with primary-keyed keyword
+  metadata. Zero mappings means cold insert; exactly one identical actual
+  document means skip FTS writes; duplicates, stale addresses or changed payload
+  mean remove all matching physical rows and insert one canonical row.
+- Keep provider/item guards on rowid access. Save the FTS INSERT statement's
+  `lastInsertRowid` as bigint; never use a later connection-wide value or Number.
+  FTS, derived addresses, keywords and meta share the mutation transaction.
+- Do not use keyword hash as a document hash, or persist a document-hash cache:
+  the content-policy clear path changes actual FTS content outside apply.
+- Replacement and provider clear clear their mapping rows; repair clears all
+  mappings/readiness. A new writer rediscovers legacy/downgrade writes. Whole-index
+  maintenance also clears derived identities after successfully clearing FTS.
+  Older databases without the derived table remain supported.
+- Readers require no derived table and issue no DDL. Public submitted-item
+  summaries, keyword-priority updates, meta freshness and commit behavior remain
+  unchanged: skipping FTS replacement is not a whole-pipeline no-op.
+
+**Validation & Error Matrix:** failed discovery -> rollback and retry coverage;
+failed apply/replacement -> preserve all committed FTS/address/meta/keyword state;
+missing insert rowid -> `SEARCH_INDEX_MISSING_INSERT_ROWID` and rollback;
+stale rowid reused by another identity -> no foreign deletion;
+derived-identity cleanup failure -> propagate, never claim a successful wipe.
+
+**Good / Base / Bad:** an unchanged document keeps its physical FTS row; a new
+document inserts without DELETE; a duplicate identity is canonicalized, never
+accepted merely because one duplicate matches.
+
+**Tests Required:** real-libSQL `search-index-service.energy.test.ts` covers
+no-op FTS writes, independent priority/body changes, duplicates/missing meta,
+restart, policy clear, rollback/retry, rowid query plans, high 64-bit rowids,
+cold inserts, maintenance reuse and public repair. Existing delta tests retain
+staged replacement visibility/abort/rollback coverage. `storage-maintenance.test.ts`
+guards derived cleanup, older table absence and visible cleanup failure.
+
+**Wrong vs Correct:** `DELETE ... WHERE provider=? AND item_id=?` is an unbounded
+identity scan per item; lookup addresses through the compound side index and
+delete by `rowid IN (...)` plus provider/item guards. Synthetic CPU-ms evidence
+belongs to the measured mutation workload, not a wattage or whole-app idle claim.
 
 ### 9. Full scans checkpoint per top-level child
 

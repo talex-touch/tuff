@@ -169,10 +169,21 @@ export async function cleanupFileIndex(
   // `clearSearchIndex` clears both. That is defensible while `rebuild` re-projects the catalog,
   // and it is opt-in, but it is the same shape of over-broad delete as the one fixed above.
   if (options?.clearSearchIndex) {
+    let clearedFts = false
     try {
       await db.run(sql`DELETE FROM search_index`)
+      clearedFts = true
     } catch {
       // ignore
+    }
+    if (clearedFts) {
+      const rowidTable = await db.all(sql`
+        SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'search_index_rowids'
+      `)
+      if (rowidTable.length > 0) {
+        // Derived addresses contain file identities too; do not retain them after a full wipe.
+        await db.run(sql`DELETE FROM search_index_rowids`)
+      }
     }
     try {
       await db.run(sql`DELETE FROM file_fts`)
