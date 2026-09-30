@@ -88,7 +88,7 @@ code: |
 |-----------|-------------|--------|
 | `TuffButton` | Interactive button with tactile feedback | `button/` |
 | `TuffSwitch` | Toggle switch with smooth animations | `switch/` |
-| `TuffInput` | Input with clearable and textarea support | `flat-input/` |
+| `TuffInput` | Input with clearable and textarea support | `input/` |
 | `TuffCheckbox` | Checkbox with SVG tick animation | `checkbox/` |
 | `TuffSelect` | Dropdown select with floating positioning | `select/` |
 | `TuffSelectItem` | Select option item | `select/` |
@@ -152,7 +152,7 @@ code: |
   pnpm -C packages/tuffex run test
   pnpm -C packages/tuffex run typecheck
 
-  # Showcase and docs are hosted by Nexus
+  # Showcase and docs are hosted by Tuff
   pnpm -C apps/nexus run dev
 ---
 :::

@@ -154,23 +154,23 @@ const copy = computed(() => zh.value
 // docs language re-renders the whole feed instead of leaving old strings in it.
 const feedText = computed<Record<FeedKind, (seq?: number) => { title: string, body: string }>>(() => zh.value
   ? {
-      installed: () => ({ title: '「翻译」2.4.0 已安装', body: '来自 Nexus 插件市场 · touch-translation' }),
+      installed: () => ({ title: '「翻译」2.4.0 已安装', body: '来自 Tuff 插件市场 · touch-translation' }),
       synced: () => ({ title: '剪贴板已同步到 MacBook Pro', body: '3 条新内容 · 端到端加密' }),
       agent: () => ({ title: '智能体「每日摘要」已完成', body: '汇总了 12 条剪贴板与 3 封邮件，等待确认' }),
       indexed: () => ({ title: '新索引 1,204 个文件', body: '~/Documents 与 ~/Projects' }),
       ran: () => ({ title: '工作流「截图翻译」运行 18 次', body: '由 ⌘ ⇧ T 触发 · 全部成功' }),
       signin: () => ({ title: '在 Windows 台式机上登录', body: 'Windows 11 · 已通过双重验证' }),
-      backup: () => ({ title: '设置已备份到 Nexus', body: '42 项偏好 · 自动备份' }),
+      backup: () => ({ title: '设置已备份到 Tuff', body: '42 项偏好 · 自动备份' }),
       workflow: seq => ({ title: `新建「未命名工作流 ${seq}」`, body: '在工作流页设置触发器与步骤' }),
     }
   : {
-      installed: () => ({ title: 'Translate 2.4.0 installed', body: 'From the Nexus plugin store · touch-translation' }),
+      installed: () => ({ title: 'Translate 2.4.0 installed', body: 'From the Tuff plugin store · touch-translation' }),
       synced: () => ({ title: 'Clipboard synced to MacBook Pro', body: '3 new items · end-to-end encrypted' }),
       agent: () => ({ title: 'Agent "Daily digest" finished', body: 'Summarised 12 clips and 3 emails, waiting for review' }),
       indexed: () => ({ title: '1,204 files indexed', body: '~/Documents and ~/Projects' }),
       ran: () => ({ title: '"Screenshot translate" ran 18 times', body: 'Triggered by ⌘ ⇧ T · all succeeded' }),
       signin: () => ({ title: 'Signed in on a Windows desktop', body: 'Windows 11 · two-factor verified' }),
-      backup: () => ({ title: 'Settings backed up to Nexus', body: '42 preferences · automatic backup' }),
+      backup: () => ({ title: 'Settings backed up to Tuff', body: '42 preferences · automatic backup' }),
       workflow: seq => ({ title: `Created "Untitled workflow ${seq}"`, body: 'Set its trigger and steps on the Workflows page' }),
     })
 
@@ -408,8 +408,8 @@ const services = computed(() => {
   return [
     { id: 'sync', icon: 'i-carbon-paste', name: t ? '剪贴板同步' : 'Clipboard sync', ...sync },
     { id: 'index', icon: 'i-carbon-data-base', name: t ? '文件索引' : 'File index', detail: t ? '1,204 个新文件' : '1,204 new files', status: '82%', tone: 'info' as StatusTone },
-    { id: 'nexus', icon: 'i-carbon-cloud', name: t ? 'Nexus 账户' : 'Nexus account', detail: 'tuff.tagzxia.com', status: t ? '已连接' : 'Online', tone: 'success' as StatusTone },
-    { id: 'ai', icon: 'i-carbon-machine-learning-model', name: t ? 'AI 网关' : 'AI gateway', detail: t ? '经 Nexus 路由' : 'Routed via Nexus', status: t ? '偏慢' : 'Slow', tone: 'warning' as StatusTone },
+    { id: 'nexus', icon: 'i-carbon-cloud', name: t ? 'Tuff 账户' : 'Tuff account', detail: 'tuff.tagzxia.com', status: t ? '已连接' : 'Online', tone: 'success' as StatusTone },
+    { id: 'ai', icon: 'i-carbon-machine-learning-model', name: t ? 'AI 网关' : 'AI gateway', detail: t ? '经 Tuff 路由' : 'Routed via Tuff', status: t ? '偏慢' : 'Slow', tone: 'warning' as StatusTone }
   ]
 })
 

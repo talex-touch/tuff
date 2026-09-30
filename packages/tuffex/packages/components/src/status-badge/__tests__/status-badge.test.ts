@@ -2,7 +2,6 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TxStatusBadge from '../src/TxStatusBadge.vue'
 
-
 describe('txStatusBadge', () => {
   it('renders text, size, and explicit status tone', () => {
     const wrapper = mount(TxStatusBadge, {
@@ -159,7 +158,6 @@ describe('txStatusBadge', () => {
     const wrapper = mount(TxStatusBadge, { props: { text: 'Not started', status: 'muted' } })
     expect(wrapper.findAll('.tx-status-badge__glyph')).toHaveLength(0)
   })
-
 
   it('flags a pill that opens with a glyph, so only that side takes the concentric padding', () => {
     expect(mount(TxStatusBadge, { props: { text: 'Online', status: 'success' } }).classes()).toContain('has-icon')

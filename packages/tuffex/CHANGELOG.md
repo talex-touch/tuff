@@ -413,7 +413,6 @@ const handleClick = () => {
 | `filter-chips` | base | **0.3.9** |
 | `fine-tune-card` | ai | **0.3.9** |
 | `flat-dropdown` | base | **0.3.9** |
-| `flat-input` | base | **0.3.4** |
 | `flat-radio` | base | **0.3.4** |
 | `flat-select` | base | **0.3.4** |
 | `flex` | base | **0.3.4** |

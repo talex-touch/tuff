@@ -63,24 +63,24 @@ const labels = computed(() => {
 const rows = computed<OperationRow[]>(() => {
   if (locale.value === 'zh') {
     return [
-      { id: 1, name: '文档截图认证', status: 'ready', owner: 'Nexus', latency: 38, coverage: 96 },
+      { id: 1, name: '文档截图认证', status: 'ready', owner: 'Tuff', latency: 38, coverage: 96 },
       { id: 2, name: '组件 API 审阅', status: 'running', owner: 'Tuffex', latency: 64, coverage: 88 },
       { id: 3, name: '后台分页回归', status: 'ready', owner: 'Dashboard', latency: 42, coverage: 91 },
       { id: 4, name: '骨架屏占位校验', status: 'blocked', owner: 'QA', latency: 96, coverage: 72 },
       { id: 5, name: '暗色主题检查', status: 'running', owner: 'Design', latency: 58, coverage: 84 },
-      { id: 6, name: '数据空态恢复', status: 'ready', owner: 'Nexus', latency: 35, coverage: 93 },
+      { id: 6, name: '数据空态恢复', status: 'ready', owner: 'Tuff', latency: 35, coverage: 93 },
       { id: 7, name: '排序键盘交互', status: 'ready', owner: 'Tuffex', latency: 44, coverage: 89 },
       { id: 8, name: '发布质量门禁', status: 'blocked', owner: 'CI', latency: 120, coverage: 68 },
     ]
   }
 
   return [
-    { id: 1, name: 'Verify doc screenshots', status: 'ready', owner: 'Nexus', latency: 38, coverage: 96 },
+    { id: 1, name: 'Verify doc screenshots', status: 'ready', owner: 'Tuff', latency: 38, coverage: 96 },
     { id: 2, name: 'Review component API', status: 'running', owner: 'Tuffex', latency: 64, coverage: 88 },
     { id: 3, name: 'Dashboard pagination QA', status: 'ready', owner: 'Dashboard', latency: 42, coverage: 91 },
     { id: 4, name: 'Skeleton placeholder check', status: 'blocked', owner: 'QA', latency: 96, coverage: 72 },
     { id: 5, name: 'Dark theme check', status: 'running', owner: 'Design', latency: 58, coverage: 84 },
-    { id: 6, name: 'Data recovery path', status: 'ready', owner: 'Nexus', latency: 35, coverage: 93 },
+    { id: 6, name: 'Data recovery path', status: 'ready', owner: 'Tuff', latency: 35, coverage: 93 },
     { id: 7, name: 'Sort keyboard workflow', status: 'ready', owner: 'Tuffex', latency: 44, coverage: 89 },
     { id: 8, name: 'Release quality gate', status: 'blocked', owner: 'CI', latency: 120, coverage: 68 },
   ]

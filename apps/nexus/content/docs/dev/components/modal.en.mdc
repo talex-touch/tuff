@@ -20,11 +20,15 @@ code: |
   import { ref } from 'vue'
 
   const open = ref(false)
+  const fullscreen = ref(false)
   </script>
 
   <template>
     <TxButton variant="primary" @click="open = true">
       Open Modal
+    </TxButton>
+    <TxButton variant="ghost" @click="fullscreen = true">
+      Open fullscreen preview
     </TxButton>
 
     <TxModal v-model="open" title="Confirm sync settings" width="min(92vw, 520px)">
@@ -32,6 +36,13 @@ code: |
       <template #footer>
         <TxButton variant="ghost" @click="open = false">Cancel</TxButton>
         <TxButton variant="primary" @click="open = false">Confirm sync</TxButton>
+      </template>
+    </TxModal>
+
+    <TxModal v-model="fullscreen" fullscreen title="Release notes">
+      <p>Long content scrolls inside the panel; the bars stay put.</p>
+      <template #footer>
+        <TxButton variant="ghost" @click="fullscreen = false">Close preview</TxButton>
       </template>
     </TxModal>
   </template>
@@ -44,7 +55,21 @@ code: |
 - Prefer the default `title` header for accessible labeling. If you replace `header`, keep the title visible and avoid passing a stale `title` that no longer matches the custom header markup.
 - Put destructive or final actions in the `footer`; keep secondary actions visually quieter than the primary action.
 - Use responsive `width` values for docs and app surfaces because the content panel also has internal padding.
+- Reach for `fullscreen` only when the content itself owns the screen (image or diagram preview). It ignores `width`, drops the panel radius and shadow, and the body becomes the scrolling region — a short confirmation does not belong there.
 - Do not store long-running async state only inside modal content. If closing cancels work, model that cancellation in the parent.
+
+### Fullscreen Panel
+
+```vue
+<TxModal v-model="previewOpen" fullscreen :title="current?.name">
+  <img :src="current.url" alt="">
+  <template #footer>
+    <TxButton variant="ghost" @click="previewOpen = false">Close</TxButton>
+  </template>
+</TxModal>
+```
+
+`fullscreen` stretches the panel to the visible viewport (a `dvh` height where supported, so mobile browser chrome does not cover the footer). The panel becomes a header/body/footer column: the body takes the remaining space and scrolls, the bars stay put, and the footer's bottom padding carries `safe-area-inset-bottom`.
 
 ## API Reference
 
@@ -54,7 +79,8 @@ code: |
 |------|------|---------|-------------|
 | `modelValue` | `boolean` | required | Controls whether the dialog is visible. Used by `v-model`. |
 | `title` | `string` | `''` | Default header title. When present, the generated heading is linked with `aria-labelledby`. |
-| `width` | `string` | `'480px'` | Inline width applied to the content panel. Prefer responsive values such as `min(92vw, 520px)`. |
+| `width` | `string` | `'480px'` | Inline width applied to the content panel. Prefer responsive values such as `min(92vw, 520px)`. Ignored when `fullscreen` is set. |
+| `fullscreen` | `boolean` | `false` | Stretch the panel to the full visible viewport instead of centring a sized panel. |
 
 ### Events
 
@@ -79,6 +105,8 @@ code: |
 - Opening focuses the overlay root. Closing or unmounting restores the element focused before opening.
 - Tab and Shift+Tab cycle focus within the dialog (focus trap), so focus cannot reach the page behind the modal.
 - Backdrop click, Escape, and the close button all emit `update:modelValue(false)` followed by `close`.
+- With `fullscreen`, the overlay keeps its dialog semantics, focus trap, Escape handling and focus restore; only the layout changes — the panel stretches to the visible viewport and its header/body/footer become a fixed-bar column with the body scrolling.
+- The fullscreen panel covers the whole overlay, so there is no backdrop region left to click: Escape and the close button are the dismissals. Keep a visible close affordance in the header or footer.
 - `TModal` forwards props, attrs, `update:modelValue`, `close`, and `default/header/footer` slots to `TxModal`.
 
 ## Technologies

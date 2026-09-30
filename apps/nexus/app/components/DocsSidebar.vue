@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import DocSection from './docs/DocSection.vue'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
+import type { TxRadioValue } from '@talex-touch/tuffex/radio'
+import { TxRadio, TxRadioGroup } from '@talex-touch/tuffex/radio'
+import type { JellyIndicatorFrame } from '@talex-touch/tuffex/utils'
+import { GLIDE, stepSpring, useIndicatorBox, useJellyIndicator } from '@talex-touch/tuffex/utils'
 import { hasWindow } from '@talex-touch/utils/env'
 import type { DocsSuiteKey } from '~/utils/docs-suites'
 import { coerceJsonArray } from '~/utils/docs-api'
@@ -261,7 +265,6 @@ const SECTION_ORDER: Record<string, string[]> = {
     // base — Form
     '/docs/dev/components/form',
     '/docs/dev/components/input',
-    '/docs/dev/components/flat-input',
     '/docs/dev/components/sensitive-input',
     '/docs/dev/components/textarea',
     '/docs/dev/components/number-input',
@@ -1090,6 +1093,16 @@ const activeTopSection = computed(() => {
   return defaultSection.value
 })
 
+// The section switch is a real radiogroup. Its selection reads the route, and
+// picking a segment is a navigation: `activeTopSection` updates when the new
+// page lands, which is what moves the group's indicator. A pick that names the
+// section already showing is ignored rather than re-navigating.
+function onTopSectionChange(key: TxRadioValue) {
+  const section = TOP_SECTIONS.value.find(candidate => candidate.key === key)
+  if (!section || section.key === activeTopSection.value) return
+  void navigateTo(localizedDocsPath(section.entryPath || section.basePath))
+}
+
 const sidebarPending = computed(() => pending.value)
 
 function hasComponentDocsMetadata() {
@@ -1368,6 +1381,105 @@ watch(
   { immediate: true, flush: 'post' },
 )
 
+// One travelling highlight for the whole list, as in TxSidebarNav: it follows
+// the pointer (or keyboard focus) first and the current page second, so it
+// reads as "where you are about to go" rather than a second current page.
+// Rows keep their ink, weight and the current page's accent bar; the fill is
+// this one plate, measured by `useIndicatorBox` and moved by the library's
+// indicator engine on the glide material.
+const NAV_ROW_SELECTOR = '.docs-nav-link, .DocSection-Header--page'
+const CURRENT_NAV_ROW_SELECTOR = 'a.docs-nav-link.is-active, a.DocSection-Header--page.is-active'
+const COLLAPSED_NAV_BODY_SELECTOR = '.DocSection-Body:not(.is-open), .docs-nav-family-body:not(.is-open)'
+
+const navListRef = ref<HTMLElement | null>(null)
+const navPlateRef = ref<HTMLElement | null>(null)
+const hoveredNavRow = shallowRef<HTMLElement | null>(null)
+const currentNavRow = shallowRef<HTMLElement | null>(null)
+// Until the plate has painted once the rows keep their own fills — that is all
+// SSR and the first client frames show — and it lands exactly on the fill it
+// replaces. Its fade switches on only after that first paint.
+const navPlateLive = ref(false)
+const navPlateFades = ref(false)
+
+// A row in a collapsed section or family is clipped, not gone; the plate must
+// not land on space the list no longer shows.
+function visibleNavRow(row: HTMLElement | null) {
+  return row && row.isConnected && !row.closest(COLLAPSED_NAV_BODY_SELECTOR) ? row : null
+}
+
+function syncNavRows() {
+  currentNavRow.value = visibleNavRow(navListRef.value?.querySelector<HTMLElement>(CURRENT_NAV_ROW_SELECTOR) ?? null)
+  if (!visibleNavRow(hoveredNavRow.value)) hoveredNavRow.value = null
+}
+
+// Delegated, because rows come from three templates (links, family toggles and
+// DocSection's own page header). Anything that is not a row — a group label,
+// the 1px gap between rows — leaves the plate where it is.
+function onNavRowIntent(event: Event) {
+  const row = (event.target as Element | null)?.closest<HTMLElement>(NAV_ROW_SELECTOR)
+  if (row && navListRef.value?.contains(row)) hoveredNavRow.value = row
+}
+
+function clearNavRowIntent() {
+  hoveredNavRow.value = null
+}
+
+const navPlateTarget = () => hoveredNavRow.value ?? currentNavRow.value
+
+const { box: navPlateBox } = useIndicatorBox({ container: navListRef, target: navPlateTarget })
+
+function writeNavPlate(el: HTMLElement, frame: JellyIndicatorFrame) {
+  el.style.opacity = frame.visible ? '1' : '0'
+  el.style.width = `${frame.rect.width}px`
+  el.style.height = `${frame.rect.height}px`
+  el.style.transform = `translate3d(${frame.rect.x}px, ${frame.rect.y}px, 0)`
+}
+
+function revealNavPlate() {
+  navPlateLive.value = true
+  // Two frames: the first paints the plate in place with no transition to run.
+  window.requestAnimationFrame(() =>
+    window.requestAnimationFrame(() => {
+      navPlateFades.value = true
+    }),
+  )
+}
+
+const navPlate = useJellyIndicator({
+  axis: 'y',
+  material: 'glide',
+  integrate: stepSpring,
+  // TxSidebarNav's pace: the glide springs at their reference speed, with a
+  // lighter lag than the tabs because hover tracking wants the plate to keep up.
+  glide: { ...GLIDE, lag: 0.3 },
+  bounds: () => {
+    const list = navListRef.value
+    return list && list.scrollHeight > 0 ? { start: 0, end: list.scrollHeight } : null
+  },
+  onFrame(frame) {
+    if (navPlateRef.value) writeNavPlate(navPlateRef.value, frame)
+    if (frame.visible && !navPlateLive.value) revealNavPlate()
+  },
+})
+
+// Only a new target travels. A re-measure of the same row (a section above it
+// opening, a resize, a font swap) lands in place.
+let landedNavRow: HTMLElement | null | undefined
+
+watch(
+  navPlateBox,
+  box => {
+    const row = navPlateTarget()
+    const animate = row !== landedNavRow
+    landedNavRow = row
+    navPlate.moveTo(box ? { x: box.left, y: box.top, width: box.width, height: box.height } : null, { animate })
+  },
+  { flush: 'post' },
+)
+
+onMounted(syncNavRows)
+onUpdated(syncNavRows)
+
 onBeforeUnmount(() => {
   clearComponentDocsMetadataSchedule()
   if (hasWindow() && activeScrollFrame !== null) window.cancelAnimationFrame(activeScrollFrame)
@@ -1386,20 +1498,22 @@ onBeforeUnmount(() => {
     <!-- Section switch + suite switcher (sticky within sidebar). Two fixed rows:
          the suites used to be a second tab row that wrapped once it outgrew 230px. -->
     <div v-if="!isTutorialRoute" class="docs-nav-head">
-      <div class="docs-seg" role="group" :aria-label="t('docsSidebar.sections')">
-        <NuxtLink
+      <TxRadioGroup
+        :model-value="activeTopSection"
+        type="button"
+        class="docs-nav-sections"
+        :aria-label="t('docsSidebar.sections')"
+        @change="onTopSectionChange"
+      >
+        <TxRadio
           v-for="sec in TOP_SECTIONS"
           :key="sec.key"
-          :to="localizedDocsPath(sec.entryPath || sec.basePath)"
-          :prefetch="false"
-          class="docs-seg__item"
-          :class="activeTopSection === sec.key ? 'is-active' : ''"
-          :aria-current="activeTopSection === sec.key ? 'true' : undefined"
+          :value="sec.key"
         >
-          <span :class="sec.icon" class="docs-seg__icon" aria-hidden="true" />
-          <span>{{ sec.label }}</span>
-        </NuxtLink>
-      </div>
+          <span :class="sec.icon" class="docs-nav-section__icon" aria-hidden="true" />
+          <span class="docs-nav-section__label">{{ sec.label }}</span>
+        </TxRadio>
+      </TxRadioGroup>
       <TxDropdownMenu
         v-if="activeTopSection === 'components'"
         v-model="suiteMenuOpen"
@@ -1470,7 +1584,16 @@ onBeforeUnmount(() => {
          so `pending` is false during SSR but true on the client's first render. Gating on it
          made server and client disagree on this node and broke hydration for the whole page.
          Both sides now take the `sections.length === 0` branch until the fetch resolves. -->
-    <div class="flex flex-col gap-0.5">
+    <div
+      ref="navListRef"
+      class="docs-nav-body flex flex-col gap-0.5"
+      :class="{ 'has-plate': navPlateLive }"
+      @mouseover="onNavRowIntent"
+      @mouseleave="clearNavRowIntent"
+      @focusin="onNavRowIntent"
+      @focusout="clearNavRowIntent"
+    >
+      <span ref="navPlateRef" class="docs-nav-plate" :class="{ 'is-fading': navPlateFades }" aria-hidden="true" />
       <template v-if="error">
         <div
           class="border border-gray-200 rounded-md bg-white p-3 text-sm text-gray-500 dark:border-gray-800 dark:bg-dark/80 dark:text-gray-300"
@@ -1614,8 +1737,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .docs-nav-head {
-  --docs-seg-track: var(--tx-fill-color-light, #f5f7fa);
-  --docs-seg-thumb: var(--tx-bg-color, #fff);
+  --docs-nav-switch-track: var(--tx-fill-color-light, #f5f7fa);
+  --docs-nav-switch-thumb: var(--tx-bg-color, #fff);
 
   position: sticky;
   top: 0;
@@ -1637,51 +1760,77 @@ onBeforeUnmount(() => {
    the lighter surface for the active segment to read as raised, not sunk. */
 :global(.dark .docs-nav-head),
 :global([data-theme='dark'] .docs-nav-head) {
-  --docs-seg-track: var(--tx-fill-color-lighter, #1d1d1d);
-  --docs-seg-thumb: var(--tx-fill-color, #303030);
+  --docs-nav-switch-track: var(--tx-fill-color-lighter, #1d1d1d);
+  --docs-nav-switch-thumb: var(--tx-fill-color, #303030);
 }
 
-.docs-seg {
+/* Section switch. TxRadioGroup ships the segmented control — real radiogroup
+   semantics, a roving tab stop and the travelling indicator — so this is the
+   skin it needs to become the sidebar's own full-width two-segment control:
+   the component's rules are one class deep, and every rule below is anchored
+   on `.docs-nav-head` (or raises specificity further) so it wins regardless of
+   stylesheet order. */
+.docs-nav-head .docs-nav-sections {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
   gap: 2px;
   padding: 3px;
+  border: 0;
   border-radius: 10px;
-  background: var(--docs-seg-track);
+  background: var(--docs-nav-switch-track);
   box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter, #ebeef5);
+  flex-wrap: nowrap;
 }
 
-.docs-seg__item {
-  display: inline-flex;
-  align-items: center;
+.docs-nav-head .docs-nav-sections :deep(.tx-radio) {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
   justify-content: center;
   gap: 6px;
-  height: 28px;
   /* Concentric with the track: 10px outer radius minus the 3px inset. */
+  padding: 0 8px;
+  border: 0;
   border-radius: 7px;
+  background: transparent;
+  overflow: hidden;
+  white-space: nowrap;
   font-size: 13px;
   font-weight: 500;
   color: var(--docs-nav-ink);
-  text-decoration: none;
 }
 
-.docs-seg__icon {
-  font-size: 14px;
-}
-
-.docs-seg__item:hover {
+.docs-nav-head .docs-nav-sections :deep(.tx-radio.is-checked) {
   color: var(--tx-text-color-primary, #303133);
 }
 
-.docs-seg__item.is-active {
-  color: var(--tx-text-color-primary, #303133);
-  background: var(--docs-seg-thumb);
+/* The component fills a hovered segment; the sheet's own thumb is the only
+   fill that should read, and it slides under the pointer. */
+.docs-nav-head .docs-nav-sections :deep(.tx-radio--button:hover:not(.is-disabled):not(.is-checked)) {
+  background: transparent;
+}
+
+.docs-nav-head .docs-nav-sections :deep(.tx-radio:focus-visible) {
+  box-shadow: none;
+  outline: 2px solid var(--tx-color-primary, #409eff);
+  outline-offset: 1px;
+}
+
+.docs-nav-head .docs-nav-sections :deep(.tx-radio-group__indicator-plain) {
+  border: 0;
+  border-radius: 7px;
+  background: var(--docs-nav-switch-thumb);
   box-shadow: var(--tx-elevation-1, 1px 2px 4px rgba(0, 0, 0, 0.08));
 }
 
-.docs-seg__item:focus-visible {
-  outline: 2px solid var(--tx-color-primary, #409eff);
-  outline-offset: 1px;
+.docs-nav-head .docs-nav-sections :deep(.tx-radio-group__indicator-outline),
+.docs-nav-head .docs-nav-sections :deep(.tx-radio-group__indicator-hit) {
+  border-radius: 7px;
+}
+
+.docs-nav-section__icon {
+  font-size: 14px;
 }
 
 .docs-suite-trigger {
@@ -1705,7 +1854,7 @@ onBeforeUnmount(() => {
 
 .docs-suite-trigger:hover,
 .docs-suite-trigger[aria-expanded='true'] {
-  background: var(--docs-seg-track);
+  background: var(--docs-nav-switch-track);
 }
 
 .docs-suite-trigger:focus-visible {
@@ -2018,9 +2167,41 @@ onBeforeUnmount(() => {
   border-left: 1px solid var(--tx-border-color-lighter, #ebeef5);
 }
 
+/* The travelling highlight. The engine writes its transform, size and opacity
+   every frame, so none of them may carry a transition — CSS would re-ease each
+   written frame and the plate would trail its own spring. The fade is the one
+   exception, and only once the plate has painted in place. Rows are positioned
+   and come later in the tree, so they paint over it. */
+.docs-nav-body {
+  position: relative;
+}
+
+.docs-nav-plate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 7px;
+  background: var(--docs-nav-active);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.docs-nav-plate.is-fading {
+  transition: opacity 150ms ease;
+}
+
+/* Once live, the plate is the only fill. Declared after the family toggle's
+   hover fill, which has the same specificity. */
+.docs-nav-body.has-plate :deep(.docs-nav-link),
+.docs-nav-body.has-plate :deep(.DocSection-Header--page) {
+  background: transparent;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :deep(.docs-nav-family-indicator),
-  :deep(.docs-nav-family-body) {
+  :deep(.docs-nav-family-body),
+  .docs-nav-plate.is-fading {
     transition: none;
   }
 }

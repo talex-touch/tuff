@@ -1,6 +1,6 @@
 ---
 title: "ImageGallery 图片预览"
-description: "缩略图网格与 Modal 图片预览，支持索引收敛和上一张/下一张边界导航。"
+description: "缩略图网格与全屏灯箱预览，支持索引收敛和上一张/下一张边界导航。"
 category: Data
 status: beta
 since: 0.3.4
@@ -27,6 +27,8 @@ code: |
 ---
 ::::
 
+点击缩略图会在全屏灯箱中打开当前图片：图片在视口内等比完整显示，标题、页码、上一张/下一张与关闭按钮浮在其上。
+
 ### 追踪预览打开
 
 ```vue
@@ -49,12 +51,12 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 </template>
 ```
 
-`startIndex` 变化时会被收敛到有效范围。它选择初始/当前预览索引，但不会主动打开 Modal。
+`startIndex` 变化时会被收敛到有效范围。它选择初始/当前预览索引，但不会主动打开全屏预览。
 
 ### 最佳实践
 
 - 使用稳定 `id`；不要把数组索引用作长期图库数据的 key。
-- 信息性图片应提供 `name`，让按钮标签、alt 文本和 Modal 标题有意义。
+- 信息性图片应提供 `name`，让按钮标签、alt 文本和预览标题有意义。
 - 列表规模保持适中。该组件会渲染所有缩略图，不做虚拟化。
 - 不要直接传入未经边界归一化或代理处理的不可信远程图片 URL。
 - `startIndex` 用于选择预览上下文，不是可见性控制。
@@ -66,7 +68,7 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `items` | `ImageGalleryItem[]` | 必填 | 渲染为缩略图并可在 Modal 中预览的图片。 |
+| `items` | `ImageGalleryItem[]` | 必填 | 渲染为缩略图并可在全屏预览中打开的图片。 |
 | `startIndex` | `number` | `0` | 初始/当前预览索引，会收敛到可用 item 范围。 |
 
 ### ImageGalleryItem
@@ -74,15 +76,15 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `id` | `string` | 缩略图渲染使用的稳定 key。 |
-| `url` | `string` | 缩略图和 Modal 预览使用的图片 URL。 |
-| `name` | `string` | 可选显示名称，用于 label、alt 和 Modal 标题。 |
+| `url` | `string` | 缩略图和预览图使用的图片 URL。 |
+| `name` | `string` | 可选显示名称，用于 label、alt 和预览标题。 |
 
 ### Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `open` | `{ index: number, item: ImageGalleryItem }` | 缩略图打开 Modal 预览后发出。 |
-| `close` | `void` | Modal 关闭时发出。 |
+| `open` | `{ index: number, item: ImageGalleryItem }` | 缩略图打开全屏预览后发出。 |
+| `close` | `void` | 预览关闭时发出。 |
 
 ### Slots
 
@@ -98,18 +100,23 @@ function onOpen({ index, item }: { index: number, item: { id: string } }) {
 - 缩略图按钮使用 `aria-label="Open {label} preview"`，其中 `label` 来自 `item.name` 或生成的 `Image N`。
 - 缩略图和预览图的 `alt` 使用 `item.name`；未命名图片会有意使用空 alt。
 - `items` 为空时不渲染缩略图按钮，也不会发出 `open`。
-- 点击缩略图会收敛索引、打开 Modal，并用 `{ index, item }` 发出 `open`。
+- 点击缩略图会收敛索引、打开全屏预览，并用 `{ index, item }` 发出 `open`。
 - `startIndex` 变化会收敛到 `0..items.length - 1`。
 - 当 `items` 变为空数组时，预览会关闭，索引重置为 `0`。
 - 预览导航有边界：第一张禁用上一张，最后一张禁用下一张。
-- Modal 标题使用当前图片名称，回退为 `Preview`。
-- 关闭行为委托给 `TxModal`；关闭时发出 `close`。
+- 导航按钮到达边界后变为禁用时，焦点会移到另一侧仍可用的导航按钮，保证 Escape 和 Tab 仍在预览中工作。
+- 预览标题使用当前图片名称，回退为 `Preview`。
+- 预览铺满视口：图片在海报头与底栏之间的空间内等比完整显示（不裁切），任何视口形状下两个方向都可见。
+- 预览复用 `TxModal` 的 `fullscreen` 模式，因此同样挂载到 `body`、Tab 焦点陷阱、Escape 或关闭按钮关闭，并把焦点还给打开它的缩略图。
+- 关闭时发出 `close`。
 
 ## 技术实现
 
 - 已人工核对 `packages/tuffex/packages/components/src/image-gallery/src/types.ts`、`TxImageGallery.vue` 与 `image-gallery.test.ts`。
-- `startIndex` 会被收敛并更新当前预览索引，但不会主动打开 Modal。
+- `startIndex` 会被收敛并更新当前预览索引，但不会主动打开全屏预览。
 - 未命名图片会有意使用空图片 alt，同时缩略图按钮仍会获得生成的打开标签。
+- 灯箱使用 `TxModal` 的 `fullscreen` 属性，而不是再写一套自定义浮层，焦点陷阱、Escape 处理、z-index 分配和焦点恢复因此只有一份实现。
+- 已否决预览图继续使用 `max-height: 70vh`：在高视口里它会把人像图挤到中间一条带状区域，而不是用满海报头与底栏留出的空间。
 
 - Component source: `packages/tuffex/packages/components/src/image-gallery/src/TxImageGallery.vue`。
 - Types: `packages/tuffex/packages/components/src/image-gallery/src/types.ts`。

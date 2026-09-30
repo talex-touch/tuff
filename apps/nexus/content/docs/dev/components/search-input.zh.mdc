@@ -166,7 +166,7 @@ code: |
 
 `TxSearchInput` 适合承载关键词输入；当筛选还需要“范围/类型”时，搭配 `TxSearchSelect` 和 `TxSearchEmpty` 可以形成完整的列表筛选路径。
 
-:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="后台筛选工具栏" description="已通过本地 Nexus 页面截图验证的搜索输入、筛选选择器与搜索空态组合。"}
+:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="后台筛选工具栏" description="已通过本地 Tuff 页面截图验证的搜索输入、筛选选择器与搜索空态组合。"}
 ---
 code: |
   <script setup lang="ts">

@@ -159,8 +159,8 @@ const SECTION_OUTLINE: Record<Section, Bi> = {
     en: '## Background\n\nIt started with reports of hitches nobody could reproduce. We added instrumentation first, then ruled things out one step at a time.\n\n## Approach\n\n- Move slow work off the main thread\n- Serialise writes through one queue\n- Give every step a metric',
   },
   community: {
-    zh: '## 本期内容\n\n- 新插件与值得关注的更新\n- 社区作品与主题\n- 下期活动预告\n\n欢迎在 Nexus 社区投稿。',
-    en: '## In this issue\n\n- New plugins and notable updates\n- Community work and themes\n- What is coming up next\n\nSubmissions are welcome on the Nexus community board.',
+    zh: '## 本期内容\n\n- 新插件与值得关注的更新\n- 社区作品与主题\n- 下期活动预告\n\n欢迎在 Tuff 社区投稿。',
+    en: '## In this issue\n\n- New plugins and notable updates\n- Community work and themes\n- What is coming up next\n\nSubmissions are welcome on the Tuff community board.',
   },
 }
 
@@ -276,7 +276,7 @@ const SEEDS: Seed[] = [
   },
   {
     slug: 'plugin-review-guidelines-2026',
-    title: { zh: 'Nexus 插件审核标准（2026 版）', en: 'Nexus plugin review guidelines (2026)' },
+    title: { zh: 'Tuff 插件审核标准（2026 版）', en: 'Tuff plugin review guidelines (2026)' },
     summary: { zh: '权限最小化、存储配额与签名要求——提交前逐条自查。', en: 'Least privilege, storage quotas and signing — a checklist to run before you submit.' },
     section: 'guide',
     status: 'review',

@@ -166,7 +166,7 @@ code: |
 
 Use `TxSearchInput` for the keyword field. When a list also needs scope/type filtering, combine it with `TxSearchSelect` and `TxSearchEmpty` so filtering, matching, and recovery states stay in one path.
 
-:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="Dashboard filter toolbar" description="A screenshot-verified composition of search input, search select, and search empty state on the local Nexus page."}
+:::TuffDemoWrapper{demo="ComponentsSearchFiltersDemo" code-lang="vue" title="Dashboard filter toolbar" description="A screenshot-verified composition of search input, search select, and search empty state on the local Tuff page."}
 ---
 code: |
   <script setup lang="ts">

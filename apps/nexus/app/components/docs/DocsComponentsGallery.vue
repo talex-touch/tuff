@@ -284,6 +284,7 @@ const period = ref('week')
 const periodStd = ref('day')
 const rating = ref(4)
 const page = ref(2)
+const pageSize = ref(10)
 const avatarNames = ['Talex', 'Kiri', 'Ame', 'Louis']
 
 const avatarVariants = [
@@ -382,9 +383,9 @@ function resetAlerts(): void {
   alertsVisible.error = true
 }
 const flatSelectValue = ref('json')
-const flatInputValue = ref('')
+const blockInputValue = ref('')
 const numberValue = ref(60)
-const pickerValue = ref<(string | number)[]>(['beta'])
+const pickerValue = ref<(string | number)[]>(['nightly'])
 // A drum needs rows above and below the centre to actually read as one; three
 // options only ever showed a flat, full list.
 const pickerColumns = [{
@@ -400,6 +401,9 @@ const pickerColumns = [{
   ],
 }]
 const scrubWidth = ref(324)
+const scrubHeight = ref(192)
+const scrubRotation = ref(12.5)
+const scrubOpacity = ref(80)
 const sensitiveValue = ref('sk_live_a1b2c3d4e5f6')
 const searchText = ref('')
 const searchSelectValue = ref('')
@@ -1387,7 +1391,15 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxPagination v-model:current-page="page" :total-pages="5" />
+            <div class="docs-gallery__stack docs-gallery__stack--center">
+              <TxPagination v-model:current-page="page" :total="50" :page-size="pageSize" />
+              <label class="docs-gallery__page-size">
+                <span>{{ localeKey === 'zh' ? '每页条数' : 'Items per page' }}</span>
+                <TxSelect v-model="pageSize" :aria-label="localeKey === 'zh' ? '每页条数' : 'Items per page'">
+                  <TxSelectItem v-for="size in [10, 20, 50]" :key="size" :value="size" :label="String(size)" />
+                </TxSelect>
+              </label>
+            </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -1597,22 +1609,6 @@ async function copyInstall() {
       </section>
 
       <section class="docs-gallery__cell">
-        <NuxtLink class="docs-gallery__label" :to="docPath('flat-input')">
-          {{ cellLabel('FlatInput', '扁平输入') }}
-        </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
-          <ClientOnly>
-            <div class="docs-gallery__block">
-              <TxFlatInput v-model="flatInputValue" :placeholder="copy.typeSomething" />
-            </div>
-            <template #fallback>
-              <div class="docs-gallery__ph" />
-            </template>
-          </ClientOnly>
-        </div>
-      </section>
-
-      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('flat-radio')">
           {{ cellLabel('FlatRadio', '扁平单选') }}
         </NuxtLink>
@@ -1758,8 +1754,11 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block">
-              <TxScrubField v-model="scrubWidth" label="W" :min="40" :max="999" />
+            <div class="docs-gallery__block docs-gallery__scrub-fields">
+              <TxScrubField v-model="scrubWidth" label="W" suffix="px" :min="40" :max="999" :aria-label="localeKey === 'zh' ? '宽度' : 'Width'" :value-label="localeKey === 'zh' ? '宽度数值' : 'Width value'" />
+              <TxScrubField v-model="scrubHeight" label="H" suffix="px" :min="40" :max="999" :aria-label="localeKey === 'zh' ? '高度' : 'Height'" :value-label="localeKey === 'zh' ? '高度数值' : 'Height value'" />
+              <TxScrubField v-model="scrubRotation" label="R" suffix="°" :min="-180" :max="180" :step="0.5" active :aria-label="localeKey === 'zh' ? '旋转角度' : 'Rotation'" :value-label="localeKey === 'zh' ? '旋转角度数值' : 'Rotation value'" />
+              <TxScrubField v-model="scrubOpacity" label="α" suffix="%" :min="0" :max="100" disabled :aria-label="localeKey === 'zh' ? '不透明度' : 'Opacity'" :value-label="localeKey === 'zh' ? '不透明度数值' : 'Opacity value'" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2034,10 +2033,8 @@ async function copyInstall() {
             <div class="docs-gallery__block">
               <TxGroupBlock :name="copy.dividerSection">
                 <TxBlockSwitch v-model="blockSwitch" :title="copy.autoSync" :description="copy.autoSyncDesc" />
-                <!-- TxBlockLine is a title+description row, not a separator.
-                     Propless it rendered as an empty band. -->
                 <TxBlockLine :title="copy.installTitle" :description="copy.installBody" />
-                <TxBlockInput v-model="flatInputValue" :title="copy.formName" :placeholder="copy.typeSomething" />
+                <TxBlockInput v-model="blockInputValue" :title="copy.formName" :placeholder="copy.typeSomething" />
               </TxGroupBlock>
             </div>
             <template #fallback>
@@ -2213,10 +2210,15 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__framed docs-gallery__chrome docs-gallery__chrome--bottom">
-              <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" />
-              <div class="docs-gallery__chrome-body" />
-              <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" indicator="line" />
+            <div class="docs-gallery__block docs-gallery__tab-bars">
+              <div class="docs-gallery__framed docs-gallery__chrome">
+                <div class="docs-gallery__chrome-body docs-gallery__chrome-body--compact" />
+                <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" size="sm" />
+              </div>
+              <div class="docs-gallery__framed docs-gallery__chrome">
+                <div class="docs-gallery__chrome-body docs-gallery__chrome-body--compact" />
+                <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" size="sm" indicator="line" />
+              </div>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
