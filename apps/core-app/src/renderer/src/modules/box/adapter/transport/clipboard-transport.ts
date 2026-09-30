@@ -40,7 +40,7 @@ export async function getHistory(request: ClipboardQueryRequest) {
  * @param id - The ID of the item to apply.
  */
 export async function apply(id: number) {
-  return transport.send(ClipboardEvents.apply, { id })
+  return transport.send(ClipboardEvents.apply, { id, eventId: crypto.randomUUID() })
 }
 
 /**

@@ -28,7 +28,7 @@ export interface PluginFeatureEntry {
 }
 
 export interface FeatureInvocationResult {
-  /** The plugin's own verdict; `false` means it refused the trigger. */
+  /** The plugin's own verdict: whether it accepted the trigger. */
   handled: boolean
 }
 
@@ -132,12 +132,10 @@ export function createPluginFeatureSource(deps: PluginFeatureDeps): PluginFeatur
         throw new Error(`Plugin "${pluginName}" has no feature "${featureId}"`)
       }
 
-      // `ITouchPlugin` under-declares this as `void`; the implementation
-      // resolves the lifecycle's own return, where `false` is a refusal.
-      const verdict = (await plugin.triggerFeature(feature, buildQuery(feature, text))) as
-        | boolean
-        | void
-      return { handled: verdict !== false }
+      // `triggerFeature` normalises the lifecycle's legacy `boolean | void` (where `false` is a
+      // non-activation, not a failure) into `{ accepted, shouldActivate }`.
+      const verdict = await plugin.triggerFeature(feature, buildQuery(feature, text))
+      return { handled: verdict.accepted }
     }
   }
 }

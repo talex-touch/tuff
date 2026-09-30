@@ -1518,7 +1518,10 @@ export class OmniPanelModule extends BaseModule {
 
     const query = this.buildFeatureQuery(contextText, item, feature, source)
     try {
-      await plugin.triggerFeature(feature, query)
+      const verdict = await plugin.triggerFeature(feature, query)
+      if (!verdict.accepted) {
+        return this.buildExecuteError('FEATURE_EXECUTION_FAILED')
+      }
       return { success: true }
     } catch (error) {
       return this.buildExecuteError(

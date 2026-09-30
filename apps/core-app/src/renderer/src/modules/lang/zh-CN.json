@@ -6283,8 +6283,12 @@
       "trending": "最近变多",
       "cold-start": "猜你要用"
     },
+    "usage": {
+      "launchCount": "累计启动 {count} 次",
+      "useCount": "累计使用此项目 {count} 次"
+    },
     "evidence": {
-      "opened": "打开过 {count} 次",
+      "opened": "累计使用 {count} 次",
       "peakHours": "常在 {start}–{end} 点使用",
       "justUsed": "刚刚用过",
       "lastUsed": "{age}前用过",

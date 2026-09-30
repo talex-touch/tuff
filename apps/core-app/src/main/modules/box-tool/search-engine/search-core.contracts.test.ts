@@ -5,6 +5,7 @@ type PinnedItem = typeof schema.pinnedItems.$inferSelect
 type ItemUsageStat = typeof schema.itemUsageStats.$inferSelect
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import type { ExecuteRecordResult } from '../../../db/utils'
 // resetModules reinitializes the real AppProvider module graph before each contract case.
 vi.setConfig({ hookTimeout: 30_000, testTimeout: 30_000 })
 
@@ -13,6 +14,19 @@ const state = vi.hoisted(() => {
   const searchUpdateCompletion = { current: Promise.withResolvers<void>() }
 
   return {
+    /**
+     * The committed-execute push. `broadcast` reaches every window (the main window owns the
+     * settings/application pages); `broadcastToWindow` is the explicit CoreBox delivery, because
+     * the channel's own broadcast list does not include the CoreBox window.
+     */
+    broadcast: vi.fn(),
+    broadcastToWindow: vi.fn(),
+    /** The CoreBox handle the explicit delivery needs; replaceable so a test can make it absent. */
+    getCoreBoxWindow: vi.fn(
+      (): { window: { id: number; isDestroyed: () => boolean } } | undefined => ({
+        window: { id: 7, isDestroyed: () => false }
+      })
+    ),
     transportHandlers,
     searchUpdateCompletion,
     addUsageLog: vi.fn(async () => undefined),
@@ -32,6 +46,15 @@ const state = vi.hoisted(() => {
     forceFlushUsageQueue: vi.fn(async () => undefined),
     getAllPinnedItems: vi.fn<() => Promise<PinnedItem[]>>(async () => []),
     getUsageStatsBatch: vi.fn<() => Promise<ItemUsageStat[]>>(async () => []),
+    getUsageBehaviorBatch: vi.fn<() => Promise<never[]>>(async () => []),
+    // The single-writer execute path: the facade's contract is that it hands the action to this
+    // one transaction and reports what it accepted, not that it fans out to per-table writers.
+    // Real shape: `usageStats` is the committed `item_usage_stats` row on an accepted write and
+    // `null` only when the event was a duplicate, so the stub must allow both.
+    recordExecuteTransaction: vi.fn<() => Promise<ExecuteRecordResult>>(async () => ({
+      accepted: true,
+      usageStats: null
+    })),
     incrementUsageStats: vi.fn(async () => undefined),
     incrementUsageSummary: vi.fn(async () => undefined),
     incrementUsageTrendDaily: vi.fn(() => Promise.resolve()),
@@ -157,7 +180,6 @@ vi.mock('../../storage', () => ({
 vi.mock('../addon/apps/app-provider', () => ({
   // search-core.ts imports this alongside appProvider; a factory mock has to carry every
   // binding the importer names or vitest throws at import time, before any test runs.
-  setAppExecutionRecorder: vi.fn(),
   appProvider: {
     id: 'app-provider',
     onSearch: vi.fn(),
@@ -229,6 +251,10 @@ vi.mock('../addon/system/windows-shell-file-provider', () => ({
   }
 }))
 vi.mock('../core-box/window', () => ({
+  // `getCoreBoxWindow` is the handle the committed-count delivery targets. Leaving it out of the
+  // factory made the explicit CoreBox push a silent no-op (the lookup threw into the catch), which
+  // is exactly the regression the delivery tests below guard.
+  getCoreBoxWindow: state.getCoreBoxWindow,
   windowManager: { current: { window: { id: 7, isDestroyed: () => false } } }
 }))
 vi.mock('./indexing-runtime', () => ({
@@ -331,6 +357,8 @@ vi.mock('@talex-touch/utils/common/utils/polling', () => ({
 }))
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: vi.fn(() => ({
+    broadcast: state.broadcast,
+    broadcastToWindow: state.broadcastToWindow,
     on: (event: unknown, handler: (...args: never[]) => unknown) => {
       state.transportHandlers.set(event, handler)
     },
@@ -414,8 +442,12 @@ describe('SearchEngineCore facade contracts', () => {
     core = searchCoreModule.SearchEngineCore.getInstance()
     state.createDbUtils.mockReturnValue({
       addUsageLog: state.addUsageLog,
+      recordExecuteTransaction: state.recordExecuteTransaction,
       getAllPinnedItems: state.getAllPinnedItems,
       getUsageStatsBatch: state.getUsageStatsBatch,
+      // `injectUsageStats` pairs the lifetime row with one dated behaviour read; a mock without
+      // this method makes the whole injection throw into its catch and no row gets stamped.
+      getUsageBehaviorBatch: state.getUsageBehaviorBatch,
       incrementUsageStats: state.incrementUsageStats,
       incrementUsageSummary: state.incrementUsageSummary,
       incrementUsageTrendDaily: state.incrementUsageTrendDaily,
@@ -435,6 +467,116 @@ describe('SearchEngineCore facade contracts', () => {
   afterEach(async () => {
     const lifecycle = core as unknown as { destroying: boolean }
     if (!lifecycle.destroying) await core.destroy()
+  })
+
+  it('reports no committed push when the write throws, so no surface is shown a count that was rolled back', async () => {
+    // A failed transaction is the one case where the user's action succeeded but there is no count:
+    // announcing a row that was never committed (or the previous one) would make the visible count
+    // disagree with the database on the next read.
+    const item = buildItem('failed-item', 'app-provider', 'Failed')
+    state.recordExecuteTransaction.mockRejectedValueOnce(new Error('database is locked'))
+
+    await expect(
+      core.recordExecute('failed-session', item, 'failed-1', { entryPoint: 'core-box' })
+    ).resolves.toBeUndefined()
+
+    expect(state.broadcast).not.toHaveBeenCalled()
+    expect(state.broadcastToWindow).not.toHaveBeenCalled()
+  })
+
+  it('delivers the committed count to both the main window and the CoreBox window, once per accepted action', async () => {
+    // TouchChannel.broadcast only reaches the main window, so a committed count never showed up in
+    // CoreBox itself. The engine now pushes the same serialized facts to the main window and
+    // explicitly to the CoreBox window; the payload — not the call — is what a consumer applies to
+    // its row, so a re-notified or failed action must not add a second one.
+    const item = buildItem('counted-item', 'app-provider', 'Counted')
+    const committedAt = new Date('2026-09-30T08:00:00.000Z')
+    state.recordExecuteTransaction.mockResolvedValueOnce({
+      accepted: true,
+      usageStats: {
+        sourceId: 'app-provider',
+        itemId: 'counted-item',
+        sourceType: 'application',
+        executeCount: 7,
+        searchCount: 2,
+        cancelCount: 0,
+        lastExecuted: committedAt,
+        lastSearched: null,
+        lastCancelled: null,
+        createdAt: committedAt,
+        updatedAt: committedAt
+      }
+    })
+
+    await core.recordExecute('commit-session', item, 'commit-1', { entryPoint: 'core-box' })
+
+    // One broadcast to every window, one explicit delivery to the CoreBox window by its live id.
+    expect(state.broadcast).toHaveBeenCalledTimes(1)
+    expect(state.broadcastToWindow).toHaveBeenCalledTimes(1)
+    expect(state.broadcastToWindow).toHaveBeenCalledWith(
+      7,
+      expect.anything(),
+      expect.objectContaining({
+        sourceId: 'app-provider',
+        itemId: 'counted-item',
+        usageStats: expect.objectContaining({
+          executeCount: 7,
+          searchCount: 2,
+          lastExecuted: committedAt.toISOString()
+        })
+      })
+    )
+    // Both deliveries carry the same serialized write, so the two surfaces cannot disagree.
+    const broadcastPayload = state.broadcast.mock.calls[0]?.[1]
+    const targetedPayload = state.broadcastToWindow.mock.calls[0]?.[2]
+    expect(broadcastPayload).toEqual(targetedPayload)
+
+    // A replay of the same action is a database dupe: it reports no committed row, so no extra
+    // push of the stale pre-commit shape reaches the windows.
+    state.recordExecuteTransaction.mockResolvedValueOnce({ accepted: false, usageStats: null })
+    await core.recordExecute('commit-session', item, 'commit-1', { entryPoint: 'core-box' })
+    expect(state.broadcast).toHaveBeenCalledTimes(1)
+    expect(state.broadcastToWindow).toHaveBeenCalledTimes(1)
+  })
+
+  it('still records the accepted action when the CoreBox window is gone or destroyed', async () => {
+    // The explicit CoreBox delivery is best-effort: a missing or torn-down window must not turn a
+    // successful action into a failure, and the main-window push must still go out.
+    const item = buildItem('headless-item', 'app-provider', 'Headless')
+    const committedAt = new Date('2026-09-30T08:00:00.000Z')
+    // Every call commits a row (the point is the delivery, not the write), so the committed push is
+    // always due and the only variable is the CoreBox handle.
+    state.recordExecuteTransaction.mockResolvedValue({
+      accepted: true,
+      usageStats: {
+        sourceId: 'app-provider',
+        itemId: 'headless-item',
+        sourceType: 'application',
+        executeCount: 1,
+        searchCount: 0,
+        cancelCount: 0,
+        lastExecuted: committedAt,
+        lastSearched: null,
+        lastCancelled: null,
+        createdAt: committedAt,
+        updatedAt: committedAt
+      }
+    })
+
+    for (const handle of [undefined, { window: { id: 9, isDestroyed: () => true } }]) {
+      state.getCoreBoxWindow.mockReturnValueOnce(handle)
+      state.broadcast.mockClear()
+      state.broadcastToWindow.mockClear()
+
+      await expect(
+        core.recordExecute('headless-session', item, 'headless-1', { entryPoint: 'core-box' })
+      ).resolves.toBeUndefined()
+
+      // The action is accepted and announced to the main window; only the CoreBox leg is skipped.
+      expect(state.broadcast).toHaveBeenCalledTimes(1)
+      expect(state.broadcastToWindow).not.toHaveBeenCalled()
+    }
+    expect(state.recordExecuteTransaction).toHaveBeenCalledTimes(2)
   })
 
   it('releases first-result metrics even when telemetry is disabled', () => {
@@ -607,32 +749,21 @@ describe('SearchEngineCore facade contracts', () => {
     ])
   })
 
-  it('records execution usage through the facade with the source-qualified item identity', async () => {
+  it('records an accepted execute through the single-writer transaction, keyed by the source-qualified identity', async () => {
     const item = buildItem('executed-item', 'usage-provider', 'Open report')
 
-    await core.recordExecute('session-usage-1', item)
+    await core.recordExecute('session-usage-1', item, 'event-under-test')
 
-    // Log, stats and trend rows all key on the provider id; only the separate
-    // source_type column carries the type.
-    expect(state.addUsageLog).toHaveBeenCalledWith(
+    // The facade's whole job here is identity resolution and handing the action to the one
+    // transaction the db owns; the transaction itself decides acceptance and dedupe.
+    expect(state.recordExecuteTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: 'execute',
+        eventId: 'event-under-test',
+        sourceId: 'usage-provider',
         itemId: 'executed-item',
-        sessionId: 'session-usage-1',
-        source: 'usage-provider'
+        sourceType: 'application',
+        sessionId: 'session-usage-1'
       })
-    )
-    expect(state.incrementUsageSummary).toHaveBeenCalledWith('executed-item')
-    expect(state.usageQueueEnqueue).toHaveBeenCalledWith(
-      'usage-provider',
-      'executed-item',
-      'application',
-      'execute'
-    )
-    expect(state.incrementUsageTrendDaily).toHaveBeenCalledWith(
-      'usage-provider',
-      'executed-item',
-      expect.any(Date)
     )
   })
 

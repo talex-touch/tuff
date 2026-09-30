@@ -1,19 +1,15 @@
-import type { RecommendationEvidence, TuffItem, TuffRender } from '@talex-touch/utils'
+import type { RecommendationEvidence, TuffItem } from '@talex-touch/utils'
 import type { ScoredItem } from './recommendation-engine'
 import { createLogger } from '../../../../utils/logger'
-import { resolvePeakHourRange } from './recommendation-utils'
+import {
+  isFrequentEligible,
+  resolveEvidenceBackedReason,
+  resolvePeakHourRange
+} from './recommendation-utils'
 import { recommendationSourceRegistry } from './recommendation-source-registry'
 import { DEFAULT_RECOMMENDATION_BADGE, RECOMMENDATION_BADGES } from './recommendation-presentation'
 
 const itemRebuilderLog = createLogger('RecommendationEngine').child('ItemRebuilder')
-
-type TuffBasicIcon = NonNullable<NonNullable<TuffRender['basic']>['icon']>
-
-const DEFAULT_PLUGIN_RECOMMEND_ICON: TuffBasicIcon = {
-  type: 'class',
-  value: 'i-ri-lightbulb-line'
-}
-const SUPPORTED_RECOMMEND_ICON_TYPES = new Set(['emoji', 'url', 'file', 'class', 'builtin'])
 
 const getMetaString = (item: TuffItem, key: string): string | undefined => {
   const meta = item.meta as Record<string, unknown> | undefined
@@ -45,34 +41,6 @@ const getAppIdentitySet = (item: TuffItem): Set<string> => {
   return identities
 }
 
-function normalizePluginRecommendIcon(icon: unknown): TuffBasicIcon {
-  if (!icon || typeof icon !== 'object') return { ...DEFAULT_PLUGIN_RECOMMEND_ICON }
-
-  const raw = icon as Record<string, unknown>
-  if (
-    typeof raw.type !== 'string' ||
-    !SUPPORTED_RECOMMEND_ICON_TYPES.has(raw.type) ||
-    typeof raw.value !== 'string' ||
-    !raw.value.trim()
-  ) {
-    return { ...DEFAULT_PLUGIN_RECOMMEND_ICON }
-  }
-
-  const normalized: TuffBasicIcon = {
-    type: raw.type as TuffBasicIcon['type'],
-    value: raw.value
-  }
-
-  if (typeof raw.color === 'string') normalized.color = raw.color
-  if (typeof raw.colorful === 'boolean') normalized.colorful = raw.colorful
-  if (raw.status === 'normal' || raw.status === 'loading' || raw.status === 'error') {
-    normalized.status = raw.status
-  }
-  if (typeof raw.error === 'string') normalized.error = raw.error
-
-  return normalized
-}
-
 /**
  * Turns scored candidates back into renderable items.
  *
@@ -90,16 +58,14 @@ export class ItemRebuilder {
   async rebuildItems(scoredItems: ScoredItem[]): Promise<TuffItem[]> {
     if (scoredItems.length === 0) return []
 
-    // Plugin-recommend candidates carry their whole payload inline and are rebuilt from the flat
-    // list below, so they must not also be dispatched as a source group.
-    const sourceCandidates = scoredItems.filter((scored) => !scored.pluginCandidate)
-    const grouped = this.groupByNormalizedSource(sourceCandidates)
+    // Every candidate — plugin, builtin, or a search provider's — is rebuilt by whichever source
+    // claimed its id. There is no carrier branch here: a plugin candidate is executable only because
+    // its provider registered a source, which is also what makes the builtin clipboard card work.
+    const grouped = this.groupByNormalizedSource(scoredItems)
 
     const batches = await Promise.all(
       [...grouped].map(([sourceId, items]) => this.rebuildSourceItems(sourceId, items))
     )
-
-    batches.push(this.rebuildPluginRecommendItems(scoredItems))
 
     return this.mergeAndEnrichItems(batches.flat(), scoredItems)
   }
@@ -146,77 +112,6 @@ export class ItemRebuilder {
     }
 
     return groups
-  }
-
-  /**
-   * 重建插件功能项
-   */
-  /**
-   * 重建插件推荐候选项和内置候选项（如剪贴板 URL）
-   */
-  private rebuildPluginRecommendItems(scoredItems: ScoredItem[]): TuffItem[] {
-    const items: TuffItem[] = []
-
-    for (const scored of scoredItems) {
-      if (!scored.pluginCandidate) continue
-
-      const candidate = scored.pluginCandidate
-      const isBuiltinUrl = scored.sourceId === '__builtin_clipboard_url__'
-
-      const tuffItem: TuffItem = {
-        id: candidate.id,
-        source: {
-          id: scored.sourceId,
-          type: isBuiltinUrl ? 'system' : 'plugin',
-          name: isBuiltinUrl ? 'Clipboard URL' : `Plugin: ${candidate.providerId || 'unknown'}`
-        },
-        kind: 'action',
-        render: {
-          mode: 'default',
-          basic: {
-            title: candidate.title,
-            subtitle: candidate.subtitle,
-            icon: normalizePluginRecommendIcon(candidate.icon)
-          }
-        },
-        actions: isBuiltinUrl
-          ? [
-              {
-                id: 'open-url',
-                type: 'execute',
-                label: '打开',
-                shortcut: 'Enter'
-              },
-              {
-                id: 'copy-url',
-                type: 'copy',
-                label: '复制',
-                shortcut: 'CmdOrCtrl+C'
-              }
-            ]
-          : [
-              {
-                id: candidate.action,
-                type: 'execute',
-                label: 'Execute',
-                shortcut: 'Enter'
-              }
-            ],
-        meta: {
-          pluginRecommend: {
-            providerId: candidate.providerId,
-            action: candidate.action,
-            data: candidate.data
-          },
-          _originalItemId: scored.itemId,
-          _originalSourceId: scored.sourceId
-        } as TuffItem['meta']
-      }
-
-      items.push(tuffItem)
-    }
-
-    return items
   }
 
   private findScoredByPartialMatch(
@@ -283,13 +178,21 @@ export class ItemRebuilder {
       const meta: Record<string, unknown> = {
         ...(item.meta as Record<string, unknown> | undefined)
       }
+      // The recall tag says what put the item in the pool; the *reason* it is shown with is
+      // derived from dated evidence here, so a `frequent` recall carrying only a legacy lifetime
+      // count cannot print a habit badge it cannot support (R9).
+      const reasonSource = resolveEvidenceBackedReason(scored.source, scored.behavior)
       meta.recommendation = {
         score: scored.score,
-        source: scored.source,
-        reason: this.getReasonLabel(scored),
+        source: reasonSource,
+        reason: this.getReasonLabel(reasonSource),
         isIntelligent: true,
-        badge: this.generateBadge(scored),
-        evidence: this.buildEvidence(scored)
+        badge: this.generateBadge(reasonSource),
+        evidence: this.buildEvidence(scored),
+        // The grid admits a tile by this flag, not by the badge: the label says what recalled the
+        // item, this says whether the dated behaviour crossed the frequent threshold. Absent means
+        // "no evidence" (not executable by habit), and the layout treats it as such.
+        frequentEligible: scored.behavior !== undefined && isFrequentEligible(scored.behavior)
       }
       // Store original itemId for deduplication in recommendation-engine
       meta._originalItemId = scored.itemId
@@ -307,7 +210,7 @@ export class ItemRebuilder {
     return ranked.sort((a, b) => a.rank - b.rank).map(({ item }) => item)
   }
 
-  private getReasonLabel(scored: ScoredItem): string {
+  private getReasonLabel(source: ScoredItem['source']): string {
     const labels: Record<string, string> = {
       pinned: 'Pinned',
       frequent: 'Frequent',
@@ -319,35 +222,44 @@ export class ItemRebuilder {
       'newly-installed': 'Just Installed',
       'cold-start': 'Suggested'
     }
-    return labels[scored.source] || 'Recommended'
+    return labels[source] || 'Recommended'
   }
 
-  private generateBadge(scored: ScoredItem): { text: string; icon: string; variant: string } {
-    return RECOMMENDATION_BADGES[scored.source] ?? DEFAULT_RECOMMENDATION_BADGE
+  private generateBadge(source: ScoredItem['source']): {
+    text: string
+    icon: string
+    variant: string
+  } {
+    return RECOMMENDATION_BADGES[source] ?? DEFAULT_RECOMMENDATION_BADGE
   }
 
   /**
    * Collects the data behind a recommendation so the UI can show a reason the
    * user can check ("used 23 times", "usually around 09-11").
    *
-   * Only fields with real data are set, and the whole object is dropped when
-   * nothing is known — an absent field means "we don't know", so the renderer
-   * shows nothing rather than a zero or a guess. A zero `executeCount` is
-   * treated as unknown for the same reason: "used 0 times" is not a reason.
+   * Every dated field comes from the batch behaviour read, never from the stored aggregate: a
+   * legacy row's `lastExecuted` can predate the entry fix, so quoting it would date a "recent" claim
+   * to an execution the ledger never accepted (R9). The lifetime `executeCount` is still the
+   * aggregate — it is a real fact, just not a dated one. Nothing known means the whole object is
+   * dropped; a zero count is treated as unknown because "used 0 times" is not a reason.
    */
   private buildEvidence(scored: ScoredItem): RecommendationEvidence | undefined {
     const evidence: RecommendationEvidence = {}
 
-    const executeCount = scored.usageStats?.executeCount
+    // The lifetime aggregate is a real fact, and both carriers come from `item_usage_stats`: the
+    // candidate's `usageStats` row and the behaviour facts' `executeCount`. Prefer the row, fall
+    // back to the facts so a rehydrated candidate that carries only the batch read still shows
+    // "used N times" — never a dated field, which is what R9 forbids here.
+    const usageExecuteCount = scored.usageStats?.executeCount
+    const executeCount =
+      typeof usageExecuteCount === 'number' && usageExecuteCount > 0
+        ? usageExecuteCount
+        : scored.behavior?.executeCount
     if (typeof executeCount === 'number' && Number.isFinite(executeCount) && executeCount > 0) {
       evidence.executeCount = executeCount
     }
 
-    // Drizzle hands back a Date for `mode: 'timestamp'` columns, but synthesized
-    // rows (plugin candidates) carry a raw epoch, so accept both.
-    const lastExecuted = scored.usageStats?.lastExecuted as Date | number | null | undefined
-    const lastExecutedAt =
-      lastExecuted instanceof Date ? lastExecuted.getTime() : (lastExecuted ?? undefined)
+    const lastExecutedAt = scored.behavior?.lastExecutedAt
     if (
       typeof lastExecutedAt === 'number' &&
       Number.isFinite(lastExecutedAt) &&
@@ -361,7 +273,15 @@ export class ItemRebuilder {
       evidence.installedAt = installedAt
     }
 
-    const peakHourRange = resolvePeakHourRange(scored.timeStats?.hourDistribution)
+    // The peak-hour reason may only be claimed from the same reliable 30-day distribution the
+    // scorer uses, never the lifetime stored histogram, and only once that distribution is spread
+    // over enough distinct days. `resolvePeakHourRange` returns null when the sample, the count or
+    // the day gate fails, so no reason is shown (R9).
+    const peakHourRange = resolvePeakHourRange(
+      scored.behavior?.hourDistribution30,
+      scored.behavior?.activeDays30,
+      scored.behavior?.executeCount30
+    )
     if (peakHourRange) evidence.peakHourRange = peakHourRange
 
     return Object.keys(evidence).length > 0 ? evidence : undefined

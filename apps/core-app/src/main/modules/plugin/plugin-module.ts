@@ -119,6 +119,8 @@ import {
   type PluginQuickOpsOperationId
 } from './host/plugin-host-request-reply'
 import { createPluginVoiceCapabilities } from './host/plugin-voice-capabilities'
+import { createPluginRecommendationCapabilities } from './host/plugin-host-recommend-capabilities'
+import { getPluginRecommendationApi } from '../box-tool/search-engine/recommendation/plugin-recommendation-api'
 import { createQuickOpsDeveloperPreviewResponse, saveQuickOpsDeveloperPreview } from '../quick-ops'
 import type {
   PluginVoiceHostService,
@@ -2257,6 +2259,22 @@ export class PluginModule extends BaseModule {
         }
       })
     })
+    const recommendationCapabilities = createPluginRecommendationCapabilities({
+      resolveCurrentActivation: (pluginName) =>
+        ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+      resolveHostGeneration: (activation) => this.runtimeService?.resolveHostGeneration(activation),
+      api: {
+        registerPluginProvider: (pluginName, provider) => {
+          const engine = getPluginRecommendationApi()
+          if (!engine) {
+            throw new Error('RecommendationEngine is not available')
+          }
+          return engine.registerPluginProvider(pluginName, provider)
+        },
+        unregisterPluginProvider: (pluginName, providerId) =>
+          getPluginRecommendationApi()?.unregisterPluginProvider(pluginName, providerId) ?? false
+      }
+    })
     const intelligenceHostService = createPluginIntelligenceHostService()
     const createTranslationCapability = (activation: PluginActivationIdentity) =>
       createPluginIntelligenceCapabilities({
@@ -3097,7 +3115,8 @@ export class PluginModule extends BaseModule {
       capabilityDefinitions: Object.freeze([
         ...this.pluginBusinessCapabilities.definitions,
         ...requestReplyCapabilities.definitions,
-        ...voiceCapabilities.definitions
+        ...voiceCapabilities.definitions,
+        ...recommendationCapabilities.definitions
       ]),
       authorizeCapability: authorizePluginCapability,
       watchPermissionRevoked: watchPluginPermissionRevoked,

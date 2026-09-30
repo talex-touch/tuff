@@ -2243,7 +2243,11 @@ export class CommonChannelModule extends BaseModule {
           // being stored verbatim: `ent` is an enum the reports group by.
           const entryPoint =
             toUsageEntryPoint(getOptionalStringProp(payload, 'entryPoint')) ?? 'settings-app-detail'
-          return appProvider.entryActions.launch(inputPath, entryPoint)
+          return appProvider.entryActions.launch(
+            inputPath,
+            entryPoint,
+            getOptionalStringProp(payload, 'eventId')
+          )
         }
       ),
       transport.on<AppIndexUsageRequest, AppIndexUsageResult>(

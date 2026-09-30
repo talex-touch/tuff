@@ -221,10 +221,54 @@ export const usageLogs = sqliteTable(
     keyword: text('keyword'),
     timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
     // 以JSON字符串形式存储更多上下文信息
-    context: text('context') // e.g., { "prev_app": "com.figma.Desktop", "window_title": "..." }
+    context: text('context'), // e.g. { "prev_app": "com.figma.Desktop", "window_title": "..." }
+    // Identifier of the user action this row belongs to. Compare with `executeEvents.eventId`.
+    // Null for non-execute rows and legacy rows; the `usage_logs_event_idx` partial unique index
+    // (migration 0051) enforces one log row per accepted execute.
+    eventId: text('event_id')
   },
   (table) => ({
     retentionIdx: index('usage_logs_retention_idx').on(table.timestamp, table.id)
+  })
+)
+
+/**
+ * One accepted major action, keyed by `eventId`.
+ *
+ * This is the durable dedupe + accepted-marker for effective usage: a retried or re-notified
+ * action carries the same `eventId`, so the interaction transaction inserts here and everything
+ * else (usage_logs row, item_usage_stats increment, usage_summary, usage_trend_daily) is applied
+ * only when that insert actually created a row. A failure inside the transaction rolls back all of
+ * it together — there is no half-written count, and no row here means the write never landed.
+ *
+ * `timestamp` is the authoritative execution instant for behaviour windows (local
+ * day/week/hour/slot) and decay; the column is intentionally the only event-time source so a
+ * distribution can never be inferred from lifetime aggregates.
+ */
+export const executeEvents = sqliteTable(
+  'usage_execute_events',
+  {
+    eventId: text('event_id').primaryKey(),
+    sourceId: text('source_id').notNull(),
+    itemId: text('item_id').notNull(),
+    sourceType: text('source_type').notNull(),
+    timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
+    /**
+     * UTC day bucket (`floor(epoch_ms / 86400000)`), mirroring `usage_trend_daily.day`.
+     *
+     * Explicit rather than a retention-time expression so the owner's day-cutoff sweep uses an
+     * indexable integer column it can sort/paginate like every other target. It is a purge key,
+     * not a habit signal — the behaviour windows read `timestamp` through the local calendar.
+     */
+    day: integer('day').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`)
+  },
+  (table) => ({
+    sourceItemIdx: index('idx_usage_execute_events_source_item').on(table.sourceId, table.itemId),
+    retainedIdx: index('idx_usage_execute_events_retained').on(table.timestamp, table.eventId),
+    dayIdx: index('idx_usage_execute_events_day').on(table.day)
   })
 )
 

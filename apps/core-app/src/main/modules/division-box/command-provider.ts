@@ -11,6 +11,10 @@ import { TuffInputType } from '@talex-touch/utils'
 import { divisionBoxCommandProviderLog } from './logger'
 import { DivisionBoxManager } from './manager'
 import { shortcutTriggerManager } from './shortcut-trigger'
+import {
+  recordAcceptedExecute,
+  resolveExecuteEventId
+} from '../box-tool/search-engine/execute-recorder'
 
 type DivisionBoxCommandMeta = NonNullable<TuffItem['meta']> & {
   mappingId?: string
@@ -175,6 +179,18 @@ export class DivisionBoxCommandProvider implements ISearchProvider<ProviderConte
       if (mapping.afterOpen) {
         await mapping.afterOpen(session.sessionId)
       }
+
+      // The session was created: opening the DivisionBox is the accepted major action. A missing
+      // mapping, a throwing callback or a failed session creation landed in the catch above and
+      // does not count. Fire-and-forget: the box is already open, a stats failure must not undo it.
+      recordAcceptedExecute({
+        item,
+        sessionId: args.searchResult?.sessionId ?? null,
+        entryPoint: 'core-box',
+        eventId: resolveExecuteEventId(args.eventId)
+      }).catch((error) => {
+        divisionBoxCommandProviderLog.warn('Failed to record command usage', { error })
+      })
 
       return null
     } catch (error) {

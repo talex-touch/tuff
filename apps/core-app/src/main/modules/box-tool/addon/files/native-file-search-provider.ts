@@ -18,6 +18,7 @@ import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable
 import { formatDuration } from '../../../../utils/logger'
 import { getMainConfig } from '../../../storage'
 import { searchLogger } from '../../search-engine/search-logger'
+import { recordAcceptedExecute, resolveExecuteEventId } from '../../search-engine/execute-recorder'
 import type { FileIndexSettings } from './types'
 import { EverythingIconCache } from './everything-icon-cache'
 import { getFileAssetBridge, type IndexedFileAssets } from './file-asset-bridge'
@@ -484,7 +485,26 @@ abstract class BaseNativeFileSearchProvider implements NativeFileSearchProvider 
   async onExecute(args: IExecuteArgs): Promise<null> {
     const filePath = args.item.meta?.file?.path
     if (!filePath) return null
-    await shell.openPath(filePath)
+    try {
+      await fs.access(filePath)
+      const openError = await shell.openPath(filePath)
+      if (openError) {
+        nativeFileSearchLog.debug(`[${this.id}] open failed`, { error: openError })
+        return null
+      }
+      recordAcceptedExecute({
+        item: args.item,
+        sessionId: args.searchResult?.sessionId ?? null,
+        entryPoint: 'core-box',
+        eventId: resolveExecuteEventId(args.eventId)
+      }).catch((error) => {
+        nativeFileSearchLog.debug(`[${this.id}] failed to record open usage`, { error })
+      })
+    } catch (error) {
+      if (!isAbortError(error)) {
+        nativeFileSearchLog.debug(`[${this.id}] open failed`, { error })
+      }
+    }
     return null
   }
 }

@@ -36,6 +36,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../db/schema'
 import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
+import { recordAcceptedExecute, resolveExecuteEventId } from '../../search-engine/execute-recorder'
 import {
   DEFAULT_FILE_INDEX_SETTINGS,
   FILE_CONTENT_INDEX_POLICY_VERSION,
@@ -4224,7 +4225,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     try {
       // Check if file exists before opening to avoid macOS system dialog
       await fs.access(filePath)
-      await shell.openPath(filePath)
+      const openError = await shell.openPath(filePath)
+      if (openError) {
+        this.logError('Failed to open file', new Error(openError), { path: filePath })
+        return null
+      }
+      recordAcceptedExecute({
+        item: args.item,
+        sessionId: args.searchResult?.sessionId ?? null,
+        entryPoint: 'core-box',
+        eventId: resolveExecuteEventId(args.eventId)
+      }).catch((error) => {
+        this.logWarn('Failed to record file open usage', error, { path: filePath })
+      })
       return null
     } catch (err: unknown) {
       const errorCode =

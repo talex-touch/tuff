@@ -6283,8 +6283,12 @@
       "trending": "Trending up",
       "cold-start": "You might need"
     },
+    "usage": {
+      "launchCount": "Launched {count} times in total",
+      "useCount": "Used this item {count} times in total"
+    },
     "evidence": {
-      "opened": "Opened {count}×",
+      "opened": "Used {count}× in total",
       "peakHours": "Usually {start}–{end}",
       "justUsed": "Just used",
       "lastUsed": "Used {age} ago",

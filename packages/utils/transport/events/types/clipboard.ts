@@ -172,6 +172,8 @@ export interface ClipboardMetaQueryRequest {
 export interface ClipboardApplyRequest extends ClipboardSdkApiPayload {
   id: number
   autoPaste?: boolean
+  /** Minted once for one user action; reuse it when retrying that same action. */
+  eventId?: string
 }
 
 /**

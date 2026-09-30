@@ -1194,3 +1194,67 @@ attaching):
 - Opening CoreBox and clearing the query: no empty frame between the old grid and the new one.
 - Still pending: the CDP Performance recording that decides the list FLIP default, written to
   `.trellis/tasks/09-25-corebox-list-motion/research/perf.md`.
+
+## Scenario: Visible usage facts update without moving the user's choice (2026-09-30)
+
+### 1. Scope / Trigger
+
+Changes to `useResultExposure`, `CoreBoxEvents.item.usageChanged`, or the CoreBox/application-detail consumers of usage statistics.
+
+### 2. Signatures
+
+- `CoreBoxEvents.recommendation.reportExposure` reports visible item identities and the current display-session identity; it is not an execution.
+- `CoreBoxEvents.item.usageChanged` carries `{ sourceId, itemId, usageStats }` from the committed transaction, with ISO dates or `null`.
+- `useSearch` updates both search-result and active-provider metadata; `ApplicationIndex.loadUsage(path, committedExecuteCount?)` rejects an older aggregate after a committed notification.
+
+### 3. Contracts
+
+- A result batch arriving does not prove exposure. Only rows intersecting the actual visible viewport of a shown CoreBox are eligible. Deduplicate source/item within one display session; a new show starts a new session.
+- Exposure contributes no execution count, no habit qualification, no execution recency, and no refresh of old execution decay.
+- The host explicitly delivers committed facts to the main product window **and** the owned CoreBox window. `TouchChannel.broadcast` targets the main window, despite its name; it is not proof of delivery to CoreBox. Never broadcast cross-source usage to every plugin window.
+- A visible row receives only new usage/evidence metadata. Do not refresh, rank, repartition sections, rebuild layout, change focus, or change numeric shortcuts in response to the notification.
+- The next show or explicit refresh may use the new ranking and qualification. Cache invalidation alone is insufficient: that read waits for already-admitted execution writes.
+- Probe the actual mounted component transport when Vite HMR versions its module URL. Importing an unversioned SDK can create a different singleton; its handler list is not the page's subscription state.
+
+### 4. Validation & Error Matrix
+
+| Situation | Required result |
+| --- | --- |
+| Off-screen row, hidden window, or repeated callback in the same show | No extra visible exposure |
+| Successful new committed action in another product window | Same canonical count reaches the current row; order and focus stay unchanged |
+| Duplicate action receipt or failed statistics transaction | No invented committed increment |
+| CoreBox absent or destroyed | Main-window update still works; no plugin-window fallback |
+| Aggregate reply older than the commit notification | Drop the whole reply, including old distributions |
+| Ordinary selection after a legitimate privacy cleanup | No global count floor; display the actual retained state |
+
+### 5. Good / Base / Bad Cases
+
+- Good: launch from application details, CoreBox's existing chosen row updates its facts, the next show may change its rank.
+- Base: only the main window exists; it consumes the same committed payload without waiting for CoreBox creation.
+- Bad: use `count + 1`, take exposure as use, call `executeSearch` on every notification, or use a main-only broadcast as cross-window evidence.
+
+### 6. Tests Required
+
+- `useResultExposure.test.ts`: visibility, session dedupe, session renewal, and canonical identity.
+- `useSearch.core.test.ts`: committed metadata changes with selection, layout, and row order preserved.
+- `ApplicationIndex.test.ts`: committed count is not overwritten by an older asynchronous aggregate; normal reads still permit legitimate cleanup decreases.
+- Real Electron proof must exercise an actual accepted action from another product window and observe the mounted CoreBox consumer, not merely a mock transport call.
+
+### 7. Wrong vs Correct
+
+```ts
+// Wrong: a fact notification is not a request to reshuffle the interface.
+await executeSearch()
+// Correct: retain each visible item's position and update only its committed facts.
+setSearchResults(searchResults.value.map(updateCommittedMetadata))
+```
+
+
+### Verified native evidence (2026-09-30)
+
+- In an isolated Electron profile, the selected application's visible launch count changed from 8 to 9 within 82 ms of the pre-action observation. Selection stayed on the same application.
+- A real plugin execution reached both product-window subscriptions. The mounted CoreBox kept the same visible row order and selected item; the next recommendation snapshot reflected the committed count.
+- The application list contained 200 rows and 200 completed native-icon images. The captured main-window view showed the shared list rows, application paths with middle truncation, and the committed detail count.
+- A legacy Spotlight file pin rebuilt as a canonical `file-provider` item, remained in the list, and did not expand the two-item habitual grid.
+- Evidence lives under `/tmp/tuff-reco-0929/`; no production profile was modified. CDP screenshots must account for CoreBox's initial input-only viewport rather than treating a cropped image as proof of the whole panel.
+

@@ -149,6 +149,22 @@ export function createSearchRetentionOwner(options: SearchRetentionOwnerOptions)
       byteExpression: "length(COALESCE(source_id, '')) + length(COALESCE(item_id, ''))"
     },
     {
+      client: options.coreClient,
+      label: 'usage-execute-events',
+      // Explicit `day` integer column cleared under a day cutoff. Deliberately the SAME policy
+      // window as `usage-trend` and `item-usage`: the ledger row backs the accepted-execute dedupe
+      // and the dated windows, so once the behaviour owners are cleared under this policy, keeping
+      // the event rows would preserve a link to facts the user asked to erase (the ledger carries
+      // no local-day formatting, so it cannot serve the windows on its own). Retention never
+      // decrements `item_usage_stats.execute_count`; it clears the whole row, so the 30-day windows
+      // and retention expire together and no window outlives its evidence.
+      table: 'usage_execute_events',
+      cutoffColumn: 'day',
+      cutoffUnit: 'day',
+      byteExpression:
+        "length(COALESCE(event_id, '')) + length(COALESCE(source_id, '')) + length(COALESCE(item_id, '')) + length(COALESCE(source_type, ''))"
+    },
+    {
       client: options.auxiliaryClient,
       label: 'recommendation-cache',
       table: 'recommendation_cache',
@@ -468,6 +484,18 @@ export function createSearchRetentionOwner(options: SearchRetentionOwnerOptions)
           kind: 'usage-trend',
           day: exportNumber(row.day),
           executeCount: exportNumber(row.execute_count)
+        })
+      },
+      {
+        client: options.coreClient,
+        sql: `SELECT source_id, item_id, source_type, timestamp
+                FROM usage_execute_events ORDER BY timestamp, rowid LIMIT ?`,
+        map: (row) => ({
+          kind: 'usage-execute-event',
+          sourceId: exportString(row.source_id, 256),
+          itemId: exportString(row.item_id, 256),
+          sourceType: exportString(row.source_type, 256),
+          executedAt: exportNumber(row.timestamp)
         })
       }
     ]

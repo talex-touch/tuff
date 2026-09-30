@@ -1,3 +1,5 @@
+import type { IExecuteArgs } from './tuff/tuff-dsl'
+
 /**
  * Recommendation sources in the order their sections are rendered in the
  * CoreBox empty state.
@@ -190,9 +192,23 @@ export interface RecommendProvider {
   /** Display name */
   name: string
   /** Whether this provider can supply recommendations for the given context */
-  canProvide(context: ContextSignal): boolean
+  canProvide(context: ContextSignal): boolean | Promise<boolean>
   /** Return recommendation candidates */
   getCandidates(context: ContextSignal): PluginRecommendCandidate[] | Promise<PluginRecommendCandidate[]>
+  /**
+   * Execute one of this provider's own candidates.
+   *
+   * Required: a candidate the host can render but no one can run is a dead row. The host calls
+   * this with the candidate it produced from `getCandidates` (never a value the renderer supplied)
+   * plus the search-context args, so a provider only ever acts on its own `action`/`data`.
+   *
+   * `false` or a thrown error means the action failed and the host does not count it; `true` or a
+   * resolved `undefined` means the major action was accepted and the host counts it once.
+   */
+  onExecute(
+    candidate: PluginRecommendCandidate,
+    args: IExecuteArgs
+  ): boolean | void | Promise<boolean | void>
 }
 
 /**

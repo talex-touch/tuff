@@ -24,6 +24,7 @@ import {
 import { t } from '../../../../utils/i18n-helper'
 import { calculateHighlights } from '../apps/highlighting-service'
 import { getAppDestinationNavigationService } from '../../../app-destination/app-destination-navigation'
+import { recordAcceptedExecute, resolveExecuteEventId } from '../../search-engine/execute-recorder'
 
 const destinationLog = getLogger('app-destination-provider')
 
@@ -125,7 +126,18 @@ export class AppDestinationProvider implements ISearchProvider<ProviderContext> 
       return null
     }
 
-    getAppDestinationNavigationService(context.touchApp).open(destinationId)
+    const result = getAppDestinationNavigationService(context.touchApp).open(destinationId)
+    // A destination the host could not reach is not a use; an opened or queued one is.
+    if (result.status !== 'unavailable') {
+      recordAcceptedExecute({
+        item: args.item,
+        sessionId: args.searchResult?.sessionId ?? null,
+        entryPoint: 'core-box',
+        eventId: resolveExecuteEventId(args.eventId)
+      }).catch((error) => {
+        destinationLog.warn('Failed to record destination open usage', { error })
+      })
+    }
     return null
   }
 

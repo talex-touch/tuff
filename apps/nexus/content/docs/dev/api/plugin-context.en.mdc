@@ -219,17 +219,17 @@ code: |
 
 ## recommend
 
-RecommendSDK for registering custom recommendation providers with CoreBox.
+RecommendSDK for registering custom recommendation providers with CoreBox. `registerProvider` and `unregisterProvider` both return a Promise and must be awaited; a provider must implement `onExecute` or registration throws.
 
 :::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Register recommendation provider
-  const dispose = recommend.registerProvider({
+  const dispose = await recommend.registerProvider({
   id: 'my-recommendation',
   name: 'My Recommendations',
   canProvide(context) {
-  return context.timeOfDay === 'morning'
+  return context.time.timeSlot === 'morning'
   },
   getCandidates(context) {
   return [{
@@ -240,13 +240,19 @@ code: |
   priority: 75,
   action: 'show-morning-tip'
   }]
+  },
+  // true or undefined means the major action was accepted and the host records
+  // one execution; false or a thrown error means failure and nothing is counted.
+  async onExecute(candidate) {
+  if (candidate.action !== 'show-morning-tip') return false
+  return await showMorningTip()
   }
   })
 
   // Unregister provider
-  dispose()
+  await dispose()
   // or
-  recommend.unregisterProvider('my-recommendation')
+  await recommend.unregisterProvider('my-recommendation')
 ---
 :::
 

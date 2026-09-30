@@ -278,6 +278,8 @@ export interface ClipboardApplyOptions {
   delayMs?: number
   hideCoreBox?: boolean
   type?: PluginClipboardItem['type']
+  /** Reuse when retrying the same history-item apply; omit for a new user action. */
+  eventId?: string
 }
 
 export interface ClipboardWriteOptions {
@@ -477,6 +479,7 @@ export function useClipboard() {
         const response = await transport.send(ClipboardEvents.apply, {
           id: Number(options.item?.id),
           autoPaste: true,
+          eventId: options.eventId ?? crypto.randomUUID(),
           _sdkapi: resolveSdkApi(),
         })
         return ensureClipboardActionSuccess(response)

@@ -99,7 +99,11 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
     if (recordId == null) return false
 
     try {
-      const result = await transport.send(ClipboardEvents.apply, { id: recordId, autoPaste })
+      const result = await transport.send(ClipboardEvents.apply, {
+        id: recordId,
+        autoPaste,
+        eventId: crypto.randomUUID()
+      })
       if (result?.success === false) {
         showCoreBoxFooterFeedback(
           result.message || t('corebox.actionUnsupported', '暂不支持该操作'),

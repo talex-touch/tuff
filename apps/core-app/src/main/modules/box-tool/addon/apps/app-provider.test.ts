@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
-import { fileURLToPath } from 'node:url'
+
 import path from 'node:path'
 import type { IExecuteArgs, TuffItem } from '@talex-touch/utils'
 import type { IndexedSourceRecordBatch } from '@talex-touch/utils/search'
@@ -36,12 +36,14 @@ import {
 } from './app-provider-test-harness'
 import { buildAppExtensions } from './app-index-metadata'
 
-const { scheduleAppLaunchMock } = vi.hoisted(() => ({
-  scheduleAppLaunchMock: vi.fn()
+const { launchAppMock } = vi.hoisted(() => ({
+  // The provider hands a launch to `launchApp` and counts only an OS-accepted outcome, so the
+  // mock resolves a success; the assertions below still pin the request the provider built.
+  launchAppMock: vi.fn(async () => ({ status: 'success' }))
 }))
 
 vi.mock('./app-launcher', () => ({
-  scheduleAppLaunch: scheduleAppLaunchMock
+  launchApp: launchAppMock
 }))
 
 type TestFileRow = {
@@ -664,12 +666,14 @@ describe('appProvider rebuild maintenance', () => {
     })
   })
 
-  it('records a session-scoped usage event before handing the app to the launch boundary', async () => {
+  it('captures the foreground app before the launch and records only the accepted launch', async () => {
     const { appProvider } = await loadSubject()
     searchRecordExecuteMock.mockResolvedValueOnce(undefined)
-    // The launch below is only deferred to the next macrotask, so the foreground read has to
-    // happen before it is scheduled: the recorder cannot do it, or a launch that wins the race
-    // records the app as having been launched from itself.
+    searchRecordExecuteMock.mockClear()
+    launchAppMock.mockClear()
+    // The foreground read has to happen before the launch is handed over: once the target is
+    // frontmost, "what the user came from" is gone, and a read left to race reports the launched
+    // app as the app it was launched from.
     resolvePreviousAppContextMock.mockResolvedValueOnce({ prevApp: 'com.apple.Finder' })
     const item = executeItem({
       id: 'recorded-app',
@@ -688,18 +692,11 @@ describe('appProvider rebuild maintenance', () => {
       searchResult: { sessionId: 'search-session-42' }
     } as IExecuteArgs)
 
-    expect(searchRecordExecuteMock).toHaveBeenCalledWith(
-      'search-session-42',
-      item,
-      'com.apple.Finder'
+    // The read precedes the launch handoff (#712).
+    expect(resolvePreviousAppContextMock.mock.invocationCallOrder[0]).toBeLessThan(
+      launchAppMock.mock.invocationCallOrder[0]
     )
-    // "before" has to be asserted, not implied by the await: awaiting onExecute drains the
-    // microtask queue, so a recorder deferred by a Promise.resolve().then() still ends up
-    // called by the time these run. Invocation order is what actually pins it (#712).
-    expect(searchRecordExecuteMock.mock.invocationCallOrder[0]).toBeLessThan(
-      scheduleAppLaunchMock.mock.invocationCallOrder[0]
-    )
-    expect(scheduleAppLaunchMock).toHaveBeenCalledWith({
+    expect(launchAppMock).toHaveBeenCalledWith({
       name: 'Recorded App',
       path: '/Applications/Recorded.app',
       launchKind: 'path',
@@ -708,25 +705,73 @@ describe('appProvider rebuild maintenance', () => {
       workingDirectory: undefined,
       sourceItemId: 'recorded-app'
     })
+    // Only a launch the OS accepted is a use, and the count is recorded after that outcome: the
+    // provider can no longer count an action it merely handed off.
+    expect(searchRecordExecuteMock).toHaveBeenCalledWith({
+      item,
+      sessionId: 'search-session-42',
+      entryPoint: 'core-box',
+      eventId: expect.any(String),
+      previousApp: 'com.apple.Finder'
+    })
   })
 
-  it('has search-core register the recorder, since nothing else can', async () => {
-    // The seam defaults to a no-op. If search-core stops registering, app launches simply stop
-    // being recorded -- no error, no failing assertion anywhere else, because every other test
-    // registers the mock itself. Read from source: importing search-core here would drag in the
-    // whole engine, and the thing worth pinning is that the call site exists at all (#712).
-    const here = path.dirname(fileURLToPath(import.meta.url))
-    const searchCore = await fs.readFile(
-      path.resolve(here, '../../search-engine/search-core.ts'),
-      'utf-8'
+  it('does not count an app launch the OS refused', async () => {
+    const { appProvider } = await loadSubject()
+    searchRecordExecuteMock.mockClear()
+    launchAppMock.mockResolvedValueOnce({ status: 'failed' } as never)
+
+    const item = executeItem({
+      id: 'failed-app',
+      meta: {
+        app: {
+          path: '/Applications/Missing.app',
+          launchKind: 'path',
+          launchTarget: '/Applications/Missing.app'
+        }
+      }
+    })
+
+    await appProvider.onExecute({
+      item,
+      searchResult: { sessionId: 'failed-session' }
+    } as IExecuteArgs)
+
+    expect(searchRecordExecuteMock).not.toHaveBeenCalled()
+  })
+
+  it('routes an accepted launch through the module-scope execute recorder', async () => {
+    // The provider must not own a private recorder: it publishes an accepted launch through the
+    // same module-scope seam search-core registers, so a launch counted by the app provider and one
+    // counted by the engine cannot diverge. This drives the real call instead of reading source.
+    const { appProvider } = await loadSubject()
+    searchRecordExecuteMock.mockClear()
+    searchRecordExecuteMock.mockResolvedValueOnce(undefined)
+
+    const item = executeItem({
+      id: 'recorded-app',
+      render: { mode: 'default', basic: { title: 'Recorded App' } },
+      meta: {
+        app: {
+          path: '/Applications/Recorded.app',
+          launchKind: 'path',
+          launchTarget: '/Applications/Recorded.app'
+        }
+      }
+    })
+
+    await appProvider.onExecute({
+      item,
+      searchResult: { sessionId: 'search-session-9' }
+    } as IExecuteArgs)
+
+    expect(searchRecordExecuteMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        item,
+        sessionId: 'search-session-9',
+        entryPoint: 'core-box'
+      })
     )
-
-    expect(searchCore).toContain('setAppExecutionRecorder(')
-    expect(searchCore).toMatch(/setAppExecutionRecorder\(\s*\(sessionId, item, previousApp\) =>/)
-
-    // And app-provider must not reach back, or the cycle returns.
-    const provider = await fs.readFile(path.resolve(here, './app-provider.ts'), 'utf-8')
-    expect(provider).not.toMatch(/^import .*search-engine\/search-core/m)
   })
 
   it('requests a runtime reset for public rebuilds', async () => {
@@ -1018,7 +1063,7 @@ describe('appProvider rebuild maintenance', () => {
       })
     } satisfies IExecuteArgs)
 
-    expect(scheduleAppLaunchMock).toHaveBeenCalledWith({
+    expect(launchAppMock).toHaveBeenCalledWith({
       name: 'Test App',
       path: 'C:\\Users\\demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk',
       launchKind: 'shortcut',
@@ -1045,7 +1090,7 @@ describe('appProvider rebuild maintenance', () => {
       })
     } satisfies IExecuteArgs)
 
-    expect(scheduleAppLaunchMock).toHaveBeenCalledWith({
+    expect(launchAppMock).toHaveBeenCalledWith({
       name: 'Test App',
       path: 'shell:AppsFolder\\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App',
       launchKind: 'uwp',

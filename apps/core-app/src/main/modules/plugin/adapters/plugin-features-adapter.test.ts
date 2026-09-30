@@ -9,6 +9,13 @@ import { isCommandMatch, PluginFeaturesAdapter } from './plugin-features-adapter
 import { pluginModule } from '../plugin-module'
 import { PluginViewLoader } from '../view/plugin-view-loader'
 
+const executeRecorderMock = vi.hoisted(() => ({ recordAcceptedExecute: vi.fn(async () => {}) }))
+
+vi.mock('../../box-tool/search-engine/execute-recorder', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  recordAcceptedExecute: executeRecorderMock.recordAcceptedExecute
+}))
+
 const searchEngineHost = {
   getActivationState: vi.fn<() => IProviderActivate[] | null>(() => null),
   activateProviders: vi.fn(),
@@ -265,7 +272,7 @@ describe('plugin-features-adapter', () => {
   it('forwards empty input to active push features', async () => {
     const adapter = createAdapter()
     const pushFeature = { ...createFeature(), push: true }
-    const triggerFeature = vi.fn(async () => true)
+    const triggerFeature = vi.fn(async () => ({ accepted: true, shouldActivate: true }))
     const triggerInputChanged = vi.fn()
     const plugin = {
       ...createPlugin(),
@@ -346,6 +353,109 @@ describe('plugin-features-adapter', () => {
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
   })
 
+  it('counts an item action whose activation decision is false', async () => {
+    // Execution and activation are separate facts: the plugin ran the action, it just does not
+    // need a surface. That is a successful use the host must count.
+    const adapter = createAdapter()
+    executeRecorderMock.recordAcceptedExecute.mockClear()
+    const onItemAction = vi.fn(async () => ({ shouldActivate: false }))
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      pluginLifecycle: { onItemAction }
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    await adapter.onExecute({
+      item: {
+        id: 'test-plugin/widget-ready',
+        source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+        kind: 'feature',
+        meta: { pluginName: 'test-plugin', actionId: 'run' }
+      }
+    } as never)
+
+    expect(executeRecorderMock.recordAcceptedExecute).toHaveBeenCalledTimes(1)
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
+  it('does not count an item action the plugin refused with a structured failure', async () => {
+    // The official plugins signal refusal as `{ success: false, status: 'blocked' }` without
+    // throwing. Counting every non-throwing return would inflate a use that never happened.
+    const adapter = createAdapter()
+    executeRecorderMock.recordAcceptedExecute.mockClear()
+    const onItemAction = vi.fn(async () => ({ success: false, status: 'blocked' as const }))
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      pluginLifecycle: { onItemAction }
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    await adapter.onExecute({
+      item: {
+        id: 'test-plugin/widget-ready',
+        source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+        kind: 'feature',
+        meta: { pluginName: 'test-plugin', actionId: 'run' }
+      }
+    } as never)
+
+    expect(executeRecorderMock.recordAcceptedExecute).not.toHaveBeenCalled()
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
+  it('does not count an item action whose callback throws', async () => {
+    const adapter = createAdapter()
+    executeRecorderMock.recordAcceptedExecute.mockClear()
+    const onItemAction = vi.fn(async () => {
+      throw new Error('copy failed')
+    })
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      pluginLifecycle: { onItemAction }
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    await adapter.onExecute({
+      item: {
+        id: 'test-plugin/widget-ready',
+        source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+        kind: 'feature',
+        meta: { pluginName: 'test-plugin', actionId: 'run' }
+      }
+    } as never)
+
+    expect(executeRecorderMock.recordAcceptedExecute).not.toHaveBeenCalled()
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
+  it('does not count a feature whose trigger reports a structured failure', async () => {
+    const adapter = createAdapter()
+    executeRecorderMock.recordAcceptedExecute.mockClear()
+    const feature = createFeature()
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      getFeature: vi.fn(() => feature),
+      triggerFeature: vi.fn(async () => ({ accepted: false, shouldActivate: false }))
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    await adapter.onExecute({
+      item: {
+        id: `test-plugin/${feature.id}`,
+        source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+        kind: 'feature',
+        meta: { pluginName: 'test-plugin', featureId: feature.id }
+      }
+    } as never)
+
+    expect(executeRecorderMock.recordAcceptedExecute).not.toHaveBeenCalled()
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
   it('honors explicit hidden input for webcontent features with accepted inputs', async () => {
     const adapter = createAdapter()
     const feature = {
@@ -404,7 +514,7 @@ describe('plugin-features-adapter', () => {
         allowInput: true
       }
     } as IPluginFeature
-    const triggerFeature = vi.fn(async () => true)
+    const triggerFeature = vi.fn(async () => ({ accepted: true, shouldActivate: true }))
     const plugin = {
       ...createPlugin(),
       status: PluginStatus.ACTIVE,
@@ -449,7 +559,7 @@ describe('plugin-features-adapter', () => {
         forceMax: true
       }
     } as IPluginFeature
-    const triggerFeature = vi.fn(async () => true)
+    const triggerFeature = vi.fn(async () => ({ accepted: true, shouldActivate: true }))
     const plugin = {
       ...createPlugin(),
       status: PluginStatus.ACTIVE,
