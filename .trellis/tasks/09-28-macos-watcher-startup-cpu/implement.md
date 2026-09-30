@@ -63,6 +63,23 @@ git diff --check
 
 ## Checkpoints and rollback
 
+### Installed Validation Follow-Up (September 30, 2026)
+
+- [x] Back up the original app and clone the real profile before the explicitly authorized installation.
+- [x] Install the production rowid patch without energy-test IPC probes and verify real database handles.
+- [x] Recover the initial blank renderer by preserving the original renderer/preload; disclose that this is not clean release-build acceptance.
+- [x] Run B1/A1/A2/B2 installed 120-second update observations and exact file/meta/FTS checks.
+- [x] Retain the original timeout and the candidate's high-energy no-fixture-mutation window.
+- [x] Extend the installed observation to five minutes; retain the repeated high-load failure and overlapping native stack evidence.
+- [x] Exercise watched rename/delete/cleanup and restore the temporary CoreBox pin setting.
+- [ ] Reproduce and attribute the fd/worker-recreation spike before choosing a further production fix.
+- [ ] Complete final installed foreground UI search and latency acceptance.
+- [ ] Verify matched settled-idle/long-duration energy and a clean full package.
+
+These unchecked gates keep the task in progress and PR #2031 draft. The installed
+results in `research/installed-real-profile-energy-2026-09-30.md` supplement, rather
+than replace, the earlier synthetic and service measurements.
+
 - Planning checkpoint: only this task's planning/research artifacts and developer initialization metadata exist; no source implementation has started.
 - Implementation checkpoint: stop if event parity, subtree scope, native packaging or privacy isolation cannot be proven with the proposed bounded change.
 - Publication checkpoint: user authorized issue/PR creation, but not merging, publishing releases or deployment. Do not upload raw local logs/profiles/samples containing personal information.

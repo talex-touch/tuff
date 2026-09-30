@@ -203,6 +203,14 @@
   - 同时补上该文件此前完全缺失的日志（`createLogger('SearchIndex').child('ReadWorker')`，只在首次失败与触发冷却那次告警），这是原故障无法从会话日志回溯的直接原因。
   - 未做（仍 open）：读 worker 侧同样无日志（`search-index-read-worker.ts`），首次失败的真实原因（15s 慢查询 / worker OOM 退出 / 确定性 SQL 错误）仍需运行时证据；`waitUntilReadable(request)` 把 request 对象按位置传进 signal 形参（本文件被静默忽略）属既有 E-L8。
 
+- [ ] **R12 — 安装版真实 profile 的持续低能耗验收未完成**（2026-09-30）
+  - 承接：`09-28-macos-watcher-startup-cpu/research/installed-real-profile-energy-2026-09-30.md`；PR #2031 保持 draft。
+  - 实际替换 `/Applications/tuff.app`，复用约 23 GiB 原真实索引且不含能耗测试探针。200 文件更新两轮：原版 CPU 114.647% / 93.666%、Energy Impact 4782.810 / 4314.030；补丁 6.657% / 5.938%、144.029 / 122.009，更新分别 1.277s / 1.282s。原版首轮 180s 超时后才确认收敛，第二轮 120.277s；两边启动/后台状态并非严格隔离。
+  - **不能关闭能耗问题**：补丁后无测试文件变更的另一 120s 窗口仍为 CPU 116.171%、Energy Impact 4582.138，原生归因中含 fd 子进程；随后较安静窗口 3.564% / 85.559，不能用它抹去高负载。Energy Impact 是相对评分，不是整机 W/J。
+  - **延长安装观察仍失败**：本地 17:35:44–17:40:41 的 300s 窗口为 CPU 93.039%、Energy Impact 3847.683、读 7,915,184,128 bytes；诊断中 scan worker busy、writer idle。同期 5s native sample 含主线程与另一个 WorkerThread 的文件 `AfterStat` 回调，不能据此定位具体 JS 调用点，也不能反向排除前一高峰的 provider discovery。该窗口有 profiler/只读取证重叠，不冒充纯 idle A/B。
+  - 已确认源码边界、尚未证明实机因果：writer 无待办 60s 后正常退休，新 rowid store 首次 provider 变更会重新发现映射；fd 的排除在枚举后执行，root-only checkpoint pass 也可能重复遍历已排除子树；reconcile 只有协作 yield、没有等价 duty-cycle sleep。下一步要用无路径/正文参数的计数和 wall/thread-CPU 探针区分发现、枚举、对账，不能直接猜补丁。
+  - 主窗口、新建文件首次 CoreBox UI 搜索已实测；最终改名/删除后 UI 验收受同名窗口选择与工具超时阻碍，数据库精确核对不是其替代。临时 pin 已恢复，所有自有 fixture 清理并确认 files/meta/FTS 都为 0；真实数据和原版备份保留。
+
 ### 🟢 低危清理
 
 - [x] **C1 — 死依赖** ✅ 已修（2026-08-07）：`mathjs` 已从两处 manifest、Vite externalize 例外与 electron-builder 排除项一并移除（[#338](https://github.com/talex-touch/tuff/issues/338) / [PR #1088](https://github.com/talex-touch/tuff/pull/1088)）；`tesseract.js` 在依赖树里已不存在，其残留的 build-allowlist 条目随 [#347](https://github.com/talex-touch/tuff/issues/347) / [PR #1084](https://github.com/talex-touch/tuff/pull/1084) 一并清除。

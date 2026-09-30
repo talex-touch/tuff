@@ -238,3 +238,25 @@ does not establish causality for every live libSQL sample, wattage, battery life
 or "particularly low" whole-app energy. Windows/Linux/Intel macOS runtime,
 power-counter A/B, the live million-file profile, long-duration restarts and
 content-rich workload acceptance remain unverified.
+
+## Later Packaged A/B Verification
+
+The earlier statements above describe the initial delivery checkpoint.
+Three alternating-order packaged-app pairs have now completed; see
+`packaged-energy-ab-2026-09-30.md` and `packaged-energy-results-2026-09-30.json`.
+The 200-file update workload reduces process-group Energy Impact rate by 98.52%
+and drains 11.27x faster. This supersedes the absence of matched application
+power-counter evidence, **not** the remaining idle/whole-machine/battery,
+production-profile and search-latency-parity limitations. Candidate idle-after
+energy and search P95 medians increased and remain explicitly reported.
+
+## Installed Real-Profile Verification
+
+The production patch was subsequently installed at `/Applications/tuff.app` and
+tested against the existing real profile. See
+`installed-real-profile-energy-2026-09-30.md` and
+`installed-energy-results-2026-09-30.json` for B1/A1/A2/B2 update observations,
+exact file/meta/FTS checks, app-only rollback, the failed high-energy post-work
+window and incomplete final UI acceptance. This supersedes the statement that no
+installed-profile experiment was performed, **not** the unresolved overall
+low-energy/foreground-latency/clean-package gates. The task and PR remain open.
