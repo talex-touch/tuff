@@ -669,6 +669,26 @@ useChannel(boxOptions, searchVal)
 
 const { focusWindowAndInput, focusInput } = useFocus({ boxInputRef })
 
+function focusCoreBoxInput(): void {
+  if (!shouldShowInput.value) return
+
+  void nextTick(() => {
+    focusInput()
+    // Native window.focus() runs shortly after the show event and can move focus back to body.
+    window.setTimeout(() => {
+      if (shouldShowInput.value) focusInput()
+    }, 160)
+  })
+}
+
+function handleCoreBoxWindowFocus(): void {
+  focusCoreBoxInput()
+}
+
+function handleCoreBoxShown(): void {
+  focusCoreBoxInput()
+}
+
 // Preview History hook
 const historyPanelRef = ref<InstanceType<typeof PreviewHistoryPanel> | null>(null)
 const previewHistory = usePreviewHistory({
@@ -725,11 +745,14 @@ const actionPanel = useActionPanel({
 const metaPanelFill = useMetaPanelFill()
 
 // Channel: focus input
-const unregFocusInput = transport.on(CoreBoxEvents.input.focus, () => focusInput())
+const unregFocusInput = transport.on(CoreBoxEvents.input.focus, () => focusCoreBoxInput())
 
 onMounted(() => {
   resetAutoPasteState()
   void refreshLocalAiCliAvailability()
+  window.addEventListener('corebox:shown', handleCoreBoxShown)
+  window.addEventListener('focus', handleCoreBoxWindowFocus)
+  focusCoreBoxInput()
 })
 
 onBeforeUnmount(() => {
@@ -737,6 +760,8 @@ onBeforeUnmount(() => {
   cleanupVisibility()
   unregUIModeExited()
   unregFocusInput()
+  window.removeEventListener('corebox:shown', handleCoreBoxShown)
+  window.removeEventListener('focus', handleCoreBoxWindowFocus)
   if (resWatchTimerId !== null) {
     clearTimeout(resWatchTimerId)
     resWatchTimerId = null
