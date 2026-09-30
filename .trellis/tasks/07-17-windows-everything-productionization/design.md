@@ -55,7 +55,13 @@ must bind:
 2. CLI recovery evidence (`backend=cli`) with an SDK attempt failure;
 3. unavailable evidence proving a visible degraded reason;
 4. at least 200 real Windows samples with P50/P95/fallback ratio;
-5. normal, explicit `@file`, and structured-filter searches.
+5. normal, explicit `@file`, and structured-filter searches. Each mode records
+   the provider that **actually answered** it (resolved from the orchestrator's
+   real `sources`): Everything answers the normal and `@file` modes, while
+   structured-filter (`ext:txt …`) is a structural filter routed to the local
+   file index and is never recorded or judged as an Everything row. A screenshot
+   name in the artifact array is not evidence on its own; the gate also requires
+   the file to exist, be inside the evidence root, be non-empty and be a real PNG.
 
 Synthetic and non-Windows artifacts may validate collectors/verifiers but cannot
 close the Windows gate.
