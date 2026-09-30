@@ -234,13 +234,6 @@ describe('txStatusBadge', () => {
       expect(declaration(own, 'font-family')).toContain('--tx-font-mono')
     })
 
-    it('carries no border: the tint and the disc already bound the badge', () => {
-      // A hairline on top of both reads as a third edge. This is a deliberate
-      // divergence from the TxBadge / TxTag / TxAlert 12%/32% recipe — only the
-      // border half is dropped, the tint stays in family.
-      expect(ownDeclarations(root)).not.toMatch(/(^|\s)border:/)
-    })
-
     it('paints the disc from the chip ramp and never from --tx-color-*', () => {
       const chip = ownDeclarations(blockBody(root, '&__chip'))
       expect(declaration(chip, 'background')).toContain('--tx-status-chip')

@@ -165,6 +165,8 @@ code: |
 ---
 
 ### BlockLine
+Title and description remain side by side when space allows. In narrow containers, the description wraps below the title instead of being squeezed into a fixed column; long commands can wrap without clipping.
+
 :::TuffDemoWrapper{demo="GroupBlockBlockLineBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -172,6 +174,9 @@ code: |
     <TxGroupBlock name="Release info" description="Readonly configuration rows" default-icon="i-ri-information-line" :collapsible="false">
       <TxBlockLine title="Version" description="2.4.13-beta.3" />
       <TxBlockLine title="Build date" description="2026.07.06" />
+    </TxGroupBlock>
+    <TxGroupBlock name="Install" style="width: min(100%, 320px)" :collapsible="false">
+      <TxBlockLine title="How to install?" description="pnpm add @talex-touch/tuffex" />
     </TxGroupBlock>
   </template>
 ---
@@ -540,6 +545,7 @@ None. Use props, `update:expanded`, `toggle`, and the row-specific events instea
 - After the user toggles a group, later `collapsed` / `defaultExpand` prop changes no longer overwrite the chosen state.
 - Group bodies stay mounted; expansion only animates height, opacity, and display.
 - `TxBlockLine` renders a non-interactive `div` by default and a native `button type="button"` only when `link=true`.
+- `TxBlockLine` uses the same 16px row inset as other settings rows; its description wraps to a second row when the title and value cannot fit side by side.
 - `TxBlockSlot` pins every control slot at `flex-shrink: 0` so fixed-size controls never squash. `TxBlockInput` lifts that for itself: its field shrinks toward `min-width: 120px` instead of holding 180px and squeezing the row's title, which in a 240px container left the title 10px.
 - `TxBlockSlot` blocks click emits when disabled; `TxBlockSwitch` freezes the whole row's pointer events while `loading=true` too, but the row is not dimmed — `tx-block-switch--loading:not(.tx-block-switch--disabled)` takes back the slot's `opacity: .5` so busy and disabled stay visually distinct.
 - `TxBlockSwitch` shows the busy cue in exactly one place: `loading` is forwarded to the inner `TuffSwitch`, whose thumb becomes a spinning ring. The row only adds a shimmer and no longer renders a separate spinner.
