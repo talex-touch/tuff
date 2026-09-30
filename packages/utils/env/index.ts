@@ -95,6 +95,57 @@ export function hasNavigator(): boolean {
   return typeof navigator !== 'undefined'
 }
 
+export type RuntimePlatform = 'darwin' | 'win32' | 'linux' | 'unknown'
+
+export interface RuntimePlatformInput {
+  startupPlatform?: string | null
+  electronPlatform?: string | null
+  navigatorPlatform?: string | null
+  userAgent?: string | null
+}
+
+function normalizeRuntimePlatform(value: string | null | undefined): RuntimePlatform | null {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (!normalized)
+    return null
+  if (normalized === 'darwin' || normalized === 'mac' || normalized === 'macos')
+    return 'darwin'
+  if (normalized === 'win32' || normalized === 'windows' || normalized === 'win')
+    return 'win32'
+  if (normalized === 'linux')
+    return 'linux'
+  return null
+}
+
+function inferBrowserPlatform(input: RuntimePlatformInput): RuntimePlatform | null {
+  const platformText = typeof input.navigatorPlatform === 'string' ? input.navigatorPlatform.toLowerCase() : ''
+  const agentText = typeof input.userAgent === 'string' ? input.userAgent.toLowerCase() : ''
+  const combined = `${platformText} ${agentText}`.trim()
+  if (!combined)
+    return null
+  if (
+    combined.includes('mac')
+    || combined.includes('iphone')
+    || combined.includes('ipad')
+    || combined.includes('ipod')
+  ) {
+    return 'darwin'
+  }
+  if (combined.includes('win'))
+    return 'win32'
+  if (combined.includes('linux') || combined.includes('x11'))
+    return 'linux'
+  return null
+}
+
+/** Resolve OS identity, never CPU architecture, with native hints ahead of browser hints. */
+export function resolveRuntimePlatform(input: RuntimePlatformInput = {}): RuntimePlatform {
+  return normalizeRuntimePlatform(input.startupPlatform)
+    || normalizeRuntimePlatform(input.electronPlatform)
+    || inferBrowserPlatform(input)
+    || 'unknown'
+}
+
 export function isBrowserRuntime(): boolean {
   return hasWindow() && hasDocument()
 }

@@ -128,8 +128,8 @@ describe('target selection', () => {
 
   /** The discriminator the live run proved necessary: body class, not URL. */
   it('tells the main window from CoreBox by body class', () => {
-    expect(isMainWindowIdentity({ bodyClass: 'MacIntel', title: 'Tuff' })).toBe(true)
-    expect(isMainWindowIdentity({ bodyClass: 'MacIntel core-box', title: 'Tuff' })).toBe(false)
+    expect(isMainWindowIdentity({ bodyClass: 'darwin', title: 'Tuff' })).toBe(true)
+    expect(isMainWindowIdentity({ bodyClass: 'darwin core-box', title: 'Tuff' })).toBe(false)
     expect(isMainWindowIdentity({ bodyClass: 'plugin-view dark', title: 'Tuff' })).toBe(false)
   })
 
