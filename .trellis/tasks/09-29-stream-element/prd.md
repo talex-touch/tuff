@@ -88,4 +88,4 @@ Streamed AI output in TuffEx should feel alive and be composable: a `TxStreamEle
 
 ## Open Questions
 
-- None blocking. To confirm at review: the preset names (`aurora`, `hue`, `blur`, `languid`, `none`), the pacer defaults (`wordMs` 24, `maxLagMs` 600, `drainMs` 320, `pauseMs` 400), and the optional `reveal` prop added to `TxStreamMarkdown` (R9).
+- None. Confirmed by the user on 2026-09-30 ("confirm 做吧"): preset names `aurora` (default) / `hue` / `blur` / `languid` / `none`; pacer defaults `wordMs` 24, `maxLagMs` 600, `drainMs` 320, `pauseMs` 400; the optional additive `reveal` prop on `TxStreamMarkdown` (R9).
