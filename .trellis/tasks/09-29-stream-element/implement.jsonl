@@ -1,0 +1,13 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "frontend spec index and pre-development checklist"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "component structure, props/emits, one writer per custom property, ready content must not wait on reveal motion, suite taxonomy, virtual-list keys"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "--tx-* tokens only, motion rules (reduced-motion finished frame, replay on a second keyframe name, compositor loops), new-component checklist"}
+{"file": ".trellis/spec/frontend/tuffex-text-motion.md", "reason": "boundary with the TxTextMorph engine; this family is an append reveal, not a morph"}
+{"file": ".trellis/spec/frontend/bui-component-family.md", "reason": "TxCodeStream is a BUI port: tx-bui tokens, mixins and hard rules for its content-driven mode"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "docs sync, demos, gallery specimens, dist rebuild and dev-server restart traps"}
+{"file": ".trellis/spec/frontend/nexus-docs-structure.md", "reason": "component page shape for stream-text and stream-element"}
+{"file": ".trellis/spec/frontend/nexus-docs-templates.md", "reason": "Templates page contract for the AI answer template (child 5)"}
+{"file": ".trellis/tasks/09-29-stream-element/research/motion-references.md", "reason": "recorded kobra/BUI/forgeui motion numbers behind the presets"}
+{"file": ".trellis/tasks/09-29-stream-element/research/existing-streaming-components.md", "reason": "internals of TxStreamMarkdown, TxCodeStream, fresh chunks, block stream"}
+{"file": ".trellis/tasks/09-29-stream-element/research/ai-suite-building-blocks.md", "reason": "TxInlineCitation, TxSources, TxSuggestionChips, TxMessageActions APIs for the showcase"}
+{"file": ".trellis/tasks/09-29-stream-element/research/prior-decisions.md", "reason": "decisions and binding rules from prior stream/chat tasks"}
+{"file": ".trellis/tasks/09-29-stream-element/research/consumers.md", "reason": "HomePage and demo call sites affected by TxStreamMarkdown and TxCodeStream changes"}
