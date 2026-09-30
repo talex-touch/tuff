@@ -1597,22 +1597,6 @@ async function copyInstall() {
       </section>
 
       <section class="docs-gallery__cell">
-        <NuxtLink class="docs-gallery__label" :to="docPath('flat-input')">
-          {{ cellLabel('FlatInput', '扁平输入') }}
-        </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
-          <ClientOnly>
-            <div class="docs-gallery__block">
-              <TxFlatInput v-model="flatInputValue" :placeholder="copy.typeSomething" />
-            </div>
-            <template #fallback>
-              <div class="docs-gallery__ph" />
-            </template>
-          </ClientOnly>
-        </div>
-      </section>
-
-      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('flat-radio')">
           {{ cellLabel('FlatRadio', '扁平单选') }}
         </NuxtLink>

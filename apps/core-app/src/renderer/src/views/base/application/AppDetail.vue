@@ -8,6 +8,7 @@ import type {
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { toTfileUrl } from '@talex-touch/utils/network'
@@ -16,7 +17,6 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PluginIcon from '~/components/plugin/PluginIcon.vue'
 import SettingChip from '~/components/settings/SettingChip.vue'
-import FlatInput from '~/components/base/input/FlatInput.vue'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -605,7 +605,7 @@ function removeAlias(alias: string): void {
         <p v-else class="AppDetail-AliasDialogEmpty">{{ t('appDetail.aliasNone') }}</p>
 
         <div class="AppDetail-AliasEditor">
-          <FlatInput
+          <TxInput
             v-model="aliasDraft"
             class="AppDetail-AliasInput"
             :placeholder="t('appDetail.aliasPlaceholder')"
