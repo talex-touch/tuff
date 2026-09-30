@@ -4,6 +4,7 @@ import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import type { ForwardedKeyEvent } from '../transport/key-transport'
 import type { CoreBoxMetaActionEventDetail } from '../../meta-actions/meta-action-model'
+import { normalizeCoreBoxQuickSelectAction } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { onBeforeUnmount } from 'vue'
@@ -20,6 +21,7 @@ import { createCoreBoxKeyTransport } from '../transport/key-transport'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import { resolveVisibleBoxGridColumnCount } from '~/components/render/box-grid-layout'
 import { publishWidgetHostKeyEvent } from '~/modules/plugin/widget-host-key-bridge'
+import { appSetting } from '~/modules/storage/app-storage'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
 
@@ -768,11 +770,20 @@ export function useKeyboard(
     if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
       const key = event.key
       const index = key === '0' ? 9 : Number.parseInt(key, 10) - 1
-      if (!Number.isNaN(index) && index >= 0 && index < 10) {
-        if (res.value[index]) {
-          boxOptions.focus = index
-          event.preventDefault()
+      const target = Number.isNaN(index) || index < 0 || index > 9 ? undefined : res.value[index]
+      if (target) {
+        boxOptions.focus = index
+        // Read per press rather than once: the preference is written from the settings window, and
+        // this listener outlives that — a value captured at mount would need the box to restart.
+        if (
+          normalizeCoreBoxQuickSelectAction(appSetting.coreBox?.quickSelectAction) === 'execute'
+        ) {
+          // Same two steps Enter takes, so an executed result is the selected one: a provider that
+          // reads `select` (history, usage, the item an action may follow) sees the number's row.
+          select.value = index
+          handleExecute(target)
         }
+        event.preventDefault()
       }
     }
 

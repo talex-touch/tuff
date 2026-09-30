@@ -70,7 +70,24 @@ function keydown(el: Element, key: string): KeyboardEvent {
   return event
 }
 
+const originalMatchMedia = window.matchMedia
+
+/** Matches `prefers-reduced-motion: reduce`; `afterEach` puts the host stub back. */
+function stubReducedMotion(): void {
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes('reduced-motion'),
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+}
+
 afterEach(() => {
+  window.matchMedia = originalMatchMedia
   document.body.innerHTML = ''
 })
 
@@ -143,7 +160,9 @@ describe('txDropdownMenu', () => {
   })
 
   it('keeps open state internally when modelValue is omitted', async () => {
-    const wrapper = mountMenu()
+    // Blink feedback is off here: this test pins the internal open state, not
+    // the pre-close rhythm (see the activation-feedback block below).
+    const wrapper = mountMenu({ activationFeedback: false })
 
     await wrapper.find('.open-control').trigger('click')
     await nextTick()
@@ -306,7 +325,8 @@ describe('txDropdownMenu', () => {
       },
       global: {
         provide: {
-          txDropdownMenu: { close, closeOnSelect: true },
+          // Blink feedback off: this pins the select -> close contract itself.
+          txDropdownMenu: { close, closeOnSelect: true, activationFeedback: false },
         },
       },
     })
@@ -345,7 +365,7 @@ describe('txDropdownMenu', () => {
       },
       global: {
         provide: {
-          txDropdownMenu: { close, closeOnSelect: true },
+          txDropdownMenu: { close, closeOnSelect: true, activationFeedback: false },
         },
       },
     })
@@ -381,7 +401,7 @@ describe('txDropdownMenu', () => {
   })
 
   it('reflects closeOnSelect prop changes after mount', async () => {
-    const wrapper = mountMenu({ modelValue: true, closeOnSelect: true })
+    const wrapper = mountMenu({ modelValue: true, closeOnSelect: true, activationFeedback: false })
     await nextTick()
 
     // closeOnSelect=true: selecting an item closes the parent dropdown.
@@ -394,5 +414,250 @@ describe('txDropdownMenu', () => {
 
     await wrapper.find('.rename-item').trigger('click')
     expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  // The pre-close blink: a closing activation clears the row, confirms it, and
+  // only then emits `select` and asks the menu to close. These mount a single
+  // row against the same context shape the menu provides.
+  describe('activation feedback', () => {
+    function mountItem(props: Record<string, unknown> = {}, ctx: Record<string, unknown> = {}) {
+      const close = vi.fn()
+      const wrapper = mount(TxDropdownItem, {
+        props,
+        slots: { default: 'Rename' },
+        global: {
+          provide: {
+            txDropdownMenu: { close, closeOnSelect: true, activationFeedback: true, ...ctx },
+          },
+        },
+      })
+      return { close, wrapper }
+    }
+
+    it('clears then confirms the row before emitting select and closing', async () => {
+      vi.useFakeTimers()
+      try {
+        const { close, wrapper } = mountItem()
+
+        await wrapper.trigger('click')
+        await nextTick()
+
+        expect(wrapper.classes()).toContain('is-activation-clear')
+        expect(wrapper.classes()).not.toContain('is-activation-confirm')
+        expect(wrapper.classes()).not.toContain('tx-card-item--active')
+        expect(wrapper.emitted('select')).toBeUndefined()
+        expect(close).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(90)
+        await nextTick()
+
+        expect(wrapper.classes()).toContain('is-activation-confirm')
+        expect(wrapper.classes()).not.toContain('is-activation-clear')
+        expect(wrapper.classes()).toContain('tx-card-item--active')
+        expect(wrapper.emitted('select')).toBeUndefined()
+        expect(close).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(90)
+        await nextTick()
+
+        expect(wrapper.emitted('select')).toHaveLength(1)
+        expect(close).toHaveBeenCalledTimes(1)
+        expect(wrapper.classes()).not.toContain('is-activation-feedback')
+        expect(wrapper.classes()).not.toContain('tx-card-item--active')
+      }
+      finally {
+        vi.useRealTimers()
+      }
+    })
+
+    const keyboardCases: Array<[string, Record<string, unknown>]> = [
+      ['Enter', { key: 'Enter' }],
+      ['Space', { key: ' ' }],
+    ]
+
+    it.each(keyboardCases)('routes %s activation through the same delayed path', async (_key, event) => {
+      vi.useFakeTimers()
+      try {
+        const { close, wrapper } = mountItem()
+
+        await wrapper.trigger('keydown', event)
+        await nextTick()
+
+        expect(wrapper.classes()).toContain('is-activation-clear')
+        expect(wrapper.emitted('select')).toBeUndefined()
+        expect(close).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(180)
+        await nextTick()
+
+        expect(wrapper.emitted('select')).toHaveLength(1)
+        expect(close).toHaveBeenCalledTimes(1)
+      }
+      finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('emits select and close once when activated repeatedly mid-cycle', async () => {
+      vi.useFakeTimers()
+      try {
+        const { close, wrapper } = mountItem()
+
+        await wrapper.trigger('click')
+        await nextTick()
+        await wrapper.trigger('click')
+        await wrapper.trigger('click')
+
+        vi.advanceTimersByTime(90)
+        await nextTick()
+        // Still inside the cycle: the confirm beat must not be re-entered either.
+        await wrapper.trigger('click')
+
+        vi.advanceTimersByTime(90)
+        await nextTick()
+
+        expect(wrapper.emitted('select')).toHaveLength(1)
+        expect(close).toHaveBeenCalledTimes(1)
+      }
+      finally {
+        vi.useRealTimers()
+      }
+    })
+
+    const immediateCases: Array<[string, Record<string, unknown>, Record<string, unknown>, boolean]> = [
+      ['menu-level opt-out', {}, { activationFeedback: false }, true],
+      ['item-level opt-out', { activationFeedback: false }, { activationFeedback: true }, true],
+      ['closeOnSelect disabled', {}, { closeOnSelect: false }, false],
+    ]
+
+    it.each(immediateCases)('keeps %s activation immediate', async (_label, props, ctx, closes) => {
+      vi.useFakeTimers()
+      try {
+        const { close, wrapper } = mountItem(props, ctx)
+
+        await wrapper.trigger('click')
+        await nextTick()
+
+        expect(wrapper.emitted('select')).toHaveLength(1)
+        expect(wrapper.classes()).not.toContain('is-activation-feedback')
+        expect(close).toHaveBeenCalledTimes(closes ? 1 : 0)
+
+        // The immediate path leaves nothing behind that fires later.
+        vi.advanceTimersByTime(180)
+        await nextTick()
+
+        expect(wrapper.emitted('select')).toHaveLength(1)
+        expect(close).toHaveBeenCalledTimes(closes ? 1 : 0)
+      }
+      finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('stays immediate when no menu context is injected', async () => {
+      vi.useFakeTimers()
+      try {
+        const wrapper = mount(TxDropdownItem, { slots: { default: 'Rename' } })
+
+        await wrapper.trigger('click')
+        await nextTick()
+
+        expect(wrapper.emitted('select')).toHaveLength(1)
+        expect(wrapper.classes()).not.toContain('is-activation-feedback')
+      }
+      finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('lets an item opt-in override a menu that disabled feedback', async () => {
+      vi.useFakeTimers()
+      try {
+        const { close, wrapper } = mountItem({ activationFeedback: true }, { activationFeedback: false })
+
+        await wrapper.trigger('click')
+        await nextTick()
+
+        expect(wrapper.classes()).toContain('is-activation-clear')
+        expect(wrapper.emitted('select')).toBeUndefined()
+
+        vi.advanceTimersByTime(180)
+        await nextTick()
+
+        expect(wrapper.emitted('select')).toHaveLength(1)
+        expect(close).toHaveBeenCalledTimes(1)
+      }
+      finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('applies the selection at once under prefers-reduced-motion', async () => {
+      stubReducedMotion()
+      vi.useFakeTimers()
+      try {
+        const { close, wrapper } = mountItem()
+
+        await wrapper.trigger('click')
+        await nextTick()
+
+        expect(wrapper.emitted('select')).toHaveLength(1)
+        expect(close).toHaveBeenCalledTimes(1)
+        expect(wrapper.classes()).not.toContain('is-activation-feedback')
+
+        // No blink is left to finish, and no feedback timer fires later.
+        vi.advanceTimersByTime(200)
+        await nextTick()
+
+        expect(wrapper.emitted('select')).toHaveLength(1)
+        expect(close).toHaveBeenCalledTimes(1)
+      }
+      finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('drops a pending cycle when the row unmounts before it completes', async () => {
+      vi.useFakeTimers()
+      try {
+        const { close, wrapper } = mountItem()
+
+        await wrapper.trigger('click')
+        await nextTick()
+        expect(wrapper.classes()).toContain('is-activation-clear')
+
+        wrapper.unmount()
+        vi.advanceTimersByTime(200)
+
+        expect(wrapper.emitted('select')).toBeUndefined()
+        expect(close).not.toHaveBeenCalled()
+      }
+      finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('closes the dropdown only once the feedback cycle completes', async () => {
+      vi.useFakeTimers()
+      try {
+        const wrapper = mountMenu({ modelValue: true })
+        await nextTick()
+
+        await wrapper.find('.rename-item').trigger('click')
+        await nextTick()
+
+        expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+        expect(wrapper.find('.rename-item').classes()).toContain('is-activation-clear')
+
+        vi.advanceTimersByTime(180)
+        await nextTick()
+
+        expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([false])
+        expect(wrapper.emitted('close')).toHaveLength(1)
+      }
+      finally {
+        vi.useRealTimers()
+      }
+    })
   })
 })

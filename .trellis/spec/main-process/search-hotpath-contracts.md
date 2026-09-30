@@ -143,11 +143,13 @@ segments (`(^|/)out/`, not `out/`), with `~/go/pkg` and `~/OrbStack` excluded as
 home-anchored toolchain caches.
 
 Cold full scans prioritize foreground responsiveness over minimum completion time. After every
-persisted chunk, `FileProviderFullScanInsertService` yields at least 100 ms; a chunk at or above
-the existing 250 ms congestion threshold instead keeps the proportional capped backoff. The
-scanner's 500-record acknowledgement boundary carries this backpressure upstream, so do not add
-a second pending persistence chunk, remove the pause based only on throughput, or change ordered
-publication without a new isolated CPU/lag A/B. The AIMD ceiling remains independently measured.
+persisted chunk, `FileProviderFullScanInsertService` yields at least 250 ms. The fused worker reports
+`process.threadCpuUsage()` for each chunk (process CPU is only an old-runtime fallback); if a 35%
+single-core duty-cycle budget needs a longer park, that budget wins. A chunk at or above the 250 ms
+congestion threshold keeps its proportional capped backoff when that is longer. The scanner's
+500-record acknowledgement boundary carries this backpressure upstream, so do not add a second
+pending persistence chunk, remove the pause based only on throughput, or change ordered publication
+without a new isolated production-like CPU/lag A/B. The AIMD ceiling remains independently measured.
 
 ### 10. Result rows obey the context-free directory rules at read time
 
@@ -162,3 +164,11 @@ retires them; do not "fix" a stale-row sighting by widening the cleanup budget.
 Generated Python dependency/cache directory names (`uvcache`, `__pycache__`, `site-packages`) are
 unconditional dev exclusions across traversal, watcher admission, writes, and read-time filtering.
 Ordinary context-dependent names such as `build` keep the sibling project-marker rule.
+
+### 11. File fuzzy recall is staged after exact/index recall
+
+`FileProviderSearchResultService` runs exact keyword, short prefix and FTS in parallel. It does not run `lookupBySubsequence` or n-gram aggregation beside every ordinary query: on a 150,000-file / 4,036,303-keyword fixture that shape produced 1.2 s warm P95. Only when those primary sources return no candidate does it try up to two selective numeric/letter FTS tokens, then bounded n-gram recall. At most 120 admitted candidates reach the in-process fzf-style filename/path scorer.
+
+Zero-result diagnostics never count the FTS or meta table on the request path. A diagnostic log may include provider and query length, but no follow-up read may delay the empty result.
+
+Regression and benchmark contract: exact/prefix stays ahead of fuzzy; filename beats path-only; typo/non-consecutive recall preserves the intended Top-K. The 150,000-row / 4,036,303-keyword warm probe must remain below the CoreBox 80 ms window even with zero `sqlite_stat1` rows (2026-09-29 baseline: median 1.36 ms, P95 32.20 ms, max 37.03 ms).

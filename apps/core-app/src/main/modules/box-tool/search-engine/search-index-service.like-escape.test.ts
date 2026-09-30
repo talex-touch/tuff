@@ -119,3 +119,22 @@ describe('lookupByKeywordPrefix LIKE escaping', () => {
     })
   })
 })
+
+/**
+ * The subsequence scan is bounded to the query's first character so it can ride the keyword
+ * index instead of walking every row for the provider. That bound is load-bearing: it decides
+ * which keywords are reachable at all.
+ */
+describe('lookupBySubsequence first-character range', () => {
+  it('scans only keywords inside the query first-character range', async () => {
+    await withIndexService(async (service, client) => {
+      // `untenable` and `nice-to-eat` both contain n-t-e in order, but only the rows whose
+      // keyword starts with the query's first character live in the scanned index range.
+      await seed(client, ['note', 'notepad', 'untenable', 'anteater', 'nice-to-eat'])
+
+      const rows = await service.lookupBySubsequence(PROVIDER, 'nte', 20)
+
+      expect(rows.map((row) => row.keyword).sort()).toEqual(['nice-to-eat', 'note', 'notepad'])
+    })
+  })
+})

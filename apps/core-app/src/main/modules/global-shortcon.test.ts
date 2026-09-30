@@ -598,8 +598,13 @@ describe('ShortcutModule app shortcut rebind', () => {
     const previousCallback = vi.fn()
     const refusedCallback = vi.fn()
 
-    expect(module.setAppShortcut('app.test.rebind', ACCELERATOR_A, previousCallback)).toBe(true)
-    expect(module.setAppShortcut('app.test.rebind', ACCELERATOR_B, refusedCallback)).toBe(false)
+    expect(module.setAppShortcut('app.test.rebind', ACCELERATOR_A, previousCallback)).toEqual({
+      ok: true
+    })
+    expect(module.setAppShortcut('app.test.rebind', ACCELERATOR_B, refusedCallback)).toEqual({
+      ok: false,
+      reason: 'unavailable'
+    })
 
     // The store must be back on the key that still works, not left on the refused one.
     expect(module.getShortcutAccelerator('app.test.rebind')).toBe(ACCELERATOR_A)
@@ -615,7 +620,10 @@ describe('ShortcutModule app shortcut rebind', () => {
     const { module, storage } = createModule()
     installRegisterMock([ACCELERATOR_B])
 
-    expect(module.setAppShortcut('app.test.first', ACCELERATOR_B, vi.fn())).toBe(false)
+    expect(module.setAppShortcut('app.test.first', ACCELERATOR_B, vi.fn())).toEqual({
+      ok: false,
+      reason: 'unavailable'
+    })
 
     expect(module.getShortcutAccelerator('app.test.first')).toBeNull()
     expect(storage.getShortcutById('app.test.first')).toBeUndefined()
@@ -624,22 +632,78 @@ describe('ShortcutModule app shortcut rebind', () => {
   })
 
   /**
-   * A key already bound to another app shortcut never reaches `globalShortcut.register`, so the
-   * verdict for this id is `conflict` rather than `unavailable`. Reporting success there would
-   * persist a binding that can never fire and quietly leave the user on a dead key.
+   * A key another binding holds is refused and named, and nothing is written: the surface asks the
+   * user with those names, then writes again with `force` if they say yes. Taking the key quietly,
+   * or writing it and rolling back, would both leave the answer to the question up to timing.
    */
-  it('a second app binding to a taken key is refused and rolled back', () => {
+  it('a second app binding to a taken key names the holder and writes nothing', () => {
     const { module, storage } = createModule()
     installRegisterMock([])
     const firstCallback = vi.fn()
 
-    expect(module.setAppShortcut('app.test.owner', ACCELERATOR_A, firstCallback)).toBe(true)
-    expect(module.setAppShortcut('app.test.duplicate', ACCELERATOR_A, vi.fn())).toBe(false)
+    expect(module.setAppShortcut('app.test.owner', ACCELERATOR_A, firstCallback)).toEqual({
+      ok: true
+    })
+    expect(module.setAppShortcut('app.test.duplicate', ACCELERATOR_A, vi.fn())).toEqual({
+      ok: false,
+      reason: 'conflict',
+      holders: [{ id: 'app.test.owner', label: 'app.test.owner' }]
+    })
 
     expect(module.getShortcutAccelerator('app.test.duplicate')).toBeNull()
     expect(storage.getShortcutById('app.test.duplicate')).toBeUndefined()
     // The binding that already worked is untouched.
     expect(module.getShortcutAccelerator('app.test.owner')).toBe(ACCELERATOR_A)
+
+    module.onDestroy()
+  })
+
+  /**
+   * `holders` is what the confirmation surface prints as the reason the key cannot be taken, so each
+   * name must be the one settings shows on that row: the resolved label where the locale has copy
+   * for the id, the raw id where it does not. A caller that gets the id for a labelled shortcut, or
+   * an unresolved key, asks the user to take a key from something they cannot recognise.
+   */
+  it('names each holder with its settings label, falling back to the id only where there is none', () => {
+    const { module } = createModule()
+    installRegisterMock([])
+    module.registerMainShortcut('screenshot.tool.start', ACCELERATOR_A, vi.fn())
+    module.registerMainShortcut('app.test.unlabelled', ACCELERATOR_A, vi.fn())
+
+    expect(module.setAppShortcut('app.test.latecomer', ACCELERATOR_A, vi.fn())).toEqual({
+      ok: false,
+      reason: 'conflict',
+      holders: [
+        { id: 'screenshot.tool.start', label: 'Take a screenshot' },
+        { id: 'app.test.unlabelled', label: 'app.test.unlabelled' }
+      ]
+    })
+
+    module.onDestroy()
+  })
+
+  /**
+   * The other half of the same question: `force` is the user's answer, so the key is taken and the
+   * previous holder is left without it — the pass decides who owns it, not the write order.
+   */
+  it('a forced bind takes a key another binding holds and leaves that one without it', () => {
+    const { module } = createModule()
+    const dispatch = installRegisterMock([])
+    const ownerCallback = vi.fn()
+    const takerCallback = vi.fn()
+
+    expect(module.setAppShortcut('app.test.owner', ACCELERATOR_A, ownerCallback)).toEqual({
+      ok: true
+    })
+    expect(
+      module.setAppShortcut('app.test.taker', ACCELERATOR_A, takerCallback, { force: true })
+    ).toEqual({ ok: true })
+
+    expect(module.getShortcutAccelerator('app.test.taker')).toBe(ACCELERATOR_A)
+
+    dispatch.get(ACCELERATOR_A)?.()
+    expect(takerCallback).toHaveBeenCalledTimes(1)
+    expect(ownerCallback).not.toHaveBeenCalled()
 
     module.onDestroy()
   })
@@ -651,7 +715,9 @@ describe('ShortcutModule app shortcut rebind', () => {
     const acceptedCallback = vi.fn()
 
     module.setAppShortcut('app.test.accepted', ACCELERATOR_A, previousCallback)
-    expect(module.setAppShortcut('app.test.accepted', ACCELERATOR_B, acceptedCallback)).toBe(true)
+    expect(module.setAppShortcut('app.test.accepted', ACCELERATOR_B, acceptedCallback)).toEqual({
+      ok: true
+    })
 
     expect(module.getShortcutAccelerator('app.test.accepted')).toBe(ACCELERATOR_B)
 
@@ -969,19 +1035,106 @@ describe('ShortcutModule CoreBox default, and CoreBox left without a key', () =>
 
   it('stays quiet when a key the user chose for CoreBox loses a conflict', () => {
     const { module, storage } = createTrackedModule()
-    storeSystemBinding(storage, 'screenshot.tool.start', 'Command+K')
+    // CoreBox was put on Command+K first, the screenshot tool after it: between two keys the user
+    // chose, the later binding owns the key (see `orderByOwnership`).
     storeSystemBinding(storage, COREBOX_ID, 'Command+K')
+    storeSystemBinding(storage, 'screenshot.tool.start', 'Command+K')
     installRegisterMock([])
 
-    module.registerMainShortcut('screenshot.tool.start', 'CommandOrControl+Shift+A', vi.fn())
     module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+    module.registerMainShortcut('screenshot.tool.start', 'CommandOrControl+Shift+A', vi.fn())
 
     // Their own key, and settings already shows the conflict on it: no notice, as for a refusal.
     expect(module.shortcutStatusMap?.get(COREBOX_ID)?.state).toBe('conflict')
     expect(noticeMocks.showInternalSystemNotification).not.toHaveBeenCalled()
   })
 
-  it('stays quiet when CoreBox wins the conflict on its key', () => {
+  /**
+   * Two binds can land in the same millisecond — the recorder writes the new value the instant the
+   * user finishes a capture, and a pass that writes two records back to back does not leave the
+   * clock any room. `meta.modificationTime` cannot separate those two, so the store's own order has
+   * to: records are appended, so the later position is the later write, and it owns the key.
+   *
+   * The clock is frozen so the tie is real: without that this test would pass on the timestamp
+   * comparison alone and stop pinning the fallback the moment the two writes straddled a
+   * millisecond.
+   */
+  it('gives a key two bindings chose in the same millisecond to the later record', () => {
+    const { module, storage } = createTrackedModule()
+    const dispatch = installRegisterMock([])
+    const corebox = vi.fn()
+    const screenshot = vi.fn()
+    const frozen = new Date('2026-01-01T00:00:00.000Z').getTime()
+
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(frozen)
+      storeSystemBinding(storage, COREBOX_ID, 'Command+K')
+      storeSystemBinding(storage, 'screenshot.tool.start', 'Command+K')
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(storage.getShortcutById(COREBOX_ID)?.meta?.modificationTime).toBe(frozen)
+    expect(storage.getShortcutById('screenshot.tool.start')?.meta?.modificationTime).toBe(frozen)
+
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, corebox, COREBOX_OPTIONS)
+    module.registerMainShortcut('screenshot.tool.start', 'CommandOrControl+Shift+A', screenshot)
+
+    expect(module.shortcutStatusMap?.get('screenshot.tool.start')?.state).toBe('active')
+    expect(module.shortcutStatusMap?.get(COREBOX_ID)).toEqual({
+      state: 'conflict',
+      reason: 'conflict-system',
+      conflictWith: ['screenshot.tool.start']
+    })
+    dispatch.get('Command+K')?.()
+    expect(screenshot).toHaveBeenCalledTimes(1)
+    expect(corebox).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The same rule seen from the other side: the record written *first* takes the key when it was
+   * rebound later, which is what makes moving a shortcut onto a key another one holds work in
+   * settings. Ownership is the last write, not the position the store happens to hold.
+   */
+  it('lets the binding stored first take the key when it was rebound onto it later', () => {
+    const { module, storage } = createTrackedModule()
+    const dispatch = installRegisterMock([])
+    const corebox = vi.fn()
+    const screenshot = vi.fn()
+
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z').getTime())
+      storeSystemBinding(storage, COREBOX_ID, 'Command+J')
+      storeSystemBinding(storage, 'screenshot.tool.start', 'Command+K')
+      module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, corebox, COREBOX_OPTIONS)
+      module.registerMainShortcut('screenshot.tool.start', 'CommandOrControl+Shift+A', screenshot)
+      expect(module.shortcutStatusMap?.get('screenshot.tool.start')?.state).toBe('active')
+
+      // A minute later the user moves CoreBox onto the screenshot's key.
+      vi.setSystemTime(new Date('2026-01-01T00:01:00.000Z').getTime())
+      module.updateShortcut(COREBOX_ID, 'Command+K')
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(module.shortcutStatusMap?.get(COREBOX_ID)?.state).toBe('active')
+    expect(module.shortcutStatusMap?.get('screenshot.tool.start')).toEqual({
+      state: 'conflict',
+      reason: 'conflict-system',
+      conflictWith: [COREBOX_ID]
+    })
+    dispatch.get('Command+K')?.()
+    expect(corebox).toHaveBeenCalledTimes(1)
+    expect(screenshot).not.toHaveBeenCalled()
+  })
+
+  /**
+   * The other side of the same rule: a key someone chose takes precedence over a default, so a
+   * screenshot tool the user moved to ⌥Space keeps it and CoreBox is left keyless. That is the
+   * one case CoreBox announces, and the message names what took the key.
+   */
+  it('loses its default to a key the user chose elsewhere, and says so once', () => {
     const { module, storage } = createTrackedModule()
     storeSystemBinding(storage, COREBOX_ID, DEFAULT_ACCELERATOR)
     storeSystemBinding(storage, 'screenshot.tool.start', 'Option+Space')
@@ -989,6 +1142,25 @@ describe('ShortcutModule CoreBox default, and CoreBox left without a key', () =>
 
     module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
     module.registerMainShortcut('screenshot.tool.start', 'CommandOrControl+Shift+A', vi.fn())
+
+    expect(module.getEffectiveAccelerator(COREBOX_ID)).toBeNull()
+    expect(module.shortcutStatusMap?.get('screenshot.tool.start')?.state).toBe('active')
+    // Named, because settings has a label for the shortcut that took the key.
+    expect(shownBodies()).toEqual([
+      'notifications.coreBoxShortcutConflictNamedBody {"shortcut":"⌥Space","other":"Take a screenshot"}'
+    ])
+  })
+
+  it('keeps its default key when the other binding is on a default too', () => {
+    const { module, storage } = createTrackedModule()
+    storeSystemBinding(storage, COREBOX_ID, DEFAULT_ACCELERATOR)
+    storeSystemBinding(storage, 'screenshot.tool.start', 'Option+Space')
+    installRegisterMock([])
+
+    module.registerMainShortcut(COREBOX_ID, DEFAULT_ACCELERATOR, vi.fn(), COREBOX_OPTIONS)
+    // Registered on the value it is already stored with, so neither binding is one the user chose
+    // and the store's own order decides — CoreBox was there first.
+    module.registerMainShortcut('screenshot.tool.start', 'Option+Space', vi.fn())
 
     expect(module.getEffectiveAccelerator(COREBOX_ID)).toBe(DEFAULT_ACCELERATOR)
     expect(module.shortcutStatusMap?.get('screenshot.tool.start')?.state).toBe('conflict')

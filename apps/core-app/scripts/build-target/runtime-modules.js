@@ -890,7 +890,16 @@ function copyModuleToResources(resourcesDir, moduleEntry, options = {}) {
       if (!excludeWorkspaceNodeModules) return true
 
       const relativePath = path.relative(normalizedEntry.sourceDir, sourcePath)
-      return relativePath !== 'node_modules' && !relativePath.startsWith(`node_modules${path.sep}`)
+      if (relativePath === 'node_modules' || relativePath.startsWith(`node_modules${path.sep}`)) {
+        return false
+      }
+      if (
+        normalizedEntry.name === '@talex-touch/tuff-native' &&
+        relativePath.split(path.sep).includes('target')
+      ) {
+        return false
+      }
+      return true
     }
   })
 }

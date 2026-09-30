@@ -31,6 +31,7 @@ export interface FileProviderEnrichmentResumeServiceDeps {
   getDbUtils: () => DbUtils | null
   isSearchIndexAvailable: () => boolean
   isShuttingDown: () => boolean
+  isEnabled: () => boolean
   withMutationLease: <T>(operation: (leaseId: string) => Promise<T>) => Promise<T>
   scheduleIndexing: (
     files: FileProviderIndexSchedulerFile[],
@@ -71,7 +72,7 @@ export class FileProviderEnrichmentResumeService {
   constructor(private readonly deps: FileProviderEnrichmentResumeServiceDeps) {}
 
   resume(reason: string): void {
-    if (this.deps.isShuttingDown()) return
+    if (this.deps.isShuttingDown() || !this.deps.isEnabled()) return
     if (this.resumePromise) {
       // A pass is already running. Rows it marks pending (or a change event's
       // deferred overflow) must not wait for an unrelated future drain, so
@@ -95,6 +96,18 @@ export class FileProviderEnrichmentResumeService {
       return
     }
     this.startRound(reason)
+  }
+
+  stop(): void {
+    this.rerunRequested = false
+    if (this.cooldownTimer) {
+      clearTimeout(this.cooldownTimer)
+      this.cooldownTimer = null
+    }
+  }
+
+  isActive(): boolean {
+    return this.resumePromise !== null || this.cooldownTimer !== null
   }
 
   private startRound(reason: string): void {
@@ -123,7 +136,7 @@ export class FileProviderEnrichmentResumeService {
     if (this.cooldownTimer) return
     const timer = setTimeout(() => {
       this.cooldownTimer = null
-      if (this.deps.isShuttingDown()) return
+      if (this.deps.isShuttingDown() || !this.deps.isEnabled()) return
       if (this.resumePromise) {
         this.rerunRequested = true
         return
@@ -137,7 +150,7 @@ export class FileProviderEnrichmentResumeService {
 
   private async run(reason: string): Promise<ResumeRoundOutcome> {
     const dbUtils = this.deps.getDbUtils()
-    if (!dbUtils || !this.deps.isSearchIndexAvailable()) return 'stopped'
+    if (!dbUtils || !this.deps.isSearchIndexAvailable() || !this.deps.isEnabled()) return 'stopped'
 
     const label = `enrichment-resume.${reason}`
     const startedAt = this.cursor
@@ -147,7 +160,7 @@ export class FileProviderEnrichmentResumeService {
     let failedPages = 0
     // Ids of a partially admitted page whose dispatch failed; see the loop below.
     let failedPageIds: number[] | null = null
-    while (!this.deps.isShuttingDown()) {
+    while (!this.deps.isShuttingDown() && this.deps.isEnabled()) {
       const rows = await dbUtils
         .getFileIndexReadDb()
         .select({

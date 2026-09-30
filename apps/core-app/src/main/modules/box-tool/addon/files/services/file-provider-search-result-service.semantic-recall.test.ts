@@ -48,6 +48,7 @@ function makeService(opts: {
     // handle, mirroring createDbUtils' flag-off behavior.
     getDbUtils: () => ({ getDb, getFileIndexReadDb: getDb }) as never,
     getSearchIndex: () => null,
+    isContentIndexingEnabled: () => true,
     buildItem: (file) =>
       ({
         id: file.path,

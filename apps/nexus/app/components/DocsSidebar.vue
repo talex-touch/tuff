@@ -1555,7 +1555,7 @@ onBeforeUnmount(() => {
           class="docs-suite-option"
           :class="activeSuite === suite.key ? 'is-current' : ''"
           :aria-checked="activeSuite === suite.key"
-          @click="selectSuite(suite.key)"
+          @select="selectSuite(suite.key)"
           @keydown.esc.stop="suiteMenuOpen = false"
         >
           <span class="docs-suite-option__body">

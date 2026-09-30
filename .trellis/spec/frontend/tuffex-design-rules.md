@@ -197,6 +197,32 @@ Worked example: `TxEmptyState`'s illustrations (all variants since 2026-09-24). 
 
 The inverse form is equally valid and smaller: declare the animation **only** inside `@media (prefers-reduced-motion: no-preference) { … }`, so reduced motion never starts it and the element simply rests in its declared (final) style. `TxStatCard`, the charts and `TxChoiceCard` use it (2026-09-26: it took ~0.4 KiB off `TxChoiceCard` with pixel-identical output). Pick one form per component; a style-contract test must then assert the form you picked — either every animated selector has a `reduce` stop, or every `animation:` declaration sits inside a `no-preference` block.
 
+### A closing menu command confirms before the panel disappears
+
+`TxDropdownItem` and `TxContextMenuItem` use one pre-close rhythm so a short menu does not vanish before the user can tell which row landed:
+
+1. clear the current hover/focus highlight for **90ms**;
+2. show the existing `TxCardItem` active treatment for **90ms**;
+3. emit `select`;
+4. close the root menu.
+
+The contract is `activationFeedback?: boolean`: menu / context-panel default `true`, an item may override it. It runs only when the activation will close a parent. `closeOnSelect=false`, missing parent context, explicit opt-out, and `prefers-reduced-motion: reduce` stay on the immediate select/close path — reduced motion removes the delay, not just the paint.
+
+Use `packages/tuffex/packages/utils/menu-activation-feedback.ts`; do not copy timers into each menu family. The phase class disables row transitions, the clear phase must outrank hover **and focus-visible** selectors, and the confirm phase reuses `TxCardItem.active` rather than inventing another fill. Guard duplicate activation and clear pending timers on unmount.
+
+```vue
+<!-- Wrong: business action runs on native click before the confirmation. -->
+<TxDropdownItem @click="runAction">Run</TxDropdownItem>
+
+<!-- Correct: select runs after confirmation; opt out only for stronger immediate feedback. -->
+<TxDropdownItem @select="runAction">Run</TxDropdownItem>
+<TxDropdownItem :activation-feedback="false" @click="startViewTransition">
+  Switch theme
+</TxDropdownItem>
+```
+
+Tests assert the 90ms clear / 90ms confirm states, callback timing, Enter/Space convergence, duplicate suppression, inheritance/override, reduced-motion bypass, `closeOnSelect=false`, nested root close, and unmount cleanup. Real-browser verification samples class/computed-style changes around an actual pointer or keyboard action; a screenshot alone is too slow to capture a 180ms interaction.
+
 ### Collapsing content keeps its size while it closes
 
 A collapse that shrinks its content box during the close animation makes the text reflow on the way out, which reads as a glitch rather than a transition. Animate the container; leave the content at its measured size until the animation ends. See `bui-disclosure-collapse` in `style/mixins.scss`.

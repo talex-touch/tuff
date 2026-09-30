@@ -1,6 +1,6 @@
 ---
 title: "DropdownMenu"
-description: "Compact menu surface built on Popover"
+description: "Compact Popover-based menu with pre-close activation confirmation."
 category: Navigation
 status: beta
 since: 0.3.4
@@ -21,7 +21,8 @@ code: |
         <TxButton>Menu</TxButton>
       </template>
 
-      <TxDropdownItem>Open</TxDropdownItem>
+      <TxDropdownItem>Open (confirm blink)</TxDropdownItem>
+      <TxDropdownItem :activation-feedback="false">Run immediately (feedback off)</TxDropdownItem>
       <TxDropdownItem danger>Delete</TxDropdownItem>
     </TxDropdownMenu>
   </template>
@@ -66,6 +67,7 @@ code: |
 - Use `danger` only for destructive commands and keep those commands visually separated from neutral actions when the list grows.
 - Use `arrow` for navigation/submenu rows; use the `right` slot for external-link icons, keyboard hints, or status badges.
 - Leave `closeOnSelect=true` for normal commands. Set it to `false` only when the row opens another surface or starts a multi-step flow.
+- The default `activationFeedback=true` clears the highlight for 90 ms, confirms with the existing active state for 90 ms, then emits `select` and closes. Disable it only when the host already supplies stronger immediate feedback or requires synchronous callbacks; reduced motion automatically uses the immediate path.
 - Set `initialFocus="none"` only when the host places focus itself after opening (focusing a search field inside the panel, for example). Otherwise keyboard users open the menu with focus still on the trigger and need an extra arrow press to reach the list.
 - Prefer `panelBackground="refraction"` / default panel styling unless a surrounding surface already provides strong contrast.
 
@@ -80,6 +82,7 @@ code: |
 | `placement` | `DropdownPlacement` | `'bottom-start'` | Positions the panel relative to the trigger. |
 | `offset` | `number` | `6` | Distance in pixels between the trigger and panel. |
 | `closeOnSelect` | `boolean` | `true` | Closes the menu after an enabled item emits `select`. |
+| `activationFeedback` | `boolean` | `true` | Runs a 90 ms clear + 90 ms confirmation before `select` and close for closing commands; reduced motion skips it. |
 | `initialFocus` | `'first-item' \| 'none'` | `'first-item'` | Where focus lands when the menu opens. `'first-item'` focuses the first enabled item; `'none'` leaves focus alone so the host can place it itself (a search field at the top of the panel, for example). Arrow keys still hand focus from there to the list. |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | Popover animation config forwarded to BaseAnchor; an empty object uses BaseAnchor's default animation. |
 | `minWidth` | `number` | `220` | Minimum panel width in pixels. The maximum panel width is fixed at 360px, with no prop to change it. |
@@ -101,6 +104,7 @@ code: |
 | `danger` | `boolean` | `false` | Applies danger text styling for destructive actions. |
 | `arrow` | `boolean` | `false` | Shows a trailing chevron when no `right` slot is provided. |
 | `closeOnSelect` | `boolean` | `undefined` | Per-item override of the menu-level `closeOnSelect`; unset follows the menu-level value. |
+| `activationFeedback` | `boolean` | `undefined` | Per-item override of the menu-level confirmation feedback; unset follows the menu-level value. |
 
 ### TxDropdownSubmenu Props
 
@@ -133,7 +137,7 @@ code: |
 
 | Event | Params | Description |
 |------|------|------|
-| `select` | - | Emitted when an enabled item is clicked. |
+| `select` | - | Emitted when an enabled item activates. Closing items with feedback enabled emit after the 180 ms confirmation; bypass paths emit immediately. |
 
 ## Navigation Styles
 
@@ -257,7 +261,8 @@ code: |
 
 - `TxDropdownMenu` is for short action lists; use `TxPopover` / `TxDrawer` when content includes explanations, forms, or complex state.
 - `TxDropdownMenu` wraps `TxPopover`, so `placement`, `offset`, height limiting, panel card props, and animation follow the same anchor behavior.
-- `closeOnSelect` closes the parent menu after enabled items emit `select`; disabled items do not select or close.
+- `closeOnSelect` closes the parent after an enabled item completes confirmation and emits `select`; disabled items do not select or close, while `closeOnSelect=false` submenu/multi-step rows select immediately without blinking.
+- `activationFeedback` is enabled by default: the row clears its current hover/focus highlight, reuses `TxCardItem`'s active style to confirm, then runs the business action and closes. `prefers-reduced-motion: reduce`, menu/item opt-out, or a missing parent menu context adds no delay.
 - The menu panel uses `role="menu"`, and each item uses `role="menuitem"` through `TxDropdownItem`.
 - The first enabled item receives focus when the menu opens; `initialFocus="none"` skips that step so the host can place focus itself (a search field at the top of the panel, for example).
 - Inside the panel, `ArrowDown` / `ArrowUp` move focus between enabled items with wraparound and enter the list from a non-item such as a search field; `Home` / `End` jump to the first / last item, skipping `aria-disabled` items, except when focus is inside an `input`, `textarea`, or `contenteditable` element, where they pass through and move the caret.
@@ -267,11 +272,12 @@ code: |
 
 ## Technologies
 
-- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue` forwards Popover placement, sizing, animation, panel visual props, and trigger/default slots.
-- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownItem.vue` confirms disabled/danger/arrow/closeOnSelect props, `right` slot behavior, `role="menuitem"`, and close-on-select injection.
-- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownSubmenu.vue` confirms hover expansion, keyboard traversal, and root-context passthrough (selecting a nested item closes the whole chain).
-- Type contracts: `packages/tuffex/packages/components/src/dropdown-menu/src/types.ts` exports `DropdownMenuProps`, `DropdownItemProps`, and the supported placement union.
+- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue` forwards Popover placement, sizing, animation, and panel visual props, then injects `closeOnSelect` and `activationFeedback` into items.
+- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownItem.vue` confirms disabled/danger/arrow/closeOnSelect/activationFeedback props, `right` slot behavior, `role="menuitem"`, and the pre-close confirmation.
+- Source: `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownSubmenu.vue` confirms hover expansion, keyboard traversal, and root-context passthrough (selecting a nested item closes the whole chain); its `closeOnSelect=false` trigger never runs pre-close feedback.
+- Shared behavior: `packages/tuffex/packages/utils/menu-activation-feedback.ts` owns the 90 ms clear / 90 ms confirm state machine, reduced-motion bypass, duplicate suppression, and unmount cleanup.
+- Type contracts: `packages/tuffex/packages/components/src/dropdown-menu/src/types.ts` exports `DropdownMenuProps`, `DropdownItemProps`, the injected menu context, and the supported placement union.
 - Keyboard contract: `Home` / `End` pass through `input`, `textarea`, and `contenteditable` targets because a search field inside the panel needs them to move the caret; a menu that takes them leaves the field uneditable. Arrow keys are still claimed on editable targets on purpose, since that is the only way the field hands focus to the list. Asking hosts to `stopPropagation` on the field was rejected: it would copy the exception into every host.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts` covers prop forwarding, open/close events, enabled selection, disabled item no-op behavior, `closeOnSelect=false`, `initialFocus="none"` leaving focus alone on open and reopen, and an input / contenteditable inside the panel keeping `Home` / `End` while `ArrowDown` still enters the list.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts` covers prop forwarding, open/close events, pointer and keyboard confirmation timing, duplicate suppression, menu/item opt-out, reduced motion, unmount cleanup, disabled items, `closeOnSelect=false`, `initialFocus="none"`, and the input/contenteditable navigation exceptions.
 
 <TuffDocSourceLink />

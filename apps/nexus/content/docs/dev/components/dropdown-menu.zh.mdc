@@ -1,6 +1,6 @@
 ---
 title: "DropdownMenu 下拉菜单"
-description: "基于 Popover 的下拉菜单（Windows 风格）。"
+description: "基于 Popover 的下拉菜单，选中关闭前提供短促确认反馈。"
 category: Navigation
 status: beta
 since: 0.3.4
@@ -21,8 +21,9 @@ code: |
         <TxButton>Menu</TxButton>
       </template>
 
-      <TxDropdownItem>Open</TxDropdownItem>
-      <TxDropdownItem danger>Delete</TxDropdownItem>
+      <TxDropdownItem>打开（闪烁确认）</TxDropdownItem>
+      <TxDropdownItem :activation-feedback="false">立即执行（关闭反馈）</TxDropdownItem>
+      <TxDropdownItem danger>删除</TxDropdownItem>
     </TxDropdownMenu>
   </template>
 ---
@@ -34,6 +35,7 @@ code: |
 - `danger` 只用于破坏性命令；列表变长时应让危险操作与普通操作保持视觉分组。
 - `arrow` 用于导航/二级菜单行；外链图标、快捷键提示或状态徽标使用 `right` 插槽。
 - 普通命令保持 `closeOnSelect=true`；只有该行会打开另一层浮层或进入多步骤流程时才设为 `false`。
+- 默认的 `activationFeedback=true` 会在关闭前先清空高亮 90ms、再用现有选中态确认 90ms，然后触发 `select` 并关闭；只有宿主已有更强的即时反馈或必须保持同步回调时才关闭它，系统减少动态效果时会自动走即时路径。
 - 只有宿主会在打开后自己落焦（例如聚焦面板内的搜索框）时才设 `initialFocus="none"`；否则键盘用户打开菜单后焦点仍停在触发器上，要多按一次方向键才能进入列表。
 - 除非外层 surface 已经提供足够对比，否则优先保留默认 `panelBackground="refraction"` 与默认面板样式。
 
@@ -80,6 +82,7 @@ code: |
 | `placement` | `DropdownPlacement` | `'bottom-start'` | 相对触发器的浮层位置。 |
 | `offset` | `number` | `6` | 触发器与面板之间的距离，单位 px。 |
 | `closeOnSelect` | `boolean` | `true` | 可用菜单项触发 `select` 后是否关闭父菜单。 |
+| `activationFeedback` | `boolean` | `true` | 对会关闭菜单的选择先执行 90ms 清空 + 90ms 确认，再触发 `select` 与关闭；减少动态效果时自动跳过。 |
 | `initialFocus` | `'first-item' \| 'none'` | `'first-item'` | 菜单打开时焦点的落点。`'first-item'` 聚焦第一个启用的菜单项；`'none'` 不移动焦点，由宿主自行落焦（例如面板顶部的搜索框），方向键仍可从该处进入列表。 |
 | `animation` | `BaseAnchorAnimationOptions` | `{}` | 透传给 BaseAnchor/Popover 的锚点动画配置；为空对象时使用 BaseAnchor 的默认动画。 |
 | `minWidth` | `number` | `220` | 面板最小宽度，单位 px。面板最大宽度固定为 360px，且没有对应 prop 可调整。 |
@@ -101,6 +104,7 @@ code: |
 | `danger` | `boolean` | `false` | 使用危险操作文字样式。 |
 | `arrow` | `boolean` | `false` | 没有 `right` 插槽时显示右侧箭头。 |
 | `closeOnSelect` | `boolean` | `undefined` | 逐项覆盖菜单级 `closeOnSelect`；未设置时跟随菜单级配置。 |
+| `activationFeedback` | `boolean` | `undefined` | 逐项覆盖菜单级确认反馈；未设置时跟随菜单级配置。 |
 
 ### TxDropdownSubmenu Props
 
@@ -133,7 +137,7 @@ code: |
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `select` | - | 可用菜单项被点击时触发。 |
+| `select` | - | 可用菜单项被激活时触发；会关闭且启用确认反馈时，在 180ms 确认结束后触发，其余路径立即触发。 |
 
 ## 导航样式
 
@@ -257,7 +261,8 @@ code: |
 
 - `TxDropdownMenu` 只承载短操作列表；包含说明、表单或复杂状态时改用 `TxPopover` / `TxDrawer`。
 - `TxDropdownMenu` 包装 `TxPopover`，因此 `placement`、`offset`、高度限制、panel card props 和动画都遵循同一套锚点行为。
-- `closeOnSelect` 默认会在可用菜单项触发 `select` 后关闭父菜单，禁用项不会触发选择或关闭。
+- `closeOnSelect` 默认会在可用菜单项完成确认反馈并触发 `select` 后关闭父菜单；禁用项不会触发选择或关闭，`closeOnSelect=false` 的二级菜单/多步骤行保持即时选择且不闪烁。
+- `activationFeedback` 默认开启：菜单行先清空当前 hover/focus 高亮，再复用 `TxCardItem` 的 active 样式确认，最后触发业务动作并关闭；`prefers-reduced-motion: reduce`、菜单级/单项关闭反馈或缺少父菜单上下文时不增加延迟。
 - 菜单面板使用 `role="menu"`，每个 `TxDropdownItem` 使用 `role="menuitem"`。
 - 菜单打开时，第一个启用的菜单项自动获得焦点；`initialFocus="none"` 跳过这一步，由宿主自行落焦（例如面板顶部的搜索框）。
 - 面板内 `ArrowDown` / `ArrowUp` 在启用项之间循环移动焦点，从搜索框等非菜单项按下时进入列表；`Home` / `End` 跳到首 / 末项，跳过 `aria-disabled` 项，但焦点在 `input`、`textarea` 或 `contenteditable` 内时放行，保留为光标移动。
@@ -267,11 +272,12 @@ code: |
 
 ## 技术实现
 
-- 组件源码：`packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue` 透传 Popover 位置、尺寸、动画、面板视觉 props，以及 trigger/default 插槽。
-- 组件源码：`packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownItem.vue` 确认 disabled/danger/arrow/closeOnSelect props、`right` 插槽、`role="menuitem"` 和 close-on-select 注入行为。
-- 组件源码：`packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownSubmenu.vue` 确认悬停展开、键盘巡航与根上下文透传（子项选中关闭整条链）。
-- 类型契约：`packages/tuffex/packages/components/src/dropdown-menu/src/types.ts` 导出 `DropdownMenuProps`、`DropdownItemProps` 和支持的 placement 联合类型。
+- 组件源码：`packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue` 透传 Popover 位置、尺寸、动画、面板视觉 props，并向菜单项注入 `closeOnSelect` 与 `activationFeedback`。
+- 组件源码：`packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownItem.vue` 确认 disabled/danger/arrow/closeOnSelect/activationFeedback props、`right` 插槽、`role="menuitem"` 和关闭前确认反馈。
+- 组件源码：`packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownSubmenu.vue` 确认悬停展开、键盘巡航与根上下文透传（子项选中关闭整条链）；触发行因 `closeOnSelect=false` 不运行关闭前反馈。
+- 共享逻辑：`packages/tuffex/packages/utils/menu-activation-feedback.ts` 统一 90ms 清空 / 90ms 确认状态机、减少动态效果降级、重复激活抑制和卸载清理。
+- 类型契约：`packages/tuffex/packages/components/src/dropdown-menu/src/types.ts` 导出 `DropdownMenuProps`、`DropdownItemProps`、菜单注入上下文和支持的 placement 联合类型。
 - 键盘契约：`Home` / `End` 对 `input`、`textarea`、`contenteditable` 目标放行，因为面板内的搜索框需要这两个键移动光标，被菜单截走后字段就无法编辑。方向键在可编辑目标上仍由菜单接管，这是字段把焦点交给列表的唯一路径。曾考虑让宿主在字段上 `stopPropagation`，被否决：那会把这条例外复制进每个宿主。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts` 覆盖 props 透传、open/close 事件、可用项选择、禁用项无操作、`closeOnSelect=false`、`initialFocus="none"` 打开与重开都不移动焦点，以及面板内 input / contenteditable 上 `Home` / `End` 不被拦截而 `ArrowDown` 仍进入列表。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/dropdown-menu/__tests__/dropdown-menu.test.ts` 覆盖 props 透传、open/close 事件、鼠标与键盘确认时序、重复激活抑制、菜单级/单项关闭反馈、减少动态效果、卸载清理、禁用项、`closeOnSelect=false`、`initialFocus="none"`，以及面板内 input / contenteditable 的导航例外。
 
 <TuffDocSourceLink />

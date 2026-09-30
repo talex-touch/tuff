@@ -34,7 +34,7 @@
 
 | 功能     | Windows                              | macOS                | Linux                                 |
 | -------- | ------------------------------------ | -------------------- | ------------------------------------- |
-| 文件搜索 | Everything 三级回退+自动安装+自愈 ✅ | Spotlight mdfind ✅  | locate/tracker/baloo，缺失时无感知 ⚠️ |
+| 文件搜索 | Everything 三级回退 + 自动安装 + 自愈 ✅ | Spotlight mdfind ✅  | locate/tracker/baloo，缺失时无感知 ⚠️ |
 | 应用扫描 | 5 源并行（重依赖 PowerShell）✅      | mdfind+plist+mdls ✅ | 仅 .desktop（139 行）⚠️               |
 | OCR      | WinRT ✅                             | Apple Vision ✅      | stub 未实现 ❌                        |
 | 截图     | Rust xcap 三平台统一，CI 构建链已验证；已签名打包运行证据待补 | 同左                 | 同左                                  |
@@ -49,15 +49,15 @@
 
 ### 🔴 已证实缺陷（代码级验证过）
 
-- [ ] **B1 — 语义搜索接而未用** 🔴 读侧已修，写侧仍然缺失 → 生产中仍是空操作（复核 2026-09-18）
+- [ ] **B1 — 语义搜索写侧已接通，真实 Provider 验收未完成** 🟠（复核 2026-09-29）
   - 位置：`addon/files/services/file-provider-search-result-service.ts:320-327`（主路径 `semanticScore: 0` 仍写死）、`addon/files/embedding-service.ts:264`（`if (rows.length === 0) return []` 每次早退）
   - 已交付（读侧，`cbbd6ba7a`）：`FileProvider.semanticRecall` + search-core `scheduleDeferredSemanticRecall`（`search-core.ts:875-912`，调用点 `:1413-1420`），首帧后异步召回并写入真实 `semanticScore`。这部分确实存在且可用。
-  - **未交付（写侧）**：`embeddings` 表在生产中恒为空，因此上面整条读链恒为空操作。
-    - `EmbeddingService.indexFile/indexFiles/removeFiles`（`embedding-service.ts:123-229`）零生产调用点；唯一旧调用点在 `AD124A650` 随 `extractContentForFile` 迁入 worker 时被删除，无替代——worker 线程访问不到主进程 tuffIntelligence SDK。
-    - 唯一的解析器式写入 `file-index-persistence-repository.ts:381` 守卫 `if (fileUpdate.embeddings && …)` 永不为真：仓库唯一注册的 parser `text-parser.ts` 四条 return 分支（`:66/:78/:90/:102`）都不产出 `embeddings`，故 `file-index-worker.ts:307-308` 的 `embeddingStatus` 恒为 `'pending'`。
-  - **运行时取证**（2026-09-18，本机 4 个真实库）：`embeddings` 表 **0 行**；`files` 表合计 **155,716 行**，`embedding_status` 仅有 `none`/`pending`，**没有任何一行是 `completed`**。
-  - 修复面（最小）：在主进程 persist 钩子补回向量生成——`file-provider-index-flush-executor-service.ts:88-93` 或 `file-provider-index-runtime-service.ts:39-43`；不能放回 worker（拿不到 SDK）。
-  - **约束carve-out**：渲染端 `search.update` 合并为 append-only（`mergeRenderedItems`）且 `useSearch.ts`/`CoreBox.vue` 为受保护用户改动，故延迟 pass **无法重排已渲染项**，仅能召回追加。"重排已渲染项"另记入下方 backlog。
+  - **已接通（写侧，`09-29-bounded-fd-fzf-file-indexing` 工作树）**：`FileProviderEmbeddingIndexService.indexCommittedEntries` 在主进程 flush 后调用 `EmbeddingService.indexFiles`，能够访问 tuffIntelligence SDK；正文索引关闭时不调用，开启后只处理实际提取到正文的文件。
+    - `contentIndexingEnabled` 默认 `false`。用户确认开启后，已有 metadata 通过 durable `file_index_progress` 分页补齐；关闭会清除 `files.content`、文件 embeddings、progress 和 FTS content，保留 metadata。
+    - 2026-09-29 隔离 Electron 实测：开启后已有 `.txt` metadata 在不重扫目录的情况下达到 `content_length=97 / status=completed / FTS 正文命中=1`；关闭后 `content/embeddings/progress/FTS 正文命中` 均为 0，metadata 与标题 FTS 仍在。
+  - **仍缺验收**：隔离 profile 未配置可用 embedding Provider，因此本轮只能证明主进程写入口、默认关闭门禁与清理生命周期，不能证明真实模型调用后 `embeddings` 新增且 `embedding_status=completed`。B1 在拿到配置 Provider 的真实写入与 semanticRecall 命中证据前不勾选。
+  - **历史取证保留**（2026-09-18，本机 4 个真实库）：当时 `embeddings` 表 0 行；`files` 合计 155,716 行，`embedding_status` 仅有 `none`/`pending`。该数据是修复前基线，不再表述当前工作树的写侧为零调用。
+  - **约束 carve-out**：渲染端 `search.update` 合并为 append-only（`mergeRenderedItems`）且 `useSearch.ts`/`CoreBox.vue` 为受保护用户改动，故延迟 pass **无法重排已渲染项**，仅能召回追加。"重排已渲染项"另记入下方 backlog。
 
 - [x] **B2 — 补全权重被绕过** ✅ 已修（`07-13-fix-ranking-dead-features`）
   - 位置：`search-engine/query-completion-service.ts:191`（写 `item.scoring.match *= boost`）vs `search-engine/sort/tuff-sorter.ts:254`（排序用 `calculateMatchScore` 重算，只读 `scoring.recency/frequency`，**不读 `scoring.match` 或 `meta.completion`**）
@@ -179,7 +179,7 @@
   - 剩余候选修法与状态：每项仍须真实 profile 证据，禁止凭代码阅读宣称收益。
     - A ✅ **已修（2026-09-21）**：`FileProvider.getIndexStats()` 增加 1s TTL 快照（`FILE_INDEX_STATS_CACHE_MS`，与仓库既有 `INDEXED_WORKER_STATUS_SNAPSHOT_CACHE_TTL_MS` 同值），返回值收敛到共享类型 `FileIndexStats`，所有出口返回副本以免调用方互相污染。定案数据：同一连接内 8 条 COUNT 合计 50 ms（单条 ~6 ms，13.7k 行、覆盖索引命中），而**新建连接**每次约 120 ms —— 所以成本在长连接下约 36 ms/次；配合 `indexing-runtime.ts:486-494` 的「每条 FS watch 事件一次 diagnostics」，一次事件风暴就等于一次扫描风暴。TTL 把调用频率压到 1Hz，单次成本不变。这也覆盖了 B 想解决的一半（降低单位时间内的调用次数），B 若仍要做只是为了减少调用**次数**本身。
     - B ✅ **watch 准入与完整诊断解耦（2026-09-25）**：显式 `sourceId` 的 watch 仅查询目标源的实时 health/roots；无 sourceId 时仍查询所有源的 health/roots；两条路均不再读取 evidence/progress。保留既有 1s 统计缓存、任务历史 hydration 和 root policy 更新；不缓存权限或 enabled 状态。完整 `getDiagnostics()` 的管理台契约不变。相关回归以修改前源码作控制，会因无关/可选诊断被调用而失败；隔离 Electron 中实际新增文件约 1.02s 发布到索引，同时人为挂起的无关 health 与目标 evidence/progress 调用次数为 0。
-  - 2026-09-27 **source-scoped diagnostics path**：`AppEvents.indexedSource.diagnostics({sourceId})` 之前先执行全量 `IndexingRuntime.getDiagnostics()`，再过滤返回源；现在直接调用 `getSourceDiagnostics(sourceId)`，只读取目标源并更新该源 root/task 状态。真实 7.48GB APFS 克隆库（148,510 files）上，六条 stats 查询同连接中位约 4.5ms；旧隔离启动首个全量 diagnostics 因无关 app-provider fast read worker 超时耗时 1.237s，修后 file-provider scoped request首次 10.9ms，未触发无关源读取。全量 diagnostics 契约保持不变。
+  - 2026-09-27 **source-scoped diagnostics path**：`AppEvents.indexedSource.diagnostics({sourceId})` 之前先执行全量 `IndexingRuntime.getDiagnostics()`，再过滤返回源；现在直接调用 `getSourceDiagnostics(sourceId)`，只读取目标源并更新该源 root/task 状态。真实 7.48GB APFS 克隆库（148,510 files）上，六条 stats 查询同连接中位约 4.5ms；旧隔离启动首个全量 diagnostics 因无关 app-provider fast read worker 超时耗时 1.237s，修后 file-provider scoped request 首次 10.9ms，未触发无关源读取。全量 diagnostics 契约保持不变。
   - 2026-09-27 **每批 `path IN` 读取量化**：在同一 7.48GB 克隆库上用 10 条真实路径重复 100 轮，现有「files 查询 + progress 按 id 查询」中位 **44.25ms**，合并为单个 LEFT JOIN 查询中位 **43.55ms**（约 1.6% 差异，P95 73.2/75.4ms）。没有足够收益承担跨层返回形状改动；该语句保留为可观测的低优先级边界，不凭代码阅读改写。
 - [x] **C — `upsertBatchScheduler` 上限重配** ✅ 已用真实隔离 profile A/B 定案（2026-09-27）：仅改变 `maxSize`，保留 `waitForIdle`、250ms backoff、ordered publication 和其余代码不变。相同 10,000 个 Markdown 文件、同一构建条件：`maxSize=20` → 542 batches / **49,571ms**；`maxSize=10` → 1,002 batches / **36,042ms**（约 **−27.3%**）。3,000 文件重复轮：`20` 为 6,155ms / 6,131ms，`10` 为 5,917ms / 5,896ms；`maxSize=40` 为 6,802ms，反而变慢。10k 两轮均精确写入 10,000 rows、task succeeded；因此生产上限从 20 调到 **10**，不采用更大的窗口。该 A/B 只证明 fullScan upsert ceiling，不宣称已消除所有主进程同步 SQLite 成本。
   - **icon writer lane 最终复验**：默认 split-on 隔离 profile 的 50 条文件结果产生 120 个 `icon`/`iconMeta` rows，写入 worker-owned search DB，主进程约 0.6% CPU，`file-icon.persist=0`、lag=0。随后在 `TUFF_DB_SEARCH_SPLIT_ENABLED=0` 隔离 profile 复现两个 legacy 路径：普通测试文件的 `icon` + `iconMeta` 确实落入 primary `database.db`；Free Download Manager opener 同时把 `file-icons/...png` 写入 app 行与 `openers.json.torrent`。两次写入各 1 次，scheduler Top-5 摘要均未出现 `file-icon.persist` / `file-opener.icon.persist`，对应 16:54 与 17:02 时间窗无 event-loop lag；后续秒级 lag 明确伴随 startup-analytics/sync/polling，与 icon 写无关。历史「300+ slow tasks」无法在当前实现复现，因此不调低队列、不做无证据重构。
@@ -194,6 +194,7 @@
   - 2026-09-27 **watch task-state write coalescing**：200 个隔离 Markdown 文件同时变更，`indexing.task-state.save` 从 191 次降到 49 次（约 −74%），`queued=0/drop=0/fail=0`；内存态立即更新，shutdown 用 `drainTaskStateWrites()` 保证最新状态落盘，scan/reconcile 写仍 await。
   - 2026-09-27 **post-scan enrichment scoped drain budget**：真实 dev profile 的恢复页保留 `activeBatches=1` + `queuedBatches=1`，旧实现却给整页固定 30s，第二批仍在发布时 lease 已退出，随后触发 `INDEXING_SOURCE_MUTATION_LEASE_INVALID:file-provider` 并重复恢复。FileProvider 现在对 scoped lease 按 `max(1, activeBatches + queuedBatches) × 30s` 计算有界 drain 预算；没有保留批次时仍给一个窗口，unscoped source-wide drain 保持 30s。focused scheduler/startup tests、module-size ratchet 与 node typecheck 通过。`embeddings` 仍为 0 行是 B1 的独立写侧缺口，不纳入本次修复。
   - 2026-09-28 **低冲击冷索引 + event-only macOS watcher（PR #2006 集成复核）**：深度 24 的 macOS watcher 改为原生 FSEvents 注册，不再为挂 watcher 递归枚举已有树；fullScan 每个持久化 chunk 固定协作让出 100ms，慢 chunk 仍沿用 ≥250ms 的比例 backoff、maxSize=10 与 ordered publication。相同隔离 3,000 Markdown 文件：主线索引阶段 10.26s / busy CPU median 125.05% / p95 243.1%；候选 38.57s / 60.7% / 80.3%，即主动接受 3.76× 时长换取 median −51.5%、p95 −67.0%，两边均精确 3,000 行；主线有一次 593ms event-loop lag，候选测量窗无 `Perf:EventLoop`。共享过滤新增 `uvcache` / `__pycache__` / `site-packages`，读侧立即隐藏旧噪声行，`Documents/build` carve-out 保持。集成时发现直接 bundle `fsevents` 会让 native addon 变成 ESM namespace、`flags.SinceNow` 为空；现由 `electron.vite.config.ts` 显式 externalize，最终 source-built Electron 实测 add 1,280ms / delete 514ms、退出 0。签名 packaged-app 能耗仍未验收。
+  - 2026-09-29 **冷插入 FTS 的 O(N²) 读取已修**：签名 `beta.53` 清 profile 首扫 30 分钟仍未完成，进程组 CPU 均值 **109.3%**、最后 5 分钟 **98.9%**、平均进程归因能耗 **3.82W**，18,906 行产生 **10.8GiB** 写入。20 秒 `sample` 证明 Electron 主线程仅 2.9% on-CPU；忙的是 `search-index` WorkerThread，99.8% on-CPU 且约 85% 栈落在 libSQL `index.node` 的 `pread`。根因是 `SearchIndexService.applyDocument()` 对每个文档都先执行 `DELETE FROM search_index WHERE provider=? AND item_id=?`，而两个字段都是 FTS5 `UNINDEXED`；冷库的新文档也会反复扫描不断增长的 `search_index_content`。修复复用 `(provider_id,item_id)` 主键元数据：每 provider 只做一次 FTS/meta 覆盖检查并缓存；覆盖完整且当前 item 无 meta 时直接 INSERT，已有 item 仍 DELETE+INSERT；旧 profile 若存在缺失 meta 的 FTS 行则保留原慢路径，provider replacement/clear 后恢复快速路径。20,000 既有文档 + 100 个真实 `SearchIndexService.applyProviderItems()` 冷插入 A/B：完整覆盖 **57.30ms / 60.86 CPU-ms**，强制缺 meta 回退 **938.43ms / 919.42 CPU-ms**，墙钟 **16.38×**；更新 10 项后仍为 100/100 distinct rows。隔离 Electron 3,000 文件为 **36.25s / CPU median 51.44% / p95 80.31% / peak 111.91%**，精确 3,000 files/FTS、2,655 completed，37s 出现 `Index process complete` 且无 `Perf:EventLoop`。SearchIndex 4 files / 41 tests、node typecheck 与 scoped ESLint 通过。
 
 - [x] **R11 — 读 worker 客户端失败后永久不可用** ✅ 已修（2026-09-21）
   - 症状：`SearchIndexReadWorkerClient.failWorker()` 会置 `closed = true` 且**没有任何重建路径**（客户端只在 `search-core.ts:2048` 构造一次），于是一次超时或 worker exit 之后，该会话内所有文件/应用搜索永久失败，而写侧与 commit 一直正常。运行时证据：`D.2026-09-21.log` 中 `Search index commit has degraded reader visibility` 1475 次、`retry failed` 1277 次、`recovered` 0 次，跨 06:50:43 → 07:17:10 共 26.5 分钟零恢复；`SearchIndex:Writer` 的修复重试（100/500/2000ms）因此变成纯固定开销。

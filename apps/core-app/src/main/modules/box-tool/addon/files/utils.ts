@@ -1,15 +1,11 @@
 import type { TuffItem } from '@core-box/tuff'
 import type { FileScanOptions } from '@talex-touch/utils/common/file-scan-constants'
-import type { FileFilterReason } from '@talex-touch/utils/common/file-filter-service'
 import type { ScanDirectoryStats } from '@talex-touch/utils/common/file-scan-utils'
 import type { files as filesSchema } from '../../../../db/schema'
 import type { ScannedFileInfo } from './types'
-import fs from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { toTfileUrl } from '@talex-touch/utils/network'
-import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
-import { CONTEXT_DEPENDENT_BLACKLISTED_DIRS } from '@talex-touch/utils/common/file-scan-constants'
 import {
   isIndexableFile as globalIsIndexableFile,
   scanDirectory as globalScanDirectory,
@@ -26,6 +22,11 @@ import {
   FILE_ICON_META_EXTENSION_KEY,
   type FileIconCacheMeta
 } from './services/file-provider-icon-cache-service'
+
+export {
+  getDirectoryLevelExclusionReason,
+  getFileTraversalExclusionReason
+} from './file-traversal-policy'
 
 const DIRECT_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'gif', 'bmp', 'webp', 'ico'])
 
@@ -56,47 +57,6 @@ export function isIndexableFile(
   }
 
   return true
-}
-/**
- * One level of the file index's directory rule: the directory's own name, judged with its parent's
- * entries as project context when the name is one of the ordinary words (`dist`, `out`, `build`,
- * ...) that only mean build output beside a project marker (#1727). Other names are judged as
- * walked top-down (present-but-empty context), which is how the scan saw them.
- */
-export async function getDirectoryLevelExclusionReason(
-  directoryPath: string,
-  readdir: (directoryPath: string) => Promise<string[]> = (target) => fs.readdir(target),
-  options?: FileScanOptions
-): Promise<FileFilterReason | null> {
-  const directoryName = path.basename(directoryPath).toLowerCase()
-  let siblingNames: string[] | undefined = []
-  if (CONTEXT_DEPENDENT_BLACKLISTED_DIRS.has(directoryName)) {
-    try {
-      siblingNames = await readdir(path.dirname(directoryPath))
-    } catch {
-      // Unknown project context keeps the stricter historical exclusion instead of admitting
-      // a build/cache subtree that the snapshot scanner could not classify either.
-      siblingNames = undefined
-    }
-  }
-  return fileFilterService.getTraversalExclusionReason(directoryPath, options, {
-    siblingNames
-  })
-}
-
-export async function getFileTraversalExclusionReason(
-  filePath: string,
-  readdir?: (directoryPath: string) => Promise<string[]>
-): Promise<FileFilterReason | null> {
-  let directoryPath = path.dirname(filePath)
-  while (true) {
-    const reason = await getDirectoryLevelExclusionReason(directoryPath, readdir)
-    if (reason) return reason
-
-    const parent = path.dirname(directoryPath)
-    if (parent === directoryPath) return null
-    directoryPath = parent
-  }
 }
 
 export async function scanDirectory(

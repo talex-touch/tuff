@@ -19,11 +19,13 @@ const {
   collectAppRuntimeModuleClosure,
   collectResourceResolvableRuntimeModuleEntries,
   collectRuntimeModuleClosure,
+  copyModuleToResources,
   copyRuntimeModuleToNodeModules,
   resolvePlatformRuntimeModules,
   resolveRuntimeModuleTargetDir,
   getPlatformRuntimeRootModules,
   syncMissingPackagedRuntimeModules,
+  syncPackagedResourceModules,
   verifyPackagedEsbuildBinaries
 } = require('../../../scripts/build-target/runtime-modules.js')
 
@@ -53,6 +55,11 @@ function createTempWorkspace() {
 function writeJson(filePath: string, value: unknown) {
   mkdirSync(path.dirname(filePath), { recursive: true })
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`)
+}
+
+function writeFile(filePath: string, contents: string) {
+  mkdirSync(path.dirname(filePath), { recursive: true })
+  writeFileSync(filePath, contents)
 }
 
 async function createPackage(baseDir: string, name: string, pkg: Record<string, unknown> = {}) {
@@ -539,5 +546,102 @@ describe('runtime module manifest contract', () => {
         preserveSourceNodeModulesPath: false
       })
     ).toBe(path.join(paths.targetNodeModules, '@talex-touch/tuff-native'))
+  })
+
+  it('packs the tuff-native addon without its rust build caches', async () => {
+    const paths = createTempWorkspace()
+    const nativeRoot = await createPackage(paths.workspaceNodeModules, '@talex-touch/tuff-native')
+    // A cargo tree holds thousands of Mach-O objects. Signing walks every one of them and times
+    // out, so the build cache must not travel with the addon.
+    writeFile(path.join(nativeRoot, 'target', 'debug', 'deps', 'libtuff.rlib'), 'cache')
+    writeFile(path.join(nativeRoot, 'target', 'release', 'libtuff.dylib'), 'cache')
+    writeFile(path.join(nativeRoot, 'native-audio', 'target', 'release', 'bundle.o'), 'cache')
+    // Runtime payload that has to survive the same copy.
+    writeFile(path.join(nativeRoot, 'build', 'Release', 'tuff_native.node'), 'addon')
+    writeFile(path.join(nativeRoot, 'native-audio', 'binding.js'), 'module.exports = {}')
+    const resourcesDir = path.join(paths.root, 'resources')
+
+    copyModuleToResources(resourcesDir, {
+      name: '@talex-touch/tuff-native',
+      sourceDir: nativeRoot
+    })
+
+    const packedRoot = path.join(resourcesDir, 'node_modules', '@talex-touch/tuff-native')
+    expect(existsSync(path.join(packedRoot, 'package.json'))).toBe(true)
+    expect(existsSync(path.join(packedRoot, 'build', 'Release', 'tuff_native.node'))).toBe(true)
+    expect(existsSync(path.join(packedRoot, 'index.js'))).toBe(true)
+    // No `target` segment survives, at the crate root or nested under a subpackage.
+    expect(existsSync(path.join(packedRoot, 'target'))).toBe(false)
+    expect(existsSync(path.join(packedRoot, 'native-audio', 'target'))).toBe(false)
+    // Only the cache is dropped: the nested package's own files still ship.
+    expect(existsSync(path.join(packedRoot, 'native-audio', 'binding.js'))).toBe(true)
+  })
+
+  it('keeps another workspace module target directory while pruning tuff-native', async () => {
+    const paths = createTempWorkspace()
+    const otherRoot = await createPackage(paths.workspaceNodeModules, '@talex-touch/other-native')
+    writeFile(path.join(otherRoot, 'target', 'artifact.bin'), 'kept')
+    const resourcesDir = path.join(paths.root, 'resources')
+
+    copyModuleToResources(resourcesDir, {
+      name: '@talex-touch/other-native',
+      sourceDir: otherRoot
+    })
+
+    // The prune is scoped to the rust crate: another workspace package keeps its target directory.
+    expect(
+      existsSync(
+        path.join(
+          resourcesDir,
+          'node_modules',
+          '@talex-touch/other-native',
+          'target',
+          'artifact.bin'
+        )
+      )
+    ).toBe(true)
+  })
+
+  it('syncs tuff-native into packaged resources without its rust build caches or nested node_modules', async () => {
+    const paths = createTempWorkspace()
+    const appOutDir = path.join(paths.root, 'dist/mac-arm64/tuff.app/Contents')
+    const resourcesDir = path.join(appOutDir, 'Resources')
+    const emptyAsarSource = path.join(paths.root, 'empty-asar')
+    const nativeRoot = await createPackage(paths.workspaceNodeModules, '@talex-touch/tuff-native')
+
+    // Runtime payload that has to survive the copy into the packaged Resources tree.
+    writeFile(path.join(nativeRoot, 'build', 'Release', 'tuff_native_audio.node'), 'addon')
+    writeFile(path.join(nativeRoot, 'native-audio', 'binding.js'), 'module.exports = {}')
+    // Cargo trees hold thousands of Mach-O objects; signing walks every one and times out.
+    writeFile(path.join(nativeRoot, 'target', 'debug', 'deps', 'libtuff.rlib'), 'cache')
+    writeFile(path.join(nativeRoot, 'native-audio', 'target', 'release', 'bundle.o'), 'cache')
+    // Workspace node_modules never belong in the packaged copy.
+    writeFile(path.join(nativeRoot, 'node_modules', 'left-pad', 'index.js'), 'module.exports = {}')
+
+    await mkdir(emptyAsarSource, { recursive: true })
+    writeJson(path.join(emptyAsarSource, 'package.json'), { name: 'empty-app' })
+    await mkdir(resourcesDir, { recursive: true })
+    const { createPackage: createAsarPackage } = require('@electron/asar')
+    await createAsarPackage(emptyAsarSource, path.join(resourcesDir, 'app.asar'))
+
+    const copiedModules = syncPackagedResourceModules(appOutDir, {
+      ...paths,
+      requiredModules: [{ name: '@talex-touch/tuff-native', location: 'resources' }],
+      rootSourceDir: paths.projectRoot
+    })
+
+    expect(copiedModules).toEqual(['@talex-touch/tuff-native'])
+    const packedRoot = path.join(resourcesDir, 'node_modules', '@talex-touch/tuff-native')
+    // Runtime files and the audio addon survive the sync.
+    expect(existsSync(path.join(packedRoot, 'package.json'))).toBe(true)
+    expect(existsSync(path.join(packedRoot, 'index.js'))).toBe(true)
+    expect(existsSync(path.join(packedRoot, 'build', 'Release', 'tuff_native_audio.node'))).toBe(
+      true
+    )
+    expect(existsSync(path.join(packedRoot, 'native-audio', 'binding.js'))).toBe(true)
+    // Both `target` trees (crate root and nested crate) and workspace node_modules are dropped.
+    expect(existsSync(path.join(packedRoot, 'node_modules'))).toBe(false)
+    expect(existsSync(path.join(packedRoot, 'target'))).toBe(false)
+    expect(existsSync(path.join(packedRoot, 'native-audio', 'target'))).toBe(false)
   })
 })

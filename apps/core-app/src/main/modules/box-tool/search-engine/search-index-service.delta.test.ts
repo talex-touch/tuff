@@ -40,6 +40,13 @@ function queryText(query: unknown): string {
   return chunks.flatMap(sqlChunkStrings).join('').trim()
 }
 
+/** The raw chunk list of a drizzle query, where bound parameters appear as bare values. */
+function queryChunks(query: unknown): unknown[] {
+  if (!query || typeof query !== 'object' || !('queryChunks' in query)) return []
+  const chunks = query.queryChunks
+  return Array.isArray(chunks) ? chunks : []
+}
+
 describe('SearchIndexService delta/hash', () => {
   it('keyword hash 在关键词顺序变化时保持稳定', () => {
     const service = createServiceHarness()
@@ -128,11 +135,90 @@ describe('SearchIndexService delta/hash', () => {
     expect(queryTexts[0]).toContain('keyword LIKE')
     expect(queryTexts[0]).toContain('ESCAPE')
     expect(queryTexts[0]).toContain('ORDER BY length(keyword) ASC, priority DESC, keyword ASC')
+    // The scan rides the keyword index instead of the whole provider: every scanned row is
+    // bounded to the query's first character, which is what keeps this off the hot path.
+    expect(queryTexts[0]).toContain('keyword >=')
+    expect(queryTexts[0]).toContain('keyword <')
     expect(db.all.mock.calls[0]).toMatchObject([
       expect.objectContaining({
         queryChunks: expect.arrayContaining(['%n%t%e%', 2000])
       })
     ])
+    expect(db.all.mock.calls[0]).toMatchObject([
+      expect.objectContaining({
+        queryChunks: expect.arrayContaining(['n', 'n\uffff'])
+      })
+    ])
+  })
+
+  it('lookupByNgrams 对每个 seed 走 INDEXED BY 等值查询并按 overlap 排序', async () => {
+    const queries: string[] = []
+    const calls: unknown[][] = []
+    const seedRows: Record<string, Array<{ itemId: string }>> = {
+      'ng:ch': [{ itemId: 'app:chrome' }, { itemId: 'app:chromium' }],
+      'ng:hr': [{ itemId: 'app:chrome' }],
+      'ng:ro': [{ itemId: 'app:chrome' }]
+    }
+    const db = {
+      all: vi.fn(async (query: unknown) => {
+        queries.push(queryText(query))
+        const chunks = queryChunks(query)
+        calls.push(chunks)
+        const seed = chunks.find(
+          (chunk): chunk is string => typeof chunk === 'string' && chunk in seedRows
+        )
+        return seed ? seedRows[seed] : []
+      })
+    }
+    const service = new SearchIndexService(
+      db as unknown as ConstructorParameters<typeof SearchIndexService>[0],
+      { initializationMode: 'writer' }
+    ) as unknown as SearchIndexHarness
+    service.initialized = true
+
+    const results = await service.lookupByNgrams('app-provider', 'chrome', 25)
+
+    // 'chrome' has five bigrams and each one is a single indexed equality probe: no LIKE, no
+    // provider-wide scan, no statistics needed to pick the index.
+    expect(calls).toHaveLength(5)
+    for (const query of queries) {
+      expect(query).toContain('INDEXED BY idx_keyword_mappings_provider_keyword')
+      expect(query).toContain('keyword =')
+      expect(query).toContain('LIMIT')
+    }
+    // Each probe is bounded by the caller's result limit.
+    expect(calls.every((chunks) => chunks.includes(25))).toBe(true)
+    // Overlap decides the order, and an item sharing no probe is not returned at all.
+    expect(results).toEqual([
+      { itemId: 'app:chrome', overlapCount: 3 },
+      { itemId: 'app:chromium', overlapCount: 1 }
+    ])
+  })
+
+  it('lookupByNgrams 把 seed 探查数封顶在 8 个', async () => {
+    const calls: unknown[][] = []
+    const db = {
+      all: vi.fn(async (query: unknown) => {
+        calls.push(queryChunks(query))
+        return []
+      })
+    }
+    const service = new SearchIndexService(
+      db as unknown as ConstructorParameters<typeof SearchIndexService>[0],
+      { initializationMode: 'writer' }
+    ) as unknown as SearchIndexHarness
+    service.initialized = true
+
+    // Fourteen distinct bigrams for fourteen characters: a query long enough to overflow the cap.
+    await service.lookupByNgrams('app-provider', 'abcdefghijklmnop', 10)
+
+    const seeds = calls.map((chunks) =>
+      chunks.find((chunk): chunk is string => typeof chunk === 'string' && chunk.startsWith('ng:'))
+    )
+    expect(seeds).toHaveLength(8)
+    // Distinct seeds only: the same bigram is never probed twice.
+    expect(new Set(seeds).size).toBe(8)
+    expect(calls.every((chunks) => chunks.includes(10))).toBe(true)
   })
 
   it('removeProviderItems 只删除匹配 provider 的索引与关键词元数据', async () => {

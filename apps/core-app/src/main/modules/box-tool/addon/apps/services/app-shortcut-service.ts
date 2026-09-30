@@ -1,4 +1,8 @@
 import type { DbUtils } from '../../../../../db/utils'
+import type {
+  AppShortcutBindResult as ShortcutBindVerdict,
+  AppShortcutHolder
+} from '../../../../global-shortcon'
 import { eq } from 'drizzle-orm'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { config as configSchema } from '../../../../../db/schema'
@@ -19,7 +23,12 @@ async function resolveShortcutModule(): Promise<AppShortcutModule> {
 /** The slice of the shortcut module this service drives, named so a helper can take one. */
 export interface AppShortcutModule {
   getShortcutAccelerator(id: string): string | null
-  setAppShortcut(id: string, accelerator: string, callback: () => void): boolean
+  setAppShortcut(
+    id: string,
+    accelerator: string,
+    callback: () => void,
+    options?: { force?: boolean }
+  ): ShortcutBindVerdict
   removeAppShortcut(id: string): boolean
 }
 
@@ -27,8 +36,15 @@ export interface AppShortcutModule {
  * What came of a rebind. The three failures are kept apart because they leave the user in
  * different places: a refused accelerator never took hold, while a failed write is a live binding
  * that will not survive the restart.
+ *
+ * `holders` names the shortcuts that held the key when the bind was refused — empty when nothing
+ * in this app did and the OS turned the key down instead. A surface asks the user with them, then
+ * writes again with `force`.
  */
-export type AppShortcutBindOutcome = 'bound' | 'conflict' | 'persist-failed'
+export interface AppShortcutBindOutcome {
+  outcome: 'bound' | 'conflict' | 'persist-failed'
+  holders?: AppShortcutHolder[]
+}
 const log = getLogger('app-shortcut')
 
 /**
@@ -100,7 +116,17 @@ export class AppShortcutService {
     )
   }
 
-  async set(path: string, accelerator: string): Promise<AppShortcutBindOutcome> {
+  /**
+   * Binds a key to an application.
+   *
+   * `force` writes a key another binding already holds, which the caller may only pass after
+   * asking the user — the refusal in the other case is what the question is asked about.
+   */
+  async set(
+    path: string,
+    accelerator: string,
+    options?: { force?: boolean }
+  ): Promise<AppShortcutBindOutcome> {
     const shortcutModule = await resolveShortcutModule()
     const shortcutId = toShortcutId(path)
     // Snapshot before the rebind: `setAppShortcut` overwrites the accelerator in the shortcut
@@ -108,20 +134,27 @@ export class AppShortcutService {
     const previousAccelerator = shortcutModule.getShortcutAccelerator(shortcutId)
     const previousPath = this.bindings[shortcutId]
 
-    const registered = shortcutModule.setAppShortcut(shortcutId, accelerator, () =>
-      this.pressBinding(path)
+    const verdict = shortcutModule.setAppShortcut(
+      shortcutId,
+      accelerator,
+      () => this.pressBinding(path),
+      options
     )
-    if (!registered) {
-      // `setAppShortcut` has already put the previous binding back — or removed the attempt when
-      // there was none — so the store must not be touched again here: removing it would discard
-      // the accelerator the user had before this failed rebind.
-      return 'conflict'
+    if (!verdict.ok) {
+      // A refusal wrote nothing — `setAppShortcut` leaves the previous binding exactly as it was,
+      // so the store must not be touched again here: removing it would discard the accelerator the
+      // user had before this failed rebind. An `unavailable` verdict is the OS turning the key
+      // down rather than a binding holding it, which is why it names no holder.
+      return {
+        outcome: 'conflict',
+        holders: verdict.reason === 'conflict' ? verdict.holders : []
+      }
     }
     this.bindings[shortcutId] = path
-    if (await this.save()) return 'bound'
+    if (await this.save()) return { outcome: 'bound' }
 
     this.restoreBinding(shortcutModule, shortcutId, previousAccelerator, previousPath)
-    return 'persist-failed'
+    return { outcome: 'persist-failed' }
   }
 
   async remove(path: string): Promise<boolean> {

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { VueWrapper } from '@vue/test-utils'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SettingSetup from './SettingSetup.vue'
@@ -46,7 +47,16 @@ const state = vi.hoisted(() => {
       hideDock: false,
       trayReady: true,
       windowVisible: true
-    }))
+    })),
+    notify: vi.fn(async () => undefined),
+    /** Answer per permission type for the `system:permission:check` probe. */
+    permissionChecks: {} as Record<
+      string,
+      { status: string; canRequest: boolean; message?: string }
+    >,
+    /** Permission types the page asked the main process to open system settings for. */
+    requestedPermissions: [] as string[],
+    transportSend: vi.fn()
   }
 })
 
@@ -55,7 +65,7 @@ vi.mock('vue-i18n', () => ({
 }))
 
 vi.mock('@talex-touch/utils/renderer', () => ({
-  useNotificationSdk: () => ({ notify: vi.fn(async () => undefined) }),
+  useNotificationSdk: () => ({ notify: state.notify }),
   useSettingsSdk: () => ({
     system: {
       getAutoStart: vi.fn(async () => false),
@@ -77,16 +87,16 @@ vi.mock('@talex-touch/utils/renderer', () => ({
 }))
 
 vi.mock('@talex-touch/utils/transport', () => ({
-  useTuffTransport: () => ({
-    send: vi.fn(async () => ({ status: 'granted', canRequest: false }))
-  })
+  useTuffTransport: () => ({ send: state.transportSend })
 }))
 
 vi.mock('@talex-touch/utils/transport/event/builder', () => ({
-  defineEvent: () => ({
-    module: () => ({
-      event: () => ({
-        define: () => 'system:permission'
+  // The real builder hands back an identifier encoding namespace/module/event; the page needs
+  // `check` and `request` to stay distinguishable so this mock must not collapse them.
+  defineEvent: (namespace: string) => ({
+    module: (moduleName: string) => ({
+      event: (eventName: string) => ({
+        define: () => `${namespace}:${moduleName}:${eventName}`
       })
     })
   })
@@ -148,6 +158,17 @@ function resetState(): void {
     trayReady: true,
     windowVisible: true
   })
+  state.notify.mockClear()
+  state.permissionChecks = {}
+  state.requestedPermissions = []
+  state.transportSend.mockReset()
+  state.transportSend.mockImplementation(async (event: string, permissionType: string) => {
+    if (event === 'system:permission:request') {
+      state.requestedPermissions.push(permissionType)
+      return true
+    }
+    return state.permissionChecks[permissionType] ?? { status: 'granted', canRequest: false }
+  })
 }
 
 function mountSettingSetup() {
@@ -156,6 +177,7 @@ function mountSettingSetup() {
       stubs: {
         TuffGroupBlock: { template: '<section><slot /></section>' },
         TuffBlockSlot: {
+          name: 'TuffBlockSlotStub',
           template: '<div><span>{{ title }}</span><slot name="tags" /><slot /></div>',
           props: ['title']
         },
@@ -240,5 +262,106 @@ describe('settingSetup advanced settings boundary', () => {
     expect(state.appSetting.window.startSilent).toBe(false)
     expect(state.appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall).toBe(false)
     falseWrapper.unmount()
+  })
+})
+
+describe('settingSetup notification permission actions', () => {
+  beforeEach(() => {
+    resetState()
+  })
+
+  function findPermissionRow(wrapper: VueWrapper, titleKey: string) {
+    const row = wrapper
+      .findAllComponents({ name: 'TuffBlockSlotStub' })
+      .find((candidate) => candidate.text().includes(titleKey))
+    if (!row) throw new Error(`permission row not rendered: ${titleKey}`)
+    return row
+  }
+
+  it('offers both the system-settings deep link and a test notification while notifications are unverifiable', async () => {
+    state.permissionChecks.notifications = { status: 'unverifiable', canRequest: true }
+    const wrapper = mountSettingSetup()
+    await flushPromises()
+
+    const row = findPermissionRow(wrapper, 'settings.setup.notifications')
+    const actions = row.findAll('button').map((button) => button.text())
+
+    expect(actions).toEqual([
+      'setupPermissions.statusUnverifiable · setupPermissions.openSettings',
+      'setupPermissions.testNotification'
+    ])
+
+    wrapper.unmount()
+  })
+
+  it('asks the main process to open system settings for the notifications permission', async () => {
+    state.permissionChecks.notifications = { status: 'unverifiable', canRequest: true }
+    const wrapper = mountSettingSetup()
+    await flushPromises()
+
+    const row = findPermissionRow(wrapper, 'settings.setup.notifications')
+    const openSettings = row
+      .findAll('button')
+      .find((button) => button.text().includes('setupPermissions.openSettings'))
+    await openSettings!.trigger('click')
+    await flushPromises()
+
+    // The request must target notifications, not whichever row happens to be first.
+    expect(state.requestedPermissions).toEqual(['notifications'])
+
+    wrapper.unmount()
+  })
+
+  it('sends a system-channel notification when the test action is pressed', async () => {
+    state.permissionChecks.notifications = { status: 'denied', canRequest: true }
+    const wrapper = mountSettingSetup()
+    await flushPromises()
+
+    const row = findPermissionRow(wrapper, 'settings.setup.notifications')
+    const testNotification = row
+      .findAll('button')
+      .find((button) => button.text().includes('setupPermissions.testNotification'))
+    await testNotification!.trigger('click')
+    await flushPromises()
+
+    expect(state.notify).toHaveBeenCalledWith({
+      channel: 'system',
+      level: 'info',
+      title: 'setupPermissions.testNotificationTitle',
+      message: 'setupPermissions.testNotificationBody'
+    })
+
+    wrapper.unmount()
+  })
+
+  it('drops the notification actions once the permission is granted', async () => {
+    // `canRequest` is deliberately left true: the granted status alone must retire the actions.
+    state.permissionChecks.notifications = { status: 'granted', canRequest: true }
+    const wrapper = mountSettingSetup()
+    await flushPromises()
+
+    const row = findPermissionRow(wrapper, 'settings.setup.notifications')
+
+    expect(row.findAll('button')).toHaveLength(0)
+    expect(state.appSetting.setup.notifications).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('keeps the full disk access row on the plain open-settings action', async () => {
+    state.permissionChecks.fullDiskAccess = { status: 'unverifiable', canRequest: true }
+    state.permissionChecks.notifications = { status: 'granted', canRequest: false }
+    const wrapper = mountSettingSetup()
+    await flushPromises()
+
+    const row = findPermissionRow(wrapper, 'setupPermissions.fullDiskAccess')
+    const actions = row.findAll('button').map((button) => button.text())
+    expect(actions).toEqual(['setupPermissions.statusUnverifiable · setupPermissions.openSettings'])
+
+    await row.findAll('button')[0]!.trigger('click')
+    await flushPromises()
+    expect(state.requestedPermissions).toEqual(['fullDiskAccess'])
+
+    wrapper.unmount()
   })
 })

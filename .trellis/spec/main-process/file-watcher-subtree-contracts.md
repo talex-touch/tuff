@@ -10,6 +10,14 @@ The macOS watcher used for `FILE_SCAN_MAX_DEPTH` roots registers an FSEvents str
 
 The application may still schedule its independent initial index scan. That scan is separate from watcher registration and must not be used to justify recursive work performed by the watcher constructor or `add` method.
 
+## 1a. Full-scan enumeration may use bundled fd
+
+The independent snapshot scan may use the application-bundled `fd` binary. Production resolution never consults PATH and never downloads a binary. The command is fixed to files, hidden/no-ignore input, absolute NUL output, no colour, no symlink following, the shared maximum depth and one fd search thread. Tuff remains the authority for roots, exclusions, conditional project-directory rules, NFC path normalization and final file admission.
+
+stdout is consumed incrementally. At most two metadata checks run concurrently, and the existing 500-record batch acknowledgement backpressures the pipe. Spawn failure, unsupported platform package or non-zero exit restarts the same root with the legacy walker. A partial fd stream never writes root completion; repeated records from the fallback converge through existing upserts. Abort kills the child and waits for its pipes and exit. Runtime diagnostics state the fallback once without logging user paths.
+
+The platform binary lives in `@prebuilt-binary/fd@10.4.2`, is made executable during install and again in `afterPack` before signing, and is unpacked from asar. Runtime resolution must map `app.asar` to `app.asar.unpacked` idempotently. The file-scan worker imports the worker-safe traversal policy and native-binary path helper directly; importing the Electron-facing `files/utils.ts` makes the packaged worker fail before fd can start. `afterPack` also requires both upstream license texts. macOS x64 has no package at this version and therefore uses the legacy walker explicitly.
+
 ## 2. Logical paths remain stable
 
 The watcher canonicalizes the native stream root only for event subscription. It emits the configured logical root and logical descendant paths so indexed identity remains stable across aliases such as `/var` and `/private/var`. A native path outside the canonical root, an excluded path, or a path deeper than the configured depth is ignored.

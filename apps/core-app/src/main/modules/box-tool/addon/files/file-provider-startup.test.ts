@@ -9,6 +9,8 @@ import type {
 } from '@talex-touch/utils/search'
 import type { FilePersistencePort } from '../../search-engine/search-index-writer'
 import type { FileProviderRuntimeWriteSnapshot } from './file-provider-index-contracts'
+import type { FileIndexSettings } from './types'
+import { DEFAULT_FILE_INDEX_SETTINGS } from './types'
 import { IndexedSourceResetReasons, IndexedSourceScanReasons } from '@talex-touch/utils/search'
 
 const {
@@ -30,6 +32,7 @@ const {
   runtimeApplyDelta,
   runtimeCleanupSource,
   runtimeCountSource,
+  runtimePublishContentCleared,
   runtimeDrainSource,
   runtimeScanSource,
   runtimeWithMutationLease,
@@ -64,6 +67,7 @@ const {
     runtimeApplyDelta: vi.fn(async () => undefined),
     runtimeCleanupSource: vi.fn(async () => 0),
     runtimeCountSource: vi.fn(async () => 0),
+    runtimePublishContentCleared: vi.fn(async () => undefined),
     runtimeDrainSource: vi.fn(async () => undefined),
     runtimeScanSource: vi.fn(async () => undefined),
     runtimeWithMutationLease: vi.fn(
@@ -107,10 +111,16 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
 }))
 
 vi.mock('../../../../db/utils', () => ({
-  createDbUtils: vi.fn((db) => ({
-    getDb: () => db,
-    getAuxDb: () => db
-  }))
+  createDbUtils: vi.fn((db) => {
+    // With the split off the real util's file-index read home is the primary handle. Startup
+    // reads content residue through it, and these fixtures own no content: answer "none".
+    const fileIndexReadHome = { all: vi.fn(async () => []) }
+    return {
+      getDb: () => db,
+      getAuxDb: () => db,
+      getFileIndexReadDb: () => fileIndexReadHome
+    }
+  })
 }))
 
 vi.mock('../../../../service/app-task-gate', () => ({
@@ -144,13 +154,10 @@ vi.mock('./services/file-provider-watch-service', () => ({
     // once at import, and afterEach's vi.clearAllMocks() wipes the
     // constructor's mock.calls — the instance field survives.
     __deps: deps,
-    getCurrentSettings: vi.fn(() => ({
-      autoScanEnabled: true,
-      autoScanIntervalMs: 86_400_000,
-      autoScanIdleThresholdMs: 3_600_000,
-      autoScanCheckIntervalMs: 300_000,
-      extraPaths: []
-    })),
+    loadFileIndexSettings: vi.fn(),
+    // A profile that never changed the file-index settings: derive from the real defaults so a
+    // new settings field cannot be silently missing from this fixture.
+    getCurrentSettings: vi.fn(() => ({ ...DEFAULT_FILE_INDEX_SETTINGS })),
     getWatchPaths: vi.fn(() => deps.baseWatchPaths),
     getNormalizedWatchPaths: vi.fn(() => deps.baseWatchPaths),
     getPendingPermissionPaths: vi.fn(() => []),
@@ -161,6 +168,12 @@ vi.mock('./services/file-provider-watch-service', () => ({
     recordUserActivity: vi.fn(),
     shouldRunAutoIndexing: vi.fn(async () => ({ allowed: false, reason: 'test' })),
     applyWatchPaths: vi.fn(),
+    // The provider awaits the durable settings write; the mock mirrors the class API so a path
+    // that updates the setting cannot fall through to "not a function".
+    updateFileIndexSettings: vi.fn(async (patch: Partial<FileIndexSettings>) => ({
+      ...DEFAULT_FILE_INDEX_SETTINGS,
+      ...patch
+    })),
     dispose: vi.fn()
   }))
 }))
@@ -446,6 +459,12 @@ function createDeferred<T>(): {
 type FileProviderLeaseRecoveryTestApi = FileProviderIndexingLifecycleTestApi & {
   drainIndexedSourceMutations: (reason: string, mutationLeaseId?: string) => Promise<void>
   waitForSearchIndexDrain: (reason: string, mutationLeaseId?: string) => Promise<void>
+  fileIndexSettings: FileIndexSettings
+  scheduleIndexing: (
+    files: Array<{ id?: number | null; path: string; name: string }>,
+    reason: string,
+    mutationLeaseId?: string
+  ) => Promise<{ accepted: number; deferred: number }>
   indexRuntimeService: {
     scheduleFlush: (delayMs: number, reason: string) => void
   }
@@ -544,6 +563,7 @@ function installRuntimeDependencies(provider: FileProviderIndexingLifecycleTestA
     applyDelta: runtimeApplyDelta,
     cleanupSource: runtimeCleanupSource,
     countSource: runtimeCountSource,
+    publishContentCleared: runtimePublishContentCleared,
     drainSource: runtimeDrainSource,
     scanSource: runtimeScanSource
   })
@@ -657,6 +677,7 @@ afterEach(() => {
   runtimeApplyDelta.mockResolvedValue(undefined)
   runtimeCleanupSource.mockResolvedValue(0)
   runtimeCountSource.mockResolvedValue(0)
+  runtimePublishContentCleared.mockResolvedValue(undefined)
   runtimeDrainSource.mockResolvedValue(undefined)
   runtimeScanSource.mockResolvedValue(undefined)
 })
@@ -1876,7 +1897,9 @@ describe('file-provider startup readiness', () => {
         async () => new Map([['report', [{ itemId: stalePath, priority: 100 }]]])
       ),
       lookupByKeywordPrefix: vi.fn(async () => []),
-      search: vi.fn(async () => [])
+      search: vi.fn(async () => []),
+      lookupBySubsequence: vi.fn(async () => []),
+      lookupByNgrams: vi.fn(async () => [])
     }
     provider.embeddingService = null
     filePersistenceRemoveFile.mockReturnValueOnce(cleanup.promise)
@@ -1975,12 +1998,15 @@ describe('file-provider startup readiness', () => {
     const ftsSearchMock = vi.fn(async () => [])
 
     provider.dbUtils = {
-      getDb: () => ({ select: selectMock })
+      getDb: () => ({ select: selectMock }),
+      getFileIndexReadDb: () => ({ select: selectMock })
     }
     provider.searchIndex = {
       lookupByKeywords: lookupByKeywordsMock,
       lookupByKeywordPrefix: lookupByKeywordPrefixMock,
-      search: ftsSearchMock
+      search: ftsSearchMock,
+      lookupBySubsequence: vi.fn(async () => []),
+      lookupByNgrams: vi.fn(async () => [])
     }
     provider.embeddingService = null
 
@@ -2571,12 +2597,15 @@ describe('file-provider startup readiness', () => {
     const originalScheduler = provider.indexSchedulerService
     const originalDbUtils = provider.dbUtils
     const originalShuttingDown = provider.shuttingDown
+    const originalSettings = provider.fileIndexSettings
     const markPending = vi.fn(async () => undefined)
     const schedule = vi.fn(() => ({ accepted: 1, deferred: 0 }))
     const resume = vi
       .spyOn(FileProviderEnrichmentResumeService.prototype, 'resume')
       .mockImplementation(() => undefined)
 
+    // Content indexing is off by default and gates intake, so this queueing path has to opt in.
+    provider.fileIndexSettings = { ...originalSettings, contentIndexingEnabled: true }
     provider.dbUtils = { markFileEnrichmentPending: markPending }
     provider.indexSchedulerService = {
       schedule,
@@ -2602,6 +2631,7 @@ describe('file-provider startup readiness', () => {
       provider.indexSchedulerService = originalScheduler
       provider.dbUtils = originalDbUtils
       provider.shuttingDown = originalShuttingDown
+      provider.fileIndexSettings = originalSettings
       resume.mockRestore()
     }
   })
@@ -2611,6 +2641,7 @@ describe('file-provider startup readiness', () => {
     const originalScheduler = provider.indexSchedulerService
     const originalDbUtils = provider.dbUtils
     const originalShuttingDown = provider.shuttingDown
+    const originalSettings = provider.fileIndexSettings
     const files = [{ id: 9, path: '/tmp/scoped-owned.txt', name: 'scoped-owned.txt' }]
     const markPending = vi.fn(async () => undefined)
     const schedule = vi.fn(() => ({ accepted: 1, deferred: 0 }))
@@ -2618,6 +2649,7 @@ describe('file-provider startup readiness', () => {
       .spyOn(FileProviderEnrichmentResumeService.prototype, 'resume')
       .mockImplementation(() => undefined)
 
+    provider.fileIndexSettings = { ...originalSettings, contentIndexingEnabled: true }
     provider.dbUtils = { markFileEnrichmentPending: markPending }
     provider.indexSchedulerService = {
       schedule,
@@ -2639,6 +2671,47 @@ describe('file-provider startup readiness', () => {
       provider.indexSchedulerService = originalScheduler
       provider.dbUtils = originalDbUtils
       provider.shuttingDown = originalShuttingDown
+      provider.fileIndexSettings = originalSettings
+      resume.mockRestore()
+    }
+  })
+
+  it('never marks pending or dispatches content work while the content setting is off', async () => {
+    const provider = fileProvider as unknown as FileProviderLeaseRecoveryTestApi
+    const originalScheduler = provider.indexSchedulerService
+    const originalDbUtils = provider.dbUtils
+    const originalSettings = provider.fileIndexSettings
+    const markPending = vi.fn(async () => undefined)
+    const schedule = vi.fn(() => ({ accepted: 1, deferred: 0 }))
+    const resume = vi
+      .spyOn(FileProviderEnrichmentResumeService.prototype, 'resume')
+      .mockImplementation(() => undefined)
+
+    provider.fileIndexSettings = { ...originalSettings, contentIndexingEnabled: false }
+    provider.dbUtils = { markFileEnrichmentPending: markPending }
+    provider.indexSchedulerService = {
+      schedule,
+      hasPendingWork: vi.fn(() => false)
+    } as unknown as typeof provider.indexSchedulerService
+
+    try {
+      await expect(
+        provider.scheduleIndexing(
+          [{ id: 11, path: '/tmp/disabled.txt', name: 'disabled.txt' }],
+          'watch-event',
+          'lease-owner'
+        )
+      ).resolves.toEqual({ accepted: 0, deferred: 0 })
+
+      // The gate sits before every downstream effect: no durable marker, no parser dispatch,
+      // and no recovery round asked to look at the batch.
+      expect(markPending).not.toHaveBeenCalled()
+      expect(schedule).not.toHaveBeenCalled()
+      expect(resume).not.toHaveBeenCalled()
+    } finally {
+      provider.indexSchedulerService = originalScheduler
+      provider.dbUtils = originalDbUtils
+      provider.fileIndexSettings = originalSettings
       resume.mockRestore()
     }
   })

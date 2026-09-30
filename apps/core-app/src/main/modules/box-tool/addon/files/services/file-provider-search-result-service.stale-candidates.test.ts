@@ -48,12 +48,15 @@ function makeService(opts: { candidateIds: string[]; rows: FakeRow[] }): {
   const deps: FileProviderSearchResultServiceDeps = {
     providerId: 'files',
     getDbUtils: () => ({ getDb, getFileIndexReadDb: getDb }) as never,
+    isContentIndexingEnabled: () => false,
     getSearchIndex: () =>
       ({
         lookupByKeywords: async (_providerId: string, terms: string[]) =>
           new Map(terms.map((term) => [term, opts.candidateIds.map((itemId) => ({ itemId }))])),
         lookupByKeywordPrefix: async () => [],
-        search: async () => []
+        search: async () => [],
+        lookupBySubsequence: async () => [],
+        lookupByNgrams: async () => []
       }) as never,
     buildItem: (file) =>
       ({

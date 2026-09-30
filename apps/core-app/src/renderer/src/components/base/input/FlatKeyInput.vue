@@ -113,12 +113,42 @@ function formatAccelerator(event: KeyboardEvent): string | null {
   return [...modifiers, key].join('+')
 }
 
+/**
+ * Ends the capture on a field the user is done with.
+ *
+ * Both elements matter: this listener sits on the wrapper (which carries the tabindex), and the
+ * text input inside it is what a click actually focuses. Blurring only the wrapper left the inner
+ * input focused, so the field stayed in capture and the global shortcuts the focus released were
+ * never re-enabled — every shortcut in the app stayed off until the user clicked elsewhere.
+ */
+function releaseCapture(event: KeyboardEvent): void {
+  const target = event.target
+  if (target instanceof HTMLElement) target.blur()
+  ;(event.currentTarget as HTMLElement | null)?.blur()
+}
+
 function startRecord(e: KeyboardEvent) {
+  // Escape and Backspace drop the binding, but only where the host can actually drop it: an empty
+  // accelerator is a no-op for the settings list, whose rows would then show a field that looks
+  // cleared while the shortcut still fires. The clear affordance is the same opt-in, so the two
+  // cannot disagree about whether an empty value means anything.
+  if ((e.key === 'Escape' || e.key === 'Backspace') && props.clearable) {
+    e.preventDefault()
+    if (model.value) clearBinding()
+    if (e.key === 'Escape') {
+      // Escape ends the capture as it always has, so the surrounding surface gets its cancel key
+      // back. Backspace keeps the field focused: it reads as "delete this one", and the next key
+      // is usually the replacement.
+      releaseCapture(e)
+    }
+    return
+  }
+
   // Escape is the cancel key everywhere else in the app, so it ends the capture instead of becoming
   // a binding. The event is deliberately not default-prevented: the drawer or dialog hosting this
   // field needs that same Escape to close, which stays broken while the field swallows the key.
   if (e.key === 'Escape') {
-    ;(e.currentTarget as HTMLElement | null)?.blur()
+    releaseCapture(e)
     return
   }
 
@@ -146,8 +176,8 @@ function clearBinding(): void {
       :class="{ 'is-clearable': clearable }"
       tabindex="0"
       @keydown="startRecord"
-      @focus="shortconApi.disableAll"
-      @blur="shortconApi.enableAll"
+      @focus="() => shortconApi.disableAll()"
+      @blur="() => shortconApi.enableAll()"
     />
     <button
       v-if="clearable"
