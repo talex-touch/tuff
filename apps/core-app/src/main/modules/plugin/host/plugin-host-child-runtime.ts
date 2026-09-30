@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { types as utilTypes } from 'node:util'
 import vm from 'node:vm'
+import { createRecommendationWeightModel } from '@talex-touch/utils/core-box/recommendation-weights'
 import { INTELLIGENCE_ERROR_CODES } from '@talex-touch/utils/transport/events/types'
 import {
   DEFAULT_HOST_WIRE_LIMITS,
@@ -1330,6 +1331,10 @@ const CONTEXT_BOOTSTRAP = String.raw`
     enumerable: true
   })
   objectFreeze(hostCapabilities)
+  // The behaviour/time weight model, evaluated from the host's own factory source so this realm
+  // runs the exact formulas the host ranks with rather than a second copy that can drift. The
+  // factory is self-contained, so evaluating it here pulls in no host lexical.
+  const recommendationWeights = (${createRecommendationWeightModel.toString()})()
 
   const hasDeclaredCapability = (id) => Boolean(getMapValue(declaredCapabilities, id))
   const isTranslationPrelude = snapshot.manifest.name === 'touch-translation'
@@ -2547,8 +2552,105 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   objectFreeze(widgetItemFacade)
 
+  /**
+   * The plugin-facing behaviour/time weights. Every member is a realm-local function of the
+   * realm-local model, wrapped in a fresh null-prototype object so a plugin can neither reach the
+   * model itself nor climb out through a shared prototype.
+   */
+  const projectRecommendWeights = () => {
+    const weights = objectCreate(null)
+    objectDefineProperty(weights, 'behaviorScore', {
+      value: recommendationWeights.behaviorScore,
+      enumerable: true
+    })
+    objectDefineProperty(weights, 'timeContribution', {
+      value: recommendationWeights.timeContribution,
+      enumerable: true
+    })
+    objectDefineProperty(weights, 'isFrequentEligible', {
+      value: recommendationWeights.isFrequentEligible,
+      enumerable: true
+    })
+    objectDefineProperty(weights, 'pluginPriorityContribution', {
+      value: recommendationWeights.pluginPriorityContribution,
+      enumerable: true
+    })
+    objectDefineProperty(weights, 'modelVersion', {
+      value: recommendationWeights.modelVersion,
+      enumerable: true
+    })
+    const constants = objectCreate(null)
+    objectDefineProperty(constants, 'timeContributionMax', {
+      value: recommendationWeights.constants.timeContributionMax,
+      enumerable: true
+    })
+    objectDefineProperty(weights, 'constants', {
+      value: objectFreeze(constants),
+      enumerable: true
+    })
+    return objectFreeze(weights)
+  }
+
+  const hasRecommendFacade =
+    hasDeclaredCapability('recommend.provider.register') ||
+    hasDeclaredCapability('recommend.provider.unregister')
+  const recommendFacade = hasRecommendFacade ? objectCreate(null) : null
+  if (recommendFacade) {
+    const weights = projectRecommendWeights()
+    if (hasDeclaredCapability('recommend.provider.register')) {
+      defineFacadeMethod(recommendFacade, 'registerProvider', (provider) => {
+        const request =
+          provider && typeof provider === 'object'
+            ? {
+                id: provider.id,
+                name: provider.name,
+                canProvide: provider.canProvide,
+                getCandidates: provider.getCandidates,
+                onExecute: provider.onExecute
+              }
+            : provider
+        return mapCapabilityResult(
+          invokeCapability('recommend.provider.register', request),
+          // The host issues the registration as a resources.register disposer; the child hands the
+          // plugin an async release call bound to that resource, so a caller never chooses what to
+          // dispose and disposal is not tied to the capability scope that delivered it.
+          (resource) => {
+            if (
+              !resource ||
+              typeof resource !== 'object' ||
+              resource.kind !== 'disposer' ||
+              typeof resource.dispose !== 'function'
+            ) {
+              throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+            }
+            const dispose = resource.dispose
+            return objectFreeze(() => thenPromise(resolvePromise(), () => dispose()))
+          }
+        )
+      })
+    }
+    if (hasDeclaredCapability('recommend.provider.unregister')) {
+      defineFacadeMethod(recommendFacade, 'unregisterProvider', (providerId) =>
+        mapCapabilityResult(
+          invokeCapability('recommend.provider.unregister', {
+            providerId: stringConstructor(providerId)
+          }),
+          (removed) => removed === true
+        )
+      )
+    }
+    objectDefineProperty(recommendFacade, 'weights', { value: weights, enumerable: true })
+    objectFreeze(recommendFacade)
+  }
+
   const pluginFacade = objectCreate(null)
   defineFacadeMethod(pluginFacade, 'getLocale', () => snapshot.locale)
+  if (recommendFacade) {
+    objectDefineProperty(pluginFacade, 'recommend', {
+      value: recommendFacade,
+      enumerable: true
+    })
+  }
   if (hasFeatureFacade) {
     objectDefineProperty(pluginFacade, 'feature', { value: featureFacade, enumerable: true })
   }
@@ -3038,6 +3140,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
       configurable: true
     },
     logger: { value: loggerFacade, configurable: true },
+    recommend: { value: recommendFacade ?? undefined, configurable: true },
     TuffItemBuilder: {
       value: hasDeclaredCapability('feature.items.push') ? ChildTuffItemBuilder : undefined,
       configurable: true

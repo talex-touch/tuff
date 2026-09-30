@@ -248,6 +248,11 @@ export type AppLaunchEntryPoint =
 export interface AppIndexLaunchRequest {
   path: string;
   entryPoint?: AppLaunchEntryPoint;
+  /**
+   * Identifier of this user action, minted once by the caller and reused for a retry of the same
+   * press; absent means the host mints one (a single press is still one count).
+   */
+  eventId?: string;
 }
 
 export interface AppIndexLaunchResult {

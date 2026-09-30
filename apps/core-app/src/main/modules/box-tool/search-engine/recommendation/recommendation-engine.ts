@@ -1,5 +1,10 @@
 import type { TuffContainerLayout, TuffItem } from '@talex-touch/utils'
-import type { PluginRecommendCandidate, RecommendProvider } from '@talex-touch/utils/core-box'
+import type {
+  IExecuteArgs,
+  IExecuteOutcome,
+  PluginRecommendCandidate,
+  RecommendProvider
+} from '@talex-touch/utils/core-box'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { DbUtils } from '../../../../db/utils'
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
@@ -8,7 +13,7 @@ import { createHash } from 'node:crypto'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { appTaskGate } from '../../../../service/app-task-gate'
-import { and, desc, eq, gte, inArray, lt, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, gte, inArray, lt, sql } from 'drizzle-orm'
 import { scheduleAuxWrite, scheduleDbWrite } from '../../../../db/db-write'
 import { getStartupDegradeWindowRemainingMs } from '../../../../db/runtime-flags'
 import * as schema from '../../../../db/schema'
@@ -19,25 +24,40 @@ import { ItemRebuilder } from './item-rebuilder'
 import { createClipboardRecommendationSource } from './clipboard-recommendation-source'
 import { createFileRecommendationSource } from './file-recommendation-source'
 import { createAppRecommendationSource } from './app-recommendation-source'
-import { recommendationSourceRegistry } from './recommendation-source-registry'
 import {
-  describeRecommendation,
-  HABITUAL_RECOMMENDATION_SOURCES
-} from './recommendation-presentation'
+  BUILTIN_CLIPBOARD_URL_SOURCE_ID,
+  createSnapshotRecommendationSource,
+  pluginRecommendationSourceId,
+  type PluginRecommendSnapshot
+} from './plugin-recommendation-source'
+import { recommendationSourceRegistry } from './recommendation-source-registry'
+import { bindPluginRecommendationApi } from './plugin-recommendation-api'
+import { openValidatedExternalUrl } from '../../../../utils/external-url-policy'
+import { shell } from 'electron'
+import { describeRecommendation } from './recommendation-presentation'
 import { isRecommendableNewFile } from './file-recommendation-admission'
 import { i18nMsg } from '@talex-touch/utils/i18n'
 import { isSameAppIdentity, matchesAppRule, type AppMatchRule } from './app-identity-match'
+import { APP_IDENTITY_EXTENSION_KEY, resolveAppItemId } from '../../addon/apps/app-index-metadata'
 import { recommendationExposureService } from './recommendation-exposure-service'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { createLogger } from '../../../../utils/logger'
 import {
   DAY_MS,
-  calculateTimeRelevanceScore,
+  BEHAVIOR_SCORE_MAX,
+  calculateBehaviorScore,
+  calculatePluginPriorityContribution,
+  calculateTimeContribution,
+  isSparseUsageBehaviorRow,
+  resolveEvidenceBackedReason,
+  usageBehaviorRowToFacts,
   toDayBucket,
   toErrorMeta,
   toPrimitive,
-  type LogMeta
+  type LogMeta,
+  type UsageBehaviorRow
 } from './recommendation-utils'
+import type { UsageBehaviorFacts } from '@talex-touch/utils/core-box'
 import {
   UsageSourceIdentityMigration,
   USAGE_SOURCE_IDENTITY_CONFIG_KEY,
@@ -51,14 +71,10 @@ import {
 import {
   buildCandidateSemanticProfile,
   buildRecommendationSemanticProfile,
-  buildRecommendationUsageAvoidanceProfile,
-  buildRecommendationUsagePreferenceProfile,
   calculateLocalSemanticScore,
   type RecommendationSemanticCandidateInput,
   type RecommendationSemanticProfile
 } from './semantic-profile'
-
-export { calculateTimeContextBoost, calculateTimeRelevanceScore } from './recommendation-utils'
 
 const TREND_HISTORY_DAYS = 30
 const TREND_RECENT_DAYS = 7
@@ -82,34 +98,32 @@ const HOST_CONTEXT_PRIORITY_WEIGHT = 1e5
 /**
  * Band for plugin-declared `priority`.
  *
- * Deliberately two decades below {@link HOST_CONTEXT_PRIORITY_WEIGHT}: `priority` is a number the
- * plugin picks for itself, and at 1e5 a default of 50 scored 5e6 — above a heavily used app's
- * frequency term (~1e6) and every recency boost (≤1e5). Any plugin could pin itself to the top of
- * the user's grid by declaring 100, and there was nothing the host could check.
- *
- * At 1e3 a top priority of 100 lands at 1e5, level with "used within the hour": a plugin can order
- * its own candidates and be visible, but it climbs past the user's habits only by being used, via
- * the same frequency/recency terms as everything else.
+ * `priority` is a number the plugin picks for itself, so it may only nudge a plugin's own
+ * candidates: {@link calculatePluginPriorityContribution} maps any manifest value into 0..5, and
+ * this band puts those 5 points at 5e4 — far under a single real execution's behaviour score and
+ * under every recency boost. A plugin can order its own candidates and be visible, but climbing
+ * past the user's habits requires being used through the same shared behaviour model.
  */
-const PLUGIN_PRIORITY_WEIGHT = 1e3
+const PLUGIN_PRIORITY_WEIGHT = 1e4
+/**
+ * Band for the automatic behaviour + time ranking. The two are capped together at
+ * {@link BEHAVIOR_SCORE_MAX} (100), so one point is 1e4 and a fully established habit reaches
+ * 1e6 — level with the old `executeCount * 1e4` asymptote but reached by saturation rather than by
+ * unbounded accumulation.
+ */
+const BEHAVIOR_SCORE_WEIGHT = 1e4
 /** Candidates one plugin may contribute to a single recommendation pass. */
 const PLUGIN_CANDIDATES_PER_PROVIDER_LIMIT = 5
+/**
+ * Unused novelty candidates (fresh installs, new files) the list may carry when the user already
+ * has usable history. Cold start lifts the cap, because there habits do not exist yet.
+ */
+const EXPLORATION_LIMIT = 1
 /** Candidates all plugins together may contribute, so N plugins cannot crowd out the built-ins. */
 const PLUGIN_CANDIDATES_TOTAL_LIMIT = 15
-/**
- * The clipboard-URL card. It rides the plugin-candidate carrier (it has a title/subtitle/action
- * rather than a catalog row) but it is host-generated, and its `source` is already `'context'`.
- */
-const BUILTIN_CLIPBOARD_URL_SOURCE_ID = '__builtin_clipboard_url__'
 /** One row. The grid tier is capped to it so the two tiers stay visually distinct. */
 const GRID_TIER_COLUMNS = 6
 
-/** The reason `mergeAndEnrichItems` recorded, or `cold-start` when an item carries none. */
-function readRecommendationSource(item: TuffItem): ScoredItem['source'] {
-  const recommendation = (item.meta as Record<string, unknown> | undefined)?.recommendation
-  const source = (recommendation as { source?: ScoredItem['source'] } | undefined)?.source
-  return source ?? 'cold-start'
-}
 /**
  * A captured selection is the same privacy tier as the clipboard but a weaker
  * intent signal — it is often minutes old and was captured for another action.
@@ -120,11 +134,13 @@ export const COLD_START_BASE_SCORE = 1e3
 /**
  * Novelty channel for freshly installed apps. Frecency scores a brand-new item
  * at exactly zero, so without an explicit exploration channel an app the user
- * just installed can never outrank their habits. 1e7 clears the frequency term
- * (`executeCount * 1e4`) until ~1000 executes, and stays under the volatile
- * context match (~1e8) on purpose: an explicit clipboard intent outranks news.
+ * just installed can never outrank their habits.
+ *
+ * Bounded below the top of the behaviour band (100 × {@link BEHAVIOR_SCORE_WEIGHT}) so a fresh
+ * install cannot outrank a mature habit — exploration may surface news, not bury the things the
+ * user actually uses. It still sits above the recency boost (≤1e5) and cold start (1e3).
  */
-const NOVELTY_WEIGHT = 1e7
+const NOVELTY_WEIGHT = 9e5
 /** Full-strength window after install. */
 const NOVELTY_FULL_WINDOW_MS = 48 * 60 * 60 * 1000
 /** Novelty is gone past this age, and freshness gating uses the same horizon. */
@@ -155,8 +171,6 @@ const INSTALLED_AT_EXTENSION_KEY = 'installedAt'
 /** Exposure slice tag for measuring the novelty channel separately. */
 const NEWLY_INSTALLED_EXPOSURE_TAG = 'newly-installed'
 const SEMANTIC_LOCAL_WEIGHT = 6e5
-const SEMANTIC_USAGE_PREFERENCE_WEIGHT = 3.5e5
-const SEMANTIC_USAGE_AVOIDANCE_WEIGHT = 5e5
 const SEMANTIC_AI_EMBEDDING_WEIGHT = 4e5
 const SEMANTIC_AI_RERANK_WEIGHT = 3e5
 const SEMANTIC_AI_RERANK_ORDER_WEIGHT = 1e4
@@ -404,7 +418,10 @@ export class RecommendationEngine {
     cacheKey: string
   } | null = null
 
-  /** Bumped by `invalidateCache`; in-flight `recommend()` calls compare against it. */
+  /**
+   * Bumped on any change that makes a computed ranking stale. The single invalidation source, so
+   * both the synchronous read guard and the in-flight check below observe the same generation.
+   */
   private cacheGeneration = 0
   /** Persisted rows older than this were invalidated and must not be read back. */
   private cacheInvalidatedAt = 0
@@ -436,6 +453,25 @@ export class RecommendationEngine {
   /** Plugin-registered recommendation providers */
   private pluginProviders: Map<string, { pluginName: string; provider: RecommendProvider }> =
     new Map()
+
+  /**
+   * Host-produced candidate snapshots, keyed by provider id then item id.
+   *
+   * Built by the candidate pass and read only by `executePluginRecommend`. The renderer never
+   * supplies this: it is what makes the executed candidate the same one the host ranked, so the
+   * usage count joins the right row and a forged `action`/`data` payload cannot reach a plugin.
+   */
+  private pluginSnapshots = new Map<string, Map<string, PluginRecommendSnapshot>>()
+
+  /**
+   * The host-generated clipboard-URL card's snapshot.
+   *
+   * Same trust rule as the plugin snapshots: the card is clickable only while this holds the URL the
+   * host just read from the clipboard and matched against the context digest. The renderer's copy of
+   * `meta.pluginRecommend.data.url` is never opened, so a forged card cannot make the host launch an
+   * arbitrary URL, and a URL the clipboard no longer holds is not executable at all.
+   */
+  private builtinClipboardSnapshots = new Map<string, PluginRecommendSnapshot>()
 
   /**
    * Semantic-AI circuit breaker. A missing/broken provider makes embedding &
@@ -472,11 +508,17 @@ export class RecommendationEngine {
         // OS icon; the next open must rebuild rather than replay them.
         onThumbnailLanded: () => this.invalidateCache()
       }),
-      createAppRecommendationSource(appCatalogDbUtils)
+      createAppRecommendationSource(appCatalogDbUtils),
+      createSnapshotRecommendationSource(
+        BUILTIN_CLIPBOARD_URL_SOURCE_ID,
+        () => this.builtinClipboardSnapshots,
+        (args) => this.executeBuiltinClipboardUrl(args)
+      )
     ].map((source) => {
       recommendationSourceRegistry.unregister(source.sourceId)
       return recommendationSourceRegistry.registerSource(source)
     })
+    this.disposeOwnedSources.push(bindPluginRecommendationApi(this))
 
     this.startBackgroundRefresh()
     this.startTelemetryReport()
@@ -1148,23 +1190,127 @@ export class RecommendationEngine {
 
   /**
    * Register a plugin recommendation provider.
-   * @returns A dispose function to unregister the provider.
+   *
+   * Besides holding the provider for the candidate pass, this registers a recommendation *source*
+   * for it, so a candidate the plugin proposed can be executed through the normal source path: the
+   * host snapshot produced by the pass is the only thing the dispatch trusts, and the plugin's own
+   * `onExecute` is what decides acceptance. Without this the item was clickable but nothing counted.
+   *
+   * @returns A dispose function to unregister the provider, its source, and its snapshots.
    */
   public registerPluginProvider(pluginName: string, provider: RecommendProvider): () => void {
+    // Required, not optional: the candidate the plugin declares is clickable, so it must have
+    // somewhere to dispatch to. A provider without it would register an inert card.
+    if (typeof provider.onExecute !== 'function') {
+      throw new Error(
+        `[RecommendationEngine] Plugin recommendation provider "${provider.id}" must implement onExecute`
+      )
+    }
+
+    // Source first, map second. `registerSource` throws when the id is already owned, and at that
+    // point nothing has been mutated — the incumbent provider and its source stay paired. Setting
+    // the map first would replace the owner while the registry still held the old source.
+    const disposeSource = recommendationSourceRegistry.registerSource(
+      createSnapshotRecommendationSource(
+        pluginRecommendationSourceId(provider.id),
+        () => this.pluginSnapshots.get(provider.id),
+        (args) => this.executePluginRecommend(provider.id, args)
+      )
+    )
+
     this.pluginProviders.set(provider.id, { pluginName, provider })
     this.invalidateCache()
     recommendationLog.debug('Registered plugin provider', {
       meta: { providerId: provider.id, pluginName }
     })
-    return () => this.unregisterPluginProvider(provider.id)
+    return () => {
+      // A disposer must not revoke a *different* provider that has since claimed the same id.
+      // Registration of an id after disposal is legal, so the stale handle from the previous
+      // instance is inert here: it can neither drop the new source nor unregister the new provider,
+      // and a second call on the same handle is a no-op because the entry is already gone.
+      if (this.pluginProviders.get(provider.id)?.provider !== provider) return
+      disposeSource()
+      this.pluginSnapshots.delete(provider.id)
+      this.unregisterPluginProvider(pluginName, provider.id)
+    }
   }
 
   /**
-   * Unregister a plugin recommendation provider by its ID.
+   * Dispatch an execute to the plugin provider that proposed it.
+   *
+   * The candidate is read from the host-produced snapshot, never from the renderer payload: the
+   * item's `_originalItemId` selects the row and the plugin only decides whether it accepted. A
+   * `false` return or a thrown error is a failure — the host must not count it, and there is no
+   * fabricated acceptance.
    */
-  public unregisterPluginProvider(providerId: string): boolean {
+  private async executePluginRecommend(
+    providerId: string,
+    args: IExecuteArgs
+  ): Promise<IExecuteOutcome> {
+    const provider = this.pluginProviders.get(providerId)?.provider
+    if (!provider?.onExecute) return { accepted: false }
+
+    const meta = args.item.meta as Record<string, unknown> | undefined
+    const itemId = typeof meta?._originalItemId === 'string' ? meta._originalItemId : args.item.id
+    const candidate = this.pluginSnapshots.get(providerId)?.get(itemId)?.candidate
+    if (!candidate) return { accepted: false }
+
+    try {
+      const result = await provider.onExecute(candidate, args)
+      return { accepted: result !== false, activation: null }
+    } catch (error) {
+      recommendationLog.warn('Plugin recommendation execute failed', {
+        meta: { providerId, itemId, ...toErrorMeta(error) }
+      })
+      return { accepted: false }
+    }
+  }
+
+  /**
+   * Execute the host-generated clipboard-URL card.
+   *
+   * The URL is read back from the host snapshot, never from the item the renderer sent: opening an
+   * external URL is the one irreversible side effect here, and the renderer's `data.url` is exactly
+   * the kind of input that must not reach `shell.openExternal`. The snapshot is only written by
+   * `getClipboardUrlCandidates`, which has already matched the clipboard against the context digest,
+   * so a hit also proves the clipboard still holds that URL. The secondary "copy-url" action is a
+   * plain copy and deliberately does not come through here — it is not the major action.
+   */
+  private async executeBuiltinClipboardUrl(args: IExecuteArgs): Promise<IExecuteOutcome> {
+    const meta = args.item.meta as Record<string, unknown> | undefined
+    const itemId = typeof meta?._originalItemId === 'string' ? meta._originalItemId : args.item.id
+    const url = this.builtinClipboardSnapshots.get(itemId)?.candidate.data?.url
+    if (typeof url !== 'string' || !url) return { accepted: false }
+
+    try {
+      const decision = await openValidatedExternalUrl(url, { opener: shell.openExternal })
+      return { accepted: decision.allowed === true, activation: null }
+    } catch (error) {
+      recommendationLog.warn('Builtin clipboard URL execute failed', {
+        meta: { itemId, ...toErrorMeta(error) }
+      })
+      return { accepted: false }
+    }
+  }
+
+  /**
+   * Unregister one of `pluginName`'s recommendation providers by ID.
+   *
+   * The owner is part of the address because the map is keyed by provider id alone: without the
+   * guard, any plugin that learned a rival's id could remove that rival's provider (and the
+   * matching source snapshot) through its own unregister call. An id owned by another plugin is
+   * reported as not removed rather than silently deleted, so a caller can never revoke a provider
+   * it does not own.
+   */
+  public unregisterPluginProvider(pluginName: string, providerId: string): boolean {
+    const entry = this.pluginProviders.get(providerId)
+    if (!entry || entry.pluginName !== pluginName) return false
     const removed = this.pluginProviders.delete(providerId)
     if (removed) {
+      // The source and the snapshot must go with the provider: a disposed plugin leaves no
+      // executable source behind and no stale candidate the next pass could dispatch to.
+      recommendationSourceRegistry.unregister(`plugin-recommend:${providerId}`)
+      this.pluginSnapshots.delete(providerId)
       this.invalidateCache()
       recommendationLog.debug('Unregistered plugin provider', {
         meta: { providerId }
@@ -1185,6 +1331,8 @@ export class RecommendationEngine {
     }
     for (const id of toRemove) {
       this.pluginProviders.delete(id)
+      recommendationSourceRegistry.unregister(`plugin-recommend:${id}`)
+      this.pluginSnapshots.delete(id)
     }
     if (toRemove.length > 0) {
       this.invalidateCache()
@@ -1207,7 +1355,6 @@ export class RecommendationEngine {
     this.recommendationCache = null
     this.cacheGeneration += 1
     this.cacheInvalidatedAt = Date.now()
-
     // Cleanup only — the read guard above is what makes invalidation immediate.
     // This write is best-effort and droppable, and exists so invalidated rows
     // do not outlive the process that invalidated them.
@@ -1222,8 +1369,31 @@ export class RecommendationEngine {
     })
   }
 
-  /** Generate recommendation list */
+  /**
+   * Generate the recommendation list, never publishing a snapshot that an invalidation overtook.
+   *
+   * Blocking the cache *write* is not enough (R7): a compute that started before an execution was
+   * accepted would still hand the caller the pre-execution ranking. So the generation is checked
+   * again after the work and, if it moved, the whole pass is recomputed before anything is
+   * returned. The retry is bounded; a steady stream of invalidations must not hang the caller.
+   */
   async recommend(options: RecommendationOptions = {}): Promise<RecommendationResult> {
+    const maxAttempts = 3
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const generation = this.cacheGeneration
+      const result = await this.computeRecommendation(options)
+      if (generation === this.cacheGeneration) return result
+      recommendationLog.debug('Discarded recommendation result invalidated before publish', {
+        meta: { attempt }
+      })
+    }
+    return await this.computeRecommendation(options)
+  }
+
+  /** The single recommendation computation; `recommend()` owns publication. */
+  private async computeRecommendation(
+    options: RecommendationOptions = {}
+  ): Promise<RecommendationResult> {
     // 启动期 appTaskGate 活跃时，先等待空闲再执行推荐计算，避免与启动任务竞争主线程。
     //
     // 但这里是交互路径的入口：CoreBox 空查询每次打开都会走到（search-core 的
@@ -1423,7 +1593,10 @@ export class RecommendationEngine {
       if (!item.meta) item.meta = {}
       const meta = item.meta as Record<string, unknown>
       if (!('recommendation' in meta)) {
-        meta.recommendation = describeRecommendation('frequent')
+        // The rebuilder writes a reason for everything scored; anything reaching here was not
+        // scored. Call it a suggestion rather than 'frequent' — a habit badge it has no evidence
+        // for is exactly the fabricated reason R9 forbids.
+        meta.recommendation = describeRecommendation('cold-start')
       }
     }
 
@@ -1535,11 +1708,11 @@ export class RecommendationEngine {
   /**
    * Two tiers: a grid of launch targets, then a list of things the host is proposing.
    *
-   * The grid prefers what the user reaches for out of habit — pinned entries, then frequent ones —
-   * because those need no explanation and read well as bare icons. But it is filled to capacity
-   * either way: gating it on habit alone left the grid empty for anyone without usage history,
-   * which is every new user, and an all-list empty state loses the visual anchor the row provides.
-   * So the remaining slots go to the next-highest ranked items.
+   * The grid holds only what the user has a right to reach for without explanation: their pinned
+   * entries, and habits that crossed the strict frequent threshold. It is deliberately NOT filled
+   * to capacity — a grid padded with exploration or loose suggestions is what let a never-used
+   * install sit where a real habit belonged. When nothing qualifies the section is absent and the
+   * empty state is a single list.
    *
    * Files never enter the grid, pinned or not. A tile is an icon and a name; a file's thumbnail
    * often is not generated yet (and cannot be, for media outside the `tfile` allowlist), so it
@@ -1564,35 +1737,34 @@ export class RecommendationEngine {
     _options: RecommendationOptions,
     items: TuffItem[]
   ): TuffContainerLayout {
-    const columns = Math.min(GRID_TIER_COLUMNS, items.length || GRID_TIER_COLUMNS)
+    const sections: TuffContainerLayout['sections'] = []
 
-    // Pinned entries claim grid slots first. They are appended last in score order (pinning is not
-    // a score), so taking the grid in list order would push the one thing the user explicitly
-    // asked to always see down into the "here is a suggestion" tier.
+    // Pinned tileable entries come first in the grid, in list order; everything else on the grid
+    // must have crossed the strict frequent threshold. There is no fill: a short grid stays short.
     const pinnedTiles: TuffItem[] = []
-    const pinnedRows: TuffItem[] = []
-    const habitualCandidates: TuffItem[] = []
-    const otherTileable: TuffItem[] = []
+    const eligibleTiles: TuffItem[] = []
+    const listItems: TuffItem[] = []
 
     for (const item of items) {
       const isPinned = item.meta?.pinned?.isPinned === true
       if (!this.isTileableRecommendation(item)) {
-        if (isPinned) pinnedRows.push(item)
-      } else if (isPinned) pinnedTiles.push(item)
-      else if (HABITUAL_RECOMMENDATION_SOURCES.has(readRecommendationSource(item))) {
-        habitualCandidates.push(item)
-      } else otherTileable.push(item)
+        listItems.push(item)
+        continue
+      }
+      if (isPinned) {
+        pinnedTiles.push(item)
+        continue
+      }
+      if (this.isGridEligible(item)) eligibleTiles.push(item)
+      else listItems.push(item)
     }
 
-    // Overflow past one row falls to the list rather than wrapping into a second grid row: a
-    // half-empty second row blurs the boundary between the tiers.
-    const grid = [...pinnedTiles, ...habitualCandidates, ...otherTileable].slice(0, columns)
-    // A pinned file cannot tile, but the user still asked to always see it, so it leads the list
-    // instead of trailing it where pinning appended it.
-    const leadingIds = new Set([...grid, ...pinnedRows].map((item) => item.id))
-    const proposed = [...pinnedRows, ...items.filter((item) => !leadingIds.has(item.id))]
+    // One row only, and never padded with exploration or other suggestions: the top tier is the
+    // user's pinned entries plus habits that actually crossed the threshold. No eligible tile and
+    // nothing pinned means there is no habitual section at all.
+    const grid = [...pinnedTiles, ...eligibleTiles].slice(0, GRID_TIER_COLUMNS)
+    const columns = Math.min(GRID_TIER_COLUMNS, items.length || GRID_TIER_COLUMNS)
 
-    const sections: TuffContainerLayout['sections'] = []
     if (grid.length > 0) {
       sections.push({
         id: 'habitual',
@@ -1601,6 +1773,15 @@ export class RecommendationEngine {
         itemIds: grid.map((item) => item.id)
       })
     }
+
+    // A pinned file cannot tile, but the user still asked to always see it, so it leads the list
+    // instead of trailing it where pinning appended it. Grid overflow, pinned files and everything
+    // else that is proposed rather than habitual lands here in the order the scorer produced.
+    const gridIds = new Set(grid.map((item) => item.id))
+    const proposed = [
+      ...listItems.filter((item) => item.meta?.pinned?.isPinned === true),
+      ...listItems.filter((item) => item.meta?.pinned?.isPinned !== true)
+    ].filter((item) => !gridIds.has(item.id))
 
     if (proposed.length > 0) {
       sections.push({
@@ -1620,6 +1801,21 @@ export class RecommendationEngine {
       },
       sections
     }
+  }
+
+  /**
+   * Whether this item earned a grid slot by habit rather than by label.
+   *
+   * The badge a candidate arrived with is not evidence: a plugin item or a cold-start suggestion is
+   * never eligible, and a `frequent`-labelled row only qualifies when the scorer confirmed the
+   * strict threshold from real dated executions. Pinned items bypass this by design — they are the
+   * user's explicit choice — and are handled by the caller.
+   */
+  private isGridEligible(item: TuffItem): boolean {
+    const recommendation = (item.meta as Record<string, unknown> | undefined)?.recommendation as
+      | { frequentEligible?: boolean }
+      | undefined
+    return recommendation?.frequentEligible === true
   }
 
   private combineRecommendedWithPinned(
@@ -1765,7 +1961,11 @@ export class RecommendationEngine {
   }
 
   /**
-   * Fallback recommendation strategy: simple usage count ordering
+   * Fallback recommendation strategy: real executes first, ranked by the shared behaviour score.
+   *
+   * The same behaviour batch the pass uses is read here so the fallback ranks on real dated
+   * evidence, and an item with no evidence at all is left for `getColdStartRecommendations` rather
+   * than being surfaced as a habit.
    */
   private async getFallbackRecommendations(limit: number): Promise<TuffItem[]> {
     try {
@@ -1776,15 +1976,26 @@ export class RecommendationEngine {
         return []
       }
 
+      const behaviorByKey = await this.loadUsageBehaviorByKey(
+        frequentItems.map((item) => ({ sourceId: item.sourceId, itemId: item.itemId }))
+      )
+
       // The rebuilder writes the full `meta.recommendation` (source, score, badge) from the
       // candidate's source. Overwriting it here with a bare `{ source }` used to strip the badge
       // off every backfilled tile.
       const items = await this.itemRebuilder.rebuildItems(
-        frequentItems.map((item) => ({
-          ...item,
-          source: 'frequent' as const,
-          score: item.usageStats.executeCount
-        }))
+        frequentItems.map((item) => {
+          const behavior = behaviorByKey.get(`${item.sourceId}:${item.itemId}`)
+          // Same rule as the candidate pass: the label must be earned. A lifetime count cannot
+          // claim "Frequent" without the strict 5/3 dated evidence, and it cannot borrow another
+          // behavioural claim either — with no accepted event it falls back to "Suggested" (R9).
+          return {
+            ...item,
+            behavior,
+            source: this.resolveHonestReasonLabel('frequent', behavior),
+            score: behavior ? calculateBehaviorScore(behavior) : 0
+          }
+        })
       )
 
       return items.slice(0, limit)
@@ -1846,6 +2057,49 @@ export class RecommendationEngine {
   }
 
   /**
+   * The usage identity each catalog row is recorded under, keyed by file id.
+   *
+   * Mirrors `AppProvider`/`ApplicationIndex` precedence — `appIdentity || path || bundleId`, via the
+   * shared `resolveAppItemId`. Reading it from the same `file_extensions` rows the catalog scan
+   * writes is what keeps the novelty gate on one bucket per app; a lookup failure degrades to "no
+   * identities", where the caller falls back to the path rather than skipping the app.
+   */
+  private async loadAppCatalogIdentityByFileId(
+    apps: Array<{ id: number; path: string }>
+  ): Promise<Map<number, string>> {
+    const identities = new Map<number, string>()
+    if (apps.length === 0) return identities
+
+    try {
+      const extensions = await this.appCatalogDbUtils.getFileExtensionsByFileIds(
+        apps.map((app) => app.id),
+        [APP_IDENTITY_EXTENSION_KEY, 'bundleId']
+      )
+      const byFileId = new Map<number, Record<string, string>>()
+      for (const extension of extensions) {
+        if (typeof extension.value !== 'string') continue
+        const entry = byFileId.get(extension.fileId) ?? {}
+        entry[extension.key] = extension.value
+        byFileId.set(extension.fileId, entry)
+      }
+      for (const app of apps) {
+        const entry = byFileId.get(app.id)
+        identities.set(
+          app.id,
+          resolveAppItemId({
+            appIdentity: entry?.[APP_IDENTITY_EXTENSION_KEY],
+            bundleId: entry?.['bundleId'],
+            path: app.path
+          })
+        )
+      }
+    } catch (error) {
+      recommendationLog.debug('Failed to read app catalog identities', { meta: toErrorMeta(error) })
+    }
+    return identities
+  }
+
+  /**
    * `installedAt` stamps for the given catalog rows, keyed by file id. The
    * stamp is an optional refinement over `ctime`, so a failed read degrades to
    * "no stamps" rather than failing the caller.
@@ -1891,6 +2145,13 @@ export class RecommendationEngine {
       if (recentlyIndexed.length === 0) return []
 
       const installedAtByFileId = await this.loadInstalledAtByFileId(recentlyIndexed)
+      // The usage key is the source-declared catalog identity, not `files.id` and not a bare path:
+      // execution records apps under `appIdentity || path || bundleId`, so joining the novelty gate
+      // on the path alone would miss the row a first execution just wrote and keep re-suggesting an
+      // app the user already opened.
+      const identityByFileId = await this.loadAppCatalogIdentityByFileId(recentlyIndexed)
+      const catalogIdFor = (app: { id: number; path: string }): string =>
+        identityByFileId.get(app.id) || app.path
       const fresh = recentlyIndexed
         .flatMap((app) => {
           const installedAt = installedAtByFileId.get(app.id)
@@ -1906,19 +2167,32 @@ export class RecommendationEngine {
       const usageStatsMap = new Map(
         (
           await this.dbUtils.getUsageStatsBatch(
-            fresh.map(({ app }) => ({ sourceId: 'app-provider', itemId: app.path }))
+            fresh.map(({ app }) => ({ sourceId: 'app-provider', itemId: catalogIdFor(app) }))
           )
         ).map((stat) => [`${stat.sourceId}:${stat.itemId}`, stat])
       )
 
-      return fresh.map(({ app, installedAt }) => ({
-        sourceId: 'app-provider',
-        itemId: app.path,
-        sourceType: 'application',
-        usageStats: usageStatsMap.get(`app-provider:${app.path}`) ?? EMPTY_USAGE_STATS,
-        source: 'newly-installed' as const,
-        firstSeenAt: installedAt
-      }))
+      // First real execution ends the novelty claim (R6/AC11): the item stays in the pool through
+      // the behaviour dimensions, it simply stops being news. Lifetime count is the right control
+      // here — an accepted execution older than the 30-day window still proves the app was opened.
+      // Never gate on `installedAt`: its absence is silent in this query and would skip every app.
+      const unused = fresh.filter(
+        ({ app }) =>
+          (usageStatsMap.get(`app-provider:${catalogIdFor(app)}`)?.executeCount ?? 0) === 0
+      )
+      if (unused.length === 0) return []
+
+      return unused.map(({ app, installedAt }) => {
+        const itemId = catalogIdFor(app)
+        return {
+          sourceId: 'app-provider',
+          itemId,
+          sourceType: 'application',
+          usageStats: usageStatsMap.get(`app-provider:${itemId}`) ?? EMPTY_USAGE_STATS,
+          source: 'newly-installed' as const,
+          firstSeenAt: installedAt
+        }
+      })
     } catch (error) {
       recommendationLog.warn('Failed to collect newly installed candidates', {
         meta: toErrorMeta(error)
@@ -1936,7 +2210,10 @@ export class RecommendationEngine {
   ): Promise<CandidateResult> {
     const candidates: CandidateItem[] = []
 
-    // 维度 1: 全局高频项目 (Top 30)
+    // 维度 1: 有真实执行的项目。Whether each is actually "Frequent" is decided from the batch
+    // behaviour read below — five uses in one afternoon is not a habit, so a candidate that has not
+    // crossed the strict 5/3 threshold is relabelled to a category its evidence can support rather
+    // than wearing a Frequent badge it did not earn.
     const frequentItems = await this.getFrequentItems(30)
     recommendationLog.debug('Loaded frequent candidates', {
       meta: { count: frequentItems.length }
@@ -1997,7 +2274,8 @@ export class RecommendationEngine {
     candidates.push(...pluginCandidates)
 
     // 维度 6: 新安装的应用 (Top 10) —— 上面五个维度全部依赖使用历史，新装应用在其中
-    // 恒为零分，只有这条通道能让它被看见。
+    // 恒为零分，只有这条通道能让它被看见。非冷启动时这条探索通道另行限额（见
+    // admitExplorationWithinBudget），不能借候选池绕过。
     const newlyInstalled = await this.getNewlyInstalledItems(NEWLY_INSTALLED_CANDIDATE_LIMIT)
     recommendationLog.debug('Loaded newly installed candidates', {
       meta: { count: newlyInstalled.length }
@@ -2023,18 +2301,38 @@ export class RecommendationEngine {
     // 去重(同一 sourceId + itemId 只保留第一次出现)
     const deduplicated = this.deduplicateCandidates(candidates)
 
-    // Provider-specific rebuilders enforce whether a persisted candidate is still safe and valid.
-    const filtered = deduplicated
+    // One batch read for the whole pass, taken after dedupe so each identity is asked once. Every
+    // consumer downstream (scorer, evidence, layout) reads these same facts for the same identity,
+    // so no surface can invent a second history.
+    const behaviorByKey = await this.loadUsageBehaviorByKey(
+      deduplicated.map((item) => ({ sourceId: item.sourceId, itemId: item.itemId }))
+    )
+    for (const item of deduplicated) {
+      item.behavior = behaviorByKey.get(`${item.sourceId}:${item.itemId}`)
+    }
+
+    // The recall tag stays what recalled the item; the *reason* it is shown with is derived from
+    // dated evidence in the rebuilder, so a `frequent` recall with a legacy lifetime count cannot
+    // print a habit badge it cannot support (R9).
+
+    // Cold start is decided by behaviour, not by candidate count: the pool is always populated by
+    // the catalog channels, so "no valid history at all" has to be measured directly. Below the
+    // frequent threshold but with some history is NOT cold start (R6).
+    const coldStart = !this.hasAnyUsageHistory(behaviorByKey)
+
+    // Non-cold-start explore budget: at most one unused novelty item may survive into the list.
+    const filtered = coldStart ? deduplicated : this.admitExplorationWithinBudget(deduplicated)
 
     // 统计各 source 的分布
     const sourceDistribution = new Map<string, number>()
     for (const item of filtered) {
       const key = item.sourceId
-      sourceDistribution.set(key, (sourceDistribution.get(key) || 0) + 1)
+      sourceDistribution.set(key, (sourceDistribution.get(key) ?? 0) + 1)
     }
     recommendationLog.debug('Filtered candidate distribution', {
       meta: {
         filteredCount: filtered.length,
+        coldStart,
         sourceDistribution: JSON.stringify(Object.fromEntries(sourceDistribution))
       }
     })
@@ -2044,6 +2342,7 @@ export class RecommendationEngine {
       perf: {
         totalCandidates,
         filteredCount: filtered.length,
+        coldStart,
         trendingDurationMs: trending.perf.durationMs,
         trendingRows: trending.perf.rowCount,
         trendingCandidates: trendingItems.length,
@@ -2053,7 +2352,77 @@ export class RecommendationEngine {
   }
 
   /**
-   * 获取全局高频项目
+   * The single batch behaviour read for a recommendation pass.
+   *
+   * Keyed by `sourceId:itemId` because that is the key the scorers look up. A failed read returns
+   * an empty map rather than throwing: a stats failure must not empty the grid, it just means no
+   * candidate can claim behaviour evidence this pass.
+   */
+  private async loadUsageBehaviorByKey(
+    keys: Array<{ sourceId: string; itemId: string }>
+  ): Promise<Map<string, UsageBehaviorRow>> {
+    if (keys.length === 0) return new Map()
+    try {
+      const rows = await this.dbUtils.getUsageBehaviorBatch(keys)
+      return new Map(rows.map((row) => [`${row.sourceId}:${row.itemId}`, row]))
+    } catch (error) {
+      recommendationLog.warn('Failed to load usage behaviour batch', {
+        meta: { keyCount: keys.length, ...toErrorMeta(error) }
+      })
+      return new Map()
+    }
+  }
+
+  /**
+   * Whether the user has any valid execution history at all.
+   *
+   * Cold start means "no usable history", not "below the frequent threshold": an item executed
+   * once, however incompletely, makes the user non-cold-start and the exploration budget applies.
+   * Rows the storage layer synthesized for keys with no evidence carry zero counts and are
+   * ignored, so a pool made only of catalog/novelty candidates still reads as cold start.
+   */
+  private hasAnyUsageHistory(behaviorByKey: Map<string, UsageBehaviorRow>): boolean {
+    for (const row of behaviorByKey.values()) {
+      if (!isSparseUsageBehaviorRow(row)) return true
+    }
+    return false
+  }
+
+  /**
+   * Apply the exploration budget to the candidate pool.
+   *
+   * Cold start is handled by the caller (the cap is lifted there). Here the user has real history,
+   * so at most {@link EXPLORATION_LIMIT} novelty items that have never been used may survive; extra
+   * ones are dropped rather than demoted, because the list should not carry a pile of unused
+   * installs competing with habits. A label is never edited here — the layout decides the badge.
+   */
+  private admitExplorationWithinBudget(candidates: CandidateItem[]): CandidateItem[] {
+    let admitted = 0
+    const result: CandidateItem[] = []
+
+    for (const item of candidates) {
+      const isUnusedNovelty =
+        (item.source === 'newly-installed' || item.source === 'newly-added') &&
+        (item.behavior?.executeCount ?? 0) === 0
+      if (!isUnusedNovelty) {
+        result.push(item)
+        continue
+      }
+      if (admitted < EXPLORATION_LIMIT) {
+        admitted += 1
+        result.push(item)
+      }
+    }
+
+    return result
+  }
+
+  /**
+   * 全局高频候选：只取有真实执行的项目。
+   *
+   * Lifetime count orders them, but the 30-day/active-day qualification that admits an item to the
+   * frequent grid is decided later from the batch behaviour read — the tag is no longer the
+   * qualification. Zero-execute rows (searched or installed only) are excluded here entirely.
    */
   private async getFrequentItems(limit: number): Promise<ItemCandidate[]> {
     const db = this.dbUtils.getDb()
@@ -2061,6 +2430,7 @@ export class RecommendationEngine {
     const stats = await db
       .select()
       .from(schema.itemUsageStats)
+      .where(gt(schema.itemUsageStats.executeCount, 0))
       .orderBy(desc(schema.itemUsageStats.executeCount))
       .limit(limit)
       .all()
@@ -2074,7 +2444,25 @@ export class RecommendationEngine {
   }
 
   /**
-   * 获取最近使用的项目
+   * 推荐理由的展示面：复用共享的证据判定，避免引擎与重建器各有一套。
+   *
+   * The decision itself lives in {@link resolveEvidenceBackedReason} so the recall tag and the shown
+   * badge can never disagree; this wrapper only adapts the engine's row-shaped behaviour facts.
+   */
+  private resolveHonestReasonLabel(
+    source: ScoredItem['source'],
+    behavior: UsageBehaviorFacts | undefined
+  ): ScoredItem['source'] {
+    return resolveEvidenceBackedReason(source, behavior)
+  }
+
+  /**
+   * 最近使用的项目：必须由可靠事件日期支撑。
+   *
+   * Filters on the batch behaviour read rather than the stored `lastExecuted`: a legacy row's
+   * timestamp can predate the entry fix, so "recent" would be a reason the evidence cannot support
+   * (R9). An item with only lifetime count and no accepted event in the window is dropped from this
+   * dimension, not demoted below it.
    */
   private async getRecentItems(limit: number): Promise<ItemCandidate[]> {
     const db = this.dbUtils.getDb()
@@ -2082,13 +2470,29 @@ export class RecommendationEngine {
     const stats = await db
       .select()
       .from(schema.itemUsageStats)
+      .where(gt(schema.itemUsageStats.executeCount, 0))
       .orderBy(desc(schema.itemUsageStats.lastExecuted))
-      .limit(limit)
+      .limit(limit * 3)
       .all()
 
+    if (stats.length === 0) return []
+
+    const behaviorByKey = await this.loadUsageBehaviorByKey(
+      stats.map((stat) => ({ sourceId: stat.sourceId, itemId: stat.itemId }))
+    )
+
     return stats
-      .filter((stat) => stat.lastExecuted != null)
       .map((stat) => ({
+        stat,
+        lastExecutedAt: behaviorByKey.get(`${stat.sourceId}:${stat.itemId}`)?.lastExecutedAt ?? null
+      }))
+      .filter(
+        (entry): entry is { stat: (typeof stats)[number]; lastExecutedAt: number } =>
+          entry.lastExecutedAt != null
+      )
+      .sort((left, right) => right.lastExecutedAt - left.lastExecutedAt)
+      .slice(0, limit)
+      .map(({ stat }) => ({
         sourceId: stat.sourceId,
         itemId: stat.itemId,
         sourceType: stat.sourceType,
@@ -2098,25 +2502,32 @@ export class RecommendationEngine {
 
   /**
    * 获取当前时段的热门项目
+   *
+   * Eligibility is evidence-gated: an item only appears as "usually used around now" when the
+   * shared model says the 30-day evidence is strong enough to add time points at all. Below the
+   * threshold a concentration in this hour is coincidence, and claiming it would be a fabricated
+   * reason (R9) — so the item is dropped from this dimension, not reranked lower.
    */
   private async getTimeBasedTopItems(
     timePattern: TimePattern,
     limit: number
   ): Promise<ItemCandidate[]> {
     const allTimeStats = await this.dbUtils.getAllItemTimeStats()
-    const scored: Array<{ item: ItemCandidate; score: number }> = []
+    if (allTimeStats.length === 0) return []
 
-    // 获取对应的使用统计
     const keys = allTimeStats.map((stat) => ({
       sourceId: stat.sourceId,
       itemId: stat.itemId
     }))
+    const behaviorByKey = await this.loadUsageBehaviorByKey(keys)
     const usageStatsMap = new Map(
       (await this.dbUtils.getUsageStatsBatch(keys)).map((stat) => [
         `${stat.sourceId}:${stat.itemId}`,
         stat
       ])
     )
+
+    const scored: Array<{ item: ItemCandidate; score: number }> = []
 
     for (let idx = 0; idx < allTimeStats.length; idx++) {
       const raw = allTimeStats[idx]
@@ -2125,23 +2536,24 @@ export class RecommendationEngine {
       // sits inside the unguarded getCandidates chain (#649).
       const parsed: ParsedItemTimeStats = toParsedItemTimeStats(raw)
 
-      const timeScore = this.calculateTimeRelevance(parsed, timePattern)
-      if (timeScore > 0) {
-        const key = `${raw.sourceId}:${raw.itemId}`
-        const usageStats = usageStatsMap.get(key)
+      const key = `${raw.sourceId}:${raw.itemId}`
+      const behaviorRow = behaviorByKey.get(key)
+      const usageStats = usageStatsMap.get(key)
+      if (!behaviorRow || !usageStats) continue
 
-        if (usageStats) {
-          scored.push({
-            item: {
-              sourceId: raw.sourceId,
-              itemId: raw.itemId,
-              sourceType: usageStats.sourceType,
-              usageStats,
-              timeStats: parsed
-            },
-            score: timeScore
-          })
-        }
+      const facts = usageBehaviorRowToFacts(behaviorRow)
+      const timeScore = calculateTimeContribution(facts, timePattern)
+      if (timeScore > 0) {
+        scored.push({
+          item: {
+            sourceId: raw.sourceId,
+            itemId: raw.itemId,
+            sourceType: usageStats.sourceType,
+            usageStats,
+            timeStats: parsed
+          },
+          score: timeScore
+        })
       }
 
       // 每 50 行让出事件循环，避免 JSON.parse 密集计算阻塞
@@ -2193,14 +2605,19 @@ export class RecommendationEngine {
         ).map((stat) => [`${stat.sourceId}:${stat.itemId}`, stat])
       )
 
-      return admissible.map((row) => ({
+      // First real open ends the novelty claim, exactly as for a newly installed app: a file you
+      // have already opened is no longer news and must be reached through behaviour (R6/AC11).
+      const unused = admissible.filter(
+        (row) => (usageStatsMap.get(`file-provider:${row.path}`)?.executeCount ?? 0) === 0
+      )
+      if (unused.length === 0) return []
+
+      return unused.map((row) => ({
         sourceId: 'file-provider',
         itemId: row.path,
         sourceType: 'file',
         usageStats: usageStatsMap.get(`file-provider:${row.path}`) ?? EMPTY_USAGE_STATS,
         source: 'newly-added' as const,
-        // The novelty channel hands the item back to frecency on first open, exactly as it does
-        // for a newly installed app: a file you have already opened is no longer news.
         firstSeenAt: row.ctime?.getTime()
       }))
     } catch (error) {
@@ -2223,14 +2640,13 @@ export class RecommendationEngine {
     // (#674). Promise.all preserves order, so the candidate sequence is unchanged.
     const settled = await Promise.all(
       Array.from(this.pluginProviders.values(), async ({ provider }) => {
-        if (!provider.canProvide(context)) return []
-
         // The timer is cleared when the provider wins. Left armed, each call
         // leaked a pending 200ms timeout that kept the event loop awake.
         let timer: ReturnType<typeof setTimeout> | undefined
         try {
           const result = await Promise.race([
-            Promise.resolve(provider.getCandidates(context)),
+            (async () =>
+              (await provider.canProvide(context)) ? provider.getCandidates(context) : [])(),
             new Promise<PluginRecommendCandidate[]>((_, reject) => {
               timer = setTimeout(
                 () => reject(new Error(`Provider ${provider.id} timed out`)),
@@ -2264,6 +2680,23 @@ export class RecommendationEngine {
     // Two bounds, not one: the per-provider slice above stops a single plugin from flooding the
     // pool, and this stops N well-behaved plugins from doing it collectively.
     const candidates = settled.flat().slice(0, PLUGIN_CANDIDATES_TOTAL_LIMIT)
+
+    // Snapshot every candidate under the provider that proposed it, so an execute can reach the
+    // plugin without trusting the renderer's copy. Rebuilt each pass: a stale action or payload
+    // from an earlier pass must not be executable.
+    this.pluginSnapshots.clear()
+    for (const candidate of candidates) {
+      if (candidate.source !== 'plugin' || !candidate.pluginCandidate) continue
+      const providerId = candidate.pluginCandidate.providerId
+      if (!providerId) continue
+      let snapshot = this.pluginSnapshots.get(providerId)
+      if (!snapshot) {
+        snapshot = new Map()
+        this.pluginSnapshots.set(providerId, snapshot)
+      }
+      snapshot.set(candidate.itemId, { candidate: candidate.pluginCandidate })
+    }
+
     return this.hydratePluginUsageStats(candidates)
   }
 
@@ -2306,6 +2739,10 @@ export class RecommendationEngine {
    * 内置剪贴板 URL 推荐候选
    */
   private async getClipboardUrlCandidates(context: ContextSignal): Promise<CandidateItem[]> {
+    // Cleared before the eligibility checks, not after: if this pass produces no card, a snapshot
+    // from an earlier pass must stop being executable rather than lingering behind a stale item.
+    this.builtinClipboardSnapshots.clear()
+
     if (!context.clipboard?.meta?.isUrl || !context.clipboard.content) return []
 
     // context.clipboard.content is a privacy digest, not the URL — ContextProvider hashes every
@@ -2319,22 +2756,29 @@ export class RecommendationEngine {
     const url = await this.readClipboardUrlMatching(context.clipboard.content)
     if (!url) return []
 
+    // The card is snapshotted here, at the one moment the clipboard is known to still hold this URL,
+    // and the execute reads it back from that snapshot. The card outlives this request (it can be
+    // re-requested while the signal holds), so the snapshot is replaced, not merely added to.
+    const card: PluginRecommendCandidate = {
+      id: `clipboard-url-open:${url}`,
+      title: '打开 URL',
+      subtitle: url.length > 60 ? `${url.substring(0, 57)}...` : url,
+      icon: { type: 'class', value: 'i-ri-links-line' },
+      priority: 95,
+      action: 'open-url',
+      data: { url }
+    }
+    this.builtinClipboardSnapshots.clear()
+    this.builtinClipboardSnapshots.set(card.id, { candidate: card })
+
     return [
       {
         sourceId: BUILTIN_CLIPBOARD_URL_SOURCE_ID,
-        itemId: `clipboard-url-open:${url}`,
+        itemId: card.id,
         sourceType: 'action',
         usageStats: EMPTY_USAGE_STATS,
         source: 'context',
-        pluginCandidate: {
-          id: `clipboard-url-open:${url}`,
-          title: '打开 URL',
-          subtitle: url.length > 60 ? `${url.substring(0, 57)}...` : url,
-          icon: { type: 'class', value: 'i-ri-links-line' },
-          priority: 95,
-          action: 'open-url',
-          data: { url }
-        }
+        pluginCandidate: card
       }
     ]
   }
@@ -2464,16 +2908,6 @@ export class RecommendationEngine {
   }
 
   /**
-   * 计算时间相关性分数
-   */
-  private calculateTimeRelevance(
-    itemTimeStats: ParsedItemTimeStats,
-    currentTime: TimePattern
-  ): number {
-    return calculateTimeRelevanceScore(itemTimeStats, currentTime)
-  }
-
-  /**
    * 计算分数并排序
    */
   private async scoreAndRank(
@@ -2488,32 +2922,13 @@ export class RecommendationEngine {
       semanticSettings.aiRerankEnabled
         ? buildRecommendationSemanticProfile(context)
         : null
-    const usageSemanticInputs = semanticSettings.localVectorEnabled
-      ? candidates.map((candidate) => ({
-          ...this.toSemanticCandidateInput(candidate),
-          searchCount: candidate.usageStats.searchCount,
-          executeCount: candidate.usageStats.executeCount,
-          cancelCount: candidate.usageStats.cancelCount,
-          lastSearched: candidate.usageStats.lastSearched,
-          lastExecuted: candidate.usageStats.lastExecuted,
-          lastCancelled: candidate.usageStats.lastCancelled
-        }))
-      : []
-    const usagePreferenceProfile = semanticSettings.localVectorEnabled
-      ? buildRecommendationUsagePreferenceProfile(usageSemanticInputs)
-      : null
-    const usageAvoidanceProfile = semanticSettings.localVectorEnabled
-      ? buildRecommendationUsageAvoidanceProfile(usageSemanticInputs)
-      : null
 
     for (const candidate of candidates) {
       const score = await this.calculateRecommendationScore(
         candidate,
         context,
         semanticSettings,
-        semanticProfile,
-        usagePreferenceProfile,
-        usageAvoidanceProfile
+        semanticProfile
       )
       scored.push({ ...candidate, score })
     }
@@ -2534,9 +2949,7 @@ export class RecommendationEngine {
     candidate: CandidateItem,
     context: ContextSignal,
     semanticSettings: RecommendationSemanticSettings,
-    semanticProfile: RecommendationSemanticProfile | null,
-    usagePreferenceProfile: RecommendationSemanticProfile | null,
-    usageAvoidanceProfile: RecommendationSemanticProfile | null
+    semanticProfile: RecommendationSemanticProfile | null
   ): Promise<number> {
     // Host-generated contextual candidates (the clipboard-URL card) keep their own band: the
     // priority came from a signal the host observed, not from something a caller declared, so it
@@ -2555,24 +2968,29 @@ export class RecommendationEngine {
     // Plugin-declared priority orders a plugin's own candidates. It used to *replace* the whole
     // calculation, which meant a plugin item ranked identically whether the user had run it a
     // hundred times or never. It is now one bounded term among the rest, and the terms below —
-    // which a plugin item earns exactly like a built-in — are what move it.
+    // which a plugin item earns exactly like a built-in — are what move it. The contribution is
+    // capped at 5/100, so no manifest value can manufacture a habit.
     if (candidate.source === 'plugin' && candidate.pluginCandidate) {
-      score += (candidate.pluginCandidate.priority ?? 50) * PLUGIN_PRIORITY_WEIGHT
+      score +=
+        calculatePluginPriorityContribution(candidate.pluginCandidate.priority) *
+        BEHAVIOR_SCORE_WEIGHT
     }
 
-    // 时间相关性
-    if (candidate.timeStats) {
-      const timeRelevance = this.calculateTimeRelevance(candidate.timeStats, context.time)
-      score += timeRelevance * 1e5
-    }
-
-    // 频率分数(带时间衰减)
-    const frequencyScore = this.calculateFrequencyScore(candidate.usageStats)
-    score += frequencyScore * 1e4
-
-    // 最近使用加成
-    const recencyBoost = this.calculateRecencyBoost(candidate.usageStats.lastExecuted)
-    score += recencyBoost * 1e3
+    // 行为分：只由有可靠日期证据的真实执行构成，0..80；时间偏好最多 20；最近使用加成也是同一
+    // 自动族的一项。三者之和封顶 BEHAVIOR_SCORE_MAX（100），所以「自动行为」整体真的落在
+    // 0..100，而不是 base+time 到 100 之后还追加一份独立 recency（R5）。recency 只承认有可靠事件
+    // 日期的执行：旧的 stored lastExecuted 可能来自升级前「实际启动前就记数」的入口，用它会让
+    // 「最近使用」的理由站不住脚（R9）。没有可靠日期就不给这份加成，也不该被标成「最近」。
+    const recencyBoost =
+      candidate.behavior?.lastExecutedAt != null
+        ? this.calculateRecencyBoost(new Date(candidate.behavior.lastExecutedAt))
+        : 0
+    const automaticBudget =
+      (candidate.behavior
+        ? calculateBehaviorScore(candidate.behavior) +
+          calculateTimeContribution(candidate.behavior, context.time)
+        : 0) + recencyBoost
+    score += Math.min(BEHAVIOR_SCORE_MAX, automaticBudget) * BEHAVIOR_SCORE_WEIGHT
 
     // Novelty: the exploration channel for freshly installed apps. It hands the
     // item back to frecency the moment there is a real execute to rank on —
@@ -2588,18 +3006,6 @@ export class RecommendationEngine {
       )
       score +=
         calculateLocalSemanticScore(semanticProfile, candidateProfile) * SEMANTIC_LOCAL_WEIGHT
-
-      if (usagePreferenceProfile && !this.isExternalPriorityCandidate(candidate)) {
-        score +=
-          calculateLocalSemanticScore(usagePreferenceProfile, candidateProfile) *
-          SEMANTIC_USAGE_PREFERENCE_WEIGHT
-      }
-
-      if (usageAvoidanceProfile && !this.isExternalPriorityCandidate(candidate)) {
-        score -=
-          calculateLocalSemanticScore(usageAvoidanceProfile, candidateProfile) *
-          SEMANTIC_USAGE_AVOIDANCE_WEIGHT
-      }
     }
 
     return score
@@ -3253,38 +3659,13 @@ export class RecommendationEngine {
     )
   }
 
-  /**
-   * 计算频率分数(带时间衰减)
-   */
-  private calculateFrequencyScore(stats: typeof schema.itemUsageStats.$inferSelect): number {
-    const executeCount = stats.executeCount
-    const searchCount = stats.searchCount
-    const cancelCount = stats.cancelCount || 0
-
-    const lastInteraction = Math.max(
-      stats.lastExecuted?.getTime() || 0,
-      stats.lastSearched?.getTime() || 0,
-      stats.lastCancelled?.getTime() || 0
-    )
-
-    const daysSince = (Date.now() - lastInteraction) / (1000 * 60 * 60 * 24)
-    const decayFactor = Math.exp(-0.1 * daysSince) // lambda = 0.1
-
-    return (executeCount * 1.0 + searchCount * 0.3 + cancelCount * -0.5) * decayFactor
-  }
-
-  /**
-   * 计算最近使用加成
-   */
+  /** Recent execution contributes at most 10 points inside the automatic 100-point budget. */
   private calculateRecencyBoost(lastUsed: Date | null): number {
     if (!lastUsed) return 0
 
     const hoursSince = (Date.now() - lastUsed.getTime()) / (1000 * 60 * 60)
 
-    // 1 小时内: 100 分
-    // 24 小时:  50 分
-    // 7 天:     10 分
-    return Math.max(0, 100 * Math.exp(-0.1 * hoursSince))
+    return 10 * Math.exp(-0.1 * Math.max(0, hoursSince))
   }
 
   /**
@@ -3344,6 +3725,8 @@ export class RecommendationEngine {
       if (!existing.timeStats && candidate.timeStats) {
         existing.timeStats = candidate.timeStats
       }
+      // Behaviour facts are attached after dedupe, so nothing to merge here; the first occurrence
+      // wins, exactly as it does for the candidate identity itself.
       if (candidate.source === 'time-based') {
         existing.source = 'time-based'
       }
@@ -3496,6 +3879,7 @@ interface CandidateResult {
   perf: {
     totalCandidates: number
     filteredCount: number
+    coldStart: boolean
     trendingDurationMs: number
     trendingRows: number
     trendingCandidates: number
@@ -3527,6 +3911,12 @@ interface ItemCandidate {
   sourceType: string
   usageStats: typeof schema.itemUsageStats.$inferSelect
   timeStats?: ParsedItemTimeStats
+  /**
+   * Real dated execution facts for this item, from the single batch behaviour read. Absent means
+   * the item has no valid history at all — never substitute a zero-shaped object, so the scorer
+   * can tell "no evidence" from "evidence of zero".
+   */
+  behavior?: UsageBehaviorFacts
   /** Plugin-provided candidate data (for source='plugin' or builtin clipboard URL) */
   pluginCandidate?: PluginRecommendCandidate
   /**

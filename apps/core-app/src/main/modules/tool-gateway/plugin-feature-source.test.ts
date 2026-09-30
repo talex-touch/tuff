@@ -38,7 +38,11 @@ function plugin(overrides: PluginOverrides = {}): ITouchPlugin {
     dev: { enable: overrides.dev ?? false, address: '' },
     getFeatures: () => features,
     getFeature: (id: string) => features.find((entry) => entry.id === id) ?? null,
-    triggerFeature: overrides.triggerFeature ?? (async () => true)
+    // `triggerFeature` normalises the lifecycle's legacy `boolean | void` into
+    // `{ accepted, shouldActivate }`; the source reads `verdict.accepted`, so the mock gives the
+    // normalised shape the real method produces.
+    triggerFeature:
+      overrides.triggerFeature ?? (async () => ({ accepted: true, shouldActivate: true }))
   } as unknown as ITouchPlugin
 }
 
@@ -143,7 +147,7 @@ describe('plugin feature catalogue', () => {
 
 describe('feature invocation', () => {
   it('hands the plugin the query CoreBox would have built', async () => {
-    const triggerFeature = vi.fn(async () => true)
+    const triggerFeature = vi.fn(async () => ({ accepted: true, shouldActivate: true }))
     const source = sourceOf(plugin({ triggerFeature }))
 
     expect(await source.invokeFeature('com.talex.translate', 'translate', '  hello  ')).toEqual({
@@ -163,7 +167,10 @@ describe('feature invocation', () => {
   })
 
   it('sends no text input when there is nothing to send or nothing that takes it', async () => {
-    const triggerFeature = vi.fn(async (_feature: IPluginFeature, _query: TuffQuery) => true)
+    const triggerFeature = vi.fn(async (_feature: IPluginFeature, _query: TuffQuery) => ({
+      accepted: true,
+      shouldActivate: true
+    }))
     const source = sourceOf(
       plugin({
         triggerFeature,
@@ -179,13 +186,17 @@ describe('feature invocation', () => {
   })
 
   it('reads a false verdict as the plugin refusing the trigger', async () => {
-    const refused = sourceOf(plugin({ triggerFeature: async () => false }))
+    const refused = sourceOf(
+      plugin({ triggerFeature: async () => ({ accepted: false, shouldActivate: false }) })
+    )
     expect(await refused.invokeFeature('com.talex.translate', 'translate', '')).toEqual({
       handled: false
     })
 
-    // Most preludes return nothing at all; silence is not a refusal.
-    const silent = sourceOf(plugin({ triggerFeature: async () => undefined }))
+    // A normalised success (the plugin ran and did not ask for a surface) is not a refusal.
+    const silent = sourceOf(
+      plugin({ triggerFeature: async () => ({ accepted: true, shouldActivate: false }) })
+    )
     expect(await silent.invokeFeature('com.talex.translate', 'translate', '')).toEqual({
       handled: true
     })

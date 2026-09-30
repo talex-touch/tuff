@@ -69,37 +69,53 @@ describe('tuff-sorter ranking strategy', () => {
     expect(sorted[0]?.id).toBe('feature-clipboard-history')
   })
 
-  it('匹配接近时，高使用频次 feature 应自动前置', () => {
-    const appItem = createItem({
-      id: 'app-clipboard-tool',
-      kind: 'app',
-      title: 'Clipboard Tool',
-      sourceId: 'app-provider',
-      searchTokens: ['clipboard-tool']
-    })
-
-    const featureItem = createItem({
+  it('曝光量与取消不再替代真实使用参与搜索排序', () => {
+    // R3: 搜索结果发布量与取消记录只作诊断，不得为频率加分或扣分；只有真实执行事实参与。
+    const base = {
       id: 'feature-clipboard-history',
       kind: 'feature',
       title: 'Clipboard History',
       sourceId: 'plugin-features',
-      searchTokens: ['clipboard-history'],
-      usageStats: {
-        executeCount: 32,
-        searchCount: 18,
-        cancelCount: 0,
-        lastExecuted: new Date().toISOString(),
-        lastSearched: new Date().toISOString(),
-        lastCancelled: null
-      }
+      searchTokens: ['clipboard-history']
+    }
+    const usage = (overrides: Partial<UsageStats>): UsageStats => ({
+      executeCount: 0,
+      searchCount: 0,
+      cancelCount: 0,
+      lastExecuted: null,
+      lastSearched: null,
+      ...overrides
     })
 
-    const sorted = tuffSorter.sort(
-      [appItem, featureItem],
-      { text: 'clipboard' } as TuffQuery,
-      signal
+    const unused = createItem({ ...base, usageStats: usage({}) })
+    const exposed = createItem({ ...base, usageStats: usage({ searchCount: 5_000 }) })
+    // A real habit is the full dated behaviour fact set, not a raw lifetime count: without the
+    // 30-day windows and distributions the behavior term reads 0 and a heavy count ranks exactly
+    // like an unused row (R9).
+    const datedBehavior = {
+      executeCount: 10,
+      executeCount30: 12,
+      executeCount7: 4,
+      activeDays30: 4,
+      decayedExecuteScore30: 8,
+      lastExecutedAt: Date.now(),
+      hourDistribution30: Array.from({ length: 24 }, () => 0),
+      dayOfWeekDistribution30: Array.from({ length: 7 }, () => 0),
+      timeSlotDistribution30: { morning: 0, afternoon: 0, evening: 0, night: 0 }
+    }
+    const used = createItem({ ...base, usageStats: usage(datedBehavior) })
+    const cancelled = createItem({
+      ...base,
+      usageStats: usage({ ...datedBehavior, cancelCount: 9_999 })
+    })
+
+    // 展示量不改变分数；取消不扣分。
+    expect(calculateSortScore(exposed, 'clipboard')).toBe(calculateSortScore(unused, 'clipboard'))
+    expect(calculateSortScore(cancelled, 'clipboard')).toBe(calculateSortScore(used, 'clipboard'))
+    // 真实执行仍然抬升排序。
+    expect(calculateSortScore(used, 'clipboard')).toBeGreaterThan(
+      calculateSortScore(unused, 'clipboard')
     )
-    expect(sorted[0]?.id).toBe('feature-clipboard-history')
   })
 
   it('app 标题前缀命中应优先于中等频次 feature 可见标题命中', () => {
@@ -335,7 +351,7 @@ describe('tuff-sorter ranking strategy', () => {
     expect(sorted[0]?.id).toBe('app-visual-studio-code')
   })
 
-  it('极高频 plugin feature 可见标题前缀命中仍可优先于 app 精确别名 token 命中', () => {
+  it('app 精确别名 token 命中优先于极高频 plugin feature 可见标题前缀命中', () => {
     const appItem = createItem({
       id: 'app-visual-studio-code',
       kind: 'app',
@@ -349,6 +365,8 @@ describe('tuff-sorter ranking strategy', () => {
       kind: 'feature',
       title: 'VSC Snippets',
       sourceId: 'plugin-features',
+      // A raw lifetime count is not evidence: with no dated fields the feature scores no
+      // frequency, and the plugin's only other lever — a self-declared priority — is capped ≤5.
       usageStats: {
         executeCount: 10000,
         searchCount: 5000,
@@ -360,7 +378,7 @@ describe('tuff-sorter ranking strategy', () => {
     })
 
     const sorted = tuffSorter.sort([appItem, featureItem], { text: 'vsc' } as TuffQuery, signal)
-    expect(sorted[0]?.id).toBe('feature-vsc-snippets')
+    expect(sorted[0]?.id).toBe('app-visual-studio-code')
   })
 
   it('极高频 plugin feature 隐藏 token 召回不应压过 app 标题命中', () => {

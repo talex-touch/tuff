@@ -17,7 +17,9 @@ import { ConversationProvider } from './conversation-provider'
 
 const mocks = vi.hoisted(() => ({
   searchConversations: vi.fn(),
-  openConversation: vi.fn(),
+  // The provider counts an open only when the host reports it reached the conversation, so the
+  // stand-in answers with an outcome status instead of `undefined`.
+  openConversation: vi.fn(() => ({ status: 'opened' })),
   getAppDestinationNavigationService: vi.fn(),
   getLogger: vi.fn(() => ({
     info: vi.fn(),

@@ -96,13 +96,3 @@ export async function launchApp(request: AppLaunchRequest): Promise<AppLaunchOut
     return { status: 'failed', error: message }
   }
 }
-
-export function scheduleAppLaunch(request: AppLaunchRequest): void {
-  setImmediate(() => {
-    void launchApp(request).catch((error) => {
-      const message = toErrorMessage(error)
-      appLauncherLog.error(`Unhandled app launch failure: ${message}`)
-      notifyLaunchFailure(request, message)
-    })
-  })
-}

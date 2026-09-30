@@ -24,6 +24,7 @@ import { pluginModule } from '../../../plugin/plugin-module'
 import { screenshotSessionModule } from '../../../screenshot-session'
 import { appProvider } from '../apps/app-provider'
 import { fileProvider } from '../files/file-provider'
+import { recordAcceptedExecute, resolveExecuteEventId } from '../../search-engine/execute-recorder'
 
 type SystemActionType =
   | 'dev-plugin'
@@ -465,6 +466,7 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
       ?.systemAction
     if (!meta?.path) return null
 
+    let accepted = false
     try {
       switch (meta.action) {
         case 'dev-plugin': {
@@ -482,6 +484,7 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
             this.notifyPluginInstallResult(name, 'dev', 'error', result.error)
           } else {
             this.notifyPluginInstallResult(name, 'dev', 'success')
+            accepted = true
           }
           break
         }
@@ -499,6 +502,7 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
             })
             const name = summary?.manifest?.name || fallbackName
             this.notifyPluginInstallResult(name, 'tpex', 'success')
+            accepted = true
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
             systemActionsLog.warn('Tpex plugin install failed', {
@@ -511,6 +515,7 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
         }
         case 'app-index': {
           await appProvider.addAppByPath(meta.path)
+          accepted = true
           break
         }
         case 'file-index': {
@@ -525,15 +530,30 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
               result
             }
           })
+          accepted = result.success === true
           break
         }
         case 'screenshot-cursor-display': {
           await screenshotSessionModule.startStandalone('system-action')
+          accepted = true
           break
         }
       }
     } catch (error) {
       systemActionsLog.warn('System action execution failed', { error })
+    }
+
+    // A built-in action counts only when its branch completed what the user asked for: an install
+    // that was already present, a manager that was not ready, or a throw is not a use.
+    if (accepted) {
+      recordAcceptedExecute({
+        item: args.item,
+        sessionId: args.searchResult?.sessionId ?? null,
+        entryPoint: 'core-box',
+        eventId: resolveExecuteEventId(args.eventId)
+      }).catch((error) => {
+        systemActionsLog.warn('Failed to record system action usage', { error })
+      })
     }
 
     return null

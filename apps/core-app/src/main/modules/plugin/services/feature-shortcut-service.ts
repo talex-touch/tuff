@@ -76,11 +76,11 @@ export async function triggerFeatureShortcut(id: string): Promise<boolean> {
   }
 
   try {
-    // Same cast the tool gateway uses (`plugin-feature-source.ts`): the interface declares
-    // `Promise<void>`, but `TouchPlugin.triggerFeature` resolves the lifecycle's own return,
-    // where `false` is a refusal and silence is not.
-    const verdict = (await plugin.triggerFeature(feature, query)) as boolean | void
-    return verdict !== false
+    // `triggerFeature` now normalises the lifecycle's legacy `boolean | void` (where `false` means
+    // "do not activate", not failure) into `{ accepted, shouldActivate }`; the shortcut ran when
+    // `accepted`.
+    const verdict = await plugin.triggerFeature(feature, query)
+    return verdict.accepted
   } catch (error) {
     featureShortcutLog.error('Feature shortcut failed to run the feature', { error })
     return false

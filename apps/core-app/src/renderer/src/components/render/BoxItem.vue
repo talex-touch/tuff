@@ -13,6 +13,7 @@ import {
   shouldRenderCoreBoxIconColorful
 } from './icon-color-mode'
 import ItemSubtitle from './ItemSubtitle.vue'
+import { formatRecommendationEvidence } from './recommendation-evidence'
 import { formatResultSignalReason, resolveResultSignal, resolveSourceMeta } from './sourceMeta'
 
 interface Props {
@@ -20,11 +21,6 @@ interface Props {
   active: boolean
   render: TuffRender
   quickKey?: string
-  /**
-   * Why this item is being recommended, already localized. Only the CoreBox
-   * empty state passes it; search results leave it unset.
-   */
-  evidence?: string
 }
 
 interface MatchAliasRange {
@@ -104,6 +100,11 @@ const showOpenerLogo = computed(() => props.item.kind === 'file' && !!openerLogo
 const clickCount = computed(() => props.item.meta?.usageStats?.executeCount ?? 0)
 const showFrequency = computed(() => clickCount.value > 0)
 const frequencyLabel = computed(() => clickCount.value.toString())
+const frequencyTitle = computed(() =>
+  t(props.item.kind === 'app' ? 'corebox.usage.launchCount' : 'corebox.usage.useCount', {
+    count: clickCount.value
+  })
+)
 
 const quickKeyLabel = computed(() => props.quickKey || '')
 const showQuickKey = computed(() => quickKeyLabel.value.length > 0)
@@ -118,6 +119,10 @@ const resultSignalTitle = computed(() => {
   return [signal.reason || signal.label, signal.actionHint].filter(Boolean).join(' · ')
 })
 const recommendation = computed(() => props.item.meta?.recommendation)
+const evidence = computed(() => {
+  const value = recommendation.value
+  return value ? formatRecommendationEvidence(value.source, value.evidence, t) : ''
+})
 const isNoticeItem = computed(() => props.item.kind === 'notification')
 const noticeDescription = computed(() => resolveI18nText(props.render.basic?.description || '', t))
 const noticeAccessory = computed(
@@ -151,6 +156,7 @@ const shouldShowNoticeReason = computed(
 <template>
   <div
     class="BoxItem group flex items-center gap-2 mx-2 my-1 p-1.5 w-[calc(100%-1rem)] h-44px box-border cursor-pointer overflow-hidden relative rounded-lg"
+    :data-corebox-item-id="item.id"
     :class="{
       'is-active': active,
       recommendation,
@@ -168,6 +174,9 @@ const shouldShowNoticeReason = computed(
       />
       <span
         v-if="showFrequency"
+        data-corebox-usage-count
+        :title="frequencyTitle"
+        :aria-label="frequencyTitle"
         class="absolute -top-1 -right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 text-[10px] leading-none rounded-full bg-[var(--tx-color-primary)] text-white shadow-sm"
       >
         {{ frequencyLabel }}

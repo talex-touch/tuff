@@ -55,6 +55,7 @@ import {
   type FlipSnapshot
 } from '../../modules/box/adapter/hooks/flip-layout'
 import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
+import { useResultExposure } from '../../modules/box/adapter/hooks/useResultExposure'
 import { useSelectionBlock } from '../../modules/box/adapter/hooks/useSelectionBlock'
 import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
 import { useCoreBoxFooterFeedback } from '../../modules/box/meta-actions/footer-feedback'
@@ -253,6 +254,7 @@ async function handleWidgetHostAction(
   }
 
   const activationState = await transport.send(CoreBoxEvents.item.execute, {
+    eventId: crypto.randomUUID(),
     item: JSON.parse(JSON.stringify(actionItem)),
     actionId: payload.actionId
   })
@@ -1034,6 +1036,16 @@ const scrollContentRef = ref<HTMLElement | null>(null)
 const listRef = ref<HTMLElement | null>(null)
 const selectionBlockRef = ref<ComponentPublicInstance | null>(null)
 const { width: resultsRootWidth } = useElementSize(resultsRootRef)
+
+useResultExposure({
+  items: res,
+  root: resultsRootRef,
+  query: searchVal,
+  kind: computed(() =>
+    !searchVal.value && !activeActivations.value?.length ? 'recommendation' : 'search'
+  ),
+  surface: () => (isDivisionBoxMode() ? 'division-box' : 'core-box')
+})
 
 /**
  * Width BoxGrid may lay out in, known in the same render that toggles the preview pane, so the

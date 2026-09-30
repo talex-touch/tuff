@@ -928,7 +928,7 @@ describe('PluginModule facade', () => {
     expect(mocks.fsRemove).not.toHaveBeenCalled()
   })
 
-  it('wires the immutable 30-ID global manifest and activation-local capability factories', async () => {
+  it('wires the immutable global capability manifest and activation-local capability factories', async () => {
     const module = new PluginModule()
     mocks.manager.getPluginByName.mockImplementation((name) =>
       name === 'calendar' ? mocks.plugin : undefined
@@ -942,20 +942,23 @@ describe('PluginModule facade', () => {
     const definitions = runtimeOptions?.capabilityDefinitions as
       | ReadonlyArray<{ id: string }>
       | undefined
-    expect(definitions).toHaveLength(30)
-    expect(definitions?.map((definition) => definition.id)).toContain('plugin.info.get')
-    expect(definitions?.map((definition) => definition.id)).toContain('permission.check')
-    expect(definitions?.map((definition) => definition.id)).toContain('http.request')
-    expect(definitions?.map((definition) => definition.id)).toContain('channel.invoke')
-    expect(definitions?.map((definition) => definition.id)).toContain('quick-ops.invoke')
-    expect(definitions?.map((definition) => definition.id)).toContain('flow.invoke')
-    expect(definitions?.map((definition) => definition.id)).toContain('voice.invoke')
-    expect(definitions?.map((definition) => definition.id)).toContain('voice.stream')
-    expect(definitions?.map((definition) => definition.id)).not.toContain('intelligence.invoke')
-    expect(definitions?.map((definition) => definition.id)).not.toContain(
-      'intelligence.context.invoke'
-    )
-    expect(definitions?.map((definition) => definition.id)).not.toContain('system.invoke')
+    // The manifest is asserted by the capabilities it actually must carry, not by a total. A
+    // count here re-breaks on every legitimate new capability (the recommendation bridge added two)
+    // and says nothing about whether the manifest is correct.
+    const definitionIds = definitions?.map((definition) => definition.id) ?? []
+    expect(definitionIds).toContain('plugin.info.get')
+    expect(definitionIds).toContain('permission.check')
+    expect(definitionIds).toContain('http.request')
+    expect(definitionIds).toContain('channel.invoke')
+    expect(definitionIds).toContain('quick-ops.invoke')
+    expect(definitionIds).toContain('flow.invoke')
+    expect(definitionIds).toContain('voice.invoke')
+    expect(definitionIds).toContain('voice.stream')
+    expect(definitionIds).toContain('recommend.provider.register')
+    expect(definitionIds).toContain('recommend.provider.unregister')
+    expect(definitionIds).not.toContain('intelligence.invoke')
+    expect(definitionIds).not.toContain('intelligence.context.invoke')
+    expect(definitionIds).not.toContain('system.invoke')
     expect(Object.isFrozen(definitions)).toBe(true)
     // One call each way, so this covers what nine separate assertions used to. Compared
     // exhaustively rather than field by field: an eleventh capability that the install block

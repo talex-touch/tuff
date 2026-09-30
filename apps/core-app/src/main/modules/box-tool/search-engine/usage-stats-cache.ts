@@ -24,11 +24,27 @@ export class UsageStatsCache {
   /** Negative entries expire sooner than real rows; see markAbsent. */
   private readonly absenceTtl: number
 
+  /**
+   * Bumped by `invalidate`/`clear`. A caller that read the database captures it before awaiting
+   * and passes it back to `setBatch`; a write whose generation no longer matches is dropped.
+   *
+   * Without this, the read-modify-cache sequence raced the execute path: a batch read issued just
+   * before a commit could land its now-stale rows AFTER `invalidate`, re-seeding the pre-execute
+   * count with a fresh timestamp — the exact "cache refresh restored an old value" failure R2/AC3
+   * forbids.
+   */
+  private generation = 0
+
   constructor(maxSize = 10000, ttl = 15 * 60 * 1000, absenceTtl = 30 * 1000) {
     // 15 minutes default TTL
     this.maxSize = maxSize
     this.ttl = ttl
     this.absenceTtl = absenceTtl
+  }
+
+  /** The current invalidation generation; pass to `setBatch` to make a write conditional. */
+  getGeneration(): number {
+    return this.generation
   }
 
   /**
@@ -119,9 +135,14 @@ export class UsageStatsCache {
   }
 
   /**
-   * Batch set usage stats in cache
+   * Batch set usage stats, optionally conditional on the generation captured before the read.
+   *
+   * When `generation` is provided and no longer current, every entry is dropped: an invalidation
+   * (typically an accepted execute) happened while this batch was in flight, so the rows describe
+   * a state that no longer holds.
    */
-  setBatch(stats: (typeof schema.itemUsageStats.$inferSelect)[]): void {
+  setBatch(stats: (typeof schema.itemUsageStats.$inferSelect)[], generation?: number): void {
+    if (generation !== undefined && generation !== this.generation) return
     for (const stat of stats) {
       this.set(stat.sourceId, stat.itemId, stat)
     }
@@ -169,6 +190,7 @@ export class UsageStatsCache {
   invalidate(sourceId: string, itemId: string): void {
     const key = this.getKey(sourceId, itemId)
     this.cache.delete(key)
+    this.generation += 1
   }
 
   /**
@@ -176,6 +198,7 @@ export class UsageStatsCache {
    */
   clear(): void {
     this.cache.clear()
+    this.generation += 1
   }
 
   /**
@@ -240,16 +263,22 @@ export async function getUsageStatsBatchCached(
   }
 
   // Fetch missing keys from database
+  const generation = cache.getGeneration()
   const dbResults = await dbUtils.getUsageStatsBatch(missingKeys)
 
-  // Cache the results
-  cache.setBatch(dbResults)
+  // Cache the results — dropped wholesale if an invalidation (an accepted execute) landed while
+  // this read was in flight, so a stale batch can never re-seed the key that just changed.
+  cache.setBatch(dbResults, generation)
 
-  // And remember the ones it did not return, so the next keystroke does not ask again.
+  // And remember the ones it did not return, so the next keystroke does not ask again. Gated on
+  // the same generation: an absent tombstone for a key that was just executed is the same stale
+  // answer in negative form.
   const returned = new Set(dbResults.map((stat) => cache.getKey(stat.sourceId, stat.itemId)))
-  cache.markAbsent(
-    missingKeys.filter(({ sourceId, itemId }) => !returned.has(cache.getKey(sourceId, itemId)))
-  )
+  if (generation === cache.getGeneration()) {
+    cache.markAbsent(
+      missingKeys.filter(({ sourceId, itemId }) => !returned.has(cache.getKey(sourceId, itemId)))
+    )
+  }
 
   // Combine cached and database results
   const resultMap = new Map<string, typeof schema.itemUsageStats.$inferSelect>()

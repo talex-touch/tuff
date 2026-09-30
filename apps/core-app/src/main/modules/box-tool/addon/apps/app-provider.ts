@@ -78,19 +78,11 @@ import { iconService } from '../../../../service/icon-service'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { operationalErrorService } from '../../../observability'
 import FileSystemWatcher from '../../file-system-watcher'
-// The recorder seam lives in a leaf module beside this one: it breaks the app-provider/search-core
-// cycle documented in that file, and this file may shrink rather than grow (#343).
-import { recordAppExecution } from './services/app-execution-recorder'
-export {
-  setAppExecutionRecorder,
-  type AppExecutionRecorder
-} from './services/app-execution-recorder'
+import { resolvePreviousAppContext } from '../../search-engine/app-launch-recorder'
+import { recordAcceptedExecute, resolveExecuteEventId } from '../../search-engine/execute-recorder'
+import { launchApp } from './app-launcher'
 
 import { appScanner, type AppScannerSourceScanResult } from './app-scanner'
-import { scheduleAppLaunch } from './app-launcher'
-// Leaf module: it reaches the foreground-app service only, never back into search-core, so this
-// import does not re-enter the module cycle documented above (#712).
-import { resolvePreviousAppContext } from '../../search-engine/app-launch-recorder'
 import { resolveApplicationProjection } from './app-resolution-service'
 import { AppProviderSourceScanner } from './app-provider-source-scanner'
 import { AppIndexedSourceRecordMapper } from './services/app-index-record-sync-service'
@@ -3434,20 +3426,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
-    const { item, searchResult } = args
-
-    const sessionId = searchResult?.sessionId
-    if (sessionId) {
-      logApp(`Recording app execution: ${chalk.cyan(item.id)}`, LogStyle.info)
-      // Awaited, not fired alongside the launch: `scheduleAppLaunch` only defers to the next
-      // macrotask, and the foreground read behind this answers with whatever is frontmost when it
-      // resolves. Left to race, a slow read reports the app being launched as the app it was
-      // launched from. The read is served from a 3s cache in the common case.
-      const previous = await resolvePreviousAppContext()
-      recordAppExecution(sessionId, item, previous.prevApp ?? null).catch((err) => {
-        logApp(`Failed to record execution: ${chalk.red(err.message)}`, LogStyle.error)
-      })
-    }
+    const { item, searchResult, eventId } = args
 
     const appMeta = (item.meta?.app as
       | {
@@ -3472,7 +3451,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const launchArgs = appMeta.launchArgs
     const workingDirectory = appMeta.workingDirectory
 
-    scheduleAppLaunch({
+    // Foreground read before the launch is handed over: once the target is frontmost, "what the
+    // user came from" is gone. Awaited before `launchApp` below for the same reason — a read left
+    // to race reports the launched app as the app it was launched from (3s-cached in the common
+    // case).
+    const previous = await resolvePreviousAppContext()
+
+    const outcome = await launchApp({
       name: item.render?.basic?.title,
       path: appPath,
       launchKind,
@@ -3481,6 +3466,20 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       workingDirectory,
       sourceItemId: item.id
     })
+
+    // Only a launch the OS accepted is a use. A missing path, a failed open and a launch that was
+    // merely scheduled are not, and a count recorded before this point could not tell them apart.
+    if (outcome.status !== 'failed') {
+      recordAcceptedExecute({
+        item,
+        sessionId: searchResult?.sessionId ?? null,
+        entryPoint: 'core-box',
+        eventId: resolveExecuteEventId(eventId),
+        previousApp: previous.prevApp ?? null
+      }).catch((err) => {
+        logApp(`Failed to record execution: ${chalk.red(err.message)}`, LogStyle.error)
+      })
+    }
 
     return null
   }

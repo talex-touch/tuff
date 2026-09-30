@@ -10,7 +10,12 @@ import type {
   TuffSearchResult,
   TuffSourceType
 } from '@talex-touch/utils'
-import type { IFeatureCommand, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
+import type {
+  IFeatureCommand,
+  IFeatureTriggerResult,
+  IPluginFeature,
+  ITouchPlugin
+} from '@talex-touch/utils/plugin'
 import type { FeatureMatchAlias, MatchRange } from '@talex-touch/utils/search'
 import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
 import type { ProviderContext } from '../../box-tool/search-engine/types'
@@ -22,6 +27,10 @@ import { matchFeature } from '@talex-touch/utils/search'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { resolveClipboardInputs } from '../../box-tool/search-engine/utils/resolve-clipboard-inputs'
+import {
+  recordAcceptedExecute,
+  resolveExecuteEventId
+} from '../../box-tool/search-engine/execute-recorder'
 
 import { pluginModule } from '../plugin-module'
 import { PluginViewLoader } from '../view/plugin-view-loader'
@@ -33,6 +42,28 @@ function getErrorCode(error: unknown): string | undefined {
   if (!error || typeof error !== 'object') return undefined
   const code = (error as { code?: unknown }).code
   return typeof code === 'string' ? code : undefined
+}
+
+/**
+ * Statuses a plugin's structured `onItemAction` result uses to mean "the action did not happen".
+ *
+ * The official plugins return these as `{ success: false, status: 'blocked', reason }` shapes; the
+ * adapter must treat them as failures rather than counting every non-throwing return. A result
+ * without `success`/`status` (the older `void | { shouldActivate }` contract) is not a failure.
+ */
+const ITEM_ACTION_FAILURE_STATUSES: Record<string, true> = {
+  blocked: true,
+  error: true,
+  failed: true,
+  cancelled: true,
+  canceled: true
+}
+
+function isItemActionFailure(result: unknown): boolean {
+  if (!result || typeof result !== 'object') return false
+  const record = result as { success?: unknown; status?: unknown }
+  if (record.success === false) return true
+  return typeof record.status === 'string' && ITEM_ACTION_FAILURE_STATUSES[record.status] === true
 }
 
 /** Exported for direct branch coverage; the search path reaches it via matchesCommand. */
@@ -223,7 +254,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       const result = await plugin.triggerFeature(feature, query)
       await plugin.triggerInputChanged(feature, query)
 
-      if (result === false) {
+      // `accepted` is the execution outcome here; the input handler keeps its boolean contract of
+      // "did the feature handle this input", so a failed run is the only `false`.
+      if (!result.accepted) {
         return false
       }
 
@@ -270,6 +303,15 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
           })
           const executionTime = Date.now() - actionStartTime
           const isExternalAction = executionTime > 100 || result?.externalAction === true
+
+          // Execution and activation are separate facts. The plugin executes the action itself
+          // (that is the use) and independently decides `shouldActivate`; a `false` activation
+          // decision is still a successful run. An adapter-visible refusal — a structured
+          // `success: false` / `status: 'blocked' | 'error' | 'failed' | 'cancelled'` result — is a
+          // failure and must not count. A thrown callback fell to the catch below and does not count.
+          if (!isItemActionFailure(result)) {
+            this.recordFeatureAccepted(item, args)
+          }
 
           if (result?.shouldActivate) {
             return result.activation || null
@@ -382,6 +424,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         return null
       }
 
+      this.recordFeatureAccepted(item, args)
       // Return the same activation object (already activated above)
       return activation
     }
@@ -423,9 +466,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       this.engine.activateProviders([activation])
 
       logExecuteBreadcrumb('push-trigger-start')
-      let shouldActivate: boolean | void
+      let trigger: IFeatureTriggerResult
       try {
-        shouldActivate = await plugin.triggerFeature(feature, query)
+        trigger = await plugin.triggerFeature(feature, query)
       } catch (error) {
         pluginFeaturesLog.error('[PluginFeaturesAdapter] push feature execute failed:', error)
         logExecuteBreadcrumb('push-trigger-error', {
@@ -436,21 +479,23 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         return null
       }
 
-      if (typeof shouldActivate === 'boolean' && shouldActivate === false) {
-        // Deactivate if feature explicitly returns false
+      // A failed run neither counts nor stays active; `shouldActivate: false` is a successful run
+      // that pushed its items and does not need a surface, so it still counts.
+      if (!trigger.accepted) {
         this.engine.deactivateProvider(`${this.id}:${pluginName}`)
         return null
       }
 
       logExecuteBreadcrumb('push-trigger-complete', { durationMs: Date.now() - executeStart })
+      this.recordFeatureAccepted(item, args)
       return activation
     }
 
     // For non-push features, use original flow
     logExecuteBreadcrumb('trigger-start')
-    let shouldActivate: boolean | void
+    let trigger: IFeatureTriggerResult
     try {
-      shouldActivate = await plugin.triggerFeature(feature, query)
+      trigger = await plugin.triggerFeature(feature, query)
     } catch (error) {
       pluginFeaturesLog.error('[PluginFeaturesAdapter] feature execute failed:', error)
       logExecuteBreadcrumb('trigger-error', {
@@ -460,11 +505,16 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       return null
     }
 
-    if (typeof shouldActivate === 'boolean' && shouldActivate === false) {
+    // A failed execution does not count and does not activate. `shouldActivate` is the activation
+    // decision only: a legacy `false` (accepted, no surface) is a successful run and still counts.
+    if (!trigger.accepted) {
       return null
     }
 
-    if (typeof shouldActivate === 'boolean' && shouldActivate === true) {
+    logExecuteBreadcrumb('trigger-complete', { durationMs: Date.now() - executeStart })
+    this.recordFeatureAccepted(item, args)
+
+    if (trigger.shouldActivate) {
       logExecuteBreadcrumb('trigger-activate', { durationMs: Date.now() - executeStart })
       return {
         id: this.id,
@@ -477,8 +527,27 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       }
     }
 
-    logExecuteBreadcrumb('trigger-complete', { durationMs: Date.now() - executeStart })
     return null
+  }
+
+  /**
+   * Counts one accepted feature execution.
+   *
+   * Reached only where the plugin actually ran the feature. Execution and activation are separate:
+   * the plugin's `shouldActivate` decision — including a legacy `false` for "opened browser and
+   * exited" — does not gate the count, and a structured refusal or a thrown handler never reaches
+   * here. The identity is the catalogue one (the rebuilt item carries `_original*`), so a
+   * recommended feature and its searched row share a count.
+   */
+  private recordFeatureAccepted(item: TuffItem, args: IExecuteArgs): void {
+    recordAcceptedExecute({
+      item,
+      sessionId: args.searchResult?.sessionId ?? null,
+      entryPoint: 'core-box',
+      eventId: resolveExecuteEventId(args.eventId)
+    }).catch((error) => {
+      pluginFeaturesLog.error('[PluginFeaturesAdapter] Failed to record feature usage:', error)
+    })
   }
 
   private isPluginActive(plugin: ITouchPlugin): boolean {

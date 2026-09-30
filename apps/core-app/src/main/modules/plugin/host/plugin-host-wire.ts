@@ -52,7 +52,9 @@ export const PLUGIN_HOST_CAPABILITIES = [
   'filesystem.vscode-projects',
   'orchestration.orca',
   'intelligence.sessions',
-  'media.image-tools'
+  'media.image-tools',
+  'recommend.provider.register',
+  'recommend.provider.unregister'
 ] as const
 
 export const PLUGIN_HOST_LIFECYCLE_METHODS = [
