@@ -105,11 +105,11 @@ code: |
 
 ## Overview
 
-The guide Tuff Desktop shows on its first launch: sign in, pick a workspace, set preferences, grant system permissions, then try the summon shortcut once. The sign-in methods follow the real Nexus sign-in page — Passkey, GitHub, LINUX DO and an email Magic Link, with no password field — and the rest of the copy comes from the desktop app's real first-run guide. Every step is simulated: no request leaves the page and no real system permission is asked for.
+The guide Tuff Desktop shows on its first launch: sign in, pick a workspace, set preferences, grant system permissions, then try the summon shortcut once. The sign-in methods follow the real Tuff sign-in page — Passkey, GitHub, LINUX DO and an email Magic Link, with no password field — and the rest of the copy comes from the desktop app's real first-run guide. Every step is simulated: no request leaves the page and no real system permission is asked for.
 
 It suits any product people walk through once after installing: a desktop app's first launch, workspace setup after a SaaS sign-up, a utility that needs system access before it can work.
 
-- The sign-in methods match Nexus: Passkey, GitHub and LINUX DO each simulate about a second of system verification or provider authorization, then move on; email is checked first, then shows Magic Link sent, and I opened the link (demo) finishes signing in. Continue offline skips the workspace step, and the last step notes that cross-device sync is unavailable.
+- The sign-in methods match Tuff: Passkey, GitHub and LINUX DO each simulate about a second of system verification or provider authorization, then move on; email is checked first, then shows Magic Link sent, and I opened the link (demo) finishes signing in. Continue offline skips the workspace step, and the last step notes that cross-device sync is unavailable.
 - Continue works only once the step is satisfied (a sign-in method, a named space or an accepted invitation, file access granted), and the footer says what is missing; Back and the finished steps on the left both go back. When you change steps, focus moves to the new step's heading.
 - The summon shortcut can be recorded: press Record, then a combination that includes ⌘, ⌃ or ⌥; Esc cancels. Combinations the browser keeps, such as ⌘W or ⌘T, are refused with a hint. The recorded shortcut carries over to the last step and the live preview.
 - Every permission waits for you to press Allow access: about 1.2 seconds stand in for the system dialog, then it reads Granted. Screen recording is refused the first time, the row offers Open System Settings, and a second press grants it with a Takes effect after a restart (sample) note.
@@ -118,7 +118,7 @@ It suits any product people walk through once after installing: a desktop app's 
 
 ## Customization
 
-- Real sign-in: replace the timer in `signIn()` with the Nexus OAuth redirect or a WebAuthn call, and the Magic Link with the real mail endpoint. Do not add a password field: Nexus has no password sign-in, and a password field that leaves the page after submit also triggers the browser's save-password prompt.
+- Real sign-in: replace the timer in `signIn()` with the Tuff OAuth redirect or a WebAuthn call, and the Magic Link with the real mail endpoint. Do not add a password field: Tuff has no password sign-in, and a password field that leaves the page after submit also triggers the browser's save-password prompt.
 - Real permissions: read the state from the system (Privacy & Security on macOS, the privacy settings on Windows) and check again after Allow access raises the system dialog. Grants start from the user's click only; onboarding never requests them on its own.
 - The entrance effects (TxTuffLogoStroke with `once`, TxKeyframeStrokeText, TxGlowText with `:repeat="false"`) all play when they mount, so mount them once they are visible and change their `key` to replay. TxBorderBeam's rotating family (`sm`, `md`, `line`) has no reduced-motion fallback, so pass `:active="false"` then; its `theme` defaults to `dark` and `auto` follows the system rather than the site, so pass the current theme explicitly.
 - TxSteps emits nothing: clicking a step only changes its own internal state. To go back, put a native `@click` on TxStep, check that the target step is finished, and give `clickable` to finished steps only.

@@ -53,7 +53,7 @@ onBeforeUnmount(() => {
     colorMode.preference = previousPreference
 })
 
-const pageTitle = computed(() => `Tuff Nexus`)
+const pageTitle = computed(() => `Tuff`)
 
 useSeoMeta({
   title: pageTitle,

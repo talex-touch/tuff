@@ -1,6 +1,6 @@
 export default {
     header: {
-      badge: 'Tuff Nexus',
+      badge: 'Tuff',
       defaultName: '伙伴',
       namedName: '{name} 伙伴',
       greeting: '欢迎回来，{name}',
@@ -305,7 +305,7 @@ export default {
         'least_cost': '成本优先',
         'lowest_latency': '延迟优先',
         'manual': '手动',
-        'nexus': 'Nexus',
+        'nexus': 'Tuff',
         'no': '否',
         'none': '无认证',
         'oauth': 'OAuth',
@@ -972,9 +972,9 @@ export default {
       oauth: {
         title: 'OAuth 应用',
         subtitle: '管理集成使用的 OAuth 客户端。',
-        forbidden: '仅 Team 管理员或 Nexus 管理员可管理 OAuth 应用。',
+        forbidden: '仅 Team 管理员或 Tuff 管理员可管理 OAuth 应用。',
         scopeTeam: '团队范围',
-        scopeNexus: 'Nexus 范围',
+        scopeNexus: 'Tuff 范围',
         scopeHint: '当前范围：{scope}',
         form: {
           name: '应用名称',

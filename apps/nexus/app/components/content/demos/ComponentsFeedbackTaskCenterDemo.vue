@@ -27,7 +27,7 @@ const labels = computed(() => {
       overlay: '正在刷新任务队列…',
       inline: '行内等待',
       persistent: '持久提示',
-      tasks: ['同步组件文档', '生成截图证据', '刷新 Nexus 预览'],
+      tasks: ['同步组件文档', '生成截图证据', '刷新 Tuff 预览'],
       owners: ['Docs', 'QA', 'Deploy'],
       states: ['运行中', '等待认证', '预览可用'],
     }
@@ -52,7 +52,7 @@ const labels = computed(() => {
     overlay: 'Refreshing task queue…',
     inline: 'Inline wait',
     persistent: 'Persistent toast',
-    tasks: ['Sync component docs', 'Generate screenshot evidence', 'Refresh Nexus preview'],
+    tasks: ['Sync component docs', 'Generate screenshot evidence', 'Refresh Tuff preview'],
     owners: ['Docs', 'QA', 'Deploy'],
     states: ['Running', 'Awaiting proof', 'Preview ready'],
   }

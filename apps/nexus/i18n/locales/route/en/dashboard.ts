@@ -1,6 +1,6 @@
 export default {
     header: {
-      badge: 'Tuff Nexus',
+      badge: 'Tuff',
       defaultName: 'friend',
       // English addresses a known user by name alone. Mirroring the Chinese
       // "{name} 伙伴" pattern literally rendered "Welcome back, Ada friend".
@@ -308,7 +308,7 @@ export default {
         'least_cost': 'Least cost',
         'lowest_latency': 'Lowest latency',
         'manual': 'Manual',
-        'nexus': 'Nexus',
+        'nexus': 'Tuff',
         'no': 'No',
         'none': 'No auth',
         'oauth': 'OAuth',
@@ -976,9 +976,9 @@ export default {
       oauth: {
         title: 'OAuth Applications',
         subtitle: 'Manage OAuth clients used by integrations.',
-        forbidden: 'Only team admin or nexus admin can manage OAuth applications.',
+        forbidden: 'Only team admin or Tuff admin can manage OAuth applications.',
         scopeTeam: 'Team Scope',
-        scopeNexus: 'Nexus Scope',
+        scopeNexus: 'Tuff Scope',
         scopeHint: 'Current scope: {scope}',
         form: {
           name: 'Application Name',
@@ -1605,7 +1605,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           guideExampleTitle: 'Example',
           guideExampleHint: 'Example uses the release endpoint (/api/releases).',
           guidePrincipleTitle: 'How it works',
-          guidePrincipleDesc: 'CI sends a signed request -> Nexus validates the API key -> writes to D1/storage -> UI fetches and renders.',
+          guidePrincipleDesc: 'CI sends a signed request -> the server validates the API key -> writes to D1/storage -> UI fetches and renders.',
           guideClose: 'Close',
         },
         form: {

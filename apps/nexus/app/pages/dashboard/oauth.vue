@@ -72,7 +72,7 @@ const scopeOptions = computed<Array<{ value: OauthScope, label: string }>>(() =>
   if (isNexusAdmin.value) {
     options.push({
       value: 'nexus',
-      label: t('dashboard.sections.oauth.scopeNexus', 'Nexus Scope'),
+      label: t('dashboard.sections.oauth.scopeNexus', 'Tuff Scope'),
     })
   }
   return options

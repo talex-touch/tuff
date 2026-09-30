@@ -229,7 +229,7 @@ const copy = computed(() => zh.value
       eastChina: '华东在线 · 近 30 次刷新',
       routes: [
         { key: 'local', label: '端侧模型', short: '端侧', percent: 72.4, description: '在本机运行，不占用云端额度。' },
-        { key: 'nexus', label: 'Nexus AI', short: 'Nexus', percent: 23.1, description: '长上下文与图像理解走云端。' },
+        { key: 'nexus', label: 'Tuff AI', short: 'Tuff', percent: 23.1, description: '长上下文与图像理解走云端。' },
         { key: 'keys', label: '自有密钥', short: '密钥', percent: 4.5, description: '用户自带 API Key 的请求。' },
       ],
       routeLabel: 'AI 请求按调用路径占比',
@@ -293,7 +293,7 @@ const copy = computed(() => zh.value
       eastChina: 'East China online · last 30 refreshes',
       routes: [
         { key: 'local', label: 'On-device', short: 'LOCAL', percent: 72.4, description: 'Runs on the machine and costs no cloud quota.' },
-        { key: 'nexus', label: 'Nexus AI', short: 'NEXUS', percent: 23.1, description: 'Long context and image understanding go to the cloud.' },
+        { key: 'nexus', label: 'Tuff AI', short: 'TUFF', percent: 23.1, description: 'Long context and image understanding go to the cloud.' },
         { key: 'keys', label: 'Own keys', short: 'KEYS', percent: 4.5, description: 'Requests on the user’s own API key.' },
       ],
       routeLabel: 'AI requests by route',

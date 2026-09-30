@@ -106,7 +106,7 @@ Tuff 的设置中心。左侧是分组的分区导航，右侧是一组组设置
 
 ## 自定义
 
-- 接真实存储：把 `watch(settings)` 里的计时器换成防抖写入（本地配置文件或 Nexus 同步），写入失败时把状态改成「未保存」并给出重试。
+- 接真实存储：把 `watch(settings)` 里的计时器换成防抖写入（本地配置文件或 Tuff 同步），写入失败时把状态改成「未保存」并给出重试。
 - 加一个分区：在对应的 TxTabItemGroup 里加 TxTabItem，`name` 用稳定的英文 key、标签放进 `#name` 插槽——直接把可见标签当 `name` 的话，切换界面语言会让当前分区对不上。TxTabs 会卸载切走的面板，所以值不要存在行组件里；头像这类 object URL 也要自己持有一份，TxImageUploader 卸载时会回收它创建的 URL。
 - TxGroupBlock 统一 `collapsible=false`：它的展开收起由 gsap 驱动，没有减弱动态效果的兜底；也不要设 `memoryName`，否则会写 localStorage。
 - 敏感字段放在分组正文里，不要塞进 56px 的设置行：TxSensitiveInput 的复制按钮浮在输入框上方，会压到上一行。TxFlatSelect 的下拉就地展开、不 teleport，要放在不会被滚动容器裁切的位置，并抬高所在行的层级（每个设置行都是独立的层叠上下文）。
@@ -120,7 +120,7 @@ Tuff 的设置中心。左侧是分组的分区导航，右侧是一组组设置
 | 设置行 | [TxGroupBlock / TxBlockSlot / TxBlockLine](/docs/dev/components/group-block) | 分组与 56px 设置行，分组固定展开 |
 | 通用与 CoreBox | [TuffSwitch](/docs/dev/components/switch)、[TxFlatSelect](/docs/dev/components/flat-select)、[TxFlatRadio](/docs/dev/components/flat-radio)、[TxSlider](/docs/dev/components/slider)、[TxSelect](/docs/dev/components/select)、[TxSegmentedSlider](/docs/dev/components/segmented-slider)、[TxNumberInput](/docs/dev/components/number-input)、[TxInput](/docs/dev/components/input)、[TxKbd](/docs/dev/components/kbd) | 语言、主题、透明度、开机启动、呼出快捷键（可录制）、自动粘贴、结果密度、最多结果、占位文字 |
 | 快捷键 | [TxSearchInput](/docs/dev/components/search-input)、[TxKbd](/docs/dev/components/kbd)、[TuffSwitch](/docs/dev/components/switch)、[TxSearchEmpty](/docs/dev/components/search-empty) | 可筛选的全局快捷键列表，逐个启停；来源插件写在说明里 |
-| AI 与隐私 | [TxAlert](/docs/dev/components/alert)、[TxSensitiveInput](/docs/dev/components/sensitive-input)、[TxCheckbox](/docs/dev/components/checkbox)、[TxRadioGroup / TxRadio](/docs/dev/components/radio) | Nexus 路由说明、服务商与温度、自带密钥、可读取的上下文、剪贴板保留时长、排除的应用 |
+| AI 与隐私 | [TxAlert](/docs/dev/components/alert)、[TxSensitiveInput](/docs/dev/components/sensitive-input)、[TxCheckbox](/docs/dev/components/checkbox)、[TxRadioGroup / TxRadio](/docs/dev/components/radio) | Tuff 路由说明、服务商与温度、自带密钥、可读取的上下文、剪贴板保留时长、排除的应用 |
 | 账户 | [TxAvatar](/docs/dev/components/avatar)、[TxImageUploader](/docs/dev/components/image-uploader) | 头像上传、显示名称、邮箱与套餐 |
 | 确认框 | [TxModal](/docs/dev/components/modal)、[TxCheckbox](/docs/dev/components/checkbox) | 重置所有设置、清空剪贴板历史（可同时清除固定内容）、退出其他设备 |
 | 实时预览（宽屏） | [TxIconChip](/docs/dev/components/icon-chip)、手写迷你 CoreBox | 主题、透明度、结果密度、最多结果、占位文字和呼出快捷键实时反映 |

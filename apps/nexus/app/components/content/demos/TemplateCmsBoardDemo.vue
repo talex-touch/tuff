@@ -221,7 +221,7 @@ const SEEDS: Seed[] = [
   {
     slug: 'plugin-review-guidelines-2026',
     column: 'review',
-    title: { zh: 'Nexus 插件审核标准（2026 版）', en: 'Nexus plugin review guidelines (2026)' },
+    title: { zh: 'Tuff 插件审核标准（2026 版）', en: 'Tuff plugin review guidelines (2026)' },
     summary: { zh: '权限最小化、存储配额与签名要求：提交前逐条自查。', en: 'Least privilege, storage quotas and signing: a checklist to run before you submit.' },
     section: 'guide',
     author: 'nh',
