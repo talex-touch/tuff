@@ -13,10 +13,12 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { TxKbd } from '@talex-touch/tuffex/kbd'
+import { useResizeObserver } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MetaActionItem from '~/components/meta/MetaActionItem.vue'
 import { normalizeCoreBoxIcon } from '~/components/render/icon-color-mode'
+import { useMotionGate } from '~/modules/box/adapter/hooks/useMotionGate'
 import {
   buildMetaActionModel,
   isImeComposing,
@@ -74,6 +76,11 @@ const executingActionId = ref<string | null>(null)
 
 const searchInput = ref<HTMLInputElement>()
 const listRef = ref<HTMLElement>()
+const indicatorRef = ref<HTMLElement>()
+const hasFollowHighlight = ref(false)
+// The overlay is a separate lightweight window, with one motion gate of its own.
+const { shouldAnimate } = useMotionGate()
+let animateHighlight = false
 
 const model = computed<MetaActionModel>(() =>
   request.value ? buildMetaActionModel(request.value, { platform }) : EMPTY_MODEL
@@ -180,6 +187,46 @@ const overlayStyle = computed(() => ({
   '--meta-section-gap': `${META_PANEL_SECTION_GAP}px`
 }))
 
+function syncHighlight(animate = animateHighlight): void {
+  const list = listRef.value
+  const indicator = indicatorRef.value
+  const row = list?.querySelector<HTMLElement>(`[data-meta-row-index="${activeIndex.value}"]`)
+  hasFollowHighlight.value = false
+  if (!visible.value || !list || !indicator || !row || activeRow.value?.row.disabled) {
+    if (indicator) indicator.style.opacity = '0'
+    return
+  }
+
+  const listRect = list.getBoundingClientRect()
+  const rowRect = row.getBoundingClientRect()
+  if (listRect.width <= 0 || listRect.height <= 0 || rowRect.height <= 0) {
+    indicator.style.opacity = '0'
+    return
+  }
+  // Panel entrance scales visually; the plate is measured in the scroller's layout pixels.
+  const scaleX = list.offsetWidth > 0 ? listRect.width / list.offsetWidth : 1
+  const scaleY = list.offsetHeight > 0 ? listRect.height / list.offsetHeight : 1
+  const x = (rowRect.left - listRect.left) / scaleX - list.clientLeft + list.scrollLeft
+  const y = (rowRect.top - listRect.top) / scaleY - list.clientTop + list.scrollTop
+  // The PromptBar menu uses a compositor clock too. Native views may starve JS RAF while
+  // inactive; one transform target per selection keeps hover motion on wall-clock time.
+  indicator.classList.toggle('is-following-pointer', animate && shouldAnimate())
+  indicator.style.width = `${rowRect.width / scaleX}px`
+  indicator.style.height = `${rowRect.height / scaleY}px`
+  indicator.style.transform = `translate3d(${x}px, ${y}px, 0)`
+  indicator.style.opacity = '1'
+  hasFollowHighlight.value = true
+}
+
+watch(
+  [visible, activeIndex, sections, listRef, indicatorRef, shouldAnimate],
+  () => syncHighlight(),
+  {
+    flush: 'post'
+  }
+)
+useResizeObserver(listRef, () => syncHighlight(false))
+
 function firstSelectableIndex(): number {
   const found = flatRows.value.find((entry) => !entry.row.disabled)
   return found ? found.index : 0
@@ -195,6 +242,7 @@ function scrollActiveIntoView(): void {
 
 function step(delta: number): void {
   const selectable = flatRows.value.filter((entry) => !entry.row.disabled)
+  animateHighlight = false
   if (selectable.length === 0) return
   const position = selectable.findIndex((entry) => entry.index === activeIndex.value)
   const next =
@@ -208,7 +256,10 @@ function step(delta: number): void {
 /** Pointer hover follows real movement only: a panel appearing under a resting cursor keeps ↵. */
 function hoverRow(index: number): void {
   const entry = flatRows.value[index]
-  if (entry && !entry.row.disabled && index !== activeIndex.value) activeIndex.value = index
+  if (entry && !entry.row.disabled && index !== activeIndex.value) {
+    animateHighlight = true
+    activeIndex.value = index
+  }
 }
 
 // Listen for show/hide messages from main process via IPC
@@ -231,6 +282,7 @@ const unregHide = transport.on(MetaOverlayEvents.ui.hide, () => {
 // Focus the filter when shown. `nextTick` rather than a timeout: the input exists as soon as the
 // `v-if` subtree is patched, and a fixed delay only postponed a usable panel.
 watch(visible, async (newVisible) => {
+  animateHighlight = false
   if (!newVisible) return
   searchQuery.value = ''
   activeIndex.value = firstSelectableIndex()
@@ -240,12 +292,14 @@ watch(visible, async (newVisible) => {
 
 // A new request (a reopen, or a different item) starts on its primary row again.
 watch(request, () => {
+  animateHighlight = false
   activeIndex.value = firstSelectableIndex()
 })
 
 watch(
   () => searchQuery.value.trim().toLowerCase(),
   () => {
+    animateHighlight = false
     activeIndex.value = firstSelectableIndex()
     void nextTick(scrollActiveIntoView)
   }
@@ -403,6 +457,7 @@ onBeforeUnmount(() => {
           :id="LIST_ID"
           ref="listRef"
           class="MetaPanel-List"
+          :class="{ 'has-follow-highlight': hasFollowHighlight }"
           role="listbox"
           :aria-label="t('corebox.actions.title')"
         >
@@ -436,6 +491,7 @@ onBeforeUnmount(() => {
           <p v-if="flatRows.length === 0" class="MetaPanel-Empty">
             {{ t('corebox.actions.empty') }}
           </p>
+          <div ref="indicatorRef" class="MetaPanel-Highlight" aria-hidden="true" />
         </div>
 
         <footer class="MetaPanel-Filter">
@@ -522,11 +578,37 @@ onBeforeUnmount(() => {
 }
 
 .MetaPanel-List {
+  position: relative;
+  isolation: isolate;
   flex: 1 1 auto;
   min-height: 0;
   padding: var(--meta-list-padding);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.MetaPanel-Highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border-radius: 6px;
+  background: var(--tx-fill-color);
+  opacity: 0;
+  pointer-events: none;
+
+  &.is-following-pointer {
+    transition: transform 220ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+  }
+}
+
+.MetaPanel-Section {
+  position: relative;
+  z-index: 1;
+}
+
+.MetaPanel-List.has-follow-highlight :deep(.MetaActionItem.is-active) {
+  background: transparent;
 }
 
 .MetaPanel-Section + .MetaPanel-Section {
