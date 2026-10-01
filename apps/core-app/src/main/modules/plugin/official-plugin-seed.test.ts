@@ -3,7 +3,7 @@ import path from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
 import { installBundledOfficialPluginSeeds } from './official-plugin-seed'
-import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
+import { PRIVILEGED_PLUGIN_NAMES } from '../../../shared/privileged-plugins'
 
 const fixtureRoots: string[] = []
 

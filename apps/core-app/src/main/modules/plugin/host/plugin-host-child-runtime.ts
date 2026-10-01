@@ -20,7 +20,7 @@ import { PLUGIN_SNIPASTE_ACTION_IDS } from './plugin-process-capabilities'
 import { PLUGIN_SYSTEM_ACTION_IDS } from './plugin-system-capabilities'
 import { PLUGIN_WINDOW_MANAGER_ACTION_IDS } from './plugin-window-manager-capabilities'
 import { PLUGIN_WINDOW_PRESET_ACTION_IDS } from './plugin-window-preset-capabilities'
-import { privilegedPluginFor } from '../privileged-plugins'
+import { privilegedPluginFor } from '../../../../shared/privileged-plugins'
 import {
   PLUGIN_HOST_CAPABILITIES,
   PLUGIN_HOST_LIFECYCLE_METHODS,

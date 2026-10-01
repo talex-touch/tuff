@@ -126,7 +126,10 @@ Reviewers should check:
 - Postprocessed macOS archives include canonical version and architecture (`tuff-<version>-<arch>.app.zip`); release-manifest inference and Nexus metadata must therefore report the actual arm64 build, and release notes list ZIP Apple Silicon rather than absent DMG/Intel artifacts.
 - CoreApp lint ignores `resources/bundled-plugins/**`; these are synchronized immutable release payloads, and quality checks run against their canonical plugin sources instead of generated/minified projections.
 - A successful projection result contains `pluginName`, `packageName`, `canonicalBuildRoot`, `bundledPluginRoot`, `canonicalVersion`, `synced: true`, and `skipped: false`.
-- Packaged startup must finish seed validation/install into `<runtime-root>/modules/plugins` before `ModuleManager` construction; replacement preserves `data`/`logs` and never downgrades an identity-matching newer local runtime.
+- Packaged startup must finish seed validation/install into `<runtime-root>/modules/plugins` before `ModuleManager` construction; replacement preserves `data`/`logs`. Only non-privileged, identity-matching newer local runtimes may skip replacement; privileged runtimes are restored from the client seed.
+- Store list/detail buttons must disable market install/upgrade for `isBundledManaged` and explain that the plugin updates with Tuff; an Official badge never bypasses the resolver's reserved-name gate. `useStoreInstall.handleInstall` checks the same policy before confirmation or download.
+- Detail metadata reads SDK requirements from the catalog manifest, never README copy, and reports the actual host package version through `useEnv`/`AppSdk.getPackage` plus `CURRENT_SDK_VERSION`. `StartupInfo.version` can be `dev` and is not a release version. Missing catalog SDK metadata is explicitly unconfirmed, not evidence of compatibility; SDK failure and client-managed installation remain distinct, with full localized reasons outside ellipsized metadata values.
+- `touch-browser-open` is a required `PLUGIN_RELEASE_TARGETS` bundled target, not a market-only plugin. Canonical build/sync and `verifyPackagedOfficialPluginSeeds` must include its `index.js`, settings page/SDK, and manifest payload hashes; reserving its privileged name while omitting the client seed leaves users with no supported installation path.
 
 ### 4. Validation & Error Matrix
 
@@ -148,13 +151,15 @@ Reviewers should check:
 - Missing/empty/invalid runtime seed set -> runtime installer throws before mutating any plugin.
 - Older, corrupt, wrong-identity, or same-version/different-signature local runtime -> staged clean replacement with rollback.
 - Same-version canonical build differs from `apps/core-app/resources/bundled-plugins/<plugin>` -> treat the resource projection as stale even if after-pack version checks pass; synchronize content before packaging. Runtime same-version signature repair only helps when the packaged seed itself is current.
-- Identity-matching newer local runtime -> return `newer-local` without mutation.
+- Non-privileged, identity-matching newer local runtime -> return `newer-local` without mutation; privileged runtimes are restored from the immutable client seed.
+- Privileged name in a regular package -> reserved-name rejection before runtime mutation; the marketplace disables the action and gives a localized client-update reason rather than exposing the raw backend text.
 
 ### 5. Good / Base / Bad Cases
 
 - Good: repeated builds keep only the current archive outside `dist/build`; packaged Resources contain two clean official seeds; a fresh profile discovers both during initial plugin loading.
 - Base: a clean checkout builds CLI core, the unplugin exporter, the CLI entrypoint, TuffEx, and both official plugins; exporter `dist/vite.js` precedes the CLI build, TuffEx CSS precedes `touch-translation`, the CoreApp-local Builder binary exists, its helper cache stays outside the repository package boundary, every platform packages the explicit `tuff` executable with the canonical version, and Nexus selects the preferred format for each platform/architecture pair.
 - Bad: copying the whole canonical `dist` directory, seeding after plugin discovery starts, or overwriting newer local runtime/data is prohibited.
+- Marketplace status: `PluginVersionStatus` keeps `sdkapi`, `isCompatible`, and `isBundledManaged` separate; the reserved-name registry lives in `apps/core-app/src/shared/privileged-plugins.ts` and is shared by main and renderer.
 
 ### 6. Tests Required
 
@@ -215,6 +220,7 @@ startModuleManager()
 - Apply when an Electron main-process barrel exports both a service class/accessor and an eagerly constructed module singleton, and any dependency can reach that barrel again during module evaluation.
 
 ### 2. Signatures
+- Marketplace smoke: a real catalog marker newer than the client shows required/current SDK, actual package version, incompatibility, and an upgrade hint; a supported marker shows compatibility and keeps ordinary installation enabled. A privileged entry independently shows client-managed installation with disabled controls. Existing resolver/dev-installer tests retain every reserved-name rejection and runtime-preservation assertion.
 
 - `getSentryService(): SentryServiceModule` returns the process singleton.
 - `sentryModule: SentryServiceModule` is initialized only after the class and accessor declarations in `sentry-service.ts` have evaluated.

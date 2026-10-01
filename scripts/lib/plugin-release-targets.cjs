@@ -115,6 +115,7 @@ const PLUGIN_RELEASE_TARGETS = Object.freeze([
     }),
   }),
   bundledJavascriptPlugin('touch-hosts'),
+  bundledJavascriptPlugin('touch-browser-open'),
   bundledJavascriptPlugin('touch-vscode-projects'),
   bundledJavascriptPlugin('touch-orca'),
   bundledJavascriptPlugin('touch-ai-sessions'),

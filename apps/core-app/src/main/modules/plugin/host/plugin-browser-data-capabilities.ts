@@ -7,7 +7,7 @@ import { lstat, mkdir, mkdtemp, open, opendir, realpath, rm, stat } from 'node:f
 import path from 'node:path'
 import { types as utilTypes } from 'node:util'
 import { PluginSqliteWorkerClient } from '../runtime/plugin-sqlite-worker-client'
-import { isPrivilegedPluginFor } from '../privileged-plugins'
+import { isPrivilegedPluginFor } from '../../../../shared/privileged-plugins'
 import {
   PluginHostCapabilityError,
   type PluginHostCapabilityDefinition

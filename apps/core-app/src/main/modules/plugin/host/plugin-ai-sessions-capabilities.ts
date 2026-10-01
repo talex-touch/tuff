@@ -6,7 +6,7 @@ import {
   PluginHostCapabilityError,
   type PluginHostCapabilityDefinition
 } from './plugin-host-capabilities'
-import { isPrivilegedPluginFor } from '../privileged-plugins'
+import { isPrivilegedPluginFor } from '../../../../shared/privileged-plugins'
 import { hasControlCharacter } from './plugin-host-text-validation'
 
 export type PluginAiSessionsPlatform =

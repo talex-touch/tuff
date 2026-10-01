@@ -19,7 +19,7 @@ vi.mock('./plugin-module', () => ({
 }))
 
 import { installDevPluginFromPath } from './dev-plugin-installer'
-import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
+import { PRIVILEGED_PLUGIN_NAMES } from '../../../shared/privileged-plugins'
 
 const tempDirs: string[] = []
 

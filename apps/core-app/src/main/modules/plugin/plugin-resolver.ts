@@ -9,7 +9,7 @@ import { createLogger } from '../../utils/logger'
 import { pluginModule } from './plugin-module'
 import { removeNodeModulesDirs, shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
 import { type PackagedManifest, ensurePluginRuntimeIntegrity } from './plugin-runtime-integrity'
-import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
+import { PRIVILEGED_PLUGIN_NAMES } from '../../../shared/privileged-plugins'
 
 type ResolverEvent = { msg: unknown }
 const pluginResolverLog = createLogger('PluginSystem').child('Resolver')

@@ -170,7 +170,10 @@ import {
   createSafePluginOpenUrl,
   withPluginSdkapiPayload
 } from './plugin-safe-api'
-import { isPrivilegedPluginFor, SYSTEM_ACTION_PLUGIN_NAMES } from './privileged-plugins'
+import {
+  isPrivilegedPluginFor,
+  SYSTEM_ACTION_PLUGIN_NAMES
+} from '../../../shared/privileged-plugins'
 import {
   bundlePluginPreludeFromContent,
   bundlePluginPreludeFromFile

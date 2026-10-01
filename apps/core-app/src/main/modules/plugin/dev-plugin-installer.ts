@@ -6,7 +6,7 @@ import { checkDirWithCreate } from '../../utils/common-util'
 import { createLogger } from '../../utils/logger'
 import { pluginModule } from './plugin-module'
 import { shouldSkipNodeModulesPath } from './plugin-install-copy-utils'
-import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
+import { PRIVILEGED_PLUGIN_NAMES } from '../../../shared/privileged-plugins'
 
 const devPluginInstallerLog = createLogger('PluginSystem').child('DevInstaller')
 

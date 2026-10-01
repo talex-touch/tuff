@@ -45,6 +45,8 @@ interface StoreItemCardProps {
   hasUpgrade?: boolean
   /** Whether the catalog manifest targets a host-supported SDK marker */
   isCompatible?: boolean
+  /** Whether the plugin runtime is updated only with the client. */
+  isBundledManaged?: boolean
 }
 
 const props = defineProps<StoreItemCardProps>()
@@ -218,6 +220,7 @@ function handleInstall(): void {
           :is-installed="isInstalled"
           :has-upgrade="hasUpgrade"
           :is-compatible="isCompatible"
+          :is-bundled-managed="isBundledManaged"
           :installed-version="installedVersion"
           :store-version="item.version"
           :install-task="installTask"

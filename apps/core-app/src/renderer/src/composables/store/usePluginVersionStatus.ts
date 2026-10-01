@@ -7,6 +7,7 @@ import type { StorePluginListItem } from './useStoreData'
  */
 import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
 import { computed } from 'vue'
+import { PRIVILEGED_PLUGIN_NAMES } from '../../../../shared/privileged-plugins'
 import { getPluginCompositeKey } from '~/modules/install/install-manager'
 import { usePluginStore } from '~/stores/plugin'
 import { hasUpgradeAvailable } from './useVersionCompare'
@@ -47,6 +48,8 @@ export interface PluginVersionStatus {
   sdkapi: number | undefined
   /** Whether this catalog version can run on the current host SDK. */
   isCompatible: boolean
+  /** Whether installation and upgrades are owned by the bundled client runtime. */
+  isBundledManaged: boolean
   /** Host-owned explanation for an incompatible SDK marker. */
   compatibilityWarning: string | undefined
 }
@@ -158,6 +161,7 @@ export function usePluginVersionStatus() {
         hasUpgrade: false,
         sdkapi: undefined,
         isCompatible: false,
+        isBundledManaged: false,
         compatibilityWarning: undefined
       }
     }
@@ -176,6 +180,7 @@ export function usePluginVersionStatus() {
       hasUpgrade: hasUpgradeAvailable(installedVersion, plugin.version),
       sdkapi,
       isCompatible: compatibility.compatible,
+      isBundledManaged: PRIVILEGED_PLUGIN_NAMES.includes(plugin.manifest?.name || plugin.name),
       compatibilityWarning: compatibility.warning
     }
   }

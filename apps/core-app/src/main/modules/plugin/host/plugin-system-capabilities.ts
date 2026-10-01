@@ -7,7 +7,10 @@ import {
   type PluginHostCapabilityDefinition
 } from './plugin-host-capabilities'
 import type { PluginHostCapabilityResourceContext } from './plugin-host-resources'
-import { isPrivilegedPluginFor, SYSTEM_ACTION_PLUGIN_NAMES } from '../privileged-plugins'
+import {
+  isPrivilegedPluginFor,
+  SYSTEM_ACTION_PLUGIN_NAMES
+} from '../../../../shared/privileged-plugins'
 
 export const PLUGIN_SYSTEM_ACTION_IDS = Object.freeze([
   'restart',

@@ -8,7 +8,7 @@ import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/secur
 import { types as utilTypes } from 'node:util'
 import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
 import type { PluginHostCapabilityResourceContext } from './plugin-host-resources'
-import { isPrivilegedPluginFor } from '../privileged-plugins'
+import { isPrivilegedPluginFor } from '../../../../shared/privileged-plugins'
 import { normalizeIntelligenceError } from '../../ai/intelligence-error-normalizer'
 import {
   type PluginIntelligenceContextRequest,
