@@ -9,7 +9,7 @@
 
 - `devalue` 从 5.8.1 更新至 5.9.3，修复 GHSA-j22f-vq7h-c4qm、GHSA-mcm9-63f2-9j32 和 GHSA-x5rw-q4pp-hg5g；仅更新锁文件中的该依赖，未放宽生产审计 allowlist。实际 5.9.3 包的循环引用、Date、Map、字节视图与异步序列化 smoke 通过，共享内存被拒绝。
 - TuffEx 当前源码版本推进到 0.6.3，补齐 StreamElement、StreamText 的生命周期与双语变更索引，源码导出总数为 166。已发布 npm 0.6.2 不回填新组件；本轮只发布客户端 beta，未独立发布 npm。
-- Windows CoreBox Everything 探针的默认 profile 改用 `os.tmpdir()`，与既有隔离目录校验一致；不把任意 `RUNNER_TEMP` 加入允许目录，不绕过 ownership 或 symlink 保护。
+- Windows CoreBox Everything 探针的默认 profile 使用既有允许的 portable `/tmp` 根。Windows 原生系统 temp 可能位于 home 内，仍按既有保护拒绝；不把任意 `RUNNER_TEMP` 加入允许目录，不绕过 home、ownership 或 symlink 保护。此修正仅影响外部验收脚本，不改 beta.56 已打标签的客户端字节。
 
 ## 2026-09-30
 
