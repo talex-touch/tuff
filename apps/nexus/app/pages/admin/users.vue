@@ -104,6 +104,12 @@ const subscriptionLoading = ref(false)
 const subscriptionSaving = ref(false)
 const subscriptionError = ref<string | null>(null)
 const subscriptionForm = reactive({ plan: 'PRO' as SubscriptionPlan, durationDays: 365 })
+let subscriptionRequestId = 0
+
+watch([drawerOpen, drawerMode, () => selectedUser.value?.id], () => {
+  subscriptionRequestId += 1
+  subscriptionLoading.value = false
+}, { flush: 'sync' })
 
 const userCredits = ref<CreditsResponse | null>(null)
 const userCreditsLoading = ref(false)
@@ -348,19 +354,29 @@ async function saveEditor() {
 
 async function fetchSelectedUserSubscription() {
   const entry = selectedUser.value
-  if (!entry)
+  if (!entry || !drawerOpen.value || drawerMode.value !== 'subscription')
     return
+  const requestId = ++subscriptionRequestId
+  const isCurrentRequest = () => requestId === subscriptionRequestId
+    && selectedUser.value?.id === entry.id
+    && drawerOpen.value
+    && drawerMode.value === 'subscription'
   subscriptionLoading.value = true
   subscriptionError.value = null
   try {
     const response = await rawFetch<{ subscription: UserSubscription }>(`/api/admin/users/${entry.id}/subscription`)
+    if (!isCurrentRequest())
+      return
     subscription.value = response.subscription
   }
   catch (err: unknown) {
+    if (!isCurrentRequest())
+      return
     subscriptionError.value = resolveErrorMessage(err, t('dashboard.sections.users.subscription.loadFailed', 'Failed to load subscription.'))
   }
   finally {
-    subscriptionLoading.value = false
+    if (isCurrentRequest())
+      subscriptionLoading.value = false
   }
 }
 
@@ -496,6 +512,7 @@ watch(userCreditLedgerPage, () => {
     void fetchSelectedUserCredits()
 })
 onBeforeUnmount(() => {
+  subscriptionRequestId += 1
   if (searchTimer)
     clearTimeout(searchTimer)
 })

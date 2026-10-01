@@ -6,7 +6,7 @@ import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
-import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { requestJson, useTypedFetch } from '~/utils/request'
 
 const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dialog/FlipDialog.vue'))
@@ -151,6 +151,9 @@ const creditTab = ref<'usage' | 'trend' | 'ledger'>('usage')
 const creditTrend = ref<CreditTrendData | null>(null)
 const creditTrendLoading = ref(false)
 const creditTrendError = ref('')
+let creditUsageRequestId = 0
+let creditLedgerRequestId = 0
+let creditTrendRequestId = 0
 
 const createOverlayVisible = ref(false)
 const inviteOverlayVisible = ref(false)
@@ -364,6 +367,14 @@ async function fetchTeamCreditUsage(options: { resetPage?: boolean } = {}) {
   if (options.resetPage)
     creditUsagePagination.page = 1
 
+  const requestId = ++creditUsageRequestId
+  const teamId = team.value?.id
+  const teamPlan = team.value?.plan
+  const isCurrentRequest = () => requestId === creditUsageRequestId
+    && team.value?.id === teamId
+    && team.value?.plan === teamPlan
+    && showCredits.value
+
   creditUsageLoading.value = true
   creditUsageError.value = ''
   try {
@@ -380,6 +391,8 @@ async function fetchTeamCreditUsage(options: { resetPage?: boolean } = {}) {
         q: creditUsageQuery.value.trim() || undefined,
       },
     })
+    if (!isCurrentRequest())
+      return
     creditUsage.value = result.users || []
     creditUsageSummary.totalUsed = result.totalUsed ?? 0
     creditUsageSummary.totalQuota = result.totalQuota ?? 0
@@ -390,10 +403,13 @@ async function fetchTeamCreditUsage(options: { resetPage?: boolean } = {}) {
     creditUsagePagination.totalPages = result.pagination.totalPages
   }
   catch (error: any) {
+    if (!isCurrentRequest())
+      return
     creditUsageError.value = normalizeErrorMessage(error, t('dashboard.team.credits.errors.usage', '加载积分消耗失败'))
   }
   finally {
-    creditUsageLoading.value = false
+    if (isCurrentRequest())
+      creditUsageLoading.value = false
   }
 }
 
@@ -402,6 +418,14 @@ async function fetchTeamCreditLedger(options: { resetPage?: boolean } = {}) {
     return
   if (options.resetPage)
     creditLedgerPagination.page = 1
+
+  const requestId = ++creditLedgerRequestId
+  const teamId = team.value?.id
+  const teamPlan = team.value?.plan
+  const isCurrentRequest = () => requestId === creditLedgerRequestId
+    && team.value?.id === teamId
+    && team.value?.plan === teamPlan
+    && showCredits.value
 
   creditLedgerLoading.value = true
   creditLedgerError.value = ''
@@ -416,6 +440,8 @@ async function fetchTeamCreditLedger(options: { resetPage?: boolean } = {}) {
         q: creditLedgerQuery.value.trim() || undefined,
       },
     })
+    if (!isCurrentRequest())
+      return
     creditLedger.value = result.entries || []
     creditLedgerPagination.page = result.pagination.page
     creditLedgerPagination.limit = result.pagination.limit
@@ -423,10 +449,13 @@ async function fetchTeamCreditLedger(options: { resetPage?: boolean } = {}) {
     creditLedgerPagination.totalPages = result.pagination.totalPages
   }
   catch (error: any) {
+    if (!isCurrentRequest())
+      return
     creditLedgerError.value = normalizeErrorMessage(error, t('dashboard.team.credits.errors.ledger', '加载积分流水失败'))
   }
   finally {
-    creditLedgerLoading.value = false
+    if (isCurrentRequest())
+      creditLedgerLoading.value = false
   }
 }
 
@@ -434,17 +463,30 @@ async function fetchTeamCreditTrend() {
   if (!showCredits.value)
     return
 
+  const requestId = ++creditTrendRequestId
+  const teamId = team.value?.id
+  const teamPlan = team.value?.plan
+  const isCurrentRequest = () => requestId === creditTrendRequestId
+    && team.value?.id === teamId
+    && team.value?.plan === teamPlan
+    && showCredits.value
+
   creditTrendLoading.value = true
   creditTrendError.value = ''
   try {
     const result = await requestJson<CreditTrendData>('/api/dashboard/team/credits/trend')
+    if (!isCurrentRequest())
+      return
     creditTrend.value = result
   }
   catch (error: any) {
+    if (!isCurrentRequest())
+      return
     creditTrendError.value = normalizeErrorMessage(error, t('dashboard.team.credits.errors.trend', '加载趋势失败'))
   }
   finally {
-    creditTrendLoading.value = false
+    if (isCurrentRequest())
+      creditTrendLoading.value = false
   }
 }
 
@@ -469,8 +511,27 @@ function openReceivedInvite(inviteId: string) {
 
 watch(
   [() => team.value?.id, () => team.value?.plan, () => showCredits.value],
-  ([, , value]) => {
-    creditUsageSummary.month = ''
+  ([teamId, , value], [previousTeamId]) => {
+    creditUsageRequestId += 1
+    creditLedgerRequestId += 1
+    creditTrendRequestId += 1
+    creditUsageLoading.value = false
+    creditLedgerLoading.value = false
+    creditTrendLoading.value = false
+    creditUsageError.value = ''
+    creditLedgerError.value = ''
+    creditTrendError.value = ''
+    Object.assign(creditUsageSummary, { totalUsed: 0, totalQuota: 0, month: '' })
+    creditUsagePagination.total = 0
+    creditUsagePagination.totalPages = 1
+    creditLedgerPagination.total = 0
+    creditLedgerPagination.totalPages = 1
+    if (teamId !== previousTeamId) {
+      creditUsageQuery.value = ''
+      creditLedgerQuery.value = ''
+      creditUsagePagination.page = 1
+      creditLedgerPagination.page = 1
+    }
     creditUsage.value = []
     creditLedger.value = []
     creditTrend.value = null
@@ -491,6 +552,12 @@ watch(() => creditTab.value, (value) => {
   if (value === 'trend' && !creditTrendLoading.value && !creditTrend.value) {
     fetchTeamCreditTrend()
   }
+})
+
+onBeforeUnmount(() => {
+  creditUsageRequestId += 1
+  creditLedgerRequestId += 1
+  creditTrendRequestId += 1
 })
 </script>
 

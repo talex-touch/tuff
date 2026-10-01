@@ -113,6 +113,8 @@ Reviewers should check:
 - Public history retains its non-FREE plan requirement, 2-credit charge, and admin-only payload access.
 - Plan & Team displays personal usage when `permissions.canViewUsage` is true. Existing team credit endpoints scope personal data to the account and organization data to authorized members; client visibility never broadens server access.
 - Personal consumption, remaining balance, and billing month use the scoped API totals. Failed initial requests must not render invented zero balances.
+- Administrative subscription responses belong to one open drawer identity and request generation. Switching user/mode, closing/reopening, or unmounting invalidates old success, error, and loading updates.
+- Credit usage, ledger, and trend responses belong to the current team ID, plan, permission context, and request generation. Team identity changes clear member filters and reset both paginators to page 1 before loading; stale organization responses cannot populate personal balances or ledgers.
 
 ### 4. Validation & Error Matrix
 
