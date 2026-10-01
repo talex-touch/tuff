@@ -1690,6 +1690,10 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           dailyActivity: 'Daily Activity',
           dailyActivityDescription: 'Visits and search frequency across recent days',
           versionDistribution: 'Version Distribution',
+          versionDistributionDescription: 'Inner ring: version families. Outer ring: exact versions. Users of multiple versions are counted in each.',
+          version: 'Version',
+          versionUsers: 'User–version pairs',
+          share: 'Share',
           hourlyDistribution: 'Hourly Distribution (UTC)',
         },
         performance: {

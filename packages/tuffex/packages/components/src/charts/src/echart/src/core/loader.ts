@@ -27,6 +27,7 @@ async function register(): Promise<EChartsRuntime> {
     charts.ScatterChart,
     charts.HeatmapChart,
     charts.TreemapChart,
+    charts.SunburstChart,
     components.GridComponent,
     components.TooltipComponent,
     components.LegendComponent,

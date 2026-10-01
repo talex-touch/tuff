@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCard } from '@talex-touch/tuffex/card'
-import { TxBarChart, TxBubbleMap, TxChoroplethMap, TxChartLegendItem, TxPieChart } from '@talex-touch/tuffex/charts'
+import { TxBarChart, TxBubbleMap, TxChoroplethMap, TxEChart } from '@talex-touch/tuffex/charts'
 import type { MapGeoJson } from '@talex-touch/tuffex/charts'
+import type { EChartsOption } from 'echarts'
 import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
 import { TxFlatRadio, TxFlatRadioItem } from '@talex-touch/tuffex/flat-radio'
@@ -111,7 +112,7 @@ function setActiveSection(value: string | number | (string | number)[]): void {
 
 const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
-const versionPalette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
+const versionPalette = ['#1d4ed8', '#047857', '#b45309', '#b91c1c', '#6d28d9', '#0e7490', '#c2410c']
 const analyticsSections = [
   { id: 'overview', icon: 'i-carbon-dashboard' },
   { id: 'performance', icon: 'i-carbon-meter' },
@@ -205,28 +206,34 @@ const hourlySeries = computed(() => {
   return { series }
 })
 const hasHourlyData = computed(() => hourlySeries.value.series.some(item => item.count > 0))
-const versionSegments = computed(() => {
+const versionDistribution = computed(() => {
   const distribution = analytics.value?.summary.versionDistribution ?? {}
-  const entries = Object.entries(distribution).filter(([, count]) => count > 0)
+  const entries = Object.entries(distribution)
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, { numeric: true }))
   const total = entries.reduce((sum, [, count]) => sum + count, 0)
-  if (!total) {
-    return { total: 0, segments: [] }
+  const families = new Map<string, { key: string, count: number, versions: { key: string, count: number }[] }>()
+
+  for (const [version, count] of entries) {
+    const match = /^v?(\d+)\.(\d+)(?:\.|$)/i.exec(version)
+    const key = match ? `${match[1]}.${match[2]}.x` : 'others'
+    const family = families.get(key) ?? { key, count: 0, versions: [] }
+    family.count += count
+    family.versions.push({ key: version, count })
+    families.set(key, family)
   }
 
-  const maxSegments = 6
-  const sorted = entries.sort((a, b) => b[1] - a[1])
-  const main = sorted.slice(0, maxSegments)
-  const remainder = sorted.slice(maxSegments).reduce((sum, [, count]) => sum + count, 0)
-  const segments = remainder > 0 ? [...main, ['others', remainder] as [string, number]] : main
+  const groups = [...families.values()]
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key, undefined, { numeric: true }))
+    .map((family, index) => ({
+      ...family,
+      name: family.key === 'others' ? t('dashboard.sections.analytics.common.others') : family.key,
+      ratio: family.count / total,
+      color: versionPalette[index % versionPalette.length],
+      versions: family.versions.map(version => ({ ...version, ratio: version.count / total })),
+    }))
 
-  const mapped = segments.map(([key, count], index) => ({
-    key,
-    count,
-    ratio: count / total,
-    color: versionPalette[index % versionPalette.length],
-  }))
-
-  return { total, segments: mapped }
+  return { total, groups }
 })
 const topProviderMetrics = computed(() => analytics.value?.summary.providerMetrics.slice(0, 12) ?? [])
 const searchSlowRate = computed(() => {
@@ -250,13 +257,51 @@ const dailyActivityChart = computed(() => {
     ],
   }
 })
-const versionChartData = computed(() =>
-  versionSegments.value.segments.map(segment => ({ name: segment.key, value: segment.count })),
-)
+const versionChartOption = computed<EChartsOption>(() => ({
+  animation: false,
+  tooltip: {
+    trigger: 'item',
+    renderMode: 'richText',
+    formatter: (params) => {
+      const item = Array.isArray(params) ? params[0] : params
+      if (!item)
+        return ''
+      const count = typeof item.value === 'number' ? item.value : 0
+      const ratio = versionDistribution.value.total ? count / versionDistribution.value.total : 0
+      return `${item.name}\n${t('dashboard.sections.analytics.overview.versionUsers')}: ${formatNumber(count)} · ${(ratio * 100).toFixed(1)}%`
+    },
+  },
+  series: [{
+    type: 'sunburst',
+    radius: ['28%', '94%'],
+    center: ['50%', '50%'],
+    nodeClick: false,
+    sort: 'desc',
+    emphasis: { focus: 'relative' },
+    label: { rotate: 'tangential', color: '#fff', fontSize: 12 },
+    itemStyle: { borderWidth: 2, borderColor: 'rgba(255, 255, 255, 0.7)', borderRadius: 4 },
+    levels: [
+      {},
+      { r0: '28%', r: '56%', label: { fontWeight: 600 } },
+      { r0: '58%', r: '94%', label: { minAngle: 16 } },
+    ],
+    data: versionDistribution.value.groups.map(group => ({
+      name: group.name,
+      value: group.count,
+      itemStyle: { color: group.color },
+      children: group.versions.map((version, index) => ({
+        name: version.key,
+        value: version.count,
+        itemStyle: { color: group.color, opacity: 0.94 + (index % 3) * 0.03 },
+      })),
+    })),
+  }],
+}))
 const hourlyChart = computed(() => ({
   categories: hourLabels,
   series: [{ name: t('dashboard.sections.analytics.charts.events'), data: hourlySeries.value.series.map(item => item.count) }],
 }))
+
 
 /**
  * The tuffex maps join regions on a GeoJSON feature property, and the vendored
@@ -863,33 +908,76 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
       <!-- Version Distribution -->
       <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="20">
-        <h3 class="mb-4 font-semibold text-black dark:text-white">
-          Version Distribution
-        </h3>
+        <div class="mb-4">
+          <h3 class="font-semibold text-black dark:text-white">
+            {{ t('dashboard.sections.analytics.overview.versionDistribution') }}
+          </h3>
+          <p class="mt-1 text-xs text-black/65 dark:text-white/65">
+            {{ t('dashboard.sections.analytics.overview.versionDistributionDescription') }}
+          </p>
+        </div>
         <TxEmptyState
-          v-if="!versionSegments.total"
+          v-if="!versionDistribution.total"
           variant="no-data"
           size="small"
           :title="t('dashboard.sections.analytics.empty.title')"
           :description="t('dashboard.sections.analytics.empty.versionData')"
         />
-        <div v-else class="flex flex-col gap-6 sm:flex-row sm:items-center">
-          <TxPieChart
-            :data="versionChartData"
-            :donut="true"
-            :show-legend="false"
-            center-label="Active users"
-            :height="260"
-            class="w-full sm:max-w-[360px]"
-          />
-          <div class="flex-1 grid grid-cols-1 gap-1 sm:grid-cols-2">
-            <TxChartLegendItem
-              v-for="segment in versionSegments.segments"
-              :key="segment.key"
-              :name="segment.key"
-              :color="segment.color"
-              :value="`${segment.count} · ${(segment.ratio * 100).toFixed(1)}%`"
+        <div v-else class="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-10">
+          <div class="relative w-full shrink-0 lg:w-[400px]">
+            <TxEChart
+              :option="versionChartOption"
+              :height="340"
+              :aria-label="t('dashboard.sections.analytics.overview.versionDistribution')"
             />
+            <div aria-hidden="true" class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1">
+              <span class="text-2xl font-semibold tabular-nums text-black dark:text-white">{{ formatNumber(versionDistribution.total) }}</span>
+              <span class="max-w-[80px] text-center text-xs leading-tight text-black/65 dark:text-white/65">{{ t('dashboard.sections.analytics.overview.versionUsers') }}</span>
+            </div>
+          </div>
+          <div class="max-h-[340px] min-w-0 flex-1 overflow-y-auto">
+            <table class="w-full text-sm tabular-nums">
+              <thead>
+                <tr class="text-xs text-black/65 dark:text-white/65">
+                  <th scope="col" class="pb-3 text-left font-medium">
+                    {{ t('dashboard.sections.analytics.overview.version') }}
+                  </th>
+                  <th scope="col" class="pb-3 pl-3 text-right font-medium">
+                    {{ t('dashboard.sections.analytics.overview.versionUsers') }}
+                  </th>
+                  <th scope="col" class="pb-3 pl-3 text-right font-medium">
+                    {{ t('dashboard.sections.analytics.overview.share') }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody v-for="group in versionDistribution.groups" :key="group.key">
+                <tr class="border-t border-black/[0.06] dark:border-white/[0.08]">
+                  <th scope="row" class="py-3 text-left font-semibold text-black dark:text-white">
+                    <span class="inline-flex items-center gap-2">
+                      <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ backgroundColor: group.color }" />
+                      {{ group.name }}
+                    </span>
+                  </th>
+                  <td class="py-3 pl-3 text-right font-medium text-black dark:text-white">
+                    {{ formatNumber(group.count) }}
+                  </td>
+                  <td class="py-3 pl-3 text-right font-medium text-black dark:text-white">
+                    {{ (group.ratio * 100).toFixed(1) }}%
+                  </td>
+                </tr>
+                <tr v-for="version in group.versions" :key="version.key" class="text-black/70 dark:text-white/70">
+                  <th scope="row" class="pb-3 pl-5 text-left font-normal break-all">
+                    {{ version.key }}
+                  </th>
+                  <td class="pb-3 pl-3 text-right">
+                    {{ formatNumber(version.count) }}
+                  </td>
+                  <td class="pb-3 pl-3 text-right">
+                    {{ (version.ratio * 100).toFixed(1) }}%
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </TxCard>
