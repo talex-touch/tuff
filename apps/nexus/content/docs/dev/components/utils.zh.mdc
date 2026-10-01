@@ -73,6 +73,7 @@ SSR 安全地检测浏览器 API 是否可用，避免直接访问 `window` / `d
 |------|------|--------|
 | `useFlip(targetRef, opts?)` | `(ref, opts?) => UseFlipReturn` | 对元素做 FLIP 过渡（`TxFlipOverlay` 底层） |
 | `useAutoResize(targetRef, opts?)` | `(ref, opts?) => UseAutoResizeReturn` | 尺寸自适应测量与过渡（`TxAutoSizer` 底层） |
+| `stepSpring(position, velocity, target, spring, dt)` | `(position, velocity, target, spring, dt) => [number, number]` | 在自己的逐帧循环里让数值沿弹簧（`{ stiffness, damping, mass? }`，`dt` 以秒计）前进，换目标时保留速度；也是 `useJellyIndicator` glide 材质的 `integrate` |
 
 ### 安装辅助
 

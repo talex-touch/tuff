@@ -17,7 +17,7 @@ const messages = computed<AiElementMessage[]>(() => (locale.value === 'zh'
         id: 'assistant-1',
         role: 'assistant',
         content: '已完成 **组件文档** 审阅：新增 API、Props 与示例覆盖，并保留待校对清单。',
-        name: 'Nexus AI',
+        name: 'Tuff AI',
         status: 'complete',
       },
       {
@@ -40,7 +40,7 @@ const messages = computed<AiElementMessage[]>(() => (locale.value === 'zh'
         id: 'assistant-1',
         role: 'assistant',
         content: 'Reviewed **component docs**: API, props, examples, and remaining review notes are now visible.',
-        name: 'Nexus AI',
+        name: 'Tuff AI',
         status: 'complete',
       },
       {

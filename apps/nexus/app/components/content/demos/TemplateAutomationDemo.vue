@@ -335,7 +335,7 @@ const options = computed<Record<OptionKey, FineTuneTypeOption[]>>(() => ({
   ],
   model: [
     { value: 'local-vision', label: zh.value ? '端侧视觉模型' : 'On-device vision' },
-    { value: 'nexus', label: 'Nexus AI' },
+    { value: 'nexus', label: 'Tuff AI' },
   ],
   target: [
     { value: 'en', label: 'English' },
@@ -344,7 +344,7 @@ const options = computed<Record<OptionKey, FineTuneTypeOption[]>>(() => ({
   ],
   provider: [
     { value: 'local', label: zh.value ? '端侧模型' : 'On-device' },
-    { value: 'nexus', label: 'Nexus AI' },
+    { value: 'nexus', label: 'Tuff AI' },
   ],
   type: [
     { value: 'toast', label: zh.value ? '气泡' : 'Toast' },

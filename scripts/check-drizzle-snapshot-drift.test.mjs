@@ -78,5 +78,7 @@ describe('drizzle snapshot drift', () => {
     assert.ok(gap.missing.includes('0048'))
     // 0049 is the hand-written provider latency column, journaled without a snapshot.
     assert.ok(gap.missing.includes('0049'))
+    // 0051 is the hand-written accepted-execute dedupe table + usage_logs.event_id column.
+    assert.ok(gap.missing.includes('0051'))
   })
 })

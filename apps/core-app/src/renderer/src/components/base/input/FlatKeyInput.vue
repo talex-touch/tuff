@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { useVModel } from '@vueuse/core'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { useI18n } from 'vue-i18n'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
-import FlatInput from './FlatInput.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -170,9 +170,9 @@ function clearBinding(): void {
 
 <template>
   <div class="FlatKeyInput">
-    <FlatInput
+    <TxInput
       v-model="model"
-      class="FlatKeyInput-Control"
+      class="FlatKeyInput-Field"
       :class="{ 'is-clearable': clearable }"
       tabindex="0"
       @keydown="startRecord"
@@ -201,7 +201,7 @@ function clearBinding(): void {
 }
 
 /* Keeps the longest accelerators off the button without moving the field's own box. */
-:deep(.FlatKeyInput-Control.is-clearable input) {
+.FlatKeyInput-Field.is-clearable :deep(input) {
   padding-right: 20px;
 }
 
@@ -245,13 +245,13 @@ function clearBinding(): void {
   }
 }
 
-:deep(.FlatKeyInput-Control) {
+.FlatKeyInput-Field {
   min-width: 220px;
   max-width: 300px;
   height: 36px;
 }
 
-:deep(.FlatKeyInput-Control input) {
+.FlatKeyInput-Field :deep(input) {
   text-align: center;
   font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
   font-size: 13px;

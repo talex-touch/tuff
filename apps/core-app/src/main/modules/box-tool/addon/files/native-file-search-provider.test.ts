@@ -92,6 +92,7 @@ import {
   linuxNativeFileProvider,
   macSpotlightFileProvider
 } from './native-file-search-provider'
+import { THUMBNAIL_STATUS_EXTENSION_KEY } from './thumbnail-config'
 
 /**
  * A real 1x1 PNG. A generated icon reaches the renderer as the cache path it was written to, and the
@@ -335,7 +336,14 @@ describe('native-file-search-provider', () => {
       const assets = new Map()
       assets.set('/Users/demo/Pictures/shot.png', {
         file: indexedRow(7, '/Users/demo/Pictures/shot.png'),
-        extensions: { thumbnail }
+        extensions: {
+          thumbnail,
+          [THUMBNAIL_STATUS_EXTENSION_KEY]: JSON.stringify({
+            status: 'generated',
+            v: 2,
+            at: Date.now()
+          })
+        }
       })
       assets.set('/Users/demo/Pictures/fresh.png', {
         file: indexedRow(8, '/Users/demo/Pictures/fresh.png'),

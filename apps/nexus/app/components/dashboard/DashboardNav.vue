@@ -251,7 +251,7 @@ const activeSection = computed(() => {
  * because their own `useHead` registers after this one.
  */
 useHead(() => ({
-  title: `${activeLabel.value} · Tuff Nexus`,
+  title: `${activeLabel.value} · Tuff`,
 }))
 </script>
 

@@ -41,6 +41,52 @@ Use shared package types for cross-layer data. Examples:
 
 ---
 
+## Scenario: Canonical Renderer OS Identity
+
+### 1. Scope / Trigger
+
+- Apply when reading OS identity in CoreApp preload, renderer initialization, or renderer platform helpers. Browser `MacIntel` / `Win32` labels are not CPU architecture.
+
+### 2. Signatures
+
+- `@talex-touch/utils/env`: `RuntimePlatform = 'darwin' | 'win32' | 'linux' | 'unknown'` and `resolveRuntimePlatform(input?: RuntimePlatformInput): RuntimePlatform`.
+- `useInitialize(electronPlatform?: string): IInitializationInfo`; `IInitializationInfo.platform` is `RuntimePlatform`.
+
+### 3. Contracts
+
+- One shared resolver owns normalization: valid `startupPlatform` first, then `electronPlatform`, then `navigatorPlatform` / `userAgent`; unsupported hints resolve to `unknown` rather than leaking browser labels.
+- Preload passes `process.platform` explicitly to initialization. Sandboxed preload's lexical `process` need not exist on `globalThis`.
+- Body classes use the canonical OS value; window-role classes such as `core-box` and `division-box` are independent and unchanged.
+- Architecture stays in the existing preload `getProcessInfo().arch`; never derive `arm64` / `x64` from browser platform or user-agent text.
+
+### 4. Validation & Error Matrix
+
+- Browser `MacIntel` → `darwin`; `Win32` → `win32`; `Linux aarch64` → `linux`.
+- Native `win32` with browser `MacIntel` → `win32`; startup `linux` with native `darwin` → `linux`.
+- No supported native or browser hint → `unknown`.
+
+### 5. Good / Base / Bad Cases
+
+- Good: an ARM64 Mac reports body `darwin core-box`, browser `MacIntel`, and preload arch `arm64`.
+- Base: browser-only fallback uses the same normalization as native initialization.
+- Bad: assigning `navigator.platform` directly to `IInitializationInfo.platform` or body classes.
+
+### 6. Tests Required
+
+- Preserve renderer resolver tests for native precedence, browser fallback, and unsupported hints.
+- Smoke the shared resolver with macOS, Windows, Linux, and unknown inputs; verify actual Electron main/CoreBox body classes and native architecture independently.
+
+### 7. Wrong vs Correct
+
+```ts
+// Wrong: browser labels are neither canonical OS identity nor CPU architecture.
+document.body.classList.add(navigator.platform)
+// Correct: preload supplies the native OS, and initialization shares renderer normalization.
+document.body.classList.add(useInitialize(process.platform).platform)
+```
+
+---
+
 ## Typed Transport And SDKs
 
 Do not add raw event names or untyped payload casts where a typed event/domain SDK exists.

@@ -1230,10 +1230,25 @@ function projectFeature(feature: IPluginFeature): IPluginFeature {
     platform: projectFeaturePlatform(requiredField(raw, 'platform')),
     commands: requiredField(raw, 'commands')
   }
-  if (Object.hasOwn(raw, 'interaction')) {
-    projection.interaction = projectFeatureInteraction(raw.interaction, featureId)
+  if (Object.hasOwn(raw, 'interaction') && raw.interaction !== undefined) {
+    const interaction = exactRecord(raw.interaction, [
+      'type',
+      'runtime',
+      'path',
+      'rendererFeatureId',
+      'showInput',
+      'allowInput',
+      'sendMode',
+      'forceMax'
+    ])
+    if (interaction.type === 'widget') {
+      projection.interaction = projectFeatureInteraction(raw.interaction, featureId)
+    } else if (interaction.type !== 'webcontent') {
+      invalid()
+    }
   }
   for (const key of FEATURE_KEYS) {
+    if (key === 'interaction') continue
     if (!Object.hasOwn(projection, key) && Object.hasOwn(raw, key) && raw[key] !== undefined) {
       projection[key] = raw[key]
     }

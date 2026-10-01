@@ -11,13 +11,13 @@ verified: true
 
 # Component Changelog & Lifecycle
 
-Since its standalone release, all 165 exported components in TuffEx maintain an authoritative Since version. Every version bump is verified by an automated gate (`audit:changelog`), requiring an explicit declaration of impacted components and change notes.
+Since its standalone release, all 164 exported components in TuffEx maintain an authoritative Since version. Every version bump is verified by an automated gate (`audit:changelog`), requiring an explicit declaration of impacted components and change notes.
 
 ## Overview
 
-The current latest release of TuffEx is **v0.6.2**, exporting a total of **165** components.
+The current latest release of TuffEx is **v0.6.2**, exporting a total of **164** components.
 
-- **Base Suite**: 94 general, form, layout, and navigation components
+- **Base Suite**: 93 general, form, layout, and navigation components
 - **Pro Suite**: 39 advanced interaction, effect, and primitive components
 - **AI Suite**: 32 AI chat, agent, reasoning, and context components
 - **Gate Protection**: Bumping package version without a version chapter or component breakdown will fail CI audits
@@ -101,7 +101,7 @@ Drawer and divider enhancements.
 Foundational input and layout batch.
 
 - **New Components (4)**: [divider](./divider.en.mdc), [kbd](./kbd.en.mdc), [number-input](./number-input.en.mdc), [textarea](./textarea.en.mdc)
-- **Updated Components (16)**: [avatar](./avatar.en.mdc), [chat](./chat.en.mdc), [flat-input](./flat-input.en.mdc), [flat-radio](./flat-radio.en.mdc), [flat-select](./flat-select.en.mdc), [flip-overlay](./flip-overlay.en.mdc), [glass-surface](./glass-surface.en.mdc), [group-block](./group-block.en.mdc), [icon](./icon.en.mdc), [input](./input.en.mdc), [scroll](./scroll.en.mdc), [slider](./slider.en.mdc), [stagger](./stagger.en.mdc), [stat-card](./stat-card.en.mdc), [tabs](./tabs.en.mdc), [transfer](./transfer.en.mdc)
+- **Updated Components (16)**: [avatar](./avatar.en.mdc), [chat](./chat.en.mdc), `flat-input`, [flat-radio](./flat-radio.en.mdc), [flat-select](./flat-select.en.mdc), [flip-overlay](./flip-overlay.en.mdc), [glass-surface](./glass-surface.en.mdc), [group-block](./group-block.en.mdc), [icon](./icon.en.mdc), [input](./input.en.mdc), [scroll](./scroll.en.mdc), [slider](./slider.en.mdc), [stagger](./stagger.en.mdc), [stat-card](./stat-card.en.mdc), [tabs](./tabs.en.mdc), [transfer](./transfer.en.mdc)
 - **Key Features**:
   - Added TxTextarea, TxNumberInput, TxDivider, TxKbd, and TxTransfer;
   - Fixed client hydration parity under SSR.
@@ -171,7 +171,6 @@ The following table lists the introduction version (Since) and suite for all 161
 | `filter-chips` | base | **0.3.9** | [Read Docs](./filter-chips.en.mdc) |
 | `fine-tune-card` | ai | **0.3.9** | [Read Docs](./fine-tune-card.en.mdc) |
 | `flat-dropdown` | base | **0.3.9** | [Read Docs](./flat-dropdown.en.mdc) |
-| `flat-input` | base | **0.3.4** | [Read Docs](./flat-input.en.mdc) |
 | `flat-radio` | base | **0.3.4** | [Read Docs](./flat-radio.en.mdc) |
 | `flat-select` | base | **0.3.4** | [Read Docs](./flat-select.en.mdc) |
 | `flex` | base | **0.3.4** | [Read Docs](./flex.en.mdc) |

@@ -71,7 +71,7 @@ const labels = computed(() => {
         },
         {
           value: 'nexus',
-          label: 'Nexus 站点',
+          label: 'Tuff 站点',
           children: [
             {
               value: 'docs',
@@ -143,7 +143,7 @@ const labels = computed(() => {
       },
       {
         value: 'nexus',
-        label: 'Nexus',
+        label: 'Tuff',
         children: [
           {
             value: 'docs',

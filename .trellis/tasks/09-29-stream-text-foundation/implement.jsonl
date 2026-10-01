@@ -1,0 +1,10 @@
+{"file": ".trellis/tasks/09-29-stream-element/design.md", "reason": "parent design: the shared contracts this child implements"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "frontend spec index"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "structure, one writer per custom property, ready content vs reveal motion, suite taxonomy"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "tokens, motion rules, new-component checklist"}
+{"file": ".trellis/spec/frontend/tuffex-text-motion.md", "reason": "boundary with the TxTextMorph engine"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "docs, demos, gallery specimens, rebuild/restart traps"}
+{"file": ".trellis/spec/frontend/nexus-docs-structure.md", "reason": "page shape"}
+{"file": ".trellis/tasks/09-29-stream-element/research/motion-references.md", "reason": "preset numbers"}
+{"file": ".trellis/tasks/09-29-stream-element/research/existing-streaming-components.md", "reason": "fresh-chunk and block-stream precedents"}
+{"file": ".trellis/tasks/09-29-stream-element/research/prior-decisions.md", "reason": "binding rules"}

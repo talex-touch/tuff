@@ -156,7 +156,7 @@ code: |
 
 ## Overview
 
-The content workbench behind the Nexus docs and blog. Editors pull up drafts and posts in review by status, publish or archive them in bulk, and change a title, link or body in a drawer; every change can be undone from the toast. The editorial board shows the same posts as a flow instead: pushed from draft to published, and slotted into a day of this week.
+The content workbench behind the Tuff docs and blog. Editors pull up drafts and posts in review by status, publish or archive them in bulk, and change a title, link or body in a drawer; every change can be undone from the toast. The editorial board shows the same posts as a flow instead: pushed from draft to published, and slotted into a day of this week.
 
 It fits any "table + details + form" admin: reviewing entries in a plugin store, a help centre, announcements and changelogs.
 

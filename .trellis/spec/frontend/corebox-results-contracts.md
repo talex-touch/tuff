@@ -16,12 +16,15 @@
   motion](./component-guidelines.md#ready-results-must-not-wait-for-reveal-motion)).
 - **What the user is looking at keeps its place.** Rows on screen keep their index, an untouched
   selection stays on row 0, the preview pane waits before it closes.
-- **Compositor properties only.** Motion is `transform`, `translate` or `opacity`. Nothing
-  transitions width, height, padding, `filter` or a custom property, and keyboard navigation never
-  scrolls smoothly. One sanctioned exception: an action's outcome morphs through
+- **Result motion stays compositor-only.** Rows and column layout move through `transform`,
+  `translate` or `opacity`, never width, height, padding, `filter` or a custom property; keyboard
+  scrolling is instant. An action's outcome may morph through
   `TxTextTransformer`, whose engine tweens its own container's width (WAAPI) while one message
   replaces another. It stays inside the feedback hint (the footer copy is a fixed-width absolute
   overlay) and asks the gate like every script motion ("Action feedback placement").
+- **Preview-only material (2026-09-30).** A selected image may blur-crossfade inside its fixed stage
+  (4px / 200ms), and the two footer shortcuts it replaces may blur and shrink on exit (4px / 160ms).
+  These bounded effects do not apply to result rows or the pane's entrance and never delay selection.
 - **One gate for script motion.** See "One motion gate" below.
 
 ```
@@ -932,6 +935,8 @@ const dy = before.top + (origin.top - entry.origin.top) - after.top
   `activeItem` watcher in `box/CoreBox.vue`; anything that reads them (`compressed`,
   `gridAvailableWidth`, `BoxGrid :compact`, the grid FLIP watchers, `revealActiveItemAfterReflow`,
   `handlePreviewOpen` / `handlePreviewOpenWith`); or `render/addon/TuffItemAddon.vue`'s slide-in.
+- Changing `TuffItemPreviewer`'s media branch, `ImagePreview`'s dimensions event or the footer's
+  `previewVisible` hint suppression also follows this scenario.
 - Why (list-motion D2): the pane followed the selection, so every arrow step across a list mixing
   files and apps flipped the results column between 100% and 40% width, and each open faded the
   pane in from transparent.
@@ -948,6 +953,9 @@ let rowsQuery = searchVal.value // the query the rows on screen answer
 watch(res, () => (rowsQuery = searchVal.value), { flush: 'sync' })
 watch(activeItem, (item) => { /* open, hold or close */ }, { immediate: true })
 ```
+
+`ImagePreview` emits `dimensionsChange(dimensions: string)`. `CoreBoxFooter` accepts
+`previewVisible?: boolean`; CoreBox supplies `addonType === 'preview' && !isWidgetMode`.
 
 ### 3. Contracts
 
@@ -976,6 +984,21 @@ watch(activeItem, (item) => { /* open, hold or close */ }, { immediate: true })
   ready. It plays when `.show` is added, so switching between files does not replay it. Reduced
   motion sets `animation: none`; low battery stops it through the global attribute.
 - The close timer is cleared on unmount.
+- **The stage owns image metadata.** `.dimension-badge` is a direct child of `.preview-area`,
+  4px from its left and bottom edges, not measured from the contained picture. `ImagePreview`
+  reports decoded positive intrinsic dimensions as `W × H`; an error or resource change reports
+  `''`. A retiring image's load/error is ignored unless its element's `src` matches the live resource.
+- **Keep changing labels mounted.** The dimensions and open-with labels use
+  `TxTextTransformer mode="fade"`, 200ms / 4px. The image component survives image-to-image resource
+  changes; only its `img` is keyed by URL. Loading and URL changes blur-crossfade the media; a failed
+  resource grant still shows `DefaultPreview`. Reduced motion and low battery remove the CSS motion.
+- **Code classification is shared.** Supported editor extensions use `CodePreview`; other
+  `getFileTypeFromPath(path) === FileType.Code` files, including PHP, use the bounded `TextPreview`
+  read path instead of an icon-only default. Do not invent a second source-language extension list.
+- **The footer follows the pane, not the current row.** While `previewVisible`, only the primary
+  Enter hint and numbered quick-select hint disappear; the action-panel hint and item information
+  remain. During the 200ms pane hold they stay hidden. Closing restores them, subject to the item's
+  original hint visibility. `animated=false` disables the hint transition.
 
 ### 4. Validation & Error Matrix
 
@@ -991,6 +1014,9 @@ watch(activeItem, (item) => { /* open, hold or close */ }, { immediate: true })
 | A same-query refresh drops the file, then returns it | stays on the file; no second slide-in |
 | The open control while the pane waits to close | opens the file shown, not the selected app |
 | Unmount with a close pending | the timer is cleared |
+| Image A → image B | metadata stays stage-anchored; retiring events cannot label B; short media-only blur |
+| A code file outside the editor's languages | bounded source text, not an icon-only preview |
+| Preview opens → closes | only Enter and quick-select hints exit and return; actions remain |
 
 ### 5. Good / Base / Bad Cases
 
@@ -1008,6 +1034,12 @@ watch(activeItem, (item) => { /* open, hold or close */ }, { immediate: true })
   `transform` and nothing else; it runs on `.TuffItemAddon.show`, and the reduce media query sets it
   to `none`.
 - `box/CoreBox.refresh-reconcile.test.ts`: the pane stays on the selected file through a refresh.
+- `render/addon/preview/ImagePreview.test.ts`: decoded/empty dimensions, error/resource-change
+  clearing and late load/error events cannot replace the current dimensions.
+- `render/CoreBoxFooter.feedback.test.ts` › "parks the keys the preview pane takes over, and brings
+  them back when it closes": only the action key remains while open; the original hints return.
+- Real Electron: portrait/landscape stage offsets, image blur frames, PHP contents, open/close hints
+  and `prefers-reduced-motion` must be observed; jsdom cannot prove these CSS or protocol paths.
 
 ### 7. Wrong vs Correct
 
@@ -1194,3 +1226,67 @@ attaching):
 - Opening CoreBox and clearing the query: no empty frame between the old grid and the new one.
 - Still pending: the CDP Performance recording that decides the list FLIP default, written to
   `.trellis/tasks/09-25-corebox-list-motion/research/perf.md`.
+
+## Scenario: Visible usage facts update without moving the user's choice (2026-09-30)
+
+### 1. Scope / Trigger
+
+Changes to `useResultExposure`, `CoreBoxEvents.item.usageChanged`, or the CoreBox/application-detail consumers of usage statistics.
+
+### 2. Signatures
+
+- `CoreBoxEvents.recommendation.reportExposure` reports visible item identities and the current display-session identity; it is not an execution.
+- `CoreBoxEvents.item.usageChanged` carries `{ sourceId, itemId, usageStats }` from the committed transaction, with ISO dates or `null`.
+- `useSearch` updates both search-result and active-provider metadata; `ApplicationIndex.loadUsage(path, committedExecuteCount?)` rejects an older aggregate after a committed notification.
+
+### 3. Contracts
+
+- A result batch arriving does not prove exposure. Only rows intersecting the actual visible viewport of a shown CoreBox are eligible. Deduplicate source/item within one display session; a new show starts a new session.
+- Exposure contributes no execution count, no habit qualification, no execution recency, and no refresh of old execution decay.
+- The host explicitly delivers committed facts to the main product window **and** the owned CoreBox window. `TouchChannel.broadcast` targets the main window, despite its name; it is not proof of delivery to CoreBox. Never broadcast cross-source usage to every plugin window.
+- A visible row receives only new usage/evidence metadata. Do not refresh, rank, repartition sections, rebuild layout, change focus, or change numeric shortcuts in response to the notification.
+- The next show or explicit refresh may use the new ranking and qualification. Cache invalidation alone is insufficient: that read waits for already-admitted execution writes.
+- Probe the actual mounted component transport when Vite HMR versions its module URL. Importing an unversioned SDK can create a different singleton; its handler list is not the page's subscription state.
+
+### 4. Validation & Error Matrix
+
+| Situation | Required result |
+| --- | --- |
+| Off-screen row, hidden window, or repeated callback in the same show | No extra visible exposure |
+| Successful new committed action in another product window | Same canonical count reaches the current row; order and focus stay unchanged |
+| Duplicate action receipt or failed statistics transaction | No invented committed increment |
+| CoreBox absent or destroyed | Main-window update still works; no plugin-window fallback |
+| Aggregate reply older than the commit notification | Drop the whole reply, including old distributions |
+| Ordinary selection after a legitimate privacy cleanup | No global count floor; display the actual retained state |
+
+### 5. Good / Base / Bad Cases
+
+- Good: launch from application details, CoreBox's existing chosen row updates its facts, the next show may change its rank.
+- Base: only the main window exists; it consumes the same committed payload without waiting for CoreBox creation.
+- Bad: use `count + 1`, take exposure as use, call `executeSearch` on every notification, or use a main-only broadcast as cross-window evidence.
+
+### 6. Tests Required
+
+- `useResultExposure.test.ts`: visibility, session dedupe, session renewal, and canonical identity.
+- `useSearch.core.test.ts`: committed metadata changes with selection, layout, and row order preserved.
+- `ApplicationIndex.test.ts`: committed count is not overwritten by an older asynchronous aggregate; normal reads still permit legitimate cleanup decreases.
+- Real Electron proof must exercise an actual accepted action from another product window and observe the mounted CoreBox consumer, not merely a mock transport call.
+
+### 7. Wrong vs Correct
+
+```ts
+// Wrong: a fact notification is not a request to reshuffle the interface.
+await executeSearch()
+// Correct: retain each visible item's position and update only its committed facts.
+setSearchResults(searchResults.value.map(updateCommittedMetadata))
+```
+
+
+### Verified native evidence (2026-09-30)
+
+- In an isolated Electron profile, the selected application's visible launch count changed from 8 to 9 within 82 ms of the pre-action observation. Selection stayed on the same application.
+- A real plugin execution reached both product-window subscriptions. The mounted CoreBox kept the same visible row order and selected item; the next recommendation snapshot reflected the committed count.
+- The application list contained 200 rows and 200 completed native-icon images. The captured main-window view showed the shared list rows, application paths with middle truncation, and the committed detail count.
+- A legacy Spotlight file pin rebuilt as a canonical `file-provider` item, remained in the list, and did not expand the two-item habitual grid.
+- Evidence lives under `/tmp/tuff-reco-0929/`; no production profile was modified. CDP screenshots must account for CoreBox's initial input-only viewport rather than treating a cropped image as proof of the whole panel.
+

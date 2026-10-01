@@ -10,6 +10,7 @@ import {
   resolveCoreBoxIconColor,
   shouldRenderCoreBoxIconColorful
 } from './icon-color-mode'
+import { formatRecommendationEvidence } from './recommendation-evidence'
 
 interface Props {
   item: TuffItem
@@ -48,11 +49,25 @@ const recommendationBadgeIcon = computed(() => {
 const recommendationBadgeText = computed(() =>
   resolveI18nText(recommendationBadge.value?.text ?? '', t)
 )
+const executeCount = computed(() => props.item.meta?.usageStats?.executeCount ?? 0)
+const usageTitle = computed(() =>
+  t(props.item.kind === 'app' ? 'corebox.usage.launchCount' : 'corebox.usage.useCount', {
+    count: executeCount.value
+  })
+)
+const badgeTitle = computed(() => {
+  const recommendation = props.item.meta?.recommendation
+  if (recommendation?.source === 'pinned') return recommendationBadgeText.value
+  return recommendation
+    ? formatRecommendationEvidence(recommendation.source, recommendation.evidence, t)
+    : ''
+})
 </script>
 
 <template>
   <div
     class="BoxGridItem fake-background"
+    :data-corebox-item-id="item.id"
     :class="{ 'is-active': active, 'is-pinned': isPinned, 'is-compact': compact }"
   >
     <!-- Counter-scaled by the FLIP morph, so the content keeps its size while the box changes. -->
@@ -75,9 +90,17 @@ const recommendationBadgeText = computed(() =>
         v-if="recommendationBadge"
         class="BoxGridItem-Badge"
         :class="`badge-${recommendationBadge.variant}`"
+        :title="badgeTitle"
       >
         <i v-if="recommendationBadgeIcon" :class="recommendationBadgeIcon" aria-hidden="true" />
         {{ recommendationBadgeText }}
+        <span
+          v-if="executeCount > 0"
+          data-corebox-usage-count
+          :title="usageTitle"
+          :aria-label="usageTitle"
+          >· {{ executeCount }}</span
+        >
       </span>
       <span v-if="quickKey" class="BoxGridItem-QuickKeyInline">{{ quickKey }}</span>
     </div>

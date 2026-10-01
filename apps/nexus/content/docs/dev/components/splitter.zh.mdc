@@ -11,7 +11,7 @@ verified: true
 
 ## 用法
 
-通过父容器提供明确宽高。组件会填满这个盒子，并把当前比例写入 CSS grid 变量。
+通过父容器提供明确宽高。分隔轨道默认宽 6px，使用细线手柄；两个面板按比例分配扣除轨道后的剩余空间，不会因轨道额外占宽而溢出。
 
 ::::TuffDemoWrapper{demo="SplitterSplitterDemo" code-lang="vue"}
 ---
@@ -56,7 +56,7 @@ code: |
 | `min` | `number` | `0.1` | 指针或键盘调整时可派发的最小比例。 |
 | `max` | `number` | `0.9` | 指针或键盘调整时可派发的最大比例。 |
 | `disabled` | `boolean` | `false` | 禁用指针和键盘调整。拖拽中切换为禁用会结束当前拖拽。 |
-| `barSize` | `number` | `10` | 分隔条轨道尺寸，单位 px。运行时最小值为 `6px`。 |
+| `barSize` | `number` | `6` | 分隔条轨道尺寸，单位 px。运行时最小值为 `6px`，可见手柄厚 2px。 |
 | `snap` | `number` | `0` | 可选比例步进。`0` 表示不吸附；正数会把派发比例吸附到最近步进。 |
 
 ### Slots

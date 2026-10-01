@@ -287,7 +287,7 @@ const REGIONS: Array<{ id: RegionId, name: Bilingual }> = [
 // `short` labels the app grid's half-width cells; `name` is what the host opens.
 const PRODUCTS: Array<{ id: ProductId, icon: string, tone: IconChipTone, name: Bilingual, short?: Bilingual, desc: Bilingual }> = [
   { id: 'desktop', icon: 'i-carbon-laptop', tone: 'ink', name: { zh: 'Tuff 桌面版', en: 'Tuff Desktop' }, desc: { zh: 'CoreBox 与插件', en: 'CoreBox and plugins' } },
-  { id: 'console', icon: 'i-carbon-dashboard', tone: 'accent', name: { zh: 'Nexus 控制台', en: 'Nexus Console' }, desc: { zh: '团队与项目', en: 'Teams and projects' } },
+  { id: 'console', icon: 'i-carbon-dashboard', tone: 'accent', name: { zh: 'Tuff 控制台', en: 'Tuff Console' }, desc: { zh: '团队与项目', en: 'Teams and projects' } },
   { id: 'store', icon: 'i-carbon-store', tone: 'orange', name: { zh: '插件市场', en: 'Plugin Store' }, desc: { zh: '发现与安装', en: 'Discover and install' } },
   { id: 'intelligence', icon: 'i-carbon-machine-learning-model', tone: 'green', name: { zh: 'Tuff Intelligence', en: 'Tuff Intelligence' }, short: { zh: 'Intelligence', en: 'Intelligence' }, desc: { zh: 'AI 网关', en: 'AI gateway' } },
   { id: 'tuffex', icon: 'i-carbon-cube', tone: 'red', name: { zh: 'TuffEx', en: 'TuffEx' }, desc: { zh: '组件库', en: 'Component library' } },
@@ -1159,7 +1159,7 @@ const tabsAnimation = computed(() => (reducedMotion.value
             <TxIconChip :size="22" :radius="7" tone="ink" :font-size="11">
               N
             </TxIconChip>
-            Nexus
+            Tuff
           </span>
           <span class="console__divider" aria-hidden="true" />
 

@@ -258,7 +258,7 @@ const emit = defineEmits<{
   color: var(--tx-color-danger);
 }
 
-.ShortcutDialog-Key :deep(.FlatKeyInput-Control) {
+.ShortcutDialog-Key :deep(.FlatKeyInput-Field) {
   width: 100%;
   min-width: 160px;
 }

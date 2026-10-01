@@ -7,7 +7,7 @@ verified: true
 
 # Tuffex 组合界面教程
 
-本教程面向 Nexus / Dashboard / Admin 页面：目标不是堆组件，而是把页面切成“操作区 → 状态区 → 数据区”，让用户能快速判断当前状态并完成动作。
+本教程面向 Tuff / Dashboard / Admin 页面：目标不是堆组件，而是把页面切成“操作区 → 状态区 → 数据区”，让用户能快速判断当前状态并完成动作。
 
 ## 组件套件与引入
 
@@ -54,7 +54,7 @@ code: |
   const query = ref('')
   const selectedKeys = ref<Array<number | string>>([1])
   const rows: Row[] = [
-    { id: 1, task: '组件截图核验', owner: 'Nexus', status: 'review', score: 84 },
+    { id: 1, task: '组件截图核验', owner: 'Tuff', status: 'review', score: 84 },
     { id: 2, task: 'API 表格补齐', owner: 'Tuffex', status: 'ready', score: 92 },
     { id: 3, task: '暗色模式回归', owner: 'QA', status: 'failed', score: 48 },
   ]
@@ -341,7 +341,7 @@ code: |
 - **授权分工**：Tree 只表达层级范围，TreeSelect 只表达归属选择，Transfer 只表达资源分配，Timeline 只表达审计历史。
 - **配置分层**：短操作进菜单，短说明进浮层，长配置进抽屉，避免一个 Popover 承担复杂表单。
 - **发布策略分工**：Cascader 只表达范围，FlatSelect 只表达单选策略，SegmentedSlider 表达离散风险，Slider 表达连续比例，TagInput 只表达短元数据。
-- **截图验证**：新增或改动 Demo 后，在本地 Nexus 页面打开并截图确认亮色、暗色、移动宽度至少一个关键状态。
+- **截图验证**：新增或改动 Demo 后，在本地 Tuff 页面打开并截图确认亮色、暗色、移动宽度至少一个关键状态。
 
 ## 13. 继续阅读
 

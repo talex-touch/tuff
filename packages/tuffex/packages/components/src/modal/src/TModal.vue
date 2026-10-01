@@ -10,10 +10,12 @@ const props = withDefaults(
     modelValue: boolean
     title?: string
     width?: string
+    fullscreen?: boolean
   }>(),
   {
     title: '',
     width: '480px',
+    fullscreen: false,
   },
 )
 
@@ -29,6 +31,7 @@ const emit = defineEmits<{
     :model-value="props.modelValue"
     :title="props.title"
     :width="props.width"
+    :fullscreen="props.fullscreen"
     @update:model-value="v => emit('update:modelValue', v)"
     @close="() => emit('close')"
   >

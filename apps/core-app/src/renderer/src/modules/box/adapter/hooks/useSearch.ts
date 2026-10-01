@@ -406,7 +406,7 @@ export function useSearch(
   const searchVal = ref('')
   const select = ref(-1)
 
-  const { items: boxItems } = useBoxItems()
+  const { items: boxItems, update: updateBoxItem } = useBoxItems()
 
   const searchResults = shallowRef<Array<TuffItem>>([])
 
@@ -468,6 +468,40 @@ export function useSearch(
   const triggerFeatureExitEvent = defineRawEvent<{ plugin: string }, void>(
     'trigger-plugin-feature-exit'
   )
+
+  const unregUsageChanged = transport.on(CoreBoxEvents.item.usageChanged, (payload) => {
+    if (!payload?.usageStats || !Number.isFinite(payload.usageStats.executeCount)) return
+    const updateItem = (item: TuffItem): TuffItem => {
+      const sourceId = item.meta?._originalSourceId ?? item.source.id
+      const itemId = item.meta?._originalItemId ?? item.id
+      if (sourceId !== payload.sourceId || itemId !== payload.itemId) return item
+      const recommendation = item.meta?.recommendation
+      const lastExecutedAt = Date.parse(payload.usageStats.lastExecuted ?? '')
+      return {
+        ...item,
+        meta: {
+          ...item.meta,
+          usageStats: payload.usageStats,
+          ...(recommendation && {
+            recommendation: {
+              ...recommendation,
+              evidence: {
+                ...recommendation.evidence,
+                executeCount: payload.usageStats.executeCount,
+                ...(Number.isFinite(lastExecutedAt) && { lastExecutedAt })
+              }
+            }
+          })
+        }
+      }
+    }
+    // Update facts only: no refresh, sort, layout change or selection movement while visible.
+    setSearchResults(searchResults.value.map(updateItem))
+    for (const item of boxItems.value) {
+      const updated = updateItem(item)
+      if (updated !== item) updateBoxItem(item.id, { meta: updated.meta })
+    }
+  })
 
   // Search-trigger debounce. Each "major" result change re-mounts the entire
   // result list through <Transition mode="out-in"> in CoreBox.vue, so a higher
@@ -1020,31 +1054,6 @@ export function useSearch(
   }
 
   /**
-   * Reports the recommendation ids we just rendered so the main process can
-   * join them against executes for local hit-rate@k. Ids and order only, never
-   * content, and failures are ignored — this must never affect rendering.
-   */
-  const reportRecommendationExposure = (items: TuffItem[]): void => {
-    const itemKeys = items
-      .filter((item) => !item.meta?.pinned?.isPinned)
-      .map((item) => {
-        const meta = item.meta as Record<string, unknown> | undefined
-        const sourceId =
-          typeof meta?._originalSourceId === 'string' ? meta._originalSourceId : item.source.id
-        const itemId = typeof meta?._originalItemId === 'string' ? meta._originalItemId : item.id
-        return `${sourceId}:${itemId}`
-      })
-    if (itemKeys.length === 0) return
-
-    transport
-      .send(CoreBoxEvents.recommendation.reportExposure, {
-        itemKeys,
-        surface: isDetachedDivisionMode() ? 'division-box' : 'core-box'
-      })
-      .catch(() => {})
-  }
-
-  /**
    * Replaces what is rendered. While `renderedTextQuery` owns the rows on screen it follows them, so
    * a later run of that query can still tell they are its own.
    */
@@ -1172,8 +1181,6 @@ export function useSearch(
     boxOptions.layout = layout
 
     activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
-
-    reportRecommendationExposure(filteredItems)
 
     nextTick(() => {
       window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
@@ -1815,6 +1822,7 @@ export function useSearch(
     if (!itemToExecute) {
       return
     }
+    const eventId = crypto.randomUUID()
 
     // Clipboard-history recommendation items have no execute provider in the
     // search core. Route them through the clipboard apply pipeline (write +
@@ -1826,7 +1834,7 @@ export function useSearch(
         searchResults.value = []
         select.value = -1
         await transport
-          .send(ClipboardEvents.apply, { id: recordId, autoPaste: true })
+          .send(ClipboardEvents.apply, { id: recordId, autoPaste: true, eventId })
           .catch((error) => {
             devLog('Clipboard apply failed:', error)
           })
@@ -1868,10 +1876,12 @@ export function useSearch(
           CoreBoxEvents.item.execute,
           serializedSearchResult
             ? {
+                eventId,
                 item: serializedItem,
                 searchResult: serializedSearchResult
               }
             : {
+                eventId,
                 item: serializedItem
               }
         )
@@ -1975,10 +1985,12 @@ export function useSearch(
         CoreBoxEvents.item.execute,
         serializedSearchResult
           ? {
+              eventId,
               item: serializedItem,
               searchResult: serializedSearchResult
             }
           : {
+              eventId,
               item: serializedItem
             }
       )
@@ -2256,6 +2268,7 @@ export function useSearch(
     cancelActiveSearchStream()
     stopIndexCommitStream()
     unsubscribeRendererActivity()
+    unregUsageChanged()
     unregContextActionsOpen()
     unregSetQuery()
     unregItemClear()

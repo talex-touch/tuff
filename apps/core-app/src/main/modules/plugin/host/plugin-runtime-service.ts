@@ -632,6 +632,28 @@ export class PluginRuntimeService {
     }
   }
 
+  /** Capability authority during onInit; does not make the host executable before activation. */
+  resolveHostGeneration(activation: PluginActivationIdentity): number | undefined {
+    try {
+      const expected = snapshotActivation(activation)
+      const record = this.records.get(expected.name)
+      if (
+        this.disposed ||
+        this.stopping ||
+        !this.isCurrentActivation(expected) ||
+        !record ||
+        record.stopPromise ||
+        !sameActivation(record.activation, expected) ||
+        (record.host.state !== 'starting' && record.host.state !== 'active')
+      ) {
+        return undefined
+      }
+      return record.host.owner.hostGeneration
+    } catch {
+      return undefined
+    }
+  }
+
   stopActivation(
     activation: PluginActivationIdentity,
     options: { runDestroy?: boolean } = {}

@@ -72,7 +72,7 @@ const appProviderMocks = vi.hoisted(() => {
     scheduleDbWriteMock: vi.fn(
       async (_label: string, task: () => Promise<unknown>) => await task()
     ),
-    searchRecordExecuteMock: vi.fn(),
+    searchRecordExecuteMock: vi.fn(async () => undefined),
     /**
      * The foreground-app read behind a launch record. Mocked rather than left to the real service:
      * that one shells out to `osascript` on macOS, and what the launch path owes is the captured
@@ -244,6 +244,14 @@ vi.mock('../../../../db/db-write-scheduler', () => ({
   dbWriteScheduler: {
     schedule: scheduleDbWriteMock
   }
+}))
+
+// app-provider records an accepted launch through the module-scope `recordAcceptedExecute` seam
+// (the single writer search-core registers). That is what it actually calls now; there is no
+// per-provider setter to swap in.
+vi.mock('../../search-engine/execute-recorder', () => ({
+  recordAcceptedExecute: searchRecordExecuteMock,
+  resolveExecuteEventId: (eventId?: string | null) => eventId ?? 'test-event-id'
 }))
 
 vi.mock('../../../../db/sqlite-retry', async (importOriginal) => ({
@@ -478,9 +486,6 @@ export async function withTimeout<T>(
 
 export async function loadSubject() {
   const subject = await import('./app-provider')
-  // app-provider no longer imports search-core (#712), so mocking that module would sit inert.
-  // The recorder is registered through the same seam search-core uses in production.
-  subject.setAppExecutionRecorder(searchRecordExecuteMock)
   subject.appProvider.setIndexedSourceRuntimeDelegate({
     scan: appRuntimeScanMock,
     reconcile: appRuntimeReconcileMock,

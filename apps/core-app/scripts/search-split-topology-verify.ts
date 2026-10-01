@@ -150,25 +150,40 @@ export function judgeTopology(topology: Topology, expect: 'split' | 'shared'): C
 /**
  * Criterion 3: after the `=0` rollback and a restart, results must match the split-on run.
  *
- * Compared against the *file index*, deliberately: raw per-file counts differ between topologies
- * because the rows live somewhere else, so the invariant is the union, not the location.
+ * Each side is read from its own **live home**, not from the union of both files. The union looked
+ * topology-independent and is not: a genuine rollback leaves the rows the worker wrote in the
+ * retired `search-index.db` (that is what "data-preserving" means in `design.md`), so the union
+ * counts every file twice and reports parity even when the primary index was never rebuilt — a
+ * false green on the one run this check exists for.
+ *
+ * `before` is therefore the split-on measurement (its live home is the search file) and `expect` is
+ * the flag the *judged* run was launched with, exactly as in `judgeTopology`. App rows are read
+ * from the primary on both sides: the catalog never moves.
  */
-export function compareParity(before: Topology, after: Topology): Check[] {
-  const indexed = (t: Topology): number =>
-    total(t.primaryFilesByType, APP_ROW_TYPE) + total(t.searchFilesByType, APP_ROW_TYPE)
-  const apps = (t: Topology): number =>
-    (t.primaryFilesByType[APP_ROW_TYPE] ?? 0) + (t.searchFilesByType[APP_ROW_TYPE] ?? 0)
+export function compareParity(
+  before: Topology,
+  after: Topology,
+  expect: 'split' | 'shared'
+): Check[] {
+  const afterHome = expect === 'shared' ? 'database.db' : 'search-index.db'
+  const beforeFiles = total(before.searchFilesByType, APP_ROW_TYPE)
+  const afterFiles = total(
+    expect === 'shared' ? after.primaryFilesByType : after.searchFilesByType,
+    APP_ROW_TYPE
+  )
+  const beforeApps = before.primaryFilesByType[APP_ROW_TYPE] ?? 0
+  const afterApps = after.primaryFilesByType[APP_ROW_TYPE] ?? 0
 
   return [
     {
       name: 'file count parity across the rollback',
-      ok: indexed(before) === indexed(after),
-      detail: `before=${indexed(before)} after=${indexed(after)}`
+      ok: beforeFiles === afterFiles,
+      detail: `before=${beforeFiles} (search-index.db) after=${afterFiles} (${afterHome})`
     },
     {
       name: 'app count parity across the rollback',
-      ok: apps(before) === apps(after),
-      detail: `before=${apps(before)} after=${apps(after)}`
+      ok: beforeApps === afterApps,
+      detail: `before=${beforeApps} after=${afterApps} (app catalog lives on database.db in both topologies)`
     }
   ]
 }
@@ -341,7 +356,7 @@ async function main(): Promise<void> {
   const baselinePath = arg('baseline')
   if (baselinePath) {
     const baseline = JSON.parse(await readFile(baselinePath, 'utf8')) as Topology
-    checks.push(...compareParity(baseline, topology))
+    checks.push(...compareParity(baseline, topology, expect))
   }
 
   const outPath = arg('out')

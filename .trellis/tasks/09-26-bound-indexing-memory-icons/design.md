@@ -1,39 +1,104 @@
 # Design
 
-## Ordered implementation
+The original ordered design (bounded admission → icon cutover → legacy conversion → native crash → scale acceptance)
+was implemented and shipped. Steps 1–3 are now landed code; steps 4–5 are the remaining order, re-scoped for the
+beta54 pipeline. Evidence index: `research/2026-09-29-master-reconciliation.md`.
 
-1. Bound content admission and retained results, reuse existing WorkerStatusSnapshot, repair observation-induced idle extension, and distinguish cumulative scheduler counters from current backlog.
-2. Remove bulk icon extraction, deliver generated file icons as cache paths through the existing tfile plane, and route writes to the owning SQLite writer.
-3. Convert old file-icon data URLs in byte-bounded keyset pages with atomic file creation and compare-before-update semantics.
-4. Add content-free native crash lifecycle diagnostics to the existing Sentry Electron integration and verify restart delivery in isolation.
-5. Run focused validation, 100k file load and a three-hour isolated soak; preserve real profiles and all concurrent work.
+## Landed contracts — reference only, never re-plan
 
-## Memory ownership contract
+- **Two admission layers, not one.** (a) Content *batch* admission: shared `IndexedWorkerSchedulerService`
+  (`packages/utils/search/indexing-worker-scheduler.ts:78-79`) with the file adapter at
+  `file-provider-index-scheduler-service.ts:105-109` — `chunkSize 30`, `maxInFlight 1`, `maxPendingBatches 2`,
+  overflow returned as `deferred` and kept durable in `file_index_progress`; `schedule()` returns
+  `{ accepted, deferred }`, `getSnapshot()` exposes `activeBatches/queuedBatches/pendingRecords/deferredRecords`,
+  and `deferredRecords` is cumulative by contract — never publish it as current backlog. (b) Physical *write*
+  admission: `search-index-writer.ts:53-55,492` — 1 active, 2 admitted waiters, at most 1 background waiter, producers
+  park on a shared capacity pulse instead of the worker pending map; `withPausedAdmission` keeps its self-write
+  bypass and shutdown rejects every waiter.
+- **Result ownership.** `index-worker-payload-budget.ts:14,17` — 1 MiB per result, 32 MiB per batch including pending
+  and inflight ownership; oversize output is an explicit failed result. Admission credit is held until results are
+  persisted and published via the optional `afterBatch` barrier (`file-index-worker-client.ts:92,107,280`, wired at
+  `file-provider-index-runtime-service.ts:209`). Live accounting comes from `pendingBytes`/`inflightBytes`
+  (`file-provider-index-flush-service.ts:77,81`, `file-provider-index-runtime-service.ts:197`), not from cumulative
+  counters. Mutation leases (`file-index-worker-client.ts:42-68,181`) fence stale deferred results.
+- **Icon delivery.** `IconService.getFileIconPath(filePath, size?)` (`icon-service.ts:121`) returns a validated path,
+  default 64 / max 256, at most 64 distinct in-flight requests, 256 lightweight cache entries; the single artifact
+  helper (`file-icon-artifact.ts:19-20,230,279`) owns PNG validation, content-hash naming and atomic writes with
+  `FILE_ICON_MAX_BYTES = 1 MiB`; `IconWorkerClient.extractToFile` writes inside the worker
+  (`icon-worker.ts:86,112`) while macOS keeps the main-thread AppKit writer; the protocol allowlists only
+  `getFileIconCacheDirectory()`. Scan-driven icon production is gone — the post-scan pass is thumbnails-only
+  (`file-provider-asset-service.ts:254`).
+- **Legacy conversion.** Keyset pages of 32 ids that carry only `length(value)` (`db/utils.ts:246`), per-row value cap,
+  verified artifact write before a compare-and-update replacement (`file-provider-icon-migration-service.ts:89-99`,
+  `db/utils.ts:283`). Failures keep the original value; no deletion, no VACUUM.
+- **Content indexing policy.** `DEFAULT_FILE_INDEX_CONTENT_SETTINGS.contentIndexingEnabled === false`
+  (`packages/utils/transport/events/types/file-index.ts:62-66`); the enable/disable/cleanup lifecycle lives in
+  `file-provider-content-index-policy-service.ts`.
 
-- The shared IndexedWorkerSchedulerService owns a globally bounded queue: default one active batch plus one queued batch; chunkSize remains 30. schedule(batch) returns { accepted, deferred } record counts. Overflow is not retained in another timer or promise queue. getSnapshot() returns activeBatches, queuedBatches, pendingRecords and deferredRecords. Closed/cancelled scopes never launch work.
-- FileProvider persists dirty enrichment status before admitting newly changed records. The existing file_index_progress and enrichment-resume service own overflow; no parallel queue database. Resume must not skip unadmitted page suffixes or duplicate active file versions.
-- A batch's admission credit remains held until its content results have been persisted and published, not merely until Worker 'done'. FileIndexWorkerClient may use an optional second constructor callback afterBatch: () => Promise<void> for this barrier, while preserving cancellation and error settlement. It must not call the scheduler-wide drain from inside its own active batch.
-- Each result has a 1 MiB conservative payload budget; admitted batch/results have a 32 MiB budget including pending and inflight ownership. Oversize output is an explicit failed file result, never a dropped successful result. Worker parsing remains serial. Byte estimates must not serialize/copy large objects solely to count them.
-- Runtime getBufferSnapshot() reports pending, inflight, pendingBytes and inflightBytes. Capacity/credit failures must stop upstream, not discard authoritative work. Mutation leases fence stale results; new-version work must not be overwritten by an older deferred result.
-- No waiting on a future foreign source lease while holding the current mutation gate. Same-lease publication and shutdown cancellation ordering stay explicit.
+## Invalidated assumptions
 
-## Storage and native boundaries
+1. The beta.41 `11d76262a` "100 admitted / 0 completed" probe and "targeted pipeline files are identical" — the
+   pipeline was replaced by beta54; re-measuring it proves nothing about master.
+2. One shared queue for all memory pressure — there are now two admission layers (batch and physical write) plus a
+   page-level policy service; merging or duplicating them is out of bounds.
+3. Enrichment-on acceptance runs — content indexing is default-off, so any probe expecting parser activity must opt in.
+4. Legacy walker as the default enumeration path — fd is primary, legacy is the fallback.
+5. `src/main/service/sentry-service.ts` — the file is now `src/main/modules/sentry/sentry-service.ts`.
 
-- Preserve the existing icon value column and path rendering contract; no replacement media framework. New file-icon writes contain paths, not image strings. Generated files have bounded dimensions/bytes and opaque cache names.
-- macOS AppKit remains on its approved main-thread native path and returns descriptors; no NSImage/Buffer round-trips. Migrate every existing consumer of a changed icon method, including native/Everything, openers and Windows app icons.
-- Only exact owned cache subdirectories may be added to tfile roots. Never broaden home or the whole cache directory.
-- New writes cut over first; bounded conversion verifies disk bytes before a compare-and-update of the old value. Conversion errors preserve original data; no mass deletion, VACUUM or real-profile migration in verification.
+## Remaining order (re-scoped)
 
-## Verification boundaries
+Order is by risk removed per hour of machine time. Each slice is independently closable and non-overlapping.
+The next slice (S1 = O1 + O2) is specified with exact files, contracts and probes in `implement.md`.
 
-Use isolated synthetic databases/profiles. Test authors own tests; production implementation owners skip validation until their mutation wave settles. Main runs verification and owns integration. Sentry server receipt requires authenticated access; an HTTP enqueue or local dump alone is not backend receipt proof.
+### O1 — Cold-scan icon budget under the fd backend (probe-only, no production edits expected)
 
-## Icon cutover API contract
+- Dependency: none.
+- Contract: during a cold scan of a tree whose rows already exist in the DB, `iconGeneratedBytesCumulative` stays 0,
+  `file_extensions` gains no new `data:image/png;base64,%` icon value for those rows, and the post-scan pass touches
+  thumbnails only. Lazy rendering must still resolve `tfile:///…/Caches/file-icons/<sha256>.png` with cache reuse
+  (several rows sharing one hash file) and app rows from `app-icons`.
+- Isolation: throwaway profile under `/tmp`; the scan root is a synthetic tree, not the home directory.
+- Fails if: any scan-path icon write appears (that would be a production defect; fix belongs in this task, icon owner).
 
-- IconService.getFileIconPath(filePath: string, size?: number): Promise<string | null> replaces extractFileIcon. Default size 64, maximum dimension 256. The result is a validated path, never a data URL or Buffer. Global file-icon admission is at most 64 distinct in-flight requests; deduplicate by canonical source identity and size, retain at most 256 lightweight cache entries, and return null when optional work cannot be admitted.
-- IconWorkerClient.extractToFile(filePath: string, outputPath: string, size?: number): Promise<string | null> replaces extract. Request includes outputPath; done carries path, not buffer. Windows extraction writes its PNG inside the worker; macOS uses existing main-thread writeDarwinAppIcon and never calls extract-file-icon inside a worker.
-- One Node-only file-icon-artifact helper owns PNG validation, content-hash naming and atomic writes, with FILE_ICON_MAX_BYTES = 1 MiB and maximum dimension 256. Export persistFileIconPng(bytes: Uint8Array, cacheDirectory: string): Promise<string> for bounded legacy conversion. IconService uses the same helper to promote bounded native output; no second storage implementation.
-- IconService.getFileIconCacheDirectory(): string returns the exact owned file-icons cache root (under Electron cache, with a userData-owned fallback). Protocol changes allow only that directory, not the whole cache or home.
-- Every caller migrates: FileProvider asset service, Everything/native cache, opener service and Windows app icon generation. Cached app-icon reads on Windows may return the already-supported file path rather than re-encoding it.
-- Main owns FileProvider/asset/opener integration, metadata-only invalidation of stale icon references, writer routing, tfile policy and late-write shutdown fencing. IconPaths owner owns IconService, IconWorkerClient/worker and the artifact helper; IconContracts owns tests only.
-- Do not bulk-generate file icons during full scan. Existing render callbacks provide lazy demand; preserve custom per-file identity (do not merge every file solely by extension). New resources use tfile delivery. Migration is the subsequent phase, not part of the extraction owner.
+### O2 — Legacy conversion campaign (probe plus fix only if a probe fails)
+
+- Dependency: none. Prefer running with content indexing at its default (off) so the writer is not contended, and
+  repeat one short run with content indexing on + an external write lock to prove the idle gate holds.
+- Contract: one pass over a legacy-shaped `file_extensions` population must terminate with
+  `scanned === converted + skipped + failed` and zero remaining `data:image/png;base64,%` icon values for
+  `files.type = 'file'` rows; `skipped/failed` rows keep their original value byte-for-byte; a `SIGTERM` mid-page
+  followed by a restart resumes at the next keyset id without re-converting or losing values; peak RSS and the page
+  rate (rows/second) are recorded so the residual drain time on a 250k-row profile is explicit.
+- Evidence source: structured `File icon migration pass finished` log line, `iconMigrated`/`scanned` counters, and
+  direct SQLite counts on the isolated database.
+
+### O3 — Native crash delivery re-confirmation on the current build
+
+- Dependency: none.
+- Contract: isolated profile → `kill -SEGV` → dump written under the precore-configured crash directory → relaunch →
+  `discovery completed phase=discovered` → `Native crash minidump parsed phase=parsed` → `transport completed
+  phase=sent` with a 2xx status → independent Sentry receipt for the new release. If receipt cannot be independently
+  observed, record the exact external blocker instead of claiming delivery.
+- Non-goals: no second uploader, no privacy widening, no transport error-semantics rewrite.
+
+### O4 — 100k / three-hour isolated acceptance re-baseline
+
+- Dependency: O1 and O2 closed (so the campaign measures the shipping icon/conversion behaviour rather than a moving
+  tree).
+- Contract: two isolated profiles over the same 100k synthetic tree — (a) shipping default (content indexing off,
+  fd backend) and (b) content indexing on, which is the only configuration that still exercises enrichment
+  admission and the byte budgets. Both must report the completed row count, exactly one root completion checkpoint,
+  live queue/byte snapshots (`activeBatches/queuedBatches/pendingRecords`, `pendingBytes/inflightBytes`), per-isolate
+  heap, process RSS, event-loop lag, and concurrent CoreBox search latency during the scan; the default profile must
+  additionally show zero parser activity. Residency of at least three hours records the same series with queues
+  returning to zero at rest, then a graceful shutdown with no module-unload timeout.
+- Isolation: scratch tree and profiles under `/tmp`, `TUFF_DISABLE_GLOBAL_SHORTCUTS=1`.
+- Non-goal: 09-29's open AC7 idle-CPU baseline (renderer/GPU) is owned by
+  `.trellis/tasks/09-29-bounded-fd-fzf-file-indexing/` and must not be claimed here.
+
+## Boundaries
+
+- No real-profile migration, no database deletion or VACUUM, no commits/pushes/releases.
+- Production edits happen only when an O1–O4 probe fails, and only inside the files named by that probe.
+- Test authors own tests; production owners skip validation until their mutation wave settles. Main runs shared
+  verification once.

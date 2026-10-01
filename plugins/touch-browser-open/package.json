@@ -1,0 +1,9 @@
+{
+  "name": "@talex-touch/touch-browser-open-plugin",
+  "private": true,
+  "version": "1.1.0",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test index.test.cjs"
+  }
+}

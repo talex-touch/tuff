@@ -103,7 +103,16 @@ function toTuffItem(record: ClipboardRecord): TuffItem {
       { id: 'paste', type: 'execute', label: 'Paste', shortcut: 'Enter' },
       { id: 'copy', type: 'copy', label: 'Copy', shortcut: 'CmdOrCtrl+C' }
     ],
-    meta: { raw: record }
+    meta: {
+      raw: record,
+      // The rendered id carries a `clipboard-` prefix so it cannot collide with other sources, but
+      // the candidate and the usage row are stored under the bare numeric id. Stamping the original
+      // identity is what lets the rebuilder's merge step (which keys on `_originalItemId`) recognise
+      // the rebuilt card as the scored candidate — without it every clipboard row was silently
+      // dropped from the grid for having no matching candidate.
+      _originalItemId: String(record.id),
+      _originalSourceId: CLIPBOARD_RECOMMENDATION_SOURCE_ID
+    } as TuffItem['meta']
   }
 }
 

@@ -1350,6 +1350,63 @@ describe('plugin business capability adapters', () => {
     expect(JSON.stringify(result)).not.toMatch(/(?:^|["'])\/(?:Users|private|home)\//)
   })
 
+  it('projects declared webcontent features without exposing their host interaction path', async () => {
+    const fixture = createFixture()
+    const { registry } = createRegistry(fixture)
+    vi.mocked(fixture.plugin.listBusinessFeatures).mockReturnValue([
+      {
+        ...feature('declared-webcontent'),
+        commands: [{ type: 'match', value: 'open-manager' }],
+        interaction: {
+          type: 'webcontent',
+          path: '/manager/private-route',
+          showInput: false
+        }
+      }
+    ])
+
+    const result = (await registry.dispatch('feature.registry.list', null)) as {
+      features: IPluginFeature[]
+    }
+
+    expect(result.features).toEqual([
+      expect.objectContaining({
+        id: 'declared-webcontent',
+        commands: [{ type: 'match', value: 'open-manager' }]
+      })
+    ])
+    expect(result.features[0]).not.toHaveProperty('interaction')
+    expect(JSON.stringify(result)).not.toContain('/manager/private-route')
+  })
+
+  it('rejects dynamic webcontent features and hostile nested interaction records', async () => {
+    const fixture = createFixture()
+    const { registry } = createRegistry(fixture)
+    const accessorTrap = vi.fn()
+    const proxyTrap = vi.fn()
+    const accessorInteraction = Object.defineProperty({}, 'type', {
+      enumerable: true,
+      get: accessorTrap
+    })
+    const proxyInteraction = new Proxy({}, { ownKeys: proxyTrap })
+
+    for (const interaction of [
+      { type: 'webcontent', path: '/dynamic-view' },
+      accessorInteraction,
+      proxyInteraction
+    ]) {
+      await expect(
+        registry.dispatch('feature.registry.add', {
+          feature: { ...feature('hostile-interaction'), interaction }
+        })
+      ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST'))
+    }
+
+    expect(fixture.plugin.addBusinessFeature).not.toHaveBeenCalled()
+    expect(accessorTrap).not.toHaveBeenCalled()
+    expect(proxyTrap).not.toHaveBeenCalled()
+  })
+
   it('accepts a safe relative file icon and forwards it to the feature host', async () => {
     const fixture = createFixture()
     const { registry } = createRegistry(fixture)

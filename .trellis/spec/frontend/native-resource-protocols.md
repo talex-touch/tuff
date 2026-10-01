@@ -57,6 +57,11 @@ net.fetch(pathToFileURL(absolutePath).toString(), {
 })
 ```
 
+File thumbnails use `generateThumbnail(options): Promise<ThumbnailGenerationResult>` from
+`addon/files/thumbnail-service.ts`. Generated image descriptors report `mimeType: 'image/png'`;
+video-frame descriptors report `'image/jpeg'`. `THUMBNAIL_ENCODER_VERSION = 2` is persisted as
+`thumbnailStatus.v`; the existing file identity and generated-path fields remain the cache key.
+
 ## 3. Contracts
 
 ### Rust NativeTransport boundary
@@ -107,6 +112,15 @@ forces every call site to re-implement a remote-URL guard. A renderer-local twin
   Any security narrowing of `tfile` roots must preserve that exact directory while continuing to
   deny the rest of the user's home. Allowing only scan roots or `userData` makes every valid
   current-cache icon fail with HTTP 403 and drives `TxIcon` to `EmptyAppPlaceholder.svg`.
+- File-image thumbnails preserve alpha in PNG; JPEG is reserved for video frames. Flattening a
+  transparent PNG into JPEG uses a black background and can turn a faint coloured logo into a
+  solid black icon. Preserve the source's translucency; do not brighten it or add a matte.
+- Thumbnail reuse requires the current encoder version as well as the existing file-identity
+  checks. Old or unversioned thumbnails are not rendered as valid results; foreground demand or
+  the deferred missing-thumbnail pass regenerates them and writes the current version.
+- `mapFileToTuffItem` marks thumbnail/direct-image URLs `colorful: true`, so image artwork is not
+  treated as a theme-coloured SVG mask. A cached native file icon whose mtime/size changed stays
+  visible while `onMissingIcon` schedules bounded refresh; metadata drift does not blank the icon.
 
 ## 4. Validation & Error Matrix
 
@@ -129,6 +143,9 @@ forces every call site to re-implement a remote-URL guard. A renderer-local twin
 | Current `app.getPath('cache')/app-icons` file                                      | Admit it through `tfile`; the renderer image completes with non-zero natural dimensions                    |
 | Arbitrary sibling under the cache directory or another home path                   | Return HTTP 403; adding the icon root must not widen access to the whole cache/home                        |
 | Visible result needs refresh                                                       | Send metadata-only invalidation or wait for the next query; never send the PNG or rewrite FTS for the icon |
+| Transparent image thumbnail | PNG descriptor and alpha-preserving output; no black/white flattening |
+| Thumbnail has missing/old encoder version | Ignore the old thumbnail and request bounded regeneration |
+| Native file icon identity changed | Keep the last cached URL while requesting refresh; do not flash a class glyph |
 
 ## 5. Good / Base / Bad Cases
 
@@ -141,6 +158,10 @@ forces every call site to re-implement a remote-URL guard. A renderer-local twin
 - Good: a bundle with standalone `.icns` uses `sips`, persists the same deterministic cache pointer, and follows the same `tfile` consumer path.
 - Base: no icon can be resolved; the app remains searchable and uses `i-ri-apps-line` without retry storms.
 - Base: a small transport event carries `{ appPath, cacheVersion }` to invalidate a view; the view re-resolves the `tfile` URL.
+- Good: a faint transparent image becomes a small RGBA PNG, keeps its source colour/alpha and
+  renders through a colourful `tfile` image; an old JPEG cache entry is replaced on demand.
+- Bad: use JPEG for image artwork, interpret artwork as a monochrome mask, or clear a valid
+  native file icon before its background refresh completes.
 - Bad: renderer/plugin/preload imports `@talex-touch/tuff-native/protocol`, loads a `.node` addon, or receives a Rust attachment Buffer through TuffTransport/MessagePort.
 - Bad: native code returns a PNG `Buffer`, a worker posts that Buffer, preload forwards it, and renderer creates a data URL.
 - Bad: `app.getFileIcon(..., { size: 'large' })` is used on macOS or a Darwin cache miss is sprayed across Chromium/libuv worker threads.
@@ -168,6 +189,12 @@ forces every call site to re-implement a remote-URL guard. A renderer-local twin
 - AppProvider tests assert 200 icon-only hydration results produce bounded icon persistence and zero search-index `applyDelta` calls.
 - Static/transport assertions verify Darwin native results and worker/IPC messages contain no `Buffer`, `ArrayBuffer`, base64, or image byte field.
 - Real smoke uses at least 125 cache misses and five consecutive cold starts; it asserts no new `.ips`, `SIGTRAP`, or `EXC_BREAKPOINT`, one extraction per cache key, and later requests served through `tfile`.
+- `thumbnail-service.test.ts` validates actual alpha-preserving output, not a mocked `.png()` echo;
+  `utils.test.ts` and `file-provider-asset-service.test.ts` cover versioned reuse/regeneration and
+  cached native-icon refresh without a generic-glyph flash.
+- Real CoreBox smoke checks a transparent-image result and its footer icon load the same coloured
+  PNG URL, and a changed file keeps its native icon while refresh is pending. Resampling may alter
+  edge alpha slightly; assert retained translucency, not exact Lanczos pixel values.
 
 ## 7. Screenshot Descriptor-Only Contract
 

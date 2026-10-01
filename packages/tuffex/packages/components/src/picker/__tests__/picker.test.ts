@@ -1,8 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxPicker from '../src/TxPicker.vue'
-import pickerSource from '../src/TxPicker.vue?raw'
 
 const columns = [
   {
@@ -29,6 +29,86 @@ function mountInlinePicker(props: Record<string, unknown> = {}) {
       ...props,
     },
   })
+}
+
+const many = [{
+  key: 'c',
+  options: Array.from({ length: 40 }).map((_, i) => ({ value: `v${i}`, label: `O${i}` })),
+}]
+
+function mountWheel(props: Record<string, unknown> = {}) {
+  return mount(TxPicker, { props: { popup: false, columns: many, modelValue: ['v20'], ...props } })
+}
+
+/** A controlled parent: it echoes every value the picker emits straight back through v-model. */
+function mountControlledWheel(props: Record<string, unknown> = {}): VueWrapper {
+  const wrapper = mount(TxPicker, {
+    props: {
+      popup: false,
+      columns: many,
+      modelValue: ['v20'],
+      'onUpdate:modelValue': (v: unknown) => wrapper.setProps({ modelValue: v as string[] }),
+      ...props,
+    },
+  })
+  return wrapper as VueWrapper
+}
+
+/** The column's position in rows — the one number the drum is drawn from. */
+function offsetOf(wrapper: VueWrapper): string {
+  return (wrapper.find('.tx-picker__wheel').element as HTMLElement).style.getPropertyValue('--tx-picker-offset')
+}
+
+// jsdom lays nothing out, so a column reports a zero-sized box and every click
+// would land on its centre line. This is the column's real box: 320x180 with its
+// centre line at y = 190.
+function stubWheelRect(el: Element): void {
+  el.getBoundingClientRect = () => ({
+    x: 0,
+    y: 100,
+    top: 100,
+    left: 0,
+    right: 320,
+    bottom: 280,
+    width: 320,
+    height: 180,
+    toJSON: () => ({}),
+  }) as DOMRect
+}
+
+/** Runs `body` with `prefers-reduced-motion: reduce` reporting `matches`, then restores the stub. */
+async function withReducedMotion(matches: boolean, body: () => Promise<void>): Promise<void> {
+  const original = window.matchMedia
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes('reduce') ? matches : false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as typeof window.matchMedia
+
+  try {
+    await body()
+  }
+  finally {
+    window.matchMedia = original
+  }
+}
+
+/**
+ * Dispatches a pointer event carrying a chosen `timeStamp`. VTU's `trigger`
+ * stamps with `Date.now()`, which cannot express a gesture's speed — and the
+ * speed is what a release coasts on and reduced motion must ignore.
+ */
+function pointerAt(el: Element, type: string, clientY: number, timeStamp: number): void {
+  const event = new Event(type, { bubbles: true }) as Event & { clientY: number, pointerId: number }
+  event.clientY = clientY
+  event.pointerId = 1
+  Object.defineProperty(event, 'timeStamp', { value: timeStamp })
+  el.dispatchEvent(event)
 }
 
 describe('txPicker', () => {
@@ -99,34 +179,6 @@ describe('txPicker', () => {
     expect(wrapper.findAll('.tx-picker__wheel').every(wheel => wheel.attributes('tabindex') === '-1')).toBe(true)
     const disabledOption = wrapper.findAll('.tx-picker__item').find(item => item.text() === 'A')
     expect(disabledOption?.attributes('aria-disabled')).toBe('true')
-  })
-
-  it('clamps itemHeight and derives the drum geometry from it', () => {
-    const wrapper = mountInlinePicker({
-      itemHeight: 12,
-      visibleItemCount: 4,
-    })
-
-    const style = wrapper.find('.tx-picker__columns').attributes('style')
-
-    // 12 is below the floor of 24.
-    expect(style).toContain('--tx-picker-item-height: 24px')
-    // r = (itemHeight / 2) / tan(step / 2), so the row's arc length matches its
-    // height and the labels neither stretch nor bunch on the surface.
-    expect(style).toContain('--tx-picker-radius: 76px')
-    expect(style).toContain('--tx-picker-step: 18')
-  })
-
-  it('sizes the inline track to visibleItemCount rows via the CSS variable', () => {
-    const wrapper = mountInlinePicker({
-      visibleItemCount: 7,
-    })
-
-    const style = wrapper.find('.tx-picker__columns').attributes('style')
-
-    // The track height is `calc(item-height * var(--tx-picker-visible-count, 5))`;
-    // inline mode must publish the variable too, not fall back to the default 5.
-    expect(style).toContain('--tx-picker-visible-count: 7')
   })
 
   it('turns each inline column to its active row on mount', async () => {
@@ -294,16 +346,7 @@ describe('txPicker keyboard a11y', () => {
 })
 
 describe('txPicker wheel', () => {
-  const many = [{
-    key: 'c',
-    options: Array.from({ length: 40 }).map((_, i) => ({ value: `v${i}`, label: `O${i}` })),
-  }]
-
-  function mountWheel(props: Record<string, unknown> = {}) {
-    return mount(TxPicker, { props: { popup: false, columns: many, modelValue: ['v20'], ...props } })
-  }
-
-  it('draws only the rows within a quarter turn, not the whole column', async () => {
+  it('draws only the rows in front of the drum\'s rim, not the whole column', async () => {
     const wrapper = mountWheel()
     await flushPromises()
 
@@ -355,33 +398,242 @@ describe('txPicker wheel', () => {
     wrapper.unmount()
   })
 
-  it('reads the row under a click out of the drum geometry', async () => {
+  it('selects the row a click lands on, above and below the centre line', async () => {
+    // The column's box is stubbed to 320x180 (centre line y = 190), so these are
+    // the screen points the rows are drawn at: ~±35px and ~±63px either side of
+    // the highlight are the centres of the rows one, two and three out.
+    const cases = [
+      { name: 'one row below the highlight', clientY: 225, expected: ['v21'] },
+      { name: 'two rows below the highlight', clientY: 253, expected: ['v22'] },
+      { name: 'three rows below the highlight', clientY: 272, expected: ['v23'] },
+      { name: 'one row above the highlight', clientY: 155, expected: ['v19'] },
+      { name: 'two rows above the highlight', clientY: 127, expected: ['v18'] },
+      { name: 'three rows above the highlight', clientY: 108, expected: ['v17'] },
+    ]
+
+    for (const { name, clientY, expected } of cases) {
+      const wrapper = mountWheel()
+      await flushPromises()
+      stubWheelRect(wrapper.find('.tx-picker__wheel').element)
+
+      await wrapper.find('.tx-picker__wheel').trigger('click', { clientY })
+
+      expect(wrapper.emitted('update:modelValue')?.at(-1), name).toEqual([expected])
+      wrapper.unmount()
+    }
+  })
+
+  it('reads a tap out of the drum geometry like a plain click', async () => {
     const wrapper = mountWheel()
     await flushPromises()
-    const wheel = wrapper.find('.tx-picker__wheel')
+    stubWheelRect(wrapper.find('.tx-picker__wheel').element)
 
-    // The rows are inert; the column hit-tests against what it drew. jsdom
-    // reports a zero-sized rect, so a click at the centre resolves to the
-    // centre row and the value holds.
-    await wheel.trigger('click', { clientY: 0 })
+    // A tap is a pointerdown/pointerup that never moved: it must resolve the same
+    // row the click path does instead of landing dead.
+    await wrapper.find('.tx-picker__wheel').trigger('pointerdown', { pointerId: 1, clientY: 272 })
+    await wrapper.find('.tx-picker__wheel').trigger('pointerup', { pointerId: 1, clientY: 272 })
+
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['v23']])
+    wrapper.unmount()
+  })
+
+  it('ignores a click on a disabled column', async () => {
+    const wrapper = mountWheel({ disabled: true })
+    await flushPromises()
+    stubWheelRect(wrapper.find('.tx-picker__wheel').element)
+
+    await wrapper.find('.tx-picker__wheel').trigger('click', { clientY: 272 })
+
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('lands a click past the drum\'s rim on the row at its edge', async () => {
+    // y = 280 is the column's bottom edge and y = 100 its top: both points are
+    // off the drum, so the projection has to saturate at the rim row rather than
+    // resolve to nothing.
+    const cases = [
+      { name: 'below the rim', clientY: 280, expected: ['v24'] },
+      { name: 'above the rim', clientY: 100, expected: ['v16'] },
+    ]
+
+    for (const { name, clientY, expected } of cases) {
+      const wrapper = mountWheel()
+      await flushPromises()
+      stubWheelRect(wrapper.find('.tx-picker__wheel').element)
+
+      await wrapper.find('.tx-picker__wheel').trigger('click', { clientY })
+
+      expect(wrapper.emitted('update:modelValue')?.at(-1), name).toEqual([expected])
+      wrapper.unmount()
+    }
+  })
+
+  it('skips a disabled row a click lands on, landing on the nearest enabled one', async () => {
+    const edgeColumns = [{
+      key: 'c',
+      options: [
+        { value: 'v20', label: 'O20' },
+        { value: 'v21', label: 'O21' },
+        { value: 'v22', label: 'O22', disabled: true },
+        { value: 'v23', label: 'O23' },
+      ],
+    }]
+    const wrapper = mount(TxPicker, { props: { popup: false, columns: edgeColumns, modelValue: ['v20'] } })
+    await flushPromises()
+    stubWheelRect(wrapper.find('.tx-picker__wheel').element)
+
+    // The point two rows below the highlight is the disabled row: the click must
+    // settle on an enabled neighbour instead of leaving the value where it was.
+    await wrapper.find('.tx-picker__wheel').trigger('click', { clientY: 253 })
+
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['v23']])
+    wrapper.unmount()
+  })
+
+  it('keeps the halfway position a drag reached when a controlled parent echoes its row', async () => {
+    const wrapper = mountControlledWheel()
+    await flushPromises()
+
+    await wrapper.find('.tx-picker__wheel').trigger('pointerdown', { pointerId: 1, clientY: 200 })
+    // Two and a half rows up: v23 is under the line, but the drum has only made
+    // half of the last row.
+    await wrapper.find('.tx-picker__wheel').trigger('pointermove', { pointerId: 1, clientY: 110 })
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['v23']])
+
+    // The parent's echo re-enters through modelValue while the drag is still live;
+    // re-placing the column there would snap the drum to the row under the finger.
+    await flushPromises()
+    expect(offsetOf(wrapper)).toBe('22.5')
 
     wrapper.unmount()
   })
 
-  it('keeps the rows out of hit testing so the centre one cannot swallow clicks', () => {
-    // The drum's predecessor rotated rows that were still clickable where they
-    // were laid out: the enlarged centre row covered its neighbours.
-    const itemRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__item {'))
-    const body = itemRule.slice(0, itemRule.indexOf('&.is-selected'))
+  it('still places the column on a new value from the parent mid-drag', async () => {
+    const wrapper = mountControlledWheel()
+    await flushPromises()
 
-    expect(body).toContain('pointer-events: none')
-    expect(body).toContain('position: absolute')
-    // Stacked on the centre line, so a rotation has no layout offset to fight.
-    expect(body).toContain('top: 50%')
-    expect(body).toMatch(/rotateX\([\s\S]*translateZ\(/)
+    await wrapper.find('.tx-picker__wheel').trigger('pointerdown', { pointerId: 1, clientY: 200 })
+    await wrapper.find('.tx-picker__wheel').trigger('pointermove', { pointerId: 1, clientY: 110 })
+    await flushPromises()
+    expect(offsetOf(wrapper)).toBe('22.5')
 
-    const wheelRule = pickerSource.slice(pickerSource.indexOf('.tx-picker__wheel {'))
-    expect(wheelRule.slice(0, wheelRule.indexOf('&:active'))).toContain('touch-action: none')
+    // A value the drag did not produce is the parent moving the selection: the
+    // drum has to follow it, not cling to the finger.
+    await wrapper.setProps({ modelValue: ['v25'] })
+    await flushPromises()
+
+    expect(offsetOf(wrapper)).toBe('25')
+    wrapper.unmount()
+  })
+
+  it('retargets a click turn when a controlled parent moves the selection mid-flight', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    })
+    try {
+      const wrapper = mountControlledWheel()
+      await flushPromises()
+      stubWheelRect(wrapper.find('.tx-picker__wheel').element)
+
+      await wrapper.find('.tx-picker__wheel').trigger('click', { clientY: 272 })
+      expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['v23']])
+
+      // The parent rejects v23 and sets v30 while the drum is still easing there:
+      // an external value outranks the turn in flight, which must let it through.
+      await wrapper.setProps({ modelValue: ['v30'] })
+      await nextTick()
+      await nextTick()
+
+      vi.advanceTimersByTime(2000)
+      await nextTick()
+      expect(offsetOf(wrapper)).toBe('30')
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('coasts a flick past the rows it dragged through', async () => {
+    const wrapper = mountWheel()
+    await flushPromises()
+    const wheel = wrapper.find('.tx-picker__wheel').element
+
+    // Two rows of one-per-16ms travel, released still moving: the drum has to
+    // carry on past the row under the finger instead of stopping dead on it.
+    pointerAt(wheel, 'pointerdown', 100, 0)
+    pointerAt(wheel, 'pointermove', 64, 16)
+    pointerAt(wheel, 'pointermove', 28, 32)
+    pointerAt(wheel, 'pointerup', 28, 48)
+
+    expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['v38']])
+    wrapper.unmount()
+  })
+
+  it('drops the coast under prefers-reduced-motion', async () => {
+    await withReducedMotion(true, async () => {
+      const wrapper = mountWheel()
+      await flushPromises()
+      const wheel = wrapper.find('.tx-picker__wheel').element
+
+      // The same flick, released at the same speed: with reduced motion the drum
+      // stays where the finger left it rather than coasting rows away.
+      pointerAt(wheel, 'pointerdown', 100, 0)
+      pointerAt(wheel, 'pointermove', 64, 16)
+      pointerAt(wheel, 'pointermove', 28, 32)
+      pointerAt(wheel, 'pointerup', 28, 48)
+
+      expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['v22']])
+      wrapper.unmount()
+    })
+  })
+
+  it('finishes a click turn while a controlled parent echoes each step', async () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'],
+    })
+    try {
+      const wrapper = mountControlledWheel()
+      await flushPromises()
+      stubWheelRect(wrapper.find('.tx-picker__wheel').element)
+
+      await wrapper.find('.tx-picker__wheel').trigger('click', { clientY: 272 })
+      expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([['v23']])
+
+      // Let the parent's echo travel all the way back through v-model first: it
+      // must leave the turn alone rather than re-place the column on its row.
+      await nextTick()
+      await nextTick()
+
+      // The turn is an animation: mid-flight the drum is between rows even though
+      // the echoed value already says v23.
+      vi.advanceTimersByTime(16)
+      await nextTick()
+      const midFlight = Math.abs(Number(offsetOf(wrapper)) - 23)
+      expect(midFlight).toBeGreaterThan(0)
+      expect(midFlight).toBeLessThan(3)
+
+      vi.advanceTimersByTime(1000)
+      await nextTick()
+      expect(offsetOf(wrapper)).toBe('23')
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lands a click turn on the row at once under prefers-reduced-motion', async () => {
+    await withReducedMotion(true, async () => {
+      const wrapper = mountControlledWheel()
+      await flushPromises()
+      stubWheelRect(wrapper.find('.tx-picker__wheel').element)
+
+      await wrapper.find('.tx-picker__wheel').trigger('click', { clientY: 272 })
+
+      // No tween to sit through and nothing to sit between: the drum is on its
+      // row with the value.
+      expect(offsetOf(wrapper)).toBe('23')
+      wrapper.unmount()
+    })
   })
 })

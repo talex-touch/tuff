@@ -29,7 +29,7 @@ code: |
       <TxButton round variant="secondary">sm</TxButton>
     </TxBorderBeam>
     <TxBorderBeam size="line" :theme="beamTheme" :border-radius="12">
-      <TxFlatInput placeholder="line" />
+      <TxInput placeholder="line" />
     </TxBorderBeam>
   </template>
 ---

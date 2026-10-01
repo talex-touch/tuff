@@ -123,83 +123,93 @@ try {
 }
 ```
 
-## Scenario: One-shot native workers exit after terminal delivery
+## Scenario: Native OCR belongs to a one-shot utility process
 
 ### 1. Scope / Trigger
 
-This applies to a `worker_threads.Worker` that invokes a native/N-API addon and
-posts one terminal success or error message to its parent.
+CoreApp `vision.ocr` recognition invokes a native/N-API addon. A native timeout or
+abort must fail one request, never terminate the Electron main process. A Node
+worker thread is not a crash boundary: its native code shares the main process.
 
 ### 2. Signatures
 
 ```ts
-type NativeWorkerMessage =
-  | { status: 'success'; jobId: number; result: { text: string } }
-  | { status: 'error'; jobId: number; error: string }
+recognizeImageTextIsolated(
+  options: NativeOcrOptions,
+  invocation?: { timeoutMs?: number; signal?: AbortSignal }
+): Promise<NativeOcrResult>
 
-worker.once('message', settleFromMessage)
-worker.once('error', rejectFromWorker)
-worker.once('exit', rejectUnexpectedExit)
+type OcrProcessMessage =
+  | { type: 'ocr.success'; requestId: string; result: NativeOcrResult }
+  | { type: 'ocr.error'; requestId: string; code?: string; message: string }
 ```
+
+The runtime entry is `ocr-process.js`; `LocalProvider.visionOcr` calls the client.
+`OcrService` invokes the configured `vision.ocr` provider route once. It must not
+run a second native worker first or fall back to native recognition on main.
 
 ### 3. Contracts
 
-- Posting the terminal message does not prove the native completion callback has
-  returned. Promise continuations can post to `parentPort` while
-  `Napi::AsyncWorker::OnWorkComplete` is still unwinding.
-- Treat `message` as untrusted at the parent boundary. Its `jobId` must equal
-  the one worker-owned job; success requires an object result with string
-  `text`, and error requires a non-empty string `error`.
-- A terminal `message` settles the parent promise but must not call
-  `worker.terminate()`. The one-shot worker returns from its entrypoint and exits
-  naturally with code 0.
-- Force termination is reserved for a parent-owned timeout or cancellation that
-  occurs before terminal delivery. Keep that path bounded and idempotent.
-- `error` and `exit` are observations of a worker already failing or exiting;
-  they must not trigger a second termination attempt.
+- One request owns one `utilityProcess.fork`. Wait for `spawn` before sending
+  `{ type: 'ocr.request', requestId, options }`; the deadline also covers that wait.
+- Default deadline: 30,000 ms. A finite positive caller deadline overrides it.
+  Timeout, cancellation and application quit reclaim only the owned OS process.
+- Structured clone yields `Uint8Array`; the child restores a Buffer view with
+  `Buffer.from(value.buffer, value.byteOffset, value.byteLength)`.
+- Only the matching request identity can settle. Success requires string `text`,
+  a supported native engine and finite `durationMs`. Preserve native error codes.
+- A terminal frame clears the deadline and disarms cancellation/quit hooks, but
+  never kills the child. The child detaches its request listener and schedules
+  exit after the N-API callback has unwound (`setImmediate`, not inline exit).
+- Settle once. Late frames cannot turn timeout/abort into success; an observed
+  failing/exited child must not receive a second kill.
 
 ### 4. Validation & Error Matrix
 
 | Condition | Required result |
 | --- | --- |
-| Native success message received | Resolve; no `terminate()`; natural exit |
-| Native error message received | Reject with the projected error; no `terminate()`; natural exit |
-| Missing/mismatched job id or malformed terminal payload | Reject as invalid; no immediate `terminate()` |
-| Parent deadline expires before a message | Terminate once; reject with the stable timeout error |
-| Worker exits nonzero before settlement | Reject as worker failure |
+| Valid matching success | Resolve; no parent kill |
+| Matching native error | Reject with its native code/message; no parent kill |
+| Malformed matching success | `OCR_PROCESS_INVALID_RESPONSE` |
+| Foreign request identity | Ignore; original deadline remains armed |
+| Deadline before result, including before spawn | Kill child once; `OCR_PROCESS_TIMEOUT` |
+| Caller abort or application quit | Reclaim active child; `OCR_PROCESS_ABORTED` |
+| Fatal child error/nonzero exit | `OCR_PROCESS_EXITED`; main stays alive |
+| Clean child exit without a result | `OCR_PROCESS_INVALID_RESPONSE` |
 
 ### 5. Good / Base / Bad Cases
 
-- Good: OCR posts its result, the parent resolves immediately, and the child
-  exits after the N-API completion callback returns.
-- Base: a pure-JavaScript one-shot worker follows the same natural-exit path.
-- Bad: the parent receives a valid result and immediately terminates the child;
-  the process can abort in `Napi::Error::ThrowAsJavaScriptException` even though
-  application logs already reported the native call as successful.
+- Good: hung Vision recognition is killed in its utility process; the same main
+  process can accept another native request.
+- Base: normal recognition returns native text/layout through the same client.
+- Bad: terminating a worker thread while its N-API callback is pending, or
+  retrying that recognition directly on main after the worker timed out.
 
 ### 6. Tests Required
 
-- The parent-worker unit test must observe `terminate()` calls and assert zero
-  after a terminal success message; restoring the old immediate termination must
-  turn the test red.
-- Cover missing/mismatched `jobId` and missing success `result.text`; neither
-  may persist a false successful job or force-terminate after delivery.
-- A runtime probe must execute the real native worker repeatedly and require a
-  terminal result plus natural exit code 0 for every worker.
-- Timeout coverage must still prove that a silent worker is force-terminated.
+- Matching success/error, malformed result and foreign identity boundaries.
+- Never-spawning child, deadline/result races, abort/quit and fresh request after
+  child failure. Assert request outcome and reclamation, not forwarding alone.
+- Service persistence/defer/failure must follow one provider invocation per job.
+- Actual Electron smoke: native error projection, silent-child reclamation and
+  child `SIGABRT`; the original main PID must survive and handle another request.
+- Normal native text recognition needs a healthy system OCR engine. On this host,
+  a standalone Node control also failed in Apple Vision's ANE model-compilation
+  XPC call. Fault-containment proof is not proof that the OS recognizer is healthy.
+- Independent macOS Electron smoke with this client and the production child returned
+  `TUFF OCR ISOLATION 2026` with one layout block in 24,950 ms. After a child
+  `SIGABRT`, the same main PID returned the same text in a new child in 175 ms.
+  This proves normal recognition and post-fault recovery; one slow first sample
+  does not establish a per-request cold-start cost. The default deadline stays 30 s.
 
 ### 7. Wrong vs Correct
 
 ```ts
-// Wrong: the native completion callback may still be on the child stack.
-worker.once('message', (message) => {
-  void worker.terminate()
-  settle(message)
-})
+// Wrong: both native calls share the Electron main process' crash boundary.
+await workerNativeOcr().catch(() => recognizeImageText(options))
 
-// Correct: terminal delivery owns settlement; the one-shot entrypoint owns exit.
-worker.once('message', settle)
-timeout = setTimeout(() => void worker.terminate(), WORKER_TIMEOUT_MS)
+// Correct: provider selection stays authoritative; native OCR lives in a child.
+await recognizeImageTextIsolated(options, { timeoutMs, signal })
 ```
 
 ## PollingService: bounded by default

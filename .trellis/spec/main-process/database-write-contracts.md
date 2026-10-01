@@ -187,3 +187,59 @@ PK/columns via `pragma_table_info` plus the behavior the change exists for
 in-parent duplicate rejected). Known debt: `retention-migration.test.ts` hard-codes
 `at(-1) === '0034…'` + journal length 35 — pre-existing red since 0035, needs re-slicing
 by the 0034 index (separate task).
+
+## Scenario: recording accepted usage and reading recommendation evidence (2026-09-30)
+
+### 1. Scope / Trigger
+
+Changes to execute accounting, behavior windows, recommendation freshness, or search-detail retention.
+
+### 2. Signatures
+
+- `DbUtils.recordExecuteTransaction({ eventId, sourceId, itemId, sourceType, sessionId, timestamp: Date, context })` returns `{ accepted, usageStats }` only after the primary-lane transaction commits.
+- `DbUtils.getUsageBehaviorBatch(keys, now?)` returns lifetime counts plus reliable 30/7-day executions, distinct **local** days, dated decay, and time distributions in requested-key order.
+- `SearchUsageService.onExecuteAccepted(listener)` emits a pre-write invalidation with `usageStats: null` and, only after a new committed admission, the updated serialized row.
+- `SearchUsageService.flush()` waits for admitted execution writes to settle before a recommendation read; failure settles the barrier without inventing data.
+
+### 3. Contracts
+
+- The provider confirms the main action was accepted first. Activation, selection, preview, capture, and secondary app actions are not acceptance.
+- Resolve source aliases and rebuilt `_originalSourceId` / `_originalItemId` before recording. One user action owns one opaque `eventId`; repeated notifications reuse it, a second intentional action gets a new one.
+- `usage_execute_events.event_id` is the admission PK. Its insert, execution log, lifetime counter, summary, daily trend, and stored time distributions share **one** `scheduleDbWrite` transaction. No second writer and no ten-minute execution queue.
+- A PK conflict returns `accepted: false` without changing any count. A later statement failure rolls back admission too; reject rather than reporting a durable success.
+- Only the accepted ledger supplies dated evidence. Legacy lifetime counts stay intact, but old timestamps, exposure totals, and UTC-floored daily trends cannot fabricate accepted executions or local-day habits. Retained logs do not reconstruct a smaller lifetime total.
+- Keep migration `0051_usage_execute_events`, the aux DDL, search privacy owner/export, and storage inventory consistent. Dedupe is retained under the same search-detail policy as its behavior evidence; it is not an indefinite exemption from privacy deletion.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+| --- | --- |
+| Same admitted `eventId` delivered again | No new admission, log, count, trend, or time bucket |
+| Failure after admission insert | All execution writes roll back; no committed-row notification |
+| Provider rejects/cancels or path is missing | No execution write; the original failure remains visible |
+| Statistics fail after a real action succeeds | Action stays successful; statistics error is logged, not relabeled as saved |
+| Legacy cumulative 50 with no accepted dated events | Lifetime 50; recent 0; last reliable execution unknown; no automatic habit |
+| Process restarts after acknowledged commit | Count and receipt survive; replay does not increment |
+
+### 5. Good / Base / Bad Cases
+
+- Good: file open accepted, receipt committed, current count updates, next recommendation reads the settled ledger.
+- Base: a retry opens the same target again but reuses the action receipt and adds no second statistic.
+- Bad: enqueue an execute, advertise a new persisted count, then let the next reader see the old database; or backfill dated habit evidence from lifetime totals.
+
+### 6. Tests Required
+
+- `search-usage-service.test.ts`: atomic rollback, duplicate receipts, read-after-write, complete time-bucket fold, reliable local-day evidence, and preservation of unknown legacy lifetime history.
+- `search-core.contracts.test.ts`: canonical identity, accepted non-activating actions, failed/secondary actions, and invalidation before a queued commit.
+- `privacy/search-retention-owner.test.ts`: receipt retention/export/deletion follows the same owner policy.
+- Runtime proof uses a real libSQL database, process reopen, acknowledged-commit crash/replay, and actual provider/clipboard actions; mocks cannot prove durability.
+
+### 7. Wrong vs Correct
+
+```ts
+// Wrong: no atomic admission and no read-after-write guarantee.
+queue.enqueue(sourceId, itemId, sourceType, 'execute')
+// Correct: the accepted action owns the receipt; await the sole-writer transaction.
+await dbUtils.recordExecuteTransaction({ eventId, sourceId, itemId, sourceType, sessionId, timestamp, context })
+```
+

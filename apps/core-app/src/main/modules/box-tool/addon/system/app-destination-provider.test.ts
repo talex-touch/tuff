@@ -9,7 +9,9 @@ import {
 import { AppDestinationProvider } from './app-destination-provider'
 
 const mocks = vi.hoisted(() => ({
-  open: vi.fn(),
+  // `open` reports a navigation outcome, and the provider counts a use only when the host could
+  // reach the destination: the mock must answer with a status, not `undefined`.
+  open: vi.fn(() => ({ status: 'opened' })),
   getAppDestinationNavigationService: vi.fn(),
   getLogger: vi.fn(() => ({
     info: vi.fn(),

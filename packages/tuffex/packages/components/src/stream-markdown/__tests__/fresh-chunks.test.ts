@@ -130,4 +130,16 @@ describe('createFreshChunks', () => {
     // normalize() merged the split text nodes back into one.
     expect(el.querySelector('p')!.childNodes).toHaveLength(1)
   })
+
+  it('seed adopts what is already shown, so only later growth animates', () => {
+    const { el, fresh, patch, spans } = harness()
+    patch('<p>挂载时就在</p>')
+    fresh.seed(el, 1)
+    expect(spans()).toHaveLength(0)
+
+    patch('<p>挂载时就在，之后才到</p>')
+    fresh.update(el, 1)
+    expect(spans()).toHaveLength(1)
+    expect(spans()[0]!.textContent).toBe('，之后才到')
+  })
 })

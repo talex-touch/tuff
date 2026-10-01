@@ -349,6 +349,14 @@ export interface CoreBoxExecuteRequest {
   item: unknown
   searchResult?: unknown
   actionId?: string
+  /** Stable across notifications/retries of one user action; a new action gets a new id. */
+  eventId?: string
+}
+
+export interface CoreBoxUsageChangedPayload {
+  sourceId: string
+  itemId: string
+  usageStats: NonNullable<NonNullable<TuffItem['meta']>['usageStats']>
 }
 
 export interface CoreBoxTogglePinRequest {
@@ -818,13 +826,16 @@ export interface CoreBoxRecommendationResponse {
   error?: string
 }
 
-/**
- * Which recommendation items a surface actually rendered, in display order.
- * Local evaluation input for hit-rate@k — ids only, fire-and-forget.
- */
+/** Actual viewport-visible items in one native-window display session. No content is reported. */
 export interface CoreBoxRecommendationExposureRequest {
-  /** `sourceId:itemId` per rendered item, in rendered order */
-  itemKeys: string[]
+  sessionId: string
+  kind: 'search' | 'recommendation'
+  items: Array<{
+    sourceId: string
+    itemId: string
+    sourceType: string
+    pinned: boolean
+  }>
   surface?: string
 }
 

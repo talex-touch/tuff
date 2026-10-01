@@ -187,7 +187,7 @@ const copy = computed(() => zh.value
       slow: '延迟升高',
       quota: 'AI 用量 · 9 月',
       quotaLabel: 'AI token 用量，按调用路径',
-      routes: { local: '端侧', nexus: 'Nexus AI', keys: '自有密钥' },
+      routes: { local: '端侧', nexus: 'Tuff AI', keys: '自有密钥' },
       insights: '洞察',
       previousInsight: '上一条洞察',
       nextInsight: '下一条洞察',
@@ -247,7 +247,7 @@ const copy = computed(() => zh.value
       slow: 'Latency up',
       quota: 'AI usage · Sep',
       quotaLabel: 'AI token usage by route',
-      routes: { local: 'On-device', nexus: 'Nexus AI', keys: 'Own keys' },
+      routes: { local: 'On-device', nexus: 'Tuff AI', keys: 'Own keys' },
       insights: 'Insights',
       previousInsight: 'Previous insight',
       nextInsight: 'Next insight',
@@ -693,12 +693,12 @@ function scrubLabel(index: number | null): string {
 const aiSegments = computed<AllocationSegment[]>(() => zh.value
   ? [
       { key: 'local', label: '端侧模型', short: '端侧', percent: 72.4, color: ChartPalette.categoricalVar(4), description: '在本机运行，不占用云端额度。' },
-      { key: 'nexus', label: 'Nexus AI', short: 'Nexus', percent: 23.1, color: ChartPalette.categoricalVar(3), description: '长上下文与图像理解走云端。' },
+      { key: 'nexus', label: 'Tuff AI', short: 'Tuff', percent: 23.1, color: ChartPalette.categoricalVar(3), description: '长上下文与图像理解走云端。' },
       { key: 'keys', label: '自有密钥', short: '密钥', percent: 4.5, color: ChartPalette.categoricalVar(5), description: '用户自带 API Key 的请求。' },
     ]
   : [
       { key: 'local', label: 'On-device', short: 'LOCAL', percent: 72.4, color: ChartPalette.categoricalVar(4), description: 'Runs on the machine and costs no cloud quota.' },
-      { key: 'nexus', label: 'Nexus AI', short: 'NEXUS', percent: 23.1, color: ChartPalette.categoricalVar(3), description: 'Long context and image understanding go to the cloud.' },
+      { key: 'nexus', label: 'Tuff AI', short: 'TUFF', percent: 23.1, color: ChartPalette.categoricalVar(3), description: 'Long context and image understanding go to the cloud.' },
       { key: 'keys', label: 'Own keys', short: 'KEYS', percent: 4.5, color: ChartPalette.categoricalVar(5), description: 'Requests on the user’s own API key.' },
     ])
 

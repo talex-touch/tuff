@@ -17,6 +17,7 @@ import {
   normalizeConversationId
 } from '../../../app-destination/app-destination-navigation'
 import { searchConversations } from '../../../conversation/conversation-store'
+import { recordAcceptedExecute, resolveExecuteEventId } from '../../search-engine/execute-recorder'
 import { t } from '../../../../utils/i18n-helper'
 
 const conversationLog = getLogger('conversation-provider')
@@ -93,7 +94,20 @@ export class ConversationProvider implements ISearchProvider<ProviderContext> {
 
     // Fire and forget: the row's job is to move the user, and the navigation service reports its
     // own failures to the log rather than to a return value nobody displays.
-    getAppDestinationNavigationService(context.touchApp).openConversation(conversationId)
+    const result = getAppDestinationNavigationService(context.touchApp).openConversation(
+      conversationId
+    )
+    // A destination the host could not reach is not a use; an opened or queued one is.
+    if (result.status !== 'unavailable') {
+      recordAcceptedExecute({
+        item: args.item,
+        sessionId: args.searchResult?.sessionId ?? null,
+        entryPoint: 'core-box',
+        eventId: resolveExecuteEventId(args.eventId)
+      }).catch((error) => {
+        conversationLog.warn('Failed to record conversation open usage', { error })
+      })
+    }
     return null
   }
 

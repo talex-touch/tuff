@@ -87,3 +87,51 @@ Close SDK/CLI strategy, packaged native availability, diagnostics, Windows accep
   CLI P50/P95 `8/9ms`, exact unavailable errors (SDK backend `2`, CLI `8`),
   and packaged wrapper/resource-manifest/native proof. Packaged CoreBox UI
   evidence remains open.
+- Packaged CoreBox UI path (AC 58/62/66) is implemented but not yet exercised on
+  Windows. Implementation:
+  `scripts/coreapp-packaged-corebox-everything-probe.ts` launches the packaged
+  app (isolated profile, `--remote-debugging-port`), drives the real
+  `#core-box-input` with the normal (`<marker>`), explicit `@file`
+  (`@file <marker>`), structured-filter (`ext:txt <stem>`) and empty-token
+  queries, and writes a redacted `everything-corebox-ui-evidence` JSON plus
+  result-column screenshots; it counts marker matches inside the renderer so no
+  title or path leaves the app. The launched profile is guarded by the split
+  harness' `assertIsolatedProfileDir`/`assertIsolatedFixtureRoot`, is only reset
+  when it is empty or carries the probe's own ownership marker, and seeds the
+  marker file inside that profile (never the real home). Each mode also records
+  the provider that actually answered (`resultSource`) from the real
+  orchestrator `sources`, not from the global Everything status: `normal` and
+  `explicit-file` are the Everything-sourced modes, while `ext:txt` is a
+  structural filter the local file index claims, so `structured-filter` is
+  recorded as `file-provider` and must never be judged as an Everything row. A
+  degraded/unavailable notice (`.BoxItem--notice`) is reported separately as
+  `noticeVisible` and excluded from `rowCount`, so a zero-row degraded run is not
+  a failure. `everything-corebox-ui-verifier.ts` evaluates that artifact (schema,
+  redaction, backend/expected agreement, per-mode rows, marker matches, empty and
+  degraded invariants) and its filesystem half,
+  `verifyEverythingCoreBoxUiArtifacts`, requires every listed screenshot to be a
+  real, non-empty PNG inside the evidence root (a filename in the artifact array
+  is not proof). The probe also reads the live non-refresh Everything status
+  before and after each typed search and attributes the real `sdk-query`/
+  `cli-query` diagnostic stage (uniquely timestamped per query — the bounded
+  performance ring cannot prove a query did not run once its window fills) to
+  that mode: an `sdk-napi` run must show a successful SDK query and no
+  CLI recovery, a `cli` run must show a successful CLI query (the SDK failing
+  first is the documented recovery), and an `unavailable` run must show no
+  Everything query. A query-time SDK failure that recovered through the CLI
+  therefore fails in the SDK phase rather than hiding behind `resultSource`
+  (SDK and CLI are both `everything-provider`). Both halves are exposed as
+  `pnpm -C apps/core-app run everything:corebox-ui:verify`; `windows:acceptance:verify`
+  re-runs them against the manifest's two artifacts. The hosted gate runs
+  the probe twice around the existing SDK/CLI/unavailable collector — once with
+  the restarted portable runtime (`--expect-backend sdk-napi`) and once with the
+  runtime stopped and `TALEX_EVERYTHING_DLL_PATH` pointed at a missing file
+  (`--expect-backend unavailable`) — and fails on either strict verification.
+  The Windows acceptance manifest records both artifacts through
+  `manualChecks.everythingSearch.coreBoxUiEvidence`, and
+  `windows:acceptance:verify --requireEverythingSearchUiEvidence` re-reads them,
+  re-runs the strict evaluator, and requires the manifest's three query strings
+  to equal the queries recorded in the artifact. Rows 58, 62, and 66 stay open
+  until a hosted run produces those artifacts and a completed Windows
+  acceptance manifest passes that command; local macOS runs only prove the
+  collectors and verifier (the strict gate correctly rejects `darwin` artifacts).

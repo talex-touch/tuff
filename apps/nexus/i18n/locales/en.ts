@@ -132,7 +132,7 @@ export default {
     emailStepTitle: 'Tuff',
     loginStepSubtitle: 'Use Magic Link or another sign-in method.',
     emailLinkSubtitle: 'Enter your email and we’ll send a one-time sign-in link.',
-    signInDescription: 'Sign in to Tuff Nexus to manage devices, plugins, and updates.',
+    signInDescription: 'Sign in to Tuff to manage devices, plugins, and updates.',
     signInSubtitle: 'Sign in with Magic Link, GitHub, LinuxDO, or Passkey. Your first successful sign-in creates the account automatically.',
     nextStep: 'Next',
     continueWithEmail: 'Continue with Email',
@@ -236,7 +236,7 @@ export default {
   pricing: {
     eyebrow: 'Pricing',
     title: 'Choose the plan that matches your momentum.',
-    subtitle: 'Upgrade inside Nexus. Unlock premium automations and surfaces instantly after subscription.',
+    subtitle: 'Upgrade inside Tuff. Unlock premium automations and surfaces instantly after subscription.',
     popular: 'Most popular',
     comingSoon: 'Coming soon',
     comingSoonHint: 'Pricing announced at launch',
@@ -619,9 +619,6 @@ export default {
     families: {
       avatarBasic: 'Basic Avatar',
     },
-  },
-  docsSuiteCatalog: {
-    total: '{count} components across {groups} groups',
   },
   ...legal,
 }

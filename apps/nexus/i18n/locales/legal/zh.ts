@@ -54,7 +54,7 @@ export default {
     lastUpdated: '最后更新',
     section1: {
       title: '1. 适用范围',
-      content: '本隐私政策适用于 Tuff 与 Nexus 提供的产品、服务与相关网站。',
+      content: '本隐私政策适用于 Tuff 提供的产品、服务与相关网站。',
     },
     section2: {
       title: '2. 我们收集的信息',
@@ -78,7 +78,7 @@ export default {
     },
     contact: {
       title: '联系我们',
-      content: '如对本隐私政策有疑问，请通过 Nexus 官方渠道联系我们。',
+      content: '如对本隐私政策有疑问，请通过 Tuff 官方渠道联系我们。',
     },
   },
   protocol: {

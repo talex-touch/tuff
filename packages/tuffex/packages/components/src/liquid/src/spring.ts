@@ -1,9 +1,11 @@
 // Ported from liquid-gooey/src/spring.ts
 // (https://github.com/Jakubantalik/Libraries). MIT License © 2026 Jakub Antalik.
 // Framework-free module kept intentionally close to upstream; local deviations
-// are limited to strict-TS (noUncheckedIndexedAccess) hardening and the
-// `springSteps` integrator (with its `springOf` config guard) below `presets`,
-// so upstream fixes stay diffable.
+// are limited to strict-TS (noUncheckedIndexedAccess) hardening, the
+// `stepSpring` import, and the `springSteps` integrator (with its `springOf`
+// config guard) below `presets`, so upstream fixes stay diffable.
+
+import { stepSpring } from '../../../../utils/animation/spring'
 
 /** Spring-driven easing, compiled to CSS `linear()` so the DOM wrapper and the
  *  SVG blob can share one GPU-composited transition — the core of zero-lag
@@ -48,14 +50,11 @@ const DT = 1 / 240
  *  retarget, so it integrates the same `presets` here instead of compiling
  *  them — one set of curves for the whole library, two ways to run it.
  *
- *  Semi-implicit Euler, the same scheme as `observer.ts`'s private
- *  `springSteps` and `simulate()` below. The substep cap is `DT`, the step
- *  `simulate()` compiles the CSS curves with, not observer's 1/60 s: at 1/60 s
- *  the snappy preset drifts 10.7% off its own compiled curve (smooth 5.7%,
- *  bouncy 10.1%), which would put a JS-driven and a CSS-driven element on the
- *  same preset visibly out of step. At `DT` the gap is 0.2% at 60 fps. Any
- *  `dt` is safe: a long frame takes more substeps, it never takes a bigger
- *  one, so a 2 s gap lands on the target instead of blowing up. */
+ *  This resolves the preset and steps on utils' `stepSpring`: semi-implicit
+ *  Euler, the same scheme as `observer.ts`'s private `springSteps` and
+ *  `simulate()` below, with a substep cap equal to `DT` rather than
+ *  observer's 1/60 s. The stepping lives in utils so hosts of the indicator
+ *  engine outside the components can reach it without this module. */
 export function springSteps(
   position: number,
   velocity: number,
@@ -63,23 +62,7 @@ export function springSteps(
   config: TransitionPreset | SpringConfig,
   dt: number,
 ): [number, number] {
-  if (!(dt > 0))
-    return [position, velocity]
-  const c = springOf(config)
-  const mass = c.mass > 0 ? c.mass : 1
-  // The epsilon keeps an exact multiple of DT (a 60 Hz frame is 4 of them)
-  // from rounding up into one extra, shorter step.
-  let n = Math.max(1, Math.ceil(dt / DT - 1e-6))
-  const h = dt / n
-  let p = position
-  let v = velocity
-  while (n-- > 0) {
-    v += ((c.stiffness * (target - p) - c.damping * v) / mass) * h
-    p += v * h
-  }
-  // A frame loop only sleeps once its springs are at rest, and NaN never is:
-  // a spring that cannot be integrated lands on its target instead.
-  return Number.isFinite(p) && Number.isFinite(v) ? [p, v] : [target, 0]
+  return stepSpring(position, velocity, target, springOf(config), dt)
 }
 
 /** `springSteps`' config with every field usable. Its callers are per-frame

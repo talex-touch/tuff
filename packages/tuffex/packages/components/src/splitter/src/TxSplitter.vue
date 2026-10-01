@@ -10,7 +10,7 @@ const props = withDefaults(defineProps<SplitterProps>(), {
   min: 0.1,
   max: 0.9,
   disabled: false,
-  barSize: 10,
+  barSize: 6,
   snap: 0,
 })
 
@@ -50,7 +50,7 @@ const dir = computed<SplitterDirection>(() => (props.direction === 'vertical' ? 
 
 const rootStyle = computed<Record<string, string>>(() => {
   return {
-    '--tx-splitter-bar-size': `${Math.max(6, props.barSize ?? 10)}px`,
+    '--tx-splitter-bar-size': `${Math.max(6, props.barSize ?? 6)}px`,
     '--tx-splitter-ratio': String(value.value),
   }
 })
@@ -181,7 +181,7 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 .tx-splitter {
-  --tx-splitter-bar-size: 10px;
+  --tx-splitter-bar-size: 6px;
   --tx-splitter-ratio: 0.5;
 
   width: 100%;
@@ -195,16 +195,16 @@ onBeforeUnmount(() => {
 
 .tx-splitter.is-horizontal {
   grid-template-columns:
-    minmax(0, calc(var(--tx-splitter-ratio) * 100%))
+    minmax(0, calc((100% - var(--tx-splitter-bar-size)) * var(--tx-splitter-ratio)))
     var(--tx-splitter-bar-size)
-    minmax(0, calc((1 - var(--tx-splitter-ratio)) * 100%));
+    minmax(0, calc((100% - var(--tx-splitter-bar-size)) * (1 - var(--tx-splitter-ratio))));
 }
 
 .tx-splitter.is-vertical {
   grid-template-rows:
-    minmax(0, calc(var(--tx-splitter-ratio) * 100%))
+    minmax(0, calc((100% - var(--tx-splitter-bar-size)) * var(--tx-splitter-ratio)))
     var(--tx-splitter-bar-size)
-    minmax(0, calc((1 - var(--tx-splitter-ratio)) * 100%));
+    minmax(0, calc((100% - var(--tx-splitter-bar-size)) * (1 - var(--tx-splitter-ratio))));
 }
 
 .tx-splitter__pane {
@@ -249,15 +249,16 @@ onBeforeUnmount(() => {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 60%, transparent);
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 74%, transparent);
-  backdrop-filter: blur(14px) saturate(150%);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  box-shadow: 5px 10px 24px rgba(0, 0, 0, 0.12);
+  width: 2px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--tx-border-color, #dcdfe6);
 }
+.tx-splitter.is-vertical .tx-splitter__grip {
+  width: 24px;
+  height: 2px;
+}
+
 
 .tx-splitter.is-disabled {
   opacity: 0.75;

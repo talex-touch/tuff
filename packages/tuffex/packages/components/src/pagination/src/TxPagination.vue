@@ -13,8 +13,8 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   currentPage: 1,
   pageSize: 10,
-  prevIcon: 'i-carbon-chevron-left',
-  nextIcon: 'i-carbon-chevron-right',
+  prevIcon: '',
+  nextIcon: '',
   showInfo: false,
   showFirstLast: false,
   ariaLabel: 'Pagination',
@@ -122,7 +122,10 @@ function handlePageChange(page: number) {
           :aria-label="prevLabel"
           @click="handlePageChange(safePage - 1)"
         >
-          <TxIcon :name="prevIcon" />
+          <TxIcon v-if="prevIcon" :name="prevIcon" />
+          <svg v-else class="tx-pagination__chevron" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="m10 3-5 5 5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         </button>
       </li>
 
@@ -155,7 +158,10 @@ function handlePageChange(page: number) {
           :aria-label="nextLabel"
           @click="handlePageChange(safePage + 1)"
         >
-          <TxIcon :name="nextIcon" />
+          <TxIcon v-if="nextIcon" :name="nextIcon" />
+          <svg v-else class="tx-pagination__chevron" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="m6 3 5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         </button>
       </li>
 
@@ -260,6 +266,12 @@ function handlePageChange(page: number) {
   border-color: var(--tx-pagination-disabled-border, var(--tx-border-color-extra-light, #f2f6fc));
   opacity: 1;
   cursor: not-allowed;
+}
+
+.tx-pagination__chevron {
+  width: 16px;
+  height: 16px;
+  flex: none;
 }
 
 .tx-pagination__ellipsis {

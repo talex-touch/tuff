@@ -16,6 +16,9 @@ import { performance } from 'node:perf_hooks'
 import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import {
+  APP_DESTINATION_ITEM_IDS,
+  APP_DESTINATION_ITEM_ID_PREFIX,
+  APP_DESTINATION_PROVIDER_ID,
   COMMON_SETTING_DESTINATION_IDS,
   getAppDestination,
   isAppDestinationId,
@@ -24,14 +27,15 @@ import {
 import { t } from '../../../../utils/i18n-helper'
 import { calculateHighlights } from '../apps/highlighting-service'
 import { getAppDestinationNavigationService } from '../../../app-destination/app-destination-navigation'
+import { recordAcceptedExecute, resolveExecuteEventId } from '../../search-engine/execute-recorder'
 
 const destinationLog = getLogger('app-destination-provider')
 
 /** Action ID prefix for a destination execute action: `open-destination:<id>`. */
 const APP_DESTINATION_ACTION_PREFIX = 'open-destination:'
 
-const MAIN_WINDOW_ITEM_ID = 'main-window'
-const PREFIXED_ITEM_ID_PREFIX = 'app-destination:'
+/** `main-window` predates the prefixed ids and keeps its bare id (see the shared catalog). */
+const MAIN_WINDOW_ITEM_ID = APP_DESTINATION_ITEM_IDS['main-window']
 
 /**
  * Upper bound on metadata search tokens.
@@ -49,14 +53,14 @@ const MAX_SEARCH_TOKENS = 32
  */
 function parseItemId(itemId: string): AppDestinationId | null {
   if (itemId === MAIN_WINDOW_ITEM_ID) {
-    return MAIN_WINDOW_ITEM_ID
+    return 'main-window'
   }
 
-  if (!itemId.startsWith(PREFIXED_ITEM_ID_PREFIX)) {
+  if (!itemId.startsWith(APP_DESTINATION_ITEM_ID_PREFIX)) {
     return null
   }
 
-  const candidate = itemId.slice(PREFIXED_ITEM_ID_PREFIX.length)
+  const candidate = itemId.slice(APP_DESTINATION_ITEM_ID_PREFIX.length)
   return isAppDestinationId(candidate) ? candidate : null
 }
 
@@ -71,7 +75,7 @@ function parseActionId(actionId: string): AppDestinationId | null {
 }
 
 export class AppDestinationProvider implements ISearchProvider<ProviderContext> {
-  readonly id = 'app-destination-provider'
+  readonly id = APP_DESTINATION_PROVIDER_ID
   readonly type = 'system' as const
   readonly name = 'App Destinations'
   readonly supportedInputTypes = [TuffInputType.Text]
@@ -125,7 +129,18 @@ export class AppDestinationProvider implements ISearchProvider<ProviderContext> 
       return null
     }
 
-    getAppDestinationNavigationService(context.touchApp).open(destinationId)
+    const result = getAppDestinationNavigationService(context.touchApp).open(destinationId)
+    // A destination the host could not reach is not a use; an opened or queued one is.
+    if (result.status !== 'unavailable') {
+      recordAcceptedExecute({
+        item: args.item,
+        sessionId: args.searchResult?.sessionId ?? null,
+        entryPoint: 'core-box',
+        eventId: resolveExecuteEventId(args.eventId)
+      }).catch((error) => {
+        destinationLog.warn('Failed to record destination open usage', { error })
+      })
+    }
     return null
   }
 
@@ -157,13 +172,7 @@ export class AppDestinationProvider implements ISearchProvider<ProviderContext> 
   ): TuffItem {
     const title = t(definition.titleKey)
 
-    return new TuffItemBuilder(
-      definition.id === MAIN_WINDOW_ITEM_ID
-        ? MAIN_WINDOW_ITEM_ID
-        : `${PREFIXED_ITEM_ID_PREFIX}${definition.id}`,
-      this.type,
-      this.id
-    )
+    return new TuffItemBuilder(APP_DESTINATION_ITEM_IDS[definition.id], this.type, this.id)
       .setKind('command')
       .setTitle(title)
       .setSubtitle(t(definition.subtitleKey))

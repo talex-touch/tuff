@@ -1,10 +1,12 @@
 <script setup lang="ts">
 const { locale } = useI18n()
 
+// One landscape and one portrait source: the lightbox contains both inside the
+// viewport, so the reader can see neither axis is cropped.
 const items = [
   { id: 'one', url: 'https://picsum.photos/seed/talex-gallery-one/640/420', name: 'Workspace overview' },
   { id: 'two', url: 'https://picsum.photos/seed/talex-gallery-two/640/420', name: 'Release graph' },
-  { id: 'three', url: 'https://picsum.photos/seed/talex-gallery-three/640/420', name: 'Plugin detail' },
+  { id: 'three', url: 'https://picsum.photos/seed/talex-gallery-three/480/760', name: 'Plugin detail' },
 ]
 </script>
 

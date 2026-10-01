@@ -1,4 +1,4 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import TxImageGallery from '../src/TxImageGallery.vue'
@@ -73,6 +73,47 @@ describe('txImageGallery', () => {
     await nextTick()
     expect(viewer()?.getAttribute('src')).toBe('/b.png')
     expect(count()).toBe('2 / 3')
+  })
+
+  it('keeps focus in the dialog when navigation reaches either end', async () => {
+    const wrapper = mount(TxImageGallery, {
+      props: { items },
+      attachTo: document.body,
+    })
+
+    const thumb = (i: number) => wrapper.findAll('.tx-image-gallery__thumb')[i]!
+    const nav = (label: string) => document.body.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!
+    const overlay = () => document.body.querySelector<HTMLElement>('.tx-modal__overlay')!
+
+    await thumb(0).trigger('click')
+    await nextTick()
+
+    // Walking to the last image disables Next under the pointer: the control the
+    // user was using disappears from the tab order, and focus must move to the
+    // other nav rather than falling out of the dialog.
+    nav('Next image').click()
+    nav('Next image').click()
+    await flushPromises()
+    expect(document.activeElement).toBe(nav('Previous image'))
+
+    // The dialog is still Escape-able, and closing puts focus back on the
+    // thumbnail the preview was opened from.
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(document.body.querySelector('.tx-modal__overlay')).toBeNull()
+    expect(document.activeElement).toBe(thumb(0).element)
+
+    // The opposite end, same rule with the controls the other way round.
+    await thumb(items.length - 1).trigger('click')
+    await nextTick()
+    nav('Previous image').click()
+    nav('Previous image').click()
+    await flushPromises()
+    expect(document.activeElement).toBe(nav('Next image'))
+    expect(overlay().contains(document.activeElement)).toBe(true)
+
+    wrapper.unmount()
   })
 
   it('does not open or emit for an empty list', async () => {

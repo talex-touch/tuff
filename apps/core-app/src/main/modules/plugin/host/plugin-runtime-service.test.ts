@@ -77,6 +77,7 @@ class FakePort implements PluginRuntimeControlPortAdapter {
   readonly loadPayloads: unknown[] = []
   started = false
   closed = false
+  failLifecycle = false
   initBarrier: ReturnType<typeof deferred<void>> | null = null
   destroyBarrier: ReturnType<typeof deferred<void>> | null = null
   private readonly listeners = new Set<(message: unknown) => void>()
@@ -110,6 +111,18 @@ class FakePort implements PluginRuntimeControlPortAdapter {
     if (message.type === 'lifecycle-call') {
       const barrier = message.method === 'onInit' ? this.initBarrier : this.destroyBarrier
       void (barrier?.promise ?? Promise.resolve()).then(() => {
+        if (this.failLifecycle) {
+          this.emit({
+            protocolVersion: message.protocolVersion,
+            activationHandle: message.activationHandle,
+            hostGeneration: message.hostGeneration,
+            type: 'lifecycle-result',
+            requestId: message.requestId,
+            ok: false,
+            error: { code: 'PLUGIN_HOST_CHILD_LIFECYCLE_FAILED' }
+          })
+          return
+        }
         this.emit({
           protocolVersion: message.protocolVersion,
           activationHandle: message.activationHandle,
@@ -513,6 +526,26 @@ describe('PluginRuntimeService', () => {
 
     initBarrier.resolve()
     await expect(starting).resolves.toMatchObject({ host: { state: 'active' } })
+    await harness.service.dispose()
+  })
+
+  it('fails the activation and cleans up when the child onInit reports a lifecycle failure', async () => {
+    const harness = createHarness()
+    const identity = activation()
+    const initBarrier = deferred<void>()
+    harness.setNextInitBarrier(initBarrier)
+    const starting = harness.start(identity)
+    await vi.waitFor(() => expect(harness.ports).toHaveLength(1))
+
+    harness.ports[0].failLifecycle = true
+    initBarrier.resolve()
+
+    await expect(starting).rejects.toEqual(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_LIFECYCLE_FAILED')
+    )
+    expect(harness.service.resolve(identity)).toBeUndefined()
+    expect(harness.children[0].exited).toBe(true)
+    expect(harness.revokeKey).toHaveBeenCalledTimes(1)
     await harness.service.dispose()
   })
 

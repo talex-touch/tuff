@@ -172,3 +172,40 @@ Ordinary context-dependent names such as `build` keep the sibling project-marker
 Zero-result diagnostics never count the FTS or meta table on the request path. A diagnostic log may include provider and query length, but no follow-up read may delay the empty result.
 
 Regression and benchmark contract: exact/prefix stays ahead of fuzzy; filename beats path-only; typo/non-consecutive recall preserves the intended Top-K. The 150,000-row / 4,036,303-keyword warm probe must remain below the CoreBox 80 ms window even with zero `sqlite_stat1` rows (2026-09-29 baseline: median 1.36 ms, P95 32.20 ms, max 37.03 ms).
+
+## Scenario: Direct path actions lead their search batch
+
+### 1. Scope / Trigger
+
+`SystemActionsProvider` recognizes an existing complete path, including `~`, spaces, file URLs, and copied file inputs. This is a contextual action, not a file-index search or a context-free frequent recommendation.
+
+### 2. Signatures
+
+- `getDirectoryTerminals(deps?)` returns `{ default, installed, all }`; production discovery is process-cached and primed from provider startup.
+- `openDirectoryInTerminal(terminal, directory, deps?)` confirms a directory and reports real launcher acquisition or failure.
+- Path rows carry `meta.extension.pathAction = { kind, ordinal, path, terminalId? }` and originate from `system-actions-provider` with source type `system`.
+
+### 3. Contracts
+
+- Whole paths are tried before token fragments. Missing paths produce no open action; plain files produce a file-manager reveal, never a terminal cwd.
+- Within one arriving batch, directory order is default terminal, other installed terminals, Finder/file manager, then ordinary results and existing index actions. Only the trusted system source can claim the path rank band; pinned items retain their partition.
+- macOS offers fixed terminal identities only when their bundles declare folder opening; default is system Terminal unless a live configured terminal is selected. LaunchServices receives the directory as one argv entry. Windows terminal aliases are offered only when present; Windows/Linux launches await spawn acknowledgment and observe asynchronous errors.
+- No shell interpolation or per-keystroke application scan. Executing rechecks directory/terminal presence. One-shot path actions do not rebuild into the empty-state frequent list.
+
+### 4. Validation & Error Matrix
+
+Missing directory, non-directory cwd, missing terminal, or failed acquisition → refused action and no accepted usage count. A forged plugin `pathAction` → normal rank, not the system band.
+
+If path validation or terminal discovery misses the first publication, the renderer appends these unpinned actions below existing rows even with a higher score. The append-only consumer contract keeps the current selection stable; the path rank band does not guarantee first-row placement across batches.
+
+### 5. Good / Base / Bad Cases
+
+Good: a directory named `中文 path; $literal` opens with that exact cwd. Base: only the system terminal is installed, so no duplicate terminal row is emitted. Bad: offering a nonexistent `wt.exe` or returning success before its asynchronous spawn error.
+
+### 6. Tests Required
+
+Directory/provider/sorter regressions cover spaced/Unicode paths, file versus directory, missing/removed targets, terminal argv/cwd, pin precedence, and forged metadata. Real CoreBox Enter must create a shell whose OS cwd matches the target; tests alone do not prove it.
+
+### 7. Wrong vs Correct
+
+Wrong: `spawn('sh', ['-c', 'cd ' + path])`. Correct: an inventory-owned launcher with a literal argv directory or process `cwd`, then observed launcher acquisition.

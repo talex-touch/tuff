@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCandidateSemanticProfile,
   buildRecommendationSemanticProfile,
-  buildRecommendationUsageAvoidanceProfile,
-  buildRecommendationUsagePreferenceProfile,
   calculateLocalSemanticScore
 } from './semantic-profile'
 
@@ -109,87 +107,5 @@ describe('recommendation semantic profile', () => {
     expect(contextProfile.text).not.toContain('net_private')
     expect(contextProfile.text).not.toContain('loc_private')
     expect(contextProfile.text).not.toContain('Asia/Shanghai')
-  })
-
-  it('builds a local usage preference vector from historical app behavior', () => {
-    const now = new Date('2026-05-04T09:00:00.000Z').getTime()
-    const preferenceProfile = buildRecommendationUsagePreferenceProfile(
-      [
-        {
-          sourceId: 'app-provider',
-          itemId: 'com.microsoft.VSCode',
-          sourceType: 'app',
-          executeCount: 40,
-          searchCount: 8,
-          lastExecuted: new Date('2026-05-04T08:55:00.000Z')
-        },
-        {
-          sourceId: 'app-provider',
-          itemId: 'discord',
-          sourceType: 'app',
-          executeCount: 2,
-          lastExecuted: new Date('2026-05-04T08:55:00.000Z')
-        }
-      ],
-      now
-    )
-    const vscodeProfile = buildCandidateSemanticProfile({
-      sourceId: 'app-provider',
-      itemId: 'com.microsoft.VSCode',
-      sourceType: 'app'
-    })
-    const discordProfile = buildCandidateSemanticProfile({
-      sourceId: 'app-provider',
-      itemId: 'discord',
-      sourceType: 'app'
-    })
-
-    expect(preferenceProfile?.text).toContain('app:ide')
-    expect(preferenceProfile).not.toBeNull()
-    expect(calculateLocalSemanticScore(preferenceProfile!, vscodeProfile)).toBeGreaterThan(
-      calculateLocalSemanticScore(preferenceProfile!, discordProfile)
-    )
-  })
-
-  it('builds a local usage avoidance vector from repeated cancellation behavior', () => {
-    const now = new Date('2026-05-04T09:00:00.000Z').getTime()
-    const avoidanceProfile = buildRecommendationUsageAvoidanceProfile(
-      [
-        {
-          sourceId: 'app-provider',
-          itemId: 'discord',
-          sourceType: 'app',
-          cancelCount: 12,
-          executeCount: 0,
-          lastCancelled: new Date('2026-05-04T08:55:00.000Z')
-        },
-        {
-          sourceId: 'app-provider',
-          itemId: 'com.microsoft.VSCode',
-          sourceType: 'app',
-          cancelCount: 1,
-          executeCount: 20,
-          lastExecuted: new Date('2026-05-04T08:55:00.000Z')
-        }
-      ],
-      now
-    )
-    const telegramProfile = buildCandidateSemanticProfile({
-      sourceId: 'app-provider',
-      itemId: 'telegram',
-      sourceType: 'app'
-    })
-    const terminalProfile = buildCandidateSemanticProfile({
-      sourceId: 'app-provider',
-      itemId: 'com.apple.Terminal',
-      sourceType: 'app'
-    })
-
-    expect(avoidanceProfile).not.toBeNull()
-    expect(avoidanceProfile?.text).toContain('app:social')
-    expect(avoidanceProfile?.text).not.toContain('discord')
-    expect(calculateLocalSemanticScore(avoidanceProfile!, telegramProfile)).toBeGreaterThan(
-      calculateLocalSemanticScore(avoidanceProfile!, terminalProfile)
-    )
   })
 })

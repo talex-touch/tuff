@@ -6283,8 +6283,12 @@
       "trending": "最近变多",
       "cold-start": "猜你要用"
     },
+    "usage": {
+      "launchCount": "累计启动 {count} 次",
+      "useCount": "累计使用此项目 {count} 次"
+    },
     "evidence": {
-      "opened": "打开过 {count} 次",
+      "opened": "累计使用 {count} 次",
       "peakHours": "常在 {start}–{end} 点使用",
       "justUsed": "刚刚用过",
       "lastUsed": "{age}前用过",
@@ -6433,7 +6437,16 @@
       "addFileIndexTitle": "加入文件索引：{name}",
       "addFileIndexSubtitle": "路径：{path}",
       "screenshotCursorDisplayTitle": "截图并复制",
-      "screenshotCursorDisplaySubtitle": "捕获当前光标所在显示器"
+      "screenshotCursorDisplaySubtitle": "捕获当前光标所在显示器",
+      "openDirectoryInDefaultTerminalTitle": "在默认终端（{terminal}）中打开",
+      "openDirectoryInTerminalTitle": "在 {terminal} 中打开",
+      "openDirectoryRevealTitle": "显示 {name}",
+      "openDirectoryInFinderTitle": "在 Finder 中打开 {name}",
+      "revealInFinderTitle": "在 Finder 中显示 {name}",
+      "openDirectoryInConfiguredTerminalSubtitle": "工作目录：{path}",
+      "openDirectoryInSystemTerminalSubtitle": "系统默认终端 · {path}",
+      "openDirectoryInTerminalSubtitle": "工作目录：{path}",
+      "openDirectoryRevealSubtitle": "在文件管理器中显示 · {path}"
     },
     "windowsShell": {
       "open": "打开",

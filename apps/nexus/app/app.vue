@@ -12,7 +12,7 @@ const LazyAuthGateState = defineAsyncComponent(() => import('@talex-touch/tuffex
 
 useHead({
   title: appName,
-  titleTemplate: title => (!title || title === appName) ? appName : (title.includes(appName) || title.includes('Tuff') ? title : `${title} · Tuff Nexus`),
+  titleTemplate: title => (!title || title === appName) ? appName : (title.includes(appName) || title.includes('Tuff') ? title : `${title} · Tuff`),
 })
 
 const { t } = useI18n()
@@ -36,7 +36,7 @@ useHead(() => {
   if (status.value === 'authenticated')
     return {}
   return {
-    title: status.value === 'loading' ? 'Checking session · Tuff Nexus' : 'Sign in required · Tuff Nexus',
+    title: status.value === 'loading' ? 'Checking session · Tuff' : 'Sign in required · Tuff',
     meta: [{ name: 'robots', content: 'noindex, nofollow' }],
   }
 })

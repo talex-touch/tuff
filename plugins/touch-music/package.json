@@ -13,7 +13,7 @@
   "dependencies": {
     "@talex-touch/tuffex": "workspace:^",
     "@types/howler": "^2.2.13",
-    "axios": "^1.18.1",
+    "axios": "^1.20.0",
     "gsap": "catalog:",
     "howler": "^2.2.4",
     "remixicon": "^4.9.1",

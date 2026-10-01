@@ -1,12 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { and, eq, inArray, isNull } from 'drizzle-orm'
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core/alias'
 import type { DbUtils } from '../../../../../db/utils'
 import { fileExtensions, files as filesSchema } from '../../../../../db/schema'
 import { normalizeFsPath } from '@talex-touch/utils/common/file-scan-utils'
 import {
+  THUMBNAIL_ENCODER_VERSION,
   THUMBNAIL_EXTENSIONS,
+  THUMBNAIL_STATUS_EXTENSION_KEY,
   getThumbnailUnsupportedReason,
   isThumbnailCandidate
 } from '../thumbnail-config'
@@ -18,13 +20,13 @@ import type {
 import { persistFileIconCache } from './file-provider-icon-cache-service'
 import { FileProviderIconMigrationService } from './file-provider-icon-migration-service'
 
-const THUMBNAIL_STATUS_KEY = 'thumbnailStatus'
-
 interface ThumbnailStatusPayload {
   status: 'failed' | 'unsupported'
   reason: string
   mtime: number | null
   size: number | null
+  /** Encoder version that produced the status; null for rows written before versioning. */
+  v: number | null
   at: number
 }
 
@@ -283,15 +285,24 @@ export class FileProviderAssetService {
           thumbnailStatusExtension,
           and(
             eq(thumbnailStatusExtension.fileId, filesSchema.id),
-            eq(thumbnailStatusExtension.key, THUMBNAIL_STATUS_KEY)
+            eq(thumbnailStatusExtension.key, THUMBNAIL_STATUS_EXTENSION_KEY)
           )
         )
         .where(
           and(
-            isNull(thumbnailExtension.value),
             inArray(
               filesSchema.extension,
               [...THUMBNAIL_EXTENSIONS].map((extension) => `.${extension}`)
+            ),
+            // A row is a candidate when it has no thumbnail at all, or when the stored one was
+            // written by an older encoder. The version test keeps the pass finite: once a row is
+            // regenerated its status carries the current version and it stops being selected.
+            or(
+              isNull(thumbnailExtension.value),
+              // Strictly older than the current encoder. Rows whose status JSON is absent or
+              // unparsable coalesce to 0 and are also regenerated; a row already stamped with the
+              // current version drops out of the candidate set, so the pass terminates.
+              sql`coalesce(json_extract(${thumbnailStatusExtension.value}, '$.v'), 0) < ${THUMBNAIL_ENCODER_VERSION}`
             )
           )
         )
@@ -306,7 +317,7 @@ export class FileProviderAssetService {
         if (!this.thumbnailTaskRunning) break
         if (
           this.shouldSkipThumbnailGeneration(file, {
-            [THUMBNAIL_STATUS_KEY]: file.statusValue ?? ''
+            [THUMBNAIL_STATUS_EXTENSION_KEY]: file.statusValue ?? ''
           })
         ) {
           skipped++
@@ -361,8 +372,11 @@ export class FileProviderAssetService {
     file: ThumbnailFileSnapshot,
     extensions?: Record<string, string>
   ): boolean {
-    const status = this.parseThumbnailStatus(extensions?.[THUMBNAIL_STATUS_KEY])
+    const status = this.parseThumbnailStatus(extensions?.[THUMBNAIL_STATUS_EXTENSION_KEY])
     if (!status) return false
+    // A status written by an older encoder describes a thumbnail that is no longer the kind of
+    // picture we store, so it does not license skipping the regeneration.
+    if (status.v !== THUMBNAIL_ENCODER_VERSION) return false
     return (
       status.mtime === this.deps.toTimestamp(file.mtime) &&
       status.size === (typeof file.size === 'number' ? file.size : null)
@@ -384,6 +398,7 @@ export class FileProviderAssetService {
         reason: parsed.reason,
         mtime: typeof parsed.mtime === 'number' ? parsed.mtime : null,
         size: typeof parsed.size === 'number' ? parsed.size : null,
+        v: typeof parsed.v === 'number' ? parsed.v : null,
         at: typeof parsed.at === 'number' ? parsed.at : 0
       }
     } catch {
@@ -404,8 +419,12 @@ export class FileProviderAssetService {
           { fileId, key: 'thumbnail', value: thumbnailPath },
           {
             fileId,
-            key: THUMBNAIL_STATUS_KEY,
-            value: JSON.stringify({ status: 'generated', at: this.now() })
+            key: THUMBNAIL_STATUS_EXTENSION_KEY,
+            value: JSON.stringify({
+              status: 'generated',
+              v: THUMBNAIL_ENCODER_VERSION,
+              at: this.now()
+            })
           }
         ])
       )
@@ -424,12 +443,13 @@ export class FileProviderAssetService {
         dbUtils.addFileExtensions([
           {
             fileId,
-            key: THUMBNAIL_STATUS_KEY,
+            key: THUMBNAIL_STATUS_EXTENSION_KEY,
             value: JSON.stringify({
               status: result.status,
               reason: result.reason,
               mtime: file ? this.deps.toTimestamp(file.mtime) : null,
               size: file && typeof file.size === 'number' ? file.size : null,
+              v: THUMBNAIL_ENCODER_VERSION,
               at: this.now()
             })
           }

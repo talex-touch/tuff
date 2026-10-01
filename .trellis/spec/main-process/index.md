@@ -85,9 +85,10 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   main-thread liveness: streaming requests default to a fetch-through-EOF
   deadline, caller-owned idle streams opt in explicitly, caller cancellation is
   source-provenanced and cooldown-neutral, protocol completion/cancellation use
-  controlled lifecycle methods, one-shot native workers exit naturally after
-  terminal delivery; PollingService defaults, outbox round budgets, child-process
-  backoff, bounded interactive `waitForIdle()`, and `[Perf:EventLoop]` diagnosis.
+  controlled lifecycle methods, native OCR isolated in a one-shot utility process
+  with parent-owned deadlines and post-callback child exit; PollingService defaults,
+  outbox round budgets, child-process backoff, bounded interactive `waitForIdle()`,
+  and `[Perf:EventLoop]` diagnosis.
 - [search-charset-and-identity-contracts.md](search-charset-and-identity-contracts.md)
   — charset rules import from search-charset only; SEARCH_KEYWORD_SCHEMA_VERSION
   bump semantics (app auto / file via bound backfill, never through the disk-reading

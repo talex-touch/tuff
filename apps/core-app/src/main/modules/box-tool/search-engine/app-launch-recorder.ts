@@ -1,4 +1,6 @@
-import type { DbUtils } from '../../../db/utils'
+import type { TuffItem } from '@talex-touch/utils'
+import type { AcceptedExecuteRecord } from './execute-recorder'
+import { recordAcceptedExecute } from './execute-recorder'
 import type { UsageEntryPoint } from './usage-entry-point'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { activeAppService } from '../../system/active-app'
@@ -8,34 +10,39 @@ const log = getLogger('search-engine')
 /**
  * The provider id every application row is keyed by. `item_usage_stats`, `item_time_stats` and
  * `usage_trend_daily` all use `(source_id, item_id)`, and the app provider declares this id
- * (`app-provider.ts:459`), so a launch recorded under anything else would land in its own bucket
- * and never join back to the catalog.
+ * (`app-provider.ts`), so a launch recorded under anything else would land in its own bucket and
+ * never join back to the catalog.
  */
 export const APP_PROVIDER_SOURCE_ID = 'app-provider'
 const APP_PROVIDER_SOURCE_TYPE = 'application'
 
 export interface AppLaunchRecord {
-  /** Resolved through `resolveAppItemId`, so it matches the indexed catalog row. */
+  /** The catalogue item id; the statistical key for this launch. */
   itemId: string
+  /**
+   * The executed item, when the caller has it (the CoreBox path does). The settings path holds
+   * only the entry's identity, and a synthetic item carrying that identity is enough for the
+   * recorder: the statistical key is `itemId`, and the source is this provider.
+   */
+  item?: TuffItem
   entryPoint: UsageEntryPoint
+  /** Identifier of this user action, reused across retries of the same launch. */
+  eventId: string
   /** Present for search-originated launches; absent when the user clicked a list row. */
   sessionId?: string | null
   /** Overrides the captured foreground app. Used when the caller already knows it. */
   previousApp?: string | null
 }
 
-/**
- * The shape stored in `usage_logs.context` for an application launch.
- *
- * `prevApp` was described in the schema comment from the beginning (`schema.ts:210`) but nothing
- * ever wrote it, so the column held `{"scoring": …}` and the transition graph had no source. It
- * is captured here, at the one moment where "what the user was in before this launch" is still
- * true — a later read would see the app that was just launched.
- */
-export interface AppLaunchContext {
-  ent: UsageEntryPoint
-  prevApp?: string
-  prevAppName?: string
+/** The identity a settings-page launch carries: it holds the catalogue key, not a rendered item. */
+function buildSyntheticAppItem(itemId: string): TuffItem {
+  return {
+    id: itemId,
+    kind: 'app',
+    source: { id: APP_PROVIDER_SOURCE_ID, type: APP_PROVIDER_SOURCE_TYPE, name: '' },
+    render: { mode: 'default', basic: { title: '' } },
+    actions: []
+  } as TuffItem
 }
 
 /**
@@ -63,53 +70,30 @@ export async function resolvePreviousAppContext(): Promise<{
     return {}
   }
 }
+
 /**
  * Records one application launch, whatever surface asked for it.
  *
- * Every launch path funnels through here so the counts mean one thing. Previously CoreBox
- * executes were recorded by `SearchUsageService.recordExecute` while the settings page called
- * `appSdk.openApp` and recorded nothing, which made per-app launch totals depend on which UI the
- * user happened to prefer.
- *
- * Failures are logged and swallowed: a launch the user asked for must not fail because a
- * statistics row could not be written.
+ * It does not write statistics itself: it publishes the accepted action through the engine's
+ * execute seam, so a settings-page launch and a CoreBox launch land in the same transaction,
+ * dedupe on the same `eventId`, and invalidate the same caches. A launch the user asked for must
+ * not fail because a statistics row could not be written, so a rejected write is logged, not
+ * rethrown, here.
  */
 export class AppLaunchRecorder {
-  constructor(private readonly deps: { getDbUtils: () => DbUtils | null }) {}
-
   async record(record: AppLaunchRecord): Promise<void> {
-    const dbUtils = this.deps.getDbUtils()
-    if (!dbUtils || !record.itemId) return
-
-    const now = new Date()
+    if (!record.itemId) return
+    const accepted: AcceptedExecuteRecord = {
+      item: record.item ?? buildSyntheticAppItem(record.itemId),
+      entryPoint: record.entryPoint,
+      eventId: record.eventId,
+      sessionId: record.sessionId ?? null,
+      previousApp: record.previousApp ?? null
+    }
     try {
-      const context = await this.buildContext(record)
-      await dbUtils.addUsageLog({
-        sessionId: record.sessionId ?? null,
-        itemId: record.itemId,
-        source: APP_PROVIDER_SOURCE_ID,
-        action: 'execute',
-        keyword: '',
-        timestamp: now,
-        context: JSON.stringify(context)
-      })
-      await dbUtils.incrementUsageSummary(record.itemId)
-      await dbUtils.incrementUsageStats(
-        APP_PROVIDER_SOURCE_ID,
-        record.itemId,
-        APP_PROVIDER_SOURCE_TYPE,
-        'execute'
-      )
-      await dbUtils.incrementUsageTrendDaily(APP_PROVIDER_SOURCE_ID, record.itemId, now)
+      await recordAcceptedExecute(accepted)
     } catch (error) {
       log.error(`Failed to record app launch for ${record.itemId}`, { error })
     }
-  }
-
-  private async buildContext(record: AppLaunchRecord): Promise<AppLaunchContext> {
-    if (record.previousApp) {
-      return { ent: record.entryPoint, prevApp: record.previousApp }
-    }
-    return { ent: record.entryPoint, ...(await resolvePreviousAppContext()) }
   }
 }

@@ -487,3 +487,107 @@ $skeleton-shimmer-duration: 1.2s !default;
     }
   }
 }
+
+// Streamed text — TxStreamText and the family built on it
+//
+// A streamed word makes a one-shot entrance: it fades in (resolving out of a
+// blur, per preset) while its colour sweeps the `--tx-stream-reveal-*` stops and
+// settles on the ink. The preset is a class on the component root
+// (`is-reveal-<preset>`), so one sheet serves all of them; the duration arrives
+// from the component as `--tx-stream-reveal-duration`, so the time the component
+// waits before it settles a word and the time the sheet plays are one number.
+//
+// The colour track reads theme tokens inside its keyframes on purpose: it is a
+// one-shot entrance rather than a loop, so the compositor rule for looping
+// effects does not apply, and the stops must follow the theme. Every animation
+// is declared under `prefers-reduced-motion: no-preference` only, so reduced
+// motion leaves each word in its resting, final style.
+//
+// `$variant: code` leaves out the colour track. `$variant: block` emits only the
+// fade a whole block enters with, for a sheet that animates no words itself.
+@mixin stream-reveal-keyframes($variant: text) {
+  @if $variant != block {
+    @keyframes tx-stream-fade {
+      0% {
+        opacity: 0;
+      }
+    }
+  }
+
+  @keyframes tx-stream-fade-blur {
+    0% {
+      opacity: 0;
+      filter: blur(4px);
+    }
+  }
+
+  @if $variant != block {
+    @keyframes tx-stream-languid {
+      0% {
+        opacity: 0;
+        filter: blur(8px);
+        translate: 0 4px;
+      }
+    }
+  }
+
+  @if $variant == text {
+    @keyframes tx-stream-hue {
+      0% {
+        color: var(--tx-stream-reveal-1, oklch(70% 0.14 250));
+      }
+
+      30% {
+        color: var(--tx-stream-reveal-2, oklch(58% 0.17 295));
+      }
+
+      60% {
+        color: var(--tx-stream-reveal-3, oklch(62% 0.13 350));
+      }
+    }
+  }
+}
+
+// Plays the root's preset on `$word`; include it inside the root rule.
+// `$variant: code` drops the colour track, so code keeps its syntax colours from
+// the first frame. `languid` rises 4px, and a translate needs a box, so its
+// words become inline blocks — only while motion is allowed.
+@mixin stream-reveal-presets($word, $variant: text) {
+  $duration: var(--tx-stream-reveal-duration, 460ms);
+  $settle: cubic-bezier(0.22, 0.61, 0.25, 1);
+  $plain: cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  @media (prefers-reduced-motion: no-preference) {
+    @if $variant == code {
+      &.is-reveal-aurora #{$word} {
+        animation: tx-stream-fade-blur $duration $settle both;
+      }
+
+      &.is-reveal-hue #{$word} {
+        animation: tx-stream-fade $duration $plain both;
+      }
+    }
+    @else {
+      &.is-reveal-aurora #{$word} {
+        animation:
+          tx-stream-fade-blur $duration $settle both,
+          tx-stream-hue $duration linear both;
+      }
+
+      &.is-reveal-hue #{$word} {
+        animation:
+          tx-stream-fade $duration $plain both,
+          tx-stream-hue $duration linear both;
+      }
+    }
+
+    &.is-reveal-blur #{$word} {
+      animation: tx-stream-fade-blur $duration $settle both;
+    }
+
+    &.is-reveal-languid #{$word} {
+      display: inline-block;
+      animation: tx-stream-languid $duration cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+  }
+}

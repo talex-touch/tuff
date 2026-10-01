@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { StreamBlock, StreamMarkdownBlockRenderer, StreamMarkdownProps } from './types'
 import { Marked } from 'marked'
-import { computed, ref, shallowRef, toRaw, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, toRaw, watch } from 'vue'
+import { useReducedMotion } from '../../liquid/src/use-reduced-motion'
+import { streamRevealDuration } from '../../stream-text/src/presets'
+import TxStreamCaret from '../../stream-text/src/TxStreamCaret.vue'
 import TxCodeBlock from './TxCodeBlock.vue'
 import TxMermaidBlock from './TxMermaidBlock.vue'
 import { completeInlineMarkup, completeTable } from './complete-inline-markup'
@@ -21,6 +24,8 @@ defineOptions({ name: 'TxStreamMarkdown' })
 
 const props = withDefaults(defineProps<StreamMarkdownProps>(), {
   streaming: false,
+  reveal: 'aurora',
+  caret: true,
   sanitize: true,
   theme: 'auto',
   blockRemoteImages: true,
@@ -185,6 +190,13 @@ watch(
 
 const resolvedTheme = useAutoTheme(() => props.theme ?? 'auto')
 
+// The StreamElement family's reveal: fresh text and new blocks enter with the
+// shared presets, timed by the one duration written onto the root.
+const reduced = useReducedMotion()
+const preset = computed(() => (reduced.value ? 'none' : props.reveal))
+const revealDuration = computed(() => streamRevealDuration(preset.value))
+const rootStyle = computed(() => ({ '--tx-stream-reveal-duration': `${revealDuration.value}ms` }))
+
 /** Built-in fence dispatch; consumer renderers override per language. */
 const BUILT_IN_RENDERERS: Record<string, StreamMarkdownBlockRenderer> = {
   mermaid: TxMermaidBlock,
@@ -218,7 +230,15 @@ const tailBlock = computed(() => blocks.value.at(-1) ?? null)
 // ---------------------------------------------------------------------------
 
 const rootRef = ref<HTMLElement | null>(null)
-const fresh = createFreshChunks()
+let fresh = createFreshChunks({ durationMs: revealDuration.value })
+
+// A chunk is tracked for as long as its entrance runs, so a new preset needs a
+// new tracker; what is on screen settles as it is.
+watch(revealDuration, (durationMs) => {
+  if (rootRef.value)
+    fresh.finish(rootRef.value)
+  fresh = createFreshChunks({ durationMs })
+})
 
 const tailMarkupId = computed(() => {
   const tail = tailBlock.value
@@ -256,6 +276,8 @@ watch(
  * block cursor instead of a stray glyph inside their markup.
  */
 const INLINE_CURSOR_RE = /<\/(?:p|h[1-6]|blockquote)>\s*$/
+/** The elements `INLINE_CURSOR_RE` lets the caret ride inside. */
+const INLINE_BLOCK = /^(?:P|H[1-6]|BLOCKQUOTE)$/
 
 const inlineCursor = computed(() => {
   const tail = tailBlock.value
@@ -265,6 +287,109 @@ const inlineCursor = computed(() => {
 const showBlockCursor = computed(
   () => props.streaming && blocks.value.length > 0 && !inlineCursor.value,
 )
+
+// ---------------------------------------------------------------------------
+// The caret: one TxStreamCaret, absolutely placed at the write head. For a
+// tail that ends in a line of text it sits after that text's last character;
+// for a list, table or fence it sits on the block cursor line below the tail.
+// It takes no room, so nothing reflows around it, and it never remounts as the
+// write head moves between elements.
+//
+// Its position is the `translate` property, not `transform`: the individual
+// transform properties compose translate → rotate → scale → transform, so the
+// enter/leave `scale` then grows it in place. Inside `transform`, the scale
+// would multiply the offset too and the caret would fly in from the corner.
+// ---------------------------------------------------------------------------
+
+const showCaret = computed(() => props.caret && props.streaming && blocks.value.length > 0)
+const caretRef = ref<HTMLElement | null>(null)
+let caretFrame = 0
+let caretObserver: ResizeObserver | null = null
+
+/** The last visible character of `el`'s text, as a rect; null when it holds no text. */
+function lastCharacterRect(el: HTMLElement): DOMRect | null {
+  const walker = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+  let last: Text | null = null
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    if (node.data.trim())
+      last = node
+  }
+  if (!last)
+    return null
+  const end = last.data.trimEnd().length
+  // Keep an astral character (an emoji) whole: its low surrogate alone has no box.
+  const start = end >= 2 && /[\uDC00-\uDFFF]/.test(last.data[end - 1]!) ? end - 2 : end - 1
+  const range = el.ownerDocument.createRange()
+  range.setStart(last, start)
+  range.setEnd(last, end)
+  const rects = range.getClientRects()
+  return rects.length > 0 ? rects[rects.length - 1]! : null
+}
+
+/** Where the caret's centre-left goes, in viewport coordinates. */
+function caretAnchor(root: HTMLElement): { x: number, y: number } | null {
+  if (inlineCursor.value) {
+    const tail = root.querySelector<HTMLElement>('.tx-stream-md__markup--tail')
+    if (tail) {
+      const end = lastCharacterRect(tail)
+      if (end)
+        return { x: end.right, y: end.top + end.height / 2 }
+      // Opened but still empty (`## ` before its words): the start of its line.
+      // The last paragraph, heading or quote, not the last child: a fresh
+      // chunk can wrap the newline after it.
+      const block = [...tail.children].reverse().find(child => INLINE_BLOCK.test(child.tagName)) as HTMLElement | undefined ?? tail
+      const rect = block.getBoundingClientRect()
+      const lineHeight = Number.parseFloat(getComputedStyle(block).lineHeight) || 0
+      return { x: rect.left, y: rect.top + lineHeight / 2 }
+    }
+  }
+  const line = root.querySelector<HTMLElement>('.tx-stream-md__cursor')
+  if (!line)
+    return null
+  const rect = line.getBoundingClientRect()
+  const lineHeight = Number.parseFloat(getComputedStyle(line).lineHeight) || 0
+  return { x: rect.left, y: rect.top + lineHeight / 2 }
+}
+
+/** The one writer of the caret's position: `translate`, nothing else. */
+function placeCaret(): void {
+  caretFrame = 0
+  const root = rootRef.value
+  const caret = caretRef.value
+  if (!root || !caret)
+    return
+  const anchor = caretAnchor(root)
+  if (!anchor)
+    return
+  const origin = root.getBoundingClientRect()
+  caret.style.translate = `${(anchor.x - origin.left).toFixed(1)}px ${(anchor.y - origin.top).toFixed(1)}px`
+}
+
+/** Measures once per frame however many patches land in it. */
+function schedulePlaceCaret(): void {
+  if (!showCaret.value || caretFrame || typeof requestAnimationFrame === 'undefined')
+    return
+  caretFrame = requestAnimationFrame(placeCaret)
+}
+
+watch([blocks, showCaret, inlineCursor], schedulePlaceCaret, { flush: 'post' })
+
+// A reflow without a new delta (the container resized, a mermaid diagram laid
+// out) moves the write head too.
+watch(showCaret, (visible) => {
+  caretObserver?.disconnect()
+  caretObserver = null
+  if (visible && rootRef.value && typeof ResizeObserver !== 'undefined') {
+    caretObserver = new ResizeObserver(schedulePlaceCaret)
+    caretObserver.observe(rootRef.value)
+  }
+}, { flush: 'post' })
+
+onBeforeUnmount(() => {
+  caretObserver?.disconnect()
+  if (caretFrame)
+    cancelAnimationFrame(caretFrame)
+})
 
 /**
  * A bare fence with nothing in it renders as an empty framed box — all chrome,
@@ -280,7 +405,8 @@ function isSuppressedFence(block: StreamBlock): boolean {
   <div
     ref="rootRef"
     class="tx-md tx-stream-md"
-    :class="[resolvedTheme, { 'is-streaming': streaming }]"
+    :class="[resolvedTheme, `is-reveal-${preset}`, { 'is-streaming': streaming }]"
+    :style="rootStyle"
     :data-theme="resolvedTheme"
   >
     <div class="markdown-body" @click="onBodyClick">
@@ -312,6 +438,13 @@ function isSuppressedFence(block: StreamBlock): boolean {
 
       <div v-if="showBlockCursor" class="tx-stream-md__cursor" aria-hidden="true" />
     </div>
+
+    <!-- Switched off by the host, the caret goes at once; only a stream that ends retracts it. -->
+    <Transition name="tx-stream-md-caret" :css="caret">
+      <span v-if="showCaret" ref="caretRef" class="tx-stream-md__caret" aria-hidden="true">
+        <TxStreamCaret state="streaming" />
+      </span>
+    </Transition>
   </div>
 </template>
 
@@ -331,16 +464,46 @@ function isSuppressedFence(block: StreamBlock): boolean {
  * here).
  */
 
+@use '../../../style/mixins.scss' as *;
+
+// Reduced motion, one form for the whole component: every animation and
+// transition is declared only under `no-preference`, so reduced motion never
+// starts one and everything rests in its declared (final) style.
+@include stream-reveal-keyframes;
+
 .tx-stream-md {
+  // The caret is placed against this box.
+  position: relative;
   font-size: 14px;
   line-height: 1.7;
 
   // Streaming affordances --------------------------------------------------
 
-  // Blocks animate once, on insertion: settled blocks never remount, so they
-  // never replay this; the growing tail patches in place, so it doesn't either.
-  &.is-streaming .tx-stream-md__block {
-    animation: tx-stream-md-reveal 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  // Freshly streamed characters take the family's reveal: the span set is
+  // rebuilt after every patch with a negative delay (use-fresh-chunks), so it
+  // reads as one continuous entrance per chunk, never a restart.
+  @include stream-reveal-presets('.tx-stream-md__fresh');
+
+  // A chunk runs across words, so it stays inline where `languid` would make
+  // it an inline block that cannot wrap; it keeps the slow blur, not the rise.
+  &.is-reveal-languid .tx-stream-md__fresh {
+    display: inline;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    // Blocks enter once, on insertion: settled blocks never remount, so they
+    // never replay this; the growing tail patches in place, so it doesn't either.
+    &.is-streaming:not(.is-reveal-none) .tx-stream-md__block {
+      animation: tx-stream-fade-blur var(--tx-stream-reveal-duration, 460ms) cubic-bezier(0.22, 0.61, 0.25, 1) both;
+    }
+
+    .tx-stream-md__block {
+      transition: --tx-stream-md-ink 0.5s ease;
+    }
+
+    .markdown-body .tx-stream-md__table-copy {
+      transition: opacity 0.15s ease;
+    }
   }
 
   // The ChatGPT-style line reveal: while streaming, the tail block's bottom
@@ -356,10 +519,8 @@ function isSuppressedFence(block: StreamBlock): boolean {
   // applied through both hand-offs — `--last` outside streaming, every block
   // during it — because a mask that disappears cannot fade. The dim zone is
   // capped at a third of the block so a two-line answer never reads half
-  // disabled while it streams.
-  .tx-stream-md__block {
-    transition: --tx-stream-md-ink 0.5s ease;
-  }
+  // disabled while it streams. (The transition sits with the other motion,
+  // above.)
 
   // A whisper, not a grey-out: only the bottom of the very last line dips,
   // and shallowly — a frosted-glass overlay and a deeper dim were both tried
@@ -382,52 +543,29 @@ function isSuppressedFence(block: StreamBlock): boolean {
     --tx-stream-md-ink: 0.65;
   }
 
-  // The caret is the brand's light-orb, not a terminal bar: a small gradient
-  // pearl breathing at the write head. Pure CSS so no asset ships with it.
-  .tx-stream-md__markup--tail > p:last-child::after,
-  .tx-stream-md__markup--tail > h1:last-child::after,
-  .tx-stream-md__markup--tail > h2:last-child::after,
-  .tx-stream-md__markup--tail > h3:last-child::after,
-  .tx-stream-md__markup--tail > h4:last-child::after,
-  .tx-stream-md__markup--tail > h5:last-child::after,
-  .tx-stream-md__markup--tail > h6:last-child::after,
-  .tx-stream-md__markup--tail > blockquote:last-child > p:last-child::after {
-    content: '';
-    display: inline-block;
-    width: 0.62em;
-    height: 0.62em;
-    margin-left: 4px;
-    border-radius: 999px;
-    background: radial-gradient(circle at 32% 30%, #9ecbff 0%, #4f8dff 38%, #7a5cff 72%, #4c2ea8 100%);
-    box-shadow: 0 0 6px rgb(122 92 255 / 55%);
-    vertical-align: -0.02em;
-    animation: tx-stream-md-orb 1.4s ease-in-out infinite;
-  }
-
-  // Zero layout height: the orb overflows into the gap below the last
-  // block, so the standalone cursor never adds a phantom empty line between
-  // the text and whatever the host renders after it.
+  // The block cursor line: where the caret goes when the tail is a list, a
+  // table or a fence. Zero layout height, so it never adds a phantom empty
+  // line between the text and whatever the host renders after it.
   .tx-stream-md__cursor {
     height: 0;
     line-height: 1.2;
-
-    &::before {
-      content: '';
-      display: inline-block;
-      width: 0.62em;
-      height: 0.62em;
-      border-radius: 999px;
-      background: radial-gradient(circle at 32% 30%, #9ecbff 0%, #4f8dff 38%, #7a5cff 72%, #4c2ea8 100%);
-      box-shadow: 0 0 6px rgb(122 92 255 / 55%);
-      animation: tx-stream-md-orb 1.4s ease-in-out infinite;
-    }
   }
 
-  // Freshly streamed characters, materialising. The span set is rebuilt after
-  // every patch with a negative delay (use-fresh-chunks), so the animation
-  // reads as one continuous resolve per chunk, never a restart.
-  .tx-stream-md__fresh {
-    animation: tx-stream-md-fresh 0.44s cubic-bezier(0.22, 1, 0.36, 1) both;
+  // The caret takes no room: a zero-size box that `placeCaret` moves with
+  // `translate`, with the Tuff caret hanging off its centre-left.
+  .tx-stream-md__caret {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+
+    > * {
+      position: absolute;
+      top: -0.475em;
+      left: 0.22em;
+    }
   }
 
   // Typography — modelled on ChatGPT web's reading rhythm: roomy line-height,
@@ -636,7 +774,6 @@ function isSuppressedFence(block: StreamBlock): boolean {
       font-size: 0.82em;
       cursor: pointer;
       opacity: 0;
-      transition: opacity 0.15s ease;
 
       &:hover {
         background: var(--tx-fill-color-light, rgb(0 0 0 / 4%));
@@ -720,60 +857,24 @@ function isSuppressedFence(block: StreamBlock): boolean {
 }
 
 
-@keyframes tx-stream-md-reveal {
-  from {
-    opacity: 0.4;
-    transform: translateY(4px);
-    filter: blur(3px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
-}
-
-@keyframes tx-stream-md-fresh {
-  from {
-    opacity: 0.08;
-    filter: blur(5px);
+@media (prefers-reduced-motion: no-preference) {
+  .tx-stream-md-caret-enter-active {
+    transition:
+      opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+      scale 0.3s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  55% {
-    opacity: 1;
+  // Retracts when the stream settles rather than fading over the last word.
+  .tx-stream-md-caret-leave-active {
+    transition:
+      opacity 0.26s cubic-bezier(0.4, 0, 1, 1),
+      scale 0.26s cubic-bezier(0.4, 0, 1, 1);
   }
 
-  to {
-    opacity: 1;
-    filter: blur(0);
-  }
-}
-
-/* A breath, not a square wave: the hard steps() blink read as a terminal
-   artefact next to prose that otherwise fades in softly. */
-@keyframes tx-stream-md-orb {
-  0%,
-  100% {
-    transform: scale(0.86);
-    opacity: 0.75;
-  }
-
-  50% {
-    transform: scale(1.06);
-    opacity: 1;
-  }
-}
-
-
-@media (prefers-reduced-motion: reduce) {
-  .tx-stream-md.is-streaming .tx-stream-md__block {
-    animation: none;
-  }
-
-  .tx-stream-md .tx-stream-md__markup--tail > :last-child::after,
-  .tx-stream-md .tx-stream-md__cursor::before,
-  .tx-stream-md .tx-stream-md__fresh {
-    animation: none;
+  .tx-stream-md-caret-enter-from,
+  .tx-stream-md-caret-leave-to {
+    opacity: 0;
+    scale: 0.4;
   }
 }
 </style>

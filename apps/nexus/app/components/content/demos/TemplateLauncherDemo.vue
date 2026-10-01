@@ -160,7 +160,7 @@ const copy = computed(() => zh.value
 const entryText = computed<Record<string, EntryText>>(() => zh.value
   ? {
       'app-vscode': { title: 'Visual Studio Code', subtitle: '应用 · /Applications', preview: '**Visual Studio Code** 1.104\n\n- 最近项目 `talex-touch`、`tuffex`\n- `↵` 打开，`⌘↵` 在终端打开所在目录\n- 已安装插件：`touch-vscode-projects`' },
-      'app-figma': { title: 'Figma', subtitle: '应用 · /Applications', preview: '**Figma** 桌面版\n\n- 最近文件：`CoreBox 3.0`、`Nexus 模板`\n- 上次打开：今天 08:52' },
+      'app-figma': { title: 'Figma', subtitle: '应用 · /Applications', preview: '**Figma** 桌面版\n\n- 最近文件：`CoreBox 3.0`、`Tuff 模板`\n- 上次打开：今天 08:52' },
       'app-obsidian': { title: 'Obsidian', subtitle: '应用 · 含 Web Clipper', preview: '**Obsidian** 1.9\n\n- 仓库 `~/Notes`，共 1,284 篇笔记\n- Web Clipper 已连接' },
       'app-terminal': { title: '终端', subtitle: '应用 · /System/Applications', preview: '**终端**\n\n- 默认 shell `zsh`\n- `⌘↵` 在当前 Finder 目录打开' },
       'plugin-clipboard': { title: '剪贴板历史', subtitle: '插件 · clipboard-history', preview: '保留最近 **500** 条文本、图片与文件，按应用和时间筛选。\n\n- `⌘ ⇧ V` 直接打开历史\n- 密码管理器里的内容自动跳过\n- 固定的条目不会被清理' },
@@ -183,7 +183,7 @@ const entryText = computed<Record<string, EntryText>>(() => zh.value
     }
   : {
       'app-vscode': { title: 'Visual Studio Code', subtitle: 'App · /Applications', preview: '**Visual Studio Code** 1.104\n\n- Recent projects `talex-touch`, `tuffex`\n- `↵` opens, `⌘↵` opens its folder in Terminal\n- Plugin installed: `touch-vscode-projects`' },
-      'app-figma': { title: 'Figma', subtitle: 'App · /Applications', preview: '**Figma** for desktop\n\n- Recent files: `CoreBox 3.0`, `Nexus templates`\n- Last opened today at 08:52' },
+      'app-figma': { title: 'Figma', subtitle: 'App · /Applications', preview: '**Figma** for desktop\n\n- Recent files: `CoreBox 3.0`, `Tuff templates`\n- Last opened today at 08:52' },
       'app-obsidian': { title: 'Obsidian', subtitle: 'App · with Web Clipper', preview: '**Obsidian** 1.9\n\n- Vault `~/Notes`, 1,284 notes\n- Web Clipper connected' },
       'app-terminal': { title: 'Terminal', subtitle: 'App · /System/Applications', preview: '**Terminal**\n\n- Default shell `zsh`\n- `⌘↵` opens at the current Finder folder' },
       'plugin-clipboard': { title: 'Clipboard History', subtitle: 'Plugin · clipboard-history', preview: 'Keeps your last **500** texts, images and files, filterable by app and time.\n\n- `⌘ ⇧ V` opens the history directly\n- Anything copied from a password manager is skipped\n- Pinned items are never cleaned up' },

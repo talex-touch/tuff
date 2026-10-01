@@ -955,7 +955,7 @@ describe('touchPlugin.triggerFeature', () => {
 
     const result = await plugin.triggerFeature(feature, { text: '', inputs: [] })
 
-    expect(result).toBe(false)
+    expect(result).toEqual({ accepted: false, shouldActivate: false })
     expect(notificationModuleMock.showInternalSystemNotification).toHaveBeenCalledWith({
       id: 'plugin-widget-load-failed:test-plugin:test-feature',
       title: 'Widget 加载失败',
@@ -1023,7 +1023,10 @@ describe('touchPlugin.triggerFeature', () => {
       filePath: '/tmp/widgets/shared.vue'
     } as never)
 
-    await expect(plugin.triggerFeature(registeredDynamicFeature, query)).resolves.toBe(true)
+    await expect(plugin.triggerFeature(registeredDynamicFeature, query)).resolves.toEqual({
+      accepted: true,
+      shouldActivate: true
+    })
 
     expect(widgetManager.registerWidget).toHaveBeenCalledWith(plugin, registeredSharedWidget)
     expect(onFeatureTriggered).toHaveBeenCalledWith(
@@ -1076,7 +1079,7 @@ describe('touchPlugin.triggerFeature', () => {
         text: 'summarize this',
         inputs: []
       })
-    ).resolves.toBe(false)
+    ).resolves.toEqual({ accepted: false, shouldActivate: false })
 
     expect(widgetManager.registerWidget).not.toHaveBeenCalled()
     expect(onFeatureTriggered).not.toHaveBeenCalled()
@@ -1122,7 +1125,10 @@ describe('touchPlugin.triggerFeature', () => {
       interaction: { type: 'widget', path: '/widget.vue' }
     } as IPluginFeature
 
-    await expect(plugin.triggerFeature(feature, { text: '', inputs: [] })).resolves.toBe(false)
+    await expect(plugin.triggerFeature(feature, { text: '', inputs: [] })).resolves.toEqual({
+      accepted: false,
+      shouldActivate: false
+    })
     expect(notificationModuleMock.showInternalSystemNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'plugin-widget-load-failed:test-plugin:test-feature',
@@ -1135,6 +1141,70 @@ describe('touchPlugin.triggerFeature', () => {
       code: 'RUNTIME_ERROR',
       source: 'runtime:registerWidget'
     })
+  })
+
+  it('fails a feature whose lifecycle declares no onFeatureTriggered handler', async () => {
+    // The adapter's features all come from a plugin whose lifecycle declares the handler, so a
+    // missing one is a real failure — not a silent no-op that would let the host count nothing.
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: true, address: 'http://localhost' },
+      '/tmp',
+      {},
+      { skipDataInit: true }
+    )
+    // Deliberately a lifecycle without `onFeatureTriggered`: the assertion below is that the host
+    // fails closed instead of silently counting nothing, so the fixture must stay incomplete.
+    // `Reflect.set` is the repo's convention for building such a negative input through the runtime
+    // boundary without a cast.
+    Reflect.set(plugin, 'pluginLifecycle', { onLaunch: vi.fn() })
+
+    const feature = {
+      id: 'no-handler',
+      name: 'No Handler',
+      desc: '',
+      commands: [{ type: 'over', value: ['noop'] }]
+    } as IPluginFeature
+
+    await expect(plugin.triggerFeature(feature, { text: '', inputs: [] })).resolves.toEqual({
+      accepted: false,
+      shouldActivate: false
+    })
+  })
+
+  it('still accepts a legacy lifecycle that runs without activating (false)', async () => {
+    // AC2: `false` from `onFeatureTriggered` means "ran, do not activate" (e.g. it opened a
+    // browser and exited) — a successful use the host must count, never a failure.
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: true, address: 'http://localhost' },
+      '/tmp',
+      {},
+      { skipDataInit: true }
+    )
+    const onFeatureTriggered = vi.fn(() => false)
+    plugin.pluginLifecycle = { onFeatureTriggered }
+
+    const feature = {
+      id: 'legacy-no-activate',
+      name: 'Legacy',
+      desc: '',
+      commands: [{ type: 'over', value: ['legacy'] }]
+    } as IPluginFeature
+
+    await expect(plugin.triggerFeature(feature, { text: '', inputs: [] })).resolves.toEqual({
+      accepted: true,
+      shouldActivate: false
+    })
+    expect(onFeatureTriggered).toHaveBeenCalledOnce()
   })
 
   it('awaits the isolated onClose lifecycle before completing feature exit', async () => {

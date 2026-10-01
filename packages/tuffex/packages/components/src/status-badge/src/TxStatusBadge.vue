@@ -176,9 +176,8 @@ function handleKeydown(event: KeyboardEvent): void {
 // own silhouette, and the disc is what makes the state legible before the text
 // is read.
 //
-// The fill stays a tint of `--tx-status-color` (shared with TxBadge / TxTag /
-// TxAlert) but the border is gone: the tint and the disc already separate the
-// badge from the page, and a hairline on top of both read as a third edge.
+// Keep the soft tint in the badge family; an inset ring defines the edge
+// without changing the badge's dimensions or its content spacing.
 .tx-status-badge {
   display: inline-flex;
   align-items: center;
@@ -190,6 +189,7 @@ function handleKeydown(event: KeyboardEvent): void {
   font-weight: 500;
   color: var(--tx-status-color, var(--tx-text-color-primary));
   background: var(--tx-status-bg, color-mix(in srgb, currentColor 14%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-status-color, currentColor) 32%, transparent);
   transition: background-color 0.25s ease;
 
   // Keyed off the role rather than a class: `interactive` is derived from
