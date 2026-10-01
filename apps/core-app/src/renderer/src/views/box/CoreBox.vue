@@ -1437,6 +1437,7 @@ const customCss = computed(() => {
             :active-activations="activeActivations"
             :result-count="res.length"
             :is-recommendation="!searchVal && !activeActivations?.length"
+            :preview-visible="addonType === 'preview' && !isWidgetMode"
             :animated="shouldAnimate()"
             :class="[
               'CoreBoxFooter-Sticky',
