@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
     conditions.push(`(LOWER(email) LIKE ${emailParam} OR LOWER(name) LIKE ${nameParam})`)
   }
 
-  if (['active', 'disabled', 'merged'].includes(status)) {
+  if (['active', 'disabled', 'merged', 'deletion_pending'].includes(status)) {
     const statusParam = addParam(status)
     conditions.push(`status = ${statusParam}`)
   }
@@ -73,6 +73,8 @@ export default defineEventHandler(async (event) => {
         email_verified,
         locale,
         disabled_at,
+        deletion_requested_at,
+        deletion_scheduled_at,
         created_at
       FROM ${USERS_TABLE}
       ${whereClause}
@@ -90,6 +92,8 @@ export default defineEventHandler(async (event) => {
       emailState: row.email_state ?? (row.email_verified ? 'verified' : 'unverified'),
       locale: row.locale ?? null,
       disabledAt: row.disabled_at ?? null,
+      deletionRequestedAt: row.deletion_requested_at ?? null,
+      deletionScheduledAt: row.deletion_scheduled_at ?? null,
       createdAt: row.created_at,
     }))
 

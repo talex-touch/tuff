@@ -18,6 +18,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'User not found.' })
   if (targetUser.status === 'merged')
     throw createError({ statusCode: 400, statusMessage: 'Merged users cannot be updated.' })
+  if (targetUser.status === 'deletion_pending')
+    throw createError({ statusCode: 409, statusMessage: 'Users pending deletion cannot be updated.' })
 
   const body = await readBody<{ amount?: number | string; direction?: string; reason?: string }>(event)
   const amount = Math.round(Math.abs(Number(body?.amount ?? 0)))

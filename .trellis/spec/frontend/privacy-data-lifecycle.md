@@ -651,3 +651,60 @@ await pluginSDK.uninstall({
 })
 // Main rechecks generation before each stage and quarantines only the admitted root inode.
 ```
+
+## Scenario: Nexus Administrator User Deletion
+
+### 1. Scope / Trigger
+
+- Apply to the user administration detail/edit/subscription/credit/deletion drawers and administrator lifecycle endpoints.
+
+### 2. Signatures
+
+```text
+GET  /api/admin/users/:id/subscription
+POST /api/admin/users/:id/deletion  { confirmEmail: string }
+requestAccountDeletionWithCleanup(event, userId, termsVersion)
+```
+
+### 3. Contracts
+
+- Both endpoints call `requireAdmin`; subscription reads are scoped to the requested user rather than returning the subscription collection.
+- Deletion requires another existing active user and the complete target email, compared after string-only trimming and lowercasing. Do not coerce arrays, objects, or numbers into confirmation strings.
+- Reuse `authStore.requestUserDeletion` and the native 30-day recovery window. Clear ephemeral authentication tokens, revoke devices, and delete API keys through `requestAccountDeletionWithCleanup`; do not physically remove financial, subscription, credit, or audit history.
+- Self-service deletion keeps its terms-session, minimum reading time, expiry, and one-use checks before calling the same cleanup owner. The administrator flow is a separate authorized operation, not a bypass of the self-service endpoint.
+- Emit `user.deletion.request` into administrator audit history and include its label in the action filter and paired dashboard catalogs.
+- Pending-deletion and merged users cannot be edited or have role/status/credits changed. Subscription grants continue to obey the existing active-user rule.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Missing administrator authority | Existing authentication/authorization rejection |
+| Target is the acting administrator | 400; no lifecycle mutation |
+| Target does not exist | 404 |
+| Target is merged, already pending, or not active | 409 |
+| Confirmation is absent, non-string, partial, or mismatched | 400, never a `trim` TypeError / 500 |
+| Valid confirmation for another active user | Native `deletion_pending` projection, requested/scheduled times, revoked-device/API-key counts |
+
+### 5. Good / Base / Bad Cases
+
+- Good: an administrator confirms a disposable local demo user, observes the pending lifecycle, and confirms its financial rows remain present.
+- Base: administrator subscription lookup returns only the selected user's current plan.
+- Bad: physically deleting auth/financial rows, accepting `{ confirmEmail: 123 }`, using a copied cleanup implementation, or clearing the administrator's own account.
+
+### 6. Tests Required
+
+- Route rejection tests defend self, unknown/merged/pending/inactive targets, non-string/mismatched confirmation, and absence of deletion/audit side effects; assertions use stable HTTP statuses, not incidental English wording.
+- Existing auth lifecycle tests defend the native recovery window. A successful lifecycle/financial-preservation claim additionally requires a real isolated/local disposable identity; mock cleanup echoes are not proof.
+- Actual browser verification covers separate details/edit/subscription/credits/delete modes and localized confirmation. Never use an original account for destructive smoke.
+
+### 7. Wrong vs Correct
+
+```ts
+// Wrong: compile-time typing does not validate JSON input.
+const confirm = body.confirmEmail?.trim()
+// Correct: reject malformed confirmation before lifecycle mutation.
+const confirm = typeof body?.confirmEmail === 'string'
+  ? body.confirmEmail.trim().toLowerCase()
+  : ''
+```
