@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { TuffItem } from '@talex-touch/utils'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { mount, type DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ImagePreview from './ImagePreview.vue'
 
@@ -16,6 +16,9 @@ const item = {
   meta: { file: { path: '/Users/demo/Pictures/photo.png' } }
 } as unknown as TuffItem
 
+const FIRST = 'tfile:///preview/first.png'
+const SECOND = 'tfile:///preview/second.png'
+
 let wrapper: VueWrapper | null = null
 
 function mountImage(resourceUrl = 'tfile:///preview/photo.png'): VueWrapper {
@@ -24,27 +27,31 @@ function mountImage(resourceUrl = 'tfile:///preview/photo.png'): VueWrapper {
   return wrapper
 }
 
+/**
+ * The previous picture stays mounted while the next one fades in, so a bare `get('img')` can hand
+ * back the outgoing element. Select by the source each element actually carries.
+ */
+function imageWithSrc(pane: VueWrapper, resourceUrl: string): DOMWrapper<Element> {
+  const image = pane.findAll('img').find((node) => node.attributes('src') === resourceUrl)
+  if (!image) throw new Error(`no mounted image for ${resourceUrl}`)
+  return image
+}
+
 /** jsdom never decodes an image, so the intrinsic size the browser would report is declared here. */
 function decodeAs(image: HTMLImageElement, width: number, height: number): void {
   Object.defineProperty(image, 'naturalWidth', { value: width, configurable: true })
   Object.defineProperty(image, 'naturalHeight', { value: height, configurable: true })
 }
 
-/** jsdom performs no layout, so the picture's rendered box is declared here. */
-function layOut(
-  element: HTMLElement,
-  top: number,
-  left: number,
-  width: number,
-  height: number
-): void {
-  const rect = { top, left, width, height, right: left + width, bottom: top + height }
-  element.getBoundingClientRect = () =>
-    ({ ...rect, x: left, y: top, toJSON: () => rect }) as DOMRect
-}
-
-function badgeStyle(): CSSStyleDeclaration {
-  return (wrapper!.get('.dimension-badge').element as HTMLElement).style
+/**
+ * jsdom carries no transition machinery, so Vue removes the outgoing picture at once. In the app the
+ * element outlives the swap while its leave transition plays, keeping its listeners wired, so it is
+ * re-attached here to model the element whose late `load`/`error` the guard has to discard.
+ */
+function retireKeepingHandlers(pane: VueWrapper, resourceUrl: string): HTMLImageElement {
+  const element = imageWithSrc(pane, resourceUrl).element as HTMLImageElement
+  pane.element.appendChild(element)
+  return element
 }
 
 afterEach(() => {
@@ -52,76 +59,77 @@ afterEach(() => {
   wrapper = null
 })
 
-describe('ImagePreview dimension badge', () => {
-  it('labels the picture with the size the browser decoded', async () => {
+describe('ImagePreview reported dimensions', () => {
+  it('reports the size the browser decoded when the picture loads', async () => {
     const pane = mountImage()
-    const image = pane.get('img').element as HTMLImageElement
-    decodeAs(image, 1280, 720)
-    layOut(pane.element as HTMLElement, 0, 0, 1080, 760)
-    layOut(image, 20, 40, 1000, 720)
+    const image = imageWithSrc(pane, 'tfile:///preview/photo.png')
+    decodeAs(image.element as HTMLImageElement, 1280, 720)
 
-    await pane.get('img').trigger('load')
+    await image.trigger('load')
 
-    expect(pane.get('.dimension-badge').text()).toBe('1280 × 720')
-    expect(badgeStyle().display).not.toBe('none')
+    expect(pane.emitted('dimensionsChange')).toEqual([['1280 × 720']])
     expect(pane.find('.loading-overlay').exists()).toBe(false)
   })
 
-  it('does not label a picture the browser has not sized', async () => {
+  it('reports an empty size when the browser decoded nothing', async () => {
     const pane = mountImage()
 
-    await pane.get('img').trigger('load')
+    await imageWithSrc(pane, 'tfile:///preview/photo.png').trigger('load')
 
-    expect(pane.find('.dimension-badge').exists()).toBe(false)
+    expect(pane.emitted('dimensionsChange')).toEqual([['']])
   })
 
-  it('drops the size label when the picture fails to load', async () => {
+  it('clears the reported size when the picture fails to load', async () => {
     const pane = mountImage()
-    decodeAs(pane.get('img').element as HTMLImageElement, 1280, 720)
-    await pane.get('img').trigger('load')
-    expect(pane.find('.dimension-badge').exists()).toBe(true)
+    const image = imageWithSrc(pane, 'tfile:///preview/photo.png')
+    decodeAs(image.element as HTMLImageElement, 1280, 720)
+    await image.trigger('load')
+    expect(pane.emitted('dimensionsChange')).toEqual([['1280 × 720']])
 
-    await pane.get('img').trigger('error')
+    await image.trigger('error')
 
-    expect(pane.find('.dimension-badge').exists()).toBe(false)
+    expect(pane.emitted('dimensionsChange')).toEqual([['1280 × 720'], ['']])
     expect(pane.find('.error-state').exists()).toBe(true)
-    expect((pane.get('img').element as HTMLElement).style.display).toBe('none')
   })
 
-  it('ignores a load event that belongs to a picture it is no longer showing', async () => {
-    const pane = mountImage('tfile:///preview/second.png')
-    const image = pane.get('img').element as HTMLImageElement
-    decodeAs(image, 1280, 720)
+  it('clears the reported size when a different file is previewed', async () => {
+    const pane = mountImage(FIRST)
+    const image = imageWithSrc(pane, FIRST)
+    decodeAs(image.element as HTMLImageElement, 1280, 720)
+    await image.trigger('load')
+    expect(pane.emitted('dimensionsChange')).toEqual([['1280 × 720']])
 
-    // The element still carries the retired resource while the watcher has already cleared the
-    // badge and Vue has not patched `src` yet, so the size it decoded is not the current one.
-    image.setAttribute('src', 'tfile:///preview/first.png')
-    await pane.get('img').trigger('load')
+    await pane.setProps({ resourceUrl: SECOND })
 
-    expect(pane.find('.dimension-badge').exists()).toBe(false)
+    expect(pane.emitted('dimensionsChange')).toEqual([['1280 × 720'], ['']])
     expect(pane.find('.loading-overlay').exists()).toBe(true)
   })
 
-  it('ignores a failure event that belongs to a picture it is no longer showing', async () => {
-    const pane = mountImage('tfile:///preview/second.png')
-    const image = pane.get('img').element as HTMLImageElement
+  it('ignores a load that belongs to the picture it stopped showing', async () => {
+    const pane = mountImage(FIRST)
+    const element = retireKeepingHandlers(pane, FIRST)
+    decodeAs(element, 1280, 720)
+    element.dispatchEvent(new Event('load'))
+    await pane.vm.$nextTick()
+    expect(pane.emitted('dimensionsChange')).toEqual([['1280 × 720']])
 
-    image.setAttribute('src', 'tfile:///preview/first.png')
-    await pane.get('img').trigger('error')
+    await pane.setProps({ resourceUrl: SECOND })
+    element.dispatchEvent(new Event('load'))
+    await pane.vm.$nextTick()
 
+    expect(pane.emitted('dimensionsChange')).toEqual([['1280 × 720'], ['']])
+    expect(pane.find('.loading-overlay').exists()).toBe(true)
+  })
+
+  it('ignores a failure that belongs to the picture it stopped showing', async () => {
+    const pane = mountImage(FIRST)
+    const element = retireKeepingHandlers(pane, FIRST)
+
+    await pane.setProps({ resourceUrl: SECOND })
+    element.dispatchEvent(new Event('error'))
+    await pane.vm.$nextTick()
+
+    expect(pane.emitted('dimensionsChange')).toEqual([['']])
     expect(pane.find('.error-state').exists()).toBe(false)
-    expect(pane.find('.loading-overlay').exists()).toBe(true)
-  })
-
-  it('drops the previous picture size when a different file is previewed', async () => {
-    const pane = mountImage('tfile:///preview/first.png')
-    decodeAs(pane.get('img').element as HTMLImageElement, 1280, 720)
-    await pane.get('img').trigger('load')
-    expect(pane.find('.dimension-badge').exists()).toBe(true)
-
-    await pane.setProps({ resourceUrl: 'tfile:///preview/second.png' })
-
-    expect(pane.find('.dimension-badge').exists()).toBe(false)
-    expect(pane.find('.loading-overlay').exists()).toBe(true)
   })
 })

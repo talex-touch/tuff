@@ -7,8 +7,10 @@ import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { toTfileUrl } from '@talex-touch/utils/network'
+import { FileType, getFileTypeFromPath } from '@talex-touch/utils'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
+import { TxTextTransformer } from '@talex-touch/tuffex/text-transformer'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import {
   AudioPreview,
@@ -84,6 +86,10 @@ function getFileType(filePath: string): FilePreviewType {
   if (['txt', 'xml', 'csv', 'log', 'html', 'htm', 'env', 'sh', 'bat', 'ps1'].includes(extension)) {
     return 'text'
   }
+  if (getFileTypeFromPath(filePath) === FileType.Code) {
+    // Languages outside the editor's supported set still have readable source content.
+    return 'text'
+  }
   if (['pdf'].includes(extension)) {
     return 'pdf'
   }
@@ -130,6 +136,7 @@ const RESOURCE_PREVIEW_TYPES = new Set<FilePreviewType>([
 ])
 const previewResourceUrl = ref('')
 const previewResourceReady = ref(false)
+const imageDimensions = ref('')
 let previewRequestVersion = 0
 
 watch(
@@ -143,6 +150,7 @@ watch(
     const requestVersion = ++previewRequestVersion
     previewResourceUrl.value = ''
     previewResourceReady.value = false
+    imageDimensions.value = ''
 
     if (!filePath || !RESOURCE_PREVIEW_TYPES.has(getFileType(filePath))) {
       previewResourceReady.value = true
@@ -260,7 +268,14 @@ function handleSourceIconError(event: Event): void {
               @error="handleSourceIconError"
             />
             <i v-else class="i-ri-external-link-line open-with-icon" aria-hidden="true" />
-            <span class="open-with-label">{{ openWithLabel }}</span>
+            <TxTextTransformer
+              class="open-with-label"
+              :text="openWithLabel"
+              mode="fade"
+              :duration-ms="200"
+              :blur-px="4"
+              aria-live="off"
+            />
           </button>
           <TxDropdownMenu
             v-if="alternativeApplications.length"
@@ -299,6 +314,14 @@ function handleSourceIconError(event: Event): void {
           </TxDropdownMenu>
         </div>
         <DefaultPreview v-if="previewComponent === DefaultPreview" :item="item" />
+        <ImagePreview
+          v-else-if="
+            previewComponent === ImagePreview && (!previewResourceReady || previewResourceUrl)
+          "
+          :item="item"
+          :resource-url="previewResourceUrl"
+          @dimensions-change="imageDimensions = $event"
+        />
         <component
           :is="previewComponent"
           v-else-if="previewResourceReady && previewResourceUrl"
@@ -308,6 +331,13 @@ function handleSourceIconError(event: Event): void {
           :search-query="searchQuery"
         />
         <DefaultPreview v-else-if="previewResourceReady" :item="item" />
+        <span
+          v-if="previewComponent === ImagePreview"
+          class="dimension-badge"
+          :class="{ 'is-empty': !imageDimensions }"
+        >
+          <TxTextTransformer :text="imageDimensions" mode="fade" :duration-ms="200" :blur-px="4" />
+        </span>
       </div>
       <div class="p-4 border-t border-gray-200 dark:border-gray-700">
         <h3 class="text-sm font-semibold mb-4">
@@ -410,6 +440,32 @@ function handleSourceIconError(event: Event): void {
     justify-content: center;
     align-items: center;
     overflow: hidden;
+  }
+
+  .dimension-badge {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+    z-index: 1;
+    display: inline-flex;
+    padding: 1px 5px;
+    border-radius: 5px;
+    background-color: rgb(0 0 0 / 55%);
+    color: #fff;
+    font-size: 10px;
+    line-height: 1.5;
+    pointer-events: none;
+    transition: opacity 200ms cubic-bezier(0.22, 1, 0.36, 1);
+
+    &.is-empty {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dimension-badge {
+      transition: none;
+    }
   }
 
   /**
