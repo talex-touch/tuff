@@ -74,7 +74,7 @@ globalThis.plugin = {
     },
     async pushItems(items) {
       state.items.push(...items)
-    }
+    },
   },
   storage: {
     async getFile(name) {
@@ -82,7 +82,7 @@ globalThis.plugin = {
     },
     async setFile(name, value) {
       state.files.set(name, value)
-    }
+    },
   },
   browser: {
     async list() {
@@ -91,13 +91,13 @@ globalThis.plugin = {
     async open(url, token) {
       state.openCalls.push({ url, token })
       return { operation: 'open', status: 'completed' }
-    }
-  }
+    },
+  },
 }
 globalThis.clipboard = {
   async writeText(value) {
     state.clipboardWrites.push(value)
-  }
+  },
 }
 globalThis.http = {
   async get(url, config) {
@@ -108,9 +108,9 @@ globalThis.http = {
       headers: {},
       data: ['tuff', ['tuff app', 'tuff plugin']],
       url,
-      ok: true
+      ok: true,
     }
-  }
+  },
 }
 globalThis.features = {
   async addFeature(feature) {
@@ -409,7 +409,7 @@ test('uses bounded typed HTTP suggestions and keeps direct search first', async 
   assert.equal(state.httpCalls[0].config.responseType, 'json')
   assert.deepEqual(
     state.items.map(item => item.title),
-    ['Google 搜索：tuff', 'tuff app', 'tuff plugin']
+    ['Google 搜索：tuff', 'tuff app', 'tuff plugin'],
   )
   const direct = actionItem('search-web')
   const result = await pluginModule.onItemAction(direct, { actionId: 'search-web' })
@@ -433,10 +433,10 @@ test('awaits clipboard writes and rejects hostile action payloads', async () => 
         label: 'open',
         payload: {
           url: 'https://example.com',
-          executable: '/Applications/Calculator.app'
-        }
-      }
-    ]
+          executable: '/Applications/Calculator.app',
+        },
+      },
+    ],
   }
   forged.meta = { ...copy.meta, defaultAction: 'default-open' }
   const result = await pluginModule.onItemAction(forged, { actionId: 'default-open' })
@@ -448,18 +448,18 @@ test('awaits clipboard writes and rejects hostile action payloads', async () => 
 test('maps capability denial to a deterministic redacted result', async () => {
   globalThis.plugin.browser.open = async () => {
     throw Object.assign(new Error('/private/path denied'), {
-      code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+      code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED',
     })
   }
   await pluginModule.onFeatureTriggered('browser-open', { text: 'example.com' })
   const result = await pluginModule.onItemAction(actionItem('default-open'), {
-    actionId: 'default-open'
+    actionId: 'default-open',
   })
   assert.deepEqual(result, {
     externalAction: true,
     success: false,
     status: 'blocked',
-    reason: 'permission-denied'
+    reason: 'permission-denied',
   })
   globalThis.plugin.browser.open = async (url, token) => {
     state.openCalls.push({ url, token })
