@@ -545,6 +545,7 @@ Host chords (`BUILTIN_SPECS`, `PROVIDER_ACTION_SPECS`; Mod = ⌘ on macOS, Ctrl 
   `MetaOverlayEvents.ui.isVisible` request hydrates initial state; any valid push wins over its late
   reply. A pending main-process response must not block clearing a local suffix. Dispose the
   subscription on unmount and ignore a hydration reply after disposal.
+- **The visibility mirror belongs to the CoreBox window.** DivisionBox also mounts `CoreBox`, but does not receive the owning CoreBox's panel-state pushes. Its Escape path must ignore that other window's initial/global visibility and handle its local attachment/query normally.
 - **Escape is one step at a time.** Close a visible overlay first, retaining clipboard and query;
   otherwise clear the attachment with dismissal remembered, then deactivate a provider, clear the
   query, or hide the window on subsequent presses. Do not clear query and suffix together.

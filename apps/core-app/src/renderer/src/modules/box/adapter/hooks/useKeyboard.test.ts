@@ -439,7 +439,36 @@ describe('useKeyboard MetaOverlay visibility cache', () => {
     activeGridKeyboardHarness?.cleanup()
     activeGridKeyboardHarness = undefined
     document.body.classList.remove('core-box')
+    document.body.classList.remove('division-box')
     vi.unstubAllGlobals()
+  })
+
+  it('ignores the cached MetaOverlay visibility in a division-box Escape sequence', async () => {
+    transportMock.send.mockResolvedValueOnce({ visible: true })
+    document.body.classList.add('division-box')
+    const query = ref('keep until the attachment is cleared')
+    const clipboardOptions: { last?: unknown } = {
+      last: { type: 'image', content: 'data:image/png;base64,preview' }
+    }
+    const clearClipboard = vi.fn(() => {
+      clipboardOptions.last = undefined
+    })
+    activeGridKeyboardHarness = mountGridKeyboardHarness(0, undefined, null, createGridResults(), {
+      searchVal: query,
+      clipboardOptions,
+      clearClipboard
+    })
+    await Promise.resolve()
+
+    await dispatchGridKeyAndFlush('Escape')
+
+    expect(clipboardOptions.last).toBeUndefined()
+    expect(query.value).toBe('keep until the attachment is cleared')
+
+    await dispatchGridKeyAndFlush('Escape')
+
+    expect(query.value).toBe('')
+    expect(transportMock.send).not.toHaveBeenCalledWith(MetaOverlayEvents.ui.hide)
   })
 
   it('clears an attachment without awaiting initial visibility and retains the query', async () => {

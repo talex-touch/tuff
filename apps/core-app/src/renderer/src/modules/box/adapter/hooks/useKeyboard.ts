@@ -965,7 +965,7 @@ export function useKeyboard(
 
       await handleCoreBoxEscapeKey({
         event,
-        isMetaOverlayVisible: async () => metaOverlayVisible,
+        isMetaOverlayVisible: async () => !isDivisionBoxHost && metaOverlayVisible,
         hideMetaOverlay: () => transport.send(MetaOverlayEvents.ui.hide),
         boxOptions,
         clipboardOptions,
