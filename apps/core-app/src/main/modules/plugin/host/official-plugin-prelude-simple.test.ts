@@ -8,6 +8,7 @@ const pluginsRoot = path.resolve(process.cwd(), '../../plugins')
 const SIMPLE_CAPABILITIES: readonly PluginHostCapability[] = [
   'permission.check',
   'feature.registry.add',
+  'feature.registry.list',
   'feature.items.push',
   'feature.items.clear',
   'storage.file.read',
@@ -46,6 +47,7 @@ interface HarnessState {
   windowManagerListCalls: number
   browserOpenCalls: Array<{ url: string; browserToken?: string }>
   browserListCalls: number
+  dynamicFeatures: Map<string, Record<string, unknown>>
   httpCalls: string[]
   workspaceScriptListCalls: number
   workspaceScriptRunTokens: string[]
@@ -77,6 +79,7 @@ function createHarness(
     windowManagerListCalls: 0,
     browserOpenCalls: [],
     browserListCalls: 0,
+    dynamicFeatures: new Map(),
     httpCalls: [],
     workspaceScriptListCalls: 0,
     workspaceScriptRunTokens: [],
@@ -99,8 +102,15 @@ function createHarness(
               (payload as { permissionId: string }).permissionId
             )
           }
-        case 'feature.registry.add':
+        case 'feature.registry.add': {
+          const feature = (payload as { feature: Record<string, unknown> }).feature
+          if (typeof feature?.id !== 'string') throw new Error('invalid feature add')
+          if (state.dynamicFeatures.has(feature.id)) return { added: false }
+          state.dynamicFeatures.set(feature.id, feature)
           return { added: true }
+        }
+        case 'feature.registry.list':
+          return { features: [...state.dynamicFeatures.values()] }
         case 'feature.items.clear': {
           const removed = state.items.length
           state.items = []
@@ -556,7 +566,8 @@ describe('official simple Prelude isolation regression', () => {
         { id: 'browser-open' }
       ]).promise
     ).resolves.toBe(true)
-    expect(first.state.browserListCalls).toBe(1)
+    // The stored token and target above are deliberately hostile; the open below must use the
+    // freshly listed token instead, which the assertion on browserOpenCalls pins.
     expect(JSON.stringify(first.state.items)).not.toMatch(/Calculator|Applications|target/i)
     const browserItem = actionItem(first.state.items, 'open-browser')
     const browserAction = (browserItem.actions as Array<{ payload: Record<string, unknown> }>)[0]

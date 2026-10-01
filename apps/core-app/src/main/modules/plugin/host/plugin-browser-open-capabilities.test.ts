@@ -7,6 +7,7 @@ import {
   createFixedPluginBrowserOpenService,
   createPluginBrowserOpenCapabilities,
   createPluginBrowserOpenProcess,
+  PLUGIN_BROWSER_OPEN_DISCOVERY_TIMEOUT_MS,
   PLUGIN_BROWSER_OPEN_MAX_URL_BYTES,
   PLUGIN_BROWSER_OPEN_TOKEN_TTL_MS,
   type PluginBrowserOpenProcess
@@ -55,6 +56,10 @@ function createHarness(
     identityVersion?: () => string
     inspectDelay?: () => Promise<void>
     processFactory?: () => PluginBrowserOpenProcess
+    discoverBrowsers?: (
+      signal: AbortSignal
+    ) => Promise<readonly { id: string; name: string; path: string }[]>
+    acceptsPath?: (candidatePath: string) => boolean
   } = {}
 ) {
   let current: PluginActivationIdentity | undefined = activation
@@ -62,9 +67,13 @@ function createHarness(
   let shellAllowed = options.shellAllowed ?? true
   let networkAllowed = options.networkAllowed ?? true
   const watchers = new Map<string, Set<() => void>>()
+  const acceptsPath =
+    options.acceptsPath ??
+    ((candidatePath: string) =>
+      candidatePath.includes('Google Chrome') || candidatePath.includes('Google\\Chrome'))
   const inspect = vi.fn(async (candidatePath: string, kind: 'directory' | 'file') => {
     await options.inspectDelay?.()
-    if (!candidatePath.includes('Google Chrome') && !candidatePath.includes('Google\\Chrome')) {
+    if (!acceptsPath(candidatePath)) {
       return null
     }
     return {
@@ -87,6 +96,7 @@ function createHarness(
       LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local',
       SystemRoot: 'C:\\Windows'
     },
+    ...(options.discoverBrowsers ? { discoverBrowsers: options.discoverBrowsers } : {}),
     inspect,
     spawn
   })
@@ -555,5 +565,205 @@ describe('isolated browser-open capability', () => {
       ['https://example.com/'],
       expect.objectContaining({ shell: false })
     )
+  })
+
+  it('lists native-discovered browsers ahead of the fixed inventory and dedupes by path', async () => {
+    const nativePath = '/Applications/ego lite.app'
+    const accepted = new Set([
+      nativePath,
+      '/Applications/Safari.app',
+      '/Applications/Google Chrome.app'
+    ])
+    const harness = createHarness({
+      discoverBrowsers: async () => [
+        { id: 'ego-lite', name: 'ego lite', path: nativePath },
+        { id: 'safari', name: 'Safari', path: '/Applications/Safari.app' },
+        // Same bundle the fixed inventory would also offer: it must not appear twice.
+        { id: 'chrome', name: 'Chrome', path: '/Applications/Google Chrome.app' }
+      ],
+      acceptsPath: (candidatePath) => accepted.has(candidatePath)
+    })
+
+    const listed = await harness.registry.dispatch('system.browser-open', { operation: 'list' })
+
+    expect(listed).toEqual({
+      operation: 'list',
+      status: 'available',
+      defaultAvailable: true,
+      browsers: [
+        {
+          id: 'ego-lite',
+          name: 'ego lite',
+          token: expect.stringMatching(/^bo_[A-Za-z0-9_-]{32}$/)
+        },
+        { id: 'safari', name: 'Safari', token: expect.stringMatching(/^bo_[A-Za-z0-9_-]{32}$/) },
+        { id: 'chrome', name: 'Chrome', token: expect.stringMatching(/^bo_[A-Za-z0-9_-]{32}$/) }
+      ]
+    })
+    // A discovered browser's native path is a main-process fact; the child only ever sees display data.
+    expect(JSON.stringify(listed)).not.toContain('/Applications')
+  })
+
+  it('opens a discovered browser through the fixed launcher with its path as one data argument', async () => {
+    const nativePath = '/Applications/ego lite.app'
+    const harness = createHarness({
+      discoverBrowsers: async () => [{ id: 'ego-lite', name: 'ego lite', path: nativePath }],
+      acceptsPath: (candidatePath) => candidatePath === nativePath
+    })
+    const listed = await harness.registry.dispatch('system.browser-open', { operation: 'list' })
+    harness.inspect.mockClear()
+
+    await expect(
+      harness.registry.dispatch('system.browser-open', {
+        operation: 'open',
+        url: 'https://example.com',
+        browserToken: browserToken(listed)
+      })
+    ).resolves.toEqual({ operation: 'open', status: 'completed' })
+
+    expect(harness.inspect).toHaveBeenCalledTimes(1)
+    expect(harness.spawn).toHaveBeenCalledWith(
+      '/usr/bin/open',
+      ['-a', nativePath, 'https://example.com/'],
+      expect.objectContaining({ shell: false })
+    )
+  })
+
+  it('drops malformed or non-bundle discoveries instead of widening what a browser path means', async () => {
+    const good = '/Applications/Ok.app'
+    const second = '/Applications/Ok-2.app'
+    const accepted = new Set([good, second])
+    const harness = createHarness({
+      discoverBrowsers: async () =>
+        [
+          { id: 'not-bundle', name: 'Not', path: '/Applications/not-a-bundle' },
+          { id: 'UPPER CAPS', name: 'Bad', path: '/Applications/Bad.app' },
+          { id: 'relative', name: 'Rel', path: 'Applications/Rel.app' },
+          { id: 'evil', name: 'Evil\nName', path: '/Applications/Evil.app' },
+          { id: 'ok', name: 'Ok', path: good },
+          { id: 'ok', name: 'Ok Again', path: second }
+        ] as unknown as readonly { id: string; name: string; path: string }[],
+      acceptsPath: (candidatePath) => accepted.has(candidatePath)
+    })
+
+    const listed = await harness.registry.dispatch('system.browser-open', { operation: 'list' })
+
+    expect(listed).toMatchObject({
+      status: 'available',
+      browsers: [
+        { id: 'ok', name: 'Ok' },
+        { id: 'ok-2', name: 'Ok Again' }
+      ]
+    })
+  })
+
+  it('keeps the fixed inventory when native discovery fails or answers with garbage', async () => {
+    const throws = createHarness({
+      discoverBrowsers: async () => {
+        throw new Error('nsWorkspace unavailable')
+      }
+    })
+    const garbage = createHarness({
+      discoverBrowsers: async () => ({ id: 'chrome' }) as unknown as readonly []
+    })
+
+    for (const harness of [throws, garbage]) {
+      await expect(
+        harness.registry.dispatch('system.browser-open', { operation: 'list' })
+      ).resolves.toMatchObject({
+        operation: 'list',
+        status: 'available',
+        browsers: [{ id: 'chrome', name: 'Chrome' }]
+      })
+    }
+  })
+
+  it('rejects a non-function discoverBrowsers option without evaluating it', () => {
+    expect(() =>
+      createFixedPluginBrowserOpenService({
+        platform: 'darwin',
+        homeDirectory: '/Users/test',
+        windowsDirectory: '/Windows',
+        environment: { HOME: '/Users/test' },
+        discoverBrowsers: 'not-a-function' as unknown as undefined,
+        inspect: vi.fn(async () => null),
+        spawn: vi.fn(() => completedProcess())
+      })
+    ).toThrow('PLUGIN_BROWSER_OPEN_INVALID')
+  })
+
+  it('finds a browser installed only in the user application directory', async () => {
+    const userChrome = '/Users/test/Applications/Google Chrome.app'
+    const harness = createHarness({
+      acceptsPath: (candidatePath) => candidatePath === userChrome
+    })
+
+    await expect(
+      harness.registry.dispatch('system.browser-open', { operation: 'list' })
+    ).resolves.toMatchObject({
+      status: 'available',
+      browsers: [{ id: 'chrome', name: 'Chrome' }]
+    })
+  })
+
+  it('lists a browser present under both application roots only once', async () => {
+    // Both roots answer; the first stat-validated candidate wins and the duplicate id is dropped.
+    const harness = createHarness({
+      acceptsPath: (candidatePath) => candidatePath.endsWith('Google Chrome.app')
+    })
+
+    const listed = await harness.registry.dispatch('system.browser-open', { operation: 'list' })
+
+    // toMatchObject requires the same array length, so a duplicate row would fail here.
+    expect(listed).toMatchObject({
+      status: 'available',
+      browsers: [{ id: 'chrome', name: 'Chrome' }]
+    })
+    expect(JSON.stringify(listed)).not.toContain('/Applications')
+  })
+
+  it('finds a Windows browser registered only under LOCALAPPDATA', async () => {
+    const localAppDataChrome =
+      'C:\\Users\\test\\AppData\\Local\\Google\\Chrome\\Application\\chrome.exe'
+    const harness = createHarness({
+      platform: 'win32',
+      acceptsPath: (candidatePath) => candidatePath === localAppDataChrome
+    })
+
+    // The first candidate root (ProgramFiles) must not short-circuit the search for the others.
+    await expect(
+      harness.registry.dispatch('system.browser-open', { operation: 'list' })
+    ).resolves.toMatchObject({
+      status: 'available',
+      browsers: [{ id: 'chrome', name: 'Chrome' }]
+    })
+  })
+
+  it('does not cache a discovery that timed out, and answers with the fixed inventory', async () => {
+    vi.useFakeTimers()
+    try {
+      const neverAnswers = vi.fn(
+        (signal: AbortSignal) =>
+          new Promise<readonly { id: string; name: string; path: string }[]>((resolve) => {
+            signal.addEventListener('abort', () => resolve([]), { once: true })
+          })
+      )
+      const harness = createHarness({ discoverBrowsers: neverAnswers })
+
+      const first = harness.registry.dispatch('system.browser-open', { operation: 'list' })
+      await vi.advanceTimersByTimeAsync(PLUGIN_BROWSER_OPEN_DISCOVERY_TIMEOUT_MS + 50)
+      await expect(first).resolves.toMatchObject({
+        status: 'available',
+        browsers: [{ id: 'chrome', name: 'Chrome' }]
+      })
+
+      // The timed-out attempt produced no inventory and must not be memoized: the next list asks again.
+      const second = harness.registry.dispatch('system.browser-open', { operation: 'list' })
+      await vi.advanceTimersByTimeAsync(PLUGIN_BROWSER_OPEN_DISCOVERY_TIMEOUT_MS + 50)
+      await expect(second).resolves.toMatchObject({ status: 'available' })
+      expect(neverAnswers).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
