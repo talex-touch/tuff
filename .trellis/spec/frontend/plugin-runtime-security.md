@@ -3089,6 +3089,8 @@ The child projection is exactly `plugin.browser.list()` and `plugin.browser.open
 - Launchers are fixed and shell-free: macOS `/usr/bin/open`, Windows fixed System32 `rundll32.exe` for default opening or fixed PowerShell for an inventory-owned browser, and POSIX `/usr/bin/xdg-open`. Child input never selects an executable or argument shape.
 - The main capability owns every launched process. Caller abort, permission revoke, disable, crash, restart, and host-generation rotation retire tokens, issue at most one kill, and await the real process `exit` event.
 - Recent-browser storage contains display metadata only. A later use must call `list` and obtain a fresh authority token; no opaque token or native path is persisted.
+- Browser Open 1.1.0 declares `sdkapi: 261001`. The canonical enum, supported-marker allowlist, and `CURRENT_SDK_VERSION` in `packages/utils/plugin/sdk-version.ts` must support that marker in both core-app and the deployed Nexus registry. Do not raise the global permission baseline or migrate unrelated plugin manifests merely to match the current marker.
+- Rebuilding a signed package after a manifest change requires a new file-map digest, artifact digest, and publisher signature. Keep the old pending artifact private until the compatible client is published; Nexus approval must generate its real admission attestation before public download.
 
 ### 4. Validation & Error Matrix
 
@@ -3101,6 +3103,9 @@ The child projection is exactly `plugin.browser.list()` and `plugin.browser.open
 | Required permission denied, revoked, or unavailable                                  | Stable permission result; no new process   |
 | Copied/proxied/non-factory discovery or process adapter                              | Reject capability construction/acquisition |
 | Cancel/revoke/close after process acquisition                                        | Kill once and await the real `exit` event  |
+| Browser 1.1.0 on beta.54 (SDK 260817) | `unsupported-sdkapi`; plugin remains blocked |
+| Browser 1.1.0 on beta.55 (SDK 261001) | Admission allowed; permissions still enforced |
+| Nexus deployed without SDK 261001 | `PLUGIN_PACKAGE_MANIFEST_SDKAPI_INCOMPATIBLE`; deploy shared marker support before upload |
 
 ### 5. Trust Boundary
 
@@ -3117,6 +3122,7 @@ The child projection is exactly `plugin.browser.list()` and `plugin.browser.open
 - Child tests prove exact declaration/plugin gating, frozen null-prototype facade, URL/token-only calls, constructor containment, and absence of filesystem, shell, process, permission, or native inventory facades.
 - Registry reads containing a declared webcontent feature must remain valid: the read projection omits its interaction/path; dynamic webcontent creation stays denied. Actual one-shot search/browser items preserve typed text through `meta.interaction = { type: 'index', showInput: true }` without `acceptedInputTypes`, so accepting clipboard types cannot bypass URL/path regexes.
 - Typed settings save uses `usePluginStorage` and `communicateWithPlugin`; the host awaits `onMessage` before acknowledging synchronization, and registration/storage failures are surfaced rather than swallowed. Source/build/signature identity remains the established website slug `com.tuffex.browser.open`.
+- SDK release smoke runs the real frozen beta.54 and current admission functions: 261001 is rejected by the old host and accepted by the new one, every historically supported marker stays admitted, and unsupported future markers remain blocked. Verify the built artifact's `manifest.sdkapi` and the live registry preview, not just the source manifest.
 - Real Electron smoke loads the official Prelude in two generations using only fake inventory, HTTP, and process adapters. It proves deny/grant, default/specific/search flows, token rotation, stale-port denial, and awaited cleanup without real browser, network, or OS activity.
 
 ### 7. Wrong vs Correct
