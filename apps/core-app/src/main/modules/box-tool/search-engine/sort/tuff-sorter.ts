@@ -58,6 +58,39 @@ const FILE_STEM_PREFIX_MATCH_SCORE = 250
 const FILE_STEM_SUBSTRING_MATCH_SCORE = 150
 const FILE_EXTENSION_ONLY_MATCH_SCORE = 40
 
+/**
+ * Path actions — open this folder in a terminal, reveal it in the file manager — outrank ordinary
+ * unpinned rows within the same arriving search batch.
+ *
+ * Only the built-in system provider can claim this band. Plugin metadata alone must not
+ * outrank normal file and application results.
+ *
+ * The band sits far above the largest real score (an exact app-token match is 6.2e6, and the whole
+ * ladder stays under 3e7) while still ordering the rows among themselves by the action's own ordinal:
+ * default terminal, then the other terminals, then the file manager. Emitting it as a real
+ * `scoring.final` preserves that order within each arriving batch. A late unpinned batch still
+ * appends below rows already on screen, regardless of score; this band cannot guarantee global
+ * first-row placement. Pin, which the caller applies as a partition above all scores, is untouched.
+ */
+const PATH_ACTION_SCORE_BASE = 1_000_000_000
+const PATH_ACTION_MAX_ORDINAL = 99
+const PATH_ACTION_ORDINAL_STEP = 1_000
+
+/**
+ * The ordinal the emitting provider assigned to this path action, or null when the item is not one.
+ *
+ * Read from meta rather than the id so a rebuilt item re-ranks exactly as it did when searched.
+ */
+function getPathActionScore(item: TuffItem): number | null {
+  if (item.source?.type !== 'system' || item.source.id !== 'system-actions-provider') return null
+  const pathAction = item.meta?.extension?.pathAction as { ordinal?: unknown } | undefined
+  const ordinal = Number(pathAction?.ordinal)
+  if (!Number.isFinite(ordinal)) return null
+
+  const clamped = Math.min(Math.max(Math.trunc(ordinal), 0), PATH_ACTION_MAX_ORDINAL)
+  return PATH_ACTION_SCORE_BASE + (PATH_ACTION_MAX_ORDINAL - clamped) * PATH_ACTION_ORDINAL_STEP
+}
+
 function isFileItem(item: TuffItem): boolean {
   return item.kind === 'file' || item.kind === 'folder' || item.source?.type === 'file'
 }
@@ -356,6 +389,10 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
 }
 
 export function calculateSortScore(item: TuffItem, searchKey?: string): number {
+  // A path action carries its own ordinal and leads everything else; see PATH_ACTION_SCORE_BASE.
+  const pathActionScore = getPathActionScore(item)
+  if (pathActionScore !== null) return pathActionScore
+
   const matchScore = calculateMatchScore(item, searchKey)
   const kindBias = getKindBias(item)
   const appTitleIntentBonus = getAppTitleIntentBonus(item, searchKey)

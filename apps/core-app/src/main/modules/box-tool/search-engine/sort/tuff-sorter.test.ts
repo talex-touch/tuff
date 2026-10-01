@@ -14,6 +14,7 @@ function createItem(input: {
   matchSource?: string
   usageStats?: UsageStats
   recency?: number
+  pathAction?: { kind: string; ordinal: number; path: string }
 }): TuffItem {
   return {
     id: input.id,
@@ -33,7 +34,8 @@ function createItem(input: {
       extension: {
         searchTokens: input.searchTokens,
         matchResult: input.matchResult,
-        source: input.matchSource
+        source: input.matchSource,
+        pathAction: input.pathAction
       },
       usageStats: input.usageStats
     },
@@ -947,5 +949,131 @@ describe('files rank on their stem, below app and feature title matches', () => 
         }
       }
     }
+  })
+})
+
+/**
+ * A folder the user pasted opens with a terminal/Finder row at the top of the list, before anything
+ * else — including an app whose title matches the query exactly. The marker the emitting provider
+ * puts on those rows (`meta.extension.pathAction`) is what does it, so these assert the ranking
+ * rule itself rather than any provider behavior.
+ */
+describe('path actions lead the list and order among themselves by ordinal', () => {
+  const signal = new AbortController().signal
+
+  function pathActionItem(id: string, ordinal: number, title = '在 Ghostty 中打开'): TuffItem {
+    return createItem({
+      id,
+      kind: 'action',
+      title,
+      sourceId: 'system-actions-provider',
+      pathAction: { kind: 'terminal-default', ordinal, path: '/Users/x/Downloads' }
+    })
+  }
+
+  function rank(items: TuffItem[], text: string): string[] {
+    return tuffSorter.sort(items, { text } as TuffQuery, signal).map((item) => item.id)
+  }
+
+  it('a folder row outranks an app whose title is an exact match for the query', () => {
+    const exactApp = createItem({
+      id: 'app-downloads',
+      kind: 'app',
+      title: 'Downloads',
+      sourceId: 'app-provider',
+      searchTokens: ['downloads'],
+      matchResult: [{ start: 0, end: 9 }]
+    })
+    const pathAction = pathActionItem('path-default', 0, 'Downloads')
+
+    expect(rank([exactApp, pathAction], 'downloads')).toEqual(['path-default', 'app-downloads'])
+  })
+
+  it('orders the default terminal, the other terminals and the file manager by ordinal', () => {
+    const ranked = rank(
+      [
+        pathActionItem('path-reveal', 90),
+        pathActionItem('path-iterm', 1),
+        pathActionItem('path-default', 0)
+      ],
+      'downloads'
+    )
+
+    expect(ranked).toEqual(['path-default', 'path-iterm', 'path-reveal'])
+  })
+
+  it('saturates out-of-range ordinals instead of letting them invert the order', () => {
+    const belowRange = calculateSortScore(pathActionItem('path-negative', -5_000), 'x')
+    const atFloor = calculateSortScore(pathActionItem('path-default', 0), 'x')
+    const overCap = calculateSortScore(pathActionItem('path-over-cap', 9_999), 'x')
+    const atCap = calculateSortScore(pathActionItem('path-at-cap', 99), 'x')
+
+    expect(belowRange).toBe(atFloor)
+    expect(overCap).toBe(atCap)
+    // A row must never fall out of the band by carrying an absurd ordinal.
+    expect(atCap).toBeGreaterThan(
+      calculateSortScore(
+        createItem({ id: 'app-x', kind: 'app', title: 'X', sourceId: 'app-provider' }),
+        'x'
+      )
+    )
+  })
+
+  it('a pinned row still beats a path action, which the band must not swallow', () => {
+    const pinned = createItem({
+      id: 'app-pinned',
+      kind: 'app',
+      title: 'Unrelated App',
+      sourceId: 'app-provider'
+    })
+    pinned.meta = { ...pinned.meta, pinned: { isPinned: true } }
+
+    expect(rank([pathActionItem('path-default', 0), pinned], 'unrelated')).toEqual([
+      'app-pinned',
+      'path-default'
+    ])
+  })
+
+  it('leaves a list with no path action item exactly as it was', () => {
+    const app = createItem({
+      id: 'app-safari',
+      kind: 'app',
+      title: 'Safari',
+      sourceId: 'app-provider',
+      searchTokens: ['safari'],
+      matchResult: [{ start: 0, end: 6 }]
+    })
+    const feature = createItem({
+      id: 'feature-other',
+      kind: 'feature',
+      title: 'Other',
+      sourceId: 'plugin-features',
+      searchTokens: ['safari']
+    })
+
+    expect(rank([feature, app], 'safari')).toEqual(['app-safari', 'feature-other'])
+  })
+
+  it('a plugin cannot claim the band by writing pathAction onto its own item', () => {
+    const forged = createItem({
+      id: 'plugin-forged',
+      kind: 'feature',
+      title: 'Totally Legit Folder',
+      sourceId: 'some-third-party-plugin',
+      pathAction: { kind: 'terminal', ordinal: 0, path: '/Users/x/Downloads' }
+    })
+    // Same shape, but from the built-in provider: this one is allowed to lead.
+    const trusted = pathActionItem('path-default', 0)
+    const exactApp = createItem({
+      id: 'app-downloads',
+      kind: 'app',
+      title: 'Downloads',
+      sourceId: 'app-provider',
+      searchTokens: ['downloads'],
+      matchResult: [{ start: 0, end: 9 }]
+    })
+
+    expect(rank([forged, exactApp], 'downloads')).toEqual(['app-downloads', 'plugin-forged'])
+    expect(rank([trusted, exactApp], 'downloads')).toEqual(['path-default', 'app-downloads'])
   })
 })

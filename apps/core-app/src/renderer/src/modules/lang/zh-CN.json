@@ -6437,7 +6437,16 @@
       "addFileIndexTitle": "加入文件索引：{name}",
       "addFileIndexSubtitle": "路径：{path}",
       "screenshotCursorDisplayTitle": "截图并复制",
-      "screenshotCursorDisplaySubtitle": "捕获当前光标所在显示器"
+      "screenshotCursorDisplaySubtitle": "捕获当前光标所在显示器",
+      "openDirectoryInDefaultTerminalTitle": "在默认终端（{terminal}）中打开",
+      "openDirectoryInTerminalTitle": "在 {terminal} 中打开",
+      "openDirectoryRevealTitle": "显示 {name}",
+      "openDirectoryInFinderTitle": "在 Finder 中打开 {name}",
+      "revealInFinderTitle": "在 Finder 中显示 {name}",
+      "openDirectoryInConfiguredTerminalSubtitle": "工作目录：{path}",
+      "openDirectoryInSystemTerminalSubtitle": "系统默认终端 · {path}",
+      "openDirectoryInTerminalSubtitle": "工作目录：{path}",
+      "openDirectoryRevealSubtitle": "在文件管理器中显示 · {path}"
     },
     "windowsShell": {
       "open": "打开",
