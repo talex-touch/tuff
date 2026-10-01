@@ -1,24 +1,55 @@
 # 浏览器打开（`touch-browser-open`）
 
+> 1.1.0 需要包含插件初始化 SDK、单次执行文本保留和浏览器发现修复的主程序。官网 beta.54 尚不包含这些修复；插件版本必须与兼容主程序一起开放下载。
+
 ## 适用场景
-- 需要快速打开 URL，并在默认浏览器与指定浏览器之间切换。
+- 复制了网址，召唤 CoreBox 后直接回车，用本机浏览器打开，无需粘贴。
+- 想用指定浏览器（如 Chrome、Safari 或其它已安装浏览器）打开链接。
+- 想把一句话直接交给搜索引擎，或一键打开微博热搜等常用入口。
 
 ## 触发方式
-- Feature ID：`browser.open`
-- Commands：`url / link / open / 浏览器 / 网页`
+
+召唤框内直接回车即可，不需要先进 Feature：
+
+| 输入 | 结果 |
+| --- | --- |
+| `example.com`、`https://example.com/a?b=1`、或刚复制到剪贴板的网址 | 出现「用 xxx 打开链接」行，回车直接用该浏览器打开 |
+| 任意普通文字（如 `今天深圳天气`） | 出现「用 xxx 搜索」行，回车直接进入搜索引擎结果页 |
+| 热搜关键词（如 `微博`、`微博热搜`） | 出现「打开微博热搜」行，回车直接打开对应网址 |
+
+显式进入的模式（保持原有用法）：
+
+| Feature ID | 说明 |
+| --- | --- |
+| `browser-open` | 推送模式：选择默认浏览器、指定浏览器、最近浏览器，或复制 URL |
+| `web-search` | 推送模式：进入搜索模式，带默认/指定引擎与搜索建议 |
+| `search-engine-google` / `search-engine-bing` / `search-engine-duckduckgo` / `search-engine-baidu` | 推送模式：进入对应引擎的搜索模式 |
+| `browser-open-settings` | 设置页：管理搜索引擎与热搜/快捷入口 |
+
+Commands：`url / link / open / 浏览器 / 网页 / 搜索 / google / bing / duckduckgo / 百度`。
 
 ## 核心能力
-- 浏览器打开：默认浏览器与指定浏览器快速打开链接
-- 支持平台：`win32, darwin`
+- **复制网址直达**：从 CoreBox 查询自带的输入内容里读取网址，无需先手动粘贴；`http(s)` 链接、`www.` 开头以及裸域名（如 `example.com`）都可识别。
+- **单次回车执行**：直接打开功能不会停留在 CoreBox 里等待第二次确认。
+- **指定浏览器**：按宿主当前可用的浏览器列表动态生成入口，执行时重新申请短期令牌再打开，不保存路径与令牌。
+- **可配置搜索引擎**：内置 Google、Bing、DuckDuckGo、百度，可增删自定义引擎，每个引擎使用 `{query}` 模板，输入文字按 URL 编码填入。
+- **热搜 / 快捷入口**：内置微博热搜（`https://s.weibo.com/top/summary`），可自行添加名称、关键词与网址。
+- **不抢文件与路径**：形如 `README.md`、`~/Workspace`、`/Users/me/file` 的输入不会被路由到网页搜索。
+- 支持平台：`win32, darwin`。
 
 ## 配置与数据
-- 配置/数据文件：`recent-browsers.json`
+- 搜索设置：`search-settings.json`（搜索引擎、默认引擎、热搜/快捷入口）
+- 最近浏览器：`recent-browsers.json`（仅显示名与时间，不含令牌或路径）
+- 设置入口：CoreBox 输入「浏览器打开设置」
+- 设置保存后会立即同步到召唤框，无需重启
 - 插件目录：`plugins/touch-browser-open`
 
 ## 权限说明
-- 必需：`system.shell`；可选：`clipboard.write`
+- 必需：`system.shell`、`network.internet`、`search.root-results`、`storage.plugin`
+- 可选：`clipboard.write`
+- 未授权时拒绝执行，不会把失败计作成功
 
 ## 快速上手
-1. 在 CoreBox 输入 `url`。
-2. 看到动作后直接回车执行。
-3. 若涉及权限，按提示授权即可。
+1. 复制任意网址，召唤 CoreBox，直接回车即可用浏览器打开。
+2. 直接输入一句话，选择「用 xxx 搜索」回车直达搜索结果。
+3. 输入「浏览器打开设置」，添加或调整搜索引擎、默认引擎与热搜入口。

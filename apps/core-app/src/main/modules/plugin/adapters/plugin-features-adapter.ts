@@ -609,7 +609,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       meta: {
         pluginName: plugin.name,
         featureId: feature.id,
-        interaction: feature.interaction,
+        interaction:
+          feature.interaction ?? (!feature.push ? { type: 'index', showInput: true } : undefined),
         footerHints: resolveFeatureFooterHints(feature),
         priority: feature.priority ?? 0,
         extension: {
@@ -726,6 +727,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
         const matchesCommand =
           queryText && feature.commands.some((cmd) => isCommandMatch(cmd, queryText))
         const matchesClipboardCommand =
+          !queryText &&
           clipboardTextContent &&
           feature.commands.some((cmd) => isCommandMatch(cmd, clipboardTextContent))
 

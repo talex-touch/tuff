@@ -11,8 +11,14 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { PluginStatus, type IPluginManager, type ITouchPlugin } from '@talex-touch/utils/plugin'
+import {
+  PluginStatus,
+  type IPluginFeature,
+  type IPluginManager,
+  type ITouchPlugin
+} from '@talex-touch/utils/plugin'
 import type { PluginApiUninstallRequest } from '@talex-touch/utils/transport/events/types'
+import type { PluginActivationIdentity } from '@talex-touch/utils/transport'
 import {
   createTrustedTestPluginContext,
   issuePluginSecurityContext
@@ -192,6 +198,7 @@ const mocks = vi.hoisted(() => {
     runtimeDispose: vi.fn(async () => undefined),
     runtimeOptions: null as Record<string, unknown> | null,
     runtimeResolve: vi.fn(),
+    runtimeResolveHostGeneration: vi.fn(),
     setCapabilities: vi.fn(),
     setSecureStoreValue: vi.fn(),
     setTransport: vi.fn(),
@@ -490,6 +497,7 @@ vi.mock('./host/plugin-runtime-service', () => ({
 
     dispose = mocks.runtimeDispose
     resolve = mocks.runtimeResolve
+    resolveHostGeneration = mocks.runtimeResolveHostGeneration
   },
   resolvePluginRuntimeArtifactPath: () => fixturePath('plugin-host.js')
 }))
@@ -787,6 +795,7 @@ describe('PluginModule facade', () => {
     mocks.runtimeDispose.mockReset()
     mocks.runtimeDispose.mockResolvedValue(undefined)
     mocks.runtimeResolve.mockReset()
+    mocks.runtimeResolveHostGeneration.mockReset()
     mocks.keyResolveCurrentIdentity.mockReset()
     mocks.mainBrowserWindow.isDestroyed.mockReset()
     mocks.mainBrowserWindow.isDestroyed.mockReturnValue(false)
@@ -1054,6 +1063,178 @@ describe('PluginModule facade', () => {
     expect(authorize?.('missing', 'clipboard.read')).toBe(false)
 
     await module.onDestroy()
+  })
+
+  it('keeps onInit business and browser consumers live only for current starting or active hosts', async () => {
+    const previousPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+    const activation = Object.freeze({
+      name: 'calendar',
+      pluginInstanceId: 'calendar-instance',
+      activationGeneration: 1,
+      key: 'calendar-key'
+    })
+    const browserActivation = Object.freeze({
+      name: 'touch-browser-open',
+      pluginInstanceId: 'browser-open-instance',
+      activationGeneration: 1,
+      key: 'browser-open-key'
+    })
+    type RuntimeState = 'starting' | 'active' | 'stale' | 'stopping' | 'revoked'
+    let runtimeState: RuntimeState = 'starting'
+    const featureStore = new Map<string, IPluginFeature>()
+    const addBusinessFeature = vi.fn(async (input: IPluginFeature) => {
+      featureStore.set(input.id, input)
+      return true
+    })
+    const readBusinessFile = vi.fn(async (name: string) => ({
+      found: true as const,
+      value: { name, state: 'persisted' }
+    }))
+    const featureHost = {
+      pushItems: vi.fn(),
+      updateItem: vi.fn(),
+      removeItem: vi.fn(),
+      clearItems: vi.fn(),
+      listItems: vi.fn(async () => [])
+    }
+    const plugin = Object.assign(Object.create(TouchPlugin.prototype), {
+      name: activation.name,
+      sdkapi: 260713,
+      status: PluginStatus.ACTIVE,
+      declaredPermissions: {
+        required: ['storage.plugin', 'system.shell'],
+        optional: []
+      },
+      getActivationIdentity: vi.fn(() => activation),
+      getBusinessRuntimeInfo: vi.fn(() => ({
+        name: activation.name,
+        displayName: 'Calendar',
+        version: '1.0.0',
+        description: 'Lifecycle fixture',
+        status: 'active',
+        sdkapi: 260713
+      })),
+      getDataPath: vi.fn(() => fixturePath('calendar', 'data')),
+      createBusinessFeatureHost: vi.fn(() => featureHost),
+      addBusinessFeature,
+      removeBusinessFeature: vi.fn(() => false),
+      listBusinessFeatures: vi.fn(() => [...featureStore.values()]),
+      readBusinessFile,
+      writeBusinessFile: vi.fn(),
+      removeBusinessFile: vi.fn(() => false),
+      listBusinessFiles: vi.fn(() => []),
+      cleanupBusinessItems: vi.fn()
+    })
+    const browserPlugin = {
+      ...plugin,
+      name: browserActivation.name,
+      sdkapi: 260713,
+      declaredPermissions: { required: ['system.shell'], optional: [] }
+    }
+    mocks.manager.getPluginByName.mockImplementation((name) => {
+      if (name === activation.name) return plugin
+      if (name === browserActivation.name) return browserPlugin
+      return undefined
+    })
+    mocks.keyResolveCurrentIdentity.mockImplementation((name) =>
+      name === browserActivation.name ? browserActivation : activation
+    )
+    mocks.permissionHasPermission.mockReturnValue(true)
+    mocks.runtimeResolveHostGeneration.mockImplementation(() => {
+      if (runtimeState === 'starting' || runtimeState === 'active') return 7
+      if (runtimeState === 'stale') return 8
+      return undefined
+    })
+    const module = new PluginModule()
+
+    type Definition = {
+      id: string
+      validateRequest(value: unknown): unknown
+      validateResult(value: unknown): unknown
+      invoke(
+        context: ReturnType<typeof issuePluginSecurityContext>,
+        request: unknown,
+        signal: AbortSignal,
+        resources: PluginHostCapabilityResourceContext
+      ): unknown
+    }
+    const invoke = async (
+      definition: Definition,
+      payload: unknown,
+      caller: PluginActivationIdentity = activation
+    ): Promise<unknown> => {
+      const context = issuePluginSecurityContext(caller, 'plugin-host', { hostGeneration: 7 })
+      const request = definition.validateRequest(payload)
+      const result = await definition.invoke(context, request, new AbortController().signal, {
+        register: vi.fn()
+      } as unknown as PluginHostCapabilityResourceContext)
+      return definition.validateResult(result)
+    }
+
+    try {
+      await initializeModule(module)
+      const definitions = mocks.runtimeOptions?.capabilityDefinitions as Definition[]
+      const definition = (id: string): Definition => {
+        const found = definitions.find((entry) => entry.id === id)
+        if (!found) throw new Error(`Missing capability definition: ${id}`)
+        return found
+      }
+      const browserFactory = mocks.setCapabilities.mock.calls.at(-1)?.[0]?.browserOpen as
+        | ((input: PluginActivationIdentity) => { definitions: readonly Definition[] })
+        | undefined
+      if (!browserFactory) throw new Error('Browser-open capability factory missing')
+      const browserList = browserFactory(browserActivation).definitions[0]!
+
+      expect(await invoke(definition('storage.file.read'), { name: 'settings.json' })).toEqual({
+        found: true,
+        value: { name: 'settings.json', state: 'persisted' }
+      })
+
+      runtimeState = 'active'
+      const dynamicFeature = {
+        id: 'runtime-feature',
+        name: 'Runtime feature',
+        desc: 'Registered while active',
+        icon: { type: 'class' as const, value: 'i-ri-flashlight-line' },
+        keywords: ['runtime'],
+        push: false,
+        platform: {},
+        commands: [{ type: 'match' as const, value: 'runtime' }]
+      }
+      expect(await invoke(definition('feature.registry.add'), { feature: dynamicFeature })).toEqual(
+        { added: true }
+      )
+      expect(featureStore.has('runtime-feature')).toBe(true)
+      expect(await invoke(browserList, { operation: 'list' }, browserActivation)).toEqual({
+        operation: 'list',
+        status: 'available',
+        defaultAvailable: true,
+        browsers: []
+      })
+
+      runtimeState = 'stale'
+      await expect(
+        invoke(definition('storage.file.read'), { name: 'settings.json' })
+      ).rejects.toThrow('PLUGIN_BUSINESS_CAPABILITY_AUTHORITY_INVALID')
+      expect(readBusinessFile).toHaveBeenCalledOnce()
+
+      runtimeState = 'stopping'
+      await expect(
+        invoke(definition('feature.registry.add'), {
+          feature: { ...dynamicFeature, id: 'must-not-register' }
+        })
+      ).rejects.toThrow('PLUGIN_BUSINESS_CAPABILITY_AUTHORITY_INVALID')
+      expect(addBusinessFeature).toHaveBeenCalledOnce()
+
+      runtimeState = 'revoked'
+      await expect(invoke(browserList, { operation: 'list' }, browserActivation)).rejects.toThrow(
+        'PLUGIN_HOST_CAPABILITY_STALE_ACTIVATION'
+      )
+    } finally {
+      await module.onDestroy()
+      Object.defineProperty(process, 'platform', { value: previousPlatform, configurable: true })
+    }
   })
 
   it('returns from a pending native image save dialog when caller abort or permission revocation wins', async () => {

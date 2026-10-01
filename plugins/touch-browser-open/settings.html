@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>浏览器打开设置</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --border: #e2e5ea;
+        --text: #1f2329;
+        --muted: #6b7280;
+        --accent: #3b6ef5;
+        --danger: #d9463f;
+      }
+      html.dark {
+        --bg: #16181d;
+        --panel: #1f2228;
+        --border: #2e323a;
+        --text: #e8eaee;
+        --muted: #9aa1ad;
+        --accent: #6f96ff;
+        --danger: #ef6b64;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 13px/1.5 -apple-system, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+      }
+      .wrap { padding: 16px 18px 88px; max-width: 980px; margin: 0 auto; }
+      h1 { font-size: 16px; margin: 0 0 2px; }
+      h2 { font-size: 13px; margin: 20px 0 8px; color: var(--muted); }
+      .hint { color: var(--muted); margin: 0 0 12px; }
+      .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+      .grid { display: grid; grid-template-columns: 34px 1.1fr 1fr 2fr 46px 34px; gap: 8px; align-items: center; }
+      .grid.hot { grid-template-columns: 34px 1fr 1fr 2fr 34px; }
+      .grid.head { color: var(--muted); font-size: 12px; padding: 0 0 6px; }
+      input[type="text"], input[type="url"] {
+        width: 100%; padding: 6px 8px; border-radius: 7px;
+        border: 1px solid var(--border); background: transparent; color: inherit; font: inherit;
+      }
+      input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      input.invalid { border-color: var(--danger); }
+      label.radio { display: flex; justify-content: center; }
+      .row { padding: 5px 0; border-top: 1px solid transparent; }
+      button {
+        font: inherit; padding: 6px 12px; border-radius: 7px; cursor: pointer;
+        border: 1px solid var(--border); background: transparent; color: inherit;
+      }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      button.icon { border: none; background: none; color: var(--danger); font-size: 15px; padding: 2px 6px; }
+      button:disabled { cursor: default; opacity: .45; }
+      footer {
+        position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 18px;
+        display: flex; gap: 10px; align-items: center; justify-content: flex-end;
+        background: var(--panel); border-top: 1px solid var(--border);
+      }
+      #status { margin-right: auto; color: var(--muted); }
+      #status.error { color: var(--danger); }
+      #status.ok { color: var(--accent); }
+      .empty { color: var(--muted); padding: 6px 0; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>浏览器打开设置</h1>
+      <p class="hint">
+        这里配置的搜索引擎与热搜入口会立即出现在召唤框里：输入任意文字即可直达搜索，输入关键词即可打开热搜。
+      </p>
+
+      <h2>搜索引擎</h2>
+      <div class="panel">
+        <div class="grid head">
+          <span>启用</span><span>名称</span><span>关键词</span><span>搜索地址模板（必须包含 {query}）</span><span>默认</span><span></span>
+        </div>
+        <div id="engines"></div>
+        <div class="row" style="margin-top:8px">
+          <button id="add-engine" type="button">+ 添加搜索引擎</button>
+        </div>
+      </div>
+
+      <h2>热搜 / 快捷入口</h2>
+      <div class="panel">
+        <div class="grid hot head">
+          <span>启用</span><span>名称</span><span>关键词</span><span>地址</span><span></span>
+        </div>
+        <div id="hot"></div>
+        <div class="row" style="margin-top:8px">
+          <button id="add-hot" type="button">+ 添加入口</button>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <span id="status"></span>
+      <button id="reload" type="button">放弃修改</button>
+      <button id="save" class="primary" type="button">保存</button>
+    </footer>
+
+    <script type="module">
+      import { usePluginStorage, communicateWithPlugin } from './settings-sdk.js'
+      const ID_PATTERN = /^[a-z][a-z0-9-]{0,31}$/
+      // The plugin re-adds its bundled engines on every sync, so they are marked here too: their
+      // name is fixed and they cannot be deleted.
+      const BUILTIN_ENGINE_IDS = new Set(['google', 'bing', 'duckduckgo', 'baidu'])
+      const BUILTIN_ENGINES = [
+        { id: 'google', name: 'Google', keyword: 'google', urlTemplate: 'https://www.google.com/search?q={query}' },
+        { id: 'bing', name: 'Bing', keyword: 'bing', urlTemplate: 'https://www.bing.com/search?q={query}' },
+        { id: 'duckduckgo', name: 'DuckDuckGo', keyword: 'duckduckgo', urlTemplate: 'https://duckduckgo.com/?q={query}' },
+        { id: 'baidu', name: '百度', keyword: '百度', urlTemplate: 'https://www.baidu.com/s?wd={query}' },
+      ]
+      const DEFAULT_SETTINGS = {
+        version: 1,
+        defaultEngine: 'google',
+        engines: [],
+        hotEntries: [],
+      }
+
+      const storage = usePluginStorage()
+      const enginesRoot = document.getElementById('engines')
+      const hotRoot = document.getElementById('hot')
+      const statusNode = document.getElementById('status')
+      const saveButton = document.getElementById('save')
+      let loaded = false
+
+      let settings = DEFAULT_SETTINGS
+
+      function setStatus(message, kind) {
+        statusNode.textContent = message || ''
+        statusNode.className = kind || ''
+      }
+
+
+      function parseStored(raw) {
+        if (!raw)
+          return null
+        if (typeof raw === 'string') {
+          try {
+            return JSON.parse(raw)
+          }
+          catch {
+            return null
+          }
+        }
+        return typeof raw === 'object' ? raw : null
+      }
+
+      function normalizeIncoming(raw) {
+        const source = parseStored(raw) || {}
+        const engines = Array.isArray(source.engines) ? source.engines : []
+        const hotEntries = Array.isArray(source.hotEntries) ? source.hotEntries : []
+        const mergedEngines = engines.map(entry => ({
+          id: String(entry && entry.id ? entry.id : ''),
+          name: String(entry && entry.name ? entry.name : ''),
+          keyword: String(entry && entry.keyword ? entry.keyword : ''),
+          urlTemplate: String(entry && entry.urlTemplate ? entry.urlTemplate : ''),
+          enabled: entry ? entry.enabled !== false : true,
+          builtin: entry ? entry.builtin === true || BUILTIN_ENGINE_IDS.has(String(entry.id)) : false,
+        }))
+        // A first run has no file yet; showing the bundled engines is what the plugin will register.
+        if (!mergedEngines.length) {
+          for (const engine of BUILTIN_ENGINES)
+            mergedEngines.push({ ...engine, enabled: true, builtin: true })
+        }
+        return {
+          version: 1,
+          defaultEngine: typeof source.defaultEngine === 'string' && source.defaultEngine
+            ? source.defaultEngine
+            : (mergedEngines.find(entry => entry.enabled)?.id || ''),
+          engines: mergedEngines,
+          hotEntries: hotEntries.map(entry => ({
+            id: String(entry && entry.id ? entry.id : ''),
+            name: String(entry && entry.name ? entry.name : ''),
+            keyword: String(entry && entry.keyword ? entry.keyword : ''),
+            url: String(entry && entry.url ? entry.url : ''),
+            enabled: entry ? entry.enabled !== false : true,
+          })),
+        }
+      }
+
+      function textField(value, placeholder, onChange) {
+        const input = document.createElement('input')
+        input.type = 'text'
+        input.value = value
+        input.placeholder = placeholder
+        input.setAttribute('aria-label', placeholder)
+        input.addEventListener('input', () => {
+          input.classList.remove('invalid')
+          onChange(input.value)
+        })
+        return input
+      }
+
+      function checkboxField(checked, onChange) {
+        const input = document.createElement('input')
+        input.type = 'checkbox'
+        input.checked = checked
+        input.setAttribute('aria-label', '启用入口')
+        input.addEventListener('change', () => onChange(input.checked))
+        return input
+      }
+
+      function renderEngines() {
+        enginesRoot.textContent = ''
+        if (!settings.engines.length) {
+          const empty = document.createElement('div')
+          empty.className = 'empty'
+          empty.textContent = '还没有搜索引擎，添加一个即可直接搜索。'
+          enginesRoot.appendChild(empty)
+          return
+        }
+        settings.engines.forEach((engine, index) => {
+          const row = document.createElement('div')
+          row.className = 'grid row'
+
+          row.appendChild(checkboxField(engine.enabled, (value) => {
+            settings.engines[index].enabled = value
+            if (!value && settings.defaultEngine === engine.id)
+              settings.defaultEngine = settings.engines.find(entry => entry.enabled)?.id || ''
+            renderEngines()
+          }))
+
+          const name = textField(engine.name, 'Google', (value) => { engine.name = value })
+          if (engine.builtin)
+            name.readOnly = true
+          row.appendChild(name)
+
+          row.appendChild(textField(engine.keyword, 'google', value => { engine.keyword = value }))
+          row.appendChild(
+            textField(engine.urlTemplate, 'https://example.com/search?q={query}', (value) => {
+              engine.urlTemplate = value
+            }),
+          )
+
+          const defaultCell = document.createElement('label')
+          defaultCell.className = 'radio'
+          const radio = document.createElement('input')
+          radio.type = 'radio'
+          radio.name = 'default-engine'
+          radio.setAttribute('aria-label', `将 ${engine.name} 设为默认搜索引擎`)
+          radio.checked = settings.defaultEngine === engine.id
+          radio.disabled = !engine.enabled
+          radio.addEventListener('change', () => {
+            settings.defaultEngine = engine.id
+            renderEngines()
+          })
+          defaultCell.appendChild(radio)
+          row.appendChild(defaultCell)
+
+          const remove = document.createElement('button')
+          remove.type = 'button'
+          remove.className = 'icon'
+          remove.title = '删除'
+          remove.setAttribute('aria-label', `删除 ${engine.name}`)
+          remove.textContent = '✕'
+          remove.disabled = Boolean(engine.builtin)
+          remove.addEventListener('click', () => {
+            settings.engines.splice(index, 1)
+            if (settings.defaultEngine === engine.id)
+              settings.defaultEngine = settings.engines.find(entry => entry.enabled)?.id || ''
+            renderEngines()
+          })
+          row.appendChild(remove)
+
+          enginesRoot.appendChild(row)
+        })
+      }
+
+      function renderHotEntries() {
+        hotRoot.textContent = ''
+        if (!settings.hotEntries.length) {
+          const empty = document.createElement('div')
+          empty.className = 'empty'
+          empty.textContent = '还没有快捷入口。'
+          hotRoot.appendChild(empty)
+          return
+        }
+        settings.hotEntries.forEach((entry, index) => {
+          const row = document.createElement('div')
+          row.className = 'grid hot row'
+
+          row.appendChild(checkboxField(entry.enabled, (value) => { entry.enabled = value }))
+          row.appendChild(textField(entry.name, '微博热搜', value => { entry.name = value }))
+          row.appendChild(textField(entry.keyword, 'weibo', value => { entry.keyword = value }))
+          row.appendChild(textField(entry.url, 'https://s.weibo.com/top/summary', value => { entry.url = value }))
+
+          const remove = document.createElement('button')
+          remove.type = 'button'
+          remove.className = 'icon'
+          remove.title = '删除'
+          remove.setAttribute('aria-label', `删除 ${entry.name}`)
+          remove.textContent = '✕'
+          remove.addEventListener('click', () => {
+            settings.hotEntries.splice(index, 1)
+            renderHotEntries()
+          })
+          row.appendChild(remove)
+
+          hotRoot.appendChild(row)
+        })
+      }
+
+      function render() {
+        renderEngines()
+        renderHotEntries()
+      }
+
+      function makeId(prefix) {
+        let counter = 1
+        while (counter < 1000) {
+          const candidate = `${prefix}-${counter}`
+          const taken = settings.engines.some(entry => entry.id === candidate)
+            || settings.hotEntries.some(entry => entry.id === candidate)
+          if (!taken && ID_PATTERN.test(candidate))
+            return candidate
+          counter += 1
+        }
+        return `${prefix}-${Date.now().toString(36)}`
+      }
+
+      function validate() {
+        const problems = []
+        const seenEngineIds = new Set()
+        for (const engine of settings.engines) {
+          if (!ID_PATTERN.test(engine.id))
+            problems.push(`搜索引擎 id 不合法：${engine.id || '(空)'}（需小写字母开头，仅 a-z 0-9 -）`)
+          else if (seenEngineIds.has(engine.id))
+            problems.push(`搜索引擎 id 重复：${engine.id}`)
+          seenEngineIds.add(engine.id)
+          if (!engine.name.trim())
+            problems.push(`搜索引擎 ${engine.id} 缺少名称`)
+          if (!engine.keyword.trim())
+            problems.push(`搜索引擎 ${engine.id} 缺少关键词`)
+          if (!engine.urlTemplate.includes('{query}'))
+            problems.push(`搜索引擎 ${engine.id} 的模板必须包含 {query}`)
+        }
+        if (!settings.engines.some(engine => engine.enabled))
+          problems.push('至少要启用一个搜索引擎')
+        if (settings.defaultEngine && !settings.engines.some(engine => engine.id === settings.defaultEngine && engine.enabled))
+          problems.push('默认搜索引擎必须处于启用状态')
+
+        const seenHotIds = new Set()
+        for (const entry of settings.hotEntries) {
+          if (!ID_PATTERN.test(entry.id))
+            problems.push(`入口 id 不合法：${entry.id || '(空)'}`)
+          else if (seenHotIds.has(entry.id))
+            problems.push(`入口 id 重复：${entry.id}`)
+          seenHotIds.add(entry.id)
+          if (!entry.name.trim())
+            problems.push(`入口 ${entry.id} 缺少名称`)
+          if (!entry.keyword.trim())
+            problems.push(`入口 ${entry.id} 缺少关键词`)
+          if (!/^https?:\/\/[^\s]+$/i.test(entry.url.trim()))
+            problems.push(`入口 ${entry.id} 的地址必须是 http(s) 链接`)
+        }
+        return problems
+      }
+
+      function toPayload() {
+        return {
+          version: 1,
+          defaultEngine: settings.defaultEngine,
+          engines: settings.engines.map(engine => ({
+            id: engine.id,
+            name: engine.name.trim(),
+            keyword: engine.keyword.trim(),
+            urlTemplate: engine.urlTemplate.trim(),
+            enabled: engine.enabled,
+          })),
+          hotEntries: settings.hotEntries.map(entry => ({
+            id: entry.id,
+            name: entry.name.trim(),
+            keyword: entry.keyword.trim(),
+            url: entry.url.trim(),
+            enabled: entry.enabled,
+          })),
+        }
+      }
+
+      async function load() {
+        loaded = false
+        saveButton.disabled = true
+        setStatus('正在读取设置…')
+        try {
+          const raw = await storage.getFile('search-settings.json')
+          if (raw && typeof raw === 'object' && raw.error)
+            throw new Error(String(raw.error))
+          settings = normalizeIncoming(raw)
+          render()
+          loaded = true
+          saveButton.disabled = false
+          setStatus('')
+        }
+        catch (error) {
+          settings = normalizeIncoming(null)
+          render()
+          setStatus(`读取设置失败：${error && error.message ? error.message : error}`, 'error')
+        }
+      }
+
+      async function save() {
+        if (!loaded || saveButton.disabled) return
+        const problems = validate()
+        if (problems.length) {
+          setStatus(problems[0], 'error')
+          return
+        }
+        setStatus('正在保存…')
+        saveButton.disabled = true
+        try {
+          const result = await storage.setFile('search-settings.json', toPayload())
+          if (result && typeof result === 'object' && result.success === false)
+            throw new Error(String(result.error || '保存失败'))
+          const synced = await communicateWithPlugin('browser-open:sync-settings')
+          if (synced?.error) throw new Error(String(synced.error))
+          setStatus('已保存，召唤框已同步', 'ok')
+        }
+        catch (error) {
+          setStatus(`保存失败：${error && error.message ? error.message : error}`, 'error')
+        }
+        finally {
+          saveButton.disabled = !loaded
+        }
+      }
+
+      document.getElementById('add-engine').addEventListener('click', () => {
+        settings.engines.push({
+          id: makeId('engine'),
+          name: '自定义搜索',
+          keyword: 'search',
+          urlTemplate: '',
+          enabled: true,
+        })
+        renderEngines()
+      })
+
+      document.getElementById('add-hot').addEventListener('click', () => {
+        settings.hotEntries.push({
+          id: makeId('hot'),
+          name: '新入口',
+          keyword: 'hot',
+          url: '',
+          enabled: true,
+        })
+        renderHotEntries()
+      })
+
+      document.getElementById('save').addEventListener('click', save)
+      document.getElementById('reload').addEventListener('click', load)
+
+      load()
+    </script>
+  </body>
+</html>

@@ -175,6 +175,9 @@ describe('official plugin manifest trust boundary', () => {
 
     // Clipboard History and the five newly manifested plugins consume the current SDK marker.
     // Other migrated plugins stay on the 260713 localization baseline until they use a newer API.
+    //
+    // touch-browser-open joins the 260713 baseline: its settings webcontent surface plus the
+    // feature-registry calls it uses for dynamic engine/hot-entry features need that marker.
     expect(currentMarkerPlugins).toEqual([
       'clipboard-history',
       'touch-ai-sessions',
@@ -183,7 +186,12 @@ describe('official plugin manifest trust boundary', () => {
       'touch-orca',
       'touch-vscode-projects',
     ])
-    expect(localizationMarkerPlugins).toEqual(['json-formatter', 'touch-intelligence', 'touch-translation'])
+    expect(localizationMarkerPlugins).toEqual([
+      'json-formatter',
+      'touch-browser-open',
+      'touch-intelligence',
+      'touch-translation',
+    ])
   })
 
   it('keeps official plugin docs coverage gaps explicit', () => {
@@ -286,9 +294,14 @@ describe('official plugin manifest trust boundary', () => {
     //
     // Full-height is plausible for AI answer panels, but that is a judgement the diff
     // should carry, not something the test should absorb quietly.
+    //
+    // touch-browser-open:browser-open-settings is the plugin's settings surface: a form
+    // that manages engines, hot-search entries and the default engine, which needs the
+    // full-height view to be usable rather than a squeezed panel.
     expect(fullHeightSurfaces.sort()).toEqual([
       'clipboard-history:clipboard-history',
       'json-formatter:json-formatter-format',
+      'touch-browser-open:browser-open-settings',
       'touch-intelligence:intelligence-ask',
       'touch-intelligence:intelligence-command-registry',
       'touch-intelligence:intelligence-explain',

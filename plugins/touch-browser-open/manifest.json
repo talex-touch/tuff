@@ -1,26 +1,26 @@
 {
-  "id": "com.tuffex.browser-open",
+  "id": "com.tuffex.browser.open",
   "name": "touch-browser-open",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "author": "TalexTouch Team",
-  "sdkapi": 260428,
+  "sdkapi": 260713,
   "category": "utilities",
   "icon": {
     "type": "file",
     "value": "assets/logo.svg"
   },
-  "description": "浏览器打开：默认浏览器与指定浏览器快速打开链接",
+  "description": "浏览器打开：召唤框内直接识别网址与文字，一次回车即用所选浏览器打开且无需二次确认；支持多引擎直搜、热搜快捷入口与可自定义的设置页。",
   "main": "index.js",
   "permissions": {
-    "required": ["system.shell", "search.root-results", "storage.plugin"],
-    "optional": ["clipboard.write", "network.internet"]
+    "required": ["system.shell", "network.internet", "search.root-results", "storage.plugin"],
+    "optional": ["clipboard.write"]
   },
   "permissionReasons": {
     "system.shell": "通过宿主固定启动策略打开浏览器",
+    "network.internet": "在默认或选定浏览器中打开网址与搜索结果；显式进入搜索模式后获取搜索建议",
     "search.root-results": "将浏览器打开与网页搜索结果推送到 CoreBox 根搜索结果",
-    "storage.plugin": "保存搜索引擎设置与非权威的最近浏览器显示信息",
-    "clipboard.write": "复制链接到剪贴板",
-    "network.internet": "打开网页并通过宿主安全网络能力获取搜索建议"
+    "storage.plugin": "保存搜索引擎、热搜入口与最近浏览器设置",
+    "clipboard.write": "复制链接到剪贴板"
   },
   "searchProviders": [
     {
@@ -98,6 +98,36 @@
         {
           "type": "over",
           "value": ["search", "web", "google", "bing", "duckduckgo", "搜索", "网页搜索"]
+        }
+      ]
+    },
+    {
+      "id": "browser-open-settings",
+      "name": "浏览器打开设置",
+      "desc": "管理搜索引擎、热搜快捷入口与默认引擎",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["browser settings", "搜索引擎设置", "热搜设置", "浏览器设置"],
+      "push": false,
+      "priority": 0,
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "interaction": {
+        "type": "webcontent",
+        "path": "settings.html",
+        "showInput": false,
+        "allowInput": false,
+        "forceMax": true
+      },
+      "commands": [
+        {
+          "type": "contain",
+          "value": ["浏览器打开设置", "搜索引擎设置", "热搜设置"]
         }
       ]
     }

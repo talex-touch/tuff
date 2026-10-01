@@ -61,6 +61,7 @@ import {
   triggerUpdateCheck
 } from '../../service/store-api.service'
 import { performStoreHttpRequest } from '../../service/store-http.service'
+import { discoverNativeBrowsers } from '../../utils/browser-inventory'
 import { createLogger } from '../../utils/logger'
 import {
   deleteSecureStoreValuesByPrefixes,
@@ -2125,8 +2126,7 @@ export class PluginModule extends BaseModule {
         const plugin = this.pluginManager?.getPluginByName(pluginName)
         return plugin instanceof TouchPlugin ? plugin : undefined
       },
-      resolveHostGeneration: (activation) =>
-        this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+      resolveHostGeneration: (activation) => this.runtimeService?.resolveHostGeneration(activation),
       hasPermission: (pluginName, permissionId, sdkapi) => {
         try {
           const plugin = this.pluginManager?.getPluginByName(pluginName)
@@ -2523,6 +2523,14 @@ export class PluginModule extends BaseModule {
           ? (process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows')
           : '/Windows',
       environment: process.env,
+      ...(process.platform === 'darwin' || process.platform === 'win32'
+        ? {
+            discoverBrowsers: (signal: AbortSignal) =>
+              discoverNativeBrowsers({ platform: process.platform, environment: process.env }).then(
+                (candidates) => (signal.aborted ? Object.freeze([]) : candidates)
+              )
+          }
+        : {}),
       inspect: async (candidatePath, kind, signal) => {
         if (signal.aborted) return null
         try {
@@ -2563,7 +2571,7 @@ export class PluginModule extends BaseModule {
         resolveCurrentActivation: (pluginName) =>
           ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
         resolveHostGeneration: (activation) =>
-          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+          this.runtimeService?.resolveHostGeneration(activation),
         authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
         authorizeNetwork: (pluginName) => authorizePluginCapability(pluginName, 'network.internet'),
         watchShellPermissionRevoked: (pluginName, onRevoke) =>

@@ -4,6 +4,7 @@ import type { IProviderActivate } from '@talex-touch/utils'
 import type { IFeatureCommand, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
 import { describe, expect, it, vi } from 'vitest'
+import { TuffInputType } from '@talex-touch/utils'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { isCommandMatch, PluginFeaturesAdapter } from './plugin-features-adapter'
 import { pluginModule } from '../plugin-module'
@@ -163,6 +164,32 @@ describe('plugin-features-adapter', () => {
     const item = adapter.createTuffItem(createPlugin(), createFeature())
 
     expect(item.meta?.footerHints).toBeUndefined()
+  })
+
+  it('keeps typed query text for plain non-push features through the index interaction default', () => {
+    const adapter = createAdapter()
+    const item = adapter.createTuffItem(createPlugin(), createFeature())
+
+    expect(item.meta?.interaction).toEqual({ type: 'index', showInput: true })
+  })
+
+  it('preserves explicit hidden webcontent input and leaves push features without a default', () => {
+    const adapter = createAdapter()
+    const hidden = adapter.createTuffItem(createPlugin(), {
+      ...createFeature(),
+      interaction: { type: 'webcontent', path: '/manager', showInput: false }
+    } as IPluginFeature)
+    const pushed = adapter.createTuffItem(createPlugin(), {
+      ...createFeature(),
+      push: true
+    })
+
+    expect(hidden.meta?.interaction).toEqual({
+      type: 'webcontent',
+      path: '/manager',
+      showInput: false
+    })
+    expect(pushed.meta?.interaction).toBeUndefined()
   })
 
   it('preserves explicit color and colorful feature icons for CoreBox rendering', () => {
@@ -588,6 +615,77 @@ describe('plugin-features-adapter', () => {
     expect(searchEngineHost.activateProviders).toHaveBeenCalledWith([
       expect.objectContaining({ forceMax: true, hideResults: false, showInput: true })
     ])
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
+  it('matches a URL command on the clipboard only while the input box is empty', async () => {
+    const adapter = createAdapter()
+    // Shape of the plugin's `browser-direct-*` row: a URL-shaped regex command, no accepted inputs.
+    const urlFeature = {
+      ...createFeature(),
+      id: 'browser-direct-default',
+      name: '用 默认浏览器 打开链接',
+      desc: '直接用 默认浏览器 打开链接',
+      commands: [{ type: 'regex', value: '^\\s*https?://[^\\s]+\\s*$' }]
+    } as IPluginFeature
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      getFeatures: vi.fn(() => [urlFeature])
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    const inputs = [{ type: TuffInputType.Text, content: 'https://example.com/copied' }]
+    const withEmptyInput = await adapter.onSearch(
+      { text: '', inputs },
+      new AbortController().signal
+    )
+
+    expect(withEmptyInput.items.map((item) => item.meta?.featureId)).toEqual([
+      'browser-direct-default'
+    ])
+    expect(withEmptyInput.items[0].meta?.extension?.source).toBe('command')
+
+    // An explicit query suppresses clipboard-command matching: the URL the user copied earlier
+    // must not offer a browser row that outranks what they are typing right now.
+    const withTypedInput = await adapter.onSearch(
+      { text: 'hello', inputs },
+      new AbortController().signal
+    )
+
+    expect(withTypedInput.items).toEqual([])
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
+  it('keeps only the feature that declares the non-text query input type', async () => {
+    const adapter = createAdapter()
+    const features = [
+      { ...createFeature(), id: 'image-tool', acceptedInputTypes: ['image'] },
+      { ...createFeature(), id: 'files-tool', acceptedInputTypes: ['files'] },
+      { ...createFeature(), id: 'text-tool' }
+    ] as IPluginFeature[]
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      getFeatures: vi.fn(() => features)
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    for (const [type, expectedFeatureId] of [
+      [TuffInputType.Image, 'image-tool'],
+      [TuffInputType.Files, 'files-tool']
+    ] as const) {
+      const result = await adapter.onSearch(
+        { text: '', inputs: [{ type, content: 'SENTINEL' }] },
+        new AbortController().signal
+      )
+
+      expect(
+        result.items.map((item) => item.meta?.featureId),
+        type
+      ).toEqual([expectedFeatureId])
+      expect(result.items[0].meta?.extension?.source, type).toBe('input')
+    }
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
   })
 })
