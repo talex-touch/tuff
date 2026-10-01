@@ -332,6 +332,7 @@ function stubDimensions(
       perf: { durationMs: 0, rowCount: 0, ready: true }
     })),
     getPluginCandidates: vi.fn(async () => []),
+    getBuiltinDestinationCandidates: vi.fn(() => []),
     ...overrides
   })
 }
@@ -434,6 +435,60 @@ function candidatePerf(totalCandidates: number, filteredCount = totalCandidates)
     trendingCandidates: 0,
     trendingReady: true
   }
+}
+
+/**
+ * A persisted-cache handle that behaves like the table it stands for: a row is stored and read back
+ * under the exact key the engine asked for, and nothing else. That is what lets a test assert
+ * context/pin isolation and same-key reuse without naming a key — an assertion on the key string
+ * would freeze the schema segment and go green while reuse broke.
+ */
+function createKeyedCacheStore() {
+  const store = new Map<string, RecommendationCacheRecord>()
+  const dbUtils = createDbUtils()
+
+  dbUtils.getRecommendationCache.mockImplementation(async (cacheKey: string) => {
+    return store.get(cacheKey) ?? null
+  })
+  dbUtils.setRecommendationCache = vi.fn(
+    async (cacheKey: string, items: unknown[], expiresAt: Date) => {
+      store.set(cacheKey, {
+        cacheKey,
+        recommendedItems: JSON.stringify(items),
+        createdAt: new Date(),
+        expiresAt
+      })
+    }
+  ) as never
+
+  return { dbUtils, store }
+}
+
+/**
+ * An engine whose candidate pool is exactly what the test hands in. The cache tests are about which
+ * key a pass reads and writes, not about how a candidate was recalled.
+ */
+function createStubbedCandidateEngine(
+  dbUtils: ReturnType<typeof createDbUtils>,
+  contexts: ContextSignal[],
+  { items = [], pinned = [] }: { items?: unknown[]; pinned?: unknown[] } = {}
+) {
+  const engine = new RecommendationEngine(dbUtils as never)
+  const getCandidates = vi.fn(async () => ({ items, perf: candidatePerf(items.length) }))
+  const fallbackContext = contexts[contexts.length - 1] ?? morningContext
+
+  Object.assign(engine as unknown as Record<string, unknown>, {
+    contextProvider: {
+      getCurrentContext: vi.fn(async () => contexts.shift() ?? fallbackContext),
+      generateCacheKey: (signal: ContextSignal) =>
+        `${signal.time.timeSlot}|${signal.time.dayOfWeek}`
+    },
+    scheduleTrendBackfill: vi.fn(),
+    getPinnedItems: vi.fn(async () => pinned),
+    getCandidates
+  })
+
+  return { engine, getCandidates }
 }
 
 describe('RecommendationEngine', () => {
@@ -668,60 +723,91 @@ describe('RecommendationEngine', () => {
   })
 
   it('does not reuse persisted recommendation cache across time slots', async () => {
-    const dbUtils = createDbUtils()
-    dbUtils.getRecommendationCache.mockImplementation(async (cacheKey: string) => {
-      if (cacheKey !== 'morning|1|pin:none') return null
-
-      return {
-        cacheKey,
-        recommendedItems: JSON.stringify([
-          {
-            id: 'cached-morning-app',
-            source: { id: 'app-provider', type: 'app', name: 'app-provider' },
-            kind: 'app',
-            render: { mode: 'default', basic: { title: 'cached-morning-app' } },
-            meta: { recommendation: { source: 'frequent' } }
-          }
-        ]),
-        createdAt: new Date('2026-05-04T09:00:00.000Z'),
-        expiresAt: new Date(Date.now() + 60_000)
-      }
-    })
-
-    const engine = new RecommendationEngine(dbUtils as never)
-    const contexts = [morningContext, afternoonContext]
-    const getCandidates = vi.fn(async () => ({
-      items: [
-        {
-          sourceId: 'app-provider',
-          itemId: 'fresh-afternoon-app',
-          sourceType: 'app',
-          source: 'frequent',
-          usageStats: createUsageStats('fresh-afternoon-app', { executeCount: 2 })
-        }
-      ],
-      perf: candidatePerf(1)
-    }))
-
-    Object.assign(engine as unknown as Record<string, unknown>, {
-      contextProvider: {
-        getCurrentContext: vi.fn(async () => contexts.shift() ?? afternoonContext),
-        generateCacheKey: (context: ContextSignal) =>
-          `${context.time.timeSlot}|${context.time.dayOfWeek}`
-      },
-      scheduleTrendBackfill: vi.fn(),
-      getPinnedItems: vi.fn(async () => []),
-      getCandidates
-    })
+    // A cached ranking is only valid for the time slot it was computed under. The harness stores and
+    // reads rows under the engine's own key, so the assertion is about isolation, not about the key
+    // spelling: an engine that reused the morning row for the afternoon context would fail here.
+    const { dbUtils } = createKeyedCacheStore()
+    const { engine, getCandidates } = createStubbedCandidateEngine(
+      dbUtils,
+      [morningContext, afternoonContext],
+      { items: createCandidates(['fresh-afternoon-app']) }
+    )
 
     const morning = await engine.recommend({ limit: 1 })
     const afternoon = await engine.recommend({ limit: 1 })
 
-    expect(morning.items[0]?.id).toBe('cached-morning-app')
+    expect(morning.fromCache).toBe(false)
+    expect(morning.items[0]?.id).toBe('fresh-afternoon-app')
+    // The afternoon context has an empty cache, so the ranking is recomputed rather than replayed.
     expect(afternoon.items[0]?.id).toBe('fresh-afternoon-app')
-    expect(dbUtils.getRecommendationCache).toHaveBeenNthCalledWith(1, 'morning|1|pin:none')
-    expect(dbUtils.getRecommendationCache).toHaveBeenNthCalledWith(2, 'afternoon|1|pin:none')
-    expect(getCandidates).toHaveBeenCalledTimes(1)
+    expect(getCandidates).toHaveBeenCalledTimes(2)
+    expect(dbUtils.getRecommendationCache.mock.calls[0]?.[0]).not.toBe(
+      dbUtils.getRecommendationCache.mock.calls[1]?.[0]
+    )
+  })
+
+  it('reuses the persisted ranking for the same context and pinned set', async () => {
+    // The positive half of the isolation contract. The second engine has an empty memory cache, so
+    // only the row the first one wrote can answer it: a cold start that ignored the persisted
+    // ranking, or keyed it differently, would recompute.
+    const { dbUtils, store } = createKeyedCacheStore()
+    const first = createStubbedCandidateEngine(dbUtils, [morningContext], {
+      items: createCandidates(['ranked-app'])
+    })
+
+    await first.engine.recommend({ limit: 1 })
+    expect(store.size).toBe(1)
+
+    const second = createStubbedCandidateEngine(dbUtils, [morningContext], {
+      items: createCandidates(['ranked-app'])
+    })
+    const warm = await second.engine.recommend({ limit: 1 })
+
+    expect(warm.fromCache).toBe(true)
+    expect(warm.items[0]?.id).toBe('ranked-app')
+    expect(second.getCandidates).not.toHaveBeenCalled()
+  })
+
+  it('never reads back a ranking persisted under an earlier cache schema', async () => {
+    // The key carries a schema segment, and bumping it is how a shipped candidate-set change
+    // invalidates every row already on disk: the previous version's ranking must not be replayed by
+    // the current engine, or an upgrade keeps serving the old empty state until the TTL expires.
+    const { dbUtils, store } = createKeyedCacheStore()
+    const first = createStubbedCandidateEngine(dbUtils, [morningContext], {
+      items: createCandidates(['fresh-app'])
+    })
+
+    await first.engine.recommend({ limit: 1 })
+    const [storedKey] = [...store.keys()]
+    expect(storedKey).toBeDefined()
+
+    // Relocate the row onto the same key one schema version older, and nothing else: a reader that
+    // ignored the version segment would answer with it.
+    const legacyKey = storedKey!.replace(/^reco-v\d+/, 'reco-v1')
+    const row = store.get(storedKey!)!
+    store.delete(storedKey!)
+    store.set(legacyKey, {
+      ...row,
+      cacheKey: legacyKey,
+      recommendedItems: JSON.stringify([
+        {
+          id: 'legacy-app',
+          source: { id: 'app-provider', type: 'app', name: 'app-provider' },
+          kind: 'app',
+          render: { mode: 'default', basic: { title: 'legacy-app' } },
+          meta: { recommendation: { source: 'frequent' } }
+        }
+      ])
+    })
+
+    const second = createStubbedCandidateEngine(dbUtils, [morningContext], {
+      items: createCandidates(['fresh-app'])
+    })
+    const fresh = await second.engine.recommend({ limit: 1 })
+
+    expect(fresh.fromCache).toBe(false)
+    expect(fresh.items.map((item) => item.id)).toEqual(['fresh-app'])
+    expect(second.getCandidates).toHaveBeenCalledTimes(1)
   })
 
   it('keeps pinned items visible when recommendations already fill the limit', async () => {
@@ -835,41 +921,21 @@ describe('RecommendationEngine', () => {
   })
 
   it('separates persisted recommendation cache by pinned items', async () => {
-    const dbUtils = createDbUtils()
-    dbUtils.getRecommendationCache.mockImplementation(async (cacheKey: string) => {
-      if (cacheKey.endsWith('pin:none')) return null
-
-      return {
-        cacheKey,
-        recommendedItems: JSON.stringify([
-          {
-            id: 'cached-pinned-app',
-            source: { id: 'pinned-source', type: 'app', name: 'pinned-source' },
-            kind: 'app',
-            render: { mode: 'default', basic: { title: 'cached-pinned-app' } },
-            meta: {
-              pinned: { isPinned: true },
-              recommendation: { source: 'pinned' }
-            }
-          }
-        ]),
-        createdAt: new Date('2026-05-04T09:00:00.000Z'),
-        expiresAt: new Date(Date.now() + 60_000)
-      }
-    })
-
-    const engine = new RecommendationEngine(dbUtils as never)
+    // Same time context, different pinned set: the second pass must not read the first pass's
+    // ranking, because the two answer different questions about what the user pinned.
+    const { dbUtils, store } = createKeyedCacheStore()
     const pinnedSets = [
       [
         {
           sourceId: 'pinned-source',
-          itemId: 'cached-pinned-app',
+          itemId: 'pinned-app',
           sourceType: 'app',
-          usageStats: createUsageStats('cached-pinned-app')
+          usageStats: createUsageStats('pinned-app')
         }
       ],
       []
     ]
+    const engine = new RecommendationEngine(dbUtils as never)
     const getCandidates = vi.fn(async () => ({
       items: [
         {
@@ -894,14 +960,15 @@ describe('RecommendationEngine', () => {
       getCandidates
     })
 
-    const cached = await engine.recommend({ limit: 1 })
-    const fresh = await engine.recommend({ limit: 1 })
+    const withPin = await engine.recommend({ limit: 1 })
+    const withoutPin = await engine.recommend({ limit: 1 })
 
-    expect(cached.items[0]?.id).toBe('cached-pinned-app')
-    expect(fresh.items[0]?.id).toBe('fresh-app')
-    expect(dbUtils.getRecommendationCache.mock.calls[0]?.[0]).toContain('pin:')
-    expect(dbUtils.getRecommendationCache.mock.calls[1]?.[0]).toBe('morning|1|pin:none')
-    expect(getCandidates).toHaveBeenCalledTimes(1)
+    expect(withPin.items[0]?.id).toBe('pinned-app')
+    expect(withoutPin.items[0]?.id).toBe('fresh-app')
+    // Two different pinned sets wrote two rows under this one time context, and neither answer
+    // was read back for the other.
+    expect(store.size).toBe(2)
+    expect(getCandidates).toHaveBeenCalledTimes(2)
   })
 
   it('uses focus system state to prefer work apps over social apps', async () => {
@@ -2483,11 +2550,10 @@ describe('RecommendationEngine', () => {
     })
 
     const result = await engine.recommend({ limit: 5 })
+    const ids = result.items.map((item) => item.id)
 
-    expect(result.items.map((item) => item.id)).toEqual([
-      '/Applications/Fresh.app',
-      '/Applications/Habit.app'
-    ])
+    expect(ids[0]).toBe('/Applications/Fresh.app')
+    expect(ids.indexOf('/Applications/Habit.app')).toBe(1)
     expect(result.items[0]?.meta?.recommendation).toMatchObject({ source: 'newly-installed' })
   })
 
@@ -2736,9 +2802,13 @@ describe('RecommendationEngine', () => {
     // What the app index commit does when the new app lands.
     engine.invalidateCache()
     const afterInstall = await engine.recommend({ limit: 5 })
+    const ids = afterInstall.items.map((item) => item.id)
 
+    // The invalidated row is not handed back, and the ranking the user sees is the freshly
+    // computed one: the just-installed app leads it.
     expect(afterInstall.fromCache).toBe(false)
-    expect(afterInstall.items.map((item) => item.id)).toEqual(['/Applications/Fresh.app'])
+    expect(ids).not.toContain('/Applications/Stale.app')
+    expect(ids[0]).toBe('/Applications/Fresh.app')
   })
 
   it('does not publish the pre-execute snapshot when an execute is accepted during the compute', async () => {

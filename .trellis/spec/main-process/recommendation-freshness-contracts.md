@@ -14,6 +14,9 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   birthtime > 0 and ≤ now + 24h), `processAppPath(options.discovery: 'watch' | 'scan')`.
 - Read side: `parseInstalledAt` / `loadInstalledAtByFileId` via
   `appCatalogDbUtils.getFileExtensionsByFileIds(ids, ['installedAt'])`.
+- Default destination identity: `APP_DESTINATION_PROVIDER_ID`,
+  `APP_DESTINATION_ITEM_ID_PREFIX` and `APP_DESTINATION_ITEM_IDS` in `shared/app-destinations.ts`.
+  The provider and recommendation pool share them; main-window keeps its existing bare id.
 
 ### 3. Contracts
 
@@ -62,6 +65,9 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   before invalidation may not write back to any layer). The aux `recommendation_cache`
   row deletion runs with `dropPolicy: 'drop'` — it is cleanup, never the mechanism.
   Index-commit trigger fires only for `providerIds` containing `APP_INDEXED_SOURCE_ID`.
+- **Candidate-shape cache versions.** Persisted keys begin with `reco-v<schemaVersion>` (currently
+  2), then the existing context and pin signature. Changing default candidates must invalidate old
+  shapes through this version; old rows expire naturally and are never repinned under the new key.
 - **Evidence must be verifiable or absent.** `meta.recommendation.evidence` carries only
   facts the DB actually holds (`executeCount`, `lastExecutedAt`, `installedAt`,
   `peakHourRange`). Every field is `Number.isFinite` + `> 0` guarded and omitted when
@@ -92,6 +98,16 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   `frequent`-labelled row with no dated evidence is not a habit. A short grid stays short:
   exploration or loose suggestions are never used to pad it. No eligible tile and nothing
   pinned means the habitual section is omitted entirely.
+- **Default settings are suggestions, not fabricated habits.** An empty query always nominates
+  three searchable destinations (`settings-general`, `settings-appearance`, `settings-channels`),
+  even with sparse history. They use `source: 'cold-start'` and empty usage statistics. Real usage
+  dimensions arrive first, so dedupe keeps an existing destination's evidence rather than replacing
+  it with an empty row. These suggestions stay in the list and are never habitual-grid padding.
+- **The default priority is small and bounded.** Only unused host-nominated destinations receive
+  the 5e3 term, above the 1e3 cold-start catalogue band and below established dated behaviour and
+  pin priority. Volatile context and novelty retain their own precedence; do not promise an absolute
+  ordering against every old aggregate. Execution uses the existing destination provider and
+  navigation service, including accepted-execution recording, not a new recommendation-only route.
 - **A post-notification consumer read must not regress to an older aggregate.** The
   `usageChanged` payload's `executeCount` is the committed epoch fact. A consumer that
   re-reads the richer aggregate right after that notification passes it as a floor
@@ -113,6 +129,9 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
 | union extended in <3 files | fixed at the root: extend `RECOMMENDATION_SECTION_ORDER` instead |
 | evidence field fabricated (0, `Date.now()`, guessed peak) | forbidden — omit the field, or the whole evidence object |
 | extension read fails | degrade to ctime ordering (`loadInstalledAtByFileId` swallows), never empty grid |
+| Sparse history | Keep real candidates and include default settings; do not fabricate usage to fill the habitual grid |
+| Destination already has real usage | One candidate retains that history; the default nomination does not replace it |
+| Persisted key belongs to an older candidate schema | Recompute under the current version; do not serve the old shape |
 
 ### 5. Tests required
 
@@ -130,3 +149,7 @@ share, midnight wraparound, too-few-active-days), renderer
 `components/render/recommendation-evidence.test.ts` "says nothing when there is no
 evidence" and the future-timestamp case, and `item-rebuilder.test.ts` "marks a rebuilt
 candidate grid-eligible only from dated behaviour, never from its label".
+The engine's cache and sparse-history regressions cover context/pin isolation, invalidation, default
+settings and real-history dedupe through returned items, not exact cache-key strings or full-list
+incidental ordering. Real CoreBox acceptance opens an empty query and executes a default setting
+from a different main-window route; seeing the destination in a list alone is not navigation proof.
