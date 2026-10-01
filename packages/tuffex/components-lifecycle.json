@@ -1,8 +1,24 @@
 {
   "$schema": "./components-lifecycle.schema.json",
-  "currentVersion": "0.6.2",
-  "totalComponents": 164,
+  "currentVersion": "0.6.3",
+  "totalComponents": 166,
   "versions": [
+    {
+      "version": "0.6.3",
+      "date": "2026-10-01",
+      "title": "流式文本、回答与菜单确认反馈 (Streaming Content and Menu Feedback)",
+      "newComponents": [
+        "stream-element",
+        "stream-text"
+      ],
+      "updatedComponents": [
+        "code-stream",
+        "context-menu",
+        "dropdown-menu",
+        "stream-markdown"
+      ],
+      "summary": "新增共享节奏的流式文字与回答组件，补齐代码和 Markdown 流式展示及菜单确认反馈；当前随客户端 beta 测试，尚未独立发布 npm。"
+    },
     {
       "version": "0.6.2",
       "date": "2026-09-28",
@@ -989,9 +1005,19 @@
       "since": "0.3.4",
       "suite": "base"
     },
+    "stream-element": {
+      "slug": "stream-element",
+      "since": "0.6.3",
+      "suite": "ai"
+    },
     "stream-markdown": {
       "slug": "stream-markdown",
       "since": "0.3.9",
+      "suite": "ai"
+    },
+    "stream-text": {
+      "slug": "stream-text",
+      "since": "0.6.3",
       "suite": "ai"
     },
     "suggestion-chips": {

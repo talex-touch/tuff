@@ -47,6 +47,13 @@ export function resolveStoreInstallFailureReason(
     return t('store.installation.reasons.noSource')
   }
 
+  if (
+    normalized === 'PRIVILEGED_PLUGIN_NAME_RESERVED' ||
+    normalized === 'privileged plugin name is reserved for the bundled runtime'
+  ) {
+    return t('store.clientManagedHint')
+  }
+
   if (normalized === 'NOT_AUTHENTICATED' || normalized === 'UNAUTHORIZED') {
     return t('store.installation.reasons.authRequired')
   }

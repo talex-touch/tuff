@@ -37,6 +37,8 @@ interface Props {
   mini?: boolean
   /** Whether the catalog manifest SDK can run on this host version */
   isCompatible?: boolean
+  /** Whether this privileged plugin can only be updated with the client. */
+  isBundledManaged?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -47,7 +49,8 @@ const props = withDefaults(defineProps<Props>(), {
   storeVersion: '',
   installTask: null,
   mini: true,
-  isCompatible: true
+  isCompatible: true,
+  isBundledManaged: false
 })
 
 const emit = defineEmits<{
@@ -109,6 +112,7 @@ const showSpinner = computed(() => installStage.value === 'installing' && !showP
 
 /** Button icon based on current state */
 const buttonIcon = computed(() => {
+  if (props.isBundledManaged) return 'i-ri-shield-check-line'
   if (!props.isCompatible && !installStage.value) {
     return 'i-ri-error-warning-line'
   }
@@ -142,6 +146,7 @@ const buttonIcon = computed(() => {
 
 /** Button label text based on current state */
 const buttonLabel = computed(() => {
+  if (props.isBundledManaged) return t('store.clientManaged')
   if (!props.isCompatible && !installStage.value) {
     return t('store.incompatible')
   }
@@ -179,6 +184,7 @@ const buttonLabel = computed(() => {
 
 /** Whether install button should be disabled */
 const isDisabled = computed(() => {
+  if (props.isBundledManaged) return true
   if (!props.isCompatible) return true
   // Disabled during active installation
   if (isActiveStage.value) return true
@@ -201,12 +207,23 @@ function handleClick(event: MouseEvent): void {
 <template>
   <TxButton
     variant="flat"
-    :type="isCompatible && (!isInstalled || hasUpgrade) ? 'primary' : undefined"
+    :type="
+      !isBundledManaged && isCompatible && (!isInstalled || hasUpgrade) ? 'primary' : undefined
+    "
     :size="mini ? 'sm' : undefined"
-    :title="!isCompatible ? t('store.incompatible') : undefined"
+    :title="
+      isBundledManaged
+        ? t('store.clientManagedHint')
+        : !isCompatible
+          ? t('store.incompatible')
+          : undefined
+    "
     :disabled="isDisabled"
     :loading="showSpinner"
-    :class="{ 'upgrade-available': isCompatible && hasUpgrade && isInstalled && !isActiveStage }"
+    :class="{
+      'upgrade-available':
+        !isBundledManaged && isCompatible && hasUpgrade && isInstalled && !isActiveStage
+    }"
     @click="handleClick"
   >
     <div class="install-button-content">

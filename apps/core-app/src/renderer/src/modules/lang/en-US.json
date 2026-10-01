@@ -157,6 +157,8 @@
       "app": "Application",
       "system": "System"
     },
+    "advancedSettings": "Advanced Settings",
+    "advancedSettingsDesc": "Show CoreBox customization and wallpaper details. Existing settings are kept when disabled.",
     "developerMode": "Developer Mode",
     "developerModeDesc": "Show internal plugins and advanced options (use with care)",
     "systemInfoPlaceholder": "System information is only available in development mode"
@@ -1862,12 +1864,28 @@
       "tools": "Tools",
       "productivity": "Productivity"
     },
+    "clientManaged": "Updated with Tuff",
+    "clientManagedHint": "This built-in plugin is managed by Tuff and cannot be installed or upgraded separately from the store. Update the Tuff client instead.",
     "detailDialog": {
       "author": "Author",
       "version": "Version",
       "updateTime": "Update Time",
       "pluginId": "Plugin ID",
       "provider": "Provider",
+      "sdkRequirement": "Required SDK",
+      "currentClient": "Current client",
+      "currentSdk": "Current SDK API",
+      "sdkCompatibility": "SDK compatibility",
+      "sdkUndeclared": "Not declared",
+      "versionUnknown": "Unknown",
+      "compatibilityUnknown": "Unconfirmed",
+      "compatible": "Compatible",
+      "incompatible": "Incompatible",
+      "installPolicy": "Installation",
+      "sdkMissingHint": "The source did not provide an SDK requirement, so compatibility is unconfirmed. The package declaration will still be checked during installation.",
+      "sdkUpgradeHint": "This plugin requires SDK API {required}; the current client provides {current}. Upgrade to a Tuff version that supports this SDK.",
+      "sdkOutdatedHint": "The plugin SDK is below the supported minimum {minimum}. Ask the author to update the plugin.",
+      "sdkUnsupportedHint": "This client does not support the declared SDK marker. Check the plugin declaration or update Tuff.",
       "download": "Download Source",
       "viewDocs": "View Documentation",
       "information": "Information",
@@ -2988,7 +3006,9 @@
     },
     "sections": {
       "habitual": "Right now",
-      "proposed": "Recent picks"
+      "proposed": "Recent picks",
+      "habitualEmptyTitle": "Your regular picks will appear as you use Tuff",
+      "habitualEmptyHint": "Use apps or features through Tuff, or choose “Pin to Recommendations” in the action menu."
     },
     "recommendation": {
       "badge": {

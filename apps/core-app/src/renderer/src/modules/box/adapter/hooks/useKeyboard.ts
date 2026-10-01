@@ -6,6 +6,7 @@ import type { ForwardedKeyEvent } from '../transport/key-transport'
 import type { CoreBoxMetaActionEventDetail } from '../../meta-actions/meta-action-model'
 import { normalizeCoreBoxQuickSelectAction } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { onBeforeUnmount } from 'vue'
 import { BoxMode } from '..'
@@ -490,6 +491,25 @@ export function useKeyboard(
   const transport = useTuffTransport()
   const keyTransport = createCoreBoxKeyTransport(transport)
 
+  // Escape must not wait for a main-process round trip before removing a local attachment.
+  // Hydrate once; subsequent authoritative panel-state pushes win over a late initial reply.
+  let metaOverlayVisible = false
+  let receivedMetaPanelState = false
+  let disposed = false
+  const disposeMetaPanelState = transport.on(CoreBoxEvents.metaOverlay.panelState, (state) => {
+    if (typeof state?.visible !== 'boolean') return
+    receivedMetaPanelState = true
+    metaOverlayVisible = state.visible
+  })
+  void transport.send(MetaOverlayEvents.ui.isVisible).then(
+    (response) => {
+      if (!disposed && !receivedMetaPanelState && typeof response?.visible === 'boolean') {
+        metaOverlayVisible = response.visible
+      }
+    },
+    (error) => coreBoxKeyboardLog.warn('Failed to read initial MetaOverlay visibility', error)
+  )
+
   function getFooterInset(): number {
     const footer = document.querySelector('.CoreBoxFooter-Sticky') as HTMLElement | null
     if (!footer) return 0
@@ -945,10 +965,7 @@ export function useKeyboard(
 
       await handleCoreBoxEscapeKey({
         event,
-        isMetaOverlayVisible: async () => {
-          const response = await transport.send(MetaOverlayEvents.ui.isVisible)
-          return response?.visible === true
-        },
+        isMetaOverlayVisible: async () => !isDivisionBoxHost && metaOverlayVisible,
         hideMetaOverlay: () => transport.send(MetaOverlayEvents.ui.hide),
         boxOptions,
         clipboardOptions,
@@ -1034,6 +1051,8 @@ export function useKeyboard(
   window.addEventListener('focus', forgetEnterPress)
 
   onBeforeUnmount(() => {
+    disposed = true
+    disposeMetaPanelState()
     document.removeEventListener('keydown', onKeyDown, true)
     document.removeEventListener('keyup', onKeyUp, true)
     window.removeEventListener('blur', forgetEnterPress)

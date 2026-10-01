@@ -157,6 +157,8 @@
       "app": "应用信息",
       "system": "系统信息"
     },
+    "advancedSettings": "高级设置",
+    "advancedSettingsDesc": "显示 CoreBox 自定义与壁纸细项，关闭后保留已有配置。",
     "developerMode": "开发者模式",
     "developerModeDesc": "显示内部插件与高级选项（谨慎使用）",
     "systemInfoPlaceholder": "系统信息仅在开发模式下可用"
@@ -1862,12 +1864,28 @@
       "tools": "工具",
       "productivity": "生产力"
     },
+    "clientManaged": "随客户端更新",
+    "clientManagedHint": "此内置插件由 Tuff 客户端管理，不能从市场单独安装或升级。请更新 Tuff 客户端。",
     "detailDialog": {
       "author": "作者",
       "version": "版本",
       "updateTime": "更新时间",
       "pluginId": "插件标识",
       "provider": "分发渠道",
+      "sdkRequirement": "SDK 要求",
+      "currentClient": "当前客户端",
+      "currentSdk": "当前 SDK API",
+      "sdkCompatibility": "SDK 兼容性",
+      "sdkUndeclared": "未声明",
+      "versionUnknown": "未知",
+      "compatibilityUnknown": "无法确认",
+      "compatible": "兼容",
+      "incompatible": "不兼容",
+      "installPolicy": "安装方式",
+      "sdkMissingHint": "分发渠道未提供 SDK 要求，无法确认兼容性。安装时仍会校验包内声明。",
+      "sdkUpgradeHint": "插件要求 SDK API {required}，当前客户端为 {current}。请升级到支持该 SDK 的 Tuff 版本。",
+      "sdkOutdatedHint": "插件 SDK 低于当前支持的最低版本 {minimum}，请联系作者更新插件。",
+      "sdkUnsupportedHint": "当前客户端不支持此 SDK 标记，请检查插件声明或升级 Tuff。",
       "download": "下载源文件",
       "viewDocs": "查看文档",
       "information": "插件信息",
@@ -2988,7 +3006,9 @@
     },
     "sections": {
       "habitual": "此刻常用",
-      "proposed": "最近案例"
+      "proposed": "最近案例",
+      "habitualEmptyTitle": "常用项目会随使用逐步出现",
+      "habitualEmptyHint": "通过 Tuff 使用应用或功能，或在操作菜单中选择“固定到推荐”。"
     },
     "recommendation": {
       "badge": {

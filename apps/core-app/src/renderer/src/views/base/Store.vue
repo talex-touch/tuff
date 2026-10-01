@@ -343,6 +343,7 @@ onMounted(() => {
           :is-installed="activeDetailPluginStatus.isInstalled"
           :has-upgrade="activeDetailPluginStatus.hasUpgrade"
           :is-compatible="activeDetailPluginStatus.isCompatible"
+          :is-bundled-managed="activeDetailPluginStatus.isBundledManaged"
           :installed-version="activeDetailPluginStatus.installedVersion"
           :store-version="activeDetailPluginStatus.storeVersion"
           :install-task="activeDetailInstallTask"

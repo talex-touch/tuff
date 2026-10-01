@@ -2,7 +2,7 @@ import path from 'node:path'
 import process from 'node:process'
 import fse from 'fs-extra'
 import { compareUpdateVersions } from '../../../shared/update/version'
-import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
+import { PRIVILEGED_PLUGIN_NAMES } from '../../../shared/privileged-plugins'
 
 type PackagedPluginManifest = {
   name?: unknown

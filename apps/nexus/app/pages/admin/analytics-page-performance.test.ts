@@ -15,6 +15,8 @@ import {
 } from 'vue'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { ComputedRef, Ref } from 'vue'
+import enDashboard from '../../../i18n/locales/route/en/dashboard'
+import zhDashboard from '../../../i18n/locales/route/zh/dashboard'
 import type { Mock } from 'vitest'
 import { useAdminAnalyticsData } from '~/composables/useAdminAnalyticsData'
 import {
@@ -26,6 +28,46 @@ interface RequestOptions extends Record<string, unknown> {}
 
 interface Request {
   (path: string, options?: RequestOptions): Promise<unknown>
+}
+
+type TranslateValues = Record<string, unknown>
+
+interface Translate {
+  (key: string, valuesOrFallback?: TranslateValues | string): string
+}
+
+const DASHBOARD_MESSAGES = {
+  en: { dashboard: enDashboard },
+  zh: { dashboard: zhDashboard },
+} as const
+
+function messageAt(locale: string, key: string): string | undefined {
+  const catalog = locale.toLowerCase().startsWith('zh')
+    ? DASHBOARD_MESSAGES.zh
+    : DASHBOARD_MESSAGES.en
+  let value: unknown = catalog
+
+  for (const segment of key.split('.')) {
+    if (typeof value !== 'object' || value === null || !(segment in value))
+      return undefined
+    value = (value as Record<string, unknown>)[segment]
+  }
+
+  return typeof value === 'string' ? value : undefined
+}
+
+function createTranslate(locale: Ref<string>): Translate {
+  return (key, valuesOrFallback) => {
+    const message = messageAt(locale.value, key)
+      ?? (typeof valuesOrFallback === 'string' ? valuesOrFallback : key)
+    if (typeof valuesOrFallback !== 'object' || valuesOrFallback === null)
+      return message
+
+    return message.replace(/\{([^{}]+)\}/g, (placeholder, name: string) => {
+      const value = valuesOrFallback[name]
+      return value === undefined ? placeholder : String(value)
+    })
+  }
 }
 
 interface AnalyticsSummary {
@@ -99,6 +141,8 @@ interface AnalyticsFacade {
   exchangeView: Ref<'history' | 'snapshots'>
   exchangeIncludePayload: Ref<boolean>
   activeSection: Ref<string>
+  analyticsTabs: ComputedRef<Array<{ value: string, label: string, icon: string }>>
+  kpiCards: ComputedRef<Array<{ key: string }>>
   docsPath: Ref<string>
   docsSource: Ref<'all' | 'docs_page' | 'doc_comments_admin'>
   worldGeoJson: Ref<unknown>
@@ -128,8 +172,9 @@ interface AnalyticsPageDependencies {
   locale: Ref<string>
   route: AnalyticsRoute
   user: Ref<AnalyticsUser | null>
-  navigateTo: (path: string) => unknown
+  navigateTo: (target: unknown, options?: unknown) => unknown
   requestJson: Request
+  fetchGeoJson: (url: string) => Promise<unknown>
 }
 
 interface AnalyticsExecutionDependencies {
@@ -160,9 +205,9 @@ interface AnalyticsExecutionDependencies {
     definePageMeta: () => void
     useAuthUser: () => { user: Ref<AnalyticsUser | null> }
     useAccountRole: () => { isAdmin: ComputedRef<boolean> }
-    useI18n: () => { t: (_key: string, fallback: string) => string, locale: Ref<string> }
+    useI18n: () => { t: Translate, locale: Ref<string> }
     useRoute: () => AnalyticsRoute
-    navigateTo: (path: string) => unknown
+    navigateTo: (target: unknown, options?: unknown) => unknown
     requestJson: Request
   }
 }
@@ -238,6 +283,8 @@ ${scriptWithoutImports}
     exchangeView,
     exchangeIncludePayload,
     activeSection,
+    analyticsTabs,
+    kpiCards,
     docsPath,
     docsSource,
     worldGeoJson,
@@ -289,13 +336,13 @@ ${scriptWithoutImports}
       watch,
     },
     nuxt: {
-      $fetch: () => Promise.resolve({ type: 'FeatureCollection', features: [] }),
+      $fetch: page.fetchGeoJson,
       defineAsyncComponent: () => ({}),
       defineI18nRoute: () => undefined,
       definePageMeta: () => undefined,
       useAuthUser: () => ({ user: page.user }),
       useAccountRole: () => ({ isAdmin: computed(() => page.user.value?.role === 'admin') }),
-      useI18n: () => ({ t: (_key: string, fallback: string) => fallback, locale: page.locale }),
+      useI18n: () => ({ t: createTranslate(page.locale), locale: page.locale }),
       useRoute: () => page.route,
       navigateTo: page.navigateTo,
       requestJson: page.requestJson,
@@ -361,7 +408,7 @@ function successfulRequest(path: string): Promise<unknown> {
     return Promise.resolve({ summary: {} })
   if (path === '/api/telemetry/messages?limit=12')
     return Promise.resolve({ messages: [] })
-  if (path === '/api/exchange/history')
+  if (path === '/api/admin/exchange/history')
     return Promise.resolve({ items: [] })
   throw new Error(`Unexpected analytics request: ${path}`)
 }
@@ -378,6 +425,7 @@ interface MountAnalyticsPageOptions {
   query?: Record<string, unknown>
   role?: string | null
   requestJson?: Request
+  fetchGeoJson?: (url: string) => Promise<unknown>
 }
 
 async function mountAnalyticsPage(options: MountAnalyticsPageOptions = {}) {
@@ -394,6 +442,10 @@ async function mountAnalyticsPage(options: MountAnalyticsPageOptions = {}) {
       Object.assign(route.query, target.query)
   })
   const locale = ref(options.locale ?? 'en')
+  const fetchGeoJson = vi.fn(options.fetchGeoJson ?? (() => Promise.resolve({
+    type: 'FeatureCollection',
+    features: [],
+  })))
   const PageHost = defineComponent({
     setup() {
       facade = setupFacade({
@@ -402,6 +454,7 @@ async function mountAnalyticsPage(options: MountAnalyticsPageOptions = {}) {
         user: ref(options.role === null ? null : { role: options.role ?? 'admin' }),
         navigateTo,
         requestJson: options.requestJson ?? successfulRequest,
+        fetchGeoJson,
       })
       return () => null
     },
@@ -413,7 +466,7 @@ async function mountAnalyticsPage(options: MountAnalyticsPageOptions = {}) {
   if (!facade)
     throw new Error('Expected analytics facade to initialize.')
 
-  return { app, facade, locale, navigateTo }
+  return { app, facade, fetchGeoJson, locale, navigateTo, route }
 }
 
 function requestPaths(mock: Mock) {
@@ -429,6 +482,7 @@ function requestFor(mock: Mock, path: string) {
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
 
 describe('dashboard admin analytics facade', () => {
@@ -472,34 +526,79 @@ describe('dashboard admin analytics facade', () => {
     page.app.unmount()
   })
 
-  it('reloads every days-dependent group with the selected period without reloading alerts', async () => {
-    vi.useFakeTimers()
+  it('uses the route query as the single source for exactly seven consumer sections', async () => {
+    const page = await mountAnalyticsPage({ query: { section: 'search', keep: 'yes' } })
+
+    expect(page.facade.analyticsTabs.value.map(tab => tab.value)).toEqual([
+      'overview',
+      'performance',
+      'search',
+      'intelligence',
+      'docs',
+      'exchange',
+      'messages',
+    ])
+    expect(page.facade.activeSection.value).toBe('search')
+
+    page.facade.setActiveSection('docs')
+    await settle()
+
+    expect(page.navigateTo).toHaveBeenLastCalledWith({
+      query: { section: 'docs', keep: 'yes' },
+    }, { replace: true })
+    expect(page.route.query.section).toBe('docs')
+    expect(page.facade.activeSection.value).toBe('docs')
+
+    page.app.unmount()
+  })
+
+  it.each(['usage', 'versions', 'not-a-section'])('folds legacy or unknown section %s into overview', async (section) => {
+    const page = await mountAnalyticsPage({ query: { section } })
+
+    expect(page.facade.activeSection.value).toBe('overview')
+    expect(page.facade.kpiCards.value.map(card => card.key)).toEqual([
+      'active-users',
+      'visits',
+      'searches',
+      'avg-latency',
+    ])
+
+    page.app.unmount()
+  })
+
+  it.each([
+    ['overview', [
+      '/api/admin/analytics?days=90',
+      '/api/admin/analytics/versions',
+      '/api/admin/analytics/geo',
+    ]],
+    ['docs', [
+      '/api/admin/analytics?days=90',
+      '/api/admin/analytics/docs',
+    ]],
+    ['intelligence', [
+      '/api/admin/analytics?days=90',
+      '/api/admin/analytics/intelligence',
+    ]],
+    ['performance', ['/api/admin/analytics?days=90']],
+    ['search', ['/api/admin/analytics?days=90']],
+    ['exchange', ['/api/admin/analytics?days=90']],
+    ['messages', ['/api/admin/analytics?days=90']],
+  ] as const)('refreshes only the %s consumer group when the period changes', async (section, expectedPaths) => {
     const requestJson = vi.fn(successfulRequest)
-    const page = await mountAnalyticsPage({ requestJson })
+    const page = await mountAnalyticsPage({ query: { section }, requestJson })
 
     requestJson.mockClear()
     page.facade.selectedDays.value = 90
     await settle()
 
-    expect(requestPaths(requestJson)).toEqual([
-      '/api/admin/analytics?days=90',
-      '/api/admin/analytics/geo',
-      '/api/admin/analytics/versions',
-      '/api/admin/analytics/docs',
-      '/api/admin/analytics/intelligence',
-    ])
-    expect(requestFor(requestJson, '/api/admin/analytics/geo')[1]).toEqual({
-      query: { days: 90, country: undefined, limit: 240, version: undefined },
-    })
-    expect(requestFor(requestJson, '/api/admin/analytics/versions')[1]).toEqual({
-      query: { days: 90 },
-    })
-    expect(requestFor(requestJson, '/api/admin/analytics/docs')[1]).toEqual({
-      query: { days: 90, path: undefined, source: undefined },
-    })
-    expect(requestFor(requestJson, '/api/admin/analytics/intelligence')[1]).toEqual({
-      query: { days: 90 },
-    })
+    expect(requestPaths(requestJson)).toEqual(expectedPaths)
+    if (section === 'overview') {
+      expect(requestFor(requestJson, '/api/admin/analytics/versions')[1]).toEqual({ query: { days: 90 } })
+      expect(requestFor(requestJson, '/api/admin/analytics/geo')[1]).toEqual({
+        query: { days: 90, country: undefined, limit: 240, version: undefined },
+      })
+    }
 
     page.app.unmount()
   })
@@ -616,95 +715,152 @@ describe('dashboard admin analytics facade', () => {
     page.app.unmount()
   })
 
-  it('keeps an unlisted country readable instead of sending it through Intl.DisplayNames', async () => {
+  it.each(['en', 'zh'])('resolves an unlisted country from the active %s catalog', async (locale) => {
     // The geo query coalesces missing geolocation to the literal 'Unknown', and
     // `Intl.DisplayNames.of('Unknown')` throws, so the guard is load-bearing for
     // every anonymous or un-geolocated visitor.
-    const page = await mountAnalyticsPage()
+    const page = await mountAnalyticsPage({ locale })
+    const expected = messageAt(locale, 'dashboard.sections.analytics.common.unknown')
 
-    expect(page.facade.resolveCountryLabel(null)).toBe('Unknown')
-    expect(page.facade.resolveCountryLabel('Unknown')).toBe('Unknown')
+    expect(expected).toBeDefined()
+    expect(page.facade.resolveCountryLabel(null)).toBe(expected)
+    expect(page.facade.resolveCountryLabel('Unknown')).toBe(expected)
 
     page.app.unmount()
   })
 
-  it('scopes the geo request to the selected version and clears the scope when the version is toggled off', async () => {
+  it('loads summary, versions, geography, and the map asset for an initial overview', async () => {
     const requestJson = vi.fn(successfulRequest)
     const page = await mountAnalyticsPage({ requestJson })
 
-    expect(page.facade.versionScope.value).toBeNull()
-
-    requestJson.mockClear()
-    page.facade.selectVersion('2.0.0')
-    await settle()
-
-    expect(page.facade.versionScope.value).toBe('2.0.0')
-    expect(requestPaths(requestJson)).toEqual(['/api/admin/analytics/geo'])
-    expect(requestFor(requestJson, '/api/admin/analytics/geo')[1]).toEqual({
-      query: { days: 30, country: undefined, limit: 240, version: '2.0.0' },
-    })
-
-    requestJson.mockClear()
-    // Selecting the row that is already in scope means "all versions", the way
-    // a chip toggles; the sentinel must not leak to the API as `'__all__'`.
-    page.facade.selectVersion('2.0.0')
-    await settle()
-
-    expect(page.facade.versionScope.value).toBeNull()
-    expect(requestFor(requestJson, '/api/admin/analytics/geo')[1]).toEqual({
-      query: { days: 30, country: undefined, limit: 240, version: undefined },
-    })
-
-    page.app.unmount()
-  })
-
-  it('fetches only the versions panel groups on a ?section=versions deep link', async () => {
-    const requestJson = vi.fn(successfulRequest)
-    const page = await mountAnalyticsPage({ query: { section: 'versions' }, requestJson })
-
-    // The KPI row reads the summary; `versions` and `geo` are what the open
-    // panel renders. Docs, intelligence, alerts and exchange belong to other
-    // panels and are fetched when those open.
-    expect(page.facade.activeSection.value).toBe('versions')
     expect(requestPaths(requestJson)).toEqual([
       '/api/admin/analytics?days=30',
       '/api/admin/analytics/versions',
       '/api/admin/analytics/geo',
     ])
-    // The world geojson belongs to the map inside this panel, so arriving on
-    // any other section no longer pays for it.
+    expect(page.fetchGeoJson).toHaveBeenCalledOnce()
+    expect(page.fetchGeoJson).toHaveBeenCalledWith('/geo/world-countries.geo.json')
     expect(page.facade.worldGeoJson.value).not.toBeNull()
 
     page.app.unmount()
   })
 
-  it('loads the versions panel groups on first arrival and leaves the loaded ones alone afterwards', async () => {
+  it.each([
+    ['performance', ['/api/admin/analytics?days=30']],
+    ['search', ['/api/admin/analytics?days=30']],
+    ['intelligence', ['/api/admin/analytics?days=30', '/api/admin/analytics/intelligence']],
+    ['docs', ['/api/admin/analytics?days=30', '/api/admin/analytics/docs']],
+    ['exchange', ['/api/admin/analytics?days=30', '/api/admin/exchange/history']],
+    ['messages', ['/api/admin/analytics?days=30', '/api/telemetry/messages?limit=12']],
+  ] as const)('does not preload overview-only resources for an initial %s consumer', async (section, expectedPaths) => {
     const requestJson = vi.fn(successfulRequest)
-    const page = await mountAnalyticsPage({ requestJson })
+    const page = await mountAnalyticsPage({ query: { section }, requestJson })
 
-    // Overview: the summary alone, and no map asset.
-    expect(requestPaths(requestJson)).toEqual(['/api/admin/analytics?days=30'])
+    expect(page.facade.activeSection.value).toBe(section)
+    expect(requestPaths(requestJson)).toEqual(expectedPaths)
+    expect(page.fetchGeoJson).not.toHaveBeenCalled()
     expect(page.facade.worldGeoJson.value).toBeNull()
 
+    page.app.unmount()
+  })
+
+  it('fills overview on first opening and reuses the loaded days/country/version query afterwards', async () => {
+    const requestJson = vi.fn(successfulRequest)
+    const page = await mountAnalyticsPage({ query: { section: 'performance' }, requestJson })
+
     requestJson.mockClear()
-    page.facade.setActiveSection('versions')
+    page.facade.setActiveSection('overview')
     await settle()
 
     expect(requestPaths(requestJson)).toEqual([
       '/api/admin/analytics/versions',
       '/api/admin/analytics/geo',
     ])
-    expect(page.facade.worldGeoJson.value).not.toBeNull()
+    expect(page.fetchGeoJson).toHaveBeenCalledOnce()
 
     requestJson.mockClear()
+    page.fetchGeoJson.mockClear()
+    page.facade.setActiveSection('search')
+    await settle()
     page.facade.setActiveSection('overview')
     await settle()
-    page.facade.setActiveSection('versions')
+
+    expect(requestPaths(requestJson)).toEqual([])
+    expect(page.fetchGeoJson).not.toHaveBeenCalled()
+
+    page.app.unmount()
+  })
+
+  it('applies overview filters to one geo query and never leaks the all-versions sentinel', async () => {
+    const requestJson = vi.fn(successfulRequest)
+    const page = await mountAnalyticsPage({ requestJson })
+
+    requestJson.mockClear()
+    page.facade.selectedGeoCountry.value = 'US'
+    page.facade.selectVersion('2.0.0')
     await settle()
 
-    // Both groups already hold data, so re-entering the panel must not
-    // round-trip again.
-    expect(requestPaths(requestJson)).toEqual([])
+    expect(requestPaths(requestJson)).toEqual(['/api/admin/analytics/geo'])
+    expect(requestFor(requestJson, '/api/admin/analytics/geo')[1]).toEqual({
+      query: { days: 30, country: 'US', limit: 240, version: '2.0.0' },
+    })
+
+    requestJson.mockClear()
+    page.facade.selectVersion('2.0.0')
+    await settle()
+
+    expect(requestFor(requestJson, '/api/admin/analytics/geo')[1]).toEqual({
+      query: { days: 30, country: 'US', limit: 240, version: undefined },
+    })
+
+    page.app.unmount()
+  })
+
+  it('debounces docs filters into the active consumer query', async () => {
+    vi.useFakeTimers()
+    const requestJson = vi.fn(successfulRequest)
+    const page = await mountAnalyticsPage({ query: { section: 'docs' }, requestJson })
+
+    requestJson.mockClear()
+    page.facade.docsPath.value = '/guides/search'
+    page.facade.docsSource.value = 'doc_comments_admin'
+    await nextTick()
+    await vi.advanceTimersByTimeAsync(240)
+    await settle()
+
+    expect(requestPaths(requestJson)).toEqual(['/api/admin/analytics/docs'])
+    expect(requestFor(requestJson, '/api/admin/analytics/docs')[1]).toEqual({
+      query: {
+        days: 30,
+        path: '/guides/search',
+        source: 'doc_comments_admin',
+      },
+    })
+
+    page.app.unmount()
+  })
+
+  it('keeps the visible period and section when an older response resolves last', async () => {
+    let resolveOldSummary: ((value: unknown) => void) | undefined
+    const requestJson = vi.fn((path: string) => {
+      if (path === '/api/admin/analytics?days=30') {
+        return new Promise((resolve) => {
+          resolveOldSummary = resolve
+        })
+      }
+      return successfulRequest(path)
+    })
+    const page = await mountAnalyticsPage({ query: { section: 'performance' }, requestJson })
+
+    page.facade.selectedDays.value = 90
+    page.facade.setActiveSection('search')
+    await settle()
+    resolveOldSummary?.(analyticsPayload({ OLD: 1 }))
+    await settle()
+
+    expect(page.facade.selectedDays.value).toBe(90)
+    expect(page.facade.activeSection.value).toBe('search')
+    expect(page.route.query.section).toBe('search')
 
     page.app.unmount()
   })

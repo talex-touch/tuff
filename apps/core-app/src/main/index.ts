@@ -320,6 +320,9 @@ app.whenReady().then(async () => {
      * CoreBox query can arrive while the renderer is still hydrating its storage.
      */
     adoptPersistedLocale(startupAppConfig.settings)
+    // A renderer's first navigation snapshots the session's protocol factories. Register tfile
+    // before TouchApp creates or loads a window; later module initialization is idempotent.
+    await fileProtocolModule.onInit()
     const touchApp = genTouchApp(startupAppConfig.settings)
 
     const modulesStartTime = Date.now()

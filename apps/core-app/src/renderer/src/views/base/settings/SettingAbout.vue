@@ -7,6 +7,7 @@
 <script setup lang="ts" name="SettingAbout">
 import type { AnalyticsSnapshot } from '@talex-touch/utils/analytics'
 import { AppPreviewChannel } from '@talex-touch/utils'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -65,6 +66,14 @@ const developerMode = computed({
     if (appSetting?.dev) {
       appSetting.dev.developerMode = val
     }
+  }
+})
+
+const advancedSettings = computed({
+  get: () => appSetting.dev?.advancedSettings === true,
+  set: (value: boolean) => {
+    appSetting.dev ??= { ...appSettingOriginData.dev }
+    appSetting.dev.advancedSettings = value
   }
 })
 
@@ -267,6 +276,12 @@ function openSoftwareLicense() {
     active-icon="i-carbon-app-switcher"
     memory-name="setting-about"
   >
+    <TuffBlockSwitch
+      v-model="advancedSettings"
+      :title="t('settingAbout.advancedSettings')"
+      :description="t('settingAbout.advancedSettingsDesc')"
+    />
+
     <TuffBlockSwitch
       v-if="showDeveloperControls"
       v-model="developerMode"

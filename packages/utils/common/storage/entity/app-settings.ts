@@ -204,6 +204,7 @@ const _appSettingOriginData = {
     autoCloseDev: true,
     runtimeServer: 'production' as 'production' | 'local',
     developerMode: false,
+    advancedSettings: false,
   },
   lang: {
     followSystem: true,

@@ -5,7 +5,7 @@ import {
   PRIVILEGED_PLUGIN_NAMES,
   privilegedPluginFor,
   SYSTEM_ACTION_PLUGIN_NAMES
-} from './privileged-plugins'
+} from '../../../shared/privileged-plugins'
 
 /**
  * This registry replaced `this.name !== 'touch-x'` guards scattered through TouchPlugin, and until

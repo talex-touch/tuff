@@ -11,18 +11,26 @@ verified: true
 
 # Component Changelog & Lifecycle
 
-Since its standalone release, all 164 exported components in TuffEx maintain an authoritative Since version. Every version bump is verified by an automated gate (`audit:changelog`), requiring an explicit declaration of impacted components and change notes.
+All 166 components exported by the current source have an explicit Since version. The `audit:changelog` gate checks the component inventory, change notes, and introduction versions for every version change.
 
 ## Overview
 
-The current latest release of TuffEx is **v0.6.2**, exporting a total of **164** components.
+The current source version is **v0.6.3**, included for testing with Tuff beta and not yet published independently to npm. The latest npm release remains **v0.6.2**. The current source exports **166** components.
 
 - **Base Suite**: 93 general, form, layout, and navigation components
 - **Pro Suite**: 39 advanced interaction, effect, and primitive components
-- **AI Suite**: 32 AI chat, agent, reasoning, and context components
+- **AI Suite**: 34 AI chat, agent, reasoning, and context components
 - **Gate Protection**: Bumping package version without a version chapter or component breakdown will fail CI audits
 
 ## Release History
+
+### Source version 0.6.3 (2026-10-01)
+
+Streaming content and menu confirmation feedback. Included for testing with the client beta; not yet published independently to npm.
+
+- **New Components (2)**: [stream-element](./stream-element.en.mdc), [stream-text](./stream-text.en.mdc).
+- **Updated Components (4)**: [code-stream](./code-stream.en.mdc), [context-menu](./context-menu.en.mdc), [dropdown-menu](./dropdown-menu.en.mdc), [stream-markdown](./stream-markdown.en.mdc).
+- **Key Features**: Shared pacing for text, code, and answers, citation and slot support, and confirmation feedback for menu items that close on selection.
 
 ### Version 0.6.2 (2026-09-28)
 
@@ -114,7 +122,7 @@ Initial standalone package baseline.
 
 ## Component Since Index
 
-The following table lists the introduction version (Since) and suite for all 161 exported TuffEx components.
+The following table lists introduction versions and suites for all 166 modules in the current source; 0.6.3 is a source version not yet published independently to npm.
 
 | Component (Slug) | Suite | Since Version | Documentation |
 |---|---|---|---|
@@ -254,7 +262,9 @@ The following table lists the introduction version (Since) and suite for all 161
 | `status-badge` | base | **0.3.4** | [Read Docs](./status-badge.en.mdc) |
 | `status-hint` | base | **0.6.1** | [Read Docs](./status-hint.en.mdc) |
 | `steps` | base | **0.3.4** | [Read Docs](./steps.en.mdc) |
+| `stream-element` | ai | **0.6.3** | [Read Docs](./stream-element.en.mdc) |
 | `stream-markdown` | ai | **0.3.9** | [Read Docs](./stream-markdown.en.mdc) |
+| `stream-text` | ai | **0.6.3** | [Read Docs](./stream-text.en.mdc) |
 | `suggestion-chips` | ai | **0.3.9** | [Read Docs](./suggestion-chips.en.mdc) |
 | `switch` | base | **0.3.4** | [Read Docs](./switch.en.mdc) |
 | `tab-bar` | base | **0.3.4** | [Read Docs](./tab-bar.en.mdc) |

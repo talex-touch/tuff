@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto'
 import path from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { types as utilTypes } from 'node:util'
-import { isPrivilegedPluginFor } from '../privileged-plugins'
+import { isPrivilegedPluginFor } from '../../../../shared/privileged-plugins'
 import {
   PluginHostCapabilityError,
   type PluginHostCapabilityDefinition

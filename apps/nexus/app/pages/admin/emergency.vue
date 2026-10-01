@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { hasNavigator } from '@talex-touch/utils/env'
+import AdminPageShell from '~/components/admin/AdminPageShell.vue'
 import { requestJson } from '~/utils/request'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
@@ -436,15 +437,10 @@ const statusLabel = computed(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#0f1318] text-white">
+  <div class="min-h-screen bg-[#0f1318] text-white" style="--tx-text-color-primary: #fff">
     <div class="mx-auto max-w-3xl p-6 md:p-10">
-      <h1 class="mb-2 text-2xl font-semibold">
-        Admin Emergency Console
-      </h1>
-      <p class="mb-2 text-sm text-white/70">
-        Break-glass access to the risk control plane, using a passkey plus a recovery code.
-      </p>
-      <p class="mb-8 text-sm text-amber-200/80">
+      <AdminPageShell title="Admin Emergency Console">
+      <p class="text-sm text-amber-200/80">
         Nothing on this page is saved. Reloading or closing the tab discards the session and any issued token, and you start again from step one.
       </p>
 
@@ -609,6 +605,7 @@ const statusLabel = computed(() => {
         <strong class="mr-2">{{ statusLabel }}</strong>
         <span>{{ message || 'Waiting for step 1.' }}</span>
       </div>
+      </AdminPageShell>
     </div>
   </div>
 </template>

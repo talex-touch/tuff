@@ -72,7 +72,7 @@ const notFound = computed(
 /** Plugin version status (installed, upgrade available, etc.) */
 const pluginStatus = usePluginStatus(activePlugin)
 
-const { detailMeta } = useStoreDetail(activePlugin, t, pluginStatus)
+const { detailMeta, compatibilityHint } = useStoreDetail(activePlugin, t, pluginStatus)
 const readmeUrl = computed(() => activePlugin.value?.readmeUrl)
 const { readmeMarkdown, readmeLoading, readmeError } = useStoreReadme(readmeUrl, t)
 const contentPluginId = computed(() => activePlugin.value?.id ?? null)
@@ -411,6 +411,7 @@ onMounted(() => {
                     v-if="!pluginStatus.isInstalled"
                     variant="flat"
                     size="sm"
+                    :disabled="pluginStatus.isBundledManaged || !pluginStatus.isCompatible"
                     @click="onInstallActivePlugin"
                   >
                     <i class="i-ri-plug-line" />
@@ -470,6 +471,12 @@ onMounted(() => {
             :items="detailMeta"
             :title="t('store.detailDialog.information')"
           />
+          <p v-if="compatibilityHint" class="sidebar-compatibility-hint" role="status">
+            {{ compatibilityHint }}
+          </p>
+          <p v-if="pluginStatus.isBundledManaged" class="sidebar-policy-hint">
+            {{ t('store.clientManagedHint') }}
+          </p>
           <div v-if="sidebarActions.length" class="sidebar-actions">
             <h4>{{ t('store.detailDialog.actions') }}</h4>
             <button
@@ -795,6 +802,22 @@ onMounted(() => {
 .sidebar-card :deep(.tx-rating) {
   transform: scale(0.82);
   transform-origin: left center;
+}
+
+.sidebar-compatibility-hint,
+.sidebar-policy-hint {
+  margin: 0.65rem 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-compatibility-hint {
+  color: var(--tx-color-warning);
+}
+
+.sidebar-policy-hint {
+  color: var(--tx-text-color-secondary);
 }
 
 .sidebar-actions {

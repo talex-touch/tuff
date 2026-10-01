@@ -182,7 +182,8 @@ async function submit() {
 <template>
   <Drawer
     :visible="open"
-    width="420px"
+    :title="mode === 'create' ? t('dashboard.sections.updates.addButton') : t('dashboard.sections.updates.editButton')"
+    width="640px"
     @update:visible="(v) => {
       if (!v)
         emit('close')
@@ -190,13 +191,7 @@ async function submit() {
     @close="emit('close')"
   >
     <div class="flex h-full flex-col">
-      <div class="flex items-center justify-between border-b border-black/5 pb-3 dark:border-white/5">
-        <h3 class="text-sm font-semibold text-black dark:text-white">
-          {{ mode === 'create' ? t('dashboard.sections.updates.addButton') : t('dashboard.sections.updates.editButton') }}
-        </h3>
-      </div>
-
-      <form class="flex-1 space-y-4 overflow-y-auto pt-4" @submit.prevent="submit">
+<form class="flex-1 space-y-4 overflow-y-auto pt-4" @submit.prevent="submit">
         <div class="grid gap-3 sm:grid-cols-2">
           <div class="flex flex-col gap-1.5">
             <label class="text-xs font-medium text-black/50 dark:text-white/50">

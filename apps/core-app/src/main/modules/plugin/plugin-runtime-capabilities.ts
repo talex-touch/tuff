@@ -16,7 +16,7 @@ import type { PluginVscodeProjectsCapabilities } from './host/plugin-vscode-proj
 import type { PluginWindowManagerCapabilities } from './host/plugin-window-manager-capabilities'
 import type { PluginWindowPresetCapabilities } from './host/plugin-window-preset-capabilities'
 import type { PluginWorkspaceScriptCapabilities } from './host/plugin-workspace-script-capabilities'
-import { isPrivilegedPluginFor } from './privileged-plugins'
+import { isPrivilegedPluginFor } from '../../../shared/privileged-plugins'
 
 /** Everything plugin-module installs on TouchPlugin for one module generation. */
 export interface TouchPluginRuntimeCapabilities {

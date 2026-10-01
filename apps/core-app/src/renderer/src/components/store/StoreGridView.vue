@@ -178,6 +178,7 @@ watch(
           :installed-version="status.installedVersion"
           :has-upgrade="status.hasUpgrade"
           :is-compatible="status.isCompatible"
+          :is-bundled-managed="status.isBundledManaged"
           :install-task="getInstallTask(item.id, item.providerId)"
           class="store-grid-item"
           @install="emit('install', item)"

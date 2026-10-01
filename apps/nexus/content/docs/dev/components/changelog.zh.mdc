@@ -11,18 +11,26 @@ verified: true
 
 # 组件变更历程
 
-TuffEx 组件库自独立发布以来，所有 164 个导出组件均建立明确的生命周期版本追溯（Since Version）。每次新版本发版均受自动化门禁（`audit:changelog`）硬性校验，必须明确声明本次更新所涉及的组件清单与变更详情。
+当前源码的全部 166 个导出组件均有明确的生命周期版本追溯（Since Version）。每次版本变更都由 `audit:changelog` 校验组件清单、变更详情和引入版本。
 
 ## 版本概览
 
-当前 TuffEx 最新发布版本为 **v0.6.2**，累计导出组件总数为 **164** 个。
+当前源码版本为 **v0.6.3**，随 Tuff beta 测试，尚未独立发布 npm；最新 npm 发布版本仍为 **v0.6.2**。当前源码导出组件总数为 **166** 个。
 
 - **基础套件 (Base)**: 93 个日常通用、表单、布局与导航组件
 - **进阶套件 (Pro)**: 39 个高阶交互、动效与底层原语组件
-- **AI 套件 (Ai)**: 32 个 AI 聊天、智能体、推理与上下文组件
+- **AI 套件 (Ai)**: 34 个 AI 聊天、智能体、推理与上下文组件
 - **门禁保护**: 新版本发布若未包含版本章节、未声明变动组件或组件 Since 版本缺失，CI 与发布流程将自动拦截阻断
 
 ## 版本更新历程
+
+### 0.6.3 源码版本（2026-10-01）
+
+流式内容组件与菜单确认反馈。当前随客户端 beta 测试，尚未独立发布 npm。
+
+- **新增组件（2 个）**：[stream-element](./stream-element.zh.mdc)、[stream-text](./stream-text.zh.mdc)。
+- **更新组件（4 个）**：[code-stream](./code-stream.zh.mdc)、[context-menu](./context-menu.zh.mdc)、[dropdown-menu](./dropdown-menu.zh.mdc)、[stream-markdown](./stream-markdown.zh.mdc)。
+- **关键特性**：共享节奏的文字、代码与回答展示，引用和插槽支持，以及关闭型菜单项的确认反馈。
 
 ### 0.6.2 版本 (2026-09-28)
 
@@ -114,7 +122,7 @@ TuffEx 独立包初始基线建立。
 
 ## 全组件引入版本索引
 
-下表列出当前 TuffEx 全部 161 个导出组件的引入版本与所属套件。
+下表列出当前源码全部 166 个导出组件的引入版本与所属套件；0.6.3 为源码版本，尚未独立发布 npm。
 
 | 组件 (Slug) | 所属套件 | 引入版本 (Since) | 文档入口 |
 |---|---|---|---|
@@ -254,7 +262,9 @@ TuffEx 独立包初始基线建立。
 | `status-badge` | base | **0.3.4** | [查看文档](./status-badge.zh.mdc) |
 | `status-hint` | base | **0.6.1** | [查看文档](./status-hint.zh.mdc) |
 | `steps` | base | **0.3.4** | [查看文档](./steps.zh.mdc) |
+| `stream-element` | ai | **0.6.3** | [查看文档](./stream-element.zh.mdc) |
 | `stream-markdown` | ai | **0.3.9** | [查看文档](./stream-markdown.zh.mdc) |
+| `stream-text` | ai | **0.6.3** | [查看文档](./stream-text.zh.mdc) |
 | `suggestion-chips` | ai | **0.3.9** | [查看文档](./suggestion-chips.zh.mdc) |
 | `switch` | base | **0.3.4** | [查看文档](./switch.zh.mdc) |
 | `tab-bar` | base | **0.3.4** | [查看文档](./tab-bar.zh.mdc) |

@@ -148,7 +148,7 @@ const accountMenuItems = computed(() => {
   const items: Array<{ id: string, label: string, icon: string }> = [
     {
       id: 'account',
-      label: t('dashboard.sections.menu.account', '账号与安全'),
+      label: t('dashboard.sections.menu.account', '安全'),
       icon: 'i-carbon-user',
     },
     {

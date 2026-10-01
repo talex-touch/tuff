@@ -268,15 +268,6 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
-    <header>
-      <h1 class="apple-heading-md">
-        {{ t('dashboard.sections.intelligence.tabs.overview') }}
-      </h1>
-      <p class="mt-2 text-sm text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.intelligence.overview.subtitle') }}
-      </p>
-    </header>
-
     <section class="apple-card-lg space-y-4 p-6">
       <div class="flex items-center justify-between gap-4">
         <div>

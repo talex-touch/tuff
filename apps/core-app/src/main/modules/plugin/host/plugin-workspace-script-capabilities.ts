@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import path from 'node:path'
 import { types as utilTypes } from 'node:util'
-import { isPrivilegedPluginFor } from '../privileged-plugins'
+import { isPrivilegedPluginFor } from '../../../../shared/privileged-plugins'
 import {
   PluginHostCapabilityError,
   type PluginHostCapabilityDefinition

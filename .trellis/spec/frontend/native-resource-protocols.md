@@ -101,6 +101,56 @@ forces every call site to re-implement a remote-URL guard. A renderer-local twin
 
 `packages/utils/transport/sdk/stream/protocol.ts` is a typed transport protocol, not the `stream:` resource scheme. It may carry stream IDs, cancellation, status, and bounded structured chunks. It must not carry image/audio/video/file bytes.
 
+### First renderer navigation includes the resource handler
+
+#### 1. Scope / Trigger
+
+Applies to startup ordering, `FileProtocolModule`, and local icons in file-backed renderers.
+
+#### 2. Signatures
+
+- `fileProtocolModule.onInit(): MaybePromise<void>` registers the default session's handler.
+- `fileProtocolModule.onDestroy(): MaybePromise<void>` releases it and the additional roots.
+- `genTouchApp(settings)` creates the main window and begins its first navigation.
+
+#### 3. Contracts
+
+- Await `fileProtocolModule.onInit()` before `genTouchApp()` in `main/index.ts`. Chromium snapshots protocol factories for the document's first navigation; a late handler can exist for `net.fetch` while that document still rejects `tfile:`.
+- Initialization is idempotent. The later ModuleManager lifecycle call must retain the same registration; destroy resets the owner so a subsequent initialization works.
+- Keep the existing allowlist, streaming file response, and enforcing CSP. Reload, retries, inline image bytes, and `bypassCSP` are not substitutes for correct startup ordering.
+
+#### 4. Validation & Error Matrix
+
+| Condition | Result |
+| --- | --- |
+| Handler registered before first navigation | Native cache images load without a renderer reload |
+| Handler registered after first navigation | Affected document may report `ERR_UNKNOWN_URL_SCHEME` even when main's fetch returns 200 |
+| Repeated initialization | Existing handler and roots remain valid |
+| Destroy, then initialize | One fresh owner serves allowed resources; forbidden paths remain 403 |
+
+#### 5. Good / Base / Bad Cases
+
+- Good: cold file-backed startup; list and detail images have nonzero natural dimensions.
+- Base: no native icon exists; the application keeps its documented fallback.
+- Bad: judge readiness solely from `isProtocolHandled()` or a successful main-process fetch; neither proves the initial renderer can consume the scheme.
+
+#### 6. Tests Required
+
+- Serve an allowlisted resource after repeated init and after destroy/re-init; retain 403 assertions.
+- Real cold-start smoke opens Applications without a reload and checks list plus detail images.
+
+#### 7. Wrong vs Correct
+
+```ts
+// Wrong: TouchApp has already started loading the renderer.
+const touchApp = genTouchApp(settings)
+await fileProtocolModule.onInit()
+
+// Correct: later module initialization is idempotent.
+await fileProtocolModule.onInit()
+const touchApp = genTouchApp(settings)
+```
+
 ### Provider and renderer boundary
 
 - Producers materialize resource bytes once under an allowlisted cache/temp root and return a typed path descriptor.

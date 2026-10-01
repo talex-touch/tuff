@@ -11,6 +11,7 @@ import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxTag } from '@talex-touch/tuffex/tag'
 import { useDashboardUpdatesData } from '~/composables/useDashboardData'
 import { useToast } from '~/composables/useToast'
+import AdminPageShell from '~/components/admin/AdminPageShell.vue'
 
 interface LocalizedText {
   zh: string
@@ -383,34 +384,24 @@ function closeDeleteConfirm() {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h2 class="apple-heading-sm">
-          {{ t('dashboard.sections.updates.title') }}
-        </h2>
-        <p class="mt-1 text-sm text-black/50 dark:text-white/50">
-          {{ t('dashboard.sections.updates.subtitle') }}
-        </p>
-      </div>
+  <AdminPageShell :title="t('dashboard.sections.updates.title')">
+    <template #actions>
+      <TxButton
+        variant="secondary"
+        size="sm"
+        icon="i-carbon-launch"
+        native-type="button"
+        @click="openUpdateLink('https://docs.tuff.chat/changelog')"
+      >
+        {{ isZh ? 'Changelog 文档' : 'Changelog' }}
+      </TxButton>
+      <TxButton v-if="isAdmin" variant="primary" icon="i-carbon-add" size="sm" native-type="button" @click="openCreate">
+        {{ t('dashboard.sections.updates.addButton') }}
+      </TxButton>
+    </template>
 
-      <div class="flex flex-wrap items-center justify-end gap-2">
-        <TxButton
-          variant="secondary"
-          size="sm"
-          icon="i-carbon-launch"
-          native-type="button"
-          @click="openUpdateLink('https://docs.tuff.chat/changelog')"
-        >
-          {{ isZh ? 'Changelog 文档' : 'Changelog' }}
-        </TxButton>
-        <TxButton v-if="isAdmin" variant="primary" icon="i-carbon-add" size="sm" native-type="button" @click="openCreate">
-          {{ t('dashboard.sections.updates.addButton') }}
-        </TxButton>
-      </div>
-    </div>
-
-    <section class="apple-card-lg p-5">
+    <template #filters>
+      <section class="apple-card-lg p-5">
       <div class="UpdateFilters">
         <div class="UpdateFilters-Grid">
           <div class="UpdateFilters-Field UpdateFilters-Field--search">
@@ -496,7 +487,10 @@ function closeDeleteConfirm() {
           </TxButton>
         </div>
       </div>
+      </section>
+    </template>
 
+    <section class="apple-card-lg p-5">
       <div v-if="updatesPending" class="mt-4 space-y-3 py-6">
         <div class="flex items-center justify-center">
           <TxSpinner :size="18" />
@@ -687,7 +681,7 @@ function closeDeleteConfirm() {
       ]"
       :close="closeDeleteConfirm"
     />
-  </div>
+  </AdminPageShell>
 </template>
 
 <style scoped>

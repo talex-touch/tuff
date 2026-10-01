@@ -170,7 +170,7 @@ import {
   createSafePluginOpenUrl,
   withPluginSdkapiPayload
 } from './plugin-safe-api'
-import { isPrivilegedPluginFor, SYSTEM_ACTION_PLUGIN_NAMES } from './privileged-plugins'
+import * as privileges from '../../../shared/privileged-plugins'
 import {
   bundlePluginPreludeFromContent,
   bundlePluginPreludeFromFile
@@ -1819,7 +1819,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createBatchRenameFilesystemCapability(
     activation: PluginActivationIdentity
   ): PluginBatchRenameFilesystemCapability | null {
-    if (!isPrivilegedPluginFor('batchRenameFilesystem', this.name)) return null
+    if (!privileges.isPrivilegedPluginFor('batchRenameFilesystem', this.name)) return null
     return createPluginBatchRenameFilesystemCapability({
       activation,
       platform: process.platform,
@@ -1847,7 +1847,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createSnipasteProcessCapability(
     activation: PluginActivationIdentity
   ): PluginSnipasteProcessCapability | null {
-    if (!isPrivilegedPluginFor('snipasteProcess', this.name)) return null
+    if (!privileges.isPrivilegedPluginFor('snipasteProcess', this.name)) return null
     const factory = TouchPlugin.capability('snipasteProcess')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_SNIPASTE_PROCESS_CAPABILITY_UNAVAILABLE'), {
@@ -1860,7 +1860,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createSystemActionCapability(
     activation: PluginActivationIdentity
   ): PluginSystemActionCapabilities | null {
-    if (!SYSTEM_ACTION_PLUGIN_NAMES.includes(this.name)) return null
+    if (!privileges.SYSTEM_ACTION_PLUGIN_NAMES.includes(this.name)) return null
     const factory = TouchPlugin.capability('systemAction')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_SYSTEM_ACTION_CAPABILITY_UNAVAILABLE'), {
@@ -1873,7 +1873,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createBrowserOpenCapability(
     activation: PluginActivationIdentity
   ): PluginBrowserOpenCapabilities | null {
-    if (!isPrivilegedPluginFor('browserOpen', this.name)) return null
+    if (!privileges.isPrivilegedPluginFor('browserOpen', this.name)) return null
     const factory = TouchPlugin.capability('browserOpen')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_BROWSER_OPEN_CAPABILITY_UNAVAILABLE'), {
@@ -1886,7 +1886,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createBrowserDataCapability(
     activation: PluginActivationIdentity
   ): PluginBrowserDataCapabilities | null {
-    if (!isPrivilegedPluginFor('browserData', this.name)) return null
+    if (!privileges.isPrivilegedPluginFor('browserData', this.name)) return null
     const factory = TouchPlugin.capability('browserData')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_BROWSER_DATA_CAPABILITY_UNAVAILABLE'), {
@@ -1899,7 +1899,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createTranslationCapability(
     activation: PluginActivationIdentity
   ): PluginIntelligenceCapabilities | null {
-    if (!isPrivilegedPluginFor('translation', this.name)) return null
+    if (!privileges.isPrivilegedPluginFor('translation', this.name)) return null
     const factory = TouchPlugin.capability('translation')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_TRANSLATION_CAPABILITY_UNAVAILABLE'), {
@@ -1912,7 +1912,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createIntelligenceContextCapability(
     activation: PluginActivationIdentity
   ): PluginIntelligenceContextCapabilities | null {
-    if (!isPrivilegedPluginFor('intelligenceContext', this.name)) return null
+    if (!privileges.isPrivilegedPluginFor('intelligenceContext', this.name)) return null
     const factory = TouchPlugin.capability('intelligenceContext')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_UNAVAILABLE'), {
@@ -1925,7 +1925,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createWindowManagerCapability(
     activation: PluginActivationIdentity
   ): PluginWindowManagerCapabilities | null {
-    if (!isPrivilegedPluginFor('windowManager', this.name)) return null
+    if (!privileges.isPrivilegedPluginFor('windowManager', this.name)) return null
     const factory = TouchPlugin.capability('windowManager')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_WINDOW_MANAGER_CAPABILITY_UNAVAILABLE'), {
@@ -1938,7 +1938,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createWindowPresetCapability(
     activation: PluginActivationIdentity
   ): PluginWindowPresetCapabilities | null {
-    if (!isPrivilegedPluginFor('windowPresets', this.name)) return null
+    if (!privileges.isPrivilegedPluginFor('windowPresets', this.name)) return null
     const factory = TouchPlugin.capability('windowPreset')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_WINDOW_PRESET_CAPABILITY_UNAVAILABLE'), {
@@ -1951,7 +1951,7 @@ export class TouchPlugin implements ITouchPlugin {
   private createWorkspaceScriptCapability(
     activation: PluginActivationIdentity
   ): PluginWorkspaceScriptCapabilities | null {
-    if (!isPrivilegedPluginFor('workspaceScripts', this.name)) return null
+    if (!privileges.isPrivilegedPluginFor('workspaceScripts', this.name)) return null
     const factory = TouchPlugin.capability('workspaceScript')
     if (!factory) {
       throw Object.assign(new Error('PLUGIN_WORKSPACE_SCRIPT_CAPABILITY_UNAVAILABLE'), {

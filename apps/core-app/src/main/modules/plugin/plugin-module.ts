@@ -206,7 +206,7 @@ import {
   buildLoaderFatalPreflightFailure,
   buildRuntimeDriftPreflightFailure
 } from './plugin-preflight-helper'
-import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
+import { PRIVILEGED_PLUGIN_NAMES } from '../../../shared/privileged-plugins'
 import { LocalPluginProvider } from './providers/local-provider'
 
 import { inspectPluginRuntimeDrift } from './runtime/plugin-runtime-repair'

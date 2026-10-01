@@ -12,6 +12,7 @@ import { useInstallManager } from '~/modules/install/install-manager'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { resolveStoreInstallFailureReason } from './store-install-error-utils'
+import { usePluginVersionStatus } from './usePluginVersionStatus'
 
 const storeInstallLog = createRendererLogger('StoreInstall')
 
@@ -31,6 +32,7 @@ export function useStoreInstall() {
   const installManager = useInstallManager()
   const transport = useTuffTransport()
   const pluginSdk = createPluginSdk(transport)
+  const { getPluginVersionStatus } = usePluginVersionStatus()
 
   function getErrorMessage(error: unknown): string {
     if (error instanceof Error) {
@@ -111,6 +113,10 @@ export function useStoreInstall() {
     if (isPluginInstalling(plugin.id, plugin.providerId)) return
 
     try {
+      const status = getPluginVersionStatus(plugin)
+      if (status.isBundledManaged) {
+        throw new Error('PRIVILEGED_PLUGIN_NAME_RESERVED')
+      }
       if (options?.isUpgrade) {
         const upgradeConfirmed = await confirmUpgrade(plugin)
         if (!upgradeConfirmed) {

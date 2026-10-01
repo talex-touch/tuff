@@ -442,7 +442,21 @@ export async function submitAccountDeletion(event: H3Event, userId: string, sess
   if (Number(consumed.meta?.changes ?? 0) <= 0)
     throw createError({ statusCode: 409, statusMessage: 'Terms session has already been used.' })
 
-  const user = await requestUserDeletion(event, userId, session.termsVersion)
+  return requestAccountDeletionWithCleanup(event, userId, session.termsVersion)
+}
+
+/**
+ * Starts the native recoverable deletion lifecycle and revokes credentials that
+ * could otherwise keep an account usable while it is pending deletion.
+ * Durable business records (including credits and billing history) are not
+ * removed here.
+ */
+export async function requestAccountDeletionWithCleanup(
+  event: H3Event,
+  userId: string,
+  termsVersion: string,
+) {
+  const user = await requestUserDeletion(event, userId, termsVersion)
   await clearUserAuthEphemeralTokens(event, userId)
   const revokedDevices = await revokeAllDevicesForUser(event, userId)
   const deletedApiKeys = await deleteApiKeysForUser(event, userId)

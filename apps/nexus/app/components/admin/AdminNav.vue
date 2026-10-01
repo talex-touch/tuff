@@ -32,9 +32,7 @@ const riskControlEnabled = computed(() => isFeatureFlagEnabled(runtimeConfig.pub
  */
 const sectionPaths: Record<string, string> = {
   updates: '/admin/updates',
-  intelligence: '/admin/intelligence',
   'intelligence-overview': '/admin/intelligence-overview',
-  'intelligence-chat': '/admin/intelligence-chat',
   'intelligence-audits': '/admin/intelligence-audits',
   'provider-registry': '/admin/provider-registry',
   governance: '/admin/governance',
@@ -43,8 +41,7 @@ const sectionPaths: Record<string, string> = {
   users: '/admin/users',
   subscriptions: '/admin/subscriptions',
   audits: '/admin/audits',
-  reviews: '/admin/reviews',
-  'doc-comments': '/admin/doc-comments',
+  reviews: '/admin/reviews?tab=plugins',
   analytics: '/admin/analytics',
 }
 
@@ -75,11 +72,9 @@ function mapItems(items: Array<{ id: string, label: string, icon: string }>): Na
  * links you can bookmark, share or land on. The rail lists the page once, and
  * the strip inside names the panels.
  *
- * Before this, four screens hid behind tabs — Intelligence carried Tuff AI,
- * overview, service channels and audits; Users and Subscriptions shared one
- * strip, as did the two comment queues. That was tabs *instead of* addresses.
- * The distinction that matters is not tab-or-no-tab, it is whether the strip
- * has an address behind it.
+ * Intelligence and account screens no longer hide separate destinations behind
+ * local-only tabs. Comment queues are one management workflow, so they remain
+ * together and expose their state as `?tab=plugins|docs`.
  *
  * A group with a single destination renders that destination and skips the
  * caption, which would only repeat it.
@@ -117,13 +112,8 @@ const menuGroups = computed<NavGroup[]>(() => {
         },
         {
           id: 'reviews',
-          label: t('dashboard.sections.menu.reviews', 'Review Moderation'),
+          label: t('dashboard.sections.menu.comments', 'Comment Management'),
           icon: 'i-carbon-chat',
-        },
-        {
-          id: 'doc-comments',
-          label: t('dashboard.sections.menu.docComments', 'Doc Comments'),
-          icon: 'i-carbon-annotation-visibility',
         },
       ]),
     },
@@ -156,16 +146,6 @@ const menuGroups = computed<NavGroup[]>(() => {
           id: 'provider-registry',
           label: t('dashboard.sections.menu.providerRegistry', 'Provider Registry'),
           icon: 'i-carbon-cloud-service-management',
-        },
-        {
-          id: 'intelligence',
-          label: t('dashboard.sections.menu.intelligenceLab', 'Tuff AI'),
-          icon: 'i-carbon-machine-learning',
-        },
-        {
-          id: 'intelligence-chat',
-          label: t('dashboard.sections.menu.intelligenceChat', 'Chat Probe'),
-          icon: 'i-carbon-chat-bot',
         },
         {
           id: 'intelligence-audits',
@@ -236,35 +216,21 @@ onBeforeUnmount(() => {
 /**
  * An ordered if-chain. Two things make the order load-bearing:
  *
- * - Longer prefixes first. `/admin/intelligence-overview` and
- *   `/admin/intelligence-audits` both start with `/admin/intelligence`, so a
- *   generic match on the short one would swallow them.
  * - Redirect sources light their destination: `…/codes` forwards to
  *   subscriptions and `…/credits` to users, so they highlight those entries
  *   during the hop rather than flashing the wrong one.
  *
- * Users/subscriptions and the two comment queues each used to collapse onto a
- * single entry because they shared a tab strip; they are separate rail entries
- * now, so they light themselves. Reordering this is silent, which is why the
- * routing test pins the whole map.
+ * Users/subscriptions remain separate destinations. The two comment queues are
+ * one query-addressed page (`/admin/reviews?tab=plugins|docs`), so the rail has
+ * one entry and the page owns the active queue.
  */
 const activeSection = computed(() => {
   if (route.path.startsWith('/admin/intelligence-overview'))
     return 'intelligence-overview'
-  if (route.path.startsWith('/admin/intelligence-chat'))
-    return 'intelligence-chat'
   if (route.path.startsWith('/admin/intelligence-audits'))
     return 'intelligence-audits'
-  if (route.path.startsWith('/admin/intelligence-agent'))
-    return 'intelligence'
-  if (route.path.startsWith('/admin/intelligence-lab'))
-    return 'intelligence'
-  if (route.path.startsWith('/admin/intelligence'))
-    return 'intelligence'
   if (route.path.startsWith('/admin/provider-registry'))
     return 'provider-registry'
-  if (route.path.startsWith('/admin/doc-comments'))
-    return 'doc-comments'
   if (route.path.startsWith('/admin/reviews'))
     return 'reviews'
   if (route.path.startsWith('/admin/subscriptions'))

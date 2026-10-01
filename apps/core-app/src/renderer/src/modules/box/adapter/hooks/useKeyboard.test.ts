@@ -3,6 +3,8 @@ import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
 import type { IBoxOptions } from '..'
 import type { Ref } from 'vue'
 import type { Mock } from 'vitest'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, ref } from 'vue'
 import { BoxMode } from '..'
@@ -15,9 +17,26 @@ import {
   useKeyboard
 } from './useKeyboard'
 
-// One stable object: a factory returning a fresh mock per call would leave nothing to assert on.
+const transportState = vi.hoisted(() => ({
+  listeners: new Map<string, (payload?: unknown) => void>()
+}))
+
+// One stable transport: mounted consumers share its listeners and calls with the test harness.
 const transportMock = vi.hoisted(() => ({
-  send: vi.fn((_event: unknown, _payload?: unknown) => Promise.resolve(undefined))
+  send: vi.fn(
+    (_event: unknown, _payload?: unknown): Promise<unknown> => Promise.resolve(undefined)
+  ),
+  on: vi.fn(
+    (event: { toEventName: () => string }, listener: (payload?: unknown) => void): (() => void) => {
+      const eventName = event.toEventName()
+      transportState.listeners.set(eventName, listener)
+      return () => {
+        if (transportState.listeners.get(eventName) === listener) {
+          transportState.listeners.delete(eventName)
+        }
+      }
+    }
+  )
 }))
 
 vi.mock('@talex-touch/utils/transport', () => ({
@@ -47,8 +66,12 @@ vi.mock('~/modules/plugin/widget-host-key-bridge', () => ({
 }))
 
 vi.mock('~/utils/dev-log', () => ({ devLog: vi.fn() }))
+const rendererLoggerMock = vi.hoisted(() => ({
+  error: vi.fn(),
+  warn: vi.fn()
+}))
 vi.mock('~/utils/renderer-log', () => ({
-  createRendererLogger: () => ({ error: vi.fn() })
+  createRendererLogger: () => rendererLoggerMock
 }))
 
 // The ⌘1–⌘0 preference is read from this store on every press, so the mock is one mutable object:
@@ -60,6 +83,15 @@ const appSettingMock = vi.hoisted(() => ({
 vi.mock('~/modules/storage/app-storage', () => ({
   appSetting: appSettingMock.appSetting
 }))
+
+beforeEach(() => {
+  transportState.listeners.clear()
+  transportMock.send.mockReset()
+  transportMock.send.mockResolvedValue(undefined)
+  transportMock.on.mockClear()
+  rendererLoggerMock.error.mockClear()
+  rendererLoggerMock.warn.mockClear()
+})
 
 function createFocusedItem(): TuffItem {
   return {
@@ -284,8 +316,19 @@ describe('handleCoreBoxEscapeKey', () => {
 type GridKeyboardHarness = {
   boxOptions: IBoxOptions
   select: Ref<number>
+  searchVal: Ref<string>
+  clipboardOptions: { last?: unknown }
+  clearClipboard: Mock
+  handleExit: Mock
   handleExecute: Mock
   cleanup: () => void
+}
+
+type GridKeyboardHarnessOptions = {
+  searchVal?: Ref<string>
+  clipboardOptions?: { last?: unknown }
+  clearClipboard?: Mock
+  handleExit?: Mock
 }
 
 let activeGridKeyboardHarness: GridKeyboardHarness | undefined
@@ -298,7 +341,8 @@ function mountGridKeyboardHarness(
   focus: number,
   layout: NonNullable<IBoxOptions['layout']> = { mode: 'grid', grid: { columns: 5 } },
   activations: IProviderActivate[] | null = null,
-  items: TuffItem[] = createGridResults()
+  items: TuffItem[] = createGridResults(),
+  options: GridKeyboardHarnessOptions = {}
 ): GridKeyboardHarness {
   const root = document.createElement('div')
   const boxOptions: IBoxOptions = {
@@ -316,6 +360,10 @@ function mountGridKeyboardHarness(
     scrollTo: (x: number, y: number) => void
   } | null>(null)
   const handleExecute = vi.fn()
+  const searchVal = options.searchVal ?? ref('')
+  const clipboardOptions = options.clipboardOptions ?? { last: undefined }
+  const clearClipboard = options.clearClipboard ?? vi.fn()
+  const handleExit = options.handleExit ?? vi.fn(async () => undefined)
 
   document.body.classList.add('core-box')
   document.body.appendChild(root)
@@ -327,12 +375,12 @@ function mountGridKeyboardHarness(
         results,
         select,
         scrollbar,
-        ref(''),
+        searchVal,
         handleExecute,
-        async () => undefined,
+        handleExit,
         ref<HTMLInputElement | undefined>(undefined),
-        { last: undefined },
-        vi.fn(),
+        clipboardOptions,
+        clearClipboard,
         ref<IProviderActivate[] | null>(activations),
         vi.fn(),
         ref<Array<HTMLElement | null>>([])
@@ -345,6 +393,10 @@ function mountGridKeyboardHarness(
   return {
     boxOptions,
     select,
+    searchVal,
+    clipboardOptions,
+    clearClipboard,
+    handleExit,
     handleExecute,
     cleanup: () => {
       app.unmount()
@@ -358,6 +410,128 @@ function dispatchGridKey(key: string, init: KeyboardEventInit = {}): KeyboardEve
   document.dispatchEvent(event)
   return event
 }
+
+async function dispatchGridKeyAndFlush(
+  key: string,
+  init: KeyboardEventInit = {}
+): Promise<KeyboardEvent> {
+  const event = dispatchGridKey(key, init)
+  await Promise.resolve()
+  await Promise.resolve()
+  return event
+}
+
+function publishMetaOverlayPanelState(payload: unknown): void {
+  const eventName = CoreBoxEvents.metaOverlay.panelState.toEventName()
+  const listener = transportState.listeners.get(eventName)
+  expect(listener, 'expected useKeyboard to subscribe to MetaOverlay panel state').toBeTypeOf(
+    'function'
+  )
+  listener!(payload)
+}
+
+describe('useKeyboard MetaOverlay visibility cache', () => {
+  beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', () => 0)
+  })
+
+  afterEach(() => {
+    activeGridKeyboardHarness?.cleanup()
+    activeGridKeyboardHarness = undefined
+    document.body.classList.remove('core-box')
+    document.body.classList.remove('division-box')
+    vi.unstubAllGlobals()
+  })
+
+  it('ignores the cached MetaOverlay visibility in a division-box Escape sequence', async () => {
+    transportMock.send.mockResolvedValueOnce({ visible: true })
+    document.body.classList.add('division-box')
+    const query = ref('keep until the attachment is cleared')
+    const clipboardOptions: { last?: unknown } = {
+      last: { type: 'image', content: 'data:image/png;base64,preview' }
+    }
+    const clearClipboard = vi.fn(() => {
+      clipboardOptions.last = undefined
+    })
+    activeGridKeyboardHarness = mountGridKeyboardHarness(0, undefined, null, createGridResults(), {
+      searchVal: query,
+      clipboardOptions,
+      clearClipboard
+    })
+    await Promise.resolve()
+
+    await dispatchGridKeyAndFlush('Escape')
+
+    expect(clipboardOptions.last).toBeUndefined()
+    expect(query.value).toBe('keep until the attachment is cleared')
+
+    await dispatchGridKeyAndFlush('Escape')
+
+    expect(query.value).toBe('')
+    expect(transportMock.send).not.toHaveBeenCalledWith(MetaOverlayEvents.ui.hide)
+  })
+
+  it('clears an attachment without awaiting initial visibility and retains the query', async () => {
+    const initialVisibility = new Promise<unknown>(() => undefined)
+    transportMock.send.mockImplementationOnce(() => initialVisibility)
+    const query = ref('keep this query')
+    const clipboardOptions = {
+      last: { type: 'image', content: 'data:image/png;base64,preview' }
+    }
+    activeGridKeyboardHarness = mountGridKeyboardHarness(0, undefined, null, createGridResults(), {
+      searchVal: query,
+      clipboardOptions
+    })
+
+    await dispatchGridKeyAndFlush('Escape')
+
+    expect(transportMock.send).toHaveBeenCalledExactlyOnceWith(MetaOverlayEvents.ui.isVisible)
+    expect(activeGridKeyboardHarness.clearClipboard).toHaveBeenCalledWith({ remember: true })
+    expect(query.value).toBe('keep this query')
+  })
+
+  it('hides a pushed-visible overlay before retaining, then clearing, the attachment', async () => {
+    const clipboardOptions = {
+      last: { type: 'image', content: 'data:image/png;base64,preview' }
+    }
+    activeGridKeyboardHarness = mountGridKeyboardHarness(0, undefined, null, createGridResults(), {
+      clipboardOptions
+    })
+
+    publishMetaOverlayPanelState({ visible: true, grown: false })
+    await dispatchGridKeyAndFlush('Escape')
+
+    expect(transportMock.send).toHaveBeenCalledWith(MetaOverlayEvents.ui.hide)
+    expect(activeGridKeyboardHarness.clearClipboard).not.toHaveBeenCalled()
+    expect(activeGridKeyboardHarness.clipboardOptions.last).toBe(clipboardOptions.last)
+
+    publishMetaOverlayPanelState({ visible: false, grown: false })
+    await dispatchGridKeyAndFlush('Escape')
+
+    expect(activeGridKeyboardHarness.clearClipboard).toHaveBeenCalledWith({ remember: true })
+  })
+
+  it('keeps a valid visibility push authoritative over a late initial reply', async () => {
+    let resolveInitialVisibility: ((value: unknown) => void) | undefined
+    const initialVisibility = new Promise<unknown>((resolve) => {
+      resolveInitialVisibility = resolve
+    })
+    transportMock.send.mockImplementationOnce(() => initialVisibility)
+    activeGridKeyboardHarness = mountGridKeyboardHarness(0, undefined, null, createGridResults(), {
+      clipboardOptions: {
+        last: { type: 'image', content: 'data:image/png;base64,preview' }
+      }
+    })
+
+    publishMetaOverlayPanelState({ visible: true, grown: false })
+    resolveInitialVisibility?.({ visible: false })
+    await Promise.resolve()
+    await dispatchGridKeyAndFlush('Escape')
+
+    expect(transportMock.send).toHaveBeenCalledWith(MetaOverlayEvents.ui.hide)
+    expect(activeGridKeyboardHarness.clearClipboard).not.toHaveBeenCalled()
+  })
+})
 
 describe('useKeyboard grid navigation', () => {
   beforeEach(() => {

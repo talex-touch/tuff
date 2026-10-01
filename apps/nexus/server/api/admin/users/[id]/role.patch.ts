@@ -26,6 +26,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'User not found.' })
   if (existing.status === 'merged')
     throw createError({ statusCode: 400, statusMessage: 'Merged users cannot be updated.' })
+  if (existing.status === 'deletion_pending')
+    throw createError({ statusCode: 409, statusMessage: 'Users pending deletion cannot be updated.' })
 
   const updated = await setUserRole(event, id, role)
   if (!updated)

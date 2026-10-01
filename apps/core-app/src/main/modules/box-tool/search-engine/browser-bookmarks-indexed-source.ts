@@ -20,7 +20,7 @@ import type {
 import { shell } from 'electron'
 import { openValidatedExternalUrl } from '../../../utils/external-url-policy'
 import type { BrowserBookmarkItem, BrowserBookmarkScanOptions } from './browser-bookmarks-scanner'
-import { privilegedPluginFor } from '../../plugin/privileged-plugins'
+import { privilegedPluginFor } from '../../../../shared/privileged-plugins'
 import {
   createBrowserBookmarksIndexedSourceDescriptor,
   IndexedWriteRuntimeEmitterService,

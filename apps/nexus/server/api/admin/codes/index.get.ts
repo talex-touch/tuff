@@ -15,19 +15,32 @@ export default defineEventHandler(async (event) => {
   }
 
   const query = getQuery(event)
-  const page = Math.max(1, Number(query.page) || 1)
-  const limit = Math.min(100, Math.max(1, Number(query.limit) || 20))
+  const requestedPage = Number(query.page) || 1
+  const requestedLimit = Number(query.limit) || 20
+  const page = Number.isFinite(requestedPage) ? Math.max(1, Math.floor(requestedPage)) : 1
+  const limit = Number.isFinite(requestedLimit) ? Math.min(100, Math.max(1, Math.floor(requestedLimit))) : 20
   const offset = (page - 1) * limit
-  const status = query.status as string | undefined
+  const status = typeof query.status === 'string' ? query.status : undefined
+  const plan = typeof query.plan === 'string' ? query.plan : undefined
+  const search = typeof query.q === 'string' ? query.q.trim() : ''
 
   try {
-    let whereClause = ''
-    const params: any[] = []
+    const conditions: string[] = []
+    const params: string[] = []
 
     if (status && ['active', 'exhausted', 'expired', 'revoked'].includes(status)) {
-      whereClause = 'WHERE status = ?1'
       params.push(status)
+      conditions.push(`status = ?${params.length}`)
     }
+    if (plan && ['FREE', 'PLUS', 'PRO', 'TEAM', 'ENTERPRISE'].includes(plan)) {
+      params.push(plan)
+      conditions.push(`plan = ?${params.length}`)
+    }
+    if (search) {
+      params.push(`%${search}%`)
+      conditions.push(`code LIKE ?${params.length}`)
+    }
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
     // Get total count
     const countResult = await db.prepare(`
@@ -40,7 +53,7 @@ export default defineEventHandler(async (event) => {
     const { results } = await db.prepare(`
       SELECT * FROM ${ACTIVATION_CODES_TABLE}
       ${whereClause}
-      ORDER BY created_at DESC
+      ORDER BY created_at DESC, id DESC
       LIMIT ?${params.length + 1} OFFSET ?${params.length + 2};
     `).bind(...params, limit, offset).all()
 
@@ -50,7 +63,7 @@ export default defineEventHandler(async (event) => {
         page,
         limit,
         total,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.max(1, Math.ceil(total / limit)),
       },
     }
   }

@@ -100,25 +100,8 @@ watch([auditPage, auditPageSize], () => {
 
 <template>
   <div class="space-y-6">
-    <header>
-      <h1 class="apple-heading-md">
-        {{ t('dashboard.sections.intelligence.tabs.audits') }}
-      </h1>
-      <p class="mt-2 text-sm text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.intelligence.audit.subtitle') }}
-      </p>
-    </header>
-
     <section class="apple-card-lg space-y-4 p-6">
-      <div class="flex items-center justify-between gap-4">
-        <div>
-          <h2 class="apple-heading-sm">
-            {{ t('dashboard.sections.intelligence.audit.title') }}
-          </h2>
-          <p class="mt-1 text-xs text-black/40 dark:text-white/40">
-            {{ t('dashboard.sections.intelligence.audit.subtitle') }}
-          </p>
-        </div>
+      <div class="flex justify-end">
         <TxButton variant="bare" size="sm" @click="fetchAudits">
           {{ t('dashboard.sections.intelligence.audit.refresh') }}
         </TxButton>

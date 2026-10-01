@@ -26,7 +26,7 @@ import { TxEChart, TxLineChart } from '@talex-touch/tuffex/charts'
 ### 最佳实践
 
 - 给宿主一个确定的高度。高度为 0 的容器画不出任何东西。
-- 优先用类型化封装；只有长尾类型（candlestick、graph、boxplot、sunburst）才落到带原始 option 的 `TxEChart`。
+- 优先用类型化封装；旭日图可直接给 `TxEChart` 传 `type: 'sunburst'` 的分层 `data`，运行时已注册该类型。其它长尾类型须先通过 `loadECharts()` 取得运行时并注册对应的 ECharts 模块。
 - 传 `aria-label`：它让 canvas 图表对辅助技术可读。
 - 传数据而不是像素：封装负责把数据映射成 option，主题色与坐标轴质感才能保持一致。
 - 在宿主应用里安装 `echarts`；缺少 peer 时容器内会给出提示，而不是静默空白。
@@ -63,20 +63,28 @@ import { TxEChart, TxLineChart } from '@talex-touch/tuffex/charts'
 
 ## 主题化宿主
 
-`TxEChart` 负责整个生命周期：解析当前主题的图表 token、应用主题、再把你的 option 画上去。传一份完整的 ECharts option 即可——这就是自定义出口，ECharts 支持的一切都属于这里。
+`TxEChart` 负责整个生命周期：解析当前主题的图表 token、应用主题、再把你的 option 画上去。旭日图已注册，可直接传入分层数据；未内置注册的其它 ECharts 类型需要先注册对应模块。
 
 ```vue
 <script setup lang="ts">
 import { TxEChart } from '@talex-touch/tuffex/charts'
+import type { EChartsOption } from 'echarts'
 
-const option = {
+const option: EChartsOption = {
   tooltip: { trigger: 'item' },
-  series: [{ type: 'treemap', data: [{ name: 'Docs', value: 40 }, { name: 'Blog', value: 25 }] }],
+  series: [{
+    type: 'sunburst',
+    radius: ['20%', '90%'],
+    data: [
+      { name: '2.5.x', children: [{ name: '2.5.1-beta.2', value: 40 }, { name: '2.5.0', value: 35 }] },
+      { name: '2.4.x', children: [{ name: '2.4.13', value: 25 }] },
+    ],
+  }],
 }
 </script>
 
 <template>
-  <TxEChart :option="option" :height="280" aria-label="Traffic by section" />
+  <TxEChart :option="option" :height="280" aria-label="版本系列与具体版本分布" />
 </template>
 ```
 

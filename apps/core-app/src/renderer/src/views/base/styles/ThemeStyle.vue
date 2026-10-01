@@ -63,6 +63,7 @@ function openThemeHelp(): void {
  */
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
 const shell = computed(() => (props.embedded ? 'div' : ViewTemplate))
+const showAdvancedSettings = computed(() => appSetting.dev?.advancedSettings === true)
 const transport = useTuffTransport()
 const themeStyleLog = createRendererLogger('ThemeStyle')
 type OpenFileRequest = Record<string, unknown>
@@ -527,7 +528,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
         />
       </WindowSectionVue>
 
-      <CoreBoxCanvasSection />
+      <CoreBoxCanvasSection v-if="showAdvancedSettings" />
 
       <TuffGroupBlock
         :name="t('themeStyle.personalized')"
@@ -621,7 +622,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
         nested bordered panels this page used to grow.
       -->
       <TuffGroupBlock
-        v-if="showWallpaperGroup"
+        v-if="showAdvancedSettings && showWallpaperGroup"
         :name="t('themeStyle.wallpaperGroup')"
         :description="t('themeStyle.wallpaperGroupDesc')"
       >

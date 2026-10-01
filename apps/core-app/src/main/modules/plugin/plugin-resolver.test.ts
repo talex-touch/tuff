@@ -22,7 +22,7 @@ vi.mock('./plugin-module', () => ({
 }))
 
 import { PluginResolver } from './plugin-resolver'
-import { PRIVILEGED_PLUGIN_NAMES } from './privileged-plugins'
+import { PRIVILEGED_PLUGIN_NAMES } from '../../../shared/privileged-plugins'
 
 async function createSourcePluginDir(root: string, manifest: IManifest): Promise<string> {
   const sourceDir = path.join(root, 'source-plugin')

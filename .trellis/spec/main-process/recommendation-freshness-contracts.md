@@ -97,7 +97,12 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   `isFrequentEligible(scored.behavior)` — the dated verdict, never the badge label — so a
   `frequent`-labelled row with no dated evidence is not a habit. A short grid stays short:
   exploration or loose suggestions are never used to pad it. No eligible tile and nothing
-  pinned means the habitual section is omitted entirely.
+  pinned means the main-process layout has no habitual result section. When `BoxGrid.vue` has
+  a rendered `proposed` section but no rendered `habitual` section, its `showHabitualEmptyState`
+  computed renders the habitual title and noninteractive learning/pinning guidance instead of
+  silently losing the region. This guidance never enters `sectionsData`, `items`, `itemIds` or
+  `registerItem`: list focus starts at 0 and its quick keys at ⌘1. A real habitual tile removes
+  the guidance; unrelated sections and sectionless grids never show it.
 - **Default settings are suggestions, not fabricated habits.** An empty query always nominates
   three searchable destinations (`settings-general`, `settings-appearance`, `settings-channels`),
   even with sparse history. They use `source: 'cold-start'` and empty usage statistics. Real usage

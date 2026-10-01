@@ -26,7 +26,7 @@ import { TxEChart, TxLineChart } from '@talex-touch/tuffex/charts'
 ### Best Practices
 
 - Give the host a definite height. A zero-height container cannot paint.
-- Prefer a typed wrapper; drop to `TxEChart` with a raw option for the long tail (candlestick, graph, boxplot, sunburst).
+- Prefer a typed wrapper. For a sunburst, pass hierarchical `data` with `type: 'sunburst'` directly to `TxEChart`; its runtime registers that series. For other long-tail types, obtain the runtime through `loadECharts()` and register the corresponding ECharts module first.
 - Use `aria-label`: the label makes a canvas chart readable to assistive tech.
 - Pass data, not pixels: the wrappers map your data onto the option, so theme colours and axis chrome stay consistent.
 - Install `echarts` in the host application; a missing peer is reported in the container instead of failing silently.
@@ -63,20 +63,28 @@ The builders themselves are public too — `buildBarChartOption`, `buildLineChar
 
 ## Themed host
 
-`TxEChart` owns the lifecycle: it resolves the chart tokens for the current theme, applies them, then paints your option over them. Pass a complete ECharts option — this is the customization hatch, so anything ECharts supports belongs here.
+`TxEChart` owns the lifecycle: it resolves the chart tokens for the current theme, applies them, then paints your option over them. Sunburst is registered and accepts hierarchical data directly; other ECharts types not registered by the host require their corresponding modules first.
 
 ```vue
 <script setup lang="ts">
 import { TxEChart } from '@talex-touch/tuffex/charts'
+import type { EChartsOption } from 'echarts'
 
-const option = {
+const option: EChartsOption = {
   tooltip: { trigger: 'item' },
-  series: [{ type: 'treemap', data: [{ name: 'Docs', value: 40 }, { name: 'Blog', value: 25 }] }],
+  series: [{
+    type: 'sunburst',
+    radius: ['20%', '90%'],
+    data: [
+      { name: '2.5.x', children: [{ name: '2.5.1-beta.2', value: 40 }, { name: '2.5.0', value: 35 }] },
+      { name: '2.4.x', children: [{ name: '2.4.13', value: 25 }] },
+    ],
+  }],
 }
 </script>
 
 <template>
-  <TxEChart :option="option" :height="280" aria-label="Traffic by section" />
+  <TxEChart :option="option" :height="280" aria-label="Version families and exact versions" />
 </template>
 ```
 

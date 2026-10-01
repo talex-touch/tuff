@@ -1,6 +1,6 @@
 # CoreApp UI Contract
 
-> 更新时间：2026-06-13
+> 更新时间：2026-10-01
 > 定位：CoreApp renderer UI 组件使用边界，约束本地 legacy UI 向 TuffEx primitives 渐进收口。
 
 ## Contract
@@ -18,6 +18,12 @@
 - `TButton`、`TModal`、`TSwitch` 新调用已迁到 TuffEx；旧文件仅作为 legacy adaptor 暂留。
 - `TuffBlock*` 属业务组合层，当前保留 API，并将内部 switch/icon/input/select primitive 收口到 TuffEx。
 - Drawer pilot 已从能力测试弹层迁到 `TxDrawer`；复杂多抽屉场景继续走后续小切片。
+
+## Advanced Appearance Settings
+
+- `dev.advancedSettings` 由“关于 → 高级设置”控制，正式版也提供入口；默认 `false`，缺失或非布尔 `true` 的历史值不显示高级内容。
+- `ThemeStyle.vue` 的 CoreBox 自定义与壁纸细项仅在开关为 `true` 时挂载。关闭只隐藏编辑入口，不重置已保存的布局、壁纸或滤镜。
+- 普通外观设置继续显示窗口效果、色彩风格、壁纸来源、模糊与透明度；高级设置不等于开发者模式，不开放内部插件或调试能力。
 
 ## Validation
 

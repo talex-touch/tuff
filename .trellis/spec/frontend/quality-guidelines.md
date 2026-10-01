@@ -95,6 +95,51 @@ Reviewers should check:
 
 ---
 
+## Scenario: Nexus Admin Inspection vs User Billing
+
+### 1. Scope / Trigger
+
+- Apply when an administrative page reads service history also exposed through a paid user API.
+
+### 2. Signatures
+
+- Admin Analytics calls `GET /api/admin/exchange/history`; user clients retain `GET /api/exchange/history`.
+- Both accept optional `target`, `since`, `until`, `limit`, `offset`, and `includePayload=true`.
+
+### 3. Contracts
+
+- Admin reads call `requireAdmin(event)` before parsing or querying; no subscription lookup or credit debit.
+- History returns `{ base: 'USD', target, items, limit, offset }`; snapshots omit `target` and may include payload.
+- Public history retains its non-FREE plan requirement, 2-credit charge, and admin-only payload access.
+- Plan & Team displays personal usage when `permissions.canViewUsage` is true. Existing team credit endpoints scope personal data to the account and organization data to authorized members; client visibility never broadens server access.
+- Personal consumption, remaining balance, and billing month use the scoped API totals. Failed initial requests must not render invented zero balances.
+- Administrative subscription responses belong to one open drawer identity and request generation. Switching user/mode, closing/reopening, or unmounting invalidates old success, error, and loading updates.
+- Credit usage, ledger, and trend responses belong to the current team ID, plan, permission context, and request generation. Team identity changes clear member filters and reset both paginators to page 1 before loading; stale organization responses cannot populate personal balances or ledgers.
+
+### 4. Validation & Error Matrix
+
+- Admin route: missing session → 401; inactive/non-admin account → 403; invalid currency or reversed time range → 400.
+- Public route: FREE → 403; credit consumption failure → 402; non-admin raw payload access → 403.
+
+### 5. Good / Base / Bad Cases
+
+- Good: a FREE admin inspects history with no debit; a FREE personal user sees their own monthly usage.
+- Base: a paid user queries history and pays 2 credits.
+- Bad: operational inspection requires purchasing a plan, or the UI invents a team pool for a personal account.
+
+### 6. Tests Required
+
+- `adminExchangeRateHistory.test.ts`: denied reads disclose nothing, accepted target/payload reads never bill, malformed queries fail.
+- `exchangeRateHistory.test.ts`: FREE denial, paid-user charge, insufficient credits, and payload authorization remain protected.
+- Browser smoke: real personal totals match the API, trends/ledger work, admin credits remain unchanged, and 390px layout does not overflow.
+
+### 7. Wrong vs Correct
+
+- Wrong: Admin Analytics calls `/api/exchange/history` and inherits the user subscription/credit gate.
+- Correct: Admin Analytics calls `/api/admin/exchange/history`, which authenticates current admin authority and only reads history.
+
+---
+
 ## Scenario: Official Plugin Release Seed Integrity
 
 ### 1. Scope / Trigger
@@ -112,6 +157,7 @@ Reviewers should check:
 - All-seed sync: `syncOfficialPluginBundledRuntimes(options?): SyncResult[]`.
 - Packaged verifier: `verifyPackagedOfficialPluginSeeds(context): void`.
 - Runtime bootstrap: `installBundledOfficialPluginSeeds({ seedRoot, runtimePluginRoot }): OfficialPluginSeedResult[]`; it is synchronous by contract.
+- Marketplace status: `PluginVersionStatus` keeps `sdkapi`, `isCompatible`, and `isBundledManaged` separate; the reserved-name registry lives in `apps/core-app/src/shared/privileged-plugins.ts` and is shared by main and renderer.
 
 ### 3. Contracts
 
@@ -126,7 +172,10 @@ Reviewers should check:
 - Postprocessed macOS archives include canonical version and architecture (`tuff-<version>-<arch>.app.zip`); release-manifest inference and Nexus metadata must therefore report the actual arm64 build, and release notes list ZIP Apple Silicon rather than absent DMG/Intel artifacts.
 - CoreApp lint ignores `resources/bundled-plugins/**`; these are synchronized immutable release payloads, and quality checks run against their canonical plugin sources instead of generated/minified projections.
 - A successful projection result contains `pluginName`, `packageName`, `canonicalBuildRoot`, `bundledPluginRoot`, `canonicalVersion`, `synced: true`, and `skipped: false`.
-- Packaged startup must finish seed validation/install into `<runtime-root>/modules/plugins` before `ModuleManager` construction; replacement preserves `data`/`logs` and never downgrades an identity-matching newer local runtime.
+- Packaged startup must finish seed validation/install into `<runtime-root>/modules/plugins` before `ModuleManager` construction; replacement preserves `data`/`logs`. Only non-privileged, identity-matching newer local runtimes may skip replacement; privileged runtimes are restored from the client seed.
+- Store list/detail buttons must disable market install/upgrade for `isBundledManaged` and explain that the plugin updates with Tuff; an Official badge never bypasses the resolver's reserved-name gate. `useStoreInstall.handleInstall` checks the same policy before confirmation or download.
+- Detail metadata reads SDK requirements from the catalog manifest, never README copy, and reports the actual host package version through `useEnv`/`AppSdk.getPackage` plus `CURRENT_SDK_VERSION`. `StartupInfo.version` can be `dev` and is not a release version. Missing catalog SDK metadata is explicitly unconfirmed, not evidence of compatibility; SDK failure and client-managed installation remain distinct, with full localized reasons outside ellipsized metadata values.
+- `touch-browser-open` is a required `PLUGIN_RELEASE_TARGETS` bundled target, not a market-only plugin. Canonical build/sync and `verifyPackagedOfficialPluginSeeds` must include its `index.js`, settings page/SDK, and manifest payload hashes; reserving its privileged name while omitting the client seed leaves users with no supported installation path.
 
 ### 4. Validation & Error Matrix
 
@@ -148,7 +197,8 @@ Reviewers should check:
 - Missing/empty/invalid runtime seed set -> runtime installer throws before mutating any plugin.
 - Older, corrupt, wrong-identity, or same-version/different-signature local runtime -> staged clean replacement with rollback.
 - Same-version canonical build differs from `apps/core-app/resources/bundled-plugins/<plugin>` -> treat the resource projection as stale even if after-pack version checks pass; synchronize content before packaging. Runtime same-version signature repair only helps when the packaged seed itself is current.
-- Identity-matching newer local runtime -> return `newer-local` without mutation.
+- Non-privileged, identity-matching newer local runtime -> return `newer-local` without mutation; privileged runtimes are restored from the immutable client seed.
+- Privileged name in a regular package -> reserved-name rejection before runtime mutation; the marketplace disables the action and gives a localized client-update reason rather than exposing the raw backend text.
 
 ### 5. Good / Base / Bad Cases
 
@@ -172,6 +222,7 @@ Reviewers should check:
 - Runtime bootstrap: assert immediate synchronous return, pre-mutation validation, clean install/update, data/log preservation, wrong-identity repair, and newer-local no-downgrade.
 - Content freshness: compare canonical `dist/build` files with the bundled resource projection (excluding the resource-only package metadata where applicable), then verify a previously installed same-version/different-signature runtime is refreshed on startup.
 - Release smoke: package CoreApp, inspect actual Resources, then launch a fresh isolated profile and assert both seeds are discovered during initial plugin loading.
+- Marketplace smoke: a real catalog marker newer than the client shows required/current SDK, actual package version, incompatibility, and an upgrade hint; a supported marker shows compatibility and keeps ordinary installation enabled. A privileged entry independently shows client-managed installation with disabled controls. Existing resolver/dev-installer tests retain every reserved-name rejection and runtime-preservation assertion.
 
 ### 7. Wrong vs Correct
 

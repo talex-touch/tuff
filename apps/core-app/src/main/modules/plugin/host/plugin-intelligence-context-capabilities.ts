@@ -2,7 +2,7 @@ import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-tou
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { types as utilTypes } from 'node:util'
 import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
-import { isPrivilegedPluginFor } from '../privileged-plugins'
+import { isPrivilegedPluginFor } from '../../../../shared/privileged-plugins'
 import {
   type PluginIntelligenceContextHostService,
   type PluginIntelligenceContextRequest,

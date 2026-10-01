@@ -69,6 +69,10 @@ See `packages/tuffex/packages/components/src/collapse/src/TxCollapseItem.vue`.
 - CoreApp business composition layers such as `TuffGroupBlock` can remain, but new interactive primitive logic should delegate to TuffEx.
 - In Nexus pages, explicitly import custom components where the page already does so; do not rely on broad global component magic for new complex components.
 - Plugin UI should use plugin SDK facades and should not bypass host permission or clipboard gates.
+- Nexus administrator pages share `components/admin/AdminPageShell.vue`: `title: string`, `#actions`, `#filters`, and the default body slot. The native shell owns the single compact page heading; do not add a second page heading or subtitle inside its body. Redirect-only routes have no layout to migrate.
+- Analytics exposes seven query-addressed panels: overview, performance, search, intelligence, docs, exchange, messages. Overview owns usage/version/geography content, four KPI cards and their skeletons; other panels neither display those cards nor fetch overview-only version/geography resources. Keep localized labels reactive and retain per-query lazy-load ownership.
+- Administrator comments share `/admin/reviews?tab=plugins|docs`; separate queues keep their own real API, filter, action and pagination state. The `doc_comments_admin` analytics source remains a logical tracking identifier, not a retired page alias.
+
 
 ---
 
@@ -121,7 +125,7 @@ Rules of thumb:
 
 ### Icon boxes, state ink, and colours read back from CSS
 
-Four small contracts that each cost a visible bug before they were written down.
+Small contracts that each cost a visible bug before they were written down.
 
 **A box that holds an icon class must size it.** UnoCSS `presetIcons` (both Nexus and CoreApp) emits `width`/`height` in `em` but no `display`, so an `<i :class="iconClass">` inside an inline `<span>` stays `display: inline` and measures 0×0 — only the row's `gap` shows. Make the wrapper `display: inline-flex` (or `flex`) so the `<i>` is a flex item. `TxTabItem`'s icons were invisible in every host until 2026-09-26; `TxTabBar`'s always showed because its icon wrapper was already flex.
 
@@ -131,6 +135,8 @@ Four small contracts that each cost a visible bug before they were written down.
 // Correct
 .tx-tab-item__icon { display: inline-flex; align-items: center; justify-content: center; font-size: 18px; line-height: 1; }
 ```
+
+**Give tab glyphs one owner.** `TxTabItem` renders `icon-class` (or its `#icon` slot) separately from `#name`; the name slot supplies the label only, for example `<template #name>{{ t('tabs.health') }}</template>`. Adding the same glyph inside `#name` duplicates it and bypasses the component's active-icon ink. Use an installed collection entry (`i-carbon-activity`, not the nonexistent `i-carbon-pulse`). Browser acceptance: each tab has exactly one glyph, nonzero width/height, and a non-`none` mask or background image after every tab switch.
 
 **Switch state ink through variables on the root, not with stronger child selectors.** A host restyles a part with one class of its own (`.debug-tabs :deep(.tx-tab-item__name) { color: inherit }`, specificity 0,3,0). An active rule written as `.tx-tab-item.is-active .tx-tab-item__name` (0,4,0 once scoped) silently beats it — LingPan's hard-dark panel would have turned dark text on dark in the light theme. Set `--tx-tab-item-ink` / `--tx-tab-item-icon-ink` on `.is-active` and read them in the part's single-class rule; the host's override still wins.
 
@@ -153,6 +159,10 @@ That wrapper is a plain rectangle. Two consequences when the trigger itself is r
 
 - `box-shadow` follows the wrapper's `border-radius`, so a hover shadow applied to it renders as a square halo around a circular trigger. Apply the shadow to the element inside.
 - A `transform` on the wrapper moves the anchor's reference rect out from under an already-open panel. Transform the inner element instead.
+
+### Drawer wrappers preserve automatic overlay allocation
+
+Nexus `components/ui/Drawer.vue` forwards an optional `zIndex` without giving it a numeric default. `TxDrawer` raises its allocator above the shell header when opening; a wrapper default such as `1998` is an explicit override and pins the drawer below `TheHeader` (`10000`). Forward a caller's explicit value when present, otherwise leave it `undefined`: `<TxDrawer :z-index="zIndex" />`. Keep the business title in the drawer's native `title` prop instead of adding a second heading in the body. Browser acceptance is relative: the drawer covers the header, its child select covers the drawer, and `elementFromPoint()` over the title hits the drawer; verify desktop width and the mobile bottom-sheet body/footer without saving business data.
 
 ### One writer per CSS custom property
 

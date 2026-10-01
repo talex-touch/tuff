@@ -54,6 +54,7 @@ describe('/api/exchange/history', () => {
     subscriptionMocks.getUserSubscription.mockResolvedValue({ plan: 'FREE' })
 
     await expect(handler({ node: { req: { url: '/api/exchange/history' } }, context: {} })).rejects.toMatchObject({ statusCode: 403 })
+    expect(creditsMocks.consumeCredits).not.toHaveBeenCalled()
   })
 
   it('非 FREE 用户可以查询 target 历史', async () => {
@@ -75,6 +76,29 @@ describe('/api/exchange/history', () => {
       target: 'CNY',
       items: [{ targetCurrency: 'CNY', rate: 7.1 }],
     })
+    expect(creditsMocks.consumeCredits).toHaveBeenCalledWith(
+      expect.anything(),
+      'u1',
+      2,
+      'exchange-history',
+      expect.objectContaining({ base: 'USD', target: 'CNY' }),
+    )
+  })
+
+  it('非 FREE 用户扣费失败返回 402', async () => {
+    authMocks.requireAuth.mockResolvedValue({ userId: 'u1' })
+    subscriptionMocks.getUserSubscription.mockResolvedValue({ plan: 'PRO' })
+    h3Mocks.getQuery.mockReturnValue({ target: 'CNY' })
+    serviceMocks.getRateHistory.mockResolvedValue({
+      target: 'CNY',
+      items: [],
+    })
+    creditsMocks.consumeCredits.mockRejectedValue(new Error('Credits exceeded.'))
+
+    await expect(handler({
+      node: { req: { url: '/api/exchange/history?target=CNY' } },
+      context: {},
+    })).rejects.toMatchObject({ statusCode: 402 })
   })
 
   it('includePayload 需要管理员', async () => {

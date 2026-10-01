@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AdminPageShell from '~/components/admin/AdminPageShell.vue'
+
 definePageMeta({
   layout: 'admin',
   requiresAuth: true,
@@ -9,6 +11,8 @@ definePageMeta({
 })
 
 defineI18nRoute(false)
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -17,15 +21,11 @@ defineI18nRoute(false)
     this page "does not have a single root node and will cause errors when navigating
     between routes", and left the declared fade pageTransition with nothing to animate.
   -->
-  <div>
+  <AdminPageShell :title="t('dashboard.sections.intelligence.tabs.overview')">
     <ClientOnly>
       <LazyDashboardIntelligenceOverviewPanel />
       <template #fallback>
         <div class="space-y-6">
-          <div class="space-y-3">
-            <div class="h-8 w-64 animate-pulse rounded-xl bg-black/10 dark:bg-white/10" />
-            <div class="h-4 max-w-2xl w-full animate-pulse rounded-lg bg-black/10 dark:bg-white/10" />
-          </div>
           <div class="grid gap-4 md:grid-cols-4">
             <div v-for="item in 4" :key="item" class="h-28 animate-pulse rounded-2xl bg-black/5 dark:bg-white/10" />
           </div>
@@ -35,5 +35,5 @@ defineI18nRoute(false)
         </div>
       </template>
     </ClientOnly>
-  </div>
+  </AdminPageShell>
 </template>
