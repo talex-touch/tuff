@@ -20,7 +20,7 @@ export interface ThumbnailGeneratedResult {
   status: 'generated'
   kind: ThumbnailMediaKind
   path: string
-  mimeType: 'image/jpeg'
+  mimeType: 'image/png' | 'image/jpeg'
   sizeBytes: number
   width?: number
   height?: number
@@ -56,8 +56,8 @@ const execFileAsync = promisify(execFile)
 const require = createRequire(import.meta.url)
 const requireFromCwd = createRequire(`${process.cwd()}${path.sep}`)
 
-function buildOutputPath(outputDir: string, prefix = 'thumbnail'): string {
-  return path.join(outputDir, `${Date.now()}-${prefix}-${crypto.randomUUID()}.jpg`)
+function buildOutputPath(outputDir: string, extension: 'png' | 'jpg'): string {
+  return path.join(outputDir, `${Date.now()}-thumbnail-${crypto.randomUUID()}.${extension}`)
 }
 
 function resolveFfmpegPath(override?: string | null): string | null {
@@ -114,25 +114,34 @@ async function fileSize(filePath: string): Promise<number> {
   return stat.size
 }
 
-async function writeJpegThumbnail(
+/**
+ * Encode a thumbnail, keeping whatever the source can show.
+ *
+ * JPEG has no alpha channel, so a transparent picture — a logo drawn in 4% alpha red, say — is
+ * flattened onto black and the row renders as a solid dark square. PNG keeps the alpha and the
+ * colors, which is what a thumbnail of a picture is for. Video frames have no alpha and are
+ * large, so they stay JPEG.
+ */
+async function writeThumbnail(
   inputPath: string,
-  outputPath: string
+  outputPath: string,
+  kind: ThumbnailMediaKind
 ): Promise<{
   sizeBytes: number
   width?: number
   height?: number
 }> {
   const { default: sharp } = await import('sharp')
-  const info = await sharp(inputPath, { animated: false })
-    .rotate()
-    .resize({
-      width: THUMBNAIL_SIZE,
-      height: THUMBNAIL_SIZE,
-      fit: 'inside',
-      withoutEnlargement: true
-    })
-    .jpeg({ quality: THUMBNAIL_JPEG_QUALITY })
-    .toFile(outputPath)
+  const pipeline = sharp(inputPath, { animated: false }).rotate().resize({
+    width: THUMBNAIL_SIZE,
+    height: THUMBNAIL_SIZE,
+    fit: 'inside',
+    withoutEnlargement: true
+  })
+  const info =
+    kind === 'image'
+      ? await pipeline.png({ compressionLevel: 9 }).toFile(outputPath)
+      : await pipeline.jpeg({ quality: THUMBNAIL_JPEG_QUALITY }).toFile(outputPath)
 
   const sizeBytes = info.size || (await fileSize(outputPath))
   if (sizeBytes <= 0) {
@@ -169,7 +178,7 @@ async function generateVideoFrame(
   ffmpegPath: string,
   ffprobePath: string | null
 ): Promise<string> {
-  const framePath = buildOutputPath(outputDir, 'frame')
+  const framePath = path.join(outputDir, `${Date.now()}-frame-${crypto.randomUUID()}.jpg`)
   const duration = ffprobePath ? await probeVideoDuration(filePath, ffprobePath) : null
   const seekSeconds = duration ? Math.min(1, Math.max(0, duration * 0.1)) : 0
 
@@ -231,7 +240,8 @@ export async function generateThumbnail(
 
   await fs.mkdir(options.outputDir, { recursive: true })
 
-  const outputPath = buildOutputPath(options.outputDir)
+  const outputExtension = kind === 'image' ? 'png' : 'jpg'
+  const outputPath = buildOutputPath(options.outputDir, outputExtension)
   let framePath: string | null = null
 
   try {
@@ -251,12 +261,12 @@ export async function generateThumbnail(
       inputPath = framePath
     }
 
-    const written = await writeJpegThumbnail(inputPath, outputPath)
+    const written = await writeThumbnail(inputPath, outputPath, kind)
     return {
       status: 'generated',
       kind,
       path: outputPath,
-      mimeType: 'image/jpeg',
+      mimeType: outputExtension === 'png' ? 'image/png' : 'image/jpeg',
       sizeBytes: written.sizeBytes,
       width: written.width,
       height: written.height,
