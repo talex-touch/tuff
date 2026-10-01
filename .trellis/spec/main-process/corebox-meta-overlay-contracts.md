@@ -540,6 +540,14 @@ Host chords (`BUILTIN_SPECS`, `PROVIDER_ACTION_SPECS`; Mod = ⌘ on macOS, Ctrl 
   secondary falls through to the ordinary Enter path.
 - **Auto-repeat runs nothing.** A held chord runs once and its repeats are prevented. In the panel a
   held ⌘K does not toggle.
+- **Escape reads mirrored visibility, not a fresh IPC request.** `useKeyboard` subscribes to
+  `CoreBoxEvents.metaOverlay.panelState` and reads its boolean `visible` (never `grown`). One
+  `MetaOverlayEvents.ui.isVisible` request hydrates initial state; any valid push wins over its late
+  reply. A pending main-process response must not block clearing a local suffix. Dispose the
+  subscription on unmount and ignore a hydration reply after disposal.
+- **Escape is one step at a time.** Close a visible overlay first, retaining clipboard and query;
+  otherwise clear the attachment with dismissal remembered, then deactivate a provider, clear the
+  query, or hide the window on subsequent presses. Do not clear query and suffix together.
 - **Held-Enter guard.** The overlay prevents every plain Enter and runs a row only when
   `!event.repeat`. Main then hides the panel and focuses CoreBox while the key can still be down, so
   CoreBox checks `swallowForeignEnterRepeat` right after F-key blocking, before every Enter consumer
@@ -587,6 +595,8 @@ Host chords (`BUILTIN_SPECS`, `PROVIDER_ACTION_SPECS`; Mod = ⌘ on macOS, Ctrl 
 | Enter repeat, press began in the overlay | CoreBox | Prevented and stopped; not run, not forwarded |
 | Enter repeat, press began in CoreBox | CoreBox | Runs as before |
 | Enter or arrows while composing | panel | Left to the IME |
+| Initial visibility query still pending; local attachment present | CoreBox | Clear attachment immediately, retaining query; no per-key visibility request |
+| Valid panel-state push precedes the initial visibility reply | CoreBox | Push remains authoritative; stale reply cannot reopen or close mirrored state |
 | Esc while composing | main | Left to the IME; the next plain Esc closes |
 | An action rejects (e.g. `SYSTEM_SHELL_PATH_UNAVAILABLE`) | CoreBox | `corebox.actions.failed` shown; log `{ actionId, code }` only |
 | Outcome with the footer off screen | CoreBox | Header slot draws it; announced once |
@@ -621,6 +631,9 @@ Host chords (`BUILTIN_SPECS`, `PROVIDER_ACTION_SPECS`; Mod = ⌘ on macOS, Ctrl 
   fresh press runs; a local press repeats as before; a composing Enter is not prevented; `blur`,
   `focus` and Enter `keyup` forget the press; a held Mod↵ runs nothing and a UI-mode repeat is not
   forwarded.
+- Same file: pending visibility hydration does not delay suffix dismissal or clear the query;
+  visible/hidden panel-state pushes preserve overlay → attachment priority; a late hydration reply
+  cannot overwrite a push. Real Electron checks image and text suffixes, including an empty query.
 - `renderer/views/meta/MetaOverlay.test.ts` › "MetaOverlay panel": Enter, Mod↵ and Mod⇧C dispatch the
   primary, the reveal and the copy path; bare Ctrl+. is not prevented, Ctrl+Shift+. pins; a repeated
   Enter is prevented and dispatches nothing; Ctrl+C stays with the filter; composition keeps arrows

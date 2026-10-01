@@ -29,6 +29,8 @@ class FileProtocolModule extends BaseModule {
   }
 
   onInit(): MaybePromise<void> {
+    if (this.releaseProtocol) return
+
     const additionalRoots = [tempFileService.getBaseDir()]
     // The icon cache root is optional at registration: if Electron cannot resolve a cache or
     // userData path there is no directory to allow, and the protocol must still serve every

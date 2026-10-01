@@ -55,11 +55,13 @@ import {
   issueTfilePreviewGrant
 } from './tfile-preview-grant'
 
+beforeEach(async () => {
+  await fileProtocolModule.onDestroy()
+  vi.clearAllMocks()
+  clearTfilePreviewGrants()
+})
+
 describe('file-protocol canonical tfile parsing', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    clearTfilePreviewGrants()
-  })
   it('forwards allowlisted files through Electron built-in streaming fetch', async () => {
     const response = new Response('icon-bytes')
     fetchMock.mockResolvedValue(response)
