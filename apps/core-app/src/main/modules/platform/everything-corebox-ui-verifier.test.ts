@@ -176,15 +176,17 @@ describe('resolveCoreBoxResultSource', () => {
   })
 
   it('returns none when no provider reported rows', () => {
-    expect(resolveCoreBoxResultSource([{ providerId: 'file-provider', resultCount: 0 }])).toBe('none')
+    expect(resolveCoreBoxResultSource([{ providerId: 'file-provider', resultCount: 0 }])).toBe(
+      'none'
+    )
   })
 })
 
 describe('evaluateEverythingCoreBoxUiEvidence source attribution', () => {
   it('passes a healthy packaged run where only the structured filter lands on the file index', () => {
-    expect(evaluateEverythingCoreBoxUiEvidence(healthyEvidence(), REQUIRE_AVAILABLE_ALL_MODES)).toEqual(
-      { passed: true, failures: [], warnings: [] }
-    )
+    expect(
+      evaluateEverythingCoreBoxUiEvidence(healthyEvidence(), REQUIRE_AVAILABLE_ALL_MODES)
+    ).toEqual({ passed: true, failures: [], warnings: [] })
   })
 
   /**
@@ -220,7 +222,9 @@ describe('evaluateEverythingCoreBoxUiEvidence source attribution', () => {
 
     expect(
       evaluateEverythingCoreBoxUiEvidence(evidence, REQUIRE_AVAILABLE_ALL_MODES).failures
-    ).toContain('Everything CoreBox UI evidence normal rendered rows without an attributed provider')
+    ).toContain(
+      'Everything CoreBox UI evidence normal rendered rows without an attributed provider'
+    )
   })
 
   it('fails Everything rows claimed while the backend was unavailable', () => {
@@ -284,7 +288,12 @@ describe('evaluateEverythingCoreBoxUiEvidence source attribution', () => {
       backendReason: 'everything-not-installed',
       noticeVisible: true
     }
-    evidence.emptyState = { query: 'tuff-corebox-empty-state-7c41q9', observed: true, rowCount: 0, reason: null }
+    evidence.emptyState = {
+      query: 'tuff-corebox-empty-state-7c41q9',
+      observed: true,
+      rowCount: 0,
+      reason: null
+    }
 
     const gate = evaluateEverythingCoreBoxUiEvidence(evidence, {
       requirePackaged: true,
@@ -334,7 +343,9 @@ describe('evaluateEverythingCoreBoxUiEvidence source attribution', () => {
       'Everything CoreBox UI evidence degraded state fabricated result rows'
     )
     expect(
-      failures.some((failure) => failure.includes('claims Everything rows with an unavailable backend'))
+      failures.some((failure) =>
+        failure.includes('claims Everything rows with an unavailable backend')
+      )
     ).toBe(true)
   })
 })

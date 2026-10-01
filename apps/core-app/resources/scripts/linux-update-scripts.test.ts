@@ -32,6 +32,11 @@ interface CommandFailure extends Error {
   stderr: string
 }
 
+interface CommandResult {
+  stdout: string
+  stderr: string
+}
+
 interface BuilderConfig {
   extraResources?: Array<{ from?: string; to?: string }>
 }
@@ -47,6 +52,9 @@ function shellEnvironment(overrides: Record<string, string>): NodeJS.ProcessEnv 
 async function writeFixtureAppImage(filePath: string, version: string): Promise<string> {
   const source = `#!/bin/bash
 set -u
+relaunch_version_tmp="$TUFF_TEST_RELAUNCH_VERSION.tmp.$$"
+printf '%s' '${version}' > "$relaunch_version_tmp"
+/bin/mv -f "$relaunch_version_tmp" "$TUFF_TEST_RELAUNCH_VERSION"
 relaunch_args_tmp="$TUFF_TEST_RELAUNCH_ARGS.tmp.$$"
 {
   printf '%s\\n' "$#"
@@ -55,9 +63,6 @@ relaunch_args_tmp="$TUFF_TEST_RELAUNCH_ARGS.tmp.$$"
   done
 } > "$relaunch_args_tmp"
 /bin/mv -f "$relaunch_args_tmp" "$TUFF_TEST_RELAUNCH_ARGS"
-relaunch_version_tmp="$TUFF_TEST_RELAUNCH_VERSION.tmp.$$"
-printf '%s' '${version}' > "$relaunch_version_tmp"
-/bin/mv -f "$relaunch_version_tmp" "$TUFF_TEST_RELAUNCH_VERSION"
 printf '%s\\n' "$TUFF_TEST_CHILD_SECRET"
 printf '%s\\n' "$TUFF_TEST_CHILD_SECRET" >&2
 `
@@ -92,7 +97,7 @@ async function createFixture(): Promise<Fixture> {
 async function runApplyScript(
   fixture: Fixture,
   environment: Record<string, string>
-): ReturnType<typeof execFileAsync> {
+): Promise<CommandResult> {
   return execFileAsync(
     '/bin/bash',
     [

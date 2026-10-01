@@ -22,16 +22,18 @@ export const EVERYTHING_COREBOX_SEARCH_MODES: readonly EverythingCoreBoxSearchMo
  * index, so the orchestrator routes it to `file-provider` and it must never be recorded or judged
  * as an Everything row. See `search-query-orchestrator.ts:routeWindowsFileProviders`.
  */
-export const EVERYTHING_COREBOX_EVERYTHING_SOURCED_MODES: readonly EverythingCoreBoxSearchModeId[] = [
-  'normal',
-  'explicit-file'
-]
+export const EVERYTHING_COREBOX_EVERYTHING_SOURCED_MODES: readonly EverythingCoreBoxSearchModeId[] =
+  ['normal', 'explicit-file']
 
 /**
  * Which provider actually answered one mode. Resolved from the real session `sources` the main
  * process reports, never inferred from the global Everything status.
  */
-export const EVERYTHING_COREBOX_RESULT_SOURCES = ['everything-provider', 'file-provider', 'none'] as const
+export const EVERYTHING_COREBOX_RESULT_SOURCES = [
+  'everything-provider',
+  'file-provider',
+  'none'
+] as const
 export type EverythingCoreBoxResultSource = (typeof EVERYTHING_COREBOX_RESULT_SOURCES)[number]
 
 /** Provider ids that own file results, so a non-file provider with rows is not mistaken for one. */

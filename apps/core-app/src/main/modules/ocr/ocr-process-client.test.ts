@@ -309,20 +309,26 @@ describe('recognizeImageTextIsolated terminal delivery', () => {
   it.each([
     { name: 'non-string text', result: { text: 42 } },
     { name: 'unknown engine', result: { text: 'ok', engine: 'tesseract', durationMs: 5 } },
-    { name: 'non-numeric duration', result: { text: 'ok', engine: 'apple-vision', durationMs: '5' } }
-  ])('rejects a matching success frame with $name shape immediately as OCR_PROCESS_INVALID_RESPONSE', async ({ result }) => {
-    const promise = recognizeImageTextIsolated(baseOptions())
-    const child = await spawnedChild()
-    const requestId = await awaitRequest(child)
+    {
+      name: 'non-numeric duration',
+      result: { text: 'ok', engine: 'apple-vision', durationMs: '5' }
+    }
+  ])(
+    'rejects a matching success frame with $name shape immediately as OCR_PROCESS_INVALID_RESPONSE',
+    async ({ result }) => {
+      const promise = recognizeImageTextIsolated(baseOptions())
+      const child = await spawnedChild()
+      const requestId = await awaitRequest(child)
 
-    child.emit('message', { type: 'ocr.success', requestId, result })
+      child.emit('message', { type: 'ocr.success', requestId, result })
 
-    // A frame that carries our request id but an unusable result is a protocol violation: the
-    // client must fail the request now, not hang until the deadline.
-    const reason = await promise.catch((error: unknown) => error)
-    expect(errorCode(reason)).toBe('OCR_PROCESS_INVALID_RESPONSE')
-    expect(child.kill).not.toHaveBeenCalled()
-  })
+      // A frame that carries our request id but an unusable result is a protocol violation: the
+      // client must fail the request now, not hang until the deadline.
+      const reason = await promise.catch((error: unknown) => error)
+      expect(errorCode(reason)).toBe('OCR_PROCESS_INVALID_RESPONSE')
+      expect(child.kill).not.toHaveBeenCalled()
+    }
+  )
 
   it('ignores a success frame carrying another request identity until the child exits', async () => {
     const promise = recognizeImageTextIsolated(baseOptions())
