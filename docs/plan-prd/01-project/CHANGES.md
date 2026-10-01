@@ -1,7 +1,15 @@
 # 变更日志
 
-> 更新时间：2026-09-30
+> 更新时间：2026-10-01
 > 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-10-01
+
+### release: reconcile beta.56 publication gates
+
+- `devalue` 从 5.8.1 更新至 5.9.3，修复 GHSA-j22f-vq7h-c4qm、GHSA-mcm9-63f2-9j32 和 GHSA-x5rw-q4pp-hg5g；仅更新锁文件中的该依赖，未放宽生产审计 allowlist。实际 5.9.3 包的循环引用、Date、Map、字节视图与异步序列化 smoke 通过，共享内存被拒绝。
+- TuffEx 当前源码版本推进到 0.6.3，补齐 StreamElement、StreamText 的生命周期与双语变更索引，源码导出总数为 166。已发布 npm 0.6.2 不回填新组件；本轮只发布客户端 beta，未独立发布 npm。
+- Windows CoreBox Everything 探针的默认 profile 改用 `os.tmpdir()`，与既有隔离目录校验一致；不把任意 `RUNNER_TEMP` 加入允许目录，不绕过 ownership 或 symlink 保护。
 
 ## 2026-09-30
 

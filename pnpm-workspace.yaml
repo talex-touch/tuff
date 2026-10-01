@@ -164,7 +164,7 @@ overrides:
   browserslist: 4.28.7
   cookie: 0.7.2
   defu: 6.1.7
-  devalue: 5.8.1
+  devalue: 5.9.3
   diff@^4.0.0: 4.0.4
   diff@^8.0.0: 8.0.4
   esbuild: 0.28.1

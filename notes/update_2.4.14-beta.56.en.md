@@ -17,3 +17,4 @@
 - Escape in DivisionBox is unaffected by another window's action-overlay visibility.
 - Advanced Settings is available in production builds; disabling it hides editors while saved layouts, wallpapers, and filters remain active.
 - An empty habitual grid shows learning and pinning guidance that disappears when habitual or pinned tiles become available, without changing numbered shortcut positions.
+- Update devalue to 5.9.3 to address security issues in shared-memory serialization, repeated-string expansion, and asynchronous rejection handling.
