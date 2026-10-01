@@ -518,6 +518,11 @@ export default {
       credits: {
         title: 'AI Credits Usage',
         subtitle: 'Monthly credits usage for team members.',
+        personalSubtitle: 'Your monthly credits consumption and available balance.',
+        personalUsage: 'Usage',
+        month: 'Billing month: {month}',
+        remaining: 'Remaining credits',
+        quotaHint: 'Monthly quota: {n} credits',
         totalUsed: 'Total used this month',
         totalQuota: 'Monthly usage baseline',
         searchPlaceholder: 'Search user ID / email',
@@ -1958,6 +1963,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           roleAll: 'All roles',
           roleAdmin: 'Admin',
           roleUser: 'User',
+          statusDeletionPending: 'Pending deletion',
         },
         table: {
           user: 'User',
@@ -1977,6 +1983,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           active: 'Active',
           disabled: 'Disabled',
           merged: 'Merged',
+          deletionPending: 'Pending deletion',
         },
         actions: {
           edit: 'Edit',
@@ -1988,6 +1995,11 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           roleFailed: 'Failed to update role.',
           statusSuccess: 'Status updated.',
           statusFailed: 'Failed to update status.',
+          details: 'Details',
+          more: 'More',
+          subscription: 'Subscription',
+          credits: 'Credit ledger',
+          delete: 'Delete',
         },
         editor: {
           title: 'Edit User',
@@ -2009,6 +2021,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           subscriptionSuccess: 'Subscription granted.',
           saveSuccess: 'User updated.',
           saveFailed: 'Failed to update user.',
+          deletionPendingLocked: 'Users pending deletion cannot be edited.',
         },
         credits: {
           title: 'Credits',
@@ -2037,6 +2050,28 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
         errors: {
           loadFailed: 'Failed to load users.',
+        },
+        details: {
+          title: 'User Details',
+          disabledAt: 'Disabled at',
+          deletionRequestedAt: 'Deletion requested',
+          deletionScheduledAt: 'Scheduled deletion',
+        },
+        subscription: {
+          title: 'User Subscription',
+          current: 'Current subscription',
+          loadFailed: 'Failed to load subscription.',
+          grantFailed: 'Failed to grant subscription.',
+          activeOnly: 'Only active users can receive a subscription.',
+        },
+        deletion: {
+          title: 'Request User Deletion',
+          warningTitle: 'This schedules account deletion.',
+          warningBody: 'The account enters a 30-day recovery window. Devices, temporary tokens, and API keys are revoked immediately; financial and credit records are preserved.',
+          confirmLabel: 'Enter the full email below to confirm',
+          confirmAction: 'Schedule deletion',
+          success: 'User deletion scheduled.',
+          failed: 'Failed to schedule user deletion.',
         },
       },
       subscriptions: {
@@ -2158,7 +2193,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         listTitle: 'All Codes',
         refresh: 'Refresh',
         loading: 'Loading...',
-        empty: 'No activation codes yet. Generate some above.',
+        empty: 'No activation codes yet. Add one to get started.',
         table: {
           code: 'Code',
           plan: 'Plan',
@@ -2174,6 +2209,37 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         revoke: 'Revoke',
         revokeSuccess: 'Activation code revoked.',
         revokeFailed: 'Failed to revoke activation code.',
+        form: {
+          plan: 'Plan',
+          durationDays: 'Duration (days)',
+          maxUses: 'Max uses',
+          expiresInDays: 'Expires in (days)',
+          count: 'Count',
+        },
+        status: {
+          active: 'Active',
+          expired: 'Expired',
+          revoked: 'Revoked',
+          exhausted: 'Exhausted',
+        },
+        errors: {
+          loadFailed: 'Failed to load activation codes.',
+          generateFailed: 'Failed to generate activation codes.',
+        },
+        generateSuccess: 'Activation codes generated.',
+        copySuccess: 'Activation code copied.',
+        copyFailed: 'Failed to copy activation code.',
+        addButton: 'Add',
+        emptyFiltered: 'No activation codes match these filters.',
+        filters: {
+          search: 'Search',
+          searchPlaceholder: 'Search activation code',
+          allPlans: 'All plans',
+          allStatuses: 'All statuses',
+        },
+        pagination: {
+          total: '{count} activation codes',
+        },
       },
       intelligence: {
         title: 'Tuff AI Lab',

@@ -95,6 +95,49 @@ Reviewers should check:
 
 ---
 
+## Scenario: Nexus Admin Inspection vs User Billing
+
+### 1. Scope / Trigger
+
+- Apply when an administrative page reads service history also exposed through a paid user API.
+
+### 2. Signatures
+
+- Admin Analytics calls `GET /api/admin/exchange/history`; user clients retain `GET /api/exchange/history`.
+- Both accept optional `target`, `since`, `until`, `limit`, `offset`, and `includePayload=true`.
+
+### 3. Contracts
+
+- Admin reads call `requireAdmin(event)` before parsing or querying; no subscription lookup or credit debit.
+- History returns `{ base: 'USD', target, items, limit, offset }`; snapshots omit `target` and may include payload.
+- Public history retains its non-FREE plan requirement, 2-credit charge, and admin-only payload access.
+- Plan & Team displays personal usage when `permissions.canViewUsage` is true. Existing team credit endpoints scope personal data to the account and organization data to authorized members; client visibility never broadens server access.
+- Personal consumption, remaining balance, and billing month use the scoped API totals. Failed initial requests must not render invented zero balances.
+
+### 4. Validation & Error Matrix
+
+- Admin route: missing session → 401; inactive/non-admin account → 403; invalid currency or reversed time range → 400.
+- Public route: FREE → 403; credit consumption failure → 402; non-admin raw payload access → 403.
+
+### 5. Good / Base / Bad Cases
+
+- Good: a FREE admin inspects history with no debit; a FREE personal user sees their own monthly usage.
+- Base: a paid user queries history and pays 2 credits.
+- Bad: operational inspection requires purchasing a plan, or the UI invents a team pool for a personal account.
+
+### 6. Tests Required
+
+- `adminExchangeRateHistory.test.ts`: denied reads disclose nothing, accepted target/payload reads never bill, malformed queries fail.
+- `exchangeRateHistory.test.ts`: FREE denial, paid-user charge, insufficient credits, and payload authorization remain protected.
+- Browser smoke: real personal totals match the API, trends/ledger work, admin credits remain unchanged, and 390px layout does not overflow.
+
+### 7. Wrong vs Correct
+
+- Wrong: Admin Analytics calls `/api/exchange/history` and inherits the user subscription/credit gate.
+- Correct: Admin Analytics calls `/api/admin/exchange/history`, which authenticates current admin authority and only reads history.
+
+---
+
 ## Scenario: Official Plugin Release Seed Integrity
 
 ### 1. Scope / Trigger
@@ -112,6 +155,7 @@ Reviewers should check:
 - All-seed sync: `syncOfficialPluginBundledRuntimes(options?): SyncResult[]`.
 - Packaged verifier: `verifyPackagedOfficialPluginSeeds(context): void`.
 - Runtime bootstrap: `installBundledOfficialPluginSeeds({ seedRoot, runtimePluginRoot }): OfficialPluginSeedResult[]`; it is synchronous by contract.
+- Marketplace status: `PluginVersionStatus` keeps `sdkapi`, `isCompatible`, and `isBundledManaged` separate; the reserved-name registry lives in `apps/core-app/src/shared/privileged-plugins.ts` and is shared by main and renderer.
 
 ### 3. Contracts
 
@@ -159,7 +203,6 @@ Reviewers should check:
 - Good: repeated builds keep only the current archive outside `dist/build`; packaged Resources contain two clean official seeds; a fresh profile discovers both during initial plugin loading.
 - Base: a clean checkout builds CLI core, the unplugin exporter, the CLI entrypoint, TuffEx, and both official plugins; exporter `dist/vite.js` precedes the CLI build, TuffEx CSS precedes `touch-translation`, the CoreApp-local Builder binary exists, its helper cache stays outside the repository package boundary, every platform packages the explicit `tuff` executable with the canonical version, and Nexus selects the preferred format for each platform/architecture pair.
 - Bad: copying the whole canonical `dist` directory, seeding after plugin discovery starts, or overwriting newer local runtime/data is prohibited.
-- Marketplace status: `PluginVersionStatus` keeps `sdkapi`, `isCompatible`, and `isBundledManaged` separate; the reserved-name registry lives in `apps/core-app/src/shared/privileged-plugins.ts` and is shared by main and renderer.
 
 ### 6. Tests Required
 
@@ -177,6 +220,7 @@ Reviewers should check:
 - Runtime bootstrap: assert immediate synchronous return, pre-mutation validation, clean install/update, data/log preservation, wrong-identity repair, and newer-local no-downgrade.
 - Content freshness: compare canonical `dist/build` files with the bundled resource projection (excluding the resource-only package metadata where applicable), then verify a previously installed same-version/different-signature runtime is refreshed on startup.
 - Release smoke: package CoreApp, inspect actual Resources, then launch a fresh isolated profile and assert both seeds are discovered during initial plugin loading.
+- Marketplace smoke: a real catalog marker newer than the client shows required/current SDK, actual package version, incompatibility, and an upgrade hint; a supported marker shows compatibility and keeps ordinary installation enabled. A privileged entry independently shows client-managed installation with disabled controls. Existing resolver/dev-installer tests retain every reserved-name rejection and runtime-preservation assertion.
 
 ### 7. Wrong vs Correct
 
@@ -220,7 +264,6 @@ startModuleManager()
 - Apply when an Electron main-process barrel exports both a service class/accessor and an eagerly constructed module singleton, and any dependency can reach that barrel again during module evaluation.
 
 ### 2. Signatures
-- Marketplace smoke: a real catalog marker newer than the client shows required/current SDK, actual package version, incompatibility, and an upgrade hint; a supported marker shows compatibility and keeps ordinary installation enabled. A privileged entry independently shows client-managed installation with disabled controls. Existing resolver/dev-installer tests retain every reserved-name rejection and runtime-preservation assertion.
 
 - `getSentryService(): SentryServiceModule` returns the process singleton.
 - `sentryModule: SentryServiceModule` is initialized only after the class and accessor declarations in `sentry-service.ts` have evaluated.
