@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TuffContainerLayout, TuffItem, TuffSection } from '@talex-touch/utils'
+import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
 import { useElementSize } from '@vueuse/core'
 import type { ComponentPublicInstance } from 'vue'
 import { computed, ref, watch } from 'vue'
@@ -114,6 +115,13 @@ const sectionsData = computed<SectionData[]>(() => {
 
 const hasSections = computed(() => sectionsData.value.length > 0)
 
+// Guidance belongs to the recommendation surface, not the result pool or keyboard indices.
+const showHabitualEmptyState = computed(
+  () =>
+    sectionsData.value.some(({ section }) => section.id === 'proposed') &&
+    !sectionsData.value.some(({ section }) => section.id === 'habitual')
+)
+
 function getQuickKey(index: number): string {
   if (index > 9) return ''
   const key = index === 9 ? 0 : index + 1
@@ -157,6 +165,24 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
     slide.
   -->
   <div ref="containerRef" class="BoxGridContainer">
+    <section
+      v-if="showHabitualEmptyState"
+      class="BoxGridWrapper"
+      :aria-label="t('coreBox.sections.habitual')"
+    >
+      <div class="BoxGridTitle" data-flip-key="title:habitual" data-flip="move">
+        {{ t('coreBox.sections.habitual') }}
+      </div>
+      <TxEmptyState
+        class="BoxGridHabitualEmpty"
+        variant="custom"
+        size="small"
+        align="center"
+        :icon="null"
+        :title="t('coreBox.sections.habitualEmptyTitle')"
+        :description="t('coreBox.sections.habitualEmptyHint')"
+      />
+    </section>
     <!-- Multiple sections mode -->
     <template v-if="hasSections">
       <div

@@ -157,6 +157,8 @@
       "app": "Application",
       "system": "System"
     },
+    "advancedSettings": "Advanced Settings",
+    "advancedSettingsDesc": "Show CoreBox customization and wallpaper details. Existing settings are kept when disabled.",
     "developerMode": "Developer Mode",
     "developerModeDesc": "Show internal plugins and advanced options (use with care)",
     "systemInfoPlaceholder": "System information is only available in development mode"
@@ -3004,7 +3006,9 @@
     },
     "sections": {
       "habitual": "Right now",
-      "proposed": "Recent picks"
+      "proposed": "Recent picks",
+      "habitualEmptyTitle": "Your regular picks will appear as you use Tuff",
+      "habitualEmptyHint": "Use apps or features through Tuff, or choose “Pin to Recommendations” in the action menu."
     },
     "recommendation": {
       "badge": {

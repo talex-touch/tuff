@@ -157,6 +157,8 @@
       "app": "应用信息",
       "system": "系统信息"
     },
+    "advancedSettings": "高级设置",
+    "advancedSettingsDesc": "显示 CoreBox 自定义与壁纸细项，关闭后保留已有配置。",
     "developerMode": "开发者模式",
     "developerModeDesc": "显示内部插件与高级选项（谨慎使用）",
     "systemInfoPlaceholder": "系统信息仅在开发模式下可用"
@@ -3004,7 +3006,9 @@
     },
     "sections": {
       "habitual": "此刻常用",
-      "proposed": "最近案例"
+      "proposed": "最近案例",
+      "habitualEmptyTitle": "常用项目会随使用逐步出现",
+      "habitualEmptyHint": "通过 Tuff 使用应用或功能，或在操作菜单中选择“固定到推荐”。"
     },
     "recommendation": {
       "badge": {

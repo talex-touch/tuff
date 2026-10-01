@@ -1,4 +1,5 @@
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import {
   migrateTuffNexusRuntimeServer,
   NEXUS_BASE_URL,
@@ -17,11 +18,7 @@ type LegacyDevSettings = AppSetting['dev'] & {
 
 export function ensureRuntimeServerSettings(): TuffNexusRuntimeServer {
   if (!appSetting.dev) {
-    appSetting.dev = {
-      autoCloseDev: true,
-      runtimeServer: 'production',
-      developerMode: false
-    }
+    appSetting.dev = { ...appSettingOriginData.dev }
   }
 
   const dev = appSetting.dev as LegacyDevSettings
