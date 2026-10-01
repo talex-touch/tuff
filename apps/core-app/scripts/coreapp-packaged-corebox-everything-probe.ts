@@ -3,6 +3,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { lstat, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
@@ -243,10 +244,7 @@ function parseArgs(argv: string[]): CliOptions | null {
   }
   if (!options.userDataDir) {
     const stamp = Date.now().toString(36)
-    options.userDataDir = path.join(
-      process.env.RUNNER_TEMP || process.env.TMPDIR || '/tmp',
-      `tuff-corebox-everything-${stamp}`
-    )
+    options.userDataDir = path.join(tmpdir(), `tuff-corebox-everything-${stamp}`)
   }
   if (userDataDirProvided && options.attachOnly) {
     throw new Error('--user-data-dir cannot be combined with --attach')
