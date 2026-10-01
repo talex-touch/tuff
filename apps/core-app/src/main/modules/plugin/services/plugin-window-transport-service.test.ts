@@ -64,11 +64,8 @@ function createHarness(onMessage: ReturnType<typeof vi.fn>) {
 
 describe('plugin window transport communication', () => {
   it('does not acknowledge a plugin message until the lifecycle handler settles', async () => {
-    let release!: () => void
-    const pending = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    const onMessage = vi.fn(() => pending)
+    const { promise, resolve } = Promise.withResolvers<void>()
+    const onMessage = vi.fn(() => promise)
     const { handler } = createHarness(onMessage)
 
     let settled = false
@@ -84,7 +81,7 @@ describe('plugin window transport communication', () => {
     expect(onMessage).toHaveBeenCalledWith('browser-open:sync-settings', { revision: 4 })
     expect(settled).toBe(false)
 
-    release()
+    resolve()
     await expect(response).resolves.toEqual({ status: 'message_sent' })
   })
 

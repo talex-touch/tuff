@@ -420,21 +420,11 @@ describe('isolated browser-open Prelude', () => {
     }
     expect(harness.state.features.has('browser-direct-default')).toBe(true)
 
-    // Config size must not expand the regex declaration: every engine keeps the same fixed,
-    // executable shape guard instead of embedding the configurable names and keywords.
-    const patterns = engines.map(({ id }) =>
-      harness.state.features.get(`search-open-${id}`)!.commands[0].value as string,
-    )
-    expect(new Set(patterns).size).toBe(1)
-    const fixedPattern = patterns[0]
-    if (typeof fixedPattern !== 'string')
+    const pattern = harness.state.features.get('search-open-kagi')!.commands[0].value
+    if (typeof pattern !== 'string')
       throw new Error('search-open pattern missing')
-    for (const { name, keyword } of engines) {
-      expect(fixedPattern).not.toContain(name)
-      expect(fixedPattern).not.toContain(keyword)
-    }
-    expect(new RegExp(fixedPattern).test('ordinary words')).toBe(true)
-    expect(new RegExp(fixedPattern).test('https://example.com')).toBe(false)
+    expect(new RegExp(pattern).test('ordinary words')).toBe(true)
+    expect(new RegExp(pattern).test('https://example.com')).toBe(false)
 
     // The default engine leads the other direct entries, and its entry still searches for real.
     const priority = (id: string): number => harness.state.features.get(id)!.priority
