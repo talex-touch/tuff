@@ -39,6 +39,12 @@ import { isRecommendableNewFile } from './file-recommendation-admission'
 import { i18nMsg } from '@talex-touch/utils/i18n'
 import { isSameAppIdentity, matchesAppRule, type AppMatchRule } from './app-identity-match'
 import { APP_IDENTITY_EXTENSION_KEY, resolveAppItemId } from '../../addon/apps/app-index-metadata'
+import {
+  APP_DESTINATION_ITEM_IDS,
+  APP_DESTINATION_PROVIDER_ID,
+  COMMON_SETTING_DESTINATION_IDS,
+  getAppDestination
+} from '../../../../../shared/app-destinations'
 import { recommendationExposureService } from './recommendation-exposure-service'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { createLogger } from '../../../../utils/logger'
@@ -155,6 +161,27 @@ const NEWLY_INSTALLED_CANDIDATE_LIMIT = 10
  * the pool, this bounds what survives them.
  */
 const NEWLY_ADDED_FILE_CANDIDATE_LIMIT = 4
+/**
+ * Candidate slots for the built-in Tuff destinations.
+ *
+ * The empty state is otherwise made of whatever the catalog and the user's history happen to
+ * contain, so a profile with only a little history gets a grid of one and a fresh install gets
+ * whatever it has scrolled through. These doors are host-owned and always on offer; three is a
+ * floor rather than a section — enough to be useful, few enough that they cannot become the grid.
+ */
+const BUILTIN_DESTINATION_CANDIDATE_LIMIT = 3
+/**
+ * Scoring nudge for a built-in destination candidate.
+ *
+ * These arrive with no usage history, so without a term of their own they would score 0 and sit
+ * under the cold-start app suggestions (1e3). This puts them just above *those* while staying under
+ * a single real execution's behaviour score (one point is 1e4, a full habit 100 × 1e4), under the
+ * novelty band (9e5) and under what a recent execution's recency boost contributes. A destination
+ * the user actually uses arrives from the frequent/recent dimension with its own real score, and
+ * this term is granted only to the never-used nominees — it is a tie-break among suggestions, never
+ * a way past the things the user actually reaches for.
+ */
+const BUILTIN_DESTINATION_SCORE_MAX = 5e3
 /**
  * Rows fetched before admission filtering.
  *
@@ -406,6 +433,17 @@ function toLogMeta(meta?: Record<string, unknown>): LogMeta | undefined {
   if (!meta) return undefined
   return Object.fromEntries(Object.entries(meta).map(([key, value]) => [key, toPrimitive(value)]))
 }
+
+/**
+ * Version of the persisted ranking, carried as the cache key's first segment.
+ *
+ * A persisted row is only readable under the key it was written with, so a build that changes what
+ * the empty state *can* contain has to move the key: without this, a row written by the previous
+ * version keeps serving its list for the rest of its 30-minute life, and the new channel looks
+ * broken until it expires. Bump when the candidate set changes; rows from older versions simply
+ * age out, which is the correct cost of the change being visible immediately.
+ */
+const RECOMMENDATION_CACHE_SCHEMA_VERSION = 2
 
 export class RecommendationEngine {
   private contextProvider: ContextProvider
@@ -2288,6 +2326,15 @@ export class RecommendationEngine {
     })
     candidates.push(...newlyAddedFiles)
 
+    // 维度 7: 内置 Tuff 目标入口。The six dimensions above are all "what happened on this machine",
+    // so a profile with little history answers the empty query with one card and a fresh install
+    // with whatever it has already scrolled through. These doors are host-owned and identical on
+    // every machine, which is exactly what makes them worth proposing here. Nominated last, so the
+    // first occurrence of an identity is the machine's own: a destination the user really uses
+    // arrives from the frequent/recent dimensions and keeps its real evidence and its badge.
+    const builtinDestinations = this.getBuiltinDestinationCandidates()
+    candidates.push(...builtinDestinations)
+
     // 内置剪贴板 URL 推荐不在这里注入：候选池的产物会进缓存，而缓存键已不含剪贴板
     // (见 buildRecommendationCacheKey)，一旦入缓存，剪贴板换了之后旧的 URL 动作仍会
     // 被命中返回，并与新建的那条并存。它由易变阶段 buildVolatileItems 每次请求现建。
@@ -2349,6 +2396,52 @@ export class RecommendationEngine {
         trendingReady: trending.perf.ready
       }
     }
+  }
+
+  /**
+   * Built-in Tuff destinations as empty-state candidates.
+   *
+   * Every other dimension is a record of this machine — what was used, what was installed, what
+   * appeared on disk — so on a profile with little or no history the grid can be one card, and a
+   * brand-new machine answers with an empty list. These entries are the host's own doors and exist
+   * whether or not anything has been used yet, which is why they belong in the default set rather
+   * than only in the cold-start fallback: the cold-start branch is never reached once any candidate
+   * survives, so keeping them there would leave the sparse profile (the observed case) untouched.
+   *
+   * Bounded two ways. The list is capped at {@link BUILTIN_DESTINATION_CANDIDATE_LIMIT}, and the
+   * only scoring term they can claim is {@link BUILTIN_DESTINATION_SCORE_MAX}, which is below one
+   * real execution's behaviour score. Nothing is fabricated: the usage row is the shared empty
+   * placeholder, the recall tag is `cold-start` (shown as "Suggested"), and the batch behaviour read
+   * leaves `behavior` absent, so they are never grid-eligible and can never print a habit badge.
+   *
+   * The identity is the provider's own ({@link APP_DESTINATION_PROVIDER_ID} + the catalog's item id),
+   * so the rebuilder and the execute dispatch resolve them through the registered source like any
+   * other candidate; a provider that is not registered degrades to "no candidates", as it does for
+   * every other source.
+   */
+  private getBuiltinDestinationCandidates(): CandidateItem[] {
+    const candidates: CandidateItem[] = []
+
+    for (const destinationId of COMMON_SETTING_DESTINATION_IDS) {
+      if (candidates.length >= BUILTIN_DESTINATION_CANDIDATE_LIMIT) break
+
+      const definition = getAppDestination(destinationId)
+      // The provider's rebuilder only emits searchable destinations, so nominating a
+      // non-searchable one would spend a slot on an item that never renders.
+      if (!definition.searchable) continue
+
+      candidates.push({
+        sourceId: APP_DESTINATION_PROVIDER_ID,
+        itemId: APP_DESTINATION_ITEM_IDS[destinationId],
+        // The provider declares `type = 'system'`; the engine cannot import it (import direction),
+        // and this only labels the item for the layout's diversity quota.
+        sourceType: 'system',
+        usageStats: EMPTY_USAGE_STATS,
+        source: 'cold-start'
+      })
+    }
+
+    return candidates
   }
 
   /**
@@ -2976,6 +3069,17 @@ export class RecommendationEngine {
         BEHAVIOR_SCORE_WEIGHT
     }
 
+    // Built-in destinations the host proposes for the empty state. They carry no usage history — that
+    // is the point, they exist before anything has been used — so without a term of their own they
+    // would score 0 and rank below even the cold-start app suggestions. The term is a tie-break
+    // among suggestions, not a promotion: it is capped at BUILTIN_DESTINATION_SCORE_MAX, under one
+    // real execution's behaviour score (1e4), and it is granted only to the nominees that arrived
+    // unused (recall tag `cold-start`). A destination the user actually opens comes back through the
+    // frequent/recent dimensions with its own evidence, and this branch does not touch it.
+    if (candidate.sourceId === APP_DESTINATION_PROVIDER_ID && candidate.source === 'cold-start') {
+      score += BUILTIN_DESTINATION_SCORE_MAX
+    }
+
     // 行为分：只由有可靠日期证据的真实执行构成，0..80；时间偏好最多 20；最近使用加成也是同一
     // 自动族的一项。三者之和封顶 BEHAVIOR_SCORE_MAX（100），所以「自动行为」整体真的落在
     // 0..100，而不是 base+time 到 100 之后还追加一份独立 recency（R5）。recency 只承认有可靠事件
@@ -3255,7 +3359,11 @@ export class RecommendationEngine {
     pinnedCacheSignature = ''
   ): string {
     const baseKey = this.contextProvider.generateCacheKey(context)
-    const segments = [baseKey, `pin:${pinnedCacheSignature || 'none'}`]
+    const segments = [
+      `reco-v${RECOMMENDATION_CACHE_SCHEMA_VERSION}`,
+      baseKey,
+      `pin:${pinnedCacheSignature || 'none'}`
+    ]
     if (!isDefaultRecommendationSemanticSettings(semanticSettings)) {
       segments.push(
         `sem:local${semanticSettings.localVectorEnabled ? 1 : 0}`,
