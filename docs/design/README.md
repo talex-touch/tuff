@@ -1,7 +1,13 @@
 # 设计文档（docs/design）
 
-> 更新时间：2026-07-31
+> 更新时间：2026-09-29
 > 定位：产品/视觉/交互设计知识。本目录同时存放 `.pen` 设计稿与生成图等资产；本 README 仅索引 markdown 文档。
+
+## 命名
+
+| 文档 | 主题 |
+| --- | --- |
+| [naming.md](./naming.md) | AI/MI/SI 阶梯里的 TI：`Tuff Intelligence` 现状、10 个候选、能力 id 前缀规则 |
 
 ## CoreBox / 桌面端
 

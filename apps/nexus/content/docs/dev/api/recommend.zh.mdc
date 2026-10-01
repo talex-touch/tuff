@@ -2,7 +2,9 @@
 
 ## 概述
 
-RecommendSDK 让插件可以向 CoreBox 推荐引擎注册自定义推荐提供者。当用户在空 query 下打开 CoreBox 时，推荐引擎会调用所有已注册的 provider 来收集候选项，与内置的频率、时段、趋势等维度一起参与统一评分排序。
+RecommendSDK 让插件向 CoreBox 推荐引擎注册自定义推荐提供者。用户在空 query 下打开 CoreBox 时，引擎调用所有已注册 provider 的 `getCandidates()` 收集候选项，与内置的频率、时段、趋势等维度一起排序。
+
+每个候选项都必须是可执行的。provider 必须实现 `onExecute()`，宿主用它在用户触发候选项时真正执行动作；没有 `onExecute` 的 provider 会在注册时直接抛错，不会留下一张点不动的卡片。执行成功后，这次使用会计入宿主统计，下一次打开 CoreBox 时推荐已包含它。
 
 ## 快速开始
 
@@ -10,29 +12,45 @@ RecommendSDK 让插件可以向 CoreBox 推荐引擎注册自定义推荐提供�
 ---
 code: |
   // index.js (Prelude 脚本)
-  const dispose = recommend.registerProvider({
-    id: 'my-plugin-weather',
-    name: '天气推荐',
+  module.exports = {
+    async onInit() {
+      // registerProvider 返回 Promise，必须 await
+      const dispose = await recommend.registerProvider({
+        id: 'my-plugin-weather',
+        name: '天气推荐',
 
-    canProvide(context) {
-      // 只在早晨时段提供天气推荐
-      const hour = new Date().getHours()
-      return hour >= 6 && hour <= 10
-    },
+        canProvide(context) {
+          // 只在早晨时段提供；时段在 context.time.timeSlot
+          return context.time.timeSlot === 'morning'
+        },
 
-    getCandidates(context) {
-      return [
-        {
-          id: 'weather-today',
-          title: '今日天气',
-          subtitle: '查看今天的天气预报',
-          icon: { type: 'emoji', value: '🌤️' },
-          priority: 80,
-          action: 'show-weather'
+        getCandidates(context) {
+          return [
+            {
+              id: 'weather-today',
+              title: '今日天气',
+              subtitle: '查看今天的天气预报',
+              icon: { type: 'emoji', value: '🌤️' },
+              priority: 80,
+              action: 'show-weather',
+              data: { city: 'Shanghai' }
+            }
+          ]
+        },
+
+        // 必须存在。返回 false 或抛错表示动作失败，宿主不计次数；
+        // 返回 true 或 undefined 表示主操作已被接受，宿主记一次使用。
+        async onExecute(candidate) {
+          if (candidate.action !== 'show-weather') return false
+          const ok = await openWeatherPanel(candidate.data.city)
+          return ok
         }
-      ]
+      })
+
+      // 不再需要时释放 provider 与它保留的回调
+      // await dispose()
     }
-  })
+  }
 ---
 :::
 
@@ -46,12 +64,17 @@ code: |
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `provider.id` | `string` | 是 | 提供者唯一 ID |
+| `provider.id` | `string` | 是 | 提供者唯一 ID，同一插件内不可重复 |
 | `provider.name` | `string` | 是 | 提供者显示名称 |
-| `provider.canProvide` | `(context: ContextSignal) => boolean` | 是 | 判断当前上下文是否应提供推荐 |
-| `provider.getCandidates` | `(context: ContextSignal) => PluginRecommendCandidate[] \| Promise<...>` | 是 | 返回推荐候选项列表 |
+| `provider.canProvide` | `(context: ContextSignal) => boolean \| Promise<boolean>` | 是 | 判断当前上下文是否应提供推荐；与候选读取共享 200 ms 预算 |
+| `provider.getCandidates` | `(context: ContextSignal) => PluginRecommendCandidate[] \| Promise<PluginRecommendCandidate[]>` | 是 | 返回推荐候选项列表 |
+| `provider.onExecute` | `(candidate: PluginRecommendCandidate, args: IExecuteArgs) => boolean \| void \| Promise<boolean \| void>` | 是 | 执行某个候选项，见下节 |
 
-**返回值**：`() => void` — 取消注册函数。
+`onExecute` 是必填项。缺少它时 `registerProvider` 抛错，注册失败。原因是候选项对用户是可点击的，没有执行入口就是一张死卡片。
+
+**返回值**：`Promise<() => void | Promise<void>>` — 必须 `await`。解析得到的 disposer 调用后释放 provider 保留的回调并从注册表移除；disposer 本身也返回 Promise。
+
+**注意**：provider ID 在同一插件内不可重复使用。宿主按插件禁用/卸载会释放该插件注册的全部 provider，无需逐个注销。
 
 ### `recommend.unregisterProvider(providerId)`
 
@@ -60,7 +83,36 @@ code: |
 **参数**：
 - `providerId: string` — 提供者 ID
 
-**返回值**：`boolean` — 是否成功移除。
+**返回值**：`Promise<boolean>` — 必须 `await`。provider 被找到并移除时为 `true`。
+
+### `recommend.weights`
+
+宿主使用的行为与时间权重函数，与 Grid 排序用的是同一份实现。纯函数，只对传入参数计算，不请求宿主、不读取任何使用数据。
+
+| 成员 | 类型 | 说明 |
+| --- | --- | --- |
+| `behaviorScore(facts)` | `(facts: UsageBehaviorFacts) => number` | 自动行为分，范围 `0..80` |
+| `timeContribution(facts, now, nowMs?)` | `(facts: UsageBehaviorFacts, now: TimePattern, nowMs?: number) => number` | 时间偏好分，范围 `0..20`，证据不足时为 `0` |
+| `isFrequentEligible(facts)` | `(facts: UsageBehaviorFacts) => boolean` | 是否达到严格常用门槛 |
+| `pluginPriorityContribution(priority)` | `(priority: number \| undefined) => number` | 插件自报 `priority` 最多能加的分，上限 `5` |
+| `modelVersion` | `string` | 模型版本，当前为 `reco-model-2` |
+| `constants.timeContributionMax` | `number` | `timeContribution` 的上限，当前为 `20` |
+
+同样的实现也以独立导出 `recommendWeights` 提供，两者函数名与结果一致。
+
+隔离插件子进程的 `plugin.recommend.weights` 与 Prelude 的 `recommend.weights` 使用同一个模型工厂。模型在插件自己的运行环境中同步计算，并冻结公开函数和常量；不会远程读取其他来源的行为数据。
+
+## RecommendProvider
+
+provider 对象结构：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `id` | `string` | 是 | 提供者唯一 ID |
+| `name` | `string` | 是 | 显示名称 |
+| `canProvide` | `(context: ContextSignal) => boolean \| Promise<boolean>` | 是 | 当前上下文是否应提供推荐；宿主等待结论，与候选读取共享 200ms 预算 |
+| `getCandidates` | `(context: ContextSignal) => PluginRecommendCandidate[] \| Promise<...>` | 是 | 返回候选项列表 |
+| `onExecute` | `(candidate, args) => boolean \| void \| Promise<boolean \| void>` | 是 | 执行候选项 |
 
 ## PluginRecommendCandidate
 
@@ -68,13 +120,14 @@ code: |
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
-| `id` | `string` | 是 | 推荐项唯一 ID |
+| `id` | `string` | 是 | 推荐项唯一 ID，同一 provider 内不可重复 |
 | `title` | `string` | 是 | 显示标题 |
 | `subtitle` | `string` | 否 | 副标题 / 描述 |
-| `icon` | `{ type: string; value: string }` | 否 | 图标配置（默认 `💡`） |
-| `priority` | `number` | 否 | 优先级 0-100，越高越靠前（默认 `50`） |
-| `action` | `string` | 是 | 执行回调标识，传回插件用于区分动作 |
-| `data` | `Record<string, unknown>` | 否 | 附加数据，会在 TuffItem.meta.pluginRecommend.data 中透传 |
+| `icon` | `{ type: string; value: string }` | 否 | 图标配置，缺省为灯泡类图标；`type` 支持 `emoji`、`url`、`file`、`class`、`builtin` |
+| `priority` | `number` | 否 | 自报优先级 `0-100`，最多加 5 分，见「行为与时间模型」 |
+| `action` | `string` | 是 | 动作标识，`onExecute` 里用它区分自己的动作 |
+| `data` | `Record<string, unknown>` | 否 | 附加数据，在 `TuffItem.meta.pluginRecommend.data` 中透传 |
+| `providerId` | `string` | 否 | 由宿主自动填充，插件不需要设置 |
 
 ## ContextSignal
 
@@ -82,10 +135,62 @@ code: |
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `timeOfDay` | `'morning' \| 'afternoon' \| 'evening' \| 'night'` | 当前时段 |
-| `dayOfWeek` | `number` | 星期几（0-6） |
-| `isWorkday` | `boolean` | 是否工作日 |
-| `clipboard` | `{ content: string; meta: { isUrl: boolean; isPath: boolean; isCode: boolean } }` | 剪贴板内容及元信息 |
+| `time` | `TimePattern` | 当前时间，见下 |
+| `clipboard` | `{ type, content, timestamp, contentType?, meta? }` | 剪贴板内容。`content` 是隐私摘要，不是原文 |
+| `selection` | 同 `clipboard` | 最近一次文本选择，隐私等级与剪贴板相同 |
+| `foregroundApp` | `{ bundleId: string; name: string }` | 前台应用 |
+| `systemState` | `{ isOnline, networkType?, batteryLevel?, ... }` | 系统状态 |
+
+`TimePattern` 字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `hourOfDay` | `number` | 小时，`0-23` |
+| `dayOfWeek` | `number` | 星期几，`0-6`，`0` 是周日 |
+| `isWorkingHours` | `boolean` | 是否工作时间（工作日 `9-18`） |
+| `timeSlot` | `'morning' \| 'afternoon' \| 'evening' \| 'night'` | 时段 |
+
+`clipboard` 与 `selection` 的 `content` 是哈希后的值，只看形状用 `contentType`、`meta.fileType`、`meta.isUrl` 等字段，不要把它当原文。
+
+## 行为与时间模型
+
+自动排序分统一落在 `0..100`：行为分 `0..80`，时间分 `0..20`，最近执行加成为一族内的独立项，最多 10 分；三项之和封顶 100。模型版本为 `reco-model-2`。
+
+| 项 | 规则 |
+| --- | --- |
+| `behaviorScore` | 由真实、带日期的执行记录算出，`0..80`。近期、持续和跨日一致三项各自饱和，历史再长也不会永久压过新习惯 |
+| `timeContribution` | `0..20`。近 30 天至少 10 次有效执行、且覆盖至少 3 个自然日才可能加分；不足门槛时为 `0`。达到门槛后仍随证据量和最近一次执行的年龄衰减 |
+| 最近执行加成 | 最多 `10` 分，按小时以 `exp(-0.1 * 小时数)` 衰减。它只承认有可靠事件日期的执行；单独一项最近使用远达不到 100 分，必须有持续使用积累才能把自动分推高 |
+| `pluginPriorityContribution` | 自报 `priority` 最多加 5 分，只能影响插件自己的候选项，不能取得常用资格 |
+| `isFrequentEligible` | 近 30 天至少 5 次有效执行、且覆盖至少 3 个自然日 |
+
+`UsageBehaviorFacts` 是这些函数唯一的输入形状，每项都来自真实执行记录：累计次数、近 30 天与近 7 天次数、近 30 天活跃天数、最近一次执行时间、按发生日衰减的执行分，以及 30 天内的时段分布。没有证据就传 0，不要推算。
+
+暴露次数、取消次数和最近搜索时间不属于行为事实，也不会被这几个函数使用。
+
+## 执行与计数
+
+宿主在收集 `getCandidates()` 结果时保存一份快照。用户触发候选项时，宿主用快照里的候选项调用 `onExecute(candidate, args)`，不会把渲染层传来的值交给插件，所以 provider 只会作用于自己产出的 `action` 和 `data`。
+
+`args` 是 `IExecuteArgs`：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `item` | `TuffItem` | 被执行的条目 |
+| `searchResult` | `TuffSearchResult \| undefined` | 来源搜索结果，直接触发时没有 |
+| `actionId` | `string \| undefined` | 次要动作标识 |
+| `eventId` | `string \| undefined` | 这次用户动作的标识 |
+
+`onExecute` 的返回值决定是否计数：
+
+| 返回值 | 结果 |
+| --- | --- |
+| `false` | 动作失败，宿主不计数 |
+| 抛出错误 | 动作失败，宿主不计数 |
+| `true` | 主操作已被接受，宿主记一次使用 |
+| `undefined`（或解析为 `undefined`） | 主操作已被接受，宿主记一次使用 |
+
+同一次用户动作只会计一次。重试或重复通知沿用同一个 `eventId`，宿主的写入按 `eventId` 去重，不会重复累计。
 
 ## 完整示例
 
@@ -95,46 +200,64 @@ code: |
   // index.js
   let weatherData = null
 
-  // 注册推荐提供者
-  const disposeProvider = recommend.registerProvider({
-    id: 'smart-weather',
-    name: '智能天气',
+  module.exports = {
+    async onInit() {
+      const disposeProvider = await recommend.registerProvider({
+        id: 'smart-weather',
+        name: '智能天气',
 
-    canProvide(context) {
-      return context.timeOfDay === 'morning' && weatherData !== null
+        canProvide(context) {
+          return context.time.timeSlot === 'morning' && weatherData !== null
+        },
+
+        async getCandidates(context) {
+          const items = [{
+            id: 'weather-forecast',
+            title: `今日 ${weatherData.temp}°C ${weatherData.condition}`,
+            subtitle: '点击查看详情',
+            icon: { type: 'emoji', value: '🌡️' },
+            priority: 85,
+            action: 'open-weather-detail',
+            data: { city: weatherData.city }
+          }]
+
+          if (weatherData.rain) {
+            items.push({
+              id: 'weather-rain-alert',
+              title: '今日有雨，记得带伞',
+              subtitle: `降雨概率 ${weatherData.rainChance}%`,
+              icon: { type: 'emoji', value: '🌧️' },
+              priority: 90,
+              action: 'rain-detail',
+              data: { rainChance: weatherData.rainChance }
+            })
+          }
+
+          return items
+        },
+
+        async onExecute(candidate) {
+          if (candidate.action === 'open-weather-detail') {
+            return await openDetailPanel(candidate.data.city)
+          }
+          if (candidate.action === 'rain-detail') {
+            return await openRainPanel(candidate.data.rainChance)
+          }
+          return false
+        }
+      })
+
+      // 插件内部状态变化时可以动态释放
+      globalThis.__disposeWeatherProvider = disposeProvider
     },
 
-    async getCandidates(context) {
-      const items = [{
-        id: 'weather-forecast',
-        title: `今日 ${weatherData.temp}°C ${weatherData.condition}`,
-        subtitle: '点击查看详情',
-        icon: { type: 'emoji', value: '🌡️' },
-        priority: 85,
-        action: 'open-weather-detail',
-        data: { city: weatherData.city }
-      }]
+    onDestroy() {
+      globalThis.__disposeWeatherProvider?.()
+      globalThis.__disposeWeatherProvider = null
+    },
 
-      if (weatherData.rain) {
-        items.push({
-          id: 'weather-rain-alert',
-          title: '今日有雨，记得带伞',
-          subtitle: `降雨概率 ${weatherData.rainChance}%`,
-          icon: { type: 'emoji', value: '🌧️' },
-          priority: 90,
-          action: 'rain-detail',
-          data: { rainChance: weatherData.rainChance }
-        })
-      }
-
-      return items
-    }
-  })
-
-  // 处理推荐项的点击回调
-  module.exports = {
     onFeatureTriggered(featureId, query, feature) {
-      // 正常的 feature 触发逻辑
+      // 普通的 feature 触发逻辑
     }
   }
 ---
@@ -142,14 +265,17 @@ code: |
 
 ## 技术说明
 
-- **主进程本地调用**：Provider 的 `canProvide()` 和 `getCandidates()` 在主进程中直接执行，不经过 IPC 序列化。
-- **超时保护**：单个 provider 的 `getCandidates()` 最多执行 200ms，超时自动跳过。
-- **自动清理**：插件禁用/卸载时，其注册的所有 provider 会被自动清理。
-- **评分机制**：候选项的 `priority`（0-100）直接映射为推荐分数，与频率、趋势等内置维度统一排序。
+- **隔离宿主调用**：Prelude 的 `recommend` 和 `plugin.recommend` 都使用租户绑定的宿主能力。宿主通过受控回调句柄调用子进程的 `canProvide()`、`getCandidates()` 和 `onExecute()`；插件不能指定其他插件的 owner 或执行回调。
+- **超时保护**：每个 provider 的资格判断和候选读取共享 200 ms 预算。超时或拒绝只跳过该 provider；provider 之间并发执行。
+- **数量上限**：单个 provider 每轮最多 5 个候选项，所有 provider 合计最多 15 个，超出部分被裁掉。
+- **自动清理**：插件禁用或卸载时，它注册的所有 provider 会被清理，保留的回调同时释放。
+- **执行来源可信**：宿主只用自己保存的候选项快照执行，渲染层传来的 `data` 不会进入 `onExecute`。
 
 ## 最佳实践
 
-1. **`canProvide` 要轻量** — 每次打开 CoreBox 都会调用，避免异步或重计算。
-2. **合理设置 priority** — 60-80 适合常规推荐，80+ 适合高置信度（如剪贴板内容关联）。
-3. **返回 dispose 函数** — 在插件内部状态变化时可以动态注册/注销。
-4. **候选项数量控制** — 单个 provider 推荐返回 1-5 个候选项，过多会被排序裁剪。
+1. **`canProvide` 要轻量**：支持异步，但资格判断和候选读取共用 200 ms 预算，避免重计算或等待慢网络。
+2. **`onExecute` 必须真实执行** — 返回 `true` 表示主操作已被接受，不要为了「看起来成功」而无条件返回 `true`。
+3. **用 `action` 和 `data` 区分自己的动作** — `onExecute` 每次只会收到本 provider 产出的候选项。
+4. **priority 只是排序微调** — 上限 5 分。要获得常用资格和更高排名，靠用户在真实使用中积累行为证据。
+5. **候选项数量控制** — 单个 provider 返回 1-5 个候选项，过多会被排序裁剪。
+6. **释放资源** — 用 `await registerProvider(...)` 返回的 disposer，或在 `onDestroy` 中注销 provider。

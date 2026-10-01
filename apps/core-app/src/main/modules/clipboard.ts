@@ -1,4 +1,5 @@
 import type { AppSetting, MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { TuffItem } from '@talex-touch/utils'
 import type {
   ClipboardActionResult,
   ClipboardAnnotateRequest,
@@ -38,6 +39,10 @@ import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../db/db-write-scheduler'
 import { isStartupDegradeActive } from '../db/startup-degrade'
 import { clipboardHistory } from '../db/schema'
+import {
+  recordAcceptedExecute,
+  resolveExecuteEventId
+} from './box-tool/search-engine/execute-recorder'
 import { APP_TASK_GATE_STARTUP_WAIT_MS, appTaskGate } from '../service/app-task-gate'
 import { normalizeRenderableSource } from '../utils/local-renderable-assets'
 import { createLogger, type LogOptions } from '../utils/logger'
@@ -1343,7 +1348,50 @@ export class ClipboardModule extends BaseModule {
     request: ClipboardApplyRequest,
     context: HandlerContext
   ): Promise<ClipboardActionResult> {
-    return await this.autopasteAutomation.handleApplyRequest(request, context)
+    const result = await this.autopasteAutomation.handleApplyRequest(request, context)
+    // The item write to the clipboard/system succeeded: that is a real use of the history record.
+    // Ordinary capture after this write is a clipboard change, not an apply, so it cannot count
+    // twice; a failed apply leaves the count untouched.
+    if (result.success) {
+      await this.recordClipboardHistoryUse(request.id, request.eventId)
+    }
+    return result
+  }
+
+  /**
+   * Records one accepted use of a clipboard-history record.
+   *
+   * The item is built inline rather than looked up from the row: the only thing the recorder needs
+   * is the identity, and rebuilding the row to count it would be a read for a write. The statistics
+   * key (`clipboard-history:<record id>`) is the bare numeric id the recommendation source rebuilds
+   * candidates under (`Number.parseInt(itemIds[i])`), while the rendered id keeps the
+   * `clipboard-` prefix, so that key is carried in `_originalItemId` — the same field the rebuilder
+   * stamps — and the display row and its count share one row. Failure is logged, never surfaced:
+   * the paste already happened.
+   */
+  private async recordClipboardHistoryUse(recordIdValue: number, eventId?: string): Promise<void> {
+    if (!Number.isFinite(recordIdValue)) return
+    const item: TuffItem = {
+      id: `clipboard-${recordIdValue}`,
+      kind: 'history',
+      source: { id: 'clipboard-history', type: 'history', name: 'Clipboard History' },
+      render: { mode: 'default', basic: { title: '' } },
+      actions: [],
+      meta: {
+        _originalSourceId: 'clipboard-history',
+        _originalItemId: String(recordIdValue)
+      } as TuffItem['meta']
+    }
+    try {
+      await recordAcceptedExecute({
+        item,
+        sessionId: null,
+        entryPoint: 'core-box',
+        eventId: resolveExecuteEventId(eventId)
+      })
+    } catch (error) {
+      clipboardLog.warn('Failed to record clipboard history usage', { error })
+    }
   }
 
   private async handleCopyAndPasteRequest(

@@ -11,7 +11,7 @@ verified: true
 
 ## Usage
 
-Give the splitter a real width and height through its parent. The component fills the available box and writes the current ratio into CSS grid variables.
+Give the splitter a real width and height through its parent. Its compact 6px separator has a slim grip; the two panes share the remaining space, so their ratio never adds separator-width overflow.
 
 ::::TuffDemoWrapper{demo="SplitterSplitterDemo" code-lang="vue"}
 ---
@@ -56,7 +56,7 @@ code: |
 | `min` | `number` | `0.1` | Minimum emitted ratio during pointer or keyboard resizing. |
 | `max` | `number` | `0.9` | Maximum emitted ratio during pointer or keyboard resizing. |
 | `disabled` | `boolean` | `false` | Disables pointer and keyboard resizing. If enabled while dragging, it ends the active drag. |
-| `barSize` | `number` | `10` | Separator track size in pixels. Runtime floor is `6px`. |
+| `barSize` | `number` | `6` | Separator track size in pixels. Runtime floor is `6px`; the visible grip is 2px thick. |
 | `snap` | `number` | `0` | Optional ratio step. `0` disables snapping; positive values snap emitted ratios to the nearest step. |
 
 ### Slots

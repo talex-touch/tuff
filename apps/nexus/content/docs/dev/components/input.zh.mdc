@@ -234,6 +234,21 @@ code: |
 ---
 :::
 
+## 从 FlatInput 迁移
+
+旧组件 `FlatInput` / `TxFlatInput` 已下线，其全部用法由 `TxInput` 承接。属性一一对应：
+
+| FlatInput | TxInput |
+|-----------|---------|
+| `area` | `type="textarea"` |
+| `password` | `type="password"` |
+| `icon="i-…"` | `prefix-icon="i-…"` |
+| 默认插槽（前缀内容） | `#prefix` 插槽 |
+| `disabled` / `readonly` | `disabled` / `readonly` |
+| `nonWin` | 移除——不再保留 Windows 下划线视觉 |
+
+`update:modelValue` 契约不变；`focus` / `blur` 现在来自原生输入元素。`FlatInput` 没有 `clear` / `suffixIcon` / `rows` 等属性，补齐之后调用方不必再手写前缀标记。
+
 ## 技术实现
 
 - **值契约：** `type="number"` 在非空输入时发出 `Number(value)`，清空时保留 `''`，因此持久化层应先做 schema 归一化。

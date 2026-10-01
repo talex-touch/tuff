@@ -1,6 +1,7 @@
 import type {
   IGatherController,
   IProviderActivate,
+  IExecuteOutcome,
   ISearchEngine,
   ISearchProvider,
   TalexTouch,
@@ -13,6 +14,7 @@ import type { DbUtils } from '../../../db/utils'
 import type { ProviderContext } from './types'
 import type { StreamContext } from '@talex-touch/utils/transport/main'
 import type { CoreBoxSearchIndexCommitPayload } from '@talex-touch/utils/transport/events/types'
+import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { TuffSearchResultBuilder, type TuffItem } from '@talex-touch/utils'
@@ -36,7 +38,7 @@ import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { getSentryService } from '../../sentry'
 import { OnboardingGateError, onboardingGate } from '../../storage'
-import { appProvider, setAppExecutionRecorder } from '../addon/apps/app-provider'
+import { appProvider } from '../addon/apps/app-provider'
 import { conversationProvider } from '../addon/conversations/conversation-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { fileProvider } from '../addon/files/file-provider'
@@ -51,6 +53,7 @@ import { appDestinationProvider } from '../addon/system/app-destination-provider
 import { systemActionsProvider } from '../addon/system/system-actions-provider'
 import { contextActionsProvider } from '../addon/context-actions/context-actions-provider'
 import { windowsShellFileProvider } from '../addon/system/windows-shell-file-provider'
+import { getCoreBoxWindow } from '../core-box/window'
 import { indexingRuntime, type IndexingRuntime } from './indexing-runtime'
 import { registerCoreIndexedSources } from './indexing-runtime-sources'
 import { SearchIndexStoreAdapter } from './indexing-store-adapter'
@@ -84,6 +87,9 @@ import { SearchProviderRegistry } from './search-provider-registry'
 import { SearchQueryOrchestrator } from './search-query-orchestrator'
 import { ProviderHealthService } from './provider-health-service'
 import { SearchUsageService } from './search-usage-service'
+import { setExecuteRecorder } from './execute-recorder'
+import type { UsageEntryPoint } from './usage-entry-point'
+import { resolveUsageIdentity } from './usage-identity'
 import {
   buildProviderSummary,
   buildProviderTelemetry,
@@ -233,6 +239,7 @@ export class SearchEngineCore
   >()
   private indexCommitUnsubscribe: (() => void) | null = null
 
+  private usageChangedUnsubscribe: (() => void) | null = null
   private touchApp: TouchApp | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private startupServicesStarted = false
@@ -945,12 +952,6 @@ export class SearchEngineCore
         const recallItems = fileFilterService.filterSearchItems(recallCandidates)
         if (recallItems.length === 0) return
         if (signal.aborted) return
-        this._recordSearchResults(sessionId, [...baseItems, ...recallItems]).catch((error) => {
-          searchEngineLog.debug('Failed to record semantic recall results', {
-            error,
-            meta: { sessionId }
-          })
-        })
         sendUpdateToFrontend(recallItems)
       } catch (error) {
         searchEngineLog.debug('Deferred semantic recall skipped', {
@@ -1143,6 +1144,10 @@ export class SearchEngineCore
 
       if (this.recommendationEngine) {
         try {
+          // Accepted executes may still be in flight (a provider counted one and returned): settle
+          // them before reading, so the first grid after a use reflects the committed row rather
+          // than the database as it was before the action.
+          await this.searchUsageService.flush()
           const recommendationResult = await this.recommendationEngine.recommend({ limit: 10 })
           const recommendationItems = fileFilterService.filterSearchItems(
             recommendationResult.items
@@ -1479,9 +1484,6 @@ export class SearchEngineCore
                   stageDurations: { ...pipelineDurations }
                 })
 
-                this._recordSearchResults(sessionId, sortedItems).catch((error) => {
-                  searchEngineLog.error('Failed to record search results', { error })
-                })
                 this.scheduleDeferredSemanticRecall(
                   sessionId,
                   query,
@@ -1630,10 +1632,6 @@ export class SearchEngineCore
               stageDurations: { ...pipelineDurations }
             })
 
-            // 异步记录搜索结果统计（不阻塞返回）
-            this._recordSearchResults(sessionId, sortedItems).catch((error) => {
-              searchEngineLog.error('Failed to record search results', { error })
-            })
             this.logSearchTrace({
               event: 'first.result',
               sessionId,
@@ -1676,14 +1674,6 @@ export class SearchEngineCore
     })
   }
 
-  private _getItemId(item: TuffItem): string {
-    if (!item.id) {
-      searchEngineLog.error('Item is missing a required `id` for usage tracking.', { error: item })
-      throw new Error('Item is missing a required `id` for usage tracking.')
-    }
-    return item.id
-  }
-
   private async _recordSearchUsage(sessionId: string, query: TuffQuery): Promise<void> {
     await this.searchUsageService.recordSearch(sessionId, query)
   }
@@ -1698,10 +1688,6 @@ export class SearchEngineCore
 
   private invalidatePinnedCache(): void {
     this.searchUsageService.invalidatePinnedCache()
-  }
-
-  private async _recordSearchResults(_sessionId: string, items: TuffItem[]): Promise<void> {
-    await this.searchUsageService.recordDisplayedResults(items)
   }
 
   /**
@@ -1840,28 +1826,45 @@ export class SearchEngineCore
   }
 
   /**
+   * Counts one accepted major action, whichever entry asked for it.
+   *
+   * The identity is resolved the same way here for every caller (registry aliases plus the
+   * rebuilder's `_original*` fields), so a rebuilt display id and its catalogue id share one row.
+   * `eventId` is the action's identity and the database dedupes on it: a retry or a duplicate
+   * notification reuses it and is counted once, while a genuinely new user action carries a new id.
+   *
+   * A statistics failure never fails the user's already-accepted action: the engine swallows it and
+   * the caller's operation stands.
+   *
    * @param previousApp Foreground app the caller captured before scheduling the launch this
-   * execute stands for. The recorder seam passes it in; omitting it makes this method capture it
-   * itself, which is only safe when no launch is racing the read.
+   * execute stands for. Omitting it makes this capture it itself, which is only safe when no launch
+   * is racing the read.
    */
   public async recordExecute(
-    sessionId: string,
+    sessionId: string | null,
     item: TuffItem,
-    previousApp?: string | null
+    eventId: string,
+    options?: { entryPoint?: UsageEntryPoint; previousApp?: string | null }
   ): Promise<void> {
-    const sessionTrace = this.sessionRegistry.getTrace(sessionId)
+    const trace = sessionId ? this.sessionRegistry.getTrace(sessionId) : undefined
     if (!this.dbUtils) {
-      this.queueExecuteTelemetry(sessionId, item, sessionTrace?.startedAt)
-      this.sessionRegistry.forgetTrace(sessionId)
+      if (sessionId) {
+        this.queueExecuteTelemetry(sessionId, item, trace?.startedAt)
+        this.sessionRegistry.forgetTrace(sessionId)
+      }
       return
     }
 
-    const itemId = this._getItemId(item)
+    const { sourceId, itemId } = resolveUsageIdentity(item)
 
     try {
-      await this.searchUsageService.recordExecute(sessionId, item, itemId, { previousApp })
+      await this.searchUsageService.recordExecute(sessionId, item, itemId, {
+        eventId,
+        entryPoint: options?.entryPoint,
+        previousApp: options?.previousApp
+      })
 
-      const queryText = sessionTrace?.query.text
+      const queryText = trace?.query.text
       if (queryText && this.queryCompletionService) {
         await this.queryCompletionService.recordCompletion(queryText, item)
       }
@@ -1869,15 +1872,17 @@ export class SearchEngineCore
       if (searchLogger.isEnabled()) {
         searchLogger.logSearchPhase(
           'Usage Recording',
-          `Recorded execute for item ${itemId} (source: ${item.source.id}) in session ${sessionId}`
+          `Recorded execute for item ${itemId} (source: ${sourceId}) in session ${sessionId ?? 'none'}`
         )
       }
     } catch (error) {
       searchEngineLog.error(`Failed to record execute usage for item ${itemId}`, { error })
     }
 
-    this.queueExecuteTelemetry(sessionId, item, sessionTrace?.startedAt)
-    this.sessionRegistry.forgetTrace(sessionId)
+    if (sessionId) {
+      this.queueExecuteTelemetry(sessionId, item, trace?.startedAt)
+      this.sessionRegistry.forgetTrace(sessionId)
+    }
   }
 
   private queueExecuteTelemetry(sessionId: string, item: TuffItem, startedAt?: number): void {
@@ -2254,13 +2259,55 @@ export class SearchEngineCore
         item: TuffItem
         searchResult?: TuffSearchResult
         actionId?: string
+        eventId?: string
       }
       const provider = instance.providerRegistry.get(item.source.id)
+
+      // One user action, one id: the entry minted it (renderer) or this default does. It is
+      // reused verbatim for any retry/duplicate of the same action, and the database dedupes on it,
+      // so a second notification cannot add a second count.
+      const eventId =
+        typeof payload.eventId === 'string' && payload.eventId ? payload.eventId : randomUUID()
+
+      // A source with no search provider (plugin recommendation candidates) still declares whether
+      // it can execute its own item. It is dispatched to instead of being dropped, and it reports
+      // acceptance; the count is recorded on the same path and under the same eventId as any other
+      // execute. The source never writes statistics itself.
       if (!provider || !provider.onExecute) {
+        const sourceEntry = recommendationSourceRegistry.resolve(item.source.id)
+        if (!sourceEntry?.execute) {
+          return instance.getActivationState()
+        }
+
+        let outcome: IExecuteOutcome
+        try {
+          outcome = await sourceEntry.execute({ item, searchResult, actionId, eventId })
+        } catch (error) {
+          searchEngineLog.warn('Recommendation source execute failed', {
+            error,
+            meta: { sourceId: item.source.id, itemId: item.id }
+          })
+          return instance.getActivationState()
+        }
+
+        if (outcome.accepted) {
+          await instance.recordExecute(searchResult?.sessionId ?? null, item, eventId, {
+            entryPoint: 'recommendation'
+          })
+        }
+
+        if (outcome.activation) {
+          instance.activateProviders([outcome.activation])
+          if (!hasConcreteActivationFeature(outcome.activation)) {
+            const query: TuffQuery = { text: '' }
+            await instance.search(query)
+          }
+        }
+
         return instance.getActivationState()
       }
 
-      const activationResult = await provider.onExecute({ item, searchResult, actionId })
+      const activationResult = await provider.onExecute({ item, searchResult, actionId, eventId })
 
       if (activationResult) {
         let activation: IProviderActivate
@@ -2295,6 +2342,9 @@ export class SearchEngineCore
           limit: data?.limit || 10,
           forceRefresh: data?.forceRefresh || false
         }
+        // Same barrier as the empty-query path: settle accepted-but-uncommitted executes so this
+        // read cannot serve a pre-execute snapshot.
+        await instance.searchUsageService.flush()
         const result = await instance.recommendationEngine.recommend(options)
 
         return {
@@ -2329,11 +2379,65 @@ export class SearchEngineCore
 
     transport.on(CoreBoxEvents.recommendation.aggregateTimeStats, handleAggregateTimeStats)
 
+    // Visibility is the renderer telling us what became visible in a native-window session; a
+    // malformed report (missing session or items) is dropped rather than thrown, so one buggy
+    // renderer cannot take the transport handler down.
     transport.on(CoreBoxEvents.recommendation.reportExposure, async (data) => {
-      recommendationExposureService.recordExposure({
-        itemKeys: data?.itemKeys ?? [],
-        surface: data?.surface
+      const sessionId = typeof data?.sessionId === 'string' ? data.sessionId : ''
+      const items = Array.isArray(data?.items) ? data.items : []
+      if (!sessionId || items.length === 0) return
+
+      const visible = items.map((entry) => ({
+        sourceId: entry.sourceId,
+        itemId: entry.itemId,
+        sourceType: entry.sourceType
+      }))
+      // Display counts cover every really-visible item, pinned included; those are still items the
+      // user saw. Hit-rate is recommendation quality and excludes fixed entries.
+      void instance.searchUsageService.recordVisibleResults(visible, sessionId).catch((error) => {
+        searchEngineLog.warn('Failed to record visible results', { error })
       })
+      if (data?.kind === 'recommendation') {
+        recommendationExposureService.recordExposure({
+          sessionId,
+          itemKeys: items
+            .filter((entry) => !entry.pinned)
+            .map((entry) => `${entry.sourceId}:${entry.itemId}`),
+          surface: data?.surface
+        })
+      }
+    })
+
+    // A committed execute pushes the new row metadata to the visible list. Registered here so the
+    // engine owns both the subscription and its teardown; the listener only forwards.
+    instance.usageChangedUnsubscribe?.()
+    instance.usageChangedUnsubscribe = instance.searchUsageService.onExecuteAccepted((event) => {
+      if (!event.usageStats) {
+        // Pre-commit notification: the earliest moment the next recommendation cannot be served a
+        // pre-execution ranking. Dropping the generation here (not only after the commit) means a
+        // compute that started before this action is discarded before it publishes, so the first
+        // empty-query read after an execute reflects the accepted write rather than the prior grid.
+        instance.recommendationEngine?.invalidateCache()
+        return
+      }
+      try {
+        const payload = {
+          sourceId: event.sourceId,
+          itemId: event.itemId,
+          usageStats: event.usageStats
+        }
+        const transport = instance.getTransport()
+        transport.broadcast(CoreBoxEvents.item.usageChanged, payload)
+        const coreBoxWindow = getCoreBoxWindow()?.window
+        if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
+          transport.broadcastToWindow(coreBoxWindow.id, CoreBoxEvents.item.usageChanged, payload)
+        }
+      } catch (error) {
+        searchEngineLog.warn('Failed to broadcast usage change', {
+          error,
+          meta: { eventId: event.eventId }
+        })
+      }
     })
 
     transport.on(CoreBoxEvents.item.togglePin, async (data) => {
@@ -2493,6 +2597,8 @@ export class SearchEngineCore
       await this.providerRegistry.destroy()
       this.indexCommitUnsubscribe?.()
       this.indexCommitUnsubscribe = null
+      this.usageChangedUnsubscribe?.()
+      this.usageChangedUnsubscribe = null
       for (const [context, coalescer] of this.indexCommitStreams) {
         coalescer.dispose()
         if (!context.isCancelled()) {
@@ -2523,12 +2629,15 @@ export class SearchEngineCore
 
 const searchEngineCore = SearchEngineCore.getInstance()
 
-// app-provider used to import this module to report a launch, which closed a module-scope cycle
-// between the two (#712). The dependency is registered from this side instead, so app-provider
-// no longer needs to know search-core exists. Registered synchronously at module evaluation:
-// the recorder must run before the launch it precedes, not a microtask later.
-setAppExecutionRecorder((sessionId, item, previousApp) =>
-  searchEngineCore.recordExecute(sessionId, item, previousApp)
+// Providers under `addon/` report accepted major actions through this leaf seam instead of
+// importing search-core, which would close the module-scope cycle documented in
+// `execute-recorder.ts` (#712/#523). Registered synchronously at module evaluation so the writer
+// exists before any provider can publish.
+setExecuteRecorder((record) =>
+  searchEngineCore.recordExecute(record.sessionId ?? null, record.item, record.eventId, {
+    entryPoint: record.entryPoint,
+    previousApp: record.previousApp ?? null
+  })
 )
 
 export default searchEngineCore

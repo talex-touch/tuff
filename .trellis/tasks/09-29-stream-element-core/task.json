@@ -1,0 +1,30 @@
+{
+  "id": "stream-element-core",
+  "name": "stream-element-core",
+  "title": "TxStreamElement: markdown subset, delegation, citations, one clock, slots + hero showcase",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-29",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "stage",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-29-stream-element",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "等待 beta.55 发布验收，无实现阻塞。",
+    "evidence": "ea4815409 已集成 StreamElement 源码、组件测试及双语示例；CI 36807315835 的 workspace typecheck 通过。",
+    "nextAction": "beta.55 发布后复核结构化内容与插槽的验收状态并归档。"
+  }
+}

@@ -1,6 +1,6 @@
 import type { TuffQuery } from '@talex-touch/utils/core-box'
 import type { ISortMiddleware, TuffItem } from '../types'
-import { calculateFrequencyScore } from '../usage-utils'
+import { calculateSearchBehaviorScore } from '../usage-utils'
 
 const DEFAULT_KIND_BIAS: Record<string, number> = {
   app: 12,
@@ -57,6 +57,39 @@ const FILE_STEM_EXACT_MATCH_SCORE = 420
 const FILE_STEM_PREFIX_MATCH_SCORE = 250
 const FILE_STEM_SUBSTRING_MATCH_SCORE = 150
 const FILE_EXTENSION_ONLY_MATCH_SCORE = 40
+
+/**
+ * Path actions — open this folder in a terminal, reveal it in the file manager — outrank ordinary
+ * unpinned rows within the same arriving search batch.
+ *
+ * Only the built-in system provider can claim this band. Plugin metadata alone must not
+ * outrank normal file and application results.
+ *
+ * The band sits far above the largest real score (an exact app-token match is 6.2e6, and the whole
+ * ladder stays under 3e7) while still ordering the rows among themselves by the action's own ordinal:
+ * default terminal, then the other terminals, then the file manager. Emitting it as a real
+ * `scoring.final` preserves that order within each arriving batch. A late unpinned batch still
+ * appends below rows already on screen, regardless of score; this band cannot guarantee global
+ * first-row placement. Pin, which the caller applies as a partition above all scores, is untouched.
+ */
+const PATH_ACTION_SCORE_BASE = 1_000_000_000
+const PATH_ACTION_MAX_ORDINAL = 99
+const PATH_ACTION_ORDINAL_STEP = 1_000
+
+/**
+ * The ordinal the emitting provider assigned to this path action, or null when the item is not one.
+ *
+ * Read from meta rather than the id so a rebuilt item re-ranks exactly as it did when searched.
+ */
+function getPathActionScore(item: TuffItem): number | null {
+  if (item.source?.type !== 'system' || item.source.id !== 'system-actions-provider') return null
+  const pathAction = item.meta?.extension?.pathAction as { ordinal?: unknown } | undefined
+  const ordinal = Number(pathAction?.ordinal)
+  if (!Number.isFinite(ordinal)) return null
+
+  const clamped = Math.min(Math.max(Math.trunc(ordinal), 0), PATH_ACTION_MAX_ORDINAL)
+  return PATH_ACTION_SCORE_BASE + (PATH_ACTION_MAX_ORDINAL - clamped) * PATH_ACTION_ORDINAL_STEP
+}
 
 function isFileItem(item: TuffItem): boolean {
   return item.kind === 'file' || item.kind === 'folder' || item.source?.type === 'file'
@@ -356,6 +389,10 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
 }
 
 export function calculateSortScore(item: TuffItem, searchKey?: string): number {
+  // A path action carries its own ordinal and leads everything else; see PATH_ACTION_SCORE_BASE.
+  const pathActionScore = getPathActionScore(item)
+  if (pathActionScore !== null) return pathActionScore
+
   const matchScore = calculateMatchScore(item, searchKey)
   const kindBias = getKindBias(item)
   const appTitleIntentBonus = getAppTitleIntentBonus(item, searchKey)
@@ -365,23 +402,9 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
   // 使用增强的频率计算（从 meta.usageStats 读取）
   let frequency = item.scoring?.frequency || 0
 
-  // 如果存在使用统计元数据，使用带时间衰减的计算（含 cancel 惩罚）
+  // 行为分来自真实执行事实：曝光量与取消不再加成，时间衰减由日期构成 (#R3)。
   if (item.meta?.usageStats) {
-    const stats = item.meta.usageStats
-
-    const lastExecuted = stats.lastExecuted ? new Date(stats.lastExecuted) : null
-    const lastSearched = stats.lastSearched ? new Date(stats.lastSearched) : null
-    const lastCancelled = stats.lastCancelled ? new Date(stats.lastCancelled) : null
-
-    frequency = calculateFrequencyScore(
-      stats.executeCount,
-      stats.searchCount,
-      stats.cancelCount || 0,
-      lastExecuted,
-      lastSearched,
-      lastCancelled,
-      0.1
-    )
+    frequency = calculateSearchBehaviorScore(item.meta.usageStats)
   }
 
   if (isLowConfidenceFeatureRecall(item, searchKey)) {

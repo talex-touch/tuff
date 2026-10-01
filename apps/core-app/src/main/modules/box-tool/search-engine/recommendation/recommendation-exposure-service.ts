@@ -29,6 +29,7 @@ const EXPOSURE_MAX_KEYS_PER_REPORT = 100
 const DEFAULT_SURFACE = 'core-box'
 
 export interface ExposureReport {
+  sessionId: string
   /** Item identities in rendered order (`sourceId:itemId`) */
   itemKeys: string[]
   surface?: string
@@ -47,6 +48,15 @@ interface ExposedEntry {
   exposedAt: number
   /** Slice this id belonged to when it was rendered, if any. */
   tag?: string
+  sessionKey: string
+  day: number
+}
+
+interface ExposureSession {
+  startedAt: number
+  seen: Set<string>
+  impressions: Set<string>
+  clicks: Set<string>
 }
 
 /**
@@ -68,6 +78,7 @@ function readSliceTag(surface: string): string | null {
 export class RecommendationExposureService {
   private exposed = new Map<string, ExposedEntry>()
   private taggedKeys = new Map<string, string>()
+  private sessions = new Map<string, ExposureSession>()
 
   /**
    * Mark the ids the engine wants measured as their own slice (e.g. the newly
@@ -85,48 +96,43 @@ export class RecommendationExposureService {
     }
   }
 
-  /** Renderer reported a rendered recommendation list. */
+  /** A visible display session contributes one opportunity, not one per streamed callback. */
   recordExposure(report: ExposureReport): void {
-    const reported = report.itemKeys.filter((key) => typeof key === 'string' && key.length > 0)
-    if (reported.length === 0) return
-
-    // Truncated from the front: rank order is what the k buckets measure, so the entries worth
-    // keeping are the ones a grid showed first.
-    const itemKeys = reported.slice(0, EXPOSURE_MAX_KEYS_PER_REPORT)
-
+    if (!report.sessionId) return
+    const itemKeys = [
+      ...new Set(report.itemKeys.filter((key) => typeof key === 'string' && key.length > 0))
+    ].slice(0, EXPOSURE_MAX_KEYS_PER_REPORT)
+    if (itemKeys.length === 0) return
     const surface = report.surface || DEFAULT_SURFACE
     const now = Date.now()
-
-    const bestTaggedRank = new Map<string, number>()
-    itemKeys.forEach((key, rank) => {
+    const sessionKey = `${surface}\0${report.sessionId}`
+    let session = this.sessions.get(sessionKey)
+    if (!session) {
+      session = { startedAt: now, seen: new Set(), impressions: new Set(), clicks: new Set() }
+      this.sessions.set(sessionKey, session)
+    }
+    const day = toDayBucket(session.startedAt)
+    for (const [rank, key] of itemKeys.entries()) {
+      if (session.seen.has(key)) continue
+      session.seen.add(key)
       const tag = this.taggedKeys.get(key)
-      this.exposed.set(key, { rank, surface, exposedAt: now, tag })
-      if (tag !== undefined && rank < (bestTaggedRank.get(tag) ?? Number.MAX_SAFE_INTEGER)) {
-        bestTaggedRank.set(tag, rank)
+      this.exposed.set(key, { rank, surface, exposedAt: now, tag, sessionKey, day })
+      if (tag !== undefined) {
+        for (const k of EXPOSURE_K_BUCKETS) {
+          const bucket = `${tag}:${k}`
+          if (rank >= k || session.impressions.has(bucket)) continue
+          session.impressions.add(bucket)
+          void this.bumpCounters(day, `${surface}:${tag}`, k, { impressions: 1, clicks: 0 })
+        }
       }
-    })
-
-    // After inserting, not before: pruning first left the size limit applying only to whatever the
-    // *next* call happened to bring, so an oversized report was held in full until then.
-    this.pruneExposed(now)
-
-    const day = toDayBucket(now)
+    }
     for (const k of EXPOSURE_K_BUCKETS) {
-      // Every bucket gets the impression, including buckets wider than the
-      // list: a 3-item render is still an opportunity to "click within the top
-      // 10". Narrowing the denominator instead would let clicks outnumber
-      // impressions and push hit-rate@k above 1.
+      const bucket = `base:${k}`
+      if (session.impressions.has(bucket)) continue
+      session.impressions.add(bucket)
       void this.bumpCounters(day, surface, k, { impressions: 1, clicks: 0 })
     }
-
-    // A slice only gets an impression at k where it actually had an item to
-    // click: "@3" for the slice means "a tagged item was in the top 3".
-    for (const [tag, rank] of bestTaggedRank) {
-      for (const k of EXPOSURE_K_BUCKETS) {
-        if (rank >= k) continue
-        void this.bumpCounters(day, `${surface}:${tag}`, k, { impressions: 1, clicks: 0 })
-      }
-    }
+    this.pruneExposed(now)
   }
 
   /**
@@ -158,14 +164,20 @@ export class RecommendationExposureService {
     // must not inflate the rate.
     this.exposed.delete(key)
 
-    const day = toDayBucket(now)
+    const session = this.sessions.get(entry.sessionKey)
+    if (!session) return
     for (const k of EXPOSURE_K_BUCKETS) {
       if (entry.rank >= k) continue
-      void this.bumpCounters(day, entry.surface, k, { impressions: 0, clicks: 1 })
-      // The tag captured at render time, not the current one: the ranking may
-      // have moved on between the render and the click.
+      const bucket = `base:${k}`
+      if (!session.clicks.has(bucket)) {
+        session.clicks.add(bucket)
+        void this.bumpCounters(entry.day, entry.surface, k, { impressions: 0, clicks: 1 })
+      }
       if (entry.tag !== undefined) {
-        void this.bumpCounters(day, `${entry.surface}:${entry.tag}`, k, {
+        const tagBucket = `${entry.tag}:${k}`
+        if (session.clicks.has(tagBucket)) continue
+        session.clicks.add(tagBucket)
+        void this.bumpCounters(entry.day, `${entry.surface}:${entry.tag}`, k, {
           impressions: 0,
           clicks: 1
         })
@@ -223,9 +235,15 @@ export class RecommendationExposureService {
   reset(): void {
     this.exposed.clear()
     this.taggedKeys.clear()
+    this.sessions.clear()
   }
 
   private pruneExposed(now: number): void {
+    while (this.sessions.size > EXPOSURE_MAX_ENTRIES) {
+      const oldest = this.sessions.keys().next().value
+      if (oldest === undefined) break
+      this.sessions.delete(oldest)
+    }
     for (const [key, entry] of this.exposed) {
       if (now - entry.exposedAt >= EXPOSURE_TTL_MS) {
         this.exposed.delete(key)

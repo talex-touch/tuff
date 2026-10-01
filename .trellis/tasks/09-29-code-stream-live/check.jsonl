@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/09-29-stream-element/prd.md", "reason": "parent acceptance criteria and decisions to verify against"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "quality gates"}
+{"file": ".trellis/spec/frontend/bui-component-family.md", "reason": "TxCodeStream is a BUI port: tokens, mixins, hard rules"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "motion and token rules"}

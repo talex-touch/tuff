@@ -174,7 +174,24 @@ const LIMITS = {
   // of the text-transformer, text-morph or icon rules it reaches through style-deps. It slimmed
   // before asking, 5.7 -> 4.9 KiB: unscoped as TxChoiceCard is, and no `-webkit-` mask duplicate.
   // Same contract as every note above: actuals plus minimal headroom, growth from here fails.
-  fullCssBytes: 623 * 1024,
+  // 623 -> 626 on 2026-09-30: `stream-text` (TxStreamText and TxStreamCaret,
+  // .trellis/tasks/09-29-stream-text-foundation) ships its own stylesheet, 3.2 KiB (3231 B), all
+  // of it present verbatim in components.css. The full bundle measured 624.7 KiB with it and
+  // 621.5 without (the 09-28 effect ports had used 0.5 KiB of the headroom left above). Checked
+  // for the inlining this limit exists to catch: the sheet carries only `.tx-stream-text*` and
+  // `.tx-stream-caret*` rules and its own `tx-stream-*` keyframes, none of the inline-citation or
+  // liquid rules it reaches through style-deps. Same contract as every note above: actuals plus
+  // minimal headroom, growth from here fails.
+  // 626 -> 629 on 2026-09-30: `stream-element` (TxStreamElement, .trellis/tasks/09-29-stream-element-
+  // core) ships its own stylesheet, 2.4 KiB (2418 B), all of it present verbatim in components.css.
+  // The full bundle went 625.7 -> 628.0 KiB with it and nothing else; it grew by 2356 B because the
+  // bundler folds the one keyframes the sheet shares with its siblings. Checked for the inlining this
+  // limit exists to catch: the sheet carries only `.tx-stream-element*` rules and the
+  // `tx-stream-fade-blur` keyframes its blocks enter with, none of the stream-text, code-stream or
+  // stream-markdown rules it reaches through style-deps. It slimmed before asking, 2.7 -> 2.4 KiB:
+  // it no longer copies the word keyframes it never plays. Same contract as every note above:
+  // actuals plus minimal headroom, growth from here fails.
+  fullCssBytes: 629 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles

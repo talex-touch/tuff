@@ -447,11 +447,17 @@ describe('SystemActionsProvider file index actions', () => {
     vi.restoreAllMocks()
   })
 
-  it('indexes copied directories without probing them for a plugin manifest', async () => {
+  function actionItems(items: TuffItem[]): Record<string, string>[] {
+    return items
+      .map(getSystemAction)
+      .filter((action): action is { action?: string; path?: string } => Boolean(action))
+      .map((action) => ({ action: action.action ?? '', path: action.path ?? '' }))
+  }
+
+  it('indexes copied directories without treating them as dev plugins', async () => {
     const directoryPath = await fs.mkdtemp(path.join(os.tmpdir(), 'system-actions-directory-'))
     const { SystemActionsProvider } = await import('./system-actions-provider')
     const provider = new SystemActionsProvider()
-    const readFileSpy = vi.spyOn(fs, 'readFile')
 
     try {
       const result = await provider.onSearch(
@@ -467,11 +473,162 @@ describe('SystemActionsProvider file index actions', () => {
         new AbortController().signal
       )
 
-      expect(getSystemAction(expectFirstItem(result.items))).toEqual({
+      const actions = actionItems(result.items)
+      // A directory is offered "open here" and "reveal" rows and the index installer; it is never
+      // read as a plugin package.
+      expect(actions).toContainEqual({ action: 'file-index', path: directoryPath })
+      expect(actions).toContainEqual({ action: 'directory-reveal', path: directoryPath })
+      expect(actions.some((action) => action.action === 'dev-plugin')).toBe(false)
+    } finally {
+      await fs.rm(directoryPath, { recursive: true, force: true })
+    }
+  })
+
+  it('offers a plain file a reveal row but never a terminal row', async () => {
+    const directoryPath = await fs.mkdtemp(path.join(os.tmpdir(), 'system-actions-file-'))
+    const filePath = path.join(directoryPath, 'notes.md')
+    await fs.writeFile(filePath, 'notes', 'utf8')
+
+    try {
+      const { SystemActionsProvider } = await import('./system-actions-provider')
+      const provider = new SystemActionsProvider()
+      const result = await provider.onSearch(
+        {
+          text: '',
+          inputs: [{ type: TuffInputType.Files, content: JSON.stringify([filePath]) }]
+        },
+        new AbortController().signal
+      )
+
+      const actions = actionItems(result.items)
+      expect(actions).toContainEqual({ action: 'directory-reveal', path: filePath })
+      expect(actions).toContainEqual({ action: 'file-index', path: filePath })
+      // A file is not a working directory; claiming a terminal cwd for it would be a lie.
+      expect(actions.some((action) => action.action.startsWith('directory-terminal'))).toBe(false)
+    } finally {
+      await fs.rm(directoryPath, { recursive: true, force: true })
+    }
+  })
+
+  it('only the file-manager row leads the list; the index installer is left to rank normally', async () => {
+    const directoryPath = await fs.mkdtemp(path.join(os.tmpdir(), 'system-actions-rank-'))
+
+    try {
+      const { SystemActionsProvider } = await import('./system-actions-provider')
+      const provider = new SystemActionsProvider()
+      const result = await provider.onSearch(
+        {
+          text: '',
+          inputs: [{ type: TuffInputType.Files, content: JSON.stringify([directoryPath]) }]
+        },
+        new AbortController().signal
+      )
+
+      const marker = (action?: string): unknown =>
+        (
+          result.items.find((item) => getSystemAction(item)?.action === action)?.meta?.extension as
+            | {
+                pathAction?: unknown
+              }
+            | undefined
+        )?.pathAction
+
+      expect(marker('directory-reveal')).toBeTruthy()
+      expect(marker('file-index')).toBeUndefined()
+    } finally {
+      await fs.rm(directoryPath, { recursive: true, force: true })
+    }
+  })
+
+  it('carries a special-character path verbatim and rebuilds the same row from its id', async () => {
+    const parent = await fs.mkdtemp(path.join(os.tmpdir(), 'system-actions-special-'))
+    const directoryPath = path.join(parent, "a 'quoted' folder; $(echo pwned) & rm -rf ~")
+    await fs.mkdir(directoryPath)
+
+    try {
+      const { SystemActionsProvider } = await import('./system-actions-provider')
+      const provider = new SystemActionsProvider()
+      const result = await provider.onSearch(
+        {
+          text: '',
+          inputs: [{ type: TuffInputType.Files, content: JSON.stringify([directoryPath]) }]
+        },
+        new AbortController().signal
+      )
+
+      const indexItem = result.items.find((item) => getSystemAction(item)?.action === 'file-index')
+      expect(indexItem).toBeDefined()
+      expect(getSystemAction(indexItem as TuffItem)).toEqual({
         action: 'file-index',
         path: directoryPath
       })
-      expect(readFileSpy).not.toHaveBeenCalled()
+
+      const rebuilt = await provider.rebuildItem((indexItem as TuffItem).id)
+      expect(getSystemAction(rebuilt as TuffItem)).toEqual({
+        action: 'file-index',
+        path: directoryPath
+      })
+    } finally {
+      await fs.rm(parent, { recursive: true, force: true })
+    }
+  })
+
+  it('emits nothing for a copied path that does not exist', async () => {
+    const missing = path.join(os.tmpdir(), `system-actions-missing-${Date.now()}-${Math.random()}`)
+    const { SystemActionsProvider } = await import('./system-actions-provider')
+    const provider = new SystemActionsProvider()
+
+    const result = await provider.onSearch(
+      { text: '', inputs: [{ type: TuffInputType.Files, content: JSON.stringify([missing]) }] },
+      new AbortController().signal
+    )
+
+    expect(result.items).toEqual([])
+  })
+
+  it('does not resurrect a stored row for a folder that has since been deleted', async () => {
+    const directoryPath = await fs.mkdtemp(path.join(os.tmpdir(), 'system-actions-vanished-'))
+    await fs.rm(directoryPath, { recursive: true, force: true })
+    const { SystemActionsProvider } = await import('./system-actions-provider')
+    const provider = new SystemActionsProvider()
+
+    await expect(
+      provider.rebuildItem(`${provider.id}:directory-reveal:${directoryPath}`)
+    ).resolves.toBeNull()
+    await expect(
+      provider.rebuildItem(`${provider.id}:directory-terminal-default:${directoryPath}`)
+    ).resolves.toBeNull()
+  })
+
+  it('does not rebuild a terminal row onto a terminal that is no longer installed', async () => {
+    const directoryPath = await fs.mkdtemp(path.join(os.tmpdir(), 'system-actions-terminal-'))
+    try {
+      const { SystemActionsProvider } = await import('./system-actions-provider')
+      const provider = new SystemActionsProvider()
+
+      // The id names a terminal that is not in this machine's inventory; the row must vanish rather
+      // than silently launching whatever terminal happens to be the default now.
+      await expect(
+        provider.rebuildItem(
+          `${provider.id}:directory-terminal:definitely-not-installed:${directoryPath}`
+        )
+      ).resolves.toBeNull()
+
+      // A row for a terminal that IS installed still rebuilds for the same path.
+      const inventoryRow = (
+        await provider.onSearch(
+          {
+            text: '',
+            inputs: [{ type: TuffInputType.Files, content: JSON.stringify([directoryPath]) }]
+          },
+          new AbortController().signal
+        )
+      ).items.find((item) => getSystemAction(item)?.action === 'directory-terminal')
+      if (inventoryRow) {
+        await expect(provider.rebuildItem(inventoryRow.id)).resolves.toMatchObject({
+          id: inventoryRow.id
+        })
+      }
     } finally {
       await fs.rm(directoryPath, { recursive: true, force: true })
     }

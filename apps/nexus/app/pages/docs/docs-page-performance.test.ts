@@ -460,7 +460,6 @@ describe('docs page performance boundaries', () => {
 
     expect.soft(iconComposer).not.toContain('fonts.googleapis.com')
     expect.soft(iconComposer).not.toContain('Space Grotesk')
-    expect.soft(iconComposer).toContain('font-nexus-display')
 
     expect.soft(backToTop).not.toContain('<TxButton')
     expect.soft(backToTop).toContain('<button v-show="visible"')

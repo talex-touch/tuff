@@ -539,3 +539,32 @@ export function resolveAppDestinationQuery(value: string): AppDestinationDefinit
 
   return DESTINATION_BY_ALIAS.get(key) ?? null
 }
+
+/**
+ * The provider id every destination item is keyed by.
+ *
+ * The recommendation engine nominates the same doors as empty-state candidates, and a candidate is
+ * rebuilt and executed by whichever source claimed its id — so the id lives here once, shared by the
+ * provider and the engine, instead of as two literals that could drift apart silently.
+ */
+export const APP_DESTINATION_PROVIDER_ID = 'app-destination-provider'
+
+/** Item-id prefix for a destination door. `main-window` is the one id that predates it. */
+export const APP_DESTINATION_ITEM_ID_PREFIX = 'app-destination:'
+
+/**
+ * Item id per destination, derived from the catalog so an emit and a nomination cannot disagree.
+ *
+ * `main-window` keeps its bare id: it predates the prefix and the usage and pin rows already carry
+ * it that way, so renaming it would orphan the history recorded behind it.
+ */
+export const APP_DESTINATION_ITEM_IDS: Readonly<Record<AppDestinationId, string>> = Object.freeze(
+  Object.fromEntries(
+    APP_DESTINATIONS.map((definition) => [
+      definition.id,
+      definition.id === 'main-window'
+        ? definition.id
+        : `${APP_DESTINATION_ITEM_ID_PREFIX}${definition.id}`
+    ])
+  )
+) as Readonly<Record<AppDestinationId, string>>

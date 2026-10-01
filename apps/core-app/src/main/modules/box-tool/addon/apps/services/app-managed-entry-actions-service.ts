@@ -16,6 +16,7 @@ import {
   AppLaunchRecorder,
   resolvePreviousAppContext
 } from '../../../search-engine/app-launch-recorder'
+import { resolveExecuteEventId } from '../../../search-engine/execute-recorder'
 import { resolveManagedEntryItemId } from '../app-index-metadata'
 import { launchApp } from '../app-launcher'
 import { putAwayApplicationInFront } from '../app-hide-adapter'
@@ -56,7 +57,7 @@ export class AppManagedEntryActionsService {
 
   constructor(private readonly options: AppManagedEntryActionsServiceOptions) {
     this.usage = new AppUsageQueryService({ getDbUtils: options.getDbUtils })
-    this.launchRecorder = new AppLaunchRecorder({ getDbUtils: options.getDbUtils })
+    this.launchRecorder = new AppLaunchRecorder()
     this.shortcuts = new AppShortcutService({
       getDbUtils: options.getDbUtils,
       press: async (path) => {
@@ -199,7 +200,8 @@ export class AppManagedEntryActionsService {
    */
   public async launch(
     pathValue: string,
-    entryPoint: UsageEntryPoint
+    entryPoint: UsageEntryPoint,
+    eventId?: string
   ): Promise<AppIndexLaunchResult> {
     const target = normalizeOptionalString(pathValue)
     if (!target) return { success: false, reason: 'invalid-path' }
@@ -227,6 +229,9 @@ export class AppManagedEntryActionsService {
     await this.launchRecorder.record({
       itemId: this.itemId(entry),
       entryPoint,
+      // One press is one action: a caller-provided id is reused across a retry of that press, while
+      // the next press is a new action and counts again.
+      eventId: resolveExecuteEventId(eventId),
       previousApp: previous.prevApp ?? null
     })
 

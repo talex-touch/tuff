@@ -938,6 +938,12 @@ export interface TuffQuickAction {
  */
 export interface TuffMeta {
   /**
+   * Host-assigned statistical identity for a rebuilt display item.
+   */
+  _originalSourceId?: string
+  _originalItemId?: string
+
+  /**
    * Icon identifier used by renderer fallbacks.
    * @description Allows providers to pass through icon class names without building a full TuffIcon.
    */
@@ -1095,6 +1101,27 @@ export interface TuffMeta {
     lastSearched: string | null
     /** 最后取消时间（ISO 字符串） */
     lastCancelled?: string | null
+    /**
+     * 可靠执行事实（近 30/7 天、跨日日、按龄衰减、时间分布）。
+     *
+     * 只在存在可靠执行证据（已接纳的执行事件）时出现；缺失即“无证据”，消费者必须降级为累计口径，
+     * 不得用累计次数伪造近期行为（R9）。字段与 `UsageBehaviorFacts` 同名同义。
+     */
+    executeCount30?: number
+    executeCount7?: number
+    activeDays30?: number
+    activeDays7?: number
+    /** 最近一次可靠执行时间（epoch 毫秒），无则 null。 */
+    lastExecutedAt?: number | null
+    decayedExecuteScore30?: number
+    hourDistribution30?: number[]
+    dayOfWeekDistribution30?: number[]
+    timeSlotDistribution30?: {
+      morning: number
+      afternoon: number
+      evening: number
+      night: number
+    }
   }
 
   /**
@@ -1200,6 +1227,12 @@ export interface TuffMeta {
      * placeholder or a guess.
      */
     evidence?: RecommendationEvidence
+    /**
+     * Whether the dated behaviour crossed the strict frequent threshold (>=5 executions over
+     * >=3 distinct local days in the last 30 days). The grid admits a tile by this, never by the
+     * badge; absent means no evidence, which is not a habit.
+     */
+    frequentEligible?: boolean
   }
 
   /**
@@ -1563,6 +1596,21 @@ export interface IProviderActivate {
 }
 
 /**
+ * Result of executing an item through a recommendation source that has no search provider.
+ *
+ * A source reports the two facts separately on purpose: whether the user's major action was
+ * accepted* (the host counts it exactly once) and whether the source wants a *surface activated*.
+ * Collapsing them into one value is what let an activation that failed, or an activation that never
+ * happened, look like a successful use.
+ */
+export interface IExecuteOutcome {
+  /** `true` = the source accepted the major action; the host records one execution for it. */
+  accepted: boolean
+  /** Surface to activate, when the source produced one. `null`/absent = no activation. */
+  activation?: IProviderActivate | null
+}
+
+/**
  * Defines the interface for a sort middleware.
  * Each middleware receives an array of items and should return a sorted array.
  */
@@ -1589,6 +1637,13 @@ export interface IExecuteArgs {
   item: TuffItem
   searchResult?: TuffSearchResult
   actionId?: string
+  /**
+   * Identifier of this user action, minted once at the entry that received the trigger and reused
+   * verbatim for a retry or a duplicate notification of the same action. The host records usage
+   * under it and dedupes there, so a provider that re-reports the same action does not add a second
+   * count. A genuinely new user action carries a new id.
+   */
+  eventId?: string
 }
 
 export interface ISearchProvider<C> {

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { THUMBNAIL_ENCODER_VERSION, THUMBNAIL_STATUS_EXTENSION_KEY } from '../thumbnail-config'
 import { FileProviderAssetService } from './file-provider-asset-service'
 
 const ICON_PATH =
@@ -130,6 +131,168 @@ describe('FileProviderAssetService lazy icons', () => {
     await Promise.all(requests)
 
     expect(getFileIconPath).toHaveBeenCalledTimes(64)
+  })
+
+  it('stamps generated thumbnails with the current encoder version so they stop being candidates', async () => {
+    const { service, deps, addFileExtensions } = createHarness()
+    deps.thumbnailWorker.generate.mockResolvedValueOnce({
+      status: 'generated',
+      kind: 'image',
+      path: '/cache/file-thumbnails/cover.png',
+      mimeType: 'image/png',
+      sizeBytes: 900,
+      durationMs: 4
+    })
+
+    await service.ensureThumbnail(11, '/docs/cover.png', {
+      mtime: 1_700_000_000_000,
+      size: 42,
+      extension: '.png'
+    } as never)
+
+    expect(addFileExtensions).toHaveBeenCalledTimes(1)
+    const [rows] = addFileExtensions.mock.calls[0]!
+    expect(rows).toContainEqual({
+      fileId: 11,
+      key: 'thumbnail',
+      value: '/cache/file-thumbnails/cover.png'
+    })
+    const statusRow = rows.find((row) => row.key === THUMBNAIL_STATUS_EXTENSION_KEY)
+    // Without the current version the deferred pass would re-select this row forever.
+    expect(JSON.parse(statusRow!.value)).toMatchObject({
+      status: 'generated',
+      v: THUMBNAIL_ENCODER_VERSION
+    })
+  })
+
+  it('does not regenerate a thumbnail whose current-version status still matches the file', async () => {
+    const { service, deps } = createHarness()
+    const file = { mtime: 1_700_000_000_000, size: 42, extension: '.png', id: 11 } as never
+
+    await service.ensureThumbnail(11, '/docs/cover.png', file, {
+      [THUMBNAIL_STATUS_EXTENSION_KEY]: JSON.stringify({
+        status: 'failed',
+        reason: 'ffmpeg-unavailable',
+        mtime: 1_700_000_000_000,
+        size: 42,
+        v: THUMBNAIL_ENCODER_VERSION,
+        at: Date.now()
+      })
+    })
+
+    expect(deps.thumbnailWorker.generate).not.toHaveBeenCalled()
+  })
+
+  it('regenerates when the current-version status describes a file that changed since', async () => {
+    const { service, deps } = createHarness()
+    const file = { mtime: 1_700_000_000_000, size: 42, extension: '.png', id: 11 } as never
+    deps.thumbnailWorker.generate.mockResolvedValueOnce({
+      status: 'failed',
+      kind: 'image',
+      reason: 'thumbnail-generation-failed',
+      durationMs: 2
+    })
+
+    await service.ensureThumbnail(11, '/docs/cover.png', file, {
+      [THUMBNAIL_STATUS_EXTENSION_KEY]: JSON.stringify({
+        status: 'failed',
+        reason: 'thumbnail-generation-failed',
+        // Same encoder version, but stamped before the file was last written.
+        mtime: 1_699_999_999_000,
+        size: 42,
+        v: THUMBNAIL_ENCODER_VERSION,
+        at: Date.now()
+      })
+    })
+
+    expect(deps.thumbnailWorker.generate).toHaveBeenCalledOnce()
+  })
+
+  it('regenerates a stored thumbnail whose status was written before versioning', async () => {
+    const { service, deps } = createHarness()
+    const file = { mtime: 1_700_000_000_000, size: 42, extension: '.png', id: 11 } as never
+    deps.thumbnailWorker.generate.mockResolvedValueOnce({
+      status: 'failed',
+      kind: 'image',
+      reason: 'thumbnail-generation-failed',
+      durationMs: 2
+    })
+
+    await service.ensureThumbnail(11, '/docs/cover.png', file, {
+      // A successful generation from the previous encoder: no status at all, so the stored JPEG
+      // would otherwise look fresh forever and never be replaced by the PNG encoder.
+      thumbnail: '/cache/file-thumbnails/cover.jpg'
+    })
+
+    expect(deps.thumbnailWorker.generate).toHaveBeenCalledOnce()
+  })
+
+  it('regenerates a thumbnail whose status matches the file but predates the encoder', async () => {
+    const { service, deps } = createHarness()
+    const file = { mtime: 1_700_000_000_000, size: 42, extension: '.png', id: 11 } as never
+    deps.thumbnailWorker.generate.mockResolvedValueOnce({
+      status: 'failed',
+      kind: 'image',
+      reason: 'thumbnail-generation-failed',
+      durationMs: 2
+    })
+
+    await service.ensureThumbnail(11, '/docs/cover.png', file, {
+      [THUMBNAIL_STATUS_EXTENSION_KEY]: JSON.stringify({
+        status: 'failed',
+        reason: 'thumbnail-generation-failed',
+        // Same file, same metadata — only the encoder that wrote this is older, and its bytes are
+        // the opaque-silhouette JPEG the current one replaces.
+        mtime: 1_700_000_000_000,
+        size: 42,
+        v: THUMBNAIL_ENCODER_VERSION - 1,
+        at: Date.now()
+      })
+    })
+
+    expect(deps.thumbnailWorker.generate).toHaveBeenCalledOnce()
+  })
+
+  it('persists failed status with the current encoder version', async () => {
+    const { service, deps, addFileExtensions } = createHarness()
+    deps.thumbnailWorker.generate.mockResolvedValueOnce({
+      status: 'failed',
+      kind: 'video',
+      reason: 'ffmpeg-unavailable',
+      durationMs: 3
+    })
+
+    // No extensions map: a failed status has no stored thumbnail to compare against.
+    await service.ensureThumbnail(11, '/docs/movie.mp4')
+
+    expect(addFileExtensions).toHaveBeenCalledTimes(1)
+    const [rows] = addFileExtensions.mock.calls[0]!
+    const statusRow = rows.find((row) => row.key === THUMBNAIL_STATUS_EXTENSION_KEY)
+    expect(JSON.parse(statusRow!.value)).toMatchObject({
+      status: 'failed',
+      reason: 'ffmpeg-unavailable',
+      v: THUMBNAIL_ENCODER_VERSION
+    })
+  })
+
+  it('persists unsupported status with the current encoder version', async () => {
+    const { service, addFileExtensions } = createHarness()
+
+    await service.ensureThumbnail(11, '/docs/shot.png', {
+      mtime: 1_700_000_000_000,
+      size: 100 * 1024 * 1024,
+      extension: '.png'
+    } as never)
+
+    expect(addFileExtensions).toHaveBeenCalledTimes(1)
+    const [rows] = addFileExtensions.mock.calls[0]!
+    const statusRow = rows.find((row) => row.key === THUMBNAIL_STATUS_EXTENSION_KEY)
+    expect(JSON.parse(statusRow!.value)).toMatchObject({
+      status: 'unsupported',
+      reason: 'file-too-large',
+      v: THUMBNAIL_ENCODER_VERSION,
+      size: 100 * 1024 * 1024
+    })
   })
 })
 

@@ -304,7 +304,7 @@ const activeLabel = computed(() => {
  * `useHead` registers after this one.
  */
 useHead(() => ({
-  title: `${activeLabel.value} · Tuff Nexus`,
+  title: `${activeLabel.value} · Tuff`,
 }))
 </script>
 

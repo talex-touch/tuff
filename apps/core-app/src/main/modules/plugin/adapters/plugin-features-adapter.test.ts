@@ -4,10 +4,18 @@ import type { IProviderActivate } from '@talex-touch/utils'
 import type { IFeatureCommand, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
 import { describe, expect, it, vi } from 'vitest'
+import { TuffInputType } from '@talex-touch/utils'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { isCommandMatch, PluginFeaturesAdapter } from './plugin-features-adapter'
 import { pluginModule } from '../plugin-module'
 import { PluginViewLoader } from '../view/plugin-view-loader'
+
+const executeRecorderMock = vi.hoisted(() => ({ recordAcceptedExecute: vi.fn(async () => {}) }))
+
+vi.mock('../../box-tool/search-engine/execute-recorder', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  recordAcceptedExecute: executeRecorderMock.recordAcceptedExecute
+}))
 
 const searchEngineHost = {
   getActivationState: vi.fn<() => IProviderActivate[] | null>(() => null),
@@ -158,6 +166,32 @@ describe('plugin-features-adapter', () => {
     expect(item.meta?.footerHints).toBeUndefined()
   })
 
+  it('keeps typed query text for plain non-push features through the index interaction default', () => {
+    const adapter = createAdapter()
+    const item = adapter.createTuffItem(createPlugin(), createFeature())
+
+    expect(item.meta?.interaction).toEqual({ type: 'index', showInput: true })
+  })
+
+  it('preserves explicit hidden webcontent input and leaves push features without a default', () => {
+    const adapter = createAdapter()
+    const hidden = adapter.createTuffItem(createPlugin(), {
+      ...createFeature(),
+      interaction: { type: 'webcontent', path: '/manager', showInput: false }
+    } as IPluginFeature)
+    const pushed = adapter.createTuffItem(createPlugin(), {
+      ...createFeature(),
+      push: true
+    })
+
+    expect(hidden.meta?.interaction).toEqual({
+      type: 'webcontent',
+      path: '/manager',
+      showInput: false
+    })
+    expect(pushed.meta?.interaction).toBeUndefined()
+  })
+
   it('preserves explicit color and colorful feature icons for CoreBox rendering', () => {
     const adapter = createAdapter()
     const item = adapter.createTuffItem(createPlugin(), {
@@ -265,7 +299,7 @@ describe('plugin-features-adapter', () => {
   it('forwards empty input to active push features', async () => {
     const adapter = createAdapter()
     const pushFeature = { ...createFeature(), push: true }
-    const triggerFeature = vi.fn(async () => true)
+    const triggerFeature = vi.fn(async () => ({ accepted: true, shouldActivate: true }))
     const triggerInputChanged = vi.fn()
     const plugin = {
       ...createPlugin(),
@@ -346,6 +380,109 @@ describe('plugin-features-adapter', () => {
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
   })
 
+  it('counts an item action whose activation decision is false', async () => {
+    // Execution and activation are separate facts: the plugin ran the action, it just does not
+    // need a surface. That is a successful use the host must count.
+    const adapter = createAdapter()
+    executeRecorderMock.recordAcceptedExecute.mockClear()
+    const onItemAction = vi.fn(async () => ({ shouldActivate: false }))
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      pluginLifecycle: { onItemAction }
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    await adapter.onExecute({
+      item: {
+        id: 'test-plugin/widget-ready',
+        source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+        kind: 'feature',
+        meta: { pluginName: 'test-plugin', actionId: 'run' }
+      }
+    } as never)
+
+    expect(executeRecorderMock.recordAcceptedExecute).toHaveBeenCalledTimes(1)
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
+  it('does not count an item action the plugin refused with a structured failure', async () => {
+    // The official plugins signal refusal as `{ success: false, status: 'blocked' }` without
+    // throwing. Counting every non-throwing return would inflate a use that never happened.
+    const adapter = createAdapter()
+    executeRecorderMock.recordAcceptedExecute.mockClear()
+    const onItemAction = vi.fn(async () => ({ success: false, status: 'blocked' as const }))
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      pluginLifecycle: { onItemAction }
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    await adapter.onExecute({
+      item: {
+        id: 'test-plugin/widget-ready',
+        source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+        kind: 'feature',
+        meta: { pluginName: 'test-plugin', actionId: 'run' }
+      }
+    } as never)
+
+    expect(executeRecorderMock.recordAcceptedExecute).not.toHaveBeenCalled()
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
+  it('does not count an item action whose callback throws', async () => {
+    const adapter = createAdapter()
+    executeRecorderMock.recordAcceptedExecute.mockClear()
+    const onItemAction = vi.fn(async () => {
+      throw new Error('copy failed')
+    })
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      pluginLifecycle: { onItemAction }
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    await adapter.onExecute({
+      item: {
+        id: 'test-plugin/widget-ready',
+        source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+        kind: 'feature',
+        meta: { pluginName: 'test-plugin', actionId: 'run' }
+      }
+    } as never)
+
+    expect(executeRecorderMock.recordAcceptedExecute).not.toHaveBeenCalled()
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
+  it('does not count a feature whose trigger reports a structured failure', async () => {
+    const adapter = createAdapter()
+    executeRecorderMock.recordAcceptedExecute.mockClear()
+    const feature = createFeature()
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      getFeature: vi.fn(() => feature),
+      triggerFeature: vi.fn(async () => ({ accepted: false, shouldActivate: false }))
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    await adapter.onExecute({
+      item: {
+        id: `test-plugin/${feature.id}`,
+        source: { type: 'plugin', id: 'plugin-features', name: 'Plugin Features' },
+        kind: 'feature',
+        meta: { pluginName: 'test-plugin', featureId: feature.id }
+      }
+    } as never)
+
+    expect(executeRecorderMock.recordAcceptedExecute).not.toHaveBeenCalled()
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
   it('honors explicit hidden input for webcontent features with accepted inputs', async () => {
     const adapter = createAdapter()
     const feature = {
@@ -404,7 +541,7 @@ describe('plugin-features-adapter', () => {
         allowInput: true
       }
     } as IPluginFeature
-    const triggerFeature = vi.fn(async () => true)
+    const triggerFeature = vi.fn(async () => ({ accepted: true, shouldActivate: true }))
     const plugin = {
       ...createPlugin(),
       status: PluginStatus.ACTIVE,
@@ -449,7 +586,7 @@ describe('plugin-features-adapter', () => {
         forceMax: true
       }
     } as IPluginFeature
-    const triggerFeature = vi.fn(async () => true)
+    const triggerFeature = vi.fn(async () => ({ accepted: true, shouldActivate: true }))
     const plugin = {
       ...createPlugin(),
       status: PluginStatus.ACTIVE,
@@ -478,6 +615,77 @@ describe('plugin-features-adapter', () => {
     expect(searchEngineHost.activateProviders).toHaveBeenCalledWith([
       expect.objectContaining({ forceMax: true, hideResults: false, showInput: true })
     ])
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
+  it('matches a URL command on the clipboard only while the input box is empty', async () => {
+    const adapter = createAdapter()
+    // Shape of the plugin's `browser-direct-*` row: a URL-shaped regex command, no accepted inputs.
+    const urlFeature = {
+      ...createFeature(),
+      id: 'browser-direct-default',
+      name: '用 默认浏览器 打开链接',
+      desc: '直接用 默认浏览器 打开链接',
+      commands: [{ type: 'regex', value: '^\\s*https?://[^\\s]+\\s*$' }]
+    } as IPluginFeature
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      getFeatures: vi.fn(() => [urlFeature])
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    const inputs = [{ type: TuffInputType.Text, content: 'https://example.com/copied' }]
+    const withEmptyInput = await adapter.onSearch(
+      { text: '', inputs },
+      new AbortController().signal
+    )
+
+    expect(withEmptyInput.items.map((item) => item.meta?.featureId)).toEqual([
+      'browser-direct-default'
+    ])
+    expect(withEmptyInput.items[0].meta?.extension?.source).toBe('command')
+
+    // An explicit query suppresses clipboard-command matching: the URL the user copied earlier
+    // must not offer a browser row that outranks what they are typing right now.
+    const withTypedInput = await adapter.onSearch(
+      { text: 'hello', inputs },
+      new AbortController().signal
+    )
+
+    expect(withTypedInput.items).toEqual([])
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
+  })
+
+  it('keeps only the feature that declares the non-text query input type', async () => {
+    const adapter = createAdapter()
+    const features = [
+      { ...createFeature(), id: 'image-tool', acceptedInputTypes: ['image'] },
+      { ...createFeature(), id: 'files-tool', acceptedInputTypes: ['files'] },
+      { ...createFeature(), id: 'text-tool' }
+    ] as IPluginFeature[]
+    const plugin = {
+      ...createPlugin(),
+      status: PluginStatus.ACTIVE,
+      getFeatures: vi.fn(() => features)
+    } as unknown as ITouchPlugin
+    ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).set('test-plugin', plugin)
+
+    for (const [type, expectedFeatureId] of [
+      [TuffInputType.Image, 'image-tool'],
+      [TuffInputType.Files, 'files-tool']
+    ] as const) {
+      const result = await adapter.onSearch(
+        { text: '', inputs: [{ type, content: 'SENTINEL' }] },
+        new AbortController().signal
+      )
+
+      expect(
+        result.items.map((item) => item.meta?.featureId),
+        type
+      ).toEqual([expectedFeatureId])
+      expect(result.items[0].meta?.extension?.source, type).toBe('input')
+    }
     ;(pluginModule.pluginManager!.plugins as Map<string, ITouchPlugin>).clear()
   })
 })

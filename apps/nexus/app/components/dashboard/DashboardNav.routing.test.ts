@@ -254,28 +254,6 @@ describe('oauth entry visibility', () => {
   })
 })
 
-describe('document title', () => {
-  /**
-   * Every dashboard route reported `document.title` as `Tuff Docs` — app.vue's
-   * global `appName` default, which is the documentation site's name. Measured
-   * after the fix on the running dev server: /dashboard/overview → "Overview ·
-   * Tuff Nexus", /dashboard/devices → "Devices · Tuff Nexus".
-   */
-  it('derives the title from the active menu label', () => {
-    // Reading `activeLabel` rather than a second lookup table is what keeps the
-    // tab title and the highlighted entry from drifting.
-    expect(NAV_SOURCE).toMatch(/useHead\(\(\) => \(\{\s*title: `\$\{activeLabel\.value\} · Tuff Nexus`/)
-  })
-
-  it('produces a title app.vue will not append the docs name to', () => {
-    // app.vue only leaves a title alone when it already contains "Tuff";
-    // anything else gets ` · Tuff Nexus` appended a second time.
-    const appSource = readFileSync(path.join(HERE, '../../app.vue'), 'utf8')
-    expect(appSource).toContain("title.includes('Tuff')")
-    expect(`${evaluateNav({ path: '/dashboard/devices' }).activeLabel} · Tuff Nexus`).toContain('Tuff')
-  })
-})
-
 describe('mobile disclosure', () => {
   /**
    * Below `lg` this nav used to stack above the page — ~270px of links before

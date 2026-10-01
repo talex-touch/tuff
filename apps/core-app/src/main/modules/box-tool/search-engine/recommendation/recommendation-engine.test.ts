@@ -126,11 +126,11 @@ vi.mock('./item-rebuilder', () => ({
 
 import {
   calculateNoveltyFactor,
-  calculateTimeContextBoost,
-  calculateTimeRelevanceScore,
   COLD_START_BASE_SCORE,
   RecommendationEngine
 } from './recommendation-engine'
+import type { UsageBehaviorRow } from '../usage-utils'
+import { recommendationSourceRegistry } from './recommendation-source-registry'
 
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
@@ -192,6 +192,29 @@ type RecommendationCacheRecord = {
   expiresAt: Date
 }
 
+/**
+ * Disposers for plugin providers registered by any test in this file.
+ *
+ * `registerPluginProvider` now also claims `plugin-recommend:<id>` in the process-wide source
+ * registry, so a test that only drops its engine would leak the claim and redden the next test's
+ * registration with "already registered". Registering through this helper keeps the registry clean.
+ */
+const pluginProviderDisposers: Array<() => void> = []
+
+afterEach(() => {
+  while (pluginProviderDisposers.length) pluginProviderDisposers.pop()?.()
+})
+
+function registerPluginProvider(
+  engine: RecommendationEngine,
+  pluginName: string,
+  provider: Record<string, unknown>
+): () => void {
+  const dispose = engine.registerPluginProvider(pluginName, provider as never)
+  pluginProviderDisposers.push(dispose)
+  return dispose
+}
+
 function createDbUtils() {
   return {
     getAuxDb: vi.fn(() => ({
@@ -207,7 +230,40 @@ function createDbUtils() {
     getUsageStatsBatch: vi.fn(
       async (_keys: Array<{ sourceId: string; itemId: string }>) =>
         [] as ReturnType<typeof createUsageStats>[]
+    ),
+    // The scorer's single behaviour read. Returning [] means "no key has evidence", which is the
+    // honest state for a suite that never seeded executions: the pass then reads as cold start.
+    getUsageBehaviorBatch: vi.fn(
+      async (_keys: Array<{ sourceId: string; itemId: string }>): Promise<UsageBehaviorRow[]> => []
     )
+  }
+}
+
+/** A behaviour row as `getUsageBehaviorBatch` returns it: dated execution facts, or a zero row. */
+function createBehaviorRow(
+  itemId: string,
+  overrides: Partial<{
+    executeCount: number
+    executeCount30: number
+    executeCount7: number
+    activeDays30: number
+    lastExecutedAt: number | null
+    decayedExecuteScore30: number
+  }> = {}
+): UsageBehaviorRow {
+  return {
+    sourceId: 'app-provider',
+    itemId,
+    executeCount: overrides.executeCount ?? 0,
+    executeCount30: overrides.executeCount30 ?? 0,
+    executeCount7: overrides.executeCount7 ?? 0,
+    activeDays30: overrides.activeDays30 ?? 0,
+    activeDays7: 0,
+    lastExecutedAt: overrides.lastExecutedAt ?? null,
+    decayedExecuteScore30: overrides.decayedExecuteScore30 ?? 0,
+    hourDistribution30: Array.from({ length: 24 }, () => 0),
+    dayOfWeekDistribution30: Array.from({ length: 7 }, () => 0),
+    timeSlotDistribution30: { morning: 0, afternoon: 0, evening: 0, night: 0 }
   }
 }
 
@@ -230,13 +286,24 @@ function createCatalogApp(path: string, indexedAgoMs: number, id: number) {
  */
 function createCatalogDbUtils(
   apps: ReturnType<typeof createCatalogApp>[],
-  installedAgoMsByFileId: Record<number, number>
+  installedAgoMsByFileId: Record<number, number>,
+  identityByFileId: Record<number, { appIdentity?: string; bundleId?: string }> = {}
 ) {
   return {
     ...createDbUtils(),
     getFilesByType: vi.fn(async () => apps),
-    getFileExtensionsByFileIds: vi.fn(async (fileIds: number[], _keys?: string[]) =>
+    getFileExtensionsByFileIds: vi.fn(async (fileIds: number[], keys?: string[]) =>
       fileIds.flatMap((fileId) => {
+        if (keys?.includes('appIdentity') || keys?.includes('bundleId')) {
+          const identity = identityByFileId[fileId]
+          if (!identity) return []
+          return [
+            ...(identity.appIdentity
+              ? [{ fileId, key: 'appIdentity', value: identity.appIdentity }]
+              : []),
+            ...(identity.bundleId ? [{ fileId, key: 'bundleId', value: identity.bundleId }] : [])
+          ]
+        }
         const installedAgoMs = installedAgoMsByFileId[fileId]
         if (installedAgoMs === undefined) return []
         return [{ fileId, key: 'installedAt', value: String(Date.now() - installedAgoMs) }]
@@ -265,6 +332,7 @@ function stubDimensions(
       perf: { durationMs: 0, rowCount: 0, ready: true }
     })),
     getPluginCandidates: vi.fn(async () => []),
+    getBuiltinDestinationCandidates: vi.fn(() => []),
     ...overrides
   })
 }
@@ -367,6 +435,60 @@ function candidatePerf(totalCandidates: number, filteredCount = totalCandidates)
     trendingCandidates: 0,
     trendingReady: true
   }
+}
+
+/**
+ * A persisted-cache handle that behaves like the table it stands for: a row is stored and read back
+ * under the exact key the engine asked for, and nothing else. That is what lets a test assert
+ * context/pin isolation and same-key reuse without naming a key — an assertion on the key string
+ * would freeze the schema segment and go green while reuse broke.
+ */
+function createKeyedCacheStore() {
+  const store = new Map<string, RecommendationCacheRecord>()
+  const dbUtils = createDbUtils()
+
+  dbUtils.getRecommendationCache.mockImplementation(async (cacheKey: string) => {
+    return store.get(cacheKey) ?? null
+  })
+  dbUtils.setRecommendationCache = vi.fn(
+    async (cacheKey: string, items: unknown[], expiresAt: Date) => {
+      store.set(cacheKey, {
+        cacheKey,
+        recommendedItems: JSON.stringify(items),
+        createdAt: new Date(),
+        expiresAt
+      })
+    }
+  ) as never
+
+  return { dbUtils, store }
+}
+
+/**
+ * An engine whose candidate pool is exactly what the test hands in. The cache tests are about which
+ * key a pass reads and writes, not about how a candidate was recalled.
+ */
+function createStubbedCandidateEngine(
+  dbUtils: ReturnType<typeof createDbUtils>,
+  contexts: ContextSignal[],
+  { items = [], pinned = [] }: { items?: unknown[]; pinned?: unknown[] } = {}
+) {
+  const engine = new RecommendationEngine(dbUtils as never)
+  const getCandidates = vi.fn(async () => ({ items, perf: candidatePerf(items.length) }))
+  const fallbackContext = contexts[contexts.length - 1] ?? morningContext
+
+  Object.assign(engine as unknown as Record<string, unknown>, {
+    contextProvider: {
+      getCurrentContext: vi.fn(async () => contexts.shift() ?? fallbackContext),
+      generateCacheKey: (signal: ContextSignal) =>
+        `${signal.time.timeSlot}|${signal.time.dayOfWeek}`
+    },
+    scheduleTrendBackfill: vi.fn(),
+    getPinnedItems: vi.fn(async () => pinned),
+    getCandidates
+  })
+
+  return { engine, getCandidates }
 }
 
 describe('RecommendationEngine', () => {
@@ -601,60 +723,91 @@ describe('RecommendationEngine', () => {
   })
 
   it('does not reuse persisted recommendation cache across time slots', async () => {
-    const dbUtils = createDbUtils()
-    dbUtils.getRecommendationCache.mockImplementation(async (cacheKey: string) => {
-      if (cacheKey !== 'morning|1|pin:none') return null
-
-      return {
-        cacheKey,
-        recommendedItems: JSON.stringify([
-          {
-            id: 'cached-morning-app',
-            source: { id: 'app-provider', type: 'app', name: 'app-provider' },
-            kind: 'app',
-            render: { mode: 'default', basic: { title: 'cached-morning-app' } },
-            meta: { recommendation: { source: 'frequent' } }
-          }
-        ]),
-        createdAt: new Date('2026-05-04T09:00:00.000Z'),
-        expiresAt: new Date(Date.now() + 60_000)
-      }
-    })
-
-    const engine = new RecommendationEngine(dbUtils as never)
-    const contexts = [morningContext, afternoonContext]
-    const getCandidates = vi.fn(async () => ({
-      items: [
-        {
-          sourceId: 'app-provider',
-          itemId: 'fresh-afternoon-app',
-          sourceType: 'app',
-          source: 'frequent',
-          usageStats: createUsageStats('fresh-afternoon-app', { executeCount: 2 })
-        }
-      ],
-      perf: candidatePerf(1)
-    }))
-
-    Object.assign(engine as unknown as Record<string, unknown>, {
-      contextProvider: {
-        getCurrentContext: vi.fn(async () => contexts.shift() ?? afternoonContext),
-        generateCacheKey: (context: ContextSignal) =>
-          `${context.time.timeSlot}|${context.time.dayOfWeek}`
-      },
-      scheduleTrendBackfill: vi.fn(),
-      getPinnedItems: vi.fn(async () => []),
-      getCandidates
-    })
+    // A cached ranking is only valid for the time slot it was computed under. The harness stores and
+    // reads rows under the engine's own key, so the assertion is about isolation, not about the key
+    // spelling: an engine that reused the morning row for the afternoon context would fail here.
+    const { dbUtils } = createKeyedCacheStore()
+    const { engine, getCandidates } = createStubbedCandidateEngine(
+      dbUtils,
+      [morningContext, afternoonContext],
+      { items: createCandidates(['fresh-afternoon-app']) }
+    )
 
     const morning = await engine.recommend({ limit: 1 })
     const afternoon = await engine.recommend({ limit: 1 })
 
-    expect(morning.items[0]?.id).toBe('cached-morning-app')
+    expect(morning.fromCache).toBe(false)
+    expect(morning.items[0]?.id).toBe('fresh-afternoon-app')
+    // The afternoon context has an empty cache, so the ranking is recomputed rather than replayed.
     expect(afternoon.items[0]?.id).toBe('fresh-afternoon-app')
-    expect(dbUtils.getRecommendationCache).toHaveBeenNthCalledWith(1, 'morning|1|pin:none')
-    expect(dbUtils.getRecommendationCache).toHaveBeenNthCalledWith(2, 'afternoon|1|pin:none')
-    expect(getCandidates).toHaveBeenCalledTimes(1)
+    expect(getCandidates).toHaveBeenCalledTimes(2)
+    expect(dbUtils.getRecommendationCache.mock.calls[0]?.[0]).not.toBe(
+      dbUtils.getRecommendationCache.mock.calls[1]?.[0]
+    )
+  })
+
+  it('reuses the persisted ranking for the same context and pinned set', async () => {
+    // The positive half of the isolation contract. The second engine has an empty memory cache, so
+    // only the row the first one wrote can answer it: a cold start that ignored the persisted
+    // ranking, or keyed it differently, would recompute.
+    const { dbUtils, store } = createKeyedCacheStore()
+    const first = createStubbedCandidateEngine(dbUtils, [morningContext], {
+      items: createCandidates(['ranked-app'])
+    })
+
+    await first.engine.recommend({ limit: 1 })
+    expect(store.size).toBe(1)
+
+    const second = createStubbedCandidateEngine(dbUtils, [morningContext], {
+      items: createCandidates(['ranked-app'])
+    })
+    const warm = await second.engine.recommend({ limit: 1 })
+
+    expect(warm.fromCache).toBe(true)
+    expect(warm.items[0]?.id).toBe('ranked-app')
+    expect(second.getCandidates).not.toHaveBeenCalled()
+  })
+
+  it('never reads back a ranking persisted under an earlier cache schema', async () => {
+    // The key carries a schema segment, and bumping it is how a shipped candidate-set change
+    // invalidates every row already on disk: the previous version's ranking must not be replayed by
+    // the current engine, or an upgrade keeps serving the old empty state until the TTL expires.
+    const { dbUtils, store } = createKeyedCacheStore()
+    const first = createStubbedCandidateEngine(dbUtils, [morningContext], {
+      items: createCandidates(['fresh-app'])
+    })
+
+    await first.engine.recommend({ limit: 1 })
+    const [storedKey] = [...store.keys()]
+    expect(storedKey).toBeDefined()
+
+    // Relocate the row onto the same key one schema version older, and nothing else: a reader that
+    // ignored the version segment would answer with it.
+    const legacyKey = storedKey!.replace(/^reco-v\d+/, 'reco-v1')
+    const row = store.get(storedKey!)!
+    store.delete(storedKey!)
+    store.set(legacyKey, {
+      ...row,
+      cacheKey: legacyKey,
+      recommendedItems: JSON.stringify([
+        {
+          id: 'legacy-app',
+          source: { id: 'app-provider', type: 'app', name: 'app-provider' },
+          kind: 'app',
+          render: { mode: 'default', basic: { title: 'legacy-app' } },
+          meta: { recommendation: { source: 'frequent' } }
+        }
+      ])
+    })
+
+    const second = createStubbedCandidateEngine(dbUtils, [morningContext], {
+      items: createCandidates(['fresh-app'])
+    })
+    const fresh = await second.engine.recommend({ limit: 1 })
+
+    expect(fresh.fromCache).toBe(false)
+    expect(fresh.items.map((item) => item.id)).toEqual(['fresh-app'])
+    expect(second.getCandidates).toHaveBeenCalledTimes(1)
   })
 
   it('keeps pinned items visible when recommendations already fill the limit', async () => {
@@ -768,41 +921,21 @@ describe('RecommendationEngine', () => {
   })
 
   it('separates persisted recommendation cache by pinned items', async () => {
-    const dbUtils = createDbUtils()
-    dbUtils.getRecommendationCache.mockImplementation(async (cacheKey: string) => {
-      if (cacheKey.endsWith('pin:none')) return null
-
-      return {
-        cacheKey,
-        recommendedItems: JSON.stringify([
-          {
-            id: 'cached-pinned-app',
-            source: { id: 'pinned-source', type: 'app', name: 'pinned-source' },
-            kind: 'app',
-            render: { mode: 'default', basic: { title: 'cached-pinned-app' } },
-            meta: {
-              pinned: { isPinned: true },
-              recommendation: { source: 'pinned' }
-            }
-          }
-        ]),
-        createdAt: new Date('2026-05-04T09:00:00.000Z'),
-        expiresAt: new Date(Date.now() + 60_000)
-      }
-    })
-
-    const engine = new RecommendationEngine(dbUtils as never)
+    // Same time context, different pinned set: the second pass must not read the first pass's
+    // ranking, because the two answer different questions about what the user pinned.
+    const { dbUtils, store } = createKeyedCacheStore()
     const pinnedSets = [
       [
         {
           sourceId: 'pinned-source',
-          itemId: 'cached-pinned-app',
+          itemId: 'pinned-app',
           sourceType: 'app',
-          usageStats: createUsageStats('cached-pinned-app')
+          usageStats: createUsageStats('pinned-app')
         }
       ],
       []
     ]
+    const engine = new RecommendationEngine(dbUtils as never)
     const getCandidates = vi.fn(async () => ({
       items: [
         {
@@ -827,47 +960,15 @@ describe('RecommendationEngine', () => {
       getCandidates
     })
 
-    const cached = await engine.recommend({ limit: 1 })
-    const fresh = await engine.recommend({ limit: 1 })
+    const withPin = await engine.recommend({ limit: 1 })
+    const withoutPin = await engine.recommend({ limit: 1 })
 
-    expect(cached.items[0]?.id).toBe('cached-pinned-app')
-    expect(fresh.items[0]?.id).toBe('fresh-app')
-    expect(dbUtils.getRecommendationCache.mock.calls[0]?.[0]).toContain('pin:')
-    expect(dbUtils.getRecommendationCache.mock.calls[1]?.[0]).toBe('morning|1|pin:none')
-    expect(getCandidates).toHaveBeenCalledTimes(1)
-  })
-
-  it('boosts candidates that match the current time slot and weekday', () => {
-    const matchingStats = createTimeStats({
-      itemId: 'morning-app',
-      morning: 6,
-      afternoon: 4,
-      monday: 5
-    })
-    const baselineStats = createTimeStats({
-      itemId: 'plain-app',
-      morning: 6,
-      afternoon: 4
-    })
-
-    expect(calculateTimeContextBoost(matchingStats, morningContext.time)).toBeGreaterThan(
-      calculateTimeContextBoost(baselineStats, morningContext.time)
-    )
-    expect(calculateTimeRelevanceScore(matchingStats, morningContext.time)).toBeGreaterThan(
-      calculateTimeRelevanceScore(baselineStats, morningContext.time)
-    )
-  })
-
-  it('keeps time-slot relevance even when the current weekday has no history yet', () => {
-    const slotOnlyStats = createTimeStats({
-      itemId: 'weekday-missing-app',
-      morning: 8,
-      afternoon: 2,
-      monday: 0,
-      tuesday: 10
-    })
-
-    expect(calculateTimeRelevanceScore(slotOnlyStats, morningContext.time)).toBeGreaterThan(0)
+    expect(withPin.items[0]?.id).toBe('pinned-app')
+    expect(withoutPin.items[0]?.id).toBe('fresh-app')
+    // Two different pinned sets wrote two rows under this one time context, and neither answer
+    // was read back for the other.
+    expect(store.size).toBe(2)
+    expect(getCandidates).toHaveBeenCalledTimes(2)
   })
 
   it('uses focus system state to prefer work apps over social apps', async () => {
@@ -985,6 +1086,21 @@ describe('RecommendationEngine', () => {
 
   it('falls back to frequency ranking when local semantic scoring is disabled', async () => {
     const dbUtils = createDbUtils()
+    // Ranking now reads real dated behaviour, not the lifetime count: the heavy app must carry a
+    // 30-day ledger row or it scores zero like everything else (R9).
+    dbUtils.getUsageBehaviorBatch = vi.fn(
+      async (): Promise<UsageBehaviorRow[]> =>
+        ['com.apple.Terminal', 'com.microsoft.VSCode', 'discord'].map((itemId) =>
+          createBehaviorRow(itemId, {
+            executeCount: itemId === 'discord' ? 20 : 1,
+            executeCount30: itemId === 'discord' ? 12 : 1,
+            executeCount7: itemId === 'discord' ? 5 : 0,
+            activeDays30: itemId === 'discord' ? 5 : 1,
+            decayedExecuteScore30: itemId === 'discord' ? 9 : 1,
+            lastExecutedAt: Date.now() - 3 * DAY_MS
+          })
+        )
+    )
     const engine = new RecommendationEngine(dbUtils as never)
 
     Object.assign(engine as unknown as Record<string, unknown>, {
@@ -1008,21 +1124,43 @@ describe('RecommendationEngine', () => {
             itemId: 'com.apple.Terminal',
             sourceType: 'app',
             source: 'frequent',
-            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 1 })
+            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 1 }),
+            behavior: createBehaviorRow('com.apple.Terminal', {
+              executeCount: 1,
+              executeCount30: 1,
+              activeDays30: 1,
+              lastExecutedAt: Date.now() - 3 * DAY_MS
+            })
           },
           {
             sourceId: 'app-provider',
             itemId: 'com.microsoft.VSCode',
             sourceType: 'app',
             source: 'frequent',
-            usageStats: createUsageStats('com.microsoft.VSCode', { executeCount: 1 })
+            usageStats: createUsageStats('com.microsoft.VSCode', { executeCount: 1 }),
+            behavior: createBehaviorRow('com.microsoft.VSCode', {
+              executeCount: 1,
+              executeCount30: 1,
+              activeDays30: 1,
+              lastExecutedAt: Date.now() - 3 * DAY_MS
+            })
           },
           {
             sourceId: 'app-provider',
             itemId: 'discord',
             sourceType: 'app',
             source: 'frequent',
-            usageStats: createUsageStats('discord', { executeCount: 5 })
+            usageStats: createUsageStats('discord', { executeCount: 5 }),
+            // The heavy app's lead is dated behaviour, not the lifetime count: ranking reads
+            // `behavior`, so a fixture without it scores exactly like an unused row (R9).
+            behavior: createBehaviorRow('discord', {
+              executeCount: 20,
+              executeCount30: 12,
+              executeCount7: 5,
+              activeDays30: 5,
+              decayedExecuteScore30: 9,
+              lastExecutedAt: Date.now() - 3 * DAY_MS
+            })
           }
         ],
         perf: candidatePerf(3, 3)
@@ -1086,65 +1224,6 @@ describe('RecommendationEngine', () => {
     const ids = result.items.map((item) => item.id)
 
     expect(ids.indexOf('com.apple.Terminal')).toBeLessThan(ids.indexOf('discord'))
-  })
-
-  it('uses historical cancellation vectors to suppress semantically avoided tools', async () => {
-    vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
-
-    const dbUtils = createDbUtils()
-    const engine = new RecommendationEngine(dbUtils as never)
-
-    Object.assign(engine as unknown as Record<string, unknown>, {
-      contextProvider: {
-        getCurrentContext: vi.fn(async () => morningContext),
-        generateCacheKey: (context: ContextSignal) =>
-          `${context.time.timeSlot}:${context.time.dayOfWeek}:avoidance-vector`
-      },
-      getRecommendationSemanticSettings: vi.fn(async () => ({
-        localVectorEnabled: true,
-        aiRerankEnabled: false,
-        aiEmbeddingEnabled: false
-      })),
-      calculateContextMatch: vi.fn(() => 0),
-      scheduleTrendBackfill: vi.fn(),
-      getPinnedItems: vi.fn(async () => []),
-      getCandidates: vi.fn(async () => ({
-        items: [
-          {
-            sourceId: 'app-provider',
-            itemId: 'discord',
-            sourceType: 'app',
-            source: 'frequent',
-            usageStats: createUsageStats('discord', {
-              executeCount: 0,
-              cancelCount: 20,
-              lastExecuted: null,
-              lastCancelled: new Date('2026-05-04T08:55:00.000Z')
-            })
-          },
-          {
-            sourceId: 'app-provider',
-            itemId: 'telegram',
-            sourceType: 'app',
-            source: 'frequent',
-            usageStats: createUsageStats('telegram', { executeCount: 4 })
-          },
-          {
-            sourceId: 'app-provider',
-            itemId: 'com.apple.Terminal',
-            sourceType: 'app',
-            source: 'frequent',
-            usageStats: createUsageStats('com.apple.Terminal', { executeCount: 2 })
-          }
-        ],
-        perf: candidatePerf(3, 3)
-      }))
-    })
-
-    const result = await engine.recommend({ limit: 10 })
-    const ids = result.items.map((item) => item.id)
-
-    expect(ids.indexOf('com.apple.Terminal')).toBeLessThan(ids.indexOf('telegram'))
   })
 
   it('uses optional AI embedding scores to improve semantic ranking', async () => {
@@ -1373,6 +1452,34 @@ describe('RecommendationEngine', () => {
     vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
 
     const dbUtils = createDbUtils()
+    // Time points are gated on >=10 executions over >=3 distinct days in the 30-day ledger, so the
+    // candidate must carry real dated facts. Plain-app keeps a big dated base but no time spread;
+    // morning-app trades base for a strong slot match so the time term is what decides it.
+    dbUtils.getUsageBehaviorBatch = vi.fn(
+      async (keys: Array<{ itemId: string }>): Promise<UsageBehaviorRow[]> =>
+        keys.map((key) =>
+          key.itemId === 'morning-app'
+            ? {
+                ...createBehaviorRow('morning-app', {
+                  executeCount: 12,
+                  executeCount30: 12,
+                  executeCount7: 4,
+                  activeDays30: 5,
+                  decayedExecuteScore30: 9,
+                  lastExecutedAt: Date.now() - 3 * DAY_MS
+                }),
+                timeSlotDistribution30: { morning: 12, afternoon: 2, evening: 0, night: 0 }
+              }
+            : createBehaviorRow('plain-app', {
+                executeCount: 100,
+                executeCount30: 10,
+                executeCount7: 3,
+                activeDays30: 4,
+                decayedExecuteScore30: 6,
+                lastExecutedAt: Date.now() - 3 * DAY_MS
+              })
+        )
+    )
     const engine = new RecommendationEngine(dbUtils as never)
     const morningStats = createTimeStats({
       itemId: 'morning-app',
@@ -1396,14 +1503,33 @@ describe('RecommendationEngine', () => {
             itemId: 'plain-app',
             sourceType: 'app',
             source: 'frequent',
-            usageStats: createUsageStats('plain-app', { executeCount: 100 })
+            usageStats: createUsageStats('plain-app', { executeCount: 100 }),
+            // Equal overall habit to morning-app: same base, same counts, same age. The only
+            // difference is the time-of-day spread, so what decides the order is the time term —
+            // not a legacy lifetime count, and not recency (which is identical for both) (R5/R9).
+            behavior: createBehaviorRow('plain-app', {
+              executeCount: 12,
+              executeCount30: 12,
+              executeCount7: 4,
+              activeDays30: 5,
+              decayedExecuteScore30: 9,
+              lastExecutedAt: Date.now() - 3 * DAY_MS
+            })
           },
           {
             sourceId: 'app-provider',
             itemId: 'morning-app',
             sourceType: 'app',
             source: 'frequent',
-            usageStats: createUsageStats('morning-app', { executeCount: 1 })
+            usageStats: createUsageStats('morning-app', { executeCount: 1 }),
+            behavior: createBehaviorRow('morning-app', {
+              executeCount: 12,
+              executeCount30: 12,
+              executeCount7: 4,
+              activeDays30: 5,
+              decayedExecuteScore30: 9,
+              lastExecutedAt: Date.now() - 3 * DAY_MS
+            })
           },
           {
             sourceId: 'app-provider',
@@ -1411,6 +1537,19 @@ describe('RecommendationEngine', () => {
             sourceType: 'app',
             source: 'time-based',
             usageStats: createUsageStats('morning-app', { executeCount: 1 }),
+            // Same habit as plain-app, but concentrated in the morning: this dated spread is what
+            // earns the time points (the legacy `timeStats` histogram is no longer read) (R5/R9).
+            behavior: {
+              ...createBehaviorRow('morning-app', {
+                executeCount: 12,
+                executeCount30: 12,
+                executeCount7: 4,
+                activeDays30: 5,
+                decayedExecuteScore30: 9,
+                lastExecutedAt: Date.now() - 3 * DAY_MS
+              }),
+              timeSlotDistribution30: { morning: 10, afternoon: 2, evening: 0, night: 0 }
+            },
             timeStats: morningStats
           }
         ],
@@ -1428,8 +1567,33 @@ describe('RecommendationEngine', () => {
     vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
 
     const dbUtils = createDbUtils()
+    // The slot split now lives in the dated 30-day distribution, not the legacy histogram, so each
+    // candidate carries its own morning/afternoon spread. The row must be keyed by the candidate's
+    // real itemId: a placeholder id would leave the candidate without behaviour (R9).
+    const slotRow = (itemId: string, morning: number, afternoon: number) => ({
+      ...createBehaviorRow(itemId, {
+        executeCount: 12,
+        executeCount30: 12,
+        executeCount7: 4,
+        activeDays30: 4,
+        decayedExecuteScore30: 8,
+        lastExecutedAt: Date.now() - 3 * DAY_MS
+      }),
+      hourDistribution30: Array.from({ length: 24 }, () => 0),
+      dayOfWeekDistribution30: Array.from({ length: 7 }, () => 0),
+      timeSlotDistribution30: { morning, afternoon, evening: 0, night: 0 }
+    })
+    dbUtils.getUsageBehaviorBatch = vi.fn(
+      async (keys: Array<{ itemId: string }>): Promise<UsageBehaviorRow[]> =>
+        keys.map((key) =>
+          key.itemId === 'morning-app' ? slotRow(key.itemId, 10, 2) : slotRow(key.itemId, 2, 10)
+        )
+    )
     const engine = new RecommendationEngine(dbUtils as never)
     const contexts = [morningContext, afternoonContext]
+    // Both candidates carry identical habit strength (same base/counts/days/age); only the
+    // time-of-day spread differs. The engine reads it from `behavior` (the dated 30-day
+    // distribution), so the slot switch is what flips the order.
     const getCandidates = vi.fn(async () => ({
       items: [
         {
@@ -1438,12 +1602,7 @@ describe('RecommendationEngine', () => {
           sourceType: 'app',
           source: 'frequent',
           usageStats: createUsageStats('morning-app', { executeCount: 4 }),
-          timeStats: createTimeStats({
-            itemId: 'morning-app',
-            morning: 12,
-            afternoon: 1,
-            monday: 8
-          })
+          behavior: slotRow('morning-app', 10, 2)
         },
         {
           sourceId: 'app-provider',
@@ -1451,12 +1610,7 @@ describe('RecommendationEngine', () => {
           sourceType: 'app',
           source: 'frequent',
           usageStats: createUsageStats('afternoon-app', { executeCount: 4 }),
-          timeStats: createTimeStats({
-            itemId: 'afternoon-app',
-            morning: 1,
-            afternoon: 12,
-            monday: 8
-          })
+          behavior: slotRow('afternoon-app', 2, 10)
         }
       ],
       perf: candidatePerf(2, 2)
@@ -1485,6 +1639,21 @@ describe('RecommendationEngine', () => {
     vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
 
     const dbUtils = createDbUtils()
+    // The volatile stage re-ranks a cached list, but the cached list is itself built from dated
+    // behaviour: Terminal must carry a real recent ledger row to sit where the re-rank can lift it.
+    dbUtils.getUsageBehaviorBatch = vi.fn(
+      async (keys: Array<{ itemId: string }>): Promise<UsageBehaviorRow[]> =>
+        keys.map((key) =>
+          createBehaviorRow(key.itemId, {
+            executeCount: key.itemId === 'com.apple.Terminal' ? 3 : 4,
+            executeCount30: key.itemId === 'com.apple.Terminal' ? 3 : 4,
+            executeCount7: 1,
+            activeDays30: 2,
+            decayedExecuteScore30: 2,
+            lastExecutedAt: Date.now() - 3 * DAY_MS
+          })
+        )
+    )
     const engine = new RecommendationEngine(dbUtils as never)
     const perfEvents: Array<{ eventType: string; metadata: Record<string, unknown> }> = []
     // Same slow-moving context, different foreground app: the 15-min warm-up
@@ -1503,14 +1672,36 @@ describe('RecommendationEngine', () => {
           itemId: 'com.apple.Terminal',
           sourceType: 'app',
           source: 'frequent',
-          usageStats: createUsageStats('com.apple.Terminal', { executeCount: 3 })
+          usageStats: createUsageStats('com.apple.Terminal', { executeCount: 3 }),
+          // Ranking reads dated behaviour; the fixture must carry the ledger row the real pass
+          // attaches or the cached list has nothing for the volatile re-rank to lift (R9).
+          // Lighter habit than its rival, so the stable ranking puts it second; the IDE
+          // foreground signal in the user's own request is what lifts it to the top.
+          behavior: createBehaviorRow('com.apple.Terminal', {
+            executeCount: 3,
+            executeCount30: 3,
+            executeCount7: 1,
+            activeDays30: 2,
+            decayedExecuteScore30: 2,
+            lastExecutedAt: Date.now() - 3 * DAY_MS
+          })
         },
         {
           sourceId: 'app-provider',
           itemId: 'com.apple.Preview',
           sourceType: 'app',
           source: 'frequent',
-          usageStats: createUsageStats('com.apple.Preview', { executeCount: 4 })
+          usageStats: createUsageStats('com.apple.Preview', { executeCount: 4 }),
+          // The heavier habit: it leads the cached stable ranking, so the volatile re-rank
+          // lifting Terminal above it is what the case measures.
+          behavior: createBehaviorRow('com.apple.Preview', {
+            executeCount: 4,
+            executeCount30: 4,
+            executeCount7: 3,
+            activeDays30: 4,
+            decayedExecuteScore30: 6,
+            lastExecutedAt: Date.now() - 3 * DAY_MS
+          })
         }
       ],
       perf: candidatePerf(2, 2)
@@ -1716,7 +1907,23 @@ describe('RecommendationEngine', () => {
       getUsageStatsBatch: vi.fn(async () => [
         createUsageStats('com.apple.Terminal', { executeCount: 3 }),
         createUsageStats('com.apple.Safari', { executeCount: 3 })
-      ])
+      ]),
+      // getTimeBasedTopItems now joins the same dated behaviour read; the healthy row needs real
+      // 30-day facts (>=10 exec / >=3 days) AND a slot distribution, or its time score is zero.
+      getUsageBehaviorBatch: vi.fn(
+        async (keys: Array<{ itemId: string }>): Promise<UsageBehaviorRow[]> =>
+          keys.map((key) => ({
+            ...createBehaviorRow(key.itemId, {
+              executeCount: 12,
+              executeCount30: 12,
+              executeCount7: 4,
+              activeDays30: 4,
+              decayedExecuteScore30: 8,
+              lastExecutedAt: Date.now() - 3 * DAY_MS
+            }),
+            timeSlotDistribution30: { morning: 12, afternoon: 0, evening: 0, night: 0 }
+          }))
+      )
     }
     const engine = new RecommendationEngine(dbUtils as never)
 
@@ -2165,9 +2372,10 @@ describe('RecommendationEngine', () => {
     let peakConcurrent = 0
 
     for (let i = 0; i < PROVIDERS; i++) {
-      engine.registerPluginProvider('demo-plugin', {
+      registerPluginProvider(engine, 'demo-plugin', {
         id: `provider-${i}`,
         canProvide: () => true,
+        onExecute: () => true,
         getCandidates: async () => {
           live += 1
           peakConcurrent = Math.max(peakConcurrent, live)
@@ -2193,6 +2401,72 @@ describe('RecommendationEngine', () => {
     expect(elapsed).toBeLessThan(DELAY * PROVIDERS)
   })
 
+  it('drops a provider whose async canProvide refuses, without disturbing the others', async () => {
+    // `canProvide` may answer asynchronously. A provider that says no must contribute nothing —
+    // not an empty row, and not a reason for another provider's candidates to be dropped.
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    let refusedCandidatesAsked = 0
+
+    registerPluginProvider(engine, 'demo-plugin', {
+      id: 'refusing',
+      canProvide: async () => false,
+      onExecute: () => true,
+      getCandidates: async () => {
+        refusedCandidatesAsked += 1
+        return [{ id: 'should-never-appear', title: 'Never', action: 'open' }]
+      }
+    } as never)
+    registerPluginProvider(engine, 'demo-plugin', {
+      id: 'accepting',
+      canProvide: async () => true,
+      onExecute: () => true,
+      getCandidates: async () => [{ id: 'kept', title: 'Kept', action: 'open' }]
+    } as never)
+
+    const candidates = (await (
+      engine as unknown as {
+        getPluginCandidates: (context: unknown) => Promise<Array<{ itemId: string }>>
+      }
+    ).getPluginCandidates(morningContext)) as Array<{ itemId: string }>
+
+    expect(candidates.map((c) => c.itemId)).toEqual(['kept'])
+    // Refusing before the fetch is the contract: the provider is not asked for candidates at all.
+    expect(refusedCandidatesAsked).toBe(0)
+  })
+
+  it('times out one slow provider without discarding the others it was polled beside', async () => {
+    vi.useFakeTimers()
+    try {
+      const engine = new RecommendationEngine(createDbUtils() as never)
+      registerPluginProvider(engine, 'demo-plugin', {
+        id: 'slow',
+        canProvide: () => true,
+        onExecute: () => true,
+        // Never answers: the shared per-provider deadline has to cut it off.
+        getCandidates: () => new Promise(() => {})
+      } as never)
+      registerPluginProvider(engine, 'demo-plugin', {
+        id: 'fast',
+        canProvide: () => true,
+        onExecute: () => true,
+        getCandidates: async () => [{ id: 'fast-candidate', title: 'Fast', action: 'open' }]
+      } as never)
+
+      const pending = (
+        engine as unknown as {
+          getPluginCandidates: (context: unknown) => Promise<Array<{ itemId: string }>>
+        }
+      ).getPluginCandidates(morningContext)
+      await vi.advanceTimersByTimeAsync(250)
+
+      const candidates = await pending
+      // The hung provider contributes nothing; the healthy one still lands.
+      expect(candidates.map((c) => c.itemId)).toEqual(['fast-candidate'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('clears the timeout timer when a provider answers in time', async () => {
     // The race armed a 200ms setTimeout per provider and never cleared it on the
     // winning path, leaving a pending timer per call keeping the loop awake (#674).
@@ -2201,9 +2475,10 @@ describe('RecommendationEngine', () => {
       const engine = new RecommendationEngine(createDbUtils() as never)
 
       for (let i = 0; i < 3; i++) {
-        engine.registerPluginProvider('demo-plugin', {
+        registerPluginProvider(engine, 'demo-plugin', {
           id: `prompt-${i}`,
           canProvide: () => true,
+          onExecute: () => true,
           getCandidates: async () => [{ id: `c-${i}`, title: `C ${i}`, action: 'open' }]
         } as never)
       }
@@ -2227,9 +2502,10 @@ describe('RecommendationEngine', () => {
     // Deliberately inverted delays: if order followed completion rather than
     // registration, this would come back reversed.
     for (const [index, delay] of [90, 60, 30, 0].entries()) {
-      engine.registerPluginProvider('demo-plugin', {
+      registerPluginProvider(engine, 'demo-plugin', {
         id: `ordered-${index}`,
         canProvide: () => true,
+        onExecute: () => true,
         getCandidates: async () => {
           await new Promise((resolve) => setTimeout(resolve, delay))
           return [{ id: `candidate-${index}`, title: `Candidate ${index}`, action: 'open' }]
@@ -2274,12 +2550,43 @@ describe('RecommendationEngine', () => {
     })
 
     const result = await engine.recommend({ limit: 5 })
+    const ids = result.items.map((item) => item.id)
 
-    expect(result.items.map((item) => item.id)).toEqual([
-      '/Applications/Fresh.app',
-      '/Applications/Habit.app'
-    ])
+    expect(ids[0]).toBe('/Applications/Fresh.app')
+    expect(ids.indexOf('/Applications/Habit.app')).toBe(1)
     expect(result.items[0]?.meta?.recommendation).toMatchObject({ source: 'newly-installed' })
+  })
+
+  it('ends app novelty on the catalog identity, not the path', async () => {
+    // AC11: the first real execution is written under the source-declared catalog identity
+    // (`appIdentity`), which differs from the file path. The novelty gate must join on that same
+    // bucket — keying on the path would miss the row a first open just wrote and keep suggesting an
+    // app the user has already used.
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [createCatalogApp('/Applications/Calc.app', 2 * HOUR_MS, 1)],
+      { 1: 2 * HOUR_MS },
+      { 1: { appIdentity: 'com.example.calc' } }
+    )
+    dbUtils.getUsageStatsBatch = vi.fn(async () => [
+      {
+        ...createUsageStats('com.example.calc', { executeCount: 1 }),
+        sourceId: 'app-provider',
+        itemId: 'com.example.calc'
+      }
+    ]) as never
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+    stubDimensions(engine, {
+      getCandidates: vi.fn(async () => ({ items: [], perf: candidatePerf(0, 0) }))
+    })
+
+    const newlyInstalled = await (
+      engine as unknown as {
+        getNewlyInstalledItems: (limit: number) => Promise<Array<{ itemId: string }>>
+      }
+    ).getNewlyInstalledItems(5)
+
+    expect(newlyInstalled).toEqual([])
   })
 
   it('treats an app as new only when the install stamp and the index row are both fresh', async () => {
@@ -2325,12 +2632,36 @@ describe('RecommendationEngine', () => {
 
   it('hands ranking back to frecency once the new app has been executed', async () => {
     const dbUtils = createDbUtils()
+    // The app has one accepted execution, so it is no longer unused novelty — the novelty boost is
+    // gone and it must rank on its (thin) real history, losing to the established habit.
     dbUtils.getUsageStatsBatch = vi.fn(async () => [
       createUsageStats('/Applications/Fresh.app', {
         executeCount: 1,
         lastExecuted: new Date(Date.now() - 3 * HOUR_MS)
       })
     ])
+    dbUtils.getUsageBehaviorBatch = vi.fn(
+      async (keys: Array<{ itemId: string }>): Promise<UsageBehaviorRow[]> =>
+        keys.map((key) =>
+          key.itemId === '/Applications/Habit.app'
+            ? createBehaviorRow(key.itemId, {
+                executeCount: 40,
+                executeCount30: 14,
+                executeCount7: 5,
+                activeDays30: 6,
+                decayedExecuteScore30: 11,
+                lastExecutedAt: Date.now() - 3 * DAY_MS - HOUR_MS
+              })
+            : createBehaviorRow(key.itemId, {
+                executeCount: 1,
+                executeCount30: 1,
+                executeCount7: 1,
+                activeDays30: 1,
+                decayedExecuteScore30: 1,
+                lastExecutedAt: Date.now() - 3 * DAY_MS - 3 * HOUR_MS
+              })
+        )
+    )
     const catalog = createCatalogDbUtils(
       [createCatalogApp('/Applications/Fresh.app', 2 * HOUR_MS, 1)],
       { 1: 2 * HOUR_MS }
@@ -2353,11 +2684,65 @@ describe('RecommendationEngine', () => {
 
     const result = await engine.recommend({ limit: 5 })
 
-    // Boost gone, but the app is still a candidate — it just ranks on usage now.
-    expect(result.items.map((item) => item.id)).toEqual([
-      '/Applications/Habit.app',
-      '/Applications/Fresh.app'
-    ])
+    // The executed app is no longer "news": the habit leads, and Fresh carries no novelty label.
+    expect(result.items[0]?.id).toBe('/Applications/Habit.app')
+    const fresh = result.items.find((item) => item.id === '/Applications/Fresh.app')
+    expect((fresh?.meta?.recommendation as { source?: string } | undefined)?.source).not.toBe(
+      'newly-installed'
+    )
+  })
+
+  it('caps unused novelty at one item once the user has real history', async () => {
+    // AC11/R6: with behaviour history, the unused-app channel and the unused-file channel together
+    // may leave at most ONE exploration item in the list. Extra installs are dropped, not demoted —
+    // otherwise a pile of unused apps would compete with the habits the user actually reaches for.
+    const dbUtils = createDbUtils()
+    const catalog = createCatalogDbUtils(
+      [
+        createCatalogApp('/Applications/FreshA.app', 2 * HOUR_MS, 1),
+        createCatalogApp('/Applications/FreshB.app', 2 * HOUR_MS, 2)
+      ],
+      { 1: 2 * HOUR_MS, 2: 2 * HOUR_MS }
+    )
+    const engine = new RecommendationEngine(dbUtils as never, catalog as never)
+    dbUtils.getUsageBehaviorBatch = vi.fn(
+      async (keys: Array<{ itemId: string }>): Promise<UsageBehaviorRow[]> =>
+        keys.map((key) =>
+          key.itemId === '/Applications/Habit.app'
+            ? createBehaviorRow(key.itemId, {
+                executeCount: 40,
+                executeCount30: 14,
+                executeCount7: 5,
+                activeDays30: 6,
+                decayedExecuteScore30: 11,
+                lastExecutedAt: Date.now() - HOUR_MS
+              })
+            : createBehaviorRow(key.itemId)
+        )
+    )
+    stubDimensions(engine, {
+      getFrequentItems: vi.fn(async () => [
+        {
+          sourceId: 'app-provider',
+          itemId: '/Applications/Habit.app',
+          sourceType: 'application',
+          usageStats: createUsageStats('/Applications/Habit.app', {
+            executeCount: 40,
+            lastExecuted: new Date(Date.now() - HOUR_MS)
+          })
+        }
+      ])
+    })
+
+    const result = await engine.recommend({ limit: 10 })
+
+    const novelty = result.items.filter((item) => {
+      const source = (item.meta?.recommendation as { source?: string } | undefined)?.source
+      return source === 'newly-installed' || source === 'newly-added'
+    })
+    // Two fresh installs are available; exactly one may survive, and the habit always does.
+    expect(novelty).toHaveLength(1)
+    expect(result.items.map((item) => item.id)).toContain('/Applications/Habit.app')
   })
 
   it('keeps the newly installed app in a grid the diversity filter trims', async () => {
@@ -2417,9 +2802,110 @@ describe('RecommendationEngine', () => {
     // What the app index commit does when the new app lands.
     engine.invalidateCache()
     const afterInstall = await engine.recommend({ limit: 5 })
+    const ids = afterInstall.items.map((item) => item.id)
 
+    // The invalidated row is not handed back, and the ranking the user sees is the freshly
+    // computed one: the just-installed app leads it.
     expect(afterInstall.fromCache).toBe(false)
-    expect(afterInstall.items.map((item) => item.id)).toEqual(['/Applications/Fresh.app'])
+    expect(ids).not.toContain('/Applications/Stale.app')
+    expect(ids[0]).toBe('/Applications/Fresh.app')
+  })
+
+  it('does not publish the pre-execute snapshot when an execute is accepted during the compute', async () => {
+    // AC12: an execute accepted while a recommendation pass is already in flight must not be
+    // published as the user's next snapshot. This is the during-compute case, not
+    // invalidation-before-read: the pass has already started its behaviour read and is suspended
+    // on it when the acceptance lands. The observable is the ranking the user sees: the pre-execute
+    // read puts Alpha first, the post-execute read puts Beta first, so a stale publish is visible.
+    const dbUtils = createDbUtils()
+    const staleRead = Promise.withResolvers<ReturnType<typeof createBehaviorRow>[]>()
+
+    let cachedItems: unknown[] | undefined
+    dbUtils.setRecommendationCache = vi.fn(async (_cacheKey: string, items: unknown[]) => {
+      cachedItems = items
+    })
+
+    const strongRow = (itemId: string) =>
+      createBehaviorRow(itemId, {
+        executeCount: 5,
+        executeCount30: 5,
+        executeCount7: 5,
+        activeDays30: 3,
+        decayedExecuteScore30: 4,
+        lastExecutedAt: Date.now() - 3 * DAY_MS
+      })
+    const weakRow = (itemId: string) =>
+      createBehaviorRow(itemId, {
+        executeCount: 1,
+        executeCount30: 1,
+        executeCount7: 1,
+        activeDays30: 1,
+        decayedExecuteScore30: 1,
+        lastExecutedAt: Date.now() - 3 * DAY_MS
+      })
+
+    // Suspend on the candidate-pass read (the one that asks for Alpha/Beta), not on a global read
+    // count: a pass now reads behaviour from several dimensions, and pinning "read #1" would break
+    // on any internal re-ordering.
+    let suspended = false
+    dbUtils.getUsageBehaviorBatch = vi.fn(
+      async (keys: Array<{ sourceId: string; itemId: string }>): Promise<UsageBehaviorRow[]> => {
+        if (!suspended && keys.some((key) => key.itemId.includes('Alpha'))) {
+          suspended = true
+          // The pre-execute snapshot: Alpha is the habit.
+          return await staleRead.promise
+        }
+        // Every later read is the real database after the accepted write: Beta has become the habit.
+        return keys.map((key) =>
+          key.itemId.includes('Beta') ? strongRow(key.itemId) : weakRow(key.itemId)
+        )
+      }
+    )
+
+    const engine = new RecommendationEngine(dbUtils as never, createCatalogDbUtils([], {}) as never)
+    // The real getCandidates runs: its single behaviour read is what we suspend. Only the
+    // dimensions that would read other tables are stubbed.
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => morningContext),
+        generateCacheKey: () => 'inflight-key'
+      },
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getFrequentItems: vi.fn(async () =>
+        ['Alpha', 'Beta'].map((name) => ({
+          sourceId: 'app-provider',
+          itemId: `/Applications/${name}.app`,
+          sourceType: 'application',
+          usageStats: createUsageStats(`/Applications/${name}.app`, { executeCount: 5 })
+        }))
+      ),
+      getRecentItems: vi.fn(async () => []),
+      getTimeBasedTopItems: vi.fn(async () => []),
+      getTrendingItems: vi.fn(async () => ({
+        items: [],
+        perf: { durationMs: 0, rowCount: 0, ready: true }
+      })),
+      getPluginCandidates: vi.fn(async () => [])
+    })
+
+    const inFlight = engine.recommend({ limit: 5 })
+    // The pass is suspended inside its behaviour read; now accept the execute.
+    await vi.waitFor(() => expect(dbUtils.getUsageBehaviorBatch).toHaveBeenCalled())
+    engine.invalidateCache()
+
+    // The stale read lands after the acceptance. It must not be published.
+    staleRead.resolve([strongRow('/Applications/Alpha.app'), weakRow('/Applications/Beta.app')])
+    const result = await inFlight
+
+    // What the user sees first reflects the post-acceptance facts. A missing generation recheck
+    // would publish the pre-execute pass, where Alpha is still the habit.
+    expect(result.items.map((item) => item.id)[0]).toBe('/Applications/Beta.app')
+
+    // And the snapshot written to the persistent cache carries the same post-acceptance ranking, so
+    // a warm reopen cannot resurrect the pre-execute order.
+    expect(cachedItems).toBeDefined()
+    expect((cachedItems![0] as { id?: string } | undefined)?.id).toBe('/Applications/Beta.app')
   })
 
   it('tags the newly installed ids it returned so exposure can be sliced', async () => {
@@ -2446,6 +2932,105 @@ describe('RecommendationEngine', () => {
     expect(exposureServiceMock.setTaggedKeys).toHaveBeenLastCalledWith('newly-installed', [
       'app-provider:/Applications/Fresh.app'
     ])
+  })
+
+  describe('plugin recommendation execute dispatch', () => {
+    const CANDIDATE_ID = 'open-project'
+
+    /**
+     * Register a provider, then run one recommendation pass so the host takes its candidate
+     * snapshot — the snapshot is what dispatch trusts, and the pass is the only thing that fills it.
+     */
+    async function withRegisteredProvider(
+      onExecute: (candidate: unknown, args: unknown) => unknown
+    ): Promise<{
+      engine: RecommendationEngine
+      /** The rebuilt card, as the host published it to the renderer. */
+      card: TuffItem
+    }> {
+      const engine = new RecommendationEngine(createDbUtils() as never)
+      registerPluginProvider(engine, 'demo-plugin', {
+        id: 'demo-provider',
+        canProvide: () => true,
+        onExecute,
+        getCandidates: async () => [{ id: CANDIDATE_ID, title: 'Open Project', action: 'open' }]
+      })
+      // Stub every DB-reading dimension but leave `getPluginCandidates` real: the pass must reach
+      // it to take the host snapshot the dispatch reads.
+      Object.assign(engine as unknown as Record<string, unknown>, {
+        contextProvider: {
+          getCurrentContext: vi.fn(async () => morningContext),
+          generateCacheKey: () => 'plugin-execute-key'
+        },
+        scheduleTrendBackfill: vi.fn(),
+        getPinnedItems: vi.fn(async () => []),
+        getFrequentItems: vi.fn(async () => []),
+        getRecentItems: vi.fn(async () => []),
+        getTimeBasedTopItems: vi.fn(async () => []),
+        getTrendingItems: vi.fn(async () => ({
+          items: [],
+          perf: { durationMs: 0, rowCount: 0, ready: true }
+        }))
+      })
+
+      const result = await engine.recommend({ limit: 5 })
+      const card = result.items.find((item) => item.id === CANDIDATE_ID)
+      if (!card) throw new Error('plugin candidate was not rebuilt into a card')
+      return { engine, card }
+    }
+
+    function executeViaSource(
+      _engine: RecommendationEngine,
+      card: TuffItem,
+      actionId?: string
+    ): Promise<{ accepted: boolean }> {
+      const entry = recommendationSourceRegistry.resolve(card.source.id)
+      if (!entry?.execute) throw new Error('plugin source did not register an execute path')
+      return entry.execute({ item: card, actionId })
+    }
+
+    it('counts the run when the provider accepts its own candidate', async () => {
+      const onExecute = vi.fn(() => true)
+      const { engine, card } = await withRegisteredProvider(onExecute)
+
+      const outcome = await executeViaSource(engine, card, 'open')
+
+      expect(outcome.accepted).toBe(true)
+      // The provider sees the host-produced candidate, not the renderer's copy.
+      expect(onExecute).toHaveBeenCalledWith(
+        expect.objectContaining({ id: CANDIDATE_ID, action: 'open' }),
+        expect.objectContaining({ item: expect.objectContaining({ id: CANDIDATE_ID }) })
+      )
+    })
+
+    it('does not count when the provider returns false', async () => {
+      const { engine, card } = await withRegisteredProvider(() => false)
+
+      expect((await executeViaSource(engine, card, 'open')).accepted).toBe(false)
+    })
+
+    it('does not count when the provider throws', async () => {
+      const { engine, card } = await withRegisteredProvider(() => {
+        throw new Error('action failed')
+      })
+
+      expect((await executeViaSource(engine, card, 'open')).accepted).toBe(false)
+    })
+
+    it('does not dispatch a tampered card the provider never proposed', async () => {
+      const onExecute = vi.fn(() => true)
+      const { engine, card } = await withRegisteredProvider(onExecute)
+
+      // The renderer renames the candidate. Dispatch resolves the snapshot by the original id,
+      // finds nothing, and refuses rather than running the provider's action on a forged payload.
+      const tampered: TuffItem = {
+        ...card,
+        meta: { ...card.meta, _originalItemId: 'forged-candidate' }
+      }
+
+      expect((await executeViaSource(engine, tampered, 'open')).accepted).toBe(false)
+      expect(onExecute).not.toHaveBeenCalled()
+    })
   })
 })
 
@@ -2514,9 +3099,7 @@ describe('RecommendationEngine plugin candidate ranking', () => {
     candidate: unknown,
     context: unknown,
     semanticSettings: unknown,
-    semanticProfile: unknown,
-    usagePreferenceProfile: unknown,
-    usageAvoidanceProfile: unknown
+    semanticProfile: unknown
   ) => Promise<number>
 
   const semanticOff = {
@@ -2528,17 +3111,19 @@ describe('RecommendationEngine plugin candidate ranking', () => {
   function scoreOf(engine: RecommendationEngine, candidate: unknown): Promise<number> {
     const score = (engine as unknown as { calculateRecommendationScore: ScoreFn })
       .calculateRecommendationScore
-    return score.call(engine, candidate, morningContext, semanticOff, null, null, null)
+    return score.call(engine, candidate, morningContext, semanticOff, null)
   }
 
   const pluginCandidate = (
     priority: number,
-    usageStats = createUsageStats('open-project', { executeCount: 0, lastExecuted: null })
+    usageStats = createUsageStats('open-project', { executeCount: 0, lastExecuted: null }),
+    behavior?: ReturnType<typeof createBehaviorRow>
   ): unknown => ({
     sourceId: 'plugin-recommend:demo',
     itemId: 'open-project',
     sourceType: 'plugin-recommend',
     usageStats,
+    behavior,
     source: 'plugin',
     pluginCandidate: {
       providerId: 'demo',
@@ -2549,13 +3134,23 @@ describe('RecommendationEngine plugin candidate ranking', () => {
     }
   })
 
-  const heavilyUsedApp = (): unknown => ({
+  // A typed record, not `unknown`: the recency-budget cases spread it, and spreading `unknown`
+  // is a compile error rather than a silent widening.
+  const heavilyUsedApp = (): Record<string, unknown> => ({
     sourceId: 'app-provider',
     itemId: '/Applications/Daily.app',
     sourceType: 'app',
     usageStats: createUsageStats('/Applications/Daily.app', {
       executeCount: 100,
       lastExecuted: new Date()
+    }),
+    behavior: createBehaviorRow('/Applications/Daily.app', {
+      executeCount: 100,
+      executeCount30: 40,
+      executeCount7: 12,
+      activeDays30: 20,
+      decayedExecuteScore30: 36,
+      lastExecutedAt: Date.now() - 3 * DAY_MS
     }),
     source: 'frequent'
   })
@@ -2578,9 +3173,19 @@ describe('RecommendationEngine plugin candidate ranking', () => {
     expect(high).toBeGreaterThan(low)
   })
 
+  it('caps a declared priority so it cannot buy more than five points', async () => {
+    // A million is not a habit: the manifest number is bounded at 5/100 of the behaviour scale.
+    const engine = new RecommendationEngine(createDbUtils() as never)
+
+    const atHundred = await scoreOf(engine, pluginCandidate(100))
+    const atMillion = await scoreOf(engine, pluginCandidate(1_000_000))
+
+    expect(atMillion).toBe(atHundred)
+  })
+
   it('lets a plugin item climb once the user actually uses it', async () => {
-    // The whole point of removing the short-circuit: usage, not the plugin's own number, is what
-    // moves an item up.
+    // The whole point of removing the short-circuit: real, dated executions — not the plugin's own
+    // number — are what move an item up.
     const engine = new RecommendationEngine(createDbUtils() as never)
 
     const unused = await scoreOf(engine, pluginCandidate(50))
@@ -2588,7 +3193,15 @@ describe('RecommendationEngine plugin candidate ranking', () => {
       engine,
       pluginCandidate(
         50,
-        createUsageStats('open-project', { executeCount: 40, lastExecuted: new Date() })
+        createUsageStats('open-project', { executeCount: 40, lastExecuted: new Date() }),
+        createBehaviorRow('open-project', {
+          executeCount: 40,
+          executeCount30: 20,
+          executeCount7: 6,
+          activeDays30: 10,
+          decayedExecuteScore30: 18,
+          lastExecutedAt: Date.now() - 3 * DAY_MS
+        })
       )
     )
 
@@ -2617,6 +3230,57 @@ describe('RecommendationEngine plugin candidate ranking', () => {
     expect(cardScore).toBe(95 * 1e5)
     expect(cardScore).toBeGreaterThan(await scoreOf(engine, heavilyUsedApp()))
   })
+
+  it('keeps the recency boost inside the automatic 100-point budget', async () => {
+    // behaviour base (saturates at 80) + time (maxes at 20) already reach the automatic ceiling of
+    // 100 on their own. The recency boost must be folded INTO that budget, not appended after it —
+    // otherwise a just-used item would outrank an equally habitual one on nothing but the clock.
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    const concentratedHours = Array.from({ length: 24 }, () => 0)
+    concentratedHours[morningContext.time.hourOfDay] = 1_000
+    const strongFacts = {
+      executeCount: 5_000,
+      executeCount30: 40,
+      executeCount7: 12,
+      activeDays30: 20,
+      decayedExecuteScore30: 30,
+      hourDistribution30: concentratedHours,
+      dayOfWeekDistribution30: Array.from({ length: 7 }, () => 0),
+      timeSlotDistribution30: {
+        morning: 0,
+        afternoon: 0,
+        evening: 0,
+        night: 0
+      }
+    }
+    ;(strongFacts.timeSlotDistribution30 as Record<string, number>)[morningContext.time.timeSlot] =
+      40
+
+    const saturatedWithoutRecency = {
+      ...heavilyUsedApp(),
+      behavior: {
+        ...createBehaviorRow('/Applications/Daily.app', {}),
+        ...strongFacts,
+        lastExecutedAt: null
+      }
+    }
+    const saturatedWithRecency = {
+      ...heavilyUsedApp(),
+      behavior: {
+        ...createBehaviorRow('/Applications/Daily.app', {}),
+        ...strongFacts,
+        lastExecutedAt: Date.now()
+      }
+    }
+
+    const withoutRecency = await scoreOf(engine, saturatedWithoutRecency)
+    const withRecency = await scoreOf(engine, saturatedWithRecency)
+
+    // behaviour + time alone stop short of the ceiling, so the recency boost is what reaches it...
+    expect(withoutRecency).toBeLessThan(100 * 10_000)
+    // ...and it is clamped there rather than appended past it.
+    expect(withRecency).toBe(100 * 10_000)
+  })
 })
 
 describe('RecommendationEngine plugin candidate quotas', () => {
@@ -2632,9 +3296,10 @@ describe('RecommendationEngine plugin candidate quotas', () => {
   }
 
   function registerProvider(engine: RecommendationEngine, id: string, count: number): void {
-    engine.registerPluginProvider('demo-plugin', {
+    registerPluginProvider(engine, 'demo-plugin', {
       id,
       canProvide: () => true,
+      onExecute: () => true,
       getCandidates: async () =>
         Array.from({ length: count }, (_unused, index) => ({
           id: `${id}-candidate-${index}`,
@@ -2693,14 +3358,45 @@ describe('RecommendationEngine plugin candidate quotas', () => {
 
     await expect(collect(engine)).resolves.toHaveLength(3)
   })
+
+  it('rejects a provider without onExecute rather than registering an inert card', () => {
+    const engine = new RecommendationEngine(createDbUtils() as never)
+
+    expect(() =>
+      registerPluginProvider(engine, 'demo-plugin', {
+        id: 'inert',
+        canProvide: () => true,
+        getCandidates: async () => []
+      } as never)
+    ).toThrow(/must implement onExecute/)
+  })
+
+  it('rejects a duplicate provider id without disturbing the incumbent source', () => {
+    // Registration is source-first, so a conflicting id throws before the provider map is
+    // touched: the incumbent must keep both its provider and its registered source.
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    registerProvider(engine, 'dup', 1)
+    const incumbent = recommendationSourceRegistry.resolve('plugin-recommend:dup')
+
+    expect(() =>
+      registerPluginProvider(engine, 'demo-plugin', {
+        id: 'dup',
+        canProvide: () => true,
+        onExecute: () => true,
+        getCandidates: async () => []
+      } as never)
+    ).toThrow(/already registered/)
+
+    expect(recommendationSourceRegistry.resolve('plugin-recommend:dup')).toBe(incumbent)
+  })
 })
 
 describe('RecommendationEngine fallback badges', () => {
-  it('keeps the badge the rebuilder wrote on usage-ranked fallback items', async () => {
-    // `getFallbackRecommendations` used to overwrite `meta.recommendation` with a bare
-    // `{ source: 'frequent' }` after the rebuild, so every tile the backfill supplied showed no
-    // badge while its neighbours read "Frequent" and "Just installed".
-    const engine = new RecommendationEngine(createDbUtils() as never)
+  /** A stub rebuilder that mirrors the real one: it echoes the candidate's source into the badge. */
+  function fallbackEngineWith(behaviorRow: ReturnType<typeof createBehaviorRow>) {
+    const dbUtils = createDbUtils()
+    dbUtils.getUsageBehaviorBatch = vi.fn(async (): Promise<UsageBehaviorRow[]> => [behaviorRow])
+    const engine = new RecommendationEngine(dbUtils as never)
     Object.assign(engine as unknown as Record<string, unknown>, {
       getFrequentItems: vi.fn(async () => [
         {
@@ -2722,22 +3418,65 @@ describe('RecommendationEngine fallback badges', () => {
               recommendation: {
                 source: item.source,
                 score: item.score,
-                badge: { text: '$i18n:coreBox.recommendation.badge.frequent', variant: 'frequent' }
+                badge: {
+                  text: `$i18n:coreBox.recommendation.badge.${item.source}`,
+                  variant: item.source
+                }
               }
             }
           }))
       }
     })
+    return engine
+  }
 
-    const items = await (
+  const fallbackOf = (engine: RecommendationEngine): Promise<TuffItem[]> =>
+    (
       engine as unknown as { getFallbackRecommendations: (limit: number) => Promise<TuffItem[]> }
     ).getFallbackRecommendations(5)
+
+  it('keeps the badge the rebuilder wrote on usage-ranked fallback items', async () => {
+    // `getFallbackRecommendations` used to overwrite `meta.recommendation` with a bare
+    // `{ source: 'frequent' }` after the rebuild, so every tile the backfill supplied showed no
+    // badge while its neighbours read "Frequent" and "Just installed". With real 5/3 dated facts
+    // the item legitimately keeps the frequent label.
+    const engine = fallbackEngineWith(
+      createBehaviorRow('/Applications/Mission Control.app', {
+        executeCount: 5,
+        executeCount30: 5,
+        executeCount7: 3,
+        activeDays30: 3,
+        decayedExecuteScore30: 4,
+        lastExecutedAt: Date.now() - 3 * DAY_MS
+      })
+    )
+
+    const items = await fallbackOf(engine)
 
     expect(items).toHaveLength(1)
     expect(items[0]?.meta?.recommendation).toMatchObject({
       source: 'frequent',
       badge: { variant: 'frequent' }
     })
+  })
+
+  it('does not let an unqualified fallback item claim the frequent label', async () => {
+    // Same rebuild path, but the ledger only supports "recent": the fallback must relabel it rather
+    // than keep a habit label the evidence does not reach (R9).
+    const engine = fallbackEngineWith(
+      createBehaviorRow('/Applications/Mission Control.app', {
+        executeCount: 4,
+        executeCount30: 4,
+        executeCount7: 2,
+        activeDays30: 2,
+        decayedExecuteScore30: 3,
+        lastExecutedAt: Date.now() - 3 * DAY_MS
+      })
+    )
+
+    const items = await fallbackOf(engine)
+
+    expect(items[0]?.meta?.recommendation).toMatchObject({ source: 'recent' })
   })
 })
 
@@ -2765,12 +3504,12 @@ describe('RecommendationEngine empty-state tiers', () => {
     )
   }
 
-  const item = (id: string, source: string, pinned = false): unknown => ({
+  const item = (id: string, source: string, pinned = false, frequentEligible = false): unknown => ({
     id,
     kind: 'app',
     source: { id: 'app-provider', type: 'application' },
     meta: {
-      recommendation: { source },
+      recommendation: { source, frequentEligible },
       ...(pinned ? { pinned: { isPinned: true } } : {})
     }
   })
@@ -2782,45 +3521,56 @@ describe('RecommendationEngine empty-state tiers', () => {
     meta: { recommendation: { source } }
   })
 
-  it('fills the grid habit-first, then by rank', () => {
-    // Habit wins a slot over a higher-ranked suggestion, but the row is filled either way. Seven
-    // items so the grid (one row of six) actually overflows and both sections exist.
+  it('puts only pinned and frequent-eligible items on the grid, without topping it up', () => {
+    // Two habit tiles and a pile of suggestions: the grid holds exactly the habits, and the
+    // suggestions wait in the list rather than filling the row (R4/AC6).
     const sections = layoutOf([
-      item('rank-1', 'time-based'),
-      item('rank-2', 'plugin'),
-      item('rank-3', 'trending'),
-      item('rank-4', 'recent'),
-      item('rank-5', 'context'),
-      item('rank-6', 'cold-start'),
-      item('daily-app', 'frequent')
+      item('habit-a', 'frequent', false, true),
+      item('habit-b', 'frequent', false, true),
+      item('suggestion-1', 'time-based'),
+      item('suggestion-2', 'plugin'),
+      item('suggestion-3', 'cold-start')
     ]).sections
 
     expect(sections?.map((section) => [section.id, section.layout])).toEqual([
       ['habitual', 'grid'],
       ['proposed', 'list']
     ])
-    // The habitual one is last by rank yet takes the first slot; the rest fill in rank order.
-    expect(sections?.[0]?.itemIds).toEqual([
-      'daily-app',
-      'rank-1',
-      'rank-2',
-      'rank-3',
-      'rank-4',
-      'rank-5'
-    ])
-    expect(sections?.[1]?.itemIds).toEqual(['rank-6'])
+    expect(sections?.[0]?.itemIds).toEqual(['habit-a', 'habit-b'])
+    expect(sections?.[1]?.itemIds).toEqual(['suggestion-1', 'suggestion-2', 'suggestion-3'])
   })
 
-  it('still fills the grid when the user has no usage history at all', () => {
-    // Gating the grid on habit alone left it empty for every new user, and an all-list empty state
-    // loses the launch row entirely.
+  it('never puts a suggestion on the grid just because the habit row is short', () => {
+    // One eligible habit and four suggestions: the row stays at one, not five.
+    const sections = layoutOf([
+      item('only-habit', 'frequent', false, true),
+      item('suggestion-1', 'time-based'),
+      item('suggestion-2', 'plugin'),
+      item('suggestion-3', 'cold-start'),
+      item('suggestion-4', 'trending')
+    ]).sections
+
+    expect(sections?.[0]?.itemIds).toEqual(['only-habit'])
+    expect(sections?.[1]?.itemIds).toHaveLength(4)
+  })
+
+  it('does not treat a frequent label as habit evidence', () => {
+    // The badge is a claim, not proof: without the scorer's eligibility flag the row is a list row.
+    const sections = layoutOf([item('labelled-only', 'frequent')]).sections
+
+    expect(sections?.map((section) => [section.id, section.layout])).toEqual([['proposed', 'list']])
+    expect(sections?.[0]?.itemIds).toEqual(['labelled-only'])
+  })
+
+  it('emits no habitual section when the user has no eligible habit and no pin', () => {
+    // A new user sees only suggestions below; there is no grid to fill with cold-start content.
     const sections = layoutOf([
       item('fresh-a', 'newly-installed'),
       item('fresh-b', 'newly-installed'),
       item('suggested', 'cold-start')
     ]).sections
 
-    expect(sections?.[0]).toMatchObject({ id: 'habitual', layout: 'grid' })
+    expect(sections?.map((section) => section.id)).toEqual(['proposed'])
     expect(sections?.[0]?.itemIds).toEqual(['fresh-a', 'fresh-b', 'suggested'])
   })
 
@@ -2830,7 +3580,7 @@ describe('RecommendationEngine empty-state tiers', () => {
     const sections = layoutOf([
       fileItem('/Users/x/Downloads/a.png', 'newly-added'),
       fileItem('/Users/x/Downloads/b.png', 'newly-added'),
-      item('an-app', 'newly-installed')
+      item('an-app', 'frequent', false, true)
     ]).sections
 
     expect(sections?.[0]?.itemIds).toEqual(['an-app'])
@@ -2841,36 +3591,43 @@ describe('RecommendationEngine empty-state tiers', () => {
     // `meta.intelligence` is not decoration: it caps the grid at the intelligence column limit and
     // draws an animated rainbow border. The habitual tier is neither — it is the plain row of
     // things the user reaches for.
-    const sections = layoutOf([item('a', 'frequent'), item('b', 'plugin')]).sections
+    const sections = layoutOf([item('a', 'frequent', false, true), item('b', 'plugin')]).sections
 
     expect(sections?.[0]).not.toHaveProperty('meta.intelligence')
   })
 
   it('titles both tiers with i18n keys rather than a hardcoded language', () => {
-    const sections = layoutOf([item('a', 'frequent'), fileItem('/b.png', 'newly-added')]).sections
+    const sections = layoutOf([
+      item('a', 'frequent', false, true),
+      fileItem('/b.png', 'newly-added')
+    ]).sections
 
     expect(sections?.[0]?.title).toBe('$i18n:coreBox.sections.habitual')
     expect(sections?.[1]?.title).toBe('$i18n:coreBox.sections.proposed')
   })
 
-  it('caps the grid at one row and spills the rest into the list', () => {
+  it('caps the grid at one row and drops the overflow rather than filling a second row', () => {
+    // Approved rule: the grid is pinned + habit-eligible, at most six, and never padded or
+    // overflowed into a second row. Eligible tiles that do not fit are dropped from the grid —
+    // they are not demoted into a half-empty list of habit rows.
     const many = Array.from({ length: 10 }, (_unused, index) =>
-      item(`frequent-${index}`, 'frequent')
+      item(`habit-${index}`, 'frequent', false, true)
     )
 
     const { grid, sections } = layoutOf(many)
 
     expect(grid?.columns).toBe(6)
+    expect(sections).toHaveLength(1)
     expect(sections?.[0]?.itemIds).toHaveLength(6)
-    // A second, half-empty grid row blurs the boundary between the tiers.
-    expect(sections?.[1]?.itemIds).toHaveLength(4)
   })
 
   it('gives pinned entries a grid slot even though they sort last', () => {
     // Pinning is not a score, so pinned items are appended after the ranked ones. Taking the grid
     // in list order would drop the one thing the user asked to always see into the tier below.
     const items = [
-      ...Array.from({ length: 8 }, (_unused, index) => item(`frequent-${index}`, 'frequent')),
+      ...Array.from({ length: 8 }, (_unused, index) =>
+        item(`habit-${index}`, 'frequent', false, true)
+      ),
       item('pinned-app', 'frequent', true)
     ]
 
@@ -2878,6 +3635,13 @@ describe('RecommendationEngine empty-state tiers', () => {
 
     expect(sections?.[0]?.itemIds?.[0]).toBe('pinned-app')
     expect(sections?.[0]?.itemIds).toHaveLength(6)
+  })
+
+  it('gives a pinned zero-use entry a grid slot, so a pin never depends on habit', () => {
+    // AC7: a pinned item with no usage at all is still the user's choice.
+    const sections = layoutOf([item('pinned-cold', 'pinned', true)]).sections
+
+    expect(sections?.[0]?.itemIds).toEqual(['pinned-cold'])
   })
 
   it('keeps a pinned file out of the grid and lets it lead the list', () => {
@@ -2893,7 +3657,7 @@ describe('RecommendationEngine empty-state tiers', () => {
     }
 
     const sections = layoutOf([
-      item('an-app', 'frequent'),
+      item('an-app', 'frequent', false, true),
       fileItem('/Users/x/Downloads/a.png', 'newly-added'),
       pinnedFile
     ]).sections
@@ -2907,7 +3671,10 @@ describe('RecommendationEngine empty-state tiers', () => {
   })
 
   it('emits only the grid when everything fits in one row', () => {
-    const sections = layoutOf([item('a', 'frequent'), item('b', 'frequent')]).sections
+    const sections = layoutOf([
+      item('a', 'frequent', false, true),
+      item('b', 'frequent', false, true)
+    ]).sections
 
     expect(sections?.map((section) => section.id)).toEqual(['habitual'])
   })
@@ -3012,8 +3779,9 @@ describe('RecommendationEngine newly added files', () => {
     await expect(collect(4)).resolves.toHaveLength(4)
   })
 
-  it('hydrates the usage row so an already-opened file stops being news', async () => {
-    // Novelty is gated on executeCount === 0; without the real row every file would look untouched.
+  it('drops an already-opened file so it stops being news', async () => {
+    // First real open ends the novelty claim (AC11): the file must be reached through behaviour,
+    // not through the "newly added" channel, so it is not returned at all.
     const { collect } = engineWith(
       [fileRow('/Users/x/Downloads/seen.pdf', HOUR_MS)],
       [
@@ -3025,11 +3793,32 @@ describe('RecommendationEngine newly added files', () => {
       ]
     )
 
+    await expect(collect(4)).resolves.toEqual([])
+  })
+
+  it('still returns an untouched file with its (empty) usage row', async () => {
+    // Positive control for the drop above: an un-opened file is still news, and it carries the
+    // stats row so the scorer can tell "never opened" from "row missing".
+    const { collect } = engineWith(
+      [fileRow('/Users/x/Downloads/fresh.pdf', HOUR_MS)],
+      [
+        {
+          ...createUsageStats('/Users/x/Downloads/fresh.pdf', {
+            executeCount: 0,
+            lastExecuted: null
+          }),
+          sourceId: 'file-provider',
+          itemId: '/Users/x/Downloads/fresh.pdf'
+        }
+      ]
+    )
+
     const [candidate] = await collect(4)
 
+    expect(candidate?.itemId).toBe('/Users/x/Downloads/fresh.pdf')
     expect(
       (candidate as unknown as { usageStats: { executeCount: number } }).usageStats.executeCount
-    ).toBe(3)
+    ).toBe(0)
   })
 
   it('degrades to [] when the lookup fails', async () => {

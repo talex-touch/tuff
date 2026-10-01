@@ -11,14 +11,11 @@ import type {
   IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
-import {
-  getNativeOcrSupport,
-  recognizeImageText,
-  type NativeOcrBlock
-} from '@talex-touch/tuff-native'
+import type { NativeOcrBlock } from '@talex-touch/tuff-native'
 import { NetworkHttpStatusError } from '@talex-touch/utils/network'
 import { enterPerfContext } from '../../../utils/perf-context'
 import { getNetworkService } from '../../network'
+import { recognizeImageTextIsolated } from '../../ocr/ocr-process-client'
 import { OpenAiCompatibleLangChainProvider } from './langchain-openai-compatible-provider'
 
 interface OllamaChatResponse {
@@ -289,25 +286,24 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
 
   async visionOcr(
     payload: IntelligenceVisionOcrPayload,
-    _options: IntelligenceInvokeOptions
+    options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>> {
     const traceId = this.generateTraceId()
     const startedAt = Date.now()
 
-    const support = getNativeOcrSupport()
-    if (!support.supported) {
-      throw new Error(
-        `[LocalProvider] Native OCR unavailable on ${support.platform}: ${support.reason || 'unsupported'}`
-      )
-    }
-
     const image = await this.getImageBuffer(payload.source)
-    const nativeResult = await recognizeImageText({
-      image,
-      languageHint: payload.language,
-      includeLayout: payload.includeLayout,
-      maxBlocks: 120
-    })
+    const nativeResult = await recognizeImageTextIsolated(
+      {
+        image,
+        languageHint: payload.language,
+        includeLayout: payload.includeLayout,
+        maxBlocks: 120
+      },
+      {
+        timeoutMs: this.resolveRequestTimeout(options, 30_000),
+        signal: (options as LocalProviderRuntimeOptions).signal
+      }
+    )
 
     const normalizedText = nativeResult.text || ''
 

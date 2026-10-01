@@ -3,7 +3,8 @@ import { buildManifest } from './windows-acceptance-manifest-test-utils'
 import {
   WINDOWS_REQUIRED_CASE_IDS,
   evaluateWindowsAcceptanceManifest,
-  verifyWindowsAcceptanceManifest
+  verifyWindowsAcceptanceManifest,
+  type WindowsAcceptanceEverythingSearchManualCheck
 } from './windows-acceptance-manifest-verifier'
 describe('windows-acceptance-manifest-verifier', () => {
   it('passes a complete Windows acceptance manifest', () => {
@@ -1152,5 +1153,104 @@ describe('windows-acceptance-manifest-verifier', () => {
       'common app launch observed launch target is missing: ChatApp',
       'common app launch CoreBox hidden evidence is missing: ChatApp'
     ])
+  })
+
+  /**
+   * The packaged CoreBox UI gate is how the Windows manifest proves the three real search modes ran
+   * against a live backend. These cases pin the manifest half of that contract: a complete
+   * everything-search check with strict verifier commands is accepted, while a missing evidence
+   * block or a verifier command that omits the strict gate flags is rejected — so a manifest cannot
+   * claim UI coverage whose artifacts were never checked at the required settings.
+   */
+  const RESULT_COMMAND =
+    'pnpm -C "apps/core-app" run everything:corebox-ui:verify -- --input "evidence/windows-everything-file-search-corebox-ui.json" --requireModes normal,explicit-file,structured-filter --requireBackend sdk-napi --requireAvailable --requireResultRows --requireMarkerMatches --requireScreenshots --requireEmptyState --requirePlatform win32'
+  const DEGRADED_COMMAND =
+    'pnpm -C "apps/core-app" run everything:corebox-ui:verify -- --input "evidence/windows-everything-file-search-corebox-ui-degraded.json" --requireModes normal,explicit-file,structured-filter --requireBackend unavailable --requireDegraded --requireScreenshots --requirePlatform win32'
+
+  function everythingSearch(
+    over: Partial<WindowsAcceptanceEverythingSearchManualCheck> = {}
+  ): WindowsAcceptanceEverythingSearchManualCheck {
+    return {
+      normalSearchPassed: true,
+      normalSearchQuery: 'tuff-everything-ci-marker.txt',
+      explicitFileSearchPassed: true,
+      explicitFileSearchQuery: '@file tuff-everything-ci-marker.txt',
+      structuredFilterSearchPassed: true,
+      structuredFilterSearchQuery: 'ext:txt tuff-everything-ci-marker',
+      sdkBackendEvidencePath: 'evidence/everything-sdk.json',
+      cliBackendEvidencePath: 'evidence/everything-cli.json',
+      unavailableBackendEvidencePath: 'evidence/everything-unavailable.json',
+      evidencePath: 'evidence/everything-search.md',
+      coreBoxUiEvidence: {
+        resultEvidencePath: 'evidence/windows-everything-file-search-corebox-ui.json',
+        resultVerifierCommand: RESULT_COMMAND,
+        degradedEvidencePath: 'evidence/windows-everything-file-search-corebox-ui-degraded.json',
+        degradedVerifierCommand: DEGRADED_COMMAND
+      },
+      ...over
+    }
+  }
+
+  const coreBoxFailures = (failures: string[]): string[] =>
+    failures.filter((failure) => failure.startsWith('Everything packaged CoreBox UI'))
+
+  it('accepts a complete packaged CoreBox UI evidence block with strict verifier commands', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({ manualChecks: { everythingSearch: everythingSearch() } }),
+      { requireEverythingSearchUiEvidence: true }
+    )
+    expect(coreBoxFailures(gate.failures)).toEqual([])
+  })
+
+  it('rejects a manifest that claims Everything UI coverage without the evidence block', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: { everythingSearch: everythingSearch({ coreBoxUiEvidence: undefined }) }
+      }),
+      { requireEverythingSearchUiEvidence: true }
+    )
+    expect(gate.failures).toContain('Everything packaged CoreBox UI evidence is missing')
+  })
+
+  it('rejects a missing degraded verifier command', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          everythingSearch: everythingSearch({
+            coreBoxUiEvidence: {
+              resultEvidencePath: 'evidence/corebox-ui.json',
+              resultVerifierCommand: RESULT_COMMAND,
+              degradedEvidencePath: 'evidence/corebox-ui-degraded.json'
+            }
+          })
+        }
+      }),
+      { requireEverythingSearchUiEvidence: true }
+    )
+    expect(gate.failures).toContain(
+      'Everything packaged CoreBox UI degraded verifier command is missing'
+    )
+  })
+
+  it('rejects a result verifier command that omits the strict gate flags', () => {
+    const gate = evaluateWindowsAcceptanceManifest(
+      buildManifest({
+        manualChecks: {
+          everythingSearch: everythingSearch({
+            coreBoxUiEvidence: {
+              resultEvidencePath: 'evidence/corebox-ui.json',
+              resultVerifierCommand:
+                'pnpm -C "apps/core-app" run everything:corebox-ui:verify -- --input "evidence/corebox-ui.json" --requireModes normal,explicit-file,structured-filter --requireAvailable --requireScreenshots --requirePlatform win32',
+              degradedEvidencePath: 'evidence/corebox-ui-degraded.json',
+              degradedVerifierCommand: DEGRADED_COMMAND
+            }
+          })
+        }
+      }),
+      { requireEverythingSearchUiEvidence: true }
+    )
+    expect(gate.failures).toContain(
+      'Everything packaged CoreBox UI result verifier command is missing strict gate flags'
+    )
   })
 })

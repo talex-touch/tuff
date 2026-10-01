@@ -104,7 +104,7 @@ describe('CoreBox footer feedback', () => {
     vi.useRealTimers()
   })
 
-  function mountFooter(props: { animated?: boolean } = {}) {
+  function mountFooter(props: { animated?: boolean; previewVisible?: boolean } = {}) {
     return mount(CoreBoxFooter, { props: { display: true, item, resultCount: 1, ...props } })
   }
 
@@ -242,6 +242,25 @@ describe('CoreBox footer feedback', () => {
     expect(still.get('.FooterFeedback').text()).toBe('已取消固定')
 
     still.unmount()
+  })
+
+  it('parks the keys the preview pane takes over, and brings them back when it closes', async () => {
+    // While the pane holds the file those keys drive the pane, so advertising them here would name
+    // a gesture the reader does not get. ⌘K still opens the action panel, so it stays.
+    const wrapper = mountFooter({ previewVisible: true })
+    await nextTick()
+    expect(wrapper.findAll('.FooterHint .HintKey').map((node) => node.text())).toEqual(['⌘K'])
+    // What the preview covers is the hint row, not the item's own label.
+    expect(wrapper.get('.FooterTitle').text()).toBe('Safari')
+
+    await wrapper.setProps({ previewVisible: false })
+    expect(wrapper.findAll('.FooterHint .HintKey').map((node) => node.text())).toEqual([
+      '↵',
+      '⌘K',
+      '⌘1-0'
+    ])
+
+    wrapper.unmount()
   })
 })
 

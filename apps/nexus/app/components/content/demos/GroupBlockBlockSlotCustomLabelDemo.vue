@@ -4,7 +4,7 @@ import { TuffInput } from '@talex-touch/tuffex/input'
 import { computed, ref } from 'vue'
 
 const { locale } = useI18n()
-const profileName = ref('Nexus')
+const profileName = ref('Tuff')
 
 const labels = computed(() => locale.value === 'zh'
   ? {

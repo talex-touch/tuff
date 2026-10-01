@@ -219,17 +219,17 @@ code: |
 
 ## recommend
 
-RecommendSDK：向 CoreBox 推荐引擎注册自定义推荐提供者。
+RecommendSDK：向 CoreBox 推荐引擎注册自定义推荐提供者。`registerProvider` 与 `unregisterProvider` 都返回 Promise，必须 `await`；provider 必须实现 `onExecute`，否则注册时抛错。
 
 :::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 注册推荐提供者
-  const dispose = recommend.registerProvider({
+  const dispose = await recommend.registerProvider({
   id: 'my-recommendation',
   name: '我的推荐',
   canProvide(context) {
-  return context.timeOfDay === 'morning'
+  return context.time.timeSlot === 'morning'
   },
   getCandidates(context) {
   return [{
@@ -240,13 +240,19 @@ code: |
   priority: 75,
   action: 'show-morning-tip'
   }]
+  },
+  // 返回 true 或 undefined 表示主操作已被接受，宿主记一次使用；
+  // 返回 false 或抛错表示失败，不计数。
+  async onExecute(candidate) {
+  if (candidate.action !== 'show-morning-tip') return false
+  return await showMorningTip()
   }
   })
 
   // 注销提供者
-  dispose()
+  await dispose()
   // 或
-  recommend.unregisterProvider('my-recommendation')
+  await recommend.unregisterProvider('my-recommendation')
 ---
 :::
 

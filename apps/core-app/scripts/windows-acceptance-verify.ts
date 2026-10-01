@@ -11,6 +11,16 @@ import {
   validateWindowsAcceptancePerformanceEvidence,
   verifyWindowsAcceptanceManifest
 } from '../src/main/modules/platform/windows-acceptance-manifest-verifier'
+import {
+  EVERYTHING_COREBOX_UI_EVIDENCE_KIND,
+  EVERYTHING_COREBOX_UI_EVIDENCE_SCHEMA_VERSION,
+  evaluateEverythingCoreBoxUiEvidence,
+  verifyEverythingCoreBoxUiArtifacts
+} from '../src/main/modules/platform/everything-corebox-ui-verifier'
+import type {
+  EverythingCoreBoxSearchModeId,
+  EverythingCoreBoxUiEvidencePayload
+} from '../src/main/modules/platform/everything-corebox-ui-verifier'
 import { WINDOWS_ACCEPTANCE_MANUAL_EVIDENCE_LABELS } from './windows-acceptance-manual-evidence'
 import type {
   WindowsAcceptanceEvidenceSchemaKey,
@@ -96,6 +106,9 @@ Options:
   --requireClipboardStress       Require clipboard stress summary path and verifier command.
   --requireEverythingSearchManualChecks
                                  Require normal, @file, structured-filter, and SDK/CLI/unavailable Everything evidence.
+  --requireEverythingSearchUiEvidence
+                                 Require and strictly re-verify the packaged CoreBox UI result and
+                                 degraded evidence artifacts, including query/artifact agreement.
   --requireCommonAppLaunchDetails
                                  Require each common app target to verify search/name/icon/launch/CoreBox hide.
   --requireCopiedAppPathManualChecks
@@ -206,6 +219,13 @@ function parseArgs(argv: string[]): CliOptions | null {
     }
     if (arg === '--requireEverythingSearchManualChecks') {
       options.requireEverythingSearchManualChecks = true
+      continue
+    }
+    if (arg === '--requireEverythingSearchUiEvidence') {
+      options.requireEverythingSearchUiEvidence = true
+      options.requireEverythingSearchManualChecks = true
+      options.requireExistingEvidenceFiles = true
+      options.requireEvidencePath = true
       continue
     }
     if (arg === '--requireCommonAppLaunchDetails') {
@@ -369,6 +389,13 @@ function collectEvidencePaths(manifest: WindowsAcceptanceManifest): string[] {
   }
   if (manifest.manualChecks?.everythingSearch?.evidencePath) {
     paths.push(manifest.manualChecks.everythingSearch.evidencePath)
+  }
+  const coreBoxUiEvidence = manifest.manualChecks?.everythingSearch?.coreBoxUiEvidence
+  if (coreBoxUiEvidence?.resultEvidencePath) {
+    paths.push(coreBoxUiEvidence.resultEvidencePath)
+  }
+  if (coreBoxUiEvidence?.degradedEvidencePath) {
+    paths.push(coreBoxUiEvidence.degradedEvidencePath)
   }
   if (manifest.manualChecks?.copiedAppPath?.evidencePath) {
     paths.push(manifest.manualChecks.copiedAppPath.evidencePath)
@@ -731,6 +758,126 @@ async function findFailedPerformanceGates(
   return { failedGates, schemaMismatches }
 }
 
+async function findEverythingCoreBoxUiFailures(
+  manifest: WindowsAcceptanceManifest,
+  baseDir: string
+): Promise<string[]> {
+  const check = manifest.manualChecks?.everythingSearch
+  const uiEvidence = check?.coreBoxUiEvidence
+  if (!check || !uiEvidence) return []
+
+  const resultPath = uiEvidence.resultEvidencePath
+  const degradedPath = uiEvidence.degradedEvidencePath
+  // Field presence is the manifest verifier's job; without both paths there is nothing to read here
+  // and reporting a second time would only duplicate its message.
+  if (!resultPath || !degradedPath) return []
+
+  const failures: string[] = []
+  const expectedQueries: Record<EverythingCoreBoxSearchModeId, string | undefined> = {
+    normal: check.normalSearchQuery,
+    'explicit-file': check.explicitFileSearchQuery,
+    'structured-filter': check.structuredFilterSearchQuery
+  }
+
+  const readPayload = async (
+    evidencePath: string,
+    label: string
+  ): Promise<EverythingCoreBoxUiEvidencePayload | null> => {
+    try {
+      const parsed = JSON.parse(
+        await readFile(resolveEvidencePath(evidencePath, baseDir), 'utf8')
+      ) as {
+        kind?: unknown
+        schemaVersion?: unknown
+      }
+      if (
+        parsed?.kind !== EVERYTHING_COREBOX_UI_EVIDENCE_KIND ||
+        parsed?.schemaVersion !== EVERYTHING_COREBOX_UI_EVIDENCE_SCHEMA_VERSION
+      ) {
+        failures.push(
+          `Everything packaged CoreBox UI ${label} evidence has an unsupported schema: ${evidencePath}`
+        )
+        return null
+      }
+      return parsed as EverythingCoreBoxUiEvidencePayload
+    } catch (error) {
+      failures.push(
+        `Everything packaged CoreBox UI ${label} evidence could not be read: ${evidencePath} (${
+          error instanceof Error ? error.message : String(error)
+        })`
+      )
+      return null
+    }
+  }
+
+  const requiredModes: EverythingCoreBoxSearchModeId[] = [
+    'normal',
+    'explicit-file',
+    'structured-filter'
+  ]
+  const resultEvidence = await readPayload(resultPath, 'result')
+  if (resultEvidence) {
+    const gate = evaluateEverythingCoreBoxUiEvidence(resultEvidence, {
+      requirePackaged: true,
+      requirePlatform: 'win32',
+      requireModes: requiredModes,
+      requireBackend: ['sdk-napi', 'cli'],
+      requireAvailable: true,
+      requireResultRows: true,
+      requireMarkerMatches: true,
+      requireScreenshots: true,
+      requireEmptyState: true
+    })
+    for (const failure of gate.failures) {
+      failures.push(`Everything packaged CoreBox UI result evidence did not pass: ${failure}`)
+    }
+    // The artifact array naming a screenshot is not proof a file exists: resolve every listed
+    // screenshot against the evidence file's own directory and require a real, non-empty PNG.
+    const artifactGate = await verifyEverythingCoreBoxUiArtifacts(resultEvidence, {
+      baseDir: path.dirname(resolveEvidencePath(resultPath, baseDir)),
+      requireScreenshots: true
+    })
+    for (const failure of artifactGate.failures) {
+      failures.push(`Everything packaged CoreBox UI result evidence did not pass: ${failure}`)
+    }
+
+    for (const mode of requiredModes) {
+      const recordedQuery = resultEvidence.modes.find((entry) => entry.mode === mode)?.query
+      const declaredQuery = expectedQueries[mode]
+      if (recordedQuery && declaredQuery && recordedQuery !== declaredQuery) {
+        failures.push(
+          `Everything packaged CoreBox UI ${mode} query does not match the collected artifact: manifest "${declaredQuery}" vs evidence "${recordedQuery}"`
+        )
+      }
+    }
+  }
+
+  const degradedEvidence = await readPayload(degradedPath, 'degraded')
+  if (degradedEvidence) {
+    const gate = evaluateEverythingCoreBoxUiEvidence(degradedEvidence, {
+      requirePackaged: true,
+      requirePlatform: 'win32',
+      requireModes: requiredModes,
+      requireBackend: ['unavailable'],
+      requireDegraded: true,
+      requireScreenshots: true,
+      requireResultRows: true
+    })
+    for (const failure of gate.failures) {
+      failures.push(`Everything packaged CoreBox UI degraded evidence did not pass: ${failure}`)
+    }
+    const artifactGate = await verifyEverythingCoreBoxUiArtifacts(degradedEvidence, {
+      baseDir: path.dirname(resolveEvidencePath(degradedPath, baseDir)),
+      requireScreenshots: true
+    })
+    for (const failure of artifactGate.failures) {
+      failures.push(`Everything packaged CoreBox UI degraded evidence did not pass: ${failure}`)
+    }
+  }
+
+  return failures
+}
+
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2))
   if (!options) return
@@ -814,6 +961,13 @@ async function main(): Promise<void> {
       verified.gate.passed = verified.gate.failures.length === 0
     }
   }
+
+  const coreBoxUiFailures = await findEverythingCoreBoxUiFailures(
+    manifest,
+    resolveEvidenceBaseDir(options)
+  )
+  verified.gate.failures.push(...coreBoxUiFailures)
+  verified.gate.passed = verified.gate.failures.length === 0
 
   console.log(JSON.stringify(verified, null, options.pretty ? 2 : 0))
 

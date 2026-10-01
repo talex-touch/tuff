@@ -412,7 +412,7 @@ const ARTISTS: Record<ArtistId, { name: Bi, hue: string }> = {
 const COLLECTIONS: Record<CollectionFilter, { label: Bi, blurb: Bi, dot: string, icon: string }> = {
   all: {
     label: { zh: '全部', en: 'All' },
-    blurb: { zh: 'Nexus 社区分享的壁纸、CoreBox 主题与插件封面。', en: 'Wallpapers, CoreBox themes and plugin covers shared on Nexus.' },
+    blurb: { zh: 'Tuff 社区分享的壁纸、CoreBox 主题与插件封面。', en: 'Wallpapers, CoreBox themes and plugin covers shared on Tuff.' },
     dot: '',
     icon: 'i-carbon-image-copy',
   },
@@ -430,7 +430,7 @@ const COLLECTIONS: Record<CollectionFilter, { label: Bi, blurb: Bi, dot: string,
   },
   cover: {
     label: { zh: '插件封面', en: 'Plugin covers' },
-    blurb: { zh: 'Nexus 插件市场里的封面与图标。', en: 'Covers and icons from the Nexus plugin store.' },
+    blurb: { zh: 'Tuff 插件市场里的封面与图标。', en: 'Covers and icons from the Tuff plugin store.' },
     dot: 'var(--tx-chart-categorical-6, #d37536)',
     icon: 'i-carbon-plug',
   },
@@ -570,7 +570,7 @@ const copy = computed(() => zh.value
   ? {
       frameTitle: 'Gallery 画廊',
       heading: '作品墙',
-      source: 'Nexus 社区',
+      source: 'Tuff 社区',
       works: (n: number) => `${n} 件作品`,
       creators: (n: number) => `${n} 位创作者`,
       collectionsLabel: '作品合集',
@@ -635,7 +635,7 @@ const copy = computed(() => zh.value
   : {
       frameTitle: 'Gallery',
       heading: 'Showcase wall',
-      source: 'Nexus community',
+      source: 'Tuff community',
       works: (n: number) => `${n} pieces`,
       creators: (n: number) => `${n} creators`,
       collectionsLabel: 'Collections',

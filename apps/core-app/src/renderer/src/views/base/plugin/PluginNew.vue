@@ -5,6 +5,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCheckbox } from '@talex-touch/tuffex/checkbox'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers/types'
 import { EnvDetector } from '@talex-touch/utils/renderer/touch-sdk/env'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import type { PluginInstallSourceResponse } from '@talex-touch/utils/transport/events/types/plugin'
@@ -14,7 +15,6 @@ import { computed, createVNode, onMounted, reactive, ref, watch } from 'vue'
 
 import { useI18n } from 'vue-i18n'
 import TerminalTemplate from '~/components/addon/TerminalTemplate.vue'
-import FlatInput from '~/components/base/input/FlatInput.vue'
 
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
 import ActionTemplate from '~/components/base/template/ActionTemplate.vue'
@@ -467,10 +467,10 @@ async function handleInstallDegit(): Promise<void> {
       <BlockTemplate :title="t('plugin.new.install.sourceBlockTitle')">
         <div class="InstallForm-Line">
           <label>{{ t('plugin.new.install.sourceLabel') }}</label>
-          <FlatInput
+          <TxInput
             v-model="installState.source"
             :placeholder="t('plugin.new.install.sourcePlaceholder')"
-            w="96!"
+            class="w-96!"
           />
         </div>
         <div class="InstallForm-Line">
@@ -495,9 +495,9 @@ async function handleInstallDegit(): Promise<void> {
       <BlockTemplate :title="t('plugin.new.install.metadataBlockTitle')">
         <div class="InstallForm-Line">
           <label>JSON</label>
-          <FlatInput
+          <TxInput
             v-model="installState.metadataText"
-            :area="true"
+            type="textarea"
             :placeholder="t('plugin.new.install.metadataPlaceholder')"
           />
         </div>
@@ -665,32 +665,30 @@ async function handleInstallDegit(): Promise<void> {
           regex='^[^\\\\/:*?"<>|]+(\\.[^\\\\/:*?"<>|]+)*$'
           :title="t('plugin.new.create.fields.name')"
         >
-          <FlatInput v-model="plugin.name" w="48!" />
+          <TxInput v-model="plugin.name" class="w-48!" />
         </LineTemplate>
         <LineTemplate :title="t('plugin.new.create.fields.icon')">
-          <FlatInput v-model="plugin.icon.value" w="48!">
-            <div h-full :class="plugin.icon.value" />
-          </FlatInput>
+          <TxInput v-model="plugin.icon.value" class="w-48!" :prefix-icon="plugin.icon.value" />
         </LineTemplate>
         <LineTemplate
           :msg="() => t('plugin.new.create.validation.version')"
           regex="^(\d+\.)(\d+\.)(\*|\d+)$"
           :title="t('plugin.new.create.fields.version')"
         >
-          <FlatInput v-model="plugin.version" w="48!" />
+          <TxInput v-model="plugin.version" class="w-48!" />
         </LineTemplate>
         <LineTemplate
           :msg="() => t('plugin.new.create.validation.devAddress')"
           regex="^(?:([A-Za-z]+):)?(\/{0,3})([0-9.\-A-Za-z]+)(?::(\d+))?(?:\/([^?#]*))?(?:\?([^#]*))?(?:#(.*))?$"
           :title="t('plugin.new.create.fields.devAddress')"
         >
-          <FlatInput v-model="plugin.dev.address" w="48!" />
+          <TxInput v-model="plugin.dev.address" class="w-48!" />
         </LineTemplate>
         <LineTemplate
           :msg="() => t('plugin.new.create.validation.description')"
           :title="t('plugin.new.create.fields.description')"
         >
-          <FlatInput v-model="plugin.desc" :area="true" w="96!" />
+          <TxInput v-model="plugin.desc" type="textarea" class="w-96!" />
         </LineTemplate>
       </BlockTemplate>
 

@@ -1,7 +1,7 @@
 {
   "$schema": "./components-lifecycle.schema.json",
   "currentVersion": "0.6.2",
-  "totalComponents": 165,
+  "totalComponents": 164,
   "versions": [
     {
       "version": "0.6.2",
@@ -572,11 +572,6 @@
     "flat-dropdown": {
       "slug": "flat-dropdown",
       "since": "0.3.9",
-      "suite": "base"
-    },
-    "flat-input": {
-      "slug": "flat-input",
-      "since": "0.3.4",
       "suite": "base"
     },
     "flat-radio": {

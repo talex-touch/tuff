@@ -113,7 +113,7 @@ const hasUpdateList = computed(() => releaseUpdates.value.length > 0)
 
 const pageTitle = computed(() => {
   if (isAllUpdatesView.value)
-    return `${t('updates.all.title')} · Tuff Nexus`
+    return `${t('updates.all.title')} · Tuff`
   return t('updates.title', 'Updates & downloads')
 })
 const pageDescription = computed(() => {

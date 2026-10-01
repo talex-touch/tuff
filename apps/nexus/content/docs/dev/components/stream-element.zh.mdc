@@ -1,0 +1,210 @@
+---
+title: "StreamElement 流式回答"
+description: "把一整段 AI 回答流式呈现：Markdown 或结构化片段在同一个时钟上逐词显影，引用 chip、代码块与委托渲染的表格、公式、图表，并公开流式状态供宿主驱动自己的界面"
+category: AiReasoning
+status: beta
+since: 0.6.3
+tags: [ai, streaming, markdown, citation, reveal]
+syncStatus: reviewed
+verified: true
+---
+
+## 安装
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/tuffex
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { TxStreamElement } from '@talex-touch/tuffex/stream-element'
+  import '@talex-touch/tuffex/stream-element/style.css'
+  import '@talex-touch/tuffex/base.css' // token 与重置样式，全局引入一次
+---
+:::
+
+## 用法
+
+`TxStreamElement` 用来流式呈现一整段回答。把目前收到的全部内容（Markdown）传给 `content`，源头还在输出时保持 `streaming` 为真：标题、段落、列表、引用和代码在同一个匀速时钟上严格按顺序逐词显影；`[n]` 标记按 `sources` 解析成引用 chip；表格、公式、图表、原始 HTML 与图片交给 `TxStreamMarkdown`，逐行显影。
+
+### 一段 AI 回答
+
+回答以不均匀的突发流入，中途停顿一次。操作行（点赞、点踩通过 `TxMessageActions` 的插槽组合）、来源堆叠和追问都通过 `footer` 插槽，等回答完成后才出现。点开引用 chip 会指出对应的来源。完成后，「重播」按所选节奏重放回答，这时由 `wordMs` 决定节奏；「重新生成」或点追问会开始一次新的流式输出。
+
+:::TuffDemoWrapper{demo="StreamElementAnswerDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStreamElement :content="answer" :streaming="busy" :sources="sources" @cite="open">
+      <template #footer="{ done }">
+        <template v-if="done">
+          <TxMessageActions :copy-text="answer" regenerable>
+            <button class="tx-message-actions__btn" aria-label="有帮助">…</button>
+          </TxMessageActions>
+          <TxSources :sources="sources" variant="stack" />
+          <TxSuggestionChips :suggestions="followUps" layout="list" />
+        </template>
+      </template>
+    </TxStreamElement>
+  </template>
+---
+:::
+
+### 委托渲染的 Markdown
+
+表格、行内公式和任务列表围着一个代码块：原生片段逐词显影，委托片段逐行显影，都在同一个时钟上。内容完整时，用 `replay()` 回放，`reserve` 让下方的内容在播放中保持不动。
+
+:::TuffDemoWrapper{demo="StreamElementMarkdownDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStreamElement ref="answer" :content="markdown" reserve />
+    <TxButton @click="answer?.replay()">重播</TxButton>
+  </template>
+---
+:::
+
+### 插槽与状态
+
+`parts` 直接接收结构化片段，包括自定义片段。每个内置部件都有对应插槽；插槽、`state-change` 事件、实例上的 `state` 和 `footer` 插槽都会告诉你流式进行到了哪一步。
+
+:::TuffDemoWrapper{demo="StreamElementSlotsDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStreamElement :parts="parts">
+      <template #caret="{ state }">
+        <span class="my-caret" :data-state="state" />
+      </template>
+      <template #citation="{ index }">
+        <sup>{{ index }}</sup>
+      </template>
+      <template #part-chart="{ part }">
+        <MyChart :values="part.props.values" />
+      </template>
+      <template #footer="{ state, done }">
+        {{ state }}
+      </template>
+    </TxStreamElement>
+  </template>
+---
+:::
+
+### 最佳实践
+
+- 传目前为止的完整回答，不要只传最新的增量；组件自己判断哪些是新的，前文被改写时只重新显影改动的部分。
+- 源头真正结束之前一直保持 `streaming` 为真：为真时，结尾处写到一半的结构（`**bold`、`` `code ``）会先替解析器补全，标记符号不会闪现。
+- 属于完整回答的东西（操作、来源、追问）都放进 `footer` 插槽并以 `done` 为条件，这样它们在最后一个词之后一次性出现。回答的盒子止于最后一个片段，后面不带外边距，footer 要自己设上间距。
+- 复制、分享用你手里的完整回答，不要用屏幕上显示的部分：显示最多会落后源头 `maxLagMs`。
+- `sources` 按模型引用的顺序给出：`[n]` 解析为 `sources[n - 1]`，没有对应来源的标记保持为文字。
+- 单段文字用 `TxStreamText`，不需要逐词显影时用 `TxStreamMarkdown`；本组件用于整段回答。
+
+## API 参考
+
+### 属性
+
+| 名称 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `content` | `string` | `''` | Markdown：目前收到的全部内容。 |
+| `parts` | `StreamPart[]` | — | `content` 的结构化替代，二者都给时以它为准。 |
+| `streaming` | `boolean` | `false` | 源头仍在输出。 |
+| `sources` | `AiSourceItem[]` | — | 把文字中的 `[n]` 解析成引用 chip（`sources[n - 1]`）。 |
+| `wordMs` | `number` | `24` | 每 `wordMs` 放出一个词。 |
+| `maxLagMs` | `number` | `600` | 提速，保证任何词在到达后这段时间内显示出来。 |
+| `drainMs` | `number` | `320` | `streaming` 变为 false 后，在这段时间内放完剩余部分。 |
+| `pauseMs` | `number` | `400` | 超过这段时间没有新词，就报告 `paused`。 |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | 词的进场方式；代码保持语法颜色。 |
+| `caret` | `boolean` | `true` | 流式进行时在写入位置显示光标。 |
+| `reserve` | `boolean` | `false` | 完整内容回放时占住最终版面：一份隐形副本；委托片段会晚一帧渲染，所以 `replay()` 时还会先占住回答当前的高度。`streaming` 时忽略。 |
+| `renderers` | `Record<string, Component>` | — | 按名称渲染自定义片段的组件；`part-<name>` 插槽优先。 |
+| `markdownProps` | `Partial<StreamMarkdownProps>` | — | 透传给渲染委托片段的 `TxStreamMarkdown`。 |
+| `locale` | `string` | `'zh'` | `Intl.Segmenter` 分词所用的语言。 |
+
+### 事件
+
+| 名称 | 参数 | 说明 |
+|------|------|------|
+| `state-change` | `(state: StreamState)` | 流式状态发生变化。 |
+| `done` | — | 每次播放触发一次：最后一个词已显示且源头已结束。 |
+| `cite` | `(source: AiSourceItem)` | 引用 chip 被打开。chip 自身从不跳转。 |
+
+### 插槽
+
+| 名称 | 作用域 | 说明 |
+|------|--------|------|
+| `caret` | `{ state }` | 替换流式光标，位于文字与代码的写入位置。 |
+| `citation` | `{ source, label, index }` | 替换引用 chip。 |
+| `inline` | `{ name, props }` | 渲染文字中的自定义行内片段。 |
+| `code` | `{ part, code, streaming }` | 替换代码块；`code` 为目前已显影的部分。 |
+| `part-<name>` | `{ part, state }` | 渲染 `{ type: 'custom', name }` 片段。 |
+| `footer` | `{ state, done }` | 回答下方；最后一个词已显示且源头已结束时 `done` 为真。 |
+
+### 暴露方法
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `state` | `StreamState` | 当前流式状态。 |
+| `replay` | `() => void` | 从第一个词开始把整段回答再播一遍。 |
+| `skip` | `() => void` | 立即显示全部内容，不再播放进场。 |
+
+### CSS 变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `--tx-stream-reveal-1` / `-2` / `-3` | 蓝 / 紫 / 粉，随主题变化 | 词扫过的三个颜色节点（与 `TxStreamText` 共用）。 |
+| `--tx-stream-reveal-duration` | 取决于预设 | 组件按 `reveal` 写在根节点上，使用方不需要设置。 |
+
+### 类型
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  type StreamPart =
+    | { type: 'heading', depth: 1 | 2 | 3 | 4 | 5 | 6, inlines: StreamInline[] }
+    | { type: 'paragraph', inlines: StreamInline[], tight?: boolean }
+    | { type: 'list', ordered: boolean, start?: number, items: { checked?: boolean, parts: StreamPart[] }[] }
+    | { type: 'quote', parts: StreamPart[] }
+    | { type: 'rule' }
+    | { type: 'code', lang?: string, code: string, filename?: string }
+    | { type: 'markdown', raw: string }
+    | { type: 'custom', name: string, props?: Record<string, unknown> }
+---
+:::
+
+## 概述
+
+- **一个时钟。** 组件持有唯一的节奏器。所有片段按文档顺序排在它上面——文字按词（`TxStreamText` 放出的单位），代码按词（`TxCodeStream` 的），委托的 Markdown 按行，分割线或自定义片段各算一个单位——每个片段拿到时钟已走到的那段前缀。于是片段严格按顺序、以同一个匀速节奏显影，突发内容表现为一段稍快的流动，整段回答不会落后源头超过 `maxLagMs`。
+- **写入位置。** 只有持有最后一个已放出词的片段处于流式状态并显示光标。光标随下一个片段的第一个词移过去，离开的片段关闭光标、立即移除，所以回答里任何时候都只有一个；回答结束时，最后那个光标收起。
+- **原生渲染：** 标题、段落、粗体、斜体、删除线、行内代码、链接（仅安全 URL）、列表（嵌套、任务）、引用、分割线和围栏代码（通过 `TxCodeStream`）。**整体委托**给 `TxStreamMarkdown`（连同它的净化与远程图片策略）：表格、公式、mermaid、原始 HTML 与图片；相邻的委托块合成一个片段。
+- **引用。** `[n]` 只在纯文字中变成 chip，代码和链接文字里不会，而且只在 `sources[n - 1]` 存在时。
+- **新片段同样有进场。** 片段挂载时带着已到期的词并播放它们的进场，所以跨进新段落的一阵突发不会让段首的词直接蹦出来。组件挂载时已有的内容直接显示。
+- **稳定的片段。** 片段按位置和类型作为 key：没有变化的片段在新 token 到来时保持元素和内容对象不变，所以一个 token 只重新渲染它落进的那个片段；类型改变的片段（段落变成 setext 标题）以落定状态重新挂载一次。
+- **状态。** `idle` → `streaming` → `paused` → `draining` → `done`，通过事件、实例和 `footer` 插槽公开。
+- **减弱动效。** 没有进场也不做节奏控制：内容一到就显示，光标保持静止。
+- **服务端渲染。** 渲染为纯文字，没有动画元素，也不留下定时器。
+- **无障碍。** 流式进行时根节点带 `aria-busy="true"`；光标和 `reserve` 副本对辅助技术隐藏，副本同时 `inert`；引用 chip 是带来源名称的链接。
+
+## 技术实现
+
+- 组件源码：`packages/tuffex/packages/components/src/stream-element/src/TxStreamElement.vue`；Markdown 到片段在 `parse.ts`，时钟排布在 `plan.ts`，类型在 `types.ts`。
+- 建立在家族之上：`TxStreamText`（及其共享的单位模型 `stream-text/src/model.ts`）、`TxCodeStream`（流式模式，代码单位在 `code-stream/src/units.ts`）、渲染委托片段的 `TxStreamMarkdown`，以及节奏器 `use-stream-pacer.ts`。
+- **已测试行为：** `stream-element/__tests__/parse.test.ts`（6 条：原生子集、嵌套与任务列表、委托及相邻块合并、引用只在文字中、流式时补全写到一半的结构、未闭合的围栏），`plan.test.ts`（4 条：文档顺序上的同一个时钟、按位置与类型的 key、跨解析复用模型、行尾位置），`stream-element.test.ts`（14 条：挂载时已有的内容、按顺序显影且只有一个写入位置、新片段的第一个词、追赶时的进场、时钟走动时只重新渲染写入位置的片段、写入位置移走时光标立即移除且最后一个光标收起、代码与委托 Markdown、引用 chip 与 `cite`、状态事件、带 `reserve` 的 `replay` 与 `skip`、`reserve` 回放期间占住回答高度、通过 `renderers` 渲染自定义片段、减弱动效、SSR）与 `stream-element-slots.test.ts`（6 条：写入位置的光标插槽、引用与行内插槽、代码插槽、自定义片段与 footer、宿主增删插槽时跟随、`caret: false`）。
+
+<TuffDocSourceLink />
+
+## 使用场景
+
+- 对话回复或助手面板中的回答，带来源、代码和追问。
+- 混合正文、列表、表格和公式的生成报告或摘要。
+- 在卡片或演示里以可读节奏回放存档的回答，配合 `reserve`。
+
+## 相关组件
+
+- [StreamText](./stream-text.zh.mdc) 流式呈现一段文字；本组件建立在它之上。
+- [CodeStream](./code-stream.zh.mdc) 渲染本组件的代码片段。
+- [StreamMarkdown](./stream-markdown.zh.mdc) 渲染委托片段。
+- [Sources](./sources.zh.mdc)、[MessageActions](./message-actions.zh.mdc) 与 [SuggestionChips](./suggestion-chips.zh.mdc) 在 `footer` 插槽里收尾一段回答。

@@ -96,7 +96,7 @@ const PREFERRED_BY_SOURCE: Partial<Record<RecommendationSource, EvidenceFormatte
   trending: [formatExecuteCount]
 }
 
-/** Used when the source has no preferred fact, or its preferred fact is missing. */
+/** Generic facts are available only for sources without a dedicated evidence kind. */
 const FALLBACK_ORDER: EvidenceFormatter[] = [
   formatExecuteCount,
   formatPeakHours,
@@ -120,7 +120,7 @@ export function formatRecommendationEvidence(
   if (!evidence) return ''
 
   const formatters = source ? PREFERRED_BY_SOURCE[source] : undefined
-  for (const format of [...(formatters ?? []), ...FALLBACK_ORDER]) {
+  for (const format of formatters ?? FALLBACK_ORDER) {
     const text = format(evidence, t, now)
     if (text) return text
   }

@@ -7,7 +7,7 @@ definePageMeta({
   layout: 'home',
 })
 
-const pageTitle = computed(() => `Tuff Nexus`)
+const pageTitle = computed(() => `Tuff`)
 
 useSeoMeta({
   title: pageTitle,

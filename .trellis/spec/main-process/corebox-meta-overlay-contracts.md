@@ -107,6 +107,21 @@ setHeight(height, target?): void
 - **The CSS reads the same numbers.** `renderer/views/meta/MetaOverlay.vue` binds the geometry as
   custom properties and caps the panel at `min(420px, 100vh - top - bottom)`. A window the work area
   clamps (`calculateCoreBoxBounds`, 12 px margin) still holds the panel; its list scrolls.
+- **One hover plate, unchanged resting appearance (2026-09-30).** The overlay renderer owns one
+  `.MetaPanel-Highlight` in the list's scroll-content coordinates. It uses the old row's
+  `var(--tx-fill-color)`, 6px radius and measured 32px row box; the active row still owns its ink
+  and glyph colour, but does not paint a second background while the plate is present.
+- **Compositor motion, not another frame integrator.** As in `TxPromptBarMenu`, hover changes one
+  transform target with a 220ms `--tx-ease-out-strong` transition. Keyboard steps, filtering,
+  resize, first show and reduced/low-battery motion land in place. Measure after Vue patches;
+  normalise panel-entry scale and include list scroll offsets. Hidden/empty rows remove the plate.
+- **Native visibility is an acceptance prerequisite.** A locked desktop can report the NSPanel
+  `onScreen=true` while loginwindow entirely covers it. Chromium Viz then suppresses its child
+  surface's BeginFrames as `ThrottleUndrawnFrames`, even when `document.hidden=false`. A screenshot
+  temporarily draws that surface and may advance a pending transition: it is not natural-hover
+  proof. Check `CGSSessionScreenIsLocked=false`, sample without screenshot-driven frames, then
+  capture the settled result. Do not add frame-pumping or background-policy changes to mask lock-screen
+  occlusion; show/hide and the existing host layout lifecycle remain unchanged.
 
 ### 4. Validation & Error Matrix
 
@@ -156,6 +171,10 @@ setHeight(height, target?): void
   no footer → `'corner'`; plugin UI mode → `'corner'` even with a lingering footer element.
 - Not pinned: `WindowBoundsController.getTargetHeight` / `isAnimating` have no direct test; the
   manager tests mock `getSettledHeight`. Add one before changing animation retargeting.
+- Real overlay acceptance exercises hover intermediate positions and settled geometry, held-key
+  selection, filtering/scrolling, reopen and reduced motion on an unlocked visible desktop. Resting
+  fill, radius and row dimensions must stay unchanged; CSS configuration or a forced screenshot alone
+  does not prove the moving effect.
 
 ### 7. Wrong vs Correct
 

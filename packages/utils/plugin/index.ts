@@ -124,6 +124,29 @@ export interface IPluginBuildInfo {
  */
 export type SdkApiVersion = number
 
+/**
+ * What running a feature produced, with execution and activation kept apart.
+ *
+ * A plugin's legacy `onFeatureTriggered` returns `boolean | void`, where `false` means "do not
+ * enter the activation state" — explicitly *not* a failure (`plugin/index.ts` documents "just opens
+ * browser and exits"). Counting that as a failure both contradicts the public SDK contract and
+ * under-counts a successful launch. The host therefore normalises the lifecycle result once, here,
+ * into two independent facts:
+ *
+ * - `accepted`: the plugin performed the major action (regardless of whether it wants a surface).
+ * - `shouldActivate`: the plugin asked to enter its activation state.
+ *
+ * A legacy `false` maps to `{ accepted: true, shouldActivate: false }`; a `true` to
+ * `{ accepted: true, shouldActivate: true }`; a resolved `undefined` to
+ * `{ accepted: true, shouldActivate: false }`.
+ */
+export interface IFeatureTriggerResult {
+  /** The feature ran and the plugin accepted the action; the host counts one execution. */
+  accepted: boolean
+  /** Whether the feature should enter its activation state (webcontent/widget/push surface). */
+  shouldActivate: boolean
+}
+
 export interface ITouchPlugin extends IPluginBaseInfo {
   /** Safe public identity used to bind destructive lifecycle requests. */
   readonly pluginInstanceId?: string
@@ -169,7 +192,7 @@ export interface ITouchPlugin extends IPluginBaseInfo {
   delFeature: (featureId: string) => boolean
   getFeature: (featureId: string) => IPluginFeature | null
   getFeatures: () => IPluginFeature[]
-  triggerFeature: (feature: IPluginFeature, query: any) => void
+  triggerFeature: (feature: IPluginFeature, query: any) => Promise<IFeatureTriggerResult>
   triggerInputChanged: (feature: IPluginFeature, query: any) => void
 
   get status(): PluginStatus

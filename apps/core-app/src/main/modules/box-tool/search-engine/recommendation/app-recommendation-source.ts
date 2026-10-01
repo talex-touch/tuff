@@ -63,8 +63,9 @@ export function createAppRecommendationSource(appCatalogDbUtils: DbUtils): {
       if (itemIds.length === 0) return []
 
       try {
-        // A candidate is stored under whichever identity the usage row carried: an absolute path
-        // or a bundle id. The two need different lookups, and each stays batched.
+        // A candidate is stored under whichever identity the usage row carried. Normally that is
+        // the canonical `appIdentity || path || bundleId`; path-or-bundle lookups are kept because
+        // pre-migration rows did use the raw path/bundleId. Each stays batched.
         const paths = itemIds.filter((itemId) => itemId.startsWith('/'))
         const bundleIds = itemIds.filter((itemId) => !itemId.startsWith('/'))
 

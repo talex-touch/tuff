@@ -112,4 +112,24 @@ describe('getUsageStatsBatchCached negative caching', () => {
     expect(cache.get('app-provider', 'a')).toBeNull()
     expect(cache.getBatch(keysFor('a')).size).toBe(0)
   })
+
+  it('does not re-seed a batch that was read before an invalidation', async () => {
+    // The race: a batch read starts, the user executes the item (which invalidates), then the read
+    // answers with the pre-execute row. Caching it would serve the old count for the whole TTL.
+    const deferred = Promise.withResolvers<ReturnType<typeof row>[]>()
+    const cache = new UsageStatsCache()
+    const getUsageStatsBatch = vi.fn(() => deferred.promise)
+    const dbUtils = { getUsageStatsBatch } as never
+
+    const pending = getUsageStatsBatchCached(dbUtils, cache, keysFor('a'))
+    // The execute lands while the read is in flight.
+    cache.invalidate('app-provider', 'a')
+    deferred.resolve([row('a')])
+    const result = await pending
+
+    // The reader still gets the row it asked for...
+    expect(result.map((stat) => stat.itemId)).toEqual(['a'])
+    // ...but the stale row must not be cached as current.
+    expect(cache.get('app-provider', 'a')).toBeNull()
+  })
 })

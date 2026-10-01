@@ -46,14 +46,32 @@ describe('formatRecommendationEvidence', () => {
     )
   })
 
-  it('falls back to any available fact when the preferred one is missing', () => {
-    // A 'time-based' item with no hour peak still has something true to say.
-    expect(formatRecommendationEvidence('time-based', { executeCount: 5 }, t, NOW)).toBe(
-      'corebox.evidence.opened(count=5)'
+  it('does not fake a reason: a source with no supporting fact says nothing', () => {
+    // R9: the reason must be the fact that explains THIS source. A 'time-based' item with no hour
+    // peak must not borrow the open-count, and 'recent' must not borrow a legacy count either.
+    expect(formatRecommendationEvidence('time-based', { executeCount: 5 }, t, NOW)).toBe('')
+    expect(formatRecommendationEvidence('recent', { executeCount: 5 }, t, NOW)).toBe('')
+    expect(formatRecommendationEvidence('newly-installed', { executeCount: 5 }, t, NOW)).toBe('')
+  })
+
+  it('says nothing for a source whose own fact is absent, even when another is present', () => {
+    // peakHourRange is present but irrelevant to 'frequent'; a count exists but is irrelevant to
+    // 'time-based'. Neither may stand in for the missing preferred fact.
+    expect(
+      formatRecommendationEvidence(
+        'frequent',
+        { peakHourRange: { startHour: 9, endHour: 11 } },
+        t,
+        NOW
+      )
+    ).toBe('')
+    expect(formatRecommendationEvidence('time-based', { lastExecutedAt: NOW - HOUR }, t, NOW)).toBe(
+      ''
     )
   })
 
-  it('uses the fallback order for sources with no preferred fact', () => {
+  it('still justifies a source with no dedicated fact from whatever is truly known', () => {
+    // 'cold-start'/'trending' have no dedicated preference, so a real fact is still honest.
     expect(formatRecommendationEvidence('cold-start', { installedAt: NOW - 5 * DAY }, t, NOW)).toBe(
       'corebox.evidence.installed(age=corebox.evidence.age.days(count=5))'
     )

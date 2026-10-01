@@ -1,6 +1,6 @@
 <script setup lang="ts" name="ImagePreview">
 import type { TuffItem } from '@talex-touch/utils'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -10,57 +10,17 @@ const props = defineProps<{
   resourceUrl: string
 }>()
 
+const emit = defineEmits<{
+  (event: 'dimensionsChange', dimensions: string): void
+}>()
+
 const imageError = ref(false)
 const imageLoading = ref(true)
-const dimensions = ref('')
-const hostRef = ref<HTMLElement | null>(null)
-const imageRef = ref<HTMLImageElement | null>(null)
-
-/**
- * The label is anchored to the picture's own bottom-left corner rather than the stage's: a
- * portrait screenshot leaves most of the 280px stage empty, and a stage-anchored badge would
- * float in that gap instead of sitting on the picture. The rendered image box is only known
- * after layout, so the corner is measured instead of derived from the flex centring.
- */
-const badgeOffset = ref<{ left: number; bottom: number } | null>(null)
 
 const imageSrc = computed(() => props.resourceUrl)
 
-function syncBadgeOffset(): void {
-  const host = hostRef.value
-  const image = imageRef.value
-  if (!host || !image || !dimensions.value) {
-    badgeOffset.value = null
-    return
-  }
-
-  const hostRect = host.getBoundingClientRect()
-  const imageRect = image.getBoundingClientRect()
-  if (imageRect.width <= 0 || imageRect.height <= 0) {
-    badgeOffset.value = null
-    return
-  }
-
-  badgeOffset.value = {
-    left: Math.round(imageRect.left - hostRect.left),
-    bottom: Math.round(hostRect.bottom - imageRect.bottom)
-  }
-}
-
-const badgeStyle = computed(() => {
-  const offset = badgeOffset.value
-  if (!offset) return { display: 'none' }
-  return { left: `${offset.left}px`, bottom: `${offset.bottom}px` }
-})
-
-/**
- * The watcher below clears the badge before Vue patches `src`, so a `load`/`error` event that
- * still belongs to the retired picture can land in that gap and paint its result over the new
- * resource. The element keeps carrying the retired `src` until the patch lands, which is what
- * identifies such an event — a counter read at event time could not tell, because it is bumped by
- * the same watcher that runs before the patch. An event is only trusted for the resource whose
- * source the element actually holds.
- */
+// A retiring image can still dispatch events while the next resource is loading.
+// Trust only the element whose source matches the current resource.
 function isRetiredImageEvent(event: Event): boolean {
   const image = event.currentTarget as HTMLImageElement | null
   return !image || image.getAttribute('src') !== imageSrc.value
@@ -71,8 +31,7 @@ function handleError(event: Event): void {
 
   imageError.value = true
   imageLoading.value = false
-  dimensions.value = ''
-  badgeOffset.value = null
+  emit('dimensionsChange', '')
 }
 
 function handleLoad(event: Event): void {
@@ -82,39 +41,21 @@ function handleLoad(event: Event): void {
   const image = event.currentTarget as HTMLImageElement | null
   const width = image?.naturalWidth ?? 0
   const height = image?.naturalHeight ?? 0
-  dimensions.value = width > 0 && height > 0 ? `${width} × ${height}` : ''
-  syncBadgeOffset()
+  emit('dimensionsChange', width > 0 && height > 0 ? `${width} × ${height}` : '')
 }
-
-let resizeObserver: ResizeObserver | null = null
-
-onMounted(() => {
-  if (typeof ResizeObserver === 'function' && hostRef.value) {
-    resizeObserver = new ResizeObserver(() => syncBadgeOffset())
-    resizeObserver.observe(hostRef.value)
-  }
-  window.addEventListener('resize', syncBadgeOffset)
-})
-
-onBeforeUnmount(() => {
-  resizeObserver?.disconnect()
-  resizeObserver = null
-  window.removeEventListener('resize', syncBadgeOffset)
-})
 
 watch(
   () => props.resourceUrl,
   () => {
     imageError.value = false
     imageLoading.value = true
-    dimensions.value = ''
-    badgeOffset.value = null
+    emit('dimensionsChange', '')
   }
 )
 </script>
 
 <template>
-  <div ref="hostRef" class="ImagePreview">
+  <div class="ImagePreview">
     <div v-if="imageLoading && !imageError" class="loading-overlay">
       <div class="loading-spinner" />
     </div>
@@ -122,15 +63,17 @@ watch(
       <i class="i-ri-image-line error-icon" />
       <span class="error-text">Failed to load image</span>
     </div>
-    <img
-      v-show="!imageError"
-      ref="imageRef"
-      :src="imageSrc"
-      :alt="t('common.imagePreviewAlt', '图片预览')"
-      @error="handleError"
-      @load="handleLoad"
-    />
-    <span v-if="dimensions" class="dimension-badge" :style="badgeStyle">{{ dimensions }}</span>
+    <Transition name="image-switch">
+      <img
+        v-if="imageSrc && !imageError"
+        :key="imageSrc"
+        :class="{ 'is-loading': imageLoading }"
+        :src="imageSrc"
+        :alt="t('common.imagePreviewAlt', '图片预览')"
+        @error="handleError"
+        @load="handleLoad"
+      />
+    </Transition>
   </div>
 </template>
 
@@ -150,18 +93,20 @@ watch(
     width: auto;
     height: auto;
     object-fit: contain;
+    transition:
+      opacity 200ms cubic-bezier(0.22, 1, 0.36, 1),
+      filter 200ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .dimension-badge {
+  .is-loading,
+  .image-switch-enter-from,
+  .image-switch-leave-to {
+    opacity: 0;
+    filter: blur(4px);
+  }
+
+  .image-switch-leave-active {
     position: absolute;
-    z-index: 1;
-    padding: 1px 5px;
-    border-radius: 5px;
-    background-color: rgb(0 0 0 / 55%);
-    color: #fff;
-    font-size: 10px;
-    line-height: 1.5;
-    pointer-events: none;
   }
 
   .loading-overlay {
@@ -206,6 +151,13 @@ watch(
   }
   100% {
     transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ImagePreview img {
+    transition: none;
+    filter: none;
   }
 }
 </style>

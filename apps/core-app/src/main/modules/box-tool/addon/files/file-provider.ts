@@ -36,6 +36,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../db/schema'
 import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
+import { executeIndexedFile } from './services/file-provider-execution-service'
 import {
   DEFAULT_FILE_INDEX_SETTINGS,
   FILE_CONTENT_INDEX_POLICY_VERSION,
@@ -63,7 +64,7 @@ import {
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
 import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm'
-import { app, shell } from 'electron'
+import { app } from 'electron'
 import { notificationModule } from '../../../notification'
 import { operationalErrorService } from '../../../observability'
 import { t } from '../../../../utils/i18n-helper'
@@ -4213,33 +4214,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return await this.searchResultService.search(query, signal)
   }
 
-  async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
-    const filePath = args.item.meta?.file?.path
-    if (!filePath) {
-      const err = new Error('File path not found in TuffItem')
-      this.logError('File path missing for execution request', err)
-      return null
-    }
-
-    try {
-      // Check if file exists before opening to avoid macOS system dialog
-      await fs.access(filePath)
-      await shell.openPath(filePath)
-      return null
-    } catch (err: unknown) {
-      const errorCode =
-        typeof err === 'object' && err !== null && 'code' in err
-          ? (err as { code?: string }).code
-          : undefined
-      if (errorCode === 'ENOENT') {
-        this.logError('File not found', new Error(`File does not exist: ${filePath}`), {
-          path: filePath
-        })
-      } else {
-        this.logError('Failed to open file', err, { path: filePath })
-      }
-      return null
-    }
+  onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
+    return executeIndexedFile(args, fileProviderLog)
   }
 }
 

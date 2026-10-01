@@ -165,6 +165,8 @@ code: |
 ---
 
 ### BlockLine
+空间足够时，标题和描述并排展示。窄容器中描述会移到标题下方，不再被固定列宽挤压；长命令可以换行，不会裁切。
+
 :::TuffDemoWrapper{demo="GroupBlockBlockLineBasicDemo" code-lang="vue"}
 ---
 code: |
@@ -172,6 +174,9 @@ code: |
     <TxGroupBlock name="版本信息" description="展示只读配置行" default-icon="i-ri-information-line" :collapsible="false">
       <TxBlockLine title="版本" description="2.4.13-beta.3" />
       <TxBlockLine title="构建日期" description="2026.07.06" />
+    </TxGroupBlock>
+    <TxGroupBlock name="安装" style="width: min(100%, 320px)" :collapsible="false">
+      <TxBlockLine title="如何安装？" description="pnpm add @talex-touch/tuffex" />
     </TxGroupBlock>
   </template>
 ---
@@ -540,6 +545,7 @@ code: |
 - 用户手动切换分组后，后续 `collapsed` / `defaultExpand` prop 变化不再覆盖当前选择。
 - 分组内容始终保持挂载；展开/折叠只改变高度、透明度和 display。
 - `TxBlockLine` 默认渲染非交互 `div`，仅在 `link=true` 时渲染 `button type="button"`。
+- `TxBlockLine` 与其他设置行统一使用 16px 左右内边距；标题和描述无法并排容纳时，描述会换到下一行。
 - `TxBlockSlot` 把每个控件槽固定为 `flex-shrink: 0`，让定宽控件永远不会被压扁。`TxBlockInput` 单独解除了这条：它的输入框会向 `min-width: 120px` 收缩，而不是死守 180px 去挤掉本行标题——在 240px 容器里那会让标题只剩 10px。
 - `TxBlockSlot` 禁用时不触发点击；`TxBlockSwitch` 在 `loading=true` 时同样冻结整行的指针事件，但行不会被压暗——`tx-block-switch--loading:not(.tx-block-switch--disabled)` 会把 slot 的 `opacity: .5` 收回来，让忙碌态和禁用态在视觉上分开。
 - `TxBlockSwitch` 的忙碌提示只有一处：`loading` 透传给内部 `TuffSwitch`，由滑块变成旋转环；行本身只叠加 shimmer，不再额外渲染 spinner。

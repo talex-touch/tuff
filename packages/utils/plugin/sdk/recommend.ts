@@ -1,43 +1,50 @@
 import type { RecommendProvider } from '../../core-box/recommendation'
-import type { ItemTimeDistribution, TimePattern } from '../../core-box'
+import type { TimePattern, UsageBehaviorFacts } from '../../core-box'
 import {
-  calculateHourAffinity,
-  calculateTimeContextBoost,
-  calculateTimeRelevanceScore,
-  TIME_CONTEXT_DAY_BOOST,
-  TIME_CONTEXT_SLOT_BOOST,
-  TIME_RELEVANCE_HOUR_WEIGHT,
-  TIME_RELEVANCE_SCALE,
-  TIME_RELEVANCE_SLOT_WEIGHT,
+  calculateBehaviorScore,
+  calculatePluginPriorityContribution,
+  calculateTimeContribution,
+  isFrequentEligible,
+  RECOMMENDATION_MODEL_VERSION,
+  TIME_CONTRIBUTION_MAX
 } from "../../core-box/recommendation-weights";
 
 /**
- * The host's time-of-use weighting, so a provider can order its candidates on the same axis the
- * grid is ranked by instead of inventing one.
+ * The host's behaviour and time-of-use weighting, so a provider can order its candidates on the
+ * same axis the grid is ranked by instead of inventing one.
  *
  * Pure functions over arguments the caller supplies — calling them performs no host request and
  * reads no usage data. Frecency is deliberately not here: it is computed from `item_usage_stats`
  * row shapes, and exposing it would freeze an internal table as an API surface and let a plugin
  * read behaviour it did not observe.
  *
- * Note that `priority` on a returned candidate orders a provider's *own* candidates. It is
- * bounded well below the terms the host derives from real usage, so declaring 100 does not place
- * an item above the applications someone actually uses; being used is what moves it.
+ * The model is bounded and evidence-gated: behaviour is 0..100 and saturates, time adds at most
+ * {@link TIME_CONTRIBUTION_MAX} and only once the 30-day evidence crosses its threshold, and a
+ * provider's own `priority` may move its candidates by at most 5 points. Every function here takes
+ * the facts as an argument and returns 0 for an item with no evidence, so a caller can never obtain
+ * a large score from a thin history.
  */
 export interface RecommendWeights {
-  /** Multiplier for "used at times like now", 1 when there is no such history. */
-  timeContextBoost(stats: ItemTimeDistribution, now: TimePattern): number
-  /** Hour-of-day affinity 0..1, or null when the item has no hour history to judge by. */
-  hourAffinity(hourDistribution: number[] | undefined, hourOfDay: number): number | null
-  /** Combined slot/weekday/hour relevance on a 0..~135 scale; 0 means "no time history". */
-  timeRelevanceScore(stats: ItemTimeDistribution, now: TimePattern): number
-  /** The constants behind the functions above, for callers blending their own signal. */
+  /**
+   * Automatic behaviour score 0..100 from real dated executions only. Saturated on purpose, so a
+   * long history cannot permanently outrank a new habit and one burst of use cannot dominate.
+   */
+  behaviorScore(facts: UsageBehaviorFacts): number
+  /**
+   * Time preference points 0..{@link TIME_CONTRIBUTION_MAX}, 0 below the evidence threshold (>=10
+   * executions over >=3 distinct local days in 30 days). Apply on top of {@link behaviorScore}; a
+   * caller must not scale it up to bypass the cap.
+   */
+  timeContribution(facts: UsageBehaviorFacts, now: TimePattern, nowMs?: number): number
+  /** Whether the item meets the strict frequent cohort (>=5 executions over >=3 distinct days). */
+  isFrequentEligible(facts: UsageBehaviorFacts): boolean
+  /** What a provider's self-declared `priority` may add: at most 5 points. */
+  pluginPriorityContribution(priority: number | undefined): number
+  /** Model version; changes when a score's meaning changes, not when a constant is tuned. */
+  readonly modelVersion: string
+  /** The cap on {@link timeContribution}, for callers blending their own signal. */
   readonly constants: {
-    readonly slotBoost: number
-    readonly dayBoost: number
-    readonly scale: number
-    readonly slotWeight: number
-    readonly hourWeight: number
+    readonly timeContributionMax: number
   }
 }
 
@@ -50,30 +57,37 @@ export interface RecommendWeights {
 export interface RecommendSDK {
   /**
    * Register a recommendation provider.
-   * @returns A dispose function to unregister the provider.
+   *
+   * The call is asynchronous because registration crosses the plugin/host boundary. It rejects
+   * when the host cannot accept the provider (no engine bound, or a provider the host refuses);
+   * it never resolves with a no-op disposer.
+   *
+   * @returns A dispose function that revokes this provider. Idempotent.
    */
-  registerProvider(provider: RecommendProvider): () => void
+  registerProvider(provider: RecommendProvider): Promise<() => Promise<void>>
 
   /**
    * Unregister a recommendation provider by its ID.
-   * @returns true if the provider was found and removed.
+   *
+   * Only a provider registered by this plugin can be removed; an unknown or foreign id resolves
+   * `false` rather than throwing.
+   *
+   * @returns true if the provider was found, owned, and removed.
    */
-  unregisterProvider(providerId: string): boolean
+  unregisterProvider(providerId: string): Promise<boolean>
 
-  /** The host's time-weighting functions. */
+  /** The host's behaviour/time-weighting functions. */
   readonly weights: RecommendWeights
 }
 
 /** The shared implementation, identical to what the host ranks with. */
 export const recommendWeights: RecommendWeights = {
-  timeContextBoost: calculateTimeContextBoost,
-  hourAffinity: calculateHourAffinity,
-  timeRelevanceScore: calculateTimeRelevanceScore,
+  behaviorScore: calculateBehaviorScore,
+  timeContribution: (facts, now, nowMs) => calculateTimeContribution(facts, now, nowMs),
+  isFrequentEligible,
+  pluginPriorityContribution: calculatePluginPriorityContribution,
+  modelVersion: RECOMMENDATION_MODEL_VERSION,
   constants: {
-    slotBoost: TIME_CONTEXT_SLOT_BOOST,
-    dayBoost: TIME_CONTEXT_DAY_BOOST,
-    scale: TIME_RELEVANCE_SCALE,
-    slotWeight: TIME_RELEVANCE_SLOT_WEIGHT,
-    hourWeight: TIME_RELEVANCE_HOUR_WEIGHT,
+    timeContributionMax: TIME_CONTRIBUTION_MAX,
   },
 };

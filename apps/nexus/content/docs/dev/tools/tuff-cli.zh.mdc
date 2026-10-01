@@ -94,7 +94,7 @@ code: |
 
 **`tuff publish`**
 
-发布最新 `.tpex` 包到 Tuff Nexus。
+发布最新 `.tpex` 包到 Tuff。
 
 :::TuffCodeBlock{lang="bash"}
 ---

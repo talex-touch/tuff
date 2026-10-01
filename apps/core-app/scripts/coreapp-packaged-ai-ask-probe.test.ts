@@ -237,12 +237,12 @@ describe('coreapp packaged AI Ask probe evidence checks', () => {
     const detached = {
       target: { id: 'detached', title: 'Tuff', type: 'page', url: 'app://detached' },
       dom: makeProbeDom('touch-intelligence detached', {
-        bodyClass: 'MacIntel core-box division-box'
+        bodyClass: 'darwin core-box division-box'
       })
     }
     const primary = {
       target: { id: 'primary', title: 'Tuff', type: 'page', url: 'app://primary' },
-      dom: makeProbeDom('touch-intelligence primary', { bodyClass: 'MacIntel core-box' })
+      dom: makeProbeDom('touch-intelligence primary', { bodyClass: 'darwin core-box' })
     }
 
     const selected = selectCoreBoxTarget([detached, primary] as Array<{
@@ -257,13 +257,13 @@ describe('coreapp packaged AI Ask probe evidence checks', () => {
     const activeDetached = {
       target: { id: 'detached', title: 'Tuff', type: 'page', url: 'app://detached' },
       dom: makeProbeDom('touch-intelligence detached send mode', {
-        bodyClass: 'MacIntel core-box division-box',
+        bodyClass: 'darwin core-box division-box',
         hasPromptSendButton: true
       })
     }
     const primary = {
       target: { id: 'primary', title: 'Tuff', type: 'page', url: 'app://primary' },
-      dom: makeProbeDom('touch-intelligence primary', { bodyClass: 'MacIntel core-box' })
+      dom: makeProbeDom('touch-intelligence primary', { bodyClass: 'darwin core-box' })
     }
 
     const selected = selectCoreBoxTarget([activeDetached, primary] as Array<{
@@ -284,7 +284,7 @@ describe('coreapp packaged AI Ask probe evidence checks', () => {
       },
       dom: makeProbeDom('plain settings CoreBox echo', {
         href: 'file:///tuff/out/renderer/index.html#/setting',
-        bodyClass: 'MacIntel core-box',
+        bodyClass: 'darwin core-box',
         hasAiChatbot: false
       })
     }
@@ -297,7 +297,7 @@ describe('coreapp packaged AI Ask probe evidence checks', () => {
       },
       dom: makeProbeDom('touch-intelligence\n智能问答\n使用 ai/@ai 前缀在 CoreBox 里调用 AI 回答', {
         href: 'file:///tuff/out/renderer/index.html#/meta-overlay',
-        bodyClass: 'MacIntel core-box'
+        bodyClass: 'darwin core-box'
       })
     }
 

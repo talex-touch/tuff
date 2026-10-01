@@ -14,6 +14,7 @@ import {
   type EverythingInstallResource
 } from '@talex-touch/tuff-native/everything-resources'
 import type { ProviderContext } from '../../search-engine/types'
+import { recordAcceptedExecute, resolveExecuteEventId } from '../../search-engine/execute-recorder'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
@@ -1924,7 +1925,19 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
     try {
       await fs.access(filePath)
-      await shell.openPath(filePath)
+      const openError = await shell.openPath(filePath)
+      if (openError) {
+        this.logError('Failed to open file', new Error(openError), { path: filePath })
+        return null
+      }
+      recordAcceptedExecute({
+        item: args.item,
+        sessionId: args.searchResult?.sessionId ?? null,
+        entryPoint: 'core-box',
+        eventId: resolveExecuteEventId(args.eventId)
+      }).catch((error) => {
+        this.logWarn('Failed to record file open usage', error, { path: filePath })
+      })
       return null
     } catch (err: unknown) {
       if (getErrorCode(err) === 'ENOENT') {

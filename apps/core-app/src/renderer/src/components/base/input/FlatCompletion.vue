@@ -1,20 +1,31 @@
 <script setup lang="ts" name="FlatCompletion">
 import { computePosition } from '@floating-ui/vue'
 import { sleep } from '@talex-touch/utils/common/utils'
-import FlatInput from '~/components/base/input/FlatInput.vue'
+import { TxInput } from '@talex-touch/tuffex/input'
 import {
   createFlatCompletionUpdate,
   resolveFlatCompletionPlaceholder
 } from './flat-completion-utils'
 
+/**
+ * The template has two roots (field + teleported panel), so Vue cannot inherit fallthrough
+ * attributes onto one of them. Bind them to the field root by hand instead: without this a
+ * caller's `class` never reached the DOM at all.
+ */
+defineOptions({ inheritAttrs: false })
+
 const props = withDefaults(
   defineProps<{
+    /**
+     * CSS class for the leading icon. Callers pass an iconify class (`i-ri-…`); the value is handed
+     * to `TxInput`'s `prefixIcon` so it renders through the same prefix path as the rest of the app.
+     */
     icon?: string
     placeholder?: string
     fetch: (query: string) => unknown[]
   }>(),
   {
-    icon: 'search',
+    icon: 'i-ri-search-line',
     placeholder: ''
   }
 )
@@ -76,17 +87,17 @@ function refreshCompletion() {
 </script>
 
 <template>
-  <div ref="completionInput" class="FlatInput-Container">
-    <FlatInput v-model="value" :placeholder="inputPlaceholder" :icon="props.icon" />
+  <div ref="completionInput" class="FlatCompletion-Field" v-bind="$attrs">
+    <TxInput v-model="value" :placeholder="inputPlaceholder" :prefix-icon="props.icon" />
   </div>
   <teleport to="body">
-    <div ref="completionWrapper" class="FlatInput-Completion" @click="value = ''">
+    <div ref="completionWrapper" class="FlatCompletion-Panel" @click="value = ''">
       <!--      <TxScroll> -->
       <div
         v-for="(item, index) in _res"
         :key="index"
         v-wave
-        class="FlatInput-Completion-Item fake-background"
+        class="FlatCompletion-Item fake-background"
         :style="`--d: ${index * 0.125}s`"
       >
         <slot :item="item">
@@ -99,7 +110,7 @@ function refreshCompletion() {
 </template>
 
 <style lang="scss" scoped>
-.FlatInput-Completion {
+.FlatCompletion-Panel {
   z-index: 100;
   position: absolute;
   display: flex;
@@ -117,7 +128,7 @@ function refreshCompletion() {
 
   transition: 0.5s cubic-bezier(0.785, 0.135, 0.15, 0.86);
 
-  .FlatInput-Completion-Item {
+  .FlatCompletion-Item {
     position: relative;
     margin: 5px 0;
     padding: 10px;

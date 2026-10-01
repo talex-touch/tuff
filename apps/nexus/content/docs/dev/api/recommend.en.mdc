@@ -2,7 +2,9 @@
 
 ## Overview
 
-RecommendSDK allows plugins to register custom recommendation providers with the CoreBox recommendation engine. When a user opens CoreBox with an empty query, the engine calls all registered providers to collect candidates, which are then scored and ranked alongside built-in dimensions (frequency, time-of-day, trending, etc.).
+RecommendSDK lets plugins register custom recommendation providers with the CoreBox engine. When the user opens CoreBox with an empty query, the engine calls `getCandidates()` on every registered provider, then ranks those candidates alongside the built-in frequency, time-of-day and trending dimensions.
+
+Every candidate must be executable. A provider must implement `onExecute()`; the host uses it to actually run the action when the user triggers a candidate. Registering a provider without `onExecute` throws instead of leaving a card nothing can run. A successful execution counts as usage, so the next CoreBox open already reflects it.
 
 ## Quick Start
 
@@ -10,29 +12,46 @@ RecommendSDK allows plugins to register custom recommendation providers with the
 ---
 code: |
   // index.js (Prelude script)
-  const dispose = recommend.registerProvider({
-    id: 'my-plugin-weather',
-    name: 'Weather Recommendations',
+  module.exports = {
+    async onInit() {
+      // registerProvider returns a Promise and must be awaited
+      const dispose = await recommend.registerProvider({
+        id: 'my-plugin-weather',
+        name: 'Weather Recommendations',
 
-    canProvide(context) {
-      // Only provide weather recommendations in the morning
-      const hour = new Date().getHours()
-      return hour >= 6 && hour <= 10
-    },
+        canProvide(context) {
+          // Morning only; the period lives on context.time.timeSlot
+          return context.time.timeSlot === 'morning'
+        },
 
-    getCandidates(context) {
-      return [
-        {
-          id: 'weather-today',
-          title: "Today's Weather",
-          subtitle: 'Check the forecast for today',
-          icon: { type: 'emoji', value: '🌤️' },
-          priority: 80,
-          action: 'show-weather'
+        getCandidates(context) {
+          return [
+            {
+              id: 'weather-today',
+              title: "Today's Weather",
+              subtitle: 'Check the forecast for today',
+              icon: { type: 'emoji', value: '🌤️' },
+              priority: 80,
+              action: 'show-weather',
+              data: { city: 'Shanghai' }
+            }
+          ]
+        },
+
+        // Required. false or a thrown error means the action failed and the host
+        // counts nothing; true or undefined means the major action was accepted
+        // and the host records one execution.
+        async onExecute(candidate) {
+          if (candidate.action !== 'show-weather') return false
+          const ok = await openWeatherPanel(candidate.data.city)
+          return ok
         }
-      ]
+      })
+
+      // Release the provider and its retained callbacks when no longer needed
+      // await dispose()
     }
-  })
+  }
 ---
 :::
 
@@ -46,12 +65,17 @@ Register a recommendation provider.
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `provider.id` | `string` | Yes | Unique provider ID |
+| `provider.id` | `string` | Yes | Unique provider ID, unique within the plugin |
 | `provider.name` | `string` | Yes | Display name |
-| `provider.canProvide` | `(context: ContextSignal) => boolean` | Yes | Whether this provider can supply recommendations for the current context |
-| `provider.getCandidates` | `(context: ContextSignal) => PluginRecommendCandidate[] \| Promise<...>` | Yes | Return recommendation candidates |
+| `provider.canProvide` | `(context: ContextSignal) => boolean \| Promise<boolean>` | Yes | Whether to provide recommendations; shares the 200 ms budget with candidate retrieval |
+| `provider.getCandidates` | `(context: ContextSignal) => PluginRecommendCandidate[] \| Promise<PluginRecommendCandidate[]>` | Yes | Return recommendation candidates |
+| `provider.onExecute` | `(candidate: PluginRecommendCandidate, args: IExecuteArgs) => boolean \| void \| Promise<boolean \| void>` | Yes | Execute one candidate; see below |
 
-**Returns**: `() => void` — Dispose function to unregister the provider.
+`onExecute` is required. `registerProvider` throws when it is missing, and the registration fails. The reason is that the candidate is clickable for the user, so a provider with no execution entry point would render a dead card.
+
+**Returns**: `Promise<() => void | Promise<void>>` — must be awaited. The resolved disposer releases the provider's retained callbacks and removes it from the registry; the disposer itself also returns a Promise.
+
+**Note**: provider IDs must be unique within a plugin. Disabling or unloading a plugin releases every provider it registered, so there is no need to unregister them one by one.
 
 ### `recommend.unregisterProvider(providerId)`
 
@@ -60,7 +84,36 @@ Unregister a recommendation provider by ID.
 **Parameters**:
 - `providerId: string` — The provider ID
 
-**Returns**: `boolean` — Whether the provider was found and removed.
+**Returns**: `Promise<boolean>` — must be awaited. `true` when the provider was found and removed.
+
+### `recommend.weights`
+
+The behaviour and time weighting the host itself uses, sharing one implementation with the grid ranking. These are pure functions over the arguments you pass: they make no host request and read no usage data.
+
+| Member | Type | Description |
+| --- | --- | --- |
+| `behaviorScore(facts)` | `(facts: UsageBehaviorFacts) => number` | Automatic behaviour score, `0..80` |
+| `timeContribution(facts, now, nowMs?)` | `(facts: UsageBehaviorFacts, now: TimePattern, nowMs?: number) => number` | Time preference points, `0..20`, `0` when the evidence is too thin |
+| `isFrequentEligible(facts)` | `(facts: UsageBehaviorFacts) => boolean` | Whether the strict frequent threshold is met |
+| `pluginPriorityContribution(priority)` | `(priority: number \| undefined) => number` | What a self-declared `priority` may add, capped at `5` |
+| `modelVersion` | `string` | Model version, currently `reco-model-2` |
+| `constants.timeContributionMax` | `number` | Cap on `timeContribution`, currently `20` |
+
+The same implementation is also available as the standalone `recommendWeights` export; both expose the same functions with the same results.
+
+The isolated child facade, `plugin.recommend.weights`, and Prelude's `recommend.weights` use the same model factory. Scoring runs synchronously in the plugin's own realm with frozen public functions and constants; it never fetches another source's behaviour data.
+
+## RecommendProvider
+
+The provider object:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | Yes | Unique provider ID |
+| `name` | `string` | Yes | Display name |
+| `canProvide` | `(context: ContextSignal) => boolean \| Promise<boolean>` | Yes | Whether to provide recommendations; the host awaits the verdict within the same 200ms budget as candidate retrieval |
+| `getCandidates` | `(context: ContextSignal) => PluginRecommendCandidate[] \| Promise<...>` | Yes | Return recommendation candidates |
+| `onExecute` | `(candidate, args) => boolean \| void \| Promise<boolean \| void>` | Yes | Execute one candidate |
 
 ## PluginRecommendCandidate
 
@@ -68,13 +121,14 @@ Each candidate item structure:
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `id` | `string` | Yes | Unique item ID |
+| `id` | `string` | Yes | Unique item ID, unique within the provider |
 | `title` | `string` | Yes | Display title |
 | `subtitle` | `string` | No | Subtitle / description |
-| `icon` | `{ type: string; value: string }` | No | Icon configuration (defaults to `💡`) |
-| `priority` | `number` | No | Priority 0-100, higher = more prominent (default `50`) |
-| `action` | `string` | Yes | Action key passed back to the plugin |
+| `icon` | `{ type: string; value: string }` | No | Icon configuration, defaults to a lightbulb class; `type` accepts `emoji`, `url`, `file`, `class`, `builtin` |
+| `priority` | `number` | No | Self-declared priority `0-100`, worth at most 5 points; see "Behaviour and time model" |
+| `action` | `string` | Yes | Action key, used in `onExecute` to tell your own actions apart |
 | `data` | `Record<string, unknown>` | No | Additional data, available in `TuffItem.meta.pluginRecommend.data` |
+| `providerId` | `string` | No | Auto-filled by the host; a plugin does not set it |
 
 ## ContextSignal
 
@@ -82,10 +136,62 @@ The context object received by `canProvide` and `getCandidates`:
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `timeOfDay` | `'morning' \| 'afternoon' \| 'evening' \| 'night'` | Current time period |
-| `dayOfWeek` | `number` | Day of week (0-6) |
-| `isWorkday` | `boolean` | Whether it is a workday |
-| `clipboard` | `{ content: string; meta: { isUrl: boolean; isPath: boolean; isCode: boolean } }` | Clipboard content and metadata |
+| `time` | `TimePattern` | Current time, see below |
+| `clipboard` | `{ type, content, timestamp, contentType?, meta? }` | Clipboard content. `content` is a privacy digest, not the original text |
+| `selection` | same as `clipboard` | The latest text selection, same privacy tier as the clipboard |
+| `foregroundApp` | `{ bundleId: string; name: string }` | Foreground application |
+| `systemState` | `{ isOnline, networkType?, batteryLevel?, ... }` | System state |
+
+`TimePattern` fields:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `hourOfDay` | `number` | Hour, `0-23` |
+| `dayOfWeek` | `number` | Day of week, `0-6`, `0` is Sunday |
+| `isWorkingHours` | `boolean` | Whether current time falls in working hours (weekdays `9-18`) |
+| `timeSlot` | `'morning' \| 'afternoon' \| 'evening' \| 'night'` | Time slot |
+
+`content` on `clipboard` and `selection` is hashed. Judge the shape with `contentType`, `meta.fileType`, `meta.isUrl` and similar fields; never treat it as the original text.
+
+## Behaviour and Time Model
+
+Automatic ranking lives in `0..100`: behaviour is `0..80`, time adds `0..20`, and a recent-execution boost is a separate term in the same family capped at 10 points; the three are capped together at 100. The model version is `reco-model-2`.
+
+| Item | Rule |
+| --- | --- |
+| `behaviorScore` | Derived from real, dated executions, `0..80`. Recent, sustained and cross-day consistency terms each saturate, so a long history cannot permanently outrank a new habit |
+| `timeContribution` | `0..20`. Needs at least 10 valid executions over at least 3 distinct local days in the last 30 days; below that it is `0`. Above it, the contribution still scales with evidence and decays with the age of the last execution |
+| Recent-execution boost | At most `10` points, decaying per hour as `exp(-0.1 * hours)`. It only accepts executions with a reliable event date; a single recent use is nowhere near 100, so sustained behaviour must accumulate before the automatic score climbs |
+| `pluginPriorityContribution` | A self-declared `priority` adds at most 5 points, can only order a plugin's own candidates, and can never earn frequent eligibility |
+| `isFrequentEligible` | At least 5 valid executions over at least 3 distinct local days in the last 30 days |
+
+`UsageBehaviorFacts` is the only input shape these functions take, and every field comes from real execution records: lifetime count, 30-day and 7-day counts, 30-day active days, the last execution time, an age-decayed execution score, and the 30-day slot distribution. Pass zeros when you have no evidence; never guess.
+
+Exposures, cancels and last-search time are not behaviour facts, and these functions do not use them.
+
+## Execution and Counting
+
+The host snapshots the result of `getCandidates()`. When the user triggers a candidate, the host calls `onExecute(candidate, args)` with the candidate from that snapshot — never a value the renderer supplied — so a provider only ever acts on its own `action` and `data`.
+
+`args` is `IExecuteArgs`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `item` | `TuffItem` | The executed item |
+| `searchResult` | `TuffSearchResult \| undefined` | Origin search result; absent on a direct trigger |
+| `actionId` | `string \| undefined` | Secondary action key |
+| `eventId` | `string \| undefined` | Identifier of this user action |
+
+The `onExecute` return value decides whether the action counts:
+
+| Return value | Result |
+| --- | --- |
+| `false` | The action failed; the host counts nothing |
+| Thrown error | The action failed; the host counts nothing |
+| `true` | The major action was accepted; the host records one execution |
+| `undefined` (or resolves to `undefined`) | The major action was accepted; the host records one execution |
+
+One user action is counted once. A retry or a duplicate notification reuses the same `eventId`, and the host dedupes on it, so the count does not grow.
 
 ## Full Example
 
@@ -95,44 +201,62 @@ code: |
   // index.js
   let weatherData = null
 
-  // Register recommendation provider
-  const disposeProvider = recommend.registerProvider({
-    id: 'smart-weather',
-    name: 'Smart Weather',
+  module.exports = {
+    async onInit() {
+      const disposeProvider = await recommend.registerProvider({
+        id: 'smart-weather',
+        name: 'Smart Weather',
 
-    canProvide(context) {
-      return context.timeOfDay === 'morning' && weatherData !== null
+        canProvide(context) {
+          return context.time.timeSlot === 'morning' && weatherData !== null
+        },
+
+        async getCandidates(context) {
+          const items = [{
+            id: 'weather-forecast',
+            title: `Today ${weatherData.temp}°C ${weatherData.condition}`,
+            subtitle: 'Click for details',
+            icon: { type: 'emoji', value: '🌡️' },
+            priority: 85,
+            action: 'open-weather-detail',
+            data: { city: weatherData.city }
+          }]
+
+          if (weatherData.rain) {
+            items.push({
+              id: 'weather-rain-alert',
+              title: 'Rain expected today, bring an umbrella',
+              subtitle: `Rain chance ${weatherData.rainChance}%`,
+              icon: { type: 'emoji', value: '🌧️' },
+              priority: 90,
+              action: 'rain-detail',
+              data: { rainChance: weatherData.rainChance }
+            })
+          }
+
+          return items
+        },
+
+        async onExecute(candidate) {
+          if (candidate.action === 'open-weather-detail') {
+            return await openDetailPanel(candidate.data.city)
+          }
+          if (candidate.action === 'rain-detail') {
+            return await openRainPanel(candidate.data.rainChance)
+          }
+          return false
+        }
+      })
+
+      // A plugin can release registration as its own state changes
+      globalThis.__disposeWeatherProvider = disposeProvider
     },
 
-    async getCandidates(context) {
-      const items = [{
-        id: 'weather-forecast',
-        title: `Today ${weatherData.temp}°C ${weatherData.condition}`,
-        subtitle: 'Click for details',
-        icon: { type: 'emoji', value: '🌡️' },
-        priority: 85,
-        action: 'open-weather-detail',
-        data: { city: weatherData.city }
-      }]
+    onDestroy() {
+      globalThis.__disposeWeatherProvider?.()
+      globalThis.__disposeWeatherProvider = null
+    },
 
-      if (weatherData.rain) {
-        items.push({
-          id: 'weather-rain-alert',
-          title: 'Rain expected today, bring an umbrella',
-          subtitle: `Rain chance ${weatherData.rainChance}%`,
-          icon: { type: 'emoji', value: '🌧️' },
-          priority: 90,
-          action: 'rain-detail',
-          data: { rainChance: weatherData.rainChance }
-        })
-      }
-
-      return items
-    }
-  })
-
-  // Handle recommendation item click callbacks
-  module.exports = {
     onFeatureTriggered(featureId, query, feature) {
       // Normal feature trigger logic
     }
@@ -142,14 +266,17 @@ code: |
 
 ## Technical Notes
 
-- **Main-process local calls**: Provider's `canProvide()` and `getCandidates()` execute directly in the main process, without IPC serialization.
-- **Timeout protection**: Each provider's `getCandidates()` has a 200ms timeout; timed-out providers are silently skipped.
-- **Automatic cleanup**: When a plugin is disabled or unloaded, all its registered providers are automatically removed.
-- **Scoring**: A candidate's `priority` (0-100) maps directly to recommendation score, ranked alongside built-in dimensions.
+- **Isolated host calls**: Prelude's `recommend` and `plugin.recommend` both use tenant-bound host capabilities. The host invokes the child's `canProvide()`, `getCandidates()` and `onExecute()` through retained callback handles; a plugin cannot select another plugin's owner or callbacks.
+- **Timeout protection**: qualification and candidate retrieval share one 200 ms budget per provider. Timeout or rejection skips only that provider; providers run concurrently.
+- **Count limits**: one provider may contribute at most 5 candidates per pass, and all providers together at most 15; excess items are trimmed.
+- **Automatic cleanup**: when a plugin is disabled or unloaded, all its registered providers are removed and their retained callbacks released.
+- **Trusted execution source**: the host executes only from its own candidate snapshot; renderer-supplied `data` never reaches `onExecute`.
 
 ## Best Practices
 
-1. **Keep `canProvide` lightweight** — Called every time CoreBox opens; avoid async or heavy computation.
-2. **Set priority thoughtfully** — 60-80 for normal recommendations, 80+ for high-confidence items (e.g., clipboard-related).
-3. **Use the dispose function** — Dynamically register/unregister as plugin state changes.
-4. **Limit candidate count** — Return 1-5 candidates per provider; excess items are trimmed by ranking.
+1. **Keep `canProvide` lightweight** — async is supported, but qualification and candidate retrieval share a 200 ms budget; avoid heavy computation or slow network waits.
+2. **`onExecute` must really execute** — returning `true` means the major action was accepted; never return `true` unconditionally just to look successful.
+3. **Tell your own actions apart with `action` and `data`** — `onExecute` only ever receives candidates this provider produced.
+4. **`priority` is only an ordering nudge** — capped at 5 points. Frequent eligibility and higher ranking come from real usage accumulating behaviour evidence.
+5. **Limit candidate count** — return 1-5 candidates per provider; excess items are trimmed by ranking.
+6. **Release resources** — use the disposer resolved by `await registerProvider(...)`, or unregister the provider in `onDestroy`.

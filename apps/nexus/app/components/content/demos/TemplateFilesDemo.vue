@@ -302,8 +302,8 @@ function seedNodes(): FileNode[] {
       en: '# Q4 2026\n\n- Plugin store: team spaces\n- CoreBox: multilingual queries\n- Clipboard: merging conflicts across devices',
     }),
     doc('meeting-notes', 'ws-docs', 'meeting-notes-0923.txt', 'text', 2.8 * KB, at(23, 9, 58), {
-      zh: '9 月 23 日 · 周会\n\n1. 2.4.1 修复多屏定位，今天发\n2. win32 夜间构建失败，佐藤跟进\n3. 下周一 Nexus 维护，提前发公告',
-      en: '23 Sep · weekly sync\n\n1. 2.4.1 fixes multi-monitor placement; ships today\n2. The win32 nightly failed; Kenji follows up\n3. Nexus maintenance next Monday; announce it early',
+      zh: '9 月 23 日 · 周会\n\n1. 2.4.1 修复多屏定位，今天发\n2. win32 夜间构建失败，佐藤跟进\n3. 下周一 Tuff 维护，提前发公告',
+      en: '23 Sep · weekly sync\n\n1. 2.4.1 fixes multi-monitor placement; ships today\n2. The win32 nightly failed; Kenji follows up\n3. Tuff maintenance next Monday; announce it early',
     }),
     doc('sdkapi', 'ws-docs', 'sdkapi-260713.json', 'json', 18.6 * KB, at(18, 14, 30), {
       zh: '{\n  "sdkapi": 260713,\n  "added": ["TuffQuery.inputs", "acceptedInputTypes"],\n  "breaking": []\n}',
@@ -351,8 +351,8 @@ function seedNodes(): FileNode[] {
     doc('snippets-library', 'plugin-snippets', 'library.json', 'json', 2.4 * MB, at(22, 16, 3), undefined, 'plugin'),
     doc('snippets-state', 'plugin-snippets', 'state.json', 'json', 0.2 * MB, at(22, 16, 3), undefined, 'plugin'),
     doc('bookmarks-json', 'plugin-bookmarks', 'bookmarks.json', 'json', 142 * KB, at(21, 9, 44), {
-      zh: '[\n  { "title": "Tuff 文档", "url": "https://tuff.tagzxia.com/docs", "pinned": true },\n  { "title": "Nexus 插件市场", "url": "https://tuff.tagzxia.com/store" }\n]',
-      en: '[\n  { "title": "Tuff docs", "url": "https://tuff.tagzxia.com/docs", "pinned": true },\n  { "title": "Nexus plugin store", "url": "https://tuff.tagzxia.com/store" }\n]',
+      zh: '[\n  { "title": "Tuff 文档", "url": "https://tuff.tagzxia.com/docs", "pinned": true },\n  { "title": "Tuff 插件市场", "url": "https://tuff.tagzxia.com/store" }\n]',
+      en: '[\n  { "title": "Tuff docs", "url": "https://tuff.tagzxia.com/docs", "pinned": true },\n  { "title": "Tuff plugin store", "url": "https://tuff.tagzxia.com/store" }\n]',
     }, 'plugin'),
     doc('bookmarks-recent', 'plugin-bookmarks', 'recent.json', 'json', 58 * KB, at(21, 9, 44), undefined, 'plugin'),
   )

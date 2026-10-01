@@ -4,6 +4,7 @@ import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 import type { LocalizedTextValue } from '@talex-touch/utils/i18n'
 import type {
   IFeatureLifeCycle,
+  IFeatureTriggerResult,
   IPlatform,
   IPluginBuildInfo,
   IPluginDev,
@@ -96,7 +97,7 @@ import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { clampBatteryPercent } from '@talex-touch/utils'
 import { resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
-import { TuffItemBuilder } from '@talex-touch/utils/core-box'
+import { TuffItemBuilder, type RecommendProvider } from '@talex-touch/utils/core-box'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
@@ -112,7 +113,9 @@ import {
   createPluginSystemSDK,
   createPluginTuffTransport,
   createPluginVoiceFacade,
-  createQuickActionsSDK
+  createQuickActionsSDK,
+  recommendWeights,
+  type RecommendSDK
 } from '@talex-touch/utils/plugin/sdk'
 import { isSearchProviderEnabledByConfig } from '@talex-touch/utils/search'
 
@@ -142,6 +145,7 @@ import { CoreBoxManager } from '../box-tool/core-box/manager'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { getBoxItemManager } from '../box-tool/item-sdk'
 import { getSearchProviderUserConfigs } from '../box-tool/search-engine/search-provider-config'
+import { getPluginRecommendationApi } from '../box-tool/search-engine/recommendation/plugin-recommendation-api'
 import { getNetworkService } from '../network'
 import { notificationModule } from '../notification'
 import { getPermissionModule } from '../permission'
@@ -222,6 +226,30 @@ function getRuntimeErrorCode(error: unknown): string | undefined {
   if (!error || typeof error !== 'object') return undefined
   const code = (error as { code?: unknown }).code
   return typeof code === 'string' ? code : undefined
+}
+
+/**
+ * Whether a lifecycle return is a structured *refusal* rather than the legacy activation verdict.
+ *
+ * The legacy contract is `boolean | void`, where `false` means "do not activate" and a resolved
+ * `undefined` is a normal run. Some plugins (and future lifecycle versions) return an object
+ * instead, and there `accepted: false` / `success: false` / a blocked-error-failed-cancelled
+ * status is an explicit failure that must not be counted.
+ */
+const TRIGGER_REFUSAL_STATUSES: Record<string, true> = {
+  blocked: true,
+  error: true,
+  failed: true,
+  cancelled: true,
+  canceled: true
+}
+
+function isStructuredTriggerFailure(result: unknown): boolean {
+  if (!result || typeof result !== 'object') return false
+  const record = result as { accepted?: unknown; success?: unknown; status?: unknown }
+  if (record.accepted === false) return true
+  if (record.success === false) return true
+  return typeof record.status === 'string' && TRIGGER_REFUSAL_STATUSES[record.status] === true
 }
 
 export interface TouchPluginRuntimeContext {
@@ -589,7 +617,7 @@ export class TouchPlugin implements ITouchPlugin {
   async triggerFeature(
     feature: IPluginFeature,
     query: TuffQuery | undefined
-  ): Promise<boolean | void> {
+  ): Promise<IFeatureTriggerResult> {
     const executeStart = Date.now()
     const logFeatureBreadcrumb = (
       stage: string,
@@ -622,7 +650,7 @@ export class TouchPlugin implements ITouchPlugin {
         this.logger.error(
           `Security Alert: Aborted loading view with invalid path: ${interactionPath}`
         )
-        return
+        return { accepted: false, shouldActivate: false }
       }
 
       this.logger.info(`Trigger feature with WebContent interaction: ${feature.id}`)
@@ -641,9 +669,9 @@ export class TouchPlugin implements ITouchPlugin {
           errorCode: getRuntimeErrorCode(error)
         })
         await this.handleRuntimeError('loadPluginView', error)
-        return false
+        return { accepted: false, shouldActivate: false }
       }
-      return true
+      return { accepted: true, shouldActivate: true }
     }
 
     if (feature.interaction?.type === 'widget') {
@@ -664,7 +692,7 @@ export class TouchPlugin implements ITouchPlugin {
             `Widget renderer feature unavailable for feature: ${feature.id} (rendererFeatureId=${rendererFeatureId || feature.id})`
           )
           this.notifyWidgetLoadFailure(feature)
-          return false
+          return { accepted: false, shouldActivate: false }
         }
 
         let registration: Awaited<ReturnType<typeof widgetManager.registerWidget>>
@@ -677,7 +705,7 @@ export class TouchPlugin implements ITouchPlugin {
           })
           await this.handleRuntimeError('registerWidget', error)
           this.notifyWidgetLoadFailure(feature)
-          return false
+          return { accepted: false, shouldActivate: false }
         }
         if (!registration) {
           logFeatureBreadcrumb('widget-register-failed', {
@@ -685,7 +713,7 @@ export class TouchPlugin implements ITouchPlugin {
           })
           this.logger.warn(`Widget interaction failed to load for feature: ${feature.id}`)
           this.notifyWidgetLoadFailure(feature)
-          return false
+          return { accepted: false, shouldActivate: false }
         }
         logFeatureBreadcrumb('widget-register-ready', {
           durationMs: Date.now() - executeStart
@@ -697,28 +725,40 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     let result: boolean | void = void 0
-    try {
-      await this.batchRenameFilesystemCapability?.approveLifecycleFileInputs(query)
-      const lifecycleQuery =
-        (await this.classicUtilityCapabilityBundle?.imageTools?.prepareLifecycleQuery(
-          query,
+    // `no handler` is a real failure: the adapter's features all come from a plugin whose lifecycle
+    // declares `onFeatureTriggered`. A widget-invalid-path/widget-registration failure already
+    // returned above; only the common handler path reaches here.
+    let handlerFailed = false
+    const handler = this.pluginLifecycle?.onFeatureTriggered
+    if (typeof handler !== 'function') {
+      handlerFailed = true
+      logFeatureBreadcrumb('lifecycle-missing', { durationMs: Date.now() - executeStart })
+    } else {
+      try {
+        await this.batchRenameFilesystemCapability?.approveLifecycleFileInputs(query)
+        const lifecycleQuery =
+          (await this.classicUtilityCapabilityBundle?.imageTools?.prepareLifecycleQuery(
+            query,
+            controller.signal
+          )) as TuffQuery | undefined
+        result = handler.call(
+          this.pluginLifecycle,
+          feature.id,
+          lifecycleQuery ?? query,
+          snapshotLifecycleFeature(feature),
           controller.signal
-        )) as TuffQuery | undefined
-      result = this.pluginLifecycle?.onFeatureTriggered(
-        feature.id,
-        lifecycleQuery ?? query,
-        snapshotLifecycleFeature(feature),
-        controller.signal
-      )
-      if (isPromiseLike(result)) {
-        result = (await result) as boolean | void
+        )
+        if (isPromiseLike(result)) {
+          result = (await result) as boolean | void
+        }
+      } catch (error) {
+        handlerFailed = true
+        logFeatureBreadcrumb('lifecycle-error', {
+          durationMs: Date.now() - executeStart,
+          errorCode: getRuntimeErrorCode(error)
+        })
+        await this.handleRuntimeError('onFeatureTriggered', error)
       }
-    } catch (error) {
-      logFeatureBreadcrumb('lifecycle-error', {
-        durationMs: Date.now() - executeStart,
-        errorCode: getRuntimeErrorCode(error)
-      })
-      await this.handleRuntimeError('onFeatureTriggered', error)
     }
     try {
       this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature))
@@ -730,7 +770,18 @@ export class TouchPlugin implements ITouchPlugin {
       await this.handleRuntimeError('onLaunch', error)
     }
     logFeatureBreadcrumb('complete', { durationMs: Date.now() - executeStart })
-    return result
+
+    // Normalise ONCE here (see {@link IFeatureTriggerResult}). The legacy `boolean | void` contract
+    // uses `false` to mean "do not activate" — a successful launch that opens a browser and exits —
+    // so it is `accepted: true, shouldActivate: false`, never a failure. `true` is
+    // `accepted: true, shouldActivate: true`; a resolved `undefined` is `accepted: true,
+    // shouldActivate: false`. Only a thrown handler, a missing handler, or a structured refusal
+    // (`accepted: false` / `success: false` / a blocked-error-failed-cancelled status) is
+    // `accepted: false`.
+    if (handlerFailed || isStructuredTriggerFailure(result)) {
+      return { accepted: false, shouldActivate: false }
+    }
+    return { accepted: true, shouldActivate: result === true }
   }
 
   async triggerInputChanged(feature: IPluginFeature, query: TuffQuery | undefined): Promise<void> {
@@ -2286,14 +2337,7 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     this._runtimeStats.startedAt = 0
-    try {
-      const { SearchEngineCore } =
-        require('../box-tool/search-engine/search-core') as typeof import('../box-tool/search-engine/search-core')
-      const engine = SearchEngineCore.getInstance().getRecommendationEngine()
-      engine?.unregisterPluginProviders(this.name)
-    } catch {
-      // SearchEngineCore may not be initialized; safe to ignore
-    }
+    getPluginRecommendationApi()?.unregisterPluginProviders(this.name)
 
     this.status = teardownFailed ? PluginStatus.CRASHED : PluginStatus.DISABLED
     if (teardownFailed) {
@@ -2539,31 +2583,27 @@ export class TouchPlugin implements ITouchPlugin {
     }
   }
 
-  private createRecommendSDK(pluginName: string) {
-    const getEngine = () => {
-      const { SearchEngineCore } =
-        require('../box-tool/search-engine/search-core') as typeof import('../box-tool/search-engine/search-core')
-      return SearchEngineCore.getInstance().getRecommendationEngine()
-    }
-
+  private createRecommendSDK(pluginName: string): RecommendSDK {
     return {
-      registerProvider: (
-        provider: import('@talex-touch/utils/core-box').RecommendProvider
-      ): (() => void) => {
-        const engine = getEngine()
+      registerProvider: async (provider: RecommendProvider): Promise<() => Promise<void>> => {
+        const engine = getPluginRecommendationApi()
         if (!engine) {
-          pluginSystemLog.warn(
-            `[Plugin ${pluginName}] RecommendationEngine not available, cannot register provider`
-          )
-          return () => {}
+          throw new Error(`[Plugin ${pluginName}] RecommendationEngine is not available`)
         }
-        return engine.registerPluginProvider(pluginName, provider)
+        const dispose = engine.registerPluginProvider(pluginName, provider)
+        return async () => {
+          dispose()
+        }
       },
-      unregisterProvider: (providerId: string): boolean => {
-        const engine = getEngine()
-        if (!engine) return false
-        return engine.unregisterPluginProvider(providerId)
-      }
+      unregisterProvider: async (providerId: string): Promise<boolean> => {
+        const engine = getPluginRecommendationApi()
+        if (!engine) {
+          throw new Error(`[Plugin ${pluginName}] RecommendationEngine is not available`)
+        }
+        // Owner-scoped: this plugin may only remove a provider it registered under its own name.
+        return engine.unregisterPluginProvider(pluginName, providerId)
+      },
+      weights: recommendWeights
     }
   }
 

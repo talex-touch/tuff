@@ -187,7 +187,7 @@ watch(
           </div>
           <div>
             <span>{{ labels.scope }}</span>
-            <TxTag label="Nexus / Tuffex" icon="i-carbon-branch" />
+            <TxTag label="Tuff / Tuffex" icon="i-carbon-branch" />
           </div>
         </div>
 

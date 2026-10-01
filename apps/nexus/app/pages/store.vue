@@ -479,7 +479,7 @@ const resultSummary = computed(() => {
   return t('store.results.filtered', { count, total })
 })
 
-const pageTitle = computed(() => `${t('nav.store')} · Tuff Nexus`)
+const pageTitle = computed(() => `${t('nav.store')} · Tuff`)
 const pageDescription = computed(() => t('store.hero.subtitle'))
 
 useSeoMeta({

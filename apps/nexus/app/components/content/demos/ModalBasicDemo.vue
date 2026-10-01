@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 const open = ref(false)
+const fullscreen = ref(false)
 const { locale } = useI18n()
 
 const labels = computed(() => (locale.value === 'zh'
@@ -13,6 +14,10 @@ const labels = computed(() => (locale.value === 'zh'
       metaBody: '当前工作区 · 3 个项目 · 仅保存 UI 偏好',
       cancel: '取消',
       confirm: '确认同步',
+      openFullscreen: '打开全屏预览',
+      fullscreenTitle: '发布说明',
+      fullscreenBody: '全屏模态把面板撑满可见视口：头部与底栏固定，正文滚动，因此很长的内容不会把操作挤出屏幕。',
+      fullscreenClose: '关闭预览',
     }
   : {
       open: 'Open Modal',
@@ -22,6 +27,10 @@ const labels = computed(() => (locale.value === 'zh'
       metaBody: 'Current workspace · 3 projects · UI preferences only',
       cancel: 'Cancel',
       confirm: 'Confirm sync',
+      openFullscreen: 'Open fullscreen preview',
+      fullscreenTitle: 'Release notes',
+      fullscreenBody: 'A fullscreen modal stretches the panel to the visible viewport: the header and footer stay fixed while the body scrolls, so very long content never pushes the actions off screen.',
+      fullscreenClose: 'Close preview',
     }))
 </script>
 
@@ -29,6 +38,9 @@ const labels = computed(() => (locale.value === 'zh'
   <div class="modal-demo">
     <TxButton variant="primary" @click="open = true">
       {{ labels.open }}
+    </TxButton>
+    <TxButton variant="ghost" @click="fullscreen = true">
+      {{ labels.openFullscreen }}
     </TxButton>
 
     <TxModal v-model="open" :title="labels.title" width="min(92vw, 520px)">
@@ -48,13 +60,26 @@ const labels = computed(() => (locale.value === 'zh'
         </TxButton>
       </template>
     </TxModal>
+
+    <TxModal v-model="fullscreen" fullscreen :title="labels.fullscreenTitle">
+      <p v-for="i in 12" :key="i" class="modal-demo__copy">
+        {{ labels.fullscreenBody }}
+      </p>
+      <template #footer>
+        <TxButton variant="ghost" @click="fullscreen = false">
+          {{ labels.fullscreenClose }}
+        </TxButton>
+      </template>
+    </TxModal>
   </div>
 </template>
 
 <style scoped>
 .modal-demo {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 12px;
 }
 
 .modal-demo__copy {

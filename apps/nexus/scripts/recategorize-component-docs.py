@@ -101,7 +101,6 @@ TAXONOMY: dict[str, list[str]] = {
     "Form": [
         "form",
         "input",
-        "flat-input",
         "sensitive-input",
         "textarea",
         "number-input",
@@ -274,6 +273,8 @@ TAXONOMY: dict[str, list[str]] = {
         "chain-of-thought",
         "reasoning-disclosure",
         "thinking-orb",
+        "stream-element",
+        "stream-text",
         "stream-markdown",
         "code-stream",
         "inline-citation",

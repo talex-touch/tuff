@@ -319,7 +319,7 @@ export function registerPluginWindowTransportHandlers(
             return { error: `Plugin ${pluginName} does not have onMessage handler` }
           }
 
-          lifecycle.onMessage(key, info)
+          await lifecycle.onMessage(key, info)
           return { status: 'message_sent' }
         } catch (error) {
           logIpcHandlerError('index:communicate', error)

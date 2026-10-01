@@ -1,0 +1,30 @@
+{
+  "id": "recommendation-usage-refactor",
+  "name": "recommendation-usage-refactor",
+  "title": "推荐引擎、使用统计与常用推荐重构",
+  "description": "已完成统一成功执行统计、严格常用准入、有界评分、隔离插件 SDK 和应用列表修正，并完成隔离原生宿主验收；已提交并集成至 beta.55 发布 PR。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-09-29",
+  "completedAt": "2026-09-30",
+  "branch": null,
+  "base_branch": "stage",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "2026-09-30：三组回归、定向 lint、node/web 类型和 main/preload 构建通过；真实 Electron 验证计数、固定文件、焦点、插件宿主及索引并发。证据和旁路限制记录于 prd.md §9。未修改生产 profile，未 commit/push/release。",
+  "meta": {
+    "blocker": "实现与原生验收完成，无实现阻塞；beta.55 发布中。",
+    "evidence": "57eb30c99 已集成完成的实现与回归；原生验收证据见 prd.md §9，发布集成见 PR #2032。",
+    "nextAction": "将已完成任务移入归档，保留验收证据。"
+  }
+}

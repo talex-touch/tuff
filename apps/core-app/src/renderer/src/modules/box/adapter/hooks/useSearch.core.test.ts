@@ -1435,7 +1435,7 @@ describe('useSearch CoreBox reopen behavior', () => {
     )
   })
 
-  it('reports rendered recommendation ids for local hit-rate accounting', async () => {
+  it('updates only the facts of a row on usage-changed, without moving the list', async () => {
     state.searchResultForRequest = () => ({
       items: [
         {
@@ -1443,8 +1443,7 @@ describe('useSearch CoreBox reopen behavior', () => {
           kind: 'app',
           source: { id: 'app-provider', type: 'application' },
           render: { mode: 'default', basic: { title: 'Rebuilt app' } },
-          // The engine keys usage by the original ids, so exposure must report
-          // those and not the rebuilt item id.
+          // The engine keys usage by the original ids, so the notification must match those.
           meta: {
             _originalSourceId: 'app-provider',
             _originalItemId: '/Applications/Rebuilt.app',
@@ -1452,36 +1451,64 @@ describe('useSearch CoreBox reopen behavior', () => {
           }
         } as TuffItem,
         {
-          id: 'pinned-app',
+          id: 'other-app',
           kind: 'app',
           source: { id: 'app-provider', type: 'application' },
-          render: { mode: 'default', basic: { title: 'Pinned app' } },
-          meta: { pinned: { isPinned: true } }
+          render: { mode: 'default', basic: { title: 'Other app' } }
         } as TuffItem
       ],
       query: { text: '', inputs: [] },
       duration: 1,
       sources: [],
-      sessionId: 'exposure-session'
+      sessionId: 'usage-changed-session'
     })
 
-    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    const boxOptions = reactive(createBoxOptions())
+    const hook = useSearch(boxOptions, createClipboardOptions())
     await flushPromises()
 
-    state.send.mockClear()
     hook.searchVal.value = ''
     await hook.handleSearchImmediate({ force: true })
     await flushPromises()
 
-    const exposureCall = state.send.mock.calls.find(
-      ([event]) => String(event) === 'core-box:recommendation:report-exposure'
-    )
+    boxOptions.focus = 1
+    const idsBefore = hook.res.value.map((item) => item.id)
+    const layoutBefore = boxOptions.layout
 
-    expect(exposureCall?.[1]).toEqual({
-      // Pinned items are user choices, not recommendations under evaluation.
-      itemKeys: ['app-provider:/Applications/Rebuilt.app'],
-      surface: 'core-box'
+    state.listeners.get('core-box:item:usage-changed')?.({
+      sourceId: 'app-provider',
+      itemId: '/Applications/Rebuilt.app',
+      usageStats: { executeCount: 7, searchCount: 0, cancelCount: 0 }
     })
+    await flushPromises()
+
+    // The count on the row it belongs to is fresh; the row it does not is untouched.
+    expect(hook.res.value[0]?.meta?.usageStats?.executeCount).toBe(7)
+    expect(hook.res.value[1]?.meta?.usageStats).toBeUndefined()
+    // A metadata refresh is not a re-rank: order, focus and layout are exactly where the user
+    // left them, so nothing moves under the cursor.
+    expect(hook.res.value.map((item) => item.id)).toEqual(idsBefore)
+    expect(boxOptions.focus).toBe(1)
+    expect(boxOptions.layout).toBe(layoutBefore)
+  })
+
+  it('ignores a usage-changed notification that carries no executable count', async () => {
+    const hook = useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+    hook.searchVal.value = ''
+    await hook.handleSearchImmediate({ force: true })
+    await flushPromises()
+
+    const before = hook.res.value
+    state.listeners.get('core-box:item:usage-changed')?.({
+      sourceId: 'app-provider',
+      itemId: 'item-1',
+      usageStats: { executeCount: Number.NaN }
+    })
+    await flushPromises()
+
+    // A malformed payload must not wipe the row's existing facts.
+    expect(hook.res.value).toBe(before)
   })
 
   it('orders the empty-query result the way its sections display it', async () => {
@@ -1543,13 +1570,23 @@ describe('useSearch CoreBox reopen behavior', () => {
     ])
   })
 
-  it('does not report an exposure when the recommendation list is empty', async () => {
+  it('sends no exposure report while rendering results on its own', async () => {
+    // Exposure is now driven by the visibility hook (useResultExposure), which owns the display
+    // session and only reports what is actually visible. useSearch must not report on render.
     state.searchResultForRequest = () => ({
-      items: [],
+      items: [
+        {
+          id: 'a-app',
+          kind: 'app',
+          source: { id: 'app-provider', type: 'application' },
+          render: { mode: 'default', basic: { title: 'A' } },
+          meta: { recommendation: { source: 'frequent' } }
+        } as TuffItem
+      ],
       query: { text: '', inputs: [] },
       duration: 1,
       sources: [],
-      sessionId: 'empty-exposure-session'
+      sessionId: 'no-exposure-session'
     })
 
     const hook = useSearch(createBoxOptions(), createClipboardOptions())

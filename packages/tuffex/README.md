@@ -89,7 +89,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **165**.
+Current source-of-truth export modules: **166**.
 
 Every module ships in exactly one of three suites, each exposed as its own category entry:
 
@@ -104,7 +104,7 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 General, form, layout, navigation, data, feedback and status components. Import from `@talex-touch/tuffex/base`.
 
 - `General (10)`: `button`, `icon`, `icon-chip`, `icon-picker`, `avatar`, `tag`, `badge`, `status-badge`, `kbd`, `divider`
-- `Form (25)`: `form`, `input`, `flat-input`, `textarea`, `number-input`, `search-input`, `tag-input`, `sensitive-input`, `scrub-field`, `select`, `flat-select`, `search-select`, `tree-select`, `cascader`, `picker`, `date-picker`, `radio`, `flat-radio`, `checkbox`, `switch`, `slider`, `segmented-slider`, `rating`, `file-uploader`, `image-uploader`
+- `Form (24)`: `form`, `input`, `textarea`, `number-input`, `search-input`, `tag-input`, `sensitive-input`, `scrub-field`, `select`, `flat-select`, `search-select`, `tree-select`, `cascader`, `picker`, `date-picker`, `radio`, `flat-radio`, `checkbox`, `switch`, `slider`, `segmented-slider`, `rating`, `file-uploader`, `image-uploader`
 - `Layout (11)`: `container`, `flex`, `grid`, `grid-layout`, `stack`, `splitter`, `scroll`, `collapse`, `card`, `card-item`, `group-block`
 - `Navigation (10)`: `tabs`, `tab-bar`, `nav-bar`, `sidebar-nav`, `breadcrumb`, `steps`, `pagination`, `dropdown-menu`, `flat-dropdown`, `context-menu`
 - `Data Display (11)`: `data-table`, `tree`, `sortable-list`, `timeline`, `transfer`, `stat-card`, `cell-link`, `dot-indicator`, `filter-chips`, `markdown-view`, `image-gallery`
@@ -126,7 +126,7 @@ Chat, agent, reasoning and context components for AI-native interfaces. Import f
 
 - `Chat (8)`: `chat`, `prompt-bar`, `attachment-tray`, `mode-chip`, `message-actions`, `suggestion-chips`, `choice-card`, `conversation-stream`
 - `Agents (10)`: `agents`, `agent-screen`, `agent-trace`, `task-rows`, `tool-call-card`, `tool-chips`, `tool-confirmation`, `approval-card`, `working-indicator`, `bot-avatar`
-- `Reasoning (8)`: `ai-elements`, `chain-of-thought`, `reasoning-disclosure`, `thinking-orb`, `stream-markdown`, `code-stream`, `inline-citation`, `sources`
+- `Reasoning (10)`: `ai-elements`, `chain-of-thought`, `reasoning-disclosure`, `thinking-orb`, `stream-element`, `stream-text`, `stream-markdown`, `code-stream`, `inline-citation`, `sources`
 - `Context & Insight (5)`: `context-cards`, `context-indicator`, `insight-cards`, `recommendation-card`, `fine-tune-card`
 - `Flow (1)`: `flowchart`
 
