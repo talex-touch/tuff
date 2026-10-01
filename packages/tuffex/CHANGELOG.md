@@ -1,11 +1,13 @@
 # TouchX UI 更新日志
 
-## [Unreleased]
+## [0.6.3] - 2026-10-01
+
+本版本为当前源码及客户端 beta 内的组件版本，尚未独立发布 npm；已发布的 0.6.2 历史记录保持不变。
 
 ### 📦 组件变动 (Components)
 
-- **新增组件**: `stream-element`, `stream-text`
-- **更新组件**: `code-stream`, `stream-markdown`
+- **新增组件 (Since 0.6.3)**: `stream-element`, `stream-text`
+- **更新组件**: `code-stream`, `context-menu`, `dropdown-menu`, `stream-markdown`
 
 ### ✨ 组件增强
 
@@ -503,7 +505,9 @@ const handleClick = () => {
 | `status-badge` | base | **0.3.4** |
 | `status-hint` | base | **0.6.0** |
 | `steps` | base | **0.3.4** |
+| `stream-element` | ai | **0.6.3** |
 | `stream-markdown` | ai | **0.3.9** |
+| `stream-text` | ai | **0.6.3** |
 | `suggestion-chips` | ai | **0.3.9** |
 | `switch` | base | **0.3.4** |
 | `tab-bar` | base | **0.3.4** |
