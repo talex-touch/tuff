@@ -189,7 +189,7 @@ Sortable headers expose `aria-sort` and support pointer click, Enter, and Space 
 
 In dashboard data regions, `TxDataTable` owns the primary list, `TxPagination` owns page navigation, and `TxSkeleton` / `TxLayoutSkeleton` keep loading previews from collapsing into blank space.
 
-A screenshot-verified table, pagination, and skeleton-loading composition on the local Tuff page."}
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="Dashboard data operations" description="A screenshot-verified table, pagination, and skeleton-loading composition on the local Tuff page."}
 ---
 code: |
   <template>

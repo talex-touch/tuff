@@ -189,7 +189,7 @@ code: |
 
 在 Dashboard 数据区中，`TxDataTable` 负责主列表，`TxPagination` 负责页码切换，加载预览用 `TxSkeleton` / `TxLayoutSkeleton` 承接，避免空白等待。
 
-已通过本地 Tuff 页面截图验证的数据表格、分页与骨架加载组合。"}
+::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="后台数据运维面板" description="已通过本地 Tuff 页面截图验证的数据表格、分页与骨架加载组合。"}
 ---
 code: |
   <template>

@@ -22,5 +22,9 @@
   "parent": "09-29-stream-element",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "blocker": "等待 beta.55 发布验收，无实现阻塞。",
+    "evidence": "ea4815409 已集成 StreamText 源码、节奏控制测试及双语示例；CI 36807315835 的 workspace typecheck 通过。",
+    "nextAction": "beta.55 发布后复核增量文本和插槽的验收状态并归档。"
+  }
 }
