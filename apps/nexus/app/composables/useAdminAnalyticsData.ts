@@ -154,14 +154,14 @@ export function useAdminAnalyticsData(options: AdminAnalyticsDataOptions = {}) {
         const normalizedTarget = target.trim().toUpperCase()
         if (!/^[A-Z]{3}$/.test(normalizedTarget))
           throw new Error('Invalid target currency code.')
-        const response = await request<{ items?: ExchangeRateHistoryItem[] }>('/api/exchange/history', {
+        const response = await request<{ items?: ExchangeRateHistoryItem[] }>('/api/admin/exchange/history', {
           query: { target: normalizedTarget, limit },
         })
         exchangeHistory.value = response.items ?? []
         exchangeSnapshots.value = []
       }
       else {
-        const response = await request<{ items?: ExchangeRateSnapshotSummary[] }>('/api/exchange/history', {
+        const response = await request<{ items?: ExchangeRateSnapshotSummary[] }>('/api/admin/exchange/history', {
           query: { limit, includePayload: includePayload ? 'true' : undefined },
         })
         exchangeSnapshots.value = response.items ?? []

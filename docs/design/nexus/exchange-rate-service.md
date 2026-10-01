@@ -19,6 +19,11 @@
   - `limit` / `offset`
   - `includePayload`（可选，仅管理员允许）
 
+- `GET /api/admin/exchange/history`
+  - 查询参数与用户历史接口一致。
+  - 仅限已登录、状态正常的管理员；未登录返回 401，非管理员返回 403。
+  - 不检查套餐，不扣 credits 积分。支持目标币种历史、快照和原始 payload。
+
 ### 配置
 
 - `runtimeConfig.exchangeRate`
@@ -42,9 +47,9 @@
   - 上游失败写入 `telemetry_messages`（`source=exchange-rate`）。
 
 4. **高级访问控制**
-   - 非 FREE 用户可访问历史接口。
-   - 管理员才允许 `includePayload=true`。
-   - Admin Analytics 提供 Exchange 区块用于查看历史数据。
+   - 用户历史接口要求非 FREE 套餐，每次查询扣 2 credits 积分。
+   - 用户接口仍仅允许管理员使用 `includePayload=true`。
+   - Admin Analytics 使用管理员专用只读接口，不受订阅套餐和用户积分限制。
 
 ## 关键文件
 
@@ -52,3 +57,4 @@
 - `/apps/nexus/server/utils/exchangeRateStore.ts`
 - `/apps/nexus/server/api/exchange/convert.get.ts`
 - `/apps/nexus/server/api/exchange/history.get.ts`
+- `/apps/nexus/server/api/admin/exchange/history.get.ts`
