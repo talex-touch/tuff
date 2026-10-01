@@ -14,6 +14,7 @@ import type { SdkApiVersion } from './index'
  * - >= 260626: SemanticAliasSDK is available
  * - >= 260713: plugin i18n/Domain Lexicon facade is available
  * - >= 260817: exact installed-application resolution facade is available
+ * - >= 261001: initialization-time SDK calls, one-shot query preservation, and browser discovery fixes
  */
 export enum SdkApi {
   /**
@@ -62,6 +63,10 @@ export enum SdkApi {
    * 2026-08-17: permission-gated exact installed-application resolution facade.
    */
   V260817 = 260817,
+  /**
+   * 2026-10-01: initialization-time SDK calls, one-shot query preservation, and browser discovery fixes.
+   */
+  V261001 = 261001,
 }
 
 /**
@@ -69,6 +74,7 @@ export enum SdkApi {
  * This list is the canonical allowlist for plugin-declared sdkapi markers.
  */
 export const SUPPORTED_SDK_VERSIONS: readonly SdkApiVersion[] = [
+  SdkApi.V261001,
   SdkApi.V260817,
   SdkApi.V260713,
   SdkApi.V260626,
@@ -86,7 +92,7 @@ export const SUPPORTED_SDK_VERSIONS: readonly SdkApiVersion[] = [
  * Current SDK API version.
  * Updated when a new supported plugin SDK marker is introduced.
  */
-export const CURRENT_SDK_VERSION: SdkApiVersion = SdkApi.V260817
+export const CURRENT_SDK_VERSION: SdkApiVersion = SdkApi.V261001
 
 /**
  * Minimum SDK version required for permission enforcement.

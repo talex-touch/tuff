@@ -64,10 +64,7 @@ function createHarness(onMessage: ReturnType<typeof vi.fn>) {
 
 describe('plugin window transport communication', () => {
   it('does not acknowledge a plugin message until the lifecycle handler settles', async () => {
-    let release!: () => void
-    const pending = new Promise<void>((resolve) => {
-      release = resolve
-    })
+    const { promise: pending, resolve: release } = Promise.withResolvers<void>()
     const onMessage = vi.fn(() => pending)
     const { handler } = createHarness(onMessage)
 
