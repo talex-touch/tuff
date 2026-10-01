@@ -1,6 +1,6 @@
 ---
 title: "CodeStream"
-description: "A code block with a filename header that reveals line by line, with copy and syntax highlighting built in."
+description: "A code block with a filename header that streams code word by word as it arrives, or reveals it line by line, with copy and syntax highlighting built in."
 category: AiReasoning
 status: beta
 since: 0.3.9
@@ -10,6 +10,28 @@ verified: true
 ---
 
 ## Usage
+
+### Streaming
+
+Pass the code received so far as `code` and set `streaming`: the component releases it word by word at a steady pace however unevenly it arrives. Each word comes in out of a light blur inside its own syntax colour, and the Tuff caret rides the end of the line being written. Setting `streaming` at all — `true` or `false` — is what selects this mode; `revealedLines` or `diff` take precedence over it. `TxStreamCode` is the same component under the streaming family's name.
+
+:::TuffDemoWrapper{demo="CodeStreamLiveDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const code = ref('')
+  const busy = ref(true)
+
+  for await (const delta of stream)
+    code.value += delta
+  busy.value = false
+  </script>
+
+  <template>
+    <TxCodeStream :code="code" :streaming="busy" lang="ts" filename="churn.ts" />
+  </template>
+---
+:::
 
 ### Line-by-Line Reveal
 
@@ -81,7 +103,8 @@ code: |
 
 ### Best Practices
 
-- Let the host advance `revealedLines` at the pace data arrives; do not put a timer inside the component.
+- For code arriving from a model, pass it whole as `code` with `streaming` and let the component pace it. Use `revealedLines` when the host owns the cadence, such as a scripted replay or a log that advances line by line.
+- In streaming mode the box grows with its lines; set `minHeight` to the finished height when the page below must not move, or `reserve` when complete code plays back.
 - When the language is uncertain, prefer omitting `lang`: plain text is always correct, and a wrong id only costs a wasted highlight pass.
 - Pair long listings with an outer scroll container. The code area scrolls horizontally on its own, but its height follows content.
 - Use `TxCodeBlock` when a fence should match `TxStreamMarkdown`; use this component when you need a filename header, a gutter, and a line-by-line reveal.
@@ -98,7 +121,16 @@ code: |
 | `filename` | `string` | — | Header filename, in the mono face. |
 | `langLabel` | `string` | — | Language label beside the filename, e.g. `TypeScript`. |
 | `revealedLines` | `number` | — | How many lines are revealed. Omit or pass `-1` for all. |
-| `caret` | `boolean` | `true` | Draws the accent caret after the last revealed line. |
+| `streaming` | `boolean` | — | Streams `code` word by word while true. Setting it at all selects streaming mode unless `revealedLines` or `diff` is set; `false` shows the code at once and lets `replay()` play it back. |
+| `reveal` | `'aurora' \| 'hue' \| 'blur' \| 'languid' \| 'none'` | `'aurora'` | Streaming mode: how a word enters. Code keeps its syntax colour throughout, so `aurora` and `blur` look alike here, and `hue` is a plain fade. |
+| `wordMs` | `number` | `24` | Streaming mode: release one word every `wordMs`. |
+| `maxLagMs` | `number` | `600` | Streaming mode: no word shows later than this after it arrived. |
+| `drainMs` | `number` | `320` | Streaming mode: once `streaming` turns false, release the rest within this. |
+| `pauseMs` | `number` | `400` | Streaming mode: report `paused` after this long without a new word. |
+| `reserve` | `boolean` | `false` | Streaming mode: hold the full height while complete code plays back. Ignored while `streaming`. |
+| `paced` | `boolean` | `true` | Streaming mode: `false` shows each word the moment it arrives, still with its entrance. `TxStreamElement` paces its parts itself and passes `false`. |
+| `appear` | `boolean` | `false` | Streaming mode: code present at mount enters too, instead of showing as it is. Read at mount. |
+| `caret` | `boolean` | `true` | The caret: a still marker after the last revealed line in `revealedLines` mode, the Tuff caret while streaming mode is live. Switched off, the streaming caret goes at once; a stream that ends retracts it. |
 | `lineNumbers` | `boolean` | `true` | Shows the line-number gutter. |
 | `theme` | `'light' \| 'dark' \| 'auto'` | `'auto'` | Highlight theme; `'auto'` follows the document root. |
 | `copyable` | `boolean` | `true` | Renders the copy button. |
@@ -120,7 +152,9 @@ code: |
 | Event | Payload | Description |
 |------|------|------|
 | `copy` | `(code: string)` | Forwarded from `TxCopyButton` on a successful copy. |
-| `complete` | — | Emitted once when `revealedLines` reaches the last line. Not emitted if it starts complete. |
+| `complete` | — | Emitted once when `revealedLines` reaches the last line. Not emitted if it starts complete, nor in streaming mode (use `done`). |
+| `state-change` | `(state: StreamState)` | Streaming mode: the stream moved to another state. |
+| `done` | — | Streaming mode: once per play-through, when the last word is shown and the source has finished. |
 
 ### Slots
 
@@ -128,6 +162,15 @@ code: |
 |------|------|------|
 | `header` | — | Replaces the filename and language label pair. |
 | `actions` | — | Inserts custom controls before the copy button. |
+| `caret` | `{ state }` | Streaming mode: replaces the Tuff caret. Rendered only while the stream is live. |
+
+### Exposed Methods
+
+| Name | Type | Description |
+|------|------|------|
+| `state` | `StreamState` | Streaming mode: where the stream is; `idle` in the other modes. |
+| `replay` | `() => void` | Streaming mode: plays the code again from the first word. |
+| `skip` | `() => void` | Streaming mode: shows everything now, without entrances. |
 
 ## Highlighting and Theming
 
@@ -140,20 +183,25 @@ The component splits shiki's output back into lines and pairs each with a number
 ## Overview
 
 - `revealedLines` is clamped to `[0, total lines]`; out-of-range values are not an error.
-- The caret appears only **while revealing** (`0 < revealedLines < total`), at the end of the last revealed line. It is **still**: upstream reserves the blinking caret for streaming prose, and the code caret is a position marker.
+- **Streaming mode keeps pace the way `TxStreamText` does.** Words go out one every `wordMs`, faster when a burst would otherwise trail the source by more than `maxLagMs`, and whatever is left drains within `drainMs` once the source stops. A word carries the whitespace before it, so a line break and its indentation arrive with the line's first word, and the caret never waits alone on an empty line. States: `idle` → `streaming` → `paused` → `draining` → `done`; a rewrite re-releases from the first changed word.
+- **Colour while streaming.** Growing code is re-highlighted on a 120ms trailing timer, as `TxCodeBlock` does for an open fence. Each shown line takes its markup from the last pass: cut to the shown length, or with the newest characters plain until the next pass colours them — inside their entrance, where the change does not read.
+- **Entrances survive re-highlighting.** A line's markup is replaced whenever its text or colour changes; the entering characters are re-wrapped after every patch with a negative delay, so an entrance resumes where the patch cut it. Once done, the wrappers fold back into plain markup.
+- **The line being written is one element.** A new line moves the finished one out into a new row, so the caret inside it never remounts and keeps its orbit.
+- In `revealedLines` mode the caret appears only **while revealing** (`0 < revealedLines < total`), at the end of the last revealed line. It is **still**: upstream reserves the blinking caret for streaming prose, and the code caret is a position marker.
 - `complete` fires once, on crossing the end. Mounting with the listing already complete is not a crossing, so nothing is emitted.
 - The copy control reuses `TxCopyButton`, so it inherits the `document.execCommand` fallback and the polite live region; only its chrome is restyled to match.
 - The gutter's `line-height: 1.86` against the code's `1.7` is deliberate: 10.5px × 1.86 and 11.5px × 1.7 both land near 19.5px, which is what puts a number on its line's baseline. Changing either side breaks the pairing.
-- The height floor reserves `lines × 1.7em + 20px`, so a reveal grows into space already held rather than pushing the page down. Upstream's hardcoded 137px is exactly six lines of its own sample.
+- The height floor reserves `lines × 1.7em + 20px`, so a reveal grows into space already held rather than pushing the page down. Upstream's hardcoded 137px is exactly six lines of its own sample. In streaming mode the floor follows the lines shown, unless `reserve` holds the full height while complete code plays back.
 - The code area is a `<div>`, not a `<pre>`: Vue's compiler preserves template whitespace inside `<pre>`, so the markup's own indentation would render as code. `white-space: pre` per line says the same thing.
-- Under reduced motion the per-line entrance stops while the reveal itself continues.
+- Under reduced motion no line or word entrance plays: `revealedLines` still reveals, streaming mode shows code as it arrives, and its caret rests as a still arc. All motion is declared only under `prefers-reduced-motion: no-preference`.
 
 ## Technologies
 
 - Component source: `packages/tuffex/packages/components/src/code-stream/src/TxCodeStream.vue`.
 - Types: `packages/tuffex/packages/components/src/code-stream/src/types.ts`.
 - Reused: `packages/tuffex/packages/components/src/button/src/copy-button.vue`, `packages/tuffex/packages/components/src/stream-markdown/src/shiki-runtime.ts`, and `.../use-auto-theme.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/code-stream/__tests__/code-stream.test.ts` (22 cases) covers reveal clamping and reuse of already-revealed lines, caret conditions, `complete` firing once, header presence, splitting shiki output into lines, the plain-text fallback on a line-count mismatch, theme forwarding, and copy event forwarding.
+- Streaming mode reuses the family's pieces: the clock `stream-text/src/use-stream-pacer.ts`, the caret `stream-text/src/TxStreamCaret.vue`, the reveal mixins in `style/mixins.scss` (their code variant, without the colour sweep) and `stream-markdown/src/use-fresh-chunks.ts` for the entrances.
+- **Verified coverage:** `packages/tuffex/packages/components/src/code-stream/__tests__/code-stream.test.ts` (22 cases) covers reveal clamping and reuse of already-revealed lines, caret conditions, `complete` firing once, header presence, splitting shiki output into lines, the plain-text fallback on a line-count mismatch, theme forwarding, and copy event forwarding. `code-stream-live.test.ts` (17) covers streaming mode: mode selection, code present at mount, code entering with `appear`, word-by-word streaming with indentation, spreading a burst, entrances inside highlighted markup and their folding back, the highlight cadence, the persistent line and caret, the caret retract, a caret switched off going at once, the caret slot and state events, replay and skip, rewrites, `reserve`, reduced motion, SSR and the alias. `code-stream-style.test.ts` (4) pins motion only without reduced motion, the line entrance outside streaming mode, the code variant of the reveal and a zero-width caret.
 - Adapted from Beautiful UI (https://www.beautifului.dev), © 2026 Shane Levine, MIT.
 
 <TuffDocSourceLink />

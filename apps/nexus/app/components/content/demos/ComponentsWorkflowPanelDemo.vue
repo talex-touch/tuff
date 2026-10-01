@@ -33,7 +33,7 @@ const labels = computed(() => {
       status: '状态',
       score: '评分',
       items: [
-        { id: 1, task: '组件截图核验', owner: 'Nexus', status: 'review', score: 84 },
+        { id: 1, task: '组件截图核验', owner: 'Tuff', status: 'review', score: 84 },
         { id: 2, task: 'API 表格补齐', owner: 'Tuffex', status: 'ready', score: 92 },
         { id: 3, task: '暗色模式回归', owner: 'QA', status: 'failed', score: 48 },
       ],
@@ -56,7 +56,7 @@ const labels = computed(() => {
     status: 'Status',
     score: 'Score',
     items: [
-      { id: 1, task: 'Verify component screenshots', owner: 'Nexus', status: 'review', score: 84 },
+      { id: 1, task: 'Verify component screenshots', owner: 'Tuff', status: 'review', score: 84 },
       { id: 2, task: 'Complete API tables', owner: 'Tuffex', status: 'ready', score: 92 },
       { id: 3, task: 'Dark-mode regression', owner: 'QA', status: 'failed', score: 48 },
     ],

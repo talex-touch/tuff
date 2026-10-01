@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/09-29-stream-element/prd.md", "reason": "parent acceptance criteria and decisions to verify against"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "quality gates"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "frontend spec index"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "structure, one writer per custom property, ready content vs reveal motion, suite taxonomy"}

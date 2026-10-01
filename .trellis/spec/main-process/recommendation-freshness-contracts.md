@@ -14,6 +14,9 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   birthtime > 0 and ≤ now + 24h), `processAppPath(options.discovery: 'watch' | 'scan')`.
 - Read side: `parseInstalledAt` / `loadInstalledAtByFileId` via
   `appCatalogDbUtils.getFileExtensionsByFileIds(ids, ['installedAt'])`.
+- Default destination identity: `APP_DESTINATION_PROVIDER_ID`,
+  `APP_DESTINATION_ITEM_ID_PREFIX` and `APP_DESTINATION_ITEM_IDS` in `shared/app-destinations.ts`.
+  The provider and recommendation pool share them; main-window keeps its existing bare id.
 
 ### 3. Contracts
 
@@ -52,21 +55,67 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   `RECOMMENDATION_SECTION_ORDER` to emit sections, so array position = the order the
   user sees, and reordering it is a user-visible behavior change (that is how pinned
   moved from bottom to top). Appending a source without a `getReasonLabel` /
-  `generateBadge` entry is caught by the badge-uniqueness test in
-  `item-rebuilder.test.ts`, which asserts all 9 sources have distinct badges and reasons.
+  `generateBadge` entry is caught by `recommendation-presentation.test.ts` ("has a badge
+  for every source the scorer can record") plus the `Record<ScoredItem['source'], …>`
+  type of `RECOMMENDATION_BADGES`; the earlier "all 9 sources have distinct badges and
+  reasons" assertion no longer exists in `item-rebuilder.test.ts` and should not be
+  cited.
 - **Cache invalidation**: `invalidateCache()` correctness = synchronous read guard
   (`cacheInvalidatedAt` rejects older rows) + generation counter (a recommend() started
   before invalidation may not write back to any layer). The aux `recommendation_cache`
   row deletion runs with `dropPolicy: 'drop'` — it is cleanup, never the mechanism.
   Index-commit trigger fires only for `providerIds` containing `APP_INDEXED_SOURCE_ID`.
+- **Candidate-shape cache versions.** Persisted keys begin with `reco-v<schemaVersion>` (currently
+  2), then the existing context and pin signature. Changing default candidates must invalidate old
+  shapes through this version; old rows expire naturally and are never repinned under the new key.
 - **Evidence must be verifiable or absent.** `meta.recommendation.evidence` carries only
   facts the DB actually holds (`executeCount`, `lastExecutedAt`, `installedAt`,
   `peakHourRange`). Every field is `Number.isFinite` + `> 0` guarded and omitted when
   unavailable; an all-empty evidence object is dropped entirely so the renderer prints
-  nothing rather than a placeholder. `resolvePeakHourRange` (recommendation-utils.ts)
-  returns `null` below 10 samples or when the best 3-hour window holds <40% of them —
-  a weak peak is no peak, not a rounded one. There is **no app co-occurrence signal**
-  anywhere in this codebase; do not add "used after X" copy without first adding the data.
+  nothing rather than a placeholder. The dated fields come from the batch behaviour read
+  (`scored.behavior`), never from the stored aggregate: a legacy row's `lastExecuted` can
+  predate the entry fix, so quoting it would date a "recent"/"peak" claim to an execution
+  the ledger never accepted (R9). `resolvePeakHourRange` (recommendation-utils.ts) takes
+  the 30-day histogram plus `activeDays30` / `executeCount30`, returns `null` below 10
+  samples, when the best 3-hour window holds <40% of them, or below the shared gate
+  (≥3 distinct local days and ≥10 executions in 30d) — a weak peak is no peak, not a
+  rounded one. There is **no app co-occurrence signal** anywhere in this codebase; do not
+  add "used after X" copy without first adding the data.
+- **The automatic score is one bounded budget, including recency.** The engine sums
+  `calculateBehaviorScore(behavior)` (0..80 saturated) + `calculateTimeContribution(behavior, time)`
+  (0..20, evidence-gated) + `calculateRecencyBoost(lastExecutedAt)` and clamps the total with
+  `Math.min(BEHAVIOR_SCORE_MAX, …)` (`BEHAVIOR_SCORE_MAX = 100`) before multiplying by
+  `BEHAVIOR_SCORE_WEIGHT`. The recency term is at most 10 points (`10 * exp(-0.1 * hoursSince)`) and
+  only uses `behavior.lastExecutedAt`, so a reliable date is required. It used to be worth 100, which
+  let one recent execution alone saturate the automatic budget and drown sustained habits; the cap is
+  now 10. Comparing an item with a real run against one without must not let recency alone reach 100.
+  A fully established habit's 100 lands at the same 1e6 scale as the old `executeCount * 1e4`
+  asymptote, so effective scores are comparable.
+- **The habitual grid is strict and never filled.** `buildContainerLayout()` forms the
+  top tier from pinned tiles plus tiles whose `meta.recommendation.frequentEligible === true`,
+  sliced to one row (`GRID_TIER_COLUMNS = 6`). `ItemRebuilder` sets that flag from
+  `isFrequentEligible(scored.behavior)` — the dated verdict, never the badge label — so a
+  `frequent`-labelled row with no dated evidence is not a habit. A short grid stays short:
+  exploration or loose suggestions are never used to pad it. No eligible tile and nothing
+  pinned means the habitual section is omitted entirely.
+- **Default settings are suggestions, not fabricated habits.** An empty query always nominates
+  three searchable destinations (`settings-general`, `settings-appearance`, `settings-channels`),
+  even with sparse history. They use `source: 'cold-start'` and empty usage statistics. Real usage
+  dimensions arrive first, so dedupe keeps an existing destination's evidence rather than replacing
+  it with an empty row. These suggestions stay in the list and are never habitual-grid padding.
+- **The default priority is small and bounded.** Only unused host-nominated destinations receive
+  the 5e3 term, above the 1e3 cold-start catalogue band and below established dated behaviour and
+  pin priority. Volatile context and novelty retain their own precedence; do not promise an absolute
+  ordering against every old aggregate. Execution uses the existing destination provider and
+  navigation service, including accepted-execution recording, not a new recommendation-only route.
+- **A post-notification consumer read must not regress to an older aggregate.** The
+  `usageChanged` payload's `executeCount` is the committed epoch fact. A consumer that
+  re-reads the richer aggregate right after that notification passes it as a floor
+  (`ApplicationIndex.loadUsage(path, committedExecuteCount)`); when the reply is lower the
+  whole reply is dropped, so it neither overwrites the committed count nor mixes an older
+  distribution into it. Ordinary selection and explicit reads pass no floor, so a
+  legitimate retention/cleanup drop still shows. This is a per-epoch guard, not a global
+  `Math.max` that pins history.
 - **Exposure slice tags**: extra rows keyed `surface + ':newly-installed'`; base surfaces
   must never contain `:` (readSliceTag splits on it). `getHitRate(days)` sums base
   surfaces only; pass the tag to read a slice.
@@ -80,6 +129,9 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
 | union extended in <3 files | fixed at the root: extend `RECOMMENDATION_SECTION_ORDER` instead |
 | evidence field fabricated (0, `Date.now()`, guessed peak) | forbidden — omit the field, or the whole evidence object |
 | extension read fails | degrade to ctime ordering (`loadInstalledAtByFileId` swallows), never empty grid |
+| Sparse history | Keep real candidates and include default settings; do not fabricate usage to fill the habitual grid |
+| Destination already has real usage | One candidate retains that history; the default nomination does not replace it |
+| Persisted key belongs to an older candidate schema | Recompute under the current version; do not serve the old shape |
 
 ### 5. Tests required
 
@@ -90,7 +142,14 @@ rather than index time" (discriminating fixture: ctime and stamp point opposite 
 a stub without `getFileExtensionsByFileIds` silently tests the degraded path),
 `search-core.contracts` app-vs-file commit invalidation, exposure slice isolation tests.
 For the source union / evidence contracts (09-04):
-`item-rebuilder.test.ts` badge-and-reason uniqueness across `RECOMMENDATION_SECTION_ORDER`,
-`recommendation-utils.test.ts` peak-hour boundaries (9-vs-10 samples, exactly-0.4 share,
-midnight wraparound), `recommendation-evidence.test.ts` "says nothing when there is no
-evidence" and the future-timestamp case.
+`recommendation-presentation.test.ts` "has a badge for every source the scorer can record"
+(the earlier `item-rebuilder.test.ts` "distinct badge and reason" assertion no longer
+exists), `recommendation-utils.test.ts` peak-hour boundaries (9-vs-10 samples, exactly-0.4
+share, midnight wraparound, too-few-active-days), renderer
+`components/render/recommendation-evidence.test.ts` "says nothing when there is no
+evidence" and the future-timestamp case, and `item-rebuilder.test.ts` "marks a rebuilt
+candidate grid-eligible only from dated behaviour, never from its label".
+The engine's cache and sparse-history regressions cover context/pin isolation, invalidation, default
+settings and real-history dedupe through returned items, not exact cache-key strings or full-list
+incidental ordering. Real CoreBox acceptance opens an empty query and executes a default setting
+from a different main-window route; seeing the destination in a list alone is not navigation proof.

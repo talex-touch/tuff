@@ -14,7 +14,9 @@ import {
 import { WHITELISTED_EXTENSIONS } from './constants'
 import {
   THUMBNAIL_EXTENSIONS,
+  THUMBNAIL_STATUS_EXTENSION_KEY,
   VIDEO_THUMBNAIL_EXTENSIONS,
+  isThumbnailStatusCurrentVersion,
   normalizeExtension
 } from './thumbnail-config'
 import { isServableLocalFilePath } from '../../../../utils/local-file-policy'
@@ -168,29 +170,36 @@ export function mapFileToTuffItem(
   const extension = normalizeExtension(file.extension || path.extname(file.name) || '')
   let cachedIcon = _extensions.icon
   const rawIconMeta = _extensions[FILE_ICON_META_EXTENSION_KEY]
+  // A cached icon whose metadata no longer describes the file is out of date, but it is still a
+  // picture of *this* file's type. Dropping it for the duration of an asynchronous re-extraction
+  // is what made a row blink from its native icon to the generic glyph on every touch; the row
+  // keeps rendering the old icon and the refresh lands in the database behind it.
+  let iconNeedsRefresh = false
   if (cachedIcon && rawIconMeta) {
     try {
       if (rawIconMeta.length > 1024) cachedIcon = ''
       else {
         const meta = JSON.parse(rawIconMeta) as FileIconCacheMeta
         if (meta.mtime !== file.mtime.getTime() || meta.size !== (file.size ?? null))
-          cachedIcon = ''
+          iconNeedsRefresh = true
       }
     } catch {
       cachedIcon = ''
     }
   }
 
-  let icon: { type: 'file' | 'url' | 'class' | 'emoji'; value: string }
+  let icon: { type: 'file' | 'url' | 'class' | 'emoji'; value: string; colorful?: boolean }
 
-  if (_extensions.thumbnail) {
+  const thumbnail = _extensions.thumbnail
+  // A stored thumbnail is only usable when its encoder version is current: the bytes of an older
+  // one do not describe the same picture the current encoder would produce, so the row asks for a
+  // new one instead of showing the old.
+  if (thumbnail && isThumbnailStatusCurrentVersion(_extensions[THUMBNAIL_STATUS_EXTENSION_KEY])) {
     // Use pre-generated thumbnail for fast display
-    icon = {
-      type: 'url',
-      value: _extensions.thumbnail.startsWith('data:')
-        ? _extensions.thumbnail
-        : toTfileUrl(_extensions.thumbnail)
-    }
+    const thumbnailSource = thumbnail.startsWith('data:') ? thumbnail : toTfileUrl(thumbnail)
+    // Raster thumbnails carry the picture's own alpha and colors, so they must not be run through
+    // the monochrome-SVG path.
+    icon = { type: 'url', value: thumbnailSource, colorful: true }
   } else if (THUMBNAIL_EXTENSIONS.has(extension) && onMissingThumbnail) {
     // Prefer placeholder until thumbnail is ready to avoid blocking IO
     onMissingThumbnail?.(file)
@@ -202,11 +211,19 @@ export function mapFileToTuffItem(
     // The picture itself, but only where tfile will serve it: for a screenshot under ~/Pictures
     // the request is refused and the renderer shows its "image failed" square, so such a file
     // takes the OS icon or the glyph below like any other.
+    //
+    // `colorful` keeps the renderer from treating the SVG as a monochrome icon template: an SVG
+    // with no color attributes of its own is otherwise masked and painted with `currentColor`,
+    // which turns a real picture into a silhouette.
     icon = {
       type: 'file',
-      value: file.path
+      value: file.path,
+      colorful: true
     }
   } else if (cachedIcon) {
+    // The cached icon renders whether or not its metadata is current; a mismatch only asks for a
+    // background refresh so the value eventually catches up with the file.
+    if (iconNeedsRefresh) onMissingIcon?.(file)
     icon = {
       type: 'url',
       value: cachedIcon.startsWith('data:') ? cachedIcon : toTfileUrl(cachedIcon)

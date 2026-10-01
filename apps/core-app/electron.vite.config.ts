@@ -277,7 +277,7 @@ export default defineConfig({
           'plugin-host': 'src/main/modules/plugin/host/plugin-host-process.ts',
           'plugin-image-tools-worker': 'src/main/modules/plugin/host/plugin-image-tools-worker.ts',
           'plugin-sqlite-worker': 'src/main/modules/plugin/runtime/plugin-sqlite-worker.ts',
-          'ocr-worker': 'src/main/modules/ocr/ocr-worker.ts',
+          'ocr-process': 'src/main/modules/ocr/ocr-process.ts',
           'file-scan-worker': 'src/main/modules/box-tool/addon/files/workers/file-scan-worker.ts',
           'file-reconcile-worker':
             'src/main/modules/box-tool/addon/files/workers/file-reconcile-worker.ts',
@@ -294,8 +294,8 @@ export default defineConfig({
         },
         output: {
           entryFileNames: (chunkInfo) => {
-            if (chunkInfo.name === 'ocr-worker') {
-              return 'ocr-worker.js'
+            if (chunkInfo.name === 'ocr-process') {
+              return 'ocr-process.js'
             } else if (chunkInfo.name === 'file-scan-worker') {
               return 'file-scan-worker.js'
             } else if (chunkInfo.name === 'file-reconcile-worker') {

@@ -81,8 +81,14 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * upgrade that records whether each attempt actually ran in the cloud or on-device. Primary and
  * auxiliary homes, including existing-profile ALTER paths, are pinned by
  * voice-recognition-records-schema.test.ts. This records only the known gap.
+ *
+ * Raised 37 → 38 on 2026-09-29 for `0051_usage_execute_events`, the hand-written upgrade that adds
+ * the event-id dedupe table and the `usage_logs.event_id` column behind accepted execution
+ * counting. Both homes that create the tables — the migration chain and the aux `ensureAuxTables`
+ * DDL plus its guarded ALTER — are pinned by usage-execute-events-schema.test.ts. This records
+ * only the known gap; it does not regenerate or claim to repair snapshot history.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 37
+export const KNOWN_MISSING_SNAPSHOTS = 38
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))

@@ -1,0 +1,8 @@
+{"file": ".trellis/tasks/09-29-stream-element/design.md", "reason": "parent design: the shared contracts this child implements"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "motion rules"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "one writer per custom property"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "docs sync incl. wrappers found by import path"}
+{"file": ".trellis/spec/frontend/tuffex-text-motion.md", "reason": "keeps the morph engine boundary"}
+{"file": ".trellis/tasks/09-29-stream-element/research/existing-streaming-components.md", "reason": "TxStreamMarkdown internals"}
+{"file": ".trellis/tasks/09-29-stream-element/research/consumers.md", "reason": "HomePage call sites"}
+{"file": ".trellis/tasks/09-29-stream-element/research/prior-decisions.md", "reason": "stream-markdown decisions and rejected designs"}

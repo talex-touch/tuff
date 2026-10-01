@@ -1,26 +1,128 @@
 # Implementation
 
-- [x] Establish task, ownership, baseline source identity, and existing spec contracts.
-- [x] Add low-cost per-worker/queue diagnostics without extending idle worker lifetime.
-- [x] Bound scheduler admission and content result ownership; persist/recover deferred versions, fence cancellation and stop upstream on slow persistence.
-- [x] Run focused regressions and real synthetic slow-consumer smoke; verify existing IPC startup fix. Proof: actual scheduler 100 submitted -> 1 active + 1 queued, 1960 deferred records; utils 23/23 and CoreApp 198/198 focused tests passed. Dirty markers now commit with metadata; byte-budget, publication ownership and cancellation cases included.
-- [x] Cut file icons to on-demand path-backed delivery and correct writer routing; migrate every shared icon caller. (Taken over by talex-touch-31 on 2026-09-26: cutover code was present; fixed `FileProtocolModule.onInit` to treat the icon cache root as optional (4 protocol tests were failing), aligned `win.test.ts` to the path contract; writer routing verified — asset/migration writes go through the split-aware `dbUtils`.)
-- [x] Verify real icon pixels, cache hits, exact protocol roots and platform-specific native boundaries. (Real app: file rows render `tfile:///…/Caches/file-icons/<sha256>.png` at 64px, several rows share one hash file; app rows 256px from app-icons; `iconGeneratedBytesCumulative` stayed 0 across the whole-home scan. See research/verification-2026-09-26.md.)
-- [x] Add bounded legacy conversion with idempotent file writes and conditional database replacement; prove interruption/failure safety. (Scheduled from `scheduleBackgroundStartupTasks` by the original session; idle-gated 32-row pages, compare-and-update through the writer. Interruption/failure safety is covered by `file-provider-icon-migration-service.test.ts` and `db/utils.icon-migration.test.ts`; on the dev profile it converts slowly while the scan holds the writer.)
-- [x] Add native minidump lifecycle diagnostics without a second uploader or privacy widening. (Already present in `sentry-service.ts`: discovery count at init, `beforeSend`/`afterSendEvent` hooks mark parsed/sent/queued/failed; verified live below.)
-- [x] Exercise isolated native crash, restart and independent Sentry receipt; record inaccessible external evidence precisely if blocked. (Isolated userData under /tmp, `kill -SEGV`, relaunch → discovered=1 → parsed → sent 200; Sentry API shows native event `a66f76b63f954801b5134c9dbf249d61` in project quotawish/tuff.)
-- [x] Exercise 100k files with slow writes, concurrent search and mutations. (2026-09-27: 100,002 rows completed in an isolated 53.4 MiB tree; external 20s SQLite write lock reproduced shutdown starvation; search stayed live at 230ms during the scan; two watch mutations were held by the authoritative scan gate and converged afterwards at 171/155ms. Full evidence in `research/verification-2026-09-26.md`.)
-- [x] Keep one isolated candidate live for at least three hours with per-isolate memory/queue evidence, then exit gracefully. (2026-09-27: PID 40286 ran 10,800.005s with 360 samples; RSS 238.9–554.2 MiB, main heapTotal 81.3–136.6 MiB, scheduler active/queued 0–1/0–1, pending records 0–30, pending bytes 0–124,950, inflight bytes 0–58,226, final queues/bytes zero, files 100,000, descriptors 21. Graceful shutdown unloaded 44/44 modules in 2,036ms and exited 0. A post-fix 300-file replay smoke then kept all 300 rows completed/pending 0 after explicit schema-migration replay and exited with 44/44 modules in 1,536ms.)
-- [x] Run final affected validation, remove owned throwaway scaffolds after acceptance, and record exact remaining external blockers. Do not commit/push/release. (2026-09-27 follow-up: CoreApp startup/replay tests 57/57, shared side-effect tests 6/6, node typecheck, package-scoped ESLint, `git diff --check`, electron-vite build, real Electron lock A/B, restart recovery, checkpoint resume, 100,002-row scan/search/mutation, three-hour residency, replay-loop regression and graceful shutdown all passed. Owned temporary profiles/probes were removed; live dev/release processes and real profiles were preserved. R10 batch-ceiling A/B then ran in an isolated clone: 10k files completed in 49,571ms at maxSize=20 versus 36,042ms at maxSize=10; 3k repeat controls were 6,155/6,131ms versus 5,917/5,896ms; maxSize=40 was 6,802ms. Production fullScan maxSize is now 10; broader R10 writer-lane/synchronous-diagnostics work remains open.)
+Post-beta54 state: the original steps 1–3 are shipped; only the acceptance/residual order below is left.
+Reconciliation with evidence: `research/2026-09-29-master-reconciliation.md`. Prior runtime evidence:
+`research/verification-2026-09-26.md`.
 
-- [x] Reduce watch-event task-state write fan-out without weakening durability. (2026-09-27: watch task history now uses a 1s leading-edge coalescing window; 200-file isolated storm reduced `indexing.task-state.save` from 191 to 49 writes, while `drainTaskStateWrites()` flushes the latest state during shutdown. Scan/reconcile writes remain immediate. `indexing-runtime.test.ts` 102/102, node typecheck, targeted ESLint, Electron build, and `git diff --check` passed.)
-- [x] Scope indexed-source diagnostics by requested source. (2026-09-27: explicit `sourceId` requests now avoid building unrelated source reports; a 7.48 GiB cloned-index probe measured 1,237ms pre-fix all-source startup timeout versus 10.9ms post-fix file-provider scoped request. Focused runtime/channel tests 143/143, node typecheck, targeted ESLint, and Electron build passed.)
-- [x] Reproduce emergency split-off and legacy opener icon writer lanes. (2026-09-27: `TUFF_DB_SEARCH_SPLIT_ENABLED=0` wrote the ordinary file's `icon`/`iconMeta` into primary `database.db`; the opener path wrote the Free Download Manager `file-icons` path into both its app row and `openers.json.torrent`. Each lane wrote once, neither appeared as a scheduler Top-5 slow label, and neither write window had event-loop lag. No production change was justified.)
+## Closed ledger — do not reimplement
 
-## Ownership (first wave)
+Landed by `b3edffef1` (this task) and reworked/shipped by `728d251a0` + `bd86b0af1`
+(`.trellis/tasks/09-29-bounded-fd-fzf-file-indexing/`, beta54). Keep these as facts, not as work items:
 
-- Main: task artifacts, db-write-scheduler counters, worker observation/perf diagnostics outside file-index-worker*, integration and runtime verification.
-- MemoryPipeline implementation: shared content scheduler, FileProvider content scheduler/resume/runtime/flush paths, file-index worker/client, persistence pending/fencing and FileProvider integration. No icon implementation changes yet.
-- MemoryContracts Tester: focused scheduler and worker/runtime/persistence contract tests only, no production edits. No tests that merely pin source text, private fields, or wiring.
+- Diagnostics without extending idle worker lifetime; scheduler admission and result ownership bounded
+  (100 submitted → 1 active + 1 queued, 1960 deferred records; utils 23/23, CoreApp 198/198 focused tests);
+  dirty markers commit with metadata; byte-budget, publication-ownership and cancellation cases covered.
+- Icon cutover to on-demand path delivery with every caller migrated; real app rendered
+  `tfile:///…/Caches/file-icons/<sha256>.png` at 64px with hash reuse; `iconGeneratedBytesCumulative` stayed 0
+  across a whole-home scan; protocol roots are the exact owned icon cache directory.
+- Legacy conversion service, native minidump lifecycle diagnostics, 100k campaign, three-hour residency, replay-loop
+  regression and graceful shutdown: all recorded on 2026-09-27 (see the verification log). R10 subfindings
+  (batch ceiling 10, watch task-state coalescing, source-scoped diagnostics, split-off/opener icon writer lanes) are
+  closed there too.
+- Superseded by beta54: the beta.41 admission baseline, the single-queue memory contract, and every acceptance run
+  made with enrichment implicitly on or the legacy walker as the default. Do not replay them.
 
-All agents skip formatter/lint/build/test commands during mutation. Contracts are in design.md. No sibling edits to the same file without ownership transfer.
+## Remaining order
+
+- [ ] **O1 — Cold-scan icon budget probe under the fd backend** (probe only; production edit only on failure).
+- [ ] **O2 — Legacy icon conversion campaign**: completion, mid-pass kill/restart resume, failure preservation,
+      page rate and peak RSS at legacy scale.
+- [ ] **O3 — Native crash delivery re-confirmation** on the current Electron build (isolated SEGV → restart →
+      independently observed receipt, or the exact external blocker).
+- [ ] **O4 — 100k / three-hour isolated acceptance re-baseline** on the shipping pipeline: default profile
+      (fd backend, content indexing off) plus a content-indexing-on control.
+- [ ] **Close-out**: record residual external blockers in `task.json`, delete owned scratch artifacts, keep real
+      profiles and live processes untouched. No commit/push/release.
+
+## Next slice (S1) — icon substrate re-acceptance = O1 + O2
+
+S1 is the smallest slice that closes two unchecked PRD criteria, needs no 3-hour run, and is expected to require
+**no production edits**. All work happens under `/tmp`; the real profile is never opened for write.
+
+### Exact files
+
+Read/reference (no edits expected):
+
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-icon-migration-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-asset-service.ts` (`:176` scheduling, `:254` thumbnails-only post-scan pass)
+- `apps/core-app/src/main/db/utils.ts` (`:246` page, `:266` value read, `:283` compare-and-update)
+- `apps/core-app/src/main/service/icon-service.ts`, `apps/core-app/src/main/service/file-icon-artifact.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/services/file-provider-runtime-evidence.ts` (`:238` `iconGeneratedBytesCumulative`)
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` (`:2145` migration scheduling; asset callers)
+
+Edit only if a probe fails, inside the file that the failing assertion names:
+
+- scan-path icon write → `file-provider-asset-service.ts`
+- conversion stall/loop/no-resume → `file-provider-icon-migration-service.ts` (+ `db/utils.ts` if the page query is at fault)
+
+### Contracts
+
+1. Cold scan over an existing-row tree produces **no** new `data:image/png;base64,%` icon value and keeps
+   `iconGeneratedBytesCumulative === 0`; the post-scan pass touches thumbnails only.
+2. Lazy rendering still resolves `tfile:///…/Caches/file-icons/<sha256>.png`, several rows share one hash file, and
+   app rows resolve from `app-icons`.
+3. A conversion pass terminates with `scanned === converted + skipped + failed` and **zero** remaining
+   `data:image/png;base64,%` icon values for `files.type = 'file'` rows in the isolated database.
+4. `skipped`/`failed` rows keep their original value byte-for-byte (compare `length(value)` and prefix before/after).
+5. A `SIGTERM` during a page, followed by a cold restart, resumes at the next keyset id: no value is converted twice,
+   no value is lost, and the second pass's `scanned` count equals the rows that were still legacy-shaped at start.
+6. Page rate (rows/second) and peak RSS are recorded so the residual drain time on a 250k-row legacy profile is an
+   explicit number, not a guess.
+
+### Acceptance probes
+
+```bash
+# Isolated legacy-shaped profile: synthetic tree + legacy data-URL icon rows seeded directly.
+#   TUFF_STARTUP_BENCHMARK_USER_DATA_DIR=/tmp/tuff-1964-o2/userData
+#   TUFF_FILE_PROVIDER_BASE_WATCH_PATHS=/tmp/tuff-1964-o2/tree
+#   TUFF_DISABLE_GLOBAL_SHORTCUTS=1
+# P1 scan budget: grep the run log for `iconGeneratedBytesCumulative` and the `file-icon.persist` lane; diff
+#    `SELECT count(*) FROM file_extensions WHERE key='icon' AND value LIKE 'data:image/png;base64,%'` before/after.
+# P2 lazy delivery: query one row's `tfile://` URL, assert the PNG exists under the isolated Caches/file-icons root
+#    and that at least two rows share one file name.
+# P3 completion: run until `File icon migration pass finished` logs scanned/converted/skipped/failed; assert
+#    scanned == converted + skipped + failed and the legacy-value count reaches 0.
+# P4 kill/resume: SIGTERM mid-pass, restart with the same profile, assert the second pass's scanned count equals the
+#    remaining legacy rows and no previously converted value regressed to a data URL.
+# P5 failure preservation: make the cache directory read-only for one page and assert those rows keep their original
+#    value while `failed` increments.
+```
+
+Focused suites to run once at the end of S1 (not mid-flight):
+
+```bash
+pnpm -C apps/core-app exec vitest run \
+  src/main/service/file-icon-artifact.test.ts \
+  src/main/service/icon-service.test.ts \
+  src/main/modules/box-tool/addon/files/services/file-provider-icon-migration-service.test.ts \
+  src/main/modules/box-tool/addon/files/services/file-provider-icon-cache-service.test.ts \
+  src/main/db/utils.icon-migration.test.ts \
+  src/main/modules/file-protocol/file-icon-cache-root.test.ts
+pnpm -C apps/core-app run typecheck:node
+```
+
+### Do not
+
+- Do not re-plan or re-implement admission, byte budgets, the content-index policy, fd enumeration, progress
+  services, or the icon API surface — all landed (`research/2026-09-29-master-reconciliation.md` §1).
+- Do not run the conversion against the real profile, delete rows, or VACUUM.
+- Do not fold the 09-29 AC7 idle-CPU baseline into this task.
+
+## Ownership (this wave)
+
+- Main: task artifacts, slice sequencing, shared verification, `task.json` close-out.
+- Probe owner for O1/O2: isolated profile, evidence log under `research/`, production fix only on failure.
+- O3 owner: `core/precore.ts` + `modules/sentry/sentry-service.ts` read-only unless a hook is proven wrong.
+- O4 owner: campaign harness + evidence log; no production edits expected.
+
+All agents skip formatter/lint/build/test during mutation; Main runs the shared pass once. No sibling edits to the
+same file without ownership transfer.
+
+## Stop conditions
+
+- Stop O2 and report if a page cannot advance (`afterId` does not progress) or if a converted value reappears as a
+  data URL after restart — that is a correctness defect, not a throughput issue.
+- Stop O4's default profile if content indexing is not observably off (parser activity > 0) — the probe would be
+  measuring the wrong configuration.
+- Never trade coverage, depth, symlink, root-completion or shutdown semantics for speed, and never raise V8 heap
+  limits or shrink search scope to pass a probe.

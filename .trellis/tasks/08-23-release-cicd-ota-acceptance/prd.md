@@ -6,7 +6,7 @@
 
 ## Confirmed Facts
 
-- 最新已验证发布版本为 `2.4.14-beta.33`；Beta33 的 Windows、macOS arm64/x64 与 Linux 发布产物、签名、公证、同 SHA `release-quality`、生产 Gate E 和 macOS arm64 N/N+1 OTA 均已通过。Beta32 的历史证据保持独立，不跨版本复用。
+- 最新已验证发布矩阵为 `2.4.14-beta.54`（2026-09-30 facts 与 `evidence/release-matrix-beta54.md`）；Beta33 的 Windows、macOS arm64/x64 与 Linux 发布产物、签名、公证、同 SHA `release-quality`、生产 Gate E 和 macOS arm64 N/N+1 OTA 均已通过，其 macOS N/N+1 结论仍是当前 AC6 依据。Beta32 与 Beta33 的历史证据保持独立，不跨版本复用。
 - `ci.yml` 对 pull request 与 master push 无路径过滤；GitHub `master` 的经典 branch protection 已启用 7 个稳定 required checks，最近 5 个 PR SHA 与最近 6 个 master SHA 均完整产生这些 context。`enforce_admins=true`、conversation resolution 已启用、`strict=false`；唯一 ruleset 仍处于 disabled。脱敏证据见 `evidence/github-remote-baseline.md`。
 - `build-and-release.yml` 已增加同一 SHA 的 `release-quality` 硬依赖；workflow 合同与负向变异证明 build/create/sync 不能绕过失败 gate。
 - 当前工作区包含跨 CoreApp、Nexus、Utils 和三个插件的未提交批次，远端全绿不能证明这批代码可发布。
@@ -25,6 +25,12 @@
 - Beta33 的 GitHub release、Nexus latest、manifest v2、四个首选平台资产、签名下载路由与回退路由已收敛；严格生产 Gate E `18/18` 通过，详见 `evidence/release-matrix-beta33.md`。
 - 官方 macOS arm64 Beta32 -> Beta33 已从隔离 profile 完成发现、下载、校验、Settings UI `Restart to Update`、无提权 helper、DMG 原位替换、Beta33 官方 attestation、startup health 和 attempt-bound `healthy` ack；同一发布包的 11 个真实 OCR worker 任务全部完成且进程保持存活，详见 `evidence/macos-ota-beta32-beta33.md`。
 - 2026-09-13：先前记录的 `quality:release` 通过发生在未提交的多任务批次上；clean committed HEAD `55da5867d` 上已逐步复跑同一门禁，lint / typecheck:all / test:targeted / electron-builder preflight / CoreApp production build 五步均 exit 0，工作树为空（含未跟踪）。这刷新了本地 preflight 绑定到具体提交的证据，但仍不改变 AC7/AC8 的外部真机结论。脱敏摘要见 `evidence/local-release-preflight.md` 的 “Rerun 2026-09-13 On Clean Committed HEAD”。
+- 2026-09-30：`v2.4.14-beta.54` 已发布且成为当前最新已验证发布矩阵。annotated tag `f33a71d9a4b74b1b17afd63d32cca71755166a22` → 发布 commit `1924e469cdd6cbe8ec48b7e6b0552b49a3e2f8cc`（PR #2020 merge）；GitHub prerelease 26 个资产；Build and Release run `36645346385`（attempt 2）的 Release Quality、macOS 26、windows-2022、ubuntu-24.04、Create Release、Sync Nexus 六个 job 全绿（attempt 1 四个 job 于同一秒被取消，未产出发布）；同一 tag push 还触发 Branch Policy run `36645346358` 通过。release-quality 是 build/create/sync 的同 SHA 硬依赖，构建 job 检出 `needs.release-quality.outputs.sha`。
+- Beta54 的 manifest v2、Nexus BETA latest、四个首选平台资产、rollback target `2.4.14-beta.53`、updater metadata 与签名下载路由一致；生产 Gate E 命令在该主机上得 18 项中 17 项通过，全部 14 个 `remote-*` 检查通过（含 `remote-download-endpoint` 4/4 `302` + 同源签名参数、`remote-signature-endpoint` 4/4 `200` 685 字节、`remote-latest`、`remote-github-asset-inventory` 26 资产无缺失）。唯一失败 `version-baseline` 的原因是本工作区仍检出在 beta.53，而发布 commit 上 root/core `package.json` 均为 `2.4.14-beta.54`（已用该 commit 的 raw 文件核对）；本次未在 beta.54 检出上复跑，故不声称 18/18。
+- Beta54 发布包直采证据：macOS arm64 DMG 从 GitHub 发布资产下载得 `521365822` 字节、SHA-256 `a4426b7441dac17a6c0881a777f4f0ef20ccbf829b5f012a88b7871c8297d073`，与 manifest/summary 一致；detached RSA-SHA256 签名与 `apps/core-app/resources/keys/release-signing-public.pem` 校验 `Verified OK`；只读挂载后 app 版本 `2.4.14-beta.54`、`arm64`、包内 `build-attestation.json` 绑定 commit `1924e469…`，`codesign --verify --deep --strict` 与 Gatekeeper `Notarized Developer ID` 通过。Windows 安装包首 1 KiB 为 PE32/i386（NSIS 引导壳），Linux AppImage 头为 ELF64 x86-64。脱敏摘要见 `evidence/release-matrix-beta54.md`。
+- Gate E 不是任何 workflow 的步骤，由维护者手工执行；本机 `.node-version` 固定 Node `26.0.0` 已不再自带 `corepack`，`publish-manifests-pack` 会在 PATH 上找不到 `corepack` 时以 `spawnSync corepack ENOENT` 失败；补上解析到仓库 `packageManager` pnpm `11.24.0` 的 `corepack` 后，`node scripts/validate-publish-manifests.mjs --pack` exit 0 并校验五个发布包。复现 Gate E 前必须显式提供 corepack。
+- Beta54 的 `release-test-summary.md` 对 win32/x64、darwin/arm64、linux/x64 的 downgrade 证据仍为 `static-only` / native trust `not-assessed`，六个发布 job 均无运行时升级步骤，因此该发布不构成 Windows/Linux N/N+1 真机证据，也不改变 AC6 的 Beta32 → Beta33 结论。
+- 稳定通道未回退：GitHub `releases/latest` 仍为 `v2.4.13`（2026-07-27T07:03:50Z，`prerelease=false`），Nexus `/api/releases/latest?channel=RELEASE` 亦为 `v2.4.13` `published`。
 
 ## Requirements
 
@@ -57,10 +63,10 @@
 | AC2 | pass | 同 SHA release gate 已形成硬依赖，合同测试与负向变异通过。 |
 | AC3 | pass | `master` 已启用 7 个 GitHub Actions required checks；最近 5 个 PR SHA 与最近 6 个 master SHA 均完整产生，失败提交也真实呈现失败或取消。`strict=false` 作为非阻塞限制保留。 |
 | AC4 | pass | tuff-cli CI/publish 假绿已修复，workflow contracts `33/33` 与 CLI tests `6/6` 通过。 |
-| AC5 | pass | Beta33 GitHub/Nexus/latest/manifest/rollback/签名/架构矩阵一致；严格生产 Gate E `18/18`，真实 macOS arm64 下载 SHA-256 与 detached 签名通过。 |
+| AC5 | pass | Beta54（最新）GitHub/Nexus/latest/manifest/rollback/签名/架构矩阵一致；发布 commit `1924e469…` 与 tag/manifest/包内 attestation 同源，真实 macOS arm64 下载 SHA-256 与 detached RSA 签名通过，稳定通道仍为 `v2.4.13`；远程 Gate E 14/14，本地 18 项中 17 项通过（唯一 `version-baseline` 为本工作区检出在 beta.53）。Beta33 历史行保持独立。 |
 | AC6 | pass | 官方 Beta32 -> Beta33 完成 ready、Settings UI install、无提权 handoff、原位替换、Beta33 startup health 与 attempt-bound `healthy` ack；Beta33 packaged OCR smoke `11/11` 完成且无 crashpad/N-API 崩溃。 |
-| AC7 | blocked | Linux helper 打包、替换/恢复与 no-FUSE 重启源码缺陷已修并通过受控测试；Windows/Linux 尚无官方 N/N+1 的发现、下载、替换、handoff 与 health-ack 真机证据。 |
-| AC8 | partial | actionlint、release checks、本地 `quality:release`、Beta33 同 SHA `release-quality`、严格 Gate E、macOS N/N+1 和 packaged OCR smoke 已通过；Windows/Linux 真机及最终文档收尾未闭环。
+| AC7 | blocked | Linux helper 打包、替换/恢复与 no-FUSE 重启源码缺陷已修并通过受控测试；Windows/Linux 尚无官方 N/N+1 的发现、下载、替换、handoff 与 health-ack 真机证据。Beta54 发布摘要仍把三平台 downgrade 证据标为 `static-only`/`not-assessed`，其六个发布 job 也无运行时升级步骤，故不构成新的 AC7 证据。 |
+| AC8 | partial | actionlint、release checks、本地 `quality:release`、Beta54 同 SHA `release-quality`、远程 Gate E 14/14、Beta33 严格 Gate E `18/18`、macOS N/N+1 和 packaged OCR smoke 已通过；Beta54 本地 Gate E 的 `version-baseline` 仍受检出状态限制，Windows/Linux 真机及最终文档收尾未闭环。 |
 
 ## Out of Scope
 

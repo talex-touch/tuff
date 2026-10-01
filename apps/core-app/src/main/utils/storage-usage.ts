@@ -151,6 +151,7 @@ const TABLE_CATALOG: Array<{ name: string; label: string; category: string }> = 
   { name: 'usage_summary', label: '使用日志-汇总', category: 'usage' },
   { name: 'item_usage_stats', label: '使用日志-项目统计', category: 'usage' },
   { name: 'item_time_stats', label: '使用日志-时间统计', category: 'usage' },
+  { name: 'usage_execute_events', label: '使用日志-执行事件', category: 'usage' },
   { name: 'recommendation_cache', label: '推荐-缓存', category: 'recommendation' },
   { name: 'pinned_items', label: '推荐-固定项', category: 'recommendation' },
   { name: 'plugin_data', label: '插件-数据', category: 'plugin' },

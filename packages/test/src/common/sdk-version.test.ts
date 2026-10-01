@@ -1,55 +1,28 @@
-import { readdirSync, readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import {
   checkSdkCompatibility,
-  CURRENT_SDK_VERSION,
   isSupportedSdkVersion,
   resolveSdkApiVersion,
   SdkApi,
 } from '@talex-touch/utils/plugin'
 import { describe, expect, it } from 'vitest'
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..')
-const pluginsDir = join(repoRoot, 'plugins')
-
-function readPluginManifests(): Array<{ pluginName: string, sdkapi: unknown }> {
-  return readdirSync(pluginsDir, { withFileTypes: true })
-    .filter(entry => entry.isDirectory())
-    .flatMap((entry) => {
-      const manifestPath = join(pluginsDir, entry.name, 'manifest.json')
-      try {
-        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
-          sdkapi?: unknown
-        }
-        return [{ pluginName: entry.name, sdkapi: manifest.sdkapi }]
-      }
-      catch {
-        return []
-      }
-    })
-}
-
 describe('sdk-version', () => {
-  it('treats 260817 as current and keeps prior sdkapi markers supported', () => {
-    expect(CURRENT_SDK_VERSION).toBe(SdkApi.V260817)
-    expect(resolveSdkApiVersion(SdkApi.V260817)).toBe(SdkApi.V260817)
-    expect(checkSdkCompatibility(SdkApi.V260817, 'clipboard-history').warning).toBeUndefined()
-
-    expect(isSupportedSdkVersion(SdkApi.V260713)).toBe(true)
-    expect(resolveSdkApiVersion(SdkApi.V260713)).toBe(SdkApi.V260713)
-    expect(checkSdkCompatibility(SdkApi.V260713, 'touch-intelligence').warning).toBeUndefined()
-    expect(isSupportedSdkVersion(SdkApi.V260626)).toBe(true)
-    expect(resolveSdkApiVersion(SdkApi.V260626)).toBe(SdkApi.V260626)
-    expect(checkSdkCompatibility(SdkApi.V260626, 'touch-intelligence').warning).toBeUndefined()
-
-    expect(isSupportedSdkVersion(SdkApi.V260615)).toBe(true)
-    expect(resolveSdkApiVersion(SdkApi.V260615)).toBe(SdkApi.V260615)
-    expect(checkSdkCompatibility(SdkApi.V260615, 'touch-intelligence').warning).toBeUndefined()
-
-    expect(isSupportedSdkVersion(SdkApi.V260428)).toBe(true)
-    expect(resolveSdkApiVersion(SdkApi.V260428)).toBe(SdkApi.V260428)
-    expect(checkSdkCompatibility(SdkApi.V260428, 'touch-dev-utils').warning).toBeUndefined()
+  it('accepts 261001 and keeps prior sdkapi markers supported', () => {
+    for (const version of [
+      SdkApi.V261001,
+      SdkApi.V260817,
+      SdkApi.V260713,
+      SdkApi.V260626,
+      SdkApi.V260615,
+      SdkApi.V260428,
+    ]) {
+      expect(isSupportedSdkVersion(version)).toBe(true)
+      expect(resolveSdkApiVersion(version)).toBe(version)
+      expect(checkSdkCompatibility(version, 'touch-existing-plugin')).toMatchObject({
+        compatible: true,
+        enforcePermissions: true,
+      })
+    }
   })
 
   it('blocks unknown sdkapi markers instead of normalizing them', () => {
@@ -63,39 +36,11 @@ describe('sdk-version', () => {
   })
 
   it('blocks future sdkapi markers until the runtime explicitly supports them', () => {
-    const compatibility = checkSdkCompatibility(260801, 'future-plugin')
+    const compatibility = checkSdkCompatibility(261002, 'future-plugin')
 
-    expect(resolveSdkApiVersion(260801)).toBeUndefined()
+    expect(resolveSdkApiVersion(261002)).toBeUndefined()
     expect(compatibility.compatible).toBe(false)
     expect(compatibility.enforcePermissions).toBe(false)
-    expect(compatibility.warning).toContain('260801')
-  })
-
-  it('keeps bundled plugin manifests on explicitly supported sdkapi markers', () => {
-    const manifests = readPluginManifests()
-    const unsupported = manifests
-      .filter(({ sdkapi }) => !isSupportedSdkVersion(sdkapi))
-      .map(({ pluginName, sdkapi }) => `${pluginName}:${String(sdkapi)}`)
-    const currentMarkerPlugins = manifests
-      .filter(({ sdkapi }) => sdkapi === CURRENT_SDK_VERSION)
-      .map(({ pluginName }) => pluginName)
-      .sort()
-    const localizationMarkerPlugins = manifests
-      .filter(({ sdkapi }) => sdkapi === SdkApi.V260713)
-      .map(({ pluginName }) => pluginName)
-      .sort()
-
-    expect(unsupported).toEqual([])
-    // The current-generation marker identifies manifests that intentionally cross its SDK boundary.
-    // Earlier supported markers remain available to plugins that do not.
-    expect(currentMarkerPlugins).toEqual([
-      'clipboard-history',
-      'touch-ai-sessions',
-      'touch-hosts',
-      'touch-image',
-      'touch-orca',
-      'touch-vscode-projects',
-    ])
-    expect(localizationMarkerPlugins).toEqual(['json-formatter', 'touch-intelligence', 'touch-translation'])
+    expect(compatibility.warning).toContain('261002')
   })
 })

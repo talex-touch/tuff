@@ -36,10 +36,12 @@ const props = withDefaults(
     resultCount?: number
     /** 是否在推荐模式 */
     isRecommendation?: boolean
+    /** The preview pane is showing a file, including its delayed close. */
+    previewVisible?: boolean
     /** CoreBox's motion gate (`shouldAnimate()`): false lands an action's outcome in place. */
     animated?: boolean
   }>(),
-  { animated: true }
+  { animated: true, previewVisible: false }
 )
 
 const displayValue = computed(() => props.display)
@@ -178,7 +180,7 @@ const keyHints = computed(() => {
   const hints: Array<{ key: string; label: string; visible: boolean }> = []
 
   // 主操作（回车）
-  if (primaryVisible.value) {
+  if (primaryVisible.value && !props.previewVisible) {
     hints.push({ key: '↵', label: primaryActionLabel.value, visible: true })
   }
 
@@ -192,7 +194,7 @@ const keyHints = computed(() => {
   }
 
   // 快速选择（Meta+1-0）
-  if (quickSelectVisible.value) {
+  if (quickSelectVisible.value && !props.previewVisible) {
     hints.push({
       key: quickSelectHotkey,
       label: quickSelectLabel === quickSelectLabelKey ? 'Quick Execute' : quickSelectLabel,
@@ -253,17 +255,17 @@ const keyHints = computed(() => {
         </template>
       </template>
     </div>
-    <div class="FooterHints">
+    <TransitionGroup name="footer-hint" tag="div" class="FooterHints" :css="animated">
       <!-- Show indexing label on the right when search results are visible -->
-      <span v-if="isIndexing && debouncedDisplay" class="IndexingHint">
+      <span v-if="isIndexing && debouncedDisplay" key="indexing" class="IndexingHint">
         <span class="IndexingDot" />
         <span>{{ indexingLabel }}</span>
       </span>
-      <div v-for="hint in keyHints" :key="hint.label" class="FooterHint">
+      <div v-for="hint in keyHints" :key="hint.key" class="FooterHint">
         <span class="HintKey">{{ hint.key }}</span>
         <span class="HintLabel">{{ hint.label }}</span>
       </div>
-    </div>
+    </TransitionGroup>
   </div>
 </template>
 
@@ -324,6 +326,7 @@ const keyHints = computed(() => {
 
 .FooterHints {
   display: flex;
+  position: relative;
   align-items: center;
   gap: 12px;
 }
@@ -367,6 +370,28 @@ const keyHints = computed(() => {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
+}
+
+.footer-hint-enter-active,
+.footer-hint-leave-active {
+  transition:
+    opacity 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.footer-hint-enter-from,
+.footer-hint-leave-to {
+  opacity: 0;
+  transform: scale(0.85);
+  filter: blur(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footer-hint-enter-active,
+  .footer-hint-leave-active {
+    transition: none;
+  }
 }
 
 .HintKey {

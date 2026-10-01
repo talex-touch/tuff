@@ -1,9 +1,10 @@
-import { hasNavigator } from '@talex-touch/utils/env'
+import type { RuntimePlatform, RuntimePlatformInput } from '@talex-touch/utils/env'
+import { hasNavigator, resolveRuntimePlatform } from '@talex-touch/utils/env'
 import { computed } from 'vue'
 import { useStartupInfo } from '../hooks/useStartupInfo'
 import { getPreloadProcessInfo } from '../preload/process-info'
 
-export type RendererPlatform = 'darwin' | 'win32' | 'linux' | 'unknown'
+export type RendererPlatform = RuntimePlatform
 
 export interface RendererPlatformState {
   platform: RendererPlatform
@@ -14,52 +15,12 @@ export interface RendererPlatformState {
 
 export type RendererBrowserEngine = 'chromium' | 'firefox' | 'webkit' | 'unknown'
 
-export interface RendererPlatformInput {
-  startupPlatform?: string | null
-  electronPlatform?: string | null
-  navigatorPlatform?: string | null
-  userAgent?: string | null
-}
+export type RendererPlatformInput = RuntimePlatformInput
 
 export interface RendererRuntimePlatformHints {
   electronPlatform: string | null
   navigatorPlatform: string | null
   userAgent: string | null
-}
-
-function normalizeRuntimePlatform(value: string | null | undefined): RendererPlatform | null {
-  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
-  if (!normalized) return null
-  if (normalized === 'darwin' || normalized === 'mac' || normalized === 'macos') return 'darwin'
-  if (normalized === 'win32' || normalized === 'windows' || normalized === 'win') return 'win32'
-  if (normalized === 'linux') return 'linux'
-  return null
-}
-
-function inferBrowserPlatform(
-  navigatorPlatform: string | null | undefined,
-  userAgent: string | null | undefined
-): RendererPlatform | null {
-  const platformText = typeof navigatorPlatform === 'string' ? navigatorPlatform.toLowerCase() : ''
-  const agentText = typeof userAgent === 'string' ? userAgent.toLowerCase() : ''
-  const combined = `${platformText} ${agentText}`.trim()
-  if (!combined) return null
-
-  if (
-    combined.includes('mac') ||
-    combined.includes('iphone') ||
-    combined.includes('ipad') ||
-    combined.includes('ipod')
-  ) {
-    return 'darwin'
-  }
-  if (combined.includes('win')) {
-    return 'win32'
-  }
-  if (combined.includes('linux') || combined.includes('x11')) {
-    return 'linux'
-  }
-  return null
 }
 
 export function getCurrentRendererUserAgent(): string | null {
@@ -106,13 +67,7 @@ function toPlatformState(platform: RendererPlatform): RendererPlatformState {
 export function resolveRendererPlatformState(
   input: RendererPlatformInput = {}
 ): RendererPlatformState {
-  const platform =
-    normalizeRuntimePlatform(input.startupPlatform) ||
-    normalizeRuntimePlatform(input.electronPlatform) ||
-    inferBrowserPlatform(input.navigatorPlatform, input.userAgent) ||
-    'unknown'
-
-  return toPlatformState(platform)
+  return toPlatformState(resolveRuntimePlatform(input))
 }
 
 export function getCurrentRendererPlatformHints(): RendererRuntimePlatformHints {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { mount } from '@vue/test-utils'
+import { mount, type VueWrapper } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import AppList, { type AppListItem, type AppListView } from './AppList.vue'
 
@@ -28,18 +28,23 @@ function mountAppList(items: AppListItem[], selectedId: string | null = null) {
   })
 }
 
-function rowNames(wrapper: ReturnType<typeof mountAppList>): string[] {
-  return wrapper.findAll('li.AppList-Row .AppList-Name').map((name) => name.text())
+/**
+ * A row is the TxCardItem root, which is a `div` nested inside the semantic `li` — so the row
+ * selector deliberately has no element qualifier.
+ */
+function rows(wrapper: VueWrapper) {
+  return wrapper.findAll('.AppList-Row')
 }
 
-function countText(wrapper: ReturnType<typeof mountAppList>): string {
+function rowNames(wrapper: VueWrapper): string[] {
+  return wrapper.findAll('.AppList-Row .AppList-Name').map((name) => name.text())
+}
+
+function countText(wrapper: VueWrapper): string {
   return wrapper.get('.AppList-Info > span').text()
 }
 
-async function selectView(
-  wrapper: ReturnType<typeof mountAppList>,
-  view: AppListView
-): Promise<void> {
+async function selectView(wrapper: VueWrapper, view: AppListView): Promise<void> {
   const option = wrapper
     .findAll('button.AppList-ViewOption')
     .find((button) => button.text().includes(`appList.view.${view}`))
@@ -49,13 +54,13 @@ async function selectView(
 }
 
 describe('AppList semantics', () => {
-  it('selects app items with keyboard activation', async () => {
+  it('activates app rows from the keyboard through the shared card primitive', async () => {
     const items: AppListItem[] = [
       { id: '/Applications/Calculator.app', name: 'Calculator' },
       { id: '/Applications/Terminal.app', name: 'Terminal' }
     ]
     const wrapper = mountAppList(items)
-    const row = wrapper.get('li.AppList-Row')
+    const row = rows(wrapper)[0]
 
     expect(row.attributes('role')).toBe('button')
     expect(row.attributes('tabindex')).toBe('0')
@@ -66,29 +71,55 @@ describe('AppList semantics', () => {
     expect(wrapper.emitted('select')?.at(-1)).toEqual(['/Applications/Calculator.app'])
   })
 
+  it('activates on Space as well, so the row is not Enter-only', async () => {
+    const wrapper = mountAppList([{ id: '/Applications/Calculator.app', name: 'Calculator' }])
+
+    await rows(wrapper)[0].trigger('keydown.space')
+
+    expect(wrapper.emitted('select')?.at(-1)).toEqual(['/Applications/Calculator.app'])
+  })
+
   it('deselects when the selected row is activated again', async () => {
     const wrapper = mountAppList(
       [{ id: '/Applications/Calculator.app', name: 'Calculator' }],
       '/Applications/Calculator.app'
     )
 
-    await wrapper.get('li.AppList-Row').trigger('click')
+    await rows(wrapper)[0].trigger('click')
 
     expect(wrapper.emitted('select')?.at(-1)).toEqual([null])
   })
 
   /**
-   * A disabled entry is still indexed — it is only excluded from recall — so it stays in the
-   * list where it can be found and re-enabled, rather than disappearing.
+   * A disabled entry is still indexed — it is only excluded from recall — so it stays in the list
+   * where it can be found and re-enabled, rather than disappearing. It must therefore remain
+   * selectable: the mark is a label, not an interaction ban.
    */
-  it('keeps recall-disabled entries visible and marks them', () => {
+  it('keeps recall-disabled entries visible, marked, and still selectable', async () => {
     const wrapper = mountAppList([
       { id: '/Applications/Hidden.app', name: 'Hidden', disabled: true }
     ])
 
-    const row = wrapper.get('li.AppList-Row')
+    const row = rows(wrapper)[0]
     expect(row.classes()).toContain('is-disabled')
     expect(row.text()).toContain('settings.settingFileIndex.appIndexManagerEntryDisabled')
+
+    await row.trigger('click')
+
+    expect(wrapper.emitted('select')?.at(-1)).toEqual(['/Applications/Hidden.app'])
+  })
+
+  it('shows the full indexed path, truncated visually but intact for the pointer and reader', () => {
+    const fullPath = '/Applications/Utilities/Disk Utility.app'
+    const wrapper = mountAppList([{ id: fullPath, name: 'Disk Utility', path: fullPath }])
+
+    const path = wrapper.get('.AppList-Row .AppList-Path')
+    expect(path.attributes('title')).toBe(fullPath)
+    expect(path.attributes('aria-label')).toBe(fullPath)
+    // The two halves are a visual truncation of ONE string; together they are the real path.
+    expect(path.find('.AppList-PathStart').text() + path.find('.AppList-PathEnd').text()).toBe(
+      fullPath
+    )
   })
 })
 

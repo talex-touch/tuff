@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { CSSProperties } from 'vue'
 import { computed, nextTick, onUnmounted, ref, useId, watch } from 'vue'
 import { hasDocument } from '../../../../utils/env'
 import { useZIndexAllocator } from '../../../../utils/z-index-manager'
@@ -15,11 +16,25 @@ const props = withDefaults(
     modelValue: boolean
     title?: string
     width?: string
+    /**
+     * Fill the viewport instead of centring a fixed-width panel. Used by
+     * fullscreen surfaces (TxImageGallery's preview) where the content owns the
+     * whole screen. `width` is ignored while set.
+     */
+    fullscreen?: boolean
   }>(),
   {
     title: '',
     width: '480px',
+    fullscreen: false,
   },
+)
+
+// Fullscreen is sized by the overlay (`position: fixed; inset: 0`) through
+// `align-items: stretch`, so the inline width must not be bound at all — an
+// inline `width` outranks the stylesheet.
+const contentStyle = computed<CSSProperties | undefined>(() =>
+  props.fullscreen ? undefined : { width: props.width },
 )
 
 const emit = defineEmits<{
@@ -110,6 +125,7 @@ onUnmounted(() => {
         v-if="visible"
         ref="overlayRef"
         class="tx-modal__overlay"
+        :class="{ 'tx-modal__overlay--fullscreen': fullscreen }"
         role="dialog"
         aria-modal="true"
         tabindex="-1"
@@ -119,7 +135,7 @@ onUnmounted(() => {
         @keydown.esc="close"
         @keydown.tab="trapFocus"
       >
-        <div class="tx-modal__content" :style="{ width }">
+        <div class="tx-modal__content" :class="{ 'tx-modal__content--fullscreen': fullscreen }" :style="contentStyle">
           <header v-if="title || $slots.header" class="tx-modal__header">
             <slot name="header">
               <h3 :id="titleId" class="tx-modal__title">
@@ -163,6 +179,94 @@ onUnmounted(() => {
   box-shadow: 12px 24px 80px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   width: min(90vw, 560px);
   color: var(--tx-text-color-primary, #303133);
+}
+
+// Fullscreen: the overlay's own inset already spans the viewport, so the panel
+// stretches to it instead of being sized. `stretch` (not `height: 100%`) keeps
+// the panel free of the overlay's padding — a percentage height would resolve
+// against the padded box and overflow past the bottom edge.
+.tx-modal__overlay--fullscreen {
+  align-items: stretch;
+  padding: 0;
+  // The panel is opaque and exactly viewport-sized, so the blur has nothing to
+  // show through while costing a full-screen compositing pass every frame.
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  // The panel cannot be taller than the viewport, so the overlay must never
+  // gain its own scrollbar on a small screen.
+  overflow: hidden;
+}
+
+// A fixed box is sized against the *layout* viewport, which on mobile keeps the
+// height the URL bar is hidden at — the bottom of a `inset: 0` overlay sits
+// under the browser chrome until the user scrolls. `dvh` tracks the visible
+// area; with `top` plus an explicit `height`, the over-constrained `bottom` is
+// dropped and the box stops at the visible edge.
+@supports (height: 100dvh) {
+  .tx-modal__overlay--fullscreen {
+    bottom: auto;
+    height: 100dvh;
+  }
+}
+
+// fullscreen: the panel is a column of `header / body / footer`. `flex: none`
+// keeps the bar chrome at its natural height and `flex: 1` + `min-height: 0`
+// lets the body shrink below its content so a tall image scrolls inside it
+// rather than pushing the footer off the bottom edge.
+.tx-modal__content--fullscreen {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.tx-modal__content--fullscreen > .tx-modal__header,
+.tx-modal__content--fullscreen > .tx-modal__footer {
+  flex: none;
+}
+
+.tx-modal__content--fullscreen > .tx-modal__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  // A wheel gesture at the end of the body must not chain to the page behind
+  // the dialog, which is still the document's scroll container.
+  overscroll-behavior: contain;
+}
+
+// A long title must not push the close button past the right edge of the screen.
+// `min-width: 0` is what actually lets the flex item shrink far enough to
+// ellipsise — a flex item's automatic minimum size is its content.
+.tx-modal__content--fullscreen > .tx-modal__header {
+  gap: 12px;
+}
+
+.tx-modal__content--fullscreen > .tx-modal__header > .tx-modal__title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tx-modal__content--fullscreen > .tx-modal__footer {
+  margin-top: 0;
+  padding-top: 12px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  // Keeps the base bar's `flex-end` row from hugging the right edge: a lone
+  // child (one action) stays reachable, and a full-width row still spreads.
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .tx-modal__content--fullscreen {
+    padding: 12px;
+  }
 }
 
 .tx-modal__header {

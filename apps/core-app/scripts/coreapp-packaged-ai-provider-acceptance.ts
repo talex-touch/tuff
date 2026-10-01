@@ -1308,7 +1308,7 @@ function storageProviderExpression(): string {
     const provider = Array.isArray(data?.providers)
       ? data.providers.find((item) => item?.id === ${JSON.stringify(ACCEPTANCE_PROVIDER_ID)})
       : undefined
-    const input = document.querySelector('.aisdk-api-config .FlatInput-Container input[type="password"]')
+    const input = document.querySelector('.aisdk-api-config .tx-input input[type="password"]')
     return {
       found: Boolean(provider),
       hasCredential: provider?.hasCredential === true,
@@ -1373,7 +1373,7 @@ async function saveCredentialThroughUi(
       const inputFocused = await evaluate<boolean>(
         send,
         `(() => {
-          const input = document.querySelector('.aisdk-api-config .FlatInput-Container input[type="password"]')
+          const input = document.querySelector('.aisdk-api-config .tx-input input[type="password"]')
           if (!(input instanceof HTMLInputElement)) return false
           const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
           const credential = ${JSON.stringify(credential)}
@@ -1389,7 +1389,7 @@ async function saveCredentialThroughUi(
       const inputUpdated = await evaluate<boolean>(
         send,
         `(() => {
-          const input = document.querySelector('.aisdk-api-config .FlatInput-Container input[type="password"]')
+          const input = document.querySelector('.aisdk-api-config .tx-input input[type="password"]')
           if (!(input instanceof HTMLInputElement) || input.value.length !== ${credential.length}) return false
           input.blur()
           return true

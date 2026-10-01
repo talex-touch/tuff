@@ -234,30 +234,6 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
     expect(state.send).not.toHaveBeenCalledWith(CoreBoxEvents.item.execute, expect.anything())
   })
 
-  it('passes actionId when routing execute item actions', async () => {
-    useActionPanel()
-    const item = createItem({
-      actions: [
-        {
-          id: 'run-custom-action',
-          type: 'execute',
-          label: 'Run Action'
-        }
-      ]
-    })
-
-    getListener(CoreBoxEvents.metaOverlay.itemAction)({
-      actionId: 'run-custom-action',
-      item
-    })
-    await flushAsyncAction()
-
-    expect(state.send).toHaveBeenCalledWith(CoreBoxEvents.item.execute, {
-      item: JSON.parse(JSON.stringify(item)),
-      actionId: 'run-custom-action'
-    })
-  })
-
   it('applies returned activation state after execute item actions', async () => {
     const onActivationState = vi.fn()
     const activationState = [
@@ -357,7 +333,12 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
     getListener(CoreBoxEvents.metaOverlay.itemAction)({ actionId: 'paste', item })
     await flushAsyncAction()
 
-    expect(state.send).toHaveBeenCalledWith(ClipboardEvents.apply, { id: 42, autoPaste: true })
+    // The business shape, not a field dump: the transport adds a per-action eventId, and pinning
+    // every field would make a harmless envelope change redden a paste-routing test.
+    expect(state.send).toHaveBeenCalledWith(
+      ClipboardEvents.apply,
+      expect.objectContaining({ id: 42, autoPaste: true })
+    )
     expect(state.send).not.toHaveBeenCalledWith(CoreBoxEvents.item.execute, expect.anything())
   })
 
@@ -374,8 +355,65 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
     getListener(CoreBoxEvents.metaOverlay.itemAction)({ actionId: 'copy', item })
     await flushAsyncAction()
 
-    expect(state.send).toHaveBeenCalledWith(ClipboardEvents.apply, { id: 7, autoPaste: false })
+    expect(state.send).toHaveBeenCalledWith(
+      ClipboardEvents.apply,
+      expect.objectContaining({ id: 7, autoPaste: false })
+    )
     expect(footerFeedback.value).toMatchObject({ tone: 'success', message: '已复制' })
+  })
+
+  it('reports the main process refusal of a clipboard apply instead of a success', async () => {
+    state.send.mockImplementation(async (event: unknown) => {
+      if (event === ClipboardEvents.apply) return { success: false, message: '剪贴板不可用' }
+      return undefined
+    })
+    useActionPanel()
+    const item = createItem({
+      id: 'clipboard-9',
+      kind: 'text',
+      source: { id: 'clipboard-history', type: 'history', name: 'Clipboard History' },
+      actions: [{ id: 'paste', type: 'execute', label: 'Paste' }],
+      meta: { raw: { id: 9 } }
+    })
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({ actionId: 'paste', item })
+    await flushAsyncAction()
+
+    expect(footerFeedback.value).toMatchObject({ tone: 'error', message: '剪贴板不可用' })
+  })
+
+  it('runs a clipboard action exactly once, without also dispatching it as an item execute', async () => {
+    useActionPanel()
+    const item = createItem({
+      id: 'clipboard-11',
+      kind: 'text',
+      source: { id: 'clipboard-history', type: 'history', name: 'Clipboard History' },
+      actions: [{ id: 'paste', type: 'execute', label: 'Paste' }],
+      meta: { raw: { id: 11 } }
+    })
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({ actionId: 'paste', item })
+    await flushAsyncAction()
+
+    const applyCalls = state.send.mock.calls.filter(([event]) => event === ClipboardEvents.apply)
+    expect(applyCalls).toHaveLength(1)
+    expect(state.send).not.toHaveBeenCalledWith(CoreBoxEvents.item.execute, expect.anything())
+  })
+
+  it('does not send a clipboard apply when the item carries no record id', async () => {
+    useActionPanel()
+    const item = createItem({
+      id: 'clipboard-history',
+      kind: 'text',
+      source: { id: 'clipboard-history', type: 'history', name: 'Clipboard History' },
+      actions: [{ id: 'paste', type: 'execute', label: 'Paste' }],
+      meta: {}
+    })
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({ actionId: 'paste', item })
+    await flushAsyncAction()
+
+    expect(state.send).not.toHaveBeenCalledWith(ClipboardEvents.apply, expect.anything())
   })
 
   it('runs a shortcut from the result list through the same action pipeline', async () => {

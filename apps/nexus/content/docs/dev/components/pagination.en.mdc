@@ -17,7 +17,7 @@ const page = ref(1)
 ## Usage
 
 ### Pagination
-Navigate through pages of data.
+Navigate through pages of data. Change items per page with `TxSelect`; `TxPagination` recalculates the page count and clamps the current page when needed.
 :::TuffDemoWrapper{demo="PaginationPaginationDemo" code-lang="vue"}
 ---
 code: |
@@ -25,16 +25,20 @@ code: |
   import { ref } from 'vue'
 
   const page = ref(1)
+  const pageSize = ref(10)
   </script>
 
   <template>
     <TxPagination
       v-model:current-page="page"
       :total="120"
-      :page-size="10"
+      :page-size="pageSize"
       show-info
       show-first-last
     />
+    <TxSelect v-model="pageSize" aria-label="Items per page">
+      <TxSelectItem v-for="size in [10, 20, 50]" :key="size" :value="size" :label="String(size)" />
+    </TxSelect>
   </template>
 ---
 :::
@@ -71,12 +75,12 @@ rows:
     description: Explicit total page count; used when total is not provided
   - name: prevIcon
     type: string
-    default: "'i-carbon-chevron-left'"
-    description: Previous page icon (UnoCSS icon class consumed by TxIcon)
+    default: "''"
+    description: Custom previous icon class consumed by TxIcon; empty uses the bundled SVG chevron
   - name: nextIcon
     type: string
-    default: "'i-carbon-chevron-right'"
-    description: Next page icon (UnoCSS icon class consumed by TxIcon)
+    default: "''"
+    description: Custom next icon class consumed by TxIcon; empty uses the bundled SVG chevron
   - name: showInfo
     type: boolean
     default: 'false'
@@ -140,12 +144,13 @@ code: |
 - `total` takes precedence for page-count calculation with `pageSize`; `totalPages` is used when `total` is not provided.
 - `showFirstLast` renders first/last page jump buttons, and boundary pages disable first/previous or next/last controls.
 - The active page button exposes `aria-current="page"`; previous/next/first/last controls expose readable `aria-label` values.
+- Default navigation chevrons are bundled SVGs and do not require host icon generation; custom icon classes still use `TxIcon`.
 
 ## Technologies
 
 - Source: `packages/tuffex/packages/components/src/pagination/src/TxPagination.vue` confirms total/page-size page calculation, ellipsis window generation, boundary guards, first/last controls, info slot props, `aria-current`, and readable pagination button labels.
 - Type contracts: `packages/tuffex/packages/components/src/pagination/src/types.ts` defines `PaginationProps` and `PaginationEmits`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/pagination/__tests__/pagination.test.ts` covers total-derived pages, ellipsis rendering, active page semantics, blocked out-of-range navigation, first/last controls, boundary disabled states, custom info slot props, and prose-list style isolation.
+- **Verified coverage:** `packages/tuffex/packages/components/src/pagination/__tests__/pagination.test.ts` covers total-derived pages, ellipsis rendering, active page semantics, blocked out-of-range navigation, first/last controls, boundary disabled states, localized control labels, and custom info slot props.
 - Recommendation: prefer `total + pageSize`; use `totalPages` only when the backend returns a page count without total items.
 
 <TuffDocSourceLink />

@@ -199,7 +199,7 @@ code: |
 
 Leaving a slot empty turns that segment into a **plain trigger**: it still emits
 its event, but opens no popover. Use this when the host already has its own
-dialog for that job — the Nexus landing hero omits `history` so the right half
+dialog for that job — the Tuff landing hero omits `history` so the right half
 opens a full-screen release-history overlay instead.
 
 ### TxVersionDownloadPanel

@@ -14,6 +14,7 @@ import {
   downloadHistory,
   downloadTasks,
   embeddings,
+  executeEvents,
   fileExtensions,
   fileIndexProgress,
   files,
@@ -331,6 +332,7 @@ export async function cleanupUsage(options?: CleanupUsageOptions): Promise<Stora
   await db.delete(itemUsageStats)
   await db.delete(usageTrendDaily)
   await db.delete(itemTimeStats)
+  await db.delete(executeEvents)
   await auxDb.delete(recommendationCache)
 
   return { success: true }

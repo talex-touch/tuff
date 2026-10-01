@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -72,6 +72,13 @@ async function runAcceptanceVerify(manifestPath: string): Promise<{
   stdout: string
   stderr: string
 }> {
+  return runAcceptanceVerifyWithFlags(manifestPath, [])
+}
+
+async function runAcceptanceVerifyWithFlags(
+  manifestPath: string,
+  flags: string[]
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   try {
     const { stdout, stderr } = await execFileAsync(
       process.execPath,
@@ -81,6 +88,7 @@ async function runAcceptanceVerify(manifestPath: string): Promise<{
         '--input',
         manifestPath,
         '--requireCompletedManualEvidence',
+        ...flags,
         '--compact'
       ],
       {
@@ -101,6 +109,197 @@ async function runAcceptanceVerify(manifestPath: string): Promise<{
       stderr: childError.stderr ?? ''
     }
   }
+}
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+const realPng = (): Buffer => Buffer.concat([PNG_SIGNATURE, Buffer.alloc(64, 3)])
+
+/**
+ * A complete manifest whose packaged CoreBox UI evidence is on disk and whose screenshot bytes the
+ * caller controls — so the artifact gate (missing/truncated/non-PNG) is exercised through the real
+ * CLI, not just the pure judge.
+ */
+async function writeCoreBoxUiAcceptanceFixture(): Promise<{
+  fixtureDir: string
+  manifestPath: string
+  resultPath: string
+  degradedPath: string
+}> {
+  const fixtureDir = await mkdtemp(path.join(tmpdir(), 'windows-corebox-ui-'))
+  const casesDir = path.join(fixtureDir, 'cases')
+  await mkdir(casesDir, { recursive: true })
+
+  const cases = WINDOWS_REQUIRED_CASE_IDS.map((caseId) => {
+    const evidencePath = `cases/${caseId}.json`
+    return {
+      caseId,
+      status: 'passed' as const,
+      requiredForRelease: true,
+      evidence: [{ path: evidencePath, verifierCommand: `pnpm verify --case ${caseId}` }]
+    }
+  })
+  for (const testCase of cases) {
+    await writeFile(path.join(fixtureDir, testCase.evidence[0].path), '{}\n', 'utf8')
+  }
+
+  const resultPath = path.join(fixtureDir, 'corebox-ui.json')
+  const degradedPath = path.join(fixtureDir, 'corebox-ui-degraded.json')
+  const modes = ['normal', 'explicit-file', 'structured-filter'].map((mode) => ({
+    mode,
+    query: mode === 'normal' ? 'tuff-everything-ci-marker.txt' : `q-${mode}`,
+    attempted: true,
+    resultSource: mode === 'structured-filter' ? 'file-provider' : 'everything-provider',
+    rowCount: 2,
+    markerMatchCount: 1,
+    emptyResult: false,
+    noticeVisible: false,
+    durationMs: 900,
+    screenshot: `shot-${mode}.png`,
+    domSnapshot: `dom-${mode}.json`
+  }))
+  // DOM snapshots are real files in the evidence directory; the screenshot bytes are what each test
+  // controls (real PNG / truncated / non-PNG / missing), so the artifact gate reads the filesystem.
+  for (const entry of modes) {
+    await writeFile(path.join(fixtureDir, entry.domSnapshot), '{"dom":true}\n', 'utf8')
+  }
+
+  const base = {
+    schemaVersion: 1,
+    kind: 'everything-corebox-ui-evidence',
+    createdAt: '2026-09-29T00:00:00.000Z',
+    runtime: {
+      packaged: true,
+      mode: 'packaged-app',
+      platform: 'win32',
+      appVersion: '2.4.14-beta.53',
+      profileIsolated: true
+    },
+    window: {
+      coreBoxVisible: true,
+      visibilityState: 'visible',
+      resultSurfaceVisible: true,
+      screenshotCount: modes.length
+    },
+    emptyState: {
+      query: 'tuff-corebox-empty-state',
+      observed: true,
+      rowCount: 0,
+      reason: null
+    },
+    redaction: {
+      queryIncluded: false,
+      resultPathsIncluded: false,
+      resultTitlesIncluded: false,
+      userHomeIncluded: false
+    },
+    modes,
+    artifacts: {
+      screenshots: modes.map((entry) => entry.screenshot),
+      domSnapshots: modes.map((entry) => entry.domSnapshot)
+    }
+  }
+  await writeFile(
+    resultPath,
+    `${JSON.stringify(
+      {
+        ...base,
+        backend: {
+          expected: 'sdk-napi',
+          observed: 'sdk-napi',
+          available: true,
+          health: 'ready',
+          version: '1.4.1.1026',
+          errorCode: null,
+          fallbackChain: ['sdk-napi', 'cli'],
+          statusChannelAvailable: true
+        },
+        degradedState: {
+          observed: false,
+          zeroResultRows: false,
+          coreBoxInteractive: true,
+          backend: 'sdk-napi',
+          backendReason: null,
+          noticeVisible: false
+        }
+      },
+      null,
+      2
+    )}\n`,
+    'utf8'
+  )
+  await writeFile(
+    degradedPath,
+    `${JSON.stringify(
+      {
+        ...base,
+        backend: {
+          expected: 'unavailable',
+          observed: 'unavailable',
+          available: false,
+          health: 'unsupported',
+          version: null,
+          errorCode: 'EVERYTHING_NOT_INSTALLED',
+          fallbackChain: [],
+          statusChannelAvailable: true
+        },
+        degradedState: {
+          observed: true,
+          zeroResultRows: true,
+          coreBoxInteractive: true,
+          backend: 'unavailable',
+          backendReason: 'everything-not-installed',
+          noticeVisible: true
+        },
+        modes: modes.map((entry) => ({
+          ...entry,
+          resultSource: 'none',
+          rowCount: 0,
+          markerMatchCount: 0,
+          emptyResult: true,
+          noticeVisible: true
+        }))
+      },
+      null,
+      2
+    )}\n`,
+    'utf8'
+  )
+
+  const manifestPath = path.join(fixtureDir, 'windows-acceptance.json')
+  await writeFile(
+    manifestPath,
+    `${JSON.stringify({
+      schema: WINDOWS_ACCEPTANCE_MANIFEST_SCHEMA,
+      generatedAt: '2026-05-11T00:00:00.000Z',
+      platform: 'win32',
+      cases,
+      manualChecks: {
+        everythingSearch: {
+          normalSearchPassed: true,
+          normalSearchQuery: 'tuff-everything-ci-marker.txt',
+          explicitFileSearchPassed: true,
+          explicitFileSearchQuery: 'q-explicit-file',
+          structuredFilterSearchPassed: true,
+          structuredFilterSearchQuery: 'q-structured-filter',
+          sdkBackendEvidencePath: 'cases/windows-everything-file-search.json',
+          cliBackendEvidencePath: 'cases/windows-everything-file-search.json',
+          unavailableBackendEvidencePath: 'cases/windows-everything-file-search.json',
+          evidencePath: 'cases/windows-everything-file-search.json',
+          coreBoxUiEvidence: {
+            resultEvidencePath: 'corebox-ui.json',
+            resultVerifierCommand:
+              'pnpm -C "apps/core-app" run everything:corebox-ui:verify -- --input "corebox-ui.json" --requireModes normal,explicit-file,structured-filter --requireBackend sdk-napi --requireAvailable --requireResultRows --requireMarkerMatches --requireScreenshots --requireEmptyState --requirePlatform win32',
+            degradedEvidencePath: 'corebox-ui-degraded.json',
+            degradedVerifierCommand:
+              'pnpm -C "apps/core-app" run everything:corebox-ui:verify -- --input "corebox-ui-degraded.json" --requireModes normal,explicit-file,structured-filter --requireBackend unavailable --requireDegraded --requireScreenshots --requirePlatform win32'
+          }
+        }
+      }
+    })}\n`,
+    'utf8'
+  )
+
+  return { fixtureDir, manifestPath, resultPath, degradedPath }
 }
 
 async function writeTemplateFixture(): Promise<string> {
@@ -598,6 +797,47 @@ describe('windows-acceptance-verify script', () => {
 - Screenshot or recording: evidence/windows/manual/copied-app-path-index.mp4
 - Notes:
 `)
+
+    const result = await runAcceptanceVerify(manifestPath)
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('"passed":true')
+  })
+
+  it('fails the packaged CoreBox UI evidence when a listed screenshot is not a real PNG', async () => {
+    const { fixtureDir, manifestPath } = await writeCoreBoxUiAcceptanceFixture()
+    // A PNG listed in the artifact array, but the bytes are not a PNG: the pure gate passes, so
+    // only the filesystem half of the gate can catch it.
+    await writeFile(path.join(fixtureDir, 'shot-normal.png'), 'GIF89a-not-a-png')
+
+    const result = await runAcceptanceVerify(manifestPath)
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stdout).toContain(
+      'Everything packaged CoreBox UI result evidence did not pass: Everything CoreBox UI evidence screenshot is not a PNG'
+    )
+  })
+
+  it('fails the packaged CoreBox UI evidence when a listed screenshot is missing', async () => {
+    const { fixtureDir, manifestPath } = await writeCoreBoxUiAcceptanceFixture()
+    // Present everywhere except on disk: the artifact array names it, the filesystem does not.
+    await rm(path.join(fixtureDir, 'shot-normal.png'), { force: true })
+
+    const result = await runAcceptanceVerify(manifestPath)
+
+    expect(result.exitCode).toBe(1)
+    expect(result.stdout).toContain('Everything packaged CoreBox UI result evidence did not pass')
+  })
+
+  it('passes the packaged CoreBox UI evidence when every screenshot is a real PNG', async () => {
+    const { fixtureDir, manifestPath } = await writeCoreBoxUiAcceptanceFixture()
+    for (const name of [
+      'shot-normal.png',
+      'shot-explicit-file.png',
+      'shot-structured-filter.png'
+    ]) {
+      await writeFile(path.join(fixtureDir, name), realPng())
+    }
 
     const result = await runAcceptanceVerify(manifestPath)
 

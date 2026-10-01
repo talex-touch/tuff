@@ -148,6 +148,7 @@ import type {
   CoreBoxTriggerPayload,
   CoreBoxUIModeExitedPayload,
   CoreBoxUiResumePayload,
+  CoreBoxUsageChangedPayload,
   CoreBoxUIViewStateResponse,
   CoreBoxVisibilityResponse,
   DeactivateProviderRequest,
@@ -1266,6 +1267,11 @@ export const CoreBoxEvents = {
       .event('execute')
       .define<CoreBoxExecuteRequest, IProviderActivate[] | null>(),
 
+    usageChanged: defineEvent('core-box')
+      .module('item')
+      .event('usage-changed')
+      .define<CoreBoxUsageChangedPayload, void>(),
+
     clear: defineEvent('core-box').module('item').event('clear').define<CoreBoxClearItemsPayload | void, void>(),
 
     togglePin: defineEvent('core-box')
@@ -1396,8 +1402,8 @@ export const CoreBoxEvents = {
       .define<CoreBoxIsPinnedRequest, CoreBoxIsPinnedResponse>(),
 
     /**
-     * Report which recommendation items a surface rendered (local hit-rate@k
-     * accounting). Fire-and-forget: the renderer does not wait for a result.
+     * Report actual viewport-visible items in a native-window session. Only recommendation
+     * impressions enter hit-rate@k; search visibility remains a separate diagnostic metric.
      */
     reportExposure: defineEvent('core-box')
       .module('recommendation')

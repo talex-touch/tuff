@@ -73,6 +73,7 @@ Serially manages global dialogs by priority with lifecycle callbacks.
 |--------|-----------|-------------|
 | `useFlip(targetRef, opts?)` | `(ref, opts?) => UseFlipReturn` | Run a FLIP transition on an element (powers `TxFlipOverlay`) |
 | `useAutoResize(targetRef, opts?)` | `(ref, opts?) => UseAutoResizeReturn` | Measure and transition size changes (powers `TxAutoSizer`) |
+| `stepSpring(position, velocity, target, spring, dt)` | `(position, velocity, target, spring, dt) => [number, number]` | Step a value you animate from your own frame loop along a spring (`{ stiffness, damping, mass? }`, `dt` in seconds), keeping its velocity when the target moves; also the `integrate` for `useJellyIndicator`'s glide |
 
 ### Install helper
 

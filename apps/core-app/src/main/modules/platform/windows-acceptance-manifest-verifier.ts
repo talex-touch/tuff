@@ -47,6 +47,8 @@ import {
   ACCEPTANCE_RECOMMENDED_COMMAND_REQUIREMENT,
   CLIPBOARD_STRESS_COMMAND_REQUIREMENT,
   CLIPBOARD_STRESS_VERIFIER_COMMAND_REQUIREMENT,
+  EVERYTHING_COREBOX_UI_DEGRADED_VERIFIER_COMMAND_REQUIREMENT,
+  EVERYTHING_COREBOX_UI_RESULT_VERIFIER_COMMAND_REQUIREMENT,
   SEARCH_TRACE_STATS_COMMAND_REQUIREMENT,
   SEARCH_TRACE_VERIFIER_COMMAND_REQUIREMENT,
   WINDOWS_ACCEPTANCE_CASE_VERIFIER_COMMAND_REQUIREMENTS,
@@ -193,6 +195,16 @@ export interface WindowsAcceptanceTimeAwareRecommendationManualCheck {
   notes?: string
 }
 
+export interface WindowsAcceptanceEverythingCoreBoxUiEvidence {
+  /** Redacted `everything-corebox-ui-evidence` JSON from the packaged app with a live backend. */
+  resultEvidencePath?: string
+  resultVerifierCommand?: string
+  /** Same schema, collected with the packaged backend unavailable. */
+  degradedEvidencePath?: string
+  degradedVerifierCommand?: string
+  notes?: string
+}
+
 export interface WindowsAcceptanceEverythingSearchManualCheck {
   normalSearchPassed: boolean
   normalSearchQuery?: string
@@ -203,6 +215,12 @@ export interface WindowsAcceptanceEverythingSearchManualCheck {
   sdkBackendEvidencePath?: string
   cliBackendEvidencePath?: string
   unavailableBackendEvidencePath?: string
+  /**
+   * Packaged CoreBox UI evidence for the three search modes. The manifest quotes the same queries the
+   * probe typed, and `--requireEverythingSearchUiEvidence` re-verifies both artifacts at strict
+   * settings, so a manifest cannot claim UI coverage the artifacts do not contain.
+   */
+  coreBoxUiEvidence?: WindowsAcceptanceEverythingCoreBoxUiEvidence
   evidencePath?: string
   notes?: string
 }
@@ -248,6 +266,12 @@ export interface WindowsAcceptanceGateOptions {
   requireCommonAppTargets?: string[]
   requireCommonAppLaunchDetails?: boolean
   requireEverythingSearchManualChecks?: boolean
+  /**
+   * Require the packaged CoreBox UI artifacts and their strict verifier commands. The manifest
+   * verifier only checks presence; `windows:acceptance:verify` reads the artifacts and re-runs
+   * `evaluateEverythingCoreBoxUiEvidence` against them.
+   */
+  requireEverythingSearchUiEvidence?: boolean
   requireCopiedAppPathManualChecks?: boolean
   requireUpdateInstallManualChecks?: boolean
   requireDivisionBoxDetachedWidgetManualChecks?: boolean
@@ -573,7 +597,10 @@ function findCommonAppLaunchDetailFailures(
   return failures
 }
 
-function findEverythingSearchManualCheckFailures(manifest: WindowsAcceptanceManifest): string[] {
+function findEverythingSearchManualCheckFailures(
+  manifest: WindowsAcceptanceManifest,
+  options: WindowsAcceptanceGateOptions = {}
+): string[] {
   const check = manifest.manualChecks?.everythingSearch
   if (!check) {
     return ['Everything search manual check is missing']
@@ -600,6 +627,52 @@ function findEverythingSearchManualCheckFailures(manifest: WindowsAcceptanceMani
   ]
   for (const [field, message] of requiredEvidence) {
     if (!isFilledManualField(check[field])) failures.push(message)
+  }
+
+  if (options.requireEverythingSearchUiEvidence) {
+    const uiEvidence = check.coreBoxUiEvidence
+    if (!uiEvidence) {
+      failures.push('Everything packaged CoreBox UI evidence is missing')
+    } else {
+      const requiredUiEvidence: Array<
+        [keyof WindowsAcceptanceEverythingCoreBoxUiEvidence, string]
+      > = [
+        ['resultEvidencePath', 'Everything packaged CoreBox UI result evidence path is missing'],
+        [
+          'resultVerifierCommand',
+          'Everything packaged CoreBox UI result verifier command is missing'
+        ],
+        [
+          'degradedEvidencePath',
+          'Everything packaged CoreBox UI degraded evidence path is missing'
+        ],
+        [
+          'degradedVerifierCommand',
+          'Everything packaged CoreBox UI degraded verifier command is missing'
+        ]
+      ]
+      for (const [field, message] of requiredUiEvidence) {
+        if (!isFilledManualField(uiEvidence[field])) failures.push(message)
+      }
+
+      const commandChecks: Array<[string | undefined, VerifierCommandRequirement, string]> = [
+        [
+          uiEvidence.resultVerifierCommand,
+          EVERYTHING_COREBOX_UI_RESULT_VERIFIER_COMMAND_REQUIREMENT,
+          'Everything packaged CoreBox UI result verifier command is missing strict gate flags'
+        ],
+        [
+          uiEvidence.degradedVerifierCommand,
+          EVERYTHING_COREBOX_UI_DEGRADED_VERIFIER_COMMAND_REQUIREMENT,
+          'Everything packaged CoreBox UI degraded verifier command is missing strict gate flags'
+        ]
+      ]
+      for (const [command, requirement, message] of commandChecks) {
+        if (command && !verifierCommandMatchesRequirement(command, requirement)) {
+          failures.push(message)
+        }
+      }
+    }
   }
 
   return failures
@@ -1183,8 +1256,8 @@ export function evaluateWindowsAcceptanceManifest(
     failures.push(...findCommonAppLaunchDetailFailures(manifest, options.requireCommonAppTargets))
   }
 
-  if (options.requireEverythingSearchManualChecks) {
-    failures.push(...findEverythingSearchManualCheckFailures(manifest))
+  if (options.requireEverythingSearchManualChecks || options.requireEverythingSearchUiEvidence) {
+    failures.push(...findEverythingSearchManualCheckFailures(manifest, options))
   }
 
   if (options.requireCopiedAppPathManualChecks) {

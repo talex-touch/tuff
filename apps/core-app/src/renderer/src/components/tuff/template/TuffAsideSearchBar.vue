@@ -1,7 +1,7 @@
 <script setup lang="ts" name="TuffAsideSearchBar">
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxInput } from '@talex-touch/tuffex/input'
 import { computed } from 'vue'
-import FlatInput from '~/components/base/input/FlatInput.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -46,17 +46,14 @@ function handleClear(): void {
       {{ props.searchLabel }}
     </label>
     <div class="TuffAsideSearch-Field">
-      <FlatInput
+      <TxInput
         :id="props.searchId"
         v-model="searchValue"
         class="TuffAsideSearch-Input"
         :placeholder="props.searchPlaceholder"
         autocomplete="off"
-      >
-        <template #default>
-          <i class="i-carbon-search" aria-hidden="true" />
-        </template>
-      </FlatInput>
+        prefix-icon="i-carbon-search"
+      />
       <TxButton
         v-if="searchValue"
         variant="flat"

@@ -69,7 +69,7 @@ code: |
 
   const messages = computed<AiElementMessage[]>(() => [
     { id: 'u1', role: 'user', content: 'Summarize this release review.', name: 'You' },
-    { id: 'a1', role: 'assistant', content: 'Reviewed **component docs**.', name: 'Nexus AI' },
+    { id: 'a1', role: 'assistant', content: 'Reviewed **component docs**.', name: 'Tuff AI' },
     { id: 't1', role: 'tool', content: '', name: 'Verifier', status: 'streaming' },
   ])
   </script>

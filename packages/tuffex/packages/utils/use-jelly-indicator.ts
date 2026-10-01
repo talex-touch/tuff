@@ -42,9 +42,9 @@ export type JellyMaterial = 'jelly' | 'glide'
 
 /**
  * One spring advanced by `dt` seconds: `[position, velocity]` after the step.
- * The glide material is driven by the library's frame spring,
- * `springSteps` in `components/src/liquid/src/spring.ts` (1/240 s substeps);
- * utils cannot import from components, so glide hosts pass it in.
+ * The glide material is driven by the library's frame spring, `stepSpring`
+ * in `animation/spring.ts` (1/240 s substeps), which glide hosts pass in;
+ * liquid's preset-aware `springSteps` steps on it and fits too.
  */
 export type JellySpringStep = (
   position: number,
@@ -86,7 +86,7 @@ export interface UseJellyIndicatorOptions {
   material?: MaybeRefOrGetter<JellyMaterial | undefined>
   /** The glide springs. Default `GLIDE`. */
   glide?: MaybeRefOrGetter<JellyGlide | undefined>
-  /** Required by `glide`: pass `springSteps`. Without it a glide move lands in place. */
+  /** Required by `glide`: pass `stepSpring` (or liquid's `springSteps`). Without it a glide move lands in place. */
   integrate?: JellySpringStep
   /** `false`: rigid exponential follow — no overshoot, no deformation. Default `true`. */
   elastic?: MaybeRefOrGetter<boolean | undefined>
@@ -420,7 +420,7 @@ export function useJellyIndicator(options: UseJellyIndicatorOptions = {}): UseJe
    * rides its own spring — the leading end on the glide spring, the trailing
    * end on the same spring played slower — so the shape lengthens a little on
    * the way and gathers as it lands. Across the travel, position and size ride
-   * the leading spring. Integrated with the host's `integrate` (`springSteps`,
+   * the leading spring. Integrated with the host's `integrate` (`stepSpring`,
    * 1/240 s substeps — the library's frame spring); the shape never scales.
    */
   function glideStep(dt: number): void {
@@ -507,7 +507,7 @@ export function useJellyIndicator(options: UseJellyIndicatorOptions = {}): UseJe
     if (lastTs == null)
       lastTs = ts
     if (isGlide() && !dragging.value) {
-      // `springSteps` substeps any frame, so only a stalled tab is capped.
+      // `stepSpring` substeps any frame, so only a stalled tab is capped.
       const glideDt = Math.min((ts - lastTs) / 1000, 0.1)
       lastTs = ts
       glideStep(glideDt)

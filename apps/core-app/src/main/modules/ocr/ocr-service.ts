@@ -12,7 +12,6 @@ import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
-import { Worker } from 'node:worker_threads'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -107,7 +106,6 @@ const OCR_FAILURE_WINDOW_MS = 10 * 60 * 1000
 const OCR_QUEUE_DISABLE_BASE_MS = 30 * 60 * 1000
 const OCR_QUEUE_DISABLE_MAX_MS = 12 * 60 * 60 * 1000
 const OCR_QUEUE_DISABLE_ESCALATE_WINDOW_MS = 24 * 60 * 60 * 1000
-const OCR_WORKER_TIMEOUT_MS = 30_000
 
 // 重试延迟配置(秒)
 const RETRY_DELAYS: Record<string, number> = {
@@ -193,196 +191,6 @@ class OcrService {
 
   private channelRegistered = false
   private transportChannel: unknown = null
-  private resolvedWorkerPath: string | null = null
-
-  private isWorkerOcrEnabled(): boolean {
-    const raw = process.env.TUFF_OCR_WORKER_ENABLED
-    if (typeof raw === 'string' && raw.trim().length > 0) {
-      const normalized = raw.trim().toLowerCase()
-      return normalized !== '0' && normalized !== 'false' && normalized !== 'off'
-    }
-    return process.env.NODE_ENV !== 'test'
-  }
-
-  private resolveWorkerPath(): string {
-    if (this.resolvedWorkerPath && existsSync(this.resolvedWorkerPath)) {
-      return this.resolvedWorkerPath
-    }
-
-    const candidateSet = new Set<string>([path.join(__dirname, 'ocr-worker.js')])
-    const resourcesPath = process.resourcesPath
-    if (typeof resourcesPath === 'string' && resourcesPath.length > 0) {
-      candidateSet.add(
-        path.join(resourcesPath, 'app.asar.unpacked', 'out', 'main', 'ocr-worker.js')
-      )
-      candidateSet.add(path.join(resourcesPath, 'app.asar', 'out', 'main', 'ocr-worker.js'))
-      candidateSet.add(path.join(resourcesPath, 'out', 'main', 'ocr-worker.js'))
-    }
-    candidateSet.add(path.resolve(process.cwd(), 'out', 'main', 'ocr-worker.js'))
-
-    const candidates = Array.from(candidateSet)
-    const found = candidates.find((candidatePath) => existsSync(candidatePath))
-    if (!found) {
-      throw new Error(`[OCR Worker] Worker bundle missing. Tried: ${candidates.join(', ')}`)
-    }
-
-    this.resolvedWorkerPath = found
-    return found
-  }
-
-  private shouldUseWorkerPath(
-    source: IntelligenceVisionOcrPayload['source'],
-    allowedProviderIds: string[]
-  ): boolean {
-    if (!this.isWorkerOcrEnabled()) return false
-    if (
-      allowedProviderIds.length > 0 &&
-      !allowedProviderIds.some((providerId) => providerId === INTERNAL_SYSTEM_OCR_PROVIDER_ID)
-    ) {
-      return false
-    }
-    return (
-      (source.type === 'file' &&
-        typeof source.filePath === 'string' &&
-        source.filePath.length > 0) ||
-      (source.type === 'data-url' &&
-        typeof source.dataUrl === 'string' &&
-        source.dataUrl.length > 0)
-    )
-  }
-
-  private async invokeWorkerOcr(
-    jobId: number,
-    job: typeof ocrJobs.$inferSelect,
-    parsed: { source: AgentJobPayload['source']; options: AgentJobPayload['options'] },
-    source: IntelligenceVisionOcrPayload['source']
-  ): Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>> {
-    const workerPath = this.resolveWorkerPath()
-
-    const workerSource: AgentJobPayload['source'] =
-      source.type === 'file' && source.filePath
-        ? { type: 'file', filePath: source.filePath }
-        : source.type === 'data-url' && source.dataUrl
-          ? { type: 'data-url', dataUrl: source.dataUrl }
-          : (() => {
-              throw new Error('[OCR Worker] Unsupported source type for worker OCR')
-            })()
-
-    const startedAt = Date.now()
-
-    const workerResult = await new Promise<IntelligenceVisionOcrResult>((resolve, reject) => {
-      let settled = false
-      const worker = new Worker(workerPath, {
-        workerData: {
-          jobId,
-          clipboardId: job.clipboardId ?? null,
-          payloadHash: job.payloadHash ?? null,
-          source: workerSource,
-          options: {
-            language: parsed.options?.language,
-            tesseditPagesegMode: parsed.options?.tesseditPagesegMode,
-            config: parsed.options?.config
-          }
-        }
-      })
-
-      const cleanup = () => {
-        clearTimeout(timeout)
-      }
-
-      const finishResolve = (result: IntelligenceVisionOcrResult) => {
-        if (settled) return
-        settled = true
-        cleanup()
-        resolve(result)
-      }
-
-      const finishReject = (error: unknown) => {
-        if (settled) return
-        settled = true
-        cleanup()
-        reject(error instanceof Error ? error : new Error(String(error)))
-      }
-
-      const timeout = setTimeout(() => {
-        void worker.terminate().catch(() => {})
-        finishReject(new Error(`[OCR Worker] Timeout after ${OCR_WORKER_TIMEOUT_MS}ms`))
-      }, OCR_WORKER_TIMEOUT_MS)
-
-      // A terminal message can be posted while native OCR is still unwinding its N-API
-      // completion callback. Let the worker exit naturally instead of terminating that callback.
-      worker.once('message', (message: unknown) => {
-        const payload =
-          message && typeof message === 'object' && !Array.isArray(message)
-            ? (message as Record<string, unknown>)
-            : null
-        if (!payload || payload.jobId !== jobId) {
-          finishReject(new Error('[OCR Worker] Invalid worker response payload'))
-          return
-        }
-
-        if (payload.status === 'success') {
-          const resultPayload =
-            payload.result && typeof payload.result === 'object' && !Array.isArray(payload.result)
-              ? (payload.result as Record<string, unknown>)
-              : null
-          if (!resultPayload || typeof resultPayload.text !== 'string') {
-            finishReject(new Error('[OCR Worker] Invalid success response payload'))
-            return
-          }
-          finishResolve({
-            text: resultPayload.text,
-            confidence:
-              typeof resultPayload.confidence === 'number' ? resultPayload.confidence : undefined,
-            language:
-              typeof resultPayload.language === 'string' ? resultPayload.language : undefined,
-            blocks: Array.isArray(resultPayload.blocks)
-              ? (resultPayload.blocks as IntelligenceVisionOcrResult['blocks'])
-              : undefined,
-            engine:
-              resultPayload.engine === 'apple-vision' ||
-              resultPayload.engine === 'windows-ocr' ||
-              resultPayload.engine === 'cloud'
-                ? resultPayload.engine
-                : undefined,
-            durationMs:
-              typeof resultPayload.durationMs === 'number' ? resultPayload.durationMs : undefined,
-            raw: resultPayload.raw
-          })
-          return
-        }
-
-        if (payload.status !== 'error' || typeof payload.error !== 'string' || !payload.error) {
-          finishReject(new Error('[OCR Worker] Invalid error response payload'))
-          return
-        }
-        finishReject(new Error(payload.error))
-      })
-
-      worker.once('error', (error) => {
-        finishReject(error)
-      })
-
-      worker.once('exit', (code) => {
-        if (code !== 0 && !settled) {
-          finishReject(new Error(`[OCR Worker] Exited with code ${code}`))
-        }
-      })
-    })
-
-    return {
-      result: workerResult,
-      usage: {
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0
-      },
-      model: 'system-ocr-worker',
-      latency: Date.now() - startedAt,
-      traceId: `ocr-worker-${jobId}-${startedAt}`,
-      provider: 'local'
-    }
-  }
 
   private ensureInitialized(): void {
     if (this.initialized) return
@@ -975,7 +783,7 @@ class OcrService {
         // Never skipped, however deep the write queue is. This row is what bounds retries: if the
         // attempt is not persisted and the process dies before failJob() runs, the job comes back
         // as pending/attempts=0, MAX_ATTEMPTS is never reached, and an image that crashes the
-        // native worker is re-dispatched every poll, forever, across launches (#645).
+        // native OCR child process is re-dispatched every poll, forever, across launches (#645).
         //
         // Marked critical and non-droppable rather than bypassing the scheduler, so it still
         // queues behind ordering rules instead of jumping them. The cost is one UPDATE per
@@ -1067,16 +875,6 @@ class OcrService {
     const modelPreference = ['system-ocr', ...(capabilityOptions.modelPreference ?? [])].filter(
       (model, index, all) => Boolean(model) && all.indexOf(model) === index
     )
-
-    if (this.shouldUseWorkerPath(normalizedSource, allowedProviderIds)) {
-      try {
-        const workerInvocation = await this.invokeWorkerOcr(jobId, job, parsed, normalizedSource)
-        await this.persistAgentSuccess(job, workerInvocation)
-        return
-      } catch {
-        // fall back to provider invoke path when worker OCR is unavailable
-      }
-    }
 
     try {
       const invocation = await tuffIntelligence.invoke<IntelligenceVisionOcrResult>(

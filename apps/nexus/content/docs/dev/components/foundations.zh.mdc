@@ -90,7 +90,7 @@ code: |
 
 ## 技术实现
 
-- **Token 说明:** 表格记录的是 `variables.scss` 中默认 light/dark 变量。高对比 mixin 定义了另一组值；Nexus 暴露该模式时应单独补充文档。
+- **Token 说明:** 表格记录的是 `variables.scss` 中默认 light/dark 变量。高对比 mixin 定义了另一组值；Tuff 暴露该模式时应单独补充文档。
 - **导入说明:** 新页面应使用 `@talex-touch/tuffex/base.css` 加按组件的 style import。完整 `@talex-touch/tuffex/style.css` bundle 只是迁移兼容入口，不是文档推荐模式。
 - **实测覆盖:** 本页已按 `variables.scss` 人工核对；docs smoke 覆盖由 component-docs coverage 测试与 demo lazy/client-boundary 测试提供。
 

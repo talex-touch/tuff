@@ -82,6 +82,11 @@
   --tx-coloring-border-color-hover: color-mix(in srgb, var(--tx-color-primary) 58%, var(--tx-border-color));
   --tx-coloring-border-shadow: inset 0 0 0 1px var(--tx-coloring-border-color);
   --tx-coloring-border-shadow-hover: inset 0 0 0 1px var(--tx-coloring-border-color-hover);
+
+  // A streamed word keeps full contrast from its first frame: no colour sweep.
+  --tx-stream-reveal-1: var(--tx-text-color-primary);
+  --tx-stream-reveal-2: var(--tx-text-color-primary);
+  --tx-stream-reveal-3: var(--tx-text-color-primary);
 }
 
 @mixin tx-high-contrast-dark {
@@ -175,6 +180,11 @@
   --tx-coloring-border-color-hover: color-mix(in srgb, var(--tx-color-primary) 68%, var(--tx-border-color));
   --tx-coloring-border-shadow: inset 0 0 0 1px var(--tx-coloring-border-color);
   --tx-coloring-border-shadow-hover: inset 0 0 0 1px var(--tx-coloring-border-color-hover);
+
+  // A streamed word keeps full contrast from its first frame: no colour sweep.
+  --tx-stream-reveal-1: var(--tx-text-color-primary);
+  --tx-stream-reveal-2: var(--tx-text-color-primary);
+  --tx-stream-reveal-3: var(--tx-text-color-primary);
 }
 
 :root {
@@ -388,6 +398,16 @@
   --tx-coloring-border-color-hover: color-mix(in srgb, var(--tx-color-primary) 46%, var(--tx-border-color));
   --tx-coloring-border-shadow: inset 0 0 0 1px var(--tx-coloring-border-color);
   --tx-coloring-border-shadow-hover: inset 0 0 0 1px var(--tx-coloring-border-color-hover);
+
+  // Streamed text (TxStreamText and its family). A word sweeps these three
+  // stops, blue → violet → pink, as it arrives and settles on the ink; the
+  // lightness is kobra.systems' streaming text, measured 2026-09-29. The caret
+  // pair is the Tuff logo's core gradient (`apps/nexus/public/logo.svg`).
+  --tx-stream-reveal-1: oklch(70% 0.14 250);
+  --tx-stream-reveal-2: oklch(58% 0.17 295);
+  --tx-stream-reveal-3: oklch(62% 0.13 350);
+  --tx-stream-caret-start: #199ffe;
+  --tx-stream-caret-end: #810dc6;
 }
 
 // Dark theme
@@ -551,6 +571,13 @@
   --tx-coloring-border-color-hover: color-mix(in srgb, var(--tx-color-primary) 58%, var(--tx-border-color));
   --tx-coloring-border-shadow: inset 0 0 0 1px var(--tx-coloring-border-color);
   --tx-coloring-border-shadow-hover: inset 0 0 0 1px var(--tx-coloring-border-color-hover);
+
+  // Lifted for the dark page (kobra's dark stops); the caret keeps the logo's.
+  --tx-stream-reveal-1: oklch(78% 0.13 250);
+  --tx-stream-reveal-2: oklch(72% 0.16 295);
+  --tx-stream-reveal-3: oklch(76% 0.12 350);
+  --tx-stream-caret-start: #199ffe;
+  --tx-stream-caret-end: #810dc6;
 }
 
 html[data-tx-contrast='high'],

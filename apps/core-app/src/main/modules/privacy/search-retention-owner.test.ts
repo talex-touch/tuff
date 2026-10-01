@@ -22,7 +22,8 @@ async function createSearchTables(client: Client): Promise<void> {
     `CREATE TABLE recommendation_cache (cache_key TEXT PRIMARY KEY, recommended_items TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
     `CREATE TABLE index_items (id TEXT PRIMARY KEY, type TEXT NOT NULL, name TEXT NOT NULL)`,
     `CREATE TABLE embeddings (id TEXT PRIMARY KEY, embedding BLOB NOT NULL, model TEXT NOT NULL, created_at INTEGER NOT NULL)`,
-    `CREATE TABLE pinned_items (source_id TEXT NOT NULL, item_id TEXT NOT NULL, source_type TEXT NOT NULL, pinned_at INTEGER NOT NULL, "order" INTEGER NOT NULL, PRIMARY KEY (source_id, item_id))`
+    `CREATE TABLE pinned_items (source_id TEXT NOT NULL, item_id TEXT NOT NULL, source_type TEXT NOT NULL, pinned_at INTEGER NOT NULL, "order" INTEGER NOT NULL, PRIMARY KEY (source_id, item_id))`,
+    `CREATE TABLE usage_execute_events (event_id TEXT PRIMARY KEY NOT NULL, source_id TEXT NOT NULL, item_id TEXT NOT NULL, source_type TEXT NOT NULL, timestamp INTEGER NOT NULL, day INTEGER NOT NULL, created_at INTEGER DEFAULT (strftime('%s', 'now')) NOT NULL)`
   ]
   for (const statement of statements) await client.execute(statement)
 }
@@ -72,6 +73,15 @@ async function seedSearchRows(client: Client): Promise<void> {
         `CANARY_ITEM_${suffix}`,
         suffix === 'OLD' ? CUTOFF_DAY - 1 : suffix === 'EQUAL' ? CUTOFF_DAY : CUTOFF_DAY + 1,
         timestamp
+      ]
+    })
+    await client.execute({
+      sql: `INSERT INTO usage_execute_events (event_id, source_id, item_id, source_type, timestamp, day) VALUES (?, 'file', ?, 'file', ?, ?)`,
+      args: [
+        `CANARY_EVENT_${suffix}`,
+        `CANARY_ITEM_${suffix}`,
+        timestamp,
+        suffix === 'OLD' ? CUTOFF_DAY - 1 : suffix === 'EQUAL' ? CUTOFF_DAY : CUTOFF_DAY + 1
       ]
     })
     await client.execute({
@@ -146,9 +156,9 @@ describe('search retention owner', () => {
     }
 
     const preview = await owner.previewDelete(request, new AbortController().signal)
-    expect(preview).toMatchObject({ ok: true, eligibleItemCount: 8, bounded: false })
+    expect(preview).toMatchObject({ ok: true, eligibleItemCount: 9, bounded: false })
     const result = await owner.delete(request, new AbortController().signal)
-    expect(result).toMatchObject({ ok: true, deletedItemCount: 8, partial: false })
+    expect(result).toMatchObject({ ok: true, deletedItemCount: 9, partial: false })
 
     for (const table of [
       'query_completions',
@@ -158,6 +168,7 @@ describe('search retention owner', () => {
       'item_usage_stats',
       'item_time_stats',
       'usage_trend_daily',
+      'usage_execute_events',
       'recommendation_cache'
     ]) {
       expect(await count(client, table)).toBe(2)
@@ -175,6 +186,7 @@ describe('search retention owner', () => {
         'item-usage',
         'item-time',
         'usage-trend',
+        'usage-execute-events',
         'recommendation-cache'
       ])
     )

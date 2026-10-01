@@ -1,16 +1,18 @@
 <script name="AppList" setup lang="ts">
 import type { ITuffIcon } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxCardItem } from '@talex-touch/tuffex/card-item'
+import { TxIcon } from '@talex-touch/tuffex/icon'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import PluginIcon from '~/components/plugin/PluginIcon.vue'
 
 export interface AppListItem {
   id: string
   name: string
   icon?: ITuffIcon
+  path?: string
   /** Indexed but excluded from search recall; the row says so rather than hiding the entry. */
   disabled?: boolean
   /** Recorded launches, used by the frequency view. Absent until summaries have loaded. */
@@ -62,6 +64,7 @@ const VIEW_ICONS: Record<AppListView, string> = {
 }
 
 const SKELETON_ROWS = 8
+const FALLBACK_APP_ICON: ITuffIcon = { type: 'class', value: 'i-ri-apps-2-line' }
 
 const view = ref<AppListView>('dictionary')
 const viewMenuOpen = ref(false)
@@ -148,9 +151,18 @@ watch(
 <template>
   <div ref="scrollRef" class="AppList-Scroll">
     <ul v-if="showSkeleton" class="AppList" aria-hidden="true">
-      <li v-for="row in SKELETON_ROWS" :key="row" class="AppList-Row is-skeleton">
-        <TxSkeleton variant="rect" :width="32" :height="32" :radius="8" />
-        <TxSkeleton :width="140" :height="13" :radius="4" />
+      <li v-for="row in SKELETON_ROWS" :key="row" class="AppList-Entry">
+        <TxCardItem class="AppList-Row" align="center">
+          <template #avatar>
+            <TxSkeleton variant="rect" :width="32" :height="32" :radius="8" />
+          </template>
+          <template #title>
+            <TxSkeleton :width="140" :height="13" :radius="4" />
+          </template>
+          <template #description>
+            <TxSkeleton :width="180" :height="12" :radius="4" />
+          </template>
+        </TxCardItem>
       </li>
     </ul>
 
@@ -166,31 +178,46 @@ watch(
     </div>
 
     <TransitionGroup v-else name="list" tag="ul" class="AppList">
-      <li
-        v-for="item in orderedItems"
-        :key="item.id"
-        class="AppList-Row fake-background"
-        :class="{ active: selectedId === item.id, 'is-disabled': item.disabled }"
-        role="button"
-        tabindex="0"
-        :data-app-row-id="item.id"
-        :aria-pressed="selectedId === item.id"
-        @click="handleClick(item)"
-        @keydown.enter.prevent="handleClick(item)"
-        @keydown.space.prevent="handleClick(item)"
-      >
-        <div class="AppList-IconContainer">
-          <PluginIcon v-if="item.icon" :icon="item.icon" :alt="item.name" :size="32" />
-          <div v-else class="AppList-IconPlaceholder">
-            <i class="i-ri-apps-2-line" />
-          </div>
-        </div>
-
-        <span class="AppList-Name">{{ item.name }}</span>
-
-        <span v-if="item.disabled" class="AppList-Flag">
-          {{ t('settings.settingFileIndex.appIndexManagerEntryDisabled') }}
-        </span>
+      <li v-for="item in orderedItems" :key="item.id" class="AppList-Entry">
+        <TxCardItem
+          class="AppList-Row"
+          :class="{ 'is-disabled': item.disabled }"
+          role="button"
+          clickable
+          align="center"
+          :active="selectedId === item.id"
+          :data-app-row-id="item.id"
+          :aria-pressed="selectedId === item.id"
+          @click="handleClick(item)"
+        >
+          <template #avatar>
+            <TxIcon colorful :icon="item.icon ?? FALLBACK_APP_ICON" :alt="item.name" :size="32">
+              <template #empty>
+                <span class="AppList-IconFallback" aria-hidden="true">
+                  <i class="i-ri-apps-2-line" />
+                </span>
+              </template>
+            </TxIcon>
+          </template>
+          <template #title>
+            <span class="AppList-Name">{{ item.name }}</span>
+          </template>
+          <template v-if="item.path" #description>
+            <span class="AppList-Path" :title="item.path" :aria-label="item.path">
+              <span class="AppList-PathStart">
+                {{ item.path.slice(0, Math.ceil(item.path.length / 2)) }}
+              </span>
+              <span class="AppList-PathEnd"
+                ><span>{{ item.path.slice(Math.ceil(item.path.length / 2)) }}</span></span
+              >
+            </span>
+          </template>
+          <template v-if="item.disabled" #right>
+            <span class="AppList-Flag">
+              {{ t('settings.settingFileIndex.appIndexManagerEntryDisabled') }}
+            </span>
+          </template>
+        </TxCardItem>
       </li>
     </TransitionGroup>
 
@@ -285,57 +312,57 @@ watch(
 }
 
 .AppList-Row {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  height: 48px;
-  padding: 0 0.5rem;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: 0.25s;
-  --fake-color: var(--tx-fill-color);
+  --tx-card-item-padding: 8px;
+  --tx-card-item-gap: 8px;
+  --tx-card-item-radius: 8px;
+  --tx-card-item-hover-bg: var(--tx-fill-color);
+  --tx-card-item-active-bg: var(--tx-color-primary-light-9);
+  min-height: 56px;
 
-  &.active {
-    --fake-color: var(--tx-color-primary-light-5);
-    border-color: var(--tx-color-primary);
-  }
-
-  // Still indexed, just not recalled — dimmed rather than removed, so the entry can be found
-  // and re-enabled from the detail pane.
   &.is-disabled .AppList-Name {
     opacity: 0.55;
   }
-
-  &.is-skeleton {
-    cursor: default;
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--tx-color-primary);
-    outline-offset: 2px;
-  }
 }
 
-.AppList-IconContainer {
-  flex-shrink: 0;
-  width: 2rem;
-  height: 2rem;
-}
-
-.AppList-IconPlaceholder {
-  display: flex;
+.AppList-IconFallback {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
-  border-radius: 4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   background: var(--tx-fill-color-lighter);
   color: var(--tx-text-color-placeholder);
 
   i {
-    font-size: 1.2rem;
+    font-size: 18px;
+  }
+}
+
+.AppList-Path {
+  display: flex;
+  min-width: 0;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.AppList-PathStart {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.AppList-PathEnd {
+  display: flex;
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  max-width: 55%;
+  min-width: 0;
+  overflow: hidden;
+
+  > span {
+    flex-shrink: 0;
   }
 }
 

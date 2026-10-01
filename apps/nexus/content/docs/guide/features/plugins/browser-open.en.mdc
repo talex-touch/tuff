@@ -1,24 +1,55 @@
 # Browser Open (`touch-browser-open`)
 
+> Version 1.1.0 requires a host supporting `sdkapi: 261001`, including initialization-time SDK calls, one-shot query preservation, and browser discovery fixes. Tuff 2.4.14-beta.55 is the first compatible release; beta.54 and earlier clients reject activation. Other plugins can continue to use previously supported SDK markers.
+
 ## When to Use
-- Open URLs quickly with default or specific browsers.
+- You copied a URL and want it open in a local browser with one Enter — no pasting.
+- You want a specific browser (Chrome, Safari, or any other installed one) to open a link.
+- You want plain text sent straight to a search engine, or a one-key shortcut such as Weibo trending.
 
 ## Trigger
-- Feature ID: `browser.open`
-- Commands: `url / link / open`
+
+Everything below works straight from the CoreBox root — no need to enter a feature first:
+
+| Input | Result |
+| --- | --- |
+| `example.com`, `https://example.com/a?b=1`, or a URL just copied to the clipboard | An "open in <browser>" row appears; one Enter opens it in that browser |
+| Any plain text (e.g. `weather in Shenzhen`) | A "search with <engine>" row appears; one Enter opens the results page |
+| A hot-entry keyword (e.g. `微博` or `微博热搜`) | An "open Weibo trending" row appears; one Enter opens the page |
+
+Explicit push features (unchanged behaviour):
+
+| Feature ID | Purpose |
+| --- | --- |
+| `browser-open` | Push mode: pick the default browser, a specific browser, a recent browser, or copy the URL |
+| `web-search` | Push mode: enter search mode with the default or a chosen engine, including suggestions |
+| `search-engine-google` / `search-engine-bing` / `search-engine-duckduckgo` / `search-engine-baidu` | Push mode: enter that engine's search mode |
+| `browser-open-settings` | Settings surface: manage search engines and hot/quick entries |
+
+Commands: `url / link / open / 浏览器 / 网页 / 搜索 / google / bing / duckduckgo / 百度`.
 
 ## Core Capabilities
-- Open links with the default or a specified browser.
-- Supported platforms: `win32, darwin`
+- **Copied URLs open directly**: the URL is read from the query's own input payload, so no paste step is needed. `http(s)` links, `www.` hosts and bare domains such as `example.com` are accepted.
+- **Single Enter**: direct actions open the link without leaving CoreBox waiting for a second confirmation.
+- **Chosen browser**: entries are generated from the host's live browser inventory; a fresh short-lived token is requested at execution time, and neither paths nor tokens are persisted.
+- **Configurable search engines**: Google, Bing, DuckDuckGo and Baidu are built in; add or remove your own engines, each with a `{query}` template and URL-encoded input.
+- **Hot / quick entries**: Weibo trending (`https://s.weibo.com/top/summary`) ships enabled; add your own name, keyword and URL.
+- **Never hijacks files or paths**: inputs such as `README.md`, `~/Workspace` or `/Users/me/file` are not routed to web search.
+- Supported platforms: `win32, darwin`.
 
 ## Config & Data
-- Config/data files: `recent-browsers.json`
+- Search settings: `search-settings.json` (engines, default engine, hot/quick entries)
+- Recent browsers: `recent-browsers.json` (display name and time only — no tokens or paths)
+- Settings entry: type `browser settings` in CoreBox
+- Saved settings sync to the CoreBox results immediately, no restart required
 - Plugin directory: `plugins/touch-browser-open`
 
 ## Permissions
-- Required: `system.shell`; Optional: `clipboard.write`
+- Required: `system.shell`, `network.internet`, `search.root-results`, `storage.plugin`
+- Optional: `clipboard.write`
+- Without a granted permission the affected action is refused and is not recorded as successful
 
 ## Quick Start
-1. In CoreBox, type `url`.
-2. Press Enter on the action you need.
-3. Grant permissions when prompted.
+1. Copy any URL, summon CoreBox and press Enter to open it in a browser.
+2. Type a sentence and pick "search with <engine>" to jump straight to results.
+3. Type `browser settings` to add or adjust engines, the default engine and hot entries.

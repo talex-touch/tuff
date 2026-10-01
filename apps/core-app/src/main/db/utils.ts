@@ -1,6 +1,6 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { and, desc, eq, gt, gte, inArray, like, lte, notInArray, sql } from 'drizzle-orm'
-import { resolveCurrentAuxDb, scheduleAuxWrite } from './db-write'
+import { resolveCurrentAuxDb, scheduleAuxWrite, scheduleDbWrite } from './db-write'
 
 /**
  * Largest number of keys to put in one composite-key lookup.
@@ -23,6 +23,170 @@ function chunkKeys<T>(keys: T[], size = COMPOSITE_KEY_CHUNK_SIZE): T[][] {
 import * as schema from './schema'
 
 export type CoreDatabase = LibSQLDatabase<typeof schema>
+
+const DAY_MS = 86_400_000
+
+/** Local natural-day windows the behaviour reader reports. */
+export const BEHAVIOR_WINDOW_30_DAYS_MS = 30 * DAY_MS
+export const BEHAVIOR_WINDOW_7_DAYS_MS = 7 * DAY_MS
+/** Half-life 14 days: an event contributes exp(-λ·ageDays) to the decayed score. */
+export const BEHAVIOR_DECAY_LAMBDA = Math.LN2 / 14
+
+export interface ExecuteRecordResult {
+  /** True when this event was newly admitted; false when `eventId` had already been recorded. */
+  accepted: boolean
+  /** The committed `item_usage_stats` row (immediately-visible count), or null on a duplicate. */
+  usageStats: typeof schema.itemUsageStats.$inferSelect | null
+}
+
+export interface UsageBehaviorRow {
+  sourceId: string
+  itemId: string
+  /** Lifetime valid executes from `item_usage_stats` (kept; never derived from exposures). */
+  executeCount: number
+  /** Valid executes whose reliable timestamp falls in the last 30 local days. */
+  executeCount30: number
+  /** Valid executes whose reliable timestamp falls in the last 7 local days. */
+  executeCount7: number
+  /** Distinct local natural days with ≥1 valid execute in the last 30 days. */
+  activeDays30: number
+  /** Distinct local natural days with ≥1 valid execute in the last 7 days. */
+  activeDays7: number
+  /** Lifetime last valid execute (epoch ms), or null when the item has never been executed. */
+  lastExecutedAt: number | null
+  /** Σ exp(-λ·ageDays) over the window's executions; reliable dates only. */
+  decayedExecuteScore30: number
+  /** Executions per hour of day within the window, length 24. */
+  hourDistribution30: number[]
+  /** Executions per weekday (0 = Sunday) within the window, length 7. */
+  dayOfWeekDistribution30: number[]
+  /** Executions per time slot within the window. */
+  timeSlotDistribution30: {
+    morning: number
+    afternoon: number
+    evening: number
+    night: number
+  }
+}
+
+function behaviorKey(sourceId: string, itemId: string): string {
+  return `${sourceId}\u0000${itemId}`
+}
+
+/** Local calendar day number, matching how scoring buckets a day. */
+function toLocalDayKey(timestamp: Date): number {
+  return Math.floor((timestamp.getTime() - timestamp.getTimezoneOffset() * 60_000) / DAY_MS)
+}
+
+function emptyBehaviorRow(sourceId: string, itemId: string): UsageBehaviorRow {
+  return {
+    sourceId,
+    itemId,
+    executeCount: 0,
+    executeCount30: 0,
+    executeCount7: 0,
+    activeDays30: 0,
+    activeDays7: 0,
+    lastExecutedAt: null,
+    decayedExecuteScore30: 0,
+    hourDistribution30: Array.from({ length: 24 }, () => 0),
+    dayOfWeekDistribution30: Array.from({ length: 7 }, () => 0),
+    timeSlotDistribution30: { morning: 0, afternoon: 0, evening: 0, night: 0 }
+  }
+}
+
+function addExecutionToBuckets(
+  hour: number[],
+  dayOfWeek: number[],
+  timeSlot: UsageBehaviorRow['timeSlotDistribution30'],
+  timestamp: Date
+): void {
+  const hourOfDay = timestamp.getHours()
+  hour[hourOfDay] += 1
+  dayOfWeek[timestamp.getDay()] += 1
+  const slot =
+    hourOfDay >= 6 && hourOfDay < 12
+      ? 'morning'
+      : hourOfDay >= 12 && hourOfDay < 18
+        ? 'afternoon'
+        : hourOfDay >= 18 && hourOfDay < 22
+          ? 'evening'
+          : 'night'
+  timeSlot[slot] += 1
+}
+
+interface StoredTimeBuckets {
+  hour: number[]
+  dayOfWeek: number[]
+  timeSlot: { morning: number; afternoon: number; evening: number; night: number }
+}
+
+function parseJsonQuietly(raw: string | null | undefined): unknown {
+  if (typeof raw !== 'string' || raw.length === 0) return null
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function parseNumberArray(raw: string | null | undefined, length: number): number[] {
+  const parsed = parseJsonQuietly(raw)
+  if (!Array.isArray(parsed)) return Array.from({ length }, () => 0)
+  return Array.from({ length }, (_, index) => {
+    const value = parsed[index]
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0
+  })
+}
+
+function parseTimeSlot(raw: string | null | undefined): {
+  morning: number
+  afternoon: number
+  evening: number
+  night: number
+} {
+  const parsed = parseJsonQuietly(raw)
+  const source =
+    parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : undefined
+  const read = (key: string): number => {
+    const value = source?.[key]
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0
+  }
+  return {
+    morning: read('morning'),
+    afternoon: read('afternoon'),
+    evening: read('evening'),
+    night: read('night')
+  }
+}
+
+/**
+ * Folds one execution into the stored (possibly malformed/absent) `item_time_stats` columns.
+ *
+ * Read-modify-write rather than SQL-side arithmetic: the distributions are JSON arrays, and the
+ * write is one row per executed item. The stored columns are re-read from the raw strings so a
+ * corrupt row loses only the buckets it cannot parse, matching `parseStoredTimeBuckets`.
+ */
+function foldExecutionIntoStoredBuckets(
+  existing:
+    | { hourDistribution: string; dayOfWeekDistribution: string; timeSlotDistribution: string }
+    | undefined,
+  timestamp: Date
+): StoredTimeBuckets {
+  const buckets: StoredTimeBuckets = existing
+    ? {
+        hour: parseNumberArray(existing.hourDistribution, 24),
+        dayOfWeek: parseNumberArray(existing.dayOfWeekDistribution, 7),
+        timeSlot: parseTimeSlot(existing.timeSlotDistribution)
+      }
+    : {
+        hour: Array.from({ length: 24 }, () => 0),
+        dayOfWeek: Array.from({ length: 7 }, () => 0),
+        timeSlot: { morning: 0, afternoon: 0, evening: 0, night: 0 }
+      }
+  addExecutionToBuckets(buckets.hour, buckets.dayOfWeek, buckets.timeSlot, timestamp)
+  return buckets
+}
 
 function sanitizeRecommendationCacheValue(value: unknown, seen: WeakSet<object>): unknown {
   if (typeof value === 'string') {
@@ -623,6 +787,297 @@ function createDbUtilsInternal(
         .select()
         .from(schema.itemUsageStats)
         .where(eq(schema.itemUsageStats.sourceId, sourceId))
+    },
+
+    /**
+     * Behaviour facts for a batch of item keys — the same numbers counting, display and ranking
+     * must agree on (R2).
+     *
+     * Two bounded reads, never a history scan:
+     * - the accepted ledger (`usage_execute_events`) is the admission source. Its rows carry the
+     *   authoritative `timestamp` and are the reason this read can name a real acceptance instant:
+     *   every accepted action writes exactly one ledger row and one log row in the same
+     *   transaction, so a ledger row IS the fact.
+     * - lifetime `executeCount` comes from `item_usage_stats`, the kept aggregate (never re-derived
+     *   from exposures, never decremented by retention).
+     *
+     * The ledger is the ONLY dated source. Window counts, distinct local days, decay, the
+     * distributions and `lastExecutedAt` all come from it, so a legacy row written by the old
+     * AppProvider path — logged *before* the path check and the launch — is preserved as a lifetime
+     * fact but can never contribute a dated habit signal, however recent its timestamp looks. That
+     * is the R9 rule: keep the fact, refuse to promote it to evidence. No backfill; a legacy action
+     * is admitted only if a future re-notification carries its `eventId`.
+     *
+     * `usage_trend_daily.day` is UTC-floored and cannot answer "local natural day", so it is
+     * deliberately not consulted.
+     *
+     * A key with lifetime executes but none accepted inside the window still returns a row (window
+     * fields zeroed, `lastExecutedAt: null`) so a caller can tell "has history" from a cold start.
+     * Rows come back in the requested order; a key with no evidence at all is returned with zeros.
+     */
+    async getUsageBehaviorBatch(
+      keys: Array<{ sourceId: string; itemId: string }>,
+      now = Date.now()
+    ): Promise<UsageBehaviorRow[]> {
+      if (keys.length === 0) return []
+
+      const cumulative = new Map<string, { executeCount: number }>()
+      const windowed = new Map<string, UsageBehaviorRow>()
+
+      for (const key of keys) {
+        windowed.set(
+          behaviorKey(key.sourceId, key.itemId),
+          emptyBehaviorRow(key.sourceId, key.itemId)
+        )
+      }
+
+      const cutoff30 = new Date(now - BEHAVIOR_WINDOW_30_DAYS_MS)
+
+      // Lifetime counters: one composite-IN read, chunked for the bound-parameter ceiling.
+      for (const chunk of chunkKeys(keys)) {
+        const rows = await db
+          .select({
+            sourceId: schema.itemUsageStats.sourceId,
+            itemId: schema.itemUsageStats.itemId,
+            executeCount: schema.itemUsageStats.executeCount
+          })
+          .from(schema.itemUsageStats)
+          .where(
+            and(
+              inArray(
+                schema.itemUsageStats.sourceId,
+                chunk.map((key) => key.sourceId)
+              ),
+              inArray(
+                schema.itemUsageStats.itemId,
+                chunk.map((key) => key.itemId)
+              )
+            )
+          )
+        for (const row of rows) {
+          cumulative.set(behaviorKey(row.sourceId, row.itemId), {
+            executeCount: Number(row.executeCount ?? 0)
+          })
+        }
+      }
+
+      // Dated facts: accepted ledger rows inside the window, by `retainedIdx (timestamp, eventId)`.
+      // The source/item filter narrows to the requested keys; a collision across sources cannot
+      // cross-attribute because the composite key is filtered below as well.
+      const events: Array<{ sourceId: string; itemId: string; timestamp: Date | null }> = []
+      for (const chunk of chunkKeys(keys)) {
+        const chunkEvents = await db
+          .select({
+            sourceId: schema.executeEvents.sourceId,
+            itemId: schema.executeEvents.itemId,
+            timestamp: schema.executeEvents.timestamp
+          })
+          .from(schema.executeEvents)
+          .where(
+            and(
+              gte(schema.executeEvents.timestamp, cutoff30),
+              inArray(schema.executeEvents.sourceId, [
+                ...new Set(chunk.map((key) => key.sourceId))
+              ]),
+              inArray(schema.executeEvents.itemId, [...new Set(chunk.map((key) => key.itemId))])
+            )
+          )
+        events.push(...chunkEvents)
+      }
+
+      const seenDays30 = new Map<string, Set<number>>()
+      const seenDays7 = new Map<string, Set<number>>()
+      const cutoff7 = now - BEHAVIOR_WINDOW_7_DAYS_MS
+
+      for (const event of events) {
+        const key = behaviorKey(event.sourceId, event.itemId)
+        const row = windowed.get(key)
+        if (!row || !event.timestamp) continue
+        const executedAt = event.timestamp.getTime()
+        if (executedAt > now || executedAt < now - BEHAVIOR_WINDOW_30_DAYS_MS) continue
+
+        const dayKey = toLocalDayKey(event.timestamp)
+        const ageDays = (now - executedAt) / DAY_MS
+
+        row.executeCount30 += 1
+        row.decayedExecuteScore30 += Math.exp(-BEHAVIOR_DECAY_LAMBDA * ageDays)
+        addExecutionToBuckets(
+          row.hourDistribution30,
+          row.dayOfWeekDistribution30,
+          row.timeSlotDistribution30,
+          event.timestamp
+        )
+        // In-window acceptance implies recency evidence, and only in-window: a key whose
+        // acceptance is older than the window keeps `lastExecutedAt: null` rather than claiming a
+        // recency the window cannot support.
+        if (row.lastExecutedAt === null || executedAt > row.lastExecutedAt) {
+          row.lastExecutedAt = executedAt
+        }
+        if (executedAt >= cutoff7) {
+          row.executeCount7 += 1
+          const days7 = seenDays7.get(key) ?? new Set<number>()
+          days7.add(dayKey)
+          seenDays7.set(key, days7)
+        }
+        const days30 = seenDays30.get(key) ?? new Set<number>()
+        days30.add(dayKey)
+        seenDays30.set(key, days30)
+      }
+
+      for (const [key, row] of windowed) {
+        const days30 = seenDays30.get(key)
+        row.activeDays30 = days30 ? days30.size : 0
+        const days7 = seenDays7.get(key)
+        row.activeDays7 = days7 ? days7.size : 0
+        row.decayedExecuteScore30 = Math.round(row.decayedExecuteScore30 * 1e6) / 1e6
+      }
+
+      return keys.map((key) => {
+        const composite = behaviorKey(key.sourceId, key.itemId)
+        const row = windowed.get(composite)!
+        const lifetime = cumulative.get(composite)
+        row.executeCount = lifetime?.executeCount ?? 0
+        return row
+      })
+    },
+
+    /**
+     * Persist one accepted major action in a single interactive transaction (R1/R2/R7).
+     *
+     * The `usage_execute_events` insert is the admission gate AND the dedupe: a retried or
+     * re-notified action carries the same `eventId`, the conflict does nothing, and the method
+     * returns `{ accepted: false }` without touching any counter. Only when a row is actually
+     * created do the log row, the cumulative counters, the summary and the daily trend get
+     * written — all inside the same transaction, so a failure past the gate rolls the whole thing
+     * back and leaves no partial or falsely-successful state.
+     *
+     * A failure rejects (the caller decides whether the user action may still stand); a duplicate
+     * resolves with `accepted: false`, which is not an error.
+     */
+    async recordExecuteTransaction(input: {
+      eventId: string
+      sourceId: string
+      itemId: string
+      sourceType: string
+      sessionId: string | null
+      timestamp: Date
+      context: string
+    }): Promise<ExecuteRecordResult> {
+      const { eventId, sourceId, itemId, sourceType, sessionId, timestamp, context } = input
+      return scheduleDbWrite(
+        'usage.execute.record',
+        async () =>
+          await db.transaction(async (tx) => {
+            const inserted = await tx
+              .insert(schema.executeEvents)
+              .values({
+                eventId,
+                sourceId,
+                itemId,
+                sourceType,
+                timestamp,
+                day: Math.floor(timestamp.getTime() / DAY_MS)
+              })
+              .onConflictDoNothing({ target: schema.executeEvents.eventId })
+              .returning({ eventId: schema.executeEvents.eventId })
+            if (inserted.length === 0) return { accepted: false, usageStats: null }
+
+            await tx.insert(schema.usageLogs).values({
+              sessionId,
+              itemId,
+              source: sourceId,
+              action: 'execute',
+              keyword: '',
+              timestamp,
+              context,
+              eventId
+            })
+
+            const [usageStatsRow] = await tx
+              .insert(schema.itemUsageStats)
+              .values({
+                sourceId,
+                itemId,
+                sourceType,
+                executeCount: 1,
+                lastExecuted: timestamp,
+                createdAt: timestamp,
+                updatedAt: timestamp
+              })
+              .onConflictDoUpdate({
+                target: [schema.itemUsageStats.sourceId, schema.itemUsageStats.itemId],
+                set: {
+                  sourceType,
+                  executeCount: sql`${schema.itemUsageStats.executeCount} + 1`,
+                  lastExecuted: timestamp,
+                  updatedAt: timestamp
+                }
+              })
+              .returning()
+
+            await tx
+              .insert(schema.usageSummary)
+              .values({ itemId, clickCount: 1, lastUsed: timestamp })
+              .onConflictDoUpdate({
+                target: schema.usageSummary.itemId,
+                set: {
+                  clickCount: sql`${schema.usageSummary.clickCount} + 1`,
+                  lastUsed: timestamp
+                }
+              })
+
+            const day = Math.floor(timestamp.getTime() / DAY_MS)
+            await tx
+              .insert(schema.usageTrendDaily)
+              .values({ sourceId, itemId, day, executeCount: 1, updatedAt: timestamp })
+              .onConflictDoUpdate({
+                target: [
+                  schema.usageTrendDaily.sourceId,
+                  schema.usageTrendDaily.itemId,
+                  schema.usageTrendDaily.day
+                ],
+                set: {
+                  executeCount: sql`${schema.usageTrendDaily.executeCount} + 1`,
+                  updatedAt: timestamp
+                }
+              })
+
+            // Same-transaction fold into `item_time_stats`: the hour/weekday/slot
+            // distributions describe the same execution as the counts above, so a
+            // rollback must not leave one advanced without the other.
+            const existingBuckets = await tx
+              .select({
+                hourDistribution: schema.itemTimeStats.hourDistribution,
+                dayOfWeekDistribution: schema.itemTimeStats.dayOfWeekDistribution,
+                timeSlotDistribution: schema.itemTimeStats.timeSlotDistribution
+              })
+              .from(schema.itemTimeStats)
+              .where(
+                and(
+                  eq(schema.itemTimeStats.sourceId, sourceId),
+                  eq(schema.itemTimeStats.itemId, itemId)
+                )
+              )
+              .get()
+            const folded = foldExecutionIntoStoredBuckets(existingBuckets, timestamp)
+            const serializedBuckets = {
+              hourDistribution: JSON.stringify(folded.hour),
+              dayOfWeekDistribution: JSON.stringify(folded.dayOfWeek),
+              timeSlotDistribution: JSON.stringify(folded.timeSlot),
+              lastUpdated: timestamp
+            }
+            await tx
+              .insert(schema.itemTimeStats)
+              .values({ sourceId, itemId, ...serializedBuckets })
+              .onConflictDoUpdate({
+                target: [schema.itemTimeStats.sourceId, schema.itemTimeStats.itemId],
+                set: serializedBuckets
+              })
+
+            return { accepted: true, usageStats: usageStatsRow ?? null }
+          }),
+        { priority: 'interactive' }
+      )
     },
 
     // Item Time Stats

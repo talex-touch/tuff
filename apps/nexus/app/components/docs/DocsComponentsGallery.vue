@@ -44,6 +44,9 @@ import GalleryEdgeMarquee from './gallery/GalleryEdgeMarquee.vue'
 import GalleryFusion from './gallery/GalleryFusion.vue'
 import GalleryFusionSurface from './gallery/GalleryFusionSurface.vue'
 import GalleryLiquidMenu from './gallery/GalleryLiquidMenu.vue'
+import GalleryStreamElement from './gallery/GalleryStreamElement.vue'
+import GalleryStreamMarkdown from './gallery/GalleryStreamMarkdown.vue'
+import GalleryStreamText from './gallery/GalleryStreamText.vue'
 import GalleryTextMorph from './gallery/GalleryTextMorph.vue'
 import GalleryTransitionLanes from './gallery/GalleryTransitionLanes.vue'
 import GalleryVirtualList from './gallery/GalleryVirtualList.vue'
@@ -163,6 +166,9 @@ const copy = computed(() => (localeKey.value === 'zh'
       liquidToggle: '展开菜单',
       liquidItems: ['收藏', '夜间模式', '音乐'] as [string, string, string],
       syncStages: ['连接中', '已连接', '同步 12 个文件', '同步 148 个文件', '已是最新'],
+      streamSentence: '开心果是这个月增长最快的口味，销量涨了 23%，核果类口味也在同一区间升温。',
+      streamMarkdown: '### 开心果周报\n\n开心果本月**增长最快**，销量涨了 23%。\n\n- 核果类口味同步升温\n- 下周补货 `pistachio-base`',
+      streamAnswer: '开心果这个月增长最快 [1]，建议：\n\n- 补货 `pistachio-base`\n- 周末加一场试吃',
       next: '下一步',
       hoverMe: '悬停',
     }
@@ -264,6 +270,9 @@ const copy = computed(() => (localeKey.value === 'zh'
       liquidToggle: 'Toggle menu',
       liquidItems: ['Favorite', 'Night mode', 'Music'] as [string, string, string],
       syncStages: ['Connecting', 'Connected', 'Syncing 12 files', 'Syncing 148 files', 'Up to date'],
+      streamSentence: 'Pistachio is your fastest-growing flavor, up 23% this month, and stone-fruit is trending in the same range.',
+      streamMarkdown: '### Pistachio weekly\n\nPistachio is the **fastest-growing** flavor, up 23%.\n\n- Stone-fruit is warming up too\n- Restock `pistachio-base` next week',
+      streamAnswer: 'Pistachio grew fastest this month [1], so:\n\n- Restock `pistachio-base`\n- Add a weekend tasting',
       next: 'Next',
       hoverMe: 'hover me',
     }))
@@ -284,6 +293,7 @@ const period = ref('week')
 const periodStd = ref('day')
 const rating = ref(4)
 const page = ref(2)
+const pageSize = ref(10)
 const avatarNames = ['Talex', 'Kiri', 'Ame', 'Louis']
 
 const avatarVariants = [
@@ -382,9 +392,9 @@ function resetAlerts(): void {
   alertsVisible.error = true
 }
 const flatSelectValue = ref('json')
-const flatInputValue = ref('')
+const blockInputValue = ref('')
 const numberValue = ref(60)
-const pickerValue = ref<(string | number)[]>(['beta'])
+const pickerValue = ref<(string | number)[]>(['nightly'])
 // A drum needs rows above and below the centre to actually read as one; three
 // options only ever showed a flat, full list.
 const pickerColumns = [{
@@ -400,6 +410,9 @@ const pickerColumns = [{
   ],
 }]
 const scrubWidth = ref(324)
+const scrubHeight = ref(192)
+const scrubRotation = ref(12.5)
+const scrubOpacity = ref(80)
 const sensitiveValue = ref('sk_live_a1b2c3d4e5f6')
 const searchText = ref('')
 const searchSelectValue = ref('')
@@ -573,7 +586,8 @@ const treeNodes = [
     ],
   },
 ]
-const markdownSample = '### Tuffex\n\n- `pnpm add @talex-touch/tuffex`\n- Vue 3 + TypeScript'
+// The StreamElement cell's one source, which its `[1]` resolves to.
+const streamSources = [{ id: 'scoop', url: 'https://scoopdata.io/flavors/pistachio', title: 'Scoop Data' }]
 // The MarkdownView cell's own sample: one of each block it renders, so the
 // specimen shows the typography rather than a two-line list.
 const markdownDoc = computed(() => (localeKey.value === 'zh'
@@ -1387,7 +1401,15 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <TxPagination v-model:current-page="page" :total-pages="5" />
+            <div class="docs-gallery__stack docs-gallery__stack--center">
+              <TxPagination v-model:current-page="page" :total="50" :page-size="pageSize" />
+              <label class="docs-gallery__page-size">
+                <span>{{ localeKey === 'zh' ? '每页条数' : 'Items per page' }}</span>
+                <TxSelect v-model="pageSize" :aria-label="localeKey === 'zh' ? '每页条数' : 'Items per page'">
+                  <TxSelectItem v-for="size in [10, 20, 50]" :key="size" :value="size" :label="String(size)" />
+                </TxSelect>
+              </label>
+            </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
             </template>
@@ -1597,22 +1619,6 @@ async function copyInstall() {
       </section>
 
       <section class="docs-gallery__cell">
-        <NuxtLink class="docs-gallery__label" :to="docPath('flat-input')">
-          {{ cellLabel('FlatInput', '扁平输入') }}
-        </NuxtLink>
-        <div class="docs-gallery__stage not-prose">
-          <ClientOnly>
-            <div class="docs-gallery__block">
-              <TxFlatInput v-model="flatInputValue" :placeholder="copy.typeSomething" />
-            </div>
-            <template #fallback>
-              <div class="docs-gallery__ph" />
-            </template>
-          </ClientOnly>
-        </div>
-      </section>
-
-      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('flat-radio')">
           {{ cellLabel('FlatRadio', '扁平单选') }}
         </NuxtLink>
@@ -1758,8 +1764,11 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block">
-              <TxScrubField v-model="scrubWidth" label="W" :min="40" :max="999" />
+            <div class="docs-gallery__block docs-gallery__scrub-fields">
+              <TxScrubField v-model="scrubWidth" label="W" suffix="px" :min="40" :max="999" :aria-label="localeKey === 'zh' ? '宽度' : 'Width'" :value-label="localeKey === 'zh' ? '宽度数值' : 'Width value'" />
+              <TxScrubField v-model="scrubHeight" label="H" suffix="px" :min="40" :max="999" :aria-label="localeKey === 'zh' ? '高度' : 'Height'" :value-label="localeKey === 'zh' ? '高度数值' : 'Height value'" />
+              <TxScrubField v-model="scrubRotation" label="R" suffix="°" :min="-180" :max="180" :step="0.5" active :aria-label="localeKey === 'zh' ? '旋转角度' : 'Rotation'" :value-label="localeKey === 'zh' ? '旋转角度数值' : 'Rotation value'" />
+              <TxScrubField v-model="scrubOpacity" label="α" suffix="%" :min="0" :max="100" disabled :aria-label="localeKey === 'zh' ? '不透明度' : 'Opacity'" :value-label="localeKey === 'zh' ? '不透明度数值' : 'Opacity value'" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -2034,10 +2043,8 @@ async function copyInstall() {
             <div class="docs-gallery__block">
               <TxGroupBlock :name="copy.dividerSection">
                 <TxBlockSwitch v-model="blockSwitch" :title="copy.autoSync" :description="copy.autoSyncDesc" />
-                <!-- TxBlockLine is a title+description row, not a separator.
-                     Propless it rendered as an empty band. -->
                 <TxBlockLine :title="copy.installTitle" :description="copy.installBody" />
-                <TxBlockInput v-model="flatInputValue" :title="copy.formName" :placeholder="copy.typeSomething" />
+                <TxBlockInput v-model="blockInputValue" :title="copy.formName" :placeholder="copy.typeSomething" />
               </TxGroupBlock>
             </div>
             <template #fallback>
@@ -2213,10 +2220,15 @@ async function copyInstall() {
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
-            <div class="docs-gallery__block docs-gallery__framed docs-gallery__chrome docs-gallery__chrome--bottom">
-              <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" />
-              <div class="docs-gallery__chrome-body" />
-              <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" indicator="line" />
+            <div class="docs-gallery__block docs-gallery__tab-bars">
+              <div class="docs-gallery__framed docs-gallery__chrome">
+                <div class="docs-gallery__chrome-body docs-gallery__chrome-body--compact" />
+                <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" size="sm" />
+              </div>
+              <div class="docs-gallery__framed docs-gallery__chrome">
+                <div class="docs-gallery__chrome-body docs-gallery__chrome-body--compact" />
+                <TxTabBar v-model="navTab" :items="tabBarItems" :fixed="false" size="sm" indicator="line" />
+              </div>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />
@@ -3909,13 +3921,45 @@ async function copyInstall() {
       </section>
 
       <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('stream-element')">
+          {{ cellLabel('StreamElement', '流式回答') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__block">
+              <GalleryStreamElement :markdown="copy.streamAnswer" :sources="streamSources" :locale="localeKey" />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('stream-text')">
+          {{ cellLabel('StreamText', '流式文字') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__block">
+              <GalleryStreamText :text="copy.streamSentence" />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
         <NuxtLink class="docs-gallery__label" :to="docPath('stream-markdown')">
           {{ cellLabel('StreamMarkdown', '流式 Markdown') }}
         </NuxtLink>
         <div class="docs-gallery__stage not-prose">
           <ClientOnly>
             <div class="docs-gallery__block">
-              <TxStreamMarkdown :content="markdownSample" />
+              <GalleryStreamMarkdown :markdown="copy.streamMarkdown" />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />

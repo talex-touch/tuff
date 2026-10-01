@@ -1,10 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FILE_ICON_META_EXTENSION_KEY } from './services/file-provider-icon-cache-service'
+import { THUMBNAIL_STATUS_EXTENSION_KEY } from './thumbnail-config'
 import {
   getDirectoryLevelExclusionReason,
   getFileTraversalExclusionReason,
   mapFileToTuffItem
 } from './utils'
+
+/**
+ * Whether a path would be served by the `tfile:` handler is answered by the local-file policy,
+ * which resolves its roots from Electron and the filesystem. Stubbing the answer here keeps the
+ * icon-selection contract under test instead of the policy's environment.
+ */
+vi.mock('../../../../utils/local-file-policy', () => ({
+  isServableLocalFilePath: (filePath: string) => filePath.startsWith('/served/')
+}))
 
 function createFile(overrides: Partial<Parameters<typeof mapFileToTuffItem>[0]> = {}) {
   return {
@@ -156,7 +166,7 @@ describe('file provider utils', () => {
     expect(onMissingIcon).not.toHaveBeenCalled()
   })
 
-  it('drops a generated icon whose metadata describes an older version of the file', () => {
+  it('keeps serving the cached icon and refreshes it in the background when its metadata is stale', () => {
     const iconPath = '/cache/file-icons/6f2a4c8e9d0b1a2c3d4e5f60718293a4b5c6d7e8f90a1b2c3.png'
     const file = createFile({ size: 129 })
     const onMissingIcon = vi.fn()
@@ -175,10 +185,97 @@ describe('file provider utils', () => {
       onMissingIcon
     )
 
-    // Showing the cached icon here would render a picture of the previous contents of the file;
-    // the row falls back to the glyph and asks for a fresh icon instead.
-    expect(item.render.basic?.icon).toEqual({ type: 'class', value: 'i-ri-file-line' })
+    // Dropping the stale icon for the duration of the re-extraction is what made a row blink from
+    // its native icon to the generic glyph on every touch; the old icon stays on screen while the
+    // refresh lands in the database behind it.
+    expect(item.render.basic?.icon).toEqual({ type: 'url', value: `tfile://${iconPath}` })
     expect(onMissingIcon).toHaveBeenCalledOnce()
+  })
+
+  it('renders a current-version thumbnail as a colorful picture', () => {
+    const thumbnailPath = '/cache/file-thumbnails/6f2a4c8e9d0b1a2c3d4e5f60718293a4b5c6d7e8.png'
+    const onMissingThumbnail = vi.fn()
+
+    const item = mapFileToTuffItem(
+      createFile({ extension: '.png', name: 'cover.png' }),
+      {
+        thumbnail: thumbnailPath,
+        [THUMBNAIL_STATUS_EXTENSION_KEY]: JSON.stringify({
+          status: 'generated',
+          v: 2,
+          at: Date.now()
+        })
+      },
+      'file-provider',
+      'File Provider',
+      undefined,
+      onMissingThumbnail
+    )
+
+    // `colorful` keeps the renderer from masking the raster thumbnail as a monochrome template,
+    // which would flatten the picture's own alpha and colors into a silhouette.
+    expect(item.render.basic?.icon).toEqual({
+      type: 'url',
+      value: `tfile://${thumbnailPath}`,
+      colorful: true
+    })
+    expect(onMissingThumbnail).not.toHaveBeenCalled()
+  })
+
+  it('requests a fresh thumbnail instead of rendering one written by an older encoder', () => {
+    const thumbnailPath = '/cache/file-thumbnails/6f2a4c8e9d0b1a2c3d4e5f60718293a4b5c6d7e8.png'
+    const onMissingThumbnail = vi.fn()
+
+    const item = mapFileToTuffItem(
+      createFile({ extension: '.png', name: 'cover.png' }),
+      // Written before the encoder was versioned: the bytes are the opaque-silhouette JPEG the
+      // current encoder replaces, so the row must not show them.
+      { thumbnail: thumbnailPath },
+      'file-provider',
+      'File Provider',
+      undefined,
+      onMissingThumbnail
+    )
+
+    expect(item.render.basic?.icon).toEqual({ type: 'class', value: 'i-ri-image-line' })
+    expect(onMissingThumbnail).toHaveBeenCalledOnce()
+  })
+
+  it('requests a fresh thumbnail instead of a stale-version one', () => {
+    const thumbnailPath = '/cache/file-thumbnails/6f2a4c8e9d0b1a2c3d4e5f60718293a4b5c6d7e8.png'
+    const onMissingThumbnail = vi.fn()
+
+    const item = mapFileToTuffItem(
+      createFile({ extension: '.png', name: 'cover.png' }),
+      {
+        thumbnail: thumbnailPath,
+        [THUMBNAIL_STATUS_EXTENSION_KEY]: JSON.stringify({
+          status: 'generated',
+          v: 1,
+          at: Date.now()
+        })
+      },
+      'file-provider',
+      'File Provider',
+      undefined,
+      onMissingThumbnail
+    )
+
+    expect(item.render.basic?.icon).toEqual({ type: 'class', value: 'i-ri-image-line' })
+    expect(onMissingThumbnail).toHaveBeenCalledOnce()
+  })
+
+  it('serves a directly viewable image as a colorful file so its colors are not masked', () => {
+    const imagePath = '/served/cover.png'
+
+    const item = mapFileToTuffItem(
+      createFile({ path: imagePath, name: 'cover.png', extension: '.png' }),
+      {},
+      'file-provider',
+      'File Provider'
+    )
+
+    expect(item.render.basic?.icon).toEqual({ type: 'file', value: imagePath, colorful: true })
   })
 })
 

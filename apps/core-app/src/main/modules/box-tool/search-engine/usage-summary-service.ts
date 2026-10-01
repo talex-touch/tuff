@@ -92,10 +92,11 @@ export class UsageSummaryService {
     const dispose = enterPerfContext('UsageSummary.run')
 
     try {
-      // `item_usage_stats` and `item_time_stats` are both owned by
-      // UsageStatsQueue's drain path now. The rebuild call stays as the gated
-      // repair hook (no-op unless TUFF_RECO_TIME_STATS_REBUILD=1); privacy
-      // retention owns raw-log deletion.
+      // `item_usage_stats` is owned by the accepted-execute transaction
+      // (DbUtils.recordExecuteTransaction) plus the display-only search queue;
+      // `item_time_stats` is folded inside that same transaction. The rebuild
+      // call stays as the gated repair hook (no-op unless
+      // TUFF_RECO_TIME_STATS_REBUILD=1); privacy retention owns raw-log deletion.
       await this.timeStatsAggregator.aggregateTimeStats()
 
       const cleanedCount = 0

@@ -11,7 +11,9 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxModal } from '@talex-touch/tuffex/modal'
 import { toTfileUrl } from '@talex-touch/utils/network'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
-import { computed, onMounted, ref, watch } from 'vue'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
@@ -35,6 +37,7 @@ import { createRendererLogger } from '~/utils/renderer-log'
  */
 const { t } = useI18n()
 const settingsSdk = useSettingsSdk()
+const transport = useTuffTransport()
 const route = useRoute()
 const { platform } = useRendererPlatform()
 const log = createRendererLogger('ApplicationIndex')
@@ -73,6 +76,8 @@ const busyPath = ref<string | null>(null)
  */
 const usage = ref<AppIndexUsageResult | null>(null)
 const usageLoading = ref(false)
+let usageRequestGeneration = 0
+let summariesRequestGeneration = 0
 
 /**
  * User-authored aliases for the selected entry. Read alongside usage on selection; the map they
@@ -107,6 +112,7 @@ const listItems = computed<AppListItem[]>(() =>
     return {
       id: entry.path,
       name: entry.displayName || entry.name || entry.path,
+      path: entry.displayPath || entry.path,
       icon: toEntryIcon(entry),
       disabled: !entry.enabled,
       executeCount: summary?.executeCount ?? 0,
@@ -133,11 +139,14 @@ const selectedDiagnostic = computed(() =>
 function toEntryIcon(entry: AppIndexManagedEntry): ITuffIcon | undefined {
   const value = entry.icon?.trim()
   if (!value) return undefined
+  if (value.startsWith('i-')) return { type: 'class', value }
   return { type: 'url', value: toTfileUrl(value), colorful: true }
 }
 
 async function loadSummaries(): Promise<void> {
+  const generation = ++summariesRequestGeneration
   const result = await settingsSdk.appIndex.listSummaries()
+  if (generation !== summariesRequestGeneration) return
   // A failed usage read reports itself instead of arriving as zero launches per row. The entries
   // are a separate read, so the list itself still stands — what is missing is the ordering facts.
   summariesDegraded.value = !result.success
@@ -379,21 +388,66 @@ async function handleUpdateAliases(
   }
 }
 
-async function loadUsage(path: string): Promise<void> {
+async function loadUsage(path: string, committedExecuteCount?: number): Promise<void> {
+  const generation = ++usageRequestGeneration
   usageLoading.value = true
   try {
     const result = await settingsSdk.appIndex.usage({ path })
     // A late response for an entry the user already moved away from must not overwrite the
     // current one: selection changes faster than a round trip.
-    if (selectedPath.value !== path) return
-    usage.value = result.success ? result : null
+    if (generation !== usageRequestGeneration || selectedPath.value !== path) return
+    if (result.success) {
+      // A post-notification refresh must not replace the committed count with an older aggregate.
+      if (committedExecuteCount !== undefined && (result.executeCount ?? 0) < committedExecuteCount)
+        return
+      usage.value = result
+    } else if (!usage.value?.success) usage.value = null
   } catch (error) {
     log.error('Failed to load app usage', error)
-    if (selectedPath.value === path) usage.value = null
+    if (
+      generation === usageRequestGeneration &&
+      selectedPath.value === path &&
+      !usage.value?.success
+    ) {
+      usage.value = null
+    }
   } finally {
-    if (selectedPath.value === path) usageLoading.value = false
+    if (generation === usageRequestGeneration && selectedPath.value === path)
+      usageLoading.value = false
   }
 }
+
+const unUsageChanged = transport.on(CoreBoxEvents.item.usageChanged, (payload) => {
+  if (payload.sourceId !== 'app-provider') return
+  let selectedMatch: AppIndexManagedEntry | null = null
+  let matched = false
+  for (const entry of entries.value) {
+    const itemId = entry.appIdentity || entry.path || entry.bundleId || ''
+    if (itemId !== payload.itemId) continue
+    matched = true
+    const summary = summaries.value[entry.path]
+    if (summary)
+      summaries.value[entry.path] = { ...summary, executeCount: payload.usageStats.executeCount }
+    if (selectedPath.value === entry.path) selectedMatch = entry
+  }
+  if (!matched) return
+  // An older in-flight aggregate must not overwrite the committed notification.
+  summariesRequestGeneration++
+  if (!selectedMatch) return
+  const lastExecuted = payload.usageStats.lastExecuted
+  usage.value = {
+    ...usage.value,
+    success: true,
+    itemId: payload.itemId,
+    executeCount: payload.usageStats.executeCount,
+    searchCount: payload.usageStats.searchCount,
+    lastExecutedAt: lastExecuted ? new Date(lastExecuted).getTime() : null
+  }
+  // Keep the committed total visible if the richer distribution read fails.
+  void loadUsage(selectedMatch.path, payload.usageStats.executeCount)
+})
+
+onBeforeUnmount(unUsageChanged)
 
 /**
  * Opening the Diagnose drawer asks for the probe. Nothing but an explicit rescan changes the
@@ -435,6 +489,7 @@ async function runDiagnostic(target: string, options: { silent?: boolean } = {})
 async function handleLaunch(entry: AppIndexManagedEntry): Promise<void> {
   try {
     const result = await settingsSdk.appIndex.launch({
+      eventId: crypto.randomUUID(),
       path: entry.path,
       entryPoint: 'settings-app-detail'
     })

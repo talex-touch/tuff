@@ -14,6 +14,16 @@ export const PLUGIN_BROWSER_OPEN_TIMEOUT_MS = 30_000
 export const PLUGIN_BROWSER_OPEN_TOKEN_TTL_MS = 30_000
 export const PLUGIN_BROWSER_OPEN_MAX_BROWSERS = 16
 export const PLUGIN_BROWSER_OPEN_MAX_URL_BYTES = 2_048
+export const PLUGIN_BROWSER_OPEN_MAX_PATH_LENGTH = 4_096
+/** Upper bound for one native inventory refresh; the capability timeout still owns the whole call. */
+export const PLUGIN_BROWSER_OPEN_DISCOVERY_TIMEOUT_MS = 4_000
+/**
+ * How long a discovered native inventory may be reused. Discovery stats application bundles and
+ * spawns one OS process, so a burst of `list` calls must not repeat it per call; the value is short
+ * enough that an uninstall or an upgrade is observed by the next user action, and a browser token is
+ * still minted fresh for every `list`.
+ */
+export const PLUGIN_BROWSER_OPEN_DISCOVERY_CACHE_TTL_MS = 2_000
 
 export interface PluginBrowserOpenPathIdentity {
   readonly canonicalPath: string
@@ -44,6 +54,10 @@ interface NativeBrowserTarget {
   readonly identity: PluginBrowserOpenPathIdentity
 }
 
+/** One platform inventory entry: display data plus the native path only main may hold. */
+type DiscoveredCandidate = { readonly id: string; readonly name: string; readonly path: string }
+type DiscoveredCandidates = readonly DiscoveredCandidate[]
+
 interface TrustedBrowserOpenService {
   readonly platform: NodeJS.Platform
   list(signal: AbortSignal): Promise<readonly NativeBrowserTarget[]>
@@ -56,6 +70,15 @@ export interface FixedPluginBrowserOpenServiceOptions {
   readonly homeDirectory: string
   readonly windowsDirectory: string
   readonly environment: Readonly<Record<string, string | undefined>>
+  /**
+   * Optional main-process-trusted native inventory, e.g. `discoverNativeBrowsers`. It is the whole
+   * inventory when it answers with at least one browser, and omitted or empty keeps the fixed
+   * per-platform candidate list. Whatever it returns is only a candidate: every `path` still has to
+   * survive `inspect`, ids are re-uniqued here, and only `{ id, name, token }` ever leaves main.
+   */
+  discoverBrowsers?(
+    signal: AbortSignal
+  ): Promise<readonly { readonly id: string; readonly name: string; readonly path: string }[]>
   inspect(
     candidatePath: string,
     kind: PluginBrowserOpenPathIdentity['kind'],
@@ -208,7 +231,17 @@ function exactRecord(
     }
     output[key] = descriptor.value
   }
-  for (const key of requiredKeys) if (!Object.hasOwn(descriptors, key)) invalid()
+  for (const key of requiredKeys) {
+    const descriptor = descriptors[key]
+    if (
+      !Object.hasOwn(descriptors, key) ||
+      !descriptor?.enumerable ||
+      !('value' in descriptor) ||
+      descriptor.value === undefined
+    ) {
+      invalid()
+    }
+  }
   return output
 }
 
@@ -499,6 +532,191 @@ function snapshotEnvironment(value: unknown): Readonly<Record<string, string>> {
   return Object.freeze(output)
 }
 
+/**
+ * Keep discovered ids unique against the ones already taken. A suffix may push the id past the
+ * public 32-character contract, in which case that later duplicate is dropped: a browser without a
+ * legal id is better than an id the child facade would reject.
+ */
+function uniqueBrowserId(id: string, taken: Set<string>): string {
+  let candidate = id
+  for (let suffix = 2; taken.has(candidate); suffix += 1) {
+    const appended = `${id}-${suffix}`
+    if (appended.length > 32) return ''
+    candidate = appended
+  }
+  taken.add(candidate)
+  return candidate
+}
+
+/**
+ * A discovered candidate is untrusted input from a trusted callback: every field is bounded, the id
+ * must satisfy the public id contract, and the name must be displayable. A malformed entry is
+ * dropped individually rather than failing the whole list, because discovery is best-effort.
+ */
+function readDiscoveredCandidate(
+  value: unknown,
+  pathApi: typeof path.posix | typeof path.win32,
+  kind: PluginBrowserOpenPathIdentity['kind']
+): DiscoveredCandidate | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || utilTypes.isProxy(value)) {
+    return null
+  }
+  let descriptors: PropertyDescriptorMap
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value)
+  } catch {
+    return null
+  }
+  const read = (key: string): unknown =>
+    Object.hasOwn(descriptors, key) && 'value' in descriptors[key]
+      ? descriptors[key].value
+      : undefined
+  const id = read('id')
+  const name = read('name')
+  const candidatePath = read('path')
+  if (
+    typeof id !== 'string' ||
+    !BROWSER_ID_PATTERN.test(id) ||
+    typeof name !== 'string' ||
+    name.length === 0 ||
+    name.length > 64 ||
+    containsControlCharacter(name) ||
+    typeof candidatePath !== 'string' ||
+    candidatePath.length === 0 ||
+    candidatePath.length > PLUGIN_BROWSER_OPEN_MAX_PATH_LENGTH ||
+    containsControlCharacter(candidatePath) ||
+    !pathApi.isAbsolute(candidatePath)
+  ) {
+    return null
+  }
+  if (pathApi.normalize(candidatePath) !== candidatePath) return null
+  // The fixed inventory only ever hands main a path inside an application root, and the platform
+  // launcher only ever hands the OS an application bundle. Discovery is held to the same shape so
+  // a trusted callback cannot widen what "a browser path" means: absolute, and a bundle on macOS.
+  if (kind === 'directory' && pathApi.extname(candidatePath).toLowerCase() !== '.app') return null
+  return { id, name, path: candidatePath }
+}
+
+/**
+ * Ask the optional trusted callback for this machine's browsers. The callback also owns completion:
+ * returning cleanly is an inventory, throwing or timing out is not. The discovery is not tied to any
+ * single caller, so one caller's cancellation cannot poison the answer another caller is waiting for.
+ */
+async function requestDiscoveredCandidates(
+  discover: NonNullable<FixedPluginBrowserOpenServiceOptions['discoverBrowsers']>,
+  pathApi: typeof path.posix | typeof path.win32,
+  kind: PluginBrowserOpenPathIdentity['kind']
+): Promise<{ readonly candidates: DiscoveredCandidates; readonly complete: boolean }> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), PLUGIN_BROWSER_OPEN_DISCOVERY_TIMEOUT_MS)
+  const candidates: { readonly id: string; readonly name: string; readonly path: string }[] = []
+  const seenPaths = new Set<string>()
+  const seenIds = new Set<string>()
+  const collect = (values: unknown): void => {
+    if (!Array.isArray(values) || utilTypes.isProxy(values)) return
+    for (const value of values) {
+      if (candidates.length >= PLUGIN_BROWSER_OPEN_MAX_BROWSERS) break
+      const candidate = readDiscoveredCandidate(value, pathApi, kind)
+      if (!candidate || seenPaths.has(candidate.path)) continue
+      const chosenId = uniqueBrowserId(candidate.id, seenIds)
+      if (!chosenId) continue
+      seenPaths.add(candidate.path)
+      candidates.push(Object.freeze({ id: chosenId, name: candidate.name, path: candidate.path }))
+    }
+  }
+  // The capability's own timeout still owns the whole `list` call; this one only stops a browser
+  // that never answers from spending it, so a stuck refresh costs one discovery, not the call.
+  const aborted = Promise.withResolvers<void>()
+  controller.signal.addEventListener('abort', () => aborted.resolve(), { once: true })
+  let complete = true
+  try {
+    await Promise.race([
+      Promise.resolve()
+        .then(() => discover.call(null, controller.signal))
+        .then(collect),
+      aborted.promise
+    ])
+  } catch {
+    complete = false
+  } finally {
+    clearTimeout(timer)
+  }
+  return {
+    candidates: Object.freeze(candidates.slice()),
+    complete: complete && !controller.signal.aborted
+  }
+}
+
+/**
+ * The discovery cache: one TTL-bounded memo of the last discovery, shared by concurrent callers.
+ * It caches native metadata only — never a browser token, never a validated identity — and only an
+ * answer discovery actually produced, never the absence of one. `list` still revalidates every
+ * candidate and mints a token per browser on every call, so a warm cache can never grant authority.
+ */
+interface DiscoveryCache {
+  readonly candidates: DiscoveredCandidates
+  readonly expiresAt: number
+}
+
+function createDiscoveryReader(
+  discover: FixedPluginBrowserOpenServiceOptions['discoverBrowsers'],
+  pathApi: typeof path.posix | typeof path.win32,
+  kind: PluginBrowserOpenPathIdentity['kind']
+): (signal: AbortSignal) => Promise<DiscoveredCandidates> {
+  const discovery = discover
+  if (!discovery) return async () => Object.freeze([])
+  let cache: DiscoveryCache | null = null
+  let inflight: Promise<DiscoveredCandidates> | null = null
+  const refresh = async (): Promise<DiscoveredCandidates> => {
+    const { candidates, complete } = await requestDiscoveredCandidates(discovery, pathApi, kind)
+    if (complete) {
+      cache = {
+        candidates,
+        expiresAt: Date.now() + PLUGIN_BROWSER_OPEN_DISCOVERY_CACHE_TTL_MS
+      }
+    }
+    return candidates
+  }
+  const startRefresh = (): Promise<DiscoveredCandidates> => {
+    const starting = refresh()
+    inflight = starting
+    void starting
+      .finally(() => {
+        if (inflight === starting) inflight = null
+      })
+      .catch(() => undefined)
+    return starting
+  }
+  return async (signal) => {
+    assertSignal(signal)
+    const cached = cache
+    if (cached && Date.now() < cached.expiresAt) return cached.candidates
+    return await awaitWithAbort(inflight ?? startRefresh(), signal)
+  }
+}
+
+/**
+ * The fixed inventory a service without native discovery still offers: the maintained per-platform
+ * candidate list, resolved against this machine's application roots. Its `id`/`name` are contract
+ * data, and its paths are as public as the plugin's own documentation, so it can be built once.
+ */
+function readFixedInventoryCandidates(
+  platform: NodeJS.Platform,
+  pathApi: typeof path.posix | typeof path.win32,
+  roots: readonly string[]
+): readonly { readonly id: string; readonly name: string; readonly path: string }[] {
+  if (platform !== 'darwin' && platform !== 'win32') return Object.freeze([])
+  const output: { readonly id: string; readonly name: string; readonly path: string }[] = []
+  for (const candidate of BROWSER_CANDIDATES[platform]) {
+    for (const root of roots) {
+      const candidatePath = pathApi.resolve(root, candidate.relative)
+      if (pathApi.relative(pathApi.resolve(root), candidatePath).startsWith('..')) continue
+      output.push(Object.freeze({ id: candidate.id, name: candidate.name, path: candidatePath }))
+    }
+  }
+  return Object.freeze(output)
+}
+
 function candidateRoots(options: FixedPluginBrowserOpenServiceOptions): readonly string[] {
   const pathApi = options.platform === 'win32' ? path.win32 : path.posix
   if (options.platform === 'darwin') {
@@ -530,14 +748,21 @@ function minimalEnvironment(
 export function createFixedPluginBrowserOpenService(
   rawOptions: FixedPluginBrowserOpenServiceOptions
 ): TrustedBrowserOpenService {
-  const options = exactRecord(rawOptions, [
-    'platform',
-    'homeDirectory',
-    'windowsDirectory',
-    'environment',
-    'inspect',
-    'spawn'
-  ])
+  const options = exactRecord(
+    rawOptions,
+    [
+      'platform',
+      'homeDirectory',
+      'windowsDirectory',
+      'environment',
+      'discoverBrowsers',
+      'inspect',
+      'spawn'
+    ],
+    ['platform', 'homeDirectory', 'windowsDirectory', 'environment', 'inspect', 'spawn']
+  )
+  const hasDiscoverBrowsers =
+    Object.hasOwn(options, 'discoverBrowsers') && options.discoverBrowsers !== undefined
   if (
     typeof options.platform !== 'string' ||
     typeof options.homeDirectory !== 'string' ||
@@ -547,6 +772,9 @@ export function createFixedPluginBrowserOpenService(
     !options.environment ||
     typeof options.environment !== 'object' ||
     utilTypes.isProxy(options.environment) ||
+    (hasDiscoverBrowsers &&
+      (typeof options.discoverBrowsers !== 'function' ||
+        utilTypes.isProxy(options.discoverBrowsers))) ||
     typeof options.inspect !== 'function' ||
     utilTypes.isProxy(options.inspect) ||
     typeof options.spawn !== 'function' ||
@@ -563,6 +791,9 @@ export function createFixedPluginBrowserOpenService(
     options.windowsDirectory as string
   )
   const environment = snapshotEnvironment(options.environment)
+  const discoverBrowsers = hasDiscoverBrowsers
+    ? (options.discoverBrowsers as FixedPluginBrowserOpenServiceOptions['discoverBrowsers'])
+    : undefined
   const inspect = options.inspect as FixedPluginBrowserOpenServiceOptions['inspect']
   const spawn = options.spawn as FixedPluginBrowserOpenServiceOptions['spawn']
   const fixedOptions: FixedPluginBrowserOpenServiceOptions = Object.freeze({
@@ -570,11 +801,17 @@ export function createFixedPluginBrowserOpenService(
     homeDirectory,
     windowsDirectory,
     environment,
+    ...(discoverBrowsers ? { discoverBrowsers } : {}),
     inspect,
     spawn
   })
   const roots = candidateRoots(fixedOptions)
   const env = minimalEnvironment(fixedOptions)
+  const readDiscoveredCandidates = createDiscoveryReader(
+    discoverBrowsers,
+    pathApi,
+    platform === 'darwin' ? 'directory' : 'file'
+  )
 
   const inspectCandidate = async (
     candidatePath: string,
@@ -593,26 +830,28 @@ export function createFixedPluginBrowserOpenService(
   const list = async (signal: AbortSignal): Promise<readonly NativeBrowserTarget[]> => {
     assertSignal(signal)
     if (platform !== 'darwin' && platform !== 'win32') return Object.freeze([])
-    const candidates = BROWSER_CANDIDATES[platform]
     const kind = platform === 'darwin' ? 'directory' : 'file'
+    const discovered = await readDiscoveredCandidates(signal)
+    const inventory: readonly DiscoveredCandidate[] =
+      discovered.length > 0 ? discovered : readFixedInventoryCandidates(platform, pathApi, roots)
     const output: NativeBrowserTarget[] = []
-    for (const candidate of candidates) {
-      for (const root of roots) {
-        const candidatePath = pathApi.resolve(root, candidate.relative)
-        if (pathApi.relative(pathApi.resolve(root), candidatePath).startsWith('..')) continue
-        const identity = await inspectCandidate(candidatePath, kind, signal)
-        if (!identity) continue
-        const target = Object.freeze({
-          id: candidate.id,
-          name: candidate.name,
-          path: candidatePath,
-          identity
-        })
-        TRUSTED_TARGETS.add(target)
-        output.push(target)
-        break
-      }
+    const seenPaths = new Set<string>()
+    const seenIds = new Set<string>()
+    for (const candidate of inventory) {
       if (output.length >= PLUGIN_BROWSER_OPEN_MAX_BROWSERS) break
+      if (seenIds.has(candidate.id)) continue
+      const identity = await inspectCandidate(candidate.path, kind, signal)
+      if (!identity || seenPaths.has(identity.canonicalPath)) continue
+      seenPaths.add(identity.canonicalPath)
+      seenIds.add(candidate.id)
+      const target = Object.freeze({
+        id: candidate.id,
+        name: candidate.name,
+        path: candidate.path,
+        identity
+      })
+      TRUSTED_TARGETS.add(target)
+      output.push(target)
     }
     return Object.freeze(output)
   }

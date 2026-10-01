@@ -13,7 +13,7 @@ const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
 
-const pageTitle = computed(() => `${t('notFound.title')} · Tuff Nexus`)
+const pageTitle = computed(() => `${t('notFound.title')} · Tuff`)
 useSeoMeta({
   title: pageTitle,
   ogTitle: pageTitle,

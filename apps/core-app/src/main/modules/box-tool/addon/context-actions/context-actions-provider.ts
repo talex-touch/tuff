@@ -28,6 +28,10 @@ import { pluginModule } from '../../../plugin/plugin-module'
 import PluginFeaturesAdapter from '../../../plugin/adapters/plugin-features-adapter'
 import { t } from '../../../../utils/i18n-helper'
 import { openValidatedExternalUrl } from '../../../../utils/external-url-policy'
+import { getLogger } from '@talex-touch/utils/common/logger'
+import { recordAcceptedExecute, resolveExecuteEventId } from '../../search-engine/execute-recorder'
+
+const contextActionsLog = getLogger('context-actions-provider')
 
 export const CONTEXT_ACTION_IDS = {
   QuickReview: 'quick-review',
@@ -656,6 +660,19 @@ export class ContextActionsProvider implements ISearchProvider<ProviderContext> 
       result
     })
     this.trimExecutionStates()
+
+    // A context action the provider actually ran (not the `ACTION_UNAVAILABLE` fallback) is a use;
+    // an error result means the action failed and must not count.
+    if (result.status !== 'error') {
+      recordAcceptedExecute({
+        item: args.item,
+        sessionId: args.searchResult?.sessionId ?? null,
+        entryPoint: 'core-box',
+        eventId: resolveExecuteEventId(args.eventId)
+      }).catch((error) => {
+        contextActionsLog.warn('Failed to record context action usage', { error })
+      })
+    }
 
     return null
   }

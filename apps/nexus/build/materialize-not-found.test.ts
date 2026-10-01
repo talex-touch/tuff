@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { assertRenderedNotFoundPage, materializeNotFoundPage, NOT_FOUND_MARKER, notFoundSourcePath } from './materialize-not-found.mjs'
 import { NOT_FOUND_PRERENDER_ROUTE } from './nexus-static-routes.mjs'
 
-const rendered = `<!DOCTYPE html><html><head><title>Page not found · Tuff Nexus</title></head><body><div id="__nuxt"><main><div role="img" ${NOT_FOUND_MARKER}>4 4</div><h1>Page not found</h1></main></div></body></html>`
+const rendered = `<!DOCTYPE html><html><head><title>Page not found · Tuff</title></head><body><div id="__nuxt"><main><div role="img" ${NOT_FOUND_MARKER}>4 4</div><h1>Page not found</h1></main></div></body></html>`
 const emptyShell = '<!DOCTYPE html><html><head></head><body><div id="__nuxt"></div><div id="teleports"></div></body></html>'
 
 function createDist(files: Record<string, string>) {

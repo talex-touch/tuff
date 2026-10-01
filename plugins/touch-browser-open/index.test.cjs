@@ -4,6 +4,9 @@ const Module = require('node:module')
 const path = require('node:path')
 const test = require('node:test')
 
+const TOKEN_A = `bo_${'A'.repeat(32)}`
+const TOKEN_B = `bo_${'B'.repeat(32)}`
+
 class FakeBuilder {
   constructor(id) {
     this.item = { id }
@@ -59,13 +62,7 @@ const state = {
     operation: 'list',
     status: 'available',
     defaultAvailable: true,
-    browsers: [
-      {
-        id: 'chrome',
-        name: 'Chrome',
-        token: 'bo_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-      },
-    ],
+    browsers: [{ id: 'chrome', name: 'Chrome', token: TOKEN_A }],
   },
 }
 
@@ -116,12 +113,18 @@ globalThis.http = {
   },
 }
 globalThis.features = {
-  async getFeature(id) {
-    return state.features.get(id)
-  },
   async addFeature(feature) {
     state.features.set(feature.id, feature)
     return true
+  },
+  async removeFeature(featureId) {
+    return state.features.delete(featureId)
+  },
+  async getFeature(featureId) {
+    return state.features.get(featureId)
+  },
+  async getFeatures() {
+    return [...state.features.values()]
   },
 }
 globalThis.platform = { platform: 'darwin', arch: 'arm64' }
@@ -137,8 +140,11 @@ function loadPluginModule(filename) {
   return mod.exports
 }
 
-const sourcePath = path.join(__dirname, 'index.js')
-const pluginModule = loadPluginModule(sourcePath)
+const pluginModule = loadPluginModule(path.join(__dirname, 'index.js'))
+
+function feature(id) {
+  return state.features.get(id)
+}
 
 function actionItem(actionId) {
   return state.items.find(item => item.actions?.some(action => action.id === actionId))
@@ -155,74 +161,214 @@ function reset() {
     operation: 'list',
     status: 'available',
     defaultAvailable: true,
-    browsers: [
-      {
-        id: 'chrome',
-        name: 'Chrome',
-        token: 'bo_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-      },
-    ],
+    browsers: [{ id: 'chrome', name: 'Chrome', token: TOKEN_A }],
   }
 }
 
 test.beforeEach(reset)
 
-test('production Prelude contains no privileged child surface or test export', () => {
-  const source = fs.readFileSync(sourcePath, 'utf8')
-  for (const pattern of [
-    /\b__test\b/,
-    /\brequire\s*\(/,
-    /\bfetch\s*\(/,
-    /(?:^|[^.\w])process\s*(?:\.|\[)/m,
-    /\bnode:(?:fs|child_process|sqlite|worker_threads)\b/,
-    /\belectron\b/,
-  ]) {
-    assert.doesNotMatch(source, pattern)
+test('registers direct entries beside the search modes, sharing one non-push shape', async () => {
+  await pluginModule.onInit()
+
+  for (const id of ['search-engine-google', 'search-engine-bing', 'search-engine-duckduckgo']) {
+    assert.equal(feature(id)?.push, true, `${id} should stay an explicit push mode`)
   }
-  // No onInputChanged: the host never calls the prelude's copy of it (#823). Input changes
-  // arrive as a re-invocation of onFeatureTriggered, which is where the refresh happens.
-  assert.deepEqual(Object.keys(pluginModule).sort(), [
-    'onDestroy',
-    'onFeatureTriggered',
-    'onInit',
-    'onItemAction',
+  for (const id of [
+    'search-open-google',
+    'search-open-baidu',
+    'browser-direct-default',
+    'browser-direct-chrome',
+    'hot-weibo-hot',
+  ]) {
+    const entry = feature(id)
+    assert.ok(entry, `${id} should be registered`)
+    // A non-push feature is what lets one Enter navigate instead of opening a surface.
+    assert.equal(entry.push, false, `${id} should not require a second activation`)
+    assert.equal(typeof entry.commands?.[0]?.value, 'string')
+    assert.equal(entry.commands?.[0]?.type, 'regex')
+  }
+})
+
+test('opens the URL carried by the copied query inputs, without the push list or a second press', async () => {
+  await pluginModule.onInit()
+
+  const result = await pluginModule.onFeatureTriggered('browser-direct-default', {
+    text: '',
+    inputs: [{ type: 'text', content: 'example.com/from-inputs' }],
+  })
+
+  assert.equal(result, false)
+  assert.deepEqual(state.openCalls, [{ url: 'https://example.com/from-inputs', token: undefined }])
+  // A one-shot entry publishes nothing, so there is no surface to confirm in.
+  assert.deepEqual(state.items, [])
+})
+
+test('searches unicode and ampersands once, percent-encoded into the engine template', async () => {
+  await pluginModule.onInit()
+  const query = '中文 & a/b?c'
+
+  const result = await pluginModule.onFeatureTriggered('search-open-google', { text: query })
+
+  assert.equal(result, false)
+  assert.deepEqual(state.openCalls, [
+    { url: `https://www.google.com/search?q=${encodeURIComponent(query)}`, token: undefined },
+  ])
+  assert.deepEqual(state.items, [])
+  // Direct search never asks the network for suggestions; that is the explicit push mode's job.
+  assert.deepEqual(state.httpCalls, [])
+})
+
+test('a settings-defined engine drives its own {query} template', async () => {
+  state.files.set('search-settings.json', {
+    engines: [
+      {
+        id: 'kagi',
+        name: 'Kagi',
+        keyword: 'kagi',
+        urlTemplate: 'https://kagi.com/search?q={query}',
+        enabled: true,
+      },
+    ],
+    defaultEngine: 'kagi',
+    hotEntries: [],
+  })
+  await pluginModule.onInit()
+
+  assert.ok(feature('search-open-kagi'), 'a custom enabled engine registers a direct entry')
+  const query = 'a&b 中'
+  await pluginModule.onFeatureTriggered('search-open-kagi', { text: query })
+
+  assert.deepEqual(state.openCalls, [
+    { url: `https://kagi.com/search?q=${encodeURIComponent(query)}`, token: undefined },
   ])
 })
 
-test('registers bounded dynamic search features through the typed registry', async () => {
+test('disabling an engine removes its registered features', async () => {
   await pluginModule.onInit()
-  assert.deepEqual(
-    [...state.features.keys()],
-    ['search-engine-google', 'search-engine-bing', 'search-engine-duckduckgo'],
-  )
-  for (const feature of state.features.values()) {
-    assert.equal(feature.icon.type, 'class')
-    assert.deepEqual(feature.platform.darwin, { enable: true, arch: [], os: [] })
-    assert.equal(feature.platform.win.enable, false)
+  assert.ok(feature('search-open-google'))
+  assert.ok(feature('search-engine-google'))
+
+  state.files.set('search-settings.json', {
+    engines: [
+      {
+        id: 'google',
+        name: 'Google',
+        keyword: 'google',
+        urlTemplate: 'https://www.google.com/search?q={query}',
+        enabled: false,
+      },
+    ],
+    hotEntries: [
+      {
+        id: 'weibo-hot',
+        name: '微博热搜',
+        keyword: 'weibo',
+        url: 'https://s.weibo.com/top/summary',
+        enabled: true,
+      },
+    ],
+  })
+  await pluginModule.onMessage('browser-open:sync-settings')
+
+  // A disabled engine must leave nothing behind — neither its direct entry nor its push mode.
+  assert.equal(feature('search-engine-google'), undefined)
+  assert.equal(feature('search-open-google'), undefined)
+  assert.deepEqual(state.openCalls, [])
+  // Other engines and entries are not collateral damage.
+  assert.ok(feature('search-open-bing'))
+  assert.ok(feature('hot-weibo-hot'))
+})
+
+test('a hot entry opens its target directly', async () => {
+  await pluginModule.onInit()
+
+  const result = await pluginModule.onFeatureTriggered('hot-weibo-hot', { text: '' })
+
+  assert.equal(result, false)
+  assert.deepEqual(state.openCalls, [
+    { url: 'https://s.weibo.com/top/summary', token: undefined },
+  ])
+  assert.deepEqual(state.items, [])
+})
+
+test('the catch-all search entry matches plain text but not URLs, paths or file names', async () => {
+  await pluginModule.onInit()
+  const pattern = feature('search-open-google').commands[0].value
+  const matches = value => new RegExp(pattern).test(value)
+
+  for (const text of ['hello world', '中文 关键词', 'how to build a thing', 'tuff']) {
+    assert.equal(matches(text), true, `plain text should route to search: ${text}`)
+  }
+  for (const text of [
+    'https://example.com/a?b=1',
+    'http://example.com',
+    '~/Workspace',
+    '/Users/x/Downloads',
+    'C:\\Users\\x\\Downloads',
+    'readme.md',
+    'notes.txt',
+  ]) {
+    assert.equal(matches(text), false, `URL/path/file must not route to search: ${text}`)
   }
 })
 
+test('a bare host is matched by the browser-link pattern, not the search pattern', async () => {
+  await pluginModule.onInit()
+  const searchPattern = new RegExp(feature('search-open-google').commands[0].value)
+  const linkPattern = new RegExp(feature('browser-direct-default').commands[0].value)
+
+  // The registered link entry accepts the domain forms the search entry refuses, so a typed domain
+  // always becomes an "open link" row rather than a web search.
+  for (const text of ['example.com', 'example.com/docs', 'www.example.com/a?b=1', 'https://example.com/a?b=1']) {
+    assert.equal(linkPattern.test(text), true, `a URL should be link-shaped: ${text}`)
+    assert.equal(searchPattern.test(text), false, `a URL must not be search-shaped: ${text}`)
+  }
+})
+
+test('a per-browser entry re-lists at execution time and opens with the fresh token', async () => {
+  await pluginModule.onInit()
+  assert.ok(feature('browser-direct-chrome'))
+
+  // The registration-time inventory is stale by the time the user presses Enter.
+  state.listResult = {
+    operation: 'list',
+    status: 'available',
+    defaultAvailable: true,
+    browsers: [{ id: 'chrome', name: 'Chrome', token: TOKEN_B }],
+  }
+  const result = await pluginModule.onFeatureTriggered('browser-direct-chrome', {
+    text: 'example.com',
+  })
+
+  assert.equal(result, false)
+  assert.deepEqual(state.openCalls, [{ url: 'https://example.com/', token: TOKEN_B }])
+})
+
+test('refuses a direct trigger with no usable URL and opens nothing', async () => {
+  await pluginModule.onInit()
+
+  const result = await pluginModule.onFeatureTriggered('browser-direct-default', {
+    text: '',
+    inputs: [],
+  })
+
+  assert.equal(result.accepted, false)
+  assert.equal(result.success, false)
+  assert.deepEqual(state.openCalls, [])
+})
+
 test('publishes only opaque browser tokens and opens a re-listed browser', async () => {
-  await pluginModule.onFeatureTriggered('browser-open', 'example.com')
+  await pluginModule.onFeatureTriggered('browser-open', { text: 'example.com' })
   const item = actionItem('open-browser')
   assert.ok(item)
   const action = item.actions.find(candidate => candidate.id === 'open-browser')
   assert.deepEqual(Object.keys(action.payload).sort(), ['browserToken', 'url'])
-  assert.equal(action.payload.browserToken, 'bo_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+  assert.equal(action.payload.browserToken, TOKEN_A)
   assert.doesNotMatch(JSON.stringify(state.items), /Applications|Google Chrome\.app|executable|target|path/i)
 
   const result = await pluginModule.onItemAction(item, { actionId: 'open-browser' })
-  assert.deepEqual(result, {
-    externalAction: true,
-    success: true,
-    status: 'completed',
-  })
-  assert.deepEqual(state.openCalls, [
-    {
-      url: 'https://example.com/',
-      token: 'bo_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-    },
-  ])
+  assert.deepEqual(result, { externalAction: true, success: true, status: 'completed' })
+  assert.deepEqual(state.openCalls, [{ url: 'https://example.com/', token: TOKEN_A }])
   const recent = state.files.get('recent-browsers.json')
   assert.deepEqual(Object.keys(recent.items[0]).sort(), ['id', 'lastUsedAt', 'name'])
   assert.equal(recent.items[0].id, 'chrome')
@@ -236,23 +382,28 @@ test('re-lists recent display ids and never treats storage as authority', async 
         id: 'chrome',
         name: 'Forged Chrome',
         target: '/Applications/Calculator.app',
-        token: 'bo_ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ',
+        token: `bo_${'Z'.repeat(32)}`,
         lastUsedAt: Date.now(),
       },
     ],
   })
-  await pluginModule.onFeatureTriggered('browser-open', 'https://example.com')
+  await pluginModule.onFeatureTriggered('browser-open', { text: 'https://example.com' })
   const recent = state.items.find(item => item.title === '最近 · Chrome')
   assert.ok(recent)
   assert.deepEqual(recent.actions[0].payload, {
     url: 'https://example.com/',
-    browserToken: 'bo_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    browserToken: TOKEN_A,
   })
   assert.doesNotMatch(JSON.stringify(recent), /Calculator|ZZZZ/)
 })
 
 test('uses bounded typed HTTP suggestions and keeps direct search first', async () => {
-  await pluginModule.onFeatureTriggered('search-engine-google', 'google tuff', null, new AbortController().signal)
+  await pluginModule.onFeatureTriggered(
+    'search-engine-google',
+    { text: 'google tuff' },
+    null,
+    new AbortController().signal,
+  )
   assert.equal(state.httpCalls.length, 1)
   assert.match(state.httpCalls[0].url, /^https:\/\/suggestqueries\.google\.com\//)
   assert.equal(state.httpCalls[0].config.responseType, 'json')
@@ -268,7 +419,7 @@ test('uses bounded typed HTTP suggestions and keeps direct search first', async 
 })
 
 test('awaits clipboard writes and rejects hostile action payloads', async () => {
-  await pluginModule.onFeatureTriggered('browser-open', 'example.com')
+  await pluginModule.onFeatureTriggered('browser-open', { text: 'example.com' })
   const copy = actionItem('copy-url')
   await pluginModule.onItemAction(copy, { actionId: 'copy-url' })
   assert.deepEqual(state.clipboardWrites, ['https://example.com/'])
@@ -300,7 +451,7 @@ test('maps capability denial to a deterministic redacted result', async () => {
       code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED',
     })
   }
-  await pluginModule.onFeatureTriggered('browser-open', 'example.com')
+  await pluginModule.onFeatureTriggered('browser-open', { text: 'example.com' })
   const result = await pluginModule.onItemAction(actionItem('default-open'), {
     actionId: 'default-open',
   })

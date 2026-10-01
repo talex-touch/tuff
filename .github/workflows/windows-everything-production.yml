@@ -10,6 +10,8 @@ on:
       - "apps/core-app/scripts/build-target.js"
       - "apps/core-app/scripts/build-target/**"
       - "apps/core-app/scripts/everything-diagnostic-verify.ts"
+      - "apps/core-app/scripts/everything-corebox-ui-verify.ts"
+      - "apps/core-app/scripts/coreapp-packaged-corebox-everything-probe.ts"
       - "apps/core-app/scripts/windows-acceptance-*.ts"
       - "apps/core-app/src/main/modules/box-tool/addon/files/everything-*.ts"
       - "apps/core-app/src/main/modules/platform/everything-*.ts"
@@ -145,6 +147,127 @@ jobs:
             nativeSha256 = (Get-FileHash -Path $native.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           } | ConvertTo-Json | Set-Content -Path (Join-Path $evidenceDirectory 'packaged-native.json') -Encoding UTF8
 
+      # The collector above stops the portable runtime to prove the unavailable state, and the packaged
+      # snapshot now exists, so the packaged UI evidence starts here: restart the verified runtime,
+      # collect the SDK-backed CoreBox searches, then stop it again for the degraded phase.
+      # `setup-windows-everything.ps1` pins `folders=` in Everything.ini to the fixture directory, so
+      # the only indexed file is the marker the probe queries.
+      - name: Restart verified Everything runtime for packaged UI evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $configPath = Join-Path (Split-Path -Parent $env:TUFF_EVERYTHING_EXE) 'Everything.ini'
+          $process = Start-Process -FilePath $env:TUFF_EVERYTHING_EXE -ArgumentList @(
+            '-config',
+            $configPath,
+            '-startup'
+          ) -PassThru
+          Start-Sleep -Seconds 3
+          $process.Refresh()
+          if ($process.HasExited) {
+            throw "Everything client exited during restart with code $($process.ExitCode)."
+          }
+          $readyPath = Join-Path $env:RUNNER_TEMP 'tuff-everything-evidence/corebox-ui/sdk-ready.json'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $readyPath) | Out-Null
+          $ready = $false
+          for ($attempt = 1; $attempt -le 60; $attempt += 1) {
+            & node packages/tuff-native/scripts/everything-selfcheck.js --query $env:TUFF_EVERYTHING_MARKER --max 5 --samples 1 --require-results --output $readyPath | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+              $ready = $true
+              break
+            }
+            Start-Sleep -Seconds 2
+          }
+          if (-not $ready) {
+            throw 'Everything SDK did not return the CI marker after restarting the runtime.'
+          }
+
+      - name: Probe packaged CoreBox Everything UI with the SDK backend
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $env:RUNNER_TEMP 'tuff-everything-evidence/corebox-ui'
+          New-Item -ItemType Directory -Force -Path $output | Out-Null
+          pnpm -C apps/core-app run windows:corebox-everything:probe -- `
+            --app-bundle dist/win-unpacked `
+            --output-dir "$output" `
+            --evidence "$output/corebox-ui.json" `
+            --expect-backend sdk-napi `
+            --marker $env:TUFF_EVERYTHING_MARKER `
+            --sdk-dll-path $env:TALEX_EVERYTHING_DLL_PATH `
+            --launch-timeout-ms 180000 `
+            --mode-timeout-ms 30000 `
+            --compact
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Packaged CoreBox Everything UI probe failed with the SDK backend.'
+          }
+
+      - name: Verify packaged CoreBox Everything UI evidence
+        working-directory: apps/core-app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $env:RUNNER_TEMP 'tuff-everything-evidence/corebox-ui'
+          pnpm run everything:corebox-ui:verify -- `
+            --input "$output/corebox-ui.json" `
+            --requireModes normal,explicit-file,structured-filter `
+            --requireBackend sdk-napi `
+            --requireAvailable `
+            --requireResultRows `
+            --requireMarkerMatches `
+            --requireScreenshots `
+            --requireEmptyState `
+            --requirePlatform win32 `
+            --compact
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Packaged CoreBox Everything UI evidence failed strict verification.'
+          }
+
+      - name: Stop Everything runtime for the degraded UI phase
+        shell: pwsh
+        run: |
+          if ($env:TUFF_EVERYTHING_EXE -and (Test-Path $env:TUFF_EVERYTHING_EXE)) {
+            Start-Process -FilePath $env:TUFF_EVERYTHING_EXE -ArgumentList '-exit' -Wait -ErrorAction SilentlyContinue
+          }
+          Write-Host 'Everything runtime stopped for the degraded UI phase.'
+
+      - name: Probe packaged CoreBox Everything UI with the backend unavailable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $env:RUNNER_TEMP 'tuff-everything-evidence/corebox-ui'
+          pnpm -C apps/core-app run windows:corebox-everything:probe -- `
+            --app-bundle dist/win-unpacked `
+            --output-dir "$output" `
+            --evidence "$output/corebox-ui-degraded.json" `
+            --expect-backend unavailable `
+            --marker $env:TUFF_EVERYTHING_MARKER `
+            --sdk-dll-path "$output/missing-everything64.dll" `
+            --launch-timeout-ms 180000 `
+            --mode-timeout-ms 30000 `
+            --compact
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Packaged CoreBox Everything UI probe did not observe the unavailable backend.'
+          }
+
+      - name: Verify packaged CoreBox degraded UI evidence
+        working-directory: apps/core-app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $env:RUNNER_TEMP 'tuff-everything-evidence/corebox-ui'
+          pnpm run everything:corebox-ui:verify -- `
+            --input "$output/corebox-ui-degraded.json" `
+            --requireModes normal,explicit-file,structured-filter `
+            --requireBackend unavailable `
+            --requireDegraded `
+            --requireScreenshots `
+            --requirePlatform win32 `
+            --compact
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Packaged CoreBox degraded UI evidence failed strict verification.'
+          }
+
       - name: Upload Windows Everything evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
@@ -156,6 +279,8 @@ jobs:
           path: |
             ${{ runner.temp }}/tuff-everything-runtime/setup-evidence.json
             ${{ runner.temp }}/tuff-everything-evidence/*.json
+            ${{ runner.temp }}/tuff-everything-evidence/corebox-ui/*.json
+            ${{ runner.temp }}/tuff-everything-evidence/corebox-ui/*.png
 
       - name: Clean up Everything service
         if: ${{ always() }}

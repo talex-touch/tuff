@@ -1,4 +1,9 @@
-import type { RecommendationRebuildCapable, TuffItem } from '@talex-touch/utils'
+import type {
+  IExecuteArgs,
+  IExecuteOutcome,
+  RecommendationRebuildCapable,
+  TuffItem
+} from '@talex-touch/utils'
 import { createLogger } from '../../../../utils/logger'
 
 const registryLog = createLogger('RecommendationEngine').child('SourceRegistry')
@@ -11,6 +16,16 @@ export interface RecommendationSourceEntry {
   readonly sourceId: string
   readonly aliases: readonly string[]
   rebuild(itemIds: readonly string[]): Promise<TuffItem[]>
+  /**
+   * Executes one of this source's own candidates when no search provider owns the source.
+   *
+   * Plugin recommendation candidates have no `ISearchProvider` (`sourceId` is
+   * `plugin-recommend:<providerId>`), so `providerRegistry.get` misses and the run would be dropped.
+   * A source that declares this capability is dispatched to instead, and it reports whether it
+   * accepted the action; the caller records the execution, this method never writes statistics.
+   * Absent means the source has no execution path and a click on it is a no-op.
+   */
+  execute?(args: IExecuteArgs): Promise<IExecuteOutcome>
 }
 
 /** Minimal shape a search provider must have to be auto-registered. */
@@ -68,6 +83,7 @@ export class RecommendationSourceRegistry {
     sourceId: string
     aliases?: readonly string[]
     rebuild(itemIds: readonly string[]): Promise<TuffItem[]>
+    execute?(args: IExecuteArgs): Promise<IExecuteOutcome>
   }): () => void {
     const { sourceId } = entry
     const aliases = entry.aliases ?? []
@@ -93,7 +109,12 @@ export class RecommendationSourceRegistry {
       }
     }
 
-    const resolved: RecommendationSourceEntry = { sourceId, aliases, rebuild: entry.rebuild }
+    const resolved: RecommendationSourceEntry = {
+      sourceId,
+      aliases,
+      rebuild: entry.rebuild,
+      execute: entry.execute
+    }
     this.entries.set(sourceId, resolved)
     for (const alias of aliases) this.aliasIndex.set(alias, sourceId)
 

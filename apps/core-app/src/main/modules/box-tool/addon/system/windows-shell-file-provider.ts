@@ -12,6 +12,7 @@ import process from 'node:process'
 import { TuffInputType, TuffItemBuilder, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
+import { recordAcceptedExecute, resolveExecuteEventId } from '../../search-engine/execute-recorder'
 import { i18nMsg } from '@talex-touch/utils/i18n'
 import { pinyin } from 'pinyin-pro'
 import { calculateHighlights, type Range } from '../apps/highlighting-service'
@@ -244,6 +245,14 @@ export class WindowsShellFileProvider implements ISearchProvider<ProviderContext
         windowsHide: true
       })
       child.unref()
+      recordAcceptedExecute({
+        item: args.item,
+        sessionId: args.searchResult?.sessionId ?? null,
+        entryPoint: 'core-box',
+        eventId: resolveExecuteEventId(args.eventId)
+      }).catch((error) => {
+        windowsShellFileLog.warn('Failed to record Windows shell entry usage', { error })
+      })
     } catch (error) {
       windowsShellFileLog.warn('Failed to open Windows shell entry', {
         error,

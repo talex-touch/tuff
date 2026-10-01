@@ -34,6 +34,12 @@ export interface FreshChunks {
    * (the wrap must land in the same frame as the patch, before paint).
    */
   update: (el: HTMLElement, blockId: number | string) => void
+  /**
+   * Adopts the element's current text as already shown: nothing in it
+   * animates, and only what is appended after this call counts as fresh. For
+   * content that was on screen before the tracker existed.
+   */
+  seed: (el: HTMLElement, blockId: number | string) => void
   /** Unwraps every fresh span under `root` and forgets all chunks. */
   finish: (root: ParentNode) => void
   reset: () => void
@@ -136,5 +142,12 @@ export function createFreshChunks(options: FreshChunksOptions = {}): FreshChunks
     reset()
   }
 
-  return { update, finish, reset }
+  function seed(el: HTMLElement, id: number | string): void {
+    unwrap(el)
+    blockId = id
+    text = el.textContent ?? ''
+    chunks = []
+  }
+
+  return { update, seed, finish, reset }
 }

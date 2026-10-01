@@ -22,6 +22,36 @@ vi.mock('vue-sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() }
 }))
 
+const transportState = vi.hoisted(() => ({
+  listeners: new Map<string, Set<(payload: unknown) => void>>()
+}))
+
+vi.mock('@talex-touch/utils/transport', () => ({
+  useTuffTransport: () => ({
+    on: (event: { toEventName?: () => string } | string, callback: (payload: unknown) => void) => {
+      const key = typeof event === 'string' ? event : (event.toEventName?.() ?? String(event))
+      const listeners = transportState.listeners.get(key) ?? new Set()
+      listeners.add(callback)
+      transportState.listeners.set(key, listeners)
+      return () => {
+        listeners.delete(callback)
+      }
+    },
+    send: vi.fn()
+  })
+}))
+
+/** Deliver a committed-execute notification the way the main process broadcasts it. */
+function emitUsageChanged(payload: {
+  sourceId: string
+  itemId: string
+  usageStats: { executeCount: number; searchCount: number; lastExecuted?: string | null }
+}): void {
+  for (const listener of transportState.listeners.get('core-box:item:usage-changed') ?? []) {
+    listener(payload)
+  }
+}
+
 const state = vi.hoisted(() => ({
   listEntries: vi.fn(),
   listSummaries: vi.fn(),
@@ -97,7 +127,9 @@ function mountPage() {
         },
         AppDetail: {
           name: 'AppDetail',
-          props: ['entry', 'diagnostic', 'diagnosing', 'busy'],
+          // `usage` is what the committed-notification cases read back: the page passes it (the real
+          // template does too), so the stub must declare it or `props('usage')` is always undefined.
+          props: ['entry', 'diagnostic', 'diagnosing', 'busy', 'usage'],
           template: '<div />'
         },
         AppIndexLaunchZoneDrawer: true,
@@ -109,6 +141,7 @@ function mountPage() {
 
 describe('ApplicationIndex', () => {
   beforeEach(() => {
+    transportState.listeners.clear()
     // Selecting an entry fans out to usage, aliases and the shortcut. Without defaults every
     // selection in every test logs three rejections that have nothing to do with what it asserts.
     state.usage.mockResolvedValue({ success: true, executeCount: 0 })
@@ -246,10 +279,17 @@ describe('ApplicationIndex', () => {
     wrapper.findComponent({ name: 'AppDetail' }).vm.$emit('launch', entry())
     await flushPromises()
 
-    expect(state.launch).toHaveBeenCalledWith({
+    // The launch is attributed to this surface AND carries a real action id: the main process
+    // dedupes accepted executions on it, so a page that sent none would count nothing.
+    expect(state.launch).toHaveBeenCalledTimes(1)
+    const [launchPayload] = state.launch.mock.calls[0] as [
+      { eventId: string; path: string; entryPoint: string }
+    ]
+    expect(launchPayload).toMatchObject({
       path: '/Applications/Calculator.app',
       entryPoint: 'settings-app-detail'
     })
+    expect(launchPayload.eventId).toMatch(/^[0-9a-f-]{36}$/)
 
     wrapper.unmount()
   })
@@ -358,5 +398,212 @@ describe('ApplicationIndex', () => {
     pending.resolve({ success: true })
     await flushPromises()
     wrapper.unmount()
+  })
+
+  /**
+   * A launch from CoreBox or a shortcut commits its count in the main process; this page is only
+   * told about it. Without reacting, the selected app's number silently disagrees with what the
+   * user just did until they reselect it.
+   */
+  it('updates the selected app and its list row from a committed usage notification', async () => {
+    state.listEntries.mockResolvedValue([
+      entry(),
+      entry({ path: '/Applications/Terminal.app', name: 'Terminal', displayName: 'Terminal' })
+    ])
+    state.listSummaries.mockResolvedValue({
+      success: true,
+      summaries: [
+        {
+          path: '/Applications/Calculator.app',
+          executeCount: 2,
+          hasShortcut: false,
+          hasAliases: false
+        },
+        {
+          path: '/Applications/Terminal.app',
+          executeCount: 7,
+          hasShortcut: false,
+          hasAliases: false
+        }
+      ]
+    })
+    // The re-read this notification triggers reads the committed row, i.e. the same 3.
+    state.usage.mockResolvedValue({
+      success: true,
+      executeCount: 3,
+      itemId: '/Applications/Calculator.app'
+    })
+
+    const wrapper = mountPage()
+    await flushPromises()
+    wrapper.findComponent({ name: 'AppList' }).vm.$emit('select', '/Applications/Calculator.app')
+    await flushPromises()
+
+    const listItems = () =>
+      wrapper.findComponent({ name: 'AppList' }).props('items') as Array<{
+        name: string
+        executeCount: number
+      }>
+
+    emitUsageChanged({
+      sourceId: 'app-provider',
+      itemId: '/Applications/Calculator.app',
+      usageStats: { executeCount: 3, searchCount: 0, lastExecuted: '2026-09-29T10:00:00.000Z' }
+    })
+    await flushPromises()
+
+    expect(listItems().find((item) => item.name === 'Calculator')?.executeCount).toBe(3)
+    expect(wrapper.findComponent({ name: 'AppDetail' }).props('usage')).toMatchObject({
+      success: true,
+      executeCount: 3
+    })
+    // Its neighbour is untouched — a notification about one identity must not move another's count.
+    expect(listItems().find((item) => item.name === 'Terminal')?.executeCount).toBe(7)
+
+    wrapper.unmount()
+  })
+
+  it('does not let a stale usage read overwrite the committed notification', async () => {
+    state.listEntries.mockResolvedValue([entry()])
+    // The selection's aggregate read is held open, then answers with the pre-execute count. The
+    // notification's own follow-up read is a fresh round trip and sees the committed value, so it
+    // must be answered as such — otherwise this would test the mock, not the generation guard.
+    const held = Promise.withResolvers<{ success: boolean; executeCount: number }>()
+    state.usage
+      .mockReturnValueOnce(held.promise)
+      .mockResolvedValue({ success: true, executeCount: 5 })
+
+    const wrapper = mountPage()
+    await flushPromises()
+    wrapper.findComponent({ name: 'AppList' }).vm.$emit('select', '/Applications/Calculator.app')
+    await flushPromises()
+
+    emitUsageChanged({
+      sourceId: 'app-provider',
+      itemId: '/Applications/Calculator.app',
+      usageStats: { executeCount: 5, searchCount: 0, lastExecuted: null }
+    })
+    await flushPromises()
+
+    // The read that started before the notification lands afterwards with the old number.
+    held.resolve({ success: true, executeCount: 4 })
+    await flushPromises()
+
+    // The committed count must survive: rolling it back would show the user the pre-execute value.
+    expect(wrapper.findComponent({ name: 'AppDetail' }).props('usage')).toMatchObject({
+      executeCount: 5
+    })
+
+    wrapper.unmount()
+  })
+
+  it('ignores a committed notification for another app or a non-app source', async () => {
+    state.listEntries.mockResolvedValue([entry()])
+    state.listSummaries.mockResolvedValue({
+      success: true,
+      summaries: [
+        {
+          path: '/Applications/Calculator.app',
+          executeCount: 2,
+          hasShortcut: false,
+          hasAliases: false
+        }
+      ]
+    })
+
+    const wrapper = mountPage()
+    await flushPromises()
+    wrapper.findComponent({ name: 'AppList' }).vm.$emit('select', '/Applications/Calculator.app')
+    await flushPromises()
+
+    emitUsageChanged({
+      sourceId: 'file-provider',
+      itemId: '/Applications/Calculator.app',
+      usageStats: { executeCount: 99, searchCount: 0, lastExecuted: null }
+    })
+    emitUsageChanged({
+      sourceId: 'app-provider',
+      itemId: '/Applications/Other.app',
+      usageStats: { executeCount: 99, searchCount: 0, lastExecuted: null }
+    })
+    await flushPromises()
+
+    const items = wrapper.findComponent({ name: 'AppList' }).props('items') as Array<{
+      executeCount: number
+    }>
+    expect(items[0]?.executeCount).toBe(2)
+    expect(wrapper.findComponent({ name: 'AppDetail' }).props('usage')).not.toMatchObject({
+      executeCount: 99
+    })
+
+    wrapper.unmount()
+  })
+
+  it('matches the committed item id the app has, not the bundle id', async () => {
+    // The canonical id a managed entry advertises is appIdentity || path || bundleId. An external
+    // launch reports that same id. With no appIdentity and a bundle id that differs from the path,
+    // a matcher that tries bundleId first never matches and the count silently misses.
+    state.listEntries.mockResolvedValue([
+      entry({
+        path: '/Applications/Calculator.app',
+        bundleId: 'com.example.calculator'
+      })
+    ])
+    state.listSummaries.mockResolvedValue({
+      success: true,
+      summaries: [
+        {
+          path: '/Applications/Calculator.app',
+          executeCount: 0,
+          hasShortcut: false,
+          hasAliases: false
+        }
+      ]
+    })
+    state.usage.mockResolvedValue({
+      success: true,
+      executeCount: 1,
+      itemId: '/Applications/Calculator.app'
+    })
+
+    const wrapper = mountPage()
+    await flushPromises()
+
+    emitUsageChanged({
+      sourceId: 'app-provider',
+      itemId: '/Applications/Calculator.app',
+      usageStats: { executeCount: 1, searchCount: 0, lastExecuted: null }
+    })
+    await flushPromises()
+
+    const items = wrapper.findComponent({ name: 'AppList' }).props('items') as Array<{
+      executeCount: number
+    }>
+    expect(items[0]?.executeCount).toBe(1)
+
+    wrapper.unmount()
+  })
+
+  it('stops listening for committed usage after the page unmounts', async () => {
+    state.listEntries.mockResolvedValue([entry()])
+    state.listSummaries.mockResolvedValue({
+      success: true,
+      summaries: [
+        {
+          path: '/Applications/Calculator.app',
+          executeCount: 2,
+          hasShortcut: false,
+          hasAliases: false
+        }
+      ]
+    })
+
+    const wrapper = mountPage()
+    await flushPromises()
+    wrapper.findComponent({ name: 'AppList' }).vm.$emit('select', '/Applications/Calculator.app')
+    await flushPromises()
+
+    wrapper.unmount()
+    expect(transportState.listeners.get('core-box:item:usage-changed')?.size ?? 0).toBe(0)
   })
 })

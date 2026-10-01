@@ -88,11 +88,11 @@ const DAY = 24 * HOUR
 const ROW_HEIGHT = 76
 
 const SENDERS: Record<SenderId, { name: Bi, address: string, system?: boolean, hue?: string }> = {
-  store: { name: { zh: 'Nexus 插件市场', en: 'Nexus Store' }, address: 'review@nexus.tagzxia.com', system: true },
+  store: { name: { zh: 'Tuff 插件市场', en: 'Tuff Store' }, address: 'review@nexus.tagzxia.com', system: true },
   ci: { name: { zh: 'Tuff CI', en: 'Tuff CI' }, address: 'ci@tuff.tagzxia.com', system: true },
   security: { name: { zh: 'Tuff 安全中心', en: 'Tuff Security' }, address: 'security@tuff.tagzxia.com', system: true },
   intelligence: { name: { zh: 'Tuff Intelligence', en: 'Tuff Intelligence' }, address: 'ai@tuff.tagzxia.com', system: true },
-  community: { name: { zh: 'Nexus 社区', en: 'Nexus Community' }, address: 'community@nexus.tagzxia.com', system: true },
+  community: { name: { zh: 'Tuff 社区', en: 'Tuff Community' }, address: 'community@nexus.tagzxia.com', system: true },
   billing: { name: { zh: 'Tuff 账户', en: 'Tuff Account' }, address: 'billing@tuff.tagzxia.com', system: true },
   sync: { name: { zh: '剪贴板同步', en: 'Clipboard Sync' }, address: 'sync@tuff.tagzxia.com', system: true },
   releases: { name: { zh: 'Tuff 发布', en: 'Tuff Releases' }, address: 'releases@tuff.tagzxia.com', system: true },
@@ -157,8 +157,8 @@ function seedMails(): Mail[] {
       subject: { zh: 'touch-translate 1.4.0 已通过审核', en: 'touch-translate 1.4.0 passed review' },
       snippet: { zh: '现在可以在开发者后台发布了。审核员留下了两条建议，不影响发布。', en: 'You can publish it from the developer console now. The reviewer left two suggestions; neither blocks the release.' },
       body: {
-        zh: '你好，\n\n**touch-translate 1.4.0** 已通过 Nexus 插件审核，现在可以在开发者后台点击「发布」。\n\n审核员留下了两条建议（不影响发布）：\n\n1. `clipboard.read` 只在划词翻译时用到，建议改为按需申请。\n2. 离线词典超过 40MB，建议拆成可选下载包。\n\n完整报告见附件。\n\n— Nexus 插件审核组',
-        en: 'Hi,\n\n**touch-translate 1.4.0** has passed Nexus plugin review. You can hit Publish in the developer console now.\n\nThe reviewer left two suggestions (neither blocks the release):\n\n1. `clipboard.read` is only used for selection translate — consider requesting it on demand.\n2. The offline dictionary is over 40 MB; consider shipping it as an optional download.\n\nThe full report is attached.\n\n— Nexus plugin review',
+        zh: '你好，\n\n**touch-translate 1.4.0** 已通过 Tuff 插件审核，现在可以在开发者后台点击「发布」。\n\n审核员留下了两条建议（不影响发布）：\n\n1. `clipboard.read` 只在划词翻译时用到，建议改为按需申请。\n2. 离线词典超过 40MB，建议拆成可选下载包。\n\n完整报告见附件。\n\n— Tuff 插件审核组',
+        en: 'Hi,\n\n**touch-translate 1.4.0** has passed Tuff plugin review. You can hit Publish in the developer console now.\n\nThe reviewer left two suggestions (neither blocks the release):\n\n1. `clipboard.read` is only used for selection translate — consider requesting it on demand.\n2. The offline dictionary is over 40 MB; consider shipping it as an optional download.\n\nThe full report is attached.\n\n— Tuff plugin review',
       },
       receivedAt: NOW - 18 * MINUTE,
       unread: true,
@@ -396,7 +396,7 @@ function deriveMails(count: number): Mail[] {
         sender: 'store',
         subject: { zh: `${plugin} 已通过审核`, en: `${plugin} passed review` },
         snippet: { zh: '可以在开发者后台发布了。', en: 'You can publish it from the developer console.' },
-        body: { zh: `**${plugin}** 已通过 Nexus 插件审核，现在可以发布。\n\n— Nexus 插件审核组`, en: `**${plugin}** passed Nexus plugin review and can be published now.\n\n— Nexus plugin review` },
+        body: { zh: `**${plugin}** 已通过 Tuff 插件审核，现在可以发布。\n\n— Tuff 插件审核组`, en: `**${plugin}** passed Tuff plugin review and can be published now.\n\n— Tuff plugin review` },
       }
     }
     else if (kind === 3) {

@@ -131,7 +131,7 @@ export default {
     emailStepTitle: 'Tuff',
     loginStepSubtitle: '使用 Magic Link 或其他方式登录。',
     emailLinkSubtitle: '输入邮箱，我们会发送一次性登录链接。',
-    signInDescription: '登录 Tuff Nexus，管理设备、插件与更新。',
+    signInDescription: '登录 Tuff，管理设备、插件与更新。',
     signInSubtitle: '支持 Magic Link、GitHub、LinuxDO 与 Passkey。首次认证成功会自动创建账号。',
     nextStep: '下一步',
     continueWithEmail: '使用邮箱继续',
@@ -235,7 +235,7 @@ export default {
   pricing: {
     eyebrow: '订阅方案',
     title: '选择与你节奏匹配的订阅方案',
-    subtitle: '直接在 Nexus 完成升级，订阅后即可即时解锁高级自动化与指挥面板。',
+    subtitle: '直接在 Tuff 完成升级，订阅后即可即时解锁高级自动化与指挥面板。',
     popular: '最受欢迎',
     comingSoon: '敬请期待',
     comingSoonHint: '上线时公布价格',
@@ -618,9 +618,6 @@ export default {
     families: {
       avatarBasic: '基础头像',
     },
-  },
-  docsSuiteCatalog: {
-    total: '共 {count} 个组件，分为 {groups} 个分组',
   },
   ...legal,
 }
