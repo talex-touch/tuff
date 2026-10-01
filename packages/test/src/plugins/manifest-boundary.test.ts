@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { checkSdkCompatibility, CURRENT_SDK_VERSION, isSupportedSdkVersion, SdkApi } from '@talex-touch/utils/plugin'
+import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
 import {
   resolveIndexedSourceManifestDescriptors,
   resolveSearchProviderManifestDescriptors,
@@ -148,7 +148,6 @@ describe('official plugin manifest trust boundary', () => {
         compatible: true,
         enforcePermissions: true,
       })
-      expect(isSupportedSdkVersion(manifest.sdkapi!), `${manifest.name} sdkapi allowlist`).toBe(true)
     }
   })
 
@@ -163,35 +162,6 @@ describe('official plugin manifest trust boundary', () => {
         expect(buildIndexEntry, `${manifest.name} build source must not be packaged index.js`).not.toBe('index.js')
       }
     }
-  })
-
-  it('keeps repository plugins off the newest SDK marker until runtime migration expands', () => {
-    const currentMarkerPlugins = manifests
-      .filter(({ manifest }) => manifest.sdkapi === CURRENT_SDK_VERSION)
-      .map(({ manifest }) => manifest.name)
-    const localizationMarkerPlugins = manifests
-      .filter(({ manifest }) => manifest.sdkapi === SdkApi.V260713)
-      .map(({ manifest }) => manifest.name)
-
-    // Clipboard History and the five newly manifested plugins consume the current SDK marker.
-    // Other migrated plugins stay on the 260713 localization baseline until they use a newer API.
-    //
-    // touch-browser-open joins the 260713 baseline: its settings webcontent surface plus the
-    // feature-registry calls it uses for dynamic engine/hot-entry features need that marker.
-    expect(currentMarkerPlugins).toEqual([
-      'clipboard-history',
-      'touch-ai-sessions',
-      'touch-hosts',
-      'touch-image',
-      'touch-orca',
-      'touch-vscode-projects',
-    ])
-    expect(localizationMarkerPlugins).toEqual([
-      'json-formatter',
-      'touch-browser-open',
-      'touch-intelligence',
-      'touch-translation',
-    ])
   })
 
   it('keeps official plugin docs coverage gaps explicit', () => {

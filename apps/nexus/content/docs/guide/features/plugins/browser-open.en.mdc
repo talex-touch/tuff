@@ -1,6 +1,6 @@
 # Browser Open (`touch-browser-open`)
 
-> Version 1.1.0 requires the host fixes for initialization-time SDK calls, one-shot query preservation, and browser discovery. The website's beta.54 does not contain these fixes; publish the plugin for download alongside a compatible host release.
+> Version 1.1.0 requires a host supporting `sdkapi: 261001`, including initialization-time SDK calls, one-shot query preservation, and browser discovery fixes. Tuff 2.4.14-beta.55 is the first compatible release; beta.54 and earlier clients reject activation. Other plugins can continue to use previously supported SDK markers.
 
 ## When to Use
 - You copied a URL and want it open in a local browser with one Enter — no pasting.

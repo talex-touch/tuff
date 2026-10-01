@@ -831,7 +831,11 @@ describe('windows-acceptance-verify script', () => {
 
   it('passes the packaged CoreBox UI evidence when every screenshot is a real PNG', async () => {
     const { fixtureDir, manifestPath } = await writeCoreBoxUiAcceptanceFixture()
-    for (const name of ['shot-normal.png', 'shot-explicit-file.png', 'shot-structured-filter.png']) {
+    for (const name of [
+      'shot-normal.png',
+      'shot-explicit-file.png',
+      'shot-structured-filter.png'
+    ]) {
       await writeFile(path.join(fixtureDir, name), realPng())
     }
 

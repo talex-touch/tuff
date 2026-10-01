@@ -62,8 +62,8 @@ const state = {
     operation: 'list',
     status: 'available',
     defaultAvailable: true,
-    browsers: [{ id: 'chrome', name: 'Chrome', token: TOKEN_A }]
-  }
+    browsers: [{ id: 'chrome', name: 'Chrome', token: TOKEN_A }],
+  },
 }
 
 globalThis.plugin = {
@@ -125,7 +125,7 @@ globalThis.features = {
   },
   async getFeatures() {
     return [...state.features.values()]
-  }
+  },
 }
 globalThis.platform = { platform: 'darwin', arch: 'arm64' }
 globalThis.logger = { error() {}, warn() {}, info() {} }
@@ -161,7 +161,7 @@ function reset() {
     operation: 'list',
     status: 'available',
     defaultAvailable: true,
-    browsers: [{ id: 'chrome', name: 'Chrome', token: TOKEN_A }]
+    browsers: [{ id: 'chrome', name: 'Chrome', token: TOKEN_A }],
   }
 }
 
@@ -178,7 +178,7 @@ test('registers direct entries beside the search modes, sharing one non-push sha
     'search-open-baidu',
     'browser-direct-default',
     'browser-direct-chrome',
-    'hot-weibo-hot'
+    'hot-weibo-hot',
   ]) {
     const entry = feature(id)
     assert.ok(entry, `${id} should be registered`)
@@ -194,7 +194,7 @@ test('opens the URL carried by the copied query inputs, without the push list or
 
   const result = await pluginModule.onFeatureTriggered('browser-direct-default', {
     text: '',
-    inputs: [{ type: 'text', content: 'example.com/from-inputs' }]
+    inputs: [{ type: 'text', content: 'example.com/from-inputs' }],
   })
 
   assert.equal(result, false)
@@ -211,7 +211,7 @@ test('searches unicode and ampersands once, percent-encoded into the engine temp
 
   assert.equal(result, false)
   assert.deepEqual(state.openCalls, [
-    { url: `https://www.google.com/search?q=${encodeURIComponent(query)}`, token: undefined }
+    { url: `https://www.google.com/search?q=${encodeURIComponent(query)}`, token: undefined },
   ])
   assert.deepEqual(state.items, [])
   // Direct search never asks the network for suggestions; that is the explicit push mode's job.
@@ -226,11 +226,11 @@ test('a settings-defined engine drives its own {query} template', async () => {
         name: 'Kagi',
         keyword: 'kagi',
         urlTemplate: 'https://kagi.com/search?q={query}',
-        enabled: true
-      }
+        enabled: true,
+      },
     ],
     defaultEngine: 'kagi',
-    hotEntries: []
+    hotEntries: [],
   })
   await pluginModule.onInit()
 
@@ -239,7 +239,7 @@ test('a settings-defined engine drives its own {query} template', async () => {
   await pluginModule.onFeatureTriggered('search-open-kagi', { text: query })
 
   assert.deepEqual(state.openCalls, [
-    { url: `https://kagi.com/search?q=${encodeURIComponent(query)}`, token: undefined }
+    { url: `https://kagi.com/search?q=${encodeURIComponent(query)}`, token: undefined },
   ])
 })
 
@@ -255,8 +255,8 @@ test('disabling an engine removes its registered features', async () => {
         name: 'Google',
         keyword: 'google',
         urlTemplate: 'https://www.google.com/search?q={query}',
-        enabled: false
-      }
+        enabled: false,
+      },
     ],
     hotEntries: [
       {
@@ -264,9 +264,9 @@ test('disabling an engine removes its registered features', async () => {
         name: '微博热搜',
         keyword: 'weibo',
         url: 'https://s.weibo.com/top/summary',
-        enabled: true
-      }
-    ]
+        enabled: true,
+      },
+    ],
   })
   await pluginModule.onMessage('browser-open:sync-settings')
 
@@ -286,7 +286,7 @@ test('a hot entry opens its target directly', async () => {
 
   assert.equal(result, false)
   assert.deepEqual(state.openCalls, [
-    { url: 'https://s.weibo.com/top/summary', token: undefined }
+    { url: 'https://s.weibo.com/top/summary', token: undefined },
   ])
   assert.deepEqual(state.items, [])
 })
@@ -306,7 +306,7 @@ test('the catch-all search entry matches plain text but not URLs, paths or file 
     '/Users/x/Downloads',
     'C:\\Users\\x\\Downloads',
     'readme.md',
-    'notes.txt'
+    'notes.txt',
   ]) {
     assert.equal(matches(text), false, `URL/path/file must not route to search: ${text}`)
   }
@@ -334,10 +334,10 @@ test('a per-browser entry re-lists at execution time and opens with the fresh to
     operation: 'list',
     status: 'available',
     defaultAvailable: true,
-    browsers: [{ id: 'chrome', name: 'Chrome', token: TOKEN_B }]
+    browsers: [{ id: 'chrome', name: 'Chrome', token: TOKEN_B }],
   }
   const result = await pluginModule.onFeatureTriggered('browser-direct-chrome', {
-    text: 'example.com'
+    text: 'example.com',
   })
 
   assert.equal(result, false)
@@ -349,7 +349,7 @@ test('refuses a direct trigger with no usable URL and opens nothing', async () =
 
   const result = await pluginModule.onFeatureTriggered('browser-direct-default', {
     text: '',
-    inputs: []
+    inputs: [],
   })
 
   assert.equal(result.accepted, false)
@@ -383,16 +383,16 @@ test('re-lists recent display ids and never treats storage as authority', async 
         name: 'Forged Chrome',
         target: '/Applications/Calculator.app',
         token: `bo_${'Z'.repeat(32)}`,
-        lastUsedAt: Date.now()
-      }
-    ]
+        lastUsedAt: Date.now(),
+      },
+    ],
   })
   await pluginModule.onFeatureTriggered('browser-open', { text: 'https://example.com' })
   const recent = state.items.find(item => item.title === '最近 · Chrome')
   assert.ok(recent)
   assert.deepEqual(recent.actions[0].payload, {
     url: 'https://example.com/',
-    browserToken: TOKEN_A
+    browserToken: TOKEN_A,
   })
   assert.doesNotMatch(JSON.stringify(recent), /Calculator|ZZZZ/)
 })
@@ -402,7 +402,7 @@ test('uses bounded typed HTTP suggestions and keeps direct search first', async 
     'search-engine-google',
     { text: 'google tuff' },
     null,
-    new AbortController().signal
+    new AbortController().signal,
   )
   assert.equal(state.httpCalls.length, 1)
   assert.match(state.httpCalls[0].url, /^https:\/\/suggestqueries\.google\.com\//)

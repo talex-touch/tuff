@@ -57,7 +57,7 @@ function runDomSummary(): {
     </div>
     <div class="CoreBox-SearchStatus-Live"></div>
   `
-  // eslint-disable-next-line no-new-func
+
   return new Function(`return ${buildDomSummaryExpression()}`)() as {
     resultRowCount: number
     noticeRowCount: number
@@ -77,7 +77,7 @@ describe('probe DOM row classification', () => {
         <div class="BoxItem BoxItem--notice">Everything backend unavailable</div>
       </div>
     `
-    // eslint-disable-next-line no-new-func
+
     const summary = new Function(`return ${buildDomSummaryExpression()}`)() as {
       resultRowCount: number
       noticeRowCount: number
@@ -101,7 +101,10 @@ function everythingStatus(
     backend?: EverythingStatusResponse['backend']
     available?: boolean
     stages?: Partial<
-      Record<EverythingDiagnosticStage, number | { timestamp: number; status: EverythingDiagnosticStatus }>
+      Record<
+        EverythingDiagnosticStage,
+        number | { timestamp: number; status: EverythingDiagnosticStatus }
+      >
     >
     performance?: Partial<NonNullable<EverythingStatusResponse['performance']>>
   } = {}
@@ -273,7 +276,10 @@ describe('checkEverythingModeBackendUsage', () => {
       everythingSourced: true,
       expectedBackend: 'cli',
       before: everythingStatus({ backend: 'cli', stages: { 'cli-query': 100 } }),
-      after: everythingStatus({ backend: 'cli', stages: { 'cli-query': { timestamp: 201, status: 'success' } } })
+      after: everythingStatus({
+        backend: 'cli',
+        stages: { 'cli-query': { timestamp: 201, status: 'success' } }
+      })
     })
     expect(failures).toEqual([])
   })

@@ -1322,7 +1322,9 @@ export const FIXTURE_FILE_NAMES = [
 export async function prepareFixtureRoot(fixtureRoot: string, profile: string): Promise<void> {
   const root = assertIsolatedFixtureRoot(profile, fixtureRoot)
   if (!(await hasProfileOwnershipMarker(profile))) {
-    throw new Error(`refusing to seed fixture root ${root}: its profile carries no ownership marker`)
+    throw new Error(
+      `refusing to seed fixture root ${root}: its profile carries no ownership marker`
+    )
   }
   const placements: Array<[string, string]> = [
     ['Documents', FIXTURE_FILE_NAMES[0]],

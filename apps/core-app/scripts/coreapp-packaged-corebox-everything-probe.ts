@@ -560,20 +560,23 @@ export function checkEverythingModeBackendUsage(input: {
   }
   if (!input.everythingSourced) return failures
 
-  const stage = (
-    name: 'sdk-query' | 'cli-query'
-  ): { ran: boolean; status: string | null } => {
+  const stage = (name: 'sdk-query' | 'cli-query'): { ran: boolean; status: string | null } => {
     const after = input.after?.diagnostics?.stages?.[name]
     if (!after) return { ran: false, status: null }
     const beforeTimestamp = input.before?.diagnostics?.stages?.[name]?.timestamp
-    return { ran: beforeTimestamp === undefined || after.timestamp !== beforeTimestamp, status: after.status }
+    return {
+      ran: beforeTimestamp === undefined || after.timestamp !== beforeTimestamp,
+      status: after.status
+    }
   }
   const sdk = stage('sdk-query')
   const cli = stage('cli-query')
 
   if (input.expectedBackend === 'unavailable') {
-    if (sdk.ran) failures.push(`The ${input.mode} search ran an SDK query while the backend was unavailable`)
-    if (cli.ran) failures.push(`The ${input.mode} search ran a CLI query while the backend was unavailable`)
+    if (sdk.ran)
+      failures.push(`The ${input.mode} search ran an SDK query while the backend was unavailable`)
+    if (cli.ran)
+      failures.push(`The ${input.mode} search ran a CLI query while the backend was unavailable`)
     return failures
   }
   if (input.expectedBackend === 'sdk-napi') {
@@ -1037,7 +1040,9 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
           options.modeTimeoutMs + 20_000
         )
       )
-      const resultSource = sourceRead.available ? resolveCoreBoxResultSource(sourceRead.sources) : 'none'
+      const resultSource = sourceRead.available
+        ? resolveCoreBoxResultSource(sourceRead.sources)
+        : 'none'
       const domName = `${buildArtifactName(options, mode)}-dom.json`
       const screenshotName = `${buildArtifactName(options, mode)}.png`
       const domSummary = await withTarget(target, (send) =>
@@ -1084,7 +1089,11 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
       if (observedBackend !== 'unavailable' && observation.markerMatchCount === 0) {
         result.failures.push(`The ${mode} search did not render the probe marker result`)
       }
-      if (everythingSourced && observedBackend !== 'unavailable' && resultSource !== 'everything-provider') {
+      if (
+        everythingSourced &&
+        observedBackend !== 'unavailable' &&
+        resultSource !== 'everything-provider'
+      ) {
         result.failures.push(
           `The ${mode} search was answered by ${resultSource}, not Everything; the packaged Everything route is not proven`
         )

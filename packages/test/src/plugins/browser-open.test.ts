@@ -420,11 +420,14 @@ describe('isolated browser-open Prelude', () => {
     }
     expect(harness.state.features.has('browser-direct-default')).toBe(true)
 
-    const pattern = harness.state.features.get('search-open-kagi')!.commands[0].value
-    if (typeof pattern !== 'string')
-      throw new Error('search-open pattern missing')
-    expect(new RegExp(pattern).test('ordinary words')).toBe(true)
-    expect(new RegExp(pattern).test('https://example.com')).toBe(false)
+    // Boundary-sized configuration remains executable after passing the real registry.
+    for (const { id } of engines) {
+      const pattern = new RegExp(
+        harness.state.features.get(`search-open-${id}`)!.commands[0].value,
+      )
+      expect(pattern.test('ordinary words'), id).toBe(true)
+      expect(pattern.test('https://example.com'), id).toBe(false)
+    }
 
     // The default engine leads the other direct entries, and its entry still searches for real.
     const priority = (id: string): number => harness.state.features.get(id)!.priority

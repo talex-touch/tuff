@@ -117,6 +117,7 @@ function walk(node, visit) {
 function declarationName(node) {
   if (
     ts.isFunctionDeclaration(node)
+    || ts.isMethodDeclaration(node)
     || ts.isClassDeclaration(node)
     || ts.isInterfaceDeclaration(node)
     || ts.isTypeAliasDeclaration(node)

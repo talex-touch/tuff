@@ -3,7 +3,7 @@
   "name": "touch-browser-open",
   "version": "1.1.0",
   "author": "TalexTouch Team",
-  "sdkapi": 260713,
+  "sdkapi": 261001,
   "category": "utilities",
   "icon": {
     "type": "file",
