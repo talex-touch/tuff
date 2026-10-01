@@ -2,6 +2,7 @@
 import type { FileUploaderFile } from '@talex-touch/tuffex/file-uploader'
 import { ref, watchEffect } from 'vue'
 import { useDashboardImagesData } from '~/composables/useDashboardData'
+import AdminPageShell from '~/components/admin/AdminPageShell.vue'
 import { requestJson } from '~/utils/request'
 
 interface DashboardImage {
@@ -134,16 +135,8 @@ watchEffect(() => {
 </script>
 
 <template>
-  <section class="apple-card-lg p-6">
-    <div>
-      <h2 class="apple-heading-sm">
-        {{ t('dashboard.sections.images.title', 'Resources') }}
-      </h2>
-      <p class="mt-1 text-sm text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.images.subtitle', 'Manage your shared assets') }}
-      </p>
-    </div>
-
+  <AdminPageShell :title="t('dashboard.sections.images.title', 'Resources')">
+    <section class="apple-card-lg p-6">
     <div
       v-if="!isAdmin"
       class="mt-6 rounded-2xl border border-black/[0.06] bg-black/[0.02] p-6 text-sm text-black/70 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/70"
@@ -263,17 +256,18 @@ watchEffect(() => {
         </div>
       </div>
     </div>
-  </section>
+    </section>
 
   <!-- Delete Confirmation Dialog -->
-  <TxBottomDialog
-    v-if="deleteConfirmVisible"
-    :title="t('dashboard.sections.images.confirmDeleteTitle', 'Delete Resource')"
-    :message="t('dashboard.sections.images.confirmDelete', { key: pendingDeleteKey })"
-    :btns="[
-      { content: t('dashboard.sections.images.cancel', 'Cancel'), type: 'info', onClick: () => true },
-      { content: t('dashboard.sections.images.delete', 'Delete'), type: 'error', onClick: confirmDeleteImage },
-    ]"
-    :close="closeDeleteConfirm"
-  />
+    <TxBottomDialog
+      v-if="deleteConfirmVisible"
+      :title="t('dashboard.sections.images.confirmDeleteTitle', 'Delete Resource')"
+      :message="t('dashboard.sections.images.confirmDelete', { key: pendingDeleteKey })"
+      :btns="[
+        { content: t('dashboard.sections.images.cancel', 'Cancel'), type: 'info', onClick: () => true },
+        { content: t('dashboard.sections.images.delete', 'Delete'), type: 'error', onClick: confirmDeleteImage },
+      ]"
+      :close="closeDeleteConfirm"
+    />
+  </AdminPageShell>
 </template>

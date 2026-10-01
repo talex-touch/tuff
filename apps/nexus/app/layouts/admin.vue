@@ -3,7 +3,7 @@
     <TheHeader class="admin-shell-header z-10" />
     <div class="admin-shell-body min-h-0 w-full flex flex-1 flex-col pt-11 lg:flex-row">
       <AdminNav />
-      <main class="admin-shell-main min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-6 lg:px-8">
+      <main class="admin-shell-main min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4 lg:px-8">
         <slot />
       </main>
     </div>
@@ -81,12 +81,6 @@
   box-shadow: none;
 }
 
-.admin-shell h1.apple-heading-md,
-.admin-shell h2.apple-heading-md {
-  font-size: 1.75rem;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-}
 
 .admin-shell .tx-button {
   border-radius: 999px;

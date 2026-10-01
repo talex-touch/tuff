@@ -21,7 +21,6 @@ const props = withDefaults(
     closeOnClickMask: true,
     closeOnPressEscape: true,
     mobileAdapt: true,
-    zIndex: 1998,
   },
 )
 

@@ -6,6 +6,7 @@ import { TuffSelect, TuffSelectItem, type TxSelectModelValue } from '@talex-touc
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import AdminPageShell from '~/components/admin/AdminPageShell.vue'
 import type {
   ConfigListResponse, GovernanceAnalytics, GovernanceConfigType, GovernanceNumberStat,
   GovernanceScopedAnalytics, GovernanceSummary, NotificationChannelProfileTemplate,
@@ -1239,21 +1240,13 @@ function exportGovernanceReport(): void {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <header class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 class="apple-heading-md">
-          {{ tt('dashboard.sections.menu.governance', 'Data Governance') }}
-        </h1>
-        <p class="mt-2 max-w-3xl text-sm text-black/50 dark:text-white/50">
-          {{ tt('dashboard.governance.subtitle', 'Manage anonymized analytics, upload health, storage limits, notification channels, and provider quotas from one control surface.') }}
-        </p>
-      </div>
+  <AdminPageShell :title="tt('dashboard.sections.menu.governance', 'Data Governance')">
+    <template #actions>
       <TxButton variant="secondary" size="sm" :disabled="governancePagePending" @click="refreshAll">
         <TxSpinner v-if="governancePagePending" :size="14" />
         <span :class="governancePagePending ? 'ml-2' : ''">{{ t('common.refresh', 'Refresh') }}</span>
       </TxButton>
-    </header>
+    </template>
 
     <div v-if="!isAdmin" class="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">
       {{ tt('dashboard.governance.adminOnly', 'Only administrators can manage data governance.') }}
@@ -4052,5 +4045,5 @@ function exportGovernanceReport(): void {
         </section>
       </aside>
     </section>
-  </div>
+  </AdminPageShell>
 </template>

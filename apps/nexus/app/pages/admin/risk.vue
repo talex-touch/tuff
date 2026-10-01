@@ -3,6 +3,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TxModal } from '@talex-touch/tuffex/modal'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
+import AdminPageShell from '~/components/admin/AdminPageShell.vue'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
@@ -358,16 +359,8 @@ function useOperationId() {
 </script>
 
 <template>
-  <div class="space-y-6 px-5 py-6">
-    <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-      <div class="space-y-2">
-        <h1 class="text-2xl font-semibold">
-          {{ t('dashboard.sections.menu.risk', 'Risk Control') }}
-        </h1>
-        <p class="text-sm text-black/60 dark:text-white/60">
-          Emergency control plane for defense mode, risk blocks and dual-control review. Every action here is audited.
-        </p>
-      </div>
+  <AdminPageShell :title="t('dashboard.sections.menu.risk', 'Risk Control')">
+    <template #actions>
       <NuxtLink
         to="/admin/emergency"
         target="_blank"
@@ -376,7 +369,7 @@ function useOperationId() {
       >
         Open emergency console
       </NuxtLink>
-    </header>
+    </template>
 
     <section class="rounded-xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-black/10">
       <label for="risk-step-up-token" class="mb-2 block text-sm font-medium">Passkey step-up token</label>
@@ -594,5 +587,5 @@ function useOperationId() {
         </div>
       </template>
     </TxModal>
-  </div>
+  </AdminPageShell>
 </template>

@@ -504,20 +504,12 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
 
 <template>
   <div class="mx-auto max-w-6xl space-y-6">
-    <header class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 class="apple-heading-md">
-          {{ t('dashboard.providerRegistry.title', 'Provider Registry') }}
-        </h1>
-        <p class="mt-2 max-w-3xl text-sm text-black/50 dark:text-white/50">
-          {{ t('dashboard.providerRegistry.subtitle', 'Manage provider capabilities and scene bindings for translation, AI, exchange rates, and future runtime scenes.') }}
-        </p>
-      </div>
+    <div class="flex justify-end">
       <TxButton variant="secondary" size="sm" :disabled="loading" @click="fetchRegistry">
         <TxSpinner v-if="loading" :size="14" />
         <span :class="loading ? 'ml-2' : ''">{{ t('common.refresh', 'Refresh') }}</span>
       </TxButton>
-    </header>
+    </div>
 
     <div v-if="!isAdmin" class="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">
       {{ t('dashboard.providerRegistry.adminOnly', 'Only administrators can manage provider registry.') }}
@@ -605,7 +597,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
       <TxStatCard
         :value="unhealthyCount"
         :label="t('dashboard.providerRegistry.summary.health', 'Health')"
-        icon-class="i-carbon-pulse text-6xl text-[var(--tx-color-danger)]"
+        icon-class="i-carbon-activity text-6xl text-[var(--tx-color-danger)]"
       >
         <template #label>
           <div class="space-y-1">
@@ -622,10 +614,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
       <TxTabs v-model="activeTab" placement="top" :content-scrollable="false">
         <TxTabItem name="providers" icon-class="i-carbon-cloud-service-management">
           <template #name>
-            <span class="inline-flex items-center gap-2">
-              <span class="i-carbon-cloud-service-management text-sm" aria-hidden="true" />
-              <span>{{ t('dashboard.providerRegistry.tabs.providers', 'Providers') }}</span>
-            </span>
+            {{ t('dashboard.providerRegistry.tabs.providers', 'Providers') }}
           </template>
 
           <div class="space-y-4">
@@ -842,10 +831,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
 
         <TxTabItem name="routes" icon-class="i-carbon-flow">
           <template #name>
-            <span class="inline-flex items-center gap-2">
-              <span class="i-carbon-flow text-sm" aria-hidden="true" />
-              <span>{{ t('dashboard.providerRegistry.tabs.routes', 'Capability routes') }}</span>
-            </span>
+            {{ t('dashboard.providerRegistry.tabs.routes', 'Capability routes') }}
           </template>
 
           <div class="space-y-6">
@@ -1043,10 +1029,7 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
 
         <TxTabItem name="usage" icon-class="i-carbon-data-check">
           <template #name>
-            <span class="inline-flex items-center gap-2">
-              <span class="i-carbon-data-check text-sm" aria-hidden="true" />
-              <span>{{ t('dashboard.providerRegistry.tabs.usage', 'Usage') }}</span>
-            </span>
+            {{ t('dashboard.providerRegistry.tabs.usage', 'Usage') }}
           </template>
 
           <div class="space-y-4">
@@ -1157,12 +1140,9 @@ function confirmDeleteScene(scene: SceneRegistryRecord) {
           </div>
         </TxTabItem>
 
-        <TxTabItem name="health" icon-class="i-carbon-pulse">
+        <TxTabItem name="health" icon-class="i-carbon-activity">
           <template #name>
-            <span class="inline-flex items-center gap-2">
-              <span class="i-carbon-pulse text-sm" aria-hidden="true" />
-              <span>{{ t('dashboard.providerRegistry.tabs.health', 'Health') }}</span>
-            </span>
+            {{ t('dashboard.providerRegistry.tabs.health', 'Health') }}
           </template>
 
           <div class="space-y-4">

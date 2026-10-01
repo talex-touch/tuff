@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AdminPageShell from '~/components/admin/AdminPageShell.vue'
+
 definePageMeta({
   layout: 'admin',
   requiresAuth: true,
@@ -9,15 +11,16 @@ definePageMeta({
 })
 
 defineI18nRoute(false)
+
+const { t } = useI18n()
 </script>
 
 <template>
-  <div>
+  <AdminPageShell :title="t('dashboard.providerRegistry.title', 'Provider Registry')">
     <ClientOnly>
       <LazyDashboardProviderRegistryAdminPanel />
       <template #fallback>
-        <div class="space-y-4 p-6">
-          <div class="h-8 w-64 animate-pulse rounded-xl bg-black/10 dark:bg-white/10" />
+        <div class="space-y-4">
           <div class="h-24 animate-pulse rounded-2xl bg-black/5 dark:bg-white/5" />
           <div class="grid gap-3 md:grid-cols-3">
             <div v-for="item in 3" :key="item" class="h-20 animate-pulse rounded-2xl bg-black/5 dark:bg-white/5" />
@@ -25,5 +28,5 @@ defineI18nRoute(false)
         </div>
       </template>
     </ClientOnly>
-  </div>
+  </AdminPageShell>
 </template>

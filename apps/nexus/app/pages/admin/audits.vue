@@ -7,6 +7,7 @@ import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { hasWindow } from '@talex-touch/utils/env'
+import AdminPageShell from '~/components/admin/AdminPageShell.vue'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
@@ -72,12 +73,10 @@ const filters = reactive({
 const hasPrev = computed(() => pagination.page > 1)
 const hasNext = computed(() => pagination.page < pagination.totalPages)
 
-// Covers only 5 of the 17 actions logAdminAudit() writes; the other 12 have no
-// locale key yet, so they stay out of the filter and render as their raw action
-// id. admin-page-layout-contracts.test.ts pins that list so it cannot grow.
 const actionLabels = computed<Record<string, string>>(() => ({
   'user.role.update': t('dashboard.sections.audits.actions.userRole', 'User role updated'),
   'user.status.update': t('dashboard.sections.audits.actions.userStatus', 'User status updated'),
+  'user.deletion.request': t('dashboard.sections.audits.actions.userDeletionRequest', 'User deletion requested'),
   'subscription.grant': t('dashboard.sections.audits.actions.subscriptionGrant', 'Subscription granted'),
   'activation_code.revoke': t('dashboard.sections.audits.actions.codeRevoke', 'Activation code revoked'),
   'audit.export': t('dashboard.sections.audits.actions.auditExport', 'Audit exported'),
@@ -286,18 +285,18 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div>
-      <h1 class="apple-heading-md">
-        {{ t('dashboard.sections.audits.title', 'Audit Logs') }}
-      </h1>
-      <p class="mt-2 text-sm text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.audits.subtitle', 'Track administrator actions and changes.') }}
-      </p>
-    </div>
-
+  <AdminPageShell :title="t('dashboard.sections.audits.title', 'Audit Logs')">
+    <template #actions>
+      <TxButton variant="secondary" size="sm" :disabled="loading" @click="fetchAudits({ resetPage: true })">
+        {{ t('common.refresh', 'Refresh') }}
+      </TxButton>
+      <TxButton variant="secondary" size="sm" :disabled="exporting" @click="exportAudits">
+        {{ exporting ? t('dashboard.sections.audits.export.exporting', 'Exporting...') : t('dashboard.sections.audits.export.label', 'Export CSV') }}
+      </TxButton>
+    </template>
+    <template #filters>
     <section class="apple-card-lg p-5 space-y-4">
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_220px_auto_auto]">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_220px]">
         <div>
           <label class="apple-section-title mb-1 block">
             {{ t('dashboard.sections.audits.filters.searchLabel', 'Search') }}
@@ -318,18 +317,9 @@ onMounted(() => {
             <TuffSelectItem v-for="opt in actionOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
           </TuffSelect>
         </div>
-        <div class="flex items-end">
-          <TxButton variant="secondary" size="sm" :disabled="loading" @click="fetchAudits({ resetPage: true })">
-            {{ t('common.refresh', 'Refresh') }}
-          </TxButton>
-        </div>
-        <div class="flex items-end">
-          <TxButton variant="secondary" size="sm" :disabled="exporting" @click="exportAudits">
-            {{ exporting ? t('dashboard.sections.audits.export.exporting', 'Exporting...') : t('dashboard.sections.audits.export.label', 'Export CSV') }}
-          </TxButton>
-        </div>
       </div>
     </section>
+    </template>
 
     <div v-if="error" class="rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
       {{ error }}
@@ -337,13 +327,8 @@ onMounted(() => {
 
     <section class="apple-card-lg overflow-hidden">
       <div class="border-b border-black/[0.04] p-5 dark:border-white/[0.06]">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <h2 class="text-base font-semibold text-black dark:text-white">
-            {{ t('dashboard.sections.audits.title', 'Audit Logs') }}
-          </h2>
-          <div class="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
-            <span>{{ pagination.page }} / {{ pagination.totalPages }}</span>
-          </div>
+        <div class="flex items-center justify-end gap-2 text-xs text-black/50 dark:text-white/50">
+          <span>{{ pagination.page }} / {{ pagination.totalPages }}</span>
         </div>
       </div>
 
@@ -409,5 +394,5 @@ onMounted(() => {
         </TxButton>
       </div>
     </section>
-  </div>
+  </AdminPageShell>
 </template>

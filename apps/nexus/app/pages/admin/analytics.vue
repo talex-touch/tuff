@@ -12,6 +12,7 @@ import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import { TxStatCard } from '@talex-touch/tuffex/stat-card'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
+import AdminPageShell from '~/components/admin/AdminPageShell.vue'
 import { useAdminAnalyticsData } from '~/composables/useAdminAnalyticsData'
 import type { GeoAnalyticsData } from '~/types/admin-analytics'
 import {
@@ -59,6 +60,8 @@ const exchangeView = ref<'history' | 'snapshots'>('history')
 const exchangeIncludePayload = ref(false)
 const docsPath = ref('')
 const docsSource = ref<'all' | 'docs_page' | 'doc_comments_admin'>('all')
+const loadedVersionDays = ref<number | null>(null)
+const loadedGeoQueryKey = ref<string | null>(null)
 const {
   analytics, loading, error, geoAnalytics, geoLoading, geoError, messages, messagesLoading, messagesError,
   versionAnalytics, versionLoading, versionError,
@@ -73,12 +76,12 @@ const {
  * source of truth, so back/forward work, a deep link lands on its panel, and the
  * tab strip below the header cannot disagree with the address bar.
  *
- * The nine panels are one page's worth of state over one payload, so the strip
+ * The seven panels are one page's worth of state over one payload, so the strip
  * switches panels instead of navigating somewhere else.
  */
-type AnalyticsSection = 'overview' | 'usage' | 'performance' | 'search' | 'intelligence' | 'docs' | 'versions' | 'exchange' | 'messages'
+type AnalyticsSection = 'overview' | 'performance' | 'search' | 'intelligence' | 'docs' | 'exchange' | 'messages'
 
-const ANALYTICS_SECTIONS = ['overview', 'usage', 'performance', 'search', 'intelligence', 'docs', 'versions', 'exchange', 'messages'] as const
+const ANALYTICS_SECTIONS = ['overview', 'performance', 'search', 'intelligence', 'docs', 'exchange', 'messages'] as const
 
 const activeSection = computed<AnalyticsSection>({
   get() {
@@ -110,15 +113,13 @@ const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
 const versionPalette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
 const analyticsSections = [
-  { id: 'overview', label: 'Data Overview', icon: 'i-carbon-dashboard' },
-  { id: 'usage', label: 'Usage', icon: 'i-carbon-chart-line-smooth' },
-  { id: 'performance', label: 'Performance', icon: 'i-carbon-meter' },
-  { id: 'search', label: 'Search', icon: 'i-carbon-search' },
-  { id: 'intelligence', label: 'AI Analytics', icon: 'i-carbon-ai-status' },
-  { id: 'docs', label: 'Docs Analytics', icon: 'i-carbon-document' },
-  { id: 'versions', label: 'Versions & Geo', icon: 'i-carbon-version' },
-  { id: 'exchange', label: 'Exchange', icon: 'i-carbon-currency' },
-  { id: 'messages', label: 'Alerts', icon: 'i-carbon-warning' },
+  { id: 'overview', icon: 'i-carbon-dashboard' },
+  { id: 'performance', icon: 'i-carbon-meter' },
+  { id: 'search', icon: 'i-carbon-search' },
+  { id: 'intelligence', icon: 'i-carbon-ai-status' },
+  { id: 'docs', icon: 'i-carbon-document' },
+  { id: 'exchange', icon: 'i-carbon-currency' },
+  { id: 'messages', icon: 'i-carbon-warning' },
 ] as const
 
 /**
@@ -129,21 +130,19 @@ const analyticsSections = [
  */
 const analyticsTabs = computed(() => analyticsSections.map(section => ({
   value: section.id as AnalyticsSection,
-  label: t(`dashboard.sections.analytics.sections.${section.id}`, section.label),
+  label: t(`dashboard.sections.analytics.sections.${section.id}`),
   icon: section.icon,
 })))
 
 /**
  * The heading names the panel you are on, next to the tab strip that switches
- * it. Both read the same key the rail uses, so the three cannot drift; the
- * hardcoded English in `analyticsSections` is the fallback rather than the
- * source.
+ * it. Both read the same key the rail uses, so the three cannot drift.
  */
 const activeSectionLabel = computed(() => {
   const section = analyticsSections.find(entry => entry.id === activeSection.value)
   if (!section)
-    return t('dashboard.sections.analytics.title', 'Analytics Dashboard')
-  return t(`dashboard.sections.analytics.sections.${section.id}`, section.label)
+    return t('dashboard.sections.analytics.title')
+  return t(`dashboard.sections.analytics.sections.${section.id}`)
 })
 const topModuleLoads = computed(() => analytics.value?.summary.moduleLoadMetrics.slice(0, 10) ?? [])
 /**
@@ -157,31 +156,31 @@ const kpiCards = computed(() => {
   return [
     {
       key: 'active-users',
-      label: 'Active Users (24h)',
+      label: t('dashboard.sections.analytics.kpi.activeUsers'),
       icon: 'i-carbon-user-multiple text-[var(--tx-color-info)]',
       value: formatNumber(realtime?.activeUsers ?? 0),
-      total: `${formatNumber(summary?.totalUsers ?? 0)} total users`,
+      total: t('dashboard.sections.analytics.kpi.totalUsers', { count: formatNumber(summary?.totalUsers ?? 0) }),
     },
     {
       key: 'visits',
-      label: 'Visits (24h)',
+      label: t('dashboard.sections.analytics.kpi.visits'),
       icon: 'i-carbon-view text-[var(--tx-color-success)]',
       value: formatNumber(realtime?.visitsLast24h ?? 0),
-      total: `${formatNumber(summary?.totalEvents ?? 0)} uploaded events`,
+      total: t('dashboard.sections.analytics.kpi.uploadedEvents', { count: formatNumber(summary?.totalEvents ?? 0) }),
     },
     {
       key: 'searches',
-      label: 'Searches (24h)',
+      label: t('dashboard.sections.analytics.kpi.searches'),
       icon: 'i-carbon-search text-[var(--tx-color-warning)]',
       value: formatNumber(realtime?.searchesLast24h ?? 0),
-      total: `${formatNumber(summary?.totalSearches ?? 0)} total searches`,
+      total: t('dashboard.sections.analytics.kpi.totalSearches', { count: formatNumber(summary?.totalSearches ?? 0) }),
     },
     {
       key: 'avg-latency',
-      label: 'Avg Latency (24h)',
+      label: t('dashboard.sections.analytics.kpi.avgLatency'),
       icon: 'i-carbon-time text-[var(--tx-color-danger)]',
       value: `${realtime?.avgLatency ?? 0}ms`,
-      total: `${summary?.avgSearchDuration ?? 0}ms avg search`,
+      total: t('dashboard.sections.analytics.kpi.avgSearch', { duration: summary?.avgSearchDuration ?? 0 }),
     },
   ]
 })
@@ -246,8 +245,8 @@ const dailyActivityChart = computed(() => {
   return {
     categories: days.map(day => day.date.slice(5)),
     series: [
-      { name: 'Visits', data: days.map(day => day.visits), color: '#3b82f6' },
-      { name: 'Searches', data: days.map(day => day.searches), color: '#a855f7' },
+      { name: t('dashboard.sections.analytics.charts.visits'), data: days.map(day => day.visits), color: '#3b82f6' },
+      { name: t('dashboard.sections.analytics.charts.searches'), data: days.map(day => day.searches), color: '#a855f7' },
     ],
   }
 })
@@ -256,7 +255,7 @@ const versionChartData = computed(() =>
 )
 const hourlyChart = computed(() => ({
   categories: hourLabels,
-  series: [{ name: 'Events', data: hourlySeries.value.series.map(item => item.count) }],
+  series: [{ name: t('dashboard.sections.analytics.charts.events'), data: hourlySeries.value.series.map(item => item.count) }],
 }))
 
 /**
@@ -370,8 +369,10 @@ const versionOptions = computed(() => (versionAnalytics.value?.versions ?? []).m
   value: row.version,
   label: `${row.version} · ${formatNumber(row.visits)}`,
 })))
-const versionScopeLabel = computed(() => versionScope.value ?? 'All versions')
-const allVersionsLabel = computed(() => `All versions (${formatNumber(versionAnalytics.value?.summary.versionCount ?? 0)})`)
+const versionScopeLabel = computed(() => versionScope.value ?? t('dashboard.sections.analytics.versions.allVersions'))
+const allVersionsLabel = computed(() => t('dashboard.sections.analytics.versions.allVersionsCount', {
+  count: formatNumber(versionAnalytics.value?.summary.versionCount ?? 0),
+}))
 const versionUsageChart = computed(() => {
   // Top slice only: past a dozen bars the labels stop being readable, and the
   // list below carries every version in range anyway.
@@ -379,8 +380,8 @@ const versionUsageChart = computed(() => {
   return {
     categories: rows.map(row => row.version),
     series: [
-      { name: 'Visits', data: rows.map(row => row.visits), color: '#3b82f6' },
-      { name: 'Searches', data: rows.map(row => row.searches), color: '#a855f7' },
+      { name: t('dashboard.sections.analytics.charts.visits'), data: rows.map(row => row.visits), color: '#3b82f6' },
+      { name: t('dashboard.sections.analytics.charts.searches'), data: rows.map(row => row.searches), color: '#a855f7' },
     ],
   }
 })
@@ -416,25 +417,47 @@ const maxHeatValue = computed(() => {
 
 function resolveCountryLabel(countryCode: string | null): string {
   if (!countryCode || countryCode === 'Unknown') {
-    return 'Unknown'
+    return t('dashboard.sections.analytics.common.unknown')
   }
   return regionDisplayNames.value?.of(countryCode) ?? countryCode
 }
 
 function resolveSubdivisionLabel(item: GeoAnalyticsData['subdivisions'][number]): string {
-  return item.regionName || item.regionCode || 'Unknown'
+  return item.regionName || item.regionCode || t('dashboard.sections.analytics.common.unknown')
 }
 
 async function fetchAnalytics(): Promise<void> {
   await loadAnalytics(selectedDays.value)
 }
 
+function currentGeoAnalyticsKey(): string {
+  return JSON.stringify([selectedDays.value, selectedGeoCountry.value, versionScope.value])
+}
+
 async function fetchGeoAnalytics(): Promise<void> {
+  const queryKey = currentGeoAnalyticsKey()
   await loadGeoAnalytics(selectedDays.value, selectedGeoCountry.value, versionScope.value)
+  if (!geoError.value && currentGeoAnalyticsKey() === queryKey)
+    loadedGeoQueryKey.value = queryKey
+  if (activeSection.value === 'overview' && currentGeoAnalyticsKey() !== queryKey)
+    ensureOverviewAnalytics()
 }
 
 async function fetchVersionAnalytics(): Promise<void> {
-  await loadVersionAnalytics(selectedDays.value)
+  const days = selectedDays.value
+  await loadVersionAnalytics(days)
+  if (!versionError.value && selectedDays.value === days)
+    loadedVersionDays.value = days
+  if (activeSection.value === 'overview' && selectedDays.value !== days)
+    ensureOverviewAnalytics()
+}
+
+function ensureOverviewAnalytics(): void {
+  if (loadedVersionDays.value !== selectedDays.value && !versionLoading.value)
+    void fetchVersionAnalytics()
+  if (loadedGeoQueryKey.value !== currentGeoAnalyticsKey() && !geoLoading.value)
+    void fetchGeoAnalytics()
+  void fetchWorldGeoJson()
 }
 
 async function fetchDocsAnalytics(): Promise<void> {
@@ -464,36 +487,36 @@ onMounted(() => {
   if (initialSource === 'docs_page' || initialSource === 'doc_comments_admin')
     docsSource.value = initialSource
 
-  // Only the groups the open section actually renders. The KPI row and most
-  // panels read the summary, everything else is per-section — fetching every
-  // group made each section wait on responses it never used (extra D1 round
-  // trips before the skeletons could clear).
+  // The shared summary feeds all seven panels. Overview alone owns the
+  // additional version, geography, and local map payloads.
   void fetchAnalytics()
-  if (activeSection.value === 'versions') {
-    void fetchVersionAnalytics()
-    void fetchGeoAnalytics()
-    void fetchWorldGeoJson()
-  }
+  if (activeSection.value === 'overview')
+    ensureOverviewAnalytics()
   if (activeSection.value === 'docs')
     void fetchDocsAnalytics()
   if (activeSection.value === 'intelligence')
     void fetchIntelligenceAnalytics()
   if (activeSection.value === 'messages')
     void fetchMessages()
+  if (activeSection.value === 'exchange')
+    void fetchExchangeHistory()
 })
 
 watch(selectedDays, () => {
   fetchAnalytics()
-  fetchGeoAnalytics()
-  fetchVersionAnalytics()
-  fetchDocsAnalytics()
-  fetchIntelligenceAnalytics()
+  if (activeSection.value === 'overview')
+    ensureOverviewAnalytics()
+  if (activeSection.value === 'docs')
+    void fetchDocsAnalytics()
+  if (activeSection.value === 'intelligence')
+    void fetchIntelligenceAnalytics()
 })
 
-// Both scopes feed the same `geo` response, so one refetch covers country and
-// version selection.
+// Both scopes feed the same overview-only `geo` response. Hidden panels do not
+// pay for a query they cannot render.
 watch([selectedGeoCountry, selectedVersion], () => {
-  fetchGeoAnalytics()
+  if (activeSection.value === 'overview')
+    ensureOverviewAnalytics()
 })
 
 let docsQueryTimer: ReturnType<typeof setTimeout> | null = null
@@ -510,13 +533,8 @@ watch(activeSection, (section) => {
     fetchDocsAnalytics()
   if (section === 'intelligence' && !intelligenceAnalytics.value && !intelligenceLoading.value)
     fetchIntelligenceAnalytics()
-  if (section === 'versions') {
-    if (!versionAnalytics.value && !versionLoading.value)
-      fetchVersionAnalytics()
-    if (!geoAnalytics.value && !geoLoading.value)
-      fetchGeoAnalytics()
-    void fetchWorldGeoJson()
-  }
+  if (section === 'overview')
+    ensureOverviewAnalytics()
   if (section === 'messages' && !messages.value?.length && !messagesLoading.value)
     fetchMessages()
   if (section === 'exchange' && !exchangeLoading.value)
@@ -588,32 +606,25 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 </script>
 
 <template>
-  <div class="space-y-6">
-    <header class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h1 class="apple-heading-md">
-          {{ activeSectionLabel }}
-        </h1>
-        <p class="mt-2 text-sm text-black/50 dark:text-white/50">
-          {{ t('dashboard.sections.analytics.subtitle', 'Usage statistics and insights') }}
-        </p>
-      </div>
+  <AdminPageShell :title="activeSectionLabel">
+    <template #actions>
       <ClientOnly>
         <TxSelect v-model="selectedDays" class="w-44">
-          <TxSelectItem :value="7" :label="t('dashboard.sections.analytics.last7Days', 'Last 7 days')" />
-          <TxSelectItem :value="30" :label="t('dashboard.sections.analytics.last30Days', 'Last 30 days')" />
-          <TxSelectItem :value="90" :label="t('dashboard.sections.analytics.last90Days', 'Last 90 days')" />
+          <TxSelectItem :value="7" :label="t('dashboard.sections.analytics.last7Days')" />
+          <TxSelectItem :value="30" :label="t('dashboard.sections.analytics.last30Days')" />
+          <TxSelectItem :value="90" :label="t('dashboard.sections.analytics.last90Days')" />
         </TxSelect>
         <template #fallback>
           <div class="w-full rounded-xl bg-black/[0.04] px-3 py-2 text-xs text-black/60 dark:bg-white/[0.08] dark:text-white/60 sm:w-44">
-            {{ t('dashboard.sections.analytics.last30Days', 'Last 30 days') }}
+            {{ t('dashboard.sections.analytics.last30Days') }}
           </div>
         </template>
       </ClientOnly>
-    </header>
+    </template>
 
+    <div class="space-y-6">
     <!--
-      One radio for all nine panels, over data this page already holds: the rail
+      One radio for all seven panels, over data this page already holds: the rail
       links into the page once, and once you are here this selector is the cheap
       move — the address stays on this page and back/forward still work because
       the section lives in `?section=`. The box scrolls rather than wraps at
@@ -637,22 +648,10 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
     </div>
 
     <div v-if="loading" class="space-y-5">
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div v-if="activeSection === 'overview'" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <TxCard
           v-for="card in 4"
           :key="`realtime-skeleton-${card}`"
-          variant="plain"
-          background="mask"
-          :radius="16"
-          :padding="16"
-        >
-          <TxSkeleton :loading="true" :lines="2" />
-        </TxCard>
-      </div>
-      <div class="grid gap-4 lg:grid-cols-4">
-        <TxCard
-          v-for="card in 4"
-          :key="`overview-skeleton-${card}`"
           variant="plain"
           background="mask"
           :radius="16"
@@ -669,19 +668,19 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
     <TxCard v-else-if="error" variant="plain" background="mask" :radius="18" :padding="24" class="text-center">
       <TxEmptyState
         variant="error"
-        :title="t('common.error', 'Error')"
+        :title="t('common.error')"
         :description="error"
       />
       <div class="mt-4 flex justify-center">
         <TxButton variant="secondary" size="sm" native-type="button" @click="fetchAnalytics">
-          {{ t('common.retry', 'Retry') }}
+          {{ t('common.retry') }}
         </TxButton>
       </div>
     </TxCard>
 
     <section v-else-if="analytics" class="space-y-6">
       <!-- KPI Cards: the 24h figure is the headline, the rolling total sits beside it -->
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div v-if="activeSection === 'overview'" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <TxStatCard
           v-for="card in kpiCards"
           :key="card.key"
@@ -703,7 +702,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <div v-if="activeSection === 'search'" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <TxCard variant="plain" background="mask" :radius="16" :padding="16">
           <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-            First Result
+            {{ t('dashboard.sections.analytics.search.firstResult') }}
           </h3>
           <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.avgFirstResultMs }}ms
@@ -711,7 +710,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </TxCard>
         <TxCard variant="plain" background="mask" :radius="16" :padding="16">
           <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-            Slow Searches
+            {{ t('dashboard.sections.analytics.search.slowSearches') }}
           </h3>
           <div class="mt-2 flex items-baseline gap-2">
             <span class="text-2xl font-bold text-black dark:text-white">{{ formatNumber(analytics.summary.searchSlowCount) }}</span>
@@ -720,7 +719,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </TxCard>
         <TxCard variant="plain" background="mask" :radius="16" :padding="16">
           <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-            Avg Results
+            {{ t('dashboard.sections.analytics.search.avgResults') }}
           </h3>
           <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.avgResultCount }}
@@ -728,7 +727,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </TxCard>
         <TxCard variant="plain" background="mask" :radius="16" :padding="16">
           <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-            Avg Sorting
+            {{ t('dashboard.sections.analytics.search.avgSorting') }}
           </h3>
           <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.avgSortingDuration }}ms
@@ -740,10 +739,10 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="20">
         <div class="mb-4">
           <h3 class="font-semibold text-black dark:text-white">
-            Daily Activity
+            {{ t('dashboard.sections.analytics.overview.dailyActivity') }}
           </h3>
           <p class="text-xs text-black/45 dark:text-white/45">
-            Visits and search frequency across recent days
+            {{ t('dashboard.sections.analytics.overview.dailyActivityDescription') }}
           </p>
         </div>
         <TxBarChart
@@ -759,53 +758,62 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <div v-if="activeSection === 'performance'" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <TxCard variant="plain" background="mask" :radius="16" :padding="16">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-medium text-emerald-600 dark:text-emerald-400">Long Tasks</span>
+            <span class="text-xs font-medium text-emerald-600 dark:text-emerald-400">{{ t('dashboard.sections.analytics.performance.longTasks') }}</span>
             <span class="i-carbon-time text-base text-emerald-500" />
           </div>
           <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.performance.longTaskAvgMs }}ms
           </p>
           <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-            max {{ analytics.summary.performance.longTaskMaxMs }}ms · {{ formatNumber(analytics.summary.performance.longTaskCount) }} tasks
+            {{ t('dashboard.sections.analytics.performance.longTasksDetail', {
+              max: analytics.summary.performance.longTaskMaxMs,
+              count: formatNumber(analytics.summary.performance.longTaskCount),
+            }) }}
           </p>
         </TxCard>
 
         <TxCard variant="plain" background="mask" :radius="16" :padding="16">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-medium text-blue-600 dark:text-blue-400">Frame Jank</span>
+            <span class="text-xs font-medium text-blue-600 dark:text-blue-400">{{ t('dashboard.sections.analytics.performance.frameJank') }}</span>
             <span class="i-carbon-chart-line-smooth text-base text-blue-500" />
           </div>
           <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.performance.rafJankAvgMs }}ms
           </p>
           <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-            max {{ analytics.summary.performance.rafJankMaxMs }}ms · {{ formatNumber(analytics.summary.performance.rafJankCount) }} frames
+            {{ t('dashboard.sections.analytics.performance.frameJankDetail', {
+              max: analytics.summary.performance.rafJankMaxMs,
+              count: formatNumber(analytics.summary.performance.rafJankCount),
+            }) }}
           </p>
         </TxCard>
 
         <TxCard variant="plain" background="mask" :radius="16" :padding="16">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-medium text-purple-600 dark:text-purple-400">Main Loop Delay (p95)</span>
+            <span class="text-xs font-medium text-purple-600 dark:text-purple-400">{{ t('dashboard.sections.analytics.performance.mainLoopDelay') }}</span>
             <span class="i-carbon-activity text-base text-purple-500" />
           </div>
           <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.performance.eventLoopDelayP95AvgMs }}ms
           </p>
           <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-            max {{ analytics.summary.performance.eventLoopDelayMaxMs }}ms
+            {{ t('dashboard.sections.analytics.performance.maxDuration', { max: analytics.summary.performance.eventLoopDelayMaxMs }) }}
           </p>
         </TxCard>
 
         <TxCard variant="plain" background="mask" :radius="16" :padding="16">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-medium text-amber-600 dark:text-amber-400">Unresponsive</span>
+            <span class="text-xs font-medium text-amber-600 dark:text-amber-400">{{ t('dashboard.sections.analytics.performance.unresponsive') }}</span>
             <span class="i-carbon-warning-alt text-base text-amber-500" />
           </div>
           <p class="mt-2 text-2xl font-bold text-black dark:text-white">
             {{ analytics.summary.performance.unresponsiveAvgMs }}ms
           </p>
           <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-            max {{ analytics.summary.performance.unresponsiveMaxMs }}ms · {{ formatNumber(analytics.summary.performance.unresponsiveCount) }} times
+            {{ t('dashboard.sections.analytics.performance.unresponsiveDetail', {
+              max: analytics.summary.performance.unresponsiveMaxMs,
+              count: formatNumber(analytics.summary.performance.unresponsiveCount),
+            }) }}
           </p>
         </TxCard>
       </div>
@@ -815,19 +823,20 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         <div class="mb-4 flex items-center justify-between">
           <div>
             <h3 class="font-semibold text-black dark:text-white">
-              Module Load Performance
+              {{ t('dashboard.sections.analytics.performance.moduleLoad') }}
             </h3>
             <p class="text-xs text-black/45 dark:text-white/45">
-              Detailed execution time and load ratio by module
+              {{ t('dashboard.sections.analytics.performance.moduleLoadDescription') }}
             </p>
           </div>
-          <span class="text-xs text-black/40 dark:text-white/40">avg / max / min / ratio</span>
+          <span class="text-xs text-black/40 dark:text-white/40">{{ t('dashboard.sections.analytics.performance.moduleLoadLegend') }}</span>
         </div>
         <TxEmptyState
           v-if="topModuleLoads.length === 0"
           variant="no-data"
           size="small"
-          description="No module load metrics yet"
+          :title="t('dashboard.sections.analytics.empty.title')"
+          :description="t('dashboard.sections.analytics.empty.moduleLoad')"
         />
         <div v-else class="space-y-2.5">
           <div
@@ -840,13 +849,13 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
                 {{ item.module }}
               </p>
               <p class="text-xs text-black/45 dark:text-white/45 font-mono">
-                ratio {{ item.ratio.toFixed(2) }}x
+                {{ t('dashboard.sections.analytics.performance.ratio', { ratio: item.ratio.toFixed(2) }) }}
               </p>
             </div>
             <div class="flex items-center gap-4 font-mono text-xs text-black/60 dark:text-white/60">
-              <span>avg {{ item.avgDuration }}ms</span>
-              <span>max {{ item.maxDuration }}ms</span>
-              <span>min {{ item.minDuration }}ms</span>
+              <span>{{ t('dashboard.sections.analytics.performance.avg', { duration: item.avgDuration }) }}</span>
+              <span>{{ t('dashboard.sections.analytics.performance.max', { duration: item.maxDuration }) }}</span>
+              <span>{{ t('dashboard.sections.analytics.performance.min', { duration: item.minDuration }) }}</span>
             </div>
           </div>
         </div>
@@ -861,7 +870,8 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           v-if="!versionSegments.total"
           variant="no-data"
           size="small"
-          description="No version data yet"
+          :title="t('dashboard.sections.analytics.empty.title')"
+          :description="t('dashboard.sections.analytics.empty.versionData')"
         />
         <div v-else class="flex flex-col gap-6 sm:flex-row sm:items-center">
           <TxPieChart
@@ -887,13 +897,14 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
       <!-- Hourly Distribution -->
       <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="20">
         <h3 class="mb-4 font-semibold text-black dark:text-white">
-          Hourly Distribution (UTC)
+          {{ t('dashboard.sections.analytics.overview.hourlyDistribution') }}
         </h3>
         <TxEmptyState
           v-if="!hasHourlyData"
           variant="no-data"
           size="small"
-          description="No hourly data yet"
+          :title="t('dashboard.sections.analytics.empty.title')"
+          :description="t('dashboard.sections.analytics.empty.hourlyData')"
         />
         <TxBarChart
           v-else
@@ -909,10 +920,10 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           <span class="i-carbon-locked text-xl text-black/45 dark:text-white/45 mt-0.5" />
           <div>
             <h3 class="font-semibold text-black dark:text-white">
-              Search Terms
+              {{ t('dashboard.sections.analytics.search.searchTerms') }}
             </h3>
             <p class="mt-1 text-sm text-black/50 dark:text-white/50">
-              Disabled by privacy policy. Only length, type, and timing metrics are recorded.
+              {{ t('dashboard.sections.analytics.search.searchTermsDescription') }}
             </p>
           </div>
         </div>
@@ -922,50 +933,51 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         <div class="mb-4 flex items-center justify-between">
           <div>
             <h3 class="font-semibold text-black dark:text-white">
-              Provider Performance
+              {{ t('dashboard.sections.analytics.search.providerPerformance') }}
             </h3>
             <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-              Anonymous timings grouped by provider. P95 is computed from recent search events.
+              {{ t('dashboard.sections.analytics.search.providerPerformanceDescription') }}
             </p>
           </div>
-          <TxStatusBadge :text="`${selectedDays}d`" status="info" size="sm" />
+          <TxStatusBadge :text="t('dashboard.sections.analytics.common.days', { count: selectedDays })" status="info" size="sm" />
         </div>
         <TxEmptyState
           v-if="topProviderMetrics.length === 0"
           variant="no-data"
           size="small"
-          description="No provider telemetry yet"
+          :title="t('dashboard.sections.analytics.empty.title')"
+          :description="t('dashboard.sections.analytics.empty.providerTelemetry')"
         />
         <div v-else class="overflow-x-auto">
           <table class="w-full min-w-[760px] text-left text-sm">
             <thead class="text-xs uppercase text-black/40 dark:text-white/40">
               <tr>
                 <th class="py-2 pr-4 font-medium">
-Provider
+{{ t('dashboard.sections.analytics.search.table.provider') }}
 </th>
                 <th class="py-2 pr-4 text-right font-medium">
-Calls
+{{ t('dashboard.sections.analytics.search.table.calls') }}
 </th>
                 <th class="py-2 pr-4 text-right font-medium">
-Avg
+{{ t('dashboard.sections.analytics.search.table.avg') }}
 </th>
                 <th class="py-2 pr-4 text-right font-medium">
 P95
 </th>
                 <th class="py-2 pr-4 text-right font-medium">
-Max
+{{ t('dashboard.sections.analytics.search.table.max') }}
 </th>
                 <th class="py-2 pr-4 text-right font-medium">
-Results
+{{ t('dashboard.sections.analytics.search.table.results') }}
 </th>
                 <th class="py-2 pr-4 text-right font-medium">
-Errors
+{{ t('dashboard.sections.analytics.search.table.errors') }}
 </th>
                 <th class="py-2 pr-4 text-right font-medium">
-Timeouts
+{{ t('dashboard.sections.analytics.search.table.timeouts') }}
 </th>
                 <th class="py-2 text-right font-medium">
-Slow
+{{ t('dashboard.sections.analytics.search.table.slow') }}
 </th>
               </tr>
             </thead>
@@ -1010,14 +1022,14 @@ Slow
       </TxCard>
 
       <!-- Secondary Insights -->
-      <div v-if="activeSection === 'search' || activeSection === 'usage'" class="grid gap-4 lg:grid-cols-3">
+      <div v-if="activeSection === 'search' || activeSection === 'overview'" class="grid gap-4 lg:grid-cols-3">
         <TxCard v-if="activeSection === 'search'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
-              Search Scenes
+              {{ t('dashboard.sections.analytics.search.searchScenes') }}
             </h3>
             <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'search'">
-              View details
+              {{ t('dashboard.sections.analytics.common.viewDetails') }}
             </TxButton>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
@@ -1030,10 +1042,10 @@ Slow
         <TxCard v-if="activeSection === 'search'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
-              Result Categories
+              {{ t('dashboard.sections.analytics.search.resultCategories') }}
             </h3>
             <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'search'">
-              View details
+              {{ t('dashboard.sections.analytics.common.viewDetails') }}
             </TxButton>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
@@ -1043,13 +1055,13 @@ Slow
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'usage'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
-              Top Categories
+              {{ t('dashboard.sections.analytics.usage.topCategories') }}
             </h3>
             <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
-              View details
+              {{ t('dashboard.sections.analytics.common.viewDetails') }}
             </TxButton>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
@@ -1061,13 +1073,13 @@ Slow
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'usage'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
-              Update Actions
+              {{ t('dashboard.sections.analytics.usage.updateActions') }}
             </h3>
             <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
-              View details
+              {{ t('dashboard.sections.analytics.common.viewDetails') }}
             </TxButton>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
@@ -1077,13 +1089,13 @@ Slow
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'usage'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
-              Update Results
+              {{ t('dashboard.sections.analytics.usage.updateResults') }}
             </h3>
             <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
-              View details
+              {{ t('dashboard.sections.analytics.common.viewDetails') }}
             </TxButton>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
@@ -1093,13 +1105,13 @@ Slow
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'usage'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
-              Update Channels
+              {{ t('dashboard.sections.analytics.usage.updateChannels') }}
             </h3>
             <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
-              View details
+              {{ t('dashboard.sections.analytics.common.viewDetails') }}
             </TxButton>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
@@ -1109,13 +1121,13 @@ Slow
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'usage'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
-              Update Sources
+              {{ t('dashboard.sections.analytics.usage.updateSources') }}
             </h3>
             <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
-              View details
+              {{ t('dashboard.sections.analytics.common.viewDetails') }}
             </TxButton>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
@@ -1125,13 +1137,13 @@ Slow
             </div>
           </div>
         </TxCard>
-        <TxCard v-if="activeSection === 'usage'" variant="plain" background="mask" :radius="18" :padding="18">
+        <TxCard v-if="activeSection === 'overview'" variant="plain" background="mask" :radius="18" :padding="18">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-white">
-              Update Tags
+              {{ t('dashboard.sections.analytics.usage.updateTags') }}
             </h3>
             <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
-              View details
+              {{ t('dashboard.sections.analytics.common.viewDetails') }}
             </TxButton>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
@@ -1151,7 +1163,7 @@ Slow
         <TxCard v-else-if="intelligenceError" variant="plain" background="mask" :radius="18" :padding="24">
           <TxEmptyState
             variant="error"
-            :title="t('common.error', 'Error')"
+            :title="t('common.error')"
             :description="intelligenceError"
           />
         </TxCard>
@@ -1159,58 +1171,58 @@ Slow
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <TxCard variant="plain" background="mask" :radius="16" :padding="16">
               <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-                Runs
+                {{ t('dashboard.sections.analytics.intelligence.runs') }}
               </h3>
               <p class="mt-2 text-2xl font-bold text-black dark:text-white">
                 {{ formatNumber(intelligenceAnalytics.summary.totalRuns) }}
               </p>
               <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-                success {{ intelligenceAnalytics.summary.successRate }}%
+                {{ t('dashboard.sections.analytics.intelligence.successRate', { rate: intelligenceAnalytics.summary.successRate }) }}
               </p>
               <p class="text-xs text-black/45 dark:text-white/45">
-                disconnect pause {{ intelligenceAnalytics.summary.disconnectPauseRate }}%
+                {{ t('dashboard.sections.analytics.intelligence.disconnectPauseRate', { rate: intelligenceAnalytics.summary.disconnectPauseRate }) }}
               </p>
             </TxCard>
             <TxCard variant="plain" background="mask" :radius="16" :padding="16">
               <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-                Fallback
+                {{ t('dashboard.sections.analytics.intelligence.fallback') }}
               </h3>
               <p class="mt-2 text-2xl font-bold text-black dark:text-white">
                 {{ intelligenceAnalytics.summary.fallbackRate }}%
               </p>
               <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-                recovery {{ intelligenceAnalytics.summary.recoveryRate }}%
+                {{ t('dashboard.sections.analytics.intelligence.recoveryRate', { rate: intelligenceAnalytics.summary.recoveryRate }) }}
               </p>
               <p class="text-xs text-black/45 dark:text-white/45">
-                retry run {{ intelligenceAnalytics.summary.retryRunRate }}%
+                {{ t('dashboard.sections.analytics.intelligence.retryRunRate', { rate: intelligenceAnalytics.summary.retryRunRate }) }}
               </p>
             </TxCard>
             <TxCard variant="plain" background="mask" :radius="16" :padding="16">
               <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-                Approval Hit
+                {{ t('dashboard.sections.analytics.intelligence.approvalHit') }}
               </h3>
               <p class="mt-2 text-2xl font-bold text-black dark:text-white">
                 {{ intelligenceAnalytics.summary.approvalHitRate }}%
               </p>
               <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-                waiting {{ intelligenceAnalytics.summary.waitingApprovals }}
+                {{ t('dashboard.sections.analytics.intelligence.waitingApprovals', { count: intelligenceAnalytics.summary.waitingApprovals }) }}
               </p>
               <p class="text-xs text-black/45 dark:text-white/45">
-                checkpoint loss {{ intelligenceAnalytics.summary.checkpointLossRate }}%
+                {{ t('dashboard.sections.analytics.intelligence.checkpointLossRate', { rate: intelligenceAnalytics.summary.checkpointLossRate }) }}
               </p>
             </TxCard>
             <TxCard variant="plain" background="mask" :radius="16" :padding="16">
               <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-                Stream Coverage
+                {{ t('dashboard.sections.analytics.intelligence.streamCoverage') }}
               </h3>
               <p class="mt-2 text-2xl font-bold text-black dark:text-white">
                 {{ intelligenceAnalytics.summary.streamCoverageRate }}%
               </p>
               <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-                p95 {{ intelligenceAnalytics.summary.p95DurationMs }}ms
+                {{ t('dashboard.sections.analytics.intelligence.p95Duration', { duration: intelligenceAnalytics.summary.p95DurationMs }) }}
               </p>
               <p class="text-xs text-black/45 dark:text-white/45">
-                avg {{ intelligenceAnalytics.summary.avgDurationMs }}ms
+                {{ t('dashboard.sections.analytics.intelligence.avgDuration', { duration: intelligenceAnalytics.summary.avgDurationMs }) }}
               </p>
             </TxCard>
           </div>
@@ -1219,10 +1231,10 @@ Slow
             <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <div class="mb-3 flex items-center justify-between">
                 <h3 class="font-semibold text-black dark:text-white">
-                  Runtime Status Distribution
+                  {{ t('dashboard.sections.analytics.intelligence.statusDistribution') }}
                 </h3>
                 <span class="text-xs text-black/45 dark:text-white/45">
-                  avg {{ intelligenceAnalytics.summary.avgDurationMs }}ms
+                  {{ t('dashboard.sections.analytics.intelligence.avgDuration', { duration: intelligenceAnalytics.summary.avgDurationMs }) }}
                 </span>
               </div>
               <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
@@ -1240,17 +1252,18 @@ Slow
             <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <div class="mb-3 flex items-center justify-between">
                 <h3 class="font-semibold text-black dark:text-white">
-                  Tool Failures
+                  {{ t('dashboard.sections.analytics.intelligence.toolFailures') }}
                 </h3>
                 <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/45 dark:text-white/45" @click="fetchIntelligenceAnalytics">
-                  Refresh
+                  {{ t('dashboard.sections.analytics.common.refresh') }}
                 </TxButton>
               </div>
               <TxEmptyState
                 v-if="intelligenceAnalytics.toolFailureDistribution.length === 0"
                 variant="no-data"
                 size="small"
-                description="No tool failures in selected period."
+                :title="t('dashboard.sections.analytics.empty.title')"
+                :description="t('dashboard.sections.analytics.empty.toolFailures')"
               />
               <div v-else class="space-y-2 text-sm text-black/70 dark:text-white/70">
                 <div
@@ -1267,13 +1280,14 @@ Slow
 
           <TxCard variant="plain" background="mask" :radius="18" :padding="20">
             <h3 class="mb-3 font-semibold text-black dark:text-white">
-              Recent Intelligence Runs
+              {{ t('dashboard.sections.analytics.intelligence.recentRuns') }}
             </h3>
             <TxEmptyState
               v-if="intelligenceAnalytics.recentRuns.length === 0"
               variant="no-data"
               size="small"
-              description="No runtime records."
+              :title="t('dashboard.sections.analytics.empty.title')"
+              :description="t('dashboard.sections.analytics.empty.runtimeRecords')"
             />
             <div v-else class="space-y-2 text-sm text-black/70 dark:text-white/70">
               <div
@@ -1286,7 +1300,7 @@ Slow
                     {{ run.sessionId }}
                   </p>
                   <p class="text-xs text-black/45 dark:text-white/45">
-                    {{ run.providerName || 'runtime' }} · {{ run.model }}
+                    {{ run.providerName || t('dashboard.sections.analytics.common.runtime') }} · {{ run.model }}
                   </p>
                 </div>
                 <div class="flex items-center gap-3 text-xs text-black/50 dark:text-white/50">
@@ -1296,8 +1310,8 @@ Slow
                     size="sm"
                   />
                   <span class="font-mono">{{ run.durationMs }}ms</span>
-                  <span>fallback {{ run.fallbackCount }}</span>
-                  <span>approval {{ run.approvalHitCount }}</span>
+                  <span>{{ t('dashboard.sections.analytics.intelligence.fallbackCount', { count: run.fallbackCount }) }}</span>
+                  <span>{{ t('dashboard.sections.analytics.intelligence.approvalCount', { count: run.approvalHitCount }) }}</span>
                 </div>
               </div>
             </div>
@@ -1310,7 +1324,7 @@ Slow
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <TxCard variant="plain" background="mask" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-              Docs
+              {{ t('dashboard.sections.analytics.docs.docs') }}
             </h3>
             <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber(docsAnalytics?.overview.docCount || 0) }}
@@ -1318,7 +1332,7 @@ Slow
           </TxCard>
           <TxCard variant="plain" background="mask" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-              Views
+              {{ t('dashboard.sections.analytics.docs.views') }}
             </h3>
             <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber(docsAnalytics?.overview.totalViews || 0) }}
@@ -1326,7 +1340,7 @@ Slow
           </TxCard>
           <TxCard variant="plain" background="mask" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-              Active Read Time
+              {{ t('dashboard.sections.analytics.docs.activeReadTime') }}
             </h3>
             <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatDuration(docsAnalytics?.overview.totalActiveMs || 0) }}
@@ -1334,7 +1348,7 @@ Slow
           </TxCard>
           <TxCard variant="plain" background="mask" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-              Copy / Select
+              {{ t('dashboard.sections.analytics.docs.copySelect') }}
             </h3>
             <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber((docsAnalytics?.overview.totalCopyCount || 0) + (docsAnalytics?.overview.totalSelectCount || 0)) }}
@@ -1347,16 +1361,16 @@ Slow
             <TxInput
               v-model="docsPath"
               type="text"
-              placeholder="Filter path (e.g. docs/dev/components/button)"
+              :placeholder="t('dashboard.sections.analytics.docs.pathPlaceholder')"
               class="w-72"
             />
             <TxSelect v-model="docsSource" class="w-44">
-              <TxSelectItem value="all" label="All sources" />
-              <TxSelectItem value="docs_page" label="Docs page" />
-              <TxSelectItem value="doc_comments_admin" label="Doc comments admin" />
+              <TxSelectItem value="all" :label="t('dashboard.sections.analytics.docs.sources.all')" />
+              <TxSelectItem value="docs_page" :label="t('dashboard.sections.analytics.docs.sources.docsPage')" />
+              <TxSelectItem value="doc_comments_admin" :label="t('dashboard.sections.analytics.docs.sources.docCommentsAdmin')" />
             </TxSelect>
             <TxButton variant="secondary" size="sm" native-type="button" @click="fetchDocsAnalytics">
-              Refresh
+              {{ t('dashboard.sections.analytics.common.refresh') }}
             </TxButton>
             <TxButton
               v-if="docsPath"
@@ -1365,19 +1379,19 @@ Slow
               native-type="button"
               @click="docsPath = ''"
             >
-              Clear
+              {{ t('dashboard.sections.analytics.common.clear') }}
             </TxButton>
           </div>
         </TxCard>
 
         <TxCard v-if="docsLoading" variant="plain" background="mask" :radius="18" :padding="24" class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
           <TxSpinner :size="16" />
-          Loading docs analytics...
+          {{ t('dashboard.sections.analytics.docs.loading') }}
         </TxCard>
         <TxCard v-else-if="docsError" variant="plain" background="mask" :radius="18" :padding="24">
           <TxEmptyState
             variant="error"
-            :title="t('common.error', 'Error')"
+            :title="t('common.error')"
             :description="docsError"
           />
         </TxCard>
@@ -1385,13 +1399,14 @@ Slow
           <div class="grid gap-4 lg:grid-cols-2">
             <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
-                Docs summary
+                {{ t('dashboard.sections.analytics.docs.summary') }}
               </h3>
               <TxEmptyState
                 v-if="docsSummaryRows.length === 0"
                 variant="no-data"
                 size="small"
-                description="No docs data in current range."
+                :title="t('dashboard.sections.analytics.empty.title')"
+                :description="t('dashboard.sections.analytics.empty.docsSummary')"
               />
               <div v-else class="space-y-2">
                 <TxButton
@@ -1408,11 +1423,11 @@ Slow
                       {{ item.path }}
                     </p>
                     <p class="truncate text-xs text-black/45 dark:text-white/50">
-                      {{ item.title || 'Untitled' }}
+                      {{ item.title || t('dashboard.sections.analytics.common.untitled') }}
                     </p>
                   </div>
                   <div class="text-right font-mono text-xs text-black/50 dark:text-white/50">
-                    <p>{{ formatNumber(item.views) }} views</p>
+                    <p>{{ t('dashboard.sections.analytics.docs.viewCount', { count: formatNumber(item.views) }) }}</p>
                     <p>{{ formatDuration(item.activeMs) }}</p>
                   </div>
                 </TxButton>
@@ -1421,13 +1436,14 @@ Slow
 
             <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
-                Action evidence
+                {{ t('dashboard.sections.analytics.docs.actionEvidence') }}
               </h3>
               <TxEmptyState
                 v-if="!docsDetail || docsDetail.evidence.length === 0"
                 variant="no-data"
                 size="small"
-                description="No action evidence in current range."
+                :title="t('dashboard.sections.analytics.empty.title')"
+                :description="t('dashboard.sections.analytics.empty.actionEvidence')"
               />
               <div v-else class="space-y-2">
                 <div
@@ -1440,7 +1456,7 @@ Slow
                     <span class="font-mono text-black/45 dark:text-white/50">{{ formatNumber(item.count) }}</span>
                   </div>
                   <p class="mt-1 truncate text-black/45 dark:text-white/50">
-                    {{ item.sectionId }} · bucket {{ item.anchorBucket }} · {{ item.sourceType }}
+                    {{ item.sectionId }} · {{ t('dashboard.sections.analytics.docs.bucket', { bucket: item.anchorBucket }) }} · {{ item.sourceType }}
                   </p>
                   <p v-if="item.textHash" class="mt-1 truncate font-mono text-black/40 dark:text-white/45">
                     {{ item.textHash }}
@@ -1453,13 +1469,14 @@ Slow
           <div v-if="docsDetail" class="grid gap-4 lg:grid-cols-2">
             <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
-                Sections · {{ docsDetail.path }}
+                {{ t('dashboard.sections.analytics.docs.sections') }} · {{ docsDetail.path }}
               </h3>
               <TxEmptyState
                 v-if="docsDetail.sections.length === 0"
                 variant="no-data"
                 size="small"
-                description="No section heat data."
+                :title="t('dashboard.sections.analytics.empty.title')"
+                :description="t('dashboard.sections.analytics.empty.sectionHeat')"
               />
               <div v-else class="space-y-2">
                 <div
@@ -1480,13 +1497,14 @@ Slow
 
             <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
-                Heat buckets (0-19)
+                {{ t('dashboard.sections.analytics.docs.heatBuckets') }}
               </h3>
               <TxEmptyState
                 v-if="!docsDetail || docsDetail.heatmap.length === 0"
                 variant="no-data"
                 size="small"
-                description="No heat buckets yet."
+                :title="t('dashboard.sections.analytics.empty.title')"
+                :description="t('dashboard.sections.analytics.empty.heatBuckets')"
               />
               <div v-else class="space-y-3">
                 <div
@@ -1503,7 +1521,11 @@ Slow
                       :key="`${section.sectionId}:${bucket.bucket}:${bucket.sourceType}`"
                       class="h-14 w-2 rounded bg-emerald-500/70"
                       :style="{ height: `${Math.max(8, (bucket.activeMs / maxHeatValue) * 56)}px` }"
-                      :title="`bucket ${bucket.bucket} · ${bucket.sourceType} · ${bucket.activeMs}ms`"
+                      :title="t('dashboard.sections.analytics.docs.bucketTooltip', {
+                        bucket: bucket.bucket,
+                        source: bucket.sourceType,
+                        duration: bucket.activeMs,
+                      })"
                     />
                   </div>
                 </div>
@@ -1513,16 +1535,16 @@ Slow
         </template>
       </div>
 
-      <!-- Versions & Geo: one scope, two readings -->
-      <div v-if="activeSection === 'versions'" class="space-y-5">
+      <!-- Overview version and geography detail: one scope, two readings -->
+      <div v-if="activeSection === 'overview'" class="space-y-5">
         <TxCard variant="plain" background="mask" :radius="18" :padding="20">
           <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 class="font-semibold text-black dark:text-white">
-                Version Usage
+                {{ t('dashboard.sections.analytics.versions.usage') }}
               </h3>
               <p class="text-xs text-black/45 dark:text-white/45">
-                Sessions and searches per client version. The region block below reads the same version.
+                {{ t('dashboard.sections.analytics.versions.usageDescription') }}
               </p>
             </div>
             <ClientOnly>
@@ -1545,19 +1567,20 @@ Slow
 
           <div v-if="versionLoading" class="flex items-center justify-center gap-2 py-10 text-sm text-black/50 dark:text-white/50">
             <TxSpinner :size="16" />
-            Loading version analytics...
+            {{ t('dashboard.sections.analytics.versions.loading') }}
           </div>
           <TxEmptyState
             v-else-if="versionError"
             variant="error"
-            :title="t('common.error', 'Error')"
+            :title="t('common.error')"
             :description="versionError"
           />
           <TxEmptyState
             v-else-if="!versionAnalytics?.versions.length"
             variant="no-data"
             size="small"
-            description="No version data in range"
+            :title="t('dashboard.sections.analytics.empty.title')"
+            :description="t('dashboard.sections.analytics.empty.versionRange')"
           />
           <template v-else>
             <TxBarChart
@@ -1584,9 +1607,9 @@ Slow
               >
                 <span class="min-w-0 truncate font-medium text-black/80 dark:text-white/80">{{ row.version }}</span>
                 <span class="flex shrink-0 items-center gap-3 font-mono text-xs text-black/45 dark:text-white/50">
-                  <span>{{ formatNumber(row.visits) }} visits</span>
-                  <span>{{ formatNumber(row.searches) }} searches</span>
-                  <span>{{ formatNumber(row.users) }} users</span>
+                  <span>{{ t('dashboard.sections.analytics.versions.visitCount', { count: formatNumber(row.visits) }) }}</span>
+                  <span>{{ t('dashboard.sections.analytics.versions.searchCount', { count: formatNumber(row.searches) }) }}</span>
+                  <span>{{ t('dashboard.sections.analytics.versions.userCount', { count: formatNumber(row.users) }) }}</span>
                   <span>{{ row.avgSearchDuration }}ms</span>
                   <span>{{ formatCompactDate(row.lastSeenAt) }}</span>
                 </span>
@@ -1598,7 +1621,7 @@ Slow
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <TxCard variant="plain" background="mask" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-              Searches
+              {{ t('dashboard.sections.analytics.versions.searches') }}
             </h3>
             <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber(geoAnalytics?.summary.totalSearches || 0) }}
@@ -1606,7 +1629,7 @@ Slow
           </TxCard>
           <TxCard variant="plain" background="mask" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-              Unique IPs
+              {{ t('dashboard.sections.analytics.versions.uniqueIps') }}
             </h3>
             <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber(geoAnalytics?.summary.uniqueIps || 0) }}
@@ -1614,7 +1637,7 @@ Slow
           </TxCard>
           <TxCard variant="plain" background="mask" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-              Countries
+              {{ t('dashboard.sections.analytics.versions.countries') }}
             </h3>
             <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber(geoAnalytics?.summary.countryCount || 0) }}
@@ -1622,7 +1645,7 @@ Slow
           </TxCard>
           <TxCard variant="plain" background="mask" :radius="16" :padding="16">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-              Subdivisions
+              {{ t('dashboard.sections.analytics.versions.subdivisions') }}
             </h3>
             <p class="mt-2 text-2xl font-bold text-black dark:text-white">
               {{ formatNumber(geoAnalytics?.summary.subdivisionCount || 0) }}
@@ -1633,12 +1656,12 @@ Slow
         <TxCard variant="plain" background="mask" :radius="16" :padding="14">
           <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
             <div class="flex flex-wrap items-center gap-2">
-              <span class="text-black/60 dark:text-white/60">Scope:</span>
+              <span class="text-black/60 dark:text-white/60">{{ t('dashboard.sections.analytics.versions.scope') }}</span>
               <span class="rounded-lg bg-black/[0.05] px-2 py-0.5 font-medium text-black dark:bg-white/[0.08] dark:text-white">
                 {{ versionScopeLabel }}
               </span>
               <span class="text-black/40 dark:text-white/40">·</span>
-              <span class="font-medium text-black dark:text-white">Global</span>
+              <span class="font-medium text-black dark:text-white">{{ t('dashboard.sections.analytics.versions.global') }}</span>
               <span v-if="selectedGeoCountry" class="text-black/40 dark:text-white/40">></span>
               <span v-if="selectedGeoCountry" class="font-medium text-black dark:text-white">{{ resolveCountryLabel(selectedGeoCountry) }}</span>
             </div>
@@ -1649,19 +1672,19 @@ Slow
               native-type="button"
               @click="resetGeoDrilldown"
             >
-              Back to Global
+              {{ t('dashboard.sections.analytics.versions.backToGlobal') }}
             </TxButton>
           </div>
         </TxCard>
 
         <TxCard v-if="geoLoading" variant="plain" background="mask" :radius="18" :padding="24" class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
           <TxSpinner :size="16" />
-          Loading geo analytics...
+          {{ t('dashboard.sections.analytics.versions.loadingGeo') }}
         </TxCard>
         <TxCard v-else-if="geoError" variant="plain" background="mask" :radius="18" :padding="24">
           <TxEmptyState
             variant="error"
-            :title="t('common.error', 'Error')"
+            :title="t('common.error')"
             :description="geoError"
           />
         </TxCard>
@@ -1672,7 +1695,10 @@ Slow
               v-if="!worldGeoJson || (selectedGeoCountry ? geoMapPoints.length === 0 : geoCountryMapRows.length === 0)"
               variant="no-data"
               size="small"
-              :description="worldGeoJsonFailed ? 'World map data failed to load' : 'No geolocated rows for this version and range'"
+              :title="t('dashboard.sections.analytics.empty.title')"
+              :description="worldGeoJsonFailed
+                ? t('dashboard.sections.analytics.empty.worldMap')
+                : t('dashboard.sections.analytics.empty.geoRows')"
             />
             <TxChoroplethMap
               v-else-if="!selectedGeoCountry"
@@ -1702,13 +1728,16 @@ Slow
           <div class="grid gap-4 lg:grid-cols-2">
             <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
-                {{ selectedGeoCountry ? 'State / Province Breakdown' : 'Country Breakdown' }}
+                {{ selectedGeoCountry
+                  ? t('dashboard.sections.analytics.versions.subdivisionBreakdown')
+                  : t('dashboard.sections.analytics.versions.countryBreakdown') }}
               </h3>
               <TxEmptyState
                 v-if="selectedGeoCountry ? geoSubdivisions.length === 0 : geoCountries.length === 0"
                 variant="no-data"
                 size="small"
-                description="No data in current range"
+                :title="t('dashboard.sections.analytics.empty.title')"
+                :description="t('dashboard.sections.analytics.empty.rangeData')"
               />
               <div v-else class="space-y-2">
                 <template v-if="selectedGeoCountry">
@@ -1751,13 +1780,14 @@ Slow
 
             <TxCard variant="plain" background="mask" :radius="18" :padding="20">
               <h3 class="mb-3 font-semibold text-black dark:text-white">
-                Top IPs
+                {{ t('dashboard.sections.analytics.versions.topIps') }}
               </h3>
               <TxEmptyState
                 v-if="geoTopIps.length === 0"
                 variant="no-data"
                 size="small"
-                description="No IP data in current range"
+                :title="t('dashboard.sections.analytics.empty.title')"
+                :description="t('dashboard.sections.analytics.empty.ipData')"
               />
               <div v-else class="space-y-2">
                 <div
@@ -1784,19 +1814,19 @@ Slow
         <div class="mb-4 flex items-center justify-between">
           <div>
             <h3 class="font-semibold text-black dark:text-white">
-              Telemetry Messages
+              {{ t('dashboard.sections.analytics.messages.title') }}
             </h3>
             <p class="text-xs text-black/45 dark:text-white/45">
-              System alerts, warnings, and runtime event notifications
+              {{ t('dashboard.sections.analytics.messages.description') }}
             </p>
           </div>
           <TxButton variant="secondary" size="sm" native-type="button" @click="fetchMessages">
-            Refresh
+            {{ t('dashboard.sections.analytics.common.refresh') }}
           </TxButton>
         </div>
         <div v-if="messagesLoading" class="flex items-center gap-2 py-8 justify-center text-sm text-black/40 dark:text-white/40">
           <TxSpinner :size="16" />
-          Loading messages...
+          {{ t('dashboard.sections.analytics.messages.loading') }}
         </div>
         <div v-else-if="messagesError" class="rounded-lg bg-red-500/10 p-3 text-sm text-red-500">
           {{ messagesError }}
@@ -1805,7 +1835,8 @@ Slow
           v-else-if="messages.length === 0"
           variant="no-data"
           size="small"
-          description="No messages yet"
+          :title="t('dashboard.sections.analytics.empty.title')"
+          :description="t('dashboard.sections.analytics.empty.messages')"
         />
         <div v-else class="space-y-3">
           <div
@@ -1824,7 +1855,7 @@ Slow
                   />
                   <TxStatusBadge
                     v-if="item.status === 'unread'"
-                    text="unread"
+                    :text="t('dashboard.sections.analytics.messages.unread')"
                     status="warning"
                     size="sm"
                   />
@@ -1847,25 +1878,25 @@ Slow
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 class="font-semibold text-black dark:text-white">
-              Exchange Rate History
+              {{ t('dashboard.sections.analytics.exchange.title') }}
             </h3>
             <p class="text-xs text-black/45 dark:text-white/45">
-              Non-free users only. USD base.
+              {{ t('dashboard.sections.analytics.exchangeHistoryHint') }}
             </p>
           </div>
           <TxButton variant="secondary" size="sm" native-type="button" @click="fetchExchangeHistory">
-            Refresh
+            {{ t('dashboard.sections.analytics.common.refresh') }}
           </TxButton>
         </div>
         <div class="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-black/[0.04] bg-black/[0.02] p-3 text-xs dark:border-white/[0.05] dark:bg-white/[0.03]">
           <TxSelect v-model="exchangeView" class="w-40">
-            <TxSelectItem value="history" label="Target history" />
-            <TxSelectItem value="snapshots" label="Snapshots" />
+            <TxSelectItem value="history" :label="t('dashboard.sections.analytics.exchange.targetHistory')" />
+            <TxSelectItem value="snapshots" :label="t('dashboard.sections.analytics.exchange.snapshots')" />
           </TxSelect>
           <TxInput
             v-model="exchangeTarget"
             type="text"
-            placeholder="Target (e.g. CNY)"
+            :placeholder="t('dashboard.sections.analytics.exchange.targetPlaceholder')"
             class="w-28 uppercase"
           />
           <TxInput
@@ -1877,12 +1908,12 @@ Slow
           />
           <label class="flex items-center gap-2 text-xs text-black/60 dark:text-white/60">
             <TxCheckbox v-model="exchangeIncludePayload" />
-            Include payload (admin)
+            {{ t('dashboard.sections.analytics.exchange.includePayload') }}
           </label>
         </div>
         <div v-if="exchangeLoading" class="flex items-center gap-2 py-6 justify-center text-sm text-black/40 dark:text-white/40">
           <TxSpinner :size="16" />
-          Loading exchange history...
+          {{ t('dashboard.sections.analytics.exchange.loading') }}
         </div>
         <div v-else-if="exchangeError" class="rounded-lg bg-red-500/10 p-3 text-sm text-red-500">
           {{ exchangeError }}
@@ -1891,13 +1922,15 @@ Slow
           v-else-if="exchangeView === 'history' && exchangeHistory.length === 0"
           variant="no-data"
           size="small"
-          description="No history data"
+          :title="t('dashboard.sections.analytics.empty.title')"
+          :description="t('dashboard.sections.analytics.empty.exchangeHistory')"
         />
         <TxEmptyState
           v-else-if="exchangeView === 'snapshots' && exchangeSnapshots.length === 0"
           variant="no-data"
           size="small"
-          description="No snapshot data"
+          :title="t('dashboard.sections.analytics.empty.title')"
+          :description="t('dashboard.sections.analytics.empty.exchangeSnapshots')"
         />
         <div v-else class="space-y-3">
           <template v-if="exchangeView === 'history'">
@@ -1915,7 +1948,7 @@ Slow
                 </div>
               </div>
               <div class="mt-2 font-mono text-xs text-black/60 dark:text-white/60">
-                Rate: {{ formatRate(item.rate) }}
+                {{ t('dashboard.sections.analytics.exchange.rate', { rate: formatRate(item.rate) }) }}
               </div>
             </div>
           </template>
@@ -1927,14 +1960,14 @@ Slow
             >
               <div class="flex items-center justify-between gap-4">
                 <div class="font-semibold text-black dark:text-white">
-                  Snapshot · {{ item.baseCurrency }}
+                  {{ t('dashboard.sections.analytics.exchange.snapshot') }} · {{ item.baseCurrency }}
                 </div>
                 <div class="font-mono text-xs text-black/40 dark:text-white/40">
                   {{ formatExchangeTime(item.fetchedAt) }}
                 </div>
               </div>
               <div class="mt-2 text-xs text-black/60 dark:text-white/60">
-                Provider updated: {{ formatExchangeTime(item.providerUpdatedAt) }}
+                {{ t('dashboard.sections.analytics.exchange.providerUpdated', { time: formatExchangeTime(item.providerUpdatedAt) }) }}
               </div>
               <div v-if="item.payload" class="mt-2 rounded-lg bg-black/[0.03] p-3 font-mono text-[11px] text-black/60 dark:bg-white/[0.05] dark:text-white/60">
                 {{ formatPayloadPreview(item.payload) }}
@@ -1950,10 +1983,10 @@ Slow
           <div class="mb-4 flex items-center justify-between">
             <div>
               <h3 class="text-lg font-semibold text-black dark:text-white">
-                Analytics Breakdown
+                {{ t('dashboard.sections.analytics.breakdown.title') }}
               </h3>
               <p class="text-xs text-black/50 dark:text-white/50">
-                Secondary distributions and deep-dive signals
+                {{ t('dashboard.sections.analytics.breakdown.description') }}
               </p>
             </div>
             <TxButton variant="ghost" circle size="sm" native-type="button" @click="showBreakdown = false">
@@ -1968,7 +2001,7 @@ Slow
               native-type="button"
               @click="activeBreakdownTab = 'search'"
             >
-              Search
+              {{ t('dashboard.sections.analytics.sections.search') }}
             </TxButton>
             <TxButton
               :variant="activeBreakdownTab === 'usage' ? 'primary' : 'secondary'"
@@ -1976,14 +2009,14 @@ Slow
               native-type="button"
               @click="activeBreakdownTab = 'usage'"
             >
-              Usage
+              {{ t('dashboard.sections.analytics.sections.usage') }}
             </TxButton>
           </div>
 
           <div v-if="activeBreakdownTab === 'search'" class="space-y-6 text-sm">
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Search Input Types
+                {{ t('dashboard.sections.analytics.breakdown.searchInputTypes') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.searchInputTypeDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -1994,7 +2027,7 @@ Slow
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Provider Usage
+                {{ t('dashboard.sections.analytics.breakdown.providerUsage') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.searchProviderDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2005,7 +2038,7 @@ Slow
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Provider Results
+                {{ t('dashboard.sections.analytics.breakdown.providerResults') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.searchProviderResultDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2019,7 +2052,7 @@ Slow
           <div v-else class="space-y-6 text-sm">
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Executed Sources
+                {{ t('dashboard.sections.analytics.breakdown.executedSources') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.featureUseSourceTypeDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2030,7 +2063,7 @@ Slow
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Item Kinds
+                {{ t('dashboard.sections.analytics.breakdown.itemKinds') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.featureUseItemKindDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2041,7 +2074,7 @@ Slow
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Plugins
+                {{ t('dashboard.sections.analytics.breakdown.plugins') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.featureUsePluginDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2052,7 +2085,7 @@ Slow
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Usage Categories
+                {{ t('dashboard.sections.analytics.breakdown.usageCategories') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.featureUseCategoryDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2063,7 +2096,7 @@ Slow
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Update Actions
+                {{ t('dashboard.sections.analytics.usage.updateActions') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.updateActionDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2074,7 +2107,7 @@ Slow
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Update Stages
+                {{ t('dashboard.sections.analytics.breakdown.updateStages') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.updateStageDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2085,7 +2118,7 @@ Slow
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Update Results
+                {{ t('dashboard.sections.analytics.usage.updateResults') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.updateResultDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2096,7 +2129,7 @@ Slow
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Update Channels
+                {{ t('dashboard.sections.analytics.usage.updateChannels') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.updateChannelDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2107,7 +2140,7 @@ Slow
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Update Sources
+                {{ t('dashboard.sections.analytics.usage.updateSources') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.updateSourceDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2118,7 +2151,7 @@ Slow
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Update Tags
+                {{ t('dashboard.sections.analytics.usage.updateTags') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.updateTagDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2129,7 +2162,7 @@ Slow
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-white">
-                Update Item Kinds
+                {{ t('dashboard.sections.analytics.breakdown.updateItemKinds') }}
               </h4>
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.updateItemKindDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
@@ -2143,5 +2176,6 @@ Slow
       </div>
       </div>
     </section>
-  </div>
+    </div>
+  </AdminPageShell>
 </template>
