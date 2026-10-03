@@ -64,7 +64,7 @@
     "eslint": "^9.39.4",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
-    "markdown-it": "14.2.0",
+    "markdown-it": "15.0.2",
     "markdownlint": "0.39.0",
     "marked": "catalog:",
     "remark-mdc": "3.11.1",
