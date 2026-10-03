@@ -10,6 +10,7 @@ import { shortcutChordLabel, shortcutChordMatches } from '~/modules/shortcuts/sh
 import { isSameShortcutChord, parseShortcutString } from '~/modules/shortcuts/shortcut-string'
 import {
   COREBOX_APP_BIND_SHORTCUT_ACTION_ID,
+  COREBOX_FLOW_TRANSFER_ACTION_ID,
   COREBOX_PRIMARY_ACTION_ID,
   COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
   COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID
@@ -203,7 +204,7 @@ const BUILTIN_SPECS: Readonly<Record<string, HostActionSpec>> = {
     glyph: glyph('translate-pin'),
     chord: { code: 'KeyT', alt: true }
   },
-  'flow-transfer': {
+  [COREBOX_FLOW_TRANSFER_ACTION_ID]: {
     slot: 'open',
     rank: 130,
     label: key('corebox.actions.flowTransfer'),
@@ -457,7 +458,7 @@ export function generateBuiltinActions(item: TuffItem): MetaAction[] {
     actions.push(builtin(COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID, 'Translate image', 'open'))
     actions.push(builtin(COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID, 'Translate and pin', 'open'))
   }
-  actions.push(builtin('flow-transfer', 'Transfer to plugin', 'open'))
+  actions.push(builtin(COREBOX_FLOW_TRANSFER_ACTION_ID, 'Transfer to plugin', 'open'))
   // Every item offers it: settings are about the app, not about whatever the row holds.
   actions.push(builtin('open-settings', 'Open settings', 'host'))
   return actions

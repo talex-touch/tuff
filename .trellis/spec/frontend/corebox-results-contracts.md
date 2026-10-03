@@ -184,6 +184,94 @@ followedRowWasOnScreen =
   items !== previousItems && focus !== previousFocus && isRowOnScreen(onScreenItemRefs[previousFocus])
 ```
 
+## Scenario: The focus scroll measures only a window that can hold the row (2026-10-02)
+
+### 1. Scope / Trigger
+
+- Changing `scrollActiveItemIntoView` (`hooks/useKeyboard.ts`) or its callers: the end of
+  `onKeyDown`, `revealActiveItemAfterReflow` / `handleGridColumnsChange` and the results watcher in
+  `box/CoreBox.vue`.
+- Why: after clearing a clipboard attachment the list ended 183 px down (a later run 144 px),
+  hiding 此刻常用 and its guidance — the defect in the user's 2026-10-02 screenshot. The results
+  render a frame or more before main grows the window for them, and these callers measured the
+  focused row against that collapsed or half-grown viewport.
+
+### 2. Signatures
+
+```ts
+// hooks/useKeyboard.ts — the only writer of the results scrollTop besides CoreBox's scrollTo(0, 0)
+function scrollActiveItemIntoView(): void // rAF; effectiveHeight = viewport − footer inset
+
+// box/CoreBox.vue
+let gridColumnsResults: TuffItem[] | null // the results the grid last reported its columns for
+function handleGridColumnsChange(columns: number): void
+const TILE_REFLOW_SETTLE_MS = 260         // revealActiveItemAfterReflow: nextTick + 260 ms
+```
+
+### 3. Contracts
+
+- **No scroll against a viewport shorter than the row.** `effectiveHeight < itemBottom − itemTop`
+  returns without scrolling: the window is collapsed to its header or still growing, and any scroll
+  computed then buries the sections above the row once the window has grown.
+- **Row 0 scrolls to the top.** When focus is 0 and the row is above the viewport, scroll to 0, not
+  to the row's top: nothing focusable sits above row 0, only section titles and the habitual
+  guidance (which takes no focus), and they must come back with it.
+- **Only a re-wrap reveals.** `handleGridColumnsChange` stores the column count as before but calls
+  `revealActiveItemAfterReflow` only when `res.value` is the same array it reported for last time —
+  the same tiles re-wrapping (the preview pane squeezing the row). A grid mounting for new results
+  (including the first grid after clearing an attachment) reports its columns too; revealing then
+  ran the 260 ms re-scroll mid-way through the window's growth. New results belong to the results
+  watcher (previous scenario).
+- Everything else in the previous scenario stands: instant, minimal, a row the user scrolled away
+  from stays where they put it.
+
+### 4. Validation & Error Matrix
+
+| Situation | Scroll |
+| --- | --- |
+| Focus row below the fold in a settled window | Row bottom to the footer's top (as before) |
+| Focus row above the viewport, focus > 0 | Row top to the viewport top (as before) |
+| Focus 0 above the viewport | `scrollTo(0, 0)` |
+| Viewport shorter than the row (collapsed or growing) | None |
+| Grid reports columns for new results | Columns stored, no reveal |
+| Same results re-wrap (preview pane) | Reveal: nextTick + 260 ms |
+
+### 5. Good / Base / Bad Cases
+
+- Good (real device, 2026-10-03): ↓ to the last of 10 rows scrolls 196 px, its bottom on the footer's
+  top; ↑ back to row 0 returns to 0 with 此刻常用 visible; a fresh profile's first grid, mounted while
+  the window grew from 56 px, gets only the fresh-results `scrollTo(0, 0)`.
+- Base: opening the preview pane squeezes the grid; the selected tile is revealed after the re-wrap.
+- Bad (before): Esc clearing an attachment in a collapsed window → the nextTick reveal scrolled to
+  234 against a ~8 px viewport, the 260 ms reveal then aligned the row's top → 183; with the guard
+  alone, the 260 ms reveal still landed mid-animation → 144.
+
+### 6. Tests Required
+
+- `hooks/useKeyboard.test.ts` › "useKeyboard focus scroll": below the fold → `(0, 112)`; above,
+  focus 4 → `(0, 100)`; row 0 above → `(0, 0)`; collapsed and growing viewports → no scroll;
+  collapsed → grown sequence stays at 0; Esc clearing an attachment in a collapsed window → no
+  scroll. Negative controls: no guard, an always-returning guard, `effectiveHeight < itemBottom`.
+- `box/CoreBox.result-switch.test.ts` › "CoreBox grid re-wrap reveal": a grid laying out new results
+  (first report, then other results) never calls `scrollActiveItemIntoView`; the same tiles
+  re-wrapping call it on nextTick and again at 260 ms.
+
+### 7. Wrong vs Correct
+
+```ts
+// Wrong: any column report reveals, including a fresh grid mounting while the window grows.
+if (boxOptions.visibleGridColumns === columns) return
+boxOptions.visibleGridColumns = columns
+revealActiveItemAfterReflow()
+
+// Correct: only the tiles already on screen re-wrapping.
+const rewrap = gridColumnsResults === res.value
+gridColumnsResults = res.value
+if (boxOptions.visibleGridColumns === columns) return
+boxOptions.visibleGridColumns = columns
+if (rewrap) revealActiveItemAfterReflow()
+```
+
 ## Scenario: Results are append-only; a same-query refresh reconciles at search end
 
 ### 1. Scope / Trigger

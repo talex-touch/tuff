@@ -89,4 +89,27 @@ describe('MetaActionItem row', () => {
     expect(disabled.emitted('run')).toBeUndefined()
     expect(disabled.get('button').attributes('aria-disabled')).toBe('true')
   })
+
+  it('ends the row with its trailing slot, where the keys go, and adds nothing without one', () => {
+    const keysOnly = mount(MetaActionItem, {
+      props: { label: 'Pin', glyph: 'pin', shortcuts: ['⌘.'], active: false }
+    })
+    expect(
+      [...keysOnly.get('.MetaActionItem-Keys').element.children].map((child) => child.tagName)
+    ).toEqual(['KBD'])
+
+    const bare = mount(MetaActionItem, {
+      props: { label: 'Share', glyph: 'share', shortcuts: [], active: false }
+    })
+    expect(bare.find('.MetaActionItem-Keys').exists()).toBe(false)
+
+    // A row with no keys still gets its accessory at the end.
+    const trailing = mount(MetaActionItem, {
+      props: { label: 'Stop All Sessions', subtitle: 'QuickOps', shortcuts: [], active: false },
+      slots: { trailing: '<i class="trailing-mark" />' }
+    })
+    const keys = trailing.get('.MetaActionItem-Keys')
+    expect(keys.find('.trailing-mark').exists()).toBe(true)
+    expect(trailing.get('button').element.lastElementChild).toBe(keys.element)
+  })
 })

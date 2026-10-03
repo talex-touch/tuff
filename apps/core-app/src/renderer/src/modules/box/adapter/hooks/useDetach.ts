@@ -5,13 +5,16 @@ import type {
   ITuffIcon,
   TuffItem
 } from '@talex-touch/utils'
+import type { MetaPanelAnchor } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { ComputedRef, Ref } from 'vue'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents, DivisionBoxEvents, FlowEvents } from '@talex-touch/utils/transport/events'
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { createRendererLogger } from '../../../../utils/renderer-log'
+import { showCoreBoxFooterFeedback } from '../../meta-actions/footer-feedback'
+import { isCoreBoxFooterShown } from './useKeyboard'
 
 const DETACHED_PAYLOAD_STATE_KEY = 'detachedPayload'
 const COREBOX_HEADER_HEIGHT = 56
@@ -155,10 +158,12 @@ function getFlowPermissionMessage(
     return null
   }
   const permissionId = typeof error.permissionId === 'string' ? error.permissionId : ''
+  // The catalogs' one missing-permission string sits under the setup page's namespace; a key
+  // neither locale has would print itself in the footer.
   if (!permissionId) {
-    return t('systemPermission.requiredPermission', { permission: 'storage.shared' })
+    return t('setupPermissions.requiredPermission', { permission: 'storage.shared' })
   }
-  return t('systemPermission.requiredPermission', { permission: permissionId })
+  return t('setupPermissions.requiredPermission', { permission: permissionId })
 }
 
 function getActiveFeature(
@@ -186,8 +191,13 @@ export function useDetach(options: UseDetachOptions) {
   const transport = useTuffTransport()
 
   const flowVisible = ref(false)
-  const flowPayload = ref<FlowPayload | null>(null)
+  // Shallow: the payload goes over IPC as it is, and structured clone rejects Vue's proxies. A deep
+  // ref wrapped it in one, so every dispatch failed with "An object could not be cloned".
+  const flowPayload = shallowRef<FlowPayload | null>(null)
   const flowSessionId = ref('')
+  // Where the Flow picker anchors: above the footer's ⌘K hint when the footer shows, as the ⌘K
+  // panel does, else in the window corner.
+  const flowAnchor = ref<MetaPanelAnchor>('corner')
 
   async function getCurrentCoreBoxBounds(): Promise<{
     x: number
@@ -268,7 +278,10 @@ export function useDetach(options: UseDetachOptions) {
   }
 
   function openFlowSelector(item: TuffItem): void {
-    flowPayload.value = buildCoreBoxFlowPayload(item, searchVal.value)
+    // `toRaw`: an item taken from an activation or the box data is a Proxy, which the clone rejects
+    // as well.
+    flowPayload.value = buildCoreBoxFlowPayload(toRaw(item), searchVal.value)
+    flowAnchor.value = !isUIMode.value && isCoreBoxFooterShown() ? 'footer' : 'corner'
     flowVisible.value = true
   }
 
@@ -278,6 +291,10 @@ export function useDetach(options: UseDetachOptions) {
     flowSessionId.value = ''
   }
 
+  /**
+   * The outcome goes to the footer, as a ⌘K action's does: CoreBox mounts no toast host, so a toast
+   * never reached the screen and a transfer that failed looked like one that had not been tried.
+   */
   async function dispatchFlow(payload: {
     targetId: string
     consentToken?: string
@@ -294,18 +311,18 @@ export function useDetach(options: UseDetachOptions) {
         options: { preferredTarget: targetId, skipSelector: true, consentToken, confirmationToken }
       })
       if (response?.success) {
-        toast.success(t('corebox.flowSent', '已发送到目标插件'))
+        showCoreBoxFooterFeedback(t('corebox.flowSent', '已发送到目标插件'))
       } else {
         const permissionMessage = getFlowPermissionMessage(response?.error, t)
         if (permissionMessage) {
-          toast.warning(permissionMessage)
+          showCoreBoxFooterFeedback(permissionMessage, 'error')
           return
         }
         throw new Error(response?.error?.message || 'Flow failed')
       }
     } catch (error) {
       detachLog.error('Flow failed:', error)
-      toast.error(t('corebox.flowFailed', '流转失败'))
+      showCoreBoxFooterFeedback(t('corebox.flowFailed', '流转失败'), 'error')
     } finally {
       closeFlowSelector()
     }
@@ -365,6 +382,7 @@ export function useDetach(options: UseDetachOptions) {
     flowVisible,
     flowPayload,
     flowSessionId,
+    flowAnchor,
     detachFeature,
     detachUIMode,
     openFlowSelector,

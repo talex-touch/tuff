@@ -44,8 +44,7 @@ const MISSING_FROM_BOTH = [
   // keys' only call sites with them. A baseline may only shrink; carrying them would let 10 new
   // dead keys in unnoticed.
   'store.official',
-  'system.unknownError',
-  'systemPermission.requiredPermission'
+  'system.unknownError'
 ]
 
 function loadLocale(name: string): Record<string, unknown> {

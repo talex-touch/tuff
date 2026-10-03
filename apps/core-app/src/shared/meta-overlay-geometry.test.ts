@@ -4,7 +4,8 @@ import {
   extendMetaPanelHeightForPluginRows,
   META_PANEL_MAX_HEIGHT,
   resolveMetaOverlayWindowHeight,
-  resolveMetaPanelBottomInset
+  resolveMetaPanelBottomInset,
+  resolveMetaPanelCssVars
 } from './meta-overlay-geometry'
 
 describe('resolveMetaPanelBottomInset', () => {
@@ -12,6 +13,30 @@ describe('resolveMetaPanelBottomInset', () => {
     expect(resolveMetaPanelBottomInset('footer')).toBe(52)
     expect(resolveMetaPanelBottomInset('corner')).toBe(12)
     expect(resolveMetaPanelBottomInset(undefined)).toBe(12)
+  })
+})
+
+describe('resolveMetaPanelCssVars', () => {
+  it('hands the panel CSS the numbers main sizes the window with', () => {
+    expect(resolveMetaPanelCssVars('footer')).toEqual({
+      '--meta-panel-width': '340px',
+      '--meta-panel-max-height': '420px',
+      '--meta-panel-right': '12px',
+      '--meta-panel-top': '64px',
+      '--meta-panel-bottom': '52px',
+      '--meta-header-height': '40px',
+      '--meta-filter-height': '40px',
+      '--meta-list-padding': '6px',
+      '--meta-row-height': '32px',
+      '--meta-section-title-height': '24px',
+      '--meta-section-gap': '4px'
+    })
+  })
+
+  it('moves only the bottom inset with the anchor', () => {
+    const footer = resolveMetaPanelCssVars('footer')
+    expect(resolveMetaPanelCssVars('corner')).toEqual({ ...footer, '--meta-panel-bottom': '12px' })
+    expect(resolveMetaPanelCssVars(undefined)).toEqual({ ...footer, '--meta-panel-bottom': '12px' })
   })
 })
 

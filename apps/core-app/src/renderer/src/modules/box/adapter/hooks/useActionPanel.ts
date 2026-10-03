@@ -8,6 +8,7 @@ import { useI18n } from 'vue-i18n'
 import { showCoreBoxFooterFeedback } from '../../meta-actions/footer-feedback'
 import { COREBOX_META_ACTION_EVENT } from '../../meta-actions/meta-action-model'
 import {
+  COREBOX_FLOW_TRANSFER_ACTION_ID,
   COREBOX_PRIMARY_ACTION_ID,
   COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
   COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID,
@@ -159,7 +160,7 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
         if (path) await appSdk.showInFolder(path, { reveal: true })
         break
       }
-      case 'flow-transfer':
+      case COREBOX_FLOW_TRANSFER_ACTION_ID:
         if (openFlowSelector) openFlowSelector(targetItem)
         break
       case 'open-settings': {

@@ -3007,8 +3007,7 @@
     "sections": {
       "habitual": "此刻常用",
       "proposed": "最近案例",
-      "habitualEmptyTitle": "常用项目会随使用逐步出现",
-      "habitualEmptyHint": "通过 Tuff 使用应用或功能，或在操作菜单中选择“固定到推荐”。"
+      "habitualEmptyTitle": "常用项目会随使用出现"
     },
     "recommendation": {
       "badge": {
@@ -6251,12 +6250,9 @@
   },
   "flow": {
     "selectTarget": "选择目标",
-    "selectTargetDesc": "选择要将数据发送到的插件",
-    "searchTargets": "搜索目标...",
+    "searchTargets": "搜索目标…",
     "noTargets": "没有可用的目标",
-    "navigate": "导航",
-    "confirm": "确认",
-    "cancel": "取消",
+    "requiresConfirmation": "需要确认",
     "consentTitle": "确认流转",
     "consentDesc": "允许 {source} 将内容发送到 {target}？",
     "executionConfirmationTitle": "确认本次执行",

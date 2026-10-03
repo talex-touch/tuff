@@ -171,6 +171,7 @@ vi.mock('../../modules/box/adapter/hooks/useDetach', () => ({
     flowVisible: false,
     flowSessionId: '',
     flowPayload: undefined,
+    flowAnchor: 'corner',
     closeFlowSelector: () => {},
     dispatchFlow: () => {},
     openFlowSelector: () => {}
@@ -937,5 +938,70 @@ describe('CoreBox list scroll anchoring', () => {
     expect(anchoring).toEqual([
       { selector: '.CoreBoxRes-Main > .scroll-area .item-list.item-list--flip', value: 'none' }
     ])
+  })
+})
+
+describe('CoreBox grid re-wrap reveal', () => {
+  const gridRows = (prefix: string, count: number): TuffItem[] =>
+    Array.from({ length: count }, (_, index) => item(`${prefix}-${index}`, `${prefix} ${index}`))
+
+  function gridLayout(results: TuffItem[]): TuffContainerLayout {
+    return {
+      mode: 'grid',
+      grid: { columns: 6 },
+      sections: [{ id: 'habitual', itemIds: results.map((result) => result.id), layout: 'grid' }]
+    } as TuffContainerLayout
+  }
+
+  async function mountGrid(results: TuffItem[]) {
+    state.layout = gridLayout(results)
+    state.searchVal.value = ''
+    state.results.value = results
+    wrapper = mount(CoreBox, { global: { plugins: [router], stubs } })
+    await nextTick()
+    state.scrollActiveItemIntoView.mockClear()
+    return wrapper.findComponent(stubs.BoxGrid)
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    state.scrollActiveItemIntoView.mockClear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    state.scrollActiveItemIntoView.mockClear()
+  })
+
+  it('leaves the focus scroll alone when a grid lays out new results', async () => {
+    // The first grid after clearing an attachment, then a grid for the next results: each reports
+    // its columns while the window may still be growing for it. Revealing would measure that
+    // window mid-animation and scroll the sections above row 0 away.
+    const grid = await mountGrid(gridRows('first', 6))
+    grid.vm.$emit('update:visibleColumns', 6)
+    await nextTick()
+    vi.advanceTimersByTime(1_000)
+    expect(state.scrollActiveItemIntoView).not.toHaveBeenCalled()
+
+    state.results.value = gridRows('next', 3)
+    await nextTick()
+    grid.vm.$emit('update:visibleColumns', 3)
+    await nextTick()
+    vi.advanceTimersByTime(1_000)
+    expect(state.scrollActiveItemIntoView).not.toHaveBeenCalled()
+  })
+
+  it('re-runs the focus scroll when the tiles on screen re-wrap', async () => {
+    // The preview pane squeezing the row: the same results, fewer columns.
+    const grid = await mountGrid(gridRows('tiles', 6))
+    grid.vm.$emit('update:visibleColumns', 6)
+    await nextTick()
+    state.scrollActiveItemIntoView.mockClear()
+
+    grid.vm.$emit('update:visibleColumns', 3)
+    await nextTick()
+    expect(state.scrollActiveItemIntoView).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(260)
+    expect(state.scrollActiveItemIntoView).toHaveBeenCalledTimes(2)
   })
 })

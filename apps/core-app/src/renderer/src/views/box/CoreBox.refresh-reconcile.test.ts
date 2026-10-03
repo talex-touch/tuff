@@ -159,6 +159,7 @@ vi.mock('../../modules/box/adapter/hooks/useDetach', () => ({
     flowVisible: false,
     flowSessionId: '',
     flowPayload: undefined,
+    flowAnchor: 'corner',
     closeFlowSelector: () => {},
     dispatchFlow: () => {},
     openFlowSelector: () => {}

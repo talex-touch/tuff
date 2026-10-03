@@ -38,7 +38,10 @@ Electron main-process (apps/core-app/src/main) coding contracts.
   over the pre-open height on close), the host-only `panelState` notification that keeps the
   grown space painted until the shrink lands, `showInFolder` reveal-never-open (macOS packages
   after realpath, behind `system.shell`), and the key rules (code chords, platform-split pin,
-  held-Enter guard, IME) with failures logged as id + code and shown in footer or header.
+  held-Enter guard, IME) with failures logged as id + code and shown in footer or header; plus the
+  流转 hand-off (main waits for the Flow picker's floor instead of handing the height back) and the
+  Flow picker in the CoreBox renderer (the shared `MetaPanel` card, window-capture keyboard
+  ownership, `room` / `floorApplied` window floor and paint, clone-safe payload, footer feedback).
 - [global-shortcut-contracts.md](global-shortcut-contracts.md) — the OS-level keys
   `ShortcutModule` registers: defaults written once (`shared/corebox-shortcut.ts`) and migrated
   by value, not by author; what a refused registration means per OS (macOS registers

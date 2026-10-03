@@ -56,7 +56,7 @@ const mocks = vi.hoisted(() => ({
   // The CoreBox window height the manager reads and writes through WindowManager.
   windowHeight: 480,
   getSettledHeight: vi.fn((): number | null => mocks.windowHeight),
-  setHeight: vi.fn((height: number) => {
+  setHeight: vi.fn((height: number, _target?: unknown) => {
     mocks.windowHeight = height
   }),
   // Whether an animated resize is still in flight; a resize without the animation lands at once.
@@ -157,6 +157,7 @@ vi.mock('electron', () => ({
 
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
+import { COREBOX_FLOW_TRANSFER_ACTION_ID } from '../../../../shared/events/corebox-scenes'
 import { metaOverlayManager } from './meta-overlay'
 
 const item = {
@@ -879,5 +880,334 @@ describe('MetaOverlayManager panel state while the window animates back', () => 
     vi.advanceTimersByTime(40)
 
     expect(published().at(-1)).toEqual({ visible: true, grown: false })
+  })
+})
+
+/**
+ * The transfer row opens the Flow picker in CoreBox, and the picker needs the window next. Handing
+ * the height back on the spot shrank the window and the picker grew it again a moment later, so
+ * the panel stays open until the picker's room arrives, and closing on it replays that room.
+ */
+describe('MetaOverlayManager hand-off to the Flow picker', () => {
+  const hostWindow = expect.objectContaining({ window: mocks.parentWindow })
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubEnv('ELECTRON_RENDERER_URL', 'http://localhost:5173/')
+    metaOverlayManager.destroy()
+    vi.clearAllMocks()
+    mocks.createdMetaWebContents.length = 0
+    mocks.createdMetaViews.length = 0
+    mocks.windowHeight = 300
+    mocks.isResizing.mockReturnValue(false)
+    metaOverlayManager.init(mocks.parentWindow as never)
+    expect(metaOverlayManager.markRendererReady(mocks.createdMetaWebContents.at(-1)!.id)).toBe(true)
+  })
+
+  afterEach(() => {
+    metaOverlayManager.destroy()
+    mocks.isResizing.mockReturnValue(false)
+    vi.useRealTimers()
+  })
+
+  function request(overrides: Partial<MetaShowRequest> = {}): MetaShowRequest {
+    return { item, builtinActions: [], itemActions: [], pluginActions: [], ...overrides }
+  }
+
+  function published(): unknown[] {
+    return mocks.broadcastToWindow.mock.calls
+      .filter(([, event]) => event === CoreBoxEvents.metaOverlay.panelState)
+      .map(([, , payload]) => payload)
+  }
+
+  /** Every height the window was set to, in order. */
+  function heights(): number[] {
+    return mocks.setHeight.mock.calls.map(([height]) => height)
+  }
+
+  function hideDispatches(): number {
+    return mocks.sendTo.mock.calls.filter(([, event]) => event === MetaOverlayEvents.ui.hide).length
+  }
+
+  /**
+   * `CoreBoxModule.applyLayoutUpdate` past its guards: the panel is offered the update first, and
+   * it is applied only when not held. The held replay re-enters it, as the module's does.
+   */
+  function applyLayoutUpdate(height: number): void {
+    if (metaOverlayManager.holdLayoutUpdate(() => applyLayoutUpdate(height))) return
+    mocks.setHeight(height, { window: mocks.parentWindow })
+  }
+
+  /** Opens a panel that grows the window from 300 to 416, then runs its transfer row. */
+  async function transferFromGrownPanel(): Promise<void> {
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    expect(heights()).toEqual([416])
+
+    await expect(
+      metaOverlayManager.executeAction(COREBOX_FLOW_TRANSFER_ACTION_ID, item)
+    ).resolves.toEqual({ success: true })
+
+    // Relayed like any renderer row: only the close waits.
+    expect(mocks.broadcastToWindow).toHaveBeenCalledWith(
+      mocks.parentWindow.id,
+      CoreBoxEvents.metaOverlay.itemAction,
+      { actionId: COREBOX_FLOW_TRANSFER_ACTION_ID, item }
+    )
+  }
+
+  function rendererGone(): void {
+    const listener = mocks.createdMetaViews
+      .at(-1)!
+      .webContents.on.mock.calls.find(([event]) => event === 'render-process-gone')?.[1] as
+      | (() => void)
+      | undefined
+    expect(listener).toBeTypeOf('function')
+    listener!()
+  }
+
+  it('moves the window once, from the panel straight to the picker, when its room arrives', async () => {
+    await transferFromGrownPanel()
+
+    // Still open: nothing handed back, the renderer not reset, focus not moved.
+    expect(metaOverlayManager.getVisible()).toBe(true)
+    expect(heights()).toEqual([416])
+    expect(hideDispatches()).toBe(0)
+    expect(mocks.parentWindow.webContents.focus).not.toHaveBeenCalled()
+
+    applyLayoutUpdate(536)
+
+    // Never back to 300 on the way: that was the shrink before the picker grew it again.
+    expect(heights()).toEqual([416, 536])
+    expect(mocks.setHeight).toHaveBeenLastCalledWith(536, hostWindow)
+    expect(metaOverlayManager.getVisible()).toBe(false)
+    expect(hideDispatches()).toBe(1)
+    expect(mocks.parentWindow.webContents.focus).toHaveBeenCalledOnce()
+    expect(published()).toEqual([
+      { visible: true, grown: true },
+      { visible: false, grown: false }
+    ])
+    expect(vi.getTimerCount()).toBe(0)
+
+    vi.advanceTimersByTime(1_000)
+    expect(heights()).toEqual([416, 536])
+    expect(hideDispatches()).toBe(1)
+  })
+
+  it('says the update was held and replays it exactly once, in place of the pre-open height', async () => {
+    await transferFromGrownPanel()
+    const replay = vi.fn()
+
+    // The module must not apply it as well: the replay has run by the time the hold returns.
+    expect(metaOverlayManager.holdLayoutUpdate(replay)).toBe(true)
+
+    expect(replay).toHaveBeenCalledOnce()
+    expect(heights()).toEqual([416])
+    expect(metaOverlayManager.getVisible()).toBe(false)
+    expect(metaOverlayManager.holdLayoutUpdate(vi.fn())).toBe(false)
+  })
+
+  it('hands the height back at the deadline when the picker never asks for room', async () => {
+    await transferFromGrownPanel()
+
+    // FLOW_HAND_OFF_MAX_WAIT_MS.
+    vi.advanceTimersByTime(499)
+    expect(metaOverlayManager.getVisible()).toBe(true)
+    expect(heights()).toEqual([416])
+
+    vi.advanceTimersByTime(1)
+
+    expect(metaOverlayManager.getVisible()).toBe(false)
+    expect(heights()).toEqual([416, 300])
+    expect(mocks.setHeight).toHaveBeenLastCalledWith(300, hostWindow)
+    expect(hideDispatches()).toBe(1)
+    expect(mocks.parentWindow.webContents.focus).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('keeps the space painted from the transfer until the picker height has landed', async () => {
+    await transferFromGrownPanel()
+
+    // The window is still taller than CoreBox's own layout for the whole wait.
+    vi.advanceTimersByTime(100)
+    expect(published()).toEqual([{ visible: true, grown: true }])
+
+    // The picker's room animates the window from 416 to 536.
+    mocks.isResizing.mockReturnValue(true)
+    applyLayoutUpdate(536)
+
+    expect(heights()).toEqual([416, 536])
+    expect(published()).toEqual([
+      { visible: true, grown: true },
+      { visible: false, grown: true }
+    ])
+
+    vi.advanceTimersByTime(160)
+    expect(published()).toHaveLength(2)
+
+    mocks.isResizing.mockReturnValue(false)
+    vi.advanceTimersByTime(40)
+
+    expect(published()).toEqual([
+      { visible: true, grown: true },
+      { visible: false, grown: true },
+      { visible: false, grown: false }
+    ])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('closes as usual when dismissed during the wait, and the deadline then does nothing', async () => {
+    await transferFromGrownPanel()
+
+    // What Esc in the overlay and `ui.hide` both call.
+    metaOverlayManager.hide()
+
+    expect(heights()).toEqual([416, 300])
+    expect(vi.getTimerCount()).toBe(0)
+
+    vi.advanceTimersByTime(1_000)
+    expect(heights()).toEqual([416, 300])
+    expect(hideDispatches()).toBe(1)
+    expect(mocks.parentWindow.webContents.focus).toHaveBeenCalledOnce()
+  })
+
+  it('ends with CoreBox hiding, without resizing the hidden window or moving focus', async () => {
+    await transferFromGrownPanel()
+
+    for (const listener of mocks.parentWindow.hideListeners) listener()
+
+    expect(metaOverlayManager.getVisible()).toBe(false)
+    expect(hideDispatches()).toBe(1)
+    expect(heights()).toEqual([416])
+    expect(published().at(-1)).toEqual({ visible: false, grown: false })
+    expect(vi.getTimerCount()).toBe(0)
+
+    vi.advanceTimersByTime(1_000)
+    expect(heights()).toEqual([416])
+    expect(hideDispatches()).toBe(1)
+    expect(mocks.parentWindow.webContents.focus).not.toHaveBeenCalled()
+    expect(metaOverlayManager.holdLayoutUpdate(vi.fn())).toBe(false)
+  })
+
+  it('ends with the overlay renderer exiting, which still hands the height back', async () => {
+    await transferFromGrownPanel()
+    expect(heights()).toEqual([416])
+
+    rendererGone()
+
+    expect(heights()).toEqual([416, 300])
+    expect(published().at(-1)).toEqual({ visible: false, grown: false })
+    expect(vi.getTimerCount()).toBe(0)
+
+    vi.advanceTimersByTime(1_000)
+    expect(heights()).toEqual([416, 300])
+  })
+
+  it('ends with a reopen, which keeps holding layout updates for the panel', async () => {
+    await transferFromGrownPanel()
+
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    const replay = vi.fn()
+
+    expect(metaOverlayManager.holdLayoutUpdate(replay)).toBe(true)
+    expect(replay).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1_000)
+    // The deadline went with the hand-off: the reopened panel stays, and nothing is handed back.
+    expect(metaOverlayManager.getVisible()).toBe(true)
+    expect(hideDispatches()).toBe(0)
+    expect(heights()).toEqual([416])
+
+    metaOverlayManager.hide()
+    expect(replay).toHaveBeenCalledOnce()
+    expect(heights()).toEqual([416])
+  })
+
+  it('keeps one deadline across a second transfer, so none outlives the hand-off', async () => {
+    await transferFromGrownPanel()
+    await metaOverlayManager.executeAction(COREBOX_FLOW_TRANSFER_ACTION_ID, item)
+    expect(metaOverlayManager.getVisible()).toBe(true)
+
+    applyLayoutUpdate(536)
+
+    expect(heights()).toEqual([416, 536])
+    expect(hideDispatches()).toBe(1)
+    expect(vi.getTimerCount()).toBe(0)
+
+    // A deadline left over from the first transfer would close this panel when it ran out.
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    vi.advanceTimersByTime(1_000)
+    expect(metaOverlayManager.getVisible()).toBe(true)
+    expect(hideDispatches()).toBe(1)
+  })
+
+  it('closes at once when closing would not move the window', async () => {
+    mocks.windowHeight = 480
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+
+    await metaOverlayManager.executeAction(COREBOX_FLOW_TRANSFER_ACTION_ID, item)
+
+    // A panel that never grew the window and holds nothing hands nothing back: the picker grows
+    // the window from where it is, and focus has no reason to wait.
+    expect(metaOverlayManager.getVisible()).toBe(false)
+    expect(hideDispatches()).toBe(1)
+    expect(mocks.parentWindow.webContents.focus).toHaveBeenCalledOnce()
+    expect(heights()).toEqual([])
+    expect(published()).toEqual([
+      { visible: true, grown: false },
+      { visible: false, grown: false }
+    ])
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('waits for the picker on a panel that holds an update, even one that never grew the window', async () => {
+    mocks.windowHeight = 480
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+    // The results changed under the panel: closing would replay this, and the picker regrow it.
+    const stale = vi.fn()
+    expect(metaOverlayManager.holdLayoutUpdate(stale)).toBe(true)
+
+    await metaOverlayManager.executeAction(COREBOX_FLOW_TRANSFER_ACTION_ID, item)
+    expect(metaOverlayManager.getVisible()).toBe(true)
+
+    applyLayoutUpdate(536)
+
+    expect(stale).not.toHaveBeenCalled()
+    expect(heights()).toEqual([536])
+    expect(metaOverlayManager.getVisible()).toBe(false)
+  })
+
+  it('closes at once and hands the height back for any other renderer row', async () => {
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+
+    await metaOverlayManager.executeAction('copy-title', item)
+
+    expect(metaOverlayManager.getVisible()).toBe(false)
+    expect(heights()).toEqual([416, 300])
+    expect(hideDispatches()).toBe(1)
+    expect(mocks.parentWindow.webContents.focus).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each([
+    ['a plugin action', 'plugin-action'],
+    // The plugin owns it, not the CoreBox renderer: no picker opens.
+    ['a plugin action registered under the transfer id', COREBOX_FLOW_TRANSFER_ACTION_ID]
+  ])('closes at once for %s', async (_label, actionId) => {
+    metaOverlayManager.registerPluginAction('plugin-a', {
+      id: actionId,
+      render: { basic: { title: 'Plugin action' } }
+    })
+    metaOverlayManager.show(request({ anchor: 'footer', desiredPanelHeight: 300 }))
+
+    await metaOverlayManager.executeAction(actionId, item)
+
+    expect(mocks.sendToPlugin).toHaveBeenCalledExactlyOnceWith(
+      'plugin-a',
+      CoreBoxEvents.metaOverlay.actionExecuted,
+      { actionId, item, pluginId: 'plugin-a' }
+    )
+    expect(metaOverlayManager.getVisible()).toBe(false)
+    expect(heights()).toEqual([416, 300])
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

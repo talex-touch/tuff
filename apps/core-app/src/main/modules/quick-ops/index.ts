@@ -523,7 +523,7 @@ const QUICK_OPS_STOP_SYSTEM_AWAKE_FLOW_TARGET: FlowTarget = {
   name: 'QuickOps Stop System Awake',
   description: 'Stops the current QuickOps system-awake session if one is running.',
   supportedTypes: ['json', 'text'],
-  icon: 'ri:shutdown-line',
+  icon: 'ri:shut-down-line',
   actionId: QUICK_OPS_STOP_SYSTEM_AWAKE_FLOW_TARGET_FULL_ID,
   capabilities: {
     maxPayloadSize: 16 * 1024
@@ -548,7 +548,7 @@ const QUICK_OPS_SYSTEM_AWAKE_FLOW_TARGET: FlowTarget = {
   name: 'QuickOps System Awake',
   description: 'Starts or replaces the QuickOps system-awake session.',
   supportedTypes: ['json', 'text'],
-  icon: 'ri:power-line',
+  icon: 'ri:cup-line',
   actionId: QUICK_OPS_SYSTEM_AWAKE_FLOW_TARGET_FULL_ID,
   requireConfirm: true,
   capabilities: {

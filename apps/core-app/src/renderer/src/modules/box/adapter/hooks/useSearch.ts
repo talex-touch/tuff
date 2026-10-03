@@ -15,6 +15,7 @@ import type {
   ActivationState,
   CoreBoxSearchSessionChunk
 } from '@talex-touch/utils/transport/events/types'
+import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import type { IUseSearch } from '../types'
 import type { DetachedDivisionConfig } from './detached-division'
@@ -321,9 +322,17 @@ function mergePluginFeatureActivationState(
   })
 }
 
+export interface UseSearchOptions {
+  /** Height the window must not go below while a panel needs the room (`useFlowPanelRoom`). */
+  windowFloor?: Readonly<Ref<number>>
+  /** Set to whether that floor is what holds the window above the results' own height. */
+  windowFloorApplied?: Ref<boolean>
+}
+
 export function useSearch(
   boxOptions: IBoxOptions,
-  clipboardOptions?: IClipboardOptions
+  clipboardOptions?: IClipboardOptions,
+  options: UseSearchOptions = {}
 ): IUseSearch {
   const shouldLog = () =>
     appSetting.searchEngine?.logsEnabled || appSetting.diagnostics?.verboseLogs
@@ -2132,7 +2141,14 @@ export function useSearch(
     }
   }
 
-  useResize({ results: res, activeActivations, loading, recommendationPending })
+  useResize({
+    results: res,
+    activeActivations,
+    loading,
+    recommendationPending,
+    floor: options.windowFloor,
+    floorApplied: options.windowFloorApplied
+  })
 
   watch(
     () => res.value.length,

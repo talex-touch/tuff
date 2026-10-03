@@ -44,6 +44,7 @@ import { useActionPanel } from '../../modules/box/adapter/hooks/useActionPanel'
 import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
 import { useClipboard } from '../../modules/box/adapter/hooks/useClipboard'
 import { useDetach } from '../../modules/box/adapter/hooks/useDetach'
+import { useFlowPanelRoom } from '../../modules/box/adapter/hooks/useFlowPanelRoom'
 import { useFocus } from '../../modules/box/adapter/hooks/useFocus'
 import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
 import { useListFlip } from '../../modules/box/adapter/hooks/useListFlip'
@@ -102,6 +103,16 @@ const clipboardOptions = reactive<IClipboardOptions>({
   activeClipboardSource: null
 })
 
+// The Flow picker is drawn in this window, so it needs the window to fit it as main makes the ⌘K
+// panel fit: useSearch's resize keeps the window at least `floor` tall while the picker is open,
+// and says through `floorApplied` when the floor is what holds it there.
+const {
+  floor: flowPanelFloor,
+  floorApplied: flowPanelFloorApplied,
+  fill: flowPanelFill,
+  update: updateFlowPanelRoom
+} = useFlowPanelRoom()
+
 const {
   searchVal,
   select,
@@ -119,7 +130,10 @@ const {
   deactivateProvider,
   deactivateAllProviders
   // cancelSearch
-} = useSearch(boxOptions, clipboardOptions)
+} = useSearch(boxOptions, clipboardOptions, {
+  windowFloor: flowPanelFloor,
+  windowFloorApplied: flowPanelFloorApplied
+})
 
 // The searching cue waits for the current query's first rows. Once they are up, the deferred layer
 // (the files) still gathering gets the quieter settling status instead (useSearch).
@@ -675,10 +689,13 @@ function focusCoreBoxInput(): void {
   if (!shouldShowInput.value) return
 
   void nextTick(() => {
+    // The Flow picker keeps focus in its own filter. Picked from the ⌘K panel, it opens just as
+    // main hands focus back to this window, which lands here, so either may come first.
+    if (detach.flowVisible) return
     focusInput()
     // Native window.focus() runs shortly after the show event and can move focus back to body.
     window.setTimeout(() => {
-      if (shouldShowInput.value) focusInput()
+      if (shouldShowInput.value && !detach.flowVisible) focusInput()
     }, 160)
   })
 }
@@ -909,11 +926,20 @@ async function handlePreviewOpenWith(applicationId: string): Promise<void> {
  * BoxGrid wraps tiles past what fits at their minimum width; the keyboard has to step rows by that
  * same count. The window keeps its height on purpose — a re-wrap while the preview pane slides in
  * would otherwise resize the window mid-animation — and the list scrolls instead.
+ *
+ * Only a re-wrap of the tiles already on screen can push the selection out of view. A grid that
+ * mounts for new results reports its columns too, and revealing then measures a window that is
+ * still growing for those results: the timed re-run lands mid-animation and scrolls the sections
+ * above row 0 away (the first grid after clearing an attachment ended 144px down). New results are
+ * the results watcher's below.
  */
+let gridColumnsResults: TuffItem[] | null = null
 function handleGridColumnsChange(columns: number): void {
+  const rewrap = gridColumnsResults === res.value
+  gridColumnsResults = res.value
   if (boxOptions.visibleGridColumns === columns) return
   boxOptions.visibleGridColumns = columns
-  revealActiveItemAfterReflow()
+  if (rewrap) revealActiveItemAfterReflow()
 }
 
 /**
@@ -1183,7 +1209,7 @@ const customCss = computed(() => {
       resultHoverClass,
       { 'CoreBox-Wrapper--canvas': isCanvasLayout },
       { 'CoreBox-Wrapper--division-no-header': isDivisionBox && !showDivisionBoxHeader },
-      { 'CoreBox-Wrapper--meta-fill': metaPanelFill }
+      { 'CoreBox-Wrapper--meta-fill': metaPanelFill || flowPanelFill }
     ]"
   >
     <component :is="'style'" v-if="customCss">{{ customCss }}</component>
@@ -1472,8 +1498,11 @@ const customCss = computed(() => {
     :visible="detach.flowVisible"
     :session-id="detach.flowSessionId"
     :payload="detach.flowPayload"
+    :anchor="detach.flowAnchor"
+    :should-animate="shouldAnimate"
     @close="detach.closeFlowSelector"
     @select="detach.dispatchFlow"
+    @room="updateFlowPanelRoom"
   />
 </template>
 
@@ -1914,10 +1943,11 @@ div.CoreBox {
   background-color: var(--tx-fill-color);
 }
 
-// The ⌘K panel grew the window (`useMetaPanelFill`). The results have no surface of their own, only
-// the mask above over the window material, so the space the growth added showed a blur of the
-// desktop under the panel's dim. Everything under the header takes the mask's colour at full
-// strength instead: over the mask, behind every row and the footer; the header keeps its material.
+// The ⌘K panel (`useMetaPanelFill`) or the Flow picker (`useFlowPanelRoom`) grew the window. The
+// results have no surface of their own, only the mask above over the window material, so the space
+// the growth added showed a blur of the desktop under the panel's dim. Everything under the header
+// takes the mask's colour at full strength instead: over the mask, behind every row and the
+// footer; the header keeps its material.
 .CoreBox-Wrapper.CoreBox-Wrapper--meta-fill::before {
   content: '';
   position: absolute;
