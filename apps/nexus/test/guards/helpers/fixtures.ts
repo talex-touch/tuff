@@ -54,6 +54,12 @@ export const historicalFixtures = {
     blob: '1ef54f622a7e4ca7f5d5b5a6c8f2b65d01835294',
     expectation: 'throw createError(...) at line 11 runs at <script setup> top level',
   },
+  pageSingleRoot: {
+    fixture: 'intelligence-overview.multi-root.vue.txt',
+    originalPath: 'app/pages/admin/intelligence-overview.vue',
+    blob: 'cdffd4c13b7f2f33c086206c671887f1f8f4aa5b',
+    expectation: 'the HTML comment at line 19 and <AdminPageShell> at line 24 are both template roots',
+  },
   i18nFallbackMismatch: {
     fixture: 'risk.buggy.vue.txt',
     originalPath: 'app/pages/admin/risk.vue',

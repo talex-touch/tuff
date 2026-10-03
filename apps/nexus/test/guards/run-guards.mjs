@@ -2,7 +2,7 @@
 /**
  * Single entry point for the nexus admin regression guards.
  *
- *   node test/guards/run-guards.mjs              # run all seven
+ *   node test/guards/run-guards.mjs              # run all eight
  *   node test/guards/run-guards.mjs --list       # inventory only, no run
  *   node test/guards/run-guards.mjs i18n         # vitest name filter
  *
