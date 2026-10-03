@@ -141,6 +141,8 @@ function layouts(home: string): SourceLayout[] {
         { path: 'skills', kind: 'skill' },
         { path: 'prompts', kind: 'command' }
       ],
+      // The agent's own user-level MCP file (pi-mcp-adapter's), named after the agent, not the file.
+      userMcpFiles: [{ path: join(home, '.pi', 'agent', 'mcp.json'), name: 'Pi MCP' }],
       projectFiles: [
         { path: 'AGENTS.md', kind: 'instruction' },
         { path: '.pi/settings.json', kind: 'config' }
@@ -168,6 +170,7 @@ function layouts(home: string): SourceLayout[] {
         { path: 'prompts', kind: 'command' },
         { path: 'instructions', kind: 'instruction' }
       ],
+      userMcpFiles: [{ path: join(home, '.omp', 'agent', 'mcp.json'), name: 'Oh My Pi MCP' }],
       projectFiles: [
         { path: '.omp/config.yml', kind: 'config' },
         { path: '.omp/settings.json', kind: 'config' },
@@ -389,6 +392,47 @@ async function readCandidateFile(
   return await readBoundedImportFile(sourceRoot, path)
 }
 
+/**
+ * Where a candidate came from, enough to tell two of one agent's files apart: the scope, labelled
+ * as the sources are (`User` / `Project`), and the file's path from that source's root. A file kept
+ * outside the root (`~/.claude.json` beside `~/.claude`) goes by its file name.
+ */
+function candidateOrigin(candidate: AiImportCandidate, root: string | undefined): string {
+  const fromRoot = root ? relative(root, candidate.path) : ''
+  const file =
+    fromRoot && !fromRoot.startsWith('..') && !isAbsolute(fromRoot)
+      ? fromRoot
+      : basename(candidate.path)
+  return `${candidate.scope === 'user' ? 'User' : 'Project'} ${file}`
+}
+
+/**
+ * One preview names an agent's MCP rows apart. The first keeps its name; a later one whose name the
+ * agent already has is followed by where it came from, so the user's and the project's
+ * `config.toml` never read alike (`Codex MCP · Project .codex/config.toml`), and by a count should
+ * even that be taken.
+ */
+function distinguishSameNamedMcpCandidates(
+  candidates: AiImportCandidate[],
+  sources: AiImportSourceSnapshot[]
+): AiImportCandidate[] {
+  const roots = new Map(sources.map((source) => [source.id, source.rootPath]))
+  const taken = new Set<string>()
+  return candidates.map((candidate) => {
+    if (candidate.kind !== 'mcp') return candidate
+    const isTaken = (name: string): boolean => taken.has(`${candidate.provider}\0${name}`)
+    let name = candidate.name
+    if (isTaken(name)) {
+      const origin = candidateOrigin(candidate, roots.get(candidate.sourceId))
+      const named = `${candidate.name} · ${origin}`
+      name = named
+      for (let count = 2; isTaken(name); count += 1) name = `${named} (${count})`
+    }
+    taken.add(`${candidate.provider}\0${name}`)
+    return name === candidate.name ? candidate : { ...candidate, name }
+  })
+}
+
 function candidateName(path: string, metadata: CandidateMetadata): string {
   if (metadata.name) return metadata.name
   const file = basename(path)
@@ -401,13 +445,21 @@ async function buildCandidate(
   source: AiImportSourceSnapshot,
   kind: AiImportItemKind,
   path: string,
-  /**
-   * Directory the file must stay inside. `userRoot` except for the MCP files an agent keeps beside
-   * its config directory, where the root is the directory holding the file itself.
-   */
-  containedBy: string = source.rootPath,
-  nameOverride?: string
+  options: {
+    /**
+     * Directory the file must stay inside. `userRoot` except for the MCP files an agent keeps
+     * beside its config directory, where the root is the directory holding the file itself.
+     */
+    containedBy?: string
+    nameOverride?: string
+    /**
+     * The agent's display name (`Codex`). The MCP servers a config file declares are named after
+     * it: the file's own name (`config`) says nothing about whose servers they are.
+     */
+    agentLabel?: string
+  } = {}
 ): Promise<AiImportCandidate[]> {
+  const { containedBy = source.rootPath, nameOverride, agentLabel } = options
   try {
     const { canonicalPath, content, updatedAt } = await readCandidateFile(containedBy, path)
     const extension = extname(canonicalPath).toLowerCase()
@@ -512,7 +564,7 @@ async function buildCandidate(
       id: kind === 'config' ? `${base.id}:mcp` : base.id,
       sourceKey: `mcp:${relative(source.rootPath, canonicalPath)}`,
       kind: 'mcp',
-      name: kind === 'config' ? `${base.name} MCP` : base.name,
+      name: kind === 'config' ? `${agentLabel ?? base.name} MCP` : base.name,
       serverNames: metadata.serverNames ?? [],
       transportTypes: metadata.transportTypes ?? [],
       secretKeyPaths: metadata.secretKeyPaths ?? [],
@@ -612,12 +664,19 @@ async function scanSource(
   }
   const candidates: AiImportCandidate[] = []
   for (const file of fileSpecs)
-    candidates.push(...(await buildCandidate(source, file.kind, join(canonicalRoot, file.path))))
+    candidates.push(
+      ...(await buildCandidate(source, file.kind, join(canonicalRoot, file.path), {
+        agentLabel: layout.label
+      }))
+    )
 
   // Contained by their own directory: these live next to the agent's config root, not inside it.
   for (const file of mcpFiles)
     candidates.push(
-      ...(await buildCandidate(source, 'mcp', file.path, dirname(file.path), file.name))
+      ...(await buildCandidate(source, 'mcp', file.path, {
+        containedBy: dirname(file.path),
+        nameOverride: file.name
+      }))
     )
 
   const budget = {
@@ -694,7 +753,7 @@ export class AiCliImportService {
       sources.map((source) => source.id)
     )
     const activeById = new Map(activeCandidates.map((candidate) => [candidate.id, candidate]))
-    const detected = candidates.map((candidate) => {
+    const detected = distinguishSameNamedMcpCandidates(candidates, sources).map((candidate) => {
       const active = activeById.get(candidate.id)
       return {
         ...candidate,

@@ -359,6 +359,78 @@ describe('aiCliImportService preview', () => {
       ignoredFields: ['owner']
     })
   })
+
+  it('finds the MCP servers pi and omp keep in their own mcp.json, named after each agent', async () => {
+    const workspace = join(fixtureRoot, 'workspace')
+    await mkdir(workspace, { recursive: true })
+    // The shapes on a real machine (2026-10-03): pi-mcp-adapter's stdio + HTTP entries, and omp's
+    // file with its `$schema` and a `timeout` the parser ignores.
+    await writeFixture(
+      fixtureRoot,
+      'home/.pi/agent/mcp.json',
+      JSON.stringify({
+        mcpServers: {
+          files: { command: 'npx', args: ['-y', 'server-filesystem'] },
+          remote: { url: 'https://example.invalid/mcp', lifecycle: 'lazy' }
+        }
+      })
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.omp/agent/mcp.json',
+      JSON.stringify({
+        $schema: 'https://example.invalid/mcp-schema.json',
+        mcpServers: { search: { type: 'stdio', command: 'uvx', args: ['search'], timeout: 30 } }
+      })
+    )
+
+    const scan = await new AiCliImportService().preview({
+      cwd: workspace,
+      providerIds: ['pi', 'oh-my-pi']
+    })
+
+    expect(
+      scan.candidates
+        .filter((candidate) => candidate.kind === 'mcp')
+        .map((candidate) => ({
+          provider: candidate.provider,
+          scope: candidate.scope,
+          name: candidate.name,
+          serverNames: candidate.kind === 'mcp' ? candidate.serverNames : []
+        }))
+    ).toEqual([
+      { provider: 'oh-my-pi', scope: 'user', name: 'Oh My Pi MCP', serverNames: ['search'] },
+      { provider: 'pi', scope: 'user', name: 'Pi MCP', serverNames: ['files', 'remote'] }
+    ])
+  })
+
+  it("names an agent's config-file servers after the agent, and two such rows apart by origin", async () => {
+    await writeFixture(
+      fixtureRoot,
+      'home/.codex/config.toml',
+      '[mcp_servers.review]\ncommand = "node"\n'
+    )
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.codex/config.toml',
+      '[mcp_servers.lint]\ncommand = "node"\n'
+    )
+
+    const scan = await new AiCliImportService().preview({
+      cwd: join(fixtureRoot, 'workspace'),
+      providerIds: ['codex']
+    })
+
+    expect(
+      scan.candidates
+        .filter((candidate) => candidate.kind === 'mcp')
+        .map((candidate) => [candidate.scope, candidate.name])
+    ).toEqual([
+      ['user', 'Codex MCP'],
+      // Not just `config.toml`: the user's file has that name too.
+      ['project', `Codex MCP · Project ${join('.codex', 'config.toml')}`]
+    ])
+  })
 })
 
 describe('aiCliImportService canonical ingress', () => {

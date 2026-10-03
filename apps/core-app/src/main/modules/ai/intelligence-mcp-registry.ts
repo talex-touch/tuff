@@ -1,4 +1,5 @@
 import type { AdaptedStructuredTool } from '@talex-touch/tuff-intelligence'
+import { delimiter, dirname } from 'node:path'
 import { McpToolAdapter } from '@talex-touch/tuff-intelligence'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -8,6 +9,10 @@ import { app } from 'electron'
 import { getSecureStoreValue, isSecureStoreAvailable } from '../../utils/secure-store'
 import { createLogger } from '../../utils/logger'
 import { createMcpFailure, readMcpFailureReason } from './intelligence-mcp-failure'
+import {
+  existingDirectBinDirectories,
+  findCommandInSearchRoots
+} from './providers/cli/cli-executable'
 import { projectToolError, projectToolErrorCode } from './tool-error-projection'
 
 const mcpLog = createLogger('Intelligence').child('McpRegistry')
@@ -318,15 +323,33 @@ export class IntelligenceMcpRegistry {
     generation: number
   ): Promise<ConnectedMcpSession> {
     const client = new Client({ name: 'tuff-intelligence', version: '1.0.0' })
+    let session: ConnectedMcpSession | null = null
+    // A close can arrive while connect() is still awaiting, before there is a session object to
+    // mark. Recording it is what stops the object built below from being returned and cached
+    // with closed: false, leaving the registry serving a dead transport (#777).
+    let closedBeforeSessionExisted = false
+    // Installed with the client, ahead of every await below: building the transport waits on
+    // credentials and on the command lookup, and the handlers must not depend on how long that takes.
+    client.onerror = () => {
+      mcpLog.warn('MCP transport failed', { meta: { code: 'MCP_SERVER_UNAVAILABLE' } })
+    }
+    client.onclose = () => {
+      if (session) {
+        this.removeSession(profile.id, session)
+      } else {
+        closedBeforeSessionExisted = true
+      }
+      mcpLog.info('MCP transport disconnected')
+    }
+
     const transport =
       profile.transport.type === 'stdio'
         ? new StdioClientTransport({
-            command: profile.transport.command,
+            ...(await this.resolveStdioLaunch(
+              profile as Extract<IntelligenceMcpProfile, { transport: { type: 'stdio' } }>
+            )),
             args: profile.transport.args,
             cwd: profile.transport.cwd,
-            env: await this.resolveStdioEnv(
-              profile as Extract<IntelligenceMcpProfile, { transport: { type: 'stdio' } }>
-            ),
             stderr: 'pipe'
           })
         : new StreamableHTTPClientTransport(new URL(profile.transport.url), {
@@ -339,23 +362,6 @@ export class IntelligenceMcpRegistry {
               )
             }
           })
-
-    let session: ConnectedMcpSession | null = null
-    // A close can arrive while connect() is still awaiting, before there is a session object to
-    // mark. Recording it is what stops the object built below from being returned and cached
-    // with closed: false, leaving the registry serving a dead transport (#777).
-    let closedBeforeSessionExisted = false
-    client.onerror = () => {
-      mcpLog.warn('MCP transport failed', { meta: { code: 'MCP_SERVER_UNAVAILABLE' } })
-    }
-    client.onclose = () => {
-      if (session) {
-        this.removeSession(profile.id, session)
-      } else {
-        closedBeforeSessionExisted = true
-      }
-      mcpLog.info('MCP transport disconnected')
-    }
 
     await client.connect(transport)
     if (closedBeforeSessionExisted) {
@@ -423,6 +429,41 @@ export class IntelligenceMcpRegistry {
     } catch {
       mcpLog.warn('MCP session close failed', { meta: { code: 'MCP_SERVER_UNAVAILABLE' } })
     }
+  }
+
+  /**
+   * What a stdio server is started as. A bare command (`npx`, `node`, `uvx`) is looked up the way
+   * the local CLIs are — PATH, then the version-manager roots, then the fixed bins — and run by the
+   * absolute path found. Its PATH is that directory, then the inherited PATH as it is, then the
+   * fixed bins it lacks: a GUI launch inherits launchd's PATH, which has none of them, and `npx`
+   * needs the `node` beside it for its own `#!/usr/bin/env node`. The fixed bins go last so they
+   * only fill gaps; a tool the server starts resolves first where the user's own PATH says.
+   *
+   * The stored profile is never changed. Run exactly as configured: a command given as a path, a
+   * profile that sets PATH itself, a command found nowhere (it fails as it did before), and Windows,
+   * where a GUI launch already inherits the user's PATH.
+   */
+  private async resolveStdioLaunch(
+    profile: Extract<IntelligenceMcpProfile, { transport: { type: 'stdio' } }>
+  ): Promise<{ command: string; env: Record<string, string> }> {
+    const env = await this.resolveStdioEnv(profile)
+    const command = profile.transport.command
+    if (
+      process.platform === 'win32' ||
+      /[\\/]/.test(command) ||
+      Object.keys(env).some((key) => key.toUpperCase() === 'PATH')
+    ) {
+      return { command, env }
+    }
+    const resolved = await findCommandInSearchRoots(command)
+    if (!resolved) return { command, env }
+    const path = [
+      dirname(resolved),
+      ...(process.env.PATH ?? '').split(delimiter),
+      ...(await existingDirectBinDirectories())
+    ].filter(Boolean)
+    // First occurrence wins: a fixed bin already on the inherited PATH stays where the user put it.
+    return { command: resolved, env: { ...env, PATH: [...new Set(path)].join(delimiter) } }
   }
 
   private async resolveStdioEnv(
