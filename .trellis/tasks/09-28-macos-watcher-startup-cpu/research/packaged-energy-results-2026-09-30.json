@@ -1,0 +1,403 @@
+{
+  "method": "Duration-weighted native process-group Energy Impact rate and CPU, then median of three runs per variant. Not watts, joules, battery life, or foreground UI latency.",
+  "baselineSource": "226e8d2fb960c053b3d0dbd6204b1221c1ead217",
+  "candidateSource": "29044f48bc1286aa55bdd24243d38860f2cf9d9a",
+  "order": ["baseline/candidate", "candidate/baseline", "baseline/candidate"],
+  "fixture": "3000 production-indexed files plus 1197000 FTS/meta padding rows belonging to a separate synthetic provider; 200 metadata changes, 20 creates, 20 deletes.",
+  "aggregate": {
+    "baseline": {
+      "indexReadyMs": 76348.541417,
+      "watchUpdateDrainedMs": 45820.51462499998,
+      "watchInsertVisibleMs": 1030.175916999986,
+      "watchDeleteVisibleMs": 5043.523042000015,
+      "searchP95Ms": 1.7814999999827705,
+      "concurrentSearchP95Ms": 1.9405419999966398,
+      "windows": {
+        "idle-before": {
+          "energyImpactRate": 2.7304029725473855,
+          "groupCpuPercent": 0.6063636875171657
+        },
+        "watch-updates": {
+          "energyImpactRate": 2742.2748608260517,
+          "groupCpuPercent": 48.57376937298098
+        },
+        "idle-after": {
+          "energyImpactRate": 2.6040005285680237,
+          "groupCpuPercent": 0.6004147205332441
+        }
+      }
+    },
+    "candidate": {
+      "indexReadyMs": 4822.797625,
+      "watchUpdateDrainedMs": 4065.4875410000095,
+      "watchInsertVisibleMs": 1539.9220000000205,
+      "watchDeleteVisibleMs": 512.4959999999846,
+      "searchP95Ms": 2.2562090000137687,
+      "concurrentSearchP95Ms": 4.063125000015134,
+      "windows": {
+        "idle-before": {
+          "energyImpactRate": 2.6784856359602878,
+          "groupCpuPercent": 0.6022609098753122
+        },
+        "watch-updates": {
+          "energyImpactRate": 40.48231231205894,
+          "groupCpuPercent": 1.829558665041404
+        },
+        "idle-after": {
+          "energyImpactRate": 9.931907046205142,
+          "groupCpuPercent": 0.7875888256713786
+        }
+      }
+    }
+  },
+  "runs": [
+    {
+      "name": "warm-5-baseline",
+      "variant": "baseline",
+      "repeat": 5,
+      "node": "v26.7.0",
+      "startedAt": "2026-09-30T06:20:31.449Z",
+      "indexReadyMs": 78045.127125,
+      "watchUpdateDrainedMs": 46829.38779200002,
+      "watchInsertVisibleMs": 1024.3601670000353,
+      "watchDeleteVisibleMs": 4565.712916000048,
+      "searchP95Ms": 1.7814999999827705,
+      "concurrentSearchP95Ms": 2.288291000004392,
+      "finalFiles": 3000,
+      "finalFts": 3000,
+      "paddingRows": 1197000,
+      "eventLoopWarningOccurrences": 2,
+      "windows": {
+        "idle-before": {
+          "wallMs": 60009,
+          "sampledMs": 57614.31209300001,
+          "sampleCount": 54,
+          "sampledFraction": 0.9600945207052277,
+          "energyImpactRate": 2.7304029725473855,
+          "groupCpuPercent": 0.5474084486002544,
+          "groupCpuMs": 315.3856120000001,
+          "bytesRead": 65536,
+          "bytesWritten": 0,
+          "interruptWakeups": 2403,
+          "thermalPressure": ["Nominal"]
+        },
+        "watch-updates": {
+          "wallMs": 93000,
+          "sampledMs": 89848.760252,
+          "sampleCount": 84,
+          "sampledFraction": 0.9661157016344085,
+          "energyImpactRate": 2783.6681043290487,
+          "groupCpuPercent": 49.94906326601322,
+          "groupCpuMs": 44878.61410200002,
+          "bytesRead": 85741568,
+          "bytesWritten": 31256576,
+          "interruptWakeups": 5820,
+          "thermalPressure": ["Nominal"]
+        },
+        "idle-after": {
+          "wallMs": 30403,
+          "sampledMs": 26774.529446999997,
+          "sampleCount": 25,
+          "sampledFraction": 0.8806541935664243,
+          "energyImpactRate": 3.90610054257063,
+          "groupCpuPercent": 0.6408404574939233,
+          "groupCpuMs": 171.58201699999998,
+          "bytesRead": 16384,
+          "bytesWritten": 0,
+          "interruptWakeups": 1134,
+          "thermalPressure": ["Nominal"]
+        }
+      }
+    },
+    {
+      "name": "warm-5-candidate",
+      "variant": "candidate",
+      "repeat": 5,
+      "node": "v26.7.0",
+      "startedAt": "2026-09-30T06:27:12.872Z",
+      "indexReadyMs": 4822.797625,
+      "watchUpdateDrainedMs": 4065.4875410000095,
+      "watchInsertVisibleMs": 1539.9220000000205,
+      "watchDeleteVisibleMs": 512.4959999999846,
+      "searchP95Ms": 2.2562090000137687,
+      "concurrentSearchP95Ms": 4.063125000015134,
+      "finalFiles": 3000,
+      "finalFts": 3000,
+      "paddingRows": 1197000,
+      "eventLoopWarningOccurrences": 0,
+      "windows": {
+        "idle-before": {
+          "wallMs": 60005,
+          "sampledMs": 56869.26222600001,
+          "sampleCount": 53,
+          "sampledFraction": 0.9477420585951173,
+          "energyImpactRate": 2.6784856359602878,
+          "groupCpuPercent": 0.5113800700355159,
+          "groupCpuMs": 290.818073,
+          "bytesRead": 98304,
+          "bytesWritten": 147456,
+          "interruptWakeups": 2240,
+          "thermalPressure": ["Nominal"]
+        },
+        "watch-updates": {
+          "wallMs": 93002,
+          "sampledMs": 90067.73029400001,
+          "sampleCount": 84,
+          "sampledFraction": 0.9684493913464227,
+          "energyImpactRate": 40.48231231205894,
+          "groupCpuPercent": 1.829558665041404,
+          "groupCpuMs": 1647.8419639999988,
+          "bytesRead": 23777280,
+          "bytesWritten": 10387456,
+          "interruptWakeups": 4895,
+          "thermalPressure": ["Nominal"]
+        },
+        "idle-after": {
+          "wallMs": 30403,
+          "sampledMs": 26794.678279,
+          "sampleCount": 25,
+          "sampledFraction": 0.8813169186922343,
+          "energyImpactRate": 9.931907046205142,
+          "groupCpuPercent": 0.7875888256713786,
+          "groupCpuMs": 211.03189200000003,
+          "bytesRead": 0,
+          "bytesWritten": 0,
+          "interruptWakeups": 1083,
+          "thermalPressure": ["Nominal"]
+        }
+      }
+    },
+    {
+      "name": "warm-6-baseline",
+      "variant": "baseline",
+      "repeat": 6,
+      "node": "v26.7.0",
+      "startedAt": "2026-09-30T06:39:35.503Z",
+      "indexReadyMs": 76348.541417,
+      "watchUpdateDrainedMs": 45283.28879100003,
+      "watchInsertVisibleMs": 1520.9945420000004,
+      "watchDeleteVisibleMs": 5044.590665999975,
+      "searchP95Ms": 1.5026249999646097,
+      "concurrentSearchP95Ms": 1.9405419999966398,
+      "finalFiles": 3000,
+      "finalFts": 3000,
+      "paddingRows": 1197000,
+      "eventLoopWarningOccurrences": 0,
+      "windows": {
+        "idle-before": {
+          "wallMs": 60015,
+          "sampledMs": 56689.272474,
+          "sampleCount": 53,
+          "sampledFraction": 0.9445850616345913,
+          "energyImpactRate": 2.125641073542912,
+          "groupCpuPercent": 0.6063636875171657,
+          "groupCpuMs": 343.743163,
+          "bytesRead": 69632,
+          "bytesWritten": 0,
+          "interruptWakeups": 2318,
+          "thermalPressure": ["Nominal"]
+        },
+        "watch-updates": {
+          "wallMs": 93000,
+          "sampledMs": 90367.24153800002,
+          "sampleCount": 85,
+          "sampledFraction": 0.9716907692258067,
+          "energyImpactRate": 2715.476085056904,
+          "groupCpuPercent": 47.00299168934891,
+          "groupCpuMs": 42475.30703000001,
+          "bytesRead": 80072704,
+          "bytesWritten": 31608832,
+          "interruptWakeups": 5471,
+          "thermalPressure": ["Nominal"]
+        },
+        "idle-after": {
+          "wallMs": 30397,
+          "sampledMs": 27658.885153999996,
+          "sampleCount": 26,
+          "sampledFraction": 0.909921543375991,
+          "energyImpactRate": 2.3480085924796557,
+          "groupCpuPercent": 0.6004147205332441,
+          "groupCpuMs": 166.06801800000002,
+          "bytesRead": 20480,
+          "bytesWritten": 0,
+          "interruptWakeups": 1158,
+          "thermalPressure": ["Nominal"]
+        }
+      }
+    },
+    {
+      "name": "warm-6-candidate",
+      "variant": "candidate",
+      "repeat": 6,
+      "node": "v26.7.0",
+      "startedAt": "2026-09-30T06:33:23.995Z",
+      "indexReadyMs": 4282.766833,
+      "watchUpdateDrainedMs": 5161.54462499998,
+      "watchInsertVisibleMs": 2040.0949159999727,
+      "watchDeleteVisibleMs": 512.8125829999917,
+      "searchP95Ms": 2.3787909999955446,
+      "concurrentSearchP95Ms": 1.730916000000434,
+      "finalFiles": 3000,
+      "finalFts": 3000,
+      "paddingRows": 1197000,
+      "eventLoopWarningOccurrences": 1,
+      "windows": {
+        "idle-before": {
+          "wallMs": 60033,
+          "sampledMs": 57974.57993100001,
+          "sampleCount": 54,
+          "sampledFraction": 0.9657118573284694,
+          "energyImpactRate": 40.02100418427264,
+          "groupCpuPercent": 1.898883669895029,
+          "groupCpuMs": 1100.869831,
+          "bytesRead": 13488128,
+          "bytesWritten": 409600,
+          "interruptWakeups": 2588,
+          "thermalPressure": ["Nominal"]
+        },
+        "watch-updates": {
+          "wallMs": 92999,
+          "sampledMs": 90031.94195500003,
+          "sampleCount": 84,
+          "sampledFraction": 0.9680958069979251,
+          "energyImpactRate": 74.58259028063858,
+          "groupCpuPercent": 3.177808619778538,
+          "groupCpuMs": 2861.042812000001,
+          "bytesRead": 27389952,
+          "bytesWritten": 11517952,
+          "interruptWakeups": 6997,
+          "thermalPressure": ["Nominal"]
+        },
+        "idle-after": {
+          "wallMs": 30412,
+          "sampledMs": 27811.370069999997,
+          "sampleCount": 26,
+          "sampledFraction": 0.9144867180718137,
+          "energyImpactRate": 2.5794989178683068,
+          "groupCpuPercent": 0.6435674889424822,
+          "groupCpuMs": 178.984936,
+          "bytesRead": 0,
+          "bytesWritten": 0,
+          "interruptWakeups": 1140,
+          "thermalPressure": ["Nominal"]
+        }
+      }
+    },
+    {
+      "name": "warm-7-baseline",
+      "variant": "baseline",
+      "repeat": 7,
+      "node": "v26.7.0",
+      "startedAt": "2026-09-30T06:46:17.532Z",
+      "indexReadyMs": 74056.949667,
+      "watchUpdateDrainedMs": 45820.51462499998,
+      "watchInsertVisibleMs": 1030.175916999986,
+      "watchDeleteVisibleMs": 5043.523042000015,
+      "searchP95Ms": 1.9149580000084825,
+      "concurrentSearchP95Ms": 1.8230420000036247,
+      "finalFiles": 3000,
+      "finalFts": 3000,
+      "paddingRows": 1197000,
+      "eventLoopWarningOccurrences": 0,
+      "windows": {
+        "idle-before": {
+          "wallMs": 60008,
+          "sampledMs": 57538.99576700001,
+          "sampleCount": 54,
+          "sampledFraction": 0.9588554153946142,
+          "energyImpactRate": 3.9534510459854757,
+          "groupCpuPercent": 0.6144621682861774,
+          "groupCpuMs": 353.55536100000006,
+          "bytesRead": 253952,
+          "bytesWritten": 0,
+          "interruptWakeups": 2345,
+          "thermalPressure": ["Nominal"]
+        },
+        "watch-updates": {
+          "wallMs": 93002,
+          "sampledMs": 89376.34561700004,
+          "sampleCount": 84,
+          "sampledFraction": 0.9610153073804869,
+          "energyImpactRate": 2742.2748608260517,
+          "groupCpuPercent": 48.57376937298098,
+          "groupCpuMs": 43413.459994000004,
+          "bytesRead": 41697280,
+          "bytesWritten": 27824128,
+          "interruptWakeups": 5472,
+          "thermalPressure": ["Nominal"]
+        },
+        "idle-after": {
+          "wallMs": 30363,
+          "sampledMs": 27753.846900999997,
+          "sampleCount": 26,
+          "sampledFraction": 0.9140680071468563,
+          "energyImpactRate": 2.6040005285680237,
+          "groupCpuPercent": 0.5774174606195793,
+          "groupCpuMs": 160.255558,
+          "bytesRead": 8192,
+          "bytesWritten": 0,
+          "interruptWakeups": 1125,
+          "thermalPressure": ["Nominal"]
+        }
+      }
+    },
+    {
+      "name": "warm-7-candidate",
+      "variant": "candidate",
+      "repeat": 7,
+      "node": "v26.7.0",
+      "startedAt": "2026-09-30T06:53:01.071Z",
+      "indexReadyMs": 4982.071916999999,
+      "watchUpdateDrainedMs": 4061.787042000011,
+      "watchInsertVisibleMs": 1530.5149170000223,
+      "watchDeleteVisibleMs": 510.7484579999582,
+      "searchP95Ms": 1.6131249999743886,
+      "concurrentSearchP95Ms": 4.528917000017827,
+      "finalFiles": 3000,
+      "finalFts": 3000,
+      "paddingRows": 1197000,
+      "eventLoopWarningOccurrences": 0,
+      "windows": {
+        "idle-before": {
+          "wallMs": 60009,
+          "sampledMs": 56593.030265,
+          "sampleCount": 53,
+          "sampledFraction": 0.9430757097268744,
+          "energyImpactRate": 2.049659851342827,
+          "groupCpuPercent": 0.6022609098753122,
+          "groupCpuMs": 340.8376989999999,
+          "bytesRead": 98304,
+          "bytesWritten": 147456,
+          "interruptWakeups": 2297,
+          "thermalPressure": ["Nominal"]
+        },
+        "watch-updates": {
+          "wallMs": 93001,
+          "sampledMs": 89696.619164,
+          "sampleCount": 84,
+          "sampledFraction": 0.9644694053182225,
+          "energyImpactRate": 37.21613465605155,
+          "groupCpuPercent": 1.6754319627725223,
+          "groupCpuMs": 1502.8058269999997,
+          "bytesRead": 21544960,
+          "bytesWritten": 10534912,
+          "interruptWakeups": 5008,
+          "thermalPressure": ["Nominal"]
+        },
+        "idle-after": {
+          "wallMs": 30330,
+          "sampledMs": 26743.204528999995,
+          "sampleCount": 25,
+          "sampledFraction": 0.8817409999670291,
+          "energyImpactRate": 15.998702718518178,
+          "groupCpuPercent": 1.3932966843817987,
+          "groupCpuMs": 372.61218199999996,
+          "bytesRead": 32768,
+          "bytesWritten": 0,
+          "interruptWakeups": 1107,
+          "thermalPressure": ["Nominal"]
+        }
+      }
+    }
+  ]
+}

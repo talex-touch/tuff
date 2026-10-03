@@ -39,3 +39,16 @@ Reduce sustained macOS startup CPU use and multi-second main-thread stalls witho
 
 - Database cleanup/migration, clipboard/OCR optimization, generic memory-leak fixes, UI redesign, broad indexing architecture changes, auto-update/release, merge or deployment.
 - Promising that all host fans stop: other applications also consumed CPU during the original observation.
+
+## Installation Validation Amendment (September 30, 2026)
+
+The user explicitly requested installation and real-host testing rather than only
+test code or isolated packages. R4/AC4's earlier prohibition on installed-app
+replacement is superseded for this verified, reversible experiment: preserve an
+app backup and private profile clone, replace only the app, retain the original
+live profile, never reset/rebuild user data, and verify app-only rollback.
+
+Installed observations and failed gates are recorded in
+`research/installed-real-profile-energy-2026-09-30.md`. The rowid patch is actually
+installed and tested, but overall low-energy and final foreground UI acceptance
+remain incomplete. Keep the task in progress and the upstream PR draft.

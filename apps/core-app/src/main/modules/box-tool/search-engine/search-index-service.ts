@@ -18,6 +18,11 @@ import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { createLogger } from '../../../utils/logger'
 import { AdaptiveBatchScheduler } from './adaptive-batch-scheduler'
+import {
+  SearchIndexRowidStore,
+  type FtsDocument,
+  type SearchIndexWriteTx
+} from './search-index-rowid-store'
 
 const WORD_SPLIT_REGEX = /[\s\-_]+/g
 const PATH_SPLIT_REGEX = /[\\/]+/
@@ -105,16 +110,7 @@ export interface SearchIndexProviderReplacementSummary {
   indexedItems: number
 }
 
-interface PreparedIndexDocument {
-  itemId: string
-  providerId: string
-  type: string
-  title: string
-  titleCompact: string
-  keywords: string
-  tags: string
-  path: string
-  content: string
+interface PreparedIndexDocument extends FtsDocument {
   keywordEntries: SearchIndexKeyword[]
   keywordHash: string
 }
@@ -128,11 +124,6 @@ interface ProviderReplacementOutcomeRow {
   removedItems: number
   indexedItems: number
 }
-
-type SearchIndexWriteTx = Pick<
-  LibSQLDatabase<typeof schema>,
-  'run' | 'all' | 'delete' | 'insert' | 'select'
->
 
 type SearchIndexLogAction = 'index' | 'remove' | 'removeByProvider'
 
@@ -179,12 +170,7 @@ export class SearchIndexService {
   private readonly readiness?: SearchIndexReadinessGate
   private readonly readExecutor?: SearchIndexReadExecutor
   private readonly zeroResultDiagnosticAt = new Map<string, number>()
-  /**
-   * Provider coverage is stable while this service owns the single writer: every indexed
-   * document has a matching primary-keyed meta row. A false value preserves the legacy
-   * delete-before-insert path for profiles whose FTS rows predate search_index_meta.
-   */
-  private readonly providerMetaCoverageComplete = new Map<string, boolean>()
+  private readonly rowidStore: SearchIndexRowidStore
   private readonly logWindowMs = 12_000
   private readonly slowLogThresholdMs = 1_500
   private readonly indexLogBucket = this.createLogBucket()
@@ -207,6 +193,7 @@ export class SearchIndexService {
     private readonly db: LibSQLDatabase<typeof schema>,
     options?: SearchIndexServiceOptions
   ) {
+    this.rowidStore = new SearchIndexRowidStore(db)
     this.directMode = options?.directMode ?? false
     this.runtimeLogger = options?.logger ?? noopSearchIndexRuntimeLogger
     this.initializationMode = options?.initializationMode ?? 'writer'
@@ -244,7 +231,7 @@ export class SearchIndexService {
     }
     await this.scheduleWrite('search-index.repair', async () => {
       await this.repairSearchIndexFtsTables()
-      this.providerMetaCoverageComplete.clear()
+      this.rowidStore.reset()
       this.didMigrate = true
       this.initialized = false
       this.initializationPromise = null
@@ -388,9 +375,11 @@ export class SearchIndexService {
     await this.scheduleWrite('search-index.ensure', () => this.ensureInitialized())
 
     const preparedDocs = await this.prepareDocuments(items)
-    const metaCoverageByProvider = await this.scheduleWrite('search-index.metaCoverage', () =>
-      this.resolveProviderMetaCoverage(preparedDocs)
-    )
+    await this.scheduleWrite('search-index.rowidLookup', async () => {
+      for (const providerId of new Set(preparedDocs.map((doc) => doc.providerId))) {
+        await this.rowidStore.ensureProvider(providerId)
+      }
+    })
 
     // Adaptive batching: use AIMD scheduler to find the optimal batch size
     // that keeps each transaction close to the target duration (~500ms).
@@ -407,7 +396,7 @@ export class SearchIndexService {
       await this.scheduleWrite('search-index.indexBatch', () =>
         this.db.transaction(async (tx) => {
           for (const doc of batch) {
-            await this.applyDocument(tx, doc, metaCoverageByProvider.get(doc.providerId) === true)
+            await this.applyDocument(tx, doc)
           }
         })
       )
@@ -448,14 +437,11 @@ export class SearchIndexService {
     await this.scheduleWrite('search-index.ensure', () => this.ensureInitialized())
     const preparedDocs = await this.prepareDocuments(items)
     const removedItems = await this.scheduleWrite('search-index.applyProviderItems', async () => {
-      const metaCoverageComplete = await this.hasCompleteProviderMetaCoverage(providerId)
+      await this.rowidStore.ensureProvider(providerId)
       return await this.db.transaction(async (tx) => {
         let removed = 0
         for (const itemId of retiredItemIds) {
-          const result = await tx.run(
-            sql`DELETE FROM search_index WHERE provider = ${providerId} AND item_id = ${itemId}`
-          )
-          removed += Number(result.rowsAffected ?? 0)
+          removed += await this.rowidStore.removeItem(tx, providerId, itemId)
           await tx
             .delete(schema.keywordMappings)
             .where(
@@ -474,7 +460,7 @@ export class SearchIndexService {
             )
         }
         for (const doc of preparedDocs) {
-          await this.applyDocument(tx, doc, metaCoverageComplete)
+          await this.applyDocument(tx, doc)
         }
         return removed
       })
@@ -563,6 +549,7 @@ export class SearchIndexService {
         `)
         const removedItems = Number(current[0]?.removedItems ?? 0)
         await tx.run(sql`DELETE FROM search_index WHERE provider = ${providerId}`)
+        await this.rowidStore.clearProvider(tx, providerId)
         await tx
           .delete(schema.keywordMappings)
           .where(eq(schema.keywordMappings.providerId, providerId))
@@ -587,7 +574,7 @@ export class SearchIndexService {
             if (doc.providerId !== providerId) {
               throw new Error(`SEARCH_INDEX_STAGED_PROVIDER_MISMATCH:${providerId}`)
             }
-            await this.applyDocument(tx, doc, true)
+            await this.applyDocument(tx, doc)
             indexedItems += 1
             lastSequence = row.sequence
           }
@@ -604,7 +591,6 @@ export class SearchIndexService {
         return { removedItems, indexedItems }
       })
     )
-    this.providerMetaCoverageComplete.set(providerId, true)
     this.recordOperationLog(
       'index',
       summary.indexedItems,
@@ -651,13 +637,11 @@ export class SearchIndexService {
         'search-index.removeProviderBatch',
         async () => {
           await this.ensureInitialized()
+          await this.rowidStore.ensureProvider(providerId)
           return await this.db.transaction(async (tx) => {
             let batchRemovedItems = 0
             for (const itemId of batch) {
-              const result = await tx.run(
-                sql`DELETE FROM search_index WHERE provider = ${providerId} AND item_id = ${itemId}`
-              )
-              const rowsAffected = Number(result.rowsAffected ?? 0)
+              const rowsAffected = await this.rowidStore.removeItem(tx, providerId, itemId)
               if (rowsAffected <= 0) continue
               await tx
                 .delete(schema.keywordMappings)
@@ -745,6 +729,7 @@ export class SearchIndexService {
       await this.ensureInitialized()
       return await this.db.transaction(async (tx) => {
         const result = await tx.run(sql`DELETE FROM search_index WHERE provider = ${providerId}`)
+        await this.rowidStore.clearProvider(tx, providerId)
         await tx
           .delete(schema.keywordMappings)
           .where(eq(schema.keywordMappings.providerId, providerId))
@@ -754,7 +739,6 @@ export class SearchIndexService {
         return Number(result.rowsAffected ?? 0)
       })
     })
-    this.providerMetaCoverageComplete.set(providerId, true)
     this.recordOperationLog(
       'removeByProvider',
       removedItems,
@@ -1104,6 +1088,7 @@ export class SearchIndexService {
     const createdSearchIndex = await this.createSearchIndexTable()
     await this.createFileFtsTable()
     await this.createSearchIndexMetaTable()
+    await this.rowidStore.initialize(createdSearchIndex)
     if (createdSearchIndex) await this.clearOrphanedSearchIndexMeta()
     await this.createKeywordMappingIndexes()
     await this.createProviderReplacementTables()
@@ -1275,25 +1260,13 @@ export class SearchIndexService {
     )
   }
 
-  private async applyDocument(
-    tx: SearchIndexWriteTx,
-    doc: PreparedIndexDocument,
-    metaCoverageComplete: boolean
-  ): Promise<void> {
-    const existingKeywordHash = await this.readExistingKeywordHash(tx, doc)
+  private async applyDocument(tx: SearchIndexWriteTx, doc: PreparedIndexDocument): Promise<void> {
+    const { state, keywordHash: existingKeywordHash } = await this.rowidStore.readDocument(tx, doc)
     const shouldUpdateKeywords = existingKeywordHash !== doc.keywordHash
 
-    // provider/item_id are UNINDEXED FTS5 columns. Scanning the growing content table before
-    // every cold insert makes a clean full scan O(N²). Complete meta coverage proves that a
-    // missing primary-keyed meta row also means the FTS document is new; legacy/incomplete
-    // profiles retain delete-before-insert until a provider replacement repairs coverage.
-    if (!metaCoverageComplete || existingKeywordHash !== undefined) {
-      await tx.run(
-        sql`DELETE FROM search_index WHERE provider = ${doc.providerId} AND item_id = ${doc.itemId}`
-      )
-    }
-
-    await tx.run(sql`
+    if (state !== 'unchanged') {
+      if (state === 'changed') await this.rowidStore.removeItem(tx, doc.providerId, doc.itemId)
+      const inserted = await tx.run(sql`
       INSERT INTO search_index (
         item_id,
         provider,
@@ -1316,64 +1289,14 @@ export class SearchIndexService {
         ${doc.content}
       )
     `)
+      await this.rowidStore.recordInsert(tx, doc, inserted.lastInsertRowid)
+    }
 
     if (shouldUpdateKeywords) {
       await this.applyKeywordMappingsDelta(tx, doc)
     }
 
     await this.upsertSearchIndexMeta(tx, doc)
-  }
-
-  private async resolveProviderMetaCoverage(
-    docs: readonly PreparedIndexDocument[]
-  ): Promise<Map<string, boolean>> {
-    const coverage = new Map<string, boolean>()
-    for (const doc of docs) {
-      if (coverage.has(doc.providerId)) continue
-      coverage.set(doc.providerId, await this.hasCompleteProviderMetaCoverage(doc.providerId))
-    }
-    return coverage
-  }
-
-  private async hasCompleteProviderMetaCoverage(providerId: string): Promise<boolean> {
-    const cached = this.providerMetaCoverageComplete.get(providerId)
-    if (cached !== undefined) return cached
-
-    const rows = await this.db.all<{ hasMissingMeta: number }>(sql`
-      SELECT EXISTS (
-        SELECT 1
-        FROM search_index AS indexed
-        WHERE indexed.provider = ${providerId}
-          AND NOT EXISTS (
-            SELECT 1
-            FROM search_index_meta AS meta
-            WHERE meta.provider_id = indexed.provider
-              AND meta.item_id = indexed.item_id
-          )
-        LIMIT 1
-      ) AS hasMissingMeta
-    `)
-    const complete = Number(rows[0]?.hasMissingMeta ?? 0) === 0
-    this.providerMetaCoverageComplete.set(providerId, complete)
-    return complete
-  }
-
-  private async readExistingKeywordHash(
-    tx: SearchIndexWriteTx,
-    doc: PreparedIndexDocument
-  ): Promise<string | undefined> {
-    const existingMeta = await tx
-      .select({ keywordHash: schema.searchIndexMeta.keywordHash })
-      .from(schema.searchIndexMeta)
-      .where(
-        and(
-          eq(schema.searchIndexMeta.providerId, doc.providerId),
-          eq(schema.searchIndexMeta.itemId, doc.itemId)
-        )
-      )
-      .limit(1)
-
-    return existingMeta[0]?.keywordHash
   }
 
   private async applyKeywordMappingsDelta(

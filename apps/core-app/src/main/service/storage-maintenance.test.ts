@@ -9,6 +9,7 @@ const {
   fileRebuildMock,
   getDbMock,
   getSearchDbMock,
+  allMock,
   runMock,
   selectFromMock,
   selectMock,
@@ -20,6 +21,7 @@ const {
   fileRebuildMock: vi.fn(),
   getDbMock: vi.fn(),
   getSearchDbMock: vi.fn(),
+  allMock: vi.fn(),
   runMock: vi.fn(),
   selectFromMock: vi.fn(),
   selectMock: vi.fn(),
@@ -86,9 +88,11 @@ describe('cleanupFileIndex', () => {
         Object.assign(Promise.resolve(undefined), { where: deleteWhereMock })
       )
     runMock.mockReset().mockResolvedValue(undefined)
+    allMock.mockReset().mockResolvedValue([{ name: 'search_index_rowids' }])
     const connection = {
       select: selectMock,
       delete: deleteMock,
+      all: allMock,
       run: runMock
     }
     getDbMock.mockReset().mockResolvedValue(connection)
@@ -180,5 +184,37 @@ describe('cleanupFileIndex', () => {
     await cleanupFileIndex({})
 
     expect(deleteMock).not.toHaveBeenCalledWith(searchIndexMeta)
+  })
+
+  it('clears derived FTS addresses only when clearing the search index', async () => {
+    const dialect = new SQLiteSyncDialect()
+    await cleanupFileIndex({})
+    expect(runMock).not.toHaveBeenCalled()
+
+    await cleanupFileIndex({ clearSearchIndex: true })
+    const queries = runMock.mock.calls.map(([query]) => dialect.sqlToQuery(query).sql.trim())
+    expect(queries).toContain('DELETE FROM search_index_rowids')
+  })
+
+  it('supports older databases without the derived table', async () => {
+    allMock.mockResolvedValueOnce([])
+    await expect(cleanupFileIndex({ clearSearchIndex: true })).resolves.toMatchObject({
+      success: true
+    })
+    const dialect = new SQLiteSyncDialect()
+    const queries = runMock.mock.calls.map(([query]) => dialect.sqlToQuery(query).sql.trim())
+    expect(queries).not.toContain('DELETE FROM search_index_rowids')
+  })
+
+  it('does not hide failures clearing derived file identities', async () => {
+    const dialect = new SQLiteSyncDialect()
+    runMock.mockImplementation(async (query) => {
+      if (dialect.sqlToQuery(query).sql.includes('DELETE FROM search_index_rowids')) {
+        throw new Error('injected address cleanup failure')
+      }
+    })
+    await expect(cleanupFileIndex({ clearSearchIndex: true })).rejects.toThrow(
+      'injected address cleanup failure'
+    )
   })
 })
