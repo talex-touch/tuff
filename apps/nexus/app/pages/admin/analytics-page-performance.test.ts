@@ -129,9 +129,6 @@ interface AnalyticsFacade {
   docsAnalytics: Ref<{ docs: unknown[] } | null>
   docsLoading: Ref<boolean>
   docsError: Ref<string | null>
-  intelligenceAnalytics: Ref<{ summary: Record<string, unknown> } | null>
-  intelligenceLoading: Ref<boolean>
-  intelligenceError: Ref<string | null>
   exchangeHistory: Ref<Array<Record<string, unknown>>>
   exchangeSnapshots: Ref<Array<Record<string, unknown>>>
   exchangeLoading: Ref<boolean>
@@ -153,7 +150,6 @@ interface AnalyticsFacade {
   fetchGeoAnalytics: () => Promise<void>
   fetchVersionAnalytics: () => Promise<void>
   fetchDocsAnalytics: () => Promise<void>
-  fetchIntelligenceAnalytics: () => Promise<void>
   fetchMessages: () => Promise<void>
   fetchExchangeHistory: () => Promise<void>
 }
@@ -271,9 +267,6 @@ ${scriptWithoutImports}
     docsAnalytics,
     docsLoading,
     docsError,
-    intelligenceAnalytics,
-    intelligenceLoading,
-    intelligenceError,
     exchangeHistory,
     exchangeSnapshots,
     exchangeLoading,
@@ -295,7 +288,6 @@ ${scriptWithoutImports}
     fetchGeoAnalytics,
     fetchVersionAnalytics,
     fetchDocsAnalytics,
-    fetchIntelligenceAnalytics,
     fetchMessages,
     fetchExchangeHistory,
   }
@@ -404,8 +396,6 @@ function successfulRequest(path: string): Promise<unknown> {
     return Promise.resolve(versionAnalyticsPayload())
   if (path === '/api/admin/analytics/docs')
     return Promise.resolve({ docs: [] })
-  if (path === '/api/admin/analytics/intelligence')
-    return Promise.resolve({ summary: {} })
   if (path === '/api/telemetry/messages?limit=12')
     return Promise.resolve({ messages: [] })
   if (path === '/api/admin/exchange/history')
@@ -526,14 +516,13 @@ describe('dashboard admin analytics facade', () => {
     page.app.unmount()
   })
 
-  it('uses the route query as the single source for exactly seven consumer sections', async () => {
+  it('uses the route query as the single source for exactly six consumer sections', async () => {
     const page = await mountAnalyticsPage({ query: { section: 'search', keep: 'yes' } })
 
     expect(page.facade.analyticsTabs.value.map(tab => tab.value)).toEqual([
       'overview',
       'performance',
       'search',
-      'intelligence',
       'docs',
       'exchange',
       'messages',
@@ -552,10 +541,18 @@ describe('dashboard admin analytics facade', () => {
     page.app.unmount()
   })
 
-  it.each(['usage', 'versions', 'not-a-section'])('folds legacy or unknown section %s into overview', async (section) => {
-    const page = await mountAnalyticsPage({ query: { section } })
+  // `intelligence` is the AI panel retired with its runtime: an old deep link lands on overview and
+  // requests only what overview owns, never the deleted `/api/admin/analytics/intelligence`.
+  it.each(['usage', 'versions', 'intelligence', 'not-a-section'])('folds legacy or unknown section %s into overview', async (section) => {
+    const requestJson = vi.fn(successfulRequest)
+    const page = await mountAnalyticsPage({ query: { section }, requestJson })
 
     expect(page.facade.activeSection.value).toBe('overview')
+    expect(requestPaths(requestJson)).toEqual([
+      '/api/admin/analytics?days=30',
+      '/api/admin/analytics/versions',
+      '/api/admin/analytics/geo',
+    ])
     expect(page.facade.kpiCards.value.map(card => card.key)).toEqual([
       'active-users',
       'visits',
@@ -575,10 +572,6 @@ describe('dashboard admin analytics facade', () => {
     ['docs', [
       '/api/admin/analytics?days=90',
       '/api/admin/analytics/docs',
-    ]],
-    ['intelligence', [
-      '/api/admin/analytics?days=90',
-      '/api/admin/analytics/intelligence',
     ]],
     ['performance', ['/api/admin/analytics?days=90']],
     ['search', ['/api/admin/analytics?days=90']],
@@ -639,14 +632,6 @@ describe('dashboard admin analytics facade', () => {
         error: page.facade.docsError,
         seed: () => { page.facade.docsAnalytics.value = { docs: ['stale'] } },
         assertCleanup: () => expect(page.facade.docsAnalytics.value).toBeNull(),
-      },
-      {
-        name: 'intelligence analytics',
-        invoke: () => page.facade.fetchIntelligenceAnalytics(),
-        loading: page.facade.intelligenceLoading,
-        error: page.facade.intelligenceError,
-        seed: () => { page.facade.intelligenceAnalytics.value = { summary: { totalRuns: 1 } } },
-        assertCleanup: () => expect(page.facade.intelligenceAnalytics.value).toBeNull(),
       },
       {
         name: 'telemetry messages',
@@ -748,7 +733,6 @@ describe('dashboard admin analytics facade', () => {
   it.each([
     ['performance', ['/api/admin/analytics?days=30']],
     ['search', ['/api/admin/analytics?days=30']],
-    ['intelligence', ['/api/admin/analytics?days=30', '/api/admin/analytics/intelligence']],
     ['docs', ['/api/admin/analytics?days=30', '/api/admin/analytics/docs']],
     ['exchange', ['/api/admin/analytics?days=30', '/api/admin/exchange/history']],
     ['messages', ['/api/admin/analytics?days=30', '/api/telemetry/messages?limit=12']],

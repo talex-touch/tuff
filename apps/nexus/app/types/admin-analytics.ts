@@ -1,4 +1,3 @@
-import type { IntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import type { DocAnalyticsResponse } from '~/types/docs-engagement'
 
 export interface AnalyticsData {
@@ -163,43 +162,6 @@ export interface VersionAnalyticsData {
   }
   versions: VersionAnalyticsEntry[]
   generatedAt: string
-}
-
-export interface IntelligenceAnalyticsData {
-  summary: {
-    days: number
-    totalRuns: number
-    successRuns: number
-    failureRuns: number
-    successRate: number
-    fallbackRate: number
-    approvalHitRate: number
-    recoveryRate: number
-    streamCoverageRate: number
-    retryRunRate: number
-    disconnectPauseRate: number
-    checkpointLossRate: number
-    totalActions: number
-    completedActions: number
-    failedActions: number
-    waitingApprovals: number
-    avgDurationMs: number
-    p95DurationMs: number
-  }
-  statusDistribution: Record<string, number>
-  toolFailureDistribution: Array<{ toolId: string, count: number }>
-  errorCodeDistribution: Array<{ code: IntelligenceErrorCode, count: number }>
-  recentRuns: Array<{
-    sessionId: string
-    status: string
-    errorCode?: IntelligenceErrorCode
-    providerName: string | null
-    model: string
-    fallbackCount: number
-    approvalHitCount: number
-    durationMs: number
-    createdAt: string
-  }>
 }
 
 export type { DocAnalyticsResponse }

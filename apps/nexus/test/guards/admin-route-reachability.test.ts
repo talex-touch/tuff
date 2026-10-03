@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { loadHistoricalFixture, shippedFixFixtures } from './helpers/fixtures'
 import { findTopLevelOccurrences } from './helpers/js-text'
 import { formatViolations, listFiles, loadSources, readSource } from './helpers/repo'
 import { parseSfc } from './helpers/sfc'
@@ -7,10 +8,10 @@ import type { SourceFile, Violation } from './helpers/repo'
 /**
  * Guard 6 — every admin page is reachable by clicking.
  *
- * `provider-registry` and `intelligence-chat` shipped with no navigation entry
- * of any kind: they existed, they worked, and the only way to open them was to
- * type the URL. Nothing fails when a page falls out of the menu, so nothing
- * ever surfaced it.
+ * `provider-registry` and the since-retired `intelligence-chat` probe shipped
+ * with no navigation entry of any kind: they existed, they worked, and the only
+ * way to open them was to type the URL. Nothing fails when a page falls out of
+ * the menu, so nothing ever surfaced it.
  *
  * The check is written against *link* occurrences rather than against
  * `DashboardNav`'s current data shape, because that component is under active
@@ -127,8 +128,9 @@ function loadAdminPages(): SourceFile[] {
  * fails as soon as one gains a navigation entry.
  *
  * `/admin/intelligence-chat` used to be here and is not any more: the console
- * made its rail the single navigation surface, and the chat probe became an
- * entry under Intelligence instead of a URL-only page.
+ * made its rail the single navigation surface, the chat probe became an entry
+ * under Intelligence instead of a URL-only page, and `5e6579e05` later retired
+ * the probe together with its page.
  */
 const KNOWN_ORPHANS = [
   {
@@ -210,7 +212,7 @@ describe('guard: every admin page is reachable from the UI', () => {
   })
 
   it('exempts a page that only forwards elsewhere', () => {
-    // intelligence-lab is reachable by URL only on purpose: it redirects.
+    // A retired route kept only to forward old links needs no menu entry.
     const page: SourceFile = {
       path: 'app/pages/admin/retired.vue',
       content: '<script setup lang="ts">\nawait navigateTo(\'/admin/intelligence\')\n</script>\n'
@@ -221,9 +223,9 @@ describe('guard: every admin page is reachable from the UI', () => {
   })
 
   it('recognises the shipped intelligence-lab redirect as a forwarding page', () => {
-    const lab = loadAdminPages().find(page => page.path.endsWith('intelligence-lab.vue'))
-    if (!lab)
-      return
+    // The page was retired in `5e6579e05`; its last shipped form, a route-meta
+    // redirect, is frozen so this control can still fail.
+    const lab = loadHistoricalFixture(shippedFixFixtures.retiredRouteRedirect)
     expect(isForwardingPage(lab), 'intelligence-lab.vue should forward rather than render').toBe(true)
   })
 
