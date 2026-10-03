@@ -402,7 +402,8 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
 ```
 
 - `env` is the provider's extra environment **on top of** the inherited one (`PATH` gains the
-  binary's dirname there), and `onLine` is the ordered protocol observation that runs before
+  binary's dirname there — `withExecutableDirOnPath`, the same rule every local-agent spawn follows:
+  version probe, task, terminal and the Claude SDK), and `onLine` is the ordered protocol observation that runs before
   `parseLine` on every stdout line. Both are part of the contract because the run is wrong without
   them: `env` carries the tool gateway's URL/token and `pi`'s retry-stall override, and `onLine` is
   where the Pi native-session contract validates the session line **and can throw to fail the turn**
@@ -466,17 +467,47 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
 
 #### 3.3 Executable lookup, absent vs unprobed
 
-- Order: `TUFF_<CLI>_CLI_PATH` → `PATH` → version-manager roots (mise, volta,
-  nvm, fnm) → fixed bins (`~/.local/bin`, `~/.bun/bin`, `/opt/homebrew/bin`, …).
-  A GUI launch inherits launchd's `PATH` and would otherwise find nothing.
-- The override is **authoritative**: a value that does not point at an
-  executable means *absent*, never "search anyway". That is what makes
+- One lookup serves both features: the chat providers and the local agent
+  (`modules/local-ai-cli`) resolve through `cli/cli-executable.ts`, so a CLI is the
+  same program whichever feature runs it.
+- Order: `TUFF_<CLI>_CLI_PATH` → the 「选择程序」 pick
+  (`localAiCli.providers[id].executableOverride`) → `PATH` → version-manager roots
+  (mise, volta, nvm, fnm) → fixed bins (`~/.local/bin`, `~/.bun/bin`,
+  `/opt/homebrew/bin`, …). A GUI launch inherits launchd's `PATH` and would
+  otherwise find nothing.
+- The env override is **authoritative**: a value that is not an executable regular
+  file means *absent*, never "search anyway". That is what makes
   `TUFF_CLAUDE_CLI_PATH=/nonexistent` a faithful simulation of an uninstalled CLI.
+- The 「选择程序」 pick is **not** authoritative: one that is no longer an executable
+  regular file (moved, uninstalled, or a directory such as an `.app` bundle) is
+  skipped, the search goes on, and the result carries `settingsOverrideRejected`.
+  The chat providers read the same pick through the reader installed with
+  `setCliSettingsOverrideReader`; the memo is keyed by command + pick. The file
+  dialog keeps aliases (`noResolveAliases`), so a picked shim stays a shim.
+- **No realpath.** The answer is the path as found: a mise shim dispatches on the
+  name it was run by (its realpath is mise itself), and a `#!/usr/bin/env node`
+  CLI needs the `node` beside the link. The archived 08-04 local-agent design's
+  "realpath + regular file" rule is superseded.
+- Version-manager roots are read newest-first **by number** (`24.18.0` before
+  `24.9.0`); only `v?major.minor.patch` directories count, so aliases (`latest`,
+  `lts`) and short names (`24`) are skipped.
 - `undefined` means **not probed**, `null` means **probed and absent**. Config
   assembly runs on every invoke, so treating unprobed as absent drops the row
-  until something else forces a re-assembly.
+  until something else forces a re-assembly. A refresh (`refreshCliExecutables`)
+  therefore resolves everything first and swaps the results in at once — readers
+  never see the cleared state — and a generation counter stops a lookup that began
+  before a reset from writing its stale answer back.
 - `pie` is pi's fallback form (same protocol, same catalogue); the display name
   hangs off the resolved form, so a `pie`-only machine still reads "Pi · Touch Pie".
+- The local agent adds a `--version` check: the output must carry the CLI's own
+  identity (`codex-cli x.y.z`, `x.y.z (Claude Code)`, `omp/x.y.z`; pi prints only the
+  number). It is memoised per path, a failure is never memoised, and while the
+  master switch `localAiCli.enabled` is off `status.get` runs no CLI unless the
+  request asks for `detail` (Settings does); everyone else gets `NOT_PROBED`.
+- Bare commands of adopted stdio MCP servers (`npx`, `node`, `uvx`) resolve through
+  the same roots (`findCommandInSearchRoots`: no override, no fallback; a cached hit
+  is re-checked, a miss is not cached) and run by absolute path with PATH = their
+  directory → the inherited PATH → the fixed bins.
 
 #### 3.4 Model catalogue reads and the credential boundary
 
@@ -535,8 +566,13 @@ resolveCliExecutable(lookup: CliExecutableLookup)             // cli/cli-executa
 - Reasoning effort (`pi-cli-reasoning.test.ts`): each CLI's flag under a plan, run through the
   provider against argv-recording stubs, and each CLI's **whole** auto argv pinned as a literal —
   "the new flag is absent" alone does not catch auto adding, dropping or reordering anything else.
-- Executable lookup: override wins, override-to-non-executable means absent,
-  `pie` fallback form, version-manager roots, probe-cache reset.
+- Executable lookup: override wins, override-to-non-executable (a directory
+  included) means absent, the 「选择程序」 pick is skipped and flagged rather than
+  authoritative, `pie` fallback form, version-manager roots in numeric order,
+  probe-cache reset, and a refresh that never exposes `undefined`.
+- Local agent status: a mise shim never resolves to mise (and `mise --version`
+  fails every identity pattern), a failed `--version` is retried, and no CLI runs
+  while the master switch is off unless `detail` is asked for.
 - Model options: four rows when present, row removed when probed absent, row
   retained when unprobed.
 - Mutation checks that must fail: swap `is_error` for `subtype` in the claude
