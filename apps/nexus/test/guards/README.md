@@ -31,6 +31,7 @@ include, so `npx vitest run` picks them up with everything else.
 | `page-toplevel-throw.test.ts` | No page throws unconditionally at `<script setup>` top level. On client navigation that rejects the suspended setup and paints nothing. Conditional throws (the idiomatic Nuxt 404) are deliberately allowed. |
 | `i18n-key-existence.test.ts` | Every literal `t('…')` key exists in both locales, and an inline fallback is not wildly unlike the message its key holds. |
 | `admin-route-reachability.test.ts` | Every `app/pages/dashboard/admin/*.vue` is linked from somewhere, forwards elsewhere, or is a recorded orphan. |
+| `page-single-root.test.ts` | Every page template has exactly one root node, counting comments (a root `v-if` / `v-else` chain counts as one). Development keeps template comments, so a comment beside the root element made a page multi-root; leaving it stalled the `out-in` page transition and the next admin page never mounted. |
 | `sfc-size-budget.test.ts` | An SFC over 3000 lines keeps its `<style>` in a sibling file, and no SFC passes 4500 lines. |
 
 ## Rules for adding or changing a guard

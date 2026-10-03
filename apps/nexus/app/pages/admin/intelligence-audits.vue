@@ -12,15 +12,17 @@ definePageMeta({
 
 defineI18nRoute(false)
 
+// ClientOnly renders a fragment, so it must not be the page root: Nuxt warns that a
+// page without a single root node "will cause errors when navigating between routes".
+// AdminPageShell is the single root. Keep explanations out of the template root too:
+// development keeps template comments, and a root comment beside AdminPageShell made
+// this page multi-root, which stalled the `out-in` transition and left the next
+// page blank (guarded by test/guards/page-single-root.test.ts).
+
 const { t } = useI18n()
 </script>
 
 <template>
-  <!--
-    ClientOnly renders a fragment, so using it as the page root made Nuxt warn that
-    this page "does not have a single root node and will cause errors when navigating
-    between routes", and left the declared fade pageTransition with nothing to animate.
-  -->
   <AdminPageShell :title="t('dashboard.sections.intelligence.tabs.audits')">
     <ClientOnly>
       <LazyDashboardIntelligenceAuditsPanel />
