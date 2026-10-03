@@ -690,6 +690,45 @@ export default {
       },
     },
     sections: {
+      // The administrator console's own frame: the layout gate (`useAdminGate`)
+      // and the shared list, table, confirmation and formatting pieces under
+      // `components/admin/` and `composables/useAdmin*`.
+      adminGate: {
+        deniedTitle: 'Administrator access required',
+        deniedDescription: 'This console is only open to administrators. Taking you back to your dashboard.',
+        errorTitle: 'Could not load your account',
+        errorDescription: 'The console needs your account details to check your access. Try again.',
+      },
+      adminKit: {
+        copy: 'Copy',
+        copied: 'Copied',
+        filters: {
+          clear: 'Clear filters',
+        },
+        table: {
+          total: '{count} in total',
+          pageSize: 'Per page',
+          pagination: 'Pagination',
+          previousPage: 'Previous page',
+          nextPage: 'Next page',
+          loadFailedTitle: 'Could not load this list',
+          emptyTitle: 'Nothing here yet',
+          filteredEmptyTitle: 'Nothing matches these filters',
+          filteredEmptyDescription: 'Change or clear the filters to see more.',
+        },
+        list: {
+          loadFailed: 'Failed to load data.',
+        },
+        confirm: {
+          requireText: 'Type {text} to confirm',
+        },
+        format: {
+          durationMs: '{value} ms',
+          durationSeconds: '{value}s',
+          durationMinutes: '{minutes}m {seconds}s',
+          durationHours: '{hours}h {minutes}m',
+        },
+      },
       overview: {
         title: 'Quick overview',
         items: {
@@ -2011,15 +2050,15 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
       },
       audits: {
-        title: 'Audit Logs',
-        subtitle: 'Track administrator actions and changes.',
         empty: 'No audit records found.',
-        loading: 'Loading...',
         filters: {
           searchLabel: 'Search',
           searchPlaceholder: 'Search by admin or target',
           actionLabel: 'Action',
           actionAll: 'All actions',
+          targetTypeChip: 'Target type: {value}',
+          adminUserChip: 'Admin: {value}',
+          removeFilter: 'Remove filter',
         },
         actions: {
           userRole: 'User role updated',
@@ -2044,6 +2083,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           evidenceItemUpsert: 'Release evidence item saved',
           evidenceDocGuard: 'Release doc guard recorded',
           creditsPricingUpdate: 'Credit price updated',
+          toolApprove: 'Agent tool call approved',
+          toolReject: 'Agent tool call rejected',
           userDeletionRequest: 'User deletion requested',
         },
         export: {
@@ -2055,14 +2096,25 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           admin: 'Admin',
           action: 'Action',
           target: 'Target',
-          detail: 'Detail',
-        },
-        pagination: {
-          prev: 'Prev',
-          next: 'Next',
+          summary: 'Summary',
         },
         errors: {
           loadFailed: 'Failed to load audit logs.',
+        },
+        filteredEmpty: 'No audit records match these filters.',
+        detail: {
+          title: 'Audit record',
+          time: 'Time',
+          admin: 'Admin',
+          adminId: 'Admin ID',
+          action: 'Action',
+          targetType: 'Target type',
+          targetId: 'Target ID',
+          targetLabel: 'Target',
+          ip: 'IP address',
+          userAgent: 'User agent',
+          metadata: 'Metadata',
+          noMetadata: 'No metadata was recorded for this action.',
         },
       },
 

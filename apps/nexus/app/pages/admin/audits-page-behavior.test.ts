@@ -1,287 +1,297 @@
-import { Buffer } from 'node:buffer'
-import { readFileSync } from 'node:fs'
-import { transform } from 'esbuild'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { computed, effectScope, nextTick, reactive, ref } from 'vue'
+import type { EffectScope, Ref } from 'vue'
+import { useAdminList } from '~/composables/useAdminList'
 import {
-  computed,
-  createRenderer,
-  defineComponent,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  reactive,
-  ref,
-  watch,
-} from 'vue'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import type { Ref } from 'vue'
+  ADMIN_AUDIT_FILTER_DEFAULTS,
+  auditSummaryText,
+  buildAuditActionLabels,
+  buildAuditActionOptions,
+  buildAuditExportUrl,
+  buildAuditQuery,
+  createAuditListOptions,
+  formatAuditMetadata,
+  summarizeAudit,
+} from '~/utils/admin-audits'
+import type { AdminAuditEntry, AuditRequest } from '~/utils/admin-audits'
 
 /**
- * Compiles the audits page `<script setup>` the same way
- * analytics-page-performance.test.ts does, so the filter/pagination/error
- * behaviour is exercised as shipped rather than re-implemented here.
+ * Behaviour of `/admin/audits`, tested through the pieces the page is built
+ * from: `createAuditListOptions` handed to `useAdminList` (exactly what the page
+ * does with `requestJson`), and the label / summary helpers in
+ * `utils/admin-audits.ts`. The page script itself is now layout only.
+ *
+ * Every assertion of the previous test, which compiled the page's own script,
+ * is kept here:
+ *
+ * | before                                                          | now |
+ * | --------------------------------------------------------------- | --- |
+ * | failure shows 'Failed to load audit logs.', never `/api/admin/audits` | `list errors` › transport string |
+ * | a server-supplied `data.message` wins                           | `list errors` › server message |
+ * | rows are dropped on failure                                     | `list errors` › stale rows |
+ * | the action column re-translates on a locale switch              | `action vocabulary` › locale switch |
+ * | the dropdown is derived from the label table                    | `action vocabulary` › dropdown |
+ * | paging stops at both ends (goPrev / goNext)                     | `paging` › both ends — TxPagination owns the buttons now, `useAdminList.setPage` refuses a page outside 1…last |
+ * | a filter change goes back to page 1                             | `paging` › filter change |
+ * | blank filters are not sent; the first query is exactly `{ page: 1, limit: 20 }` | `request` › defaults |
  */
 
-interface AuditsRequest {
-  (path: string, options?: Record<string, unknown>): Promise<unknown>
+type Query = Record<string, string | string[] | undefined>
+
+let scope: EffectScope | undefined
+
+function installRoute(query: Query = {}) {
+  const route = reactive({ path: '/admin/audits', hash: '', query: { ...query } as Query })
+  vi.stubGlobal('useRoute', () => route)
+  vi.stubGlobal('useRouter', () => ({
+    replace: vi.fn(async (location: { query: Query }) => {
+      route.query = { ...location.query }
+    }),
+  }))
+  return route
 }
 
-interface Pagination {
-  page: number
-  limit: number
-  total: number
-  totalPages: number
+/** Mirrors vue-i18n: a loaded locale wins, the inline fallback is only for a missing key. */
+function createT(locale: Ref<string>) {
+  return (key: string, fallback: string) => (locale.value === 'zh' ? `zh:${key}` : fallback)
 }
 
-interface AuditsFacade {
-  audits: Ref<unknown[]>
-  loading: Ref<boolean>
-  error: Ref<string | null>
-  pagination: Pagination
-  filters: { q: string, action: string }
-  hasPrev: Ref<boolean>
-  hasNext: Ref<boolean>
-  actionLabels: Ref<Record<string, string>>
-  actionOptions: Ref<Array<{ value: string, label: string }>>
-  fetchAudits: (options?: { resetPage?: boolean }) => Promise<void>
-  goPrev: () => Promise<void>
-  goNext: () => Promise<void>
-  formatDetail: (entry: Record<string, unknown>) => string
-}
-
-interface HostNode extends Record<string, never> {}
-
-const renderer = createRenderer<HostNode, HostNode>({
-  patchProp: () => undefined,
-  insert: () => undefined,
-  remove: () => undefined,
-  createElement: () => ({}),
-  createText: () => ({}),
-  createComment: () => ({}),
-  setText: () => undefined,
-  setElementText: () => undefined,
-  parentNode: () => null,
-  nextSibling: () => null,
-  querySelector: () => null,
-  setScopeId: () => undefined,
-  cloneNode: node => node,
-  insertStaticContent: () => [{}, {}],
-})
-
-const source = readFileSync(new URL('./audits.vue', import.meta.url), 'utf8')
-const scriptSetup = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)?.[1]
-
-if (!scriptSetup)
-  throw new Error('Expected audits page script setup.')
-
-const scriptWithoutImports = scriptSetup.replace(/^import[\s\S]*?from [^\n]+\n/gm, '')
-
-interface SetupDependencies {
-  locale: Ref<string>
-  requestJson: AuditsRequest
-  role?: string | null
-}
-
-let setupFacade: (dependencies: SetupDependencies) => AuditsFacade
-
-beforeAll(async () => {
-  const executable = `
-export function setupAuditsFacade(dependencies) {
-  const { ref, reactive, computed, watch, onMounted, onBeforeUnmount } = dependencies.vue
-  const { definePageMeta, defineI18nRoute, useI18n, useAuthUser, useAccountRole, navigateTo, requestJson, hasWindow } = dependencies.nuxt
-${scriptWithoutImports}
+function auditPage(total = 61, count = 20) {
   return {
-    audits, loading, error, pagination, filters, hasPrev, hasNext,
-    actionLabels, actionOptions, fetchAudits, goPrev, goNext, formatDetail,
+    audits: Array.from({ length: count }, (_, index) => ({ id: `a${index}`, action: 'user.role.update' })),
+    pagination: { page: 1, limit: 20, total, totalPages: Math.ceil(total / 20) },
   }
 }
-`
-  const { code } = await transform(executable, { format: 'esm', loader: 'ts', target: 'esnext' })
-  // The SFC is compiled in-memory, so there is no static specifier to import.
-  const compiled: any = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
 
-  setupFacade = dependencies => compiled.setupAuditsFacade({
-    vue: { ref, reactive, computed, watch, onMounted, onBeforeUnmount },
-    nuxt: {
-      definePageMeta: () => undefined,
-      defineI18nRoute: () => undefined,
-      // Mirrors vue-i18n: a real locale wins, and the inline fallback is only
-      // used when the key is absent. Reading `locale` makes t() reactive.
-      useI18n: () => ({
-        t: (key: string, fallback: string) =>
-          dependencies.locale.value === 'zh' ? `zh:${key}` : fallback,
-        locale: dependencies.locale,
-      }),
-      useAuthUser: () => ({ user: ref({ role: dependencies.role ?? 'admin' }) }),
-      useAccountRole: () => ({ isAdmin: computed(() => (dependencies.role ?? 'admin') === 'admin') }),
-      navigateTo: vi.fn(),
-      requestJson: dependencies.requestJson,
-      hasWindow: () => false,
-    },
-  })
-})
-
-function auditPage(overrides: Partial<Pagination> = {}, rows = 1) {
-  return {
-    audits: Array.from({ length: rows }, (_, i) => ({ id: `a${i}`, action: 'user.role.update' })),
-    pagination: { page: 1, limit: 20, total: 61, totalPages: 4, ...overrides },
-  }
+function mountAuditList(request: AuditRequest, query: Query = {}) {
+  installRoute(query)
+  scope = effectScope()
+  const t = createT(ref('en'))
+  return scope.run(() => useAdminList(createAuditListOptions(request, t)))!
 }
 
 async function settle() {
-  await Promise.resolve()
-  await nextTick()
-  await Promise.resolve()
-  await nextTick()
+  for (let index = 0; index < 4; index += 1) {
+    await nextTick()
+    await Promise.resolve()
+  }
 }
 
-async function mountAuditsPage(options: Partial<SetupDependencies> = {}) {
-  let facade: AuditsFacade | undefined
-  const locale = options.locale ?? ref('en')
-  const requestJson = options.requestJson ?? vi.fn(async () => auditPage())
-  const PageHost = defineComponent({
-    setup() {
-      facade = setupFacade({ locale, requestJson, role: options.role })
-      return () => null
-    },
-  })
-  const app = renderer.createApp(PageHost)
-  app.mount({})
-  await settle()
-  if (!facade)
-    throw new Error('Expected audits facade to initialize.')
-  return { app, facade, locale, requestJson }
-}
-
-afterEach(() => {
-  vi.useRealTimers()
+beforeEach(() => {
+  vi.useFakeTimers()
 })
 
-describe('dashboard admin audits facade', () => {
-  it('shows the localized failure message instead of the transport\'s internal error string', async () => {
+afterEach(() => {
+  scope?.stop()
+  scope = undefined
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
+
+describe('admin audits: request', () => {
+  it('sends exactly { page: 1, limit: 20 } when nothing is filtered', async () => {
+    const request = vi.fn(async (_path: string, _options: { query: Record<string, string | number> }) => auditPage())
+    mountAuditList(request)
+    await settle()
+
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(request.mock.calls[0]![0]).toBe('/api/admin/audits')
+    expect(request.mock.calls[0]![1].query).toEqual({ page: 1, limit: 20 })
+  })
+
+  it('passes the four filters the API reads, and only those that are set', () => {
+    expect(buildAuditQuery({ page: 2, limit: 50, filters: { ...ADMIN_AUDIT_FILTER_DEFAULTS, q: '  ada  ' } }))
+      .toEqual({ page: 2, limit: 50, q: 'ada' })
+    expect(buildAuditQuery({
+      page: 1,
+      limit: 20,
+      filters: { q: '', action: 'audit.export', targetType: 'user', adminUserId: 'usr_1' },
+    })).toEqual({ page: 1, limit: 20, action: 'audit.export', targetType: 'user', adminUserId: 'usr_1' })
+  })
+
+  it('takes targetType and adminUserId from the URL', async () => {
+    const request = vi.fn(async (_path: string, _options: { query: Record<string, string | number> }) => auditPage())
+    const list = mountAuditList(request, { targetType: 'user', adminUserId: 'usr_1', page: '2' })
+    await settle()
+
+    expect(request.mock.calls[0]![1].query).toEqual({ page: 2, limit: 20, targetType: 'user', adminUserId: 'usr_1' })
+    expect(list.hasActiveFilters.value).toBe(true)
+  })
+
+  it('exports with the applied filters and never the page', () => {
+    expect(buildAuditExportUrl(ADMIN_AUDIT_FILTER_DEFAULTS)).toBe('/api/admin/audits/export')
+    expect(buildAuditExportUrl({ q: 'ada', action: 'all', targetType: 'user', adminUserId: '' }))
+      .toBe('/api/admin/audits/export?q=ada&targetType=user')
+  })
+})
+
+describe('admin audits: list errors', () => {
+  it('shows the localized fallback instead of the transport string', async () => {
     // ofetch rejects with '[GET] "/api/admin/audits?page=1": <no response> Failed
     // to fetch' on err.message. Surfacing that leaked the API path to admins and
     // meant the localized fallback was never reached.
-    const requestJson = vi.fn(async () => {
-      throw Object.assign(new Error('[GET] "/api/admin/audits?page=1&limit=20": <no response> Failed to fetch'), {})
+    const request = vi.fn(async () => {
+      throw new Error('[GET] "/api/admin/audits?page=1&limit=20": <no response> Failed to fetch')
     })
-    const page = await mountAuditsPage({ requestJson })
+    const list = mountAuditList(request)
+    await settle()
 
-    expect(page.facade.error.value).toBe('Failed to load audit logs.')
-    expect(page.facade.error.value).not.toMatch(/\/api\/admin\/audits/)
-
-    page.app.unmount()
+    expect(list.error.value).toBe('Failed to load audit logs.')
+    expect(list.error.value).not.toMatch(/\/api\/admin\/audits/)
   })
 
-  it('prefers a server-supplied message when the API explains itself', async () => {
-    const requestJson = vi.fn(async () => {
+  it('prefers a server message when the API explains itself', async () => {
+    const request = vi.fn(async () => {
       throw Object.assign(new Error('ignored transport text'), { data: { message: 'Audit store unavailable.' } })
     })
-    const page = await mountAuditsPage({ requestJson })
+    const list = mountAuditList(request)
+    await settle()
 
-    expect(page.facade.error.value).toBe('Audit store unavailable.')
-
-    page.app.unmount()
+    expect(list.error.value).toBe('Audit store unavailable.')
   })
 
-  it('drops the previous rows on failure so a stale page is never captioned by a fresh error', async () => {
+  it('drops the previous rows on failure, so a stale page is never captioned by a fresh error', async () => {
     let shouldFail = false
-    const requestJson = vi.fn(async () => {
+    const request = vi.fn(async () => {
       if (shouldFail)
         throw new Error('boom')
-      return auditPage({}, 3)
+      return auditPage(3, 3)
     })
-    const page = await mountAuditsPage({ requestJson })
-    expect(page.facade.audits.value).toHaveLength(3)
+    const list = mountAuditList(request)
+    await settle()
+    expect(list.rows.value).toHaveLength(3)
 
     shouldFail = true
-    await page.facade.fetchAudits()
+    await list.refresh()
 
-    expect(page.facade.error.value).toBe('Failed to load audit logs.')
-    expect(page.facade.audits.value).toEqual([])
-
-    page.app.unmount()
+    expect(list.error.value).toBe('Failed to load audit logs.')
+    expect(list.rows.value).toEqual([])
   })
+})
 
-  it('retranslates the action column when the locale changes', async () => {
-    // actionLabels used to be a plain object built once during setup, so the
-    // filter dropdown followed a locale switch and the table column did not.
-    const locale = ref('en')
-    const page = await mountAuditsPage({ locale })
+describe('admin audits: paging', () => {
+  it('stops at both ends of the result set', async () => {
+    const request = vi.fn(async (_path: string, options: { query: Record<string, string | number> }) => ({
+      ...auditPage(61),
+      pagination: { page: options.query.page, limit: 20, total: 61, totalPages: 4 },
+    }))
+    const list = mountAuditList(request)
+    await settle()
 
-    expect(page.facade.actionLabels.value['user.role.update']).toBe('User role updated')
+    list.setPage(0)
+    await settle()
+    expect(list.page.value).toBe(1)
 
-    locale.value = 'zh'
-    await nextTick()
+    list.setPage(4)
+    await settle()
+    expect(list.page.value).toBe(4)
 
-    expect(page.facade.actionLabels.value['user.role.update'])
-      .toBe('zh:dashboard.sections.audits.actions.userRole')
-
-    page.app.unmount()
-  })
-
-  it('derives the filter options from the label map so the two cannot drift apart', async () => {
-    const page = await mountAuditsPage()
-    const optionValues = page.facade.actionOptions.value.map(option => option.value)
-
-    expect(optionValues[0]).toBe('all')
-    expect(optionValues.slice(1)).toEqual(Object.keys(page.facade.actionLabels.value))
-    for (const option of page.facade.actionOptions.value.slice(1))
-      expect(option.label).toBe(page.facade.actionLabels.value[option.value])
-
-    page.app.unmount()
-  })
-
-  it('disables paging past either end of the result set', async () => {
-    const page = await mountAuditsPage({
-      requestJson: vi.fn(async (_path, options: any) => auditPage({ page: options.query.page })),
-    })
-
-    expect(page.facade.pagination.totalPages).toBe(4)
-    expect(page.facade.hasPrev.value).toBe(false)
-    expect(page.facade.hasNext.value).toBe(true)
-
-    await page.facade.goNext()
-    await page.facade.goNext()
-    await page.facade.goNext()
-
-    expect(page.facade.pagination.page).toBe(4)
-    expect(page.facade.hasNext.value).toBe(false)
-    expect(page.facade.hasPrev.value).toBe(true)
-
-    // A click on the disabled control must not walk off the end.
-    await page.facade.goNext()
-    expect(page.facade.pagination.page).toBe(4)
-
-    page.app.unmount()
+    // Past the last page: refused, no request.
+    const calls = request.mock.calls.length
+    list.setPage(5)
+    await settle()
+    expect(list.page.value).toBe(4)
+    expect(request).toHaveBeenCalledTimes(calls)
   })
 
   it('returns to the first page when a filter narrows the result set', async () => {
-    vi.useFakeTimers()
-    const requestJson = vi.fn(async (_path: string, options: any) => auditPage({ page: options.query.page }))
-    const page = await mountAuditsPage({ requestJson })
-
-    await page.facade.goNext()
-    expect(page.facade.pagination.page).toBe(2)
-
-    page.facade.filters.action = 'audit.export'
+    const request = vi.fn(async (_path: string, _options: { query: Record<string, string | number> }) => auditPage(61))
+    const list = mountAuditList(request)
     await settle()
 
-    expect(page.facade.pagination.page).toBe(1)
-    const lastCall = requestJson.mock.calls.at(-1)?.[1] as any
-    expect(lastCall.query).toMatchObject({ page: 1, action: 'audit.export' })
+    list.setPage(2)
+    await settle()
+    expect(list.page.value).toBe(2)
 
-    page.app.unmount()
+    list.filters.action = 'audit.export'
+    await settle()
+
+    expect(list.page.value).toBe(1)
+    expect(request.mock.calls.at(-1)![1].query).toMatchObject({ page: 1, action: 'audit.export' })
+  })
+})
+
+describe('admin audits: action vocabulary', () => {
+  it('re-translates the action column when the locale changes', () => {
+    // A plain object built once during setup followed a locale switch in the
+    // dropdown and not in the table column.
+    const locale = ref('en')
+    const t = createT(locale)
+    const labels = computed(() => buildAuditActionLabels(t))
+
+    expect(labels.value['user.role.update']).toBe('User role updated')
+    locale.value = 'zh'
+    expect(labels.value['user.role.update']).toBe('zh:dashboard.sections.audits.actions.userRole')
   })
 
-  it('omits blank filters from the query rather than sending empty values', async () => {
-    // Params are declared so the recorded call tuple has an index 1 to read;
-    // a zero-arg factory types `mock.calls[0]` as `[]`.
-    const requestJson = vi.fn(async (_path: string, _options?: unknown) => auditPage())
-    const page = await mountAuditsPage({ requestJson })
+  it('derives the dropdown from the label table so the two cannot drift apart', () => {
+    const t = createT(ref('en'))
+    const labels = buildAuditActionLabels(t)
+    const options = buildAuditActionOptions(t, labels)
 
-    const query = (requestJson.mock.calls[0]?.[1] as any).query
-    expect(query).toEqual({ page: 1, limit: 20 })
+    expect(options[0]).toEqual({ value: 'all', label: 'All actions' })
+    expect(options.slice(1).map(option => option.value)).toEqual(Object.keys(labels))
+    for (const option of options.slice(1))
+      expect(option.label).toBe(labels[option.value])
+  })
 
-    page.app.unmount()
+  it('labels the agent tool decisions still in the log', () => {
+    const labels = buildAuditActionLabels(createT(ref('en')))
+    expect(labels['intelligence.tool.approve']).toBe('Agent tool call approved')
+    expect(labels['intelligence.tool.reject']).toBe('Agent tool call rejected')
+  })
+})
+
+describe('admin audits: summary column', () => {
+  const labels = buildAuditActionLabels(createT(ref('en')))
+  const options = { labels, formatDate: (value: string) => `date(${value})` }
+
+  function summary(action: string, metadata: Record<string, unknown> | null) {
+    return auditSummaryText(summarizeAudit({ action, metadata }, options))
+  }
+
+  it('keeps the five dedicated summaries', () => {
+    expect(summary('user.role.update', { before: { role: 'user' }, after: { role: 'admin' } })).toBe('user → admin')
+    expect(summary('user.status.update', { before: { status: 'active' } })).toBe('active → —')
+    expect(summary('subscription.grant', { plan: 'PRO', expiresAt: '2026-12-01' })).toBe('PRO · date(2026-12-01)')
+    expect(summary('activation_code.revoke', { before: { status: 'active' } })).toBe('Activation code revoked')
+    expect(summary('audit.export', { limit: 5000 })).toBe('Audit exported')
+  })
+
+  it('shows the first scalar fields instead of the whole metadata as JSON', () => {
+    const text = summary('intelligence.tool.approve', {
+      approved: true,
+      sessionId: 'sess_1',
+      toolId: 'web.search',
+      riskLevel: 'low',
+      nested: { a: 1 },
+    })
+    expect(text).toBe('approved: true · sessionId: sess_1 · toolId: web.search')
+    expect(text).not.toContain('{')
+  })
+
+  it('cuts a long value and says nothing when there is nothing scalar', () => {
+    expect(summary('doc_comment.delete', { path: 'x'.repeat(80) })).toMatch(/^path: x{47}…$/)
+    expect(summary('user.profile.update', { before: { name: 'a' }, after: { name: 'b' } })).toBe('—')
+    expect(summary('unknown.action', null)).toBe('—')
+  })
+
+  it('prints the full metadata for the drawer', () => {
+    const metadata = { before: { role: 'user' }, after: { role: 'admin' } }
+    expect(formatAuditMetadata(metadata)).toBe(JSON.stringify(metadata, null, 2))
+    expect(formatAuditMetadata(null)).toBeNull()
+    expect(formatAuditMetadata({})).toBeNull()
+  })
+
+  it('reads the entry shape the API returns', () => {
+    const entry: Pick<AdminAuditEntry, 'action' | 'metadata'> = { action: 'user.role.update', metadata: null }
+    expect(summarizeAudit(entry, options)).toEqual({ text: null, chips: [] })
+  })
+
+  it('falls back to the field summary when a dedicated summary has nothing on either side', () => {
+    // Seeded demo rows carry no before/after; `— → —` used to fill the column.
+    expect(summary('user.status.update', { source: 'nexus-local-demo', localOnly: true })).toBe('source: nexus-local-demo · localOnly: true')
+    expect(summary('subscription.grant', { expiresAt: '' })).toBe('—')
+    expect(summary('subscription.grant', { expiresAt: '2026-12-01' })).toBe('— · date(2026-12-01)')
   })
 })

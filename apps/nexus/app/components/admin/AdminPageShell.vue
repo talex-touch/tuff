@@ -1,7 +1,24 @@
 <script setup lang="ts">
+import { inject, onMounted } from 'vue'
+import { ADMIN_PAGE_MOUNTED_KEY } from '~/composables/useAdminRouteSkeleton'
+
+/**
+ * The frame of every administrator page: the one page heading (its text is the
+ * rail entry's), then `#actions` beside it, `#nav` for a section strip under it
+ * (`?section=` / `?tab=`), `#filters`, and the body. Nothing inside the body
+ * adds a second page heading or subtitle; blocks are titled by `AdminSection`.
+ */
 defineProps<{
   title: string
 }>()
+
+// Tells `layouts/admin.vue` that the next page is on screen, which is what ends
+// its route-change skeleton. Outside the console layout there is no provider.
+const notifyPageMounted = inject(ADMIN_PAGE_MOUNTED_KEY, null)
+
+onMounted(() => {
+  notifyPageMounted?.()
+})
 </script>
 
 <template>
@@ -14,6 +31,9 @@ defineProps<{
         <slot name="actions" />
       </div>
     </header>
+    <div v-if="$slots.nav" class="AdminPageShell-Nav">
+      <slot name="nav" />
+    </div>
     <div v-if="$slots.filters" class="AdminPageShell-Filters">
       <slot name="filters" />
     </div>
@@ -54,6 +74,7 @@ defineProps<{
   gap: 8px;
 }
 
+.AdminPageShell-Nav,
 .AdminPageShell-Filters,
 .AdminPageShell-Body {
   min-width: 0;

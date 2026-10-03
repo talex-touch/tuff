@@ -686,6 +686,44 @@ export default {
       },
     },
     sections: {
+      // 后台外壳自己的文案：布局闸门（`useAdminGate`）与 `components/admin/`、
+      // `composables/useAdmin*` 下共用的列表、表格、确认与格式化组件。
+      adminGate: {
+        deniedTitle: '需要管理员权限',
+        deniedDescription: '后台仅对管理员开放，正在返回你的控制台。',
+        errorTitle: '账户信息加载失败',
+        errorDescription: '需要先读取你的账户信息才能确认后台权限，请重试。',
+      },
+      adminKit: {
+        copy: '复制',
+        copied: '已复制',
+        filters: {
+          clear: '清空筛选',
+        },
+        table: {
+          total: '共 {count} 条',
+          pageSize: '每页',
+          pagination: '分页',
+          previousPage: '上一页',
+          nextPage: '下一页',
+          loadFailedTitle: '列表加载失败',
+          emptyTitle: '暂无数据',
+          filteredEmptyTitle: '没有符合筛选条件的结果',
+          filteredEmptyDescription: '调整或清空筛选条件后再看看。',
+        },
+        list: {
+          loadFailed: '数据加载失败。',
+        },
+        confirm: {
+          requireText: '输入 {text} 以确认',
+        },
+        format: {
+          durationMs: '{value} 毫秒',
+          durationSeconds: '{value} 秒',
+          durationMinutes: '{minutes}分{seconds}秒',
+          durationHours: '{hours}小时{minutes}分',
+        },
+      },
       overview: {
         title: '快速概览',
         items: {
@@ -2007,15 +2045,15 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
         },
       },
       audits: {
-        title: '审计日志',
-        subtitle: '追踪管理员操作与变更记录。',
         empty: '暂无审计记录。',
-        loading: '加载中...',
         filters: {
           searchLabel: '搜索',
           searchPlaceholder: '按管理员或目标搜索',
           actionLabel: '操作类型',
           actionAll: '全部操作',
+          targetTypeChip: '目标类型：{value}',
+          adminUserChip: '管理员：{value}',
+          removeFilter: '移除筛选',
         },
         actions: {
           userRole: '用户角色变更',
@@ -2040,6 +2078,8 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
           evidenceItemUpsert: '发布证据条目保存',
           evidenceDocGuard: '发布文档守卫记录',
           creditsPricingUpdate: '计价规则更新',
+          toolApprove: '智能体工具调用批准',
+          toolReject: '智能体工具调用拒绝',
           userDeletionRequest: '用户删除申请',
         },
         export: {
@@ -2051,14 +2091,25 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
           admin: '管理员',
           action: '动作',
           target: '目标',
-          detail: '详情',
-        },
-        pagination: {
-          prev: '上一页',
-          next: '下一页',
+          summary: '摘要',
         },
         errors: {
           loadFailed: '加载审计日志失败。',
+        },
+        filteredEmpty: '没有符合筛选条件的审计记录。',
+        detail: {
+          title: '审计记录',
+          time: '时间',
+          admin: '管理员',
+          adminId: '管理员 ID',
+          action: '动作',
+          targetType: '目标类型',
+          targetId: '目标 ID',
+          targetLabel: '目标',
+          ip: 'IP 地址',
+          userAgent: 'User-Agent',
+          metadata: '元数据',
+          noMetadata: '这条操作没有记录元数据。',
         },
       },
 

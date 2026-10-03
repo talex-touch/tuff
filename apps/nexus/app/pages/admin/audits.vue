@@ -1,13 +1,31 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex/button'
-import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
-import { TuffInput } from '@talex-touch/tuffex/input'
-import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
-import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import type { DataTableColumn } from '@talex-touch/tuffex/data-table'
+import type { AdminAuditEntry } from '~/utils/admin-audits'
+import { TxButton, TxCopyButton } from '@talex-touch/tuffex/button'
+import { TxDescriptions, TxDescriptionsItem } from '@talex-touch/tuffex/descriptions'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import { TxSearchInput } from '@talex-touch/tuffex/search-input'
+import { TxSelect } from '@talex-touch/tuffex/select'
+import { TxTag } from '@talex-touch/tuffex/tag'
 import { hasWindow } from '@talex-touch/utils/env'
+import { computed, ref } from 'vue'
+import AdminFilterBar from '~/components/admin/AdminFilterBar.vue'
+import AdminFilterField from '~/components/admin/AdminFilterField.vue'
+import AdminIdentity from '~/components/admin/AdminIdentity.vue'
 import AdminPageShell from '~/components/admin/AdminPageShell.vue'
+import AdminSection from '~/components/admin/AdminSection.vue'
+import AdminTable from '~/components/admin/AdminTable.vue'
+import { useAdminFormat } from '~/composables/useAdminFormat'
+import { useAdminList } from '~/composables/useAdminList'
+import {
+  auditSummaryText,
+  buildAuditActionLabels,
+  buildAuditActionOptions,
+  buildAuditExportUrl,
+  createAuditListOptions,
+  formatAuditMetadata,
+  summarizeAudit,
+} from '~/utils/admin-audits'
 import { requestJson } from '~/utils/request'
 
 definePageMeta({
@@ -21,378 +39,295 @@ definePageMeta({
 
 defineI18nRoute(false)
 
+// The administrator gate is the layout's (`useAdminGate`): this page only mounts
+// for an administrator, so it neither checks the role nor asks for data it
+// cannot have.
 const { t } = useI18n()
-const { user } = useAuthUser()
+const format = useAdminFormat()
 
-// Admin check - redirect if not admin
-const { isAdmin } = useAccountRole()
+const actionLabels = computed(() => buildAuditActionLabels(t))
+const actionOptions = computed(() => buildAuditActionOptions(t, actionLabels.value))
 
-watch(isAdmin, (admin) => {
-  if (user.value && !admin) {
-    navigateTo('/dashboard/overview')
-  }
-}, { immediate: true })
+const list = useAdminList(createAuditListOptions(requestJson, t))
+const filters = list.filters
 
-interface Pagination {
-  page: number
-  limit: number
-  total: number
-  totalPages: number
-}
-
-interface AdminAudit {
-  id: string
-  adminUserId: string
-  adminName: string | null
-  adminEmail: string | null
-  action: string
-  targetType: string | null
-  targetId: string | null
-  targetLabel: string | null
-  metadata: Record<string, any> | null
-  ip: string | null
-  userAgent: string | null
-  createdAt: string
-}
-
-const audits = ref<AdminAudit[]>([])
-const loading = ref(false)
-const error = ref<string | null>(null)
-const pagination = reactive<Pagination>({
-  page: 1,
-  limit: 20,
-  total: 0,
-  totalPages: 1,
-})
-
-const filters = reactive({
-  q: '',
-  action: 'all',
-})
-
-const hasPrev = computed(() => pagination.page > 1)
-const hasNext = computed(() => pagination.page < pagination.totalPages)
-
-const actionLabels = computed<Record<string, string>>(() => ({
-  'user.role.update': t('dashboard.sections.audits.actions.userRole', 'User role updated'),
-  'user.status.update': t('dashboard.sections.audits.actions.userStatus', 'User status updated'),
-  'user.deletion.request': t('dashboard.sections.audits.actions.userDeletionRequest', 'User deletion requested'),
-  'subscription.grant': t('dashboard.sections.audits.actions.subscriptionGrant', 'Subscription granted'),
-  'activation_code.revoke': t('dashboard.sections.audits.actions.codeRevoke', 'Activation code revoked'),
-  'audit.export': t('dashboard.sections.audits.actions.auditExport', 'Audit exported'),
-  // The audit-coverage pass made these actions start appearing in the table.
-  // Without a label each renders as its raw id and is absent from the filter
-  // dropdown, so the entries exist but no admin can find them.
-  'user.role.bootstrap': t('dashboard.sections.audits.actions.userRoleBootstrap', 'Administrator bootstrapped'),
-  'user.profile.update': t('dashboard.sections.audits.actions.userProfileUpdate', 'User profile updated'),
-  'user.credits.adjust': t('dashboard.sections.audits.actions.userCreditsAdjust', 'User credits adjusted'),
-  'activation_code.generate': t('dashboard.sections.audits.actions.codeGenerate', 'Activation codes generated'),
-  'doc_comment.delete': t('dashboard.sections.audits.actions.docCommentDelete', 'Doc comment deleted'),
-  'store_review.status.update': t('dashboard.sections.audits.actions.storeReviewStatus', 'Store review status updated'),
-  'plugin_scan_waiver.create': t('dashboard.sections.audits.actions.scanWaiverCreate', 'Plugin scan waiver created'),
-  'plugin_scan_waiver.revoke': t('dashboard.sections.audits.actions.scanWaiverRevoke', 'Plugin scan waiver revoked'),
-  'maintenance.telemetry_retention.run': t('dashboard.sections.audits.actions.telemetryRetentionRun', 'Telemetry retention run'),
-  'intelligence.prompt.upsert': t('dashboard.sections.audits.actions.promptUpsert', 'Agent prompt saved'),
-  'intelligence.prompt.delete': t('dashboard.sections.audits.actions.promptDelete', 'Agent prompt deleted'),
-  'intelligence.prompt-binding.upsert': t('dashboard.sections.audits.actions.promptBindingUpsert', 'Agent prompt binding saved'),
-  'intelligence.prompt-binding.delete': t('dashboard.sections.audits.actions.promptBindingDelete', 'Agent prompt binding deleted'),
-  'release.evidence.run.create': t('dashboard.sections.audits.actions.evidenceRunCreate', 'Release evidence run created'),
-  'release.evidence.item.upsert': t('dashboard.sections.audits.actions.evidenceItemUpsert', 'Release evidence item saved'),
-  'release.evidence.doc-guard.record': t('dashboard.sections.audits.actions.evidenceDocGuard', 'Release doc guard recorded'),
-  'credits.pricing.update': t('dashboard.sections.audits.actions.creditsPricingUpdate', 'Credit price updated'),
-}))
-
-const actionOptions = computed(() => ([
-  { value: 'all', label: t('dashboard.sections.audits.filters.actionAll', 'All actions') },
-  ...Object.entries(actionLabels.value).map(([value, label]) => ({ value, label })),
-]))
-
-const auditColumns = computed<DataTableColumn<AdminAudit>[]>(() => [
-  { key: 'time', title: t('dashboard.sections.audits.table.time', 'Time'), width: 180 },
-  { key: 'admin', title: t('dashboard.sections.audits.table.admin', 'Admin'), width: '24%' },
-  { key: 'action', title: t('dashboard.sections.audits.table.action', 'Action'), width: 180 },
-  { key: 'target', title: t('dashboard.sections.audits.table.target', 'Target'), width: 180 },
-  { key: 'detail', title: t('dashboard.sections.audits.table.detail', 'Detail') },
+const columns = computed<DataTableColumn<AdminAuditEntry>[]>(() => [
+  { key: 'time', title: t('dashboard.sections.audits.table.time', 'Time'), width: 148 },
+  { key: 'admin', title: t('dashboard.sections.audits.table.admin', 'Admin'), width: 220 },
+  { key: 'action', title: t('dashboard.sections.audits.table.action', 'Action'), width: 150 },
+  { key: 'target', title: t('dashboard.sections.audits.table.target', 'Target'), width: 220 },
+  { key: 'summary', title: t('dashboard.sections.audits.table.summary', 'Summary') },
 ])
 
-function buildQuery() {
-  const query: Record<string, string | number> = {
-    page: pagination.page,
-    limit: pagination.limit,
-  }
-  if (filters.q.trim())
-    query.q = filters.q.trim()
-  if (filters.action !== 'all')
-    query.action = filters.action
-  return query
+function actionLabel(action: string): string {
+  return actionLabels.value[action] ?? action
 }
 
-async function fetchAudits(options: { resetPage?: boolean } = {}) {
-  if (options.resetPage)
-    pagination.page = 1
-
-  loading.value = true
-  error.value = null
-  try {
-    const res = await requestJson<{ audits: AdminAudit[], pagination: Pagination }>('/api/admin/audits', {
-      query: buildQuery(),
-    })
-    audits.value = res.audits ?? []
-    if (res.pagination) {
-      pagination.page = res.pagination.page
-      pagination.limit = res.pagination.limit
-      pagination.total = res.pagination.total
-      pagination.totalPages = res.pagination.totalPages
-    }
-  }
-  catch (err: any) {
-    // Only the server-supplied message is presentable; err.message is ofetch's
-    // internal '[GET] "/api/..." <no response> Failed to fetch' string.
-    error.value = err?.data?.message || t('dashboard.sections.audits.errors.loadFailed', 'Failed to load audit logs.')
-    audits.value = []
-  }
-  finally {
-    loading.value = false
-  }
+function rowSummary(entry: AdminAuditEntry): string {
+  return auditSummaryText(summarizeAudit(entry, { labels: actionLabels.value, formatDate: format.date }))
 }
 
-function formatTime(value: string) {
-  return new Date(value).toLocaleString('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  })
+function targetTitle(entry: AdminAuditEntry): string {
+  return [entry.targetLabel || entry.targetId, entry.targetType].filter(Boolean).join(' · ')
 }
 
-function formatAdmin(entry: AdminAudit) {
-  return entry.adminName || entry.adminEmail || entry.adminUserId
+/** `targetType` / `adminUserId` arrive by URL from other pages; they show as removable chips. */
+const linkedFilterChips = computed(() => {
+  const applied = list.appliedFilters.value
+  const chips: Array<{ key: 'targetType' | 'adminUserId', label: string }> = []
+  if (applied.targetType)
+    chips.push({ key: 'targetType', label: t('dashboard.sections.audits.filters.targetTypeChip', { value: applied.targetType }) })
+  if (applied.adminUserId)
+    chips.push({ key: 'adminUserId', label: t('dashboard.sections.audits.filters.adminUserChip', { value: applied.adminUserId }) })
+  return chips
+})
+
+const detailEntry = ref<AdminAuditEntry | null>(null)
+const detailOpen = ref(false)
+const detailMetadata = computed(() => formatAuditMetadata(detailEntry.value?.metadata ?? null))
+
+function openDetail(entry: AdminAuditEntry) {
+  detailEntry.value = entry
+  detailOpen.value = true
 }
-
-function formatTarget(entry: AdminAudit) {
-  if (entry.targetLabel)
-    return entry.targetLabel
-  if (entry.targetId)
-    return entry.targetId
-  return '-'
-}
-
-function formatDetail(entry: AdminAudit) {
-  const meta = entry.metadata
-  const detailParts: string[] = []
-
-  if (entry.action === 'user.role.update') {
-    const from = meta?.before?.role ?? '-'
-    const to = meta?.after?.role ?? '-'
-    detailParts.push(`${from} -> ${to}`)
-  }
-
-  if (entry.action === 'user.status.update') {
-    const from = meta?.before?.status ?? '-'
-    const to = meta?.after?.status ?? '-'
-    detailParts.push(`${from} -> ${to}`)
-  }
-
-  if (entry.action === 'subscription.grant') {
-    const plan = meta?.plan ?? '-'
-    const expiresAt = meta?.expiresAt ? formatDate(meta.expiresAt) : '-'
-    detailParts.push(`${plan} · ${expiresAt}`)
-  }
-
-  if (entry.action === 'activation_code.revoke') {
-    detailParts.push(t('dashboard.sections.audits.actions.codeRevoke', 'Activation code revoked'))
-  }
-
-  if (entry.action === 'audit.export') {
-    detailParts.push(t('dashboard.sections.audits.actions.auditExport', 'Audit exported'))
-  }
-
-  if (entry.ip)
-    detailParts.push(`IP ${entry.ip}`)
-
-  if (!detailParts.length && meta) {
-    detailParts.push(JSON.stringify(meta))
-  }
-
-  return detailParts.length ? detailParts.join(' · ') : '-'
-}
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
-async function goPrev() {
-  if (!hasPrev.value || loading.value)
-    return
-  pagination.page -= 1
-  await fetchAudits()
-}
-
-async function goNext() {
-  if (!hasNext.value || loading.value)
-    return
-  pagination.page += 1
-  await fetchAudits()
-}
-
-let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const exporting = ref(false)
 
 function exportAudits() {
-  if (exporting.value)
+  if (exporting.value || !hasWindow())
     return
   exporting.value = true
-  try {
-    const params = new URLSearchParams()
-    if (filters.q.trim())
-      params.set('q', filters.q.trim())
-    if (filters.action !== 'all')
-      params.set('action', filters.action)
-    const url = `/api/admin/audits/export?${params.toString()}`
-    if (hasWindow())
-      window.open(url, '_blank')
-  }
-  finally {
-    setTimeout(() => {
-      exporting.value = false
-    }, 300)
-  }
-}
-
-watch(() => filters.q, () => {
-  if (searchTimer)
-    clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    fetchAudits({ resetPage: true })
+  window.open(buildAuditExportUrl(list.appliedFilters.value), '_blank')
+  setTimeout(() => {
+    exporting.value = false
   }, 300)
-})
-
-watch(() => filters.action, () => {
-  fetchAudits({ resetPage: true })
-})
-
-onBeforeUnmount(() => {
-  if (searchTimer)
-    clearTimeout(searchTimer)
-})
-
-onMounted(() => {
-  fetchAudits()
-})
+}
 </script>
 
 <template>
-  <AdminPageShell :title="t('dashboard.sections.audits.title', 'Audit Logs')">
+  <AdminPageShell :title="t('dashboard.sections.menu.adminAudits', 'Admin Action Audits')">
     <template #actions>
-      <TxButton variant="secondary" size="sm" :disabled="loading" @click="fetchAudits({ resetPage: true })">
+      <TxButton variant="secondary" size="sm" :disabled="list.loading.value || list.refreshing.value" @click="list.refresh()">
         {{ t('common.refresh', 'Refresh') }}
       </TxButton>
       <TxButton variant="secondary" size="sm" :disabled="exporting" @click="exportAudits">
         {{ exporting ? t('dashboard.sections.audits.export.exporting', 'Exporting...') : t('dashboard.sections.audits.export.label', 'Export CSV') }}
       </TxButton>
     </template>
+
     <template #filters>
-    <section class="apple-card-lg p-5 space-y-4">
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_220px]">
-        <div>
-          <label class="apple-section-title mb-1 block">
-            {{ t('dashboard.sections.audits.filters.searchLabel', 'Search') }}
-          </label>
-          <TuffInput
+      <AdminFilterBar :active="list.hasActiveFilters.value" @clear="list.clearFilters()">
+        <AdminFilterField :label="t('dashboard.sections.audits.filters.searchLabel', 'Search')" for="admin-audit-search" wide>
+          <TxSearchInput
+            id="admin-audit-search"
             v-model="filters.q"
-            type="text"
             autocomplete="off"
             :placeholder="t('dashboard.sections.audits.filters.searchPlaceholder', 'Search by admin or target')"
-            class="w-full"
           />
-        </div>
-        <div>
-          <label class="apple-section-title mb-1 block">
-            {{ t('dashboard.sections.audits.filters.actionLabel', 'Action') }}
-          </label>
-          <TuffSelect v-model="filters.action" class="w-full">
-            <TuffSelectItem v-for="opt in actionOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
-          </TuffSelect>
-        </div>
-      </div>
-    </section>
+        </AdminFilterField>
+        <AdminFilterField :label="t('dashboard.sections.audits.filters.actionLabel', 'Action')">
+          <TxSelect v-model="filters.action" :options="actionOptions" />
+        </AdminFilterField>
+        <template #trailing>
+          <TxTag
+            v-for="chip in linkedFilterChips"
+            :key="chip.key"
+            :label="chip.label"
+            size="md"
+            variant="soft"
+            closable
+            :close-aria-label="t('dashboard.sections.audits.filters.removeFilter', 'Remove filter')"
+            @close="filters[chip.key] = ''"
+          />
+        </template>
+      </AdminFilterBar>
     </template>
 
-    <div v-if="error" class="rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
-      {{ error }}
-    </div>
+    <AdminSection :padded="false">
+      <AdminTable
+        :columns="columns"
+        :rows="list.rows.value"
+        row-key="id"
+        :loading="list.loading.value"
+        :refreshing="list.refreshing.value"
+        :error="list.error.value"
+        :empty-title="t('dashboard.sections.audits.empty', 'No audit records found.')"
+        :filtered-empty-title="t('dashboard.sections.audits.filteredEmpty', 'No audit records match these filters.')"
+        :filtered="list.hasActiveFilters.value"
+        :page="list.page.value"
+        :limit="list.limit.value"
+        :total="list.total.value"
+        :page-sizes="list.pageSizes"
+        table-layout="fixed"
+        clickable-rows
+        @retry="list.refresh()"
+        @clear-filters="list.clearFilters()"
+        @update:page="list.setPage"
+        @update:limit="list.setLimit"
+        @row-click="openDetail"
+      >
+        <template #cell-time="{ row }">
+          <span class="AuditCell is-numeric" :title="format.dateTimeTitle(row.createdAt)">{{ format.tableDateTime(row.createdAt) }}</span>
+        </template>
+        <template #cell-admin="{ row }">
+          <AdminIdentity :name="row.adminName" :email="row.adminEmail" :fallback="row.adminUserId" size="sm" compact />
+        </template>
+        <template #cell-action="{ row }">
+          <span class="AuditCell" :title="`${actionLabel(row.action)} · ${row.action}`">{{ actionLabel(row.action) }}</span>
+        </template>
+        <template #cell-target="{ row }">
+          <span class="AuditTarget" :title="targetTitle(row)">
+            <span class="AuditTarget-Label">{{ row.targetLabel || row.targetId || '—' }}</span>
+            <span v-if="row.targetType" class="AuditTarget-Type">{{ row.targetType }}</span>
+          </span>
+        </template>
+        <template #cell-summary="{ row }">
+          <span class="AuditCell is-muted" :title="rowSummary(row)">{{ rowSummary(row) }}</span>
+        </template>
+      </AdminTable>
+    </AdminSection>
 
-    <section class="apple-card-lg overflow-hidden">
-      <div class="border-b border-black/[0.04] p-5 dark:border-white/[0.06]">
-        <div class="flex items-center justify-end gap-2 text-xs text-black/50 dark:text-white/50">
-          <span>{{ pagination.page }} / {{ pagination.totalPages }}</span>
+    <TxDrawer v-model:visible="detailOpen" :title="t('dashboard.sections.audits.detail.title', 'Audit record')" size="520px">
+      <div v-if="detailEntry" class="AuditDetail">
+        <TxDescriptions :columns="1" size="sm">
+          <TxDescriptionsItem :label="t('dashboard.sections.audits.detail.time', 'Time')">
+            {{ format.dateTimeTitle(detailEntry.createdAt) }}
+          </TxDescriptionsItem>
+          <TxDescriptionsItem :label="t('dashboard.sections.audits.detail.admin', 'Admin')">
+            <AdminIdentity :name="detailEntry.adminName" :email="detailEntry.adminEmail" :fallback="detailEntry.adminUserId" size="sm" />
+          </TxDescriptionsItem>
+          <TxDescriptionsItem :label="t('dashboard.sections.audits.detail.adminId', 'Admin ID')">
+            <code class="AuditDetail-Inline">{{ detailEntry.adminUserId }}</code>
+          </TxDescriptionsItem>
+          <TxDescriptionsItem :label="t('dashboard.sections.audits.detail.action', 'Action')">
+            {{ actionLabel(detailEntry.action) }}
+            <code class="AuditDetail-Inline">{{ detailEntry.action }}</code>
+          </TxDescriptionsItem>
+          <TxDescriptionsItem :label="t('dashboard.sections.audits.detail.targetType', 'Target type')">
+            {{ detailEntry.targetType }}
+          </TxDescriptionsItem>
+          <TxDescriptionsItem :label="t('dashboard.sections.audits.detail.targetId', 'Target ID')">
+            <code v-if="detailEntry.targetId" class="AuditDetail-Inline">{{ detailEntry.targetId }}</code>
+          </TxDescriptionsItem>
+          <TxDescriptionsItem :label="t('dashboard.sections.audits.detail.targetLabel', 'Target')">
+            {{ detailEntry.targetLabel }}
+          </TxDescriptionsItem>
+          <TxDescriptionsItem :label="t('dashboard.sections.audits.detail.ip', 'IP address')">
+            {{ detailEntry.ip }}
+          </TxDescriptionsItem>
+          <TxDescriptionsItem :label="t('dashboard.sections.audits.detail.userAgent', 'User agent')">
+            {{ detailEntry.userAgent }}
+          </TxDescriptionsItem>
+        </TxDescriptions>
+
+        <div class="AuditDetail-Metadata">
+          <div class="AuditDetail-MetadataHeader">
+            <h3 class="AuditDetail-MetadataTitle">
+              {{ t('dashboard.sections.audits.detail.metadata', 'Metadata') }}
+            </h3>
+            <TxCopyButton
+              v-if="detailMetadata"
+              :text="detailMetadata"
+              :copy-label="t('dashboard.sections.adminKit.copy', 'Copy')"
+              :copied-label="t('dashboard.sections.adminKit.copied', 'Copied')"
+            />
+          </div>
+          <pre v-if="detailMetadata" class="AuditDetail-Code">{{ detailMetadata }}</pre>
+          <p v-else class="AuditDetail-Empty">
+            {{ t('dashboard.sections.audits.detail.noMetadata', 'No metadata was recorded for this action.') }}
+          </p>
         </div>
       </div>
-
-      <div v-if="loading && !audits.length" class="p-5 space-y-3">
-        <div class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
-          <TxSpinner :size="16" />
-          {{ t('dashboard.sections.audits.loading', 'Loading...') }}
-        </div>
-        <!-- One skeleton row per audit row, split on the same 5 columns. -->
-        <div
-          v-for="row in 6"
-          :key="row"
-          class="grid grid-cols-[180px_24%_180px_180px_1fr] items-center gap-4 rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]"
-        >
-          <TxSkeleton v-for="col in 5" :key="col" :loading="true" :lines="1" />
-        </div>
-      </div>
-
-      <!-- The banner above already names the failure; showing the empty state
-           too would read as "the log is genuinely empty". -->
-      <div v-else-if="!audits.length && !error" class="p-8 text-center text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.audits.empty', 'No audit records found.') }}
-      </div>
-
-      <div v-else>
-        <!-- scroll-x makes TxDataTable own the scroll; without it the component's
-             own `overflow: hidden` clips the last column and no ancestor can
-             scroll to it. -->
-        <TxDataTable :columns="auditColumns" :data="audits" row-key="id" scroll-x>
-          <template #cell-time="{ row: entry }">
-            <span class="text-sm text-black/60 dark:text-white/60">{{ formatTime(entry.createdAt) }}</span>
-          </template>
-          <template #cell-admin="{ row: entry }">
-            <div class="space-y-1">
-              <p class="font-medium text-black dark:text-white">
-                {{ formatAdmin(entry) }}
-              </p>
-              <p v-if="entry.adminEmail" class="text-xs text-black/60 dark:text-white/60">
-                {{ entry.adminEmail }}
-              </p>
-            </div>
-          </template>
-          <template #cell-action="{ row: entry }">
-            <span class="text-sm text-black/70 dark:text-white/70">
-              {{ actionLabels[entry.action] || entry.action }}
-            </span>
-          </template>
-          <template #cell-target="{ row: entry }">
-            <span class="text-sm text-black/70 dark:text-white/70">{{ formatTarget(entry) }}</span>
-          </template>
-          <template #cell-detail="{ row: entry }">
-            <span class="text-xs text-black/50 dark:text-white/50">{{ formatDetail(entry) }}</span>
-          </template>
-        </TxDataTable>
-      </div>
-
-      <div class="flex items-center justify-end gap-2 border-t border-black/[0.04] p-4 dark:border-white/[0.06]">
-        <TxButton variant="secondary" size="sm" :disabled="!hasPrev || loading" @click="goPrev">
-          {{ t('dashboard.sections.audits.pagination.prev', 'Prev') }}
-        </TxButton>
-        <TxButton variant="secondary" size="sm" :disabled="!hasNext || loading" @click="goNext">
-          {{ t('dashboard.sections.audits.pagination.next', 'Next') }}
-        </TxButton>
-      </div>
-    </section>
+    </TxDrawer>
   </AdminPageShell>
 </template>
+
+<style scoped>
+/* Every cell is one line: what does not fit is cut with an ellipsis and shown in
+   full in the cell's title and in the detail drawer. The table is `fixed`, so a
+   long value can no longer widen its column and push the summary off screen. */
+.AuditCell,
+.AuditTarget {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.AuditCell {
+  color: var(--tx-text-color-primary);
+}
+
+.AuditCell.is-numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+.AuditCell.is-muted,
+.AuditTarget-Type {
+  color: var(--tx-text-color-regular);
+}
+
+.AuditTarget-Label {
+  color: var(--tx-text-color-primary);
+}
+
+.AuditTarget-Type::before {
+  content: ' · ';
+}
+
+.AuditDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.AuditDetail-Inline {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--tx-fill-color-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.AuditDetail-Metadata {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.AuditDetail-MetadataHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.AuditDetail-MetadataTitle {
+  margin: 0;
+  color: var(--tx-text-color-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.AuditDetail-Code {
+  margin: 0;
+  max-height: 420px;
+  overflow: auto;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--tx-fill-color-light);
+  color: var(--tx-text-color-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre;
+}
+
+.AuditDetail-Empty {
+  margin: 0;
+  color: var(--tx-text-color-regular);
+  font-size: 13px;
+}
+</style>

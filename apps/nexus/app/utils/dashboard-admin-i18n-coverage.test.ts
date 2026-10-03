@@ -39,6 +39,12 @@ const ADMIN_SURFACE = [
   'components/dashboard/provider-registry',
   'composables/useProviderRegistryAdmin.ts',
   'composables/provider-registry',
+  // The console frame and its shared kit: the layout's gate copy, and the list,
+  // formatting and audit-log helpers whose keys live outside any .vue file.
+  'layouts/admin.vue',
+  'composables/useAdminFormat.ts',
+  'composables/useAdminList.ts',
+  'utils/admin-audits.ts',
 ]
 
 function sourceFiles(target: string, found: string[] = []): string[] {
