@@ -66,23 +66,23 @@ const loadedGeoQueryKey = ref<string | null>(null)
 const {
   analytics, loading, error, geoAnalytics, geoLoading, geoError, messages, messagesLoading, messagesError,
   versionAnalytics, versionLoading, versionError,
-  docsAnalytics, docsLoading, docsError, intelligenceAnalytics, intelligenceLoading, intelligenceError,
+  docsAnalytics, docsLoading, docsError,
   exchangeHistory, exchangeSnapshots, exchangeLoading, exchangeError,
   fetchAnalytics: loadAnalytics, fetchGeoAnalytics: loadGeoAnalytics, fetchVersionAnalytics: loadVersionAnalytics,
   fetchDocsAnalytics: loadDocsAnalytics,
-  fetchIntelligenceAnalytics: loadIntelligenceAnalytics, fetchMessages: loadMessages, fetchExchangeHistory: loadExchangeHistory,
+  fetchMessages: loadMessages, fetchExchangeHistory: loadExchangeHistory,
 } = useAdminAnalyticsData({ request: requestJson })
 /**
  * The section lives in the URL, not in local state: `route.query` is the single
  * source of truth, so back/forward work, a deep link lands on its panel, and the
  * tab strip below the header cannot disagree with the address bar.
  *
- * The seven panels are one page's worth of state over one payload, so the strip
+ * The six panels are one page's worth of state over one payload, so the strip
  * switches panels instead of navigating somewhere else.
  */
-type AnalyticsSection = 'overview' | 'performance' | 'search' | 'intelligence' | 'docs' | 'exchange' | 'messages'
+type AnalyticsSection = 'overview' | 'performance' | 'search' | 'docs' | 'exchange' | 'messages'
 
-const ANALYTICS_SECTIONS = ['overview', 'performance', 'search', 'intelligence', 'docs', 'exchange', 'messages'] as const
+const ANALYTICS_SECTIONS = ['overview', 'performance', 'search', 'docs', 'exchange', 'messages'] as const
 
 const activeSection = computed<AnalyticsSection>({
   get() {
@@ -117,7 +117,6 @@ const analyticsSections = [
   { id: 'overview', icon: 'i-carbon-dashboard' },
   { id: 'performance', icon: 'i-carbon-meter' },
   { id: 'search', icon: 'i-carbon-search' },
-  { id: 'intelligence', icon: 'i-carbon-ai-status' },
   { id: 'docs', icon: 'i-carbon-document' },
   { id: 'exchange', icon: 'i-carbon-currency' },
   { id: 'messages', icon: 'i-carbon-warning' },
@@ -509,10 +508,6 @@ async function fetchDocsAnalytics(): Promise<void> {
   await loadDocsAnalytics(selectedDays.value, docsPath.value, docsSource.value)
 }
 
-async function fetchIntelligenceAnalytics(): Promise<void> {
-  await loadIntelligenceAnalytics(selectedDays.value)
-}
-
 async function fetchMessages(): Promise<void> {
   await loadMessages()
 }
@@ -532,15 +527,13 @@ onMounted(() => {
   if (initialSource === 'docs_page' || initialSource === 'doc_comments_admin')
     docsSource.value = initialSource
 
-  // The shared summary feeds all seven panels. Overview alone owns the
+  // The shared summary feeds all six panels. Overview alone owns the
   // additional version, geography, and local map payloads.
   void fetchAnalytics()
   if (activeSection.value === 'overview')
     ensureOverviewAnalytics()
   if (activeSection.value === 'docs')
     void fetchDocsAnalytics()
-  if (activeSection.value === 'intelligence')
-    void fetchIntelligenceAnalytics()
   if (activeSection.value === 'messages')
     void fetchMessages()
   if (activeSection.value === 'exchange')
@@ -553,8 +546,6 @@ watch(selectedDays, () => {
     ensureOverviewAnalytics()
   if (activeSection.value === 'docs')
     void fetchDocsAnalytics()
-  if (activeSection.value === 'intelligence')
-    void fetchIntelligenceAnalytics()
 })
 
 // Both scopes feed the same overview-only `geo` response. Hidden panels do not
@@ -576,8 +567,6 @@ watch([docsPath, docsSource], () => {
 watch(activeSection, (section) => {
   if (section === 'docs' && !docsAnalytics.value && !docsLoading.value)
     fetchDocsAnalytics()
-  if (section === 'intelligence' && !intelligenceAnalytics.value && !intelligenceLoading.value)
-    fetchIntelligenceAnalytics()
   if (section === 'overview')
     ensureOverviewAnalytics()
   if (section === 'messages' && !messages.value?.length && !messagesLoading.value)
@@ -669,7 +658,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
     <div class="space-y-6">
     <!--
-      One radio for all seven panels, over data this page already holds: the rail
+      One radio for all six panels, over data this page already holds: the rail
       links into the page once, and once you are here this selector is the cheap
       move — the address stays on this page and back/forward still work because
       the section lives in `?section=`. The box scrolls rather than wraps at
@@ -1241,170 +1230,6 @@ P95
             </div>
           </div>
         </TxCard>
-      </div>
-
-      <!-- Intelligence / AI Analytics -->
-      <div v-if="activeSection === 'intelligence'" class="space-y-5">
-        <TxCard v-if="intelligenceLoading" variant="plain" background="mask" :radius="18" :padding="24" class="flex items-center justify-center">
-          <TxSpinner :size="20" />
-        </TxCard>
-        <TxCard v-else-if="intelligenceError" variant="plain" background="mask" :radius="18" :padding="24">
-          <TxEmptyState
-            variant="error"
-            :title="t('common.error')"
-            :description="intelligenceError"
-          />
-        </TxCard>
-        <template v-else-if="intelligenceAnalytics">
-          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <TxCard variant="plain" background="mask" :radius="16" :padding="16">
-              <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-                {{ t('dashboard.sections.analytics.intelligence.runs') }}
-              </h3>
-              <p class="mt-2 text-2xl font-bold text-black dark:text-white">
-                {{ formatNumber(intelligenceAnalytics.summary.totalRuns) }}
-              </p>
-              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.sections.analytics.intelligence.successRate', { rate: intelligenceAnalytics.summary.successRate }) }}
-              </p>
-              <p class="text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.sections.analytics.intelligence.disconnectPauseRate', { rate: intelligenceAnalytics.summary.disconnectPauseRate }) }}
-              </p>
-            </TxCard>
-            <TxCard variant="plain" background="mask" :radius="16" :padding="16">
-              <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-                {{ t('dashboard.sections.analytics.intelligence.fallback') }}
-              </h3>
-              <p class="mt-2 text-2xl font-bold text-black dark:text-white">
-                {{ intelligenceAnalytics.summary.fallbackRate }}%
-              </p>
-              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.sections.analytics.intelligence.recoveryRate', { rate: intelligenceAnalytics.summary.recoveryRate }) }}
-              </p>
-              <p class="text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.sections.analytics.intelligence.retryRunRate', { rate: intelligenceAnalytics.summary.retryRunRate }) }}
-              </p>
-            </TxCard>
-            <TxCard variant="plain" background="mask" :radius="16" :padding="16">
-              <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-                {{ t('dashboard.sections.analytics.intelligence.approvalHit') }}
-              </h3>
-              <p class="mt-2 text-2xl font-bold text-black dark:text-white">
-                {{ intelligenceAnalytics.summary.approvalHitRate }}%
-              </p>
-              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.sections.analytics.intelligence.waitingApprovals', { count: intelligenceAnalytics.summary.waitingApprovals }) }}
-              </p>
-              <p class="text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.sections.analytics.intelligence.checkpointLossRate', { rate: intelligenceAnalytics.summary.checkpointLossRate }) }}
-              </p>
-            </TxCard>
-            <TxCard variant="plain" background="mask" :radius="16" :padding="16">
-              <h3 class="text-xs font-semibold uppercase tracking-wider text-black/45 dark:text-white/45">
-                {{ t('dashboard.sections.analytics.intelligence.streamCoverage') }}
-              </h3>
-              <p class="mt-2 text-2xl font-bold text-black dark:text-white">
-                {{ intelligenceAnalytics.summary.streamCoverageRate }}%
-              </p>
-              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.sections.analytics.intelligence.p95Duration', { duration: intelligenceAnalytics.summary.p95DurationMs }) }}
-              </p>
-              <p class="text-xs text-black/45 dark:text-white/45">
-                {{ t('dashboard.sections.analytics.intelligence.avgDuration', { duration: intelligenceAnalytics.summary.avgDurationMs }) }}
-              </p>
-            </TxCard>
-          </div>
-
-          <div class="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
-              <div class="mb-3 flex items-center justify-between">
-                <h3 class="font-semibold text-black dark:text-white">
-                  {{ t('dashboard.sections.analytics.intelligence.statusDistribution') }}
-                </h3>
-                <span class="text-xs text-black/45 dark:text-white/45">
-                  {{ t('dashboard.sections.analytics.intelligence.avgDuration', { duration: intelligenceAnalytics.summary.avgDurationMs }) }}
-                </span>
-              </div>
-              <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
-                <div
-                  v-for="item in Object.entries(intelligenceAnalytics.statusDistribution)"
-                  :key="item[0]"
-                  class="flex items-center justify-between rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 dark:border-white/[0.05] dark:bg-white/[0.03]"
-                >
-                  <span class="capitalize">{{ item[0].replace('_', ' ') }}</span>
-                  <span class="font-mono text-xs text-black/50 dark:text-white/50">{{ item[1] }}</span>
-                </div>
-              </div>
-            </TxCard>
-
-            <TxCard variant="plain" background="mask" :radius="18" :padding="20">
-              <div class="mb-3 flex items-center justify-between">
-                <h3 class="font-semibold text-black dark:text-white">
-                  {{ t('dashboard.sections.analytics.intelligence.toolFailures') }}
-                </h3>
-                <TxButton variant="bare" size="sm" native-type="button" class="text-xs text-black/45 dark:text-white/45" @click="fetchIntelligenceAnalytics">
-                  {{ t('dashboard.sections.analytics.common.refresh') }}
-                </TxButton>
-              </div>
-              <TxEmptyState
-                v-if="intelligenceAnalytics.toolFailureDistribution.length === 0"
-                variant="no-data"
-                size="small"
-                :title="t('dashboard.sections.analytics.empty.title')"
-                :description="t('dashboard.sections.analytics.empty.toolFailures')"
-              />
-              <div v-else class="space-y-2 text-sm text-black/70 dark:text-white/70">
-                <div
-                  v-for="tool in intelligenceAnalytics.toolFailureDistribution.slice(0, 8)"
-                  :key="tool.toolId"
-                  class="flex items-center justify-between rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 dark:border-white/[0.05] dark:bg-white/[0.03]"
-                >
-                  <span class="truncate font-mono">{{ tool.toolId }}</span>
-                  <span class="font-mono text-xs text-black/50 dark:text-white/50">{{ tool.count }}</span>
-                </div>
-              </div>
-            </TxCard>
-          </div>
-
-          <TxCard variant="plain" background="mask" :radius="18" :padding="20">
-            <h3 class="mb-3 font-semibold text-black dark:text-white">
-              {{ t('dashboard.sections.analytics.intelligence.recentRuns') }}
-            </h3>
-            <TxEmptyState
-              v-if="intelligenceAnalytics.recentRuns.length === 0"
-              variant="no-data"
-              size="small"
-              :title="t('dashboard.sections.analytics.empty.title')"
-              :description="t('dashboard.sections.analytics.empty.runtimeRecords')"
-            />
-            <div v-else class="space-y-2 text-sm text-black/70 dark:text-white/70">
-              <div
-                v-for="run in intelligenceAnalytics.recentRuns"
-                :key="run.sessionId + run.createdAt"
-                class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/[0.04] bg-black/[0.02] px-3.5 py-2.5 dark:border-white/[0.05] dark:bg-white/[0.03]"
-              >
-                <div class="min-w-0">
-                  <p class="truncate font-medium text-black dark:text-white">
-                    {{ run.sessionId }}
-                  </p>
-                  <p class="text-xs text-black/45 dark:text-white/45">
-                    {{ run.providerName || t('dashboard.sections.analytics.common.runtime') }} · {{ run.model }}
-                  </p>
-                </div>
-                <div class="flex items-center gap-3 text-xs text-black/50 dark:text-white/50">
-                  <TxStatusBadge
-                    :text="run.status"
-                    :status="run.status === 'success' ? 'success' : run.status === 'failed' ? 'danger' : 'info'"
-                    size="sm"
-                  />
-                  <span class="font-mono">{{ run.durationMs }}ms</span>
-                  <span>{{ t('dashboard.sections.analytics.intelligence.fallbackCount', { count: run.fallbackCount }) }}</span>
-                  <span>{{ t('dashboard.sections.analytics.intelligence.approvalCount', { count: run.approvalHitCount }) }}</span>
-                </div>
-              </div>
-            </div>
-          </TxCard>
-        </template>
       </div>
 
       <!-- Docs Analytics -->

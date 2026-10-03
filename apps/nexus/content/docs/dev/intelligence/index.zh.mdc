@@ -9,7 +9,6 @@
 - **策略选择**（provider 选择 + fallback 链）
 - **LangChain 统一模型调用层**（Provider 侧不再直连 HTTP，统一通过 LangChain 访问模型）
 - **LangGraph Agent 状态机**（`session.start -> plan -> execute -> reflect -> finalize`）
-- **Prompt Registry 管理面**（`/api/admin/intelligence-agent/prompts*` + `/prompt-bindings*`）
 - **治理能力**
   - Provider / model 兼容性校验
   - API Key 快速失败与路由

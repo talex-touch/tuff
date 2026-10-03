@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { historicalFixtures, loadHistoricalFixture } from './helpers/fixtures'
-import { fileExists, formatViolations, loadSources, readSource } from './helpers/repo'
+import { historicalFixtures, loadHistoricalFixture, shippedFixFixtures } from './helpers/fixtures'
+import { formatViolations, loadSources } from './helpers/repo'
 import { hasAttribute, hasEventListener, hasSpreadBinding, parseSfc, walkElements } from './helpers/sfc'
 import type { SourceFile, Violation } from './helpers/repo'
 import type { TemplateElement } from './helpers/sfc'
@@ -13,8 +13,9 @@ import type { TemplateElement } from './helpers/sfc'
  * render `<button :type="nativeType">`, so a button placed in
  * `<form @submit.prevent="...">` without `native-type="submit"` and without its
  * own `@click` is inert on click. Enter still submits the form, which is why
- * the dead send button on the intelligence-chat admin page went unnoticed
- * through review — it produced zero requests for every mouse user.
+ * the dead send button on the (since retired) intelligence-chat admin page
+ * went unnoticed through review — it produced zero requests for every mouse
+ * user.
  */
 
 const RULE = 'form-submit-button'
@@ -78,11 +79,10 @@ describe('guard: buttons inside submitting forms are not inert', () => {
 
   it('accepts a button once native-type="submit" is added', () => {
     // Negative control against the shipped fix, so the assertion above cannot
-    // be passing because the scanner flags every TxButton it sees.
-    const fixed = 'app/pages/admin/intelligence-chat.vue'
-    if (!fileExists(fixed))
-      return
-    expect(formatViolations(scanFormSubmitButtons([readSource(fixed)]))).toBe('')
+    // be passing because the scanner flags every TxButton it sees. The page is
+    // gone, so the fix is read from its frozen copy instead of being skipped.
+    const entry = shippedFixFixtures.formSubmitButton
+    expect(formatViolations(scanFormSubmitButtons([loadHistoricalFixture(entry)])), entry.expectation).toBe('')
   })
 
   it('accepts a button that carries its own @click', () => {

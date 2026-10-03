@@ -49,4 +49,4 @@ Nexus 承载的缓冲式 `audio.stt` 与上传式 `audio.transcribe` 统一通�
 3. 确认每个启用且需要凭据的 Provider 都有 secure-store 记录；
 4. 同时提供 `--execute` 与显式破坏性确认环境变量。
 
-Prompt、Prompt binding、审计、IP 封禁、运行时会话/trace、Provider health、usage ledger 与 Credits 记录均不依赖旧 Provider 表，继续保留。
+审计、IP 封禁、Provider health、usage ledger 与 Credits 记录均不依赖旧 Provider 表，继续保留。Prompt registry、Prompt binding 与运行时会话/trace/checkpoint 表属于 2026-10-02 退役的后台 Agent 工作台：D1 中的数据原样保留，但已没有代码读写这些表。

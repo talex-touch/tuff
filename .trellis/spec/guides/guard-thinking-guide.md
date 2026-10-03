@@ -58,6 +58,8 @@ A skip, an early return, an absent binary, and a satisfied assertion all produce
 
 If the code under test can decline to run, the guard needs a way to demand it — an env flag the CI job sets, an explicit assertion that the precondition held, or a positive control proving the search or the tool was live.
 
+**A negative control must not read a live source file and skip when it is gone.** `if (!fileExists('app/pages/admin/intelligence-lab.vue')) return` is green on the day the page is deleted and green forever after. Commit `5e6579e05` retired four admin pages, and three Nexus guards that used those pages as negative-control samples (`admin-route-reachability`, `page-toplevel-throw`, `form-submit-button`) stopped being able to fail without anyone noticing. Freeze the sample as a fixture under `apps/nexus/test/guards/fixtures/`, register it in `test/guards/helpers/fixtures.ts` (`historicalFixtures` for buggy samples, `shippedFixFixtures` for the shipped fix of a deleted page, each with its git blob sha), and let a missing fixture throw `ENOENT` instead of returning. Prove the repair the usual way: put the defect back into the sample and watch the guard fail. `i18n-key-existence.test.ts` and `feature-flag-coercion.test.ts` still skip when their subject file is missing; they are live today only because those files still exist.
+
 ### 4. Does the number this pins have a floor?
 
 A ratchet is for debt that will never reach zero but must not grow. **If the number can reach zero, the instrument is a switch, not a ratchet** — turn on the compiler flag, the lint rule, the config, and delete the counter.

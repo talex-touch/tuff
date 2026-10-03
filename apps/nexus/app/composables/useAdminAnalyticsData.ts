@@ -5,7 +5,6 @@ import type {
   ExchangeRateHistoryItem,
   ExchangeRateSnapshotSummary,
   GeoAnalyticsData,
-  IntelligenceAnalyticsData,
   TelemetryMessage,
   VersionAnalyticsData,
 } from '~/types/admin-analytics'
@@ -45,9 +44,6 @@ export function useAdminAnalyticsData(options: AdminAnalyticsDataOptions = {}) {
   const docsAnalytics = ref<DocAnalyticsResponse | null>(null)
   const docsLoading = ref(false)
   const docsError = ref<string | null>(null)
-  const intelligenceAnalytics = ref<IntelligenceAnalyticsData | null>(null)
-  const intelligenceLoading = ref(false)
-  const intelligenceError = ref<string | null>(null)
   const exchangeHistory = ref<ExchangeRateHistoryItem[]>([])
   const exchangeSnapshots = ref<ExchangeRateSnapshotSummary[]>([])
   const exchangeLoading = ref(false)
@@ -115,21 +111,6 @@ export function useAdminAnalyticsData(options: AdminAnalyticsDataOptions = {}) {
     }
   }
 
-  async function fetchIntelligenceAnalytics(days: number): Promise<void> {
-    intelligenceLoading.value = true
-    intelligenceError.value = null
-    try {
-      intelligenceAnalytics.value = await request<IntelligenceAnalyticsData>('/api/admin/analytics/intelligence', { query: { days } })
-    }
-    catch (cause) {
-      intelligenceError.value = errorMessage(cause, 'Failed to load intelligence analytics')
-      intelligenceAnalytics.value = null
-    }
-    finally {
-      intelligenceLoading.value = false
-    }
-  }
-
   async function fetchMessages(): Promise<void> {
     messagesLoading.value = true
     messagesError.value = null
@@ -194,9 +175,6 @@ export function useAdminAnalyticsData(options: AdminAnalyticsDataOptions = {}) {
     docsAnalytics,
     docsLoading,
     docsError,
-    intelligenceAnalytics,
-    intelligenceLoading,
-    intelligenceError,
     exchangeHistory,
     exchangeSnapshots,
     exchangeLoading,
@@ -205,7 +183,6 @@ export function useAdminAnalyticsData(options: AdminAnalyticsDataOptions = {}) {
     fetchGeoAnalytics,
     fetchVersionAnalytics,
     fetchDocsAnalytics,
-    fetchIntelligenceAnalytics,
     fetchMessages,
     fetchExchangeHistory,
   }

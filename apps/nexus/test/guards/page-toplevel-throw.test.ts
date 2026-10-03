@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { historicalFixtures, loadHistoricalFixture } from './helpers/fixtures'
+import { historicalFixtures, loadHistoricalFixture, shippedFixFixtures } from './helpers/fixtures'
 import { findTopLevelOccurrences } from './helpers/js-text'
-import { fileExists, formatViolations, lineAt, loadSources, readSource } from './helpers/repo'
+import { formatViolations, lineAt, loadSources } from './helpers/repo'
 import { parseSfc } from './helpers/sfc'
 import type { SourceFile, Violation } from './helpers/repo'
 
 /**
  * Guard 4 — a page never throws unconditionally at `<script setup>` top level.
  *
- * `intelligence-lab.vue` retired itself with a bare
+ * `intelligence-lab.vue` (since deleted) retired itself with a bare
  * `throw createError({ statusCode: 410, fatal: false })`. On a server render
  * that produces an error page, but on a client-side navigation it becomes an
  * unhandled promise rejection inside the suspended setup and the router lands
@@ -63,11 +63,11 @@ describe('guard: pages do not throw at setup top level', () => {
     expect(violations[0]!.message).toContain('throw createError({')
   })
 
-  it('clears the navigateTo rewrite', () => {
-    const fixed = 'app/pages/admin/intelligence-lab.vue'
-    if (!fileExists(fixed))
-      return
-    expect(formatViolations(scanPageTopLevelThrows([readSource(fixed)]))).toBe('')
+  it('clears the shipped route-meta redirect rewrite', () => {
+    // Negative control: the fix replaced the throw with `definePageMeta({ redirect })`.
+    // The page is gone, so the fix is read from its frozen copy instead of being skipped.
+    const entry = shippedFixFixtures.retiredRouteRedirect
+    expect(formatViolations(scanPageTopLevelThrows([loadHistoricalFixture(entry)])), entry.expectation).toBe('')
   })
 
   it('does not flag a throw guarded by a branch', () => {

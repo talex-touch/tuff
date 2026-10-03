@@ -17,7 +17,10 @@ export interface HistoricalFixture {
   fixture: string
   /** `apps/nexus`-relative path the fixture was taken from. */
   originalPath: string
-  /** Git blob sha of the buggy content, resolvable with `git cat-file -p <sha>`. */
+  /**
+   * Git blob sha of the frozen content (the buggy version, or the shipped fix for
+   * `shippedFixFixtures`), resolvable with `git cat-file -p <sha>`.
+   */
   blob: string
   /** What the guard is expected to find, and where. */
   expectation: string
@@ -65,6 +68,30 @@ export const historicalFixtures = {
     originalPath: 'app/pages/admin/risk.vue',
     blob: 'b290a624b0b2d20ba7dc3c6e701f966bfc98fded',
     expectation: 't(\'dashboard.sections.analytics.title\', \'Risk Control\') at line 146 contradicts the locale value',
+  },
+} as const satisfies Record<string, HistoricalFixture>
+
+/**
+ * Byte-exact copies of the last shipped *fixed* version of pages that have since
+ * been deleted, for the negative controls that assert a shipped fix clears its rule.
+ *
+ * Those controls used to read the live page and return early when it was gone.
+ * The pages were retired in `5e6579e05`, after which the controls could no longer
+ * fail. A frozen copy keeps them live, and a missing fixture now throws instead of
+ * skipping. Line numbers are the real line numbers in the original file.
+ */
+export const shippedFixFixtures = {
+  formSubmitButton: {
+    fixture: 'intelligence-chat.fixed.vue.txt',
+    originalPath: 'app/pages/admin/intelligence-chat.vue',
+    blob: 'd7fa8d8b0f99a55f22354513f87405b60675e774',
+    expectation: 'TxButton at line 323 inside the @submit.prevent form declares native-type="submit"',
+  },
+  retiredRouteRedirect: {
+    fixture: 'intelligence-lab.fixed.vue.txt',
+    originalPath: 'app/pages/admin/intelligence-lab.vue',
+    blob: '7b46607c08ebf6704c913cf87ec935c477207498',
+    expectation: 'definePageMeta({ redirect }) at line 10 forwards the retired route; no top-level throw remains',
   },
 } as const satisfies Record<string, HistoricalFixture>
 
