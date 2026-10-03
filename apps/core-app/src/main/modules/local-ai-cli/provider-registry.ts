@@ -8,6 +8,13 @@ export interface LocalAiCliProviderDefinition {
   id: LocalAiCliProviderId
   label: string
   command: string
+  /**
+   * Matches this CLI's own `--version` output and nothing else's; the version is the first capture
+   * group, or the whole match when there is none. A bare `\d+\.\d+\.\d+` also matches
+   * `mise --version` (`2025.10.8 macos-arm64 …`), which is how a mise shim resolved to mise itself
+   * passed as every one of these CLIs. pi prints only the number, so its pattern cannot carry a
+   * name; it is safe because the lookup no longer resolves a shim to the binary behind it.
+   */
   versionPattern: RegExp
   capabilities: LocalAiCliProviderCapabilities
 }
@@ -46,7 +53,7 @@ export const LOCAL_AI_CLI_PROVIDERS: readonly LocalAiCliProviderDefinition[] = [
     id: 'codex',
     label: 'Codex',
     command: 'codex',
-    versionPattern: /(?:codex-cli\s+)?\d+\.\d+\.\d+/i,
+    versionPattern: /codex-cli\s+(\d+\.\d+\.\d+)/i,
     capabilities: {
       taskRead: true,
       taskWriteApproval: true,
@@ -60,7 +67,7 @@ export const LOCAL_AI_CLI_PROVIDERS: readonly LocalAiCliProviderDefinition[] = [
     id: 'claude',
     label: 'Claude Code',
     command: 'claude',
-    versionPattern: /\d+\.\d+\.\d+(?:\s+\(Claude Code\))?/i,
+    versionPattern: /(\d+\.\d+\.\d+)\s+\(Claude Code\)/i,
     capabilities: {
       taskRead: true,
       taskWriteApproval: true,
@@ -74,7 +81,7 @@ export const LOCAL_AI_CLI_PROVIDERS: readonly LocalAiCliProviderDefinition[] = [
     id: 'oh-my-pi',
     label: 'OMP',
     command: 'omp',
-    versionPattern: /(?:omp\/?|omp v)?\d+\.\d+\.\d+/i,
+    versionPattern: /\bomp(?:\/|\s+v)(\d+\.\d+\.\d+)/i,
     capabilities: {
       taskRead: true,
       taskWriteApproval: true,

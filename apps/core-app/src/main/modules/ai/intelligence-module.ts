@@ -82,17 +82,8 @@ import {
 import { intelligenceTtsService } from './intelligence-tts-service'
 import { intelligenceWorkflowService } from './intelligence-workflow-service'
 import { createCustomProvider, createLocalProvider } from './provider-factory'
-import {
-  getResolvedClaudeExecutable,
-  getResolvedCodexExecutable,
-  getResolvedOmpExecutable,
-  getResolvedPiExecutable,
-  getResolvedPiForm,
-  probeClaudeCliAvailability,
-  probeCodexCliAvailability,
-  probeOmpCliAvailability,
-  probePiCliAvailability
-} from './providers/pi-cli-runtime'
+import { probeAllCliExecutables, setCliSettingsOverrideReader } from './providers/pi-cli-runtime'
+import { readLocalAiCliExecutableOverride } from '../local-ai-cli/executable-resolver'
 import { fetchProviderModels } from './provider-models'
 import { normalizeProviderForRuntime } from './provider-runtime'
 import {
@@ -872,29 +863,18 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
    * 探测失败不是错误：多数机器不会四个都装，此时只是少几个 provider，不该拖垮整个模块的初始化。
    * 缺席是常态（`claude` 没装就是没有这一栏），所以每个 CLI 只报名字或 `absent`，一行 info 说完；
    * 路径与形态不进日志——它们会带上用户名，而用户唯一能据以行动的只有「这个 CLI 有没有」。
+   *
+   * 「选择程序」写进设置的程序对聊天 provider 同样生效，所以先接上设置覆盖的读取，再探测：
+   * 本机代理与聊天 provider 共用这一套查找与记忆。
    */
   private async probeLocalCliProviders(): Promise<void> {
+    setCliSettingsOverrideReader(readLocalAiCliExecutableOverride)
     try {
-      await Promise.allSettled([
-        probeOmpCliAvailability(),
-        probePiCliAvailability(),
-        probeCodexCliAvailability(),
-        probeClaudeCliAvailability()
-      ])
+      const resolved = await probeAllCliExecutables()
+      intelligenceLog.info('Local CLI providers resolved', { meta: { ...resolved } })
     } catch (error) {
       intelligenceLog.warn('Local CLI probe failed', { error })
-      return
     }
-
-    intelligenceLog.info('Local CLI providers resolved', {
-      meta: {
-        pi:
-          getResolvedPiExecutable() === undefined ? 'unprobed' : (getResolvedPiForm() ?? 'absent'),
-        omp: getResolvedOmpExecutable() ? 'omp' : 'absent',
-        codex: getResolvedCodexExecutable() ? 'codex' : 'absent',
-        claude: getResolvedClaudeExecutable() ? 'claude' : 'absent'
-      }
-    })
   }
 
   /**
