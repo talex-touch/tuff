@@ -1,237 +1,301 @@
 <script setup lang="ts">
-import { $fetch as rawFetch } from 'ofetch'
-import { computed, onMounted, reactive, ref } from 'vue'
+import type { DataTableColumn } from '@talex-touch/tuffex/data-table'
+import type { PendingPluginReview, PluginReviewDecision } from '~/utils/admin-comments'
 import { TxButton } from '@talex-touch/tuffex/button'
-import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
-import { TxPagination } from '@talex-touch/tuffex/pagination'
-import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import { TxSpinner } from '@talex-touch/tuffex/spinner'
-import { useStoreFormatters } from '~/composables/useStoreFormatters'
+import { TxDescriptions, TxDescriptionsItem } from '@talex-touch/tuffex/descriptions'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import { computed, ref } from 'vue'
+import AdminConfirmDialog from '~/components/admin/AdminConfirmDialog.vue'
+import AdminIdentity from '~/components/admin/AdminIdentity.vue'
+import AdminSection from '~/components/admin/AdminSection.vue'
+import AdminTable from '~/components/admin/AdminTable.vue'
+import { useAdminFormat } from '~/composables/useAdminFormat'
+import { useAdminList } from '~/composables/useAdminList'
 import { useToast } from '~/composables/useToast'
+import { createPluginReviewListOptions, pluginReviewStatusPath } from '~/utils/admin-comments'
+import { resolveAdminErrorMessage } from '~/utils/admin-request-error'
+import { requestJson } from '~/utils/request'
 
+/**
+ * The pending plugin review queue of `/admin/reviews?tab=plugins`. Its page and
+ * page size live in the URL as `?p_page=` / `?p_limit=`, so leaving for the doc
+ * comment queue and coming back lands on the same page. Approving and rejecting
+ * both ask first; the count of pending reviews is the table footer's total.
+ */
 const { t } = useI18n()
+const format = useAdminFormat()
 const toast = useToast()
-const { formatDate } = useStoreFormatters()
 
-interface PendingReviewPlugin {
-  id: string
-  slug: string
-  name: string
-}
+const list = useAdminList(createPluginReviewListOptions(
+  requestJson,
+  () => t('dashboard.sections.reviews.loadFailed', 'Unable to load pending reviews.'),
+))
 
-interface PendingReview {
-  id: string
-  pluginId: string
-  rating: number
-  title?: string | null
-  content: string
-  author: {
-    name: string
-    avatarUrl?: string | null
-  }
-  status?: 'pending' | 'approved' | 'rejected'
-  createdAt: string
-  updatedAt: string
-  plugin?: PendingReviewPlugin | null
-}
-
-interface PendingReviewResponse {
-  reviews: PendingReview[]
-  total: number
-  limit: number
-  offset: number
-}
-
-const pagination = reactive({ page: 1, limit: 20, total: 0 })
-const pendingReviews = ref<PendingReview[]>([])
-const pendingLoading = ref(false)
-const pendingError = ref<string | null>(null)
-const actionError = ref<string | null>(null)
-const actionPendingId = ref<string | null>(null)
-let loadRequestId = 0
-
-const totalPages = computed(() => Math.max(1, Math.ceil(pagination.total / pagination.limit)))
-const actionsLocked = computed(() => pendingLoading.value || actionPendingId.value !== null)
-const reviewColumns = computed<DataTableColumn<PendingReview>[]>(() => [
-  { key: 'plugin', title: t('dashboard.sections.reviews.table.plugin', 'Plugin'), width: 220 },
-  { key: 'author', title: t('dashboard.sections.reviews.table.author', 'Author'), width: 150 },
-  { key: 'rating', title: t('dashboard.sections.reviews.table.rating', 'Rating'), width: 90 },
-  { key: 'review', title: t('dashboard.sections.reviews.table.review', 'Review'), width: '38%' },
-  { key: 'submitted', title: t('dashboard.sections.reviews.table.submitted', 'Submitted'), width: 140 },
-  { key: 'actions', title: t('dashboard.sections.reviews.table.actions', 'Actions'), width: 180, fixed: 'right' },
+// At a 1280px viewport the table is about 976px wide; the review text takes
+// what the fixed columns leave (about 270px) and is shown in full in the drawer.
+const columns = computed<DataTableColumn<PendingPluginReview>[]>(() => [
+  { key: 'plugin', title: t('dashboard.sections.reviews.table.plugin', 'Plugin'), width: 168 },
+  { key: 'author', title: t('dashboard.sections.reviews.table.author', 'Author'), width: 152 },
+  { key: 'rating', title: t('dashboard.sections.reviews.table.rating', 'Rating'), width: 72 },
+  { key: 'review', title: t('dashboard.sections.reviews.table.review', 'Review') },
+  { key: 'submitted', title: t('dashboard.sections.reviews.table.submitted', 'Submitted'), width: 144 },
+  { key: 'actions', title: t('dashboard.sections.reviews.table.actions', 'Actions'), width: 172, align: 'right', fixed: 'right' },
 ])
 
-async function fetchPendingReviews() {
-  const requestId = ++loadRequestId
-  const requestedPage = pagination.page
-  pendingLoading.value = true
-  pendingError.value = null
-
-  try {
-    const response = await rawFetch<PendingReviewResponse>('/api/admin/store/reviews/pending', {
-      query: {
-        limit: pagination.limit,
-        offset: (requestedPage - 1) * pagination.limit,
-      },
-    })
-    if (requestId !== loadRequestId)
-      return
-
-    pagination.total = response.total ?? 0
-    const lastPage = Math.max(1, Math.ceil(pagination.total / pagination.limit))
-    if (requestedPage > lastPage) {
-      pagination.page = lastPage
-      await fetchPendingReviews()
-      return
-    }
-    pendingReviews.value = response.reviews ?? []
-  }
-  catch (error: unknown) {
-    if (requestId !== loadRequestId)
-      return
-    pendingError.value = error instanceof Error
-      ? error.message
-      : t('dashboard.sections.reviews.loadFailed', 'Unable to load pending reviews.')
-  }
-  finally {
-    if (requestId === loadRequestId)
-      pendingLoading.value = false
-  }
+function pluginName(review: PendingPluginReview): string {
+  return review.plugin?.name || t('dashboard.sections.reviews.unknownPlugin', 'Unknown plugin')
 }
 
-async function refreshReviews() {
-  actionError.value = null
-  pagination.page = 1
-  await fetchPendingReviews()
+function pluginSlug(review: PendingPluginReview): string {
+  return review.plugin?.slug || review.pluginId
 }
 
-async function changePage(page: number) {
-  if (pendingLoading.value || page === pagination.page)
+function authorName(review: PendingPluginReview): string {
+  return review.author?.name?.trim() || t('store.detail.reviews.anonymous', 'Anonymous')
+}
+
+function reviewText(review: PendingPluginReview): string {
+  return [review.title, review.content].filter(Boolean).join(' · ')
+}
+
+// Detail drawer: the whole review and the same two decisions.
+const detailReview = ref<PendingPluginReview | null>(null)
+const detailOpen = ref(false)
+
+function openDetail(review: PendingPluginReview) {
+  detailReview.value = review
+  detailOpen.value = true
+}
+
+// Approve / reject, each behind a confirmation.
+const decision = ref<{ review: PendingPluginReview, status: PluginReviewDecision } | null>(null)
+const decisionOpen = ref(false)
+const deciding = ref(false)
+
+const decisionCopy = computed(() => {
+  const pending = decision.value
+  if (!pending)
+    return { title: '', description: '', confirm: '' }
+  const named = { author: authorName(pending.review), plugin: pluginName(pending.review) }
+  return pending.status === 'approved'
+    ? {
+        title: t('dashboard.sections.reviews.approveTitle', 'Approve this review?'),
+        description: t('dashboard.sections.reviews.approveDescription', named),
+        confirm: t('dashboard.sections.reviews.approve', 'Approve'),
+      }
+    : {
+        title: t('dashboard.sections.reviews.rejectTitle', 'Reject this review?'),
+        description: t('dashboard.sections.reviews.rejectDescription', named),
+        confirm: t('dashboard.sections.reviews.reject', 'Reject'),
+      }
+})
+
+function requestDecision(review: PendingPluginReview, status: PluginReviewDecision) {
+  decision.value = { review, status }
+  decisionOpen.value = true
+}
+
+async function confirmDecision() {
+  const pending = decision.value
+  if (!pending || deciding.value)
     return
-  actionError.value = null
-  pagination.page = page
-  await fetchPendingReviews()
-}
-
-async function updateReviewStatus(review: PendingReview, status: 'approved' | 'rejected') {
-  if (actionPendingId.value)
-    return
-
-  actionPendingId.value = review.id
-  actionError.value = null
+  deciding.value = true
   try {
-    await rawFetch(`/api/admin/store/reviews/${review.id}/status`, {
+    await requestJson(pluginReviewStatusPath(pending.review.id), {
       method: 'PATCH',
-      body: { status },
+      body: { status: pending.status },
     })
+    decisionOpen.value = false
+    if (detailReview.value?.id === pending.review.id)
+      detailOpen.value = false
     toast.success(t('dashboard.sections.reviews.actionSuccess', 'Review status updated.'))
-    await fetchPendingReviews()
+    await list.refresh()
   }
   catch (error: unknown) {
-    const fallback = t('dashboard.sections.reviews.actionFailed', 'Failed to update review.')
-    actionError.value = error instanceof Error ? error.message : fallback
-    toast.warning(actionError.value)
+    toast.warning(resolveAdminErrorMessage(error, t('dashboard.sections.reviews.actionFailed', 'Failed to update review.')))
   }
   finally {
-    actionPendingId.value = null
+    deciding.value = false
   }
 }
 
-onMounted(fetchPendingReviews)
+defineExpose({
+  refresh: () => list.refresh(),
+  busy: computed(() => list.loading.value || list.refreshing.value),
+})
 </script>
 
 <template>
-  <section class="space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <p class="text-xs text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.reviews.pendingCount', { count: pagination.total }) }}
-      </p>
-      <TxButton size="sm" type="text" :disabled="pendingLoading" @click="refreshReviews">
-        <TxSpinner v-if="pendingLoading" :size="14" />
-        <span :class="pendingLoading ? 'ml-2' : ''">
-          {{ t('dashboard.sections.reviews.refresh', 'Refresh') }}
-        </span>
-      </TxButton>
-    </div>
-
-    <div v-if="actionError" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
-      {{ actionError }}
-    </div>
-    <div v-if="pendingError" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
-      {{ pendingError }}
-    </div>
-
-    <div v-if="pendingLoading && !pendingReviews.length" class="space-y-3 overflow-x-auto">
-      <div class="flex items-center gap-2 text-sm text-black/60 dark:text-white/60">
-        <TxSpinner :size="16" />
-        {{ t('dashboard.sections.reviews.loading', 'Loading pending reviews...') }}
-      </div>
-      <div v-for="row in 4" :key="row" class="grid grid-cols-[220px_150px_90px_1fr_140px_180px] items-center gap-4 rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-        <TxSkeleton v-for="column in 6" :key="column" :loading="true" :lines="1" />
-      </div>
-    </div>
-    <div v-else-if="!pendingReviews.length && !pendingError" class="py-8 text-center text-sm text-black/60 dark:text-white/60">
-      {{ t('dashboard.sections.reviews.empty', 'No pending reviews yet.') }}
-    </div>
-    <div v-else-if="pendingReviews.length" class="overflow-x-auto">
-      <TxDataTable :columns="reviewColumns" :data="pendingReviews" row-key="id" :loading="pendingLoading" scroll-x>
-        <template #cell-plugin="{ row: review }">
-          <div class="min-w-0">
-            <p class="truncate text-sm font-medium text-black dark:text-white" :title="review.plugin?.name || undefined">
-              {{ review.plugin?.name || t('dashboard.sections.reviews.unknownPlugin', 'Unknown plugin') }}
-            </p>
-            <p class="truncate text-xs text-black/50 dark:text-white/50" :title="review.plugin?.slug || review.pluginId">
-              {{ review.plugin?.slug || review.pluginId }}
-            </p>
-          </div>
-        </template>
-        <template #cell-author="{ row: review }">
-          <span class="text-sm text-black/70 dark:text-white/70">
-            {{ review.author?.name || t('store.detail.reviews.anonymous', 'Anonymous') }}
+  <div class="ReviewQueue">
+    <AdminSection :padded="false">
+      <AdminTable
+        :columns="columns"
+        :rows="list.rows.value"
+        row-key="id"
+        :loading="list.loading.value"
+        :refreshing="list.refreshing.value"
+        :error="list.error.value"
+        :empty-title="t('dashboard.sections.reviews.empty', 'No pending reviews yet.')"
+        :page="list.page.value"
+        :limit="list.limit.value"
+        :total="list.total.value"
+        :page-sizes="list.pageSizes"
+        table-layout="fixed"
+        clickable-rows
+        @retry="list.refresh()"
+        @update:page="list.setPage"
+        @update:limit="list.setLimit"
+        @row-click="openDetail"
+      >
+        <template #cell-plugin="{ row }">
+          <span class="ReviewCell" :title="`${pluginName(row)} · ${pluginSlug(row)}`">
+            <span class="ReviewCell-Primary">{{ pluginName(row) }}</span>
+            <span class="ReviewCell-Muted">{{ pluginSlug(row) }}</span>
           </span>
         </template>
-        <template #cell-rating="{ row: review }">
-          <span class="font-semibold text-amber-500">{{ review.rating }}/5</span>
+        <template #cell-author="{ row }">
+          <AdminIdentity :name="row.author?.name" :avatar="row.author?.avatarUrl" :fallback="authorName(row)" size="sm" compact />
         </template>
-        <template #cell-review="{ row: review }">
-          <div class="min-w-[260px] max-w-xl">
-            <p v-if="review.title" class="font-medium text-black dark:text-white">
-              {{ review.title }}
-            </p>
-            <p class="whitespace-pre-line break-words text-sm text-black/70 dark:text-white/70" :class="review.title ? 'mt-1' : ''" :title="review.content">
-              {{ review.content }}
-            </p>
-          </div>
+        <template #cell-rating="{ row }">
+          <span class="ReviewCell is-rating">{{ row.rating }}/5</span>
         </template>
-        <template #cell-submitted="{ row: review }">
-          <span class="text-sm text-black/60 dark:text-white/60">{{ formatDate(review.createdAt) }}</span>
+        <template #cell-review="{ row }">
+          <span class="ReviewCell" :title="reviewText(row)">
+            <span v-if="row.title" class="ReviewCell-Primary">{{ row.title }}</span>
+            <span class="ReviewCell-Content">{{ row.content }}</span>
+          </span>
         </template>
-        <template #cell-actions="{ row: review }">
-          <div class="flex items-center gap-2 whitespace-nowrap">
-            <TxButton size="sm" type="success" :loading="actionPendingId === review.id" :disabled="actionsLocked" @click="updateReviewStatus(review, 'approved')">
+        <template #cell-submitted="{ row }">
+          <span class="ReviewCell is-numeric" :title="format.dateTimeTitle(row.createdAt)">{{ format.tableDateTime(row.createdAt) }}</span>
+        </template>
+        <template #cell-actions="{ row }">
+          <span class="ReviewCell is-actions" @click.stop>
+            <TxButton variant="success" size="sm" :disabled="deciding" @click.stop="requestDecision(row, 'approved')">
               {{ t('dashboard.sections.reviews.approve', 'Approve') }}
             </TxButton>
-            <TxButton size="sm" type="danger" :loading="actionPendingId === review.id" :disabled="actionsLocked" @click="updateReviewStatus(review, 'rejected')">
+            <TxButton variant="danger" size="sm" :disabled="deciding" @click.stop="requestDecision(row, 'rejected')">
               {{ t('dashboard.sections.reviews.reject', 'Reject') }}
             </TxButton>
-          </div>
+          </span>
         </template>
-      </TxDataTable>
-    </div>
+      </AdminTable>
+    </AdminSection>
 
-    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.04] pt-4 dark:border-white/[0.06]">
-      <span class="text-xs text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.reviews.pendingCount', { count: pagination.total }) }}
-      </span>
-      <TxPagination
-        :current-page="pagination.page"
-        :page-size="pagination.limit"
-        :total="pagination.total"
-        :total-pages="totalPages"
-        :prev-label="t('dashboard.sections.users.pagination.prev', 'Prev')"
-        :next-label="t('dashboard.sections.users.pagination.next', 'Next')"
-        @update:current-page="changePage"
-      />
-    </div>
-  </section>
+    <TxDrawer v-model:visible="detailOpen" :title="t('dashboard.sections.reviews.detail.title', 'Review')" size="520px">
+      <TxDescriptions v-if="detailReview" :columns="1" size="sm">
+        <TxDescriptionsItem :label="t('dashboard.sections.reviews.table.plugin', 'Plugin')">
+          {{ pluginName(detailReview) }}
+          <code class="ReviewDetail-Code">{{ pluginSlug(detailReview) }}</code>
+        </TxDescriptionsItem>
+        <TxDescriptionsItem :label="t('dashboard.sections.reviews.table.author', 'Author')">
+          <AdminIdentity :name="detailReview.author?.name" :avatar="detailReview.author?.avatarUrl" :fallback="authorName(detailReview)" size="sm" />
+        </TxDescriptionsItem>
+        <TxDescriptionsItem :label="t('dashboard.sections.reviews.table.rating', 'Rating')">
+          {{ detailReview.rating }}/5
+        </TxDescriptionsItem>
+        <TxDescriptionsItem :label="t('dashboard.sections.reviews.detail.reviewTitle', 'Title')">
+          {{ detailReview.title }}
+        </TxDescriptionsItem>
+        <TxDescriptionsItem :label="t('dashboard.sections.reviews.table.review', 'Review')">
+          <span class="ReviewDetail-Text">{{ detailReview.content }}</span>
+        </TxDescriptionsItem>
+        <TxDescriptionsItem :label="t('dashboard.sections.reviews.table.submitted', 'Submitted')">
+          {{ format.dateTimeTitle(detailReview.createdAt) }}
+        </TxDescriptionsItem>
+      </TxDescriptions>
+      <template #footer>
+        <div v-if="detailReview" class="ReviewDetail-Actions">
+          <TxButton variant="danger" size="sm" :disabled="deciding" @click="requestDecision(detailReview, 'rejected')">
+            {{ t('dashboard.sections.reviews.reject', 'Reject') }}
+          </TxButton>
+          <TxButton variant="success" size="sm" :disabled="deciding" @click="requestDecision(detailReview, 'approved')">
+            {{ t('dashboard.sections.reviews.approve', 'Approve') }}
+          </TxButton>
+        </div>
+      </template>
+    </TxDrawer>
+
+    <AdminConfirmDialog
+      v-model:open="decisionOpen"
+      :title="decisionCopy.title"
+      :description="decisionCopy.description"
+      :confirm-label="decisionCopy.confirm"
+      :tone="decision?.status === 'approved' ? 'warning' : 'danger'"
+      :loading="deciding"
+      @confirm="confirmDecision"
+    />
+  </div>
 </template>
+
+<style scoped>
+/* Every cell is one line box tall — the height of the table's skeleton row — so
+   nothing moves when the rows replace the placeholders; the 26px buttons are
+   centred in that box and overhang it into the cell's padding. What does not fit
+   is cut with an ellipsis and shown in full in the title and the drawer. */
+.ReviewCell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 1lh;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tx-text-color-primary);
+  white-space: nowrap;
+}
+
+.ReviewCell.is-numeric,
+.ReviewCell.is-rating {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.ReviewCell.is-rating {
+  color: var(--tx-color-warning);
+  font-weight: 600;
+}
+
+.ReviewCell.is-actions {
+  justify-content: flex-end;
+  gap: 8px;
+  overflow: visible;
+}
+
+.ReviewCell-Primary {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+
+.ReviewCell-Muted,
+.ReviewCell-Content {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tx-text-color-regular);
+  text-overflow: ellipsis;
+}
+
+.ReviewDetail-Text {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.ReviewDetail-Code {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--tx-fill-color-light);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.ReviewDetail-Actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+</style>

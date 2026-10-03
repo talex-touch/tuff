@@ -1,54 +1,46 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import type { DataTableColumn } from '@talex-touch/tuffex/data-table'
+import type { DocComment } from '~/utils/admin-comments'
 import { TxButton } from '@talex-touch/tuffex/button'
-import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
-import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
-import { TuffInput } from '@talex-touch/tuffex/input'
-import { TxPagination } from '@talex-touch/tuffex/pagination'
-import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
-import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { TxDescriptions, TxDescriptionsItem } from '@talex-touch/tuffex/descriptions'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import { TxSearchInput } from '@talex-touch/tuffex/search-input'
+import { computed, ref, watch } from 'vue'
+import AdminConfirmDialog from '~/components/admin/AdminConfirmDialog.vue'
+import AdminFilterBar from '~/components/admin/AdminFilterBar.vue'
+import AdminFilterField from '~/components/admin/AdminFilterField.vue'
+import AdminIdentity from '~/components/admin/AdminIdentity.vue'
+import AdminSection from '~/components/admin/AdminSection.vue'
+import AdminTable from '~/components/admin/AdminTable.vue'
+import { useAdminFormat } from '~/composables/useAdminFormat'
+import { useAdminList } from '~/composables/useAdminList'
+import {
+  createDocCommentListOptions,
+  docCommentAnalyticsLink,
+  docCommentDocumentLink,
+  docCommentPath,
+} from '~/utils/admin-comments'
+import { resolveAdminErrorMessage } from '~/utils/admin-request-error'
 import { requestJson } from '~/utils/request'
 
+/**
+ * The doc comment queue of `/admin/reviews?tab=docs`. Its path filter, page and
+ * page size live in the URL as `?d_path=` / `?d_page=` / `?d_limit=`, so leaving
+ * for the plugin review queue and coming back lands on the same filtered page.
+ * Deleting asks first.
+ */
 const { t } = useI18n()
+const format = useAdminFormat()
 const toast = useToast()
 const { deviceId } = useDeviceIdentity()
 const { isAdmin } = useAccountRole()
 
-interface DocComment {
-  id: string
-  path: string
-  userId: string
-  userName: string | null
-  userImage: string | null
-  content: string
-  createdAt: number
-}
+const list = useAdminList(createDocCommentListOptions(
+  requestJson,
+  () => t('dashboard.sections.docComments.loadFailed', 'Unable to load comments.'),
+))
+const filters = list.filters
 
-interface DocCommentListResponse {
-  comments: DocComment[]
-  total: number
-  limit: number
-  offset: number
-}
-
-const pagination = reactive({ page: 1, limit: 20, total: 0 })
-const comments = ref<DocComment[]>([])
-const loading = ref(false)
-const error = ref<string | null>(null)
-const actionPendingId = ref<string | null>(null)
-const pendingDeleteComment = ref<DocComment | null>(null)
-const pathFilter = ref('')
-let loadRequestId = 0
-
-const totalPages = computed(() => Math.max(1, Math.ceil(pagination.total / pagination.limit)))
-const actionsLocked = computed(() => loading.value || actionPendingId.value !== null)
-const commentColumns = computed<DataTableColumn<DocComment>[]>(() => [
-  { key: 'author', title: t('dashboard.sections.docComments.table.author', 'Author'), width: 190 },
-  { key: 'path', title: t('dashboard.sections.docComments.table.path', 'Document'), width: 220 },
-  { key: 'comment', title: t('dashboard.sections.docComments.table.comment', 'Comment'), width: '42%' },
-  { key: 'submitted', title: t('dashboard.sections.docComments.table.submitted', 'Submitted'), width: 180 },
-  { key: 'actions', title: t('dashboard.sections.docComments.table.actions', 'Actions'), width: 100, fixed: 'right' },
-])
 const commentsTracker = useDocEngagementTracker({
   source: 'doc_comments_admin',
   // Analytics keeps its established source identifier; this is not a route.
@@ -60,82 +52,74 @@ const commentsTracker = useDocEngagementTracker({
   captureSelection: false,
 })
 
-async function fetchComments(options: { resetPage?: boolean } = {}) {
-  if (options.resetPage)
-    pagination.page = 1
+// A path filter that took effect (after the list's debounce) is a moderation
+// action worth recording, as it was before the list moved onto useAdminList.
+watch(() => list.appliedFilters.value.path, (path) => {
+  const keyword = path.trim()
+  if (!keyword)
+    return
+  void commentsTracker.recordAction({
+    type: 'filter',
+    source: 'toolbar',
+    sectionId: 'root',
+    sectionTitle: 'Doc comments',
+    text: keyword,
+  })
+})
 
-  const requestId = ++loadRequestId
-  const requestedPage = pagination.page
-  loading.value = true
-  error.value = null
-
-  try {
-    const query: Record<string, string | number> = {
-      limit: pagination.limit,
-      offset: (requestedPage - 1) * pagination.limit,
-    }
-    if (pathFilter.value.trim())
-      query.path = pathFilter.value.trim()
-
-    const response = await requestJson<DocCommentListResponse>('/api/admin/doc-comments', { query })
-    if (requestId !== loadRequestId)
-      return
-
-    pagination.total = response.total ?? 0
-    const lastPage = Math.max(1, Math.ceil(pagination.total / pagination.limit))
-    if (requestedPage > lastPage) {
-      pagination.page = lastPage
-      await fetchComments()
-      return
-    }
-    comments.value = response.comments ?? []
-  }
-  catch (err: unknown) {
-    if (requestId !== loadRequestId)
-      return
-    error.value = err instanceof Error
-      ? err.message
-      : t('dashboard.sections.docComments.loadFailed', 'Unable to load comments.')
-  }
-  finally {
-    if (requestId === loadRequestId)
-      loading.value = false
-  }
-}
-
-async function refreshComments() {
+function refresh(): Promise<void> {
   void commentsTracker.recordAction({
     type: 'refresh',
     source: 'toolbar',
     sectionId: 'root',
     sectionTitle: 'Doc comments',
   })
-  await fetchComments({ resetPage: true })
+  return list.refresh()
 }
 
-async function changePage(page: number) {
-  if (loading.value || page === pagination.page)
-    return
-  pagination.page = page
-  await fetchComments()
+// At a 1280px viewport the table is about 976px wide; the comment takes what
+// the fixed columns leave (about 340px) and is shown in full in the drawer.
+const columns = computed<DataTableColumn<DocComment>[]>(() => [
+  { key: 'author', title: t('dashboard.sections.docComments.table.author', 'Author'), width: 168 },
+  { key: 'path', title: t('dashboard.sections.docComments.table.path', 'Document'), width: 220 },
+  { key: 'comment', title: t('dashboard.sections.docComments.table.comment', 'Comment') },
+  { key: 'submitted', title: t('dashboard.sections.docComments.table.submitted', 'Submitted'), width: 144 },
+  { key: 'actions', title: t('dashboard.sections.docComments.table.actions', 'Actions'), width: 96, align: 'right', fixed: 'right' },
+])
+
+function authorName(comment: DocComment): string {
+  return comment.userName?.trim() || t('dashboard.sections.docComments.anonymous', 'Anonymous')
 }
+
+// Detail drawer: the whole comment and its links.
+const detailComment = ref<DocComment | null>(null)
+const detailOpen = ref(false)
+
+function openDetail(comment: DocComment) {
+  detailComment.value = comment
+  detailOpen.value = true
+}
+
+// Delete, behind a confirmation.
+const deleteTarget = ref<DocComment | null>(null)
+const deleteOpen = ref(false)
+const deleting = ref(false)
 
 function requestDelete(comment: DocComment) {
-  pendingDeleteComment.value = comment
-}
-
-function closeDeleteConfirm() {
-  pendingDeleteComment.value = null
+  deleteTarget.value = comment
+  deleteOpen.value = true
 }
 
 async function confirmDelete() {
-  const comment = pendingDeleteComment.value
-  if (!comment || actionPendingId.value)
-    return false
-
-  actionPendingId.value = comment.id
+  const comment = deleteTarget.value
+  if (!comment || deleting.value)
+    return
+  deleting.value = true
   try {
-    await requestJson(`/api/admin/doc-comments/${comment.id}`, { method: 'DELETE' })
+    await requestJson(docCommentPath(comment.id), { method: 'DELETE' })
+    deleteOpen.value = false
+    if (detailComment.value?.id === comment.id)
+      detailOpen.value = false
     toast.success(t('dashboard.sections.docComments.deleteSuccess', 'Comment deleted.'))
     void commentsTracker.recordAction({
       type: 'delete',
@@ -145,187 +129,231 @@ async function confirmDelete() {
       text: comment.content,
       textLength: comment.content.length,
     })
-    pendingDeleteComment.value = null
-    await fetchComments()
-    return true
+    await list.refresh()
   }
-  catch (err: unknown) {
-    const fallback = t('dashboard.sections.docComments.deleteFailed', 'Failed to delete comment.')
-    toast.warning(err instanceof Error ? err.message : fallback)
-    return false
+  catch (error: unknown) {
+    toast.warning(resolveAdminErrorMessage(error, t('dashboard.sections.docComments.deleteFailed', 'Failed to delete comment.')))
   }
   finally {
-    actionPendingId.value = null
+    deleting.value = false
   }
 }
 
-function displayAuthor(comment: DocComment) {
-  return comment.userName?.trim() || t('dashboard.sections.docComments.anonymous', 'Anonymous')
-}
-
-function formatTime(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(timestamp))
-}
-
-function docsLink(path: string) {
-  return `/docs/${path}`
-}
-
-function normalizeDocPath(path: string) {
-  return path.replace(/^\/+|\/+$/g, '').toLowerCase()
-}
-
-function docsAnalyticsLink(path?: string) {
-  const params = new URLSearchParams()
-  params.set('section', 'docs')
-  if (path)
-    params.set('path', normalizeDocPath(path))
-  return `/admin/analytics?${params.toString()}`
-}
-
-let pathFilterTimer: ReturnType<typeof setTimeout> | null = null
-
-watch(pathFilter, () => {
-  if (pathFilterTimer)
-    clearTimeout(pathFilterTimer)
-  pathFilterTimer = setTimeout(() => {
-    const keyword = pathFilter.value.trim()
-    if (keyword) {
-      void commentsTracker.recordAction({
-        type: 'filter',
-        source: 'toolbar',
-        sectionId: 'root',
-        sectionTitle: 'Doc comments',
-        text: keyword,
-      })
-    }
-    void fetchComments({ resetPage: true })
-  }, 250)
+defineExpose({
+  refresh,
+  busy: computed(() => list.loading.value || list.refreshing.value),
 })
-
-onBeforeUnmount(() => {
-  if (pathFilterTimer)
-    clearTimeout(pathFilterTimer)
-})
-
-onMounted(refreshComments)
 </script>
 
 <template>
-  <section class="space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="flex flex-wrap items-center gap-3">
-        <TuffInput
-          v-model="pathFilter"
-          type="text"
+  <div class="DocCommentQueue">
+    <AdminFilterBar :active="list.hasActiveFilters.value" @clear="list.clearFilters()">
+      <AdminFilterField :label="t('dashboard.sections.docComments.filters.pathLabel', 'Document path')" for="admin-doc-comments-path" wide>
+        <TxSearchInput
+          id="admin-doc-comments-path"
+          v-model="filters.path"
+          autocomplete="off"
           :placeholder="t('dashboard.sections.docComments.filterPlaceholder', 'Filter by doc path…')"
-          class="w-56"
         />
-        <TxButton size="sm" type="info" :disabled="loading" @click="refreshComments">
-          <TxSpinner v-if="loading" :size="14" />
-          <span :class="loading ? 'ml-2' : ''">
-            {{ t('dashboard.sections.docComments.refresh', 'Refresh') }}
-          </span>
-        </TxButton>
-      </div>
-      <NuxtLink
-        :to="docsAnalyticsLink()"
-        class="rounded-lg border border-black/10 bg-black/[0.02] px-3 py-1.5 text-xs text-black/70 no-underline transition hover:bg-black/[0.06] dark:border-white/10 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.08]"
+      </AdminFilterField>
+      <template #trailing>
+        <NuxtLink class="DocCommentQueue-AnalyticsLink" :to="docCommentAnalyticsLink()">
+          {{ t('dashboard.sections.docComments.analytics', 'View docs analytics') }}
+        </NuxtLink>
+      </template>
+    </AdminFilterBar>
+
+    <AdminSection :padded="false">
+      <AdminTable
+        :columns="columns"
+        :rows="list.rows.value"
+        row-key="id"
+        :loading="list.loading.value"
+        :refreshing="list.refreshing.value"
+        :error="list.error.value"
+        :empty-title="t('dashboard.sections.docComments.empty', 'No comments yet.')"
+        :filtered-empty-title="t('dashboard.sections.docComments.filteredEmpty', 'No comments on this document.')"
+        :filtered="list.hasActiveFilters.value"
+        :page="list.page.value"
+        :limit="list.limit.value"
+        :total="list.total.value"
+        :page-sizes="list.pageSizes"
+        table-layout="fixed"
+        clickable-rows
+        @retry="list.refresh()"
+        @clear-filters="list.clearFilters()"
+        @update:page="list.setPage"
+        @update:limit="list.setLimit"
+        @row-click="openDetail"
       >
-        {{ t('dashboard.sections.docComments.analytics', 'View docs analytics') }}
-      </NuxtLink>
-    </div>
-
-    <div v-if="error" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
-      {{ error }}
-    </div>
-
-    <div v-if="loading && !comments.length" class="space-y-3 overflow-x-auto">
-      <div class="flex items-center gap-2 text-sm text-black/60 dark:text-white/60">
-        <TxSpinner :size="16" />
-        {{ t('dashboard.sections.docComments.loading', 'Loading comments...') }}
-      </div>
-      <div v-for="row in 4" :key="row" class="grid grid-cols-[190px_220px_1fr_180px_100px] items-center gap-4 rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
-        <TxSkeleton v-for="column in 5" :key="column" :loading="true" :lines="1" />
-      </div>
-    </div>
-    <div v-else-if="!comments.length && !error" class="py-8 text-center text-sm text-black/60 dark:text-white/60">
-      {{ t('dashboard.sections.docComments.empty', 'No comments yet.') }}
-    </div>
-    <div v-else-if="comments.length" class="overflow-x-auto">
-      <TxDataTable :columns="commentColumns" :data="comments" row-key="id" :loading="loading" scroll-x>
-        <template #cell-author="{ row: comment }">
-          <div class="flex min-w-0 items-center gap-3">
-            <img
-              v-if="comment.userImage"
-              :src="comment.userImage"
-              :alt="displayAuthor(comment)"
-              class="h-8 w-8 shrink-0 rounded-full object-cover"
-            >
-            <div v-else class="h-8 w-8 shrink-0 flex items-center justify-center rounded-full bg-black/10 text-xs font-semibold text-black/50 dark:bg-white/10 dark:text-white/50">
-              {{ displayAuthor(comment).charAt(0).toUpperCase() }}
-            </div>
-            <span class="truncate text-sm font-medium text-black dark:text-white" :title="displayAuthor(comment)">
-              {{ displayAuthor(comment) }}
-            </span>
-          </div>
+        <template #cell-author="{ row }">
+          <AdminIdentity :name="row.userName" :avatar="row.userImage" :fallback="authorName(row)" size="sm" compact />
         </template>
-        <template #cell-path="{ row: comment }">
-          <div class="min-w-0 space-y-1">
-            <NuxtLink :to="docsLink(comment.path)" class="block truncate text-sm text-primary no-underline hover:underline" :title="comment.path">
-              {{ comment.path }}
+        <template #cell-path="{ row }">
+          <span class="CommentCell" :title="row.path">
+            <NuxtLink class="CommentCell-Link" :to="docCommentDocumentLink(row.path)" @click.stop>
+              {{ row.path }}
             </NuxtLink>
             <NuxtLink
-              :to="docsAnalyticsLink(comment.path)"
-              class="block text-[11px] text-black/50 no-underline hover:text-black/80 hover:underline dark:text-white/50 dark:hover:text-white/80"
+              class="CommentCell-Analytics"
+              :to="docCommentAnalyticsLink(row.path)"
+              :aria-label="t('dashboard.sections.docComments.analyticsForPath', 'Analytics for this document')"
+              :title="t('dashboard.sections.docComments.analyticsForPath', 'Analytics for this document')"
+              @click.stop
             >
-              {{ t('dashboard.sections.docComments.analyticsPath', 'Analytics') }}
+              <span class="i-carbon-chart-line" aria-hidden="true" />
             </NuxtLink>
-          </div>
+          </span>
         </template>
-        <template #cell-comment="{ row: comment }">
-          <p class="min-w-[280px] max-w-2xl whitespace-pre-line break-words text-sm text-black/70 dark:text-white/70" :title="comment.content">
-            {{ comment.content }}
-          </p>
+        <template #cell-comment="{ row }">
+          <span class="CommentCell" :title="row.content">
+            <span class="CommentCell-Text">{{ row.content }}</span>
+          </span>
         </template>
-        <template #cell-submitted="{ row: comment }">
-          <span class="text-sm text-black/60 dark:text-white/60">{{ formatTime(comment.createdAt) }}</span>
+        <template #cell-submitted="{ row }">
+          <span class="CommentCell is-numeric" :title="format.dateTimeTitle(row.createdAt)">{{ format.tableDateTime(row.createdAt) }}</span>
         </template>
-        <template #cell-actions="{ row: comment }">
-          <TxButton size="sm" type="danger" :loading="actionPendingId === comment.id" :disabled="actionsLocked" @click="requestDelete(comment)">
+        <template #cell-actions="{ row }">
+          <span class="CommentCell is-actions" @click.stop>
+            <TxButton variant="danger" size="sm" :disabled="deleting" @click.stop="requestDelete(row)">
+              {{ t('dashboard.sections.docComments.delete', 'Delete') }}
+            </TxButton>
+          </span>
+        </template>
+      </AdminTable>
+    </AdminSection>
+
+    <TxDrawer v-model:visible="detailOpen" :title="t('dashboard.sections.docComments.detail.title', 'Comment')" size="520px">
+      <TxDescriptions v-if="detailComment" :columns="1" size="sm">
+        <TxDescriptionsItem :label="t('dashboard.sections.docComments.table.author', 'Author')">
+          <AdminIdentity :name="detailComment.userName" :avatar="detailComment.userImage" :fallback="authorName(detailComment)" size="sm" />
+        </TxDescriptionsItem>
+        <TxDescriptionsItem :label="t('dashboard.sections.docComments.table.path', 'Document')">
+          <NuxtLink class="CommentDetail-Link" :to="docCommentDocumentLink(detailComment.path)">
+            {{ detailComment.path }}
+          </NuxtLink>
+        </TxDescriptionsItem>
+        <TxDescriptionsItem :label="t('dashboard.sections.docComments.table.submitted', 'Submitted')">
+          {{ format.dateTimeTitle(detailComment.createdAt) }}
+        </TxDescriptionsItem>
+        <TxDescriptionsItem :label="t('dashboard.sections.docComments.table.comment', 'Comment')">
+          <span class="CommentDetail-Text">{{ detailComment.content }}</span>
+        </TxDescriptionsItem>
+      </TxDescriptions>
+      <template #footer>
+        <div v-if="detailComment" class="CommentDetail-Actions">
+          <NuxtLink class="DocCommentQueue-AnalyticsLink" :to="docCommentAnalyticsLink(detailComment.path)">
+            {{ t('dashboard.sections.docComments.analyticsForPath', 'Analytics for this document') }}
+          </NuxtLink>
+          <TxButton variant="danger" size="sm" :disabled="deleting" @click="requestDelete(detailComment)">
             {{ t('dashboard.sections.docComments.delete', 'Delete') }}
           </TxButton>
-        </template>
-      </TxDataTable>
-    </div>
+        </div>
+      </template>
+    </TxDrawer>
 
-    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.04] pt-4 dark:border-white/[0.06]">
-      <span class="text-xs text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.docComments.totalCount', { count: pagination.total }) || `${pagination.total} total` }}
-      </span>
-      <TxPagination
-        :current-page="pagination.page"
-        :page-size="pagination.limit"
-        :total="pagination.total"
-        :total-pages="totalPages"
-        :prev-label="t('dashboard.sections.users.pagination.prev', 'Prev')"
-        :next-label="t('dashboard.sections.users.pagination.next', 'Next')"
-        @update:current-page="changePage"
-      />
-    </div>
-  </section>
-
-  <TxBottomDialog
-    v-if="pendingDeleteComment"
-    :title="t('dashboard.sections.docComments.confirmDeleteTitle', 'Delete comment')"
-    :message="t('dashboard.sections.docComments.confirmDeleteMessage', { path: pendingDeleteComment.path })"
-    :btns="[
-      { content: t('common.cancel', 'Cancel'), type: 'info', onClick: () => true },
-      { content: t('dashboard.sections.docComments.delete', 'Delete'), type: 'error', onClick: confirmDelete },
-    ]"
-    :close="closeDeleteConfirm"
-  />
+    <AdminConfirmDialog
+      v-model:open="deleteOpen"
+      :title="t('dashboard.sections.docComments.confirmDeleteTitle', 'Delete comment')"
+      :description="deleteTarget ? t('dashboard.sections.docComments.confirmDeleteMessage', { path: deleteTarget.path }) : ''"
+      :confirm-label="t('dashboard.sections.docComments.delete', 'Delete')"
+      tone="danger"
+      :loading="deleting"
+      @confirm="confirmDelete"
+    />
+  </div>
 </template>
+
+<style scoped>
+.DocCommentQueue {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.DocCommentQueue-AnalyticsLink {
+  color: var(--tx-color-primary);
+  font-size: 13px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.DocCommentQueue-AnalyticsLink:hover {
+  text-decoration: underline;
+}
+
+/* Every cell is one line box tall — the height of the table's skeleton row — so
+   nothing moves when the rows replace the placeholders; the 26px button is
+   centred in that box and overhangs it into the cell's padding. What does not
+   fit is cut with an ellipsis and shown in full in the title and the drawer. */
+.CommentCell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 1lh;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tx-text-color-primary);
+  white-space: nowrap;
+}
+
+.CommentCell.is-numeric {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.CommentCell.is-actions {
+  justify-content: flex-end;
+  overflow: visible;
+}
+
+.CommentCell-Link {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tx-color-primary);
+  text-decoration: none;
+  text-overflow: ellipsis;
+}
+
+.CommentCell-Link:hover {
+  text-decoration: underline;
+}
+
+.CommentCell-Analytics {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--tx-text-color-regular);
+  font-size: 14px;
+}
+
+.CommentCell-Analytics:hover {
+  color: var(--tx-color-primary);
+}
+
+.CommentCell-Text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tx-text-color-regular);
+  text-overflow: ellipsis;
+}
+
+.CommentDetail-Link {
+  color: var(--tx-color-primary);
+  overflow-wrap: anywhere;
+}
+
+.CommentDetail-Text {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.CommentDetail-Actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+</style>
