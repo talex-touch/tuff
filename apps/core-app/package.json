@@ -101,7 +101,7 @@
     "@fingerprintjs/fingerprintjs": "^4.6.2",
     "@floating-ui/vue": "catalog:",
     "@langchain/anthropic": "^0.3.34",
-    "@langchain/core": "^0.3.80",
+    "@langchain/core": "^1.2.13",
     "@langchain/langgraph": "catalog:",
     "@langchain/openai": "catalog:",
     "@libsql/client": "^0.18.0",
