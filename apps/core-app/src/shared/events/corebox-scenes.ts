@@ -27,6 +27,16 @@ export const COREBOX_PRIMARY_ACTION_ID = '__corebox_primary__'
  */
 export const COREBOX_APP_BIND_SHORTCUT_ACTION_ID = 'app-bind-shortcut'
 
+/**
+ * The ⌘K panel's "transfer" row, which opens the Flow picker in the CoreBox renderer.
+ *
+ * Main relays it like any other renderer row, but does not hand the window's height back on the
+ * spot: the picker asks for room through its next layout update, and restoring first made the
+ * window shrink and grow again. The renderer builds the row, so the id is shared rather than
+ * spelled out on both sides.
+ */
+export const COREBOX_FLOW_TRANSFER_ACTION_ID = 'flow-transfer'
+
 export const COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID = 'corebox.screenshot.translate'
 export const COREBOX_FX_LATEST_SCENE_ID = 'corebox.fx.latest'
 export const COREBOX_FX_CONVERT_SCENE_ID = 'corebox.fx.convert'

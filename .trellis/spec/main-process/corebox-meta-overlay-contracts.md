@@ -59,6 +59,11 @@ show(request: MetaShowRequest): void
 holdLayoutUpdate(replay: () => void): boolean   // true = held; the caller must not apply it
 private restoreHeight: number | null            // height before the panel grew the window
 private heldLayoutReplay: (() => void) | null   // latest CoreBox layout update held while open
+private flowHandOffTimer: Timeout | null        // non-null = waiting to hand the height to the Flow picker
+FLOW_HAND_OFF_MAX_WAIT_MS = 500
+
+// shared/events/corebox-scenes.ts — the row the renderer builds and main recognises
+COREBOX_FLOW_TRANSFER_ACTION_ID = 'flow-transfer'
 
 // core-box/window.ts — WindowManager, over WindowBoundsController
 getSettledHeight(target?): number | null   // an in-flight animation's target, else the current height
@@ -93,6 +98,26 @@ setHeight(height, target?): void
   results changed under the panel — else `setHeight(restoreHeight)` if the panel grew the window,
   else nothing. Main keeps the replay itself because the renderer will not resend: `useResize`
   drops a payload equal to the last one it sent.
+- **Hand the height over to the Flow picker instead (2026-10-02).** The 流转 row is a renderer item
+  action: `executeAction` broadcasts `itemAction`, and the CoreBox renderer then opens the Flow
+  picker, which asks for a window floor through its next layout update. Handing the height back
+  first made the window shrink and grow again (measured 488 → 364 → 536 with
+  `animation.coreBoxResize`). So for `COREBOX_FLOW_TRANSFER_ACTION_ID` only, when the panel is
+  visible and closing would move the window (`restoreHeight !== null || heldLayoutReplay !== null`),
+  `executeAction` arms `flowHandOffTimer` instead of calling `hide()`:
+  - the next layout update reaching `holdLayoutUpdate` is held as usual and then ends the wait with
+    `hide()`, which replays it (the picker's floor) instead of restoring — one move, in one
+    direction. `holdLayoutUpdate` still returns `true` for it, and the replay applies exactly once
+    (re-entering with `isVisible` already false);
+  - the timer expiring with no update: `hide()` as today;
+  - `hide()` from anywhere, `dismissWithHost()`, `destroyRenderer()` and an accepted `show()` clear
+    the timer first (a stale deadline must not close a reopened panel); a second flow action restarts
+    it;
+  - nothing is published while waiting (`grown` stays true); every other action keeps its timing.
+  - Closing would not move the window → `hide()` at once: there is nothing to hand over, and the
+    transparent view would only hold focus longer.
+  - The renderer half is in "The Flow picker in the CoreBox renderer" below: while loading, the
+    picker asks for at least the height it opened in, or the replay would still shrink the window.
 - **CoreBox hides under the panel** (the parent window's `'hide'` listener → `dismissWithHost()`):
   drop the replay and `restoreHeight` without resizing a hidden window (CoreBox resets its size and
   re-sends its layout on the next show), leave focus alone, still send `ui.hide` so the retained
@@ -139,6 +164,11 @@ setHeight(height, target?): void
 | Overlay renderer gone while open | Height handed back as on close |
 | `show()` while CoreBox is hidden | Refused: not visible, nothing held, no `setHeight` |
 | Work area shorter than required | Window clamped; the panel's `max-height` follows `100vh`, the list scrolls |
+| 流转 executed, panel grew the window, a layout update arrives within 500 ms | Held, then `hide()` replays it: one `setHeight`, to the picker's floor, never to `restoreHeight` |
+| 流转 executed, no layout update within 500 ms | `hide()` as on close: replay if any, else `restoreHeight` |
+| 流转 executed while closing would not move the window | `hide()` at once, no timer |
+| `hide()` / `dismissWithHost()` / `destroyRenderer()` / `show()` during the wait | Timer cleared first, then their own semantics |
+| Any other action | Unchanged: `hide()` right after the broadcast |
 
 ### 5. Good / Base / Bad Cases
 
@@ -164,6 +194,12 @@ setHeight(height, target?): void
   hidden CoreBox → not shown, nothing held.
 - `core-box/ipc.test.ts`: `ui.show` never calls `expand`; two enabled plugin actions extend 200 →
   292, a disabled one does not count.
+- `core-box/meta-overlay.test.ts` › "hand-off to the Flow picker": the update that ends the wait is
+  held (`holdLayoutUpdate` → `true`) and replayed exactly once; the window moves once (`[416, 536]`),
+  never back to `restoreHeight`; the timer path restores; `dismissWithHost` / `destroyRenderer` /
+  re-`show` / `hide` clear the timer; a second transfer keeps one deadline; a closing that would not
+  move the window hides at once; other item actions and plugin actions hide immediately;
+  `panelState` stays `{true,true}` through the wait, then `{false,true}` → `{false,false}`.
 - `core-box/index.test.ts`: two layout updates while open → `holdLayoutUpdate` twice, `setHeight`
   never; the replay applies only the latest (260).
 - `renderer/modules/box/adapter/hooks/useKeyboard.test.ts` › "⌘K request": a displayed footer →
@@ -203,6 +239,20 @@ this.isVisible = false
 // Correct: close first, then hand the height back.
 this.isVisible = false
 this.releaseHostLayout()
+```
+
+```ts
+// Wrong: the 流转 row hands the ⌘K height back before the picker has asked for its floor —
+// the window shrinks to the results and grows again a frame later.
+transport.broadcastToWindow(coreBoxWindow.id, CoreBoxEvents.metaOverlay.itemAction, payload)
+this.hide()
+
+// Correct: wait for the picker's layout update and let hide() replay it.
+transport.broadcastToWindow(coreBoxWindow.id, CoreBoxEvents.metaOverlay.itemAction, payload)
+if (actionId === COREBOX_FLOW_TRANSFER_ACTION_ID && this.handOffToFlowPicker()) {
+  return { success: true } // holdLayoutUpdate() ends the wait; the timer is the fallback
+}
+this.hide()
 ```
 
 ## Scenario: Paint the space a grown window adds (`panelState`)
@@ -678,4 +728,157 @@ if (event.key === 'Enter') handleExecute(res.value[boxOptions.focus])
 
 // Correct: first, before any Enter consumer.
 if (swallowForeignEnterRepeat(event)) return
+```
+
+## Scenario: The Flow picker in the CoreBox renderer (2026-10-02)
+
+### 1. Scope / Trigger
+
+- Changing `renderer/components/flow/FlowSelector.vue`, the shared card
+  `renderer/components/meta/MetaPanel.vue`, `renderer/modules/box/adapter/hooks/useFlowPanelRoom.ts`,
+  the `floor` / `floorApplied` options of `useResize`, the third argument of `useSearch`, the flow
+  half of `useDetach` (payload, anchor, result feedback), or their wiring in `box/CoreBox.vue`.
+- Why it is cross-layer: the picker is drawn by the CoreBox renderer, not by the overlay view, so it
+  cannot leave the window and cannot rely on main to grow it. It borrows the ⌘K panel's card and
+  geometry, takes the window through `useResize`, and hands the ⌘K height over through the
+  main-process wait in the first scenario.
+
+### 2. Signatures
+
+```ts
+// renderer/components/meta/MetaPanel.vue — the card both panels draw; MetaOverlay's DOM unchanged
+props: { title, icon: ITuffIcon, listId, listLabel, placeholder, activeIndex: number,
+         activeDescendant?, highlight: boolean, layoutKey: unknown,
+         shouldAnimate: () => boolean,          // the owner window's one motion gate, never a second useMotionGate()
+         view?: 'list' | 'body' }               // 'body' replaces list + filter, keeps the header
+model: query; emits: composition(composing: boolean)
+slots: default (sections + rows with data-meta-row-index), header-meta, filter-key, body
+expose: focusFilter(), glideNext() /* one-shot: the next plate move glides */, scrollActiveIntoView()
+
+// renderer/components/flow/FlowSelector.vue
+props: { visible, sessionId?, payload?, anchor?: MetaPanelAnchor /* default 'corner' */, shouldAnimate }
+emits: close; select({ targetId, consentToken?, confirmationToken? }); room(height: number)
+FLOW_CONFIRM_PANEL_HEIGHT = 232 // English labels wrap the three buttons onto two rows
+
+// renderer/modules/box/adapter/hooks/useFlowPanelRoom.ts
+useFlowPanelRoom(): { floor: Readonly<Ref<number>>, floorApplied: Ref<boolean>,
+                      fill: Readonly<Ref<boolean>>, update(height: number): void }
+ROOM_FILL_HOLD_MS = 240
+
+// hooks/useResize.ts and hooks/useSearch.ts
+useResize({ …, floor?: Ref<number>, floorApplied?: Ref<boolean> })
+useSearch(boxOptions, clipboardOptions, { windowFloor?, windowFloorApplied? })
+```
+
+### 3. Contracts
+
+- **One card.** Both panels render `MetaPanel`; list content uses its class names
+  (`MetaPanel-Section`, `MetaPanel-SectionTitle`, `MetaPanel-Empty`), which the card styles through
+  `:deep()` because slot content carries the owner's scope id. Geometry comes from
+  `resolveMetaPanelCssVars(anchor)` on the owner's root (`.MetaOverlay` / `.FlowSelector`). The anchor
+  follows the ⌘K rule: `'footer'` outside plugin UI mode with `.CoreBoxFooter-Sticky.display`
+  present, else `'corner'` (`useDetach.openFlowSelector`, `isCoreBoxFooterShown`).
+- **The picker owns the keyboard while visible.** One `window` keydown listener in the capture phase
+  calls `stopPropagation()` on every key, so CoreBox's document-capture `onKeyDown` never sees ↵ / ↑↓
+  / Esc (it would run the result behind the dim, move its focus or hide CoreBox — the pre-2026-10-02
+  bug). Only handled keys are `preventDefault()`ed, so typing still reaches the filter. A repeat ↵ is
+  ignored; IME composition keeps arrows and ↵; a selection locks further selections until the
+  picker closes or reopens; replies landing after a close or reopen are dropped by a generation
+  counter. Esc closes the list view and backs the confirm view out to the list. `.FlowSelector` stays
+  the root class: `useKeyboard` still checks it for ⌘ chords.
+- **Confirmation stays in the card.** `checkConsent` asking for authorization and/or confirmation
+  switches the card to `view="body"` with today's three label combinations; focus lands on the
+  primary `TxButton`; ↵ runs the focused button. The description messages interpolate
+  `{ source, target }` — both bundles spell `{source}`, and a test asserts it.
+- **Room.** While visible the picker emits `room(resolveMetaOverlayWindowHeight({ anchor,
+  desiredPanelHeight }))`: while loading, `max(the 1-row estimate's window height, innerHeight when
+  it opened)` (never ask for less than the ⌘K-grown window before the targets are known); loaded,
+  the unfiltered list estimate; confirming, `max(list estimate, 232)`. It emits `room(0)` on the leave
+  transition's `after-leave`, with a 400 ms fallback for a window hidden mid-fade (no frames, no
+  `after-leave`), so the card fades out at full height before the window shrinks.
+- **Floor and paint.** `useResize` applies `max(height, floor)` (clamped to 600) after its own rules,
+  sends at once when the floor changes, and writes `floorApplied = floor > 0 && floor >
+  contentHeight` — the single source for the paint. `fill = floorApplied || holding`; `floorApplied`
+  turning false (released, or lowered under the results once the targets are known) holds the paint
+  240 ms over main's 120–220 ms shrink; `update(0)` also sets it false so a pending measurement
+  cannot leave the paint on. The paint is `CoreBox-Wrapper--meta-fill`, ORed with the ⌘K panel's.
+  No floor → `useResize` behaves byte-for-byte as before.
+- **Dispatch and feedback.** The payload is built from `toRaw(item)` into a `shallowRef` (see
+  channel-transport-contracts: payloads must stay cloneable). Results use
+  `showCoreBoxFooterFeedback`, never `toast` (CoreBox mounts no toast host): sent → success; a
+  permission error → `setupPermissions.requiredPermission`, error tone; failure → error tone.
+- **Rows.** Grouped by `pluginId` in first-appearance order; icon
+  `normalizeCoreBoxIcon(target.icon || target.pluginIcon)`; subtitle `description || adaptationHint`;
+  a shield (`i-ri-shield-check-line`, labelled 需要确认) in the `trailing` slot for `requireConfirm`.
+  No supported-type chips (`getTargets` already filters by payload type) and no raw JSON preview.
+  Built-in target icons are safelisted from `shared/flow-target-icons.ts`; its test also requires
+  every class to exist in the installed Remix set.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+| --- | --- |
+| Picker visible, any keydown | Never reaches CoreBox's `onKeyDown`; typing still edits the filter |
+| ↵ held from the ⌘K panel into the picker | Ignored (`event.repeat`) |
+| ↵ pressed twice quickly | One `checkConsent`, one `select` |
+| Opened in a 536 px ⌘K-grown window over 2 results | `room` 536 while loading, then the list estimate; window moves once; paint on throughout |
+| Loaded list shorter than the results | Floor stops applying; paint held 240 ms, then off |
+| Closed | Card fades at full height; `room(0)` on `after-leave` (≤ 400 ms); paint held 240 ms after |
+| Window hidden mid-fade | `room(0)` from the 400 ms fallback, once |
+| Reopened mid-fade | No `room(0)` for the new card |
+| Payload item read from reactive results | Cloned fine (`toRaw` + `shallowRef`) |
+| Dispatch fails or is denied | Footer feedback in error tone; picker closes |
+
+### 5. Good / Base / Bad Cases
+
+- Good (real device, 2026-10-03): 4 results (348 px) → ⌘K 488 → 流转 stays 488 → loaded 536, paint
+  on; System Info dispatch `ACKED` and 已发送到目标插件 in the footer; on close the card fades
+  106–227 ms, the window shrinks from 282 ms, the paint drops at 476 ms.
+- Base: the recommendation view is already 600 px tall: no floor applies, no paint, nothing moves.
+- Bad (before 2026-10-02): a centred modal in the CoreBox document listening on document bubble —
+  ↵ also ran the focused CoreBox result; icons drawn as `<i class="ri:tools-line">` (empty); every
+  dispatch failed to clone and the failure toast never reached the screen.
+
+### 6. Tests Required
+
+- `components/flow/FlowSelector.test.ts`: grouping and order; filtering and the empty row; ↑↓ wrap,
+  ↵ selects, repeat ignored; a document-capture spy receives none of ↵ / ↑ / ↓ / Esc while visible;
+  Esc in the confirm view sends no `grantConsent` and emits nothing; double ↵ → one `checkConsent`;
+  icon normalisation and `pluginIcon` fallback; anchor vars; `room` values while loading / loaded /
+  confirming; release only after `after-leave` (real Transition + held frames), once, fallback 400 ms,
+  none on a reopen mid-fade; both bundles use `{source}` / `{target}`.
+- `components/meta/MetaActionItem.test.ts`: identical DOM without `trailing`; the slot renders in the
+  keys area. `views/meta/MetaOverlay.test.ts`: passes unedited after any `MetaPanel` change.
+- `hooks/useFlowPanelRoom.test.ts` (wired to the real `useResize`): paint for a floor above the
+  results in an already-tall window; none when the results are as tall; 240 ms hold on release and
+  on a floor lowered under the results; no hold for a floor that never applied; reopen during the
+  hold; timer cleared on scope dispose.
+- `hooks/useResize.test.ts`: floor raises and releases; 600 cap; sent at once; `floorApplied` tracks
+  floor vs content. `hooks/useDetach.test.ts`: a `reactive()` item's payload survives
+  `structuredClone`; the three feedback outcomes and no `toast`.
+- `shared/flow-target-icons.test.ts`: every built-in icon is safelisted, extraction has positive
+  controls, every class exists in `@iconify-json/ri`.
+
+### 7. Wrong vs Correct
+
+```ts
+// Wrong: decide the paint from the window at request time. Handed the ⌘K-grown window, the picker
+// asks for that same height, the check fails, and the strip shows the desktop once main stops painting.
+fill.value = height > window.innerHeight
+
+// Correct: paint while the floor is what holds the window above the results (useResize measures).
+floorApplied.value = floor > 0 && floor > contentHeight // in useResize, every send
+fill = computed(() => floorApplied.value || holding.value)
+```
+
+```ts
+// Wrong: listening on document bubble — CoreBox's document-capture handler runs first.
+document.addEventListener('keydown', onKeydown)
+
+// Correct: window capture, and stop every key while the picker is up.
+window.addEventListener('keydown', (event) => {
+  if (!props.visible) return
+  event.stopPropagation()
+  handleKey(event) // preventDefault only for the keys it handles
+}, true)
 ```

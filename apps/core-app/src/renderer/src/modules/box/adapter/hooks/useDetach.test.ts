@@ -1,11 +1,49 @@
+// @vitest-environment jsdom
+// useDetach reads the footer through useKeyboard, whose app-storage import touches `window`.
 import type { TuffItem } from '@talex-touch/utils'
-import { describe, expect, it } from 'vitest'
+import { FlowEvents } from '@talex-touch/utils/transport/events'
+import { mount, type VueWrapper } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { computed, defineComponent, isProxy, reactive, ref } from 'vue'
+import {
+  clearCoreBoxFooterFeedback,
+  useCoreBoxFooterFeedback
+} from '../../meta-actions/footer-feedback'
 import { isDetachedDivisionItemMatch, parseDetachedDivisionConfig } from './detached-division'
 import {
   buildCoreBoxFlowPayload,
   buildDetachedFeatureConfig,
-  resolveCoreBoxFlowActorPluginId
+  resolveCoreBoxFlowActorPluginId,
+  useDetach
 } from './useDetach'
+
+const transportMock = vi.hoisted(() => ({
+  send: vi.fn(),
+  on: vi.fn(() => () => {})
+}))
+
+vi.mock('@talex-touch/utils/transport', () => ({
+  useTuffTransport: () => transportMock
+}))
+
+const toastMock = vi.hoisted(() => ({
+  success: vi.fn(),
+  warning: vi.fn(),
+  error: vi.fn()
+}))
+
+vi.mock('vue-sonner', () => ({ toast: toastMock }))
+
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, params?: unknown) =>
+      params && typeof params === 'object' ? `${key}:${Object.values(params).join(',')}` : key
+  })
+}))
+
+vi.mock('~/utils/renderer-log', () => ({
+  createRendererLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() })
+}))
 
 function createFeatureItem(overrides: Partial<TuffItem> = {}): TuffItem {
   return {
@@ -187,6 +225,109 @@ describe('CoreBox Flow payload', () => {
 
     expect(payload.context?.sourcePluginId).toBe('corebox')
     expect(resolveCoreBoxFlowActorPluginId(payload)).toBeUndefined()
+  })
+})
+
+describe('CoreBox Flow dispatch', () => {
+  let wrapper: VueWrapper | null = null
+
+  function mountDetach(): ReturnType<typeof useDetach> {
+    let detach: ReturnType<typeof useDetach> | undefined
+    wrapper = mount(
+      defineComponent({
+        setup() {
+          detach = useDetach({
+            searchVal: ref('start writing sprint'),
+            res: ref([]),
+            boxOptions: { focus: 0 },
+            isUIMode: computed(() => false),
+            activeActivations: computed(() => undefined),
+            deactivateProvider: async () => {}
+          })
+          return () => null
+        }
+      })
+    )
+    return detach!
+  }
+
+  function dispatchedRequest(): { payload: { data: { item: TuffItem; query: string } } } {
+    const call = transportMock.send.mock.calls.find(([event]) => event === FlowEvents.dispatch)
+    expect(call, 'expected a Flow dispatch').toBeTruthy()
+    return call![1] as { payload: { data: { item: TuffItem; query: string } } }
+  }
+
+  beforeEach(() => {
+    transportMock.send.mockReset()
+    toastMock.success.mockClear()
+    toastMock.warning.mockClear()
+    toastMock.error.mockClear()
+  })
+
+  afterEach(() => {
+    wrapper?.unmount()
+    wrapper = null
+    clearCoreBoxFooterFeedback()
+  })
+
+  it('sends a payload the transport can clone, for an item read off a reactive source', async () => {
+    transportMock.send.mockResolvedValue({ success: true })
+    const detach = mountDetach()
+
+    // An activation or the box data hands the item out as a Proxy.
+    detach.openFlowSelector(reactive(createFeatureItem()))
+    await detach.dispatchFlow({ targetId: 'quickops.system-info' })
+
+    const request = dispatchedRequest()
+    // What Electron's IPC does with it: a Proxy anywhere fails with "could not be cloned".
+    expect(() => structuredClone(request)).not.toThrow()
+    const { item } = request.payload.data
+    for (const value of [request.payload, request.payload.data, item, item.source, item.render]) {
+      expect(isProxy(value)).toBe(false)
+    }
+    expect(request.payload).toEqual(
+      buildCoreBoxFlowPayload(createFeatureItem(), 'start writing sprint')
+    )
+  })
+
+  it.each([
+    {
+      name: 'a sent transfer',
+      reply: () => Promise.resolve({ success: true }),
+      feedback: { tone: 'success', message: 'corebox.flowSent' }
+    },
+    {
+      name: 'a missing permission',
+      reply: () =>
+        Promise.resolve({
+          success: false,
+          error: { code: 'PERMISSION_DENIED', permissionId: 'clipboard.read' }
+        }),
+      feedback: { tone: 'error', message: 'setupPermissions.requiredPermission:clipboard.read' }
+    },
+    {
+      name: 'a refused transfer',
+      reply: () => Promise.resolve({ success: false, error: { message: 'No handler' } }),
+      feedback: { tone: 'error', message: 'corebox.flowFailed' }
+    },
+    {
+      name: 'a transport failure',
+      reply: () => Promise.reject(new Error('IPC closed')),
+      feedback: { tone: 'error', message: 'corebox.flowFailed' }
+    }
+  ])('reports $name in the footer, where CoreBox shows outcomes, and closes', async (outcome) => {
+    transportMock.send.mockImplementation(outcome.reply)
+    const detach = mountDetach()
+
+    detach.openFlowSelector(createFeatureItem())
+    await detach.dispatchFlow({ targetId: 'quickops.system-info' })
+
+    expect(useCoreBoxFooterFeedback().value).toMatchObject(outcome.feedback)
+    // CoreBox mounts no toast host: a toast here would never be seen.
+    expect(toastMock.success).not.toHaveBeenCalled()
+    expect(toastMock.warning).not.toHaveBeenCalled()
+    expect(toastMock.error).not.toHaveBeenCalled()
+    expect(detach.flowVisible).toBe(false)
   })
 })
 

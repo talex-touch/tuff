@@ -48,6 +48,28 @@ export function resolveMetaPanelBottomInset(anchor: MetaPanelAnchor | undefined)
     : META_PANEL_EDGE_GAP
 }
 
+/**
+ * The custom properties the panel's CSS lays out with, for the root element that hosts it: the
+ * numbers in this file, so the drawn panel is the one the window was sized for.
+ */
+export function resolveMetaPanelCssVars(
+  anchor: MetaPanelAnchor | undefined
+): Record<string, string> {
+  return {
+    '--meta-panel-width': `${META_PANEL_WIDTH}px`,
+    '--meta-panel-max-height': `${META_PANEL_MAX_HEIGHT}px`,
+    '--meta-panel-right': `${META_PANEL_EDGE_GAP}px`,
+    '--meta-panel-top': `${META_PANEL_TOP_INSET}px`,
+    '--meta-panel-bottom': `${resolveMetaPanelBottomInset(anchor)}px`,
+    '--meta-header-height': `${META_PANEL_ITEM_HEADER_HEIGHT}px`,
+    '--meta-filter-height': `${META_PANEL_FILTER_HEIGHT}px`,
+    '--meta-list-padding': `${META_PANEL_LIST_PADDING}px`,
+    '--meta-row-height': `${META_PANEL_ROW_HEIGHT}px`,
+    '--meta-section-title-height': `${META_PANEL_SECTION_TITLE_HEIGHT}px`,
+    '--meta-section-gap': `${META_PANEL_SECTION_GAP}px`
+  }
+}
+
 export interface MetaPanelShape {
   /** Rows in the list, including the primary row. */
   rows: number

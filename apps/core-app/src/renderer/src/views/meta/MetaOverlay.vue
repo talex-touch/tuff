@@ -11,12 +11,11 @@ import type {
 } from '~/modules/box/meta-actions/meta-action-model'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
-import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { TxKbd } from '@talex-touch/tuffex/kbd'
-import { useResizeObserver } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MetaActionItem from '~/components/meta/MetaActionItem.vue'
+import MetaPanel from '~/components/meta/MetaPanel.vue'
 import { normalizeCoreBoxIcon } from '~/components/render/icon-color-mode'
 import { useMotionGate } from '~/modules/box/adapter/hooks/useMotionGate'
 import {
@@ -25,26 +24,19 @@ import {
   metaActionShortcutLabels,
   resolveMetaActionShortcut
 } from '~/modules/box/meta-actions/meta-action-model'
+import {
+  matchesMetaPanelQuery,
+  normalizeMetaPanelQuery
+} from '~/modules/box/meta-actions/meta-panel-filter'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import { shortcutChordLabel } from '~/modules/shortcuts/shortcut-chord'
 import { createRendererLogger } from '~/utils/renderer-log'
-import {
-  META_PANEL_EDGE_GAP,
-  META_PANEL_FILTER_HEIGHT,
-  META_PANEL_ITEM_HEADER_HEIGHT,
-  META_PANEL_LIST_PADDING,
-  META_PANEL_MAX_HEIGHT,
-  META_PANEL_ROW_HEIGHT,
-  META_PANEL_SECTION_GAP,
-  META_PANEL_SECTION_TITLE_HEIGHT,
-  META_PANEL_TOP_INSET,
-  META_PANEL_WIDTH,
-  resolveMetaPanelBottomInset
-} from '../../../../shared/meta-overlay-geometry'
+import { resolveMetaPanelCssVars } from '../../../../shared/meta-overlay-geometry'
 
 /**
  * The ⌘K action panel: a compact card anchored bottom-right, above the CoreBox footer's ⌘K hint
- * (or in the window corner when there is no footer), over a light dim of the launcher.
+ * (or in the window corner when there is no footer), over a light dim of the launcher. The card
+ * itself is `MetaPanel`; this view owns the dim, the anchor, the keyboard and the actions.
  *
  * It lives in the full-window transparent overlay view main keeps above the plugin view, so it
  * covers a plugin UI too. The dim is painted by this document: `backdrop-filter` cannot sample the
@@ -74,13 +66,9 @@ const item = shallowRef<TuffItem | null>(null)
 const request = shallowRef<MetaShowRequest | null>(null)
 const executingActionId = ref<string | null>(null)
 
-const searchInput = ref<HTMLInputElement>()
-const listRef = ref<HTMLElement>()
-const indicatorRef = ref<HTMLElement>()
-const hasFollowHighlight = ref(false)
+const panelRef = ref<InstanceType<typeof MetaPanel> | null>(null)
 // The overlay is a separate lightweight window, with one motion gate of its own.
 const { shouldAnimate } = useMotionGate()
-let animateHighlight = false
 
 const model = computed<MetaActionModel>(() =>
   request.value ? buildMetaActionModel(request.value, { platform }) : EMPTY_MODEL
@@ -107,24 +95,6 @@ interface PanelSection {
   rows: PanelRow[]
 }
 
-/** Whether every query character appears in the text in order (`cp` → "Copy Path"). */
-function isSubsequence(query: string, text: string): boolean {
-  let cursor = 0
-  for (const char of query) {
-    const found = text.indexOf(char, cursor)
-    if (found === -1) return false
-    cursor = found + 1
-  }
-  return true
-}
-
-function matchesQuery(label: string, subtitle: string | undefined, query: string): boolean {
-  if (!query) return true
-  const title = label.toLowerCase()
-  const detail = subtitle?.toLowerCase() ?? ''
-  return title.includes(query) || detail.includes(query) || isSubsequence(query, title)
-}
-
 const sections = computed<PanelSection[]>(() => {
   const resolved = model.value.rows.map((row) => ({ row, label: resolveLabel(row.label) }))
   // A subtitle is noise unless two rows would otherwise read the same.
@@ -133,7 +103,7 @@ const sections = computed<PanelSection[]>(() => {
     labelCounts.set(entry.label, (labelCounts.get(entry.label) ?? 0) + 1)
   }
 
-  const query = searchQuery.value.trim().toLowerCase()
+  const query = normalizeMetaPanelQuery(searchQuery.value)
   let index = 0
   const result: PanelSection[] = []
   for (const section of model.value.sections) {
@@ -141,7 +111,7 @@ const sections = computed<PanelSection[]>(() => {
     for (const entry of resolved) {
       if (entry.row.section !== section.key) continue
       const subtitle = (labelCounts.get(entry.label) ?? 0) > 1 ? entry.row.subtitle : undefined
-      if (!matchesQuery(entry.label, subtitle ?? entry.row.subtitle, query)) continue
+      if (!matchesMetaPanelQuery(query, entry.label, [subtitle ?? entry.row.subtitle])) continue
       rows.push({
         row: entry.row,
         label: entry.label,
@@ -165,6 +135,9 @@ const sections = computed<PanelSection[]>(() => {
 
 const flatRows = computed(() => sections.value.flatMap((section) => section.rows))
 const activeRow = computed(() => flatRows.value[activeIndex.value] ?? null)
+const activeRowHighlighted = computed(
+  () => activeRow.value !== null && !activeRow.value.row.disabled
+)
 
 const headerTitle = computed(
   () => item.value?.render?.basic?.title?.trim() || t('corebox.actions.title')
@@ -173,59 +146,7 @@ const headerIcon = computed(() => normalizeCoreBoxIcon(item.value?.render?.basic
 const toggleKeyLabel = shortcutChordLabel({ code: 'KeyK' }, isMac)
 
 /** Geometry the panel's CSS reads; the same numbers main grows the window with. */
-const overlayStyle = computed(() => ({
-  '--meta-panel-width': `${META_PANEL_WIDTH}px`,
-  '--meta-panel-max-height': `${META_PANEL_MAX_HEIGHT}px`,
-  '--meta-panel-right': `${META_PANEL_EDGE_GAP}px`,
-  '--meta-panel-top': `${META_PANEL_TOP_INSET}px`,
-  '--meta-panel-bottom': `${resolveMetaPanelBottomInset(request.value?.anchor)}px`,
-  '--meta-header-height': `${META_PANEL_ITEM_HEADER_HEIGHT}px`,
-  '--meta-filter-height': `${META_PANEL_FILTER_HEIGHT}px`,
-  '--meta-list-padding': `${META_PANEL_LIST_PADDING}px`,
-  '--meta-row-height': `${META_PANEL_ROW_HEIGHT}px`,
-  '--meta-section-title-height': `${META_PANEL_SECTION_TITLE_HEIGHT}px`,
-  '--meta-section-gap': `${META_PANEL_SECTION_GAP}px`
-}))
-
-function syncHighlight(animate = animateHighlight): void {
-  const list = listRef.value
-  const indicator = indicatorRef.value
-  const row = list?.querySelector<HTMLElement>(`[data-meta-row-index="${activeIndex.value}"]`)
-  hasFollowHighlight.value = false
-  if (!visible.value || !list || !indicator || !row || activeRow.value?.row.disabled) {
-    if (indicator) indicator.style.opacity = '0'
-    return
-  }
-
-  const listRect = list.getBoundingClientRect()
-  const rowRect = row.getBoundingClientRect()
-  if (listRect.width <= 0 || listRect.height <= 0 || rowRect.height <= 0) {
-    indicator.style.opacity = '0'
-    return
-  }
-  // Panel entrance scales visually; the plate is measured in the scroller's layout pixels.
-  const scaleX = list.offsetWidth > 0 ? listRect.width / list.offsetWidth : 1
-  const scaleY = list.offsetHeight > 0 ? listRect.height / list.offsetHeight : 1
-  const x = (rowRect.left - listRect.left) / scaleX - list.clientLeft + list.scrollLeft
-  const y = (rowRect.top - listRect.top) / scaleY - list.clientTop + list.scrollTop
-  // The PromptBar menu uses a compositor clock too. Native views may starve JS RAF while
-  // inactive; one transform target per selection keeps hover motion on wall-clock time.
-  indicator.classList.toggle('is-following-pointer', animate && shouldAnimate())
-  indicator.style.width = `${rowRect.width / scaleX}px`
-  indicator.style.height = `${rowRect.height / scaleY}px`
-  indicator.style.transform = `translate3d(${x}px, ${y}px, 0)`
-  indicator.style.opacity = '1'
-  hasFollowHighlight.value = true
-}
-
-watch(
-  [visible, activeIndex, sections, listRef, indicatorRef, shouldAnimate],
-  () => syncHighlight(),
-  {
-    flush: 'post'
-  }
-)
-useResizeObserver(listRef, () => syncHighlight(false))
+const overlayStyle = computed(() => resolveMetaPanelCssVars(request.value?.anchor))
 
 function firstSelectableIndex(): number {
   const found = flatRows.value.find((entry) => !entry.row.disabled)
@@ -233,16 +154,11 @@ function firstSelectableIndex(): number {
 }
 
 function scrollActiveIntoView(): void {
-  const element = listRef.value?.querySelector<HTMLElement>(
-    `[data-meta-row-index="${activeIndex.value}"]`
-  )
-  // Instant: a smooth scroll would trail behind a held arrow key.
-  element?.scrollIntoView?.({ block: 'nearest', behavior: 'instant' })
+  panelRef.value?.scrollActiveIntoView()
 }
 
 function step(delta: number): void {
   const selectable = flatRows.value.filter((entry) => !entry.row.disabled)
-  animateHighlight = false
   if (selectable.length === 0) return
   const position = selectable.findIndex((entry) => entry.index === activeIndex.value)
   const next =
@@ -257,7 +173,7 @@ function step(delta: number): void {
 function hoverRow(index: number): void {
   const entry = flatRows.value[index]
   if (entry && !entry.row.disabled && index !== activeIndex.value) {
-    animateHighlight = true
+    panelRef.value?.glideNext()
     activeIndex.value = index
   }
 }
@@ -282,24 +198,21 @@ const unregHide = transport.on(MetaOverlayEvents.ui.hide, () => {
 // Focus the filter when shown. `nextTick` rather than a timeout: the input exists as soon as the
 // `v-if` subtree is patched, and a fixed delay only postponed a usable panel.
 watch(visible, async (newVisible) => {
-  animateHighlight = false
   if (!newVisible) return
   searchQuery.value = ''
   activeIndex.value = firstSelectableIndex()
   await nextTick()
-  searchInput.value?.focus()
+  panelRef.value?.focusFilter()
 })
 
 // A new request (a reopen, or a different item) starts on its primary row again.
 watch(request, () => {
-  animateHighlight = false
   activeIndex.value = firstSelectableIndex()
 })
 
 watch(
-  () => searchQuery.value.trim().toLowerCase(),
+  () => normalizeMetaPanelQuery(searchQuery.value),
   () => {
-    animateHighlight = false
     activeIndex.value = firstSelectableIndex()
     void nextTick(scrollActiveIntoView)
   }
@@ -447,73 +360,56 @@ onBeforeUnmount(() => {
 <template>
   <Transition name="meta-panel">
     <div v-if="visible" class="MetaOverlay" :style="overlayStyle" @click.self="handleClose">
-      <section class="MetaPanel" role="dialog" aria-modal="true" :aria-label="headerTitle">
-        <header class="MetaPanel-Header">
-          <TuffIcon :icon="headerIcon" :size="16" class="MetaPanel-HeaderIcon" />
-          <span class="MetaPanel-HeaderTitle" :title="headerTitle">{{ headerTitle }}</span>
-        </header>
-
+      <MetaPanel
+        ref="panelRef"
+        v-model:query="searchQuery"
+        :title="headerTitle"
+        :icon="headerIcon"
+        :list-id="LIST_ID"
+        :list-label="t('corebox.actions.title')"
+        :placeholder="t('corebox.meta.searchPlaceholder')"
+        :active-index="activeIndex"
+        :active-descendant="activeRow?.domId"
+        :highlight="activeRowHighlighted"
+        :layout-key="sections"
+        :should-animate="shouldAnimate"
+        @composition="composing = $event"
+      >
         <div
-          :id="LIST_ID"
-          ref="listRef"
-          class="MetaPanel-List"
-          :class="{ 'has-follow-highlight': hasFollowHighlight }"
-          role="listbox"
-          :aria-label="t('corebox.actions.title')"
+          v-for="section in sections"
+          :key="section.key"
+          class="MetaPanel-Section"
+          role="group"
+          :aria-labelledby="section.title ? section.titleId : undefined"
         >
-          <div
-            v-for="section in sections"
-            :key="section.key"
-            class="MetaPanel-Section"
-            role="group"
-            :aria-labelledby="section.title ? section.titleId : undefined"
-          >
-            <div v-if="section.title" :id="section.titleId" class="MetaPanel-SectionTitle">
-              {{ section.title }}
-            </div>
-            <MetaActionItem
-              v-for="entry in section.rows"
-              :id="entry.domId"
-              :key="entry.row.id"
-              :data-meta-row-index="entry.index"
-              :label="entry.label"
-              :subtitle="entry.subtitle"
-              :glyph="'glyph' in entry.row.icon ? entry.row.icon.glyph : undefined"
-              :icon="'icon' in entry.row.icon ? entry.row.icon.icon : undefined"
-              :shortcuts="entry.shortcuts"
-              :active="entry.index === activeIndex"
-              :disabled="entry.row.disabled"
-              :danger="entry.row.danger"
-              @run="handleActionExecute(entry.row)"
-              @hover="hoverRow(entry.index)"
-            />
+          <div v-if="section.title" :id="section.titleId" class="MetaPanel-SectionTitle">
+            {{ section.title }}
           </div>
-          <p v-if="flatRows.length === 0" class="MetaPanel-Empty">
-            {{ t('corebox.actions.empty') }}
-          </p>
-          <div ref="indicatorRef" class="MetaPanel-Highlight" aria-hidden="true" />
-        </div>
-
-        <footer class="MetaPanel-Filter">
-          <i class="MetaPanel-FilterIcon i-ri-search-line" aria-hidden="true" />
-          <input
-            ref="searchInput"
-            v-model="searchQuery"
-            type="text"
-            class="SearchInput"
-            role="combobox"
-            aria-autocomplete="list"
-            aria-expanded="true"
-            :aria-controls="LIST_ID"
-            :aria-activedescendant="activeRow?.domId"
-            :aria-label="t('corebox.meta.searchPlaceholder')"
-            :placeholder="t('corebox.meta.searchPlaceholder')"
-            @compositionstart="composing = true"
-            @compositionend="composing = false"
+          <MetaActionItem
+            v-for="entry in section.rows"
+            :id="entry.domId"
+            :key="entry.row.id"
+            :data-meta-row-index="entry.index"
+            :label="entry.label"
+            :subtitle="entry.subtitle"
+            :glyph="'glyph' in entry.row.icon ? entry.row.icon.glyph : undefined"
+            :icon="'icon' in entry.row.icon ? entry.row.icon.icon : undefined"
+            :shortcuts="entry.shortcuts"
+            :active="entry.index === activeIndex"
+            :disabled="entry.row.disabled"
+            :danger="entry.row.danger"
+            @run="handleActionExecute(entry.row)"
+            @hover="hoverRow(entry.index)"
           />
+        </div>
+        <p v-if="flatRows.length === 0" class="MetaPanel-Empty">
+          {{ t('corebox.actions.empty') }}
+        </p>
+
+        <template #filter-key>
           <TxKbd class="MetaPanel-FilterKey">{{ toggleKeyLabel }}</TxKbd>
-        </footer>
-      </section>
+        </template>
+      </MetaPanel>
     </div>
   </Transition>
 </template>
@@ -530,157 +426,13 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--tx-overlay-color) 20%, transparent);
 }
 
-.MetaPanel {
-  position: absolute;
-  right: var(--meta-panel-right);
-  bottom: var(--meta-panel-bottom);
-  display: flex;
-  flex-direction: column;
-  width: var(--meta-panel-width);
-  max-width: calc(100vw - 2 * var(--meta-panel-right));
-  max-height: min(
-    var(--meta-panel-max-height),
-    calc(100vh - var(--meta-panel-top) - var(--meta-panel-bottom))
-  );
-  overflow: hidden;
-  border-radius: 12px;
-  background: var(--tx-bg-color);
-  // A ring, not a border, next to a shadow (tuffex-design-rules).
-  box-shadow:
-    0 0 0 1px var(--tx-border-color-lighter),
-    var(--tx-elevation-4);
-  transform-origin: bottom right;
-}
-
-.MetaPanel-Header {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  box-sizing: border-box;
-  height: var(--meta-header-height);
-  padding: 0 12px;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
-}
-
-.MetaPanel-HeaderIcon {
-  flex: none;
-}
-
-.MetaPanel-HeaderTitle {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--tx-text-color-primary);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.MetaPanel-List {
-  position: relative;
-  isolation: isolate;
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: var(--meta-list-padding);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.MetaPanel-Highlight {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 0;
-  border-radius: 6px;
-  background: var(--tx-fill-color);
-  opacity: 0;
-  pointer-events: none;
-
-  &.is-following-pointer {
-    transition: transform 220ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
-  }
-}
-
-.MetaPanel-Section {
-  position: relative;
-  z-index: 1;
-}
-
-.MetaPanel-List.has-follow-highlight :deep(.MetaActionItem.is-active) {
-  background: transparent;
-}
-
-.MetaPanel-Section + .MetaPanel-Section {
-  margin-top: var(--meta-section-gap);
-}
-
-.MetaPanel-SectionTitle {
-  display: flex;
-  align-items: flex-end;
-  box-sizing: border-box;
-  height: var(--meta-section-title-height);
-  padding: 0 10px 4px;
-  color: var(--tx-text-color-secondary);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-}
-
-.MetaPanel-Empty {
-  display: flex;
-  align-items: center;
-  height: var(--meta-row-height);
-  margin: 0;
-  padding: 0 10px;
-  color: var(--tx-text-color-secondary);
-  font-size: 12px;
-}
-
-.MetaPanel-Filter {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  box-sizing: border-box;
-  height: var(--meta-filter-height);
-  padding: 0 8px 0 12px;
-  border-top: 1px solid var(--tx-border-color-lighter);
-}
-
-.MetaPanel-FilterIcon {
-  flex: none;
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  font-size: 14px;
-  color: var(--tx-text-color-secondary);
-}
-
-.SearchInput {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--tx-text-color-primary);
-  font: inherit;
-  font-size: 13px;
-
-  &::placeholder {
-    color: var(--tx-text-color-placeholder);
-  }
-}
-
-.MetaPanel-FilterKey {
-  flex: none;
-}
-
 .meta-panel-enter-active,
 .meta-panel-leave-active {
   transition: opacity 0.12s ease-out;
 }
 
+// `.MetaPanel` is MetaPanel's root element, which carries this view's scope id as well as its own,
+// so these rules reach it.
 .meta-panel-enter-active .MetaPanel,
 .meta-panel-leave-active .MetaPanel {
   transition:

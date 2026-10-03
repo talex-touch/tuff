@@ -1,29 +1,55 @@
 <script setup lang="ts">
 /**
- * Flow Selector Panel
+ * The Flow picker: where to send the selected item. The ⌘K panel's card (`MetaPanel`), anchored the
+ * same way bottom-right over the same light dim, with the targets grouped by plugin. A target that
+ * needs consent or confirmation asks for it inside the card.
  *
- * Displays available Flow targets for user selection.
- * Used when dispatching a flow without a preferred target.
+ * Unlike the ⌘K panel it is drawn in the CoreBox window, under CoreBox's own keyboard handler. It
+ * takes every key while open (see `handleKeyDown`), and asks CoreBox for window room through
+ * `room` (`useFlowPanelRoom`), the way main grows the window for the ⌘K panel.
  */
-import type { FlowPayload, FlowTargetInfo } from '@talex-touch/utils'
-import { nextZIndex } from '@talex-touch/tuffex/utils'
+import type { FlowPayload, FlowTargetInfo, ITuffIcon, TuffItem } from '@talex-touch/utils'
+import type { FlowConsentCheckResponse } from '@talex-touch/utils/transport/events/types'
+import type { MetaPanelAnchor } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxKbd } from '@talex-touch/tuffex/kbd'
+import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { nextZIndex } from '@talex-touch/tuffex/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { FlowEvents } from '@talex-touch/utils/transport/events'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { TxScroll } from '@talex-touch/tuffex/scroll'
-import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
-import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import MetaActionItem from '~/components/meta/MetaActionItem.vue'
+import MetaPanel from '~/components/meta/MetaPanel.vue'
+import { normalizeCoreBoxIcon } from '~/components/render/icon-color-mode'
+import { isImeComposing } from '~/modules/box/meta-actions/meta-action-model'
+import {
+  matchesMetaPanelQuery,
+  normalizeMetaPanelQuery
+} from '~/modules/box/meta-actions/meta-panel-filter'
 import { createRendererLogger } from '~/utils/renderer-log'
+import {
+  estimateMetaPanelHeight,
+  META_PANEL_ITEM_HEADER_HEIGHT,
+  resolveMetaOverlayWindowHeight,
+  resolveMetaPanelCssVars
+} from '../../../../shared/meta-overlay-geometry'
 
 interface Props {
   visible: boolean
   sessionId?: string
   payload?: FlowPayload | null
+  /** Where the card anchors, by the ⌘K panel's rule (`useDetach`). */
+  anchor?: MetaPanelAnchor
+  /**
+   * The CoreBox window's motion gate (`useMotionGate().shouldAnimate`), for the hover plate. Passed
+   * in: the window has one gate.
+   */
+  shouldAnimate: () => boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), { anchor: 'corner' })
 
 const emit = defineEmits<{
   (e: 'close'): void
@@ -31,6 +57,8 @@ const emit = defineEmits<{
     e: 'select',
     payload: { targetId: string; consentToken?: string; confirmationToken?: string }
   ): void
+  /** The window height the card needs while open (CSS px), and 0 once it has left the screen. */
+  (e: 'room', height: number): void
 }>()
 
 const { t } = useI18n()
@@ -38,32 +66,172 @@ const { t } = useI18n()
 const transport = useTuffTransport()
 const flowSelectorLog = createRendererLogger('FlowSelector')
 
-const targets = ref<FlowTargetInfo[]>([])
+const LIST_ID = 'flow-panel-list'
+const FALLBACK_HEADER_ICON: ITuffIcon = { type: 'class', value: 'i-ri-share-forward-line' }
+/**
+ * Height of the confirmation view: header 40, padding 12, title 20 (13px on a 20px line), gap 4,
+ * up to four description lines of 12px at 1.5 (72), gap 12 (the column's 4 and the actions' 8),
+ * two rows of TxButton `sm` (26 each, 8 apart) and padding 12, so 232. The second button row is
+ * English's: its three labels wrap at this width, and its card measured 232px in the real window,
+ * the Chinese one, on one row, 162px. A longer description scrolls inside the card.
+ */
+const FLOW_CONFIRM_PANEL_HEIGHT =
+  META_PANEL_ITEM_HEADER_HEIGHT + 12 + 20 + 4 + 4 * 18 + 12 + (26 + 8 + 26) + 12
+/**
+ * Longest a closed card keeps its window room. `after-leave` gives the room back once the 120 ms
+ * leave has run; this covers a leave whose frames never come, as when the window hides mid-fade,
+ * after which CoreBox would show next at the old card's height.
+ */
+const ROOM_RELEASE_FALLBACK_MS = 400
+
+// Opaque transport records: nothing here mutates them.
+const targets = shallowRef<FlowTargetInfo[]>([])
 const loading = ref(false)
+const showLoading = useDeferredLoading(loading)
+// The window's height when the card opened, which it asks for at least while its targets load.
+const openWindowHeight = ref(0)
 const searchQuery = ref('')
-const selectedIndex = ref(0)
-const inputRef = ref<HTMLInputElement>()
-const consentVisible = ref(false)
-const consentLoading = ref(false)
-const consentTarget = ref<FlowTargetInfo | null>(null)
+const activeIndex = ref(0)
+const composing = ref(false)
+const consentTarget = shallowRef<FlowTargetInfo | null>(null)
 const consentRequiresAuthorization = ref(false)
 const consentRequiresExecutionConfirmation = ref(false)
-const selectorZIndex = ref(nextZIndex())
-const consentZIndex = ref(nextZIndex())
+const consentLoading = ref(false)
+const zIndex = nextZIndex()
 
-const filteredTargets = computed(() => {
-  if (!searchQuery.value.trim()) {
-    return targets.value
-  }
+const rootRef = ref<HTMLElement>()
+const panelRef = ref<InstanceType<typeof MetaPanel> | null>(null)
+const confirmRef = ref<HTMLElement>()
 
-  const query = searchQuery.value.toLowerCase()
-  return targets.value.filter(
-    (target) =>
-      target.name.toLowerCase().includes(query) ||
-      target.description?.toLowerCase().includes(query) ||
-      target.pluginName?.toLowerCase().includes(query)
-  )
+// Bumped when the panel opens or closes: a reply that lands after that belongs to a panel that is
+// gone, and must not select a target for the content of the next one.
+let openGeneration = 0
+// Taken when a target is picked, so a second Enter or click cannot dispatch the content twice.
+// Denying the confirmation gives it back; the next open starts without it.
+let selectionLocked = false
+// What had focus when the panel opened. It gets focus back on close, as CoreBox's input does when
+// main closes the ⌘K panel.
+let returnFocusTo: HTMLElement | null = null
+// Set from the moment the card closes until its room is given back (`releaseRoom`).
+let roomReleaseTimer: ReturnType<typeof setTimeout> | null = null
+
+const confirming = computed(() => consentTarget.value !== null)
+
+const flowItem = computed<TuffItem | null>(() => {
+  const data = props.payload?.data
+  if (!data || typeof data !== 'object') return null
+  const item = (data as { item?: unknown }).item
+  return item && typeof item === 'object' ? (item as TuffItem) : null
 })
+const itemTitle = computed(() => flowItem.value?.render?.basic?.title?.trim() ?? '')
+const headerTitle = computed(() => itemTitle.value || t('flow.selectTarget'))
+const headerIcon = computed<ITuffIcon>(() =>
+  flowItem.value ? normalizeCoreBoxIcon(flowItem.value.render?.basic?.icon) : FALLBACK_HEADER_ICON
+)
+
+interface TargetRow {
+  target: FlowTargetInfo
+  icon: ITuffIcon
+  subtitle?: string
+  /** Position in the flattened, filtered list: the keyboard index. */
+  index: number
+  domId: string
+}
+
+interface TargetSection {
+  key: string
+  title: string
+  titleId: string
+  rows: TargetRow[]
+}
+
+/** Targets by plugin, each plugin where main first lists one of its targets. */
+const groups = computed(() => {
+  const byPlugin = new Map<string, FlowTargetInfo[]>()
+  for (const target of targets.value) {
+    const group = byPlugin.get(target.pluginId)
+    if (group) group.push(target)
+    else byPlugin.set(target.pluginId, [target])
+  }
+  return [...byPlugin.values()]
+})
+
+const sections = computed<TargetSection[]>(() => {
+  const query = normalizeMetaPanelQuery(searchQuery.value)
+  let index = 0
+  const result: TargetSection[] = []
+  for (const group of groups.value) {
+    const rows: TargetRow[] = []
+    for (const target of group) {
+      const subtitle = target.description || target.adaptationHint || undefined
+      if (!matchesMetaPanelQuery(query, target.name, [subtitle, target.pluginName])) continue
+      rows.push({
+        target,
+        // `ri:` names from main become `i-ri-` classes; no icon falls back to the plugin's.
+        icon: normalizeCoreBoxIcon(target.icon || target.pluginIcon),
+        subtitle,
+        index,
+        domId: `${LIST_ID}-option-${index}`
+      })
+      index += 1
+    }
+    if (rows.length === 0) continue
+    const owner = group[0]!
+    result.push({
+      key: owner.pluginId,
+      title: owner.pluginName || owner.pluginId,
+      titleId: `${LIST_ID}-section-${result.length}`,
+      rows
+    })
+  }
+  return result
+})
+
+const flatRows = computed(() => sections.value.flatMap((section) => section.rows))
+const activeRow = computed(() => flatRows.value[activeIndex.value] ?? null)
+const activeRowHighlighted = computed(
+  () => activeRow.value !== null && activeRow.value.target.isEnabled !== false
+)
+
+/**
+ * The list view's height, from every target rather than the filtered ones: as with the ⌘K panel,
+ * typing in the filter does not resize the window. Loading and an empty list draw one row.
+ */
+const listPanelHeight = computed(() => {
+  const sectionCount = groups.value.length
+  if (sectionCount === 0) {
+    return estimateMetaPanelHeight({ rows: 1, sections: 1, titledSections: 0 })
+  }
+  return estimateMetaPanelHeight({
+    rows: targets.value.length,
+    sections: sectionCount,
+    titledSections: sectionCount
+  })
+})
+// Never shorter than the list: going back to it must not shrink the window and grow it again.
+const panelHeight = computed(() =>
+  confirming.value
+    ? Math.max(listPanelHeight.value, FLOW_CONFIRM_PANEL_HEIGHT)
+    : listPanelHeight.value
+)
+/**
+ * The window height the card asks for. While its targets load the card is sized for one row, and
+ * it asks for no less than the window it opened in. Picked from the ⌘K panel, it opens in a window
+ * main grew for that panel, and main lets the first layout CoreBox sends after 流转 set the height
+ * instead of restoring the old one: a one-row room would shrink that window, and the loaded list
+ * then grow it again. Once the targets are known, the window moves once, in one direction.
+ */
+const roomHeight = computed(() => {
+  const needed =
+    resolveMetaOverlayWindowHeight({
+      anchor: props.anchor,
+      desiredPanelHeight: panelHeight.value
+    }) ?? 0
+  return loading.value ? Math.max(needed, openWindowHeight.value) : needed
+})
+
+/** Geometry the card's CSS reads, the numbers the window room is computed with. */
+const rootStyle = computed(() => ({ ...resolveMetaPanelCssVars(props.anchor), zIndex }))
 
 const senderId = computed(() => props.payload?.context?.sourcePluginId || 'corebox')
 const consentTargetName = computed(
@@ -79,8 +247,9 @@ const consentDialogTitle = computed(() => {
   return t('flow.consentTitle')
 })
 const consentDialogDescription = computed(() => {
+  // Both bundles name the sender `{source}`.
   const params = {
-    sender: senderId.value,
+    source: senderId.value,
     target: consentTargetName.value
   }
   if (consentRequiresAuthorization.value && consentRequiresExecutionConfirmation.value) {
@@ -110,12 +279,13 @@ const primaryConsentMode = computed<'once' | 'always'>(() =>
   showAlwaysConsentAction.value ? 'always' : 'once'
 )
 
-async function loadTargets(): Promise<void> {
+async function loadTargets(generation: number): Promise<void> {
   loading.value = true
   try {
     const response = await transport.send(FlowEvents.getTargets, {
       payloadType: props.payload?.type
     })
+    if (generation !== openGeneration) return
 
     if (response?.success) {
       targets.value = response.data || []
@@ -124,367 +294,541 @@ async function loadTargets(): Promise<void> {
       targets.value = []
     }
   } catch (error) {
+    if (generation !== openGeneration) return
     flowSelectorLog.error('Error loading targets:', error)
     targets.value = []
   } finally {
-    loading.value = false
+    if (generation === openGeneration) loading.value = false
   }
 }
 
-async function handleSelect(target: FlowTargetInfo): Promise<void> {
-  const response = await transport.send(FlowEvents.checkConsent, {
-    senderId: senderId.value,
-    targetId: target.fullId
-  })
-  if (response?.success && response.data?.allowed && !response.data?.requiresConfirmation) {
+async function selectTarget(target: FlowTargetInfo): Promise<void> {
+  if (selectionLocked || target.isEnabled === false) return
+  selectionLocked = true
+  const generation = openGeneration
+
+  let response: FlowConsentCheckResponse | undefined
+  try {
+    response = await transport.send(FlowEvents.checkConsent, {
+      senderId: senderId.value,
+      targetId: target.fullId
+    })
+  } catch (error) {
+    if (generation !== openGeneration) return
+    flowSelectorLog.error('Failed to check consent:', error)
+    selectionLocked = false
+    return
+  }
+  if (generation !== openGeneration) return
+
+  const allowed = response?.success === true && response.data?.allowed === true
+  const requiresConfirmation = response?.data?.requiresConfirmation === true
+  if (allowed && !requiresConfirmation) {
     emit('select', { targetId: target.fullId })
     return
   }
+  consentRequiresAuthorization.value = !allowed
+  consentRequiresExecutionConfirmation.value = requiresConfirmation
   consentTarget.value = target
-  consentRequiresAuthorization.value = !(response?.success && response.data?.allowed)
-  consentRequiresExecutionConfirmation.value = response?.data?.requiresConfirmation === true
-  consentVisible.value = true
+}
+
+async function handleConsent(mode: 'once' | 'always'): Promise<void> {
+  const target = consentTarget.value
+  if (!target || consentLoading.value) return
+  consentLoading.value = true
+  const generation = openGeneration
+
+  try {
+    const response = await transport.send(FlowEvents.grantConsent, {
+      senderId: senderId.value,
+      targetId: target.fullId,
+      mode
+    })
+    if (generation !== openGeneration) return
+    if (response?.success) {
+      emit('select', {
+        targetId: target.fullId,
+        consentToken: response.data?.token,
+        confirmationToken: response.data?.confirmationToken
+      })
+      // The buttons stay disabled until CoreBox closes the panel: the content is on its way.
+      return
+    }
+    flowSelectorLog.error('Failed to grant consent:', response?.error)
+  } catch (error) {
+    if (generation !== openGeneration) return
+    flowSelectorLog.error('Failed to grant consent:', error)
+  }
+  consentLoading.value = false
+}
+
+function resetConsent(): void {
+  consentTarget.value = null
+  consentRequiresAuthorization.value = false
+  consentRequiresExecutionConfirmation.value = false
+  consentLoading.value = false
+}
+
+/** Back to the list, with nothing granted and nothing sent. */
+async function handleConsentDeny(): Promise<void> {
+  resetConsent()
+  selectionLocked = false
+  // The list and the filter are mounted again; the active row may sit below the fold.
+  await nextTick()
+  panelRef.value?.focusFilter()
+  panelRef.value?.scrollActiveIntoView()
 }
 
 function handleClose(): void {
   emit('close')
 }
 
-async function handleConsent(mode: 'once' | 'always'): Promise<void> {
-  if (!consentTarget.value) return
-  consentLoading.value = true
-  try {
-    const response = await transport.send(FlowEvents.grantConsent, {
-      senderId: senderId.value,
-      targetId: consentTarget.value.fullId,
-      mode
-    })
-    if (response?.success) {
-      emit('select', {
-        targetId: consentTarget.value.fullId,
-        consentToken: response.data?.token,
-        confirmationToken: response.data?.confirmationToken
-      })
-      consentVisible.value = false
-      consentTarget.value = null
-      consentRequiresAuthorization.value = false
-      consentRequiresExecutionConfirmation.value = false
-    }
-  } finally {
-    consentLoading.value = false
+function firstSelectableIndex(): number {
+  const found = flatRows.value.find((row) => row.target.isEnabled !== false)
+  return found ? found.index : 0
+}
+
+function scrollActiveIntoView(): void {
+  panelRef.value?.scrollActiveIntoView()
+}
+
+function step(delta: number): void {
+  const selectable = flatRows.value.filter((row) => row.target.isEnabled !== false)
+  if (selectable.length === 0) return
+  const position = selectable.findIndex((row) => row.index === activeIndex.value)
+  const next =
+    position < 0
+      ? selectable[delta > 0 ? 0 : selectable.length - 1]!
+      : selectable[(position + delta + selectable.length) % selectable.length]!
+  activeIndex.value = next.index
+  void nextTick(scrollActiveIntoView)
+}
+
+/** Pointer hover follows real movement only: a card opening under a resting cursor keeps ↵. */
+function hoverRow(index: number): void {
+  const row = flatRows.value[index]
+  if (row && row.target.isEnabled !== false && index !== activeIndex.value) {
+    panelRef.value?.glideNext()
+    activeIndex.value = index
   }
 }
 
-function handleConsentDeny(): void {
-  consentVisible.value = false
-  consentTarget.value = null
-  consentRequiresAuthorization.value = false
-  consentRequiresExecutionConfirmation.value = false
+function runRow(row: TargetRow): void {
+  void selectTarget(row.target)
 }
 
-function handleKeydown(event: KeyboardEvent): void {
+function confirmButtons(): HTMLButtonElement[] {
+  return Array.from(confirmRef.value?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+}
+
+/** Tab moves between the buttons natively; past either end it wraps instead of leaving the card. */
+function keepFocusOnButtons(event: KeyboardEvent): void {
+  const buttons = confirmButtons().filter((button) => !button.disabled)
+  const position = buttons.findIndex((button) => button === document.activeElement)
+  const next = position + (event.shiftKey ? -1 : 1)
+  if (position >= 0 && next >= 0 && next < buttons.length) return
+  event.preventDefault()
+  const wrapped = event.shiftKey ? buttons.at(-1) : buttons[0]
+  wrapped?.focus()
+}
+
+function handleListKey(event: KeyboardEvent): void {
+  // The IME owns arrows and Enter while it composes: they pick candidates, not targets.
+  if (isImeComposing(event) || composing.value) return
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    handleClose()
+    return
+  }
+
+  // The filter is the card's one focus stop; Tab would leave it for CoreBox behind the dim.
+  if (event.key === 'Tab') {
+    event.preventDefault()
+    return
+  }
+
+  const bare = !event.metaKey && !event.ctrlKey && !event.altKey
+  if (bare && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    event.preventDefault()
+    step(event.key === 'ArrowDown' ? 1 : -1)
+    return
+  }
+
+  if (bare && !event.shiftKey && event.key === 'Enter') {
+    event.preventDefault()
+    // A fresh press only. The Enter that picked 流转 in the ⌘K panel can still be held down when
+    // this card opens, and its auto-repeat must not pick the first target.
+    if (!event.repeat && activeRow.value) void selectTarget(activeRow.value.target)
+  }
+}
+
+function handleConfirmKey(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    // Once the grant is under way there is nothing left to deny.
+    if (consentLoading.value) handleClose()
+    else void handleConsentDeny()
+    return
+  }
+
+  if (event.key === 'Tab') {
+    keepFocusOnButtons(event)
+    return
+  }
+
+  const bare = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
+  if (bare && event.key === 'Enter') {
+    event.preventDefault()
+    // The press that picked the target may still be held: its repeats must not also confirm it.
+    if (event.repeat) return
+    // Run explicitly: propagation is stopped, and a button that has focus is the one meant.
+    const focused = confirmButtons().find((button) => button === document.activeElement)
+    if (focused) focused.click()
+    else void handleConsent(primaryConsentMode.value)
+  }
+}
+
+/**
+ * The card is modal and takes every key while it is open. CoreBox listens on the document, after
+ * this capture listener on the window, and would otherwise run the result behind the dim on Enter,
+ * move its selection on the arrows and close CoreBox on Escape. A key the card does not use keeps
+ * its default action, so typing still reaches the filter.
+ */
+function handleKeyDown(event: KeyboardEvent): void {
   if (!props.visible) return
+  event.stopPropagation()
+  if (confirming.value) handleConfirmKey(event)
+  else handleListKey(event)
+}
 
-  switch (event.key) {
-    case 'ArrowDown':
-      event.preventDefault()
-      if (selectedIndex.value < filteredTargets.value.length - 1) {
-        selectedIndex.value++
-      }
-      break
-
-    case 'ArrowUp':
-      event.preventDefault()
-      if (selectedIndex.value > 0) {
-        selectedIndex.value--
-      }
-      break
-
-    case 'Enter':
-      event.preventDefault()
-      if (filteredTargets.value[selectedIndex.value]) {
-        handleSelect(filteredTargets.value[selectedIndex.value])
-      }
-      break
-
-    case 'Escape':
-      event.preventDefault()
-      handleClose()
-      break
-  }
+function restoreFocus(): void {
+  const target = returnFocusTo
+  returnFocusTo = null
+  if (!target?.isConnected) return
+  // Only from where the card left it: focus the user moved elsewhere stays there.
+  const active = document.activeElement
+  if (active && active !== document.body && !rootRef.value?.contains(active)) return
+  target.focus()
 }
 
 watch(
   () => props.visible,
   (visible) => {
-    if (visible) {
-      loadTargets()
-      selectedIndex.value = 0
-      searchQuery.value = ''
-      consentVisible.value = false
-      consentTarget.value = null
-      consentRequiresAuthorization.value = false
-      consentRequiresExecutionConfirmation.value = false
-      requestAnimationFrame(() => {
-        inputRef.value?.focus()
-      })
+    openGeneration += 1
+    if (!visible) {
+      loading.value = false
+      restoreFocus()
+      return
     }
+
+    const active = document.activeElement
+    returnFocusTo = active instanceof HTMLElement && active !== document.body ? active : null
+    selectionLocked = false
+    composing.value = false
+    resetConsent()
+    searchQuery.value = ''
+    targets.value = []
+    activeIndex.value = 0
+    openWindowHeight.value = window.innerHeight
+    void loadTargets(openGeneration)
+    void nextTick(() => panelRef.value?.focusFilter())
   }
 )
 
-watch(searchQuery, () => {
-  selectedIndex.value = 0
+// Loaded targets start on their first row again.
+watch(targets, () => {
+  activeIndex.value = firstSelectableIndex()
+})
+
+watch(
+  () => normalizeMetaPanelQuery(searchQuery.value),
+  () => {
+    activeIndex.value = firstSelectableIndex()
+    void nextTick(scrollActiveIntoView)
+  }
+)
+
+// The confirmation starts on its primary button: Enter confirms, Escape denies.
+watch(
+  confirming,
+  (isConfirming) => {
+    if (!isConfirming) return
+    confirmRef.value?.querySelector<HTMLButtonElement>('.FlowSelector-ConfirmPrimary')?.focus()
+  },
+  { flush: 'post' }
+)
+
+function cancelRoomRelease(): void {
+  if (roomReleaseTimer === null) return
+  clearTimeout(roomReleaseTimer)
+  roomReleaseTimer = null
+}
+
+/**
+ * Gives a closed card's window room back, on `after-leave` or from the fallback timer, whichever
+ * comes first. Nothing is pending once the card opens again: Vue then ends the old card's leave at
+ * once, and the room stays with the new card.
+ */
+function releaseRoom(): void {
+  if (roomReleaseTimer === null) return
+  cancelRoomRelease()
+  emit('room', 0)
+}
+
+// The window fits the card for as long as it is on screen, its fade-out included: the card is
+// anchored to the window's bottom edge and capped at its height, so a window shrinking under the
+// fade-out squeezed it as it went. The room goes back once the card has left (`releaseRoom`).
+watch([() => props.visible, roomHeight], ([visible, height], [wasVisible]) => {
+  if (visible) {
+    cancelRoomRelease()
+    emit('room', height)
+  } else if (wasVisible) {
+    roomReleaseTimer = setTimeout(releaseRoom, ROOM_RELEASE_FALLBACK_MS)
+  }
 })
 
 onMounted(() => {
-  document.addEventListener('keydown', handleKeydown)
+  window.addEventListener('keydown', handleKeyDown, true)
 })
 
-onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeydown)
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeyDown, true)
+  cancelRoomRelease()
 })
-
-function getPayloadPreview(): string {
-  if (!props.payload) return ''
-
-  const { type, data } = props.payload
-  if (type === 'text' && typeof data === 'string') {
-    return data.length > 100 ? `${data.slice(0, 100)}...` : data
-  }
-  if (type === 'json') {
-    try {
-      const str = JSON.stringify(data)
-      return str.length > 100 ? `${str.slice(0, 100)}...` : str
-    } catch {
-      return '[JSON Data]'
-    }
-  }
-  return `[${type}]`
-}
 </script>
 
 <template>
   <Teleport to="body">
-    <Transition name="flow-selector">
+    <Transition name="meta-panel" @after-leave="releaseRoom">
       <div
         v-if="visible"
-        class="FlowSelector fixed inset-0 flex items-center justify-center"
-        :style="{ zIndex: selectorZIndex }"
+        ref="rootRef"
+        class="FlowSelector"
+        :style="rootStyle"
+        @click.self="handleClose"
       >
-        <!-- Backdrop -->
-        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="handleClose" />
-
-        <!-- Panel -->
-        <div
-          class="relative w-[480px] max-h-[70vh] bg-[var(--tx-bg-color)] rounded-xl shadow-2xl overflow-hidden flex flex-col"
+        <MetaPanel
+          ref="panelRef"
+          v-model:query="searchQuery"
+          :title="headerTitle"
+          :icon="headerIcon"
+          :list-id="LIST_ID"
+          :list-label="t('flow.selectTarget')"
+          :placeholder="t('flow.searchTargets')"
+          :active-index="activeIndex"
+          :active-descendant="activeRow?.domId"
+          :highlight="activeRowHighlighted"
+          :layout-key="sections"
+          :should-animate="shouldAnimate"
+          :view="confirming ? 'body' : 'list'"
+          @composition="composing = $event"
         >
-          <!-- Header -->
-          <div class="px-4 py-3 border-b border-[var(--tx-border-color)]">
-            <h3 class="text-base font-semibold text-[var(--tx-text-color-primary)]">
-              {{ t('flow.selectTarget') }}
-            </h3>
-            <p class="text-xs text-[var(--tx-text-color-secondary)] mt-1">
-              {{ t('flow.selectTargetDesc') }}
-            </p>
-          </div>
+          <template v-if="itemTitle" #header-meta>
+            <span class="FlowSelector-HeaderMeta">{{ t('flow.selectTarget') }}</span>
+          </template>
 
-          <!-- Payload Preview -->
           <div
-            v-if="payload"
-            class="px-4 py-2 bg-[var(--tx-fill-color-light)] border-b border-[var(--tx-border-color)]"
+            v-for="section in sections"
+            :key="section.key"
+            class="MetaPanel-Section"
+            role="group"
+            :aria-labelledby="section.titleId"
           >
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-medium text-[var(--tx-text-color-secondary)] uppercase">
-                {{ payload.type }}
-              </span>
-              <span class="text-xs text-[var(--tx-text-color-regular)] truncate flex-1">
-                {{ getPayloadPreview() }}
-              </span>
+            <div :id="section.titleId" class="MetaPanel-SectionTitle">
+              {{ section.title }}
             </div>
+            <MetaActionItem
+              v-for="row in section.rows"
+              :id="row.domId"
+              :key="row.target.fullId"
+              class="FlowTargetItem"
+              :data-meta-row-index="row.index"
+              :label="row.target.name"
+              :subtitle="row.subtitle"
+              :icon="row.icon"
+              :shortcuts="[]"
+              :active="row.index === activeIndex"
+              :disabled="row.target.isEnabled === false"
+              @run="runRow(row)"
+              @hover="hoverRow(row.index)"
+            >
+              <template v-if="row.target.requireConfirm" #trailing>
+                <i
+                  class="FlowTargetItem-Confirm i-ri-shield-check-line"
+                  role="img"
+                  :aria-label="t('flow.requiresConfirmation')"
+                  :title="t('flow.requiresConfirmation')"
+                />
+              </template>
+            </MetaActionItem>
           </div>
+          <!-- Holds the one row the card was sized for while targets load; says so only after the
+               deferral, so a fast answer never flashes it. -->
+          <p
+            v-if="loading || (showLoading && flatRows.length === 0)"
+            class="MetaPanel-Empty FlowSelector-Status"
+          >
+            <template v-if="showLoading">
+              <TxSpinner :size="12" :label="t('common.loading')" />
+              <span aria-hidden="true">{{ t('common.loading') }}</span>
+            </template>
+          </p>
+          <p v-else-if="flatRows.length === 0" class="MetaPanel-Empty">
+            {{ t('flow.noTargets') }}
+          </p>
 
-          <!-- Search -->
-          <div class="px-4 py-2 border-b border-[var(--tx-border-color)]">
-            <input
-              ref="inputRef"
-              v-model="searchQuery"
-              type="text"
-              :placeholder="t('flow.searchTargets')"
-              class="w-full px-3 py-2 text-sm bg-[var(--tx-fill-color)] rounded-lg border-none outline-none focus:ring-2 focus:ring-[var(--tx-color-primary)]"
-            />
-          </div>
+          <template #filter-key>
+            <TxKbd class="MetaPanel-FilterKey">Esc</TxKbd>
+          </template>
 
-          <!-- Target List -->
-          <TxScroll native no-padding class="flex-1 min-h-0">
-            <div class="p-2">
-              <div v-if="loading" class="flex items-center justify-center py-8">
-                <TxSpinner :size="24" class="text-[var(--tx-text-color-secondary)]" />
-              </div>
-
-              <div v-else-if="filteredTargets.length === 0" class="text-center py-8">
-                <i class="ri:inbox-line text-4xl text-[var(--tx-text-color-placeholder)]" />
-                <p class="mt-2 text-sm text-[var(--tx-text-color-secondary)]">
-                  {{ t('flow.noTargets') }}
-                </p>
-              </div>
-
-              <div v-else class="space-y-1">
+          <template #body>
+            <div
+              ref="confirmRef"
+              class="FlowSelector-Confirm"
+              role="group"
+              aria-labelledby="flow-panel-confirm-title"
+              aria-describedby="flow-panel-confirm-description"
+            >
+              <p id="flow-panel-confirm-title" class="FlowSelector-ConfirmTitle">
+                {{ consentDialogTitle }}
+              </p>
+              <p id="flow-panel-confirm-description" class="FlowSelector-ConfirmDescription">
+                {{ consentDialogDescription }}
+              </p>
+              <div class="FlowSelector-ConfirmActions">
                 <TxButton
-                  v-for="(target, index) in filteredTargets"
-                  :key="target.fullId"
-                  variant="bare"
-                  class="FlowTargetItem w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors"
-                  :class="{
-                    'bg-[var(--tx-color-primary-light-9)]': index === selectedIndex,
-                    'hover:bg-[var(--tx-fill-color-light)]': index !== selectedIndex
-                  }"
-                  @click="handleSelect(target)"
-                  @mouseenter="selectedIndex = index"
+                  variant="secondary"
+                  size="sm"
+                  :disabled="consentLoading"
+                  @click="handleConsentDeny"
                 >
-                  <!-- Icon -->
-                  <div
-                    class="w-10 h-10 flex items-center justify-center rounded-lg bg-[var(--tx-fill-color)]"
-                  >
-                    <TuffIcon
-                      v-if="target.icon"
-                      :icon="{ type: 'class', value: target.icon }"
-                      :size="24"
-                    />
-                    <i v-else class="ri:apps-line text-xl text-[var(--tx-text-color-secondary)]" />
-                  </div>
-
-                  <!-- Info -->
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2">
-                      <span class="font-medium text-[var(--tx-text-color-primary)] truncate">
-                        {{ target.name }}
-                      </span>
-                      <span
-                        v-if="target.pluginName"
-                        class="text-xs text-[var(--tx-text-color-placeholder)] truncate"
-                      >
-                        · {{ target.pluginName }}
-                      </span>
-                    </div>
-                    <p
-                      v-if="target.description"
-                      class="text-xs text-[var(--tx-text-color-secondary)] truncate mt-0.5"
-                    >
-                      {{ target.description }}
-                    </p>
-                  </div>
-
-                  <!-- Supported Types -->
-                  <div class="flex gap-1">
-                    <span
-                      v-for="type in target.supportedTypes.slice(0, 3)"
-                      :key="type"
-                      class="px-1.5 py-0.5 text-[10px] rounded bg-[var(--tx-fill-color)] text-[var(--tx-text-color-secondary)]"
-                    >
-                      {{ type }}
-                    </span>
-                  </div>
+                  {{ t('flow.consentDeny') }}
+                </TxButton>
+                <TxButton
+                  v-if="showAlwaysConsentAction"
+                  variant="secondary"
+                  size="sm"
+                  :disabled="consentLoading"
+                  @click="handleConsent('once')"
+                >
+                  {{ onceConsentLabel }}
+                </TxButton>
+                <TxButton
+                  class="FlowSelector-ConfirmPrimary"
+                  variant="primary"
+                  size="sm"
+                  :disabled="consentLoading"
+                  @click="handleConsent(primaryConsentMode)"
+                >
+                  {{ primaryConsentLabel }}
                 </TxButton>
               </div>
             </div>
-          </TxScroll>
-
-          <!-- Footer -->
-          <div
-            class="px-4 py-3 border-t border-[var(--tx-border-color)] flex items-center justify-between"
-          >
-            <div class="text-xs text-[var(--tx-text-color-placeholder)]">
-              <kbd class="px-1.5 py-0.5 rounded bg-[var(--tx-fill-color)]">↑↓</kbd>
-              {{ t('flow.navigate') }}
-              <kbd class="ml-2 px-1.5 py-0.5 rounded bg-[var(--tx-fill-color)]">Enter</kbd>
-              {{ t('flow.confirm') }}
-              <kbd class="ml-2 px-1.5 py-0.5 rounded bg-[var(--tx-fill-color)]">Esc</kbd>
-              {{ t('flow.cancel') }}
-            </div>
-            <TxButton
-              variant="bare"
-              class="px-3 py-1.5 text-sm rounded-lg bg-[var(--tx-fill-color)] hover:bg-[var(--tx-fill-color-dark)] transition-colors"
-              @click="handleClose"
-            >
-              {{ t('common.cancel') }}
-            </TxButton>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
-
-  <Teleport to="body">
-    <Transition name="flow-selector">
-      <div
-        v-if="consentVisible"
-        class="fixed inset-0 flex items-center justify-center"
-        :style="{ zIndex: consentZIndex }"
-      >
-        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="handleConsentDeny" />
-        <div
-          class="relative w-[420px] bg-[var(--tx-bg-color)] rounded-xl shadow-2xl overflow-hidden p-5"
-        >
-          <h3 class="text-base font-semibold text-[var(--tx-text-color-primary)]">
-            {{ consentDialogTitle }}
-          </h3>
-          <p class="mt-2 text-sm text-[var(--tx-text-color-secondary)] leading-relaxed">
-            {{ consentDialogDescription }}
-          </p>
-          <div class="mt-4 flex items-center justify-end gap-2">
-            <TxButton
-              variant="bare"
-              class="px-3 py-1.5 text-sm rounded-md border border-[var(--tx-border-color)] text-[var(--tx-text-color-regular)] hover:bg-[var(--tx-fill-color-light)]"
-              :disabled="consentLoading"
-              @click="handleConsentDeny"
-            >
-              {{ t('flow.consentDeny') }}
-            </TxButton>
-            <TxButton
-              v-if="showAlwaysConsentAction"
-              variant="bare"
-              class="px-3 py-1.5 text-sm rounded-md border border-[var(--tx-border-color)] text-[var(--tx-text-color-regular)] hover:bg-[var(--tx-fill-color-light)]"
-              :disabled="consentLoading"
-              @click="handleConsent('once')"
-            >
-              {{ onceConsentLabel }}
-            </TxButton>
-            <TxButton
-              variant="bare"
-              class="px-3 py-1.5 text-sm rounded-md bg-[var(--tx-color-primary)] text-white hover:opacity-90"
-              :disabled="consentLoading"
-              @click="handleConsent(primaryConsentMode)"
-            >
-              {{ primaryConsentLabel }}
-            </TxButton>
-          </div>
-        </div>
+          </template>
+        </MetaPanel>
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <style scoped lang="scss">
-.flow-selector-enter-active,
-.flow-selector-leave-active {
-  transition: opacity 0.2s ease;
+// The ⌘K panel's light dim: 20% of the overlay token, no blur, on every platform and in both themes.
+.FlowSelector {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--tx-overlay-color) 20%, transparent);
 }
 
-.flow-selector-enter-from,
-.flow-selector-leave-to {
-  opacity: 0;
+.FlowSelector-HeaderMeta {
+  flex: none;
+  margin-left: auto;
+  color: var(--tx-text-color-secondary);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
-.flow-selector-enter-active .relative,
-.flow-selector-leave-active .relative {
+.FlowTargetItem-Confirm {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
+  color: var(--tx-text-color-secondary);
+}
+
+.FlowSelector-Status {
+  gap: 8px;
+}
+
+.FlowSelector-Confirm {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  padding: 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.FlowSelector-ConfirmTitle {
+  margin: 0;
+  color: var(--tx-text-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.FlowSelector-ConfirmDescription {
+  margin: 0;
+  // Read before deciding: `secondary` ink is under AA for text (tuffex-design-rules).
+  color: var(--tx-text-color-regular);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.FlowSelector-ConfirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.meta-panel-enter-active,
+.meta-panel-leave-active {
+  transition: opacity 0.12s ease-out;
+}
+
+// `.MetaPanel` is MetaPanel's root element, which carries this component's scope id as well as its
+// own, so these rules reach it.
+.meta-panel-enter-active .MetaPanel,
+.meta-panel-leave-active .MetaPanel {
   transition:
-    transform 0.2s ease,
-    opacity 0.2s ease;
+    opacity 0.12s ease-out,
+    transform 0.12s ease-out;
 }
 
-.flow-selector-enter-from .relative,
-.flow-selector-leave-to .relative {
-  transform: scale(0.95);
+.meta-panel-enter-from,
+.meta-panel-leave-to {
   opacity: 0;
+}
+
+.meta-panel-enter-from .MetaPanel,
+.meta-panel-leave-to .MetaPanel {
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meta-panel-enter-active .MetaPanel,
+  .meta-panel-leave-active .MetaPanel {
+    transition: opacity 0.12s ease-out;
+  }
+
+  .meta-panel-enter-from .MetaPanel,
+  .meta-panel-leave-to .MetaPanel {
+    transform: none;
+  }
 }
 </style>

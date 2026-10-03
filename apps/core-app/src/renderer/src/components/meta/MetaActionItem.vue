@@ -6,7 +6,8 @@ import { TxKbd } from '@talex-touch/tuffex/kbd'
 import { computed } from 'vue'
 
 /**
- * One row of the ⌘K panel: glyph, label, an optional disambiguating subtitle, and its keys.
+ * One row of the ⌘K panel: glyph, label, an optional disambiguating subtitle, and its keys. A
+ * `trailing` slot ends the row with an accessory, laid out with the keys.
  *
  * A listbox option rather than a focusable control: focus stays in the panel's filter field and
  * `aria-activedescendant` points here, the combobox pattern `TxCommandPalette` also follows.
@@ -84,7 +85,8 @@ function run(): void {
     <TuffIcon v-else-if="icon" :icon="icon" :size="16" class="MetaActionItem-Icon" />
     <span class="MetaActionItem-Label">{{ label }}</span>
     <span v-if="subtitle" class="MetaActionItem-Subtitle" :title="subtitle">{{ subtitle }}</span>
-    <span v-if="shortcuts.length" class="MetaActionItem-Keys">
+    <span v-if="shortcuts.length || $slots.trailing" class="MetaActionItem-Keys">
+      <slot name="trailing" />
       <TxKbd v-for="shortcut in shortcuts" :key="shortcut">{{ shortcut }}</TxKbd>
     </span>
   </button>

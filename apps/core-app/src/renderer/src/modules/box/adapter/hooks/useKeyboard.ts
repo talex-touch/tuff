@@ -222,8 +222,9 @@ const isMac = rendererPlatformState.isMac
 /**
  * Whether CoreBox is showing its footer. The ⌘K panel sits just above it when it is, and drops to
  * the window corner when it is not: plugin UI mode, no results, or an item that hides the footer.
+ * The Flow picker (`useDetach`) anchors by the same rule.
  */
-function isCoreBoxFooterShown(): boolean {
+export function isCoreBoxFooterShown(): boolean {
   return Boolean(document.querySelector('.CoreBoxFooter-Sticky.display'))
 }
 

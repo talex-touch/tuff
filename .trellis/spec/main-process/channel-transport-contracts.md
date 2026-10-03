@@ -66,6 +66,13 @@ transport.broadcastToWindow(windowId, event, payload): void
   deep Vue `ref` turns it into a Proxy that Electron cannot clone on the return trip; use
   `shallowRef` (or an explicitly reconstructed plain DTO) for opaque transport records and defend
   the outbound payload with a real `structuredClone` regression.
+  - The quieter variant: anything read off a reactive collection is already a Proxy, before any
+    `ref` is involved. CoreBox's Flow dispatch built its payload from the focused TuffItem in the
+    reactive results and kept it in a deep `ref`, so every `flow:bus:dispatch` failed with
+    `An object could not be cloned` (2026-10-02; silent, because CoreBox mounts no toast host).
+    Build such payloads from `toRaw(item)` and hold them in a `shallowRef`
+    (`useDetach.openFlowSelector`); `useDetach.test.ts` dispatches a `reactive()` item and asserts the
+    sent payload survives `structuredClone` with no Proxy along the item path.
 
 ### 4. Validation & error matrix
 
