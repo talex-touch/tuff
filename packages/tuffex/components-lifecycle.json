@@ -1,23 +1,26 @@
 {
   "$schema": "./components-lifecycle.schema.json",
   "currentVersion": "0.6.3",
-  "totalComponents": 166,
+  "totalComponents": 167,
   "versions": [
     {
       "version": "0.6.3",
       "date": "2026-10-01",
       "title": "流式文本、回答与菜单确认反馈 (Streaming Content and Menu Feedback)",
       "newComponents": [
+        "descriptions",
         "stream-element",
         "stream-text"
       ],
       "updatedComponents": [
         "code-stream",
         "context-menu",
+        "data-table",
         "dropdown-menu",
+        "pagination",
         "stream-markdown"
       ],
-      "summary": "新增共享节奏的流式文字与回答组件，补齐代码和 Markdown 流式展示及菜单确认反馈；当前随客户端 beta 测试，尚未独立发布 npm。"
+      "summary": "新增共享节奏的流式文字与回答组件，补齐代码和 Markdown 流式展示及菜单确认反馈；新增 TxDescriptions 描述列表，TxDataTable 支持骨架加载态，TxPagination 支持每页条数选择；当前随客户端 beta 测试，尚未独立发布 npm。"
     },
     {
       "version": "0.6.2",
@@ -518,6 +521,11 @@
     "date-picker": {
       "slug": "date-picker",
       "since": "0.3.4",
+      "suite": "base"
+    },
+    "descriptions": {
+      "slug": "descriptions",
+      "since": "0.6.3",
       "suite": "base"
     },
     "dialog": {

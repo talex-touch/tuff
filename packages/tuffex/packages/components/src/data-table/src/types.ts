@@ -22,6 +22,16 @@ export interface DataTableSortState {
 export type DataTableSortCycle = 'tri' | 'bi'
 
 /**
+ * What `loading` draws.
+ *
+ * - `overlay`: a blurred veil and a spinner over the whole table, rows or not.
+ * - `skeleton`: placeholder rows shaped like the columns while there are no rows
+ *   yet; once rows exist they stay as they are, and a thin bar under the header
+ *   says a refresh is running.
+ */
+export type DataTableLoadingVariant = 'overlay' | 'skeleton'
+
+/**
  * Class contribution for a row: anything Vue's `class` binding accepts.
  */
 export type DataTableRowClass = string | string[] | Record<string, boolean>
@@ -64,6 +74,18 @@ export interface DataTableProps<T = any> {
   data: T[]
   rowKey?: DataTableRowKey<T>
   loading?: boolean
+  /**
+   * How `loading` is drawn. `skeleton` renders placeholder rows only while there
+   * is no row to show, and keeps existing rows untouched during a refresh.
+   * @default 'overlay'
+   */
+  loadingVariant?: DataTableLoadingVariant
+  /**
+   * Placeholder rows drawn by the `skeleton` variant before the first rows land.
+   * Match it to the page size so nothing moves when the data arrives.
+   * @default 5
+   */
+  skeletonRows?: number
   emptyText?: string
   striped?: boolean
   bordered?: boolean

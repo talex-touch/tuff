@@ -42,7 +42,7 @@ code: |
 - Give the wrapper an explicit height; the component fills `width: 100%` and `height: 100%` rather than deciding page dimensions itself.
 - Use it for page, panel, side-summary, and detail-pane loading where the final layout shape is stable.
 - The scaffold draws a header + sidebar + content app layout. When the final UI has no sidebar or no header, compose `TxSkeleton`, `TxCardSkeleton`, or `TxListItemSkeleton` into the real structure instead, so nothing shifts when the data lands.
-- Do not use it as a table row placeholder. Use `TxSkeleton`, row-level placeholders, or `TxDataTable loading` for row bodies.
+- Do not use it as a table row placeholder. For row bodies use `TxDataTable` with `loadingVariant="skeleton"`, or `TxSkeleton` and row-level placeholders outside a table.
 - Keep it deterministic for docs, SSR, hydration, and visual tests; sidebar label and content line widths intentionally use fixed sequences instead of runtime randomness.
 
 ## API Reference

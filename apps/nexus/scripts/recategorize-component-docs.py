@@ -152,6 +152,7 @@ TAXONOMY: dict[str, list[str]] = {
     ],
     "Data": [
         "data-table",
+        "descriptions",
         "tree",
         "sortable-list",
         "timeline",

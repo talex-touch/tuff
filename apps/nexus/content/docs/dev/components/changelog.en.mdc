@@ -11,13 +11,13 @@ verified: true
 
 # Component Changelog & Lifecycle
 
-All 166 components exported by the current source have an explicit Since version. The `audit:changelog` gate checks the component inventory, change notes, and introduction versions for every version change.
+All 167 components exported by the current source have an explicit Since version. The `audit:changelog` gate checks the component inventory, change notes, and introduction versions for every version change.
 
 ## Overview
 
-The current source version is **v0.6.3**, included for testing with Tuff beta and not yet published independently to npm. The latest npm release remains **v0.6.2**. The current source exports **166** components.
+The current source version is **v0.6.3**, included for testing with Tuff beta and not yet published independently to npm. The latest npm release remains **v0.6.2**. The current source exports **167** components.
 
-- **Base Suite**: 93 general, form, layout, and navigation components
+- **Base Suite**: 94 general, form, layout, and navigation components
 - **Pro Suite**: 39 advanced interaction, effect, and primitive components
 - **AI Suite**: 34 AI chat, agent, reasoning, and context components
 - **Gate Protection**: Bumping package version without a version chapter or component breakdown will fail CI audits
@@ -28,9 +28,9 @@ The current source version is **v0.6.3**, included for testing with Tuff beta an
 
 Streaming content and menu confirmation feedback. Included for testing with the client beta; not yet published independently to npm.
 
-- **New Components (2)**: [stream-element](./stream-element.en.mdc), [stream-text](./stream-text.en.mdc).
-- **Updated Components (4)**: [code-stream](./code-stream.en.mdc), [context-menu](./context-menu.en.mdc), [dropdown-menu](./dropdown-menu.en.mdc), [stream-markdown](./stream-markdown.en.mdc).
-- **Key Features**: Shared pacing for text, code, and answers, citation and slot support, and confirmation feedback for menu items that close on selection.
+- **New Components (3)**: [descriptions](./descriptions.en.mdc), [stream-element](./stream-element.en.mdc), [stream-text](./stream-text.en.mdc).
+- **Updated Components (6)**: [code-stream](./code-stream.en.mdc), [context-menu](./context-menu.en.mdc), [data-table](./data-table.en.mdc), [dropdown-menu](./dropdown-menu.en.mdc), [pagination](./pagination.en.mdc), [stream-markdown](./stream-markdown.en.mdc).
+- **Key Features**: Shared pacing for text, code, and answers, citation and slot support, and confirmation feedback for menu items that close on selection; a label and value list for record details, skeleton loading for data tables, and a page-size selector for pagination.
 
 ### Version 0.6.2 (2026-09-28)
 
@@ -122,7 +122,7 @@ Initial standalone package baseline.
 
 ## Component Since Index
 
-The following table lists introduction versions and suites for all 166 modules in the current source; 0.6.3 is a source version not yet published independently to npm.
+The following table lists introduction versions and suites for all 167 modules in the current source; 0.6.3 is a source version not yet published independently to npm.
 
 | Component (Slug) | Suite | Since Version | Documentation |
 |---|---|---|---|
@@ -165,6 +165,7 @@ The following table lists introduction versions and suites for all 166 modules i
 | `corner-overlay` | pro | **0.3.4** | [Read Docs](./corner-overlay.en.mdc) |
 | `data-table` | base | **0.3.4** | [Read Docs](./data-table.en.mdc) |
 | `date-picker` | base | **0.3.4** | [Read Docs](./date-picker.en.mdc) |
+| `descriptions` | base | **0.6.3** | [Read Docs](./descriptions.en.mdc) |
 | `dialog` | base | **0.3.4** | [Read Docs](./dialog.en.mdc) |
 | `diff-table` | pro | **0.3.9** | [Read Docs](./diff-table.en.mdc) |
 | `divider` | base | **0.3.7** | [Read Docs](./divider.en.mdc) |

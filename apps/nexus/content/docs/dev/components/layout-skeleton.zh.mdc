@@ -42,7 +42,7 @@ code: |
 - 外层容器必须给出明确高度；组件只填满 `width: 100%` 与 `height: 100%`，不会替页面决定尺寸。
 - 页面、面板、侧边摘要和详情栏加载时，如果最终布局形状稳定，可以使用它保持结构预期。
 - 骨架画的是“顶栏 + 侧栏 + 内容”的应用布局；最终界面没有侧栏或顶栏时，改用 `TxSkeleton`、`TxCardSkeleton` 或 `TxListItemSkeleton` 按真实结构组合，数据到达时布局才不会跳动。
-- 不要把它当作表格行占位。表格主体应使用 `TxSkeleton`、行级占位或 `TxDataTable loading`。
+- 不要把它当作表格行占位。表格主体请用 `TxDataTable` 的 `loadingVariant="skeleton"`；表格之外再用 `TxSkeleton` 或行级占位。
 - 保持文档、SSR、hydration 与视觉测试的确定性；侧栏文字条与内容行宽度刻意使用固定序列，而不是运行时随机数。
 
 ## API 参考

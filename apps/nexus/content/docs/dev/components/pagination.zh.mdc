@@ -17,7 +17,7 @@ const page = ref(1)
 ## 用法
 
 ### 分页导航
-在多页数据间切换。使用 `TxSelect` 调整每页条数；`TxPagination` 会重新计算页数，并在必要时修正越界页码。
+在多页数据间切换。`page-sizes` 把每页条数选择器放进分页内部，`TxPagination` 按新的条数重新计算页数；本示例换条数后回到第 1 页，详见下一节。
 :::TuffDemoWrapper{demo="PaginationPaginationDemo" code-lang="vue"}
 ---
 code: |
@@ -31,14 +31,42 @@ code: |
   <template>
     <TxPagination
       v-model:current-page="page"
+      v-model:page-size="pageSize"
+      :page-sizes="[10, 20, 50]"
+      page-size-label="每页条数"
       :total="120"
-      :page-size="pageSize"
       show-info
       show-first-last
+      @page-size-change="page = 1"
     />
-    <TxSelect v-model="pageSize" aria-label="每页条数">
-      <TxSelectItem v-for="size in [10, 20, 50]" :key="size" :value="size" :label="String(size)" />
-    </TxSelect>
+  </template>
+---
+:::
+
+### 每页条数
+
+`page-sizes` 在页码按钮后增加每页条数选择器，由可见的 `page-size-label` 为它命名，并把各控件排成一行、可换行。选择条数会触发 `update:pageSize` 与 `pageSizeChange`，但不改动当前页，读者落在哪一页由宿主决定；本示例回到第 1 页。
+
+:::TuffDemoWrapper{demo="PaginationPageSizeDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const page = ref(1)
+  const pageSize = ref(20)
+  </script>
+
+  <template>
+    <TxPagination
+      v-model:current-page="page"
+      v-model:page-size="pageSize"
+      :page-sizes="[10, 20, 50]"
+      page-size-label="每页条数"
+      :total="230"
+      show-info
+      @page-size-change="page = 1"
+    />
   </template>
 ---
 :::
@@ -48,6 +76,8 @@ code: |
 - 优先使用 `total + pageSize`，让界面能展示数据总数；只有后端无法返回总数时才使用 `totalPages`。
 - `currentPage` 按 1 开始计数，初始化为 `1`，不要用 `0`。
 - 筛选条件或搜索词变化后，如果旧页码可能越界，应把 `currentPage` 重置为 `1`。
+- `pageSizeChange` 时也重置它：组件只报告新的条数，读者原本在看的行已经换了位置。越界的页码无论如何都会被修正。
+- 优先用 `pageSizes`，而不是在分页旁边自己放一个条数选择框：它由可见标签命名，并与分页处在同一行。
 - 分页控件应紧贴它控制的列表或表格。
 - 使用 `info` 插槽输出本地化范围文案，例如“正在查看第 21–40 条，共 120 条”。
 
@@ -64,7 +94,15 @@ rows:
   - name: pageSize
     type: number
     default: '10'
-    description: 每页数量
+    description: 每页数量；读者可以修改时配合 v-model:page-size 使用
+  - name: pageSizes
+    type: 'number[]'
+    default: '[]'
+    description: '可选的每页条数。提供后在页码按钮后渲染条数选择器，并把各控件排成一行、可换行；不提供时 DOM 不变。无效的条数会被丢弃，不在列表中的 pageSize 会被补进去'
+  - name: pageSizeLabel
+    type: string
+    default: "'Items per page'"
+    description: 条数选择器前的可见标签，同时为辅助技术命名该选择器
   - name: total
     type: number
     default: '-'
@@ -105,6 +143,14 @@ rows:
     type: '(page: number) => void'
     default: '-'
     description: 用户切换页码时触发
+  - name: update:pageSize
+    type: '(size: number) => void'
+    default: '-'
+    description: 读者选择其他条数时的 v-model 更新；当前页保持不变
+  - name: pageSizeChange
+    type: '(size: number) => void'
+    default: '-'
+    description: 读者选择其他每页条数时触发
 ---
 ::
 
@@ -145,12 +191,15 @@ code: |
 - `showFirstLast` 会渲染首末页跳转按钮，边界页会禁用首/上一页或下一页/末页。
 - 当前页按钮带 `aria-current="page"`，上一页/下一页/首末页按钮带可读 `aria-label`。
 - 默认导航箭头是内置 SVG，不依赖宿主生成图标样式；自定义图标类仍由 `TxIcon` 渲染。
+- 提供 `pageSizes` 时，页码列表与信息区之间会出现 `div.tx-pagination__size`：一个可见的 `span.tx-pagination__size-label`，以及一个 88px 宽的 `TxSelect`，其 combobox 通过 `aria-labelledby` 指向该标签。nav 会加上 `has-page-size`，把页码列表、选择器与信息区排成居中的一行，空间不足时换行。不提供 `pageSizes`（或只有无效条数）时这些都不会渲染。
+- 选择条数时先触发 `update:pageSize` 再触发 `pageSizeChange`，并且只在条数与 `pageSize` 不同时触发。`currentPage` 交给宿主处理；如果更大的条数让总页数少于当前页，已有的越界修正会以最后一页触发 `update:currentPage`。
+- 选择器是一个 `TxSelect`，因为 TxSelect 自身没有命名用的属性，所以通过 `aria-labelledby` 命名。按需样式插件会随分页一起加载 TxSelect 的样式；手动引入样式时，需要再引入 `select/style.css` 及其依赖的样式。
 
 ## 技术实现
 
 - 组件源码:`packages/tuffex/packages/components/src/pagination/src/TxPagination.vue` 确认 total/pageSize 页数计算、省略号窗口生成、边界保护、首末页控制、info 插槽参数、`aria-current` 和可读分页按钮标签。
 - 类型契约:`packages/tuffex/packages/components/src/pagination/src/types.ts` 定义 `PaginationProps` 和 `PaginationEmits`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/pagination/__tests__/pagination.test.ts` 覆盖 total 计算页数、省略号渲染、当前页语义、越界导航抑制、首末页控制、边界禁用状态、本地化按钮标签和自定义 info 插槽参数。
+- **实测覆盖:** `packages/tuffex/packages/components/src/pagination/__tests__/pagination.test.ts` 覆盖 total 计算页数、省略号渲染、当前页语义、越界导航抑制、首末页控制、边界禁用状态、本地化按钮标签和自定义 info 插槽参数。`pagination-page-size.test.ts`（6 条）覆盖没有有效 `pageSizes` 时 DOM 不变、选择器的位置与 `aria-labelledby` 命名、条数事件不改动页码、选择当前条数不触发事件、缺失的 `pageSize` 补进选项，以及越界修正把页码拉回的 `v-model:page-size` 往返。
 - 建议：优先传 `total + pageSize`，只有后端只返回页数时再传 `totalPages`。
 
 <TuffDocSourceLink />

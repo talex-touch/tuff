@@ -41,7 +41,7 @@ code: |
 - Use `TxSkeleton` for configurable text, rectangle, and avatar placeholders; use `TxCardSkeleton` or `TxListItemSkeleton` when their fixed structure matches the final surface.
 - Keep `loading=false` as the handoff point to real content instead of rendering skeleton and content in separate branches.
 - Do not use skeletons as decorative gray chrome. If the final content is unknown, prefer a neutral empty or loading state with copy.
-- Use `TxDataTable loading` for short table waits; use skeletons for longer waits where preserving surrounding rhythm matters.
+- For a table, use `TxDataTable` with `loadingVariant="skeleton"`: it draws placeholder rows shaped like its columns on the first load and keeps the rows during a refresh. Its default `loading` overlay suits a short local wait.
 
 ## API Reference
 
@@ -102,7 +102,7 @@ rows:
 
 ## Dashboard Data Operations
 
-For table loading, short waits can use the `TxDataTable loading` overlay; longer waits or side summaries should use `TxSkeleton` to preserve layout rhythm.
+For table loading, `TxDataTable`'s `loadingVariant="skeleton"` draws the placeholder rows itself, and a short local wait can keep its default overlay; side summaries beside the table use `TxSkeleton` to preserve layout rhythm.
 
 :::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="Data operations panel" description="Skeleton placeholders and table loading cover the data-region wait state together."}
 ---

@@ -107,7 +107,7 @@ Each suite has one overview page carrying its own live preview and its own compo
 
 | Suite | Groups | Components | Entry |
 |-------|--------|------------|-------|
-| [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 93 | `@talex-touch/tuffex/base` |
+| [Basics Suite](./base-suite.en.mdc) | General / Form / Layout / Navigation / Data Display / Feedback / Status & Empty | 94 | `@talex-touch/tuffex/base` |
 | [Pro Suite](./pro-suite.en.mdc) | Interaction / Effects / Primitives | 27 | `@talex-touch/tuffex/pro` |
 | [AI Suite](./ai-suite.en.mdc) | Chat / Agents / Reasoning / Context & Insight | 34 | `@talex-touch/tuffex/ai` |
 | [Data Suite](./data-suite.en.mdc) | Charts / Visualization | 10 | `@talex-touch/tuffex/pro` (visualization + charts) + `@talex-touch/tuffex/charts` (chart family entry) |
@@ -190,6 +190,7 @@ The everyday building blocks, importable through the `@talex-touch/tuffex/base` 
 ### Data Display
 
 - [DataTable](./data-table.en.mdc)
+- [Descriptions](./descriptions.en.mdc)
 - [Tree](./tree.en.mdc)
 - [SortableList](./sortable-list.en.mdc)
 - [Timeline](./timeline.en.mdc)

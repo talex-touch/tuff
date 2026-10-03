@@ -191,7 +191,19 @@ const LIMITS = {
   // stream-markdown rules it reaches through style-deps. It slimmed before asking, 2.7 -> 2.4 KiB:
   // it no longer copies the word keyframes it never plays. Same contract as every note above:
   // actuals plus minimal headroom, growth from here fails.
-  fullCssBytes: 629 * 1024,
+  // 629 -> 631 on 2026-10-02: the admin primitives (.trellis/tasks/10-02-tuffex-admin-primitives)
+  // add one stylesheet and grow two. `descriptions` (TxDescriptions / TxDescriptionsItem) is new
+  // at 1.3 KiB (1374 B); `data-table` grows 641 B for the skeleton loading variant (placeholder
+  // rows held to one line box, and the refresh bar with its motion-gated animation), and
+  // `pagination` 260 B for the page-size row. The full bundle went 628.0 -> 630.2 KiB with them and
+  // nothing else: 2275 B, exactly the three sheets' growth. Checked for the inlining this limit
+  // exists to catch: `descriptions/style.css` carries only `.tx-descriptions*` rules, and the two
+  // grown sheets add only their own `.tx-data-table__*` / `.tx-pagination*` rules; the skeleton
+  // and select styles they now reach stay in their own sheets through style-deps. It slimmed
+  // before asking: the descriptions sheet is unscoped (as TxStatusHint's is) and drives both size
+  // tiers from two custom properties, and the refresh cell's two declarations are inline. Same
+  // contract as every note above: actuals plus minimal headroom, growth from here fails.
+  fullCssBytes: 631 * 1024,
   // The per-component stylesheets, added up. This is the set a consumer
   // actually installs and the on-demand plugin picks from, so it is the number
   // worth watching: it fell from 2290.6 KiB to 634.7 when dependency styles
@@ -323,6 +335,15 @@ const onDemandImportBudgets = [
     subpath: 'select',
     // `tooltip` rides in behind `popover` — see the button entry above.
     allowedComponentDirs: ['base-anchor', 'base-surface', 'card', 'card-item', 'glass-surface', 'input', 'popover', 'search-input', 'select', 'spinner', 'tooltip'],
+    forbiddenStaticSpecifierPrefixes: ['gsap'],
+  },
+  {
+    // TxPagination's page-size selector is opt-in at runtime (`pageSizes`) but
+    // statically imported, so `pagination` now carries TxSelect and its anchor
+    // stack. Declared for the same reason as the avatar entry: this is the edge
+    // that would otherwise grow unnoticed.
+    subpath: 'pagination',
+    allowedComponentDirs: ['base-anchor', 'base-surface', 'card', 'card-item', 'glass-surface', 'icon', 'input', 'pagination', 'popover', 'search-input', 'select', 'spinner', 'tooltip'],
     forbiddenStaticSpecifierPrefixes: ['gsap'],
   },
   {
