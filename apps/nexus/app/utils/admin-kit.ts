@@ -104,3 +104,100 @@ export function shouldShowAdminPager({ total, limit, page, pageSizes = [] }: Adm
   const sizes = pageSizes.filter(size => Number.isInteger(size) && size > 0)
   return sizes.length > 0 && total > Math.min(...sizes)
 }
+
+// ─── Labelled fields ───────────────────────────────────────────────────────
+
+/**
+ * Controls a labelled field (`AdminFilterField`, `AdminFormField`) can find on its
+ * own when it is not given the control's id. `TxSelect` takes no id, so this is
+ * how a select gets its label.
+ */
+export const ADMIN_FIELD_CONTROL_SELECTOR = '[role="combobox"], input, select, textarea'
+
+/** What the field helpers write through: an `Element` on the page, a stub in tests. */
+export interface AdminFieldControl {
+  getAttribute: (name: string) => string | null
+  setAttribute: (name: string, value: string) => void
+  removeAttribute: (name: string) => void
+}
+
+export interface AdminFieldRoot {
+  querySelector: (selectors: string) => AdminFieldControl | null
+}
+
+/**
+ * The control a field labels: the element with the field's `for` id, or else the
+ * first combobox, input, select or textarea inside the field. Only the field's
+ * own subtree is searched.
+ */
+export function findAdminFieldControl(root: AdminFieldRoot | null | undefined, controlId?: string | null): AdminFieldControl | null {
+  if (!root)
+    return null
+  if (controlId)
+    return root.querySelector(`[id="${controlId.replace(/["\\]/g, '\\$&')}"]`)
+  return root.querySelector(ADMIN_FIELD_CONTROL_SELECTOR)
+}
+
+/**
+ * A space-separated id list (`aria-describedby`) with `id` added or removed. The
+ * other ids keep their order; `null` when none is left.
+ */
+export function withIdReference(list: string | null | undefined, id: string, present: boolean): string | null {
+  const ids = (list ?? '').split(/\s+/).filter(entry => entry && entry !== id)
+  if (present)
+    ids.push(id)
+  return ids.length ? ids.join(' ') : null
+}
+
+function setIdReference(control: AdminFieldControl, attribute: string, id: string, present: boolean) {
+  const next = withIdReference(control.getAttribute(attribute), id, present)
+  if (next === null)
+    control.removeAttribute(attribute)
+  else
+    control.setAttribute(attribute, next)
+}
+
+export interface AdminFieldControlState {
+  /** Id of the field's label element. */
+  labelId: string
+  /** The label is a `<label for>` naming the control already. */
+  labelledByFor: boolean
+  /** Id of the hint under the control, or `null` without one. */
+  hintId: string | null
+  invalid: boolean
+}
+
+/** What a field wrote on its control last time, so the next sync can take it back. */
+export interface AdminFieldControlApplied {
+  hintId: string | null
+  invalid: boolean
+}
+
+export const ADMIN_FIELD_NOTHING_APPLIED: AdminFieldControlApplied = { hintId: null, invalid: false }
+
+/**
+ * Brings a field's control in line with the field: named after the label when it
+ * is not a `<label for>` and nothing else names the control, described by the hint,
+ * and `aria-invalid` while the field is invalid. Only what the field wrote itself
+ * is ever taken back — another id in `aria-describedby` stays, and an
+ * `aria-invalid` the field never set is left alone. Returns what it wrote now.
+ */
+export function syncAdminFieldControl(
+  control: AdminFieldControl | null,
+  state: AdminFieldControlState,
+  applied: AdminFieldControlApplied = ADMIN_FIELD_NOTHING_APPLIED,
+): AdminFieldControlApplied {
+  if (!control)
+    return applied
+  if (!state.labelledByFor && control.getAttribute('aria-labelledby') === null && control.getAttribute('aria-label') === null)
+    control.setAttribute('aria-labelledby', state.labelId)
+  if (applied.hintId && applied.hintId !== state.hintId)
+    setIdReference(control, 'aria-describedby', applied.hintId, false)
+  if (state.hintId)
+    setIdReference(control, 'aria-describedby', state.hintId, true)
+  if (state.invalid)
+    control.setAttribute('aria-invalid', 'true')
+  else if (applied.invalid)
+    control.removeAttribute('aria-invalid')
+  return { hintId: state.hintId, invalid: state.invalid }
+}

@@ -15,6 +15,7 @@ const adminAuditMocks = vi.hoisted(() => ({
 const creditsMocks = vi.hoisted(() => ({
   adjustUserCredits: vi.fn(),
   getCreditSummary: vi.fn(),
+  getUserCreditAdjustLimits: vi.fn(),
   listCreditLedgerByUsers: vi.fn(),
 }))
 
@@ -47,6 +48,7 @@ describe('/api/admin/users/[id]/credits amount bounds', () => {
     authMocks.requireAdmin.mockResolvedValue({ userId: 'admin_1', user: { role: 'admin' } })
     authStoreMocks.getUserById.mockResolvedValue({ id: 'user_1', email: 'owner@example.com', status: 'active' })
     creditsMocks.getCreditSummary.mockResolvedValue({ month: '2026-08' })
+    creditsMocks.getUserCreditAdjustLimits.mockResolvedValue({ planFloor: 20000, used: 0, quota: 20000, maxDeduct: 0 })
     creditsMocks.listCreditLedgerByUsers.mockResolvedValue({ entries: [], page: 1, pageSize: 10, total: 0 })
     creditsMocks.adjustUserCredits.mockResolvedValue({
       ledgerId: 'ledger_1',

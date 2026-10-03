@@ -45,6 +45,11 @@ const ADMIN_SURFACE = [
   'composables/useAdminFormat.ts',
   'composables/useAdminList.ts',
   'utils/admin-audits.ts',
+  // User management and activation codes: list requests, labels, and the
+  // drawer data whose error fallbacks live outside the two pages.
+  'composables/useAdminUserDrawer.ts',
+  'utils/admin-users.ts',
+  'utils/admin-codes.ts',
 ]
 
 function sourceFiles(target: string, found: string[] = []): string[] {

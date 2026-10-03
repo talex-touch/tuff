@@ -15,6 +15,7 @@ const adminAuditMocks = vi.hoisted(() => ({
 const creditsMocks = vi.hoisted(() => ({
   adjustUserCredits: vi.fn(),
   getCreditSummary: vi.fn(),
+  getUserCreditAdjustLimits: vi.fn(),
   listCreditLedgerByUsers: vi.fn(),
 }))
 
@@ -35,15 +36,21 @@ vi.mock('h3', async () => {
 vi.mock('../../../server/utils/auth', () => authMocks)
 vi.mock('../../../server/utils/authStore', () => authStoreMocks)
 vi.mock('../../../server/utils/adminAuditStore', () => adminAuditMocks)
-vi.mock('../../../server/utils/creditsStore', () => creditsMocks)
+// The refusal is matched with `instanceof`, so the handler gets the store's own error class.
+vi.mock('../../../server/utils/creditsStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../server/utils/creditsStore')>()
+  return { ...creditsMocks, CreditDeductLimitError: actual.CreditDeductLimitError }
+})
 
 let getHandler: (event: any) => Promise<any>
 let patchHandler: (event: any) => Promise<any>
+let CreditDeductLimitError: typeof import('../../../server/utils/creditsStore').CreditDeductLimitError
 
 beforeAll(async () => {
   ;(globalThis as any).defineEventHandler = (fn: any) => fn
   getHandler = (await import('../../../server/api/admin/users/[id]/credits.get')).default as (event: any) => Promise<any>
   patchHandler = (await import('../../../server/api/admin/users/[id]/credits.patch')).default as (event: any) => Promise<any>
+  CreditDeductLimitError = (await import('../../../server/utils/creditsStore')).CreditDeductLimitError
 })
 
 function makeEvent(userId = 'user_1') {
@@ -72,6 +79,8 @@ const summary = {
   user: { quota: 100, used: 40 },
   team: { quota: 500, used: 140 },
 }
+
+const limits = { planFloor: 20000, used: 40, quota: 20100, maxDeduct: 100 }
 
 function ledger(overrides: Record<string, unknown> = {}) {
   return {
@@ -103,6 +112,7 @@ describe('/api/admin/users/[id]/credits', () => {
     })
     authStoreMocks.getUserById.mockResolvedValue(activeUser())
     creditsMocks.getCreditSummary.mockResolvedValue(summary)
+    creditsMocks.getUserCreditAdjustLimits.mockResolvedValue(limits)
     creditsMocks.listCreditLedgerByUsers.mockResolvedValue(ledger())
     creditsMocks.adjustUserCredits.mockResolvedValue({
       ledgerId: 'ledger_adjust',
@@ -125,6 +135,7 @@ describe('/api/admin/users/[id]/credits', () => {
 
     expect(authMocks.requireAdmin).toHaveBeenCalledWith(expect.anything())
     expect(creditsMocks.getCreditSummary).toHaveBeenCalledWith(expect.anything(), 'user_1')
+    expect(creditsMocks.getUserCreditAdjustLimits).toHaveBeenCalledWith(expect.anything(), 'user_1')
     expect(creditsMocks.listCreditLedgerByUsers).toHaveBeenCalledWith(expect.anything(), ['user_1'], {
       page: 2,
       limit: 2,
@@ -135,6 +146,7 @@ describe('/api/admin/users/[id]/credits', () => {
         status: 'active',
       }),
       summary,
+      limits,
       ledger: {
         entries: ledger().entries,
         pagination: {
@@ -158,13 +170,25 @@ describe('/api/admin/users/[id]/credits', () => {
     expect(adminAuditMocks.logAdminAudit).not.toHaveBeenCalled()
   })
 
-  it('keeps quota from dropping below used credits', async () => {
-    creditsMocks.adjustUserCredits.mockRejectedValue(new Error('User credits quota cannot be less than used credits.'))
+  it('refuses a deduction past the floor as CREDITS_DEDUCT_LIMIT, with its limit and without an audit', async () => {
+    creditsMocks.adjustUserCredits.mockRejectedValue(new CreditDeductLimitError({ planFloor: 20000, used: 4670, quota: 20000, maxDeduct: 0 }))
 
-    await expect(patchHandler(makeEvent())).rejects.toMatchObject({
-      statusCode: 400,
-      statusMessage: 'User credits quota cannot be less than used credits.',
-    })
+    const error = await patchHandler(makeEvent()).then(() => null, (cause: any) => cause)
+
+    expect(error).toMatchObject({ statusCode: 400, statusMessage: 'Credit deduction exceeds the adjustable amount.' })
+    // The limit the drawer shows; the quota itself is not part of the refusal.
+    expect(error.data).toEqual({ errorCode: 'CREDITS_DEDUCT_LIMIT', maxDeduct: 0, planFloor: 20000, used: 4670 })
+    expect(adminAuditMocks.logAdminAudit).not.toHaveBeenCalled()
+    expect(creditsMocks.getCreditSummary).not.toHaveBeenCalled()
+  })
+
+  it('answers any other store failure with a 400 carrying its message, without an audit', async () => {
+    creditsMocks.adjustUserCredits.mockRejectedValue(new Error('Credit balance update failed.'))
+
+    const error = await patchHandler(makeEvent()).then(() => null, (cause: any) => cause)
+
+    expect(error).toMatchObject({ statusCode: 400, statusMessage: 'Credit balance update failed.' })
+    expect(error.data).toBeUndefined()
     expect(adminAuditMocks.logAdminAudit).not.toHaveBeenCalled()
   })
 
@@ -193,6 +217,11 @@ describe('/api/admin/users/[id]/credits', () => {
       delta: -10,
       reason: 'manual correction',
     }))
+    // Read after the adjustment, so the drawer checks the next deduction against it.
+    expect(result.limits).toEqual(limits)
+    expect(creditsMocks.getUserCreditAdjustLimits).toHaveBeenCalledWith(expect.anything(), 'user_1')
+    expect(creditsMocks.getUserCreditAdjustLimits.mock.invocationCallOrder[0])
+      .toBeGreaterThan(creditsMocks.adjustUserCredits.mock.invocationCallOrder[0]!)
     expect(result.ledger.pagination).toEqual({
       page: 1,
       limit: 10,
