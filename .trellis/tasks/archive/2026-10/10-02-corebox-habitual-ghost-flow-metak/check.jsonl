@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "完成前的验证要求、禁止模式、git diff --check"}
+{"file": ".trellis/spec/main-process/corebox-meta-overlay-contracts.md", "reason": "核对 MetaOverlay 抽外壳后行为不变（高亮板、锚点、遮罩）以及流转面板的几何一致性"}
+{"file": ".trellis/spec/main-process/recommendation-freshness-contracts.md", "reason": "核对幽灵宫格没有破坏焦点与快捷键契约"}
+{"file": ".trellis/spec/frontend/corebox-results-contracts.md", "reason": "核对 CoreBox 键盘、运动总闸、列表行为没有回归"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对加载态、无障碍、文案走消息目录"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "核对视觉实现只用 token、ring/radius/字号符合规则"}
