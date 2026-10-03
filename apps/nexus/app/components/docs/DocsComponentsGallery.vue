@@ -34,6 +34,7 @@ import {
 } from '#components'
 import { useSelectionAnchor } from '@talex-touch/tuffex/selection-actions'
 import { toast } from '@talex-touch/tuffex/utils'
+import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 import tuffexPkg from '../../../../../packages/tuffex/package.json'
 // Every `<ClientOnly>` below is this wrapper, not Nuxt's: each one sits directly
 // in a cell's stage, and the wrapper adds the reset button that remounts the
@@ -59,8 +60,10 @@ const { locale } = useI18n()
 
 const localeKey = computed(() => (locale.value === 'zh' ? 'zh' : 'en'))
 
+// The localized route, not the content path: `/docs/dev/components/button.zh` is a client-side
+// navigation the `/docs → /en/docs` redirect never sees, so it opened the English page.
 function docPath(slug: string) {
-  return `/docs/dev/components/${slug}.${localeKey.value}`
+  return toLocalizedDocsPath(`/docs/dev/components/${slug}`, localeKey.value)
 }
 
 function cellLabel(en: string, zh: string) {

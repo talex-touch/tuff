@@ -8,8 +8,32 @@ import {
   stripDocsLocalePrefix,
   toLocalizedDocsPath,
 } from './docsPath'
+import { resolveDocsSourceLinkHref } from '../../shared/utils/docs-path'
 
 describe('docsPath', () => {
+  it('resolves an author\'s relative content link against the source document, not the URL', () => {
+    // The components overview is docs/dev/components/index.zh.mdc. Resolving its
+    // `./installation.zh.mdc` against the URL /zh/docs/dev/components would drop `components`;
+    // left unresolved, the router took the raw `.mdc` href to the not-found page.
+    expect(resolveDocsSourceLinkHref('./installation.zh.mdc', '/docs/dev/components/index.zh', 'zh'))
+      .toBe('/zh/docs/dev/components/installation')
+    expect(resolveDocsSourceLinkHref('./button.en.mdc#props', '/docs/dev/components/tabs.en', 'en'))
+      .toBe('/en/docs/dev/components/button#props')
+    expect(resolveDocsSourceLinkHref('../index.zh.md', '/docs/dev/components/tabs.zh', 'zh')).toBe('/zh/docs/dev/index')
+    expect(resolveDocsSourceLinkHref('./foo/index.en.mdc?x=1', '/docs/dev/index.en', 'en')).toBe('/en/docs/dev/foo/index?x=1')
+    // A locale-prefixed source path resolves the same way.
+    expect(resolveDocsSourceLinkHref('./theming.zh.mdc', '/zh/docs/dev/components/index.zh', 'zh'))
+      .toBe('/zh/docs/dev/components/theming')
+
+    // Anything else is left to the caller.
+    const source = '/docs/dev/components/index.zh'
+    for (const href of ['/docs/dev/components/button', 'https://example.com/a.md', './image.png', '#install', '', null])
+      expect(resolveDocsSourceLinkHref(href, source, 'zh')).toBeNull()
+    expect(resolveDocsSourceLinkHref('./installation.zh.mdc', null, 'zh')).toBeNull()
+    // A link that climbs out of the docs tree names no docs route.
+    expect(resolveDocsSourceLinkHref('../../../outside.md', source, 'zh')).toBeNull()
+  })
+
   it('gives a directory route and its index document one identity', () => {
     expect(canonicalDocsPageIdentity('/docs/dev/index')).toBe('/docs/dev')
     expect(canonicalDocsPageIdentity('/docs/dev/index.en')).toBe('/docs/dev')

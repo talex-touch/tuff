@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 import { coerceJsonArray } from '~/utils/docs-api'
 import { useTypedFetch } from '~/utils/request'
 
@@ -79,7 +80,7 @@ const rows = computed(() => {
       <tbody>
         <tr v-for="row in rows" :key="row.path">
           <td>
-            <NuxtLink :to="row.path" class="docs-sync-table__link">
+            <NuxtLink :to="toLocalizedDocsPath(row.path, localeKey)" class="docs-sync-table__link">
               {{ row.title }}
             </NuxtLink>
           </td>

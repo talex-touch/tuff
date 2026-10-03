@@ -63,12 +63,26 @@ export function createDocsPrerenderRoutes(nexusRoot: string) {
  * file on Cloudflare Pages, which is what sank the earlier attempt (`af99441e0`). With these
  * prerendered, client-side navigation between docs pages reads a static asset instead of
  * asking the Worker.
+ *
+ * A directory index gets a twin for both spellings, as the Markdown twins below do. It is
+ * scanned as `/docs/dev/index` but navigated to as `/docs/dev`, and the client asks for the
+ * twin of the route it is on. `_routes.json` keeps `/api/docs/page/*` — the query route
+ * included — off the Worker, so a missing twin is not a slow read but a dead one: every
+ * directory route ("Developer", "Concepts Overview") rendered "Document not found" after a
+ * client-side navigation. The resolver maps `/docs/dev` to its index document.
  */
 export function createDocsPageApiPrerenderRoutes(nexusRoot: string) {
   const routes = new Set<string>()
 
   for (const route of createDocsPrerenderRoutes(nexusRoot)) {
-    for (const jsonRoute of toStaticDocsPageJsonPaths(normalizeDocsPagePath(route)))
+    const normalized = normalizeDocsPagePath(route)
+    for (const jsonRoute of toStaticDocsPageJsonPaths(normalized))
+      routes.add(jsonRoute)
+
+    const canonical = canonicalDocsPageIdentity(normalized)
+    if (canonical === normalized)
+      continue
+    for (const jsonRoute of toStaticDocsPageJsonPaths(canonical))
       routes.add(jsonRoute)
   }
 
