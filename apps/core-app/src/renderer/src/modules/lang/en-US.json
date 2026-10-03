@@ -4517,11 +4517,9 @@
       "nexusManagedApiKeyHint": "API key is managed by Nexus auth token.",
       "nexusOfficialProvider": "Nexus managed official provider",
       "nexusInvokeReadyTitle": "Nexus Intelligence is ready",
-      "nexusInvokeReadyDesc": "After app sign-in, official AI calls are routed through Nexus Intelligence Provider configuration.",
       "nexusInvokeLoginTitle": "Sign in to enable Nexus AI",
-      "nexusInvokeLoginDesc": "After sign-in, the default channel uses Nexus managed invocation. Without sign-in it falls back to other available channels.",
       "nexusInvokeAutoCall": "Current sign-in state can call Nexus AI automatically.",
-      "nexusInvokeFallback": "You are not signed in. Calls will fall back to other configured channels.",
+      "nexusInvokeFallback": "Enabled after sign-in",
       "nexusInvokeLoginAction": "Sign in to Nexus",
       "deleteProvider": "Delete provider {name}",
       "deleteProviderConfig": "Delete config",
@@ -6239,13 +6237,6 @@
       "validationFieldReason": "{field}: {reason}",
       "validationFieldReasonAtStep": "Step {index} {field}: {reason}",
       "notRunCount": "Not Run Steps"
-    }
-  },
-  "Intelligence": {
-    "config": {
-      "advanced": {
-        "description": "Configure priority and timeout settings"
-      }
     }
   },
   "flow": {

@@ -202,19 +202,17 @@ function closeDeleteConfirm() {
     <div class="flex items-center gap-3">
       <TuffIcon :icon="providerIcon" :alt="provider.name" :size="40" />
       <div class="min-w-0 flex-1">
-        <div class="flex min-w-0 items-center gap-2">
-          <h1
-            id="provider-name"
-            class="min-w-0 truncate text-lg font-semibold text-gray-900 dark:text-white"
-          >
-            {{ provider.name }}
-          </h1>
-          <p v-if="isNexusManagedProvider" class="provider-official-badge">
-            <i class="i-carbon-cloud-service-management" />
-            <span>{{ t('settings.intelligence.nexusOfficialProvider') }}</span>
-          </p>
-        </div>
-        <p id="provider-type" class="text-sm text-gray-600 dark:text-gray-400">
+        <h1
+          id="provider-name"
+          class="min-w-0 truncate text-lg font-semibold text-gray-900 dark:text-white"
+        >
+          {{ provider.name }}
+        </h1>
+        <p v-if="isNexusManagedProvider" id="provider-type" class="provider-official-badge">
+          <i class="i-carbon-cloud-service-management" />
+          <span>{{ t('settings.intelligence.nexusOfficialProvider') }}</span>
+        </p>
+        <p v-else id="provider-type" class="text-sm text-gray-600 dark:text-gray-400">
           {{ t(`settings.intelligence.providerTypeOptions.${getProviderChannelType(provider)}`) }}
         </p>
       </div>
@@ -360,16 +358,19 @@ function closeDeleteConfirm() {
   -webkit-app-region: no-drag;
 }
 
+/* Replaces the provider-type line: 1rem line-height + 2 × 0.125rem padding = its 1.25rem. */
 .provider-official-badge {
-  flex: 0 0 auto;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.25rem;
-  max-width: 12rem;
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
   margin: 0;
   padding: 0.125rem 0.5rem;
   border-radius: 999px;
   font-size: 0.75rem;
+  line-height: 1rem;
   color: var(--tx-color-primary);
   background: var(--tx-color-primary-soft);
 
