@@ -3633,7 +3633,7 @@
         "command": "Command",
         "commandPlaceholder": "npx",
         "args": "Arguments",
-        "argsPlaceholder": "-y @modelcontextprotocol/server-filesystem /tmp",
+        "argsPlaceholder": "-y {'@'}modelcontextprotocol/server-filesystem /tmp",
         "env": "Environment",
         "envPlaceholder": "KEY=value, one per line",
         "envNote": "Values go to the system secure store, never plaintext config",

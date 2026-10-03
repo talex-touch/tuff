@@ -3633,7 +3633,7 @@
         "command": "命令",
         "commandPlaceholder": "npx",
         "args": "参数",
-        "argsPlaceholder": "-y @modelcontextprotocol/server-filesystem /tmp",
+        "argsPlaceholder": "-y {'@'}modelcontextprotocol/server-filesystem /tmp",
         "env": "环境变量",
         "envPlaceholder": "KEY=value，每行一个",
         "envNote": "值会进入系统安全存储，不落明文配置",
