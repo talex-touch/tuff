@@ -60,7 +60,7 @@
     "zod": "^3.25.32"
   },
   "dependencies": {
-    "@langchain/core": "^0.3.80",
+    "@langchain/core": "^1.2.13",
     "@langchain/langgraph": "catalog:",
     "@talex-touch/utils": "workspace:*"
   },
