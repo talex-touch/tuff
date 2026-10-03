@@ -1,18 +1,24 @@
 <script setup lang="ts">
+import type { TxSelectModelValue } from '../../select'
 import type { PaginationProps } from './types'
-import { computed, watch } from 'vue'
+import { computed, useId, watch } from 'vue'
 import { TxIcon } from '../../icon'
+import { TxSelect } from '../../select'
 
 interface Props extends PaginationProps {}
 
 interface Emits {
   'update:currentPage': [page: number]
   'pageChange': [page: number]
+  'update:pageSize': [size: number]
+  'pageSizeChange': [size: number]
 }
 
 const props = withDefaults(defineProps<Props>(), {
   currentPage: 1,
   pageSize: 10,
+  pageSizes: () => [],
+  pageSizeLabel: 'Items per page',
   prevIcon: '',
   nextIcon: '',
   showInfo: false,
@@ -93,10 +99,46 @@ function handlePageChange(page: number) {
   emit('update:currentPage', page)
   emit('pageChange', page)
 }
+
+// --- Page size ---------------------------------------------------------------
+// Only valid sizes count, and a `pageSize` outside the list joins it: the
+// selector would otherwise show a blank value for the size actually in use.
+const pageSizeOptions = computed(() => {
+  const sizes = new Set((props.pageSizes ?? []).filter(size => Number.isInteger(size) && size > 0))
+  if (!sizes.size)
+    return []
+  if (Number.isInteger(props.pageSize) && props.pageSize > 0)
+    sizes.add(props.pageSize)
+  return [...sizes].sort((a, b) => a - b).map(size => ({ value: size, label: String(size) }))
+})
+
+const pageSizeLabelId = `${useId()}-page-size`
+
+function handlePageSizeChange(value: TxSelectModelValue) {
+  const size = Number(value)
+  if (!Number.isInteger(size) || size <= 0 || size === props.pageSize)
+    return
+  // The page stays the caller's call. A page past the new count is corrected by
+  // the clamp above whichever way they go.
+  emit('update:pageSize', size)
+  emit('pageSizeChange', size)
+}
+
+// TxSelect has no prop that names its combobox. A wrapping <label> is not the
+// way out: label activation re-dispatches a click on the trigger's padding or
+// arrow to the input, and TxBaseAnchor toggles on every click it sees in the
+// capture phase, so the panel would open and close at once (read from the code,
+// not measured). The combobox is pointed at the visible label instead.
+// `role="combobox"` is TxSelect's tested accessibility contract, not a private
+// class name.
+function nameSizeSelect(instance: unknown) {
+  const root = (instance as { $el?: Element } | null)?.$el
+  root?.querySelector?.('[role="combobox"]')?.setAttribute('aria-labelledby', pageSizeLabelId)
+}
 </script>
 
 <template>
-  <nav class="tx-pagination" :aria-label="ariaLabel">
+  <nav class="tx-pagination" :class="{ 'has-page-size': pageSizeOptions.length }" :aria-label="ariaLabel">
     <ul class="tx-pagination__list">
       <!-- First button -->
       <li v-if="showFirstLast" class="tx-pagination__item">
@@ -179,6 +221,18 @@ function handlePageChange(page: number) {
         </button>
       </li>
     </ul>
+
+    <!-- Page size: rendered only with `pageSizes`, so callers without it keep their DOM -->
+    <div v-if="pageSizeOptions.length" class="tx-pagination__size">
+      <span :id="pageSizeLabelId" class="tx-pagination__size-label">{{ pageSizeLabel }}</span>
+      <TxSelect
+        :ref="nameSizeSelect"
+        :model-value="pageSize"
+        :options="pageSizeOptions"
+        style="width: 88px"
+        @update:model-value="handlePageSizeChange"
+      />
+    </div>
 
     <!-- Page info -->
     <div v-if="showInfo" class="tx-pagination__info">
@@ -288,5 +342,23 @@ function handlePageChange(page: number) {
 .tx-pagination__info {
   font-size: 13px;
   color: var(--tx-pagination-info-text, var(--tx-text-color-secondary, #909399));
+}
+
+/* With a size selector the controls share one wrapping row, list first: stacked,
+   three short lines would read as three separate controls. */
+.tx-pagination.has-page-size {
+  flex-flow: row wrap;
+  justify-content: center;
+  column-gap: 12px;
+}
+
+/* 13px text the reader has to read: regular ink, not the info line's secondary. */
+.tx-pagination__size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--tx-text-color-regular, #606266);
+  font-size: 13px;
+  white-space: nowrap;
 }
 </style>

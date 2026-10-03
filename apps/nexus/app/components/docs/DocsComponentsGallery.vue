@@ -534,6 +534,21 @@ const tableRows = [
   { id: 2, name: 'Browser', channel: 'Beta' },
   { id: 3, name: 'Intelligence', channel: 'Snapshot' },
 ]
+// One plugin record. The homepage is empty on purpose: the item renders the
+// list's `—` placeholder there rather than a blank value.
+const descriptionFields = computed(() => (localeKey.value === 'zh'
+  ? [
+      { label: '插件', value: '剪贴板历史' },
+      { label: '版本', value: '2.4.1' },
+      { label: '通道', value: '稳定版' },
+      { label: '主页', value: '' },
+    ]
+  : [
+      { label: 'Plugin', value: 'Clipboard history' },
+      { label: 'Version', value: '2.4.1' },
+      { label: 'Channel', value: 'Stable' },
+      { label: 'Homepage', value: '' },
+    ]))
 const filterChip = ref('all')
 const filterChipItems = computed(() => [
   { value: 'all', label: copy.value.suiteBase, count: 91 },
@@ -2509,6 +2524,26 @@ async function copyInstall() {
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxDataTable :columns="tableColumns" :data="tableRows" row-key="id" hover />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('descriptions')">
+          {{ cellLabel('Descriptions', '描述列表') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__block">
+              <TxDescriptions :columns="1">
+                <TxDescriptionsItem v-for="field in descriptionFields" :key="field.label" :label="field.label">
+                  {{ field.value }}
+                </TxDescriptionsItem>
+              </TxDescriptions>
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />

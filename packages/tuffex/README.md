@@ -89,7 +89,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **166**.
+Current source-of-truth export modules: **167**.
 
 Every module ships in exactly one of three suites, each exposed as its own category entry:
 
@@ -107,7 +107,7 @@ General, form, layout, navigation, data, feedback and status components. Import 
 - `Form (24)`: `form`, `input`, `textarea`, `number-input`, `search-input`, `tag-input`, `sensitive-input`, `scrub-field`, `select`, `flat-select`, `search-select`, `tree-select`, `cascader`, `picker`, `date-picker`, `radio`, `flat-radio`, `checkbox`, `switch`, `slider`, `segmented-slider`, `rating`, `file-uploader`, `image-uploader`
 - `Layout (11)`: `container`, `flex`, `grid`, `grid-layout`, `stack`, `splitter`, `scroll`, `collapse`, `card`, `card-item`, `group-block`
 - `Navigation (10)`: `tabs`, `tab-bar`, `nav-bar`, `sidebar-nav`, `breadcrumb`, `steps`, `pagination`, `dropdown-menu`, `flat-dropdown`, `context-menu`
-- `Data Display (11)`: `data-table`, `tree`, `sortable-list`, `timeline`, `transfer`, `stat-card`, `cell-link`, `dot-indicator`, `filter-chips`, `markdown-view`, `image-gallery`
+- `Data Display (12)`: `data-table`, `descriptions`, `tree`, `sortable-list`, `timeline`, `transfer`, `stat-card`, `cell-link`, `dot-indicator`, `filter-chips`, `markdown-view`, `image-gallery`
 - `Feedback (14)`: `dialog`, `modal`, `drawer`, `popover`, `tooltip`, `toast`, `toast-panel`, `alert`, `status-hint`, `progress`, `progress-bar`, `spinner`, `loading-overlay`, `selection-actions`
 - `Status & Empty (13)`: `empty`, `empty-state`, `no-data`, `no-selection`, `search-empty`, `error-state`, `offline-state`, `permission-state`, `guide-state`, `blank-slate`, `loading-state`, `skeleton`, `layout-skeleton`
 

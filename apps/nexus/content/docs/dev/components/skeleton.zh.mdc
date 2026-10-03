@@ -41,7 +41,7 @@ code: |
 - 可配置文本、矩形、头像占位用 `TxSkeleton`；固定结构刚好匹配最终界面时再用 `TxCardSkeleton` 或 `TxListItemSkeleton`。
 - 把 `loading=false` 作为切换到真实内容的交接点，不要在不同分支里分别维护骨架和内容。
 - 不要把骨架当作灰色装饰。如果最终内容结构未知，优先使用有文案的空态或加载态。
-- 短耗时表格等待用 `TxDataTable loading`；需要保留周围结构节奏的长耗时等待再用骨架。
+- 表格请用 `TxDataTable` 的 `loadingVariant="skeleton"`：首次加载时它按自己的列画出骨架行，刷新时保留现有行。它默认的 `loading` 遮罩适合本地的短暂等待。
 
 ## API 参考
 
@@ -102,7 +102,7 @@ rows:
 
 ## 后台数据运维面板
 
-表格数据加载时，短耗时可用 `TxDataTable loading` 遮罩；长耗时或侧栏摘要建议用 `TxSkeleton` 保留结构节奏。
+表格数据加载时，`TxDataTable` 的 `loadingVariant="skeleton"` 会自己画出骨架行，本地的短暂等待可以保留默认遮罩；表格旁的侧栏摘要用 `TxSkeleton` 保留结构节奏。
 
 :::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="数据运维面板" description="骨架屏与表格加载态一起覆盖数据区等待状态。"}
 ---

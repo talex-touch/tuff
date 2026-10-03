@@ -3,6 +3,7 @@ import type { DataTableColumn, DataTableEmits, DataTableHeaderSlotProps, DataTab
 import { computed, getCurrentInstance, ref, useId, useSlots, watch } from 'vue'
 import { TxCheckbox } from '../../checkbox'
 import { TxEmptyState } from '../../empty-state'
+import { TxSkeleton } from '../../skeleton'
 import { TxSpinner } from '../../spinner'
 
 defineOptions({ name: 'TxDataTable' })
@@ -12,10 +13,17 @@ defineOptions({ name: 'TxDataTable' })
 const SELECT_COLUMN_WIDTH = 42
 const EXPAND_COLUMN_WIDTH = 40
 
+// Bars of one width read as a striped block rather than as rows of text, so the
+// skeleton's bar width steps through this sequence by row and column. Fixed rather
+// than random: a random width would differ between the server render and hydration.
+const SKELETON_BAR_WIDTHS = [72, 88, 64, 80, 60, 90, 68]
+
 const props = withDefaults(defineProps<DataTableProps<any>>(), {
   columns: () => [],
   data: () => [],
   loading: false,
+  loadingVariant: 'overlay',
+  skeletonRows: 5,
   emptyText: 'No data',
   striped: false,
   bordered: false,
@@ -184,6 +192,35 @@ const displayRows = computed(() => {
   const sorter = col.sorter ?? ((a: any, b: any) => defaultSorter(getCellValue(a, col), getCellValue(b, col)))
   return rows.sort((a, b) => dir * sorter(a, b))
 })
+
+// --- Loading ---------------------------------------------------------------
+// Anything but an explicit `skeleton` keeps the overlay, so a mistyped variant
+// still shows that the table is busy.
+const isSkeletonLoading = computed(() => props.loading && props.loadingVariant === 'skeleton')
+const showOverlay = computed(() => props.loading && props.loadingVariant !== 'skeleton')
+// Placeholder rows only stand in for rows that do not exist yet. A refresh keeps
+// the rows on screen and says so with the bar under the header instead.
+const showSkeleton = computed(() => isSkeletonLoading.value && !displayRows.value.length)
+const showRefreshBar = computed(() => isSkeletonLoading.value && displayRows.value.length > 0)
+
+const skeletonRowCount = computed(() => {
+  const count = Math.floor(Number(props.skeletonRows))
+  return Number.isFinite(count) ? Math.max(1, count) : 5
+})
+
+function skeletonBarWidth(row: number, column: number): string {
+  return `${SKELETON_BAR_WIDTHS[(row * 5 + column * 3) % SKELETON_BAR_WIDTHS.length] ?? 72}%`
+}
+
+// The bar follows the column's alignment, so a right-aligned figure column keeps
+// its placeholder at the right edge. Inline because it is one value per column.
+function skeletonBarStyle(column: DataTableColumn): Record<string, string> | undefined {
+  if (column.align === 'right')
+    return { alignItems: 'flex-end' }
+  if (column.align === 'center')
+    return { alignItems: 'center' }
+  return undefined
+}
 
 function toggleRow(key: DataTableKey) {
   const next = new Set(selectedSet.value)
@@ -423,7 +460,7 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
     }"
     :style="shellStyle"
   >
-    <div v-if="loading" class="tx-data-table__loading" aria-live="polite">
+    <div v-if="showOverlay" class="tx-data-table__loading" aria-live="polite">
       <TxSpinner :size="20" />
     </div>
 
@@ -473,7 +510,45 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
           </th>
         </tr>
       </thead>
+      <!-- A row group of its own, so the bar neither adds height nor shifts the
+           body's `nth-child` stripes. The cell is the bar's containing block. -->
+      <tbody v-if="showRefreshBar" class="tx-data-table__refresh" aria-hidden="true">
+        <tr>
+          <td :colspan="colspan" style="position: relative; padding: 0">
+            <span class="tx-data-table__refresh-bar" />
+          </td>
+        </tr>
+      </tbody>
       <tbody>
+        <template v-if="showSkeleton">
+          <tr
+            v-for="row in skeletonRowCount"
+            :key="`skeleton-${row}`"
+            class="tx-data-table__row tx-data-table__row--skeleton"
+            :class="{ 'is-stripe': expandable && striped && row % 2 === 1 }"
+            aria-hidden="true"
+          >
+            <td v-if="expandable" class="tx-data-table__cell tx-data-table__cell--expand" />
+            <td v-if="selectable" class="tx-data-table__cell tx-data-table__cell--select">
+              <TxSkeleton class="tx-data-table__skeleton is-check" :width="18" :height="18" :radius="6" />
+            </td>
+            <td
+              v-for="(column, columnIndex) in columns"
+              :key="column.key"
+              class="tx-data-table__cell"
+              :class="columnClass(column, 'cell')"
+              :style="columnStyle(column)"
+            >
+              <TxSkeleton
+                class="tx-data-table__skeleton"
+                :style="skeletonBarStyle(column)"
+                :width="skeletonBarWidth(row, columnIndex)"
+                :height="10"
+                :radius="4"
+              />
+            </td>
+          </tr>
+        </template>
         <template v-for="(row, index) in displayRows" :key="getRowKey(row, index)">
           <tr
             class="tx-data-table__row"
@@ -821,6 +896,59 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
   background: color-mix(in srgb, var(--tx-bg-color, #fff) 70%, transparent);
   z-index: 2;
   backdrop-filter: blur(4px);
+}
+
+/* Skeleton loading -------------------------------------------------------- */
+
+/* The bar sits in a box one line tall, inside the same cell padding as a loaded
+   cell, so a placeholder row is exactly as tall as a one-line row of text. */
+.tx-data-table__skeleton {
+  height: 1lh;
+  justify-content: center;
+}
+
+/* The selection column: a box of the checkbox's size, on the text baseline as the
+   checkbox is, so a selectable placeholder row matches a selectable row too. */
+.tx-data-table__skeleton.is-check {
+  display: inline-flex;
+  height: auto;
+}
+
+/* A placeholder takes no hover tint and no clicks. */
+.tx-data-table__row--skeleton {
+  pointer-events: none;
+}
+
+/* A refresh keeps the rows. Its bar lies over the header's bottom rule, from a
+   zero-height row group of its own (the cell's two declarations are inline);
+   z-index 4 is over fixed cells (1, 3) and under a pinned header (5). Under
+   reduced motion it is a still, full line. It takes the physical left plus a
+   width rather than both insets: with both set, a right-to-left page would
+   anchor the travelling 40% bar at the right edge. */
+.tx-data-table__refresh-bar {
+  position: absolute;
+  top: -1px;
+  left: 0;
+  z-index: 4;
+  width: 100%;
+  height: 2px;
+  background: var(--tx-color-primary, #409eff);
+  pointer-events: none;
+}
+
+/* 40% travelling 150% of its own width ends flush with the right edge, so the
+   bar never leaves the table: no clipping, and no scrollbar on a scrolling shell. */
+@media (prefers-reduced-motion: no-preference) {
+  .tx-data-table__refresh-bar {
+    width: 40%;
+    animation: tx-data-table-refresh 0.9s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes tx-data-table-refresh {
+  to {
+    translate: 150% 0;
+  }
 }
 
 .tx-data-table__empty {

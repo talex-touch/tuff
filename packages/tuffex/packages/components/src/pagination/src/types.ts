@@ -1,6 +1,19 @@
 export interface PaginationProps {
   currentPage?: number
   pageSize?: number
+  /**
+   * Page-size choices. Supplying them renders a size selector after the page
+   * buttons and lays the controls out in one wrapping row; leave it out (or pass
+   * `[]`) and the component renders exactly as before. A `pageSize` missing from
+   * the list is added to it, so the selector never shows a blank value.
+   */
+  pageSizes?: number[]
+  /**
+   * Visible label in front of the page-size selector; it also names the selector
+   * for assistive technology.
+   * @default 'Items per page'
+   */
+  pageSizeLabel?: string
   total?: number
   totalPages?: number
   prevIcon?: string
@@ -22,4 +35,10 @@ export interface PaginationProps {
 export interface PaginationEmits {
   'update:currentPage': [page: number]
   'pageChange': [page: number]
+  /**
+   * The reader picked another page size. The component does not move the page:
+   * reset `currentPage` yourself if the new size should start from page 1.
+   */
+  'update:pageSize': [size: number]
+  'pageSizeChange': [size: number]
 }

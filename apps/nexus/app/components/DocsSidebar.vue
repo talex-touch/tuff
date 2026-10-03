@@ -312,6 +312,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/context-menu',
     // base — Data
     '/docs/dev/components/data-table',
+    '/docs/dev/components/descriptions',
     '/docs/dev/components/tree',
     '/docs/dev/components/sortable-list',
     '/docs/dev/components/timeline',

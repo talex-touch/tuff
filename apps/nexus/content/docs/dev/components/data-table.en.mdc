@@ -34,6 +34,33 @@ code: |
 ---
 ::
 
+### Skeleton loading
+
+`loading-variant="skeleton"` swaps the spinner veil for placeholder rows while there are no rows yet, shaped like the columns and as tall as a loaded row. Once rows exist, a refresh keeps them on screen and only a thin bar under the header moves. Pick a state to compare the two.
+
+::TuffDemoWrapper{demo="DataTableSkeletonLoadingDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const rows = ref([])
+  const loading = ref(true)
+  </script>
+
+  <template>
+    <TxDataTable
+      :columns="columns"
+      :data="rows"
+      :loading="loading"
+      loading-variant="skeleton"
+      :skeleton-rows="pageSize"
+      row-key="id"
+    />
+  </template>
+---
+::
+
 ### Expandable rows
 
 `expandable` adds a leading toggle column; each row can open a `#expanded` detail row beneath it.
@@ -69,6 +96,7 @@ code: |
 - Pass a stable `rowKey` for business lists; when selection persists across pages, drive `selectedKeys` with business ids instead of default indexes.
 - Sortable columns support click, Enter, and Space. Use `sortOnClient=false` with `sortChange` for remote sorting.
 - `tableLayout="fixed"` plus explicit `width` / `minWidth` keeps dense operations tables from shifting during loading or sorting.
+- For a list that loads from a server, use `loadingVariant="skeleton"` with `skeletonRows` set to the page size: the first load draws rows of the right shape and height, and a refresh keeps the rows instead of veiling them. The default `overlay` suits a short local wait.
 - Fixed columns should use numeric px `width` or `minWidth`; sticky offsets are calculated from those values.
 - Pick one horizontal scroller: either turn on `scrollX` and let the component be its own, or leave the default and wrap the table in an outer `overflow-x: auto` container. Both give sticky columns something to stick against — just do not nest two scrollers.
 - A pinned header or footer needs `maxHeight` (or an ancestor that already scrolls), otherwise there is nothing to stick to; and that scroll container must not scroll by transform, as `TxScroll` does in its default mode, which disables sticky entirely.
@@ -89,6 +117,8 @@ code: |
 | `data` | `any[]` | `[]` | Data source |
 | `rowKey` | `keyof T \| (row: T, index: number) => string \| number` | `index` | Unique row key |
 | `loading` | `boolean` | `false` | Loading state |
+| `loadingVariant` | `'overlay' \| 'skeleton'` | `'overlay'` | How `loading` is drawn. `overlay`: a blurred veil and a spinner over the table. `skeleton`: placeholder rows while there are no rows, and a bar under the header while existing rows refresh. Any other value is `overlay` |
+| `skeletonRows` | `number` | `5` | Placeholder rows the `skeleton` variant draws before the first rows land; floored, at least 1. Match the page size so nothing moves when the data arrives |
 | `emptyText` | `string` | `'No data'` | Empty text |
 | `striped` | `boolean` | `false` | Zebra rows |
 | `bordered` | `boolean` | `false` | Show borders |
@@ -273,14 +303,23 @@ The row hover and selection fills are exposed as CSS variables, so a paper-like 
 }
 ```
 
+## Overview
+
+- `loading` always sets `aria-busy` on the `<table>`. With the default `overlay`, `div.tx-data-table__loading` veils the whole table, rows or not, and the empty state stays hidden.
+- `skeleton` with no rows: the body holds `skeletonRows` rows of class `tx-data-table__row--skeleton`, each `aria-hidden="true"`, with no tab stop and no pointer events. Every cell keeps the column's cell class, width and fixed side. Its bar is a `TxSkeleton` held to one line box (`height: 1lh`) and aligned like the column, so a placeholder row is exactly as tall as a one-line row and nothing moves when the rows land. The selection column holds a checkbox-sized box on the text baseline; the expand column stays empty. Bar widths step through a fixed sequence between 60% and 90%, so the server render and hydration agree.
+- `skeleton` with rows: the rows stay, with no veil, no fade and no placeholder. A 2px bar in `--tx-color-primary` lies over the header's bottom rule, from a zero-height row group of its own (`tbody.tx-data-table__refresh`, `aria-hidden`), so the body's stripes keep their parity. It slides back and forth on `translate` only while `prefers-reduced-motion` is `no-preference`, and never leaves the table; under reduced motion it is a still, full line.
+- The empty state never shows while loading. Once `loading` turns false with no rows, the placeholders give way to it.
+- The skeleton variant renders `TxSkeleton`. The on-demand style plugin loads that sheet with the table's; when importing styles by hand, add `@talex-touch/tuffex/skeleton/style.css`.
+- Without `loadingVariant`, the table renders exactly as before the variant existed.
+
 ## Technologies
 
 - **Accessibility note:** `TxDataTable` renders a native table and gives sortable header cells `scope="col"`, `aria-sort`, keyboard focus, and Enter/Space handlers.
 - **Types:** `rowKey` is declared as `keyof T` or a callback that returns a string or number; `sortChange` may emit a `DataTableSortState` or `null`.
-- **Verified coverage:** The component test renders headers and rows, checks pointer sorting plus keyboard `aria-sort` transitions, selection emission, and layout/nowrap/auto/fixed-column styles. The last-row separator reset is asserted against the SFC source, because vitest never evaluates a `<style>` block.
+- **Verified coverage:** The component test renders headers and rows, checks pointer sorting plus keyboard `aria-sort` transitions, selection emission, and layout/nowrap/auto/fixed-column styles. The last-row separator reset is asserted against the SFC source, because vitest never evaluates a `<style>` block. The loading test (8 cases) covers the overlay default, placeholder rows (count, cells, widths, alignment, the utility columns, deterministic bar widths), a refresh that keeps the very same row elements with the bar in its own row group, the swap to rows or to the empty state, an unknown variant falling back to the overlay, and, against the stylesheet, the one-line box and the motion-gated bar.
 
 - Component source: `packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue`.
 - Type contracts: `packages/tuffex/packages/components/src/data-table/src/types.ts` exports `DataTableProps`, `DataTableColumn`, sort state, row-key, and emit types.
-- Coverage: `packages/tuffex/packages/components/src/data-table/__tests__/data-table.test.ts` verifies header and row rendering, pointer and keyboard sorting (including `aria-sort`), selection emission, layout/nowrap/auto/fixed-column styles, and the last-row separator reset.
+- Coverage: `packages/tuffex/packages/components/src/data-table/__tests__/data-table.test.ts` verifies header and row rendering, pointer and keyboard sorting (including `aria-sort`), selection emission, layout/nowrap/auto/fixed-column styles, and the last-row separator reset; `data-table-loading.test.ts` verifies both loading variants.
 
 <TuffDocSourceLink />
