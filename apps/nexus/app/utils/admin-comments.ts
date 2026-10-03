@@ -1,4 +1,5 @@
 import type { AdminListFetchParams, AdminListOptions, AdminListPage } from '~/composables/useAdminList'
+import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 /**
  * Comment management (`/admin/reviews?tab=plugins|docs`): the request each queue
@@ -121,9 +122,16 @@ export function docCommentPath(id: string): string {
   return `/api/admin/doc-comments/${encodeURIComponent(id)}`
 }
 
-/** Where the commented document lives on the docs site. */
-export function docCommentDocumentLink(path: string): string {
-  return `/docs/${path.replace(/^\/+/, '')}`
+/**
+ * Where the commented document lives on the docs site, in the administrator's locale. A
+ * comment stores its page path without the leading slash (`docs/guide/start`), so prefixing
+ * `/docs/` again linked every comment to `/docs/docs/...`; and an unprefixed docs link opens
+ * the English page.
+ */
+export function docCommentDocumentLink(path: string, locale: 'en' | 'zh'): string {
+  const trimmed = path.replace(/^\/+/, '')
+  const docsPath = trimmed === 'docs' || trimmed.startsWith('docs/') ? `/${trimmed}` : `/docs/${trimmed}`
+  return toLocalizedDocsPath(docsPath, locale)
 }
 
 function normalizeDocPath(path: string): string {

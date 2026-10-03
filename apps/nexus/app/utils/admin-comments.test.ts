@@ -190,8 +190,13 @@ describe('switching queues', () => {
 
 describe('comment links and actions', () => {
   it('links a comment to its document and to that document\'s analytics', () => {
-    expect(docCommentDocumentLink('guide/intro')).toBe('/docs/guide/intro')
-    expect(docCommentDocumentLink('/guide/intro')).toBe('/docs/guide/intro')
+    // A comment stores the page path the docs page posts, slash-trimmed: `docs/guide/start`.
+    // Prefixing `/docs/` again linked every real comment to `/docs/docs/...`.
+    expect(docCommentDocumentLink('docs/guide/start', 'zh')).toBe('/zh/docs/guide/start')
+    expect(docCommentDocumentLink('docs/dev/api/channel', 'en')).toBe('/en/docs/dev/api/channel')
+    expect(docCommentDocumentLink('/docs/dev/components/index', 'zh')).toBe('/zh/docs/dev/components/index')
+    // A path stored without the docs segment still lands in the docs tree.
+    expect(docCommentDocumentLink('guide/intro', 'en')).toBe('/en/docs/guide/intro')
     expect(docCommentAnalyticsLink()).toBe('/admin/analytics?section=docs')
     expect(docCommentAnalyticsLink('/Guide/Intro/')).toBe('/admin/analytics?section=docs&path=guide%2Fintro')
   })

@@ -29,7 +29,9 @@ import { requestJson } from '~/utils/request'
  * for the plugin review queue and coming back lands on the same filtered page.
  * Deleting asks first.
  */
-const { t } = useI18n()
+const { t, locale } = useI18n()
+// Document links open the docs page in the administrator's language.
+const linkLocale = computed<'en' | 'zh'>(() => (locale.value === 'zh' ? 'zh' : 'en'))
 const format = useAdminFormat()
 const toast = useToast()
 const { deviceId } = useDeviceIdentity()
@@ -191,7 +193,7 @@ defineExpose({
         </template>
         <template #cell-path="{ row }">
           <span class="CommentCell" :title="row.path">
-            <NuxtLink class="CommentCell-Link" :to="docCommentDocumentLink(row.path)" @click.stop>
+            <NuxtLink class="CommentCell-Link" :to="docCommentDocumentLink(row.path, linkLocale)" @click.stop>
               {{ row.path }}
             </NuxtLink>
             <NuxtLink
@@ -229,7 +231,7 @@ defineExpose({
           <AdminIdentity :name="detailComment.userName" :avatar="detailComment.userImage" :fallback="authorName(detailComment)" size="sm" />
         </TxDescriptionsItem>
         <TxDescriptionsItem :label="t('dashboard.sections.docComments.table.path', 'Document')">
-          <NuxtLink class="CommentDetail-Link" :to="docCommentDocumentLink(detailComment.path)">
+          <NuxtLink class="CommentDetail-Link" :to="docCommentDocumentLink(detailComment.path, linkLocale)">
             {{ detailComment.path }}
           </NuxtLink>
         </TxDescriptionsItem>
