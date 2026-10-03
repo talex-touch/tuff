@@ -366,6 +366,87 @@ export async function listImages(event: H3Event): Promise<string[]> {
   return listStorageObjectKeys(bucket, memoryStorage)
 }
 
+/** Keys per page of `GET /api/images/list?limit=`, when the caller names no limit. */
+export const IMAGE_LIST_DEFAULT_LIMIT = 60
+/** The largest page `GET /api/images/list?limit=` serves; R2 itself stops at 1000. */
+export const IMAGE_LIST_MAX_LIMIT = 200
+
+export interface ImageListPageRequest {
+  limit: number
+  /** Continuation token from the previous page; `null` for the first page. */
+  cursor: string | null
+}
+
+export interface ImageListPage {
+  keys: string[]
+  /** Set while more keys remain; pass it back as `cursor` for the next page. */
+  cursor: string | null
+  truncated: boolean
+}
+
+function firstQueryValue(value: unknown): unknown {
+  return Array.isArray(value) ? value[0] : value
+}
+
+/**
+ * The paging parameters of `GET /api/images/list`, or `null` when the request
+ * names neither `limit` nor `cursor` — the original form, which still answers
+ * with every key at once. A limit that is not a positive integer falls back to
+ * the default, and one above the cap is lowered to it.
+ */
+export function parseImageListPageQuery(query: Record<string, unknown>): ImageListPageRequest | null {
+  const rawLimit = firstQueryValue(query.limit)
+  const rawCursor = firstQueryValue(query.cursor)
+  if (rawLimit === undefined && rawCursor === undefined)
+    return null
+
+  const requested = typeof rawLimit === 'string' && /^\d+$/.test(rawLimit.trim()) ? Number(rawLimit) : Number.NaN
+  const limit = Number.isSafeInteger(requested) && requested > 0
+    ? Math.min(requested, IMAGE_LIST_MAX_LIMIT)
+    : IMAGE_LIST_DEFAULT_LIMIT
+  const cursor = typeof rawCursor === 'string' && rawCursor.trim() ? rawCursor.trim() : null
+  return { limit, cursor }
+}
+
+/**
+ * One page of the in-memory store (development without an R2 binding), in the
+ * order R2 lists keys — ascending — with the last key of a page as its cursor.
+ * Reading "after this key" rather than "from this offset" keeps the next page
+ * right when an earlier key is deleted between two requests.
+ */
+export function pageStorageKeys(keys: readonly string[], request: ImageListPageRequest): ImageListPage {
+  const sorted = [...keys].sort()
+  const after = request.cursor
+  const start = after === null ? 0 : sorted.findIndex(key => key > after)
+  const from = start === -1 ? sorted.length : start
+  const page = sorted.slice(from, from + request.limit)
+  const truncated = from + page.length < sorted.length
+  return {
+    keys: page,
+    cursor: truncated ? page[page.length - 1] ?? null : null,
+    truncated,
+  }
+}
+
+/**
+ * One page of the listing `listImages` returns whole: R2's own `limit` / `cursor`,
+ * or the in-memory store paged the same way.
+ */
+export async function listImagesPage(event: H3Event, request: ImageListPageRequest): Promise<ImageListPage> {
+  const bucket = getR2Bucket(event)
+  if (!bucket)
+    return pageStorageKeys(Array.from(memoryStorage.keys()), request)
+
+  const listed = await bucket.list(request.cursor
+    ? { limit: request.limit, cursor: request.cursor }
+    : { limit: request.limit })
+  return {
+    keys: listed.objects.map(object => object.key),
+    cursor: listed.truncated ? listed.cursor : null,
+    truncated: listed.truncated,
+  }
+}
+
 /**
  * 从 Buffer 上传图片（用于从 tpex 包中提取的 icon）
  */

@@ -9,14 +9,32 @@ export type AdminNumberInput = number | string | null | undefined
 
 type Translate = (key: string, named: Record<string, unknown>) => string
 
+export interface AdminDateOptions {
+  /**
+   * `'UTC'` reads the value's UTC calendar fields. Use it for a date-only value
+   * stored at UTC midnight: west of UTC its local day is the day before
+   * (`2026-09-26T00:00:00Z` is 2026-09-25 17:00 in Los Angeles).
+   */
+  timeZone?: 'UTC'
+}
+
 export interface AdminFormat {
   /** BCP-47 tag every `Intl` formatter here uses. */
   locale: ComputedRef<string>
   /** `YYYY-MM-DD HH:mm`, local time, 24-hour: fixed width, so a table column never wraps. */
   tableDateTime: (value: AdminDateInput) => string
-  /** The full localized date and time; the `title` behind a `tableDateTime` cell. */
+  /**
+   * `YYYY-MM-DD`, local time: `tableDateTime` without the clock, for a column
+   * whose values are calendar days. An update published "on 2026-10-03" is
+   * stored as `2026-10-03T00:00:00Z`, and its clock would only print the
+   * reader's UTC offset ("08:00" in UTC+8) — read such a value with
+   * `{ timeZone: 'UTC' }`, or west of UTC it prints the day before.
+   */
+  tableDate: (value: AdminDateInput, options?: AdminDateOptions) => string
+  /** The full localized date and time; the `title` behind a `tableDateTime` or `tableDate` cell. */
   dateTimeTitle: (value: AdminDateInput) => string
-  date: (value: AdminDateInput) => string
+  /** The localized date without a time; `{ timeZone: 'UTC' }` as for `tableDate`. */
+  date: (value: AdminDateInput, options?: AdminDateOptions) => string
   dateTime: (value: AdminDateInput) => string
   /** "3 minutes ago" / "3 分钟前". `now` exists for tests. */
   relative: (value: AdminDateInput, now?: number) => string
@@ -61,6 +79,16 @@ function toNumber(value: AdminNumberInput): number | null {
 
 function pad(value: number): string {
   return String(value).padStart(2, '0')
+}
+
+/** `YYYY-MM-DD` from the local calendar fields. */
+function localDay(date: Date): string {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+/** `YYYY-MM-DD` from the UTC calendar fields. */
+function utcDay(date: Date): string {
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`
 }
 
 const RELATIVE_STEPS: Array<{ unit: Intl.RelativeTimeFormatUnit, seconds: number }> = [
@@ -112,15 +140,23 @@ export function createAdminFormat(resolveLocale: () => string, t: Translate): Ad
       const date = toDate(value)
       if (!date)
         return ADMIN_FORMAT_EMPTY
-      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+      return `${localDay(date)} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+    },
+    tableDate(value, options) {
+      const date = toDate(value)
+      if (!date)
+        return ADMIN_FORMAT_EMPTY
+      return options?.timeZone === 'UTC' ? utcDay(date) : localDay(date)
     },
     dateTimeTitle(value) {
       const date = toDate(value)
       return date ? dateFormat({ dateStyle: 'medium', timeStyle: 'medium' }).format(date) : ADMIN_FORMAT_EMPTY
     },
-    date(value) {
+    date(value, options) {
       const date = toDate(value)
-      return date ? dateFormat({ dateStyle: 'medium' }).format(date) : ADMIN_FORMAT_EMPTY
+      if (!date)
+        return ADMIN_FORMAT_EMPTY
+      return dateFormat(options?.timeZone ? { dateStyle: 'medium', timeZone: options.timeZone } : { dateStyle: 'medium' }).format(date)
     },
     dateTime(value) {
       const date = toDate(value)

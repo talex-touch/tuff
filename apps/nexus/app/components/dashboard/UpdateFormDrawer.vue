@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import type { ComponentPublicInstance } from 'vue'
+import { TxAlert } from '@talex-touch/tuffex/alert'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
-import Drawer from '~/components/ui/Drawer.vue'
+import { reactive, ref, useId, watch } from 'vue'
+import { resolveAdminErrorMessage } from '~/utils/admin-request-error'
 import { requestJson } from '~/utils/request'
 
 interface UpdateFormState {
@@ -39,6 +43,12 @@ interface DashboardUpdate {
   payloadUrl?: string | null
 }
 
+/**
+ * Create / edit an update. The drawer is the console's detail drawer (520px, the
+ * business title in the drawer's own heading); every field has a real label, and
+ * a failed save shows the server's own message, never the transport's
+ * `[POST] "/api/…"` text.
+ */
 const props = defineProps<{
   open: boolean
   mode: 'create' | 'edit'
@@ -54,6 +64,9 @@ const { t } = useI18n()
 
 const saving = ref(false)
 const error = ref<string | null>(null)
+
+const baseId = useId()
+const fieldId = (name: string) => `${baseId}-${name}`
 
 const todayInput = () => new Date().toISOString().slice(0, 10)
 
@@ -106,72 +119,95 @@ watch(() => props.open, (isOpen) => {
   }
 })
 
+/**
+ * `TuffSelect` takes no id, so a `<label for>` cannot reach it: point its
+ * combobox at the visible label instead, as `AdminFilterField` does.
+ */
+function labelCombobox(container: Element | ComponentPublicInstance | null, labelId: string) {
+  if (!(container instanceof HTMLElement))
+    return
+  const control = container.querySelector<HTMLElement>('[role="combobox"]')
+  if (control && !control.hasAttribute('aria-labelledby'))
+    control.setAttribute('aria-labelledby', labelId)
+}
+
+function close() {
+  if (!saving.value)
+    emit('close')
+}
+
 async function submit() {
-  saving.value = true
+  if (saving.value)
+    return
   error.value = null
 
+  const timestampIso = form.timestamp
+    ? new Date(`${form.timestamp}T00:00:00Z`).toISOString()
+    : new Date().toISOString()
+
+  const tags = form.tags
+    .split(',')
+    .map(tag => tag.trim())
+    .filter(Boolean)
+
+  const channels = form.channels
+    .split(',')
+    .map(channel => channel.trim().toUpperCase())
+    .filter(Boolean)
+
+  const titleZh = form.titleZh.trim()
+  const titleEn = form.titleEn.trim()
+  const summaryZh = form.summaryZh.trim()
+  const summaryEn = form.summaryEn.trim()
+
+  const resolvedTitle = {
+    zh: titleZh || titleEn,
+    en: titleEn || titleZh,
+  }
+  const resolvedSummary = {
+    zh: summaryZh || summaryEn,
+    en: summaryEn || summaryZh,
+  }
+
+  if (!resolvedTitle.zh && !resolvedTitle.en) {
+    error.value = t('dashboard.sections.updates.form.titleRequired', 'Title is required.')
+    return
+  }
+
+  if (!resolvedSummary.zh && !resolvedSummary.en) {
+    error.value = t('dashboard.sections.updates.form.summaryRequired', 'Summary is required.')
+    return
+  }
+
+  const payload: Record<string, unknown> = {
+    type: form.type,
+    scope: form.scope,
+    channels,
+    title: resolvedTitle,
+    summary: resolvedSummary,
+    link: form.link.trim(),
+    tags,
+    timestamp: timestampIso,
+  }
+
+  if (form.payload.trim())
+    payload.payload = form.payload.trim()
+  if (form.payloadVersion.trim())
+    payload.payloadVersion = form.payloadVersion.trim()
+
+  const endpoint = props.mode === 'edit' && props.update
+    ? `/api/dashboard/updates/${props.update.id}`
+    : '/api/dashboard/updates'
+  const method = props.mode === 'edit' ? 'PATCH' : 'POST'
+
+  saving.value = true
   try {
-    const timestampIso = form.timestamp
-      ? new Date(`${form.timestamp}T00:00:00Z`).toISOString()
-      : new Date().toISOString()
-
-    const tags = form.tags
-      .split(',')
-      .map(tag => tag.trim())
-      .filter(Boolean)
-
-    const channels = form.channels
-      .split(',')
-      .map(channel => channel.trim().toUpperCase())
-      .filter(Boolean)
-
-    const titleZh = form.titleZh.trim()
-    const titleEn = form.titleEn.trim()
-    const summaryZh = form.summaryZh.trim()
-    const summaryEn = form.summaryEn.trim()
-
-    const resolvedTitle = {
-      zh: titleZh || titleEn,
-      en: titleEn || titleZh,
-    }
-    const resolvedSummary = {
-      zh: summaryZh || summaryEn,
-      en: summaryEn || summaryZh,
-    }
-
-    if (!resolvedTitle.zh && !resolvedTitle.en)
-      throw new Error(t('dashboard.sections.updates.form.titleRequired', 'Title is required.'))
-
-    if (!resolvedSummary.zh && !resolvedSummary.en)
-      throw new Error(t('dashboard.sections.updates.form.summaryRequired', 'Summary is required.'))
-
-    const payload: Record<string, unknown> = {
-      type: form.type,
-      scope: form.scope,
-      channels,
-      title: resolvedTitle,
-      summary: resolvedSummary,
-      link: form.link.trim(),
-      tags,
-      timestamp: timestampIso,
-    }
-
-    if (form.payload.trim())
-      payload.payload = form.payload.trim()
-    if (form.payloadVersion.trim())
-      payload.payloadVersion = form.payloadVersion.trim()
-
-    const endpoint = props.mode === 'edit' && props.update
-      ? `/api/dashboard/updates/${props.update.id}`
-      : '/api/dashboard/updates'
-    const method = props.mode === 'edit' ? 'PATCH' : 'POST'
-
     await requestJson(endpoint, { method, body: payload })
     emit('saved')
     emit('close')
   }
   catch (err: unknown) {
-    error.value = err instanceof Error ? err.message : t('dashboard.sections.updates.errors.unknown')
+    error.value = resolveAdminErrorMessage(err, t('dashboard.sections.updates.errors.unknown', 'Something went wrong while saving the update.'))
   }
   finally {
     saving.value = false
@@ -180,139 +216,179 @@ async function submit() {
 </script>
 
 <template>
-  <Drawer
+  <TxDrawer
     :visible="open"
-    :title="mode === 'create' ? t('dashboard.sections.updates.addButton') : t('dashboard.sections.updates.editButton')"
-    width="640px"
-    @update:visible="(v) => {
-      if (!v)
-        emit('close')
+    :title="mode === 'create' ? t('dashboard.sections.updates.addButton', 'New update') : t('dashboard.sections.updates.editButton', 'Edit update')"
+    size="520px"
+    :close-on-click-mask="!saving"
+    :close-on-press-escape="!saving"
+    @update:visible="(visible) => {
+      if (!visible)
+        close()
     }"
-    @close="emit('close')"
   >
-    <div class="flex h-full flex-col">
-<form class="flex-1 space-y-4 overflow-y-auto pt-4" @submit.prevent="submit">
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-medium text-black/50 dark:text-white/50">
-              {{ t('dashboard.sections.updates.form.type') }}
-            </label>
-            <TuffSelect v-model="form.type" class="w-full">
-              <TuffSelectItem value="news" :label="t('dashboard.sections.updates.form.typeNews')" />
-              <TuffSelectItem value="announcement" :label="t('dashboard.sections.updates.form.typeAnnouncement')" />
-              <TuffSelectItem value="config" :label="t('dashboard.sections.updates.form.typeConfig')" />
-              <TuffSelectItem value="data" :label="t('dashboard.sections.updates.form.typeData')" />
-            </TuffSelect>
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-medium text-black/50 dark:text-white/50">
-              {{ t('dashboard.sections.updates.form.scope') }}
-            </label>
-            <TuffSelect v-model="form.scope" class="w-full">
-              <TuffSelectItem value="web" :label="t('dashboard.sections.updates.form.scopeWeb')" />
-              <TuffSelectItem value="system" :label="t('dashboard.sections.updates.form.scopeSystem')" />
-              <TuffSelectItem value="both" :label="t('dashboard.sections.updates.form.scopeBoth')" />
-            </TuffSelect>
-          </div>
+    <form class="UpdateForm" @submit.prevent="submit">
+      <div class="UpdateForm-Row">
+        <div :ref="(el) => labelCombobox(el, fieldId('type-label'))" class="UpdateForm-Field">
+          <span :id="fieldId('type-label')" class="UpdateForm-Label">
+            {{ t('dashboard.sections.updates.form.type', 'Update type') }}
+          </span>
+          <TuffSelect v-model="form.type">
+            <TuffSelectItem value="news" :label="t('dashboard.sections.updates.form.typeNews', 'News')" />
+            <TuffSelectItem value="announcement" :label="t('dashboard.sections.updates.form.typeAnnouncement', 'Announcement')" />
+            <TuffSelectItem value="config" :label="t('dashboard.sections.updates.form.typeConfig', 'Config')" />
+            <TuffSelectItem value="data" :label="t('dashboard.sections.updates.form.typeData', 'Data')" />
+          </TuffSelect>
         </div>
+        <div :ref="(el) => labelCombobox(el, fieldId('scope-label'))" class="UpdateForm-Field">
+          <span :id="fieldId('scope-label')" class="UpdateForm-Label">
+            {{ t('dashboard.sections.updates.form.scope', 'Scope') }}
+          </span>
+          <TuffSelect v-model="form.scope">
+            <TuffSelectItem value="web" :label="t('dashboard.sections.updates.form.scopeWeb', 'Web')" />
+            <TuffSelectItem value="system" :label="t('dashboard.sections.updates.form.scopeSystem', 'System')" />
+            <TuffSelectItem value="both" :label="t('dashboard.sections.updates.form.scopeBoth', 'Web + System')" />
+          </TuffSelect>
+        </div>
+      </div>
 
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-black/50 dark:text-white/50">
-            {{ t('dashboard.sections.updates.form.channels') }}
+      <div class="UpdateForm-Field">
+        <label class="UpdateForm-Label" :for="fieldId('channels')">
+          {{ t('dashboard.sections.updates.form.channels', 'Channels (optional)') }}
+        </label>
+        <TuffInput
+          :id="fieldId('channels')"
+          v-model="form.channels"
+          type="text"
+          :placeholder="t('dashboard.sections.updates.form.channelsPlaceholder', 'RELEASE, BETA, SNAPSHOT')"
+        />
+      </div>
+
+      <div class="UpdateForm-Row">
+        <div class="UpdateForm-Field">
+          <label class="UpdateForm-Label" :for="fieldId('title-zh')">
+            {{ t('dashboard.sections.updates.form.titleZh', 'Title (ZH)') }}
           </label>
-          <TuffInput
-            v-model="form.channels"
-            type="text"
-            :placeholder="t('dashboard.sections.updates.form.channelsPlaceholder')"
-          />
+          <TuffInput :id="fieldId('title-zh')" v-model="form.titleZh" type="text" />
         </div>
-
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-medium text-black/50 dark:text-white/50">
-              {{ t('dashboard.sections.updates.form.titleZh') }}
-            </label>
-            <TuffInput v-model="form.titleZh" type="text" />
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-medium text-black/50 dark:text-white/50">
-              {{ t('dashboard.sections.updates.form.titleEn') }}
-            </label>
-            <TuffInput v-model="form.titleEn" type="text" />
-          </div>
-        </div>
-
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-black/50 dark:text-white/50">
-            {{ t('dashboard.sections.updates.form.date') }}
+        <div class="UpdateForm-Field">
+          <label class="UpdateForm-Label" :for="fieldId('title-en')">
+            {{ t('dashboard.sections.updates.form.titleEn', 'Title (EN)') }}
           </label>
-          <TuffInput v-model="form.timestamp" type="date" required />
+          <TuffInput :id="fieldId('title-en')" v-model="form.titleEn" type="text" />
         </div>
+      </div>
 
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-medium text-black/50 dark:text-white/50">
-              {{ t('dashboard.sections.updates.form.summaryZh') }}
-            </label>
-            <TuffInput v-model="form.summaryZh" type="textarea" :rows="4" />
-          </div>
-          <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-medium text-black/50 dark:text-white/50">
-              {{ t('dashboard.sections.updates.form.summaryEn') }}
-            </label>
-            <TuffInput v-model="form.summaryEn" type="textarea" :rows="4" />
-          </div>
-        </div>
+      <div class="UpdateForm-Field">
+        <label class="UpdateForm-Label" :for="fieldId('date')">
+          {{ t('dashboard.sections.updates.form.date', 'Published on') }}
+        </label>
+        <TuffInput :id="fieldId('date')" v-model="form.timestamp" type="date" required />
+      </div>
 
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-black/50 dark:text-white/50">
-            {{ t('dashboard.sections.updates.form.tags') }}
+      <div class="UpdateForm-Row">
+        <div class="UpdateForm-Field">
+          <label class="UpdateForm-Label" :for="fieldId('summary-zh')">
+            {{ t('dashboard.sections.updates.form.summaryZh', 'Summary (ZH)') }}
           </label>
-          <TuffInput v-model="form.tags" type="text" placeholder="release, roadmap" />
+          <TuffInput :id="fieldId('summary-zh')" v-model="form.summaryZh" type="textarea" :rows="4" />
         </div>
-
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-black/50 dark:text-white/50">
-            {{ t('dashboard.sections.updates.form.link') }}
+        <div class="UpdateForm-Field">
+          <label class="UpdateForm-Label" :for="fieldId('summary-en')">
+            {{ t('dashboard.sections.updates.form.summaryEn', 'Summary (EN)') }}
           </label>
-          <TuffInput v-model="form.link" type="text" placeholder="https://" required />
+          <TuffInput :id="fieldId('summary-en')" v-model="form.summaryEn" type="textarea" :rows="4" />
         </div>
+      </div>
 
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-black/50 dark:text-white/50">
-            {{ t('dashboard.sections.updates.form.payload') }}
-          </label>
-          <TuffInput
-            v-model="form.payload"
-            type="textarea"
-            :rows="6"
-            :placeholder="t('dashboard.sections.updates.form.payloadPlaceholder')"
-          />
-        </div>
+      <div class="UpdateForm-Field">
+        <label class="UpdateForm-Label" :for="fieldId('tags')">
+          {{ t('dashboard.sections.updates.form.tags', 'Tags (comma separated)') }}
+        </label>
+        <TuffInput :id="fieldId('tags')" v-model="form.tags" type="text" placeholder="release, roadmap" />
+      </div>
 
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-black/50 dark:text-white/50">
-            {{ t('dashboard.sections.updates.form.payloadVersion') }}
-          </label>
-          <TuffInput v-model="form.payloadVersion" type="text" :placeholder="t('dashboard.sections.updates.form.payloadVersionPlaceholder')" />
-        </div>
+      <div class="UpdateForm-Field">
+        <label class="UpdateForm-Label" :for="fieldId('link')">
+          {{ t('dashboard.sections.updates.form.link', 'External link') }}
+        </label>
+        <TuffInput :id="fieldId('link')" v-model="form.link" type="text" placeholder="https://" required />
+      </div>
 
-        <p v-if="error" class="rounded-md bg-red-50 p-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
-          {{ error }}
-        </p>
-      </form>
-    </div>
+      <div class="UpdateForm-Field">
+        <label class="UpdateForm-Label" :for="fieldId('payload')">
+          {{ t('dashboard.sections.updates.form.payload', 'Payload (JSON, optional)') }}
+        </label>
+        <TuffInput
+          :id="fieldId('payload')"
+          v-model="form.payload"
+          type="textarea"
+          :rows="6"
+          :placeholder="t('dashboard.sections.updates.form.payloadPlaceholder', 'example: kind=fx-rate, rates: CNY=7.23')"
+        />
+      </div>
+
+      <div class="UpdateForm-Field">
+        <label class="UpdateForm-Label" :for="fieldId('payload-version')">
+          {{ t('dashboard.sections.updates.form.payloadVersion', 'Payload version (optional)') }}
+        </label>
+        <TuffInput
+          :id="fieldId('payload-version')"
+          v-model="form.payloadVersion"
+          type="text"
+          :placeholder="t('dashboard.sections.updates.form.payloadVersionPlaceholder', '20260219-1')"
+        />
+      </div>
+
+      <TxAlert v-if="error" type="error" :message="error" />
+    </form>
 
     <template #footer>
-      <div class="flex items-center justify-end gap-2">
-        <TxButton variant="secondary" @click="emit('close')">
-          {{ t('dashboard.sections.updates.closeButton') }}
+      <div class="UpdateForm-Actions">
+        <TxButton variant="secondary" size="sm" :disabled="saving" @click="close">
+          {{ t('dashboard.sections.updates.closeButton', 'Close') }}
         </TxButton>
-        <TxButton :disabled="saving" @click="submit">
-          <span v-if="saving" class="i-carbon-circle-dash mr-1 animate-spin" />
-          {{ mode === 'create' ? t('dashboard.sections.updates.createSubmit') : t('dashboard.sections.updates.updateSubmit') }}
+        <TxButton variant="primary" size="sm" :loading="saving" @click="submit">
+          {{ mode === 'create' ? t('dashboard.sections.updates.createSubmit', 'Publish update') : t('dashboard.sections.updates.updateSubmit', 'Save changes') }}
         </TxButton>
       </div>
     </template>
-  </Drawer>
+  </TxDrawer>
 </template>
+
+<style scoped>
+.UpdateForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Two fields side by side while the drawer is wide enough for both, one under
+   the other on a phone's bottom sheet. */
+.UpdateForm-Row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px 16px;
+}
+
+.UpdateForm-Field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* A label is read: 13px, regular ink, no tracking (tuffex-design-rules). */
+.UpdateForm-Label {
+  color: var(--tx-text-color-regular);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.UpdateForm-Actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+</style>

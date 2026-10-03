@@ -294,3 +294,113 @@ describe('useAdminList', () => {
     expect(list.rows.value).toEqual([])
   })
 })
+
+describe('useAdminList with a queryKeyPrefix', () => {
+  // Two lists on one route, like the plugin and doc comment queues on
+  // `/admin/reviews`: one scope holds both, as one page would.
+  function createPair(fetchPlugins: Parameters<typeof createList>[0], fetchDocs: Parameters<typeof createList>[0]) {
+    scope = effectScope()
+    return scope.run(() => ({
+      plugins: useAdminList<Row, Filters>({
+        fetch: fetchPlugins,
+        defaults: DEFAULTS,
+        debounceKeys: ['q'],
+        errorFallback: 'Failed.',
+        queryKeyPrefix: 'p_',
+      }),
+      docs: useAdminList<Row, Filters>({
+        fetch: fetchDocs,
+        defaults: DEFAULTS,
+        debounceKeys: ['q'],
+        errorFallback: 'Failed.',
+        queryKeyPrefix: 'd_',
+      }),
+    }))!
+  }
+
+  it('reads only its own prefixed keys from the URL', async () => {
+    installRoute({ p_page: '2', p_status: 'disabled', p_limit: '50', page: '5', status: 'active', tab: 'plugins' })
+    const fetch = vi.fn(async () => ({ rows: rows(50), total: 400 }))
+    const list = createList(fetch, { queryKeyPrefix: 'p_' })
+    await settle()
+
+    // `page` and `status` belong to some other list on this route, not to this one.
+    expect(fetch).toHaveBeenCalledWith({ page: 2, limit: 50, filters: { q: '', status: 'disabled' } })
+    expect(list.filters.status).toBe('disabled')
+  })
+
+  it('writes prefixed keys and keeps every key it does not own, unprefixed ones included', async () => {
+    const { route } = installRoute({ tab: 'plugins', page: '7' })
+    const list = createList(vi.fn(async () => ({ rows: rows(20), total: 61 })), { queryKeyPrefix: 'p_' })
+    await settle()
+
+    list.setPage(2)
+    await settle()
+    expect(route.query).toEqual({ tab: 'plugins', page: '7', p_page: '2' })
+
+    list.filters.q = 'ada'
+    await settle()
+    vi.advanceTimersByTime(300)
+    await settle()
+    expect(route.query).toEqual({ tab: 'plugins', page: '7', p_q: 'ada' })
+
+    list.clearFilters()
+    await settle()
+    expect(route.query).toEqual({ tab: 'plugins', page: '7' })
+  })
+
+  it('keeps two lists on one route from overwriting each other', async () => {
+    const { route } = installRoute({ tab: 'plugins' })
+    const fetchPlugins = vi.fn(async () => ({ rows: rows(20, 'p'), total: 61 }))
+    const fetchDocs = vi.fn(async () => ({ rows: rows(20, 'd'), total: 45 }))
+    const { plugins, docs } = createPair(fetchPlugins, fetchDocs)
+    await settle()
+
+    plugins.setPage(2)
+    await settle()
+    docs.filters.status = 'disabled'
+    await settle()
+    docs.setPage(3)
+    await settle()
+
+    expect(route.query).toEqual({ tab: 'plugins', p_page: '2', d_status: 'disabled', d_page: '3' })
+    expect(plugins.page.value).toBe(2)
+    expect(plugins.filters.status).toBe('all')
+    expect(docs.page.value).toBe(3)
+    // The docs list moving did not make the plugin list ask again.
+    expect(fetchPlugins).toHaveBeenCalledTimes(2)
+    expect(fetchPlugins).toHaveBeenLastCalledWith({ page: 2, limit: 20, filters: { q: '', status: 'all' } })
+
+    // Switching the tab rewrites `tab` only; both lists keep their page.
+    route.query = { ...route.query, tab: 'docs' }
+    await settle()
+    expect(plugins.page.value).toBe(2)
+    expect(docs.page.value).toBe(3)
+    expect(fetchPlugins).toHaveBeenCalledTimes(2)
+    expect(fetchDocs).toHaveBeenCalledTimes(3)
+  })
+
+  it('restores each list from its own keys when it mounts again', async () => {
+    // A queue that remounts (its tab was left and re-entered) reads its page back
+    // from the URL instead of starting over at page 1.
+    installRoute({ tab: 'plugins', p_page: '2', d_page: '3' })
+    const fetch = vi.fn(async () => ({ rows: rows(20), total: 100 }))
+    const list = createList(fetch, { queryKeyPrefix: 'd_' })
+    await settle()
+    expect(list.page.value).toBe(3)
+    expect(fetch).toHaveBeenCalledWith({ page: 3, limit: 20, filters: DEFAULTS })
+  })
+
+  it('leaves the unprefixed key names exactly as they were', async () => {
+    // Positive control for the default: a list without a prefix still owns the
+    // bare names and ignores prefixed ones.
+    const { route } = installRoute({ p_page: '4' })
+    const list = createList(vi.fn(async () => ({ rows: rows(20), total: 100 })))
+    await settle()
+    expect(list.page.value).toBe(1)
+
+    list.setPage(2)
+    await settle()
+    expect(route.query).toEqual({ p_page: '4', page: '2' })
+  })
+})

@@ -374,11 +374,6 @@ const KNOWN_WRONG_KEYS: KnownWrongKey[] = [
     key: 'dashboard.devices.revoke',
     renders: 'the kick-out action renders "Revoke" / "撤销" instead of "踢出"',
   },
-  {
-    file: 'app/pages/admin/images.vue',
-    key: 'dashboard.sections.images.errors.unknown',
-    renders: 'upload and delete failures both render the generic "Something went wrong while managing resources."',
-  },
 ]
 
 const ALL_WAIVERS: Array<KnownWrongKey & { rule: string }> = [

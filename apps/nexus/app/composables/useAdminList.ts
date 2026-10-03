@@ -29,6 +29,14 @@ export interface AdminListOptions<Row, F extends AdminListFilters> {
   debounceKeys?: Array<keyof F & string>
   /** Read and write the state through the route query. @default true */
   query?: boolean
+  /**
+   * Prepended to every query key this list owns: `p_` makes them `?p_page=`,
+   * `?p_limit=` and `?p_<filter>=`. For two lists on one route (the comment
+   * queues), which would otherwise read and overwrite each other's page and
+   * filters. The `filters` handed to `fetch` keep their own, unprefixed names.
+   * @default ''
+   */
+  queryKeyPrefix?: string
   /** Shown when a request fails and the server gave no message of its own. Defaults to a generic localized line. */
   errorFallback?: MaybeRefOrGetter<string>
 }
@@ -92,7 +100,8 @@ function sameQuery(left: Record<string, QueryValue>, right: Record<string, Query
  *
  * - The state lives in the URL query (`?q=&action=&page=&limit=`), so a filtered
  *   page can be reloaded, bookmarked or shared; only non-default values are
- *   written, and keys this list does not own (`?tab=`) are kept.
+ *   written, and keys this list does not own (`?tab=`) are kept. Two lists on one
+ *   route each take a `queryKeyPrefix` (`?p_page=` / `?d_page=`).
  * - A filter or page-size change goes back to page 1. Text filters wait 300 ms.
  * - Every request carries a generation; a response that arrives after a newer
  *   request started is dropped, so a slow first page cannot overwrite a fast second.
@@ -115,7 +124,9 @@ export function useAdminList<Row, F extends AdminListFilters>(options: AdminList
   const defaultLimit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : 20
   const filterKeys = Object.keys(options.defaults) as Array<keyof F & string>
   const debouncedKeys = new Set<string>(options.debounceKeys ?? [])
-  const managedKeys = new Set<string>(['page', 'limit', ...filterKeys])
+  const keyPrefix = options.queryKeyPrefix ?? ''
+  const queryKey = (name: string) => `${keyPrefix}${name}`
+  const managedKeys = new Set<string>([queryKey('page'), queryKey('limit'), ...filterKeys.map(queryKey)])
 
   function normalizeFilters(source: Record<string, unknown>): F {
     const normalized = { ...options.defaults } as Record<string, string>
@@ -133,12 +144,12 @@ export function useAdminList<Row, F extends AdminListFilters>(options: AdminList
 
   function readQuery(): AppliedState<F> {
     const query = (route?.query ?? {}) as Record<string, QueryValue>
-    const limit = parsePositiveInteger(firstQueryValue(query.limit))
+    const limit = parsePositiveInteger(firstQueryValue(query[queryKey('limit')]))
     const filters: Record<string, unknown> = {}
     for (const key of filterKeys)
-      filters[key] = firstQueryValue(query[key])
+      filters[key] = firstQueryValue(query[queryKey(key)])
     return {
-      page: parsePositiveInteger(firstQueryValue(query.page)) ?? 1,
+      page: parsePositiveInteger(firstQueryValue(query[queryKey('page')])) ?? 1,
       limit: limit !== null && pageSizes.includes(limit) ? limit : defaultLimit,
       filters: normalizeFilters(filters),
     }
@@ -155,12 +166,12 @@ export function useAdminList<Row, F extends AdminListFilters>(options: AdminList
     }
     for (const key of filterKeys) {
       if (state.filters[key] !== options.defaults[key])
-        query[key] = state.filters[key]
+        query[queryKey(key)] = state.filters[key]
     }
     if (state.page !== 1)
-      query.page = String(state.page)
+      query[queryKey('page')] = String(state.page)
     if (state.limit !== defaultLimit)
-      query.limit = String(state.limit)
+      query[queryKey('limit')] = String(state.limit)
     if (sameQuery(query, current))
       return
     void router.replace({ path: route.path, query, hash: route.hash })

@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
-import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
+import type { CommentQueue } from '~/utils/admin-comments'
+import { TxButton } from '@talex-touch/tuffex/button'
+import { TxFlatRadio, TxFlatRadioItem } from '@talex-touch/tuffex/flat-radio'
+import { computed, ref } from 'vue'
 import AdminPageShell from '~/components/admin/AdminPageShell.vue'
 import DocCommentsPanel from '~/components/admin/DocCommentsPanel.vue'
 import PluginReviewsPanel from '~/components/admin/PluginReviewsPanel.vue'
+import { useAdminQueryState } from '~/composables/useAdminQueryState'
+import { COMMENT_QUEUES } from '~/utils/admin-comments'
 
 definePageMeta({
   layout: 'admin',
@@ -16,59 +20,48 @@ definePageMeta({
 
 defineI18nRoute(false)
 
-type CommentTab = 'plugins' | 'docs'
-
+// The administrator gate is the layout's (`useAdminGate`): this page only mounts
+// for an administrator, so it neither checks the role nor asks for data it
+// cannot have.
 const { t } = useI18n()
-const route = useRoute()
-const router = useRouter()
-const { user } = useAuthUser()
-const { isAdmin } = useAccountRole()
 
-const activeTab = computed<CommentTab>({
-  get: () => {
-    const tab = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab
-    return tab === 'docs' ? 'docs' : 'plugins'
-  },
-  set: (tab) => {
-    if (route.query.tab === tab)
-      return
-    void router.replace({
-      query: {
-        ...route.query,
-        tab,
-      },
-    })
-  },
-})
+// The two queues are one page addressed by `?tab=plugins|docs`. Only the open
+// queue is mounted — the doc queue's engagement tracker counts the time it is
+// open — and each keeps its own page and filters in the URL under its own
+// prefix (`p_` / `d_`), so leaving a queue and coming back lands where it was.
+const activeQueue = useAdminQueryState<CommentQueue>('tab', COMMENT_QUEUES, 'plugins')
 
-watch(isAdmin, (admin) => {
-  if (user.value && !admin)
-    navigateTo('/dashboard/overview')
-}, { immediate: true })
+function selectQueue(value: unknown) {
+  if ((COMMENT_QUEUES as readonly unknown[]).includes(value))
+    activeQueue.value = value as CommentQueue
+}
+
+const pluginsPanel = ref<InstanceType<typeof PluginReviewsPanel> | null>(null)
+const docsPanel = ref<InstanceType<typeof DocCommentsPanel> | null>(null)
+const activePanel = computed(() => (activeQueue.value === 'plugins' ? pluginsPanel.value : docsPanel.value))
 </script>
 
 <template>
-  <AdminPageShell :title="t('dashboard.sections.comments.title', 'Comment Management')">
-    <TxTabs
-      v-model="activeTab"
-      placement="top"
-      borderless
-      :content-padding="0"
-      :content-scrollable="false"
-      indicator-variant="pill"
-    >
-      <TxTabItem name="plugins" icon-class="i-carbon-chat">
-        <template #name>
-          {{ t('dashboard.sections.comments.plugins', 'Plugin comments') }}
-        </template>
-        <PluginReviewsPanel />
-      </TxTabItem>
-      <TxTabItem name="docs" icon-class="i-carbon-annotation-visibility">
-        <template #name>
-          {{ t('dashboard.sections.comments.docs', 'Doc comments') }}
-        </template>
-        <DocCommentsPanel />
-      </TxTabItem>
-    </TxTabs>
+  <AdminPageShell :title="t('dashboard.sections.menu.comments', 'Comments')">
+    <template #actions>
+      <TxButton variant="secondary" size="sm" :disabled="!activePanel || activePanel.busy" @click="activePanel?.refresh()">
+        {{ t('common.refresh', 'Refresh') }}
+      </TxButton>
+    </template>
+
+    <template #nav>
+      <TxFlatRadio
+        :model-value="activeQueue"
+        size="md"
+        :aria-label="t('dashboard.sections.comments.queueLabel', 'Comment queue')"
+        @update:model-value="selectQueue"
+      >
+        <TxFlatRadioItem value="plugins" :label="t('dashboard.sections.comments.plugins', 'Plugin Reviews')" icon="i-carbon-chat" />
+        <TxFlatRadioItem value="docs" :label="t('dashboard.sections.comments.docs', 'Document Comments')" icon="i-carbon-annotation-visibility" />
+      </TxFlatRadio>
+    </template>
+
+    <PluginReviewsPanel v-if="activeQueue === 'plugins'" ref="pluginsPanel" />
+    <DocCommentsPanel v-else ref="docsPanel" />
   </AdminPageShell>
 </template>

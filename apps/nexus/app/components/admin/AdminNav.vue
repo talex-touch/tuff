@@ -112,7 +112,7 @@ const menuGroups = computed<NavGroup[]>(() => {
         },
         {
           id: 'reviews',
-          label: t('dashboard.sections.menu.comments', 'Comment Management'),
+          label: t('dashboard.sections.menu.comments', 'Comments'),
           icon: 'i-carbon-chat',
         },
       ]),
