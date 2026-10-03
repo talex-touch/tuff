@@ -1,380 +1,422 @@
 <script setup lang="ts">
-import { $fetch as rawFetch } from 'ofetch'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex/button'
-import { TxDataTable, type DataTableColumn } from '@talex-touch/tuffex/data-table'
-import { TxDrawer } from '@talex-touch/tuffex/drawer'
-import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
+import type { DataTableColumn } from '@talex-touch/tuffex/data-table'
+import type { AdminActivationCode, CodeGenerationField } from '~/utils/admin-codes'
+import { TxAlert } from '@talex-touch/tuffex/alert'
+import { TxButton, TxCopyButton } from '@talex-touch/tuffex/button'
 import { TuffInput } from '@talex-touch/tuffex/input'
-import { TxPagination } from '@talex-touch/tuffex/pagination'
-import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
-import { TxRowSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxModal } from '@talex-touch/tuffex/modal'
+import { TxSearchInput } from '@talex-touch/tuffex/search-input'
+import { TxSelect } from '@talex-touch/tuffex/select'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
+import { TxTag } from '@talex-touch/tuffex/tag'
+import { computed, reactive, ref, useId } from 'vue'
+import AdminConfirmDialog from '~/components/admin/AdminConfirmDialog.vue'
+import AdminFilterBar from '~/components/admin/AdminFilterBar.vue'
+import AdminFilterField from '~/components/admin/AdminFilterField.vue'
+import AdminFormField from '~/components/admin/AdminFormField.vue'
 import AdminPageShell from '~/components/admin/AdminPageShell.vue'
+import AdminSection from '~/components/admin/AdminSection.vue'
+import AdminTable from '~/components/admin/AdminTable.vue'
+import { useAdminFormat } from '~/composables/useAdminFormat'
+import { useAdminList } from '~/composables/useAdminList'
 import { useToast } from '~/composables/useToast'
+import {
+  ACTIVATION_CODE_PLANS,
+  buildCodePlanOptions,
+  buildCodeStatusLabels,
+  buildCodeStatusOptions,
+  CODE_GENERATION_DEFAULTS,
+  CODE_GENERATION_LIMITS,
+  codeDurationLabel,
+  codeStatusTone,
+  createCodeListOptions,
+  isRevocableCode,
+  showCodeActionsColumn,
+  validateCodeGeneration,
+} from '~/utils/admin-codes'
+import { resolveAdminErrorMessage } from '~/utils/admin-request-error'
+import { requestJson } from '~/utils/request'
 
-definePageMeta({ layout: 'admin', requiresAuth: true, pageTransition: { name: 'fade', mode: 'out-in' } })
-defineI18nRoute(false)
-
-const { t, locale } = useI18n()
-const { user } = useAuthUser()
-const { isAdmin } = useAccountRole()
-const toast = useToast()
-
-watch(isAdmin, (admin) => {
-  if (user.value && !admin)
-    navigateTo('/dashboard/overview')
-}, { immediate: true })
-
-interface ActivationCode {
-  id: string
-  code: string
-  plan: string
-  duration_days: number
-  max_uses: number
-  uses: number
-  created_at: string
-  expires_at: string | null
-  status: string
-}
-
-interface CodePagination {
-  page: number
-  limit: number
-  total: number
-  totalPages: number
-}
-
-function resolveErrorMessage(err: unknown, fallback: string) {
-  const data = (err as { data?: { message?: unknown, statusMessage?: unknown } })?.data
-  const message = data?.message ?? data?.statusMessage
-  return typeof message === 'string' && message.trim() ? message.trim() : fallback
-}
-
-const planOptions = [
-  { value: 'FREE', label: 'FREE', color: 'text-slate-500' },
-  { value: 'PLUS', label: 'PLUS', color: 'text-blue-500' },
-  { value: 'PRO', label: 'PRO', color: 'text-purple-500' },
-  { value: 'ENTERPRISE', label: 'ENTERPRISE', color: 'text-amber-500' },
-  { value: 'TEAM', label: 'TEAM', color: 'text-green-500' },
-]
-
-const codes = ref<ActivationCode[]>([])
-const codesLoading = ref(false)
-const codesGenerating = ref(false)
-const codesError = ref<string | null>(null)
-const generationError = ref<string | null>(null)
-const generatorOpen = ref(false)
-const codesActionPendingId = ref<string | null>(null)
-const revokeArmedId = ref<string | null>(null)
-const copiedCodeId = ref<string | null>(null)
-const filters = reactive({ q: '', plan: 'all', status: 'all' })
-const pagination = reactive<CodePagination>({ page: 1, limit: 20, total: 0, totalPages: 1 })
-let revokeArmTimer: ReturnType<typeof setTimeout> | null = null
-let copyResetTimer: ReturnType<typeof setTimeout> | null = null
-let searchTimer: ReturnType<typeof setTimeout> | null = null
-let latestCodesRequest = 0
-
-const genForm = reactive({
-  plan: 'PLUS' as 'FREE' | 'PLUS' | 'PRO' | 'ENTERPRISE' | 'TEAM',
-  durationDays: 30,
-  maxUses: 1,
-  expiresInDays: 90,
-  count: 1,
+definePageMeta({
+  layout: 'admin',
+  requiresAuth: true,
+  pageTransition: {
+    name: 'fade',
+    mode: 'out-in',
+  },
 })
 
-const codeStatusLabels = computed<Record<string, string>>(() => ({
-  active: t('dashboard.sections.codes.status.active', 'Active'),
-  expired: t('dashboard.sections.codes.status.expired', 'Expired'),
-  revoked: t('dashboard.sections.codes.status.revoked', 'Revoked'),
-  exhausted: t('dashboard.sections.codes.status.exhausted', 'Exhausted'),
+defineI18nRoute(false)
+
+// The administrator gate is the layout's (`useAdminGate`): this page only mounts
+// for an administrator, so it neither checks the role nor asks for data it
+// cannot have.
+const { t } = useI18n()
+const format = useAdminFormat()
+const toast = useToast()
+
+const list = useAdminList(createCodeListOptions(requestJson, t))
+const filters = list.filters
+
+const planOptions = computed(() => buildCodePlanOptions(t))
+const statusOptions = computed(() => buildCodeStatusOptions(t))
+const statusLabels = computed(() => buildCodeStatusLabels(t))
+
+function statusLabel(status: string): string {
+  return statusLabels.value[status] ?? status
+}
+
+const showActions = computed(() => showCodeActionsColumn({
+  rows: list.rows.value,
+  loading: list.loading.value,
+  status: list.appliedFilters.value.status,
 }))
-const hasFilters = computed(() => Boolean(filters.q.trim()) || filters.plan !== 'all' || filters.status !== 'all')
-const statusOptions = computed(() => Object.entries(codeStatusLabels.value).map(([value, label]) => ({ value, label })))
-const codeColumns = computed<DataTableColumn<ActivationCode>[]>(() => [
-  { key: 'code', title: t('dashboard.sections.codes.table.code', 'Code'), width: 300, fixed: 'left', nowrap: true },
-  { key: 'plan', title: t('dashboard.sections.codes.table.plan', 'Plan'), width: 110, nowrap: true },
-  { key: 'duration', title: t('dashboard.sections.codes.table.duration', 'Duration'), width: 130, nowrap: true },
-  { key: 'uses', title: t('dashboard.sections.codes.table.uses', 'Uses'), width: 110, nowrap: true },
-  { key: 'status', title: t('dashboard.sections.codes.table.status', 'Status'), width: 130, nowrap: true },
-  { key: 'created', title: t('dashboard.sections.codes.table.created', 'Created'), width: 140, nowrap: true },
-  { key: 'expires', title: t('dashboard.sections.codes.table.expires', 'Expires'), width: 140, nowrap: true },
-  { key: 'actions', title: t('dashboard.sections.codes.table.actions', 'Actions'), width: 120, fixed: 'right', nowrap: true },
+
+// Every cell is one line, so a row is exactly as tall as the skeleton row it
+// replaces. Each fixed column is its widest value plus the 24px cell padding and
+// 2–4px to spare, measured in both locales with the fonts the console renders
+// (PingFang SC, SF Mono for the badges): the ENTERPRISE tag 88px, "365 days" 56px,
+// "1,000 / 1,000" 79px, the "Exhausted" badge 100px, a timestamp 117px, "Revoke"
+// 62px — 807px in all. At 1440px with a classic scrollbar the table is 1119px
+// wide, so the code column keeps 312px: the longest code (TUFF-ENTERPRISE-…,
+// 29 characters, 233px) and its 38px icon-only copy button with 9px to spare.
+// Narrower, the code is cut (full text in its title) and the copy button still
+// copies all of it.
+const columns = computed<DataTableColumn<AdminActivationCode>[]>(() => [
+  { key: 'code', title: t('dashboard.sections.codes.table.code', 'Code') },
+  { key: 'plan', title: t('dashboard.sections.codes.table.plan', 'Plan'), width: 115 },
+  { key: 'duration', title: t('dashboard.sections.codes.table.duration', 'Duration'), width: 84 },
+  { key: 'uses', title: t('dashboard.sections.codes.table.uses', 'Uses'), width: 106 },
+  { key: 'status', title: t('dashboard.sections.codes.table.status', 'Status'), width: 126 },
+  { key: 'created', title: t('dashboard.sections.codes.table.created', 'Created'), width: 144 },
+  { key: 'expires', title: t('dashboard.sections.codes.table.expires', 'Expires'), width: 144 },
+  ...(showActions.value
+    ? [{ key: 'actions', title: t('dashboard.sections.codes.table.actions', 'Actions'), width: 88 }]
+    : []),
 ])
 
-async function fetchCodes(options: { resetPage?: boolean } = {}) {
-  if (options.resetPage)
-    pagination.page = 1
-  const requestId = ++latestCodesRequest
-  codesLoading.value = true
-  codesError.value = null
+function durationLabel(days: number): string {
+  return codeDurationLabel(days, t, format.number)
+}
+
+function copyFailed() {
+  toast.warning(t('dashboard.sections.codes.copyFailed', 'Failed to copy activation code.'))
+}
+
+// ─── Revoke ────────────────────────────────────────────────────────────────
+
+const revokeOpen = ref(false)
+const revokeTarget = ref<AdminActivationCode | null>(null)
+const revoking = ref(false)
+
+function openRevoke(code: AdminActivationCode) {
+  if (!isRevocableCode(code))
+    return
+  revokeTarget.value = code
+  revokeOpen.value = true
+}
+
+async function revokeCode() {
+  const code = revokeTarget.value
+  if (!code || revoking.value)
+    return
+  revoking.value = true
   try {
-    const response = await rawFetch<{ codes: ActivationCode[], pagination: CodePagination }>('/api/admin/codes', {
-      query: {
-        page: pagination.page,
-        limit: pagination.limit,
-        q: filters.q.trim() || undefined,
-        plan: filters.plan === 'all' ? undefined : filters.plan,
-        status: filters.status === 'all' ? undefined : filters.status,
-      },
-    })
-    if (requestId !== latestCodesRequest)
-      return
-    codes.value = response.codes ?? []
-    Object.assign(pagination, response.pagination)
+    await requestJson(`/api/admin/codes/${encodeURIComponent(code.id)}`, { method: 'PATCH', body: { status: 'revoked' } })
+    toast.success(t('dashboard.sections.codes.revokeSuccess', 'Activation code revoked.'))
+    revokeOpen.value = false
+    void list.refresh()
   }
-  catch (err: unknown) {
-    if (requestId !== latestCodesRequest)
-      return
-    codesError.value = resolveErrorMessage(err, t('dashboard.sections.codes.errors.loadFailed', 'Failed to load activation codes.'))
+  catch (cause) {
+    toast.warning(resolveAdminErrorMessage(cause, t('dashboard.sections.codes.revokeFailed', 'Failed to revoke activation code.')))
   }
   finally {
-    if (requestId === latestCodesRequest)
-      codesLoading.value = false
+    revoking.value = false
   }
+}
+
+// ─── Generator ─────────────────────────────────────────────────────────────
+
+const generatorOpen = ref(false)
+const generating = ref(false)
+const generationError = ref<string | null>(null)
+// Number fields hold what `TuffInput type="number"` emits: a number, or '' while empty.
+const generatorForm = reactive<{ plan: string } & Record<CodeGenerationField, number | string>>({ ...CODE_GENERATION_DEFAULTS })
+const invalidFields = ref<CodeGenerationField[]>([])
+const generatorPlanOptions = ACTIVATION_CODE_PLANS.map(plan => ({ value: plan, label: plan }))
+
+const generatorFieldIds: Record<CodeGenerationField, string> = {
+  durationDays: useId(),
+  maxUses: useId(),
+  expiresInDays: useId(),
+  count: useId(),
+}
+
+const generatorFields = computed(() => [
+  { key: 'durationDays' as const, label: t('dashboard.sections.codes.form.durationDays', 'Duration (days)') },
+  { key: 'expiresInDays' as const, label: t('dashboard.sections.codes.form.expiresInDays', 'Expires in (days)') },
+  { key: 'maxUses' as const, label: t('dashboard.sections.codes.form.maxUses', 'Max uses') },
+  { key: 'count' as const, label: t('dashboard.sections.codes.form.count', 'Count') },
+])
+
+// The accepted range sits under each field (`AdminFormField`'s hint); it turns red
+// when the value is out of it.
+function rangeHint(field: CodeGenerationField): string {
+  const { min, max } = CODE_GENERATION_LIMITS[field]
+  return t('dashboard.sections.codes.form.range', { min: format.number(min), max: format.number(max) })
 }
 
 function openGenerator() {
+  Object.assign(generatorForm, CODE_GENERATION_DEFAULTS)
+  invalidFields.value = []
   generationError.value = null
   generatorOpen.value = true
 }
 
-async function generateCodes() {
-  if (codesGenerating.value)
+// Nothing closes the dialog while the request runs: the codes would be created
+// with nowhere left to say so.
+function requestCloseGenerator(open: boolean) {
+  if (!open && generating.value)
     return
-  codesGenerating.value = true
+  generatorOpen.value = open
+}
+
+async function generateCodes() {
+  if (generating.value)
+    return
+  const check = validateCodeGeneration(generatorForm)
+  if (!check.ok) {
+    invalidFields.value = check.fields
+    return
+  }
+  invalidFields.value = []
   generationError.value = null
+  generating.value = true
   try {
-    await rawFetch('/api/admin/codes/generate', { method: 'POST', body: genForm })
+    await requestJson('/api/admin/codes/generate', { method: 'POST', body: check.body })
     toast.success(t('dashboard.sections.codes.generateSuccess', 'Activation codes generated.'))
     generatorOpen.value = false
-    await fetchCodes({ resetPage: true })
+    // Newest first: the new codes are on the first page.
+    if (list.page.value === 1)
+      void list.refresh()
+    else
+      list.setPage(1)
   }
-  catch (err: unknown) {
-    const message = resolveErrorMessage(err, t('dashboard.sections.codes.errors.generateFailed', 'Failed to generate activation codes.'))
-    generationError.value = message
-    toast.warning(message)
-  }
-  finally {
-    codesGenerating.value = false
-  }
-}
-
-async function changePage(page: number) {
-  if (codesLoading.value)
-    return
-  pagination.page = page
-  await fetchCodes()
-}
-
-async function copyCode(id: string, code: string) {
-  try {
-    await navigator.clipboard.writeText(code)
-    copiedCodeId.value = id
-    toast.success(t('dashboard.sections.codes.copySuccess', 'Activation code copied.'))
-  }
-  catch {
-    copiedCodeId.value = null
-    toast.warning(t('dashboard.sections.codes.copyFailed', 'Failed to copy activation code.'))
-  }
-  if (copyResetTimer)
-    clearTimeout(copyResetTimer)
-  copyResetTimer = setTimeout(() => { copiedCodeId.value = null }, 2000)
-}
-
-function requestRevoke(code: ActivationCode) {
-  if (codesActionPendingId.value)
-    return
-  if (revokeArmedId.value === code.id) {
-    void revokeCode(code)
-    return
-  }
-  revokeArmedId.value = code.id
-  if (revokeArmTimer)
-    clearTimeout(revokeArmTimer)
-  revokeArmTimer = setTimeout(() => { revokeArmedId.value = null }, 5000)
-}
-
-async function revokeCode(code: ActivationCode) {
-  if (codesActionPendingId.value)
-    return
-  if (revokeArmTimer)
-    clearTimeout(revokeArmTimer)
-  revokeArmedId.value = null
-  codesActionPendingId.value = code.id
-  try {
-    await rawFetch(`/api/admin/codes/${code.id}`, { method: 'PATCH', body: { status: 'revoked' } })
-    toast.success(t('dashboard.sections.codes.revokeSuccess', 'Activation code revoked.'))
-    await fetchCodes()
-  }
-  catch (err: unknown) {
-    toast.warning(resolveErrorMessage(err, t('dashboard.sections.codes.revokeFailed', 'Failed to revoke activation code.')))
+  catch (cause) {
+    generationError.value = resolveAdminErrorMessage(cause, t('dashboard.sections.codes.errors.generateFailed', 'Failed to generate activation codes.'))
   }
   finally {
-    codesActionPendingId.value = null
+    generating.value = false
   }
 }
-
-function formatDate(value: string | null) {
-  if (!value)
-    return '-'
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(locale.value, { year: 'numeric', month: 'short', day: 'numeric' })
-}
-
-function resolvePlanStyle(plan: string) {
-  return planOptions.find(option => option.value === plan)
-}
-
-function codeStatusTone(status: string) {
-  if (status === 'active')
-    return 'success'
-  if (status === 'expired')
-    return 'danger'
-  if (status === 'revoked')
-    return 'warning'
-  if (status === 'exhausted')
-    return 'muted'
-  return 'info'
-}
-
-watch(() => filters.q, () => {
-  if (searchTimer)
-    clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => { void fetchCodes({ resetPage: true }) }, 300)
-})
-watch([() => filters.plan, () => filters.status], () => {
-  if (searchTimer)
-    clearTimeout(searchTimer)
-  void fetchCodes({ resetPage: true })
-})
-
-onBeforeUnmount(() => {
-  if (revokeArmTimer)
-    clearTimeout(revokeArmTimer)
-  if (copyResetTimer)
-    clearTimeout(copyResetTimer)
-  if (searchTimer)
-    clearTimeout(searchTimer)
-})
-onMounted(() => void fetchCodes())
 </script>
 
 <template>
-  <AdminPageShell :title="t('dashboard.sections.codes.title', 'Activation Codes')">
+  <AdminPageShell :title="t('dashboard.sections.menu.subscriptions', 'Activation Codes')">
     <template #actions>
+      <TxButton variant="secondary" size="sm" :disabled="list.loading.value || list.refreshing.value" @click="list.refresh()">
+        {{ t('common.refresh', 'Refresh') }}
+      </TxButton>
       <TxButton variant="primary" size="sm" icon="i-carbon-add" @click="openGenerator">
-        {{ t('dashboard.sections.codes.addButton', 'Add') }}
+        {{ t('dashboard.sections.codes.generateButton', 'Generate Codes') }}
       </TxButton>
     </template>
 
     <template #filters>
-      <div class="grid gap-4 md:grid-cols-[1fr_180px_180px]">
-        <div>
-          <label class="apple-section-title mb-1 block">{{ t('dashboard.sections.codes.filters.search', 'Search') }}</label>
-          <TuffInput v-model="filters.q" :placeholder="t('dashboard.sections.codes.filters.searchPlaceholder', 'Search activation code')" class="w-full" />
-        </div>
-        <div>
-          <label class="apple-section-title mb-1 block">{{ t('dashboard.sections.codes.form.plan', 'Plan') }}</label>
-          <TuffSelect v-model="filters.plan" class="w-full">
-            <TuffSelectItem value="all" :label="t('dashboard.sections.codes.filters.allPlans', 'All plans')" />
-            <TuffSelectItem v-for="option in planOptions" :key="option.value" :value="option.value" :label="option.label" />
-          </TuffSelect>
-        </div>
-        <div>
-          <label class="apple-section-title mb-1 block">{{ t('dashboard.sections.codes.table.status', 'Status') }}</label>
-          <TuffSelect v-model="filters.status" class="w-full">
-            <TuffSelectItem value="all" :label="t('dashboard.sections.codes.filters.allStatuses', 'All statuses')" />
-            <TuffSelectItem v-for="option in statusOptions" :key="option.value" :value="option.value" :label="option.label" />
-          </TuffSelect>
-        </div>
-      </div>
+      <AdminFilterBar :active="list.hasActiveFilters.value" @clear="list.clearFilters()">
+        <AdminFilterField :label="t('dashboard.sections.codes.filters.search', 'Search')" for="admin-code-search" wide>
+          <TxSearchInput
+            id="admin-code-search"
+            v-model="filters.q"
+            autocomplete="off"
+            spellcheck="false"
+            :placeholder="t('dashboard.sections.codes.filters.searchPlaceholder', 'Search activation code')"
+          />
+        </AdminFilterField>
+        <AdminFilterField :label="t('dashboard.sections.codes.form.plan', 'Plan')">
+          <TxSelect v-model="filters.plan" :options="planOptions" />
+        </AdminFilterField>
+        <AdminFilterField :label="t('dashboard.sections.codes.table.status', 'Status')">
+          <TxSelect v-model="filters.status" :options="statusOptions" />
+        </AdminFilterField>
+      </AdminFilterBar>
     </template>
 
-    <div class="space-y-4">
-      <div v-if="codesError && codes.length" class="rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
-{{ codesError }}
-</div>
-      <div v-if="codesLoading && !codes.length" class="py-5" role="status" :aria-label="t('dashboard.sections.codes.loading', 'Loading...')">
-        <TxRowSkeleton :rows="4" description separated trailing />
-      </div>
-      <TxEmptyState v-else-if="codesError && !codes.length" variant="error" size="small" :title="t('dashboard.sections.codes.errors.loadFailed', 'Failed to load activation codes.')" :description="codesError" :primary-action="{ label: t('common.retry', 'Retry'), variant: 'flat' }" @primary="fetchCodes()" />
-      <TxEmptyState v-else-if="!codes.length" variant="blank-slate" size="small" icon="i-carbon-ticket" :title="hasFilters ? t('dashboard.sections.codes.emptyFiltered', 'No activation codes match these filters.') : t('dashboard.sections.codes.empty', 'No activation codes yet. Add one to get started.')" description="" />
-      <TxDataTable v-else :columns="codeColumns" :data="codes" row-key="id" :loading="codesLoading" scroll-x nowrap>
-        <template #cell-code="{ row: code }">
-          <div class="flex min-w-0 items-center gap-2">
-            <code class="truncate rounded bg-black/5 px-2 py-1 font-mono text-sm text-black dark:bg-white/[0.08] dark:text-white" :title="code.code">{{ code.code }}</code>
-            <TxButton variant="bare" size="sm" native-type="button" :icon="copiedCodeId === code.id ? 'i-carbon-checkmark' : 'i-carbon-copy'" :title="t('dashboard.sections.codes.copy', 'Copy')" class="shrink-0" @click="copyCode(code.id, code.code)" />
-          </div>
+    <AdminSection :padded="false">
+      <AdminTable
+        :columns="columns"
+        :rows="list.rows.value"
+        row-key="id"
+        :loading="list.loading.value"
+        :refreshing="list.refreshing.value"
+        :error="list.error.value"
+        :empty-title="t('dashboard.sections.codes.empty', 'No activation codes yet. Use Generate Codes to create some.')"
+        :filtered-empty-title="t('dashboard.sections.codes.emptyFiltered', 'No activation codes match these filters.')"
+        :filtered="list.hasActiveFilters.value"
+        :page="list.page.value"
+        :limit="list.limit.value"
+        :total="list.total.value"
+        :page-sizes="list.pageSizes"
+        table-layout="fixed"
+        @retry="list.refresh()"
+        @clear-filters="list.clearFilters()"
+        @update:page="list.setPage"
+        @update:limit="list.setLimit"
+      >
+        <template #cell-code="{ row }">
+          <span class="CodesLine">
+            <code class="CodesCode" :title="row.code">{{ row.code }}</code>
+            <!-- Icon only: a visible "Copy" / "Copied" label costs the code column
+                 the 40–50px that the full code needs at 1440px. The button keeps
+                 its accessible name and announces "Copied" all the same. -->
+            <TxCopyButton
+              class="CodesCopy"
+              :text="row.code"
+              :copy-label="t('dashboard.sections.adminKit.copy', 'Copy')"
+              :copied-label="t('dashboard.sections.adminKit.copied', 'Copied')"
+              :title="t('dashboard.sections.adminKit.copy', 'Copy')"
+              @error="copyFailed"
+            >
+              <span aria-hidden="true" />
+            </TxCopyButton>
+          </span>
         </template>
-        <template #cell-plan="{ row: code }">
-<span class="font-medium" :class="resolvePlanStyle(code.plan)?.color">{{ code.plan }}</span>
-</template>
-        <template #cell-duration="{ row: code }">
-<span class="text-sm text-black/60 dark:text-white/60">{{ code.duration_days }} {{ t('dashboard.sections.codes.days', 'days') }}</span>
-</template>
-        <template #cell-uses="{ row: code }">
-<span class="text-sm text-black dark:text-white">{{ code.uses }} / {{ code.max_uses }}</span>
-</template>
-        <template #cell-status="{ row: code }">
-<TxStatusBadge :text="codeStatusLabels[code.status] || code.status" :status="codeStatusTone(code.status)" size="sm" />
-</template>
-        <template #cell-created="{ row: code }">
-<span class="text-sm text-black/60 dark:text-white/60">{{ formatDate(code.created_at) }}</span>
-</template>
-        <template #cell-expires="{ row: code }">
-<span class="text-sm text-black/60 dark:text-white/60">{{ formatDate(code.expires_at) }}</span>
-</template>
-        <template #cell-actions="{ row: code }">
-          <TxButton v-if="code.status === 'active'" :variant="revokeArmedId === code.id ? 'danger' : 'secondary'" size="sm" :disabled="codesActionPendingId === code.id" @click="requestRevoke(code)">
-            {{ revokeArmedId === code.id ? t('common.confirm', 'Confirm') : t('dashboard.sections.codes.revoke', 'Revoke') }}
-          </TxButton>
+        <template #cell-plan="{ row }">
+          <span class="CodesLine">
+            <TxTag :label="row.plan" size="sm" :variant="row.plan === 'FREE' ? 'plain' : 'soft'" />
+          </span>
         </template>
-      </TxDataTable>
-      <div class="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.04] pt-4 dark:border-white/[0.06]">
-        <span class="text-xs text-black/50 dark:text-white/50">{{ t('dashboard.sections.codes.pagination.total', { count: pagination.total }) }}</span>
-        <TxPagination :current-page="pagination.page" :page-size="pagination.limit" :total="pagination.total" :total-pages="pagination.totalPages" :prev-label="t('dashboard.sections.users.pagination.prev', 'Previous page')" :next-label="t('dashboard.sections.users.pagination.next', 'Next page')" @update:current-page="changePage" />
-      </div>
-    </div>
+        <template #cell-duration="{ row }">
+          <span class="CodesText is-numeric">{{ durationLabel(row.duration_days) }}</span>
+        </template>
+        <template #cell-uses="{ row }">
+          <span class="CodesText is-numeric">{{ format.number(row.uses) }} / {{ format.number(row.max_uses) }}</span>
+        </template>
+        <template #cell-status="{ row }">
+          <span class="CodesLine">
+            <TxStatusBadge :text="statusLabel(row.status)" :status="codeStatusTone(row.status)" size="sm" />
+          </span>
+        </template>
+        <template #cell-created="{ row }">
+          <span class="CodesText is-numeric" :title="format.dateTimeTitle(row.created_at)">{{ format.tableDateTime(row.created_at) }}</span>
+        </template>
+        <template #cell-expires="{ row }">
+          <span class="CodesText is-numeric" :title="format.dateTimeTitle(row.expires_at)">{{ format.tableDateTime(row.expires_at) }}</span>
+        </template>
+        <template #cell-actions="{ row }">
+          <span v-if="isRevocableCode(row)" class="CodesLine">
+            <TxButton variant="secondary" size="sm" @click="openRevoke(row)">
+              {{ t('dashboard.sections.codes.revoke', 'Revoke') }}
+            </TxButton>
+          </span>
+        </template>
+      </AdminTable>
+    </AdminSection>
 
-    <TxDrawer v-model:visible="generatorOpen" :title="t('dashboard.sections.codes.generateTitle', 'Generate Activation Codes')" width="640px" :show-close="!codesGenerating" :close-on-click-mask="!codesGenerating" :close-on-press-escape="!codesGenerating">
-      <form id="activation-code-generator" class="grid gap-4 sm:grid-cols-2" @submit.prevent="generateCodes">
-        <div>
-          <label class="apple-section-title mb-1 block">{{ t('dashboard.sections.codes.form.plan', 'Plan') }}</label>
-          <TuffSelect v-model="genForm.plan" class="w-full">
-            <TuffSelectItem v-for="option in planOptions" :key="option.value" :value="option.value" :label="option.label" />
-          </TuffSelect>
-        </div>
-        <div>
-          <label class="apple-section-title mb-1 block">{{ t('dashboard.sections.codes.form.durationDays', 'Duration (days)') }}</label>
-          <TuffInput v-model="genForm.durationDays" type="number" min="1" max="365" required class="w-full" />
-        </div>
-        <div>
-          <label class="apple-section-title mb-1 block">{{ t('dashboard.sections.codes.form.maxUses', 'Max uses') }}</label>
-          <TuffInput v-model="genForm.maxUses" type="number" min="1" max="1000" required class="w-full" />
-        </div>
-        <div>
-          <label class="apple-section-title mb-1 block">{{ t('dashboard.sections.codes.form.expiresInDays', 'Expires in (days)') }}</label>
-          <TuffInput v-model="genForm.expiresInDays" type="number" min="1" max="365" required class="w-full" />
-        </div>
-        <div>
-          <label class="apple-section-title mb-1 block">{{ t('dashboard.sections.codes.form.count', 'Count') }}</label>
-          <TuffInput v-model="genForm.count" type="number" min="1" max="100" required class="w-full" />
-        </div>
-        <p v-if="generationError" role="alert" class="rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200 sm:col-span-2">
-{{ generationError }}
-</p>
+    <AdminConfirmDialog
+      v-model:open="revokeOpen"
+      :title="t('dashboard.sections.codes.revokeConfirm.title', 'Revoke activation code?')"
+      :description="revokeTarget ? t('dashboard.sections.codes.revokeConfirm.description', { code: revokeTarget.code }) : ''"
+      :confirm-label="t('dashboard.sections.codes.revoke', 'Revoke')"
+      tone="danger"
+      :loading="revoking"
+      @confirm="revokeCode"
+    />
+
+    <TxModal
+      :model-value="generatorOpen"
+      :title="t('dashboard.sections.codes.generateTitle', 'Generate New Codes')"
+      width="480px"
+      @update:model-value="requestCloseGenerator"
+    >
+      <form id="admin-code-generator" class="CodeForm" novalidate @submit.prevent="generateCodes">
+        <AdminFormField class="CodeForm-Field--full" :label="t('dashboard.sections.codes.form.plan', 'Plan')">
+          <TxSelect v-model="generatorForm.plan" :options="generatorPlanOptions" :disabled="generating" />
+        </AdminFormField>
+        <AdminFormField
+          v-for="field in generatorFields"
+          :key="field.key"
+          :label="field.label"
+          :for="generatorFieldIds[field.key]"
+          :hint="rangeHint(field.key)"
+          :invalid="invalidFields.includes(field.key)"
+        >
+          <TuffInput
+            :id="generatorFieldIds[field.key]"
+            v-model="generatorForm[field.key]"
+            type="number"
+            :min="CODE_GENERATION_LIMITS[field.key].min"
+            :max="CODE_GENERATION_LIMITS[field.key].max"
+            step="1"
+            :disabled="generating"
+          />
+        </AdminFormField>
+        <TxAlert v-if="generationError" class="CodeForm-Field--full" type="error" :closable="false" :message="generationError" />
       </form>
       <template #footer>
-        <div class="flex justify-end gap-2">
-          <TxButton variant="secondary" size="sm" :disabled="codesGenerating" @click="generatorOpen = false">
-{{ t('common.cancel', 'Cancel') }}
-</TxButton>
-          <TxButton variant="primary" size="sm" native-type="submit" form="activation-code-generator" :loading="codesGenerating" :disabled="codesGenerating">
-{{ t('dashboard.sections.codes.generateButton', 'Generate Codes') }}
-</TxButton>
-        </div>
+        <TxButton variant="secondary" size="sm" :disabled="generating" @click="requestCloseGenerator(false)">
+          {{ t('common.cancel', 'Cancel') }}
+        </TxButton>
+        <TxButton variant="primary" size="sm" native-type="submit" form="admin-code-generator" :loading="generating" :disabled="generating">
+          {{ t('dashboard.sections.codes.generateButton', 'Generate Codes') }}
+        </TxButton>
       </template>
-    </TxDrawer>
+    </TxModal>
   </AdminPageShell>
 </template>
+
+<style scoped>
+/* A cell holding a control is one line box tall, like a text cell and like the
+   skeleton row it replaces: the copy and revoke buttons and the badges overhang
+   it into the cell padding instead of making the row taller. */
+.CodesLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 1lh;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.CodesCode {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tx-text-color-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* No gap left for the empty label, so the icon sits in the middle of the button.
+   Scoped under the cell so it outranks the button's own equally specific rule
+   whichever stylesheet loads last. */
+.CodesLine > .CodesCopy {
+  flex: none;
+  gap: 0;
+}
+
+/* One line; what does not fit is cut and shown in full in the title. */
+.CodesText {
+  display: block;
+  overflow: hidden;
+  color: var(--tx-text-color-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.CodesText.is-numeric {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Two columns of fields; the plan spans both. */
+.CodeForm {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.CodeForm-Field--full {
+  grid-column: 1 / -1;
+}
+</style>

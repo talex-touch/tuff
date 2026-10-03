@@ -2,7 +2,13 @@ import { createError, readBody } from 'h3'
 import { requireAdmin } from '../../../../utils/auth'
 import { getUserById } from '../../../../utils/authStore'
 import { logAdminAudit } from '../../../../utils/adminAuditStore'
-import { adjustUserCredits, getCreditSummary, listCreditLedgerByUsers } from '../../../../utils/creditsStore'
+import {
+  adjustUserCredits,
+  CreditDeductLimitError,
+  getCreditSummary,
+  getUserCreditAdjustLimits,
+  listCreditLedgerByUsers,
+} from '../../../../utils/creditsStore'
 
 const MAX_CREDIT_ADJUSTMENT = 1_000_000_000
 
@@ -45,6 +51,16 @@ export default defineEventHandler(async (event) => {
     })
   }
   catch (error) {
+    // A deduction past the floor wrote nothing, so there is nothing to audit.
+    // The limit it was refused against goes back for the drawer to show.
+    if (error instanceof CreditDeductLimitError) {
+      const { maxDeduct, planFloor, used } = error.limits
+      throw createError({
+        statusCode: 400,
+        statusMessage: error.message,
+        data: { errorCode: error.errorCode, maxDeduct, planFloor, used },
+      })
+    }
     const message = error instanceof Error ? error.message : 'Failed to adjust credits.'
     throw createError({ statusCode: 400, statusMessage: message })
   }
@@ -62,14 +78,17 @@ export default defineEventHandler(async (event) => {
     },
   })
 
-  const [summary, ledger] = await Promise.all([
+  const [summary, ledger, limits] = await Promise.all([
     getCreditSummary(event, id),
     listCreditLedgerByUsers(event, [id], { page: 1, limit: 10 }),
+    getUserCreditAdjustLimits(event, id),
   ])
 
   return {
     adjustment,
     summary,
+    // Read after the adjustment: what the next deduction is checked against.
+    limits,
     ledger: {
       entries: ledger.entries,
       pagination: {

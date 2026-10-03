@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref, useId } from 'vue'
+import { ref, useId } from 'vue'
+import { useAdminFieldControl } from '~/composables/useAdminFieldControl'
 
 /**
- * One labelled control of `AdminFilterBar`.
+ * One labelled control of `AdminFilterBar`. A form field is `AdminFormField`: this
+ * one is a flex item sized for a row of filters, and in a column its 200px basis
+ * would become a 200px height.
  *
  * The label never wraps the control. A wrapping `<label>` forwards a click on
  * `TxSelect`'s arrow to its input, the anchor sees two clicks and the panel opens
@@ -12,6 +15,7 @@ import { onMounted, ref, useId } from 'vue'
  * - otherwise the label is plain text, and on mount the first combobox or input
  *   inside without an accessible name is pointed at it through `aria-labelledby`
  *   — how `TxPagination` names its size select, since `TxSelect` takes no id.
+ *   (`useAdminFieldControl`, shared with `AdminFormField`.)
  */
 const props = withDefaults(defineProps<{
   label: string
@@ -26,13 +30,7 @@ const props = withDefaults(defineProps<{
 const labelId = useId()
 const root = ref<HTMLElement | null>(null)
 
-onMounted(() => {
-  if (props.for)
-    return
-  const control = root.value?.querySelector<HTMLElement>('[role="combobox"], input, select, textarea')
-  if (control && !control.hasAttribute('aria-labelledby') && !control.hasAttribute('aria-label'))
-    control.setAttribute('aria-labelledby', labelId)
-})
+useAdminFieldControl({ root, labelId, controlId: () => props.for })
 </script>
 
 <template>
