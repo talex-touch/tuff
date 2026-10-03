@@ -3007,8 +3007,7 @@
     "sections": {
       "habitual": "Right now",
       "proposed": "Recent picks",
-      "habitualEmptyTitle": "Your regular picks will appear as you use Tuff",
-      "habitualEmptyHint": "Use apps or features through Tuff, or choose “Pin to Recommendations” in the action menu."
+      "habitualEmptyTitle": "Regular picks appear as you use Tuff"
     },
     "recommendation": {
       "badge": {

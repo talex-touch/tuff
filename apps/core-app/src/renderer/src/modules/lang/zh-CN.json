@@ -3007,8 +3007,7 @@
     "sections": {
       "habitual": "此刻常用",
       "proposed": "最近案例",
-      "habitualEmptyTitle": "常用项目会随使用逐步出现",
-      "habitualEmptyHint": "通过 Tuff 使用应用或功能，或在操作菜单中选择“固定到推荐”。"
+      "habitualEmptyTitle": "常用项目会随使用出现"
     },
     "recommendation": {
       "badge": {

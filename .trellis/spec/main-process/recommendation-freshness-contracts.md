@@ -103,6 +103,17 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
   silently losing the region. This guidance never enters `sectionsData`, `items`, `itemIds` or
   `registerItem`: list focus starts at 0 and its quick keys at ⌘1. A real habitual tile removes
   the guidance; unrelated sections and sectionless grids never show it.
+  - Its shape since 2026-10-02 is a ghost grid, not a text block: the section title, then
+    `visibleColumns` empty slots drawn in a `.BoxGrid` container with the real grid's `p-4`,
+    `--grid-cols`, `--grid-gap` and `size-*` (so each slot sits on the track a habitual tile will
+    take), then one centred line `habitualEmptyTitle · <TxKbd>⌘K</TxKbd> corebox.actions.pin`. The
+    key label comes from `shortcutChordLabel({ code: 'KeyK' }, isMac)`, the source of the action
+    panel's own key (Ctrl+K off macOS); the pin text reuses the action-menu label verbatim. The slot
+    container is `aria-hidden`, slots are static `<span>`s (no shimmer: guidance, not loading),
+    with ink-tint colours (`color-mix` of `--tx-text-color-primary`) because CoreBox has no opaque
+    surface for a fill token to read against. Below 480px of container width the line splits into
+    two centred lines without the separator. `components/render/BoxGrid.test.ts` pins the slot
+    count, `aria-hidden`, ⌘1 on the first real row, the platform key and both locales' copy.
 - **Default settings are suggestions, not fabricated habits.** An empty query always nominates
   three searchable destinations (`settings-general`, `settings-appearance`, `settings-channels`),
   even with sparse history. They use `source: 'cold-start'` and empty usage statistics. Real usage
