@@ -56,7 +56,7 @@ catalog:
   '@nuxtjs/mdc': ^0.22.2
   '@panva/hkdf': 1.2.1
   '@sentry/nuxt': ^10.64.0
-  '@sidebase/nuxt-auth': ^0.9.4
+  '@sidebase/nuxt-auth': ^1.4.0
   '@unocss/preset-web-fonts': ^66.7.5
   '@vue/compiler-sfc': ^3.5.41
   better-sqlite3: ^12.11.1
