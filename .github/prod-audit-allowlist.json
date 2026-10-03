@@ -11,7 +11,8 @@
     "here because the prose could be — and four times was — about a different dependency than the",
     "entry allows: GHSA-2v37-7h3g-55p8 carried a verbatim copy of the neighbouring nanoid reason,",
     "which described a range that entry did not have. Nothing could see that by reading. Now the",
-    "audit is asked instead."
+    "audit is asked instead.",
+    "2026-10-03: GHSA-86w9-cpqp-85rv (node-forge) and GHSA-vfj7-8cjw-p6xm (braces) entered the --prod audit with no patched release, failing every PR. Allowlisted for 30 days with traced paths; the owner approved the exception."
   ],
   "advisories": [
     {
@@ -68,6 +69,28 @@
       "reason": "Reaches --prod through apps/nexus's production dependency @sentry/nuxt@10.65.0, which depends on nuxt by construction — a Sentry integration for Nuxt cannot not. Traced with `pnpm -C apps/nexus why nuxt --prod`: @sentry/nuxt -> nuxt -> @nuxt/devtools -> @nuxt/kit. Not reclassifiable: Sentry reporting is runtime behaviour, not a build input. Blocked behind the unhead 2 -> 3 migration (#1098).",
       "owner": "#328",
       "expires": "2026-11-09"
+    },
+    {
+      "id": "GHSA-86w9-cpqp-85rv",
+      "module": "node-forge",
+      "severity": "high",
+      "versions": [
+        "1.4.0"
+      ],
+      "reason": "Reaches --prod only through listhen@1.10.0, the local HTTP(S) listener behind `nuxt dev` / `nitro dev` (it also mints the self-signed dev certificate). Traced with `pnpm why node-forge --prod`: listhen -> @nuxt/cli@3.37.0 -> nuxt, and listhen -> nitropack@2.13.4 -> @talex-touch/tuff-nexus. Not in the deployed worker: no file under nitropack/dist/runtime imports listhen; only dist/core/index.mjs and dist/cli/dev.mjs do. The advisory is RSA PKCS#1 v1.5 signature verification accepting extra nested DigestAlgorithm elements, and no runtime path verifies a signature with node-forge. No patched release exists (vulnerable <= 1.4.0, first_patched_version null). Remove this entry and upgrade when node-forge ships a fix.",
+      "owner": "#328",
+      "expires": "2026-11-02"
+    },
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "module": "braces",
+      "severity": "high",
+      "versions": [
+        "3.0.3"
+      ],
+      "reason": "Reaches --prod through two paths (`pnpm why braces --prod`): chokidar@3.6.0, a production dependency of @talex-touch/core-app used by the main-process file watchers (service/file-watch.service.ts, box-tool/file-system-watcher), and nitropack@2.13.4 -> globby@16.2.1 -> fast-glob@3.3.3 -> micromatch@4.0.8 (Nexus build-time globbing, not part of the deployed worker runtime). The advisory is stack exhaustion when expanding deeply nested brace patterns. core-app's watchers watch directories the app indexes on the user's own machine and filter with an ignore function, not attacker-supplied brace globs; nitropack expands patterns from its own config at build time. No patched release exists (vulnerable <= 3.0.3, first_patched_version null). Remove this entry and upgrade when braces ships a fix.",
+      "owner": "#328",
+      "expires": "2026-11-02"
     }
   ]
 }
