@@ -49,4 +49,4 @@ Application startup never runs destructive DDL. Operators use the guarded `provi
 3. confirms every enabled credentialed provider has a secure-store row;
 4. receives both `--execute` and the explicit destructive acknowledgement environment variable.
 
-Prompts, prompt bindings, audits, IP bans, runtime sessions/traces, provider health, usage ledgers, and credit records are independent of the retired provider table and remain available.
+Audits, IP bans, provider health, usage ledgers, and credit records are independent of the retired provider table and remain available. The prompt registry, prompt bindings and runtime session/trace/checkpoint tables belonged to the admin agent workspace retired on 2026-10-02: their rows stay in D1 untouched, but no code reads or writes them any more.

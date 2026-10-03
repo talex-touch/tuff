@@ -1,6 +1,6 @@
 # TODO 长期债务池（Long-term Backlog）
 
-> 更新时间：2026-08-01
+> 更新时间：2026-10-02
 > 说明：本文承接 `docs/plan-prd/TODO.md` 的非 2 周执行项。主 TODO 只保留当前 release window；本页只保留长尾债务与后续专题。
 
 ## A. 架构与质量债务
@@ -31,8 +31,8 @@
 - [ ] DivisionBox：prepare/attach/detach 生命周期语义文档深化。
 - [ ] Intelligence Agents：Workflow 编辑器、完整 Review Queue、记忆系统治理与高级协作能力。
 - [x] AI：strict 错误码端到端回归（SSE `code/message/reason/recovery` 覆盖 pre/post-delta；HTTP status/body 覆盖 auth、invalid、quota、provider、network 与 unknown，并保留 CoreApp network policy）。
-- [x] AI：当前 `/api/admin/intelligence-agent/session/stream` 持续分块 smoke 已覆盖首帧在 graph 完成前可读、后续帧有序及唯一 done；historical `/api/chat/sessions/:sessionId/stream` 在当前仓库不存在，不再把缺失路由记为已交付。
-- [ ] AI：selected-days canonical `errorCode` distribution API 已补齐，current/legacy Agent audit 中的 explicit code 与 message-only failure 都会归一化且不返回 raw stack/message；Dashboard 可视化、告警阈值仍待补齐。historical `AIAPP_STRICT_MODE_UNAVAILABLE` 在当前仓库没有 producer，不再作为有效指标。
+- [x] AI：`/api/admin/intelligence-agent/session/stream` 持续分块 smoke 曾覆盖首帧在 graph 完成前可读、后续帧有序及唯一 done；historical `/api/chat/sessions/:sessionId/stream` 在当前仓库不存在，不再把缺失路由记为已交付。（2026-10-02 已退役：该入口与后台 Agent 运行时一并删除，见 CHANGES 2026-10-02。）
+- [x] AI：selected-days canonical `errorCode` distribution API 曾补齐，current/legacy Agent audit 中的 explicit code 与 message-only failure 都会归一化且不返回 raw stack/message；historical `AIAPP_STRICT_MODE_UNAVAILABLE` 在当前仓库没有 producer，不再作为有效指标。（2026-10-02 已退役：分析页 AI 面板、该接口与 `listRuntimeAudits()` 一并删除，见 CHANGES 2026-10-02。）剩余的 Dashboard 可视化与告警阈值随之关闭。
 - [ ] Intelligence：`video.generate` 当前并非“仅缺真实 Provider runtime”——capability enum/alias、payload/result、typed SDK domain、provider adapter、异步 job 状态/取消/产物合同、UI 与成功路径均不存在。实现前先确定 provider 与异步生命周期，禁止先暴露会稳定返回 unsupported 的空 SDK。
 - [x] AI：移除 default Nexus `audio.tts` 假能力与首选 binding，并迁移已存 stale 配置；真实 OpenAI/SiliconFlow TTS 继续可用，Nexus 待 server runtime 成功路径落地后再广告。
 
@@ -55,8 +55,8 @@
 ## 历史完成索引
 
 - AI 附件慢链路与 Admin 设置合并已完成：附件投递按 `id > https url > base64`，`/admin/*` 成为管理主入口。
-- AI 路由历史记录已按当前实现校正：仓库不存在 `/api/chat/sessions/:sessionId/stream`；当前 Dashboard Agent 唯一流式执行入口为 `/api/admin/intelligence-agent/session/stream`，运行 trace 通过 `/api/admin/intelligence-agent/session/trace` 按 `fromSeq` 查询。
-- Dashboard Agent UI 直接消费 live SSE；历史恢复通过 trace GET 的 `fromSeq + limit` 分页读取。当前实现没有 `follow` 参数，不再沿用旧 `fromSeq + follow` 描述。
+- AI 路由历史记录已按当时实现校正：仓库不存在 `/api/chat/sessions/:sessionId/stream`；Dashboard Agent 当时唯一的流式执行入口为 `/api/admin/intelligence-agent/session/stream`，运行 trace 通过 `/api/admin/intelligence-agent/session/trace` 按 `fromSeq` 查询。（2026-10-02 已退役：该入口与后台 Agent 运行时一并删除，见 CHANGES 2026-10-02。）
+- Dashboard Agent UI 曾直接消费 live SSE；历史恢复通过 trace GET 的 `fromSeq + limit` 分页读取，没有 `follow` 参数。页面已于 2026-10-01 删除，运行时与接口于 2026-10-02 删除。
 - Intelligence 多模态配置、Websearch 聚合和模型组能力治理已有基础实现；剩余项还包括 Agent Workflow/Review Queue/记忆治理、strict-mode 运维看板与 `video.generate` 真实运行时，不再使用“仅剩 video”结论。
 - 2.4.8 OmniPanel Gate、v2.4.7 Gate A/B/C/D/E、2.4.9 插件完善主线均为 historical done。
 

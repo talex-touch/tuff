@@ -2,16 +2,18 @@
 
 This page describes the **LangChain/LangGraph Agent migration plan** for Tuff Intelligence, replacing scattered hand-written orchestration in Core-App and Nexus.
 
+> **Status (2026-10-02):** Nexus no longer runs an agent. The admin Lab / agent workspace, its LangGraph runner and its planner, executor and reflector stages have been removed; Nexus keeps only single-capability invoke/stream behind Scene routing. The Nexus items in the rollout path and acceptance criteria below record the original plan and no longer apply; the plan continues for Core-App only.
+
 ## Goals
 
 - Standardize the `Plan → Execute → Reflect` lifecycle.
-- Reuse one tool-call / approval / tracing contract across Core-App and Nexus Lab.
+- Reuse one tool-call / approval / tracing contract across Core-App runtimes.
 - Make provider routing, prompt injection, fallback, and audit behavior graph-driven and testable.
 
 ## Current Gaps
 
 - Core-App already has `intelligence-sdk.ts` and `packages/tuff-intelligence/src/graph.ts`, but agent flow is not fully unified under one graph runtime.
-- Nexus `tuffIntelligenceLabService.ts` still carries stage-specific orchestration logic (planner / executor / reflector / follow-up).
+- Nexus does not orchestrate agents: the planner / executor / reflector / follow-up stages in `tuffIntelligenceLabService.ts` were removed with the admin agent workspace (2026-10-02), and the file now serves only single-capability invoke/stream plus the provider lookups and probes shared by the credits model list, the docs assistant and provider checks.
 - Prompt/provider/capability settings are persisted in multiple places, causing behavior drift between runtimes.
 
 ## Target Architecture
@@ -45,7 +47,7 @@ code: |
 - Orchestration core: `packages/tuff-intelligence/src/graph.ts`
 - LangChain bridge: `packages/tuff-intelligence/src/langchain-bridge.ts`
 - Core-App runtime: `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
-- Nexus Lab runtime: `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- Nexus capability invoke/stream (no agent runtime): `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
 
 ## Minimal Rollout Path
 

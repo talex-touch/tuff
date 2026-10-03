@@ -1,7 +1,18 @@
 # 变更日志
 
-> 更新时间：2026-10-01
+> 更新时间：2026-10-02
 > 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-10-02
+
+### nexus: remove the admin AI agent runtime left behind by the retired pages
+
+- 10-01 删掉了 Tuff AI 工作台与对话探针页面，本次删除只为它们服务的服务端：`/api/admin/intelligence-agent/*`（13 个在线 handler + 3 个 orchestrator 410 桩）、`/api/admin/intelligence/chat`、`/api/admin/intelligence-lab/*`（10 个 410 桩）与 `/api/admin/analytics/intelligence`。这些 URL 现在与任意不存在的 `/api` 路径一样返回 404：410 桩指向的迁移目标已不存在，全仓也没有调用方。
+- 删除 `intelligenceAgentGraphRunner`、`intelligenceAgentRuntimeBridge`、`tuffIntelligenceRuntimeStore`、`tuffIntelligenceLabTools`。`tuffIntelligenceLabService.ts` 按可达性裁掉 58 个不可达声明（5,059 → 2,079 行，存活声明行数不变），保留 v1 invoke/stream、积分模型列表、文档助手与渠道检测共用的入口。`intelligenceStore.ts` 去掉 Prompt Registry 段、prompt 两表的建表语句与 `listRuntimeAudits`，审计与 IP 封禁不变。
+- 分析页 AI 面板随其唯一的数据来源一起下线：数据分析收敛为六个面板，旧链接 `?section=intelligence` 回落到概览。中英对称删除 `dashboard.intelligenceLab`、三个退役菜单键、`sections.analytics.intelligence.*` 以及只供该面板使用的文案。Nexus 不再声明 `@langchain/langgraph` 与 `@talex-touch/intelligence-uikit`；锁文件只少了 Nexus importer 的这两条记录，包集合不变。
+- D1 中 prompt registry/bindings 与 runtime sessions/traces/checkpoints 五张表及其数据原样保留，只是不再有代码读写；删表需另走受控脚本。审计动作标签与 `packages/utils` 中的公共类型保留。
+- 三个守卫的负控自 10-01 起读不到已删页面、直接返回而无法失败。现在改读冻结的已上线修复版本 fixture，样本缺失时测试失败；把原问题注回样本后三者均失败。
+- 验证：Nexus vitest **248 files / 1873 tests** 通过（清理前 255 / 1902，差额全部来自删除和裁剪的测试）；guarded typecheck（app/server 正控各报 1 个错误）、改动文件零警告 ESLint、API 路由树、MDC fence、文档双语一致性与 `git diff --check` 均通过。在 worktree 本地实例上，18 个保留接口探针在清理前后的状态码、响应形状与错误码一致。真实浏览器（ego）中，数据分析的中英文六个面板逐一可打开，`?section=intelligence` 回落到概览，且只请求 analytics / versions / geo 三个接口。
 
 ## 2026-10-01
 
