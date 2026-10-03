@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. List candidates with `find .trellis/spec -name '*.md'` — note that `get_context.py --mode packages` reports layers only and omits spec/guides, which real manifests do cite. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "收尾校验"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "核对草稿/保存语义与离开拦截"}
+{"file": ".trellis/tasks/10-03-skills-page-revamp/research/skills-page.md", "reason": "核对手动保存、命名遗漏、事故回归断言"}

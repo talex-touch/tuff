@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. List candidates with `find .trellis/spec -name '*.md'` — note that `get_context.py --mode packages` reports layers only and omits spec/guides, which real manifests do cite. Delete this line once real entries are added."}
+{"file": ".trellis/spec/main-process/pi-provider-contracts.md", "reason": "§11.2 env 叠加 PATH（dirname）、§11.3.3 可执行文件查找顺序与 absent/unprobed、§11.3.5 启动日志：本任务的探测必须收敛到这份契约"}
+{"file": ".trellis/spec/main-process/global-shortcut-contracts.md", "reason": "去掉门槛后 CommandOrControl+Shift+L 会对所有 macOS 用户注册，需按快捷键契约处理冲突与默认值"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "local-ai-cli 状态 payload（issueCode / betaAvailable）若调整，需按类型化 transport 规则改"}
+{"file": ".trellis/tasks/10-03-local-agent-detection/research/detection.md", "reason": "四套查找对照、启动链路 env、门槛影响面、mise 与登录 shell 实测、MCP 布局与命名（行号以 2026-10-03 工作区为准）"}

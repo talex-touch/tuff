@@ -1,0 +1,7 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. List candidates with `find .trellis/spec -name '*.md'` — note that `get_context.py --mode packages` reports layers only and omits spec/guides, which real manifests do cite. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "列表分组、骨架屏、i18n 改名"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "手动保存：草稿与已持久化状态分离、脏检测、离开拦截"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "若抽 useDraftSave 之类的组合式函数，按这里的生命周期规则写"}
+{"file": ".trellis/spec/main-process/agent-tool-gateway-contracts.md", "reason": "首页技能注入面（home skills-injection surface marker）：本机技能启停与注入的契约"}
+{"file": ".trellis/tasks/10-03-skills-page-revamp/research/skills-page.md", "reason": "页面解剖、留白来源、保存链路、本地 skill 数据与去重、命名清单、测试锁定面（行号以 2026-10-03 工作区为准）"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "skill-local 事件与类型收成共享 TuffEvent（第 5 条：注册、发送、mock 同一份）"}
