@@ -1264,3 +1264,38 @@ New TuffEx TxStatusHint (tone wash rising from the leading edge, grain in the ma
 ### Next Steps
 
 - None - task complete
+
+
+## Session 80: CoreBox 常用幽灵宫格 + 流转面板 MetaK 化
+
+**Date**: 2026-10-03
+**Task**: CoreBox 常用幽灵宫格 + 流转面板 MetaK 化
+**Branch**: `stage`
+
+### Summary
+
+此刻常用空态改成对齐宫格轨道的幽灵宫格；流转面板照 MetaK 重做（共用 MetaPanel 卡片、按插件分组、卡片内确认、window 捕获键盘），并接入窗口让位（useResize 地板 + floorApplied 铺底，after-leave 释放）与主进程 ⌘K 高度交接。顺带修复四个原有问题：派发载荷不可克隆导致流转从未发出、结果 toast 在 CoreBox 不可见（改底栏反馈）、⌘K→流转窗口回弹、列表重排后被滚走（视口守卫、第 0 项回顶、只在同一批格子重排时补滚）。真机隔离实例逐项复验，spec 更新四份契约。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b8f2a2477` | (see git log) |
+| `8f78dd29f` | (see git log) |
+| `85221fba1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
