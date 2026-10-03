@@ -1637,7 +1637,7 @@ onBeforeUnmount(() => {
               ? isSectionExpanded(section)
               : normalizedRoutePath === (linkTarget(section) || '')
           "
-          :link="linkTarget(section) || undefined"
+          :link="linkTarget(section) ? localizedDocsPath(linkTarget(section)) : undefined"
           :list="section.children?.length || 0"
           @click="toggleSection(section)"
         >

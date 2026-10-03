@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { defineAsyncComponent, h, type FunctionalComponent } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
+import ProseA from '~/components/content/ProseA.vue'
 import DocsProseHeading from '~/components/docs/DocsProseHeading.vue'
 import { appDescription, appName } from '~/constants'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
 import { cacheDocsFullBody, hasCachedDocsFullBody, isDocsPageRecordForRoute, readCachedDocsFullBody, requestDocsPage, resolveDocsFullBodyCacheKey } from '~/utils/docs-page-client-cache'
 import { buildDocOutlineFromBody, buildDocOutlineTree, type DocTocEntry } from '~/utils/docs-outline'
 import { buildDocsSeoHead, normalizeDocsSeoCanonicalPath } from '~/utils/docs-seo'
+import { DOCS_SOURCE_PATH_KEY } from '~/utils/docs-source-path'
 import { useTypedFetch } from '~/utils/request'
 import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
@@ -212,6 +214,13 @@ const fullDocError = ref(false)
 
 const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
 const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value ?? doc.value : doc.value))
+
+// `ProseA` resolves an author's relative content link (`./installation.zh.mdc`) against the
+// document being rendered: such a link is relative to the source file, not to the URL.
+provide(DOCS_SOURCE_PATH_KEY, computed(() => {
+  const path = renderDoc.value?.path ?? doc.value?.path
+  return typeof path === 'string' ? path : null
+}))
 
 // The loading skeleton reuses TxSkeleton without joining the first-paint TuffEx
 // import graph (docs-page-performance.test.ts guards this): async chunk only.
@@ -937,7 +946,11 @@ function createDocsProseHeading(tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'): F
   return heading
 }
 
+// `:prose="false"` renders native tags, so links are mapped back to `ProseA` on purpose:
+// as a bare `<a>`, every `/docs/...` link dropped the reader's locale (a Chinese reader
+// was switched to English) and `./installation.zh.mdc` went to the not-found page.
 const docsProseComponents = {
+  a: ProseA,
   h1: createDocsProseHeading('h1'),
   h2: createDocsProseHeading('h2'),
   h3: createDocsProseHeading('h3'),

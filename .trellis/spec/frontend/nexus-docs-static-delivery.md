@@ -196,8 +196,17 @@ it is 370+ dynamic imports and would enter the SSR graph of every docs page.
 Every docs page is also prerendered as `/api/docs/page/<locale>/<meta|body>/<path>.json`
 (`build/docs-prerender-routes.ts::createDocsPageApiPrerenderRoutes`, ~1 100 files). The client
 (`app/utils/docs-page-client-cache.ts::requestDocsPage`) reads that twin first and falls back
-exactly once to `/api/docs/page?path=…`, the Worker route that also serves development and any
-document outside the list. The resolver behind both fronts is `server/utils/docsPageResolver.ts`.
+exactly once to `/api/docs/page?path=…`. That fallback reaches the Worker only in development:
+in production the `/api/docs/page/*` exclude also covers the bare `/api/docs/page`, so every
+`?path=` request answers the static 404 (measured 2026-10-03). A navigable spelling without a
+twin therefore renders "Document not found". The resolver behind both fronts is
+`server/utils/docsPageResolver.ts`.
+
+- A directory index gets a twin for both spellings — `dev/components/index.json`, which is the
+  scanned input, and `dev/components.json`, the route a reader navigates to — as the `.md`
+  twins do. Without the second one, "Developer" and "Concepts Overview" rendered "Document not
+  found" after every client-side navigation from 2026-09-12 (`e2a9b568c`) on, while a full page
+  load worked through the HTML alias. The docs root's two spellings share `index.json`.
 
 - The route is path-shaped because a query string never becomes a file on Pages (why
   `af99441e0` was reverted). The `.json` suffix keeps the MIME guess right on its own.
@@ -206,6 +215,24 @@ document outside the list. The resolver behind both fronts is `server/utils/docs
   or most of them silently fall back to the Worker. The guard checks the pattern is present.
 - `docsStaticJsonHeaderRoutes` includes `/api/docs/page/**`, so the twins carry the docs cache
   window and `application/json`.
+
+## Every docs link carries the reader's locale
+
+An unprefixed `/docs/...` link is a client-side navigation that the `/docs → /en/docs`
+`_redirects` rule never sees, so the route resolves to English: a Chinese reader is switched to
+English, and a directory route on top of that has no twin. Every link a reader clicks is
+therefore localized where it is built.
+
+- Components build links with `toLocalizedDocsPath` (`#shared/utils/docs-path`) — the sidebar,
+  section headers included (`DocSection :link`), the component sync table and the gallery
+  labels. Never a content path such as `/docs/dev/components/button.zh`.
+- The page renders content with `:prose="false"` (native tags), so `docsProseComponents` maps
+  `a` back to `ProseA` on purpose. `ProseA` localizes `/docs/...` links and resolves an author's
+  relative link (`./installation.zh.mdc`) against the rendered document, which the page
+  provides through `DOCS_SOURCE_PATH_KEY`: such a link is relative to the source file, not
+  the URL. Left as written it reached the router verbatim and landed on the not-found page.
+- Guard: `app/components/docs/docs-locale-links.test.ts` pins every sidebar link binding, the
+  sync table, the gallery's `docPath` and the `ProseA` wiring.
 
 ## Sentry loads after mount
 
