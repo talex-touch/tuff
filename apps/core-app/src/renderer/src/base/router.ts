@@ -124,6 +124,10 @@ function createSettingCategoryRoutes(withPerf: typeof withRouteComponentPerf): R
     'intelligence/capabilities': {
       name: '$I18n:router.intelligenceCapabilities',
       load: () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue')
+    },
+    'intelligence/mcp': {
+      name: '$I18n:router.intelligenceMcp',
+      load: () => import('../views/base/intelligence/IntelligenceMcpPage.vue')
     }
   }
 

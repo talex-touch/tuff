@@ -235,7 +235,7 @@ on. `mcp-servers` (Tuff as a client) is the neighbouring domain and is *not* thi
 - Protocol suite (`mcp-host-protocol.test.ts`) covering the matrix above.
 - Settings normalizer (`mcp-host-settings.test.ts`), including the uppercase-hex
   case and the port boundaries.
-- Renderer section (`SettingSkillsMcp.host.test.ts`): masked token page-wide
+- Renderer section (`SettingMcpHost.test.ts`, on the MCP settings page): masked token page-wide
   (row *and* pasted-config block), copy path still handing over the real
   document, rotation re-arming the mask, and the failure reason for a listener
   that is on but not bound.

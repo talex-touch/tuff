@@ -50,7 +50,10 @@ const SETTINGS_CATEGORY_ICONS = [
   'i-ri-global-line',
   'i-ri-download-2-line',
   'i-ri-hard-drive-2-line',
-  'i-ri-information-line'
+  'i-ri-information-line',
+  // Sub-page `navIcon`s live in the same `.ts` table, so the extractor never sees them either.
+  // The MCP page's is listed rather than left to a template that happens to name the same class.
+  'i-ri-plug-line'
 ]
 
 /**

@@ -1773,7 +1773,9 @@
     "audit": "Audit",
     "auditDesc": "Usage, logs, memory review and global limits.",
     "capabilities": "Capabilities",
-    "capabilitiesDesc": "Bind capabilities to providers and models."
+    "capabilitiesDesc": "Bind capabilities to providers and models.",
+    "mcp": "MCP",
+    "mcpDesc": "Manage MCP servers and let other AI clients call Tuff."
   },
   "settingsEntries": {
     "installedPlugins": "Installed Plugins",
@@ -3173,6 +3175,7 @@
     "intelligenceChannels": "Intelligence Channels",
     "intelligenceVoice": "Voice Input",
     "intelligenceCapabilities": "Intelligence Capabilities",
+    "intelligenceMcp": "MCP",
     "intelligencePrompts": "Intelligence Prompts",
     "intelligenceAudit": "Intelligence Audit",
     "intelligenceAgents": "Intelligence Agents",

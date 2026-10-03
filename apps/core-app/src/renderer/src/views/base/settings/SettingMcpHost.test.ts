@@ -38,6 +38,7 @@ vi.hoisted(() => {
 })
 
 vi.mock('@talex-touch/utils/renderer', () => ({
+  /** Read by the MCP servers section the page renders beside this one. */
   useIntelligenceSdk: () => ({
     orchestratorGetSnapshot: vi.fn().mockResolvedValue({
       importedItems: [
@@ -49,14 +50,6 @@ vi.mock('@talex-touch/utils/renderer', () => ({
           state: 'active',
           origin: 'manual',
           payload: { transport: { type: 'stdio', command: 'npx' } }
-        },
-        {
-          id: 'skill-1',
-          kind: 'skill',
-          name: 'notes',
-          description: 'take notes',
-          active: true,
-          state: 'active'
         },
         // A pre-contract row: no sourceId/candidateId. This is the shape that
         // blanked the live settings page — it must render, not throw.
@@ -81,25 +74,6 @@ vi.mock('@talex-touch/utils/renderer', () => ({
   useMcpHostSdk: () => host
 }))
 
-const localSnapshot = {
-  dirs: [{ path: '/Users/dev/tuff-skills', sourceId: null, auto: false }],
-  skills: [
-    {
-      id: 'local:abc123def456',
-      name: 'triage',
-      description: 'Sort the inbox',
-      path: '/Users/dev/tuff-skills/triage',
-      sourceDir: '/Users/dev/tuff-skills',
-      enabled: true
-    }
-  ]
-}
-
-const send = vi.fn(async (event: { toEventName: () => string }) =>
-  event.toEventName() === 'ai:skill-local:list' ? localSnapshot : undefined
-)
-
-vi.mock('@talex-touch/utils/transport', () => ({ useTuffTransport: () => ({ send }) }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('vue-i18n', () => ({
   useI18n: () => ({
@@ -110,7 +84,8 @@ vi.mock('vue-i18n', () => ({
 }))
 vi.mock('vue-sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
-import SettingSkillsMcp from './SettingSkillsMcp.vue'
+import IntelligenceMcpPage from '../intelligence/IntelligenceMcpPage.vue'
+import SettingMcpHost from './SettingMcpHost.vue'
 
 const TOKEN = 'a3f1c7d2'.repeat(8)
 const ENDPOINT = 'http://127.0.0.1:43110/mcp'
@@ -147,7 +122,7 @@ function hostAnswering(name: string, enabled: boolean): McpHostState {
 
 async function mountSection(state: McpHostState): Promise<VueWrapper> {
   host.getState.mockResolvedValue(state)
-  const wrapper = mount(SettingSkillsMcp)
+  const wrapper = mount(SettingMcpHost)
   await flushPromises()
   return wrapper
 }
@@ -193,7 +168,7 @@ function buttonLabelled(row: DOMWrapper<Element>, label: string): DOMWrapper<Ele
   return button
 }
 
-describe('settingSkillsMcp local MCP server section', () => {
+describe('settingMcpHost local MCP server section', () => {
   it('shows the running endpoint and every published tool on load, without a click', async () => {
     const wrapper = await mountSection(LISTENING)
     const text = wrapper.text()
@@ -362,15 +337,18 @@ describe('settingSkillsMcp local MCP server section', () => {
     expect(description).not.toContain('settings.skillsMcp.host.startingDesc')
   })
 
-  it('leaves the MCP-client and skills rows alone when the host is switched on', async () => {
-    const wrapper = await mountSection({
+  it('leaves the MCP server rows alone when the host is switched on', async () => {
+    host.getState.mockResolvedValue({
       ...LISTENING,
       enabled: false,
       running: false,
       endpoint: null
     })
+    // The whole MCP page, so the servers section beside this one supplies real neighbours.
+    const wrapper = mount(IntelligenceMcpPage)
+    await flushPromises()
 
-    const neighbours = ['fs', 'legacy-server', 'notes', 'triage']
+    const neighbours = ['fs', 'legacy-server']
     const before = neighbours.map((title) => rowNamed(wrapper, title).text())
     expect(
       switchOf(rowNamed(wrapper, 'settings.skillsMcp.host.enableTitle')).attributes('aria-checked')

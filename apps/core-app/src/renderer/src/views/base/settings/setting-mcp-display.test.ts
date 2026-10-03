@@ -5,7 +5,7 @@ import {
   parseCommandArgs,
   parseKeyValueLines,
   resolveMcpTransport
-} from './setting-skills-mcp-display'
+} from './setting-mcp-display'
 
 function makeItem(overrides: Partial<AiImportedConfigItem> = {}): AiImportedConfigItem {
   return {
@@ -28,7 +28,7 @@ function makeItem(overrides: Partial<AiImportedConfigItem> = {}): AiImportedConf
   } as AiImportedConfigItem
 }
 
-describe('setting-skills-mcp-display', () => {
+describe('setting-mcp-display', () => {
   it('summarises a stdio profile as its full command line', () => {
     const item = makeItem({
       normalizedProjection: {

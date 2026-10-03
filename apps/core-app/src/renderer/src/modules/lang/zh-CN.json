@@ -1773,7 +1773,9 @@
     "audit": "审计",
     "auditDesc": "用量、日志、记忆复核与全局限制。",
     "capabilities": "能力",
-    "capabilitiesDesc": "把能力绑定到渠道与模型。"
+    "capabilitiesDesc": "把能力绑定到渠道与模型。",
+    "mcp": "MCP",
+    "mcpDesc": "管理 MCP 服务器，以及让其他 AI 调用 Tuff。"
   },
   "settingsEntries": {
     "installedPlugins": "已安装插件",
@@ -3173,6 +3175,7 @@
     "intelligenceChannels": "智能通道",
     "intelligenceVoice": "语音输入",
     "intelligenceCapabilities": "智能能力",
+    "intelligenceMcp": "MCP",
     "intelligencePrompts": "智能提示词",
     "intelligenceAudit": "智能审计",
     "intelligenceAgents": "智能代理",
