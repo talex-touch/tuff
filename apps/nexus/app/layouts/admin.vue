@@ -1,10 +1,46 @@
+<script setup lang="ts">
+import { TxErrorState } from '@talex-touch/tuffex/error-state'
+import { TxPermissionState } from '@talex-touch/tuffex/permission-state'
+import AdminGateSkeleton from '~/components/admin/AdminGateSkeleton.vue'
+import { useAdminGate } from '~/composables/useAdminGate'
+import { useAdminRouteSkeleton } from '~/composables/useAdminRouteSkeleton'
+
+const { t } = useI18n()
+const { state: gateState, retrying: gateRetrying, retry: retryGate } = useAdminGate()
+const { visible: routeSkeletonVisible } = useAdminRouteSkeleton()
+</script>
+
 <template>
   <div class="admin-shell h-screen flex flex-col overflow-hidden from-white via-white to-slate-100 bg-gradient-to-br text-black dark:from-dark dark:via-dark/95 dark:to-dark/85 dark:text-light">
     <TheHeader class="admin-shell-header z-10" />
     <div class="admin-shell-body min-h-0 w-full flex flex-1 flex-col pt-11 lg:flex-row">
       <AdminNav />
-      <main class="admin-shell-main min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4 lg:px-8">
-        <slot />
+      <main
+        class="admin-shell-main min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4 lg:px-8"
+        :aria-busy="gateState === 'resolving' || routeSkeletonVisible ? 'true' : undefined"
+      >
+        <AdminGateSkeleton v-if="gateState === 'resolving'" />
+        <div v-else-if="gateState === 'denied'" class="admin-shell-gate-state">
+          <TxPermissionState
+            :title="t('dashboard.sections.adminGate.deniedTitle', 'Administrator access required')"
+            :description="t('dashboard.sections.adminGate.deniedDescription', 'This console is only open to administrators. Taking you back to your dashboard.')"
+          />
+        </div>
+        <div v-else-if="gateState === 'error'" class="admin-shell-gate-state">
+          <TxErrorState
+            :title="t('dashboard.sections.adminGate.errorTitle', 'Could not load your account')"
+            :description="t('dashboard.sections.adminGate.errorDescription', 'The console needs your account details to check your access. Try again.')"
+            :loading="gateRetrying"
+            :primary-action="{ label: t('common.retry', 'Retry'), variant: 'flat', disabled: gateRetrying }"
+            @primary="retryGate"
+          />
+        </div>
+        <div v-else class="admin-shell-stage">
+          <AdminGateSkeleton v-if="routeSkeletonVisible" class="admin-shell-route-skeleton" />
+          <div class="admin-shell-page" :class="{ 'is-covered': routeSkeletonVisible }" :inert="routeSkeletonVisible">
+            <slot />
+          </div>
+        </div>
       </main>
     </div>
   </div>
@@ -31,6 +67,18 @@
  * `layouts/dashboard.vue` because layouts are lazy chunks: a hard load of
  * `/admin/updates` never loads the dashboard layout, so a rule parked there
  * would simply be absent. Keeping it duplicated means each shell is complete.
+ *
+ * `<main>` has four states (`useAdminGate`): a skeleton while the session and
+ * profile resolve, an access-denied state for a signed-in non-administrator
+ * (who is then sent to `/dashboard/overview`), a retry when the profile request
+ * failed, and the page. The page slot only mounts for an administrator, so a page
+ * never needs a gate of its own and never sends a request that could only
+ * answer 403.
+ *
+ * While a navigation moves to another console page, the same skeleton stands in
+ * for the page until the next one has mounted (`useAdminRouteSkeleton`), instead
+ * of an empty column. The page slot stays mounted underneath, collapsed and
+ * `inert`, so nothing in it can take focus or be read out until it is shown.
  */
 
 /*
@@ -84,5 +132,28 @@
 
 .admin-shell .tx-button {
   border-radius: 999px;
+}
+
+.admin-shell-gate-state {
+  display: grid;
+  min-height: 60vh;
+  place-content: center;
+}
+
+.admin-shell-stage,
+.admin-shell-page {
+  min-width: 0;
+}
+
+/* Collapsed and hidden, not removed: the outgoing page finishes its transition
+   and the incoming one mounts and lays out at its real width underneath, so the
+   swap back moves nothing. Collapsing it also lets `<main>` clamp its scroll to
+   the skeleton, so the next page starts at the top rather than at the old one's
+   scroll offset. The element is also `inert` meanwhile: a descendant that sets
+   `visibility: visible` would otherwise stay focusable and readable here. */
+.admin-shell-page.is-covered {
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
 }
 </style>
