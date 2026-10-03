@@ -321,7 +321,13 @@ type GridKeyboardHarness = {
   clearClipboard: Mock
   handleExit: Mock
   handleExecute: Mock
+  scrollActiveItemIntoView: () => void
   cleanup: () => void
+}
+
+type ScrollbarStub = {
+  getScrollInfo: () => { clientHeight: number; scrollTop: number }
+  scrollTo: (x: number, y: number) => void
 }
 
 type GridKeyboardHarnessOptions = {
@@ -329,6 +335,8 @@ type GridKeyboardHarnessOptions = {
   clipboardOptions?: { last?: unknown }
   clearClipboard?: Mock
   handleExit?: Mock
+  scrollbar?: Ref<ScrollbarStub | null>
+  itemRefs?: Ref<Array<HTMLElement | null>>
 }
 
 let activeGridKeyboardHarness: GridKeyboardHarness | undefined
@@ -355,22 +363,20 @@ function mountGridKeyboardHarness(
   }
   const results = ref(items)
   const select = ref(-1)
-  const scrollbar = ref<{
-    getScrollInfo: () => { clientHeight: number; scrollTop: number }
-    scrollTo: (x: number, y: number) => void
-  } | null>(null)
+  const scrollbar = options.scrollbar ?? ref<ScrollbarStub | null>(null)
   const handleExecute = vi.fn()
   const searchVal = options.searchVal ?? ref('')
   const clipboardOptions = options.clipboardOptions ?? { last: undefined }
   const clearClipboard = options.clearClipboard ?? vi.fn()
   const handleExit = options.handleExit ?? vi.fn(async () => undefined)
+  let scrollActiveItemIntoView: () => void = () => {}
 
   document.body.classList.add('core-box')
   document.body.appendChild(root)
 
   const app = createApp({
     setup() {
-      useKeyboard(
+      const keyboard = useKeyboard(
         boxOptions,
         results,
         select,
@@ -383,8 +389,9 @@ function mountGridKeyboardHarness(
         clearClipboard,
         ref<IProviderActivate[] | null>(activations),
         vi.fn(),
-        ref<Array<HTMLElement | null>>([])
+        options.itemRefs ?? ref<Array<HTMLElement | null>>([])
       )
+      scrollActiveItemIntoView = keyboard.scrollActiveItemIntoView
       return () => null
     }
   })
@@ -398,6 +405,7 @@ function mountGridKeyboardHarness(
     clearClipboard,
     handleExit,
     handleExecute,
+    scrollActiveItemIntoView: () => scrollActiveItemIntoView(),
     cleanup: () => {
       app.unmount()
       root.remove()
@@ -1205,5 +1213,172 @@ describe('useKeyboard ⌘1–⌘0 quick select', () => {
 
     expect(activeGridKeyboardHarness.boxOptions.focus).toBe(1)
     expect(activeGridKeyboardHarness.handleExecute).toHaveBeenCalledExactlyOnceWith(items[1])
+  })
+})
+
+describe('useKeyboard focus scroll', () => {
+  // A full-height CoreBox window is 600px: the 56px header, then the results viewport, whose last
+  // 44px the sticky footer covers.
+  const HEADER_HEIGHT = 56
+  const FOOTER_HEIGHT = 44
+  const FULL_VIEWPORT_HEIGHT = 600 - HEADER_HEIGHT
+  const ROW_HEIGHT = 52
+  // The first recommendation row below an empty habitual section (its title, the ghost grid and
+  // the guidance line) and the proposed section's title: where the real list stopped.
+  const FIRST_ROW_OFFSET = 183
+
+  let frames: FrameRequestCallback[] = []
+  let viewportHeight = FULL_VIEWPORT_HEIGHT
+  let rowOffset = FIRST_ROW_OFFSET
+  let scrollTop = 0
+  const scrollTo = vi.fn((_x: number, y: number) => {
+    scrollTop = y
+  })
+
+  function rect(top: number, height: number): DOMRect {
+    return {
+      x: 0,
+      y: top,
+      top,
+      bottom: top + height,
+      left: 0,
+      right: 720,
+      width: 720,
+      height,
+      toJSON: () => ({})
+    } as DOMRect
+  }
+
+  /** The focused row inside TxScroll's native viewport, laid out against `viewportHeight`. */
+  function mountScrollHarness(
+    options: GridKeyboardHarnessOptions = {},
+    focus = 0
+  ): GridKeyboardHarness {
+    const scrollArea = document.createElement('div')
+    scrollArea.className = 'scroll-area'
+    const viewport = document.createElement('div')
+    viewport.className = 'tx-scroll__native'
+    viewport.getBoundingClientRect = () => rect(HEADER_HEIGHT, viewportHeight)
+    const row = document.createElement('div')
+    row.getBoundingClientRect = () => rect(HEADER_HEIGHT + rowOffset - scrollTop, ROW_HEIGHT)
+    viewport.appendChild(row)
+    scrollArea.appendChild(viewport)
+    const footer = document.createElement('div')
+    footer.className = 'CoreBoxFooter-Sticky'
+    footer.getBoundingClientRect = () =>
+      rect(HEADER_HEIGHT + viewportHeight - FOOTER_HEIGHT, FOOTER_HEIGHT)
+    document.body.append(scrollArea, footer)
+
+    return mountGridKeyboardHarness(focus, undefined, null, createGridResults(), {
+      ...options,
+      scrollbar: ref<ScrollbarStub | null>({
+        getScrollInfo: () => ({ clientHeight: viewportHeight, scrollTop }),
+        scrollTo
+      }),
+      itemRefs: ref<Array<HTMLElement | null>>([...Array.from({ length: focus }, () => null), row])
+    })
+  }
+
+  function flushFrames(): void {
+    for (const callback of frames.splice(0)) callback(performance.now())
+  }
+
+  beforeEach(() => {
+    frames = []
+    viewportHeight = FULL_VIEWPORT_HEIGHT
+    rowOffset = FIRST_ROW_OFFSET
+    scrollTop = 0
+    scrollTo.mockClear()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback)
+    )
+  })
+
+  afterEach(() => {
+    activeGridKeyboardHarness?.cleanup()
+    activeGridKeyboardHarness = undefined
+    document.body.classList.remove('core-box')
+    document.body.replaceChildren()
+    vi.unstubAllGlobals()
+  })
+
+  it('brings a row below the fold up to just above the footer', () => {
+    rowOffset = 560
+    activeGridKeyboardHarness = mountScrollHarness()
+
+    activeGridKeyboardHarness.scrollActiveItemIntoView()
+    flushFrames()
+
+    // The row's bottom (612) at the bottom of what the footer leaves (500).
+    expect(scrollTo).toHaveBeenCalledExactlyOnceWith(0, 112)
+  })
+
+  it('brings a row above the viewport down to its top', () => {
+    rowOffset = 100
+    scrollTop = 300
+    activeGridKeyboardHarness = mountScrollHarness({}, 4)
+
+    activeGridKeyboardHarness.scrollActiveItemIntoView()
+    flushFrames()
+
+    expect(scrollTo).toHaveBeenCalledExactlyOnceWith(0, 100)
+  })
+
+  it('scrolls back to the top when focus returns to row 0, bringing the sections above it', () => {
+    // Arrowing back up a scrolled list: row 0 is above the viewport, and above row 0 are only the
+    // section titles and the habitual guidance, none of which can take focus.
+    scrollTop = 300
+    activeGridKeyboardHarness = mountScrollHarness()
+
+    activeGridKeyboardHarness.scrollActiveItemIntoView()
+    flushFrames()
+
+    expect(scrollTo).toHaveBeenCalledExactlyOnceWith(0, 0)
+  })
+
+  it.each([
+    { name: 'still collapsed to its header', height: 0 },
+    { name: 'still growing, shorter than the row', height: FOOTER_HEIGHT + ROW_HEIGHT - 1 }
+  ])('leaves the list alone in a window $name', ({ height }) => {
+    viewportHeight = height
+    activeGridKeyboardHarness = mountScrollHarness()
+
+    activeGridKeyboardHarness.scrollActiveItemIntoView()
+    flushFrames()
+
+    expect(scrollTo).not.toHaveBeenCalled()
+  })
+
+  it('keeps the list at its top when the window grows around rows already rendered', () => {
+    // The rows land while the window is still at its header's height; the next scroll (a key, the
+    // grid's re-wrap pass) comes once it has grown.
+    viewportHeight = 0
+    activeGridKeyboardHarness = mountScrollHarness()
+    activeGridKeyboardHarness.scrollActiveItemIntoView()
+    flushFrames()
+    viewportHeight = FULL_VIEWPORT_HEIGHT
+    activeGridKeyboardHarness.scrollActiveItemIntoView()
+    flushFrames()
+
+    // Measured against the collapsed viewport, the first scroll went to 234, the row's bottom at
+    // the top edge, and the second found the row above the top and aligned it there: 183, the row
+    // first in view and every section above it scrolled away.
+    expect(scrollTo).not.toHaveBeenCalled()
+    expect(scrollTop).toBe(0)
+  })
+
+  it('does not scroll for the Escape that clears an attachment in a collapsed window', async () => {
+    viewportHeight = 0
+    activeGridKeyboardHarness = mountScrollHarness({
+      clipboardOptions: { last: { type: 'text', content: 'copied text' } }
+    })
+
+    dispatchGridKey('Escape')
+    // The scroll is scheduled once the Escape sequence it awaits has run.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    flushFrames()
+
+    expect(activeGridKeyboardHarness.clearClipboard).toHaveBeenCalledWith({ remember: true })
+    expect(scrollTo).not.toHaveBeenCalled()
   })
 })

@@ -1026,8 +1026,19 @@ export function useKeyboard(
           ? itemRect.bottom - viewportRect.top
           : activeEl.offsetTop + activeEl.offsetHeight - scrollTop
 
+        // A viewport shorter than the row is a window still collapsed to its header, or still
+        // growing: rows render a frame or more before main resizes the window for them. Measured
+        // against it, the scroll puts the row's bottom at the top edge, and the window then grows
+        // around a list scrolled past every section above the row.
+        if (effectiveHeight < itemBottom - itemTop) {
+          return
+        }
+
         if (itemTop < 0) {
-          sb.scrollTo(0, Math.max(0, scrollTop + itemTop))
+          // Nothing focusable sits above row 0, only what introduces the list: section titles and
+          // the habitual guidance, which takes no focus. Stepping back to row 0 scrolls back to the
+          // top, so they come back with it instead of staying above the fold.
+          sb.scrollTo(0, boxOptions.focus === 0 ? 0 : Math.max(0, scrollTop + itemTop))
         } else if (itemBottom > effectiveHeight) {
           sb.scrollTo(0, Math.max(0, scrollTop + itemBottom - effectiveHeight))
         }

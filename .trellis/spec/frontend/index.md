@@ -32,7 +32,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Anchor Overlay Chain](./anchor-overlay-chain.md)             | Nested overlay chain: anchor-delay links, hover travel, outside-click, submenus      | Filled |
 | [Hook Guidelines](./hook-guidelines.md)                       | Custom composables, lifecycle, data access                                           | Filled |
 | [State Management](./state-management.md)                     | Local state, Pinia, host/server state                                                | Filled |
-| [CoreBox Results Contracts](./corebox-results-contracts.md)   | CoreBox renderer: selection follow, append-only merge and refresh reconcile, searching cue, one motion gate, selection block, list FLIP, preview pane, action feedback hint | Filled |
+| [CoreBox Results Contracts](./corebox-results-contracts.md)   | CoreBox renderer: selection follow, focus scroll only against a viewport that holds the row, append-only merge and refresh reconcile, searching cue, one motion gate, selection block, list FLIP, preview pane, action feedback hint | Filled |
 | [TuffEx Design Rules](./tuffex-design-rules.md)               | Kumo-derived type/spacing/colour/motion rules restated in `--tx-*` tokens and BEM      | Filled |
 | [TuffEx Charts Package](./tuffex-charts-package.md)           | tuffex-charts contracts: no echarts, CSS-var theming, kumo divergences               | Filled |
 | [TuffEx Text Motion](./tuffex-text-motion.md)                 | One text-morph engine: torph port, the shared spring, unscoped styles, mode fallbacks | Filled |

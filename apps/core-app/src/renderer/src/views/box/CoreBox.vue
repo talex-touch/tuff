@@ -909,11 +909,20 @@ async function handlePreviewOpenWith(applicationId: string): Promise<void> {
  * BoxGrid wraps tiles past what fits at their minimum width; the keyboard has to step rows by that
  * same count. The window keeps its height on purpose — a re-wrap while the preview pane slides in
  * would otherwise resize the window mid-animation — and the list scrolls instead.
+ *
+ * Only a re-wrap of the tiles already on screen can push the selection out of view. A grid that
+ * mounts for new results reports its columns too, and revealing then measures a window that is
+ * still growing for those results: the timed re-run lands mid-animation and scrolls the sections
+ * above row 0 away (the first grid after clearing an attachment ended 144px down). New results are
+ * the results watcher's below.
  */
+let gridColumnsResults: TuffItem[] | null = null
 function handleGridColumnsChange(columns: number): void {
+  const rewrap = gridColumnsResults === res.value
+  gridColumnsResults = res.value
   if (boxOptions.visibleGridColumns === columns) return
   boxOptions.visibleGridColumns = columns
-  revealActiveItemAfterReflow()
+  if (rewrap) revealActiveItemAfterReflow()
 }
 
 /**
