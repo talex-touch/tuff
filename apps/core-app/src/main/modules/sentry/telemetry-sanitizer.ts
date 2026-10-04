@@ -1,4 +1,5 @@
 import type * as Sentry from '@sentry/electron/main'
+import { sanitizeCoreBoxFocusRecord } from '@talex-touch/utils/core-box/focus-telemetry'
 
 type NexusTelemetryEventType = 'search' | 'visit' | 'error' | 'feature_use' | 'performance'
 
@@ -358,6 +359,13 @@ function sanitizeMetadata(
   eventType: NexusTelemetryEventType,
   metadata: Record<string, unknown> | undefined
 ): Record<string, unknown> | undefined {
+  if (
+    (eventType === 'error' || eventType === 'performance') &&
+    metadata?.kind === 'corebox-focus'
+  ) {
+    const focus = sanitizeCoreBoxFocusRecord(metadata)
+    return focus ? { ...focus } : undefined
+  }
   if (eventType === 'search') return sanitizeSearchMetadata(metadata)
   if (eventType === 'feature_use') return sanitizeFeatureUseMetadata(metadata)
   if (eventType === 'performance') return sanitizePerformanceMetadata(metadata)
@@ -369,6 +377,12 @@ export function sanitizeNexusTelemetryEvent(
   event: SanitizableNexusTelemetryEvent
 ): SanitizableNexusTelemetryEvent | null {
   const metadata = sanitizeMetadata(event.eventType, event.metadata)
+  if (
+    (event.eventType === 'error' || event.eventType === 'performance') &&
+    event.metadata?.kind === 'corebox-focus' &&
+    !metadata
+  )
+    return null
   const providerTimings = sanitizeProviderNumberMap(event.providerTimings, MAX_SEARCH_DURATION_MS)
   const inputTypes = sanitizeStringArray(event.inputTypes, 10)
   const userId = event.isAnonymous ? undefined : normalizeIdentifier(event.userId)
@@ -452,9 +466,11 @@ export function sanitizeSentryEvent<T extends Sentry.Event>(event: T): T {
   if (event.contexts) {
     const environment = sanitizeSentryContext(event.contexts.environment)
     const operational = sanitizeSentryContext(event.contexts.operational)
+    const focus = sanitizeCoreBoxFocusRecord(event.contexts.corebox_focus)
     event.contexts = {
       ...(environment ? { environment: environment as Record<string, unknown> } : {}),
-      ...(operational ? { operational: operational as Record<string, unknown> } : {})
+      ...(operational ? { operational: operational as Record<string, unknown> } : {}),
+      ...(focus ? { corebox_focus: { ...focus } } : {})
     }
     if (Object.keys(event.contexts).length === 0) event.contexts = undefined
   }

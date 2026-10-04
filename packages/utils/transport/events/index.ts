@@ -98,6 +98,8 @@ import type {
   ClipboardWriteRequest,
 } from './types/clipboard'
 
+import type { CoreBoxFocusFailurePayload, CoreBoxFocusProbeRequest, CoreBoxFocusProbeResponse } from '../../core-box/focus-diagnostics'
+
 import type {
   ActivationState,
   AllowClipboardRequest,
@@ -1023,6 +1025,11 @@ export const CoreBoxEvents = {
      * Focus the CoreBox window.
      */
     focusWindow: defineEvent('core-box').module('ui').event('focus-window').define<void, FocusWindowResponse>(),
+    focusSession: defineEvent('core-box').module('ui').event('focus-session').define<Pick<CoreBoxFocusProbeRequest, 'summonId'>, void>(),
+
+    focusProbe: defineEvent('core-box').module('ui').event('focus-probe').define<CoreBoxFocusProbeRequest, void>(),
+    focusProbeResult: defineEvent('core-box').module('ui').event('focus-probe-result').define<CoreBoxFocusProbeResponse, void>(),
+    focusFailure: defineEvent('core-box').module('ui').event('focus-failure').define<CoreBoxFocusFailurePayload, void>(),
 
     /**
      * Forward a key event to the attached UI view.

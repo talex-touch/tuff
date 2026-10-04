@@ -113,6 +113,11 @@ export interface FocusWindowResponse {
    * Whether the window was successfully focused.
    */
   focused: boolean
+  /**
+   * The current focus diagnostic summon ID, if any, allowing the renderer to correlate
+   * subsequent probe results with the in-flight focus session.
+   */
+  summonId?: string
 }
 
 export interface CoreBoxHideRequest {
@@ -168,6 +173,7 @@ export interface CoreBoxGetBoundsResponse {
 export interface CoreBoxTriggerPayload {
   id?: number
   show?: boolean
+  summonId?: string
   type?: string
   sessionId?: string
   config?: unknown

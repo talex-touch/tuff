@@ -683,7 +683,19 @@ const { scrollActiveItemIntoView } = useKeyboard(
 )
 useChannel(boxOptions, searchVal)
 
-const { focusWindowAndInput, focusInput } = useFocus({ boxInputRef })
+const { focusWindowAndInput, focusInput, getSummonId } = useFocus({
+  boxInputRef,
+  getExpectedTarget: () =>
+    detach.flowVisible
+      ? 'flow'
+      : previewHistory.visible
+        ? 'history'
+        : shouldShowInput.value
+          ? 'input'
+          : isUIMode.value
+            ? 'plugin'
+            : 'none'
+})
 
 function focusCoreBoxInput(): void {
   if (!shouldShowInput.value) return
@@ -692,10 +704,11 @@ function focusCoreBoxInput(): void {
     // The Flow picker keeps focus in its own filter. Picked from the ⌘K panel, it opens just as
     // main hands focus back to this window, which lands here, so either may come first.
     if (detach.flowVisible) return
-    focusInput()
+    const owner = getSummonId()
+    focusInput(owner)
     // Native window.focus() runs shortly after the show event and can move focus back to body.
     window.setTimeout(() => {
-      if (shouldShowInput.value && !detach.flowVisible) focusInput()
+      if (shouldShowInput.value && !detach.flowVisible) focusInput(owner)
     }, 160)
   })
 }
@@ -728,8 +741,9 @@ const handleUIModeExited = (payload?: { resetInput?: boolean }) => {
     boxOptions.mode = BoxMode.INPUT
   }
 
+  const owner = getSummonId()
   setTimeout(() => {
-    boxInputRef.value?.focus()
+    focusInput(owner)
   }, 150)
 }
 const unregUIModeExited = transport.on(CoreBoxEvents.ui.uiModeExited, handleUIModeExited)

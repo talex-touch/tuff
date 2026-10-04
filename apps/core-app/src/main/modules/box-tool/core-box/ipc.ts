@@ -296,15 +296,21 @@ export class IpcManager {
       })
     )
 
-    const handleFocusWindow = () => {
-      const window = getCoreBoxWindow()
-      if (window && !window.window.isDestroyed()) {
-        window.window.focus()
-      }
-      return { focused: true }
-    }
+    const handleFocusWindow = () => ({
+      focused: windowManager.focusFromRenderer(),
+      summonId: windowManager.focusSummonId
+    })
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.ui.focusWindow, handleFocusWindow))
+
+    this.transportDisposers.push(
+      transport.on(CoreBoxEvents.ui.focusProbeResult, (payload, context) => {
+        windowManager.receiveFocusProbe(payload, context.sender.id)
+      }),
+      transport.on(CoreBoxEvents.ui.focusFailure, (payload, context) => {
+        windowManager.recordRendererFocusFailure(payload, context.sender.id)
+      })
+    )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.search.query, async ({ query, activations, surface }, context) => {

@@ -48,6 +48,10 @@ const mocks = vi.hoisted(() => ({
   enterUIMode: vi.fn(),
   exitUIMode: vi.fn(),
   detachUIViewToDivisionBox: vi.fn(),
+  focusSummonId: vi.fn((): string | undefined => undefined),
+  focusFromRenderer: vi.fn(() => false),
+  receiveFocusProbe: vi.fn(),
+  recordRendererFocusFailure: vi.fn(),
   getBoxItemManager: vi.fn(() => ({
     clear: vi.fn()
   })),
@@ -61,7 +65,7 @@ const mocks = vi.hoisted(() => ({
   currentWindow: null as null | {
     isDestroyed: () => boolean
     isVisible: () => boolean
-    webContents: { id: number }
+    webContents: { id: number; isDestroyed: () => boolean; isFocused: () => boolean }
   },
   searchEngineCore: {
     getActivationState: vi.fn(() => []),
@@ -193,7 +197,11 @@ vi.mock('./window', () => ({
     setPinned: mocks.setPinned,
     isPinned: mocks.isPinned,
     setHeight: vi.fn(),
-    setPositionOffset: vi.fn()
+    setPositionOffset: vi.fn(),
+    focusFromRenderer: mocks.focusFromRenderer,
+    focusSummonId: mocks.focusSummonId,
+    receiveFocusProbe: mocks.receiveFocusProbe,
+    recordRendererFocusFailure: mocks.recordRendererFocusFailure
   }
 }))
 
@@ -271,7 +279,7 @@ describe('CoreBox IPC hide transport', () => {
     mocks.currentWindow = {
       isDestroyed: () => false,
       isVisible: () => true,
-      webContents: { id: 71 }
+      webContents: { id: 71, isDestroyed: () => false, isFocused: () => true }
     }
     const handler = soleHandler(CoreBoxEvents.uiMode.detach)
     const detachRegistrations = mocks.on.mock.calls.filter(([event]) => {
@@ -293,7 +301,7 @@ describe('CoreBox IPC hide transport', () => {
     mocks.currentWindow = {
       isDestroyed: () => false,
       isVisible: () => true,
-      webContents: { id: 71 }
+      webContents: { id: 71, isDestroyed: () => false, isFocused: () => true }
     }
     const handler = soleHandler(CoreBoxEvents.uiMode.detach)
 
@@ -528,17 +536,17 @@ describe('CoreBox IPC hide transport', () => {
     ['no CoreBox window', null, { visible: false }],
     [
       'destroyed CoreBox window',
-      { isDestroyed: () => true, isVisible: () => true, webContents: { id: 41 } },
+      { isDestroyed: () => true, isVisible: () => true, webContents: { id: 41, isDestroyed: () => true, isFocused: () => false } },
       { visible: false }
     ],
     [
       'hidden live CoreBox window',
-      { isDestroyed: () => false, isVisible: () => false, webContents: { id: 41 } },
+      { isDestroyed: () => false, isVisible: () => false, webContents: { id: 41, isDestroyed: () => false, isFocused: () => false } },
       { visible: false }
     ],
     [
       'visible live CoreBox window',
-      { isDestroyed: () => false, isVisible: () => true, webContents: { id: 41 } },
+      { isDestroyed: () => false, isVisible: () => true, webContents: { id: 41, isDestroyed: () => false, isFocused: () => true } },
       { visible: true }
     ]
   ])('answers native visibility from the current %s', (_case, currentWindow, expected) => {
@@ -588,7 +596,7 @@ describe('CoreBox IPC hide transport', () => {
     mocks.currentWindow = {
       isDestroyed: () => false,
       isVisible: () => true,
-      webContents: { id: 41 }
+      webContents: { id: 41, isDestroyed: () => false, isFocused: () => true }
     }
     const handler = soleHandler(CoreBoxEvents.ui.expand)
 
@@ -663,4 +671,8 @@ describe('CoreBox IPC hide transport', () => {
     })
     expect(mocks.executeMetaOverlayAction).toHaveBeenCalledTimes(1)
   })
+
+
+
+
 })

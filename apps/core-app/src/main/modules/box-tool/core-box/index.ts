@@ -2,7 +2,7 @@ import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { HandlerContext } from '@talex-touch/utils/transport'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { CoreBoxLayoutUpdateRequest } from '@talex-touch/utils/transport/events/types'
-import type { TalexEvents } from '../../../core/eventbus/touch-event'
+import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
@@ -51,6 +51,7 @@ export class CoreBoxModule extends BaseModule {
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
   private disposeLagBurstSubscription: (() => void) | null = null
+  private beforeModulesUnloadListener: (() => Promise<void>) | null = null
 
   private pendingLayoutUpdate: CoreBoxLayoutUpdateRequest | null = null
   private pendingLayoutContext: Pick<HandlerContext, 'sender'> | undefined
@@ -86,6 +87,9 @@ export class CoreBoxModule extends BaseModule {
 
     // CoreBox is latency-critical; keep its hidden renderer prewarmed during startup.
     await windowManager.ensureCreated()
+
+    this.beforeModulesUnloadListener = () => windowManager.stopFocusDiagnosticsForShutdown()
+    touchEventBus.on(TalexEvents.BEFORE_MODULES_UNLOAD, this.beforeModulesUnloadListener)
 
     shortcutModule.registerMainShortcut(
       COREBOX_TOGGLE_SHORTCUT_ID,
@@ -158,6 +162,11 @@ export class CoreBoxModule extends BaseModule {
 
   async onDestroy(): Promise<void> {
     shortcutModule.unregisterMainShortcut(COREBOX_TOGGLE_SHORTCUT_ID)
+
+    if (this.beforeModulesUnloadListener) {
+      touchEventBus.off(TalexEvents.BEFORE_MODULES_UNLOAD, this.beforeModulesUnloadListener)
+      this.beforeModulesUnloadListener = null
+    }
 
     if (this.disposeLagBurstSubscription) {
       this.disposeLagBurstSubscription()
