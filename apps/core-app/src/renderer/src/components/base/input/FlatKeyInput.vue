@@ -62,9 +62,52 @@ const KEY_REPLACEMENTS: Record<string, string> = {
   '/': 'Slash'
 }
 
-function normalizePrimaryKey(event: KeyboardEvent): string | null {
+/**
+ * The bindable key name a physical `code` stands for, or `null` when this table does not name it.
+ * Same vocabulary as the key-based branches below: letters/digits by their glyph, punctuation by
+ * its code name (`Semicolon`, as a bare `;` press is recorded), F-keys and Space by name.
+ */
+const PHYSICAL_KEY_CODES = new Set([
+  'Space',
+  'Semicolon',
+  'Comma',
+  'Period',
+  'Slash',
+  'Backquote',
+  'Minus',
+  'Equal',
+  'BracketLeft',
+  'BracketRight',
+  'Backslash',
+  'Quote'
+])
+
+function primaryKeyFromCode(code: string | undefined): string | null {
+  if (!code) return null
+  if (code.startsWith('Key') && code.length === 4) return code.slice(3)
+  if (code.startsWith('Digit') && code.length === 6) return code.slice(5)
+  // Option turns numpad digits into typographic characters (⌥+3 types `³`); Electron binds the
+  // physical NumpadN key, which is what the user pressed.
+  if (/^Numpad\d$/.test(code)) return code
+  if (PHYSICAL_KEY_CODES.has(code)) return code
+  if (/^F\d{1,2}$/.test(code)) return code
+  return null
+}
+
+function normalizePrimaryKey(event: KeyboardEvent, isMac: boolean): string | null {
   if (MODIFIER_ONLY_KEYS.has(event.key)) {
     return null
+  }
+
+  // macOS rewrites `key` while Option is held — ⌥E is `'Dead'`, ⌥T is `'ŧ'`, ⌥Space a no-break
+  // space — and none of those strings is a key Electron can bind, so the recorder stored an
+  // accelerator that displayed as `OPTION+DEAD` and never registered. Under Option the physical
+  // code is the only reliable source, and it is what the user means: ⌥E is E on any layout.
+  if (isMac && event.altKey) {
+    const physical = primaryKeyFromCode(event.code)
+    if (physical) {
+      return physical
+    }
   }
 
   if (event.code?.startsWith('Numpad')) {
@@ -94,17 +137,17 @@ function normalizePrimaryKey(event: KeyboardEvent): string | null {
 }
 
 function formatAccelerator(event: KeyboardEvent): string | null {
-  const key = normalizePrimaryKey(event)
-  if (!key) {
-    return null
-  }
-
-  const modifiers: string[] = []
   // `isMac` is a computed ref. Read bare it is an object and always truthy, which recorded the
   // Windows key as `Command` everywhere -- a modifier Electron documents as having no effect on
   // Windows and Linux. Off macOS the names are the ones the main process normalises to.
   const mac = isMac.value
 
+  const key = normalizePrimaryKey(event, mac)
+  if (!key) {
+    return null
+  }
+
+  const modifiers: string[] = []
   if (event.metaKey) modifiers.push(mac ? 'Command' : 'Super')
   if (event.ctrlKey) modifiers.push('Control')
   if (event.altKey) modifiers.push(mac ? 'Option' : 'Alt')
