@@ -13,6 +13,7 @@ export interface AdminStatItem {
   value: number | string
   /** The card's tooltip: the full value behind a shortened one, as `dateTimeTitle` is behind `tableDateTime`. */
   title?: string
+  /** A second, smaller line under the label: what the number counts. */
   meta?: string
   iconClass?: string
   insight?: StatCardInsight
@@ -138,6 +139,25 @@ export function findAdminFieldControl(root: AdminFieldRoot | null | undefined, c
   if (controlId)
     return root.querySelector(`[id="${controlId.replace(/["\\]/g, '\\$&')}"]`)
   return root.querySelector(ADMIN_FIELD_CONTROL_SELECTOR)
+}
+
+/**
+ * Names a control that has no visible label, a row editor's select say, after
+ * `label`. An `aria-label` attribute on `TxSelect` stays on its root `div`, which
+ * no reader announces, so the name goes on the combobox inside, found the way a
+ * field finds its control.
+ */
+export function nameAdminControl(root: AdminFieldRoot | null | undefined, label: string): void {
+  findAdminFieldControl(root)?.setAttribute('aria-label', label)
+}
+
+/**
+ * Gives the control inside `root` the id an `AdminFormField`'s `for` points at.
+ * `TxSelect` takes no id and leaves an `id` attribute on its root `div`, which a
+ * `<label for>` cannot name, so the id goes on the combobox inside.
+ */
+export function identifyAdminControl(root: AdminFieldRoot | null | undefined, id: string): void {
+  findAdminFieldControl(root)?.setAttribute('id', id)
 }
 
 /**

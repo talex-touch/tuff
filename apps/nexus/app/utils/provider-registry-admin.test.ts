@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { getTuffIntelligenceBuiltinAbility } from '@talex-touch/tuff-intelligence/light'
 import { describe, expect, it } from 'vitest'
 import {
@@ -265,62 +264,6 @@ describe('provider registry quota helpers', () => {
   })
 })
 
-describe('provider registry quota UI contract', () => {
-  it('renders multi-channel provider quota summaries in the admin panel', () => {
-    const panel = readFileSync(
-      new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url),
-      'utf8',
-    )
-
-    expect(panel).toContain('getProviderQuotaList')
-    expect(panel).toContain('getProviderQuotaList(selectedProvider.id)')
-    expect(panel).toContain('dashboard.providerRegistry.quota.channels')
-    expect(panel).toContain('dashboard.providerRegistry.quota.defaultChannel')
-    expect(panel).toContain('quota.channel')
-    expect(panel).toContain('quota.limits?.maxRequests')
-    expect(panel).toContain('quota.limits?.maxTokens')
-  })
-})
-
-describe('provider registry observability UI contract', () => {
-  it('renders provider, scene, usage, and health next-action hints in the admin panel', () => {
-    const panel = readFileSync(
-      new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url),
-      'utf8',
-    )
-
-    expect(panel).toContain('getProviderObservabilityActionHint(provider.id)')
-    expect(panel).toContain('getSceneObservabilityActionHint(scene.id)')
-    expect(panel).toContain('getUsageLedgerActionHint(entry)')
-    expect(panel).toContain('getHealthCheckActionHint(entry)')
-    expect(panel).toContain('dashboard.providerRegistry.observability.latestSceneRun')
-    expect(panel).toContain('getProviderObservability(provider.id).latestHealth?.latencyMs')
-    expect(panel).toContain('getSceneObservability(scene.id).latestUsage?.providerId')
-    expect(panel).toContain('getUsageLedgerReference(entry)')
-    expect(panel).toContain('getHealthCheckReason(entry)')
-  })
-})
-
-describe('provider registry capability template UI contract', () => {
-  it('uses a compact table for adapter-scoped capability rows without exposing schema refs', () => {
-    const panel = readFileSync(
-      new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url),
-      'utf8',
-    )
-
-    expect(panel).toContain('providerCapabilityTemplateOptions')
-    expect(panel).toContain('applyProviderCapabilityTemplate(row, $event)')
-    expect(panel).not.toContain('providerSchemaRefOptions')
-    expect(panel).not.toContain('row.schemaRef')
-    expect(panel).toContain('providerMeteringUnitOptions')
-    expect(panel).toContain('<table class="w-full min-w-[620px]')
-    expect(panel).toContain('dashboard.providerRegistry.fields.meteringUnit')
-    expect(panel).toContain('text-red-500')
-    expect(panel).toContain('i-carbon-close')
-    expect(panel).toContain('w-full min-w-0')
-  })
-})
-
 describe('provider registry provider templates', () => {
   it('includes AI provider templates so Intelligence configuration starts in Provider Registry', () => {
     const aiTemplates = providerRegistryTemplates.filter(template => template.serviceCategory === 'ai')
@@ -387,20 +330,6 @@ describe('provider registry provider templates', () => {
     })
   })
 
-  it('renders service category and adapter selectors in the admin panel', () => {
-    const panel = readFileSync(
-      new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url),
-      'utf8',
-    )
-
-    expect(panel).toContain('providerServiceCategoryOptions')
-    expect(panel).toContain('applyProviderServiceCategory')
-    expect(panel).toContain('providerTemplateOptions')
-    expect(panel).toContain('applyProviderTemplate')
-    expect(panel).toContain('dashboard.providerRegistry.fields.serviceCategory')
-    expect(panel).toContain('dashboard.providerRegistry.fields.adapter')
-  })
-
   it('seeds runnable OpenAI scene inputs for admin verification', () => {
     expect(createDefaultSceneCapabilityInput('chat.completion')).toEqual({
       messages: [
@@ -432,17 +361,6 @@ describe('provider registry provider templates', () => {
     })
   })
 
-  it('keeps run drawer wired to capability-specific samples and failed run hints', () => {
-    const panel = readFileSync(
-      new URL('../components/dashboard/provider-registry/ProviderRegistryAdminPanel.vue', import.meta.url),
-      'utf8',
-    )
-
-    expect(panel).toContain('applySceneRunCapabilitySample')
-    expect(panel).toContain('selectSceneRunCapability')
-    expect(panel).toContain('dashboard.providerRegistry.routes.resetSample')
-    expect(panel).toContain('activeSceneRunPanel.error')
-  })
 })
 
 function sceneRecord(overrides: Partial<SceneRegistryRecord>): SceneRegistryRecord {

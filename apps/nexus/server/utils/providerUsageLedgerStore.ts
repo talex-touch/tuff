@@ -67,6 +67,10 @@ export interface ListProviderUsageLedgerOptions {
   providerUsageRef?: string
   status?: ProviderUsageLedgerStatus
   mode?: ProviderUsageLedgerMode
+  /** Only the rows the console calls 需关注: failed or planned, or carrying an estimate. */
+  attention?: boolean
+  /** Only the rows whose usage is an estimate. */
+  estimated?: boolean
   page?: number
   limit?: number
 }
@@ -345,6 +349,10 @@ function buildLedgerWhere(options: ListProviderUsageLedgerOptions) {
     conditions.push('mode = ?')
     values.push(options.mode)
   }
+  if (options.estimated)
+    conditions.push('estimated = 1')
+  if (options.attention)
+    conditions.push(`(status IN ('failed', 'planned') OR estimated = 1)`)
 
   return {
     clause: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '',
@@ -439,6 +447,8 @@ export async function listProviderUsageLedgerEntries(
     providerUsageRef: readOptionalString(options.providerUsageRef, 'providerUsageRef', 255),
     status: assertEnum(options.status, 'status', ['planned', 'completed', 'failed'] as const),
     mode: assertEnum(options.mode, 'mode', ['dry_run', 'execute'] as const),
+    attention: options.attention === true,
+    estimated: options.estimated === true,
     page: options.page,
     limit: options.limit,
   }

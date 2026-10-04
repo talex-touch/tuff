@@ -73,6 +73,8 @@ describe('/api/dashboard/provider-registry/usage', () => {
         capability: undefined,
         status: 'completed',
         mode: 'execute',
+        attention: false,
+        estimated: false,
         page: undefined,
         limit: 25,
       },
@@ -83,5 +85,32 @@ describe('/api/dashboard/provider-registry/usage', () => {
       limit: 25,
       total: 0,
     })
+  })
+
+  it('passes the attention and estimated filters on to the ledger', async () => {
+    h3Mocks.getQuery.mockReturnValue({ attention: 'true', estimated: 'true' })
+
+    await usageHandler(makeEvent())
+
+    expect(ledgerMocks.listProviderUsageLedgerEntries).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ attention: true, estimated: true }),
+    )
+  })
+
+  it('refuses a filter flag that is neither true nor false', async () => {
+    h3Mocks.getQuery.mockReturnValue({ attention: 'maybe' })
+    await expect(usageHandler(makeEvent())).rejects.toMatchObject({
+      statusCode: 400,
+      statusMessage: 'attention is invalid.',
+    })
+
+    h3Mocks.getQuery.mockReturnValue({ estimated: '1' })
+    await expect(usageHandler(makeEvent())).rejects.toMatchObject({
+      statusCode: 400,
+      statusMessage: 'estimated is invalid.',
+    })
+
+    expect(ledgerMocks.listProviderUsageLedgerEntries).not.toHaveBeenCalled()
   })
 })

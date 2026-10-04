@@ -1,5 +1,5 @@
 import type { ProviderUsageLedgerMode, ProviderUsageLedgerStatus } from '../../../utils/providerUsageLedgerStore'
-import { getQuery } from 'h3'
+import { createError, getQuery } from 'h3'
 import { requireAdmin } from '../../../utils/auth'
 import { listProviderUsageLedgerEntries } from '../../../utils/providerUsageLedgerStore'
 
@@ -8,6 +8,15 @@ function readPositiveInteger(value: unknown): number | undefined {
     return undefined
   const parsed = Number.parseInt(value, 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
+/** `true` or `false`; absent is `false`. Anything else is refused rather than read as either. */
+function readFlag(value: unknown, field: string): boolean {
+  if (value === undefined || value === 'false')
+    return false
+  if (value === 'true')
+    return true
+  throw createError({ statusCode: 400, statusMessage: `${field} is invalid.` })
 }
 
 export default defineEventHandler(async (event) => {
@@ -21,6 +30,8 @@ export default defineEventHandler(async (event) => {
     capability: typeof query.capability === 'string' ? query.capability : undefined,
     status: typeof query.status === 'string' ? query.status as ProviderUsageLedgerStatus : undefined,
     mode: typeof query.mode === 'string' ? query.mode as ProviderUsageLedgerMode : undefined,
+    attention: readFlag(query.attention, 'attention'),
+    estimated: readFlag(query.estimated, 'estimated'),
     page: readPositiveInteger(query.page),
     limit: readPositiveInteger(query.limit),
   })

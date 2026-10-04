@@ -24,6 +24,8 @@ const props = withDefaults(defineProps<{
 })
 
 const placeholderCount = computed(() => props.items.length || Math.max(1, Math.floor(props.skeletonCount)))
+/** One card with a meta line gives every card the line, so the figures stay level across the row. */
+const metaRow = computed(() => props.items.some(item => item.meta))
 </script>
 
 <template>
@@ -41,6 +43,10 @@ const placeholderCount = computed(() => props.items.length || Math.max(1, Math.f
       >
         <TxSkeleton width="48%" :height="28" :radius="8" />
         <TxSkeleton width="36%" :height="12" :radius="6" />
+        <template v-if="metaRow">
+          <TxSkeleton v-if="items[index - 1]?.meta" width="56%" :height="12" :radius="6" />
+          <span v-else class="AdminStatGrid-PlaceholderGap" />
+        </template>
       </div>
     </template>
     <template v-else>
@@ -50,10 +56,15 @@ const placeholderCount = computed(() => props.items.length || Math.max(1, Math.f
         :label="item.label"
         :value="item.value"
         :title="item.title"
-        :meta="item.meta"
         :icon-class="item.iconClass"
         :insight="item.insight"
-      />
+      >
+        <!-- TxStatCard draws its `meta` prop only in the progress layout, so a plain card carries it in the label. -->
+        <template v-if="metaRow" #label>
+          {{ item.label }}
+          <span class="AdminStatGrid-Meta">{{ item.meta }}</span>
+        </template>
+      </TxStatCard>
     </template>
   </div>
 </template>
@@ -77,5 +88,18 @@ const placeholderCount = computed(() => props.items.length || Math.max(1, Math.f
   padding: 16px;
   border-radius: 16px;
   box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter);
+}
+
+/* TxStatCard's own meta line: 12px under the label, in the label's colour. An
+   empty one keeps its height, for a card in a row that has the line elsewhere. */
+.AdminStatGrid-Meta {
+  display: block;
+  min-height: 1lh;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.AdminStatGrid-PlaceholderGap {
+  height: 12px;
 }
 </style>

@@ -1,4 +1,3 @@
-import type { ProviderHealthStatus } from '../../../utils/providerHealthStore'
 import { getQuery } from 'h3'
 import { requireAdmin } from '../../../utils/auth'
 import { listProviderHealthChecks } from '../../../utils/providerHealthStore'
@@ -17,7 +16,7 @@ export default defineEventHandler(async (event) => {
   return await listProviderHealthChecks(event, {
     providerId: typeof query.providerId === 'string' ? query.providerId : undefined,
     capability: typeof query.capability === 'string' ? query.capability : undefined,
-    status: typeof query.status === 'string' ? query.status as ProviderHealthStatus : undefined,
+    status: typeof query.status === 'string' ? query.status : undefined,
     page: readPositiveInteger(query.page),
     limit: readPositiveInteger(query.limit),
   })

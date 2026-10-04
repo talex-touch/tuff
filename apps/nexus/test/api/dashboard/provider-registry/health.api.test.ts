@@ -80,4 +80,15 @@ describe('/api/dashboard/provider-registry/health', () => {
       total: 0,
     })
   })
+
+  it('passes several comma-separated statuses on to the store as they came', async () => {
+    h3Mocks.getQuery.mockReturnValue({ status: 'degraded,unhealthy' })
+
+    await healthHandler(makeEvent())
+
+    expect(healthMocks.listProviderHealthChecks).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'degraded,unhealthy' }),
+    )
+  })
 })
