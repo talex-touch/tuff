@@ -2,6 +2,7 @@ import type {
   LocalAiCliProviderCapabilities,
   LocalAiCliProviderId,
   LocalAiCliProviderStatus,
+  LocalAiCliStatus,
   LocalAiCliTaskChunk
 } from '@talex-touch/utils/transport/events/local-ai-cli'
 /**
@@ -21,7 +22,7 @@ import type { StoredLocalAiCliSession } from './session-store'
 import { EventEmitter } from 'node:events'
 import { appendFile, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@libsql/client'
 import { LocalAiCliEvents } from '@talex-touch/utils/transport/events/local-ai-cli'
@@ -38,21 +39,29 @@ const {
   getTuffTransportMainMock,
   resolveProviderStatusMock,
   resolveAllProviderStatusesMock,
+  refreshExecutablesMock,
   spawnSafeMock,
   ptySpawnMock,
   claudeQueryMock,
   getMainConfigMock,
   saveMainConfigMock,
+  subscribeMainConfigMock,
+  registerMainShortcutMock,
+  unregisterMainShortcutMock,
   databaseRef
 } = vi.hoisted(() => ({
   getTuffTransportMainMock: vi.fn(),
   resolveProviderStatusMock: vi.fn(),
   resolveAllProviderStatusesMock: vi.fn(),
+  refreshExecutablesMock: vi.fn(async () => undefined),
   spawnSafeMock: vi.fn(),
   ptySpawnMock: vi.fn(),
   claudeQueryMock: vi.fn(),
   getMainConfigMock: vi.fn(),
   saveMainConfigMock: vi.fn(),
+  subscribeMainConfigMock: vi.fn(),
+  registerMainShortcutMock: vi.fn(),
+  unregisterMainShortcutMock: vi.fn(),
   databaseRef: { current: null as unknown }
 }))
 
@@ -68,18 +77,20 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
 
 vi.mock('./executable-resolver', () => ({
   resolveLocalAiCliProviderStatus: resolveProviderStatusMock,
-  resolveAllLocalAiCliProviderStatuses: resolveAllProviderStatusesMock
+  resolveAllLocalAiCliProviderStatuses: resolveAllProviderStatusesMock,
+  refreshLocalAiCliExecutables: refreshExecutablesMock
 }))
 
 vi.mock('../storage', () => ({
   getMainConfig: getMainConfigMock,
-  saveMainConfig: saveMainConfigMock
+  saveMainConfig: saveMainConfigMock,
+  subscribeMainConfig: subscribeMainConfigMock
 }))
 
 vi.mock('../global-shortcon', () => ({
   shortcutModule: {
-    registerMainShortcut: vi.fn(),
-    unregisterMainShortcut: vi.fn()
+    registerMainShortcut: registerMainShortcutMock,
+    unregisterMainShortcut: unregisterMainShortcutMock
   }
 }))
 
@@ -197,7 +208,8 @@ let moduleDir: string
 let projectRoot: string
 let statusOverrides: { capabilities?: Partial<LocalAiCliProviderCapabilities> } = {}
 let originalPlatform: NodeJS.Platform
-let originalBetaFlag: string | undefined
+/** The APP_SETTING listeners the module subscribed, so a test can play a settings change. */
+const settingsListeners: Array<(settings: unknown) => void> = []
 
 function piEntry(
   id: string,
@@ -333,6 +345,16 @@ async function waitFor(condition: () => boolean, description: string): Promise<v
     await new Promise<void>((resolveTick) => setImmediate(resolveTick))
   }
   throw new Error(`Timed out waiting for ${description}`)
+}
+
+/**
+ * The PATH a provider child must get: the executable's own directory first, where a version
+ * manager keeps the `node` a `#!/usr/bin/env node` CLI needs, then everything inherited.
+ */
+function expectExecutableDirFirstOnPath(env: unknown, executable: string): void {
+  expect((env as { PATH?: string } | undefined)?.PATH).toBe(
+    [dirname(executable), process.env.PATH].join(delimiter)
+  )
 }
 
 function providerStatus(provider: LocalAiCliProviderId): LocalAiCliProviderStatus {
@@ -622,9 +644,8 @@ async function expectTupleFree(
 
 beforeEach(async () => {
   originalPlatform = process.platform
-  originalBetaFlag = process.env.TUFF_ENABLE_LOCAL_AI_CLI
+  // The platform is the whole gate: no environment variable opens or closes it.
   Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
-  process.env.TUFF_ENABLE_LOCAL_AI_CLI = '1'
 
   tempRoot = await realpath(await mkdtemp(join(tmpdir(), 'local-ai-cli-module-')))
   projectRoot = join(tempRoot, 'project')
@@ -639,7 +660,21 @@ beforeEach(async () => {
   statusOverrides = {}
   ptyInstances.length = 0
   claudeOptions.length = 0
+  settingsListeners.length = 0
   getMainConfigMock.mockReturnValue(appSettings())
+  subscribeMainConfigMock.mockReset()
+  subscribeMainConfigMock.mockImplementation(
+    (_key: string, listener: (settings: unknown) => void) => {
+      settingsListeners.push(listener)
+      return () => {
+        const index = settingsListeners.indexOf(listener)
+        if (index >= 0) settingsListeners.splice(index, 1)
+      }
+    }
+  )
+  registerMainShortcutMock.mockReset()
+  unregisterMainShortcutMock.mockReset()
+  refreshExecutablesMock.mockClear()
   resolveProviderStatusMock.mockImplementation(async (provider: LocalAiCliProviderId) =>
     providerStatus(provider)
   )
@@ -671,8 +706,6 @@ afterEach(async () => {
   client.close()
   await rm(tempRoot, { recursive: true, force: true })
   Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
-  if (originalBetaFlag === undefined) delete process.env.TUFF_ENABLE_LOCAL_AI_CLI
-  else process.env.TUFF_ENABLE_LOCAL_AI_CLI = originalBetaFlag
 })
 
 describe('localAiCli task resume gates', () => {
@@ -890,6 +923,10 @@ describe('localAiCli terminal resume gates', () => {
       expect.arrayContaining(['--no-tools', '--session', 'pi-term-resume-1'])
     )
     expect(spawn?.[2]).toMatchObject({ cwd: projectRoot })
+    expectExecutableDirFirstOnPath(
+      (spawn?.[2] as { env?: unknown } | undefined)?.env,
+      '/fake/bin/pi'
+    )
   })
 })
 
@@ -1080,6 +1117,7 @@ describe('localAiCli Pi task continuation', () => {
     expect(spawn.args).toContain('--mode')
     expect(spawn.args).not.toContain('--session')
     expect(spawn.options).toMatchObject({ cwd: projectRoot })
+    expectExecutableDirFirstOnPath(spawn.options.env, '/fake/bin/pi')
     // The prompt body and the provider transcript stay main-only; only sessionRef is renderer-safe.
     expectOpaqueTaskChunks(stream.chunks, [
       'pi-fresh-1',
@@ -1532,6 +1570,7 @@ describe('localAiCli Claude SDK continuation', () => {
       cwd: projectRoot,
       pathToClaudeCodeExecutable: '/fake/bin/claude'
     })
+    expectExecutableDirFirstOnPath(claudeOptions[0]?.env, '/fake/bin/claude')
     expect(spawnSafeMock).not.toHaveBeenCalled()
     expect(taskSessionChunk(stream.chunks).sessionRef).toBe(pointer.id)
     expect(stream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'resumed answer' })
@@ -1599,5 +1638,91 @@ describe('localAiCli Claude SDK continuation', () => {
     expect(stream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'fresh answer' })
     expectOpaqueTaskChunks(stream.chunks, ['claude-fresh-1'])
     expect(await pointerCount()).toBe(1)
+  })
+})
+
+describe('localAiCli platform gate and quick-open shortcut', () => {
+  function settingsWithMasterSwitch(enabled: boolean): Record<string, unknown> {
+    const settings = appSettings() as { localAiCli: Record<string, unknown> }
+    return { ...settings, localAiCli: { ...settings.localAiCli, enabled } }
+  }
+
+  /** What a settings write delivers to the module's APP_SETTING subscription. */
+  function playSettings(enabled: boolean): void {
+    for (const listener of [...settingsListeners]) listener(settingsWithMasterSwitch(enabled))
+  }
+
+  it('offers nothing and probes nothing off macOS, whatever the settings say', async () => {
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+    const { transport } = await initModule()
+
+    const status = (await invokeHandler(
+      transport,
+      LocalAiCliEvents.status.get.toEventName(),
+      { refresh: true },
+      { plugin: null, sender: { id: 11 } }
+    )) as LocalAiCliStatus
+
+    expect(status).toMatchObject({ betaAvailable: false, enabled: false })
+    expect(status.providers.map((provider) => provider.issueCode)).toEqual([
+      'BETA_UNAVAILABLE',
+      'BETA_UNAVAILABLE',
+      'BETA_UNAVAILABLE',
+      'BETA_UNAVAILABLE'
+    ])
+    expect(resolveAllProviderStatusesMock).not.toHaveBeenCalled()
+    expect(refreshExecutablesMock).not.toHaveBeenCalled()
+    // The master switch is on in these settings; off macOS that still registers no key.
+    expect(registerMainShortcutMock).not.toHaveBeenCalled()
+  })
+
+  it('registers ⌘⇧L only while the master switch is on, and follows it both ways', async () => {
+    getMainConfigMock.mockReturnValue(settingsWithMasterSwitch(false))
+    await initModule()
+    expect(registerMainShortcutMock).not.toHaveBeenCalled()
+
+    playSettings(true)
+    expect(registerMainShortcutMock).toHaveBeenCalledExactlyOnceWith(
+      'local-ai-cli.quick-open',
+      'CommandOrControl+Shift+L',
+      expect.any(Function),
+      { owner: 'core-app:local-ai-cli', enabled: true }
+    )
+    // Any other settings write replays the switch; it is still on, so nothing changes.
+    playSettings(true)
+    expect(registerMainShortcutMock).toHaveBeenCalledTimes(1)
+
+    playSettings(false)
+    expect(unregisterMainShortcutMock).toHaveBeenCalledExactlyOnceWith('local-ai-cli.quick-open')
+
+    playSettings(true)
+    expect(registerMainShortcutMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('runs no CLI while the master switch is off, unless Settings asks for detail', async () => {
+    getMainConfigMock.mockReturnValue(settingsWithMasterSwitch(false))
+    resolveAllProviderStatusesMock.mockClear()
+    const { transport } = await initModule()
+    const readStatus = async (payload?: Record<string, boolean>): Promise<LocalAiCliStatus> =>
+      (await invokeHandler(transport, LocalAiCliEvents.status.get.toEventName(), payload, {
+        plugin: null,
+        sender: { id: 11 }
+      })) as LocalAiCliStatus
+
+    // CoreBox, the omni panel and the project menu need only the switch: nothing is looked for,
+    // and nothing claims a CLI is missing.
+    const status = await readStatus()
+    expect(status).toMatchObject({ betaAvailable: true, enabled: false })
+    expect(status.providers.map((provider) => [provider.installed, provider.issueCode])).toEqual(
+      Array(4).fill([false, 'NOT_PROBED'])
+    )
+    expect(resolveAllProviderStatusesMock).not.toHaveBeenCalled()
+
+    // Settings is where the user decides whether to turn local agents on; 「重新探测」 asks too.
+    await expect(readStatus({ detail: true })).resolves.toMatchObject({ enabled: false })
+    expect(resolveAllProviderStatusesMock).toHaveBeenCalledTimes(1)
+    await readStatus({ refresh: true })
+    expect(refreshExecutablesMock).toHaveBeenCalledTimes(1)
+    expect(resolveAllProviderStatusesMock).toHaveBeenCalledTimes(2)
   })
 })

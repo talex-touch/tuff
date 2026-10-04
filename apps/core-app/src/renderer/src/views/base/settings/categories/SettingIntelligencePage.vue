@@ -28,7 +28,7 @@ const subPages = computed(() =>
     <!-- One shared group: the master switch, its floating entry, and the wake-word placeholder. -->
     <SettingAssistant mode="all" />
 
-    <!-- What the home conversation can reach beyond the model: skills and MCP servers. -->
+    <!-- What the home conversation can reach beyond the model: its skills. MCP has its own page. -->
     <SettingSkillsMcp />
 
     <!--

@@ -140,6 +140,13 @@ export const SETTING_CATEGORIES: SettingCategory[] = [
         labelKey: 'settingsIntelligenceHub.capabilities',
         descriptionKey: 'settingsIntelligenceHub.capabilitiesDesc',
         navIcon: 'i-carbon-machine-learning-model'
+      },
+      {
+        key: 'mcp',
+        path: '/setting/intelligence/mcp',
+        labelKey: 'settingsIntelligenceHub.mcp',
+        descriptionKey: 'settingsIntelligenceHub.mcpDesc',
+        navIcon: 'i-ri-plug-line'
       }
     ]
   },

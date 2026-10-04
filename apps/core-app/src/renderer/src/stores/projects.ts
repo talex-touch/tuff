@@ -17,10 +17,15 @@ export const useProjectStore = defineStore('projects', () => {
   const localAiAgents = ref<LocalAiAgentChoice[]>([])
   const localAiAgentsPhase = ref<LocalAiAgentsPhase>('loading')
   /**
-   * Whether this build offers local agents at all (the macOS beta gate): `null` until a status
-   * read succeeds. Project menus leave the whole 「本机代理」 group out when it is `false`.
+   * Whether this platform offers local agents at all (macOS): `null` until a status read succeeds.
+   * Once `false` it stays so, and project menus stop asking.
    */
   const localAiBetaAvailable = ref<boolean | null>(null)
+  /**
+   * The master switch in Settings, as the last status read saw it: `null` until one succeeds. Project
+   * menus leave the whole 「本机代理」 group out while either this or the platform is `false`.
+   */
+  const localAiEnabled = ref<boolean | null>(null)
   const loading = ref(false)
   const pendingProjectId = ref<string | null | undefined>(undefined)
   const activeProjectId = ref<string | null>(null)
@@ -107,6 +112,7 @@ export const useProjectStore = defineStore('projects', () => {
       const status: unknown = await localAiSdk.getStatus()
       if (!isLocalAiCliStatus(status)) throw new Error('LOCAL_AI_CLI_STATUS_INVALID')
       localAiBetaAvailable.value = status.betaAvailable
+      localAiEnabled.value = status.enabled === true
       const agents = localAiAgentChoices(status)
       localAiAgents.value = agents
       localAiAgentsPhase.value = agents.length > 0 ? 'ready' : 'none'
@@ -118,8 +124,9 @@ export const useProjectStore = defineStore('projects', () => {
 
   /**
    * Which local agent CLIs a project can be opened in, read afresh each time a project menu opens:
-   * a CLI can be installed, or switched off in Settings, while the app runs. A call made while a
-   * read is in flight joins it, because every read makes the main process probe each CLI's version.
+   * a CLI can be installed, switched off in Settings, or the master switch turned, while the app
+   * runs. The main process answers from its memoised probe; a call made while a read is in flight
+   * joins it all the same.
    */
   function refreshLocalAiAgents(): Promise<void> {
     localAiAgentsInFlight ??= loadLocalAiAgents().finally(() => {
@@ -130,7 +137,7 @@ export const useProjectStore = defineStore('projects', () => {
 
   /**
    * Reads the agent status once, so project menus know whether to offer the 「本机代理」 group
-   * before they are opened. With the beta off the main process answers without probing any CLI.
+   * before they are opened. Off macOS the main process answers without probing any CLI.
    */
   function ensureLocalAiStatus(): void {
     if (localAiBetaAvailable.value === null) void refreshLocalAiAgents()
@@ -168,6 +175,7 @@ export const useProjectStore = defineStore('projects', () => {
     localAiAgents,
     localAiAgentsPhase,
     localAiBetaAvailable,
+    localAiEnabled,
     loading,
     pendingProjectId,
     activeProjectId,

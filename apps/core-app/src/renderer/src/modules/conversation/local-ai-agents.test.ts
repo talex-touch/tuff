@@ -73,12 +73,16 @@ describe('localAiAgentChoices', () => {
     ])
   })
 
-  it('offers nothing in a build without local agents', () => {
+  it('offers nothing off macOS, nor while the master switch is off', () => {
+    // Off macOS every CLI reads as not installed; listing them would send the user off to install
+    // something that still could not run.
     expect(
       localAiAgentChoices(
         status([provider('pi', { installed: false })], { betaAvailable: false, enabled: false })
       )
     ).toEqual([])
+    // On macOS with every CLI ready, the entry still waits for the switch in Settings.
+    expect(localAiAgentChoices(status([provider('pi')], { enabled: false }))).toEqual([])
   })
 
   it('drops provider entries it cannot read', () => {

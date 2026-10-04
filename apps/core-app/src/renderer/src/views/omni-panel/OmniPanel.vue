@@ -192,6 +192,29 @@ async function closePanel(): Promise<void> {
   previousFocusedElement?.focus?.()
 }
 
+/** The 「交给本机代理」 action this window adds to main's feature list. */
+function localAiActionFeature(): OmniPanelFeatureItemPayload {
+  const now = Date.now()
+  return {
+    id: LOCAL_AI_CLI_FEATURE_ID,
+    source: 'builtin',
+    target: 'system',
+    title: t('localAiCliPanel.actionTitle'),
+    subtitle: t('localAiCliPanel.actionSubtitle'),
+    icon: { type: 'class', value: 'i-ri-terminal-box-line' },
+    enabled: true,
+    order: -1,
+    updatedAt: now,
+    createdAt: now
+  }
+}
+
+/** Offered once the user has turned local agents on in Settings; off macOS, never. */
+async function isLocalAiActionOffered(): Promise<boolean> {
+  const localStatus = await localAiCli.getStatus()
+  return localStatus.betaAvailable && localStatus.enabled
+}
+
 async function loadFeatures(): Promise<void> {
   loading.value = true
   try {
@@ -199,22 +222,7 @@ async function loadFeatures(): Promise<void> {
     const payload = response as OmniPanelFeatureListResponse
     const nextFeatures = Array.isArray(payload?.features) ? [...payload.features] : []
     try {
-      const localStatus = await localAiCli.getStatus()
-      if (localStatus.betaAvailable) {
-        const now = Date.now()
-        nextFeatures.push({
-          id: LOCAL_AI_CLI_FEATURE_ID,
-          source: 'builtin',
-          target: 'system',
-          title: t('localAiCliPanel.actionTitle'),
-          subtitle: t('localAiCliPanel.actionSubtitle'),
-          icon: { type: 'class', value: 'i-ri-terminal-box-line' },
-          enabled: true,
-          order: -1,
-          updatedAt: now,
-          createdAt: now
-        })
-      }
+      if (await isLocalAiActionOffered()) nextFeatures.push(localAiActionFeature())
     } catch (error) {
       omniPanelLog.debug('Local AI CLI action is unavailable', error)
     }
@@ -227,6 +235,28 @@ async function loadFeatures(): Promise<void> {
     loading.value = false
     hasLoadedFeatures.value = true
   }
+}
+
+/**
+ * Re-reads whether the local agent action is offered, on every show: the master switch can be
+ * turned in Settings while this window stays alive, and main's feature-refresh broadcast goes to
+ * the main window rather than this one, so the context push of a show is how this window hears of
+ * it. Only that one action is added or removed; a full reload would flash the loading state.
+ */
+async function syncLocalAiAction(): Promise<void> {
+  if (!hasLoadedFeatures.value) return
+  let offered = false
+  try {
+    offered = await isLocalAiActionOffered()
+  } catch (error) {
+    omniPanelLog.debug('Local AI CLI action is unavailable', error)
+  }
+  const present = features.value.some((item) => item.id === LOCAL_AI_CLI_FEATURE_ID)
+  if (offered === present) return
+  features.value = offered
+    ? [...features.value, localAiActionFeature()]
+    : features.value.filter((item) => item.id !== LOCAL_AI_CLI_FEATURE_ID)
+  focusedIndex.value = ensureValidFocusIndex(focusedIndex.value, features.value.length)
 }
 
 function resolveExecuteErrorMessage(response?: OmniPanelFeatureExecuteResponse): string {
@@ -500,6 +530,7 @@ async function handleKeydown(event: KeyboardEvent): Promise<void> {
 
 const disposeContext = transport.on(omniPanelContextEvent, (payload) => {
   handleContext(payload as OmniPanelContextPayload)
+  void syncLocalAiAction()
 })
 
 const disposeFeatureRefresh = transport.on(omniPanelFeatureRefreshEvent, async () => {

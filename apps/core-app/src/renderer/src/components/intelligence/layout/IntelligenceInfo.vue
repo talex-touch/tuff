@@ -81,12 +81,6 @@ const nexusStatusTitle = computed(() =>
     : t('settings.intelligence.nexusInvokeLoginTitle')
 )
 
-const nexusStatusDescription = computed(() =>
-  isLoggedIn.value
-    ? t('settings.intelligence.nexusInvokeReadyDesc')
-    : t('settings.intelligence.nexusInvokeLoginDesc')
-)
-
 const nexusCallStateText = computed(() =>
   isLoggedIn.value
     ? t('settings.intelligence.nexusInvokeAutoCall')
@@ -173,7 +167,6 @@ function handleToggleCliEnabled() {
       <TuffGroupBlock
         v-if="isNexusManagedProvider"
         :name="nexusStatusTitle"
-        :description="nexusStatusDescription"
         default-icon="i-carbon-cloud-service-management"
         active-icon="i-carbon-cloud-service-management"
         memory-name="aisdk-nexus-status"
@@ -280,7 +273,6 @@ function handleToggleCliEnabled() {
 
       <TuffGroupBlock
         :name="t('intelligence.config.advanced.title')"
-        :description="t('Intelligence.config.advanced.description')"
         default-icon="i-carbon-settings"
         active-icon="i-carbon-settings"
         memory-name="aisdk-advanced-config"

@@ -728,13 +728,15 @@
     "betaLabel": "macOS Beta · 本机进程",
     "refresh": "重新探测",
     "enable": "启用本机 AI 代理",
-    "enableDesc": "启用后才允许 CoreBox 和 OmniPanel 请求本机代理；不会在设置页自动启动任何 CLI。",
+    "enableDesc": "启用后才允许 CoreBox 和 OmniPanel 请求本机代理。设置页只会读取各 CLI 的版本号，不会替你运行任务。",
     "locate": "选择程序",
     "defaultProvider": "默认代理",
     "defaultProviderDesc": "仅列出已允许的代理；自动选择会使用第一个可用代理。",
     "defaultAutomatic": "自动选择",
     "providerUnavailable": "未探测到可用程序",
     "providerUnavailableWithReason": "不可用：{reason}",
+    "overrideRejected": "已选程序不可用",
+    "overrideRejectedFallback": "已选程序不可用，已改用自动找到的",
     "capabilities": {
       "quickReply": "快速问答",
       "taskApproval": "任务逐次审批",
@@ -1773,7 +1775,9 @@
     "audit": "审计",
     "auditDesc": "用量、日志、记忆复核与全局限制。",
     "capabilities": "能力",
-    "capabilitiesDesc": "把能力绑定到渠道与模型。"
+    "capabilitiesDesc": "把能力绑定到渠道与模型。",
+    "mcp": "MCP",
+    "mcpDesc": "管理 MCP 服务器，以及让其他 AI 调用 Tuff。"
   },
   "settingsEntries": {
     "installedPlugins": "已安装插件",
@@ -3173,6 +3177,7 @@
     "intelligenceChannels": "智能通道",
     "intelligenceVoice": "语音输入",
     "intelligenceCapabilities": "智能能力",
+    "intelligenceMcp": "MCP",
     "intelligencePrompts": "智能提示词",
     "intelligenceAudit": "智能审计",
     "intelligenceAgents": "智能代理",
@@ -3633,7 +3638,7 @@
         "command": "命令",
         "commandPlaceholder": "npx",
         "args": "参数",
-        "argsPlaceholder": "-y @modelcontextprotocol/server-filesystem /tmp",
+        "argsPlaceholder": "-y {'@'}modelcontextprotocol/server-filesystem /tmp",
         "env": "环境变量",
         "envPlaceholder": "KEY=value，每行一个",
         "envNote": "值会进入系统安全存储，不落明文配置",
@@ -4513,11 +4518,9 @@
       "nexusManagedApiKeyHint": "该渠道 API Key 由 Nexus 登录态托管。",
       "nexusOfficialProvider": "Nexus 官方托管",
       "nexusInvokeReadyTitle": "Nexus Intelligence 已就绪",
-      "nexusInvokeReadyDesc": "官方应用登录后会自动通过 Nexus 调用已配置的 Intelligence Provider。",
       "nexusInvokeLoginTitle": "需要登录以启用 Nexus AI",
-      "nexusInvokeLoginDesc": "登录后默认渠道会使用 Nexus 托管调用；未登录时会回退到其他可用渠道。",
       "nexusInvokeAutoCall": "当前登录态可用于自动调用 Nexus AI 能力。",
-      "nexusInvokeFallback": "当前未登录，调用会回退到其他已配置渠道。",
+      "nexusInvokeFallback": "登录后启用",
       "nexusInvokeLoginAction": "登录 Nexus",
       "deleteProvider": "删除提供商 {name}",
       "deleteProviderConfig": "删除配置",
@@ -6239,13 +6242,6 @@
       "validationFieldReason": "{field}：{reason}",
       "validationFieldReasonAtStep": "第 {index} 步 {field}：{reason}",
       "notRunCount": "未执行步骤数"
-    }
-  },
-  "Intelligence": {
-    "config": {
-      "advanced": {
-        "description": "配置优先级和超时设置"
-      }
     }
   },
   "flow": {

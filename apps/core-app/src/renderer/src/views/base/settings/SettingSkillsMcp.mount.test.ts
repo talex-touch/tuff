@@ -41,47 +41,7 @@ const orchestratorGetSnapshot = vi.fn().mockResolvedValue({
 vi.mock('@talex-touch/utils/renderer', () => ({
   useIntelligenceSdk: () => ({
     orchestratorGetSnapshot,
-    orchestratorPreviewImport: vi.fn().mockResolvedValue({
-      scanId: 'scan-1',
-      candidates: [
-        {
-          id: 'candidate-mcp-1',
-          kind: 'mcp',
-          name: 'Discovered Claude MCP',
-          provider: 'claude',
-          state: 'added',
-          blockingIssues: [],
-          serverNames: ['memory', 'fetch'],
-          secretKeyPaths: []
-        }
-      ]
-    }),
-    orchestratorApplyImport: vi.fn(),
-    orchestratorSetImportedItemActive: vi.fn(),
-    orchestratorDeleteImportedItem: vi.fn()
-  }),
-  useMcpServersSdk: () => ({
-    probe: vi.fn().mockResolvedValue({ ok: true, toolCount: 3 }),
-    upsertManual: vi.fn().mockResolvedValue({ itemId: 'mcp-1' })
-  }),
-  /**
-   * The local MCP server section reads this on mount. Left off by default so the
-   * existing assertions keep describing the MCP-client and skills sections; the
-   * section's own tests turn it on.
-   */
-  useMcpHostSdk: () => ({
-    getState: vi.fn().mockResolvedValue({
-      enabled: false,
-      running: false,
-      endpoint: null,
-      port: 43110,
-      token: '',
-      tools: []
-    }),
-    setEnabled: vi.fn(),
-    setToolEnabled: vi.fn(),
-    setPort: vi.fn(),
-    rotateToken: vi.fn()
+    orchestratorSetImportedItemActive: vi.fn()
   })
 }))
 
@@ -134,11 +94,11 @@ describe('settingSkillsMcp mounts standalone', () => {
 
     expect(orchestratorGetSnapshot).toHaveBeenCalled()
     const text = wrapper.text()
-    expect(text).toContain('settings.skillsMcp.mcp.label')
     expect(text).toContain('settings.skillsMcp.skills.label')
-    expect(text).toContain('fs')
     expect(text).toContain('notes')
-    expect(text).toContain('legacy-server')
+    // MCP servers moved to their own page; the snapshot's MCP rows are not listed here.
+    expect(text).not.toContain('settings.skillsMcp.mcp.label')
+    expect(text).not.toContain('legacy-server')
   })
 
   it('lists linked and auto-detected directories and their skills from the local snapshot', async () => {
@@ -158,15 +118,5 @@ describe('settingSkillsMcp mounts standalone', () => {
     expect(text).toContain('settings.skillsMcp.localDirs.dirDesc:{"count":1}')
     // Auto-detected directory count
     expect(text).toContain('settings.skillsMcp.localDirs.autoDesc:{"count":1}')
-  })
-
-  it('renders discovered unadopted MCP servers with adopt button', async () => {
-    const wrapper = mount(SettingSkillsMcp)
-    await flushPromises()
-
-    const text = wrapper.text()
-    expect(text).toContain('Discovered Claude MCP')
-    expect(text).toContain('settings.skillsMcp.mcp.discoveredChip')
-    expect(text).toContain('settings.skillsMcp.mcp.adoptAction')
   })
 })

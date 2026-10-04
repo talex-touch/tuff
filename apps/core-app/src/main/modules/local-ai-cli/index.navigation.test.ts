@@ -2,13 +2,14 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { LocalAiCliEvents } from '@talex-touch/utils/transport/events/local-ai-cli'
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   open: vi.fn(),
   handlers: new Map<string, (payload: unknown, context: unknown) => unknown>(),
   getMainConfig: vi.fn(),
   saveMainConfig: vi.fn(),
+  subscribeMainConfig: vi.fn(() => vi.fn()),
   resolveAllLocalAiCliProviderStatuses: vi.fn(),
   resolveLocalAiCliProviderStatus: vi.fn(),
   restoreLocalAi: vi.fn(async () => undefined),
@@ -48,7 +49,8 @@ vi.mock('../../core/runtime-accessor', () => ({
 }))
 vi.mock('../storage', () => ({
   getMainConfig: mocks.getMainConfig,
-  saveMainConfig: mocks.saveMainConfig
+  saveMainConfig: mocks.saveMainConfig,
+  subscribeMainConfig: mocks.subscribeMainConfig
 }))
 vi.mock('./executable-resolver', () => ({
   resolveAllLocalAiCliProviderStatuses: mocks.resolveAllLocalAiCliProviderStatuses,
@@ -114,9 +116,9 @@ async function createModule(): Promise<InstanceType<typeof LocalAiCliModule>> {
 describe('LocalAiCliModule settings navigation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // The platform is the whole gate: no environment variable opens or closes it.
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
     mocks.handlers.clear()
-    process.env.TUFF_ENABLE_LOCAL_AI_CLI = '1'
     mocks.getMainConfig.mockReturnValue({
       localAiCli: { enabled: true, defaultProvider: 'pi', providers: {} }
     })
@@ -124,10 +126,6 @@ describe('LocalAiCliModule settings navigation', () => {
       { id: 'pi', enabled: true, installed: true, capabilities: { taskRead: true } }
     ])
     mocks.open.mockReturnValue({ status: 'opened', destinationId: 'settings-intelligence' })
-  })
-
-  afterEach(() => {
-    delete process.env.TUFF_ENABLE_LOCAL_AI_CLI
   })
 
   afterAll(() => {

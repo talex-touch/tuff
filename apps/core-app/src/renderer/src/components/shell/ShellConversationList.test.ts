@@ -1338,7 +1338,7 @@ describe('shellConversationList open in local agent', () => {
     expect(agentPanel(folder).note().exists()).toBe(false)
   })
 
-  it('leaves the whole local-agent group out in a build without the beta', async () => {
+  it('leaves the whole local-agent group out off macOS', async () => {
     listState.projects = [project({ id: 'p1' })]
     listState.agentStatus = agentStatus(
       [agent('pi', { installed: false }), agent('codex', { installed: false })],
@@ -1351,7 +1351,7 @@ describe('shellConversationList open in local agent', () => {
     expect(folder.find('.tx-dropdown-submenu__panel').exists()).toBe(false)
     expect(folder.text()).not.toContain('shell.projects.openInLocalAgent')
     expect(folder.text()).not.toContain('shell.projects.adoptSessions')
-    // Known to be off, the menu stops asking.
+    // A platform without local agents never gains them, so the menu stops asking.
     expect(sentCalls(LocalAiCliEvents.status.get)).toHaveLength(1)
   })
 

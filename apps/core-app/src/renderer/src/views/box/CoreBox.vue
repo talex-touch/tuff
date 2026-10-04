@@ -213,12 +213,21 @@ function handleSubmitFeaturePrompt(): void {
   void handleExecute(activeSendTargetItem.value)
 }
 
+// Mount and every show each ask. Only the newest ask may set the button, in whatever order the
+// answers land.
+let localAiCliAvailabilityRequest = 0
+
 async function refreshLocalAiCliAvailability(): Promise<void> {
+  const request = ++localAiCliAvailabilityRequest
+  let available: boolean
   try {
-    localAiCliAvailable.value = (await localAiCli.getStatus()).betaAvailable
+    const status = await localAiCli.getStatus()
+    // Shown once the user has turned local agents on in Settings; off macOS, never.
+    available = status.betaAvailable && status.enabled
   } catch {
-    localAiCliAvailable.value = false
+    available = false
   }
+  if (request === localAiCliAvailabilityRequest) localAiCliAvailable.value = available
 }
 
 async function handleOpenLocalAiCli(): Promise<void> {
@@ -706,6 +715,9 @@ function handleCoreBoxWindowFocus(): void {
 
 function handleCoreBoxShown(): void {
   focusCoreBoxInput()
+  // On every show, not only at mount: CoreBox stays alive while the master switch is turned in
+  // Settings. The main process answers from its memo, so this starts no CLI.
+  void refreshLocalAiCliAvailability()
 }
 
 // Preview History hook

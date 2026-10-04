@@ -728,13 +728,15 @@
     "betaLabel": "macOS Beta · local process",
     "refresh": "Detect again",
     "enable": "Enable local AI agents",
-    "enableDesc": "Allows CoreBox and OmniPanel to request local agents. Opening Settings never starts a CLI process.",
+    "enableDesc": "Allows CoreBox and OmniPanel to request local agents. Settings only reads each CLI's version; it never runs a task.",
     "locate": "Choose executable",
     "defaultProvider": "Default agent",
     "defaultProviderDesc": "Only allowed agents are listed. Automatic uses the first available agent.",
     "defaultAutomatic": "Automatic",
     "providerUnavailable": "No compatible executable detected",
     "providerUnavailableWithReason": "Unavailable: {reason}",
+    "overrideRejected": "The chosen executable can't be run",
+    "overrideRejectedFallback": "The chosen executable can't be run; using the one found automatically",
     "capabilities": {
       "quickReply": "Quick reply",
       "taskApproval": "Per-task approval",
@@ -1773,7 +1775,9 @@
     "audit": "Audit",
     "auditDesc": "Usage, logs, memory review and global limits.",
     "capabilities": "Capabilities",
-    "capabilitiesDesc": "Bind capabilities to providers and models."
+    "capabilitiesDesc": "Bind capabilities to providers and models.",
+    "mcp": "MCP",
+    "mcpDesc": "Manage MCP servers and let other AI clients call Tuff."
   },
   "settingsEntries": {
     "installedPlugins": "Installed Plugins",
@@ -3173,6 +3177,7 @@
     "intelligenceChannels": "Intelligence Channels",
     "intelligenceVoice": "Voice Input",
     "intelligenceCapabilities": "Intelligence Capabilities",
+    "intelligenceMcp": "MCP",
     "intelligencePrompts": "Intelligence Prompts",
     "intelligenceAudit": "Intelligence Audit",
     "intelligenceAgents": "Intelligence Agents",
@@ -3633,7 +3638,7 @@
         "command": "Command",
         "commandPlaceholder": "npx",
         "args": "Arguments",
-        "argsPlaceholder": "-y @modelcontextprotocol/server-filesystem /tmp",
+        "argsPlaceholder": "-y {'@'}modelcontextprotocol/server-filesystem /tmp",
         "env": "Environment",
         "envPlaceholder": "KEY=value, one per line",
         "envNote": "Values go to the system secure store, never plaintext config",
@@ -4517,11 +4522,9 @@
       "nexusManagedApiKeyHint": "API key is managed by Nexus auth token.",
       "nexusOfficialProvider": "Nexus managed official provider",
       "nexusInvokeReadyTitle": "Nexus Intelligence is ready",
-      "nexusInvokeReadyDesc": "After app sign-in, official AI calls are routed through Nexus Intelligence Provider configuration.",
       "nexusInvokeLoginTitle": "Sign in to enable Nexus AI",
-      "nexusInvokeLoginDesc": "After sign-in, the default channel uses Nexus managed invocation. Without sign-in it falls back to other available channels.",
       "nexusInvokeAutoCall": "Current sign-in state can call Nexus AI automatically.",
-      "nexusInvokeFallback": "You are not signed in. Calls will fall back to other configured channels.",
+      "nexusInvokeFallback": "Enabled after sign-in",
       "nexusInvokeLoginAction": "Sign in to Nexus",
       "deleteProvider": "Delete provider {name}",
       "deleteProviderConfig": "Delete config",
@@ -6239,13 +6242,6 @@
       "validationFieldReason": "{field}: {reason}",
       "validationFieldReasonAtStep": "Step {index} {field}: {reason}",
       "notRunCount": "Not Run Steps"
-    }
-  },
-  "Intelligence": {
-    "config": {
-      "advanced": {
-        "description": "Configure priority and timeout settings"
-      }
     }
   },
   "flow": {

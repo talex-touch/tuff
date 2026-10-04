@@ -47,12 +47,22 @@ function capabilityLabel(provider: LocalAiCliProviderStatus): string {
 }
 
 function providerDescription(provider: LocalAiCliProviderStatus): string {
+  // A pick in 「选择程序」 that no longer runs is skipped rather than trusted; say so, and whether
+  // the path shown is one found without it.
+  const overrideNote = provider.settingsOverrideRejected
+    ? t(
+        provider.installed
+          ? 'settingLocalAiCli.overrideRejectedFallback'
+          : 'settingLocalAiCli.overrideRejected'
+      )
+    : ''
   if (!provider.installed) {
-    return provider.issueCode
+    const unavailable = provider.issueCode
       ? t('settingLocalAiCli.providerUnavailableWithReason', { reason: provider.issueCode })
       : t('settingLocalAiCli.providerUnavailable')
+    return [overrideNote, unavailable].filter(Boolean).join(' · ')
   }
-  return [provider.version, provider.executablePath, capabilityLabel(provider)]
+  return [overrideNote, provider.version, provider.executablePath, capabilityLabel(provider)]
     .filter(Boolean)
     .join(' · ')
 }
@@ -124,10 +134,16 @@ async function setDefaultProvider(provider: string | number): Promise<void> {
   await persistLocalAiSettings(next)
 }
 
-async function refreshStatus(): Promise<void> {
+/**
+ * Reads the status. The main process answers from what it probed before; `refresh` (the
+ * 「重新探测」 button) makes it look for every CLI and ask each its version again. Always with
+ * `detail`: this section is where the user sees what is installed and decides whether to turn
+ * local agents on, so it needs the real answer while the master switch is still off.
+ */
+async function refreshStatus(options: { refresh?: boolean } = {}): Promise<void> {
   loading.value = true
   try {
-    status.value = await sdk.getStatus()
+    status.value = await sdk.getStatus({ detail: true, refresh: options.refresh === true })
   } catch (error) {
     log.error('Failed to load local AI CLI status', error)
     toast.error(t('settingLocalAiCli.messages.loadFailed'))
@@ -167,7 +183,7 @@ onMounted(() => {
         size="sm"
         :loading="loading"
         :disabled="saving"
-        @click="refreshStatus"
+        @click="refreshStatus({ refresh: true })"
       >
         {{ t('settingLocalAiCli.refresh') }}
       </TxButton>

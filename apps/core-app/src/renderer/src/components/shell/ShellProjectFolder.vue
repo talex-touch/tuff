@@ -87,10 +87,19 @@ const AGENT_FALLBACK_ICON = 'i-ri-terminal-box-line'
 
 const { t } = useI18n()
 const projectStore = useProjectStore()
-const { localAiAgents, localAiAgentsPhase, localAiBetaAvailable } = storeToRefs(projectStore)
+const { localAiAgents, localAiAgentsPhase, localAiBetaAvailable, localAiEnabled } =
+  storeToRefs(projectStore)
 const menuOpen = ref(false)
 const draft = ref('')
 const renameInputRef = ref<HTMLInputElement | null>(null)
+
+/**
+ * The 「本机代理」 group needs both the platform (macOS) and the user's master switch in Settings.
+ * Unknown — no read has succeeded yet — still shows it, with the submenu saying why it is empty.
+ */
+const localAiGroupVisible = computed(
+  () => localAiBetaAvailable.value !== false && localAiEnabled.value !== false
+)
 
 /** What the agent submenu says in place of the agents while it has none to offer. */
 const agentsNote = computed(() => {
@@ -105,8 +114,9 @@ const agentsNote = computed(() => {
 })
 
 /**
- * The agents are read afresh whenever this menu opens, not when the submenu does: the version
- * probes behind the list are then already running by the time the pointer reaches the submenu.
+ * The agents are read afresh whenever this menu opens, not when the submenu does, so the list is
+ * current by the time the pointer reaches the submenu. That read is also how a menu learns the
+ * master switch was turned on or off in Settings; only a platform without local agents stops it.
  */
 watch(menuOpen, (open) => {
   if (open && !props.archived && localAiBetaAvailable.value !== false) {
@@ -283,10 +293,11 @@ function onRenameKeydown(event: KeyboardEvent): void {
               {{ t('shell.projects.newChat') }}
             </TxDropdownItem>
           </div>
-          <!-- Local agents are a macOS beta: a build known to lack it leaves the whole group out
-               rather than offering actions that cannot run. Unknown (a read that failed) still
-               shows it, with the submenu saying why it has nothing. -->
-          <template v-if="localAiBetaAvailable !== false">
+          <!-- Local agents are a macOS Beta the user turns on in Settings: off macOS, or with the
+               master switch off, the whole group is left out rather than offering actions that
+               cannot run. Unknown (a read that failed) still shows it, with the submenu saying
+               why it has nothing. -->
+          <template v-if="localAiGroupVisible">
             <div class="ShellProjectFolder-MenuDivider" role="separator" />
             <div
               class="ShellProjectFolder-MenuGroup"

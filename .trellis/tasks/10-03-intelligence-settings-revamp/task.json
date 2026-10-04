@@ -1,0 +1,31 @@
+{
+  "id": "intelligence-settings-revamp",
+  "name": "intelligence-settings-revamp",
+  "title": "塔芙智能设置区改版 + 本机代理探测修复",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-10-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "stage",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "10-03-mcp-settings-page",
+    "10-03-skills-page-revamp",
+    "10-03-nexus-channel-copy",
+    "10-03-local-agent-detection"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

@@ -443,8 +443,9 @@ bodyKey, params = refused                                  → refusedBodyKey,  
     (threw);
   - it lost an in-app conflict: `conflict`. A system record loses only to a system record stored
     before it (`resolveConflictStatuses`). On a fresh profile the screenshot, voice and local AI
-    records precede `core.box.toggle` (module load order), so giving one of them ⌥Space in settings
-    is enough.
+    records used to precede `core.box.toggle` (module load order). The screenshot and voice records
+    still do; the local AI record is registered only once its master switch is turned on, so a
+    fresh profile has none and a later one comes after `core.box.toggle`.
 
   `invalid`, `runtime-missing` and `disabled` are other stories and get no notice.
 - **Only a system default qualifies.** All of these must hold:

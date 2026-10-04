@@ -9,6 +9,7 @@ import type {
   LocalAiCliSessionSummary,
   LocalAiCliStartRequest,
   LocalAiCliStatus,
+  LocalAiCliStatusRequest,
   LocalAiCliTaskChunk,
   LocalAiCliTerminalCreateRequest,
   LocalAiCliTerminalCreateResult,
@@ -22,7 +23,7 @@ import type { ITuffTransport, StreamController, StreamOptions } from '../../type
 import { LocalAiCliEvents } from '../../events/local-ai-cli'
 
 export interface LocalAiCliSdk {
-  getStatus: () => Promise<LocalAiCliStatus>
+  getStatus: (request?: LocalAiCliStatusRequest) => Promise<LocalAiCliStatus>
   locate: (request: LocalAiCliLocateRequest) => Promise<LocalAiCliProviderStatus>
   openSettings: () => Promise<boolean>
   returnToPanel: () => Promise<boolean>
@@ -50,7 +51,7 @@ export interface LocalAiCliSdk {
 
 export function createLocalAiCliSdk(transport: ITuffTransport): LocalAiCliSdk {
   return {
-    getStatus: () => transport.send(LocalAiCliEvents.status.get),
+    getStatus: request => transport.send(LocalAiCliEvents.status.get, request),
     locate: request => transport.send(LocalAiCliEvents.status.locate, request),
     openSettings: () => transport.send(LocalAiCliEvents.status.openSettings),
     returnToPanel: () => transport.send(LocalAiCliEvents.status.returnToPanel),
