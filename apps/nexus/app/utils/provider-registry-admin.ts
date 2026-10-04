@@ -1014,26 +1014,40 @@ function sceneNeedsAttention(summary: SceneObservabilitySummary) {
     || summary.failedUsageCount > 0
 }
 
+/** One provider against one status filter; a provider with no evidence yet is `unknown`. */
+export function providerMatchesObservability(
+  summary: ProviderObservabilitySummary | undefined,
+  filter: ProviderObservabilityFilter,
+) {
+  if (filter === 'all')
+    return true
+  const resolved = summary ?? { latestHealth: null, latestUsage: null, status: 'unknown' as const }
+  if (filter === 'attention')
+    return providerNeedsAttention(resolved)
+  return resolved.status === filter
+}
+
+/** One scene against one latest-run filter; a scene that never ran is `unknown`. */
+export function sceneMatchesObservability(
+  summary: SceneObservabilitySummary | undefined,
+  filter: SceneObservabilityFilter,
+) {
+  if (filter === 'all')
+    return true
+  const resolved = summary ?? { latestUsage: null, failedUsageCount: 0, status: 'unknown' as const }
+  if (filter === 'attention')
+    return sceneNeedsAttention(resolved)
+  if (filter === 'failed')
+    return resolved.status === 'failed' || resolved.failedUsageCount > 0
+  return resolved.status === filter
+}
+
 export function filterProvidersByObservability(
   providers: ProviderRegistryRecord[],
   observabilityById: Record<string, ProviderObservabilitySummary>,
   filter: ProviderObservabilityFilter,
 ) {
-  if (filter === 'all')
-    return providers
-
-  return providers.filter((provider) => {
-    const summary = observabilityById[provider.id] ?? {
-      latestHealth: null,
-      latestUsage: null,
-      status: 'unknown',
-    }
-
-    if (filter === 'attention')
-      return providerNeedsAttention(summary)
-
-    return summary.status === filter
-  })
+  return providers.filter(provider => providerMatchesObservability(observabilityById[provider.id], filter))
 }
 
 export function filterScenesByObservability(
@@ -1041,24 +1055,7 @@ export function filterScenesByObservability(
   observabilityById: Record<string, SceneObservabilitySummary>,
   filter: SceneObservabilityFilter,
 ) {
-  if (filter === 'all')
-    return scenes
-
-  return scenes.filter((scene) => {
-    const summary = observabilityById[scene.id] ?? {
-      latestUsage: null,
-      failedUsageCount: 0,
-      status: 'unknown',
-    }
-
-    if (filter === 'attention')
-      return sceneNeedsAttention(summary)
-
-    if (filter === 'failed')
-      return summary.status === 'failed' || summary.failedUsageCount > 0
-
-    return summary.status === filter
-  })
+  return scenes.filter(scene => sceneMatchesObservability(observabilityById[scene.id], filter))
 }
 
 export function resolveProviderObservabilityEmptyState(
@@ -1191,6 +1188,42 @@ function isSceneRunResult(value: unknown): value is SceneRunResult {
     && Array.isArray(value.usage)
 }
 
+/**
+ * A value the operator typed that a form cannot send: a field that is not JSON,
+ * a number out of range, a duplicated capability, a default model missing from
+ * the model list. `code` and `params` name it for a localized message
+ * (`dashboard.providerRegistry.validation.<code>`); `message` keeps the English
+ * sentence it has always had.
+ */
+export type ProviderRegistryInputErrorCode =
+  | 'json-invalid'
+  | 'json-not-object'
+  | 'capability-duplicated'
+  | 'number-non-negative'
+  | 'number-min'
+  | 'number-range'
+  | 'default-model-missing'
+
+export class ProviderRegistryInputError extends Error {
+  constructor(
+    readonly code: ProviderRegistryInputErrorCode,
+    readonly params: Record<string, string | number>,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'ProviderRegistryInputError'
+  }
+}
+
+function parseJsonText(text: string, field: string): unknown {
+  try {
+    return JSON.parse(text)
+  }
+  catch {
+    throw new ProviderRegistryInputError('json-invalid', { field }, `${field} is not valid JSON.`)
+  }
+}
+
 export function normalizeError(err: unknown, fallback: string) {
   const error = isRecord(err) ? err : null
   const data = isRecord(error?.data) ? error.data : null
@@ -1236,9 +1269,9 @@ export function parseJsonObjectField(value: string, field: string): Record<strin
   const trimmed = value.trim()
   if (!trimmed)
     return null
-  const parsed = JSON.parse(trimmed)
+  const parsed = parseJsonText(trimmed, field)
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-    throw new Error(`${field} must be a JSON object.`)
+    throw new ProviderRegistryInputError('json-not-object', { field }, `${field} must be a JSON object.`)
   return parsed as Record<string, unknown>
 }
 
@@ -1277,7 +1310,11 @@ export function ensureUniqueCapabilities(capabilities: Array<{ capability: strin
   const seen = new Set<string>()
   for (const item of capabilities) {
     if (seen.has(item.capability)) {
-      throw new Error(`capability ${item.capability} is duplicated.`)
+      throw new ProviderRegistryInputError(
+        'capability-duplicated',
+        { capability: item.capability },
+        `capability ${item.capability} is duplicated.`,
+      )
     }
     seen.add(item.capability)
   }
@@ -1485,7 +1522,7 @@ export function parseOptionalNonNegativeNumber(value: string, field: string): nu
     return null
   const parsed = Number(trimmed)
   if (!Number.isFinite(parsed) || parsed < 0)
-    throw new Error(`${field} must be a non-negative number.`)
+    throw new ProviderRegistryInputError('number-non-negative', { field }, `${field} must be a non-negative number.`)
   return parsed
 }
 
@@ -1495,13 +1532,14 @@ export function parseBoundedNumber(value: string, field: string, min = 0, max?: 
     return undefined
   const parsed = Number(trimmed)
   if (!Number.isFinite(parsed) || parsed < min || (max !== undefined && parsed > max)) {
-    const range = max === undefined ? `greater than or equal to ${min}` : `between ${min} and ${max}`
-    throw new Error(`${field} must be a number ${range}.`)
+    if (max === undefined)
+      throw new ProviderRegistryInputError('number-min', { field, min }, `${field} must be a number greater than or equal to ${min}.`)
+    throw new ProviderRegistryInputError('number-range', { field, min, max }, `${field} must be a number between ${min} and ${max}.`)
   }
   return parsed
 }
 
-export function parseOptionalJson(value: string): unknown {
+export function parseOptionalJson(value: string, field = 'input'): unknown {
   const trimmed = value.trim()
-  return trimmed ? JSON.parse(trimmed) : undefined
+  return trimmed ? parseJsonText(trimmed, field) : undefined
 }

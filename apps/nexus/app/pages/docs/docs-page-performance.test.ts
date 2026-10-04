@@ -260,9 +260,13 @@ describe('docs page performance boundaries', () => {
     expect.soft(dashboardPage).not.toContain("~/components/store/")
     expect.soft(dashboardOverviewPage).not.toContain("~/components/docs/")
     expect.soft(dashboardOverviewPage).not.toContain("~/components/store/")
-    expect.soft(providerRegistryPage).toContain('<ClientOnly>')
-    expect.soft(providerRegistryPage).toContain('<LazyDashboardProviderRegistryAdminPanel />')
-    expect.soft(providerRegistryPage).not.toContain("import ProviderRegistryAdminPanel")
+    // The registry panel, its tabs and its drawers stay one async chunk that only
+    // the provider registry page loads. The page reaches them through the lazy
+    // component alone, never a static import. (`<ClientOnly>` is no longer
+    // needed: the admin layout never server-renders a page before its gate.)
+    expect.soft(providerRegistryPage).toMatch(/<LazyDashboardProviderRegistryAdminPanel\b/)
+    expect.soft(providerRegistryPage).not.toMatch(/from ['"]~\/components\/dashboard\/provider-registry\//)
+    expect.soft(providerRegistryPage).not.toContain('import ProviderRegistryAdminPanel')
     expect.soft(governancePage).not.toContain("~/components/docs/")
     expect.soft(governancePage).not.toContain("~/components/store/")
 

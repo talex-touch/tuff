@@ -1,7 +1,9 @@
 import { createProviderRegistryCrudService } from '~/composables/provider-registry/provider-registry-crud-service'
 import { createProviderRegistrySceneObservabilityService } from '~/composables/provider-registry/provider-registry-scene-observability-service'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
+import { useAdminResource } from '~/composables/useAdminResource'
 import { useToast } from '~/composables/useToast'
+import { resolveProviderRegistryError } from '~/utils/admin-provider-registry'
 import {
   authTypeOptions,
   bindingStatusOptions,
@@ -13,16 +15,10 @@ import {
   createSceneRunPanel,
   ensureUniqueCapabilities,
   fallbackOptions,
-  filterHealthCheckEntries,
-  filterProvidersByObservability,
-  filterScenesByObservability,
-  filterUsageLedgerEntries,
-  formatDate,
   formatJson,
   formatRunJson,
   extractFailedSceneRun,
   mergeJsonObjects,
-  normalizeError,
   parseBoundedNumber,
   parseCommaList,
   parseJsonObjectField,
@@ -31,42 +27,33 @@ import {
   ownerScopeOptions,
   providerServiceCategoryOptions,
   providerStatusOptions,
-  providerObservabilityFilters,
   providerCapabilityCatalogOptions,
+  ProviderRegistryInputError,
   providerRegistryTemplates,
   providerVendorOptions,
   observabilityTone,
-  healthCheckFilters,
   resolveProviderObservability,
   resolveProviderObservabilityActionHint,
-  resolveProviderObservabilityEmptyState,
   summarizeProviderQuotaList,
   resolveHealthCheckActionHint,
-  resolveHealthCheckEmptyState,
   resolveHealthCheckReason,
   resolveFirstProviderTemplateForServiceCategory,
   resolveSceneObservability,
   resolveSceneObservabilityActionHint,
-  resolveSceneObservabilityEmptyState,
   resolveUsageLedgerActionHint,
-  resolveUsageLedgerEmptyState,
   resolveUsageLedgerReference,
-  sceneObservabilityFilters,
   sceneCapabilities,
   sceneOwnerOptions,
   statusTone,
   strategyOptions,
-  usageLedgerFilters,
   type BindingFormRow,
   type BindingStatus,
   type CapabilityFormRow,
-  type HealthCheckFilter,
   type OwnerScope,
   type ProviderCapabilityRecord,
   type ProviderCheckResult,
   type ProviderEditPanelState,
   type ProviderHealthCheckEntry,
-  type ProviderObservabilityFilter,
   type ProviderObservabilitySummary,
   type ProviderQuotaPanelState,
   type ProviderQuotaRecord,
@@ -78,54 +65,151 @@ import {
   type ProviderUsageLedgerEntry,
   type SceneEditPanelState,
   type SceneFallback,
-  type SceneObservabilityFilter,
   type SceneObservabilitySummary,
   type SceneOwner,
   type SceneRegistryRecord,
   type SceneRunPanelState,
   type SceneStrategyMode,
-  type UsageLedgerFilter,
 } from '~/utils/provider-registry-admin'
 
+/** Everything the registry page reads from one load. */
+export interface ProviderRegistrySnapshot {
+  providers: ProviderRegistryRecord[]
+  adapters: SceneCapabilityAdapterCatalogEntry[]
+  capabilities: ProviderCapabilityRecord[]
+  scenes: SceneRegistryRecord[]
+  /** The latest 25 ledger rows: the providers' and routes' latest-run evidence. */
+  usageEntries: ProviderUsageLedgerEntry[]
+  /** The latest 25 checks: the providers' health badges. */
+  healthEntries: ProviderHealthCheckEntry[]
+  usageTotal: number
+  unhealthyTotal: number
+  quotas: Record<string, ProviderQuotaRecord | null>
+  quotaLists: Record<string, ProviderQuotaRecord[]>
+}
 
+/**
+ * The provider registry page's data and actions.
+ *
+ * The page calls this once, so its stat cards, its Refresh button and every tab
+ * read the same registry. Providers, capabilities, scenes, quotas and the
+ * 25-row observability windows are one `useAdminResource`: a first-load
+ * skeleton, content kept during a refresh, a localized error with a retry. The
+ * usage ledger and health check lists are server-paged lists of their own on
+ * their tabs.
+ *
+ * The administrator gate is the layout's (`useAdminGate`): this composable
+ * neither checks the role nor redirects, and is only ever mounted for an
+ * administrator.
+ *
+ * Every action answers whether it succeeded, so the drawer that started it
+ * decides whether to close; a failure shows its localized message in that
+ * drawer, or as a toast for actions without one.
+ */
 export function useProviderRegistryAdmin() {
   const { t } = useI18n()
-  const { user } = useAuthUser()
   const toast = useToast()
   const providerService = createProviderRegistryCrudService()
   const sceneObservabilityService = createProviderRegistrySceneObservabilityService()
 
-  const { isAdmin } = useAccountRole()
+  function failure(err: unknown, key: string, fallback: string): string {
+    return resolveProviderRegistryError(err, t, t(key, fallback))
+  }
 
-  watch(isAdmin, (admin) => {
-    if (user.value && !admin) {
-      navigateTo('/dashboard/overview')
+  async function loadRegistry(): Promise<ProviderRegistrySnapshot> {
+    await sceneObservabilityService.seedRegistry()
+    const [providerResult, registryData] = await Promise.all([
+      providerService.listProviders(),
+      sceneObservabilityService.loadRegistryCollections(),
+    ])
+    const providers = providerResult.providers ?? []
+    const quotaEntries = await Promise.all(providers.map(async (provider) => {
+      const result = await providerService.fetchProviderQuota(provider.id)
+      return [provider.id, result] as const
+    }))
+    return {
+      providers,
+      adapters: providerResult.adapters ?? [],
+      capabilities: registryData.capabilities,
+      scenes: registryData.scenes,
+      usageEntries: registryData.usageEntries,
+      healthEntries: registryData.healthEntries,
+      usageTotal: registryData.usageTotal,
+      unhealthyTotal: registryData.unhealthyTotal,
+      quotas: Object.fromEntries(quotaEntries.map(([providerId, result]) => [providerId, result.quota])),
+      quotaLists: Object.fromEntries(quotaEntries.map(([providerId, result]) => [providerId, result.quotas ?? (result.quota ? [result.quota] : [])])),
     }
-  }, { immediate: true })
+  }
 
-  const activeTab = ref('providers')
-  const providers = ref<ProviderRegistryRecord[]>([])
-  const adapterCatalog = ref<SceneCapabilityAdapterCatalogEntry[]>([])
-  const capabilities = ref<ProviderCapabilityRecord[]>([])
-  const scenes = ref<SceneRegistryRecord[]>([])
-  const usageEntries = ref<ProviderUsageLedgerEntry[]>([])
-  const healthEntries = ref<ProviderHealthCheckEntry[]>([])
-  const loading = ref(false)
+  const registry = useAdminResource<ProviderRegistrySnapshot>({
+    fetch: loadRegistry,
+    errorFallback: () => t('dashboard.providerRegistry.errors.loadFailed', 'Failed to load provider registry.'),
+  })
+  // A failure with nothing loaded yet takes the place of the blocks the registry
+  // feeds; a failed refresh leaves the last load on screen under a notice.
+  const registryLoadError = computed(() => (registry.data.value ? null : registry.error.value))
+  const registryRefreshError = computed(() => (registry.data.value ? registry.error.value : null))
+
+  /**
+   * Settles once the registry has rows to page (resolves) or its load has failed
+   * with nothing to show (rejects). A client list asked before the first answer
+   * waits for it: paging an empty registry would move a link's `?rt_page=2`
+   * back to page 1 for good.
+   */
+  function whenRegistryLoaded(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      function settle(): boolean {
+        if (registry.data.value) {
+          resolve()
+          return true
+        }
+        if (!registry.loading.value && registry.error.value) {
+          reject(new Error(registry.error.value))
+          return true
+        }
+        return false
+      }
+      if (settle())
+        return
+      const stop = watch([() => registry.data.value, () => registry.loading.value, () => registry.error.value], () => {
+        if (settle())
+          stop()
+      })
+    })
+  }
+
+  const providers = computed(() => registry.data.value?.providers ?? [])
+  const adapterCatalog = computed(() => registry.data.value?.adapters ?? [])
+  const capabilities = computed(() => registry.data.value?.capabilities ?? [])
+  const scenes = computed(() => registry.data.value?.scenes ?? [])
+  const usageEntries = computed(() => registry.data.value?.usageEntries ?? [])
+  const healthEntries = computed(() => registry.data.value?.healthEntries ?? [])
+  const usageTotal = computed(() => registry.data.value?.usageTotal ?? 0)
+  const unhealthyTotal = computed(() => registry.data.value?.unhealthyTotal ?? 0)
+
   const savingProvider = ref(false)
+  // The line of the latest failed save, for the panel to toast when the drawer
+  // that started the save is no longer there to show it.
+  const lastSaveError = ref<string | null>(null)
+
+  function saveFailed(err: unknown, key: string, fallback: string): string {
+    const message = failure(err, key, fallback)
+    lastSaveError.value = message
+    return message
+  }
   const savingScene = ref(false)
   const actionPending = ref<string | null>(null)
   const providerCheckResults = ref<Record<string, ProviderCheckResult>>({})
-  const providerObservabilityFilter = ref<ProviderObservabilityFilter>('all')
-  const sceneObservabilityFilter = ref<SceneObservabilityFilter>('all')
-  const usageLedgerFilter = ref<UsageLedgerFilter>('all')
-  const healthCheckFilter = ref<HealthCheckFilter>('all')
   const sceneRunPanels = reactive<Record<string, SceneRunPanelState>>({})
   const providerEditPanels = reactive<Record<string, ProviderEditPanelState>>({})
   const providerQuotaPanels = reactive<Record<string, ProviderQuotaPanelState>>({})
   const sceneEditPanels = reactive<Record<string, SceneEditPanelState>>({})
+  // Quotas are patched in place after a quota save, until the next load.
   const providerQuotas = ref<Record<string, ProviderQuotaRecord | null>>({})
   const providerQuotaLists = ref<Record<string, ProviderQuotaRecord[]>>({})
-  const error = ref<string | null>(null)
+  /** The create drawers' failures: they have no per-record panel to hold one. */
+  const providerCreateError = ref<string | null>(null)
+  const sceneCreateError = ref<string | null>(null)
   const fetchingProviderModels = ref<string | null>(null)
   const providerServiceCategoryId = ref<ProviderServiceCategory>('ai')
   const initialProviderTemplate = providerRegistryTemplates.find(template => template.id === 'openai-compatible-ai')
@@ -172,11 +256,20 @@ export function useProviderRegistryAdmin() {
     },
   ])
 
+  watch(() => registry.data.value, (data) => {
+    if (!data)
+      return
+    providerQuotas.value = data.quotas
+    providerQuotaLists.value = data.quotaLists
+    const firstBinding = bindingRows.value[0]
+    const firstProvider = data.providers[0]
+    if (firstBinding && !firstBinding.providerId && firstProvider)
+      firstBinding.providerId = firstProvider.id
+  }, { immediate: true })
+
   const enabledProviders = computed(() => providers.value.filter(item => item.status === 'enabled').length)
   const capabilityCount = computed(() => capabilities.value.length)
   const sceneCount = computed(() => scenes.value.length)
-  const usageCount = computed(() => usageEntries.value.length)
-  const unhealthyCount = computed(() => healthEntries.value.filter(item => item.status !== 'healthy').length)
   const providerOptions = computed(() => providers.value.map(provider => ({
     value: provider.id,
     label: `${provider.displayName} · ${provider.vendor}`,
@@ -193,62 +286,6 @@ export function useProviderRegistryAdmin() {
       resolveSceneObservability(scene.id, usageEntries.value),
     ]),
   ))
-  const filteredProviders = computed(() => filterProvidersByObservability(
-    providers.value,
-    providerObservabilityById.value,
-    providerObservabilityFilter.value,
-  ))
-  const filteredScenes = computed(() => filterScenesByObservability(
-    scenes.value,
-    sceneObservabilityById.value,
-    sceneObservabilityFilter.value,
-  ))
-  const filteredUsageEntries = computed(() => filterUsageLedgerEntries(
-    usageEntries.value,
-    usageLedgerFilter.value,
-  ))
-  const filteredHealthEntries = computed(() => filterHealthCheckEntries(
-    healthEntries.value,
-    healthCheckFilter.value,
-  ))
-  const providerObservabilityEmptyState = computed(() => resolveProviderObservabilityEmptyState(
-    providers.value,
-    providerObservabilityById.value,
-    providerObservabilityFilter.value,
-  ))
-  const sceneObservabilityEmptyState = computed(() => resolveSceneObservabilityEmptyState(
-    scenes.value,
-    sceneObservabilityById.value,
-    sceneObservabilityFilter.value,
-  ))
-  const usageLedgerEmptyState = computed(() => resolveUsageLedgerEmptyState(
-    usageEntries.value,
-    usageLedgerFilter.value,
-  ))
-  const healthCheckEmptyState = computed(() => resolveHealthCheckEmptyState(
-    healthEntries.value,
-    healthCheckFilter.value,
-  ))
-  const providerFilterOptions = computed(() => providerObservabilityFilters.map(filter => ({
-    value: filter,
-    label: filter,
-    count: filterProvidersByObservability(providers.value, providerObservabilityById.value, filter).length,
-  })))
-  const sceneFilterOptions = computed(() => sceneObservabilityFilters.map(filter => ({
-    value: filter,
-    label: filter,
-    count: filterScenesByObservability(scenes.value, sceneObservabilityById.value, filter).length,
-  })))
-  const usageFilterOptions = computed(() => usageLedgerFilters.map(filter => ({
-    value: filter,
-    label: filter,
-    count: filterUsageLedgerEntries(usageEntries.value, filter).length,
-  })))
-  const healthFilterOptions = computed(() => healthCheckFilters.map(filter => ({
-    value: filter,
-    label: filter,
-    count: filterHealthCheckEntries(healthEntries.value, filter).length,
-  })))
   const providerServiceCategoryOptionsView = computed(() => providerServiceCategoryOptions.map(category => ({
     value: category,
     label: category,
@@ -259,7 +296,6 @@ export function useProviderRegistryAdmin() {
       value: template.id,
       label: template.displayName,
     })))
-  const activeProviderTemplate = computed(() => providerRegistryTemplates.find(template => template.id === providerTemplateId.value) ?? null)
   const providerCapabilityTemplateOptions = computed(() => providerCapabilityCatalogOptions.map(row => ({ ...row })))
   const providerMeteringUnitOptions = computed(() => Array.from(new Set(providerCapabilityCatalogOptions.map(row => row.meteringUnit))))
   const providerAdapterOptions = computed(() => adapterCatalog.value.map(adapter => ({
@@ -342,46 +378,35 @@ export function useProviderRegistryAdmin() {
     bindingRows.value.splice(index, 1)
   }
 
+  // The panel getters read the panel back through its reactive record: the
+  // object just created is the raw one, and a drawer computed over it would
+  // never see the save's error or saving flag.
   function getProviderEditPanel(provider: ProviderRegistryRecord): ProviderEditPanelState {
-    let panel = providerEditPanels[provider.id]
-    if (!panel) {
-      panel = createProviderEditPanel(provider)
-      providerEditPanels[provider.id] = panel
-    }
-    return panel
+    providerEditPanels[provider.id] ??= createProviderEditPanel(provider)
+    return providerEditPanels[provider.id]!
   }
 
   function getProviderQuotaPanel(provider: ProviderRegistryRecord): ProviderQuotaPanelState {
-    let panel = providerQuotaPanels[provider.id]
-    if (!panel) {
-      panel = createProviderQuotaPanel(provider, providerQuotas.value[provider.id])
-      providerQuotaPanels[provider.id] = panel
-    }
-    return panel
-  }
-
-  function getProviderAdapterSummary(provider: ProviderRegistryRecord) {
-    const total = provider.capabilities.length
-    const ready = provider.capabilities.filter(item => item.adapter?.ready).length
-    const missingCapabilities = provider.capabilities
-      .filter(item => item.adapter && !item.adapter.ready)
-      .map(item => `${item.capability}:${item.adapter?.reason ?? 'adapter-missing'}`)
-
-    return {
-      total,
-      ready,
-      missing: Math.max(0, total - ready),
-      missingCapabilities,
-    }
+    providerQuotaPanels[provider.id] ??= createProviderQuotaPanel(provider, providerQuotas.value[provider.id])
+    return providerQuotaPanels[provider.id]!
   }
 
   function getSceneEditPanel(scene: SceneRegistryRecord): SceneEditPanelState {
-    let panel = sceneEditPanels[scene.id]
-    if (!panel) {
-      panel = createSceneEditPanel(scene)
-      sceneEditPanels[scene.id] = panel
-    }
-    return panel
+    sceneEditPanels[scene.id] ??= createSceneEditPanel(scene)
+    return sceneEditPanels[scene.id]!
+  }
+
+  /** A fresh editor for a drawer that opens: whatever was typed last time is gone. */
+  function resetProviderEditPanel(provider: ProviderRegistryRecord) {
+    delete providerEditPanels[provider.id]
+  }
+
+  function resetProviderQuotaPanel(provider: ProviderRegistryRecord) {
+    delete providerQuotaPanels[provider.id]
+  }
+
+  function resetSceneEditPanel(scene: SceneRegistryRecord) {
+    delete sceneEditPanels[scene.id]
   }
 
   function addProviderCapabilityEditRow(provider: ProviderRegistryRecord) {
@@ -425,14 +450,15 @@ export function useProviderRegistryAdmin() {
     return parseCommaList(sceneForm.requiredCapabilitiesText)
   }
 
-
   async function syncProviderCapabilities(provider: ProviderRegistryRecord, panel: ProviderEditPanelState) {
     const blankedExistingCapabilityIds = panel.capabilities
       .filter(row => row.id && !row.capability.trim())
       .map(row => row.id as string)
+    // A row's path keeps its place in the editor, blank rows included, so an error names the row on screen.
     const capabilityInputs = panel.capabilities
-      .filter(row => row.capability.trim())
-      .map((row, index) => ({
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => row.capability.trim())
+      .map(({ row, index }) => ({
         id: row.id,
         capability: row.capability.trim(),
         schemaRef: row.schemaRef.trim() || null,
@@ -482,34 +508,6 @@ export function useProviderRegistryAdmin() {
     }
   }
 
-
-  function toggleProviderEdit(provider: ProviderRegistryRecord) {
-    const current = providerEditPanels[provider.id]
-    if (current?.expanded) {
-      current.expanded = false
-      return
-    }
-    providerEditPanels[provider.id] = createProviderEditPanel(provider)
-  }
-
-  function toggleProviderQuota(provider: ProviderRegistryRecord) {
-    const current = providerQuotaPanels[provider.id]
-    if (current?.expanded) {
-      current.expanded = false
-      return
-    }
-    providerQuotaPanels[provider.id] = createProviderQuotaPanel(provider, providerQuotas.value[provider.id])
-  }
-
-  function toggleSceneEdit(scene: SceneRegistryRecord) {
-    const current = sceneEditPanels[scene.id]
-    if (current?.expanded) {
-      current.expanded = false
-      return
-    }
-    sceneEditPanels[scene.id] = createSceneEditPanel(scene)
-  }
-
   function sceneProviderOptions(scene: SceneRegistryRecord) {
     const providerIds = new Set(scene.bindings.map(binding => binding.providerId))
     return providerOptions.value.filter(provider => providerIds.has(provider.value))
@@ -529,16 +527,12 @@ export function useProviderRegistryAdmin() {
 
   function assertDefaultModel(models: string[], defaultModel: string) {
     if (defaultModel && !models.includes(defaultModel))
-      throw new Error('Default model must be included in the provider model list.')
+      throw new ProviderRegistryInputError('default-model-missing', {}, 'Default model must be included in the provider model list.')
   }
 
   function getSceneRunPanel(scene: SceneRegistryRecord): SceneRunPanelState {
-    let panel = sceneRunPanels[scene.id]
-    if (!panel) {
-      panel = createSceneRunPanel(scene)
-      sceneRunPanels[scene.id] = panel
-    }
-    return panel
+    sceneRunPanels[scene.id] ??= createSceneRunPanel(scene)
+    return sceneRunPanels[scene.id]!
   }
 
   function applySceneRunCapabilitySample(scene: SceneRegistryRecord, capability: string) {
@@ -553,7 +547,6 @@ export function useProviderRegistryAdmin() {
     panel.result = null
     panel.error = null
   }
-
 
   function getProviderCheckResult(providerId: string): ProviderCheckResult | null {
     return providerCheckResults.value[providerId] ?? null
@@ -574,7 +567,6 @@ export function useProviderRegistryAdmin() {
   function getProviderQuotaList(providerId: string) {
     return providerQuotaLists.value[providerId] ?? (providerQuotas.value[providerId] ? [providerQuotas.value[providerId]!] : [])
   }
-
 
   function getUsageLedgerActionHint(entry: ProviderUsageLedgerEntry) {
     return resolveUsageLedgerActionHint(entry)
@@ -600,44 +592,14 @@ export function useProviderRegistryAdmin() {
     return resolveSceneObservabilityActionHint(getSceneObservability(sceneId))
   }
 
-  async function fetchRegistry() {
-    loading.value = true
-    error.value = null
-    try {
-      await sceneObservabilityService.seedRegistry()
-      const [providerResult, registryData] = await Promise.all([
-        providerService.listProviders(),
-        sceneObservabilityService.loadRegistryCollections(),
-      ])
-      providers.value = providerResult.providers ?? []
-      adapterCatalog.value = providerResult.adapters ?? []
-      capabilities.value = registryData.capabilities
-      scenes.value = registryData.scenes
-      usageEntries.value = registryData.usageEntries
-      healthEntries.value = registryData.healthEntries
-      const quotaEntries = await Promise.all(providers.value.map(async provider => {
-        const result = await providerService.fetchProviderQuota(provider.id)
-        return [provider.id, result] as const
-      }))
-      providerQuotas.value = Object.fromEntries(quotaEntries.map(([providerId, result]) => [providerId, result.quota]))
-      providerQuotaLists.value = Object.fromEntries(quotaEntries.map(([providerId, result]) => [providerId, result.quotas ?? (result.quota ? [result.quota] : [])]))
-
-      const firstBinding = bindingRows.value[0]
-      const firstProvider = providers.value[0]
-      if (firstBinding && !firstBinding.providerId && firstProvider)
-        firstBinding.providerId = firstProvider.id
-    }
-    catch (err) {
-      error.value = normalizeError(err, t('dashboard.providerRegistry.errors.loadFailed', 'Failed to load provider registry.'))
-    }
-    finally {
-      loading.value = false
-    }
+  /** Load again, keeping what is on screen until the answer lands. */
+  function refresh() {
+    return registry.refresh()
   }
 
-  async function createProvider() {
+  async function createProvider(): Promise<boolean> {
     savingProvider.value = true
-    error.value = null
+    providerCreateError.value = null
     try {
       const targetStatus = providerForm.status
       const authRef = providerForm.authType === 'none'
@@ -703,20 +665,20 @@ export function useProviderRegistryAdmin() {
         }
       }
       toast.success(t('dashboard.providerRegistry.providers.created', 'Provider created.'))
-      await fetchRegistry()
+      await refresh()
+      return true
     }
     catch (err) {
-      error.value = normalizeError(err, t('dashboard.providerRegistry.errors.createProviderFailed', 'Failed to create provider.'))
-      toast.warning(error.value || t('dashboard.providerRegistry.errors.createProviderFailed', 'Failed to create provider.'))
+      providerCreateError.value = saveFailed(err, 'dashboard.providerRegistry.errors.createProviderFailed', 'Failed to create provider.')
+      return false
     }
     finally {
       savingProvider.value = false
     }
   }
 
-  async function checkProvider(provider: ProviderRegistryRecord, capability?: string) {
+  async function checkProvider(provider: ProviderRegistryRecord, capability?: string): Promise<ProviderCheckResult> {
     actionPending.value = `provider:${provider.id}:check`
-    error.value = null
     const targetCapability = capability?.trim() || provider.capabilities[0]?.capability || 'text.translate'
     try {
       const result = await providerService.checkProvider(provider.id, targetCapability)
@@ -730,39 +692,43 @@ export function useProviderRegistryAdmin() {
       else {
         toast.warning(result.message || t('dashboard.providerRegistry.providers.checkFailed', 'Provider check failed.'))
       }
+      // The check is recorded either way: the health badge and the health card read it from the registry.
+      await refresh()
+      return result
     }
     catch (err) {
-      const message = normalizeError(err, t('dashboard.providerRegistry.errors.checkProviderFailed', 'Failed to check provider.'))
-      error.value = message
+      const message = failure(err, 'dashboard.providerRegistry.errors.checkProviderFailed', 'Failed to check provider.')
+      const result: ProviderCheckResult = {
+        success: false,
+        providerId: provider.id,
+        capability: targetCapability,
+        latency: 0,
+        endpoint: provider.endpoint || '',
+        message,
+        error: { message },
+      }
       providerCheckResults.value = {
         ...providerCheckResults.value,
-        [provider.id]: {
-          success: false,
-          providerId: provider.id,
-          capability: targetCapability,
-          latency: 0,
-          endpoint: provider.endpoint || '',
-          message,
-          error: { message },
-        },
+        [provider.id]: result,
       }
       toast.warning(message)
+      return result
     }
     finally {
       actionPending.value = null
     }
   }
 
-  async function updateProviderStatus(provider: ProviderRegistryRecord, status: ProviderStatus) {
+  async function updateProviderStatus(provider: ProviderRegistryRecord, status: ProviderStatus): Promise<boolean> {
     actionPending.value = `provider:${provider.id}:${status}`
-    error.value = null
     try {
       await providerService.updateProvider(provider.id, { status })
-      await fetchRegistry()
+      await refresh()
+      return true
     }
     catch (err) {
-      error.value = normalizeError(err, t('dashboard.providerRegistry.errors.updateProviderFailed', 'Failed to update provider.'))
-      toast.warning(error.value || t('dashboard.providerRegistry.errors.updateProviderFailed', 'Failed to update provider.'))
+      toast.warning(failure(err, 'dashboard.providerRegistry.errors.updateProviderFailed', 'Failed to update provider.'))
+      return false
     }
     finally {
       actionPending.value = null
@@ -773,7 +739,6 @@ export function useProviderRegistryAdmin() {
     const panel = getProviderEditPanel(provider)
     fetchingProviderModels.value = provider.id
     panel.error = null
-    error.value = null
     try {
       const result = await providerService.fetchProviderModels(provider.id)
       const models = Array.from(new Set(
@@ -787,21 +752,17 @@ export function useProviderRegistryAdmin() {
       toast.success(t('dashboard.providerRegistry.providers.modelsFetched', { count: models.length }, `Fetched ${models.length} model(s).`))
     }
     catch (err) {
-      const message = normalizeError(err, t('dashboard.providerRegistry.errors.fetchModelsFailed', 'Failed to fetch provider models.'))
-      panel.error = message
-      error.value = message
-      toast.warning(message)
+      panel.error = failure(err, 'dashboard.providerRegistry.errors.fetchModelsFailed', 'Failed to fetch provider models.')
     }
     finally {
       fetchingProviderModels.value = null
     }
   }
 
-  async function saveProviderEdit(provider: ProviderRegistryRecord) {
+  async function saveProviderEdit(provider: ProviderRegistryRecord): Promise<boolean> {
     const panel = getProviderEditPanel(provider)
     panel.saving = true
     panel.error = null
-    error.value = null
     try {
       assertDefaultModel(parseProviderModels(panel.modelsText), panel.defaultModel.trim())
       const body = {
@@ -829,25 +790,25 @@ export function useProviderRegistryAdmin() {
       await providerService.updateProvider(provider.id, body)
       await syncProviderCapabilities(provider, panel)
       toast.success(t('dashboard.providerRegistry.providers.updated', 'Provider updated.'))
-      delete providerEditPanels[provider.id]
-      await fetchRegistry()
+      // Unless the drawer was reopened while this saved: that editor is the operator's now.
+      if (providerEditPanels[provider.id] === panel)
+        delete providerEditPanels[provider.id]
+      await refresh()
+      return true
     }
     catch (err) {
-      const message = normalizeError(err, t('dashboard.providerRegistry.errors.updateProviderFailed', 'Failed to update provider.'))
-      panel.error = message
-      error.value = message
-      toast.warning(message)
+      panel.error = saveFailed(err, 'dashboard.providerRegistry.errors.updateProviderFailed', 'Failed to update provider.')
+      return false
     }
     finally {
       panel.saving = false
     }
   }
 
-  async function saveProviderQuota(provider: ProviderRegistryRecord) {
+  async function saveProviderQuota(provider: ProviderRegistryRecord): Promise<boolean> {
     const panel = getProviderQuotaPanel(provider)
     panel.saving = true
     panel.error = null
-    error.value = null
     try {
       const windowDays = parseBoundedNumber(panel.windowDays, 'windowDays', 1) ?? 30
       const maxRequests = parseBoundedNumber(panel.maxRequests, 'maxRequests')
@@ -877,37 +838,36 @@ export function useProviderRegistryAdmin() {
         [provider.id]: [result.quota],
       }
       toast.success(t('dashboard.providerRegistry.quota.saved', 'Provider quota saved.'))
+      return true
     }
     catch (err) {
-      const message = normalizeError(err, t('dashboard.providerRegistry.errors.saveQuotaFailed', 'Failed to save provider quota.'))
-      panel.error = message
-      error.value = message
-      toast.warning(message)
+      panel.error = saveFailed(err, 'dashboard.providerRegistry.errors.saveQuotaFailed', 'Failed to save provider quota.')
+      return false
     }
     finally {
       panel.saving = false
     }
   }
 
-  async function deleteProvider(provider: ProviderRegistryRecord) {
+  async function deleteProvider(provider: ProviderRegistryRecord): Promise<boolean> {
     actionPending.value = `provider:${provider.id}:delete`
-    error.value = null
     try {
       await providerService.deleteProvider(provider.id)
-      await fetchRegistry()
+      await refresh()
+      return true
     }
     catch (err) {
-      error.value = normalizeError(err, t('dashboard.providerRegistry.errors.deleteProviderFailed', 'Failed to delete provider.'))
-      toast.warning(error.value || t('dashboard.providerRegistry.errors.deleteProviderFailed', 'Failed to delete provider.'))
+      toast.warning(failure(err, 'dashboard.providerRegistry.errors.deleteProviderFailed', 'Failed to delete provider.'))
+      return false
     }
     finally {
       actionPending.value = null
     }
   }
 
-  async function createScene() {
+  async function createScene(): Promise<boolean> {
     savingScene.value = true
-    error.value = null
+    sceneCreateError.value = null
     try {
       const body = {
         id: sceneForm.id.trim(),
@@ -934,38 +894,38 @@ export function useProviderRegistryAdmin() {
 
       await sceneObservabilityService.createScene(body)
       toast.success(t('dashboard.providerRegistry.scenes.created', 'Scene created.'))
-      await fetchRegistry()
+      await refresh()
+      return true
     }
     catch (err) {
-      error.value = normalizeError(err, t('dashboard.providerRegistry.errors.createSceneFailed', 'Failed to create scene.'))
-      toast.warning(error.value || t('dashboard.providerRegistry.errors.createSceneFailed', 'Failed to create scene.'))
+      sceneCreateError.value = saveFailed(err, 'dashboard.providerRegistry.errors.createSceneFailed', 'Failed to create scene.')
+      return false
     }
     finally {
       savingScene.value = false
     }
   }
 
-  async function updateSceneStatus(scene: SceneRegistryRecord, status: BindingStatus) {
+  async function updateSceneStatus(scene: SceneRegistryRecord, status: BindingStatus): Promise<boolean> {
     actionPending.value = `scene:${scene.id}:${status}`
-    error.value = null
     try {
       await sceneObservabilityService.updateScene(scene.id, { status })
-      await fetchRegistry()
+      await refresh()
+      return true
     }
     catch (err) {
-      error.value = normalizeError(err, t('dashboard.providerRegistry.errors.updateSceneFailed', 'Failed to update scene.'))
-      toast.warning(error.value || t('dashboard.providerRegistry.errors.updateSceneFailed', 'Failed to update scene.'))
+      toast.warning(failure(err, 'dashboard.providerRegistry.errors.updateSceneFailed', 'Failed to update scene.'))
+      return false
     }
     finally {
       actionPending.value = null
     }
   }
 
-  async function saveSceneEdit(scene: SceneRegistryRecord) {
+  async function saveSceneEdit(scene: SceneRegistryRecord): Promise<boolean> {
     const panel = getSceneEditPanel(scene)
     panel.saving = true
     panel.error = null
-    error.value = null
     try {
       const body = {
         displayName: panel.displayName.trim(),
@@ -980,8 +940,9 @@ export function useProviderRegistryAdmin() {
         auditPolicy: parseJsonObjectField(panel.auditPolicyText, 'scene.auditPolicy'),
         metadata: parseJsonObjectField(panel.metadataText, 'scene.metadata'),
         bindings: panel.bindings
-          .filter(row => row.providerId && row.capability.trim())
-          .map((row, index) => ({
+          .map((row, index) => ({ row, index }))
+          .filter(({ row }) => row.providerId && row.capability.trim())
+          .map(({ row, index }) => ({
             providerId: row.providerId,
             capability: row.capability.trim(),
             model: row.model.trim() || undefined,
@@ -995,14 +956,14 @@ export function useProviderRegistryAdmin() {
 
       await sceneObservabilityService.updateScene(scene.id, body)
       toast.success(t('dashboard.providerRegistry.scenes.updated', 'Scene updated.'))
-      delete sceneEditPanels[scene.id]
-      await fetchRegistry()
+      if (sceneEditPanels[scene.id] === panel)
+        delete sceneEditPanels[scene.id]
+      await refresh()
+      return true
     }
     catch (err) {
-      const message = normalizeError(err, t('dashboard.providerRegistry.errors.updateSceneFailed', 'Failed to update scene.'))
-      panel.error = message
-      error.value = message
-      toast.warning(message)
+      panel.error = saveFailed(err, 'dashboard.providerRegistry.errors.updateSceneFailed', 'Failed to update scene.')
+      return false
     }
     finally {
       panel.saving = false
@@ -1013,7 +974,6 @@ export function useProviderRegistryAdmin() {
     const panel = getSceneRunPanel(scene)
     const pendingKey = `scene:${scene.id}:run:${dryRun ? 'dry' : 'execute'}`
     actionPending.value = pendingKey
-    error.value = null
     panel.error = null
     try {
       const input = parseOptionalJson(panel.inputText)
@@ -1034,46 +994,47 @@ export function useProviderRegistryAdmin() {
           ? t('dashboard.providerRegistry.scenes.dryRunCompleted', 'Scene dry run completed.')
           : t('dashboard.providerRegistry.scenes.runCompleted', 'Scene run completed.'))
       }
-      await fetchRegistry()
+      await refresh()
     }
     catch (err) {
-      const message = normalizeError(err, t('dashboard.providerRegistry.errors.runSceneFailed', 'Failed to run scene.'))
       const failedRun = extractFailedSceneRun(err)
       if (failedRun)
         panel.result = failedRun
-      panel.error = message
-      error.value = message
-      toast.warning(message)
+      panel.error = failure(err, 'dashboard.providerRegistry.errors.runSceneFailed', 'Failed to run scene.')
     }
     finally {
       actionPending.value = null
     }
   }
 
-  async function deleteScene(scene: SceneRegistryRecord) {
+  async function deleteScene(scene: SceneRegistryRecord): Promise<boolean> {
     actionPending.value = `scene:${scene.id}:delete`
-    error.value = null
     try {
       await sceneObservabilityService.deleteScene(scene.id)
-      await fetchRegistry()
+      await refresh()
+      return true
     }
     catch (err) {
-      error.value = normalizeError(err, t('dashboard.providerRegistry.errors.deleteSceneFailed', 'Failed to delete scene.'))
-      toast.warning(error.value || t('dashboard.providerRegistry.errors.deleteSceneFailed', 'Failed to delete scene.'))
+      toast.warning(failure(err, 'dashboard.providerRegistry.errors.deleteSceneFailed', 'Failed to delete scene.'))
+      return false
     }
     finally {
       actionPending.value = null
     }
   }
 
-  onMounted(() => {
-    fetchRegistry()
-  })
-
   return {
+    /** The registry resource: `loading` (nothing yet), `refreshing`, `error`, `data`. */
+    registry,
+    registryLoadError,
+    registryRefreshError,
+    whenRegistryLoaded,
+    lastSaveError,
+    refresh,
+    listUsageEntries: sceneObservabilityService.listUsageEntries,
+    listHealthChecks: sceneObservabilityService.listHealthChecks,
     adapterCatalog,
     bindingModelOptions,
-    activeTab,
     actionPending,
     addBindingRow,
     addCapabilityRow,
@@ -1094,22 +1055,14 @@ export function useProviderRegistryAdmin() {
     deleteProvider,
     deleteScene,
     enabledProviders,
-    error,
     fallbackOptions,
-    fetchRegistry,
     fetchProviderModels,
     fetchingProviderModels,
-    filteredHealthEntries,
-    filteredProviders,
-    filteredScenes,
-    filteredUsageEntries,
-    formatDate,
     formatJson,
     formatRunJson,
     getProviderCheckResult,
     getProviderEditPanel,
     getProviderQuotaPanel,
-    getProviderAdapterSummary,
     getProviderQuotaList,
     getProviderQuotaSummary,
     getHealthCheckActionHint,
@@ -1123,18 +1076,12 @@ export function useProviderRegistryAdmin() {
     applySceneRunCapabilitySample,
     getUsageLedgerActionHint,
     getUsageLedgerReference,
-    healthCheckEmptyState,
-    healthCheckFilter,
-    healthFilterOptions,
     healthEntries,
-    isAdmin,
-    loading,
     ownerScopeOptions,
+    providerCreateError,
     providerEditPanels,
     providerForm,
-    providerFilterOptions,
-    providerObservabilityFilter,
-    providerObservabilityEmptyState,
+    providerObservabilityById,
     providerOptions,
     providerCapabilityTemplateOptions,
     providerAdapterOptions,
@@ -1152,17 +1099,19 @@ export function useProviderRegistryAdmin() {
     removeCapabilityRow,
     removeProviderCapabilityEditRow,
     removeSceneBindingEditRow,
+    resetProviderEditPanel,
+    resetProviderQuotaPanel,
+    resetSceneEditPanel,
     runScene,
     saveProviderEdit,
     saveProviderQuota,
     saveSceneEdit,
     sceneCapabilities,
     sceneCount,
+    sceneCreateError,
     sceneEditPanels,
-    sceneFilterOptions,
     sceneForm,
-    sceneObservabilityFilter,
-    sceneObservabilityEmptyState,
+    sceneObservabilityById,
     sceneOwnerOptions,
     sceneProviderOptions,
     scenes,
@@ -1171,16 +1120,12 @@ export function useProviderRegistryAdmin() {
     observabilityTone,
     statusTone,
     strategyOptions,
-    toggleProviderEdit,
-    toggleProviderQuota,
-    toggleSceneEdit,
-    unhealthyCount,
+    unhealthyTotal,
     updateProviderStatus,
     updateSceneStatus,
-    usageCount,
-    usageFilterOptions,
-    usageLedgerEmptyState,
-    usageLedgerFilter,
     usageEntries,
+    usageTotal,
   }
 }
+
+export type ProviderRegistryAdmin = ReturnType<typeof useProviderRegistryAdmin>

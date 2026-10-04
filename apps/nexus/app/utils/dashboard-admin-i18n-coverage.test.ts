@@ -53,6 +53,11 @@ const ADMIN_SURFACE = [
   // AI overview and AI call audits: the metric, ranked-list, metadata and
   // provider-type labels the two pages build outside their .vue files.
   'utils/admin-intelligence.ts',
+  // Provider registry: the stat cards, filter options, status labels, detail
+  // drawers and confirmations the page builds outside its .vue files.
+  'utils/admin-provider-registry.ts',
+  'utils/admin-provider-registry-detail.ts',
+  'composables/useProviderRegistryPanel.ts',
 ]
 
 function sourceFiles(target: string, found: string[] = []): string[] {
