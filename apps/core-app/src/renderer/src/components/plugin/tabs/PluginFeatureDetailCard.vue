@@ -220,6 +220,13 @@ const shortcutConflictHint = computed(() => {
   })
 })
 
+/** Main releases the key while the plugin is not running, and takes it back once it runs. */
+const shortcutRuntimeMissingHint = computed(() => {
+  const status = shortcutStatus.value
+  if (status?.state !== 'unavailable' || status.reason !== 'runtime-missing') return ''
+  return t('plugin.features.shortcut.runtimeMissing')
+})
+
 const widgetStatusTone = computed(() => {
   if (!props.widgetSourceFilePath && !props.widgetSourceUrl && !props.widgetCompiledPath) {
     return 'is-missing'
@@ -540,6 +547,12 @@ function handleClose(): void {
                       class="text-xs text-[var(--tx-color-warning)] m-0"
                     >
                       {{ shortcutConflictHint }}
+                    </p>
+                    <p
+                      v-if="shortcutRuntimeMissingHint"
+                      class="text-xs text-[var(--tx-color-warning)] m-0"
+                    >
+                      {{ shortcutRuntimeMissingHint }}
                     </p>
                     <p v-if="shortcutError" class="text-xs text-[var(--tx-color-danger)] m-0">
                       {{ shortcutError }}

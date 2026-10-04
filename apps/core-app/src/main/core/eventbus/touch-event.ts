@@ -5,6 +5,7 @@ import type {
   ITouchEvent,
   ITouchEventBus
 } from '@talex-touch/utils/eventbus'
+import type { PluginStatus } from '@talex-touch/utils/plugin'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
 
 import type { Event, NotificationResponse } from 'electron'
@@ -49,6 +50,9 @@ export enum TalexEvents {
   // Plugin Storage Event
   PLUGIN_STORAGE_UPDATED = 'plugin/storage-updated',
   PLUGIN_INSTALL_COMPLETED = 'plugin/install-completed',
+
+  // Plugin Status Event — a plugin's status changed (enabled, disabled, crashed, loaded…)
+  PLUGIN_STATUS_CHANGED = 'plugin/status-changed',
 
   // Clipboard Events
   CLIPBOARD_CHANGE = 'clipboard/change',
@@ -463,6 +467,19 @@ export class PluginStorageUpdatedEvent implements ITouchEvent<TalexEvents> {
   constructor(pluginName: string, fileName?: string) {
     this.pluginName = pluginName
     this.fileName = fileName
+  }
+}
+
+export class PluginStatusChangedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.PLUGIN_STATUS_CHANGED
+  pluginName: string
+  status: PluginStatus
+  previousStatus: PluginStatus
+
+  constructor(pluginName: string, status: PluginStatus, previousStatus: PluginStatus) {
+    this.pluginName = pluginName
+    this.status = status
+    this.previousStatus = previousStatus
   }
 }
 

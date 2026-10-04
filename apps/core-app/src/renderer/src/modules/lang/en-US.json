@@ -514,6 +514,8 @@
       "conflictPlugin": "Conflicts with plugin shortcuts",
       "unavailable": "Shortcut registration failed; possibly reserved by the system",
       "invalid": "Invalid shortcut",
+      "localAiCliOff": "Takes effect once Local AI agents is turned on",
+      "runtimeMissing": "Its feature or plugin isn't running",
       "omniPanelAccessibilityRequired": "Accessibility permission required",
       "omniPanelAccessibilityHint": "Grant macOS Accessibility permission before the mouse trigger can work.",
       "spotlightHint": "Disable Spotlight shortcut in macOS settings to free this combo"
@@ -2535,6 +2537,7 @@
         "behaviourBox": "Opens the search box on this feature",
         "behaviourView": "Opens the search box and loads this feature's view",
         "conflict": "Already taken by: {with}",
+        "runtimeMissing": "Its feature or plugin isn't running",
         "invalid": "That combination cannot be used, try another",
         "saveFailed": "Could not save, try again"
       },
@@ -2648,7 +2651,7 @@
         "autoDetect": "Auto detect",
         "sourceHint": "Supports GitHub repository/release, NPM package, .tpex package, or local archive paths.",
         "metadataBlockTitle": "Extra metadata (optional)",
-        "metadataPlaceholder": "{ \"tag\": \"v1.0.0\" }",
+        "metadataPlaceholder": "{'{'} \"tag\": \"v1.0.0\" {'}'}",
         "metadataHint": "Use this for tag / branch and other extra info. Leave empty for automatic handling.",
         "actionBlockTitle": "Action",
         "sourceTypeResult": "Source type"
@@ -4732,7 +4735,7 @@
       "promptSearchPlaceholder": "Search prompts...",
       "promptFilterAll": "All",
       "promptListEmpty": "No prompts match your filters",
-      "promptStatsLabel": "Total: {total} | Built-in: {builtin} | Custom: {custom}",
+      "promptStatsLabel": "Total: {total} {'|'} Built-in: {builtin} {'|'} Custom: {custom}",
       "promptTimestampUnknown": "N/A",
       "promptMetaTitle": "Basic information",
       "promptMetaDesc": "Maintain the template name, category, and usage scenario.",
@@ -4855,7 +4858,7 @@
           "auditDesc": "Review invocation history and logs across channels.",
           "auditButton": "View audit",
           "statsTitle": "Total spend: ${amount}",
-          "statsDesc": "Channels: {total} | Enabled: {enabled}",
+          "statsDesc": "Channels: {total} {'|'} Enabled: {enabled}",
           "statsButton": "View stats"
         },
         "capabilities": {
@@ -4869,7 +4872,7 @@
           "auditDesc": "Track execution logs and performance metrics.",
           "auditButton": "View audit",
           "statsTitle": "Total calls: {count} times",
-          "statsDesc": "Bound: {bound}/{total} | Frequency: {freq}/h",
+          "statsDesc": "Bound: {bound}/{total} {'|'} Frequency: {freq}/h",
           "statsButton": "View metrics"
         },
         "prompts": {
@@ -6200,7 +6203,7 @@
       "inputJson": "Step Input (JSON)",
       "toolId": "Tool ID",
       "toolSource": "Tool Source",
-      "inputPlaceholder": "{\"query\":\"describe your task\"}",
+      "inputPlaceholder": "{'{'}\"query\":\"describe your task\"{'}'}",
       "resultTitle": "Execution Result",
       "resultDescription": "Execution status, per-step outputs, and error details.",
       "statusLabel": "Workflow Status",

@@ -4,12 +4,14 @@ import type {
   ShortcutMeta
 } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import type { ShortcutBinding } from '../../shared/events/shortcut-binding'
+import type { PluginStatusChangedEvent } from '../core/eventbus/touch-event'
 import process from 'node:process'
 import {
   ShortcutTriggerKind,
   ShortcutType
 } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import ShortcutStorage from '@talex-touch/utils/common/storage/shortcut-storage'
+import { PluginStatus } from '@talex-touch/utils/plugin'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -210,6 +212,46 @@ function renameMacOnlyModifiers(accelerator: string): string | null {
   return [...renamed, key].join('+')
 }
 
+/** How long plugin status changes are gathered before one pass: plugins load one after another. */
+const PLUGIN_STATUS_SETTLE_MS = 100
+
+/**
+ * Whether a plugin in this status runs, by the verdict CoreBox and feature shortcuts use
+ * (`PluginFeaturesAdapter.isPluginActive`, `triggerFeatureShortcut`): a key is live exactly when
+ * the plugin can handle it. ENABLED and ACTIVE both run; CoreBox moves a plugin between them as
+ * its view opens and closes.
+ */
+function isRunningStatus(status: PluginStatus | undefined): boolean {
+  return status === PluginStatus.ENABLED || status === PluginStatus.ACTIVE
+}
+
+/**
+ * The plugin a shortcut does nothing without, found the way its trigger finds it, or `null` for a
+ * system record:
+ *
+ * - a feature binding: the plugin key its id names, as `triggerFeatureShortcut` looks it up;
+ * - a key the plugin registered itself: its author, the manifest name `sendToPlugin` delivers to.
+ *   That is the plugin's key too, unless its folder is named otherwise.
+ *
+ * `undefined` is a plugin that is not loaded, or no longer installed.
+ */
+function owningPlugin(shortcut: Shortcut): { status: PluginStatus } | null | undefined {
+  const plugins = pluginModule.pluginManager?.plugins
+  if (shortcut.type === ShortcutType.FEATURE) {
+    const target = parseFeatureShortcutId(shortcut.id)
+    return target ? plugins?.get(target.pluginName) : null
+  }
+  if (shortcut.type === ShortcutType.RENDERER) {
+    const author = shortcut.meta?.author
+    if (!author || author === SYSTEM_SHORTCUT_AUTHOR) return null
+    return (
+      plugins?.get(author) ??
+      [...(plugins?.values() ?? [])].find((plugin) => plugin.name === author)
+    )
+  }
+  return null
+}
+
 export class ShortcutModule extends BaseModule {
   static key: symbol = Symbol.for('Shortcut')
   name: ModuleKey = ShortcutModule.key
@@ -218,6 +260,7 @@ export class ShortcutModule extends BaseModule {
   private shortcutStatusMap = new Map<string, ShortcutStatus>()
   private isEnabled: boolean = !GLOBAL_SHORTCUT_REGISTRATION_DISABLED
   private disposeBeforeQuitListener: (() => void) | null = null
+  private disposePluginStatusListener: (() => void) | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   /** Ids of the shortcuts this launch has already told the user are left without a key. */
   private announcedNotices = new Set<string>()
@@ -243,6 +286,7 @@ export class ShortcutModule extends BaseModule {
     }
     this.renameRecordedMacModifiers()
     this.registerBeforeQuitTeardownListener()
+    this.registerPluginStatusListener()
     const runtime = resolveMainRuntime(ctx, 'ShortcutModule.onInit')
     this.transport = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
     this.setupIpcListeners(this.transport)
@@ -972,6 +1016,14 @@ export class ShortcutModule extends BaseModule {
           continue
         }
 
+        // A plugin's key does nothing while the plugin is not running, so it is not held either,
+        // and it takes no part in conflicts.
+        const owner = owningPlugin(shortcut)
+        if (owner !== null && !isRunningStatus(owner?.status)) {
+          statusMap.set(shortcut.id, { state: 'unavailable', reason: 'runtime-missing' })
+          continue
+        }
+
         const normalizedAccelerator = this.normalizeAccelerator(shortcut.accelerator)
         if (!normalizedAccelerator) {
           statusMap.set(shortcut.id, { state: 'unavailable', reason: 'invalid' })
@@ -1477,6 +1529,34 @@ export class ShortcutModule extends BaseModule {
     return token.charAt(0).toUpperCase() + token.slice(1)
   }
 
+  /**
+   * A plugin's shortcuts are registered only while it runs, so a plugin starting or stopping sends
+   * the shortcuts through another pass. Moving between ENABLED and ACTIVE does not: the plugin runs
+   * either way, and CoreBox does it every time a plugin view opens or closes. Changes are gathered
+   * first: each pass unregisters and registers every key, and plugins load one after another.
+   */
+  private registerPluginStatusListener(): void {
+    if (this.disposePluginStatusListener) {
+      return
+    }
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const handler = (event: unknown) => {
+      const change = event as Partial<PluginStatusChangedEvent>
+      if (isRunningStatus(change.previousStatus) === isRunningStatus(change.status)) return
+      if (timer) return
+      timer = setTimeout(() => {
+        timer = null
+        this.reregisterAllShortcuts()
+      }, PLUGIN_STATUS_SETTLE_MS)
+    }
+    touchEventBus.on(TalexEvents.PLUGIN_STATUS_CHANGED, handler)
+    this.disposePluginStatusListener = () => {
+      touchEventBus.off(TalexEvents.PLUGIN_STATUS_CHANGED, handler)
+      if (timer) clearTimeout(timer)
+      timer = null
+    }
+  }
+
   private registerBeforeQuitTeardownListener(): void {
     if (this.disposeBeforeQuitListener) {
       return
@@ -1491,6 +1571,10 @@ export class ShortcutModule extends BaseModule {
   }
 
   private teardownRuntimeRegistrations(): void {
+    // From here no plugin status change registers keys. On quit, plugins can stop before this
+    // runs; the passes they cause then only release those plugins' keys.
+    this.disposePluginStatusListener?.()
+    this.disposePluginStatusListener = null
     globalShortcut.unregisterAll()
     mainCallbackRegistry.clear()
     mainTriggerRegistry.clear()

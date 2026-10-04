@@ -3,6 +3,7 @@ import {
   ShortcutTriggerKind,
   ShortcutType
 } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
+import { PluginStatus } from '@talex-touch/utils/plugin'
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 
 // global-shortcon.ts computes `isMacPlatform` at module scope, so the Option/Alt
@@ -76,7 +77,8 @@ const eventBusMocks = vi.hoisted(() => {
   }
   return {
     TalexEvents: {
-      BEFORE_APP_QUIT: 'app-before-quit'
+      BEFORE_APP_QUIT: 'app-before-quit',
+      PLUGIN_STATUS_CHANGED: 'plugin/status-changed'
     },
     touchEventBus: {
       on,
@@ -149,6 +151,8 @@ import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { acceleratorsMatch } from '../../shared/accelerator-label'
 import { shortconChangedEvent, shortconGetBindingEvent } from '../../shared/events/shortcut-binding'
 import { ShortcutModule } from './global-shortcon'
+import { pluginModule } from './plugin/plugin-module'
+import { buildFeatureShortcutId } from './plugin/services/feature-shortcut-id'
 
 type MutableShortcut = Shortcut & {
   meta: NonNullable<Shortcut['meta']> & {
@@ -560,6 +564,206 @@ describe('ShortcutModule runtime cleanup', () => {
     )
 
     module.onDestroy()
+  })
+})
+
+describe('ShortcutModule plugin shortcuts follow their plugin', () => {
+  type PluginShortcutHarness = {
+    registerPluginStatusListener: () => void
+    shortcutStatusMap?: Map<string, { state?: string; reason?: string }>
+  }
+
+  const RENDERER_ID = 'plugin.demo.toggle'
+  const FEATURE_ID = buildFeatureShortcutId('demo', 'translate')
+  const RENDERER_KEY = 'CommandOrControl+Shift+D'
+  const FEATURE_KEY = 'CommandOrControl+Shift+F'
+
+  /**
+   * Stands in for the plugin manager: plugin name to status, or no entry for an uninstalled one.
+   * Keyed by folder, which is the manifest name unless `folders` says otherwise.
+   */
+  function setPlugins(
+    statuses: Record<string, PluginStatus>,
+    folders: Record<string, string> = {}
+  ): void {
+    const plugins = new Map(
+      Object.entries(statuses).map(([name, status]) => [folders[name] ?? name, { name, status }])
+    )
+    ;(pluginModule as { pluginManager: unknown }).pluginManager = { plugins }
+  }
+
+  function emitStatus(previousStatus: PluginStatus, status: PluginStatus): void {
+    touchEventBus.emit(TalexEvents.PLUGIN_STATUS_CHANGED, {
+      pluginName: 'demo',
+      previousStatus,
+      status
+    } as never)
+  }
+
+  function seedPluginShortcuts(storage: InMemoryShortcutStorage, enabled = true): void {
+    const now = Date.now()
+    storage.addShortcut({
+      id: RENDERER_ID,
+      accelerator: RENDERER_KEY,
+      type: ShortcutType.RENDERER,
+      meta: { creationTime: now, modificationTime: now, author: 'demo', enabled }
+    })
+    storage.addShortcut({
+      id: FEATURE_ID,
+      accelerator: FEATURE_KEY,
+      type: ShortcutType.FEATURE,
+      meta: { creationTime: now, modificationTime: now, author: 'demo', enabled }
+    })
+  }
+
+  function registeredKeys(): string[] {
+    return electronMocks.register.mock.calls.map(([accelerator]) => accelerator)
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+    ;(pluginModule as { pluginManager: unknown }).pluginManager = null
+  })
+
+  it.each([
+    ['disabled', { demo: PluginStatus.DISABLED }],
+    ['crashed', { demo: PluginStatus.CRASHED }],
+    ['still loading', { demo: PluginStatus.LOADING }],
+    ['uninstalled', {}]
+  ] as const)('holds no key for a plugin that is %s', (_, plugins) => {
+    const { module, storage } = createModule()
+    seedPluginShortcuts(storage)
+    setPlugins(plugins)
+
+    module.reregisterAllShortcuts?.()
+
+    expect(registeredKeys()).toEqual([])
+    for (const id of [RENDERER_ID, FEATURE_ID]) {
+      expect(module.shortcutStatusMap?.get(id)).toEqual({
+        state: 'unavailable',
+        reason: 'runtime-missing'
+      })
+    }
+    module.onDestroy()
+  })
+
+  it.each([
+    ['ENABLED', PluginStatus.ENABLED],
+    ['ACTIVE', PluginStatus.ACTIVE]
+  ] as const)('registers both kinds while the plugin runs (%s)', (_, status) => {
+    const { module, storage } = createModule()
+    seedPluginShortcuts(storage)
+    setPlugins({ demo: status })
+
+    module.reregisterAllShortcuts?.()
+
+    expect(registeredKeys().sort()).toEqual([FEATURE_KEY, RENDERER_KEY].sort())
+    expect(module.shortcutStatusMap?.get(RENDERER_ID)?.state).toBe('active')
+    expect(module.shortcutStatusMap?.get(FEATURE_ID)?.state).toBe('active')
+    module.onDestroy()
+  })
+
+  it('keeps a record the user switched off disabled, whatever the plugin does', () => {
+    const { module, storage } = createModule()
+    seedPluginShortcuts(storage, false)
+    setPlugins({})
+
+    module.reregisterAllShortcuts?.()
+
+    expect(module.shortcutStatusMap?.get(RENDERER_ID)?.state).toBe('disabled')
+    expect(module.shortcutStatusMap?.get(FEATURE_ID)?.state).toBe('disabled')
+    module.onDestroy()
+  })
+
+  it('leaves the key to a system shortcut while the plugin that shares it is not running', () => {
+    const { module, storage } = createModule()
+    seedPluginShortcuts(storage)
+    setPlugins({ demo: PluginStatus.DISABLED })
+    const callback = vi.fn()
+
+    module.registerMainShortcut('core.test.shared', RENDERER_KEY, callback, { owner: 'test' })
+
+    expect(module.shortcutStatusMap?.get('core.test.shared')?.state).toBe('active')
+    expect(module.shortcutStatusMap?.get(RENDERER_ID)?.reason).toBe('runtime-missing')
+    expect(electronMocks.register.mock.calls.at(-1)?.[0]).toBe(RENDERER_KEY)
+    module.onDestroy()
+  })
+
+  it('follows a plugin starting with one pass once its changes settle', () => {
+    vi.useFakeTimers()
+    const { module, storage } = createModule()
+    seedPluginShortcuts(storage)
+    setPlugins({ demo: PluginStatus.DISABLED })
+    ;(module as unknown as PluginShortcutHarness).registerPluginStatusListener()
+    module.reregisterAllShortcuts?.()
+    expect(registeredKeys()).toEqual([])
+    electronMocks.unregisterAll.mockClear()
+
+    setPlugins({ demo: PluginStatus.ENABLED })
+    emitStatus(PluginStatus.DISABLED, PluginStatus.LOADING)
+    emitStatus(PluginStatus.LOADING, PluginStatus.LOADED)
+    emitStatus(PluginStatus.LOADED, PluginStatus.ENABLED)
+    vi.advanceTimersByTime(99)
+    expect(electronMocks.unregisterAll).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    expect(electronMocks.unregisterAll).toHaveBeenCalledTimes(1)
+    expect(registeredKeys().sort()).toEqual([FEATURE_KEY, RENDERER_KEY].sort())
+    module.onDestroy()
+  })
+
+  it('leaves every key alone while a plugin moves between ENABLED and ACTIVE', () => {
+    vi.useFakeTimers()
+    const { module, storage } = createModule()
+    seedPluginShortcuts(storage)
+    setPlugins({ demo: PluginStatus.ENABLED })
+    ;(module as unknown as PluginShortcutHarness).registerPluginStatusListener()
+    module.reregisterAllShortcuts?.()
+    electronMocks.unregisterAll.mockClear()
+    electronMocks.register.mockClear()
+
+    // CoreBox opening and then leaving one of the plugin's views.
+    setPlugins({ demo: PluginStatus.ACTIVE })
+    emitStatus(PluginStatus.ENABLED, PluginStatus.ACTIVE)
+    setPlugins({ demo: PluginStatus.ENABLED })
+    emitStatus(PluginStatus.ACTIVE, PluginStatus.ENABLED)
+    vi.advanceTimersByTime(1_000)
+
+    expect(electronMocks.unregisterAll).not.toHaveBeenCalled()
+    expect(electronMocks.register).not.toHaveBeenCalled()
+    module.onDestroy()
+  })
+
+  it('finds a running plugin by its manifest name when its folder is named otherwise', () => {
+    const { module, storage } = createModule()
+    seedPluginShortcuts(storage)
+    setPlugins({ demo: PluginStatus.ENABLED }, { demo: 'demo-folder' })
+
+    module.reregisterAllShortcuts?.()
+
+    // The plugin's own key is delivered by manifest name, so it holds its key.
+    expect(module.shortcutStatusMap?.get(RENDERER_ID)?.state).toBe('active')
+    expect(registeredKeys()).toEqual([RENDERER_KEY])
+    // A feature binding is triggered by the plugin key its id names, which is not loaded here.
+    expect(module.shortcutStatusMap?.get(FEATURE_ID)?.reason).toBe('runtime-missing')
+    module.onDestroy()
+  })
+
+  it('stops following plugin status once torn down for quit', () => {
+    vi.useFakeTimers()
+    const { module, storage } = createModule()
+    seedPluginShortcuts(storage)
+    setPlugins({ demo: PluginStatus.ENABLED })
+    ;(module as unknown as PluginShortcutHarness).registerPluginStatusListener()
+    module.onDestroy()
+    electronMocks.unregisterAll.mockClear()
+    electronMocks.register.mockClear()
+
+    emitStatus(PluginStatus.ENABLED, PluginStatus.DISABLED)
+    vi.advanceTimersByTime(1_000)
+
+    expect(electronMocks.unregisterAll).not.toHaveBeenCalled()
+    expect(electronMocks.register).not.toHaveBeenCalled()
   })
 })
 

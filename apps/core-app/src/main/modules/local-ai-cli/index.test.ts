@@ -48,6 +48,7 @@ const {
   subscribeMainConfigMock,
   registerMainShortcutMock,
   unregisterMainShortcutMock,
+  requestFeatureRefreshMock,
   databaseRef
 } = vi.hoisted(() => ({
   getTuffTransportMainMock: vi.fn(),
@@ -62,6 +63,7 @@ const {
   subscribeMainConfigMock: vi.fn(),
   registerMainShortcutMock: vi.fn(),
   unregisterMainShortcutMock: vi.fn(),
+  requestFeatureRefreshMock: vi.fn(),
   databaseRef: { current: null as unknown }
 }))
 
@@ -98,7 +100,8 @@ vi.mock('../omni-panel', () => ({
   omniPanelModule: {
     showLocalAi: vi.fn(),
     restoreLocalAi: vi.fn(),
-    hideForPasteBack: vi.fn()
+    hideForPasteBack: vi.fn(),
+    requestFeatureRefresh: requestFeatureRefreshMock
   }
 }))
 
@@ -548,7 +551,9 @@ async function completePiRun(
     type: 'message_end',
     message: { role: 'assistant', content: [{ type: 'text', text: input.answer }] }
   })
+  // pi ends a run with both, and `agent_settled` lands before the get_entries answer.
   child.sendLine({ type: 'agent_end' })
+  child.sendLine({ type: 'agent_settled' })
 
   await waitFor(
     () => child.framesOfType('get_entries').length === 2,
@@ -651,6 +656,8 @@ beforeEach(async () => {
   projectRoot = join(tempRoot, 'project')
   moduleDir = join(tempRoot, 'module')
   await mkdir(projectRoot, { recursive: true })
+  // Read when pi reports a stored session not found; a test must never look in the real ~/.pi.
+  vi.stubEnv('PI_CODING_AGENT_SESSION_DIR', join(tempRoot, 'pi-sessions'))
 
   client = createClient({ url: `file:${join(tempRoot, 'database.db')}` })
   db = drizzle(client)
@@ -705,6 +712,7 @@ afterEach(async () => {
   }
   client.close()
   await rm(tempRoot, { recursive: true, force: true })
+  vi.unstubAllEnvs()
   Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
 })
 
@@ -1160,6 +1168,39 @@ describe('localAiCli Pi task continuation', () => {
     expect(spawnCall().options).toMatchObject({ cwd: workspacePath })
   })
 
+  it('registers a new session whose file pi writes only with its first reply', async () => {
+    // pi 0.84.3 holds a new session in memory, its model and thinking-level entries already there,
+    // and writes the whole file with the first assistant reply: nothing is on disk at the prompt.
+    const { transport } = await initModule()
+    const workspacePath = join(moduleDir, 'workspace')
+    const sessionFile = join(tempRoot, 'pi-lazy-1.jsonl')
+    const model: PiEntry = { type: 'model_change', id: 'm1', parentId: null }
+    const thinking: PiEntry = { type: 'thinking_level_change', id: 't1', parentId: 'm1' }
+    const user = piEntry('u1', 't1', 'user', 'quick question')
+    const assistant = piEntry('a1', 'u1', 'assistant', 'OK')
+    const child = expectSpawn()
+    const stream = taskStream()
+    const run = startTask(transport, taskPayload({ prompt: 'quick question' }), stream.context)
+
+    await completePiRun(child, {
+      sessionId: 'pi-lazy-1',
+      sessionFile,
+      before: { entries: [model, thinking], leafId: 't1' },
+      append:
+        `${JSON.stringify({ type: 'session', id: 'pi-lazy-1', cwd: workspacePath })}\n` +
+        [model, thinking, user, assistant].map(piEntryLine).join(''),
+      post: { entries: [user, assistant], leafId: 'a1' },
+      answer: 'OK'
+    })
+    await run
+
+    expect(stream.chunks.at(-1)).toMatchObject({ type: 'complete', text: 'OK' })
+    const row = await pointerRow(taskSessionChunk(stream.chunks).sessionRef)
+    expect(row?.native_session_id).toBe('pi-lazy-1')
+    expect(row?.expected_head_id).toBe('a1')
+    expect(row?.state).toBe('available')
+  })
+
   it('continues the stored native session and advances the head only after the file agrees', async () => {
     const { transport } = await initModule()
     const pointer = await seedPointer({
@@ -1190,6 +1231,72 @@ describe('localAiCli Pi task continuation', () => {
     expect(taskSessionChunk(stream.chunks).sessionRef).toBe(pointer.id)
     expect(spawnCall().args).toEqual(expect.arrayContaining(['--session', 'pi-resume-1']))
     expectOpaqueTaskChunks(stream.chunks, ['pi-resume-1', sessionFile, projectRoot])
+  })
+
+  it.each([
+    { name: 'plain', stderr: "No session found matching 'pi-unwritten-1'\n" },
+    // What pi prints when FORCE_COLOR reaches it.
+    { name: 'coloured', stderr: "\u001B[31mNo session found matching 'pi-unwritten-1'\u001B[39m\n" }
+  ])('marks the pointer missing when pi finds no stored session ($name)', async ({ stderr }) => {
+    const { transport } = await initModule()
+    // A new task stopped before pi's first reply leaves a pointer to a file pi never wrote.
+    const pointer = await seedPointer({
+      nativeSessionId: 'pi-unwritten-1',
+      expectedHeadId: 'pi-unwritten-head'
+    })
+    const child = expectSpawn()
+    const stream = taskStream()
+    const run = startTask(transport, taskPayload({ sessionRef: pointer.id }), stream.context)
+
+    await waitFor(() => child.framesOfType('get_state').length > 0, 'the initial get_state frame')
+    // pi 0.84.3 rejects `--session <id>` this way and exits before writing any protocol line.
+    child.stderr.emit('data', stderr)
+    child.close(1)
+    await run
+
+    expect(spawnCall().args).toEqual(expect.arrayContaining(['--session', 'pi-unwritten-1']))
+    expect(child.framesOfType('prompt')).toHaveLength(0)
+    expect(stream.chunks).toContainEqual({
+      type: 'failed',
+      callId: expect.any(String),
+      code: 'NATIVE_SESSION_MISSING',
+      recoverable: false
+    })
+    expect((await pointerRow(pointer.id))?.state).toBe('missing')
+    expect(await pointerCount()).toBe(1)
+  })
+
+  it('marks the pointer conflicted when pi cannot find a session whose file is still there', async () => {
+    const { transport } = await initModule()
+    const pointer = await seedPointer({
+      nativeSessionId: 'pi-edited-1',
+      expectedHeadId: PI_BASE_LEAF
+    })
+    // pi looks `--session` up by the header id; this file keeps its name but not its header.
+    const sessionDir = join(tempRoot, 'pi-sessions', '--project--')
+    await mkdir(sessionDir, { recursive: true })
+    await writeFile(
+      join(sessionDir, '2026-10-03T00-00-00-000Z_pi-edited-1.jsonl'),
+      `${JSON.stringify({ type: 'session', id: 'pi-someone-else', cwd: projectRoot })}\n`
+    )
+    const child = expectSpawn()
+    const stream = taskStream()
+    const run = startTask(transport, taskPayload({ sessionRef: pointer.id }), stream.context)
+
+    await waitFor(() => child.framesOfType('get_state').length > 0, 'the initial get_state frame')
+    child.stderr.emit('data', "No session found matching 'pi-edited-1'\n")
+    child.close(1)
+    await run
+
+    expect(child.framesOfType('prompt')).toHaveLength(0)
+    expect(stream.chunks).toContainEqual({
+      type: 'failed',
+      callId: expect.any(String),
+      code: 'NATIVE_SESSION_CONFLICT',
+      recoverable: false
+    })
+    expect((await pointerRow(pointer.id))?.state).toBe('conflict')
+    expect(await pointerCount()).toBe(1)
   })
 
   it('marks the pointer conflicted when the provider reports a head the pointer never stored', async () => {
@@ -1697,6 +1804,21 @@ describe('localAiCli platform gate and quick-open shortcut', () => {
 
     playSettings(true)
     expect(registerMainShortcutMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('has an open OmniPanel read its actions again each time the master switch flips', async () => {
+    getMainConfigMock.mockReturnValue(settingsWithMasterSwitch(false))
+    requestFeatureRefreshMock.mockClear()
+    await initModule()
+    // The first read is no change: a panel opened later reads the switch itself.
+    expect(requestFeatureRefreshMock).not.toHaveBeenCalled()
+
+    playSettings(true)
+    playSettings(true)
+    expect(requestFeatureRefreshMock).toHaveBeenCalledExactlyOnceWith('local-ai-cli')
+
+    playSettings(false)
+    expect(requestFeatureRefreshMock).toHaveBeenCalledTimes(2)
   })
 
   it('runs no CLI while the master switch is off, unless Settings asks for detail', async () => {

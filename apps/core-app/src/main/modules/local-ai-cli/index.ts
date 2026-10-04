@@ -59,13 +59,15 @@ import {
   resolveLocalAiCliProviderStatus
 } from './executable-resolver'
 import { nativeSessionLeaseRegistry } from './native-session-lease'
-import { isNativeSessionMissingError } from './native-session-errors'
-import { scanNativeSessionsForProject } from './native-session-discovery'
+import { isNativeSessionMissingError, isPiSessionNotFoundError } from './native-session-errors'
+import { hasPiSessionFileNamedFor, scanNativeSessionsForProject } from './native-session-discovery'
 import {
   capturePiSessionFile,
+  isPiSessionFileUnwritten,
   parsePiEntriesResponse,
   parsePiStateResponse,
-  verifyPiSessionAppend
+  verifyPiSessionAppend,
+  verifyPiSessionFirstWrite
 } from './pi-native-session'
 import {
   createLocalAiCliResumeArgs,
@@ -120,7 +122,12 @@ interface LocalAiCliExecution {
 interface PiRunState {
   beforeEntries: PiEntriesSnapshot
   capturedHead: string | null
-  file: PiSessionFileCapture
+  /**
+   * The session file as it stood before the prompt, or `null` for a new session pi has not written
+   * yet: pi writes that file whole with its first reply, so it is checked from its header once the
+   * run is over ({@link verifyPiSessionFirstWrite}).
+   */
+  file: PiSessionFileCapture | null
   verificationRequested: boolean
 }
 
@@ -301,6 +308,8 @@ export class LocalAiCliModule extends BaseModule {
   private pendingPanelReturnUntil = 0
   /** Whether ⌘⇧L is registered: it follows the master switch, not just the platform. */
   private quickOpenShortcutRegistered = false
+  /** The master switch last seen, to tell an open OmniPanel it flipped; `null` before the first read. */
+  private lastMasterSwitch: boolean | null = null
   /** The picks last seen, to notice one being cleared; `null` until the first settings read. */
   private lastExecutableOverrides: Record<LocalAiCliProviderId, string> | null = null
 
@@ -339,7 +348,13 @@ export class LocalAiCliModule extends BaseModule {
    */
   private applySettings(settings: AppSetting['localAiCli'] | undefined): void {
     if (!settings) return
-    this.syncQuickOpenShortcut(settings.enabled === true)
+    const enabled = settings.enabled === true
+    this.syncQuickOpenShortcut(enabled)
+    // The panel's 「交给本机代理」 follows the switch too; an open panel reads its actions again.
+    if (this.lastMasterSwitch !== null && this.lastMasterSwitch !== enabled) {
+      omniPanelModule.requestFeatureRefresh('local-ai-cli')
+    }
+    this.lastMasterSwitch = enabled
 
     const overrides = executableOverrides(settings)
     const previous = this.lastExecutableOverrides
@@ -1031,11 +1046,11 @@ export class LocalAiCliModule extends BaseModule {
           if (pointer && entries.leafId !== pointer.expectedHeadId) {
             await markConflictAndThrow()
           }
-          const file = await capturePiSessionFile(
-            piState.sessionFile,
-            piState.sessionId,
-            execution.cwd
-          )
+          // Only a new task may find no file yet; a stored session's file is captured as it is.
+          const file =
+            !pointer && (await isPiSessionFileUnwritten(piState.sessionFile))
+              ? null
+              : await capturePiSessionFile(piState.sessionFile, piState.sessionId, execution.cwd)
           await publishNativeSession(piState.sessionId, entries.leafId)
           piRun = {
             beforeEntries: entries,
@@ -1048,12 +1063,21 @@ export class LocalAiCliModule extends BaseModule {
           return
         }
         if (entries && piRun?.verificationRequested) {
-          const finalHead = await verifyPiSessionAppend({
-            capture: piRun.file,
-            capturedHead: piRun.capturedHead,
-            beforeEntryIds: new Set(piRun.beforeEntries.entries.map((entry) => entry.id)),
-            post: entries
-          })
+          if (!piState) throw new Error('PROTOCOL_INVALID')
+          const finalHead = piRun.file
+            ? await verifyPiSessionAppend({
+                capture: piRun.file,
+                capturedHead: piRun.capturedHead,
+                beforeEntryIds: new Set(piRun.beforeEntries.entries.map((entry) => entry.id)),
+                post: entries
+              })
+            : await verifyPiSessionFirstWrite({
+                sessionFile: piState.sessionFile,
+                nativeSessionId: piState.sessionId,
+                projectRoot: execution.cwd,
+                before: piRun.beforeEntries,
+                post: entries
+              })
           if (!pointer) throw new Error('PROTOCOL_INVALID')
           await this.touchNativeSession(pointer, finalHead)
           completionReady = true
@@ -1252,7 +1276,10 @@ export class LocalAiCliModule extends BaseModule {
       if (decoded.completed && spec.terminateOnComplete && completeText.trim()) {
         if (!pointer) throw new Error('PROTOCOL_INVALID')
         if (spec.protocol === 'pi-rpc') {
-          if (!piRun || piRun.verificationRequested) throw new Error('PROTOCOL_INVALID')
+          // pi ends a run twice, `agent_end` and then `agent_settled`, and the second arrives ahead
+          // of the `get_entries` answer: the run is already being verified.
+          if (piRun?.verificationRequested) return
+          if (!piRun) throw new Error('PROTOCOL_INVALID')
           piRun.verificationRequested = true
           writeProtocol({
             id: 'tuff-after',
@@ -1294,15 +1321,21 @@ export class LocalAiCliModule extends BaseModule {
         stdoutBuffer = ''
       }
       await protocolChain
-      if (
-        !protocolFailure &&
-        pointer &&
-        !completionReady &&
-        stderrText &&
-        isNativeSessionMissingError(new Error(stderrText))
-      ) {
-        await markLocalAiCliSessionState(pointer.id, 'missing')
-        protocolFailure = new Error('NATIVE_SESSION_MISSING')
+      if (!protocolFailure && pointer && !completionReady && stderrText) {
+        if (isNativeSessionMissingError(new Error(stderrText))) {
+          await markLocalAiCliSessionState(pointer.id, 'missing')
+          protocolFailure = new Error('NATIVE_SESSION_MISSING')
+        } else if (spec.protocol === 'pi-rpc' && isPiSessionNotFoundError(stderrText)) {
+          // pi finds a `--session` by the id in each file's header, so a file still named for it
+          // was edited or replaced; only no file at all is a missing session.
+          const replaced = await hasPiSessionFileNamedFor(pointer.nativeSessionId).catch(
+            () => false
+          )
+          await markLocalAiCliSessionState(pointer.id, replaced ? 'conflict' : 'missing')
+          protocolFailure = new Error(
+            replaced ? 'NATIVE_SESSION_CONFLICT' : 'NATIVE_SESSION_MISSING'
+          )
+        }
       }
       this.approvals.cancelCall(callId)
       this.taskProcesses.delete(callId)
@@ -1538,6 +1571,7 @@ export class LocalAiCliModule extends BaseModule {
   async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
     shortcutModule.unregisterMainShortcut(LOCAL_AI_CLI_SHORTCUT_ID)
     this.quickOpenShortcutRegistered = false
+    this.lastMasterSwitch = null
     this.lastExecutableOverrides = null
     this.approvals.destroy()
     for (const dispose of this.disposers.splice(0)) dispose()
