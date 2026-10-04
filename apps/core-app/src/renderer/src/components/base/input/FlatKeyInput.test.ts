@@ -197,3 +197,70 @@ describe('FlatKeyInput modifier names', () => {
     expect(wrapper.emitted('update:modelValue')).toEqual([[expected]])
   })
 })
+/**
+ * macOS rewrites `KeyboardEvent.key` while Option is held: ⌥E is a dead key (`'Dead'`), ⌥T types
+ * `'ŧ'`, ⌥Space a no-break space. Those strings are not keys Electron can bind, so the recorder
+ * stored `Option+Dead` — the field showed it verbatim and the shortcut never registered. The fix
+ * reads the physical `code` when the produced key cannot be bound.
+ */
+describe('FlatKeyInput Option-produced keys', () => {
+  it('records the physical letter when Option produces a dead key', async () => {
+    const wrapper = mountKeyInput()
+    const input = wrapper.get<HTMLInputElement>('input')
+
+    pressKey(input.element, { key: 'Dead', code: 'KeyE', altKey: true })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('update:modelValue')).toEqual([['Option+E']])
+  })
+
+  it('records the physical letter when Option types a diacritic', async () => {
+    const wrapper = mountKeyInput()
+    const input = wrapper.get<HTMLInputElement>('input')
+
+    pressKey(input.element, { key: 'ŧ', code: 'KeyT', altKey: true })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('update:modelValue')).toEqual([['Option+T']])
+  })
+
+  it('records Space when Option+Space types a no-break space', async () => {
+    const wrapper = mountKeyInput()
+    const input = wrapper.get<HTMLInputElement>('input')
+
+    pressKey(input.element, { key: '\u00a0', code: 'Space', altKey: true })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('update:modelValue')).toEqual([['Option+Space']])
+  })
+
+  it('stores punctuation by its name, as Option-free presses do', async () => {
+    const wrapper = mountKeyInput()
+    const input = wrapper.get<HTMLInputElement>('input')
+
+    pressKey(input.element, { key: '…', code: 'Semicolon', altKey: true })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('update:modelValue')).toEqual([['Option+Semicolon']])
+  })
+
+  it('resolves a digit typed dead under Option', async () => {
+    const wrapper = mountKeyInput()
+    const input = wrapper.get<HTMLInputElement>('input')
+
+    pressKey(input.element, { key: '¡', code: 'Digit1', altKey: true })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('update:modelValue')).toEqual([['Option+1']])
+  })
+
+  it('binds the physical numpad key when Option types a superscript', async () => {
+    const wrapper = mountKeyInput()
+    const input = wrapper.get<HTMLInputElement>('input')
+
+    pressKey(input.element, { key: '³', code: 'Numpad3', altKey: true })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('update:modelValue')).toEqual([['Option+Numpad3']])
+  })
+})
