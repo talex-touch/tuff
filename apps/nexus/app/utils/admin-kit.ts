@@ -11,6 +11,8 @@ export interface AdminStatItem {
   label: string
   /** A number is printed by TxStatCard in en-US; pass a `useAdminFormat()` string to follow the locale. */
   value: number | string
+  /** The card's tooltip: the full value behind a shortened one, as `dateTimeTitle` is behind `tableDateTime`. */
+  title?: string
   meta?: string
   iconClass?: string
   insight?: StatCardInsight
