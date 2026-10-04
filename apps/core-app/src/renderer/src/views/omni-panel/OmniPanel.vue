@@ -216,7 +216,9 @@ async function isLocalAiActionOffered(): Promise<boolean> {
 }
 
 async function loadFeatures(): Promise<void> {
-  loading.value = true
+  // Only the first load has nothing to show meanwhile: a refresh from main keeps the current list
+  // on screen until the new one arrives, rather than flashing the loading state while open.
+  loading.value = !hasLoadedFeatures.value
   try {
     const response = await transport.send(omniPanelFeatureListEvent)
     const payload = response as OmniPanelFeatureListResponse
@@ -238,10 +240,9 @@ async function loadFeatures(): Promise<void> {
 }
 
 /**
- * Re-reads whether the local agent action is offered, on every show: the master switch can be
- * turned in Settings while this window stays alive, and main's feature-refresh broadcast goes to
- * the main window rather than this one, so the context push of a show is how this window hears of
- * it. Only that one action is added or removed; a full reload would flash the loading state.
+ * Re-reads whether the local agent action is offered as soon as a show pushes its context, adding
+ * or removing only that one action; main's feature refresh, which reaches this window too, then
+ * reads the whole list again.
  */
 async function syncLocalAiAction(): Promise<void> {
   if (!hasLoadedFeatures.value) return

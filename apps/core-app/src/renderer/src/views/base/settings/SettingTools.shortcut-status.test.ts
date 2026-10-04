@@ -156,4 +156,22 @@ describe('SettingTools shortcut status', () => {
     expect(texts['core.box.toggle']).toBe('settingTools.shortcutStatus.conflictSystem')
     expect(texts['screenshot.tool.start']).toBe('')
   })
+
+  it('says a shortcut whose owner is not running waits for it, rather than blaming the system', async () => {
+    // The record stays when its callback goes: ⌘⇧L while local agents are off, or a shortcut
+    // whose plugin is not running. Nothing was refused, so neither reads "registration failed".
+    const runtimeMissing = { state: 'unavailable', reason: 'runtime-missing' } as const
+    state.shortcuts = [
+      mainShortcut('local-ai-cli.quick-open', 'CommandOrControl+Shift+L', runtimeMissing),
+      {
+        ...mainShortcut('plugin.translate.toggle', 'Alt+T', runtimeMissing),
+        meta: { creationTime: 0, modificationTime: 0, author: 'translate', enabled: true }
+      }
+    ]
+
+    const texts = await statusTexts()
+
+    expect(texts['local-ai-cli.quick-open']).toBe('settingTools.shortcutStatus.localAiCliOff')
+    expect(texts['plugin.translate.toggle']).toBe('settingTools.shortcutStatus.runtimeMissing')
+  })
 })

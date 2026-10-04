@@ -1,5 +1,5 @@
 import type { FileHandle } from 'node:fs/promises'
-import { open, realpath } from 'node:fs/promises'
+import { lstat, open, realpath } from 'node:fs/promises'
 
 const MAX_PI_APPEND_BYTES = 1_048_576
 const MAX_PI_HEADER_BYTES = 65_536
@@ -21,6 +21,8 @@ export interface PiSessionFileCapture {
   device: bigint
   inode: bigint
   size: number
+  /** Bytes taken by the `session` header line, its newline included. */
+  headerSize: number
 }
 
 function conflict(): never {
@@ -137,10 +139,26 @@ export async function capturePiSessionFile(
       path: canonicalPath,
       device: details.dev,
       inode: details.ino,
-      size: Number(details.size)
+      size: Number(details.size),
+      headerSize: newline + 1
     }
   } finally {
     await handle.close()
+  }
+}
+
+/**
+ * Whether pi has yet to write a session file. pi (0.84.3) keeps a new session in memory and writes
+ * the whole file with its first assistant reply, so before a new session's first prompt there is
+ * nothing on disk. Only a plain absence counts: anything else at the path is captured, and refused,
+ * as it is.
+ */
+export async function isPiSessionFileUnwritten(sessionFile: string): Promise<boolean> {
+  try {
+    await lstat(sessionFile)
+    return false
+  } catch (error) {
+    return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
   }
 }
 
@@ -316,4 +334,68 @@ export async function verifyPiSessionAppend(input: {
   if (assistantEntries.length !== 1) conflict()
   if (!input.post.leafId || !appendedIds.has(input.post.leafId)) conflict()
   return input.post.leafId
+}
+
+/**
+ * Verifies the file of a new session that pi wrote during this run. There was nothing to capture
+ * before the prompt — pi (0.84.3) writes a new session's file whole with its first assistant reply
+ * — so the file is checked from its header on: it must be this session's, in this workspace, and
+ * every entry after the header accounted for. First come the entries `get_entries` reported before
+ * the prompt, in that order; then this run's, one parent chain on from that captured head, opening
+ * with the one user message and holding at least one assistant reply; the last of them is the head
+ * `get_entries` reports now, and those are exactly the entries it reports as new.
+ */
+export async function verifyPiSessionFirstWrite(input: {
+  sessionFile: string
+  nativeSessionId: string
+  projectRoot: string
+  before: PiEntriesSnapshot
+  post: PiEntriesSnapshot
+}): Promise<string> {
+  const file = await capturePiSessionFile(
+    input.sessionFile,
+    input.nativeSessionId,
+    input.projectRoot
+  )
+  const entries = await readAppendedEntries({ ...file, size: file.headerSize })
+  const before = input.before.entries
+  const seen = new Set<string>()
+  let parentId: string | null = null
+  for (const [index, entry] of entries.entries()) {
+    const reported = before[index]
+    if (
+      seen.has(entry.id) ||
+      entry.parentId !== parentId ||
+      (reported && (reported.id !== entry.id || reported.type !== entry.type))
+    ) {
+      conflict()
+    }
+    seen.add(entry.id)
+    parentId = entry.id
+  }
+  const capturedHead = before.at(-1)?.id ?? null
+  if (input.before.leafId !== capturedHead) conflict()
+
+  const run = entries.slice(before.length)
+  const userEntry = run[0]
+  if (userEntry?.type !== 'message' || userEntry.message?.role !== 'user') conflict()
+  let userMessages = 0
+  let assistantMessages = 0
+  for (const entry of run) {
+    if (entry.type === 'message' && entry.message?.role === 'user') userMessages += 1
+    if (entry.type === 'message' && entry.message?.role === 'assistant') assistantMessages += 1
+  }
+  if (userMessages !== 1 || assistantMessages < 1) conflict()
+
+  const head = run.at(-1)!.id
+  const beforeIds = new Set(before.map((entry) => entry.id))
+  const reportedNew = input.post.entries.filter((entry) => !beforeIds.has(entry.id))
+  if (
+    input.post.leafId !== head ||
+    reportedNew.length !== run.length ||
+    reportedNew.some((entry, index) => entry.id !== run[index]!.id)
+  ) {
+    conflict()
+  }
+  return head
 }

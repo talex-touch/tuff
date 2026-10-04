@@ -552,6 +552,9 @@ function getShortcutSourceLabel(shortcut: ShortcutWithStatus): string {
   return t('settingTools.shortcutsDialog.sourceUnknown')
 }
 
+/** ⌘⇧L: main registers its callback only while the local agent master switch is on. */
+const LOCAL_AI_CLI_QUICK_OPEN_SHORTCUT_ID = 'local-ai-cli.quick-open'
+
 function getShortcutStatusText(shortcut: ShortcutWithStatus): string | null {
   if (shortcut.meta?.enabled === false || shortcut.status?.state === 'disabled') {
     return t('settingTools.shortcutsDialog.statusDisabled')
@@ -575,6 +578,13 @@ function getShortcutStatusText(shortcut: ShortcutWithStatus): string | null {
   }
   if (status.reason === 'invalid') {
     return t('settingTools.shortcutStatus.invalid')
+  }
+  // The record outlives its owner's callback: nothing asked the system for the key, so this is not
+  // a registration failure.
+  if (status.reason === 'runtime-missing') {
+    return shortcut.id === LOCAL_AI_CLI_QUICK_OPEN_SHORTCUT_ID
+      ? t('settingTools.shortcutStatus.localAiCliOff')
+      : t('settingTools.shortcutStatus.runtimeMissing')
   }
   return t('settingTools.shortcutStatus.unavailable')
 }

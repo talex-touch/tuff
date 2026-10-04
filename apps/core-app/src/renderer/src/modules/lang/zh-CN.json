@@ -514,6 +514,8 @@
       "conflictPlugin": "与插件快捷键冲突",
       "unavailable": "快捷键注册失败，可能被系统占用",
       "invalid": "快捷键无效",
+      "localAiCliOff": "打开『本机 AI 代理』后生效",
+      "runtimeMissing": "所属功能或插件未运行",
       "omniPanelAccessibilityRequired": "需要辅助功能权限",
       "omniPanelAccessibilityHint": "macOS 需先授予辅助功能权限，右键长按触发才会生效。",
       "spotlightHint": "可在系统设置中关闭 Spotlight 快捷键以释放该组合键"
@@ -2535,6 +2537,7 @@
         "behaviourBox": "按下后打开搜索框并进入该功能",
         "behaviourView": "按下后打开搜索框并载入该功能的界面",
         "conflict": "该组合键已被占用：{with}",
+        "runtimeMissing": "所属功能或插件未运行",
         "invalid": "该组合键不可用，请换一个",
         "saveFailed": "保存失败，请重试"
       },
@@ -2648,7 +2651,7 @@
         "autoDetect": "自动识别",
         "sourceHint": "支持 GitHub 仓库 / release、NPM 包、.tpex 包或本地压缩包路径。",
         "metadataBlockTitle": "附加元数据（可选）",
-        "metadataPlaceholder": "{ \"tag\": \"v1.0.0\" }",
+        "metadataPlaceholder": "{'{'} \"tag\": \"v1.0.0\" {'}'}",
         "metadataHint": "用于指定 tag / branch 等额外信息，留空则自动处理。",
         "actionBlockTitle": "执行",
         "sourceTypeResult": "来源类型"
@@ -6200,7 +6203,7 @@
       "inputJson": "步骤输入（JSON）",
       "toolId": "Tool ID",
       "toolSource": "Tool Source",
-      "inputPlaceholder": "{\"query\":\"请描述任务\"}",
+      "inputPlaceholder": "{'{'}\"query\":\"请描述任务\"{'}'}",
       "resultTitle": "执行结果",
       "resultDescription": "展示整体状态、步骤输出与错误信息。",
       "statusLabel": "工作流状态",

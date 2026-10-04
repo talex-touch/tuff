@@ -957,7 +957,7 @@ class TouchChannel {
   }
 
   /**
-   * Broadcast a message without waiting for a response.
+   * Send a message to the main window without waiting for a response; no other window gets it.
    * Use for notification-style messages that don't need acknowledgment.
    * @deprecated Use `TuffMainTransport.broadcast()` instead.
    * This method will be removed in a future version.

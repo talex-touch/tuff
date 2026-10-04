@@ -30,7 +30,15 @@ const LOOKUP = {
   envOverride: 'TUFF_PROBE_CLI_PATH'
 } as const
 
-const ENV_KEYS = ['PATH', 'HOME', 'USERPROFILE', LOOKUP.envOverride, 'TUFF_PI_CLI_PATH'] as const
+const ENV_KEYS = [
+  'PATH',
+  'HOME',
+  'USERPROFILE',
+  'FNM_DIR',
+  'XDG_DATA_HOME',
+  LOOKUP.envOverride,
+  'TUFF_PI_CLI_PATH'
+] as const
 
 let workDir: string
 let binDir: string
@@ -52,6 +60,8 @@ beforeEach(async () => {
   process.env.PATH = binDir
   process.env.HOME = workDir
   process.env.USERPROFILE = workDir
+  delete process.env.FNM_DIR
+  delete process.env.XDG_DATA_HOME
   delete process.env[LOOKUP.envOverride]
   delete process.env.TUFF_PI_CLI_PATH
   resetCliExecutableCache()
@@ -128,6 +138,37 @@ describe('resolveCliExecutable', () => {
 
     await expect(resolveCliExecutable(LOOKUP)).resolves.toMatchObject({ path: newest })
   })
+
+  it.each([
+    { root: '$FNM_DIR', env: { FNM_DIR: 'custom-fnm' }, dir: ['custom-fnm'] },
+    { root: 'the legacy ~/.fnm', dir: ['.fnm'] },
+    {
+      root: "macOS's Application Support",
+      dir: ['Library', 'Application Support', 'fnm'],
+      platform: 'darwin'
+    },
+    { root: '$XDG_DATA_HOME', env: { XDG_DATA_HOME: 'xdg-data' }, dir: ['xdg-data', 'fnm'] },
+    { root: '~/.local/share', dir: ['.local', 'share', 'fnm'] }
+  ])(
+    "finds fnm's install under $root, in installation/bin, newest first",
+    async ({ env, dir, platform }) => {
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+      if (platform) Object.defineProperty(process, 'platform', { value: platform })
+      for (const [key, value] of Object.entries(env ?? {})) process.env[key] = join(workDir, value)
+      try {
+        const versions = join(workDir, ...dir, 'node-versions')
+        await writeExecutable(join(versions, 'v22.9.0', 'installation', 'bin'), LOOKUP.command)
+        const newest = await writeExecutable(
+          join(versions, 'v22.10.0', 'installation', 'bin'),
+          LOOKUP.command
+        )
+
+        await expect(resolveCliExecutable(LOOKUP)).resolves.toMatchObject({ path: newest })
+      } finally {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  )
 
   it('reports absence as null when neither name exists', async () => {
     await expect(resolveCliExecutable(LOOKUP)).resolves.toBeNull()

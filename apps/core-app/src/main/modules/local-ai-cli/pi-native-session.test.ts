@@ -23,7 +23,8 @@ import {
   capturePiSessionFile,
   parsePiEntriesResponse,
   parsePiStateResponse,
-  verifyPiSessionAppend
+  verifyPiSessionAppend,
+  verifyPiSessionFirstWrite
 } from './pi-native-session'
 
 const SESSION_ID = 'pi-native-1'
@@ -306,5 +307,65 @@ describe('verifyPiSessionAppend', () => {
     await rename(replacement, sessionFile)
 
     await expect(verifyAppend(capture, validPost)).rejects.toThrow('NATIVE_SESSION_CONFLICT')
+  })
+})
+
+/**
+ * A new session as pi 0.84.3 runs it: the model and thinking-level entries exist in memory before
+ * the prompt, and the file appears, whole, with the first assistant reply.
+ */
+describe('verifyPiSessionFirstWrite', () => {
+  const model: PiEntry = { type: 'model_change', id: 'm1', parentId: null }
+  const thinking: PiEntry = { type: 'thinking_level_change', id: 't1', parentId: 'm1' }
+  const user = messageEntry('u1', 't1', 'user', 'only reply OK')
+  const assistant = messageEntry('a1', 'u1', 'assistant', 'OK')
+  const before: PiEntriesSnapshot = { entries: [model, thinking], leafId: 't1' }
+  const post: PiEntriesSnapshot = { entries: [user, assistant], leafId: 'a1' }
+
+  function verifyFirstWrite(snapshot: PiEntriesSnapshot = post): Promise<string> {
+    return verifyPiSessionFirstWrite({
+      sessionFile,
+      nativeSessionId: SESSION_ID,
+      projectRoot: root,
+      before,
+      post: snapshot
+    })
+  }
+
+  it('accepts the file pi wrote with the first reply, from its header on', async () => {
+    await writeSession([model, thinking, user, assistant])
+
+    await expect(verifyFirstWrite()).resolves.toBe('a1')
+  })
+
+  it.each([
+    { name: 'a file pi never wrote', entries: null },
+    {
+      name: 'a header naming another session',
+      entries: [model, thinking, user, assistant],
+      overrides: { sessionId: 'someone-else' }
+    },
+    {
+      name: 'a header from another workspace',
+      entries: [model, thinking, user, assistant],
+      overrides: { cwd: tmpdir() }
+    },
+    {
+      name: 'entries other than the ones reported before the prompt',
+      entries: [{ ...model, id: 'm9' }, { ...thinking, parentId: 'm9' }, user, assistant]
+    },
+    {
+      name: 'a second branch off the captured head',
+      entries: [model, thinking, user, assistant, messageEntry('u2', 't1', 'user', 'again')]
+    },
+    {
+      name: 'a head get_entries does not report',
+      entries: [model, thinking, user, assistant],
+      post: { entries: [user], leafId: 'u1' } satisfies PiEntriesSnapshot
+    }
+  ])('rejects $name', async ({ entries, overrides, post: snapshot }) => {
+    if (entries) await writeSession(entries, overrides)
+
+    await expect(verifyFirstWrite(snapshot)).rejects.toThrow('NATIVE_SESSION_CONFLICT')
   })
 })

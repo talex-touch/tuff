@@ -538,6 +538,28 @@ export async function findPiNativeSessionFile(
   return matches[0] ?? null
 }
 
+/**
+ * Whether pi's session root still holds a file named for this session, whatever its header says.
+ *
+ * pi looks a `--session` up by the id in each file's header, so when it reports the session not
+ * found while a file under that name is still there, the file was edited or replaced rather than
+ * lost — a conflict, where no file at all is a missing session.
+ */
+export async function hasPiSessionFileNamedFor(
+  nativeSessionId: string,
+  sessionRoot = resolveNativeSessionDiscoveryRoots().pi,
+  signal?: AbortSignal
+): Promise<boolean> {
+  if (!/^[A-Za-z0-9-]{1,128}$/u.test(nativeSessionId)) {
+    throw new Error('LOCAL_AI_CLI_SESSION_INVALID')
+  }
+  assertActive(signal)
+  const canonicalRoot = await canonicalDirectory(sessionRoot)
+  if (!canonicalRoot) return false
+  const collection = await collectJsonlFiles(canonicalRoot, 1, signal, nativeSessionId)
+  return collection.files.length > 0
+}
+
 export async function scanNativeSessionsForProject(
   projectRoot: string,
   options: {

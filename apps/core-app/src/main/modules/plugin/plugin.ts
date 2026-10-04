@@ -131,6 +131,7 @@ import { app } from 'electron'
 import fse from 'fs-extra'
 import {
   PluginLogAppendEvent,
+  PluginStatusChangedEvent,
   PluginStorageUpdatedEvent,
   TalexEvents,
   touchEventBus
@@ -544,6 +545,7 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   set status(v: PluginStatus) {
+    const previous = this._status
     this._status = v
 
     if (this.transport) {
@@ -551,6 +553,13 @@ export class TouchPlugin implements ITouchPlugin {
         plugin: this.name,
         status: this._status
       })
+    }
+    // For main-process modules that follow a plugin's state, such as its global shortcuts.
+    if (previous !== v) {
+      touchEventBus.emit(
+        TalexEvents.PLUGIN_STATUS_CHANGED,
+        new PluginStatusChangedEvent(this.name, v, previous)
+      )
     }
   }
 

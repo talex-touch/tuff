@@ -22,6 +22,7 @@ import type {
   OmniPanelFeatureItemPayload,
   OmniPanelFeatureListResponse,
   OmniPanelFeatureRefreshPayload,
+  OmniPanelFeatureRefreshReason,
   OmniPanelFeatureReorderRequest,
   OmniPanelFeatureSource,
   OmniPanelFeatureUnavailableReason,
@@ -945,6 +946,14 @@ export class OmniPanelModule extends BaseModule {
     targetWindow.window.focus()
   }
 
+  /**
+   * Has an open panel read its actions again after a change outside the feature registry: the
+   * local agent master switch, which decides the 「交给本机代理」 action the panel adds itself.
+   */
+  requestFeatureRefresh(reason: Extract<OmniPanelFeatureRefreshReason, 'local-ai-cli'>): void {
+    this.notifyFeatureRefresh(reason)
+  }
+
   private async show(options?: OmniPanelShowRequest): Promise<void> {
     const targetWindow = await this.ensureWindow()
     const normalizedSource = normalizeContextSource(options?.source)
@@ -1565,10 +1574,13 @@ export class OmniPanelModule extends BaseModule {
 
   private notifyFeatureRefresh(reason: OmniPanelFeatureRefreshPayload['reason']): void {
     if (!this.transport) return
-    this.transport.broadcast(omniPanelFeatureRefreshEvent, {
-      reason,
-      updatedAt: this.registryUpdatedAt
-    })
+    const payload: OmniPanelFeatureRefreshPayload = { reason, updatedAt: this.registryUpdatedAt }
+    this.transport.broadcast(omniPanelFeatureRefreshEvent, payload)
+    // `broadcast` reaches the main window only, and the panel is a window of its own.
+    const panel = this.panelWindow?.window
+    if (panel && !panel.isDestroyed()) {
+      this.transport.broadcastToWindow(panel.id, omniPanelFeatureRefreshEvent, payload)
+    }
   }
 
   private getPluginInstance(pluginName: string | undefined): ITouchPlugin | undefined {

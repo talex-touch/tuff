@@ -1,7 +1,7 @@
 import { constants } from 'node:fs'
 import { access, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, delimiter, dirname, join } from 'node:path'
+import { basename, delimiter, dirname, isAbsolute, join } from 'node:path'
 
 /**
  * Executable discovery for the local AI CLIs (`pi`, `omp`, `codex`, `claude`). The chat providers
@@ -58,18 +58,47 @@ export interface ResolvedCliExecutable {
   settingsOverrideRejected?: true
 }
 
+/** A directory of per-version installs, and where a version keeps its binaries. */
+interface VersionManagerRoot {
+  root: string
+  /** From a version directory to its binaries: `bin`, or fnm's `installation/bin`. */
+  bin: string
+}
+
 /**
  * Version-manager roots that install CLIs outside any PATH entry Electron inherits. A GUI launch
  * on macOS gets `/usr/bin:/bin:/usr/sbin:/sbin` from launchd — none of these are in it, so
  * searching PATH alone finds nothing even when the CLI is installed and works in the user's
  * terminal.
  */
-function versionManagerRoots(home: string): string[] {
+function versionManagerRoots(home: string): VersionManagerRoot[] {
   return [
-    join(home, '.local', 'share', 'mise', 'installs', 'node'),
-    join(home, '.volta', 'tools', 'image', 'node'),
-    join(home, '.nvm', 'versions', 'node'),
-    join(home, '.fnm', 'node-versions')
+    { root: join(home, '.local', 'share', 'mise', 'installs', 'node'), bin: 'bin' },
+    { root: join(home, '.volta', 'tools', 'image', 'node'), bin: 'bin' },
+    { root: join(home, '.nvm', 'versions', 'node'), bin: 'bin' },
+    ...fnmDirectories(home).map((directory) => ({
+      root: join(directory, 'node-versions'),
+      bin: join('installation', 'bin')
+    }))
+  ]
+}
+
+/**
+ * Where fnm may keep its installs (`<dir>/node-versions/v<x.y.z>/installation/bin`): `$FNM_DIR`
+ * when it is an absolute path, the legacy `~/.fnm`, the `Application Support` directory on macOS,
+ * then the XDG data directory — the default of current releases on macOS as well as Linux. Only
+ * those that exist are read, so naming every one costs a machine without fnm nothing.
+ */
+function fnmDirectories(home: string): string[] {
+  const fnmDir = process.env.FNM_DIR?.trim()
+  const xdgDataHome = process.env.XDG_DATA_HOME?.trim()
+  return [
+    ...(fnmDir && isAbsolute(fnmDir) ? [fnmDir] : []),
+    join(home, '.fnm'),
+    ...(process.platform === 'darwin' ? [join(home, 'Library', 'Application Support', 'fnm')] : []),
+    xdgDataHome && isAbsolute(xdgDataHome)
+      ? join(xdgDataHome, 'fnm')
+      : join(home, '.local', 'share', 'fnm')
   ]
 }
 
@@ -143,12 +172,12 @@ function compareVersionsDescending(left: number[], right: number[]): number {
 }
 
 /**
- * Version managers nest binaries one level down (`installs/node/<version>/bin`). The versions are
- * read newest-first, by number — `24.18.0` before `24.9.0`, which a string sort gets backwards — so
- * a machine with several Node installs resolves to the newest one rather than an abandoned old
- * install that may not have the CLI at all.
+ * Version managers nest binaries below a version directory (`installs/node/<version>/bin`). The
+ * versions are read newest-first, by number — `24.18.0` before `24.9.0`, which a string sort gets
+ * backwards — so a machine with several Node installs resolves to the newest one rather than an
+ * abandoned old install that may not have the CLI at all.
  */
-async function expandVersionedBinDirs(root: string): Promise<string[]> {
+async function expandVersionedBinDirs({ root, bin }: VersionManagerRoot): Promise<string[]> {
   try {
     const entries = await readdir(root, { withFileTypes: true })
     return entries
@@ -158,7 +187,7 @@ async function expandVersionedBinDirs(root: string): Promise<string[]> {
         return version ? [{ name: entry.name, version }] : []
       })
       .sort((left, right) => compareVersionsDescending(left.version, right.version))
-      .map((entry) => join(root, entry.name, 'bin'))
+      .map((entry) => join(root, entry.name, bin))
   } catch {
     return []
   }

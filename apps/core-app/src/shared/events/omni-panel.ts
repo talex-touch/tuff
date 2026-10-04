@@ -145,6 +145,8 @@ export type OmniPanelFeatureRefreshReason =
   | 'execute'
   | 'context-updated'
   | 'sync'
+  /** The local agent master switch flipped: it decides whether the panel offers 「交给本机代理」. */
+  | 'local-ai-cli'
 
 export interface OmniPanelFeatureRefreshPayload {
   reason: OmniPanelFeatureRefreshReason
