@@ -7,6 +7,12 @@ import type { TouchApp } from '../../../core/touch-app'
 import type { TouchPlugin } from '../../plugin/plugin'
 import type { ExistingUIViewReleaseResult } from '../../division-box/session'
 import type { CoreBoxKeyEvent } from './key-event'
+import type {
+  CoreBoxFocusFailurePayload,
+  CoreBoxFocusNativeSnapshot,
+  CoreBoxFocusProbeResponse
+} from '@talex-touch/utils/core-box/focus-diagnostics'
+import type { SentryServiceModule } from '../../sentry/sentry-service'
 import path from 'node:path'
 import process from 'node:process'
 import { DivisionBoxErrorCode, sleep, StorageList } from '@talex-touch/utils'
@@ -32,6 +38,7 @@ import { getMainConfig, subscribeMainConfig } from '../../storage'
 import { captureForegroundAppSnapshot } from '../../system/foreground-app-snapshot'
 import { WindowBoundsController } from './bounds-controller'
 import { CoreBoxFocusPolicy } from './focus-policy'
+import { CoreBoxFocusDiagnostics } from './focus-diagnostics'
 import { isBlockedCoreBoxFunctionKey } from './key-event'
 import { coreBoxManager } from './manager'
 import { metaOverlayManager } from './meta-overlay'
@@ -84,6 +91,120 @@ export class WindowManager {
   private readonly focusPolicy = new CoreBoxFocusPolicy()
   private appSettingUnsubscribe: (() => void) | null = null
   private creationPromise: Promise<TouchWindow> | null = null
+  private focusTelemetry: Promise<SentryServiceModule> | null = null
+  private focusWindow: TouchWindow | null = null
+  private readonly focusDiagnostics = new CoreBoxFocusDiagnostics({
+    readNative: () => this.readFocusSnapshot(),
+    dispatchProbe: (request) => {
+      const window = this.focusWindow?.window
+      if (!window || window.isDestroyed()) throw new Error('COREBOX_FOCUS_WINDOW_MISSING')
+      this.getTransport().broadcastToWindow(window.id, CoreBoxEvents.ui.focusProbe, request)
+    },
+    emit: (record) => {
+      coreBoxWindowLog[record.severity === 'error' ? 'error' : 'info']('CoreBox focus diagnostic', {
+        meta: { ...record }
+      })
+      this.focusTelemetry ??= import('../../sentry/sentry-service').then(({ getSentryService }) =>
+        getSentryService()
+      )
+      void this.focusTelemetry
+        .then((service) => service.recordCoreBoxFocus(record))
+        .catch(() =>
+          coreBoxWindowLog.error('CoreBox focus telemetry unavailable', {
+            meta: {
+              code: 'COREBOX_FOCUS_TELEMETRY_FAILED',
+              summonId: record.summonId,
+              sampleIndex: record.sampleIndex
+            }
+          })
+        )
+    }
+  })
+
+  private readFocusSnapshot(): CoreBoxFocusNativeSnapshot {
+    const currentWindow = this.focusWindow?.window
+    const window = currentWindow && !currentWindow.isDestroyed() ? currentWindow : undefined
+    const plugin = this.pluginViewController.getFocusSnapshot()
+    const meta = metaOverlayManager.getFocusSnapshot()
+    return {
+      windowId: window?.id,
+      windowAlive: window !== undefined,
+      visible: window?.isVisible() === true,
+      windowFocused: window?.isFocused() === true,
+      webContentsFocused:
+        window !== undefined && !window.webContents.isDestroyed() && window.webContents.isFocused(),
+      pluginActive: coreBoxManager.isUIMode && plugin.active,
+      pluginFocused: plugin.focused,
+      metaVisible: meta.visible,
+      metaFocused: meta.focused
+    }
+  }
+
+  public get focusSummonId(): string | undefined {
+    return this.focusDiagnostics.summonId
+  }
+
+  public async stopFocusDiagnosticsForShutdown(): Promise<void> {
+    this.focusDiagnostics.cancel('shutdown')
+    // Cancellation records use the lazy telemetry sink; let them reach it before draining.
+    const telemetry = await this.focusTelemetry
+    await telemetry?.flushCoreBoxFocusOnShutdown()
+  }
+
+  public receiveFocusProbe(payload: CoreBoxFocusProbeResponse, senderId: number): void {
+    if (this.focusWindow?.window.webContents.id !== senderId) return
+    this.focusDiagnostics.receiveProbe(payload)
+  }
+
+  public recordRendererFocusFailure(payload: CoreBoxFocusFailurePayload, senderId: number): void {
+    if (this.focusWindow?.window.webContents.id !== senderId) return
+    if (
+      !payload ||
+      typeof payload.summonId !== 'string' ||
+      !this.focusDiagnostics.isCurrent(payload.summonId)
+    )
+      return
+    if (
+      payload?.code !== 'COREBOX_FOCUS_REQUEST_FAILED' &&
+      payload?.code !== 'COREBOX_FOCUS_INPUT_REQUEST_FAILED'
+    )
+      return
+    if (
+      typeof payload.documentFocused !== 'boolean' ||
+      typeof payload.inputPresent !== 'boolean' ||
+      typeof payload.inputFocused !== 'boolean'
+    ) {
+      this.focusDiagnostics.record(
+        'renderer-focus',
+        'COREBOX_FOCUS_RENDERER_INVALID_REPLY',
+        true,
+        payload.summonId
+      )
+      return
+    }
+    this.focusDiagnostics.record('renderer-focus', payload.code, true, payload.summonId, {
+      documentFocused: payload.documentFocused,
+      inputPresent: payload.inputPresent,
+      inputFocused: payload.inputFocused,
+      summonId: payload.summonId
+    })
+  }
+
+  public focusFromRenderer(): boolean {
+    const window = this.current?.window
+    if (!window || window.isDestroyed()) {
+      this.focusDiagnostics.record('native-focus', 'COREBOX_FOCUS_WINDOW_MISSING', true)
+      return false
+    }
+    try {
+      window.focus()
+      this.focusDiagnostics.record('native-focus', 'COREBOX_FOCUS_REQUESTED')
+      return window.isFocused()
+    } catch (error) {
+      this.focusDiagnostics.record('native-focus', 'COREBOX_FOCUS_FOCUS_FROM_RENDERER_FAILED', true)
+      throw error
+    }
+  }
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -118,6 +239,10 @@ export class WindowManager {
         ) {
           return
         }
+      }
+
+      if (this.focusDiagnostics.monitoring) {
+        this.focusDiagnostics.record('window-blur', 'COREBOX_FOCUS_UNEXPECTED_HIDE', true)
       }
 
       coreBoxManager.trigger(false)
@@ -238,12 +363,16 @@ export class WindowManager {
       // state again after the page finishes loading so hidden CoreBox work is suspended.
       this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
         id: window.window.webContents.id,
-        show: wasVisibleBeforeReload || window.window.isVisible()
+        show: wasVisibleBeforeReload || window.window.isVisible(),
+        summonId: this.focusWindow === window ? this.focusSummonId : undefined
       })
       wasVisibleBeforeReload = false
     })
 
     window.window.addListener('closed', () => {
+      if (this.focusWindow === window && this.focusDiagnostics.monitoring) {
+        this.focusDiagnostics.record('cancel', 'COREBOX_FOCUS_DESTROYED', true)
+      }
       this.windows = this.windows.filter((w) => w !== window)
       metaOverlayManager.destroy()
       coreBoxWindowLog.debug('BoxWindow closed')
@@ -254,15 +383,22 @@ export class WindowManager {
     })
 
     window.window.on('hide', () => {
+      if (this.focusWindow === window && this.focusDiagnostics.monitoring) {
+        this.focusDiagnostics.record('window-blur', 'COREBOX_FOCUS_UNEXPECTED_HIDE', true)
+      }
       this.focusPolicy.clearPendingBlurHide()
       coreBoxManager.syncVisibility(false)
     })
 
     window.window.on('focus', () => {
+      if (this.focusWindow === window)
+        this.focusDiagnostics.record('window-focus', 'COREBOX_FOCUS_OK')
       this.focusPolicy.clearPendingBlurHide()
     })
 
     window.window.on('blur', async () => {
+      if (this.focusWindow === window)
+        this.focusDiagnostics.record('window-blur', 'COREBOX_FOCUS_WINDOW_NOT_FOCUSED')
       if (this.isPinned()) {
         return
       }
@@ -339,19 +475,43 @@ export class WindowManager {
    * Show CoreBox window
    * @param triggeredByShortcut - Whether this show was triggered by keyboard shortcut
    */
-  public show(triggeredByShortcut: boolean = false): void {
+  public show(triggeredByShortcut: boolean = false, existingSummonId?: string): void {
+    const summonId =
+      existingSummonId ??
+      this.focusDiagnostics.start(triggeredByShortcut ? 'shortcut' : 'programmatic')
+    if (!existingSummonId) this.focusWindow = null
+    if (!this.focusDiagnostics.isCurrent(summonId)) return
+    const createFailed = (error: unknown) => {
+      if (!this.focusDiagnostics.isCurrent(summonId)) return
+      this.focusDiagnostics.record('show', 'COREBOX_FOCUS_CREATE_FAILED', true, summonId)
+      this.focusDiagnostics.cancel('create-failed')
+      coreBoxWindowLog.error('Failed to create CoreBox for show', { error })
+    }
     if (this.creationPromise) {
       void this.creationPromise
-        .then(() => this.show(triggeredByShortcut))
-        .catch((error) => coreBoxWindowLog.error('Failed to create CoreBox for show', { error }))
+        .then(() => this.show(triggeredByShortcut, summonId))
+        .catch(createFailed)
       return
     }
     const window = this.current
     if (!window || window.window.isDestroyed()) {
       void this.ensureCreated()
-        .then(() => this.show(triggeredByShortcut))
-        .catch((error) => coreBoxWindowLog.error('Failed to create CoreBox for show', { error }))
+        .then(() => this.show(triggeredByShortcut, summonId))
+        .catch(createFailed)
       return
+    }
+    this.focusWindow = window
+    try {
+      this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.focusSession, {
+        summonId
+      })
+    } catch {
+      this.focusDiagnostics.record(
+        'renderer-focus',
+        'COREBOX_FOCUS_RENDERER_INVALID_REPLY',
+        true,
+        summonId
+      )
     }
     // Before anything below takes focus: the recommendation context wants the
     // app the user was in, and every later query answers "Touch".
@@ -372,9 +532,14 @@ export class WindowManager {
     // have no non-activating equivalent and still need the app-level focus to receive input.
     if (triggeredByShortcut && process.platform !== 'darwin') {
       try {
-        app.focus({ steal: true })
-      } catch {
-        app.focus()
+        try {
+          app.focus({ steal: true })
+        } catch {
+          app.focus()
+        }
+      } catch (error) {
+        this.focusDiagnostics.record('native-focus', 'COREBOX_FOCUS_REQUEST_FAILED', true, summonId)
+        throw error
       }
     }
 
@@ -388,21 +553,38 @@ export class WindowManager {
       )
     }
 
-    if (process.platform === 'darwin') this.applyMacPanelBehaviour(window)
-
-    if (shouldFocus) {
-      window.window.show()
-      if (triggeredByShortcut) {
-        ;(window.window as { moveTop?: () => void }).moveTop?.()
-        window.window.focus()
+    try {
+      if (process.platform === 'darwin') this.applyMacPanelBehaviour(window)
+      if (shouldFocus) {
+        window.window.show()
+        if (triggeredByShortcut) {
+          window.window.moveTop()
+          try {
+            window.window.focus()
+            this.focusDiagnostics.record('native-focus', 'COREBOX_FOCUS_REQUESTED', false, summonId)
+          } catch (error) {
+            this.focusDiagnostics.record(
+              'native-focus',
+              'COREBOX_FOCUS_REQUEST_FAILED',
+              true,
+              summonId
+            )
+            throw error
+          }
+        }
+      } else {
+        window.window.showInactive()
       }
-    } else {
-      window.window.showInactive()
+    } catch (error) {
+      this.focusDiagnostics.record('show', 'COREBOX_FOCUS_SHOW_FAILED', true, summonId)
+      this.focusDiagnostics.cancel('show-failed')
+      throw error
     }
-
+    this.focusDiagnostics.shown(summonId)
     this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
       id: window.window.webContents.id,
-      show: true
+      show: true,
+      summonId
     })
     touchEventBus.emit(TalexEvents.COREBOX_WINDOW_SHOWN, new CoreBoxWindowShownEvent())
 
@@ -420,9 +602,15 @@ export class WindowManager {
     }
     setTimeout(() => {
       if (window.window.isDestroyed()) return
-      window.window.focus()
-      if (coreBoxManager.isUIMode) {
-        this.pluginViewController.focusView()
+      try {
+        window.window.focus()
+        this.focusDiagnostics.record('native-focus', 'COREBOX_FOCUS_REQUESTED', false, summonId)
+        if (coreBoxManager.isUIMode) {
+          this.pluginViewController.focusView()
+        }
+      } catch (error) {
+        this.focusDiagnostics.record('native-focus', 'COREBOX_FOCUS_REQUEST_FAILED', true, summonId)
+        throw error
       }
     }, 100)
   }
@@ -435,6 +623,7 @@ export class WindowManager {
    * Hiding the application here would instead un-hide every Tuff window on the next activation.
    */
   public hide(options: { immediate?: boolean } = {}): void {
+    this.focusDiagnostics.cancel('hidden')
     const window = this.current
     if (!window) return
     if (window.window.isDestroyed()) return
@@ -748,6 +937,7 @@ export class WindowManager {
   }
 
   public destroy(): void {
+    this.focusDiagnostics.cancel('shutdown')
     metaOverlayManager.destroy()
     for (const window of this.windows) {
       if (!window.window.isDestroyed()) window.window.destroy()

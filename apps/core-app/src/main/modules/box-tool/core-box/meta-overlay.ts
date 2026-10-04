@@ -86,6 +86,14 @@ export class MetaOverlayManager {
     return useAliveWebContents(this.metaView)
   }
 
+  public getFocusSnapshot(): { visible: boolean; focused: boolean } {
+    const contents = this.getAliveMetaWebContents()
+    return {
+      visible: this.isVisible && contents !== null,
+      focused: this.isVisible && contents?.isFocused() === true
+    }
+  }
+
   private getAliveParentWindow(): BrowserWindow | null {
     return useAliveTarget(this.parentWindow)
   }

@@ -6,6 +6,8 @@
 
 import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { TelemetryUploadStatsRecord } from './telemetry-upload-stats-store'
+import type { CoreBoxFocusTelemetryRecord } from '@talex-touch/utils/core-box/focus-diagnostics'
+import { sanitizeCoreBoxFocusRecord } from '@talex-touch/utils/core-box/focus-telemetry'
 import fs, { type Dir } from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -1320,6 +1322,37 @@ export class SentryServiceModule extends BaseModule {
       Sentry.captureMessage(message)
     })
   }
+  recordCoreBoxFocus(record: CoreBoxFocusTelemetryRecord): void {
+    if (!this.isTelemetryEnabled()) return
+    const focus = sanitizeCoreBoxFocusRecord(record)
+    if (!focus) {
+      sentryLog.warn('Dropped invalid CoreBox focus diagnostic', {
+        meta: { code: 'COREBOX_FOCUS_INVALID_RECORD' }
+      })
+      return
+    }
+    const metadata = { ...focus }
+    if (this.isInitialized) {
+      Sentry.withScope((scope) => {
+        scope.setLevel(focus.severity)
+        scope.setTag('diagnostic.type', 'corebox-focus')
+        scope.setTag('diagnostic.stage', focus.stage)
+        scope.setTag('diagnostic.code', focus.code)
+        scope.setFingerprint(['corebox-focus', focus.stage, focus.code])
+        scope.setContext('corebox_focus', metadata)
+        scope.setContext('environment', getEnvironmentContext())
+        Sentry.captureMessage('CoreBox focus diagnostic', focus.severity)
+      })
+    }
+    this.queueNexusTelemetry({
+      eventType: focus.severity === 'error' ? 'error' : 'performance',
+      clientId: this.clientId ?? undefined,
+      userId: this.currentUserId ?? undefined,
+      platform: process.platform,
+      version: getAppVersionSafe(),
+      metadata
+    })
+  }
 
   getNativeCrashDeliveryStatus(): NativeCrashDeliveryStatus {
     return { ...this.nativeCrashDelivery }
@@ -1666,6 +1699,14 @@ export class SentryServiceModule extends BaseModule {
     }
 
     return true
+  }
+
+  async flushCoreBoxFocusOnShutdown(): Promise<void> {
+    if (!this.config.enabled) return
+    await Promise.all([
+      Sentry.flush(2_000),
+      this.flushNexusTelemetry().then(() => this.flushQueuedNexusTelemetryOutbox())
+    ])
   }
 
   /**
