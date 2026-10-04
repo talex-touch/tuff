@@ -362,6 +362,18 @@ describe('AdminStatGrid, AdminSection and AdminPageShell', () => {
     expect(loaded.html.match(/class="tx-stat-card fake-background/g)).toHaveLength(3)
   })
 
+  it('gives a card the tooltip its item carries, and no other card one', async () => {
+    const { html } = await render('AdminStatGrid', {
+      items: [
+        { key: 'requests', label: 'Requests', value: '12' },
+        { key: 'lastSeen', label: 'Last seen', value: '2026-10-03 06:21', title: 'Oct 3, 2026, 6:21:09 AM' },
+      ],
+    })
+    const titled = [...html.matchAll(/<div[^>]*\stitle="([^"]*)"[^>]*>/g)]
+    expect(titled.map(match => match[1])).toEqual(['Oct 3, 2026, 6:21:09 AM'])
+    expect(titled[0]![0]).toContain('tx-stat-card')
+  })
+
   it('titles a section with an h2 that names the block', async () => {
     const { html } = await render('AdminSection', { title: 'Retention', description: 'Rows older than 90 days.' }, {
       default: () => 'body',

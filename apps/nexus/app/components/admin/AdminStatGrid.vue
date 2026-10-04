@@ -49,6 +49,7 @@ const placeholderCount = computed(() => props.items.length || Math.max(1, Math.f
         :key="item.key"
         :label="item.label"
         :value="item.value"
+        :title="item.title"
         :meta="item.meta"
         :icon-class="item.iconClass"
         :insight="item.insight"

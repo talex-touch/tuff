@@ -50,6 +50,9 @@ const ADMIN_SURFACE = [
   'composables/useAdminUserDrawer.ts',
   'utils/admin-users.ts',
   'utils/admin-codes.ts',
+  // AI overview and AI call audits: the metric, ranked-list, metadata and
+  // provider-type labels the two pages build outside their .vue files.
+  'utils/admin-intelligence.ts',
 ]
 
 function sourceFiles(target: string, found: string[] = []): string[] {
