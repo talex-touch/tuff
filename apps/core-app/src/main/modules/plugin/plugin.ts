@@ -131,7 +131,6 @@ import { app } from 'electron'
 import fse from 'fs-extra'
 import {
   PluginLogAppendEvent,
-  PluginStatusChangedEvent,
   PluginStorageUpdatedEvent,
   TalexEvents,
   touchEventBus
@@ -171,6 +170,7 @@ import {
   createSafePluginOpenUrl,
   withPluginSdkapiPayload
 } from './plugin-safe-api'
+import { announcePluginStatus } from './plugin-status-notice'
 import * as privileges from '../../../shared/privileged-plugins'
 import {
   bundlePluginPreludeFromContent,
@@ -547,20 +547,7 @@ export class TouchPlugin implements ITouchPlugin {
   set status(v: PluginStatus) {
     const previous = this._status
     this._status = v
-
-    if (this.transport) {
-      this.transport.broadcast(PluginEvents.push.statusUpdated, {
-        plugin: this.name,
-        status: this._status
-      })
-    }
-    // For main-process modules that follow a plugin's state, such as its global shortcuts.
-    if (previous !== v) {
-      touchEventBus.emit(
-        TalexEvents.PLUGIN_STATUS_CHANGED,
-        new PluginStatusChangedEvent(this.name, v, previous)
-      )
-    }
+    announcePluginStatus(this.transport, this.name, v, previous)
   }
 
   setLoadState(nextState: PluginLoadState, loadError?: PluginLoadError): void {
