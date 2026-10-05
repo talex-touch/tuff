@@ -224,6 +224,11 @@ export function useHomeConversation(
     }
     // The surface marker rides every turn, pinned model or not: it is what tells main this is a
     // user conversation rather than a capability test running on the same `text.chat` id.
+    //
+    // Deliberately no `caller`: main counts these turns as `core.home.conversation` from the
+    // surface marker (`resolveUsageCaller` in `intelligence-sdk.ts`). A Home-surface request that
+    // names a caller is refused by the Pi native-session guard (`resolveHomeSessionContext` in
+    // `providers/pi-cli-provider.ts`), which is how a plugin is kept from impersonating Home.
     return {
       ...(routing?.providerId ? { preferredProviderId: routing.providerId } : {}),
       ...(routing?.model ? { modelPreference: [routing.model] } : {}),

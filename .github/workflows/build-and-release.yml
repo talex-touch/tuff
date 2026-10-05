@@ -514,6 +514,10 @@ jobs:
           pnpm -C packages/tuff-native run build:screenshot &&
           pnpm -C packages/tuff-native run verify:screenshot-production
 
+      - name: Build macOS on-device translation helper
+        if: matrix.os == 'macos-latest'
+        run: node packages/tuff-native/scripts/build-translation.js --universal
+
       - name: Build Tuff App
         shell: bash
         env:

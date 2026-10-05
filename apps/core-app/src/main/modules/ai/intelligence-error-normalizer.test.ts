@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   normalizeIntelligenceError,
   PROVIDER_DETAIL_MAX_CHARS,
@@ -7,6 +7,7 @@ import {
   toNormalizedIntelligenceError,
   toStreamFailure
 } from './intelligence-error-normalizer'
+import { createUsageLimitError } from './usage-ledger/usage-limits'
 
 describe('intelligence error normalization', () => {
   it('maps known stable failure modes to explicit codes and recovery text', () => {
@@ -135,5 +136,82 @@ describe('what the provider said, on a failed stream', () => {
     const long = redactProviderDetail('错'.repeat(PROVIDER_DETAIL_MAX_CHARS + 50), '/Users/me')
     expect([...long]).toHaveLength(PROVIDER_DETAIL_MAX_CHARS)
     expect(long.endsWith('…')).toBe(true)
+  })
+})
+
+describe('the global usage limit (USAGE_LIMIT_REACHED)', () => {
+  const originalTimeZone = process.env.TZ
+  beforeEach(() => {
+    process.env.TZ = 'Asia/Shanghai'
+  })
+  afterEach(() => {
+    if (originalTimeZone === undefined) delete process.env.TZ
+    else process.env.TZ = originalTimeZone
+  })
+
+  /** Local midnight that starts 2026-10-04 in Shanghai. */
+  const resetsAt = Date.parse('2026-10-03T16:00:00.000Z')
+  const refusal = () =>
+    createUsageLimitError('text.chat', { key: 'requestsPerDay', used: 3, max: 3, resetsAt })
+
+  it('is recognised by its explicit code, ahead of the quota rules', () => {
+    expect(normalizeIntelligenceError(refusal(), { capabilityId: 'text.chat' })).toEqual({
+      code: 'USAGE_LIMIT_REACHED',
+      message: 'Usage limit reached: requestsPerDay; resets at 2026-10-03T16:00:00.000Z',
+      reason:
+        'The usage limit you set is reached (requestsPerDay: 3 / 3); it resets at 2026-10-04 00:00 local time (2026-10-03T16:00:00.000Z).',
+      recovery:
+        'Wait until the limit resets, or raise or clear it in Settings › Intelligence › Audit.',
+      capabilityId: 'text.chat'
+    })
+  })
+
+  it('is recognised by its message token alone, still ahead of the quota rules', () => {
+    // A message that also trips the quota substring rule: the usage-limit token decides.
+    const normalized = normalizeIntelligenceError(
+      new Error(
+        '[USAGE_LIMIT_REACHED:text.chat] Usage limit reached: tokensPerMonth; resets at 2026-10-31T16:00:00.000Z (quota exceeded)'
+      )
+    )
+    expect(normalized.code).toBe('USAGE_LIMIT_REACHED')
+    expect(normalized.reason).toBe(
+      'The usage limit you set is reached; it resets at 2026-11-01 00:00 local time (2026-10-31T16:00:00.000Z).'
+    )
+    // Without the token the same sentence is the quota rule's, as before.
+    expect(normalizeIntelligenceError(new Error('Usage limit reached (quota exceeded)')).code).toBe(
+      'QUOTA_EXHAUSTED'
+    )
+  })
+
+  it('never puts quota, credit or throttle words in what it reports', () => {
+    const normalized = normalizeIntelligenceError(refusal())
+    for (const text of [normalized.message, normalized.reason, normalized.recovery]) {
+      expect(text.toLowerCase()).not.toMatch(/quota|credit|rate limit|too many requests/)
+    }
+  })
+
+  it('wraps once for transport and keeps the structured limit on the wrapper', () => {
+    const wrapped = toNormalizedIntelligenceError(refusal(), { capabilityId: 'text.chat' })
+
+    expect(wrapped.message).toBe(
+      '[USAGE_LIMIT_REACHED:text.chat] Usage limit reached: requestsPerDay; resets at 2026-10-03T16:00:00.000Z'
+    )
+    expect(wrapped.code).toBe('USAGE_LIMIT_REACHED')
+    expect(wrapped).toMatchObject({
+      usageLimit: { key: 'requestsPerDay', used: 3, max: 3, resetsAt }
+    })
+  })
+
+  it('tells the app which limit and when it resets on a failed stream; a plugin gets the code', () => {
+    const wrapped = toNormalizedIntelligenceError(refusal(), { capabilityId: 'text.chat' })
+
+    const host = toStreamFailure('USAGE_LIMIT_REACHED', wrapped, { host: true })
+    expect(host.message).toBe(
+      '[USAGE_LIMIT_REACHED] Usage limit reached: requestsPerDay; resets at 2026-10-03T16:00:00.000Z'
+    )
+    expect(host.code).toBe('USAGE_LIMIT_REACHED')
+    const plugin = toStreamFailure('USAGE_LIMIT_REACHED', wrapped, { host: false })
+    expect(plugin.message).toBe('USAGE_LIMIT_REACHED')
+    expect(plugin.code).toBe('USAGE_LIMIT_REACHED')
   })
 })

@@ -1,0 +1,293 @@
+schema: comet.native.v4
+name: trellis-to-comet-native
+language: zh-CN
+phase: build
+status: active
+state_version: 21
+brief: brief.md
+document_constraints_version: 2
+shape_confirmation_hash: 9c715c84cbb5fbaaa3e7a31883e31906bd8f8a428ab8fb9702f9e491ab5bd01e
+spec_changes:
+  - capability: agent-workflow
+    operation: create
+    source: specs/agent-workflow/spec.md
+workspace:
+  isolation: current
+  change_branch: task/chore/live-work-1003
+  target_branch: task/chore/live-work-1003
+  finish: null
+loop:
+  stage: repairing
+  goal_cycle: 2
+  iteration: 6
+  attempt: 0
+  retry_epoch: 0
+  failed_iteration_count: 2
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: submit-builder-candidate
+acceptance:
+  - id: A1
+    source: brief.md
+    text: omp 新会话能够发现并调用项目 `/comet` 与 Native 规则，写入守卫在不允许的阶段阻止实现文件写入。
+    result: pending
+    reason: null
+  - id: A2
+    source: brief.md
+    text: Claude Code 新会话能够加载项目 Comet Skill、规则和可移植 hooks，旧 Trellis 注入已移除，原有本机权限配置保留。
+    result: pending
+    reason: null
+  - id: A3
+    source: brief.md
+    text: Codex 能发现 `.agents/skills` 的 Comet Skill、项目规则和 hooks；实际写入守卫结果与支持范围被验证并明确记录。
+    result: pending
+    reason: null
+  - id: A4
+    source: brief.md
+    text: 中断或本机 Runtime 缺失后，Native 从正式状态恢复正确进度，不把旧检查或缺失的独立验收当作通过。
+    result: pending
+    reason: null
+  - id: A5
+    source: brief.md
+    text: 工作区绑定不匹配会被拒绝；并行变更修改同一 capability 时，归档前暴露冲突，不覆盖正式 Spec。
+    result: pending
+    reason: null
+  - id: A6
+    source: brief.md
+    text: 迁移后的规范与活审计保留当前工程约束；所有旧活跃目标都有明确冻结去向，未提交或未跟踪任务文档和证据没有丢失。
+    result: pending
+    reason: null
+  - id: A7
+    source: brief.md
+    text: 在无 `.trellis/` 的工作区，审计未知任务、错误默认值、文档失效链接和缺少有效验收仍会失败；正常项目内容通过相关门禁。
+    result: pending
+    reason: null
+  - id: A8
+    source: brief.md
+    text: 默认项目入口只要求 Comet Native，三平台不存在活跃 Trellis hooks、生命周期脚本或失效知识入口。
+    result: pending
+    reason: null
+  - id: A9
+    source: brief.md
+    text: 产品数据兼容值与其他会话的产品改动保持不变；本机 Runtime、用户设置和日志不进入正式项目资产。
+    result: pending
+    reason: null
+builder_handoff:
+  candidate_id: 7294ef2b-ae24-4929-b8c4-cececf8c1f2e
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:6db5f3b5-2b2b-4d2b-ac8f-923a77031dd8
+  iteration: 5
+  summary:
+    text: 当前候选仍为已批准的三平台迁移。最新其他会话焦点变更的4项类型原子收尾已由原作者完成并仅运行Node
+      typecheck验证0退出，随后恢复只读且取消其后台写入任务；迁移没有改该业务实现。全部A1-A9证据及范围保持不变，提交新的完整候选。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+    - A9
+  acceptance_review:
+    - id: A1
+      status: implemented-with-evidence
+      evidence:
+        - .omp/skills/comet/SKILL.md
+        - .omp/hooks/pre/comet-hook-router.ts
+        - Observed omp tool_execution_end isError=true; protected Runtime probe
+          absent
+        - "ordinary-implementation-phase-proof.json: actual ordinary source
+          Write refused in Shape"
+      note: 补充材料见 implementation-evidence.json；只描述实际观察，原始调用日志与源码快照可独立核对。
+    - id: A2
+      status: implemented-with-evidence
+      evidence:
+        - .claude/settings.json
+        - .claude/hooks/statusline.py
+        - Observed Claude PreToolUse:Write exit_code=2; original local
+          permission config restored
+        - "claude-named-loading-proof.json: actual project Skill(comet), Native
+          Skill/rule Read calls"
+      note: 补充材料见 implementation-evidence.json；只描述实际观察，原始调用日志与源码快照可独立核对。
+    - id: A3
+      status: implemented-with-evidence
+      evidence:
+        - .codex/hooks/comet-hook-router.mjs
+        - .codex/hooks.json
+        - Native hooks/list trusted and enabled; actual hook/completed
+          preToolUse status=blocked
+        - scripts/comet-codex-hook.test.mjs
+      note: 补充材料见 implementation-evidence.json；只描述实际观察，原始调用日志与源码快照可独立核对。
+    - id: A4
+      status: implemented-with-evidence
+      evidence:
+        - Isolated local Runtime directory retained outside fixture; next
+          rebuilt portable Build state then ran real subtract check
+        - "portable-recovery-proof.json: acceptance remained 0/1 pending"
+      note: 补充材料见 implementation-evidence.json；只描述实际观察，原始调用日志与源码快照可独立核对。
+    - id: A5
+      status: implemented-with-evidence
+      evidence:
+        - Wrong branch continuation disposition=blocked without transition
+        - Actual second Git worktree declaring same addition capability made
+          Archive ready=false with capability-peer
+      note: 补充材料见 implementation-evidence.json；只描述实际观察，原始调用日志与源码快照可独立核对。
+    - id: A6
+      status: implemented-with-evidence
+      evidence:
+        - docs/engineering/specs/
+        - docs/engineering/reports/search-crossplatform-audit.md
+        - docs/engineering/workflow/retired-task-index.json
+        - raw-handoff-preservation-final.json:280 byte-identical raw files plus
+          late note preserved; full retiring tree retained
+      note: 补充材料见 implementation-evidence.json；只描述实际观察，原始调用日志与源码快照可独立核对。
+    - id: A7
+      status: implemented-with-evidence
+      evidence:
+        - scripts/docs/verify-docs.mjs
+        - scripts/lib/retired-task-index.mjs
+        - scripts/check-audit-report-claims.mjs
+        - 114 related contract tests exercised; actual docs/audit/privacy gates
+          passed without legacy directory
+      note: 补充材料见 implementation-evidence.json；只描述实际观察，原始调用日志与源码快照可独立核对。
+    - id: A8
+      status: implemented-with-evidence
+      evidence:
+        - AGENTS.md
+        - CLAUDE.md
+        - Project Trellis scripts/hooks/commands/agents/skills retired; omp
+          scoped legacy skills ignored
+        - Actual Comet doctor healthy project install
+      note: 补充材料见 implementation-evidence.json；只描述实际观察，原始调用日志与源码快照可独立核对。
+    - id: A9
+      status: implemented-with-evidence
+      evidence:
+        - Serialized PluginAiSessionsPlatform trellis unchanged
+        - Only reviewed Codex project Hook trust records changed; native proof
+          confirms other user fields unchanged
+        - No migration Git commit/push; unrelated active product edits not
+          reverted
+        - "concurrent-preservation-proof.json: exact parent mutation receipts
+          plus semantic/content preservation, not an assumption of no concurrent
+          changes"
+      note: 补充材料见 implementation-evidence.json；只描述实际观察，原始调用日志与源码快照可独立核对。
+  checks:
+    - name:
+        text: Development migration contracts
+        truncated: false
+      result: passed
+      note:
+        text: 114 related tests; docs/audit/privacy/Node typecheck/pinned actionlint
+          exercised. Last stylistic fixes and final candidate will be checked by
+          Runtime.
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: 未执行远端 CI，没有提交、合并、推送、PR 或发布授权。
+      truncated: false
+    - text: 当前 mise run 的额外 pnpm11.24安装会被旧 aqua后端/限流阻断；本次用已安装的同版本
+        actionlint/shellcheck 直接执行同一检查。
+      truncated: false
+    - text: Native 对独立外部 CLI 验收的 assurance 为 skill-coordinated，需要用户接受结果后才能继续归档。
+      truncated: false
+  known_limits_truncated: false
+  review: null
+  submitted_at: 2026-10-03T18:54:28.194Z
+blockers: []
+verification: null
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Native Shape artifacts changed
+      truncated: false
+    completed_at: 2026-10-03T12:59:09.647Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 1
+    outcome: blocked
+    unresolved_ids:
+      - A1
+      - A2
+      - A9
+    summary:
+      text: 独立读取全部A1-A9及完整Spec、相关实现、绑定12项Runtime通过收据与平台/恢复/冲突/保全实际记录。A3-A8通过；A1、A2、A9因特定证据缺口blocked，不推定失败或通过。所有九项恰好一次回传；缺口涉及实际平台入口/阶段调用和并发来源，现有有效测试不重复运行。
+      truncated: false
+    completed_at: 2026-10-03T16:14:35.708Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Observed implementation write before
+        .comet/drafts/intelligence-audit-rebuild/limits/implementation-notes.md
+      truncated: false
+    completed_at: 2026-10-03T16:40:37.420Z
+  - goal_cycle: 2
+    iteration: 2
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Observed implementation write before
+        .comet/drafts/intelligence-audit-rebuild/limits/implementation-notes.md
+      truncated: false
+    completed_at: 2026-10-03T17:28:14.416Z
+  - goal_cycle: 2
+    iteration: 3
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: "Builder handoff Runtime checks failed: node-typecheck"
+      truncated: false
+    completed_at: 2026-10-03T18:20:55.240Z
+  - goal_cycle: 2
+    iteration: 4
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: "Builder handoff Runtime checks failed: node-typecheck"
+      truncated: false
+    completed_at: 2026-10-03T18:36:43.276Z
+  - goal_cycle: 2
+    iteration: 5
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 独立只读完整验收A1-A9全部通过，每项恰好一次；复用并读取当前候选12项Runtime回执和日志，核查正式brief/fullSpec、实际守卫/门禁及原始平台、变更、语义、Git证据。未手动重跑检查，未修改源码或正式产物，未接受结果、归档或恢复并行写入。
+      truncated: false
+    completed_at: 2026-10-03T19:02:09.466Z
+  - goal_cycle: 2
+    iteration: 5
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Observed implementation write before convergenceRoot/unused
+      truncated: false
+    completed_at: 2026-10-04T02:45:24.434Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pending
+verification_report: null
+archived: false
+created_at: 2026-10-03T12:03:19.131Z

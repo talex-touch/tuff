@@ -5,10 +5,57 @@ export interface IntelligenceErrorRecoveryInput {
   errorCode?: string
 }
 
+export interface IntelligenceErrorRecoveryAction {
+  /** Renderer route the action opens. */
+  path: string
+  label: string
+}
+
 export interface IntelligenceErrorRecovery {
   code: string
   title: string
   detail: string
+  /** The way out, for callers that render one. */
+  action?: IntelligenceErrorRecoveryAction
+}
+
+/** Where the global AI usage limits are set: Settings › Intelligence › Audit. */
+export const USAGE_LIMITS_ROUTE = '/setting/intelligence/audit'
+
+/**
+ * Shared error code of a call refused by the user's own global usage limit. Its messages never
+ * contain QUOTA or CREDIT, so the branch below cannot be shadowed by the Nexus-credits one — and it
+ * runs first regardless.
+ */
+export const USAGE_LIMIT_REACHED_CODE = 'USAGE_LIMIT_REACHED'
+
+const USAGE_LIMIT_RESETS_AT = /resets at (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/i
+
+/** Whether a failure's code or text is the global usage-limit refusal. */
+export function isUsageLimitFailure(text: string): boolean {
+  return text.toUpperCase().includes(USAGE_LIMIT_REACHED_CODE)
+}
+
+/**
+ * When the limit resets, from main's message (`… resets at <ISO>`). Null when only the code
+ * arrived — plugins and some transports carry nothing else.
+ */
+export function readUsageLimitResetsAt(text: string): number | null {
+  const iso = USAGE_LIMIT_RESETS_AT.exec(text)?.[1]
+  if (!iso) return null
+  const resetsAt = Date.parse(iso)
+  return Number.isFinite(resetsAt) ? resetsAt : null
+}
+
+/** The reset time in this machine's local time: month/day and 24-hour clock. */
+export function formatUsageLimitResetTime(resetsAt: number, locale?: string): string {
+  return new Intl.DateTimeFormat(locale, {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  }).format(resetsAt)
 }
 
 function normalizeText(value: unknown): string {
@@ -38,6 +85,29 @@ export function resolveIntelligenceErrorRecovery(
         'intelligence.errorRecovery.authDetail',
         'Sign in to Tuff Nexus, then retry this AI request.'
       )
+    }
+  }
+
+  // The limit the user set in Audit, ahead of both quota branches: it is not Nexus credits or a
+  // team quota, and the way out is the Audit page, not the account.
+  if (normalized.includes(USAGE_LIMIT_REACHED_CODE)) {
+    const resetsAt = readUsageLimitResetsAt(rawError)
+    return {
+      code: 'usage-limit',
+      title: t('intelligence.errorRecovery.usageLimitTitle', 'AI usage limit reached'),
+      detail:
+        resetsAt === null
+          ? t(
+              'intelligence.errorRecovery.usageLimitDetailNoTime',
+              "You've reached the AI usage limit you set in Audit, where you can change it."
+            )
+          : t('intelligence.errorRecovery.usageLimitDetail', {
+              time: formatUsageLimitResetTime(resetsAt)
+            }),
+      action: {
+        path: USAGE_LIMITS_ROUTE,
+        label: t('intelligence.errorRecovery.openUsageLimits', 'Open Audit')
+      }
     }
   }
 

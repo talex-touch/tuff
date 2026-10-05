@@ -16,6 +16,7 @@ import {
   toRuntimeCapabilityId
 } from '@talex-touch/tuff-intelligence'
 import { StorageList } from '@talex-touch/utils'
+import { isSystemTranslationAvailable } from '@talex-touch/tuff-native/translation'
 import {
   DASHSCOPE_QWEN_ASR_REALTIME_MODELS,
   getVoiceCapabilityRecommendedModels,
@@ -77,6 +78,20 @@ const INTERNAL_SYSTEM_OCR_PROVIDER: IntelligenceProviderConfig = {
 
 const INTERNAL_SYSTEM_OCR_CAPABILITY_ID = 'vision.ocr'
 const INTERNAL_SYSTEM_OCR_MODEL = 'system-ocr'
+
+const INTERNAL_SYSTEM_TRANSLATION_PROVIDER_ID = 'local-system-translation'
+const INTERNAL_SYSTEM_TRANSLATION_PROVIDER: IntelligenceProviderConfig = {
+  id: INTERNAL_SYSTEM_TRANSLATION_PROVIDER_ID,
+  type: IntelligenceProviderType.LOCAL,
+  name: 'macOS Translation',
+  enabled: true,
+  priority: 0,
+  models: [{ id: 'system-translation' }],
+  defaultModel: 'system-translation',
+  timeout: 30_000,
+  capabilities: ['text.translate'],
+  metadata: { internal: true, engine: 'system-translation' }
+}
 
 /**
  * The locally installed `pi` CLI, exposed as a provider so a machine with it needs no API key to
@@ -1167,6 +1182,30 @@ function withCliChatBindings(
   }
 }
 
+function withSystemTranslationBinding(
+  capabilities: Record<string, IntelligenceCapabilityRoutingConfig>
+): Record<string, IntelligenceCapabilityRoutingConfig> {
+  if (!isSystemTranslationAvailable()) return capabilities
+  const routing = capabilities['text.translate'] ?? { id: 'text.translate', providers: [] }
+  return {
+    ...capabilities,
+    'text.translate': {
+      ...routing,
+      providers: [
+        {
+          providerId: INTERNAL_SYSTEM_TRANSLATION_PROVIDER_ID,
+          priority: 0,
+          enabled: true,
+          models: ['system-translation']
+        },
+        ...routing.providers.filter(
+          (binding) => binding.providerId !== INTERNAL_SYSTEM_TRANSLATION_PROVIDER_ID
+        )
+      ]
+    }
+  }
+}
+
 export function ensureIntelligenceConfigLoaded(force = false): void {
   // 每次都实时从 storage 读取最新配置
   const stored = getLatestConfig()
@@ -1202,6 +1241,9 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
   )
   if (!nativeOcrDisabledByEnv && !hasInternalProvider) {
     providers.unshift({ ...INTERNAL_SYSTEM_OCR_PROVIDER })
+  }
+  if (isSystemTranslationAvailable()) {
+    providers.unshift({ ...INTERNAL_SYSTEM_TRANSLATION_PROVIDER })
   }
 
   const ompAvailable = Boolean(getResolvedOmpExecutable())
@@ -1240,7 +1282,9 @@ export function ensureIntelligenceConfigLoaded(force = false): void {
     enableCache: stored.globalConfig?.enableCache ?? false,
     enableQuota: stored.globalConfig?.enableQuota ?? true,
     cacheExpiration: stored.globalConfig?.cacheExpiration,
-    capabilities: withCliChatBindings(stored.capabilities ?? {}, availableCliIds),
+    capabilities: withSystemTranslationBinding(
+      withCliChatBindings(stored.capabilities ?? {}, availableCliIds)
+    ),
     promptRegistry: stored.promptRegistry ?? [],
     promptBindings: stored.promptBindings ?? []
   }
@@ -1286,7 +1330,7 @@ export function getEffectiveCapabilityRoutingConfig(
     return undefined
   }
   return resolveEffectiveCapabilityRoutingConfig(
-    getLatestConfig()?.capabilities ?? {},
+    withSystemTranslationBinding(getLatestConfig()?.capabilities ?? {}),
     normalizedCapabilityId
   )
 }
@@ -1299,7 +1343,7 @@ export function getCapabilityOptions(capabilityId: string): {
   // 实时从 storage 读取
   const stored = getLatestConfig()
   const normalizedCapabilityId = toRuntimeCapabilityId(capabilityId)
-  const capabilityMap = stored?.capabilities ?? {}
+  const capabilityMap = withSystemTranslationBinding(stored?.capabilities ?? {})
   const config = normalizedCapabilityId
     ? resolveEffectiveCapabilityRoutingConfig(capabilityMap, normalizedCapabilityId)
     : undefined
@@ -1318,6 +1362,9 @@ export function getCapabilityOptions(capabilityId: string): {
     process.env.TUFF_DISABLE_NATIVE_OCR !== '1'
   ) {
     enabledProviderIds.add(INTERNAL_SYSTEM_OCR_PROVIDER_ID)
+  }
+  if (normalizedCapabilityId === 'text.translate' && isSystemTranslationAvailable()) {
+    enabledProviderIds.add(INTERNAL_SYSTEM_TRANSLATION_PROVIDER_ID)
   }
   const enabledBindings =
     config.providers?.filter(
@@ -1343,14 +1390,14 @@ export function getCapabilityPrompt(capabilityId: string): string | undefined {
 export function listCapabilities(): IntelligenceCapabilityRoutingConfig[] {
   // 实时从 storage 读取
   const stored = getLatestConfig()
-  const capabilityMap = stored?.capabilities ?? {}
+  const capabilityMap = withSystemTranslationBinding(stored?.capabilities ?? {})
   return Object.values(capabilityMap)
 }
 
 export function getCapabilitiesMap(): Record<string, IntelligenceCapabilityRoutingConfig> {
   // 实时从 storage 读取
   const stored = getLatestConfig()
-  return stored?.capabilities ?? {}
+  return withSystemTranslationBinding(stored?.capabilities ?? {})
 }
 
 /**

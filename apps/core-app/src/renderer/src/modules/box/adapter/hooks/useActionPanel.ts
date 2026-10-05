@@ -1,4 +1,5 @@
 import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
+import type { MetaFlowSelection } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { CoreBoxMetaActionEventDetail } from '../../meta-actions/meta-action-model'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -41,8 +42,19 @@ function getItemOpenTarget(targetItem: TuffItem): string {
   )
 }
 
+/** The Flow target a relayed transfer action carries, when it carries a usable one. */
+function readFlowSelection(value: unknown): MetaFlowSelection | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const { targetId } = value as { targetId?: unknown }
+  return typeof targetId === 'string' && targetId ? (value as MetaFlowSelection) : undefined
+}
+
 interface UseActionPanelOptions {
-  openFlowSelector?: (item: TuffItem) => void
+  /**
+   * Sends the item to the target picked on the ⌘K card's Flow page (`useDetach.dispatchFlow`). The
+   * card picks and relays; CoreBox builds the payload and dispatches it.
+   */
+  dispatchFlow?: (item: TuffItem, selection: MetaFlowSelection) => Promise<void>
   refreshSearch?: () => void
   navigate?: (path: string) => void
   onActivationState?: (activations: IProviderActivate[] | null) => void
@@ -55,7 +67,7 @@ interface UseActionPanelOptions {
 }
 
 export function useActionPanel(options: UseActionPanelOptions = {}) {
-  const { openFlowSelector, refreshSearch, navigate, onActivationState, onPrimaryExecute } = options
+  const { dispatchFlow, refreshSearch, navigate, onActivationState, onPrimaryExecute } = options
   const { t } = useI18n()
   const transport = useTuffTransport()
   const appSdk = useAppSdk()
@@ -122,7 +134,11 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
     return true
   }
 
-  async function executeAction(actionId: string, targetItem: TuffItem): Promise<void> {
+  async function executeAction(
+    actionId: string,
+    targetItem: TuffItem,
+    flow?: MetaFlowSelection
+  ): Promise<void> {
     // Primary action mirrors pressing Enter on the item in the main list.
     if (actionId === COREBOX_PRIMARY_ACTION_ID) {
       await onPrimaryExecute?.(targetItem)
@@ -161,7 +177,10 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
         break
       }
       case COREBOX_FLOW_TRANSFER_ACTION_ID:
-        if (openFlowSelector) openFlowSelector(targetItem)
+        // The ⌘K card opens its Flow page itself; the action reaches CoreBox only once a target is
+        // picked there, carrying it. Without one there is nothing to send.
+        if (flow) await dispatchFlow?.(targetItem, flow)
+        else actionPanelLog.debug('Transfer action without a Flow target', { actionId })
         break
       case 'open-settings': {
         // Settings live in the main window, which main reveals and routes; CoreBox then hides so
@@ -313,8 +332,12 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
    * shortcut. A failure the action does not report itself would otherwise surface as an unhandled
    * rejection with nothing on screen, so it is logged and the footer says the action failed.
    */
-  function runUnawaitedAction(actionId: string, targetItem: TuffItem): void {
-    void executeAction(actionId, targetItem).catch((error: unknown) => {
+  function runUnawaitedAction(
+    actionId: string,
+    targetItem: TuffItem,
+    flow?: MetaFlowSelection
+  ): void {
+    void executeAction(actionId, targetItem, flow).catch((error: unknown) => {
       // The action id and a projected code only: a raw error can carry the item's path.
       actionPanelLog.error('Action failed', { actionId, code: resolveErrorCode(error) })
       showCoreBoxFooterFeedback(t('corebox.actions.failed', '操作失败'), 'error')
@@ -322,10 +345,14 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
   }
 
   // MetaOverlay (⌘K) routes built-in and item actions back to the CoreBox
-  // renderer through this channel.
-  const metaOverlayActionHandler = (data: { actionId?: string; item?: TuffItem }) => {
+  // renderer through this channel, the transfer with the Flow target picked on the card.
+  const metaOverlayActionHandler = (data: {
+    actionId?: string
+    item?: TuffItem
+    flow?: MetaFlowSelection
+  }) => {
     if (!data?.item || !data.actionId) return
-    runUnawaitedAction(data.actionId, data.item)
+    runUnawaitedAction(data.actionId, data.item, readFlowSelection(data.flow))
   }
   const unregMetaOverlayAction = transport.on(
     CoreBoxEvents.metaOverlay.itemAction,

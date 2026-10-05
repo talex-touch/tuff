@@ -8,6 +8,8 @@ import type {
   LocalAiCliProviderStatus,
   LocalAiCliSessionSummary,
   LocalAiCliStartRequest,
+  LocalAiCliStatus,
+  LocalAiCliStatusRequest,
   LocalAiCliTaskChunk,
   LocalAiCliTerminalCreateRequest,
   LocalAiCliTerminalExit
@@ -42,15 +44,17 @@ import {
   type AppDestinationRuntime
 } from '../app-destination/app-destination-navigation'
 import { BaseModule } from '../abstract-base-module'
+import { withExecutableDirOnPath } from '../ai/providers/cli/cli-executable'
 import { shortcutModule } from '../global-shortcon'
 import { omniPanelModule } from '../omni-panel'
 import { getAutoPasteCapabilityPatch } from '../platform/capability-adapter'
 import { getProject, touchProject } from '../project/project-store'
-import { getMainConfig, saveMainConfig } from '../storage'
+import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { activeAppService } from '../system/active-app'
 import { sendPlatformShortcut } from '../system/desktop-shortcut'
 import { LocalAiCliApprovalBroker } from './approval-broker'
 import {
+  refreshLocalAiCliExecutables,
   resolveAllLocalAiCliProviderStatuses,
   resolveLocalAiCliProviderStatus
 } from './executable-resolver'
@@ -120,12 +124,57 @@ interface PiRunState {
   verificationRequested: boolean
 }
 
-function isLocalAiCliBetaAvailable(): boolean {
-  return process.platform === 'darwin' && process.env.TUFF_ENABLE_LOCAL_AI_CLI === '1'
+/**
+ * Local agents are a macOS Beta: Windows and Linux show no entry until discovery, PTY, process-tree
+ * cleanup and a real-machine acceptance exist there (08-04 R23). On macOS the Settings section is
+ * always there; every other entry — ⌘⇧L, the CoreBox button, the omni-panel action, the project
+ * menu group, the execution handlers — also waits for the user's master switch,
+ * `localAiCli.enabled` (08-04 R15: consent is a setting, never an environment variable).
+ */
+function isLocalAiCliPlatformSupported(): boolean {
+  return process.platform === 'darwin'
 }
 
 function readSettings(): AppSetting {
   return getMainConfig(StorageList.APP_SETTING) as AppSetting
+}
+
+/** The 「选择程序」 picks, one per CLI, in a form two snapshots can be compared by. */
+function executableOverrides(
+  settings: AppSetting['localAiCli']
+): Record<LocalAiCliProviderId, string> {
+  return Object.fromEntries(
+    LOCAL_AI_CLI_PROVIDERS.map((provider) => [
+      provider.id,
+      settings.providers[provider.id]?.executableOverride?.trim() ?? ''
+    ])
+  ) as Record<LocalAiCliProviderId, string>
+}
+
+/**
+ * A provider as reported while the master switch is off to a caller that did not ask for detail:
+ * nothing was looked for or run, so `installed: false` here says nothing about the machine, and
+ * the issue says so instead of claiming the CLI is unavailable.
+ */
+function unprobedProviderStatus(
+  providerId: LocalAiCliProviderId,
+  settings: AppSetting['localAiCli']
+): LocalAiCliProviderStatus {
+  return {
+    id: providerId,
+    label: getLocalAiCliProviderDefinition(providerId).label,
+    enabled: settings.providers[providerId]?.enabled === true,
+    installed: false,
+    issueCode: 'NOT_PROBED',
+    capabilities: {
+      taskRead: false,
+      taskWriteApproval: false,
+      terminalRead: false,
+      terminalWriteApproval: false,
+      taskResume: false,
+      terminalResume: false
+    }
+  }
 }
 
 function assertHostContext(
@@ -250,6 +299,10 @@ export class LocalAiCliModule extends BaseModule {
   private readonly nativeSessionLeases = nativeSessionLeaseRegistry
   private workspacePath = ''
   private pendingPanelReturnUntil = 0
+  /** Whether ⌘⇧L is registered: it follows the master switch, not just the platform. */
+  private quickOpenShortcutRegistered = false
+  /** The picks last seen, to notice one being cleared; `null` until the first settings read. */
+  private lastExecutableOverrides: Record<LocalAiCliProviderId, string> | null = null
 
   constructor() {
     super(LocalAiCliModule.key, { create: true })
@@ -266,16 +319,58 @@ export class LocalAiCliModule extends BaseModule {
     await mkdir(this.workspacePath, { recursive: true })
     setLocalAiCliWorkspaceRoot(this.workspacePath)
     this.registerHandlers()
-    if (isLocalAiCliBetaAvailable()) {
-      shortcutModule.registerMainShortcut(
-        LOCAL_AI_CLI_SHORTCUT_ID,
-        'CommandOrControl+Shift+L',
-        () => {
-          void omniPanelModule.showLocalAi()
-        },
-        { owner: LOCAL_AI_CLI_SHORTCUT_OWNER, enabled: true }
+    if (isLocalAiCliPlatformSupported()) {
+      // Read once here as well as through the subscription: the subscription only replays a
+      // value the store has already loaded.
+      this.applySettings(readSettings().localAiCli)
+      this.disposers.push(
+        subscribeMainConfig(StorageList.APP_SETTING, (settings) => {
+          this.applySettings(settings.localAiCli)
+        })
       )
     }
+  }
+
+  /**
+   * Follows the settings: ⌘⇧L exists only while the master switch is on (registered when it turns
+   * on, unregistered when it turns off), and a 「选择程序」 pick that is cleared sends the lookups
+   * back to the search, which may have changed since they were memoised. A new pick needs no
+   * refresh here: it is its own memo key, and `locate` refreshes after writing it.
+   */
+  private applySettings(settings: AppSetting['localAiCli'] | undefined): void {
+    if (!settings) return
+    this.syncQuickOpenShortcut(settings.enabled === true)
+
+    const overrides = executableOverrides(settings)
+    const previous = this.lastExecutableOverrides
+    this.lastExecutableOverrides = overrides
+    const cleared =
+      previous !== null &&
+      LOCAL_AI_CLI_PROVIDERS.some((provider) => previous[provider.id] && !overrides[provider.id])
+    if (cleared) {
+      void refreshLocalAiCliExecutables(settings).catch((error) => {
+        localAiCliLog.warn('Local AI CLI re-probe after a cleared executable pick failed', {
+          error
+        })
+      })
+    }
+  }
+
+  private syncQuickOpenShortcut(enabled: boolean): void {
+    if (enabled === this.quickOpenShortcutRegistered) return
+    this.quickOpenShortcutRegistered = enabled
+    if (!enabled) {
+      shortcutModule.unregisterMainShortcut(LOCAL_AI_CLI_SHORTCUT_ID)
+      return
+    }
+    shortcutModule.registerMainShortcut(
+      LOCAL_AI_CLI_SHORTCUT_ID,
+      'CommandOrControl+Shift+L',
+      () => {
+        void omniPanelModule.showLocalAi()
+      },
+      { owner: LOCAL_AI_CLI_SHORTCUT_OWNER, enabled: true }
+    )
   }
 
   private registerHandlers(): void {
@@ -286,9 +381,12 @@ export class LocalAiCliModule extends BaseModule {
       subscribeLocalAiCliSessionMutations((mutation) => {
         transport.broadcast(LocalAiCliEvents.session.changed, mutation)
       }),
-      transport.on(LocalAiCliEvents.status.get, async (_payload, context) => {
+      transport.on(LocalAiCliEvents.status.get, async (payload, context) => {
         assertHostContext(context)
-        return await this.getStatus()
+        return await this.getStatus({
+          detail: payload?.detail === true,
+          refresh: payload?.refresh === true
+        })
       }),
       transport.on(LocalAiCliEvents.status.locate, async (payload, context) => {
         assertHostContext(context)
@@ -397,7 +495,7 @@ export class LocalAiCliModule extends BaseModule {
   }
 
   private async returnToPanel(): Promise<boolean> {
-    if (!isLocalAiCliBetaAvailable() || Date.now() > this.pendingPanelReturnUntil) {
+    if (!isLocalAiCliPlatformSupported() || Date.now() > this.pendingPanelReturnUntil) {
       this.pendingPanelReturnUntil = 0
       return false
     }
@@ -411,9 +509,17 @@ export class LocalAiCliModule extends BaseModule {
     return true
   }
 
-  private async getStatus() {
+  /**
+   * Answered from the memoised lookups unless `refresh` asks to probe again (「重新探测」): CoreBox,
+   * the omni panel and every project menu read this, and none of them should start four CLI
+   * processes to do it. Off macOS nothing is probed at all. With the master switch off those
+   * readers need only `enabled`, and a CLI's `--version` is still a third-party program run before
+   * the user agreed to any: then only `detail` probes, which Settings asks for, as the place where
+   * the user decides.
+   */
+  private async getStatus(request: LocalAiCliStatusRequest = {}): Promise<LocalAiCliStatus> {
     const settings = readSettings().localAiCli
-    if (!isLocalAiCliBetaAvailable()) {
+    if (!isLocalAiCliPlatformSupported()) {
       return {
         betaAvailable: false,
         enabled: false,
@@ -435,6 +541,17 @@ export class LocalAiCliModule extends BaseModule {
         }))
       }
     }
+    if (!settings.enabled && request.detail !== true && request.refresh !== true) {
+      return {
+        betaAvailable: true,
+        enabled: false,
+        defaultProvider: settings.defaultProvider,
+        providers: LOCAL_AI_CLI_PROVIDERS.map((provider) =>
+          unprobedProviderStatus(provider.id, settings)
+        )
+      }
+    }
+    if (request.refresh === true) await refreshLocalAiCliExecutables(settings)
     return {
       betaAvailable: true,
       enabled: settings.enabled,
@@ -444,12 +561,15 @@ export class LocalAiCliModule extends BaseModule {
   }
 
   private async locateProvider(provider: unknown): Promise<LocalAiCliProviderStatus> {
-    if (!isLocalAiCliBetaAvailable()) throw new Error('LOCAL_AI_CLI_BETA_UNAVAILABLE')
+    if (!isLocalAiCliPlatformSupported()) throw new Error('LOCAL_AI_CLI_BETA_UNAVAILABLE')
     const definition = LOCAL_AI_CLI_PROVIDERS.find((candidate) => candidate.id === provider)
     if (!definition) throw new Error('LOCAL_AI_CLI_PROVIDER_INVALID')
     const result = await dialog.showOpenDialog({
       title: `Locate ${definition.label}`,
-      properties: ['openFile']
+      // An app bundle is a directory, never the CLI: open it like a folder rather than return it.
+      // The pick is used as found, so a symlink must stay one: a mise shim resolved to its
+      // target is mise itself, which no CLI's version check accepts.
+      properties: ['openFile', 'treatPackageAsDirectory', 'noResolveAliases']
     })
     if (result.canceled || result.filePaths.length !== 1) {
       throw new Error('LOCAL_AI_CLI_LOCATE_CANCELLED')
@@ -458,6 +578,9 @@ export class LocalAiCliModule extends BaseModule {
     const nextSettings = structuredClone(appSettings)
     nextSettings.localAiCli.providers[definition.id].executableOverride = result.filePaths[0]!
     await saveMainConfig(StorageList.APP_SETTING, nextSettings)
+    // The pick is used as chosen, never resolved through its links (a shim dispatches on the name
+    // it was run by). Probing again also hands the chat providers the same pick.
+    await refreshLocalAiCliExecutables(nextSettings.localAiCli)
     return await resolveLocalAiCliProviderStatus(definition.id, nextSettings.localAiCli)
   }
 
@@ -465,7 +588,7 @@ export class LocalAiCliModule extends BaseModule {
     providerId: LocalAiCliProviderId,
     access: LocalAiCliTerminalCreateRequest['access']
   ): Promise<LocalAiCliProviderStatus> {
-    if (!isLocalAiCliBetaAvailable()) throw new Error('LOCAL_AI_CLI_BETA_UNAVAILABLE')
+    if (!isLocalAiCliPlatformSupported()) throw new Error('LOCAL_AI_CLI_BETA_UNAVAILABLE')
     const settings = readSettings().localAiCli
     if (!settings.enabled) throw new Error('LOCAL_AI_CLI_FEATURE_DISABLED')
     if (!settings.providers[providerId]?.enabled) {
@@ -614,6 +737,9 @@ export class LocalAiCliModule extends BaseModule {
           cwd: execution.cwd,
           ...(pointer ? { resume: pointer.nativeSessionId } : {}),
           pathToClaudeCodeExecutable: executablePath,
+          // Replaces the SDK's default `{ ...process.env }`: an npm-installed claude is a node
+          // script, and the SDK resolves its interpreter from this PATH.
+          env: withExecutableDirOnPath(sanitizedChildEnv(), executablePath),
           includePartialMessages: true,
           maxTurns: 1,
           tools,
@@ -762,7 +888,7 @@ export class LocalAiCliModule extends BaseModule {
     try {
       child = spawnSafe(status.executablePath!, spec.args, {
         cwd: execution.cwd,
-        env: sanitizedChildEnv(),
+        env: withExecutableDirOnPath(sanitizedChildEnv(), status.executablePath!),
         stdio: ['pipe', 'pipe', 'pipe']
       })
     } catch {
@@ -1241,7 +1367,7 @@ export class LocalAiCliModule extends BaseModule {
   }
 
   private async pasteBack(payload: LocalAiCliPasteBackRequest): Promise<LocalAiCliPasteBackResult> {
-    if (!isLocalAiCliBetaAvailable() || !readSettings().localAiCli.enabled) {
+    if (!isLocalAiCliPlatformSupported() || !readSettings().localAiCli.enabled) {
       return { success: false, reason: 'target-unavailable' }
     }
     const text =
@@ -1315,7 +1441,7 @@ export class LocalAiCliModule extends BaseModule {
           cols: terminalSize(request.cols, DEFAULT_COLS, LOCAL_AI_CLI_LIMITS.terminalCols),
           rows: terminalSize(request.rows, DEFAULT_ROWS, LOCAL_AI_CLI_LIMITS.terminalRows),
           cwd: execution.cwd,
-          env: sanitizedChildEnv()
+          env: withExecutableDirOnPath(sanitizedChildEnv(), status.executablePath!)
         }
       )
     } catch (error) {
@@ -1411,6 +1537,8 @@ export class LocalAiCliModule extends BaseModule {
 
   async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
     shortcutModule.unregisterMainShortcut(LOCAL_AI_CLI_SHORTCUT_ID)
+    this.quickOpenShortcutRegistered = false
+    this.lastExecutableOverrides = null
     this.approvals.destroy()
     for (const dispose of this.disposers.splice(0)) dispose()
     const taskCompletions: Promise<void>[] = []

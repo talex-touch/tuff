@@ -7,6 +7,7 @@ vi.mock('vue-sonner', () => ({ toast }))
 
 const { captureNoticeKind, classifyDictationFailure, notReadyNotice, showDictationNotice } =
   await import('./dictation-notice')
+const { formatUsageLimitResetTime } = await import('~/modules/intelligence/ai-error-recovery')
 
 /** `assertSupported` rethrows the component's failure with this code and this sentence. */
 const CAPTURE_REASON = (reason: string): Error =>
@@ -198,5 +199,58 @@ describe('showDictationNotice', () => {
     expect(options.description).toBe('the route is gone')
     options.action.onClick()
     expect(openRecognitionSettings).toHaveBeenCalledOnce()
+  })
+})
+
+describe('the global usage limit the user set in Audit', () => {
+  const resetsAtIso = '2026-10-03T16:00:00.000Z'
+  const refusal = Object.assign(
+    new Error(
+      `[USAGE_LIMIT_REACHED] Usage limit reached: requestsPerDay; resets at ${resetsAtIso}`
+    ),
+    { code: 'USAGE_LIMIT_REACHED' }
+  )
+  /** Echoes interpolation so the reset time shows in the headline. */
+  const tNamed = (key: string, params?: Record<string, unknown>): string =>
+    params ? `${key} ${JSON.stringify(params)}` : key
+
+  it('is its own kind, ahead of the quota rule, carrying only the reset time', () => {
+    expect(classifyDictationFailure(refusal)).toEqual({ kind: 'usage-limit', detail: resetsAtIso })
+    // Only the code (beside quota wording): still the usage limit, nothing to carry.
+    expect(
+      classifyDictationFailure(
+        Object.assign(new Error('quota exceeded'), { code: 'USAGE_LIMIT_REACHED' })
+      )
+    ).toEqual({ kind: 'usage-limit' })
+    // The quota rule is untouched for everything else.
+    expect(classifyDictationFailure(new Error('QUOTA_EXHAUSTED'))?.kind).toBe('quota')
+  })
+
+  it('names the local reset time and opens Audit when the page can', () => {
+    const openUsageLimits = vi.fn()
+    showDictationNotice(
+      'usage-limit',
+      { t: tNamed, openRecognitionSettings: vi.fn(), openUsageLimits },
+      resetsAtIso
+    )
+    const [message, options] = toast.warning.mock.calls.at(-1)!
+    expect(message).toBe(
+      `assistant.voicePanel.usageLimitReached ${JSON.stringify({
+        time: formatUsageLimitResetTime(Date.parse(resetsAtIso))
+      })}`
+    )
+    // The ISO instant is folded into the headline, never shown as a raw description.
+    expect(options.description).toBeUndefined()
+    expect(options.action.label).toBe('assistant.voicePanel.openUsageLimits')
+    options.action.onClick()
+    expect(openUsageLimits).toHaveBeenCalledOnce()
+  })
+
+  it('falls back to the copy without a time, and no button where Audit cannot be opened', () => {
+    showDictationNotice('usage-limit', { t: tNamed, openRecognitionSettings: vi.fn() })
+    expect(toast.warning).toHaveBeenLastCalledWith(
+      'assistant.voicePanel.usageLimitReachedNoTime',
+      undefined
+    )
   })
 })

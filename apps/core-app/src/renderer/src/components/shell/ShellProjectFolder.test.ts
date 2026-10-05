@@ -195,8 +195,11 @@ describe('shellProjectFolder menu on the real tuffex dropdown', () => {
     expect(wrapper.emitted('runAgent')).toEqual([['claude']])
   })
 
-  it('leaves the local-agent group out when this build has no local agents (the beta is off)', async () => {
-    statusState.current = { ...agentStatus([]), betaAvailable: false }
+  it.each([
+    ['off macOS', { betaAvailable: false, enabled: false }],
+    ['while the master switch in Settings is off', { betaAvailable: true, enabled: false }]
+  ])('leaves the local-agent group out %s', async (_when, gate) => {
+    statusState.current = { ...agentStatus([agent('claude', { label: 'Claude Code' })]), ...gate }
     const wrapper = await mountFolder()
     await openMenu(wrapper)
     expect(rootItems(wrapper).map((item) => item.text())).toEqual([

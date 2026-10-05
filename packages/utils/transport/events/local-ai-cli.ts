@@ -38,6 +38,7 @@ export type LocalAiCliErrorCode
     | 'FEATURE_DISABLED'
     | 'PROVIDER_DISABLED'
     | 'PROVIDER_UNAVAILABLE'
+    | 'NOT_PROBED'
     | 'PROVIDER_VERSION_UNSUPPORTED'
     | 'WRITE_APPROVAL_UNAVAILABLE'
     | 'PROVIDER_RESUME_UNSUPPORTED'
@@ -116,16 +117,48 @@ export interface LocalAiCliProviderStatus {
   enabled: boolean
   installed: boolean
   version?: string
+  /** The path the CLI was found at and is run by, as found (not its realpath). */
   executablePath?: string
+  /**
+   * Why `installed` is false. `NOT_PROBED` means the CLI was not looked for at all (the master
+   * switch is off and the request did not ask for `detail`), so it says nothing about the machine.
+   */
   issueCode?: LocalAiCliErrorCode
+  /**
+   * The program picked in Settings (「选择程序」) is not an executable file (moved, uninstalled, or
+   * an app bundle), so the lookup went on without it: `executablePath`, when there is one, was
+   * found automatically.
+   */
+  settingsOverrideRejected?: boolean
   capabilities: LocalAiCliProviderCapabilities
 }
 
 export interface LocalAiCliStatus {
+  /**
+   * This platform offers local agents (a macOS Beta). It is not the user's consent: that is
+   * `enabled`, the master switch in Settings, which every entry point other than Settings also
+   * requires. Off this platform every provider reads `BETA_UNAVAILABLE` and nothing is probed.
+   */
   betaAvailable: boolean
   enabled: boolean
   defaultProvider: LocalAiCliProviderId | null
   providers: LocalAiCliProviderStatus[]
+}
+
+export interface LocalAiCliStatusRequest {
+  /**
+   * Look for the CLIs and ask each its version even while the master switch is off. Settings asks
+   * for this: it is where the user sees what is installed and decides whether to turn local agents
+   * on. Every other entry only needs `enabled`; with the switch off it gets each provider as
+   * `NOT_PROBED`, and no CLI is run for it.
+   */
+  detail?: boolean
+  /**
+   * Drop the memoised lookups and `--version` answers and probe every CLI again (「重新探测」).
+   * Implies `detail`. Without it the status is answered from memory, so opening a menu costs no CLI
+   * process.
+   */
+  refresh?: boolean
 }
 
 export interface LocalAiCliLocateRequest {
@@ -303,7 +336,10 @@ export function normalizeLocalAiCliApprovalDecision(value: unknown): LocalAiCliA
 
 export const LocalAiCliEvents = {
   status: {
-    get: defineEvent('local-ai-cli').module('status').event('get').define<void, LocalAiCliStatus>(),
+    get: defineEvent('local-ai-cli')
+      .module('status')
+      .event('get')
+      .define<LocalAiCliStatusRequest | undefined, LocalAiCliStatus>(),
     locate: defineEvent('local-ai-cli')
       .module('status')
       .event('locate')

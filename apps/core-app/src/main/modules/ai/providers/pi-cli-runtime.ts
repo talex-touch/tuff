@@ -9,7 +9,11 @@ import type {
   ReasoningEffortPlan,
   ReasoningEffortWire
 } from '@talex-touch/utils/intelligence/reasoning-effort'
-import type { CliExecutableForm, CliExecutableLookup } from './cli/cli-executable'
+import type {
+  CliExecutableForm,
+  CliExecutableLookup,
+  ResolvedCliExecutable
+} from './cli/cli-executable'
 import {
   getResolvedCliExecutable,
   resetCliExecutableCache,
@@ -66,24 +70,66 @@ export function isCliAgentProviderConfig(config: IntelligenceProviderConfig): bo
 // ============================================================================
 
 /**
+ * The user's 「选择程序」 pick for the CLI behind `lookup`
+ * (`localAiCli.providers[id].executableOverride`), or `undefined`.
+ *
+ * Installed by the module that owns the app settings (`setCliSettingsOverrideReader`) rather than
+ * read from storage here: this file is imported by every CLI provider and its tests, and the
+ * storage module would come along with it. With no reader installed, every lookup runs without a
+ * settings override.
+ */
+export type CliSettingsOverrideReader = (lookup: CliExecutableLookup) => string | undefined
+
+let settingsOverrideReader: CliSettingsOverrideReader | null = null
+
+export function setCliSettingsOverrideReader(reader: CliSettingsOverrideReader | null): void {
+  settingsOverrideReader = reader
+}
+
+function settingsOverrideFor(lookup: CliExecutableLookup): string | undefined {
+  try {
+    return settingsOverrideReader?.(lookup)?.trim() || undefined
+  } catch {
+    // Settings not readable yet: look the CLI up the way a profile without a pick would.
+    return undefined
+  }
+}
+
+/**
+ * Resolves with the current settings override. The chat providers and the local agent read the
+ * same pick, so one CLI never answers as two different programs.
+ */
+async function resolveWithSettings(
+  lookup: CliExecutableLookup
+): Promise<ResolvedCliExecutable | null> {
+  return await resolveCliExecutable(lookup, { settingsOverride: settingsOverrideFor(lookup) })
+}
+
+function getResolvedWithSettings(
+  lookup: CliExecutableLookup
+): ResolvedCliExecutable | null | undefined {
+  return getResolvedCliExecutable(lookup.command, settingsOverrideFor(lookup))
+}
+
+/**
  * `pie` (`@talex-touch/touch-pie`) is pi's installer-shaped alias: it finds `pi` and passes every
  * argument through, intercepting only `update` / `version` / `about`. Same protocol, same
  * catalogue under `~/.pi/agent` — so it is the fallback form of the pi provider, searched only
  * once every location for `pi` itself has come up empty.
  */
-const PI_CLI_LOOKUP: CliExecutableLookup = {
+export const PI_CLI_LOOKUP: CliExecutableLookup = {
   command: 'pi',
   fallbackCommands: ['pie'],
   envOverride: 'TUFF_PI_CLI_PATH'
 }
 
 /**
- * Resolves the `pi` binary, preferring an explicit override, then PATH, then the version-manager and
- * fixed roots. The result is cached because a miss walks several directories and the answer only
- * changes when the user installs or removes the CLI.
+ * Resolves the `pi` binary: an explicit override, the settings pick, then PATH, then the
+ * version-manager and fixed roots. The result is cached because a miss walks several directories
+ * and the answer only changes when the user installs or removes the CLI.
  */
 export async function resolvePiExecutable(): Promise<string | null> {
-  return (await resolveCliExecutable(PI_CLI_LOOKUP))?.path ?? null
+  return (await resolveWithSettings(PI_CLI_LOOKUP))?.path ?? null
 }
 
 /** Test seam and install-time refresh: drops the memoised lookup so the next resolve re-scans. */
@@ -99,7 +145,7 @@ export function resetPiExecutableCache(): void {
  * CLI. Call {@link probePiCliAvailability} once at startup to settle it.
  */
 export function getResolvedPiExecutable(): string | null | undefined {
-  const resolved = getResolvedCliExecutable(PI_CLI_LOOKUP.command)
+  const resolved = getResolvedWithSettings(PI_CLI_LOOKUP)
   return resolved === undefined ? undefined : (resolved?.path ?? null)
 }
 
@@ -108,24 +154,24 @@ export function getResolvedPiExecutable(): string | null | undefined {
  * hangs off this ("Pi · Touch Pie"); `undefined` while unprobed or when neither exists.
  */
 export function getResolvedPiForm(): CliExecutableForm | undefined {
-  return getResolvedCliExecutable(PI_CLI_LOOKUP.command)?.form
+  return getResolvedWithSettings(PI_CLI_LOOKUP)?.form
 }
 
 export async function probePiCliAvailability(): Promise<boolean> {
   return Boolean(await resolvePiExecutable())
 }
 
-const OMP_CLI_LOOKUP: CliExecutableLookup = {
+export const OMP_CLI_LOOKUP: CliExecutableLookup = {
   command: 'omp',
   envOverride: 'TUFF_OMP_CLI_PATH'
 }
 
 export async function resolveOmpExecutable(): Promise<string | null> {
-  return (await resolveCliExecutable(OMP_CLI_LOOKUP))?.path ?? null
+  return (await resolveWithSettings(OMP_CLI_LOOKUP))?.path ?? null
 }
 
 export function getResolvedOmpExecutable(): string | null | undefined {
-  const resolved = getResolvedCliExecutable(OMP_CLI_LOOKUP.command)
+  const resolved = getResolvedWithSettings(OMP_CLI_LOOKUP)
   return resolved === undefined ? undefined : (resolved?.path ?? null)
 }
 
@@ -133,17 +179,17 @@ export async function probeOmpCliAvailability(): Promise<boolean> {
   return Boolean(await resolveOmpExecutable())
 }
 
-const CODEX_CLI_LOOKUP: CliExecutableLookup = {
+export const CODEX_CLI_LOOKUP: CliExecutableLookup = {
   command: 'codex',
   envOverride: 'TUFF_CODEX_CLI_PATH'
 }
 
 export async function resolveCodexExecutable(): Promise<string | null> {
-  return (await resolveCliExecutable(CODEX_CLI_LOOKUP))?.path ?? null
+  return (await resolveWithSettings(CODEX_CLI_LOOKUP))?.path ?? null
 }
 
 export function getResolvedCodexExecutable(): string | null | undefined {
-  const resolved = getResolvedCliExecutable(CODEX_CLI_LOOKUP.command)
+  const resolved = getResolvedWithSettings(CODEX_CLI_LOOKUP)
   return resolved === undefined ? undefined : (resolved?.path ?? null)
 }
 
@@ -151,17 +197,17 @@ export async function probeCodexCliAvailability(): Promise<boolean> {
   return Boolean(await resolveCodexExecutable())
 }
 
-const CLAUDE_CLI_LOOKUP: CliExecutableLookup = {
+export const CLAUDE_CLI_LOOKUP: CliExecutableLookup = {
   command: 'claude',
   envOverride: 'TUFF_CLAUDE_CLI_PATH'
 }
 
 export async function resolveClaudeExecutable(): Promise<string | null> {
-  return (await resolveCliExecutable(CLAUDE_CLI_LOOKUP))?.path ?? null
+  return (await resolveWithSettings(CLAUDE_CLI_LOOKUP))?.path ?? null
 }
 
 export function getResolvedClaudeExecutable(): string | null | undefined {
-  const resolved = getResolvedCliExecutable(CLAUDE_CLI_LOOKUP.command)
+  const resolved = getResolvedWithSettings(CLAUDE_CLI_LOOKUP)
   return resolved === undefined ? undefined : (resolved?.path ?? null)
 }
 
@@ -174,6 +220,42 @@ export function resetAllCliExecutableCaches(): void {
   resetCliExecutableCache(OMP_CLI_LOOKUP.command)
   resetCliExecutableCache(CODEX_CLI_LOOKUP.command)
   resetCliExecutableCache(CLAUDE_CLI_LOOKUP.command)
+}
+
+/**
+ * What the probe found, by name only: the resolved form for pi, the CLI's name for the others, or
+ * `absent`. Paths stay out — they carry the user's name, and whether the CLI is there is the only
+ * fact anyone can act on.
+ */
+export interface CliExecutablesSummary {
+  pi: CliExecutableForm | 'absent' | 'unprobed'
+  omp: 'omp' | 'absent'
+  codex: 'codex' | 'absent'
+  claude: 'claude' | 'absent'
+}
+
+export function describeResolvedCliExecutables(): CliExecutablesSummary {
+  return {
+    pi: getResolvedPiExecutable() === undefined ? 'unprobed' : (getResolvedPiForm() ?? 'absent'),
+    omp: getResolvedOmpExecutable() ? 'omp' : 'absent',
+    codex: getResolvedCodexExecutable() ? 'codex' : 'absent',
+    claude: getResolvedClaudeExecutable() ? 'claude' : 'absent'
+  }
+}
+
+/**
+ * Resolves all four CLIs with the current settings overrides, so config assembly — which reads the
+ * memo synchronously on every invoke — sees each one as present or absent rather than unprobed.
+ * A CLI that fails to resolve is just absent: most machines do not have all four.
+ */
+export async function probeAllCliExecutables(): Promise<CliExecutablesSummary> {
+  await Promise.allSettled([
+    probeOmpCliAvailability(),
+    probePiCliAvailability(),
+    probeCodexCliAvailability(),
+    probeClaudeCliAvailability()
+  ])
+  return describeResolvedCliExecutables()
 }
 
 // ============================================================================

@@ -460,7 +460,8 @@ describe('Intelligence typed transport integration', () => {
     expect(auditRows[0]).toMatchObject({
       traceId: 'trace-typed-invoke-success',
       capabilityId: 'text.chat',
-      provider: 'typed-invoke-runtime',
+      // The selected channel's config id (R-A4); the result above keeps what the provider reported.
+      provider: 'typed-invoke-provider',
       model: 'gpt-4o-mini',
       promptTokens: 12,
       completionTokens: 8,
@@ -674,7 +675,8 @@ describe('Intelligence typed transport integration', () => {
     expect(auditRows[0]).toMatchObject({
       traceId: 'trace-typed-fallback',
       capabilityId: 'text.chat',
-      provider: 'typed-fallback-runtime',
+      // The fallback channel's config id (R-A4); `onEnd` above still sees the chunk's provider.
+      provider: 'typed-fallback-provider',
       model: 'gpt-4o-mini',
       promptTokens: 15,
       completionTokens: 5,

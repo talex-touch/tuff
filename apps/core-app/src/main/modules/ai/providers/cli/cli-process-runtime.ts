@@ -8,9 +8,9 @@ import type { ChildProcessByStdio } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import type { Logger } from '../../../../utils/logger'
 import { spawn } from 'node:child_process'
-import { delimiter, dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import { spillAttachments } from '../attachment-spill'
+import { withExecutableDirOnPath } from './cli-executable'
 
 /**
  * The part of a local-CLI chat turn that is the same for every CLI: spawn the child with a
@@ -150,14 +150,9 @@ export async function* runCliChat(
     child = spawn(spec.executable, resolveArgs(spec, attachments.paths), {
       ...(spec.cwd ? { cwd: spec.cwd } : {}),
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        // These CLIs are `#!/usr/bin/env node` scripts and version managers keep `node` beside
-        // them. A GUI launch inherits a PATH that contains neither, so without this the shebang
-        // fails to resolve even though the binary itself was found by absolute path.
-        PATH: [dirname(spec.executable), process.env.PATH].filter(Boolean).join(delimiter),
-        ...spec.env
-      }
+      // `node` beside the executable goes in front of PATH (see the helper); the provider's own
+      // variables go on top of that.
+      env: { ...withExecutableDirOnPath(process.env, spec.executable), ...spec.env }
     })
   } catch (error) {
     // A spawn that fails synchronously throws here, before the run's own cleanup path exists.

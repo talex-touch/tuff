@@ -7,11 +7,13 @@ const {
   ensureIntelligenceConfigLoadedMock,
   getCapabilityOptionsMock,
   aiInvokeMock,
+  embeddingGenerateMock,
   pushInboxEntryMock
 } = vi.hoisted(() => ({
   ensureIntelligenceConfigLoadedMock: vi.fn(),
   getCapabilityOptionsMock: vi.fn(),
   aiInvokeMock: vi.fn(),
+  embeddingGenerateMock: vi.fn(),
   pushInboxEntryMock: vi.fn()
 }))
 
@@ -122,11 +124,13 @@ vi.mock('../ai/intelligence-config', () => ({
 
 vi.mock('../ai/intelligence-sdk', () => ({
   tuffIntelligence: {
-    invoke: aiInvokeMock
+    invoke: aiInvokeMock,
+    embedding: { generate: embeddingGenerateMock }
   }
 }))
 
 import { ocrService } from './ocr-service'
+import { createUsageLimitError } from '../ai/usage-ledger/usage-limits'
 
 interface OcrServiceTestAccess {
   processQueue: () => Promise<void>
@@ -167,6 +171,7 @@ afterEach(() => {
   ensureIntelligenceConfigLoadedMock.mockReset()
   getCapabilityOptionsMock.mockReset()
   aiInvokeMock.mockReset()
+  embeddingGenerateMock.mockReset()
   pushInboxEntryMock.mockReset()
 })
 
@@ -214,6 +219,31 @@ describe('OcrService runAgentJob local-first options', () => {
     expect(call[1]).toMatchObject({ language: 'fr-FR' })
     expect(call[2].allowedProviderIds[0]).toBe('local-system-ocr')
     expect(call[2].modelPreference[0]).toBe('system-ocr')
+    // Stable usage-ledger caller of the clipboard OCR agent (AC-B5).
+    expect(call[2].metadata).toEqual({ caller: 'core.ocr.clipboard' })
+  })
+
+  it('counts the OCR text embedding under its own stable caller', async () => {
+    getCapabilityOptionsMock.mockReturnValue({
+      allowedProviderIds: ['openai-default'],
+      modelPreference: ['text-embedding-3-small']
+    })
+    embeddingGenerateMock.mockResolvedValue({ result: [0.25, 0.5] })
+    const service = ocrService as unknown as {
+      generateEmbedding: (text: string) => Promise<number[] | null>
+    }
+
+    await expect(service.generateEmbedding('recognised clipboard text')).resolves.toEqual([
+      0.25, 0.5
+    ])
+    expect(embeddingGenerateMock).toHaveBeenCalledWith(
+      { text: 'recognised clipboard text' },
+      {
+        modelPreference: ['text-embedding-3-small'],
+        allowedProviderIds: ['openai-default'],
+        metadata: { caller: 'core.ocr.embedding' }
+      }
+    )
   })
 
   it('auto-disables queue after repeated failures and pushes inbox warning', async () => {
@@ -239,6 +269,79 @@ describe('OcrService runAgentJob local-first options', () => {
     const service = ocrService as unknown as OcrServiceTestAccess
     const reason = service.classifyRetryableAgentError(new Error('fetch failed'))
     expect(reason).toBe('OCR provider network failure')
+  })
+
+  it('ends a job the global usage limit refused with that code and never retries it', async () => {
+    getCapabilityOptionsMock.mockReturnValue({ allowedProviderIds: [], modelPreference: [] })
+    aiInvokeMock.mockRejectedValue(
+      createUsageLimitError('vision.ocr', {
+        key: 'requestsPerDay',
+        used: 3,
+        max: 3,
+        resetsAt: Date.parse('2026-10-03T16:00:00.000Z')
+      })
+    )
+    const service = ocrService as unknown as OcrServiceTestAccess & {
+      withDbWrite: (label: string, operation: (db: unknown) => Promise<unknown>) => Promise<unknown>
+    }
+    const updateClipboardMeta = vi
+      .spyOn(service, 'updateClipboardMeta')
+      .mockResolvedValue(undefined)
+    vi.spyOn(service, 'normalizeSourceForAgent').mockResolvedValue({
+      type: 'data-url',
+      dataUrl: 'data:image/png;base64,AA=='
+    })
+    vi.spyOn(service, 'buildAgentPrompt').mockReturnValue('prompt-template')
+    const deferJob = vi.spyOn(service, 'deferJob').mockResolvedValue(undefined)
+    const failJob = vi.spyOn(service, 'failJob').mockResolvedValue(undefined)
+    const recordJobFailure = vi.spyOn(service, 'recordJobFailure').mockResolvedValue(undefined)
+    const jobUpdates: unknown[] = []
+    const fakeDb = {
+      update: () => ({
+        set: (values: unknown) => {
+          jobUpdates.push(values)
+          return { where: async () => undefined }
+        }
+      })
+    }
+    vi.spyOn(service, 'withDbWrite').mockImplementation(async (_label, operation) =>
+      operation(fakeDb)
+    )
+    const previousDb = service.db
+    service.db = fakeDb
+
+    try {
+      await service.runAgentJob(7, {
+        id: 7,
+        clipboardId: 321,
+        attempts: 1,
+        payloadHash: 'hash-7',
+        meta: JSON.stringify({ source: { type: 'clipboard' }, options: {} })
+      })
+    } finally {
+      service.db = previousDb
+    }
+
+    expect(aiInvokeMock).toHaveBeenCalledOnce()
+    expect(jobUpdates).toEqual([
+      expect.objectContaining({
+        status: 'failed',
+        lastError: 'USAGE_LIMIT_REACHED',
+        nextRetryAt: null
+      })
+    ])
+    expect(updateClipboardMeta).toHaveBeenLastCalledWith(
+      321,
+      expect.objectContaining({
+        ocr_status: 'failed',
+        ocr_last_error: 'USAGE_LIMIT_REACHED',
+        ocr_next_retry_at: null
+      })
+    )
+    // No retry path: neither deferred nor re-queued, and not counted toward disabling the queue.
+    expect(deferJob).not.toHaveBeenCalled()
+    expect(failJob).not.toHaveBeenCalled()
+    expect(recordJobFailure).not.toHaveBeenCalled()
   })
 
   it('escalates cooldown window for repeated queue auto-disable', async () => {

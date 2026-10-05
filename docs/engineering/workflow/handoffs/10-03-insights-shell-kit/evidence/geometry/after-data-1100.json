@@ -1,0 +1,230 @@
+{
+  "viewport": "1100x1302",
+  "header": {
+    "box": {
+      "x": 300,
+      "y": 56,
+      "w": 760,
+      "h": 87.2
+    },
+    "flexDirection": "row",
+    "alignItems": "flex-end",
+    "marginBottom": "24px"
+  },
+  "h1": {
+    "box": {
+      "x": 300,
+      "y": 56,
+      "w": 104,
+      "h": 31.2
+    },
+    "fontSize": "26px",
+    "fontWeight": "600",
+    "lineHeight": "31.2px",
+    "userSelect": "none",
+    "color": "rgb(245, 245, 247)"
+  },
+  "actions": {
+    "box": {
+      "x": 300,
+      "y": 111.2,
+      "w": 760.5,
+      "h": 32
+    },
+    "flexDirection": "row",
+    "gap": "8px",
+    "marginRight": "0px"
+  },
+  "actionChildren": [
+    {
+      "id": "voice-status-alert",
+      "box": {
+        "x": 300,
+        "y": 112.2,
+        "w": 584.5,
+        "h": 30
+      }
+    },
+    {
+      "id": "voice-insights-records-jump",
+      "box": {
+        "x": 892.5,
+        "y": 111.2,
+        "w": 80,
+        "h": 32
+      }
+    },
+    {
+      "id": "voice-insights-more",
+      "box": {
+        "x": 980.5,
+        "y": 111.2,
+        "w": 80,
+        "h": 32
+      }
+    }
+  ],
+  "hero": {
+    "box": {
+      "x": 300,
+      "y": 167.2,
+      "w": 760,
+      "h": 59
+    },
+    "label": {
+      "box": {
+        "x": 300,
+        "y": 167.2,
+        "w": 760,
+        "h": 18
+      },
+      "fontSize": "12px",
+      "color": "rgb(174, 174, 178)",
+      "gap": "8px"
+    },
+    "value": {
+      "box": {
+        "x": 300,
+        "y": 193.2,
+        "w": 190.7,
+        "h": 33
+      },
+      "fontSize": "30px",
+      "fontWeight": "600",
+      "lineHeight": "33px",
+      "color": "rgb(245, 245, 247)"
+    },
+    "basis": {
+      "box": {
+        "x": 356,
+        "y": 169.2,
+        "w": 14,
+        "h": 14
+      },
+      "tabindex": "0",
+      "role": "img",
+      "color": "rgb(217, 164, 65)",
+      "cursor": "help"
+    }
+  },
+  "metrics": [
+    {
+      "metric": "characters",
+      "box": {
+        "x": 300,
+        "y": 250.2,
+        "w": 237.3,
+        "h": 116
+      },
+      "paddingTop": "24px",
+      "minHeight": "116px",
+      "justifyContent": "center",
+      "value": {
+        "box": {
+          "x": 325,
+          "y": 278.9,
+          "w": 93.3,
+          "h": 34.5
+        },
+        "fontSize": "30px",
+        "fontWeight": "700",
+        "letterSpacing": "-0.75px",
+        "color": "rgb(245, 245, 247)"
+      },
+      "unit": null,
+      "label": {
+        "box": {
+          "x": 325,
+          "y": 313.4,
+          "w": 187.3,
+          "h": 24
+        },
+        "fontSize": "16px",
+        "color": "rgb(245, 245, 247)",
+        "marginTop": "0px"
+      }
+    },
+    {
+      "metric": "rate",
+      "box": {
+        "x": 561.3,
+        "y": 250.2,
+        "w": 237.3,
+        "h": 116
+      },
+      "paddingTop": "24px",
+      "minHeight": "116px",
+      "justifyContent": "center",
+      "value": {
+        "box": {
+          "x": 586.3,
+          "y": 278.9,
+          "w": 83.1,
+          "h": 34.5
+        },
+        "fontSize": "30px",
+        "fontWeight": "700",
+        "letterSpacing": "-0.75px",
+        "color": "rgb(245, 245, 247)"
+      },
+      "unit": {
+        "box": {
+          "x": 677.4,
+          "y": 291.9,
+          "w": 46.4,
+          "h": 21
+        },
+        "fontSize": "14px",
+        "fontWeight": "600",
+        "color": "rgb(209, 209, 214)"
+      },
+      "label": {
+        "box": {
+          "x": 586.3,
+          "y": 313.4,
+          "w": 187.3,
+          "h": 24
+        },
+        "fontSize": "16px",
+        "color": "rgb(245, 245, 247)",
+        "marginTop": "0px"
+      }
+    },
+    {
+      "metric": "duration",
+      "box": {
+        "x": 822.7,
+        "y": 250.2,
+        "w": 237.3,
+        "h": 116
+      },
+      "paddingTop": "24px",
+      "minHeight": "116px",
+      "justifyContent": "center",
+      "value": {
+        "box": {
+          "x": 847.7,
+          "y": 278.9,
+          "w": 102.2,
+          "h": 34.5
+        },
+        "fontSize": "30px",
+        "fontWeight": "700",
+        "letterSpacing": "-0.75px",
+        "color": "rgb(245, 245, 247)"
+      },
+      "unit": null,
+      "label": {
+        "box": {
+          "x": 847.7,
+          "y": 313.4,
+          "w": 187.3,
+          "h": 24
+        },
+        "fontSize": "16px",
+        "color": "rgb(245, 245, 247)",
+        "marginTop": "0px"
+      }
+    }
+  ]
+}

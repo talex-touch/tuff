@@ -2,8 +2,8 @@
 
 > 文件名：`roadmap-brand-new.md`
 > 定位：全新的产品、架构与工程演化基线。
-> 维护边界：本文描述长期方向、阶段依赖和退出门禁；不复制两周任务、实时 Trellis 状态、本地分支、工作区状态或固定版本号。
-> 当前事实源：版本读取根目录 `package.json` 与 `apps/core-app/package.json`；实时执行顺序读取 `docs/plan-prd/TODO.md`；任务状态读取 `.trellis/tasks/`；完成事实读取 `CHANGES.md` 与对应 Evidence Matrix。
+> 维护边界：本文描述长期方向、阶段依赖和退出门禁；不复制两周任务、实时变更状态、本地分支、工作区状态或固定版本号。
+> 当前事实源：版本读取根目录 `package.json` 与 `apps/core-app/package.json`；实时执行顺序读取 `docs/plan-prd/TODO.md`；当前变更状态读取 `docs/comet/changes/`；旧任务归属读取 `docs/engineering/workflow/backlog.md`；完成事实读取 `CHANGES.md` 与对应 Evidence Matrix。
 
 ## 0. 总体判断
 
@@ -588,7 +588,7 @@ G0 建立基线，后续各阶段只比较同一口径的改善。不能在没�
 | --- | --- |
 | 项目长期路线 | `roadmap-brand-new.md` |
 | 当前两周做什么 | `docs/plan-prd/TODO.md` |
-| 某个任务由谁执行 | `.trellis/tasks/` 与任务元数据 |
+| 某个目标由谁执行 | `docs/comet/changes/` 的工作区绑定与交接状态；旧任务查 `docs/engineering/workflow/backlog.md` |
 | 已经发生了什么 | `docs/plan-prd/01-project/CHANGES.md` |
 | 某项是否真的完成 | 对应 Evidence Matrix 或 `docs/engineering/reports/` |
 | 当前代码版本 | 根目录与 `apps/core-app/package.json` |
@@ -612,8 +612,8 @@ G0 建立基线，后续各阶段只比较同一口径的改善。不能在没�
 - 文档事实源边界：`docs/INDEX.md`
 - 现有路线和历史阶段：`ROADMAP.md`
 - 现有实施路线：`docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md`
-- 全链路完成要求：`.trellis/tasks/08-23-full-product-completion/prd.md`
-- 搜索与跨平台审计：`.trellis/tasks/07-13-search-crossplatform-audit/prd.md`
+- 全链路完成要求：`docs/engineering/workflow/backlog.md#08-23-full-product-completion`
+- 搜索与跨平台审计：`docs/engineering/reports/search-crossplatform-audit.md`
 - AI Stable 与产品化专题：`docs/plan-prd/TODO-AI.md`
 - Search / Indexing 专题：`docs/plan-prd/TODO-R3.md`
 - 工程报告与证据索引：`docs/engineering/reports/README.md`

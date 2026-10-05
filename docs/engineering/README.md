@@ -1,24 +1,32 @@
 # Engineering Docs
 
-> 更新时间：2026-07-16
+> 更新时间：2026-10-03
 > 定位：工程规范、交接、审计和 curated evidence 入口。当前任务优先级见 [`../plan-prd/TODO.md`](../plan-prd/TODO.md)。
 
 ## 当前交接
 
 - [`security-hardening-handoff-2026-07-15.md`](./security-hardening-handoff-2026-07-15.md)：安全加固完成项、剩余边界和真机前提。
 - [`security-hardening-remaining-backlog-2026-07-15.md`](./security-hardening-remaining-backlog-2026-07-15.md)：插件隔离、sync 批量化、usage 双写等实施细节。
-- [Search & Cross-Platform Audit](../../.trellis/tasks/07-13-search-crossplatform-audit/prd.md)：搜索系统与跨平台风险 backlog。
+- [Search & Cross-Platform Audit](./reports/search-crossplatform-audit.md)：搜索系统与跨平台风险 backlog（活审计）。
+- [search-index split 写路径验收](./reports/search-index-split-write-acceptance.md)：应用级验收矩阵与执行记录（活报告）。
 
 交接文档中的 commit、worktree、并行修改和“未 push”描述是生成当日快照；执行前必须读取当前仓库状态，不把快照当实时事实。
 
 ## 工程规范
 
+- [`specs/frontend/index.md`](./specs/frontend/index.md)、[`specs/main-process/index.md`](./specs/main-process/index.md)：分层开发规范与检查清单，编辑对应层前先读；共享思考指南见 [`specs/guides/index.md`](./specs/guides/index.md)。
 - [`monorepo-standards.md`](./monorepo-standards.md)：monorepo 工程约束。
 - [`coreapp-ui-contract.md`](./coreapp-ui-contract.md)：CoreApp renderer 与 TuffEx 使用边界。
 - [`cloud-sync-sdk-usage.md`](./cloud-sync-sdk-usage.md)：Cloud Sync SDK 使用说明。
 - [`sensitive-data-inventory.md`](./sensitive-data-inventory.md)：敏感数据 owner、存储、导出、删除、保留与迁移清单；机器可读源为 [`sensitive-data-inventory.json`](./sensitive-data-inventory.json)。
 - [`tuff-intelligence-rollout-todo.md`](./tuff-intelligence-rollout-todo.md)：Intelligence rollout 专题。
 - [`catalog-service-boundary.md`](./catalog-service-boundary.md)：R8-F CatalogService 的已完成/未完成边界 —— 服务契约已成立，触发面未接出。
+
+## 迁移前任务
+
+- [`workflow/backlog.md`](./workflow/backlog.md)：切换到 Comet Native 时冻结的旧活跃任务（owner、下一步、blocker、证据）；不是活动任务。
+- [`workflow/retired-task-index.json`](./workflow/retired-task-index.json)：全部旧任务（冻结与已归档）的身份登记。
+- [`workflow/handoffs/`](./workflow/handoffs/README.md)：迁移时有未保存内容的旧任务文档与证据的逐字节交接。
 
 ## Evidence 与报告
 
@@ -31,7 +39,7 @@
 
 ## 维护规则
 
-1. 新过程资料优先补到现有专题、Trellis task 或 `reports/`，不在本目录根部堆叠临时 handoff。
+1. 新过程资料优先补到现有专题、当前 Comet 变更或 `reports/`，不在本目录根部堆叠临时 handoff。
 2. `reports/` 只提交摘要、manifest/checklist、严格验证输出和最终可复核 evidence。
 3. 调试日志、pid、完整 HAR、重复截图、Chromium profile 和 user-data 进入 ignored evidence 目录。
 4. Release notes 保留在根目录 `notes/`，因为发布 workflow 消费该路径。

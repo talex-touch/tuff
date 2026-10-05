@@ -1,4 +1,0 @@
-{"file":".trellis/tasks/archive/2026-09/09-29-recommendation-usage-refactor/prd.md","reason":"本次推荐重构需求源；评审稿，尚未批准实现。"}
-{"file":".trellis/spec/main-process/database-write-contracts.md","reason":"单写者、主辅库实际读写位置、退出与数据库故障边界。"}
-{"file":".trellis/spec/main-process/recommendation-source-registry-contracts.md","reason":"来源注册、稳定身份、批量重建和单来源故障隔离。"}
-{"file":".trellis/spec/main-process/recommendation-freshness-contracts.md","reason":"新鲜度证据、缓存失效读屏障和推荐理由；产品评分变更需评审后修订。"}

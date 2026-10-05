@@ -1,0 +1,91 @@
+---
+title: AiAnswer 问答助手
+description: 多轮问答，每一轮回答由 TxStreamElement 流式写出，带引用 chip、代码和逐行写出的表格，写完才出现操作、来源与追问
+category: TemplateAi
+status: beta
+since: 0.6.3
+tags: [template, ai, answer, streaming, citation]
+syncStatus: reviewed
+verified: false
+---
+
+## 用法
+
+### 多轮问答
+
+:::TuffDemoWrapper{demo="TemplateAiAnswerDemo" code-lang="vue" title="多轮问答" description="进入视口后自动演示；第一问答完后自动追问一次，点一下或按任意键就交给你。随时可以停止、重新生成或自己提问。"}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive } from 'vue'
+  import TemplateFrame from './TemplateFrame.vue'
+
+  // 一轮 = 提问一行 + 回答一行。新行插在固定的 tail 前面，
+  // 已有的行只挂载一次；会话前缀每次重置都换，同时做 stream 的 key
+  const state = reactive({ session, turns: [], items: [{ id: `${session}-tail`, kind: 'tail' }] })
+
+  // 停止生成：源头到此结束，组件把已经收到的部分显影完
+  function stop() {
+    lastTurn.value.live = false
+  }
+  </script>
+
+  <template>
+    <TemplateFrame title="问答助手" @enter="start">
+      <TxConversationStream :key="state.session" :items="state.items" item-key="id" :streaming="answering">
+        <template #item="{ item }">
+          <TxChatMessage v-if="item.kind === 'ask'" :message="askMessage(item)" :markdown="false" />
+          <TxStreamElement
+            v-else-if="item.kind === 'reply'"
+            :key="turnOf(item).gen"
+            :content="turnOf(item).received"
+            :streaming="turnOf(item).live"
+            :sources="sources"
+            @cite="onCite"
+            @done="onDone"
+          >
+            <template #footer="{ done }">
+              <div v-if="done">
+                <TxMessageActions :copy-text="turnOf(item).received" regenerable @regenerate="regenerate" />
+                <TxSources :sources="citedBy(item)" variant="stack" />
+                <TxSuggestionChips :suggestions="followUpsOf(item)" layout="list" @select="onFollowUp" />
+              </div>
+            </template>
+          </TxStreamElement>
+        </template>
+      </TxConversationStream>
+      <TxButton v-if="sourcing" size="sm" @click="stop">停止生成</TxButton>
+      <TxPromptBar v-model="draft" :submitting="sourcing" @send="onSend" />
+    </TemplateFrame>
+  </template>
+---
+:::
+
+## 概述
+
+「问答助手」是一段多轮问答：读者问 CoreBox 第一次搜索为什么慢，回答由一个 TxStreamElement 写出，标题、带编号引用的段落、列表和代码块在同一个节奏里逐词出现。第一问答完后，模板替读者追问一次「预热会多占多少内存」，这一次回答里的表格交给 TxStreamMarkdown 逐行写出。
+
+适合答案引擎、帮助中心和产品内的 AI 助手这类一问一答、结论要能溯源的界面。模板里的回答都是预设文字，表格是示例数据，只作定性比较。
+
+- 模板进入视口后开始，第一问的回答中途停顿一次；写完后静置约 1.6 秒，自动追问一次。在模板里点一下或按任意键，就不再自动追问，交给你来问。
+- 回答写完才出现操作行（复制、重新生成、点赞、点踩）、来源和追问；点一个追问，就在下面追加新的一轮。在输入框里自己提问，会得到一段预设回答。
+- 回答写出时可以「停止生成」：源头立刻结束，已经收到的内容照常显影完，标上「已停止生成」，之后仍然可以重新生成。
+- 点回答里的编号引用，这一轮的来源列表会展开，输入框上方显示「宿主会打开：…」，不会离开页面。
+- 对话列跟随最新的内容滚动，向上翻看时停止跟随，整页不会被带动。列内（640–959px）回答占满整列，960px 起居中显示；窄屏（< 640px）收起标题栏的状态和回答的头像。开启「减弱动态效果」时直接呈现两轮完整的问答，不启动任何计时器。
+
+## 自定义
+
+- 接真实服务：把模型的 token 依次拼进 `content`，源头没结束时保持 `streaming` 为真。停止生成就是把 `streaming` 置为假，组件会把已经收到的部分显影完。
+- 引用按 `sources` 的顺序编号，`[n]` 对应 `sources[n - 1]`，没有对应来源的标记保持为文字。复制和分享用你手里的完整文本，不要读屏幕上的显示，显示最多落后源头 `maxLagMs`。
+- 对话列表的行 id 要全局唯一。模板每次重置都换一个会话前缀，并用它做 TxConversationStream 的 `key`，量过的行高不会串到新对话里。
+- 新行插在固定的最后一行（tail）前面。TxConversationStream 把最后一项放在虚拟列表之外，有新项到来时会重挂载它；有了 tail，每一轮只挂载一次，正在写的回答不会被打断。
+
+## 相关组件
+
+| 区域 | 组件 | 作用 |
+|---|---|---|
+| 标题栏 | [TxIconButton](/docs/dev/components/button) | 回答状态与「重新开始」 |
+| 对话 | [TxConversationStream](/docs/dev/components/conversation-stream)、[TxChatMessage](/docs/dev/components/chat) | 虚拟滚动的多轮对话，跟随最新内容；读者的提问气泡 |
+| 回答 | [TxStreamElement](/docs/dev/components/stream-element) | 标题、段落、列表和代码在同一个时钟上逐词显影，`[n]` 变成引用 chip，表格交给 TxStreamMarkdown 逐行写出 |
+| 回答之后 | [TxMessageActions](/docs/dev/components/message-actions)、[TxSources](/docs/dev/components/sources)、[TxSuggestionChips](/docs/dev/components/suggestion-chips) | 复制、重新生成和点赞点踩；引用的来源；追问候选，都放在 `footer` 插槽里，等回答写完 |
+| 输入 | [TxPromptBar](/docs/dev/components/prompt-bar)、[TxButton](/docs/dev/components/button) | 提问；回答写出时的「停止生成」 |

@@ -12,6 +12,7 @@ asarUnpack:
   - '**/*.dylib'
   - '**/*.dll'
   - '**/*.so'
+  - '**/tuff-native-translation'
   - '**/node_modules/sharp/**'
   - '**/node_modules/@img/**'
   - '**/node_modules/ffmpeg-static/**'

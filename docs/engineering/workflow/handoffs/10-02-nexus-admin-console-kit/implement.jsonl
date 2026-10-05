@@ -1,0 +1,9 @@
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/design.md", "reason": "Parent contracts for the kit (section 2.2), nav end state (section 3) and the page migration definition of done (section 4)"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/research/page-inventory.md", "reason": "Duplication map, the 8 gate copies, 13 formatter copies, and the audits page defects and tests to preserve"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/research/visual-baseline-2026-10-02.md", "reason": "Real-browser defects of /admin/audits that the pilot must close"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "AdminPageShell contract (:72), explicit imports (:70), Loading States (:311-341)"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Composable conventions for useAdminGate/useAdminList/useAdminQueryState/useAdminFormat"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "URL query as the source of list/filter state; no Pinia for page-local state"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Typed list fetchers and filter shapes"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "SSR-safety and admin request-generation rule (:118)"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Collapsing duplicated helpers into one owner without leaving stale copies"}

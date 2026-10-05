@@ -168,13 +168,10 @@ vi.mock('../../modules/box/adapter/hooks/useClipboard', () => ({
 
 vi.mock('../../modules/box/adapter/hooks/useDetach', () => ({
   useDetach: () => ({
-    flowVisible: false,
-    flowSessionId: '',
-    flowPayload: undefined,
-    flowAnchor: 'corner',
-    closeFlowSelector: () => {},
-    dispatchFlow: () => {},
-    openFlowSelector: () => {}
+    detachFeature: async () => {},
+    detachUIMode: async () => {},
+    openFlowPanel: async () => {},
+    dispatchFlow: async () => {}
   })
 }))
 
@@ -277,7 +274,6 @@ const stubs = {
     template: '<div class="normal-list-row">{{ item.render.basic.title }}</div>'
   },
   DivisionBoxHeader: { template: '<div />' },
-  FlowSelector: { template: '<div />' },
   PrefixPart: { template: '<div />' },
   PreviewHistoryPanel: { template: '<div />' },
   TagSection: { template: '<div />' },
@@ -938,6 +934,56 @@ describe('CoreBox list scroll anchoring', () => {
     expect(anchoring).toEqual([
       { selector: '.CoreBoxRes-Main > .scroll-area .item-list.item-list--flip', value: 'none' }
     ])
+  })
+})
+
+/**
+ * Under the ⌘K card's Flow page CoreBox blurs its own content. CSS alone draws it, so the rules are
+ * asserted in the compiled stylesheet: a `filter` on the header and the results (a backdrop filter
+ * in this transparent window would leave them sharp underneath), eased, and switched without easing
+ * when the motion gate is closed.
+ */
+describe('CoreBox blur under a Flow page', () => {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const sfcPath = resolve(here, 'CoreBox.vue')
+
+  /** The compiled stylesheet with comments dropped and whitespace collapsed to single spaces. */
+  function compiledCss(): string {
+    const blocks = [...readFileSync(sfcPath, 'utf8').matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
+    return blocks
+      .map(
+        ([, block]) =>
+          sass.compileString(block ?? '', { url: pathToFileURL(sfcPath), syntax: 'scss' }).css
+      )
+      .join('\n')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\s+/g, ' ')
+  }
+
+  const CONTENT = '.CoreBox-Wrapper > .CoreBox, .CoreBox-Wrapper > .CoreBoxRes'
+
+  it('blurs the header and the results with a filter, never a backdrop filter', () => {
+    const css = compiledCss()
+
+    expect(css).toContain(
+      '.CoreBox-Wrapper.CoreBox-Wrapper--meta-blur > .CoreBox, ' +
+        '.CoreBox-Wrapper.CoreBox-Wrapper--meta-blur > .CoreBoxRes { filter: blur(8px); }'
+    )
+    expect(css).not.toMatch(/meta-blur[^{]*\{[^}]*backdrop-filter/)
+  })
+
+  it('eases the blur in and out, and only switches it with the motion gate closed', () => {
+    const css = compiledCss()
+
+    expect(css).toContain(
+      `${CONTENT} { transition: filter 0.22s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)); }`
+    )
+    expect(css).toContain(
+      `@media (prefers-reduced-motion: reduce) { ${CONTENT} { transition: none; } }`
+    )
+    expect(css).toMatch(
+      /html\[data-low-battery-motion=["']1["']\] \.CoreBox-Wrapper > \.CoreBox, html\[data-low-battery-motion=["']1["']\] \.CoreBox-Wrapper > \.CoreBoxRes \{ transition: none; \}/
+    )
   })
 })
 

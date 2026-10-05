@@ -4,6 +4,7 @@ import type {
   AiImportApplyRequest,
   AiImportApplyResult,
   AiImportCandidate,
+  AiImportedConfigItem,
   AiImportItemKind,
   AiImportPreviewRequest,
   AiImportScanResult,
@@ -11,6 +12,8 @@ import type {
   AiImportSourceSnapshot,
   AiMcpImportCandidate
 } from '@talex-touch/utils/types/ai-orchestrator'
+import type { AiImportHeldMcpServers } from './ai-import-runtime'
+import type { AiPreparedImportCommitOptions } from './ai-orchestrator-store'
 import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { access, opendir, realpath, stat } from 'node:fs/promises'
@@ -31,7 +34,7 @@ import { aiOrchestratorStore } from './ai-orchestrator-store'
 import { readBoundedImportFile } from './ai-import-bounded-file'
 import { parseConfig, parseMcpProfiles } from './ai-import-config-parser'
 import { aiImportRuntimeService } from './ai-import-runtime'
-import { aiImportedConfigRuntime } from './ai-imported-config-runtime'
+import { aiImportedConfigRuntime, mcpProfilesFromItem } from './ai-imported-config-runtime'
 
 interface SourceLayout {
   provider: AiCliProviderId
@@ -141,6 +144,8 @@ function layouts(home: string): SourceLayout[] {
         { path: 'skills', kind: 'skill' },
         { path: 'prompts', kind: 'command' }
       ],
+      // The agent's own user-level MCP file (pi-mcp-adapter's), named after the agent, not the file.
+      userMcpFiles: [{ path: join(home, '.pi', 'agent', 'mcp.json'), name: 'Pi MCP' }],
       projectFiles: [
         { path: 'AGENTS.md', kind: 'instruction' },
         { path: '.pi/settings.json', kind: 'config' }
@@ -168,6 +173,7 @@ function layouts(home: string): SourceLayout[] {
         { path: 'prompts', kind: 'command' },
         { path: 'instructions', kind: 'instruction' }
       ],
+      userMcpFiles: [{ path: join(home, '.omp', 'agent', 'mcp.json'), name: 'Oh My Pi MCP' }],
       projectFiles: [
         { path: '.omp/config.yml', kind: 'config' },
         { path: '.omp/settings.json', kind: 'config' },
@@ -389,6 +395,47 @@ async function readCandidateFile(
   return await readBoundedImportFile(sourceRoot, path)
 }
 
+/**
+ * Where a candidate came from, enough to tell two of one agent's files apart: the scope, labelled
+ * as the sources are (`User` / `Project`), and the file's path from that source's root. A file kept
+ * outside the root (`~/.claude.json` beside `~/.claude`) goes by its file name.
+ */
+function candidateOrigin(candidate: AiImportCandidate, root: string | undefined): string {
+  const fromRoot = root ? relative(root, candidate.path) : ''
+  const file =
+    fromRoot && !fromRoot.startsWith('..') && !isAbsolute(fromRoot)
+      ? fromRoot
+      : basename(candidate.path)
+  return `${candidate.scope === 'user' ? 'User' : 'Project'} ${file}`
+}
+
+/**
+ * One preview names an agent's MCP rows apart. The first keeps its name; a later one whose name the
+ * agent already has is followed by where it came from, so the user's and the project's
+ * `config.toml` never read alike (`Codex MCP · Project .codex/config.toml`), and by a count should
+ * even that be taken.
+ */
+function distinguishSameNamedMcpCandidates(
+  candidates: AiImportCandidate[],
+  sources: AiImportSourceSnapshot[]
+): AiImportCandidate[] {
+  const roots = new Map(sources.map((source) => [source.id, source.rootPath]))
+  const taken = new Set<string>()
+  return candidates.map((candidate) => {
+    if (candidate.kind !== 'mcp') return candidate
+    const isTaken = (name: string): boolean => taken.has(`${candidate.provider}\0${name}`)
+    let name = candidate.name
+    if (isTaken(name)) {
+      const origin = candidateOrigin(candidate, roots.get(candidate.sourceId))
+      const named = `${candidate.name} · ${origin}`
+      name = named
+      for (let count = 2; isTaken(name); count += 1) name = `${named} (${count})`
+    }
+    taken.add(`${candidate.provider}\0${name}`)
+    return name === candidate.name ? candidate : { ...candidate, name }
+  })
+}
+
 function candidateName(path: string, metadata: CandidateMetadata): string {
   if (metadata.name) return metadata.name
   const file = basename(path)
@@ -401,15 +448,27 @@ async function buildCandidate(
   source: AiImportSourceSnapshot,
   kind: AiImportItemKind,
   path: string,
-  /**
-   * Directory the file must stay inside. `userRoot` except for the MCP files an agent keeps beside
-   * its config directory, where the root is the directory holding the file itself.
-   */
-  containedBy: string = source.rootPath,
-  nameOverride?: string
+  options: {
+    /**
+     * Directory the file must stay inside. `userRoot` except for the MCP files an agent keeps
+     * beside its config directory, where the root is the directory holding the file itself.
+     */
+    containedBy?: string
+    nameOverride?: string
+    /**
+     * The agent's display name (`Codex`). The MCP servers a config file declares are named after
+     * it: the file's own name (`config`) says nothing about whose servers they are.
+     */
+    agentLabel?: string
+  } = {}
 ): Promise<AiImportCandidate[]> {
+  const { containedBy = source.rootPath, nameOverride, agentLabel } = options
   try {
     const { canonicalPath, content, updatedAt } = await readCandidateFile(containedBy, path)
+    // A file held to a directory other than the source's root carries that directory, so applying
+    // it re-reads the file under the same containment rather than one it was never inside.
+    const ownContainment =
+      options.containedBy === undefined ? undefined : await realpath(options.containedBy)
     const extension = extname(canonicalPath).toLowerCase()
     const metadata =
       kind === 'mcp'
@@ -428,6 +487,9 @@ async function buildCandidate(
       kind,
       name: nameOverride ?? candidateName(canonicalPath, metadata),
       path: canonicalPath,
+      ...(ownContainment && ownContainment !== source.rootPath
+        ? { containedBy: ownContainment }
+        : {}),
       fingerprint: hash(content),
       updatedAt,
       warnings: [] as string[],
@@ -512,7 +574,7 @@ async function buildCandidate(
       id: kind === 'config' ? `${base.id}:mcp` : base.id,
       sourceKey: `mcp:${relative(source.rootPath, canonicalPath)}`,
       kind: 'mcp',
-      name: kind === 'config' ? `${base.name} MCP` : base.name,
+      name: kind === 'config' ? `${agentLabel ?? base.name} MCP` : base.name,
       serverNames: metadata.serverNames ?? [],
       transportTypes: metadata.transportTypes ?? [],
       secretKeyPaths: metadata.secretKeyPaths ?? [],
@@ -612,12 +674,19 @@ async function scanSource(
   }
   const candidates: AiImportCandidate[] = []
   for (const file of fileSpecs)
-    candidates.push(...(await buildCandidate(source, file.kind, join(canonicalRoot, file.path))))
+    candidates.push(
+      ...(await buildCandidate(source, file.kind, join(canonicalRoot, file.path), {
+        agentLabel: layout.label
+      }))
+    )
 
   // Contained by their own directory: these live next to the agent's config root, not inside it.
   for (const file of mcpFiles)
     candidates.push(
-      ...(await buildCandidate(source, 'mcp', file.path, dirname(file.path), file.name))
+      ...(await buildCandidate(source, 'mcp', file.path, {
+        containedBy: dirname(file.path),
+        nameOverride: file.name
+      }))
     )
 
   const budget = {
@@ -636,6 +705,100 @@ async function scanSource(
       .join('\n')
   )
   return { source, candidates }
+}
+
+/**
+ * Checks a request's server picks against the scan they name, before any file is read or secret
+ * looked at: each must be for an MCP candidate this apply selects from that scan, and may only name
+ * servers the scan found in it.
+ */
+function assertServerPicksFitScan(
+  scan: AiImportScanResult,
+  selectedIds: ReadonlySet<string>,
+  picks: AiImportApplyRequest['mcpServers']
+): void {
+  if (picks === undefined) return
+  if (!picks || typeof picks !== 'object' || Array.isArray(picks))
+    throw new Error('mcpServers must map candidate ids to server picks')
+  const isNameList = (value: unknown): value is string[] =>
+    Array.isArray(value) && value.every((name) => typeof name === 'string')
+  const candidates = new Map(scan.candidates.map((candidate) => [candidate.id, candidate]))
+  for (const [candidateId, pick] of Object.entries(picks)) {
+    if (!selectedIds.has(candidateId))
+      throw new Error(
+        `MCP server selection names candidate ${candidateId}, which this apply does not select`
+      )
+    const candidate = candidates.get(candidateId)
+    if (!candidate)
+      throw new Error(
+        `MCP server selection names candidate ${candidateId}, which scan ${scan.scanId} did not find`
+      )
+    if (candidate.kind !== 'mcp')
+      throw new Error(`MCP server selection names candidate ${candidateId}, which is not MCP`)
+    const include: unknown = pick?.include
+    const disabled: unknown = pick?.disabled ?? []
+    if (!isNameList(include) || !isNameList(disabled))
+      throw new Error(`MCP server selection for candidate ${candidateId} must list server names`)
+    if (include.length === 0) throw new Error(`MCP candidate ${candidateId} selects no server`)
+    const declared = new Set(candidate.serverNames)
+    const undeclared = [...new Set(include.filter((name) => !declared.has(name)))]
+    if (undeclared.length > 0)
+      throw new Error(
+        `MCP candidate ${candidateId} does not declare server ${undeclared.join(', ')}`
+      )
+    const stray = [...new Set(disabled.filter((name) => !include.includes(name)))]
+    if (stray.length > 0)
+      throw new Error(
+        `MCP candidate ${candidateId} switches off server ${stray.join(', ')} it does not import`
+      )
+  }
+}
+
+/** The servers of a stored MCP item, by name, each with whether the runtime runs it now. */
+function heldServers(item: AiImportedConfigItem): AiImportHeldMcpServers {
+  const live = item.active && item.state === 'active'
+  return new Map(
+    mcpProfilesFromItem(item).map((profile) => [
+      profile.name,
+      { running: live && profile.enabled !== false }
+    ])
+  )
+}
+
+/**
+ * For each MCP candidate a request picks servers of: the servers Tuff already holds from it, which
+ * the pick adds to, and what the commit must honour — the item that was read, so a switch flipped
+ * before the commit is not silently undone, and whether the pick turns a server on, which the item
+ * then has to run for. A request without picks merges nothing.
+ */
+async function mergeWithHeldServers(
+  selected: AiImportCandidate[],
+  picks: AiImportApplyRequest['mcpServers']
+): Promise<{
+  held: Map<string, AiImportHeldMcpServers>
+  commit: AiPreparedImportCommitOptions
+}> {
+  const held = new Map<string, AiImportHeldMcpServers>()
+  const basedOn = new Map<string, { itemId: string; updatedAt: number; active: boolean } | null>()
+  const activate = new Set<string>()
+  const picked = selected.filter((candidate) => candidate.kind === 'mcp' && picks?.[candidate.id])
+  if (picked.length > 0) {
+    const items = await aiOrchestratorStore.listImportedItems()
+    for (const candidate of picked) {
+      const pick = picks![candidate.id]!
+      const item = items.find(
+        (stored) => stored.candidateId === candidate.id && stored.kind === 'mcp'
+      )
+      basedOn.set(
+        candidate.id,
+        item ? { itemId: item.id, updatedAt: item.updatedAt, active: item.active } : null
+      )
+      if (item) held.set(candidate.id, heldServers(item))
+      const switchedOff = new Set(pick.disabled ?? [])
+      if (pick.include.some((name) => !switchedOff.has(name))) activate.add(candidate.id)
+    }
+  }
+  return { held, commit: { activate, basedOn } }
 }
 
 export class AiCliImportService {
@@ -694,7 +857,7 @@ export class AiCliImportService {
       sources.map((source) => source.id)
     )
     const activeById = new Map(activeCandidates.map((candidate) => [candidate.id, candidate]))
-    const detected = candidates.map((candidate) => {
+    const detected = distinguishSameNamedMcpCandidates(candidates, sources).map((candidate) => {
       const active = activeById.get(candidate.id)
       return {
         ...candidate,
@@ -741,27 +904,34 @@ export class AiCliImportService {
       const scan = await aiOrchestratorStore.getImportScan(request.scanId)
       if (!scan) throw new Error(`Import scan ${request.scanId} not found`)
       const selectedIds = new Set(request.candidateIds)
+      assertServerPicksFitScan(scan, selectedIds, request.mcpServers)
       const selected = scan.candidates.filter(
         (candidate) =>
           selectedIds.has(candidate.id) &&
           candidate.state !== 'source-missing' &&
-          candidate.state !== 'invalid' &&
+          // A stored copy is invalid because one of its servers needs re-authentication. Picking
+          // servers can leave that one out (prepare refuses a pick that names it); taking the whole
+          // file again cannot.
+          (candidate.state !== 'invalid' || request.mcpServers?.[candidate.id] !== undefined) &&
           candidate.blockingIssues.length === 0
       )
       if (selected.length !== selectedIds.size)
         throw new Error('Import selection contains stale, blocked, or missing candidates')
 
+      const merge = await mergeWithHeldServers(selected, request.mcpServers)
       const transaction = await aiImportRuntimeService.prepare(
         scan.cwd,
         selected,
         request,
-        scan.sources
+        scan.sources,
+        merge.held
       )
       let result: AiImportApplyResult
       try {
         result = await aiOrchestratorStore.applyPreparedImportScan(
           request.scanId,
-          transaction.items
+          transaction.items,
+          merge.commit
         )
       } catch (error) {
         await aiImportRuntimeService.rollback(transaction)

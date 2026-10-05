@@ -1,4 +1,0 @@
-{"file":".trellis/tasks/archive/2026-09/09-29-recommendation-usage-refactor/prd.md","reason":"逐项验证 AC1 至 AC16；本轮仅校验需求文档，不能宣称实现验收已通过。"}
-{"file":".trellis/spec/main-process/database-write-contracts.md","reason":"核验写入安全、读写位置一致和故障恢复约束。"}
-{"file":".trellis/spec/main-process/recommendation-source-registry-contracts.md","reason":"核验来源身份、别名、重建顺序和来源故障隔离不退化。"}
-{"file":".trellis/spec/main-process/recommendation-freshness-contracts.md","reason":"核验新鲜度双条件、缓存更新和理由必须有证据。"}

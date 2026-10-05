@@ -1,0 +1,7 @@
+{
+  "caseBase": "valid-final-contract",
+  "files": {
+    "docs/comet/changes/docs-quality-change/brief.md": "# Outcome\n\nShip the brief checks for every live change.\n\nOwner: TBD\n\n# Scope\n\n- Live briefs under docs/comet/changes.\n\nTODO: fill the rollout list.\n\n# Non-goals\n\n- Archived briefs.\n\nReview notes 待补充。\n\n# Acceptance examples\n\n- A brief with an unresolved placeholder fails.\n\nProof: <evidence>\n\nThe ordinary UI placeholder attribute is not unresolved work, and `TBD` in inline code is quoted, not open.\n",
+    "docs/comet/changes/docs-quality-change/comet-state.yaml": "schema: comet.native.v4\nname: docs-quality-change\nphase: shape\nstatus: active\n"
+  }
+}

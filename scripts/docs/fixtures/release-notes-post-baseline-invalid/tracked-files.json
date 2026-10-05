@@ -1,5 +1,6 @@
 [
   "apps/core-app/package.json",
+  "docs/engineering/workflow/retired-task-index.json",
   "notes/RELEASE_NOTES_GUIDE.md",
   "notes/release-notes.config.json",
   "notes/update_2.4.14.en.md",

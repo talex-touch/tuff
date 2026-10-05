@@ -5,8 +5,8 @@
 > 和 direct privileged require 均不是当前合同。当前实现为一 activation 一 utility process、
 > V2 fixed typed capability、owner/generation-bound callback/resource/cancel、默认 fail-closed
 > 且无 main-process VM fallback。实施与审查必须使用
-> `.trellis/spec/frontend/plugin-runtime-security.md` 及
-> `.trellis/tasks/07-27-isolate-plugin-prelude-297/`，下文仅保留历史背景。
+> [`docs/engineering/specs/frontend/plugin-runtime-security.md`](../../engineering/specs/frontend/plugin-runtime-security.md) 及
+> 已归档任务记录 [`07-27-isolate-plugin-prelude-297`](https://github.com/talex-touch/tuff/tree/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/archive/2026-07/07-27-isolate-plugin-prelude-297)，下文仅保留历史背景。
 
 > 状态：设计讨论（不动代码）
 > 关联安全发现：C1（插件 Prelude 主进程 RCE）、H2（插件 Surface 视图不安全默认）

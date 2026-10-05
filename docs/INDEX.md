@@ -1,6 +1,6 @@
 # 文档索引
 
-> 更新时间：2026-09-13
+> 更新时间：2026-10-03
 > 定位：仓库文档导航，不保存易漂移的本地 `HEAD`、分支、工作区或“当前版本”快照。项目全貌一览见根目录 [`ROADMAP.md`](../ROADMAP.md)。
 
 ## 30 秒入口
@@ -9,7 +9,7 @@
 | --- | --- |
 | 项目全貌是什么 | 根目录 [`ROADMAP.md`](../ROADMAP.md) |
 | 当前代码版本是什么 | 根目录与 `apps/core-app/package.json` |
-| 当前任务由谁执行、状态如何 | [`.trellis/tasks/README.md`](../.trellis/tasks/README.md) 与 `.trellis/scripts/get_context.py` |
+| 当前任务由谁执行、状态如何 | 进行中的变更在 `docs/comet/changes/`（入口 `/comet`，状态由 Comet Runtime 维护）；切换前的任务已冻结，见 [`engineering/workflow/backlog.md`](./engineering/workflow/backlog.md) |
 | 接下来两周先做什么 | [`plan-prd/TODO.md`](./plan-prd/TODO.md) |
 | 产品阶段和能力边界是什么 | [`plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md`](./plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md) |
 | 最近已经发生了什么 | [`plan-prd/01-project/CHANGES.md`](./plan-prd/01-project/CHANGES.md) |
@@ -33,7 +33,8 @@ Usage 单写者、Nexus 同步原子批处理和 Trellis 任务/文档收敛三�
 
 - [`plan-prd/README.md`](./plan-prd/README.md)：规划入口与事实源边界。
 - [`plan-prd/TODO.md`](./plan-prd/TODO.md)：唯一的两周级优先级清单。
-- [`.trellis/tasks/README.md`](../.trellis/tasks/README.md)：任务 owner、状态、PRD、设计和实施记录。
+- `docs/comet/changes/`：进行中的 Comet Native 变更（brief、spec 与验收记录；阶段与验收状态由 Runtime 写入）。
+- [`engineering/workflow/backlog.md`](./engineering/workflow/backlog.md)：冻结的迁移前任务（owner、下一步、blocker、证据）；全部旧任务身份见 [`retired-task-index.json`](./engineering/workflow/retired-task-index.json)，未保存内容的交接见 [`handoffs/`](./engineering/workflow/handoffs/README.md)。
 
 ### 2. 路线与专题层
 
@@ -48,12 +49,13 @@ Usage 单写者、Nexus 同步原子批处理和 Trellis 任务/文档收敛三�
 ### 3. 工程交接与审计层
 
 - [`engineering/README.md`](./engineering/README.md)：工程资料入口。
+- 工程规范：[`frontend`](./engineering/specs/frontend/index.md)、[`main-process`](./engineering/specs/main-process/index.md)、[`guides`](./engineering/specs/guides/index.md)（编辑对应层前先读）。
 - [`engineering/build-strategy.md`](./engineering/build-strategy.md)：打包与分发策略。
 - [`engineering/nexus-release-assets-checklist.md`](./engineering/nexus-release-assets-checklist.md)：Nexus 发布资产核对（Gate D）。
 - 脚本原生专题（2026-01/02 设计基线）：[`script-native-build-distribution.md`](./script-native-build-distribution.md)、[`script-native-capability-matrix.md`](./script-native-capability-matrix.md)、[`script-native-constraints.md`](./script-native-constraints.md)、[`script-native-native-integration.md`](./script-native-native-integration.md)、[`script-native-provider-examples.md`](./script-native-provider-examples.md)、[`script-native-python-runtime.md`](./script-native-python-runtime.md)、[`script-native-test-plan.md`](./script-native-test-plan.md)。
 - [`engineering/security-hardening-handoff-2026-07-15.md`](./engineering/security-hardening-handoff-2026-07-15.md)：安全加固交接摘要。
 - [`engineering/security-hardening-remaining-backlog-2026-07-15.md`](./engineering/security-hardening-remaining-backlog-2026-07-15.md)：剩余安全/数据一致性实施细节。
-- [Search & Cross-Platform Audit](../.trellis/tasks/07-13-search-crossplatform-audit/prd.md)：搜索与跨平台风险清单。
+- [Search & Cross-Platform Audit](./engineering/reports/search-crossplatform-audit.md)：搜索与跨平台风险清单（活审计）。
 
 ### 4. 验收与历史层
 
@@ -64,7 +66,7 @@ Usage 单写者、Nexus 同步原子批处理和 Trellis 任务/文档收敛三�
 
 ## 维护规则
 
-1. 任务状态只写 Trellis；两周优先级只写 `TODO.md`；路线只写 Roadmap；完成事实只写 `CHANGES.md` / evidence。
+1. 变更状态只由 Comet Runtime 写入（`docs/comet/changes/`），冻结的迁移前任务只读；两周优先级只写 `TODO.md`；路线只写 Roadmap；完成事实只写 `CHANGES.md` / evidence。
 2. 长期文档不得固化本地 `HEAD`、dirty worktree、当前分支或可从 `package.json` 读取的版本。
 3. 专题 TODO 只承载专题细节，不反向定义全局优先级。
 4. 探索日志、临时截图、HAR、用户数据和原始 probe 输出不得进入文档树；只提交可复核摘要与最终 evidence。

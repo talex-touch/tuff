@@ -258,7 +258,7 @@ function verifyPackagedNativeAddons(context, options = {}) {
 
   const message =
     `[afterPack] Packaged native addons missing from ${path.join(nativePackageRoot, 'build', 'Release')}: ` +
-    `${missing.join(', ')}. Build them with \`pnpm -C packages/tuff-native run build:audio\`.`
+    `${missing.join(', ')}. Build them with the native package rebuild, build:audio, and build:translation scripts.`
   if (strict) {
     throw new Error(message)
   }

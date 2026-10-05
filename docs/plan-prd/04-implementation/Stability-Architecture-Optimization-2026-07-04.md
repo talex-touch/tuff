@@ -50,7 +50,7 @@
 | 4 | R3 大目录与真实 profile 风险 | 大目录扫描内存峰值、真实 profile migration/evidence 未闭合 | chunked/streaming memory profile；attach-only 与审批后的 migration evidence |
 | 5 | Linux 能力不对称 | OCR、更新安装、应用扫描等仍有明确缺口 | capability matrix 的 degraded/unsupported 与真实平台 smoke |
 
-搜索与跨平台详情见 [Search & Cross-Platform Audit](../../../.trellis/tasks/07-13-search-crossplatform-audit/prd.md)。安全与数据一致性详情见 [`../../engineering/security-hardening-remaining-backlog-2026-07-15.md`](../../engineering/security-hardening-remaining-backlog-2026-07-15.md)。
+搜索与跨平台详情见 [Search & Cross-Platform Audit](../../engineering/reports/search-crossplatform-audit.md)。安全与数据一致性详情见 [`../../engineering/security-hardening-remaining-backlog-2026-07-15.md`](../../engineering/security-hardening-remaining-backlog-2026-07-15.md)。
 
 ## 5. 暂缓项
 

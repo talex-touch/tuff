@@ -1,0 +1,12 @@
+{"file": ".trellis/spec/main-process/corebox-meta-overlay-contracts.md", "reason": "⌘K 卡片全部契约：窗口只在面板打开期间归面板（拉高、挂起、归还）、panelState 铺底、按键与 IME、Esc 一次一步、旧流转面板一节（本任务要改写）"}
+{"file": ".trellis/spec/main-process/channel-transport-contracts.md", "reason": "主进程通知与请求的区别、发送方归属校验、载荷必须可结构化克隆（toRaw + shallowRef），新增 ui.page 和 flow 字段都要遵守"}
+{"file": ".trellis/spec/frontend/corebox-results-contracts.md", "reason": "CoreBox 渲染端：唯一运动总闸、焦点滚动、底栏与操作反馈；模糊和 footer 底板改的就是这里"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "语义化控件与无障碍（返回按钮、listbox、inert）、加载态规则（useDeferredLoading）、TuffEx 套件划分"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "TxTransitionPush 的动效规则：只用 --tx-* token、缓动曲线、减弱动效、hover 不过渡颜色"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "改 TuffEx 组件必须同步 Nexus 文档：transition 页中英文、demo、包装组件的影响范围"}
+{"file": ".trellis/spec/frontend/nexus-docs-structure.md", "reason": "文档固定栏目名的写法（### Best Practices 等），nexus 测试按字面匹配"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "新组合式函数 useMetaFlowPage / useMetaPanelState 的生命周期与订阅释放"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "协议字段变更（MetaShowRequest / panelState / itemAction）与运行时校验"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "验证要求、错误日志只记 id + code、token 不进日志"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "本任务横跨主进程、两个渲染层和 TuffEx 包"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "仓库有并发会话：只暂存自己的 hunk，私有 index 提交"}

@@ -11,6 +11,10 @@ import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { CoreBoxMetaOverlayPanelStatePayload } from '@talex-touch/utils/transport/events/types'
 import type {
   MetaAction,
+  MetaFlowSelection,
+  MetaPageChangeRequest,
+  MetaPanelAnchor,
+  MetaPanelPage,
   MetaShowRequest
 } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { BrowserWindow } from 'electron'
@@ -21,10 +25,7 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { app, WebContentsView } from 'electron'
-import {
-  COREBOX_APP_BIND_SHORTCUT_ACTION_ID,
-  COREBOX_FLOW_TRANSFER_ACTION_ID
-} from '../../../../shared/events/corebox-scenes'
+import { COREBOX_APP_BIND_SHORTCUT_ACTION_ID } from '../../../../shared/events/corebox-scenes'
 import { getAppDestinationNavigationService } from '../../app-destination/app-destination-navigation'
 import { BoxWindowOption } from '../../../config/default'
 import { maybeGetRegisteredMainRuntime } from '../../../core/runtime-accessor'
@@ -52,12 +53,6 @@ export class MetaOverlayManager {
   private static readonly HAND_BACK_POLL_MS = 32
   /** Longest CoreBox keeps painting for a hand-back; an animated resize takes at most 220ms. */
   private static readonly HAND_BACK_MAX_WAIT_MS = 1_000
-  /**
-   * Longest an executed transfer keeps the panel open for the Flow picker's room. The picker sends
-   * it as soon as it opens, so the wait normally ends within one layout round trip (tens of ms);
-   * the bound only matters when no update comes, and the transparent view keeps focus until then.
-   */
-  private static readonly FLOW_HAND_OFF_MAX_WAIT_MS = 500
   private metaView: WebContentsView | null = null
   private parentWindow: BrowserWindow | null = null
   private isVisible = false
@@ -74,12 +69,17 @@ export class MetaOverlayManager {
   /** The panel closed, and the window it grew is still animating back (see `watchHandBack`). */
   private handBackPending = false
   private handBackTimer: NodeJS.Timeout | null = null
-  /** Set while an executed transfer waits to hand the window to the Flow picker. */
-  private flowHandOffTimer: NodeJS.Timeout | null = null
+  /** The page the card is showing: the show request's, then the overlay's (see `changePage`). */
+  private page: MetaPanelPage = 'actions'
+  /** The card can go back a page, so Esc is the overlay's to handle rather than a close. */
+  private canGoBack = false
+  /** Anchor of the open panel, which a page that needs more room is sized for. */
+  private currentAnchor: MetaPanelAnchor | undefined = undefined
   /** What the CoreBox renderer was last told about the panel (see `publishPanelState`). */
   private publishedPanelState: CoreBoxMetaOverlayPanelStatePayload = {
     visible: false,
-    grown: false
+    grown: false,
+    blur: false
   }
 
   private getAliveMetaWebContents(): Electron.WebContents | null {
@@ -173,13 +173,15 @@ export class MetaOverlayManager {
     })
 
     // Handle ESC key to close MetaOverlay. Not while an IME composes: its Esc cancels the
-    // composition, and the renderer closes the panel on the next plain Esc.
+    // composition, and the renderer closes the panel on the next plain Esc. Not while the card can
+    // go back a page either: that Esc is the overlay's, and takes the card back one page.
     this.metaView.webContents.on('before-input-event', (event, input) => {
       if (
         input.type === 'keyDown' &&
         input.key === 'Escape' &&
         !input.isComposing &&
-        this.isVisible
+        this.isVisible &&
+        !this.canGoBack
       ) {
         this.hide()
         event.preventDefault()
@@ -312,9 +314,6 @@ export class MetaOverlayManager {
       return
     }
 
-    // A reopen during a transfer's hand-off keeps the panel: the next layout update is held for
-    // it, not taken as the Flow picker's room to close on.
-    this.clearFlowHandOff()
     this.pendingShowRequest = request
     this.currentItem = request.item
 
@@ -371,6 +370,11 @@ export class MetaOverlayManager {
 
     this.pendingShowRequest = null
     this.isVisible = true
+    // The card opens on the page asked for, with nothing to go back to; the overlay reports every
+    // page after this one (`changePage`). Set before growing: the state published then says it.
+    this.page = request.page === 'flow' ? 'flow' : 'actions'
+    this.canGoBack = false
+    this.currentAnchor = request.anchor
     // Grow before revealing, so the first frame already has room for the panel. setBounds syncs
     // this view to the new window size on the way.
     this.fitParentToPanel(request)
@@ -415,7 +419,7 @@ export class MetaOverlayManager {
    * CoreBox hears about the growth before it happens: its first frame at the new size then
    * already paints the added space, which would otherwise show the desktop behind the window.
    */
-  private fitParentToPanel(request: MetaShowRequest): void {
+  private fitParentToPanel(request: Pick<MetaShowRequest, 'anchor' | 'desiredPanelHeight'>): void {
     const requiredHeight = resolveMetaOverlayWindowHeight(request)
     const hostWindow = this.findHostWindow()
     if (requiredHeight === null || !hostWindow) return
@@ -426,6 +430,26 @@ export class MetaOverlayManager {
     if (this.restoreHeight === null) this.restoreHeight = currentHeight
     this.publishPanelState()
     windowManager.setHeight(requiredHeight, hostWindow)
+  }
+
+  /**
+   * Follows the card to the page the overlay reports. While the card can go back a page, Esc is
+   * left to the overlay; while it shows a Flow page, CoreBox blurs under it.
+   *
+   * A page that does not fit grows the window as an open does, and a shorter one never shrinks it:
+   * shrinking on the way back would move the window at every step in and out, and the height is
+   * handed back on close all the same (`releaseHostLayout`). The room a shorter page leaves is
+   * still the panel's (`grown`), so CoreBox keeps painting it.
+   */
+  public changePage(request: MetaPageChangeRequest): void {
+    if (!this.isVisible) return
+    this.page = request.page
+    this.canGoBack = request.canGoBack
+    this.fitParentToPanel({
+      anchor: this.currentAnchor,
+      desiredPanelHeight: request.desiredPanelHeight
+    })
+    this.publishPanelState()
   }
 
   /**
@@ -452,15 +476,11 @@ export class MetaOverlayManager {
    * Holds a CoreBox layout update while the panel is on screen, keeping only the latest one.
    * Applying it would resize the window under the panel and clip it; it is replayed on close.
    *
-   * @returns `true` when the update was held and must not be applied now. During a transfer's
-   * hand-off it has been replayed by the time this returns, and must not be applied twice.
+   * @returns `true` when the update was held and must not be applied now.
    */
   public holdLayoutUpdate(replay: () => void): boolean {
     if (!this.isVisible) return false
     this.heldLayoutReplay = replay
-    // The update a transfer is waiting for (`handOffToFlowPicker`). Closing on it replays it, so
-    // the window moves once, from the panel's height straight to the picker's.
-    if (this.flowHandOffTimer) this.hide()
     return true
   }
 
@@ -497,7 +517,6 @@ export class MetaOverlayManager {
    */
   public hide(): void {
     this.clearHeightSyncTimer()
-    this.clearFlowHandOff()
     // A show queued for a panel the user just dismissed must not surface on a later handshake.
     this.pendingShowRequest = null
     const parentWindow = this.getAliveParentWindow()
@@ -508,6 +527,7 @@ export class MetaOverlayManager {
     }
     this.isVisible = false
     this.currentItem = null
+    this.resetPage()
     const grewWindow = this.restoreHeight !== null
     this.releaseHostLayout()
     if (grewWindow) this.watchHandBack()
@@ -524,7 +544,6 @@ export class MetaOverlayManager {
   private dismissWithHost(): void {
     this.clearHeightSyncTimer()
     this.clearHandBackWatch()
-    this.clearFlowHandOff()
     this.pendingShowRequest = null
     this.heldLayoutReplay = null
     this.restoreHeight = null
@@ -538,8 +557,16 @@ export class MetaOverlayManager {
       this.currentItem = null
       metaOverlayLog.debug('MetaOverlay dismissed with its CoreBox window')
     }
+    this.resetPage()
     // Also ends a hand-back still landing: the next show must not open on a painted window.
     this.publishPanelState()
+  }
+
+  /** Back to the page every open starts from; a closed panel has no page to go back to. */
+  private resetPage(): void {
+    this.page = 'actions'
+    this.canGoBack = false
+    this.currentAnchor = undefined
   }
 
   /**
@@ -578,37 +605,6 @@ export class MetaOverlayManager {
     return hostWindow ? windowManager.isResizing(hostWindow) : false
   }
 
-  /**
-   * Keeps the panel open after a transfer until the Flow picker it opens has claimed the window.
-   * Handing the height back on the spot shrank the window to CoreBox's own height, and the picker
-   * grew it again a moment later (488 → 364 → 536 over ~170ms, measured). Left open, the panel
-   * holds the picker's room like any layout update, and `holdLayoutUpdate` closes on it: `hide()`
-   * then replays that update instead of restoring the pre-open height.
-   *
-   * The overlay renderer hid its own content when it ran the action, so the view stays up
-   * transparent for the wait, keeping focus until `hide()` hands it back to CoreBox. A close that
-   * would not move the window (the panel never grew it and holds nothing) is not deferred.
-   *
-   * @returns `true` when the close is deferred and the caller must not hide.
-   */
-  private handOffToFlowPicker(): boolean {
-    if (!this.isVisible || (this.restoreHeight === null && this.heldLayoutReplay === null)) {
-      return false
-    }
-    this.clearFlowHandOff()
-    this.flowHandOffTimer = setTimeout(() => {
-      this.flowHandOffTimer = null
-      this.hide()
-    }, MetaOverlayManager.FLOW_HAND_OFF_MAX_WAIT_MS)
-    return true
-  }
-
-  private clearFlowHandOff(): void {
-    if (!this.flowHandOffTimer) return
-    clearTimeout(this.flowHandOffTimer)
-    this.flowHandOffTimer = null
-  }
-
   private dispatchHideToRenderer(metaWebContents: Electron.WebContents): void {
     const runtime = getCoreBoxRuntimeOrNull()
     if (!runtime) {
@@ -625,10 +621,12 @@ export class MetaOverlayManager {
   }
 
   /**
-   * Tells the CoreBox renderer whether the panel is open and whether the window is taller than its
-   * own layout because of it. CoreBox paints the grown space while it is; otherwise that space
-   * shows the window material, a blur of the desktop behind CoreBox. `grown` rises before the
-   * window grows and, with an animated restore, falls only once the height handed back has landed.
+   * Tells the CoreBox renderer whether the panel is open, whether the window is taller than its
+   * own layout because of it, and whether the card shows a Flow page. CoreBox paints the grown
+   * space while it is; otherwise that space shows the window material, a blur of the desktop
+   * behind CoreBox. `grown` rises before the window grows and, with an animated restore, falls
+   * only once the height handed back has landed. `blur` keeps CoreBox's own content out of the way
+   * of the Flow targets, and never outlasts the panel.
    *
    * Fire-and-forget and only on change: the renderer answers nothing, and closing a panel that
    * never opened tells it nothing new.
@@ -636,10 +634,13 @@ export class MetaOverlayManager {
   private publishPanelState(): void {
     const next: CoreBoxMetaOverlayPanelStatePayload = {
       visible: this.isVisible,
-      grown: (this.isVisible && this.restoreHeight !== null) || this.handBackPending
+      grown: (this.isVisible && this.restoreHeight !== null) || this.handBackPending,
+      blur: this.isVisible && this.page !== 'actions'
     }
     const last = this.publishedPanelState
-    if (last.visible === next.visible && last.grown === next.grown) return
+    if (last.visible === next.visible && last.grown === next.grown && last.blur === next.blur) {
+      return
+    }
 
     const parentWindow = this.getAliveParentWindow()
     const runtime = getCoreBoxRuntimeOrNull()
@@ -725,10 +726,13 @@ export class MetaOverlayManager {
    *
    * @param actionId - The action ID to execute
    * @param item - The item context for the action
+   * @param flow - The Flow target picked on the card's Flow page, relayed to the CoreBox renderer
+   * with the transfer action that ends there
    */
   public async executeAction(
     actionId: string,
-    item?: TuffItem
+    item?: TuffItem,
+    flow?: MetaFlowSelection
   ): Promise<{ success: boolean; error?: string }> {
     const targetItem = item ?? this.currentItem
     if (!targetItem) {
@@ -804,18 +808,16 @@ export class MetaOverlayManager {
       // Target the attached parent window, never a caller-supplied sender: the overlay is a
       // WebContentsView and the parent is the sole renderer with the action-panel listener.
       // `broadcastToWindow` avoids the 60-second request timeout a void `sendTo` creates.
+      // A Flow selection rides along untouched: CoreBox builds the payload and dispatches it.
       const coreBoxWindow = this.getAliveParentWindow()
       if (coreBoxWindow) {
         const channel = touchApp.channel
         const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
-        transport.broadcastToWindow(coreBoxWindow.id, CoreBoxEvents.metaOverlay.itemAction, {
-          actionId,
-          item: targetItem
-        })
-        // The renderer opens the Flow picker for this row, and the picker needs the window next.
-        if (actionId === COREBOX_FLOW_TRANSFER_ACTION_ID && this.handOffToFlowPicker()) {
-          return { success: true }
-        }
+        transport.broadcastToWindow(
+          coreBoxWindow.id,
+          CoreBoxEvents.metaOverlay.itemAction,
+          flow ? { actionId, item: targetItem, flow } : { actionId, item: targetItem }
+        )
       }
     }
 
@@ -849,7 +851,6 @@ export class MetaOverlayManager {
   private destroyRenderer(): void {
     this.clearHeightSyncTimer()
     this.clearHandBackWatch()
-    this.clearFlowHandOff()
     this.pendingShowRequest = null
     this.rendererReadyWebContentsId = null
     // A renderer lost under an open panel still owes CoreBox its height back.
@@ -858,9 +859,10 @@ export class MetaOverlayManager {
     if (wasVisible) this.releaseHostLayout()
     this.heldLayoutReplay = null
     this.restoreHeight = null
+    this.resetPage()
     this.publishPanelState()
     // Whatever that reached, the next parent's renderer starts from a closed panel.
-    this.publishedPanelState = { visible: false, grown: false }
+    this.publishedPanelState = { visible: false, grown: false, blur: false }
     this.detachParentHideListener?.()
     this.detachParentHideListener = null
     const parentWindow = this.getAliveParentWindow()

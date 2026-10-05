@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/10-02-nexus-admin-migrate-ai-services/prd.md", "reason": "Acceptance criteria of this child"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/design.md", "reason": "Definition of done (section 4) every migrated page is checked against"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Admin shell, loading-state and i18n rules"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification commands and forbidden patterns"}
+{"file": ".trellis/spec/frontend/nexus-provider-scene-routing.md", "reason": "Browser verification items for the Provider Registry admin UI"}

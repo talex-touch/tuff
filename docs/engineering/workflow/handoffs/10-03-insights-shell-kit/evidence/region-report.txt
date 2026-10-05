@@ -1,0 +1,63 @@
+Whole-frame: pixels that differ at all / pixels that differ by more than 1 of 255 in any channel
+  empty        2200x1640  differ=    0  differ>1=0
+  data         2200x2604  differ=  270  differ>1=0
+  menu         2200x1640  differ=  491  differ>1=0
+  notices      2200x3080  differ=    0  differ>1=0
+  notices-640  1280x4102  differ=    0  differ>1=0
+  notices-460  920x6346  differ=    0  differ>1=0
+
+Per region (boxes from the geometry dump of each phase; before and after boxes are identical):
+  [empty] geometry identical: True
+    header row                   differ=0 differ>1=0
+  [data] geometry identical: True
+    header row                   differ=0 differ>1=0
+    hero metric                  differ=0 differ>1=0
+    card characters              differ=0 differ>1=0
+    card rate                    differ=0 differ>1=0
+    card duration                differ=0 differ>1=0
+  [menu] geometry identical: True
+    header row                   differ=0 differ>1=0
+    hero metric                  differ=0 differ>1=0
+    card characters              differ=0 differ>1=0
+    card rate                    differ=0 differ>1=0
+    card duration                differ=0 differ>1=0
+    menu panel                   differ=0 differ>1=0
+  [notices] geometry identical: True
+    header row                   differ=0 differ>1=0
+    notice error                 differ=0 differ>1=0
+    notice copy-error            differ=0 differ>1=0
+    notice clear-refresh-warning differ=0 differ>1=0
+    hero metric                  differ=0 differ>1=0
+    card characters              differ=0 differ>1=0
+    card rate                    differ=0 differ>1=0
+    card duration                differ=0 differ>1=0
+  [notices-640] geometry identical: True
+    header row                   differ=0 differ>1=0
+    notice error                 differ=0 differ>1=0
+    notice copy-error            differ=0 differ>1=0
+    notice clear-refresh-warning differ=0 differ>1=0
+    hero metric                  differ=0 differ>1=0
+    card characters              differ=0 differ>1=0
+    card rate                    differ=0 differ>1=0
+    card duration                differ=0 differ>1=0
+  [notices-460] geometry identical: True
+    header row                   differ=0 differ>1=0
+    notice error                 differ=0 differ>1=0
+    notice copy-error            differ=0 differ>1=0
+    notice clear-refresh-warning differ=0 differ>1=0
+    hero metric                  differ=0 differ>1=0
+    card characters              differ=0 differ>1=0
+    card rate                    differ=0 differ>1=0
+    card duration                differ=0 differ>1=0
+
+Noise floor — two captures of the unchanged HEAD page (before vs before2), same metric:
+  empty        differ=    0  differ>1=0  bbox=None
+  data         differ=    7  differ>1=0  bbox=None
+  menu         differ=    7  differ>1=0  bbox=None
+  notices      differ=    0  differ>1=0  bbox=None
+  notices-640  differ=    0  differ>1=0  bbox=None
+  notices-460  differ=    0  differ>1=0  bbox=None
+
+Where the before/after delta-1 pixels sit (bounding boxes in CSS px):
+  data: delta-1 pixels lie within x 815-980, y 694-830 (CSS px) — inside the year heatmap card (cell corners), outside every migrated region
+  menu: delta-1 pixels lie within x 808-988, y 694-814 (CSS px) — inside the year heatmap card (cell corners), outside every migrated region

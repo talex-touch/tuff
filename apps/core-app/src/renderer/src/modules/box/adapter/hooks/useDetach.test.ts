@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 // useDetach reads the footer through useKeyboard, whose app-storage import touches `window`.
-import type { TuffItem } from '@talex-touch/utils'
+import type { FlowTargetInfo, IProviderActivate, TuffItem } from '@talex-touch/utils'
+import type { MetaShowRequest } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import { FlowEvents } from '@talex-touch/utils/transport/events'
+import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, defineComponent, isProxy, reactive, ref } from 'vue'
@@ -9,6 +11,7 @@ import {
   clearCoreBoxFooterFeedback,
   useCoreBoxFooterFeedback
 } from '../../meta-actions/footer-feedback'
+import { estimateFlowTargetsPanelHeight } from '../../meta-actions/meta-flow-page'
 import { isDetachedDivisionItemMatch, parseDetachedDivisionConfig } from './detached-division'
 import {
   buildCoreBoxFlowPayload,
@@ -17,9 +20,16 @@ import {
   useDetach
 } from './useDetach'
 
+const transportListeners = vi.hoisted(() => new Map<string, (payload?: unknown) => void>())
+
 const transportMock = vi.hoisted(() => ({
   send: vi.fn(),
-  on: vi.fn(() => () => {})
+  on: vi.fn((event: { toEventName: () => string }, listener: (payload?: unknown) => void) => {
+    transportListeners.set(event.toEventName(), listener)
+    return () => {
+      transportListeners.delete(event.toEventName())
+    }
+  })
 }))
 
 vi.mock('@talex-touch/utils/transport', () => ({
@@ -228,29 +238,37 @@ describe('CoreBox Flow payload', () => {
   })
 })
 
+let wrapper: VueWrapper | null = null
+
+/** useDetach in a mounted component, over `results`, in plugin UI mode or not. */
+function mountDetach(
+  options: {
+    results?: TuffItem[]
+    uiMode?: boolean
+    activations?: IProviderActivate[]
+    boxData?: unknown
+  } = {}
+): ReturnType<typeof useDetach> {
+  let detach: ReturnType<typeof useDetach> | undefined
+  wrapper = mount(
+    defineComponent({
+      setup() {
+        detach = useDetach({
+          searchVal: ref('start writing sprint'),
+          res: ref(options.results ?? []),
+          boxOptions: { focus: 0, data: options.boxData },
+          isUIMode: computed(() => options.uiMode === true),
+          activeActivations: computed(() => options.activations),
+          deactivateProvider: async () => {}
+        })
+        return () => null
+      }
+    })
+  )
+  return detach!
+}
+
 describe('CoreBox Flow dispatch', () => {
-  let wrapper: VueWrapper | null = null
-
-  function mountDetach(): ReturnType<typeof useDetach> {
-    let detach: ReturnType<typeof useDetach> | undefined
-    wrapper = mount(
-      defineComponent({
-        setup() {
-          detach = useDetach({
-            searchVal: ref('start writing sprint'),
-            res: ref([]),
-            boxOptions: { focus: 0 },
-            isUIMode: computed(() => false),
-            activeActivations: computed(() => undefined),
-            deactivateProvider: async () => {}
-          })
-          return () => null
-        }
-      })
-    )
-    return detach!
-  }
-
   function dispatchedRequest(): { payload: { data: { item: TuffItem; query: string } } } {
     const call = transportMock.send.mock.calls.find(([event]) => event === FlowEvents.dispatch)
     expect(call, 'expected a Flow dispatch').toBeTruthy()
@@ -274,9 +292,8 @@ describe('CoreBox Flow dispatch', () => {
     transportMock.send.mockResolvedValue({ success: true })
     const detach = mountDetach()
 
-    // An activation or the box data hands the item out as a Proxy.
-    detach.openFlowSelector(reactive(createFeatureItem()))
-    await detach.dispatchFlow({ targetId: 'quickops.system-info' })
+    // An activation, the box data or the results hand the item out as a Proxy.
+    await detach.dispatchFlow(reactive(createFeatureItem()), { targetId: 'quickops.system-info' })
 
     const request = dispatchedRequest()
     // What Electron's IPC does with it: a Proxy anywhere fails with "could not be cloned".
@@ -288,6 +305,29 @@ describe('CoreBox Flow dispatch', () => {
     expect(request.payload).toEqual(
       buildCoreBoxFlowPayload(createFeatureItem(), 'start writing sprint')
     )
+  })
+
+  it('dispatches to the picked target with the tokens its confirmation returned', async () => {
+    transportMock.send.mockResolvedValue({ success: true })
+    const detach = mountDetach()
+
+    await detach.dispatchFlow(createFeatureItem(), {
+      targetId: 'quickops.stop-all',
+      consentToken: 'consent-token',
+      confirmationToken: 'confirm-token'
+    })
+
+    expect(dispatchedRequest()).toEqual({
+      senderId: 'corebox',
+      actorPluginId: 'demo-plugin',
+      payload: buildCoreBoxFlowPayload(createFeatureItem(), 'start writing sprint'),
+      options: {
+        preferredTarget: 'quickops.stop-all',
+        skipSelector: true,
+        consentToken: 'consent-token',
+        confirmationToken: 'confirm-token'
+      }
+    })
   })
 
   it.each([
@@ -315,19 +355,165 @@ describe('CoreBox Flow dispatch', () => {
       reply: () => Promise.reject(new Error('IPC closed')),
       feedback: { tone: 'error', message: 'corebox.flowFailed' }
     }
-  ])('reports $name in the footer, where CoreBox shows outcomes, and closes', async (outcome) => {
+  ])('reports $name in the footer, where CoreBox shows outcomes', async (outcome) => {
     transportMock.send.mockImplementation(outcome.reply)
     const detach = mountDetach()
 
-    detach.openFlowSelector(createFeatureItem())
-    await detach.dispatchFlow({ targetId: 'quickops.system-info' })
+    await detach.dispatchFlow(createFeatureItem(), { targetId: 'quickops.system-info' })
 
     expect(useCoreBoxFooterFeedback().value).toMatchObject(outcome.feedback)
     // CoreBox mounts no toast host: a toast here would never be seen.
     expect(toastMock.success).not.toHaveBeenCalled()
     expect(toastMock.warning).not.toHaveBeenCalled()
     expect(toastMock.error).not.toHaveBeenCalled()
-    expect(detach.flowVisible).toBe(false)
+  })
+})
+
+describe('CoreBox Flow page open', () => {
+  const systemInfo: FlowTargetInfo = {
+    id: 'system-info',
+    fullId: 'quickops.system-info',
+    name: 'QuickOps System Info',
+    pluginId: 'quickops',
+    pluginName: 'QuickOps',
+    supportedTypes: ['json'],
+    hasFlowHandler: true,
+    isEnabled: true
+  }
+  const airDrop: FlowTargetInfo = {
+    id: 'airdrop',
+    fullId: 'system-share.airdrop',
+    name: 'AirDrop',
+    pluginId: 'system-share',
+    supportedTypes: ['json'],
+    hasFlowHandler: true,
+    isEnabled: true
+  }
+
+  /** Answers the targets with `targets` (or the `targets` reply itself), and the show. */
+  function serve(targets: FlowTargetInfo[] | (() => Promise<unknown>)): void {
+    transportMock.send.mockImplementation(async (event: unknown) => {
+      if (event === FlowEvents.getTargets) {
+        return typeof targets === 'function' ? targets() : { success: true, data: targets }
+      }
+      if (event === MetaOverlayEvents.ui.show) return { accepted: true }
+      throw new Error('unexpected transport event')
+    })
+  }
+
+  function sentEvents(): unknown[] {
+    return transportMock.send.mock.calls.map(([event]) => event)
+  }
+
+  function showRequest(): MetaShowRequest {
+    const call = transportMock.send.mock.calls.find(
+      ([event]) => event === MetaOverlayEvents.ui.show
+    )
+    expect(call, 'expected the ⌘K card to be asked to open').toBeTruthy()
+    return call![1] as MetaShowRequest
+  }
+
+  beforeEach(() => {
+    transportMock.send.mockReset()
+    transportListeners.clear()
+  })
+
+  afterEach(() => {
+    wrapper?.unmount()
+    wrapper = null
+    document.body.classList.remove('division-box')
+    document.querySelectorAll('.CoreBoxFooter-Sticky').forEach((element) => element.remove())
+  })
+
+  it('opens the ⌘K card on its Flow page, sized for the targets it fetched first', async () => {
+    serve([systemInfo, airDrop])
+    const detach = mountDetach()
+
+    // Read off the results, the item is a Proxy; the request must still clone.
+    await detach.openFlowPanel(reactive(createFeatureItem()))
+
+    expect(sentEvents()).toEqual([FlowEvents.getTargets, MetaOverlayEvents.ui.show])
+    expect(transportMock.send).toHaveBeenNthCalledWith(1, FlowEvents.getTargets, {
+      payloadType: 'json'
+    })
+    const request = showRequest()
+    expect(request).toMatchObject({
+      page: 'flow',
+      anchor: 'corner',
+      flowTargets: [systemInfo, airDrop],
+      desiredPanelHeight: estimateFlowTargetsPanelHeight([systemInfo, airDrop])
+    })
+    expect(request.item).toEqual(createFeatureItem())
+    expect(isProxy(request.item)).toBe(false)
+    expect(() => structuredClone(request)).not.toThrow()
+  })
+
+  it('anchors above a displayed footer, and in the corner in plugin UI mode', async () => {
+    serve([systemInfo])
+    const footer = document.createElement('div')
+    footer.className = 'CoreBoxFooter-Sticky display'
+    document.body.appendChild(footer)
+
+    await mountDetach().openFlowPanel(createFeatureItem())
+    expect(showRequest().anchor).toBe('footer')
+
+    wrapper?.unmount()
+    transportMock.send.mockClear()
+    await mountDetach({ uiMode: true }).openFlowPanel(createFeatureItem())
+    expect(showRequest().anchor).toBe('corner')
+  })
+
+  it.each([
+    {
+      name: 'a refused fetch',
+      reply: () => Promise.resolve({ success: false, error: { message: 'x' } })
+    },
+    { name: 'a failed fetch', reply: () => Promise.reject(new Error('IPC closed')) }
+  ])('opens on no targets after $name', async ({ reply }) => {
+    serve(reply)
+
+    await mountDetach().openFlowPanel(createFeatureItem())
+
+    expect(showRequest()).toMatchObject({
+      page: 'flow',
+      flowTargets: [],
+      desiredPanelHeight: estimateFlowTargetsPanelHeight([])
+    })
+  })
+
+  it('asks for nothing in a DivisionBox, which has no ⌘K card of its own', async () => {
+    serve([systemInfo])
+    document.body.classList.add('division-box')
+
+    await mountDetach().openFlowPanel(createFeatureItem())
+
+    expect(transportMock.send).not.toHaveBeenCalled()
+  })
+
+  it('opens from the result list’s ⌘⇧D and from a plugin view’s Flow shortcut', async () => {
+    serve([systemInfo])
+    const focused = createFeatureItem({ id: 'focused-result' })
+    mountDetach({ results: [focused] })
+
+    const picked = createFeatureItem({ id: 'picked-result' })
+    window.dispatchEvent(new CustomEvent('corebox:flow-item', { detail: { item: picked } }))
+    await vi.waitFor(() => expect(showRequest().item.id).toBe('picked-result'))
+
+    transportMock.send.mockClear()
+    transportListeners.get(FlowEvents.triggerTransfer.toEventName())?.()
+    await vi.waitFor(() => expect(showRequest().item.id).toBe('focused-result'))
+  })
+
+  it('sends the result the key names, not a plugin feature the box data still remembers', async () => {
+    serve([systemInfo])
+    // A plugin view the user has left: no activation, its feature still in the box data.
+    const leftFeature = createFeatureItem({ id: 'left-plugin-feature' })
+    const picked = createFeatureItem({ id: 'picked-result' })
+    mountDetach({ results: [picked], boxData: { feature: leftFeature } })
+
+    window.dispatchEvent(new CustomEvent('corebox:flow-item', { detail: { item: picked } }))
+
+    await vi.waitFor(() => expect(showRequest().item.id).toBe('picked-result'))
   })
 })
 

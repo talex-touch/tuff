@@ -147,6 +147,13 @@ export const SETTING_CATEGORIES: SettingCategory[] = [
         labelKey: 'settingsIntelligenceHub.mcp',
         descriptionKey: 'settingsIntelligenceHub.mcpDesc',
         navIcon: 'i-ri-plug-line'
+      },
+      {
+        key: 'memory',
+        path: '/setting/intelligence/memory',
+        labelKey: 'settingsIntelligenceHub.memory',
+        descriptionKey: 'settingsIntelligenceHub.memoryDesc',
+        navIcon: 'i-ri-brain-line'
       }
     ]
   },

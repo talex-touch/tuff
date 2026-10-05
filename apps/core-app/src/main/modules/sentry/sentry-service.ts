@@ -35,6 +35,7 @@ import {
   TelemetryUploadStatsStore
 } from './telemetry-upload-stats-store'
 import { sanitizeNexusTelemetryEvent, sanitizeSentryEvent } from './telemetry-sanitizer'
+import { sanitizeCoreBoxFocusRecord } from '@talex-touch/utils/core-box'
 import { operationalErrorService, type OperationalErrorSinkEvent } from '../observability'
 
 // User type from auth
@@ -1319,6 +1320,75 @@ export class SentryServiceModule extends BaseModule {
       scope.setContext('environment', getEnvironmentContext())
       Sentry.captureMessage(message)
     })
+  }
+
+  /**
+   * Record a CoreBox focus telemetry event.
+   *
+   * Captures every event synchronously — no sampling, no 60-second dedup
+   * swallowing failures. On Sentry the level is `error` for failures and
+   * `info` for success/cancel. On Nexus the same event is queued as an
+   * `error` event type for failures and `performance` for success/cancel.
+   *
+   * `summonId`/`sampleIndex` are placed in a dedicated `corebox_focus`
+   * context, never in the issue fingerprint, to avoid fingerprint explosion.
+   *
+   * The record is validated against a strict allowlist before leaving the
+   * process; invalid records are logged and dropped.
+   */
+  recordCoreBoxFocus(record: Record<string, unknown>): void {
+    const validated = sanitizeCoreBoxFocusRecord(record)
+    if (!validated) {
+      sentryLog.warn('Dropped invalid CoreBox focus record', {
+        meta: { code: 'COREBOX_FOCUS_INVALID_RECORD' }
+      })
+      return
+    }
+
+    const { kind, code, stage, summonId, sampleIndex, success } = validated
+    const level: Sentry.SeverityLevel = success ? 'info' : 'error'
+
+    sentryLog.debug('CoreBox focus record', {
+      meta: { kind, code, stage, success }
+    })
+
+    // --- Sentry capture (always, even when Nexus is the primary path) ---
+    if (this.config.enabled && this.isInitialized) {
+      // No sampling, no dedup: every event reaches beforeSend.
+      Sentry.withScope((scope) => {
+        scope.setLevel(level)
+        // Stable fingerprint by kind + code + stage — no summonId/sampleIndex
+        // here to avoid per-summon fingerprint explosion.
+        scope.setFingerprint(['corebox', 'focus', kind, code, stage])
+        scope.setTag('corebox.focus.kind', kind)
+        scope.setTag('corebox.focus.code', code)
+        scope.setTag('corebox.focus.stage', stage)
+        scope.setContext('environment', getEnvironmentContext())
+        // summonId/sampleIndex live only in a tagged context, never in the
+        // fingerprint or the global event namespace.
+        scope.setContext('corebox_focus', {
+          summonId,
+          sampleIndex
+        })
+        Sentry.captureMessage('CoreBox focus event', level)
+      })
+    }
+
+    // --- Nexus telemetry queue ---
+    if (this.isTelemetryEnabled()) {
+      const nexusEventType = success ? 'performance' : 'error'
+      void this.queueNexusTelemetry({
+        eventType: nexusEventType,
+        metadata: {
+          kind,
+          code,
+          stage,
+          success,
+          summonId,
+          sampleIndex
+        }
+      })
+    }
   }
 
   getNativeCrashDeliveryStatus(): NativeCrashDeliveryStatus {

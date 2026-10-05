@@ -134,8 +134,12 @@ function trimDataUrlPrefix(dataUrl: string): string {
   return commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl
 }
 
+/** Stable usage-ledger caller for every CoreBox context action (audit rebuild design §1.4). */
+const CONTEXT_ACTION_CALLER = 'core.corebox.context-action'
+
 function intelligenceMetadata(actionId: ContextActionId, input: ContextActionInput) {
   return {
+    caller: CONTEXT_ACTION_CALLER,
     entry: 'context-actions',
     actionId,
     inputType: input.type,

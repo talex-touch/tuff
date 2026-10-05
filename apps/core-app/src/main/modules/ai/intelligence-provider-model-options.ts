@@ -185,6 +185,13 @@ export function getProviderModelOptions(
   const options = getCapabilityOptions(capabilityId)
   const allowedProviderIds = new Set(options.allowedProviderIds ?? [])
   const capabilityBindings = getEffectiveCapabilityRoutingConfig(capabilityId)?.providers ?? []
+  const systemTranslationProviderId =
+    capabilityId === 'text.translate'
+      ? capabilityBindings.find(
+          (binding) =>
+            binding.enabled !== false && binding.providerId === 'local-system-translation'
+        )?.providerId
+      : undefined
 
   return getIntelligenceProviderManager()
     .getEnabled()
@@ -243,6 +250,11 @@ export function getProviderModelOptions(
     .filter((provider) => provider.models.length > 0)
     .sort((a, b) => {
       if (a.available !== b.available) return a.available ? -1 : 1
+      if (systemTranslationProviderId) {
+        const aIsSystem = a.providerId === systemTranslationProviderId
+        const bIsSystem = b.providerId === systemTranslationProviderId
+        if (aIsSystem !== bIsSystem) return aIsSystem ? -1 : 1
+      }
       return a.providerName.localeCompare(b.providerName)
     })
 }

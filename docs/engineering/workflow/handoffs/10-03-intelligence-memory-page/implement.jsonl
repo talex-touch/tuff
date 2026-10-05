@@ -1,0 +1,7 @@
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/design.md", "reason": "parent design §6: files, registration, scope rule, interactions"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/prd.md", "reason": "decisions D4/D5/D6, requirements R-F1–R-F7, memory background anchors"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/research/memory-subpage-and-ia.md", "reason": "registration chain, test locks, memory domain rules, split-page conventions"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "skeleton rules, semantic controls, i18n"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "SDK-backed list state and KeepAlive refresh"}
+{"file": ".trellis/spec/frontend/privacy-data-lifecycle.md", "reason": "memory keeps its own delete/tombstone lifecycle"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "shared files with the sibling settings-revamp task"}

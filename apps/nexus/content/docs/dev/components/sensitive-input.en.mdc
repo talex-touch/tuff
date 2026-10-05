@@ -115,7 +115,7 @@ Copying does not unmask. That is the point: handing the value to the clipboard i
 - Component source: `packages/tuffex/packages/components/src/sensitive-input/src/TxSensitiveInput.vue`.
 - Types: `packages/tuffex/packages/components/src/sensitive-input/src/types.ts`.
 - **Tested coverage:** `packages/tuffex/packages/components/src/sensitive-input/__tests__/sensitive-input.test.ts` (17 cases) covers the masked default and its ARIA shape, reveal by click and by Enter, the read-only reveal path, re-mask on blur and on Escape with focus return, the eye/copy focus exemption, the disabled state, the empty-state edit path, an externally-arriving and an externally-cleared value, copy with its live-region announcement and confirm window, a denied clipboard, error derived from the message, label localization, the label-less accessible name, eye toggling, and the exposed methods.
-- Behaviour modelled on [Kumo's SensitiveInput](https://kumo-ui.com/components/sensitive-input/); the design rules it follows are recorded in `.trellis/spec/frontend/tuffex-design-rules.md`.
+- Behaviour modelled on [Kumo's SensitiveInput](https://kumo-ui.com/components/sensitive-input/); the design rules it follows are recorded in `docs/engineering/specs/frontend/tuffex-design-rules.md`.
 
 <TuffDocSourceLink />
 

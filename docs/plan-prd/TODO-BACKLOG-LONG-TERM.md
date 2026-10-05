@@ -5,8 +5,8 @@
 
 ## A. 架构与质量债务
 
-- [x] Transport Wave A：MessagePort 高频通道迁移、`sendSync` 清理与 retained raw event 分批 typed builder 迁移。（承接：[Transport Wave A](../../.trellis/tasks/archive/2026-07/07-17-transport-wave-a/prd.md)）
-- [x] Transport Wave A：legacy alias registry、legacy hit evidence 与双监听关闭条件。（承接：[Transport Legacy Cutover Evidence](../../.trellis/tasks/archive/2026-07/07-17-transport-legacy-cutover-evidence/prd.md)）
+- [x] Transport Wave A：MessagePort 高频通道迁移、`sendSync` 清理与 retained raw event 分批 typed builder 迁移。（承接：[Transport Wave A](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/archive/2026-07/07-17-transport-wave-a/prd.md)，已归档任务记录）
+- [x] Transport Wave A：legacy alias registry、legacy hit evidence 与双监听关闭条件。（承接：[Transport Legacy Cutover Evidence](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/archive/2026-07/07-17-transport-legacy-cutover-evidence/prd.md)，已归档任务记录）
 - [ ] AI Wave B：`retired-ai-app` 存量 typecheck/lint 债务逐批清理。
 - [ ] AI Wave B：SSE 断线、鉴权与渠道矩阵集成回归补齐。
 - [ ] SRP Wave C：`plugin-module`、`search-core`、`file-provider` 大文件职责拆分。

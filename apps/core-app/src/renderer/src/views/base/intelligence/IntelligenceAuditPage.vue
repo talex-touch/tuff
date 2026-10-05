@@ -5,7 +5,6 @@ import { TxInput } from '@talex-touch/tuffex/input'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
 import SettingsPage from '~/components/settings/SettingsPage.vue'
 import IntelligenceAuditLogs from '~/components/intelligence/audit/IntelligenceAuditLogs.vue'
-import IntelligenceMemoryReview from '~/components/intelligence/audit/IntelligenceMemoryReview.vue'
 import IntelligenceUsageChart from '~/components/intelligence/audit/IntelligenceUsageChart.vue'
 import IntelligenceUsageStats from '~/components/intelligence/audit/IntelligenceUsageStats.vue'
 import IntelligenceGlobalSettings from '~/components/intelligence/config/IntelligenceGlobalSettings.vue'
@@ -61,17 +60,6 @@ function handleCacheExpirationBlur() {
       memory-name="intelligence-usage-chart"
     >
       <IntelligenceUsageChart :days="14" />
-    </TuffGroupBlock>
-
-    <!-- Memory Review Section -->
-    <TuffGroupBlock
-      :name="t('intelligence.memoryReview.title')"
-      :description="t('intelligence.memoryReview.description')"
-      default-icon="i-carbon-policy"
-      active-icon="i-carbon-policy"
-      memory-name="intelligence-memory-review"
-    >
-      <IntelligenceMemoryReview />
     </TuffGroupBlock>
 
     <!-- Audit Logs Section -->

@@ -213,6 +213,21 @@ export class AiImportedConfigRuntime {
     return item
   }
 
+  /**
+   * Switches one server of an imported MCP item, leaving the file's other servers as they were. The
+   * registry is reconciled before this returns, so a server switched off is closed and unregistered
+   * by the time the caller hears back.
+   */
+  async setMcpProfileEnabled(
+    itemId: string,
+    profileId: string,
+    enabled: boolean
+  ): Promise<AiImportedConfigItem> {
+    const item = await aiOrchestratorStore.setImportedMcpProfileEnabled(itemId, profileId, enabled)
+    await this.refresh()
+    return item
+  }
+
   async clone(itemId: string, alias?: string): Promise<AiImportedConfigItem> {
     const item = await aiOrchestratorStore.cloneImportedItem(itemId, alias)
     await this.refresh()
@@ -271,6 +286,9 @@ export class AiImportedConfigRuntime {
     const mcpProfiles = effectiveItems
       .filter((item) => item.kind === 'mcp')
       .flatMap((item) => mcpProfilesFromItem(item))
+      // A server switched off on its own is as unavailable as one whose whole file is off:
+      // advertising it would only buy the model a refused `mcp.listTools`.
+      .filter((profile) => profile.enabled !== false)
       .map((profile) => ({ id: profile.id, name: profile.name }))
     const sections = createSectionBudget(MAX_IMPORTED_CONTEXT_CHARS)
     if (skills.length > 0) {

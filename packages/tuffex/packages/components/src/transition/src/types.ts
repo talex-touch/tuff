@@ -31,3 +31,20 @@ export interface TxTransitionSmoothSizeProps {
 
   motion?: Exclude<TransitionPreset, 'smooth-size'>
 }
+
+/** `forward` brings the next page in from the inline end; `back` from the inline start. */
+export type TransitionPushDirection = 'forward' | 'back'
+
+export interface TxTransitionPushProps {
+  direction?: TransitionPushDirection
+
+  /** Milliseconds. `0` swaps the page at once. */
+  duration?: number
+
+  easing?: string
+
+  /** Tween the container from the old page's height to the new one's while they switch. */
+  height?: boolean
+
+  appear?: boolean
+}

@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+@AGENTS.md
+
+## Project Workflow
+
+Use `/comet` to enter Comet Native. The project workflow and engineering knowledge entry points are defined in `AGENTS.md`; do not recreate a platform-specific task lifecycle. Runtime state and verification artifacts live under `docs/comet/`, while `.comet/runtime/` remains local.
+
+Use `mise exec -- comet` for the pinned CLI. Verify the current change's workspace before writing, and keep archive confirmation separate from authorization to commit, merge, push, or publish.
+
 ## Development Commands
 
 ### Core Application Development

@@ -77,6 +77,7 @@ import {
 import { NetworkCooldownError } from '@talex-touch/utils/network'
 import { getVoiceAsrMetadata } from '@talex-touch/utils/intelligence/voice-asr'
 import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
+import { INTELLIGENCE_HOME_SURFACE } from '@talex-touch/utils/types/intelligence'
 import { createLogger } from '../../utils/logger'
 import { enterPerfContext } from '../../utils/perf-context'
 import { agentManager } from './agents'
@@ -100,9 +101,31 @@ import {
   withReasoningPlan
 } from './reasoning-effort-runtime'
 import { IntelligenceProvider } from './runtime/base-provider'
+import { HOME_CONVERSATION_CALLER } from './usage-ledger/constants'
+import {
+  isUsageLimitError,
+  NO_USAGE_ADMISSION,
+  type UsageAdmission,
+  usageLimitGate
+} from './usage-ledger/usage-limits'
 
 const intelligenceLog = createLogger('Intelligence')
 const formatLogMessage = (...args: unknown[]) => format(...args)
+
+/**
+ * The caller a request is counted and quota-checked under.
+ *
+ * A host Home turn carries the Home surface marker and deliberately no caller — the Pi native
+ * session guard refuses a Home-surface request that names one (`resolveHomeSessionContext` in
+ * `providers/pi-cli-provider.ts`) — so it is attributed here, not by the renderer, and the metadata
+ * the providers see is left untouched. A plugin request always arrives with `plugin:<name>` bound
+ * by the host, so this fallback can never relabel it.
+ */
+function resolveUsageCaller(metadata: Record<string, unknown> | undefined): string | undefined {
+  const caller = metadata?.caller
+  if (typeof caller === 'string' && caller) return caller
+  return metadata?.surface === INTELLIGENCE_HOME_SURFACE ? HOME_CONVERSATION_CALLER : undefined
+}
 
 class IntelligenceOperationCancelledError extends Error {
   readonly code = 'INTELLIGENCE_OPERATION_CANCELLED' as const
@@ -702,6 +725,8 @@ export class TuffIntelligenceSDK {
       stream: Boolean(options?.stream),
       caller: options.metadata?.caller
     })
+    /** The call's global request slot: freed when it is logged, or here when it ends unlogged. */
+    let usageAdmission: UsageAdmission = NO_USAGE_ADMISSION
     try {
       const capability = intelligenceCapabilityRegistry.get(capabilityId)
       if (!capability) {
@@ -712,17 +737,7 @@ export class TuffIntelligenceSDK {
       }
       logInfo(`invoke -> ${capabilityId}`)
 
-      const caller = options.metadata?.caller
-      if (!outerGoverned && this.config.enableQuota && caller) {
-        const quotaCheck = await awaitIntelligenceBoundary(
-          this.checkQuota(caller, 0, signal),
-          signal
-        )
-        if (!quotaCheck.allowed) {
-          throw new Error(`[Intelligence] Quota exceeded: ${quotaCheck.reason}`)
-        }
-      }
-
+      const caller = resolveUsageCaller(options.metadata)
       const { runtimeOptions, promptTemplate, promptVariables } = this.prepareRuntimeOptions(
         capabilityId,
         options
@@ -740,6 +755,22 @@ export class TuffIntelligenceSDK {
         if (cached) {
           logInfo(`Returning cached result for ${capabilityId}`)
           return cached
+        }
+      }
+
+      // A cache hit above is neither limited nor counted. From here the call is metered: the
+      // global usage limit first, for every call with or without a caller, then the per-caller
+      // quota.
+      if (!outerGoverned && this.config.enableQuota) {
+        usageAdmission = await this.admitGlobalUsage(capabilityId, signal)
+      }
+      if (!outerGoverned && this.config.enableQuota && caller) {
+        const quotaCheck = await awaitIntelligenceBoundary(
+          this.checkQuota(caller, 0, signal),
+          signal
+        )
+        if (!quotaCheck.allowed) {
+          throw new Error(`[Intelligence] Quota exceeded: ${quotaCheck.reason}`)
         }
       }
 
@@ -814,14 +845,16 @@ export class TuffIntelligenceSDK {
             result,
             startTime,
             capabilityId,
-            caller: runtimeOptions.metadata?.caller,
+            providerId: strategyResult.selectedProvider.id,
+            caller,
             userId: runtimeOptions.metadata?.userId,
             metadata: {
               ...runtimeOptions.metadata,
               ...reasoningAuditMetadata(result.reasoningEffort)
             },
             promptTemplate,
-            promptVariables
+            promptVariables,
+            usageAdmission
           })
         }
 
@@ -836,7 +869,7 @@ export class TuffIntelligenceSDK {
           throw new IntelligenceOperationCancelledError()
         }
 
-        const fallbackResult =
+        const fallback =
           hasExplicitProviderSelection(runtimeOptions) ||
           (capabilityId === 'audio.stt' && isNexusManagedProvider(strategyResult.selectedProvider))
             ? null
@@ -853,7 +886,8 @@ export class TuffIntelligenceSDK {
         // Fallback success has the same logical commit point as primary success.
         throwIfIntelligenceCancelled(signal)
 
-        if (fallbackResult) {
+        if (fallback) {
+          const fallbackResult = fallback.result
           if (cacheKey !== null) {
             this.setToCache(cacheKey, fallbackResult)
           }
@@ -862,14 +896,16 @@ export class TuffIntelligenceSDK {
               result: fallbackResult,
               startTime,
               capabilityId,
-              caller: runtimeOptions.metadata?.caller,
+              providerId: fallback.providerId,
+              caller,
               userId: runtimeOptions.metadata?.userId,
               metadata: {
                 ...runtimeOptions.metadata,
                 ...reasoningAuditMetadata(fallbackResult.reasoningEffort)
               },
               promptTemplate,
-              promptVariables
+              promptVariables,
+              usageAdmission
             })
           }
           this.invokeFailureCounts.delete(capabilityId)
@@ -898,20 +934,22 @@ export class TuffIntelligenceSDK {
             startTime,
             capabilityId,
             providerId: strategyResult.selectedProvider.id,
-            caller: runtimeOptions.metadata?.caller,
+            caller,
             userId: runtimeOptions.metadata?.userId,
             metadata: {
               ...runtimeOptions.metadata,
               ...reasoningAuditMetadata(selectedReasoningPlan?.decision)
             },
             promptTemplate,
-            promptVariables
+            promptVariables,
+            usageAdmission
           })
         }
 
         throw error
       }
     } finally {
+      usageAdmission.release()
       disposeInvoke()
     }
   }
@@ -939,6 +977,8 @@ export class TuffIntelligenceSDK {
     })
 
     let consumerClosed = false
+    /** The call's global request slot: freed when it is logged, or here when it ends unlogged. */
+    let usageAdmission: UsageAdmission = NO_USAGE_ADMISSION
     try {
       const capability = intelligenceCapabilityRegistry.get(capabilityId)
       if (!capability) {
@@ -948,7 +988,12 @@ export class TuffIntelligenceSDK {
         throw new Error(`[Intelligence] Capability ${capabilityId} does not support streaming`)
       }
 
-      const caller = options.metadata?.caller
+      const caller = resolveUsageCaller(options.metadata)
+      // Streams have no result cache, so every one is metered: the global usage limit first, for
+      // every call with or without a caller, then the per-caller quota.
+      if (!outerGoverned && this.config.enableQuota) {
+        usageAdmission = await this.admitGlobalUsage(capabilityId, signal)
+      }
       if (!outerGoverned && this.config.enableQuota && caller) {
         const quotaCheck = await awaitIntelligenceBoundary(
           this.checkQuota(caller, 0, signal),
@@ -981,6 +1026,11 @@ export class TuffIntelligenceSDK {
         signal
       )
       const emptyUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+      /**
+       * The attempt the terminal audit describes. `provider` is always the selected channel's
+       * config id (R-A4): a chunk may report an upstream id (Nexus reports its own provider
+       * record), which consumers still see on the events, but it is never what the ledger records.
+       */
       let terminalAttempt: {
         provider: string
         model?: string
@@ -1020,11 +1070,13 @@ export class TuffIntelligenceSDK {
             },
             startTime: requestStartTime,
             capabilityId,
-            caller: runtimeOptions.metadata?.caller,
+            providerId: terminalAttempt.provider,
+            caller,
             userId: runtimeOptions.metadata?.userId,
             metadata: { ...runtimeOptions.metadata, ...reasoningAuditMetadata(terminalReasoning) },
             promptTemplate,
-            promptVariables
+            promptVariables,
+            usageAdmission
           })
         } catch {
           logWarn('Failed to prepare stream success audit')
@@ -1043,11 +1095,12 @@ export class TuffIntelligenceSDK {
             model: terminalAttempt.model,
             usage: terminalAttempt.usage,
             latency: terminalAttempt.latency ?? Date.now() - terminalAttempt.startedAt,
-            caller: runtimeOptions.metadata?.caller,
+            caller,
             userId: runtimeOptions.metadata?.userId,
             metadata: { ...runtimeOptions.metadata, ...reasoningAuditMetadata(terminalReasoning) },
             promptTemplate,
-            promptVariables
+            promptVariables,
+            usageAdmission
           })
         } catch {
           logWarn('Failed to prepare stream failure audit')
@@ -1111,7 +1164,7 @@ export class TuffIntelligenceSDK {
         let committedLength = 0
         let finalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
         terminalAttempt = {
-          provider: finalProvider,
+          provider: providerConfig.id,
           model: finalModel,
           traceId: finalTraceId,
           usage: finalUsage,
@@ -1166,7 +1219,7 @@ export class TuffIntelligenceSDK {
             }
             if (chunk.usage) finalUsage = chunk.usage
             terminalAttempt = {
-              provider: finalProvider,
+              provider: providerConfig.id,
               model: finalModel,
               traceId: finalTraceId,
               usage: finalUsage,
@@ -1220,7 +1273,7 @@ export class TuffIntelligenceSDK {
 
         const latency = finalLatency ?? Date.now() - startTime
         terminalAttempt = {
-          provider: finalProvider,
+          provider: providerConfig.id,
           model: finalModel,
           traceId: finalTraceId,
           usage: finalUsage,
@@ -1323,6 +1376,7 @@ export class TuffIntelligenceSDK {
         throw lastError
       }
     } finally {
+      usageAdmission.release()
       disposeStream()
     }
   }
@@ -2247,6 +2301,10 @@ export class TuffIntelligenceSDK {
     )
   }
 
+  /**
+   * Tries the fallback channels in order. On success also returns the config id of the channel
+   * that answered: the audit row records that id (R-A4), not what the provider reports.
+   */
   private async tryFallbackProviders<T>(params: {
     capabilityId: string
     capabilityType: string
@@ -2256,7 +2314,7 @@ export class TuffIntelligenceSDK {
     fallbackProviders: IntelligenceProviderConfig[]
     promptTemplate?: string
     promptVariables?: Record<string, unknown>
-  }): Promise<IntelligenceInvokeResult<T> | null> {
+  }): Promise<{ result: IntelligenceInvokeResult<T>; providerId: string } | null> {
     const {
       capabilityId,
       capabilityType,
@@ -2314,7 +2372,10 @@ export class TuffIntelligenceSDK {
         if (!result) continue
 
         logInfo(`Fallback successful with provider ${fallbackConfig.id}`)
-        return withReasoningDecision(result, fallbackReasoningPlan)
+        return {
+          result: withReasoningDecision(result, fallbackReasoningPlan),
+          providerId: fallbackConfig.id
+        }
       } catch (fallbackError) {
         if (signal?.aborted) {
           throw new IntelligenceOperationCancelledError()
@@ -2351,47 +2412,57 @@ export class TuffIntelligenceSDK {
     }
   }
 
+  /**
+   * Success audit. Written whether or not audit is on: `enableAudit` only decides whether the
+   * detail row is kept; the call is always counted (R-A1). `provider` is the config id of the
+   * channel that answered (`providerId`), never the id the provider reports about itself (R-A4).
+   */
   private async writeSuccessAudit(params: {
     result: IntelligenceInvokeResult<unknown>
     startTime: number
     capabilityId: string
+    providerId: string
     caller?: string
     userId?: string
     metadata?: Record<string, unknown>
     promptTemplate?: string
     promptVariables?: Record<string, unknown>
+    /** Handed over to the logged entry (`logAudit`). */
+    usageAdmission?: UsageAdmission
   }): Promise<void> {
-    if (!this.config.enableAudit) {
-      return
-    }
-
     const {
       result,
       startTime,
       capabilityId,
+      providerId,
       caller,
       userId,
       metadata,
       promptTemplate,
-      promptVariables
+      promptVariables,
+      usageAdmission
     } = params
     const auditMeta = this.getAuditMeta(promptTemplate, promptVariables, metadata)
 
-    await this.logAudit({
-      traceId: result.traceId,
-      timestamp: startTime,
-      capabilityId,
-      provider: result.provider,
-      model: result.model,
-      usage: result.usage,
-      latency: result.latency,
-      success: true,
-      caller,
-      userId,
-      ...auditMeta
-    })
+    await this.logAudit(
+      {
+        traceId: result.traceId,
+        timestamp: startTime,
+        capabilityId,
+        provider: providerId,
+        model: result.model,
+        usage: result.usage,
+        latency: result.latency,
+        success: true,
+        caller,
+        userId,
+        ...auditMeta
+      },
+      usageAdmission
+    )
   }
 
+  /** Failure audit; counted whether or not audit is on, like `writeSuccessAudit`. */
   private async writeFailureAudit(params: {
     error: unknown
     startTime: number
@@ -2406,11 +2477,9 @@ export class TuffIntelligenceSDK {
     metadata?: Record<string, unknown>
     promptTemplate?: string
     promptVariables?: Record<string, unknown>
+    /** Handed over to the logged entry (`logAudit`). */
+    usageAdmission?: UsageAdmission
   }): Promise<void> {
-    if (!this.config.enableAudit) {
-      return
-    }
-
     const {
       error,
       startTime,
@@ -2424,7 +2493,8 @@ export class TuffIntelligenceSDK {
       userId,
       metadata,
       promptTemplate,
-      promptVariables
+      promptVariables,
+      usageAdmission
     } = params
     const auditMeta = this.getAuditMeta(promptTemplate, promptVariables, metadata)
     const candidateCode =
@@ -2436,20 +2506,23 @@ export class TuffIntelligenceSDK {
         ? candidateCode
         : 'INTELLIGENCE_PROVIDER_FAILED'
 
-    await this.logAudit({
-      traceId: traceId || intelligenceAuditLogger.generateTraceId(),
-      timestamp: startTime,
-      capabilityId,
-      provider: providerId,
-      model: model || 'unknown',
-      usage: usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      latency: latency ?? Date.now() - startTime,
-      success: false,
-      error: errorCode,
-      caller,
-      userId,
-      ...auditMeta
-    })
+    await this.logAudit(
+      {
+        traceId: traceId || intelligenceAuditLogger.generateTraceId(),
+        timestamp: startTime,
+        capabilityId,
+        provider: providerId,
+        model: model || 'unknown',
+        usage: usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        latency: latency ?? Date.now() - startTime,
+        success: false,
+        error: errorCode,
+        caller,
+        userId,
+        ...auditMeta
+      },
+      usageAdmission
+    )
   }
 
   async *invokeStream(
@@ -2574,12 +2647,71 @@ export class TuffIntelligenceSDK {
     await this.logAudit(log)
   }
 
-  private async logAudit(log: IntelligenceAuditLogEntry): Promise<void> {
+  /** Whether calls keep a detail row in `intelligence_audit_logs`; counting is unconditional. */
+  isAuditEnabled(): boolean {
+    return Boolean(this.config.enableAudit)
+  }
+
+  private async logAudit(
+    log: IntelligenceAuditLogEntry,
+    usageAdmission?: UsageAdmission
+  ): Promise<void> {
     try {
-      await intelligenceAuditLogger.log(log)
+      const logged = intelligenceAuditLogger.log(log, { detail: this.isAuditEnabled() })
+      // `log()` adds the entry to the pending global usage before it returns, so freeing the
+      // request slot in the same synchronous run hands the call from "in flight" to "logged" with
+      // no moment where a limit check sees it twice or not at all.
+      usageAdmission?.release()
+      await logged
     } catch {
       logWarn(`Failed to log audit entry: ${REDACTED_AUDIT_FAILURE}`)
+    } finally {
+      usageAdmission?.release()
     }
+  }
+
+  /**
+   * The global usage limit (usage-limits task C3) for one metered call, with or without a caller.
+   * Resolves to the request slot the call holds until `logAudit` hands it over or the call ends
+   * unlogged (the `finally` of `invoke` / `stream`). Refusals keep their `USAGE_LIMIT_REACHED`
+   * error; a limit whose usage cannot be read fails closed as `QUOTA_CHECK_UNAVAILABLE`.
+   */
+  private async admitGlobalUsage(
+    capabilityId: string,
+    signal?: AbortSignal
+  ): Promise<UsageAdmission> {
+    throwIfIntelligenceCancelled(signal)
+    const pending = usageLimitGate.admit({ capabilityId, signal })
+    let admission: UsageAdmission
+    try {
+      admission = await awaitIntelligenceBoundary(pending, signal)
+    } catch (error) {
+      // An abort can win the race against a slot the gate grants afterwards: free that slot too.
+      void pending.then(
+        (late) => late.release(),
+        () => undefined
+      )
+      if (signal?.aborted) throw new IntelligenceOperationCancelledError()
+      if (isUsageLimitError(error)) throw error
+      if (signal) {
+        logWarn(`Failed to check usage limits: ${REDACTED_QUOTA_FAILURE}`)
+      } else {
+        logError('Failed to check usage limits:', error)
+      }
+      throw Object.assign(
+        toNormalizedIntelligenceError(
+          Object.assign(new Error('Quota verification is unavailable.'), {
+            code: 'QUOTA_CHECK_UNAVAILABLE'
+          })
+        ),
+        signal ? {} : { cause: error }
+      )
+    }
+    if (signal?.aborted) {
+      admission.release()
+      throw new IntelligenceOperationCancelledError()
+    }
+    return admission
   }
 
   /**

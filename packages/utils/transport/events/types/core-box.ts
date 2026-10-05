@@ -16,6 +16,7 @@ import type {
   TuffSearchResult,
 } from '../../../core-box/tuff/tuff-dsl'
 import type { IndexedSourceDiagnosticsSnapshot } from '../../../search'
+import type { MetaFlowSelection } from './meta-overlay'
 
 export interface CoreBoxImageTranslateRouteStage {
   capability: string
@@ -113,6 +114,86 @@ export interface FocusWindowResponse {
    * Whether the window was successfully focused.
    */
   focused: boolean
+}
+
+/**
+ * Request body for the focus probe: main broadcasts this to the CoreBox renderer
+ * to ask it to snapshot the current DOM focus state and reply via
+ * `CoreBoxEvents.ui.focusProbeResult`.
+ */
+export interface CoreBoxFocusProbeRequest {
+  /**
+   * Correlation identifier the sender can use to match the eventual result.
+   */
+  summonId: string
+  /**
+   * 0-based sample index within the summon run, so the sender can detect
+   * out-of-order or missing replies.
+   */
+  sampleIndex: number
+}
+
+/**
+ * Result of a focus probe, sent from the CoreBox renderer back to main.
+ */
+export interface CoreBoxFocusProbeResponse {
+  summonId: string
+  sampleIndex: number
+  /**
+   * Whether the renderer document currently believes it has focus.
+   */
+  documentHasFocus: boolean
+  /**
+   * The WebContents id of the focused web contents, if the active element
+   * resolves to a known web contents id.
+   */
+  activeWebContentsId?: number
+  /**
+   * The element path or tag name of the currently focused element.
+   */
+  activeElementPath?: string
+  /**
+   * The expected focus target the renderer *intended* to be focused.
+   */
+  expectedTarget?: FocusTarget
+  /**
+   * The actual focus target observed in the DOM.
+   */
+  actualTarget?: FocusTarget
+}
+
+/**
+ * Describes a DOM node that should—or does—hold focus.
+ */
+export interface FocusTarget {
+  /**
+   * A short stable name for the target slot.
+   */
+  name: string
+  /**
+   * CSS selector the helper used to locate the target.
+   */
+  selector: string
+}
+
+/**
+ * Safe, structured diagnostic payload for a focus failure. No raw DOM
+ * values, titles, or innerText are included.
+ */
+export interface CoreBoxFocusFailureNotification {
+  /**
+   * Stable reason code.
+   */
+  code: 'input-focus-failed' | 'native-focus-error' | 'unexpected-active-element' | 'missing-target'
+  /**
+   * Optional human-readable detail for logs (never surfaced to end users).
+   */
+  detail?: string
+  /**
+   * Echoed summon / sample context when the failure relates to a probe.
+   */
+  summonId?: string
+  sampleIndex?: number
 }
 
 export interface CoreBoxHideRequest {
@@ -785,6 +866,12 @@ export interface CoreBoxMetaOverlayActionExecutedPayload {
 export interface CoreBoxMetaOverlayItemActionPayload {
   actionId: string
   item: TuffItem
+  /**
+   * The Flow target picked on the ⌘K card's Flow page, present only on the transfer action
+   * (`flow-transfer`) that ends there. CoreBox dispatches the item to it; without it the transfer
+   * action dispatches nothing.
+   */
+  flow?: MetaFlowSelection
 }
 
 export interface CoreBoxMetaOverlayFlowTransferPayload {
@@ -795,7 +882,8 @@ export interface CoreBoxMetaOverlayFlowTransferPayload {
  * The ⌘K action panel's state as the CoreBox window hosting it sees it. Main publishes it to that
  * window's renderer on every change: while main has the window grown for the panel, CoreBox paints
  * the space the growth added, which otherwise shows the window material — a blur of the desktop
- * behind CoreBox. Host-only: a main → CoreBox broadcast with no handler and no plugin surface.
+ * behind CoreBox; while the card shows a Flow page, CoreBox blurs its own content under it.
+ * Host-only: a main → CoreBox broadcast with no handler and no plugin surface.
  */
 export interface CoreBoxMetaOverlayPanelStatePayload {
   /** The panel is on screen. */
@@ -806,6 +894,12 @@ export interface CoreBoxMetaOverlayPanelStatePayload {
    * outlasts `visible` by up to the animation.
    */
   grown: boolean
+  /**
+   * The card is showing a Flow page (`flow` or `flow-confirm`), and CoreBox blurs its own content
+   * under it. Never `true` while `visible` is `false`. Main always sends it; a reader treats
+   * anything but `true` as `false`, so a payload without it reads as not blurred.
+   */
+  blur: boolean
 }
 
 export interface CoreBoxUiResumePayload {
