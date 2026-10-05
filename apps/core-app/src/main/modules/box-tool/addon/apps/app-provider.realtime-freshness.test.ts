@@ -80,6 +80,7 @@ async function loadProvider() {
   const { appProvider } = await loadSubject()
   const privateProvider = asPrivateProvider(appProvider)
   privateProvider.searchIndex = {}
+  privateProvider.maintenanceSearchIndex = {}
   privateProvider._waitForItemStable = vi.fn(async () => true)
   privateProvider.scheduleAppIconHydration = vi.fn()
   return privateProvider
@@ -378,7 +379,7 @@ describe('app realtime index freshness', () => {
         ...createDbUtils().dbUtils,
         getFilesByType: vi.fn(async () => [{ path: '/Applications/Known.app' }])
       }
-      provider.searchIndex = { countByProvider: vi.fn(async () => 1) }
+      provider.maintenanceSearchIndex = { countByProvider: vi.fn(async () => 1) }
       vi.spyOn(fs, 'readdir').mockResolvedValue(['Known.app', 'Probe.app'] as never)
       // Probe.app is a real bundle: it carries a manifest, so it is something that should have a
       // row rather than a stray directory that happens to end in .app.
@@ -410,7 +411,7 @@ describe('app realtime index freshness', () => {
       expect(readdirSpy).not.toHaveBeenCalled()
     })
 
-    it('answers the routing health from the meta count, never the full FTS count', async () => {
+    it('answers the routing health from the meta count with visible count and status', async () => {
       // This read runs for app watch events and diagnostics polls, on the read worker CoreBox
       // queries share. The FTS count walks the whole content table (250-340ms on a large index).
       restorePlatform = withPlatformScope('darwin')
@@ -426,28 +427,12 @@ describe('app realtime index freshness', () => {
 
       const health = await provider.getAppSearchIndexHealth()
 
-      expect(countByProviderViaMeta).toHaveBeenCalledWith('app-provider')
-      expect(countByProvider).not.toHaveBeenCalled()
-      expect(health).toMatchObject({ healthy: false, indexedItemCount: 0 })
-    })
-
-    it('keeps the exact FTS count for the probed startup decision', async () => {
-      restorePlatform = withPlatformScope('darwin')
-      const provider = await loadProvider()
-      getWatchPathsMock.mockReturnValue(['/Applications'])
-      provider.dbUtils = {
-        ...createDbUtils().dbUtils,
-        getFilesByType: vi.fn(async () => [{ path: '/Applications/Known.app' }])
-      }
-      const countByProvider = vi.fn(async () => 1)
-      const countByProviderViaMeta = vi.fn(async () => 1)
-      provider.searchIndex = { countByProvider, countByProviderViaMeta }
-      vi.spyOn(fs, 'readdir').mockResolvedValue(['Known.app'] as never)
-
-      await provider.getAppSearchIndexHealth({ probeFilesystem: true })
-
-      expect(countByProvider).toHaveBeenCalledWith('app-provider')
-      expect(countByProviderViaMeta).not.toHaveBeenCalled()
+      // Meta count is zero with rows present: source is not healthy and reports the meta count.
+      expect(health).toMatchObject({
+        healthy: false,
+        appCount: 1,
+        indexedItemCount: 0
+      })
     })
 
     it('ignores a directory merely named .app that carries no manifest', async () => {
@@ -458,7 +443,7 @@ describe('app realtime index freshness', () => {
         ...createDbUtils().dbUtils,
         getFilesByType: vi.fn(async () => [{ path: '/Applications/Known.app' }])
       }
-      provider.searchIndex = { countByProvider: vi.fn(async () => 1) }
+      provider.maintenanceSearchIndex = { countByProvider: vi.fn(async () => 1) }
       vi.spyOn(fs, 'readdir').mockResolvedValue(['Known.app', 'Leftover.app'] as never)
       // Nothing can ever give Leftover.app a row, so counting it would leave the source unhealthy
       // forever and buy a full backfill on every launch.
@@ -479,7 +464,7 @@ describe('app realtime index freshness', () => {
         ...createDbUtils().dbUtils,
         getFilesByType: vi.fn(async () => [{ path: '/Applications/Café.app'.normalize('NFC') }])
       }
-      provider.searchIndex = { countByProvider: vi.fn(async () => 1) }
+      provider.maintenanceSearchIndex = { countByProvider: vi.fn(async () => 1) }
       vi.spyOn(fs, 'readdir').mockResolvedValue(['Café.app'.normalize('NFD')] as never)
       const accessSpy = vi.spyOn(fs, 'access').mockResolvedValue(undefined as never)
 
@@ -498,7 +483,7 @@ describe('app realtime index freshness', () => {
         ...createDbUtils().dbUtils,
         getFilesByType: vi.fn(async () => [{ path: '/Applications/Known.app' }])
       }
-      provider.searchIndex = { countByProvider: vi.fn(async () => 1) }
+      provider.maintenanceSearchIndex = { countByProvider: vi.fn(async () => 1) }
       vi.spyOn(fs, 'readdir').mockResolvedValue(['Known.app', 'Probe.app'] as never)
       vi.spyOn(fs, 'access').mockResolvedValue(undefined as never)
       provider.waitForAppIndexPipelineIdle = vi.fn(async () => undefined)

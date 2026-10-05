@@ -23,6 +23,7 @@ export interface ProviderContext {
   databaseManager: DatabaseModule
   storageManager: TalexTouch.IModule<TalexEvents>
   searchIndex: SearchIndexService
+  maintenanceSearchIndex: SearchIndexService
 }
 
 // Re-export types for convenience

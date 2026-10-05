@@ -605,6 +605,7 @@ export type AppProviderPrivate = {
   context: unknown
   dbUtils: unknown
   searchIndex: unknown
+  maintenanceSearchIndex: unknown
   fetchExtensionsForFiles: (files: unknown[]) => Promise<unknown[]>
   loadScannedApps: (options?: { forceRefresh?: boolean }) => Promise<unknown[]>
   mapScannedAppToIndexedSourceRecord: (
@@ -765,9 +766,9 @@ export type AppProviderPrivate = {
   _scheduleMdlsUpdateScan: () => void
   isAppIndexWarming: () => Promise<boolean>
   getAppSearchIndexHealth: (options?: { probeFilesystem?: boolean }) => Promise<{
-    healthy: boolean
+    healthy: boolean | null
     appCount: number
-    indexedItemCount: number
+    indexedItemCount: number | null
     unindexedOnDisk?: number
   }>
   waitForAppIndexPipelineIdle: () => Promise<void>
