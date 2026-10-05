@@ -38,9 +38,7 @@ describe('shortcutStorage.removeShortcuts', () => {
     expect(removedCount).toBe(3)
     expect(storage.getAllShortcuts().map(shortcut => shortcut.id)).toEqual(['core.box.toggle'])
     expect(saveConfig).toHaveBeenCalledTimes(1)
-    expect(JSON.parse(String(saveConfig.mock.calls[0]?.[1]))).toEqual([
-      createShortcut('core.box.toggle'),
-    ])
+    expect(JSON.parse(String(saveConfig.mock.calls[0]?.[1]))).toEqual([createShortcut('core.box.toggle')])
   })
 
   it('does not persist when no shortcut matches', () => {
@@ -128,5 +126,97 @@ describe('shortcutStorage encapsulation', () => {
     expect(storage.updateShortcutEnabled('b', false)).toBe(true)
 
     expect(storage.getShortcutById('b')!.meta.enabled).toBe(false)
+  })
+})
+
+describe('shortcutStorage durable replacement writes', () => {
+  function diskBoundary() {
+    let serialized = JSON.stringify([createShortcut('system'), createShortcut('unrelated')])
+    const saveConfig = vi.fn((_name: string, content?: string): void | { success: boolean } => {
+      serialized = String(content)
+      return { success: true }
+    })
+    const reopen = () =>
+      new ShortcutStorage({
+        getConfig: () => JSON.parse(serialized),
+        saveConfig,
+      })
+    return { reopen, saveConfig }
+  }
+
+  it('reopens with both the changed key and enablement committed together', () => {
+    const disk = diskBoundary()
+    const storage = disk.reopen()
+    expect(storage.updateShortcutAccelerator('system', 'CommandOrControl+J', false)).toBe(true)
+    expect(disk.saveConfig).toHaveBeenCalledTimes(1)
+    expect(disk.reopen().getShortcutById('system')).toMatchObject({
+      accelerator: 'CommandOrControl+J',
+      meta: { enabled: false },
+    })
+    const reopened = disk.reopen()
+    reopened.updateShortcutEnabled('system', true)
+    expect(disk.reopen().getShortcutById('system')).toMatchObject({
+      accelerator: 'CommandOrControl+J',
+      meta: { enabled: true },
+    })
+  })
+
+  it.each(['throw', 'false'] as const)(
+    'rejects a two-field %s save without leaking it into the next successful write',
+    failure => {
+      const disk = diskBoundary()
+      const storage = disk.reopen()
+      const before = storage.getShortcutById('system')
+      disk.saveConfig.mockImplementationOnce(() => {
+        if (failure === 'throw') throw new Error('disk unavailable')
+        return { success: false }
+      })
+      expect(() => storage.updateShortcutAccelerator('system', 'CommandOrControl+J', false)).toThrow()
+      expect(storage.getShortcutById('system')).toEqual(before)
+      expect(disk.reopen().getShortcutById('system')).toEqual(before)
+      storage.updateShortcutEnabled('unrelated', false)
+      expect(disk.reopen().getShortcutById('system')).toEqual(before)
+      expect(disk.reopen().getShortcutById('unrelated')?.meta.enabled).toBe(false)
+    },
+  )
+
+  it.each([
+    ['add', (storage: ShortcutStorage) => storage.addShortcut(createShortcut('new'))],
+    ['disable', (storage: ShortcutStorage) => storage.updateShortcutEnabled('system', false)],
+    ['remove', (storage: ShortcutStorage) => storage.removeShortcuts(['system'])],
+  ] as const)('a rejected %s does not become durable through an unrelated edit', (_name, mutate) => {
+    for (const failure of ['throw', 'false']) {
+      const disk = diskBoundary()
+      const storage = disk.reopen()
+      const before = storage.getAllShortcuts()
+      disk.saveConfig.mockImplementationOnce(() => {
+        if (failure === 'throw') throw new Error('disk unavailable')
+        return { success: false }
+      })
+      expect(() => mutate(storage)).toThrow()
+      expect(storage.getAllShortcuts()).toEqual(before)
+      storage.updateShortcutAccelerator('unrelated', 'CommandOrControl+U')
+      const restarted = disk.reopen()
+      expect(restarted.getShortcutById('system')).toEqual(before[0])
+      expect(restarted.getShortcutById('new')).toBeUndefined()
+      expect(restarted.getShortcutById('unrelated')?.accelerator).toBe('CommandOrControl+U')
+    }
+  })
+
+  it('does not persist mutations of either public read, including nested array entries', () => {
+    const disk = diskBoundary()
+    const storage = disk.reopen()
+    const rows = storage.getAllShortcuts()
+    rows[0].accelerator = 'CommandOrControl+X'
+    rows[0].meta.enabled = false
+    rows.reverse()
+    rows.push(createShortcut('injected'))
+    const item = storage.getShortcutById('system')!
+    item.meta.author = 'intruder'
+    storage.updateShortcutEnabled('unrelated', false)
+    expect(disk.reopen().getAllShortcuts()).toEqual([
+      createShortcut('system'),
+      expect.objectContaining({ id: 'unrelated', meta: expect.objectContaining({ enabled: false }) }),
+    ])
   })
 })

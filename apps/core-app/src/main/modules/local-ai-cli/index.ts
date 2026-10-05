@@ -290,7 +290,9 @@ function taskFailureCode(error: unknown): LocalAiCliErrorCode {
   ) {
     return message
   }
-  return message === 'PROCESS_START_FAILED' ? 'PROCESS_START_FAILED' : 'PROTOCOL_INVALID'
+  return message === 'PROCESS_START_FAILED' || message === 'PROCESS_EXITED'
+    ? message
+    : 'PROTOCOL_INVALID'
 }
 
 export class LocalAiCliModule extends BaseModule {
@@ -928,6 +930,7 @@ export class LocalAiCliModule extends BaseModule {
     let finalized = false
     let piState: { sessionId: string; sessionFile: string } | null = null
     let piRun: PiRunState | null = null
+    let piAttemptFailed = false
     let ompResumeAwaitingConfirmation = false
     let protocolChain = Promise.resolve()
     let settleTask!: () => void
@@ -1018,6 +1021,7 @@ export class LocalAiCliModule extends BaseModule {
 
     const handleProtocolLine = async (line: string): Promise<void> => {
       if (!line.trim()) return
+      if (spec.protocol === 'pi-rpc' && (context.isCancelled() || completionReady)) return
       let nativeEvent: Record<string, unknown>
       try {
         const parsed = JSON.parse(line)
@@ -1078,6 +1082,7 @@ export class LocalAiCliModule extends BaseModule {
                 before: piRun.beforeEntries,
                 post: entries
               })
+          if (context.isCancelled()) return
           if (!pointer) throw new Error('PROTOCOL_INVALID')
           await this.touchNativeSession(pointer, finalHead)
           completionReady = true
@@ -1268,6 +1273,23 @@ export class LocalAiCliModule extends BaseModule {
       }
 
       const decoded = decodeLocalAiCliEvent(request.provider, nativeEvent)
+      if (
+        spec.protocol === 'pi-rpc' &&
+        nativeEvent.type === 'message_end' &&
+        asObject(nativeEvent.message)?.role === 'assistant'
+      ) {
+        piAttemptFailed = decoded.failed === true
+      }
+      if (
+        spec.protocol === 'pi-rpc' &&
+        decoded.completed &&
+        (decoded.failed || piAttemptFailed) &&
+        !piRun?.verificationRequested
+      ) {
+        protocolFailure = new Error('PROCESS_EXITED')
+        child.kill()
+        return
+      }
       if (decoded.delta) {
         completeText += decoded.delta
         context.emit({ type: 'text-delta', callId, text: decoded.delta })

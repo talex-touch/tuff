@@ -11,6 +11,9 @@ const state = vi.hoisted(() => {
   const { reactive, ref } = require('vue') as typeof import('vue')
   return {
     shortcuts: [] as ShortcutWithStatus[],
+    listeners: new Set<() => void>(),
+    getAll: vi.fn<() => Promise<ShortcutWithStatus[]>>(),
+    update: vi.fn<(id: string, accelerator?: string, enabled?: boolean) => Promise<boolean>>(),
     platform: ref('darwin'),
     appSetting: reactive({
       coreBox: { customPlaceholder: '' },
@@ -76,7 +79,14 @@ vi.mock('~/modules/platform/renderer-platform', async () => {
 })
 vi.mock('~/utils/renderer-log', () => ({ createRendererLogger: () => ({ warn: vi.fn() }) }))
 vi.mock('~/modules/channel/main/shortcon', () => ({
-  shortconApi: { getAll: vi.fn(async () => state.shortcuts) }
+  shortconApi: {
+    getAll: state.getAll,
+    update: state.update,
+    onChanged: (listener: () => void) => {
+      state.listeners.add(listener)
+      return () => state.listeners.delete(listener)
+    }
+  }
 }))
 vi.mock('~/modules/storage/app-storage', () => ({ appSetting: state.appSetting }))
 
@@ -117,6 +127,57 @@ async function statusTexts(): Promise<Record<string, string>> {
   return Object.fromEntries(
     wrapper.findAll('li').map((row) => [row.attributes('data-id'), row.text()])
   )
+}
+
+beforeEach(() => {
+  state.getAll.mockReset()
+  state.getAll.mockImplementation(async () => structuredClone(state.shortcuts))
+  state.update.mockReset()
+  state.update.mockResolvedValue(true)
+})
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: Error) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+function notifyShortcutChange() {
+  for (const listener of [...state.listeners]) listener()
+}
+
+async function openLiveDialog() {
+  const wrapper = mount(SettingTools, {
+    global: {
+      stubs: {
+        ...stubs,
+        ShortcutDialog: false,
+        FlipDialog: {
+          props: ['modelValue'],
+          setup: () => ({ close: () => {} }),
+          template: '<section v-if="modelValue"><slot :close="close" /></section>'
+        },
+        FlatKeyInput: {
+          props: ['modelValue'],
+          emits: ['update:modelValue'],
+          template:
+            '<input class="shortcut-key" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />'
+        },
+        TxTooltip: { template: '<div><slot /></div>' },
+        TxSpinner: { template: '<span />' },
+        TxSkeleton: { template: '<span />' },
+        TxSearchInput: { template: '<input />' }
+      }
+    }
+  })
+  await flushPromises()
+  await wrapper.get('.ShortcutEntry button').trigger('click')
+  await flushPromises()
+  return wrapper
 }
 
 /**
@@ -173,5 +234,211 @@ describe('SettingTools shortcut status', () => {
 
     expect(texts['local-ai-cli.quick-open']).toBe('settingTools.shortcutStatus.localAiCliOff')
     expect(texts['plugin.translate.toggle']).toBe('settingTools.shortcutStatus.runtimeMissing')
+  })
+})
+
+describe('SettingTools live shortcut dialog races', () => {
+  const id = 'local-ai-cli.quick-open'
+  const originalKey = 'CommandOrControl+Shift+L'
+
+  beforeEach(() => {
+    state.platform.value = 'darwin'
+    state.shortcuts = [
+      mainShortcut(id, originalKey, { state: 'unavailable', reason: 'runtime-missing' })
+    ]
+  })
+
+  it('updates the open dialog key, enablement and null-key status reasons without reopening', async () => {
+    const wrapper = await openLiveDialog()
+    const row = wrapper.get('.ShortcutDialog-Row')
+    expect(row.get('.ShortcutDialog-StatusText').text()).toBe(
+      'settingTools.shortcutStatus.localAiCliOff'
+    )
+    state.shortcuts = [
+      mainShortcut(id, originalKey, { state: 'unavailable', reason: 'register-failed' })
+    ]
+    notifyShortcutChange()
+    await flushPromises()
+    expect(row.get('.ShortcutDialog-StatusText').text()).toBe(
+      'settingTools.shortcutStatus.unavailable'
+    )
+    state.shortcuts = [
+      {
+        ...mainShortcut(id, 'Alt+J', { state: 'disabled' }),
+        meta: { creationTime: 0, modificationTime: 0, author: 'system', enabled: false }
+      }
+    ]
+    notifyShortcutChange()
+    await flushPromises()
+    expect(row.get<HTMLInputElement>('.shortcut-key').element.value).toBe('Alt+J')
+    expect(row.get('[role="switch"]').attributes('aria-checked')).toBe('false')
+    expect(row.get('.ShortcutDialog-StatusText').text()).toBe(
+      'settingTools.shortcutsDialog.statusDisabled'
+    )
+    state.shortcuts = [
+      mainShortcut(id, 'Alt+J', {
+        state: 'conflict',
+        reason: 'conflict-plugin',
+        conflictWith: ['plugin.demo']
+      })
+    ]
+    notifyShortcutChange()
+    await flushPromises()
+    expect(row.get('[role="switch"]').attributes('aria-checked')).toBe('true')
+    expect(row.get('.ShortcutDialog-StatusText').text()).toBe(
+      'settingTools.shortcutStatus.conflictPlugin'
+    )
+  })
+
+  it('discards an older event query after a newer query has rendered', async () => {
+    const wrapper = await openLiveDialog()
+    const older = deferred<ShortcutWithStatus[]>()
+    const newer = deferred<ShortcutWithStatus[]>()
+    state.getAll.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise)
+    notifyShortcutChange()
+    notifyShortcutChange()
+    newer.resolve([mainShortcut(id, 'Alt+N', { state: 'conflict', reason: 'conflict-system' })])
+    await flushPromises()
+    older.resolve([
+      mainShortcut(id, originalKey, { state: 'unavailable', reason: 'runtime-missing' })
+    ])
+    await flushPromises()
+    expect(wrapper.get<HTMLInputElement>('.shortcut-key').element.value).toBe('Alt+N')
+    expect(wrapper.get('.ShortcutDialog-StatusText').text()).toBe(
+      'settingTools.shortcutStatus.conflictSystem'
+    )
+  })
+
+  it('preserves a saving row while refreshing a different row and rejects queries spanning the save boundary', async () => {
+    const otherId = 'core.test.other'
+    state.shortcuts.push(mainShortcut(otherId, 'Alt+O', { state: 'active' }))
+    const wrapper = await openLiveDialog()
+    const oldRead = deferred<ShortcutWithStatus[]>()
+    const duringSaveRead = deferred<ShortcutWithStatus[]>()
+    state.getAll.mockReturnValueOnce(oldRead.promise)
+    notifyShortcutChange()
+    const save = deferred<boolean>()
+    state.update.mockReturnValueOnce(save.promise)
+    const rows = wrapper.findAll('.ShortcutDialog-Row')
+    const savingRow = rows.find((row) => row.text().includes(id))!
+    const otherRow = rows.find((row) => row.text().includes(otherId))!
+    await savingRow.get('[role="switch"]').trigger('click')
+    oldRead.resolve([
+      mainShortcut(id, originalKey, { state: 'active' }),
+      mainShortcut(otherId, 'Alt+O', { state: 'active' })
+    ])
+    await flushPromises()
+    state.shortcuts[1] = mainShortcut(otherId, 'Alt+P', {
+      state: 'conflict',
+      reason: 'conflict-system'
+    })
+    notifyShortcutChange()
+    await flushPromises()
+    expect(savingRow.get('[role="switch"]').attributes('aria-checked')).toBe('false')
+    expect(savingRow.get('.ShortcutDialog-StatusText').text()).toBe(
+      'settingTools.shortcutsDialog.saving'
+    )
+    expect(otherRow.get<HTMLInputElement>('.shortcut-key').element.value).toBe('Alt+P')
+    expect(otherRow.get('.ShortcutDialog-StatusText').text()).toBe(
+      'settingTools.shortcutStatus.conflictSystem'
+    )
+
+    state.getAll.mockReturnValueOnce(duringSaveRead.promise)
+    notifyShortcutChange()
+    state.shortcuts[0] = {
+      ...mainShortcut(id, 'Alt+N', { state: 'disabled' }),
+      meta: { creationTime: 0, modificationTime: 0, author: 'system', enabled: false }
+    }
+    save.resolve(true)
+    await flushPromises()
+    expect(savingRow.get<HTMLInputElement>('.shortcut-key').element.value).toBe('Alt+N')
+    duringSaveRead.resolve([
+      mainShortcut(id, originalKey, { state: 'active' }),
+      mainShortcut(otherId, 'Alt+O', { state: 'active' })
+    ])
+    await flushPromises()
+    expect(savingRow.get('[role="switch"]').attributes('aria-checked')).toBe('false')
+    expect(savingRow.get<HTMLInputElement>('.shortcut-key').element.value).toBe('Alt+N')
+    expect(savingRow.get('.ShortcutDialog-StatusText').text()).toBe(
+      'settingTools.shortcutsDialog.saveSuccess'
+    )
+  })
+
+  it.each(['key', 'enabled'] as const)(
+    'an older rejected %s save cannot overwrite a newer successful choice',
+    async (field) => {
+      const wrapper = await openLiveDialog()
+      const older = deferred<boolean>()
+      const newer = deferred<boolean>()
+      state.update.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise)
+      if (field === 'key') {
+        await wrapper.get('.shortcut-key').setValue('Alt+O')
+        await wrapper.get('.shortcut-key').setValue('Alt+N')
+      } else {
+        await wrapper.get('[role="switch"]').trigger('click')
+        await wrapper.get('[role="switch"]').trigger('click')
+      }
+      older.resolve(false)
+      await flushPromises()
+      expect(wrapper.get<HTMLInputElement>('.shortcut-key').element.value).toBe(
+        field === 'key' ? 'Alt+N' : originalKey
+      )
+      expect(wrapper.get('[role="switch"]').attributes('aria-checked')).toBe('true')
+      expect(wrapper.get('.ShortcutDialog-StatusText').text()).toBe(
+        'settingTools.shortcutsDialog.saving'
+      )
+      if (field === 'key') state.shortcuts[0].accelerator = 'Alt+N'
+      state.shortcuts[0].meta.enabled = true
+      newer.resolve(true)
+      await flushPromises()
+      expect(wrapper.get<HTMLInputElement>('.shortcut-key').element.value).toBe(
+        field === 'key' ? 'Alt+N' : originalKey
+      )
+      expect(wrapper.get('[role="switch"]').attributes('aria-checked')).toBe('true')
+      expect(wrapper.get('.ShortcutDialog-StatusText').text()).toBe(
+        'settingTools.shortcutsDialog.saveSuccess'
+      )
+    }
+  )
+
+  it.each(['false', 'throw'] as const)(
+    'a current save %s restores the selected key and shows failure rather than success',
+    async (failure) => {
+      const wrapper = await openLiveDialog()
+      if (failure === 'false') state.update.mockResolvedValueOnce(false)
+      else state.update.mockRejectedValueOnce(new Error('save failed'))
+      await wrapper.get('.shortcut-key').setValue('Alt+X')
+      await flushPromises()
+      expect(wrapper.get<HTMLInputElement>('.shortcut-key').element.value).toBe(originalKey)
+      expect(wrapper.get('.ShortcutDialog-StatusText').text()).toBe(
+        'settingTools.shortcutsDialog.saveFailed'
+      )
+    }
+  )
+
+  it('unsubscribes on unmount and does not send old query/save results into the next dialog', async () => {
+    const old = await openLiveDialog()
+    const read = deferred<ShortcutWithStatus[]>()
+    const save = deferred<boolean>()
+    state.getAll.mockReturnValueOnce(read.promise)
+    notifyShortcutChange()
+    state.update.mockReturnValueOnce(save.promise)
+    await old.get('.shortcut-key').setValue('Alt+O')
+    expect(state.listeners.size).toBe(1)
+    old.unmount()
+    expect(state.listeners.size).toBe(0)
+    state.shortcuts = [mainShortcut(id, 'Alt+N', { state: 'conflict', reason: 'conflict-system' })]
+    const current = await openLiveDialog()
+    read.resolve([mainShortcut(id, originalKey, { state: 'active' })])
+    save.reject(new Error('unmounted save failed'))
+    await flushPromises()
+    notifyShortcutChange()
+    await flushPromises()
+    expect(current.get<HTMLInputElement>('.shortcut-key').element.value).toBe('Alt+N')
+    expect(current.get('.ShortcutDialog-StatusText').text()).toBe(
+      'settingTools.shortcutStatus.conflictSystem'
+    )
+    current.unmount()
+    expect(state.listeners.size).toBe(0)
   })
 })

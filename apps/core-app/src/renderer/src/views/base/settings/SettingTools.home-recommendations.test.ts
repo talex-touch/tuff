@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
-import { mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import SettingTools from './SettingTools.vue'
+
+enableAutoUnmount(afterEach)
 
 const settingState = vi.hoisted(() => {
   const { reactive } = require('vue') as typeof import('vue')
   return {
+    shortcutChangeListeners: new Set<() => void>(),
     appSettingMock: reactive({
       coreBox: {
         customPlaceholder: ''
@@ -57,7 +60,11 @@ vi.mock('~/utils/renderer-log', () => ({
 
 vi.mock('~/modules/channel/main/shortcon', () => ({
   shortconApi: {
-    getAll: vi.fn(async () => [])
+    getAll: vi.fn(async () => []),
+    onChanged: (listener: () => void) => {
+      settingState.shortcutChangeListeners.add(listener)
+      return () => settingState.shortcutChangeListeners.delete(listener)
+    }
   }
 }))
 

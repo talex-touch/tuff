@@ -97,6 +97,9 @@ const saveStateMap = reactive(new Map<string, SaveState>())
 const saveRunIdMap = new Map<string, number>()
 const saveTimers = new Map<string, number>()
 const initialShortcutSnapshot = ref(new Map<string, { accelerator: string; enabled: boolean }>())
+const savingShortcutIds = new Set<string>()
+let latestShortcutRead = 0
+let shortcutViewDisposed = false
 
 const AUTO_PASTE_TIME_OPTIONS = [-1, 0, 1, 3, 5, 10, 15, 30, 60, 120, 180, 300] as const
 const AUTO_CLEAR_TIME_OPTIONS = [-1, 1, 3, 5, 10, 15, 30, 60, 120, 180, 300] as const
@@ -370,8 +373,24 @@ const omniPanelMouseTriggerEnabled = computed(() => {
 })
 
 async function refreshShortcuts(): Promise<void> {
-  shortcuts.value = await shortconApi.getAll()
+  const request = ++latestShortcutRead
+  try {
+    const next = await shortconApi.getAll()
+    if (shortcutViewDisposed || request !== latestShortcutRead) return
+    const current = new Map((shortcuts.value ?? []).map((shortcut) => [shortcut.id, shortcut]))
+    shortcuts.value = next.map((shortcut) =>
+      savingShortcutIds.has(shortcut.id) ? (current.get(shortcut.id) ?? shortcut) : shortcut
+    )
+  } catch (error) {
+    if (!shortcutViewDisposed && request === latestShortcutRead) {
+      settingToolsLog.warn('Failed to refresh shortcuts', error)
+    }
+  }
 }
+
+const stopShortcutChanges = shortconApi.onChanged(() => {
+  void refreshShortcuts()
+})
 
 onMounted(async () => {
   ensureClipboardPollingSettings()
@@ -423,7 +442,10 @@ async function updateShortcut(id: string, newAccelerator: string): Promise<void>
     target.accelerator = newAccelerator
   }
 
-  const success = await saveShortcut(id, { accelerator: newAccelerator })
+  const saving = saveShortcut(id, { accelerator: newAccelerator })
+  const saveRun = saveRunIdMap.get(id)
+  const success = await saving
+  if (shortcutViewDisposed || saveRunIdMap.get(id) !== saveRun) return
   if (!success && target && previousValue) {
     target.accelerator = previousValue
   }
@@ -445,13 +467,20 @@ async function updateShortcutEnabled(id: string, enabled: boolean): Promise<void
   if (id === 'core.omniPanel.mouseLongPress' && appSetting.omniPanel) {
     appSetting.omniPanel.enableMouseLongPress = enabled
   }
-  const success = await saveShortcut(id, { enabled })
+  const saving = saveShortcut(id, { enabled })
+  const saveRun = saveRunIdMap.get(id)
+  const success = await saving
+  if (shortcutViewDisposed || saveRunIdMap.get(id) !== saveRun) return
   if (!success && target) {
     target.meta.enabled = previousEnabled
   }
   if (!success && appSetting.omniPanel) {
-    appSetting.omniPanel.enableShortcut = previousOmniPanelShortcutEnabled
-    appSetting.omniPanel.enableMouseLongPress = previousOmniPanelMouseLongPressEnabled
+    if (id === 'core.omniPanel.toggle') {
+      appSetting.omniPanel.enableShortcut = previousOmniPanelShortcutEnabled
+    }
+    if (id === 'core.omniPanel.mouseLongPress') {
+      appSetting.omniPanel.enableMouseLongPress = previousOmniPanelMouseLongPressEnabled
+    }
   }
   await refreshShortcuts()
 }
@@ -499,11 +528,12 @@ async function saveShortcut(
 ): Promise<boolean> {
   const nextRunId = (saveRunIdMap.get(id) ?? 0) + 1
   saveRunIdMap.set(id, nextRunId)
+  ++latestShortcutRead
+  savingShortcutIds.add(id)
   setRowSaveState(id, 'saving')
-  if (saveRunIdMap.get(id) !== nextRunId) return false
   try {
     const success = await shortconApi.update(id, payload.accelerator, payload.enabled)
-    if (saveRunIdMap.get(id) !== nextRunId) return success
+    if (shortcutViewDisposed || saveRunIdMap.get(id) !== nextRunId) return success
     if (!success) {
       setRowSaveState(id, 'error')
       toast.error(t('settingTools.shortcutsDialog.saveFailed'))
@@ -512,10 +542,15 @@ async function saveShortcut(
     setRowSaveState(id, 'success')
     return true
   } catch (error) {
-    if (saveRunIdMap.get(id) !== nextRunId) return false
+    if (shortcutViewDisposed || saveRunIdMap.get(id) !== nextRunId) return false
     setRowSaveState(id, 'error')
     toast.error(t('settingTools.shortcutsDialog.saveFailed'))
     return false
+  } finally {
+    if (saveRunIdMap.get(id) === nextRunId) {
+      ++latestShortcutRead
+      savingShortcutIds.delete(id)
+    }
   }
 }
 
@@ -697,8 +732,9 @@ async function resetShortcutChanges(): Promise<void> {
 watch(shortcutsDialogVisible, (visible) => {
   if (!visible) return
   shortcutSearch.value = ''
-  saveStateMap.clear()
-  saveRunIdMap.clear()
+  for (const id of saveStateMap.keys()) {
+    if (!savingShortcutIds.has(id)) saveStateMap.delete(id)
+  }
   for (const timer of saveTimers.values()) {
     window.clearTimeout(timer)
   }
@@ -714,6 +750,11 @@ watch(shortcutsDialogVisible, (visible) => {
 })
 
 onBeforeUnmount(() => {
+  shortcutViewDisposed = true
+  ++latestShortcutRead
+  stopShortcutChanges()
+  savingShortcutIds.clear()
+  saveRunIdMap.clear()
   for (const timer of saveTimers.values()) {
     window.clearTimeout(timer)
   }

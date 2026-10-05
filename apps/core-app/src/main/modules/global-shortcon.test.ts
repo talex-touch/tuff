@@ -164,30 +164,25 @@ type MutableShortcut = Shortcut & {
 class InMemoryShortcutStorage {
   private readonly shortcuts = new Map<string, MutableShortcut>()
 
-  /**
-   * Reads hand out copies, as `ShortcutStorage` does. `setAppShortcut` snapshots the previous
-   * binding through this accessor before overwriting it; handing back the live record would
-   * mutate that snapshot into the rejected value, which is the very state the rollback exists to
-   * undo. `getAllShortcuts` stays by-reference because the classification loop backfills a
-   * missing `meta` through it.
-   */
+  /** Public reads are isolated snapshots, matching the real storage contract. */
   getShortcutById(id: string): MutableShortcut | undefined {
     const shortcut = this.shortcuts.get(id)
     return shortcut ? structuredClone(shortcut) : undefined
   }
 
   addShortcut(shortcut: Shortcut): void {
-    this.shortcuts.set(shortcut.id, shortcut as MutableShortcut)
+    this.shortcuts.set(shortcut.id, structuredClone(shortcut) as MutableShortcut)
   }
 
   getAllShortcuts(): MutableShortcut[] {
-    return Array.from(this.shortcuts.values())
+    return Array.from(this.shortcuts.values(), (shortcut) => structuredClone(shortcut))
   }
 
-  updateShortcutAccelerator(id: string, accelerator: string): boolean {
+  updateShortcutAccelerator(id: string, accelerator: string, enabled?: boolean): boolean {
     const shortcut = this.shortcuts.get(id)
     if (!shortcut) return false
     shortcut.accelerator = accelerator
+    if (typeof enabled === 'boolean') shortcut.meta.enabled = enabled
     shortcut.meta.modificationTime = Date.now()
     return true
   }
@@ -258,9 +253,7 @@ describe('ShortcutModule survives a malformed shortcut record', () => {
    * classification loop then wrote through the guarded value and threw -- after
    * globalShortcut.unregisterAll() had already run, so nothing was re-registered.
    *
-   * Two separate properties, because either half of the fix alone makes a single
-   * "does everything still register" assertion pass: normalising meta stops the throw, and the
-   * try/catch hides it. They are asserted independently so each mutation is detectable.
+   * Classification must keep this trigger usable without relying on mutable public storage reads.
    */
   function seedTrigger(module: ShortcutModuleHarness, storage: InMemoryShortcutStorage): void {
     module.registerMainTrigger('core.test.trigger', ShortcutTriggerKind.MOUSE_RIGHT_LONG_PRESS, {
@@ -275,15 +268,12 @@ describe('ShortcutModule survives a malformed shortcut record', () => {
     } as unknown as Shortcut)
   }
 
-  it('缺少 meta 的记录会被补齐,而不是被判为无效', () => {
+  it('keeps a trigger without persisted meta usable during classification', () => {
     const { module, storage } = createModule()
     seedTrigger(module, storage)
 
     module.reregisterAllShortcuts?.()
 
-    const stored = storage.getShortcutById('core.test.trigger')
-    expect(stored?.meta).toBeDefined()
-    expect(stored?.meta?.triggerKind).toBe(ShortcutTriggerKind.MOUSE_RIGHT_LONG_PRESS)
     expect(module.shortcutStatusMap?.get('core.test.trigger')?.state).toBe('active')
 
     module.onDestroy()
@@ -689,27 +679,72 @@ describe('ShortcutModule plugin shortcuts follow their plugin', () => {
     module.onDestroy()
   })
 
-  it('follows a plugin starting with one pass once its changes settle', () => {
+  it('registers two plugins once in the first settle window and reclassifies the next window', () => {
     vi.useFakeTimers()
     const { module, storage } = createModule()
-    seedPluginShortcuts(storage)
-    setPlugins({ demo: PluginStatus.DISABLED })
+    const secondId = buildFeatureShortcutId('second', 'search')
+    const secondKey = 'CommandOrControl+Shift+S'
+    storage.addShortcut({
+      id: secondId,
+      accelerator: secondKey,
+      type: ShortcutType.FEATURE,
+      meta: { creationTime: 1, modificationTime: 1, author: 'second', enabled: true }
+    })
+    storage.addShortcut({
+      id: RENDERER_ID,
+      accelerator: RENDERER_KEY,
+      type: ShortcutType.RENDERER,
+      meta: { creationTime: 1, modificationTime: 1, author: 'demo', enabled: true }
+    })
+    const plugins = new Map([
+      ['demo', { name: 'demo', status: PluginStatus.DISABLED }],
+      ['second', { name: 'second', status: PluginStatus.CRASHED }]
+    ])
+    ;(pluginModule as { pluginManager: unknown }).pluginManager = { plugins }
     ;(module as unknown as PluginShortcutHarness).registerPluginStatusListener()
     module.reregisterAllShortcuts?.()
     expect(registeredKeys()).toEqual([])
     electronMocks.unregisterAll.mockClear()
 
-    setPlugins({ demo: PluginStatus.ENABLED })
-    emitStatus(PluginStatus.DISABLED, PluginStatus.LOADING)
-    emitStatus(PluginStatus.LOADING, PluginStatus.LOADED)
-    emitStatus(PluginStatus.LOADED, PluginStatus.ENABLED)
-    vi.advanceTimersByTime(99)
-    expect(electronMocks.unregisterAll).not.toHaveBeenCalled()
+    try {
+      plugins.get('demo')!.status = PluginStatus.ENABLED
+      emitStatus(PluginStatus.DISABLED, PluginStatus.ENABLED)
+      vi.advanceTimersByTime(40)
+      plugins.get('second')!.status = PluginStatus.ACTIVE
+      touchEventBus.emit(TalexEvents.PLUGIN_STATUS_CHANGED, {
+        pluginName: 'second',
+        previousStatus: PluginStatus.CRASHED,
+        status: PluginStatus.ACTIVE
+      } as never)
+      vi.advanceTimersByTime(59)
+      expect(electronMocks.unregisterAll).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(1)
+      expect(electronMocks.unregisterAll).toHaveBeenCalledTimes(1)
+      expect(registeredKeys().sort()).toEqual([RENDERER_KEY, secondKey].sort())
+      expect(module.shortcutStatusMap?.get(RENDERER_ID)?.state).toBe('active')
+      expect(module.shortcutStatusMap?.get(secondId)?.state).toBe('active')
 
-    vi.advanceTimersByTime(1)
-    expect(electronMocks.unregisterAll).toHaveBeenCalledTimes(1)
-    expect(registeredKeys().sort()).toEqual([FEATURE_KEY, RENDERER_KEY].sort())
-    module.onDestroy()
+      // Drain the rest of this window: removing the timer guard schedules a second pass at 140ms.
+      vi.advanceTimersByTime(100)
+      expect(electronMocks.unregisterAll).toHaveBeenCalledTimes(1)
+      electronMocks.register.mockClear()
+      electronMocks.unregisterAll.mockClear()
+      plugins.get('second')!.status = PluginStatus.DISABLED
+      touchEventBus.emit(TalexEvents.PLUGIN_STATUS_CHANGED, {
+        pluginName: 'second',
+        previousStatus: PluginStatus.ACTIVE,
+        status: PluginStatus.DISABLED
+      } as never)
+      vi.advanceTimersByTime(100)
+      expect(electronMocks.unregisterAll).toHaveBeenCalledTimes(1)
+      expect(registeredKeys()).toEqual([RENDERER_KEY])
+      expect(module.shortcutStatusMap?.get(secondId)).toEqual({
+        state: 'unavailable',
+        reason: 'runtime-missing'
+      })
+    } finally {
+      module.onDestroy()
+    }
   })
 
   it('leaves every key alone while a plugin moves between ENABLED and ACTIVE', () => {
@@ -762,6 +797,112 @@ describe('ShortcutModule plugin shortcuts follow their plugin', () => {
     emitStatus(PluginStatus.ENABLED, PluginStatus.DISABLED)
     vi.advanceTimersByTime(1_000)
 
+    expect(electronMocks.unregisterAll).not.toHaveBeenCalled()
+    expect(electronMocks.register).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['missing', undefined],
+    ['disabled', PluginStatus.DISABLED],
+    ['crashed', PluginStatus.CRASHED]
+  ] as const)('allows application bindings over two different %s plugin owners', (_, status) => {
+    const { module, storage } = createModule()
+    const featureId = buildFeatureShortcutId('feature-owner', 'translate')
+    storage.addShortcut({
+      id: featureId,
+      accelerator: FEATURE_KEY,
+      type: ShortcutType.FEATURE,
+      meta: { creationTime: 1, modificationTime: 1, author: 'feature-owner', enabled: true }
+    })
+    storage.addShortcut({
+      id: RENDERER_ID,
+      accelerator: RENDERER_KEY,
+      type: ShortcutType.RENDERER,
+      meta: { creationTime: 1, modificationTime: 1, author: 'renderer-owner', enabled: true }
+    })
+    setPlugins(
+      status === undefined
+        ? {}
+        : {
+            'feature-owner': status,
+            'renderer-owner': status
+          }
+    )
+    const featureCallback = vi.fn()
+    const rendererCallback = vi.fn()
+    try {
+      module.reregisterAllShortcuts?.()
+      expect(module.setAppShortcut('app.test.feature-key', FEATURE_KEY, featureCallback)).toEqual({
+        ok: true
+      })
+      expect(
+        module.setAppShortcut('app.test.renderer-key', RENDERER_KEY, rendererCallback)
+      ).toEqual({ ok: true })
+      expect(module.getEffectiveAccelerator('app.test.feature-key')).toBe(FEATURE_KEY)
+      expect(module.getEffectiveAccelerator('app.test.renderer-key')).toBe(RENDERER_KEY)
+      for (const id of [featureId, RENDERER_ID]) {
+        expect(module.shortcutStatusMap?.get(id)).toEqual({
+          state: 'unavailable',
+          reason: 'runtime-missing'
+        })
+      }
+      const dispatch = new Map(electronMocks.register.mock.calls)
+      dispatch.get(FEATURE_KEY)?.()
+      dispatch.get(RENDERER_KEY)?.()
+      expect(featureCallback).toHaveBeenCalledTimes(1)
+      expect(rendererCallback).toHaveBeenCalledTimes(1)
+    } finally {
+      module.onDestroy()
+    }
+  })
+
+  it.each([PluginStatus.ENABLED, PluginStatus.ACTIVE])(
+    'still asks before taking keys from running plugin owners (%s)',
+    (status) => {
+      const { module, storage } = createModule()
+      seedPluginShortcuts(storage)
+      setPlugins({ demo: status })
+      try {
+        module.reregisterAllShortcuts?.()
+        for (const [id, key] of [
+          [FEATURE_ID, FEATURE_KEY],
+          [RENDERER_ID, RENDERER_KEY]
+        ]) {
+          expect(module.setAppShortcut('app.test.take-plugin', key, vi.fn())).toEqual({
+            ok: false,
+            reason: 'conflict',
+            holders: [{ id, label: id }]
+          })
+          expect(storage.getShortcutById('app.test.take-plugin')).toBeUndefined()
+        }
+        const callback = vi.fn()
+        expect(
+          module.setAppShortcut('app.test.take-plugin', FEATURE_KEY, callback, { force: true })
+        ).toEqual({ ok: true })
+        expect(module.getEffectiveAccelerator('app.test.take-plugin')).toBe(FEATURE_KEY)
+        expect(module.getEffectiveAccelerator(FEATURE_ID)).toBeNull()
+        const registeredCallbacks = new Map(electronMocks.register.mock.calls)
+        registeredCallbacks.get(FEATURE_KEY)?.()
+        expect(callback).toHaveBeenCalledTimes(1)
+      } finally {
+        module.onDestroy()
+      }
+    }
+  )
+  it('cancels a pending registration batch when destroyed', () => {
+    vi.useFakeTimers()
+    const { module, storage } = createModule()
+    seedPluginShortcuts(storage)
+    setPlugins({ demo: PluginStatus.DISABLED })
+    ;(module as unknown as PluginShortcutHarness).registerPluginStatusListener()
+    module.reregisterAllShortcuts?.()
+    setPlugins({ demo: PluginStatus.ENABLED })
+    emitStatus(PluginStatus.DISABLED, PluginStatus.ENABLED)
+    vi.advanceTimersByTime(50)
+    module.onDestroy()
+    electronMocks.unregisterAll.mockClear()
+    electronMocks.register.mockClear()
+    vi.advanceTimersByTime(1_000)
     expect(electronMocks.unregisterAll).not.toHaveBeenCalled()
     expect(electronMocks.register).not.toHaveBeenCalled()
   })
@@ -1723,4 +1864,242 @@ describe('ShortcutModule with global shortcut registration disabled by environme
     expect(module.getEffectiveAccelerator(id)).toBeNull()
     expect(noticeMocks.showInternalSystemNotification).not.toHaveBeenCalled()
   })
+})
+
+describe('ShortcutModule publishes status changes without an effective key', () => {
+  it('notifies an open consumer when runtime-missing becomes disabled then register-failed', () => {
+    const id = buildFeatureShortcutId('demo', 'translate')
+    const key = 'CommandOrControl+Shift+F'
+    mainStorageMocks.getConfig.mockReturnValue([
+      {
+        id,
+        accelerator: key,
+        type: ShortcutType.FEATURE,
+        meta: { creationTime: 1, modificationTime: 1, author: 'demo', enabled: true }
+      }
+    ])
+    const module = new ShortcutModule()
+    const pluginHarness = pluginModule as unknown as { pluginManager: unknown }
+    pluginHarness.pluginManager = {
+      plugins: new Map([['demo', { name: 'demo', status: PluginStatus.DISABLED }]])
+    }
+    module.onInit({ app: {}, runtime: { channel: {} } } as Parameters<ShortcutModule['onInit']>[0])
+    const changed = vi.fn(() => module.getFeatureShortcuts('demo').translate)
+    const dispose = module.onBindingsChanged(changed)
+    transportMocks.broadcast.mockClear()
+    try {
+      expect(module.getEffectiveAccelerator(id)).toBeNull()
+      expect(module.getFeatureShortcuts('demo').translate.status).toEqual({
+        state: 'unavailable',
+        reason: 'runtime-missing'
+      })
+      module.updateShortcut(id, undefined, false)
+      expect(module.getEffectiveAccelerator(id)).toBeNull()
+      expect(changed.mock.results.at(-1)?.value).toMatchObject({
+        meta: { enabled: false },
+        status: { state: 'disabled' }
+      })
+      expect(transportMocks.broadcast).toHaveBeenCalledExactlyOnceWith(
+        shortconChangedEvent,
+        undefined
+      )
+
+      changed.mockClear()
+      transportMocks.broadcast.mockClear()
+      pluginHarness.pluginManager = {
+        plugins: new Map([['demo', { name: 'demo', status: PluginStatus.ENABLED }]])
+      }
+      electronMocks.register.mockImplementation(() => false)
+      module.updateShortcut(id, undefined, true)
+      expect(module.getEffectiveAccelerator(id)).toBeNull()
+      expect(changed.mock.results.at(-1)?.value).toMatchObject({
+        meta: { enabled: true },
+        status: { state: 'unavailable', reason: 'register-failed' }
+      })
+      expect(transportMocks.broadcast).toHaveBeenCalledExactlyOnceWith(
+        shortconChangedEvent,
+        undefined
+      )
+    } finally {
+      dispose()
+      module.onDestroy()
+      pluginHarness.pluginManager = null
+      electronMocks.register.mockImplementation(() => true)
+    }
+  })
+})
+
+describe('ShortcutModule restores durable user choices', () => {
+  const systemId = 'core.test.persisted'
+  const systemKey = 'CommandOrControl+Shift+K'
+  const featureId = buildFeatureShortcutId('demo', 'translate')
+
+  function persistence() {
+    let serialized = JSON.stringify([
+      {
+        id: systemId,
+        accelerator: systemKey,
+        type: ShortcutType.MAIN,
+        meta: { creationTime: 1, modificationTime: 1, author: 'system', enabled: true }
+      }
+    ])
+    mainStorageMocks.getConfig.mockImplementation(() => JSON.parse(serialized))
+    mainStorageMocks.saveConfig.mockImplementation((_name: string, content?: string) => {
+      serialized = String(content)
+      return { success: true }
+    })
+    const live: ShortcutModule[] = []
+    const reopen = () => {
+      const module = new ShortcutModule()
+      live.push(module)
+      module.onInit({ app: {}, runtime: { channel: {} } } as Parameters<
+        ShortcutModule['onInit']
+      >[0])
+      module.registerMainShortcut(systemId, systemKey, vi.fn(), { enabled: true })
+      return module
+    }
+    const close = (module: ShortcutModule) => {
+      module.onDestroy()
+      live.splice(live.indexOf(module), 1)
+    }
+    return {
+      reopen,
+      close,
+      records: (): Shortcut[] => JSON.parse(serialized),
+      cleanup: () => live.splice(0).forEach((module) => module.onDestroy())
+    }
+  }
+
+  it('restores an explicitly disabled system key and preserves it across recorder suspension', () => {
+    const disk = persistence()
+    try {
+      let module = disk.reopen()
+      expect(module.updateShortcut(systemId, undefined, false)).toBe(true)
+      disk.close(module)
+      electronMocks.register.mockClear()
+      module = disk.reopen()
+      expect(disk.records().find((row) => row.id === systemId)?.meta.enabled).toBe(false)
+      expect(module.getEffectiveAccelerator(systemId)).toBeNull()
+      const restartedStatus = module as unknown as Pick<ShortcutModuleHarness, 'shortcutStatusMap'>
+      expect(restartedStatus.shortcutStatusMap?.get(systemId)?.state).toBe('disabled')
+      expect(electronMocks.register).not.toHaveBeenCalledWith(systemKey, expect.any(Function))
+      mainStorageMocks.saveConfig.mockClear()
+      module.disableAll()
+      module.enableAll()
+      expect(mainStorageMocks.saveConfig).not.toHaveBeenCalled()
+      expect(disk.records().find((row) => row.id === systemId)?.meta.enabled).toBe(false)
+      expect(module.getEffectiveAccelerator(systemId)).toBeNull()
+
+      module.updateShortcut(systemId, undefined, true)
+      disk.close(module)
+      module = disk.reopen()
+      expect(disk.records().find((row) => row.id === systemId)?.meta.enabled).toBe(true)
+      expect(module.getEffectiveAccelerator(systemId)).toBe(systemKey)
+    } finally {
+      disk.cleanup()
+    }
+  })
+
+  it('restores each feature bind/rebind/clear and keeps the binding while its plugin is stopped', () => {
+    const disk = persistence()
+    const pluginHarness = pluginModule as unknown as { pluginManager: unknown }
+    pluginHarness.pluginManager = {
+      plugins: new Map([['demo', { name: 'demo', status: PluginStatus.ENABLED }]])
+    }
+    try {
+      let module = disk.reopen()
+      for (const key of ['CommandOrControl+Shift+F', 'CommandOrControl+Shift+J']) {
+        if (module.getFeatureShortcuts('demo').translate)
+          module.updateShortcut(featureId, undefined, false)
+        mainStorageMocks.saveConfig.mockClear()
+        expect(module.setFeatureShortcut('demo', 'translate', key)).toBe(true)
+        expect(mainStorageMocks.saveConfig).toHaveBeenCalledTimes(1)
+        disk.close(module)
+        module = disk.reopen()
+        expect(module.getFeatureShortcuts('demo').translate).toMatchObject({
+          accelerator: key,
+          meta: { enabled: true },
+          status: { state: 'active' }
+        })
+        expect(module.getEffectiveAccelerator(featureId)).toBe(key)
+      }
+      const saved = disk.records().find((row) => row.id === featureId)
+      disk.close(module)
+      pluginHarness.pluginManager = {
+        plugins: new Map([['demo', { name: 'demo', status: PluginStatus.DISABLED }]])
+      }
+      module = disk.reopen()
+      expect(module.getFeatureShortcuts('demo').translate).toMatchObject({
+        status: { state: 'unavailable', reason: 'runtime-missing' }
+      })
+      expect(disk.records().find((row) => row.id === featureId)).toEqual(saved)
+      disk.close(module)
+      pluginHarness.pluginManager = {
+        plugins: new Map([['demo', { name: 'demo', status: PluginStatus.ACTIVE }]])
+      }
+      module = disk.reopen()
+      expect(module.getEffectiveAccelerator(featureId)).toBe(saved?.accelerator)
+      expect(module.setFeatureShortcut('demo', 'translate', '')).toBe(true)
+      disk.close(module)
+      module = disk.reopen()
+      expect(module.getFeatureShortcuts('demo').translate).toBeUndefined()
+      expect(disk.records().find((row) => row.id === featureId)).toBeUndefined()
+    } finally {
+      disk.cleanup()
+      pluginHarness.pluginManager = null
+    }
+  })
+
+  it.each(['throw', 'false'] as const)(
+    'a rejected feature/app multi-field save (%s) preserves the prior binding and callback',
+    (failure) => {
+      const disk = persistence()
+      const pluginHarness = pluginModule as unknown as { pluginManager: unknown }
+      pluginHarness.pluginManager = {
+        plugins: new Map([['demo', { name: 'demo', status: PluginStatus.ENABLED }]])
+      }
+      try {
+        const module = disk.reopen()
+        module.setFeatureShortcut('demo', 'translate', 'CommandOrControl+Shift+F')
+        module.updateShortcut(featureId, undefined, false)
+        const featureBefore = disk.records().find((row) => row.id === featureId)
+        const rejectSave = () =>
+          mainStorageMocks.saveConfig.mockImplementationOnce(() => {
+            if (failure === 'throw') throw new Error('disk unavailable')
+            return { success: false }
+          })
+        rejectSave()
+        expect(() =>
+          module.setFeatureShortcut('demo', 'translate', 'CommandOrControl+Shift+J')
+        ).toThrow()
+        expect(module.getFeatureShortcuts('demo').translate).toMatchObject(featureBefore!)
+        module.updateShortcut(systemId, undefined, false)
+        expect(disk.records().find((row) => row.id === featureId)).toEqual(featureBefore)
+
+        const previousCallback = vi.fn()
+        const rejectedCallback = vi.fn()
+        const appKey = 'CommandOrControl+Shift+A'
+        module.setAppShortcut('app.test.persisted', appKey, previousCallback)
+        electronMocks.register.mockClear()
+        rejectSave()
+        expect(() =>
+          module.setAppShortcut('app.test.persisted', 'CommandOrControl+Shift+B', rejectedCallback)
+        ).toThrow()
+        expect(module.getShortcutAccelerator('app.test.persisted')).toBe(appKey)
+        module.disableAll()
+        module.enableAll()
+        const callbacks = new Map(electronMocks.register.mock.calls)
+        callbacks.get(appKey)?.()
+        expect(previousCallback).toHaveBeenCalledTimes(1)
+        expect(rejectedCallback).not.toHaveBeenCalled()
+        disk.close(module)
+        const restarted = disk.reopen()
+        expect(restarted.getFeatureShortcuts('demo').translate).toMatchObject(featureBefore!)
+        expect(restarted.getShortcutAccelerator('app.test.persisted')).toBe(appKey)
+      } finally {
+        disk.cleanup()
+        pluginHarness.pluginManager = null
+      }
+    }
+  )
 })
