@@ -6,8 +6,10 @@ import type {
 import type { ReasoningEffortPlan } from '@talex-touch/utils/intelligence/reasoning-effort'
 import {
   normalizeReasoningEffort,
-  planReasoningEffort
+  planReasoningEffort,
+  planReasoningEffortForSupport
 } from '@talex-touch/utils/intelligence/reasoning-effort'
+import { resolveProviderEffectiveModel } from './model-request-plan'
 import { CODEX_CLI_ORIGIN, CODEX_CLI_PROVIDER_ID } from './providers/pi-cli-runtime'
 import { readCodexConfiguredModel } from './providers/pi-model-catalog'
 
@@ -53,6 +55,9 @@ function originOf(provider: IntelligenceProviderConfig): string | undefined {
  * A provider class's built-in fallback model is deliberately not guessed at: an unknown model is
  * sent nothing, which is what the provider then does too. The one default that is not a guess is
  * Codex's: handed no model, `codex` runs the one its own config names, so that is the model planned.
+ *
+ * A known model is planned from its effective binding, so a thinking ladder or protocol saved in
+ * Settings (or published by the CLI catalog) is what the request actually carries.
  */
 export function planProviderReasoning(
   options: IntelligenceInvokeOptions,
@@ -62,11 +67,17 @@ export function planProviderReasoning(
   const requested = normalizeReasoningEffort(options.reasoningEffort)
   if (!requested) return undefined
   const isCodex = provider.id === CODEX_CLI_PROVIDER_ID || originOf(provider) === CODEX_CLI_ORIGIN
+  const plannedModel = model || (isCodex ? (readCodexConfiguredModel() ?? undefined) : undefined)
+  if (plannedModel) {
+    return planReasoningEffortForSupport(
+      requested,
+      resolveProviderEffectiveModel(provider, plannedModel).thinking
+    )
+  }
   return planReasoningEffort(requested, {
     providerType: provider.type,
     providerId: provider.id,
-    origin: originOf(provider),
-    model: model || (isCodex ? (readCodexConfiguredModel() ?? undefined) : undefined)
+    origin: originOf(provider)
   })
 }
 

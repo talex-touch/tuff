@@ -1,9 +1,9 @@
 import type { IntelligenceInvokeResult } from '@talex-touch/utils/types/intelligence'
-import { INTELLIGENCE_CONVERSATION_TITLE_OPERATION } from '@talex-touch/utils/types/intelligence'
 import { describe, expect, it, vi } from 'vitest'
 import type { TitleChatSdk } from './conversation-title'
 import {
   CONVERSATION_TITLE_MAX_CODEPOINTS,
+  createWorkingConversationTitle,
   deriveRestoredTitle,
   findTitleExchange,
   generateConversationTitle,
@@ -138,16 +138,53 @@ describe('findTitleExchange', () => {
     })
   })
 })
+describe('working conversation title', () => {
+  it.each([
+    { name: 'BMP characters', point: '长' },
+    { name: 'astral characters', point: '🧭' }
+  ])('bounds $name without splitting the last code point', ({ point }) => {
+    const atLimit = point.repeat(CONVERSATION_TITLE_MAX_CODEPOINTS)
+    expect(createWorkingConversationTitle(atLimit)).toBe(atLimit)
+    expect(createWorkingConversationTitle(`${atLimit}${point}`)).toBe(`${atLimit}…`)
+    expect(createWorkingConversationTitle(`  ${point.repeat(650)}  `)).toBe(`${atLimit}…`)
+  })
+})
 
 describe('deriveRestoredTitle', () => {
-  it('treats a stored title equal to the opening message as the working title, not a custom one', () => {
-    // Blocking generation forever on the pre-generation persist is the bug this guards.
-    expect(deriveRestoredTitle('帮我整理下载目录', '帮我整理下载目录')).toBeNull()
+  it.each([
+    { name: 'legacy full prompt', bounded: false },
+    { name: 'bounded working title', bounded: true }
+  ])('$name remains eligible for generation after restore', ({ bounded }) => {
+    const prompt = `🧭${'整理下载目录并保留原始文件。'.repeat(60)}`
+    const storedTitle = bounded ? createWorkingConversationTitle(prompt) : prompt
+    const generatedTitle = deriveRestoredTitle(storedTitle, prompt)
+    expect(generatedTitle).toBeNull()
+    expect(
+      shouldGenerateTitle({
+        generatedTitle,
+        inFlight: false,
+        firstUserContent: prompt,
+        firstAssistantContent: '已整理目录，原始文件全部保留。'
+      })
+    ).toBe(true)
   })
 
-  it('keeps a stored title that differs from the opening message', () => {
-    expect(deriveRestoredTitle('整理下载', '帮我整理下载目录')).toBe('整理下载')
-  })
+  it.each(['整理下载', '我的下载归档 🧭', '整理下载目录。'])(
+    'preserves stored custom or generated title %s and does not regenerate it',
+    (storedTitle) => {
+      const prompt = '帮我整理下载目录'.repeat(80)
+      const generatedTitle = deriveRestoredTitle(storedTitle, prompt)
+      expect(generatedTitle).toBe(storedTitle)
+      expect(
+        shouldGenerateTitle({
+          generatedTitle,
+          inFlight: false,
+          firstUserContent: prompt,
+          firstAssistantContent: '完成。'
+        })
+      ).toBe(false)
+    }
+  )
 
   it('ignores empty storage', () => {
     expect(deriveRestoredTitle('', '帮我整理下载目录')).toBeNull()
@@ -156,7 +193,7 @@ describe('deriveRestoredTitle', () => {
 })
 
 describe('generateConversationTitle', () => {
-  it('sends one low-stakes chat call and normalizes the answer', async () => {
+  it('normalizes the provider answer into a usable conversation title', async () => {
     const chat = vi.fn<TitleChatSdk['text']['chat']>(async () => chatResult('「整理下载目录」'))
     const title = await generateConversationTitle(
       { text: { chat } },

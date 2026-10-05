@@ -1,3 +1,4 @@
+import type { IntelligenceEffectiveModel } from '@talex-touch/utils/types/intelligence'
 import type { ModelDisplayFields, ModelRef } from './model-display'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, ref, type ComputedRef, type Ref } from 'vue'
@@ -33,6 +34,8 @@ export interface ProviderModelOption {
   providerName: string
   providerType: string
   models: string[]
+  /** Main's effective binding per model, same order as `models`. */
+  effectiveModels: IntelligenceEffectiveModel[]
   available: boolean
 }
 
@@ -40,6 +43,12 @@ export interface ProviderModelOption {
 export interface ModelChoice extends ModelDisplayFields {
   /** Picks the provider icon; see `providerIconFor`. */
   providerType: string
+  /**
+   * Main's effective configuration of this model — the one its requests are planned from: alias,
+   * context/output limits with provenance (limits, never occupancy), thinking support and the
+   * explicit per-model default, and whether image attachments are accepted.
+   */
+  binding: IntelligenceEffectiveModel
 }
 
 /** What the send path reads: empty when the next turn should be auto-routed. */
@@ -97,7 +106,17 @@ export interface UseModelOptionsReturn {
   isSelected: (choice: ModelRef) => boolean
 }
 
-function toChoice(option: ProviderModelOption, model: string): ModelChoice {
+/**
+ * A row for one model. The label is the binding's alias when the user gave one — the id stays the
+ * identity that is stored and sent.
+ */
+function toChoice(option: ProviderModelOption, model: string, index: number): ModelChoice | null {
+  const binding =
+    option.effectiveModels[index]?.modelId === model
+      ? option.effectiveModels[index]
+      : option.effectiveModels.find((candidate) => candidate.modelId === model)
+  // A row Main did not resolve cannot be planned the way the menu would describe it.
+  if (!binding) return null
   const { source, name } = splitModelId(model)
   return {
     providerId: option.providerId,
@@ -105,7 +124,8 @@ function toChoice(option: ProviderModelOption, model: string): ModelChoice {
     providerType: option.providerType,
     model,
     source,
-    displayName: name
+    displayName: binding.alias ?? name,
+    binding
   }
 }
 
@@ -148,7 +168,9 @@ export function useModelOptions(): UseModelOptionsReturn {
   const choices = computed<ModelChoice[]>(() =>
     options.value
       .filter((option) => option.available)
-      .flatMap((option) => option.models.map((model) => toChoice(option, model)))
+      .flatMap((option) =>
+        option.models.flatMap((model, index) => toChoice(option, model, index) ?? [])
+      )
   )
 
   const persistedSelection = computed<ModelRef | null>(() => readPersistedModel())

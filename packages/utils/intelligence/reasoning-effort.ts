@@ -12,10 +12,13 @@
  * LangChain.
  */
 import type {
+  IntelligenceEffectiveValueSource,
   IntelligenceReasoningEffort,
   IntelligenceReasoningEffortDecision,
   IntelligenceReasoningEffortStatus,
   IntelligenceReasoningLevel,
+  IntelligenceThinkingLevel,
+  IntelligenceThinkingProtocol,
 } from '../types/intelligence'
 import { TUFF_NEXUS_PROVIDER_ID, TUFF_NEXUS_PROVIDER_ORIGIN } from './nexus-provider'
 
@@ -169,6 +172,18 @@ export interface ReasoningEffortTarget {
   origin?: string
   /** The model the provider will run. On a model-table route, absent means nothing is sent. */
   model?: string
+  /**
+   * The model binding's thinking settings (`IntelligenceModelBinding`), or a catalog record Main
+   * read for this model. A `thinkingLevels` list replaces the route's family table for the model;
+   * absent follows the table. Nexus maps levels server-side and ignores it; a route that takes no
+   * reasoning parameter at all stays unsupported whatever the binding says.
+   */
+  binding?: {
+    thinkingLevels?: readonly IntelligenceThinkingLevel[]
+    thinkingProtocol?: IntelligenceThinkingProtocol
+    /** Who supplied `thinkingLevels`; defaults to the user. */
+    source?: 'user' | 'catalog'
+  }
 }
 
 function routeOf(target: ReasoningEffortTarget): ReasoningRoute {
@@ -290,15 +305,26 @@ export interface ReasoningEffortSupport {
   levels: readonly IntelligenceReasoningLevel[]
   /** Why nothing can be sent: the route never takes an effort, or this model does not. */
   unsupported?: 'provider' | 'model'
+  /**
+   * Where the answer came from: the user's binding, a table or catalog that names this model, or
+   * nothing that knows the model (`unknown`, which never enables reasoning implicitly).
+   */
+  source: IntelligenceEffectiveValueSource
 }
 
-const UNSUPPORTED_MODEL: ReasoningEffortSupport = { wire: null, levels: [], unsupported: 'model' }
-const UNSUPPORTED_PROVIDER: ReasoningEffortSupport = { wire: null, levels: [], unsupported: 'provider' }
+const UNSUPPORTED_PROVIDER: ReasoningEffortSupport = {
+  wire: null,
+  levels: [],
+  unsupported: 'provider',
+  source: 'unknown',
+}
 
 function fromFamily(family: WiredModelFamily | undefined): ReasoningEffortSupport {
-  return family && family.levels.length > 0
-    ? { wire: family.wire, levels: family.levels }
-    : UNSUPPORTED_MODEL
+  if (!family)
+    return { wire: null, levels: [], unsupported: 'model', source: 'unknown' }
+  return family.levels.length > 0
+    ? { wire: family.wire, levels: family.levels, source: 'catalog' }
+    : { wire: null, levels: [], unsupported: 'model', source: 'catalog' }
 }
 
 function withWire(
@@ -318,18 +344,69 @@ const DEEPSEEK_WIRED = withWire(DEEPSEEK_FAMILIES, 'deepseek-thinking')
  */
 const CUSTOM_WIRED = [...OPENAI_WIRED, ...DEEPSEEK_WIRED]
 
-/** What the route can take for this model — the menu's row state and the plan's input. */
-export function resolveReasoningEffortSupport(target: ReasoningEffortTarget): ReasoningEffortSupport {
-  switch (routeOf(target)) {
-    case 'nexus':
-      return { wire: 'nexus', levels: REASONING_LEVELS }
+/** Anthropic's wire: the binding's protocol when set, else the family's, else extended thinking. */
+function anthropicWire(target: ReasoningEffortTarget): ReasoningEffortWire {
+  const protocol = target.binding?.thinkingProtocol
+  if (protocol === 'adaptive')
+    return 'anthropic-adaptive'
+  if (protocol === 'legacy')
+    return 'anthropic-budget'
+  return findFamily(ANTHROPIC_FAMILIES, target.model)?.wire ?? 'anthropic-budget'
+}
+
+/** The wire a route uses for a model whose levels come from its binding rather than the table. */
+function bindingWire(route: ReasoningRoute, target: ReasoningEffortTarget): ReasoningEffortWire | null {
+  switch (route) {
     case 'pi':
     case 'omp':
-      return { wire: 'cli-thinking', levels: REASONING_LEVELS }
+      return 'cli-thinking'
+    case 'claude':
+      return 'claude-effort'
+    case 'codex':
+      return 'codex-config'
+    case 'openai':
+      return 'openai-reasoning-effort'
+    case 'deepseek':
+      return 'deepseek-thinking'
+    case 'anthropic':
+      return anthropicWire(target)
+    case 'custom':
+      return findFamily(CUSTOM_WIRED, target.model)?.wire ?? 'openai-reasoning-effort'
+    default:
+      return null
+  }
+}
+
+/** What the route can take for this model — the menu's row state and the plan's input. */
+export function resolveReasoningEffortSupport(target: ReasoningEffortTarget): ReasoningEffortSupport {
+  const route = routeOf(target)
+  if (route === 'nexus')
+    return { wire: 'nexus', levels: REASONING_LEVELS, source: 'catalog' }
+  if (route === 'none')
+    return UNSUPPORTED_PROVIDER
+
+  const explicit = target.binding?.thinkingLevels
+  if (explicit) {
+    const source = target.binding?.source ?? 'user'
+    // `off` is a capability of the model, not a level a request can carry: auto already omits.
+    const levels = REASONING_LEVELS.filter(level => explicit.includes(level))
+    const wire = bindingWire(route, target)
+    return wire && levels.length > 0
+      ? { wire, levels, source }
+      : { wire: null, levels: [], unsupported: 'model', source }
+  }
+
+  switch (route) {
+    case 'pi':
+    case 'omp':
+      // The CLI clamps to what its model offers, so every level is sendable; nothing here knows the
+      // model's own ladder without a catalog record.
+      return { wire: 'cli-thinking', levels: REASONING_LEVELS, source: 'unknown' }
     case 'claude':
       return {
         wire: 'claude-effort',
         levels: findFamily(CLAUDE_CLI_FAMILIES, target.model)?.levels ?? CLAUDE_CLI_EFFORT_LEVELS,
+        source: 'catalog',
       }
     case 'codex':
       return fromFamily(findFamily(CODEX_WIRED, target.model))
@@ -337,12 +414,12 @@ export function resolveReasoningEffortSupport(target: ReasoningEffortTarget): Re
       return fromFamily(findFamily(OPENAI_WIRED, target.model))
     case 'deepseek':
       return fromFamily(findFamily(DEEPSEEK_WIRED, target.model))
-    case 'anthropic':
-      return fromFamily(findFamily(ANTHROPIC_FAMILIES, target.model))
+    case 'anthropic': {
+      const support = fromFamily(findFamily(ANTHROPIC_FAMILIES, target.model))
+      return support.wire ? { ...support, wire: anthropicWire(target) } : support
+    }
     case 'custom':
       return fromFamily(findFamily(CUSTOM_WIRED, target.model))
-    default:
-      return UNSUPPORTED_PROVIDER
   }
 }
 
@@ -388,7 +465,17 @@ export function planReasoningEffort(
   requested: IntelligenceReasoningEffort,
   target: ReasoningEffortTarget,
 ): ReasoningEffortPlan {
-  const support = resolveReasoningEffortSupport(target)
+  return planReasoningEffortForSupport(requested, resolveReasoningEffortSupport(target))
+}
+
+/**
+ * The plan for a support Main already resolved — an `IntelligenceEffectiveModel.thinking` carries
+ * one — so the renderer's row and Main's request walk the same ladder without re-resolving it.
+ */
+export function planReasoningEffortForSupport(
+  requested: IntelligenceReasoningEffort,
+  support: Pick<ReasoningEffortSupport, 'wire' | 'levels' | 'unsupported'>,
+): ReasoningEffortPlan {
   if (!support.wire || support.levels.length === 0) {
     return {
       wire: null,

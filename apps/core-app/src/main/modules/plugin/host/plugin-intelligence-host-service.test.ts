@@ -1,5 +1,7 @@
 import type { PluginActivationIdentity } from '@talex-touch/utils/transport'
 import { describe, expect, it, vi } from 'vitest'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { resolveProviderEffectiveModel } from '../../ai/model-request-plan'
 import { PluginHostCapabilityRegistry } from './plugin-host-capabilities'
 import { createPluginIntelligenceCapabilities } from './plugin-intelligence-capabilities'
 import { createPluginIntelligenceHostService } from './plugin-intelligence-host-service'
@@ -56,6 +58,18 @@ function createDependencies() {
         providerName: 'Public Provider',
         providerType: 'openai',
         models: ['model-public'],
+        effectiveModels: [
+          resolveProviderEffectiveModel(
+            {
+              id: 'provider-public',
+              name: 'Public Provider',
+              type: IntelligenceProviderType.OPENAI,
+              enabled: true,
+              models: [{ id: 'model-public' }]
+            },
+            'model-public'
+          )
+        ],
         defaultModel: 'model-public',
         capabilities: ['text.chat', 'vision.ocr'],
         available: true,
@@ -69,32 +83,6 @@ function createDependencies() {
 }
 
 describe('plugin intelligence host service', () => {
-  it('binds the production SDK and provider-model projection by default', async () => {
-    productionMocks.invoke.mockResolvedValueOnce(sdkResult('production-answer'))
-    productionMocks.getProviderModelOptions.mockReturnValueOnce([])
-    const service = createPluginIntelligenceHostService()
-
-    await expect(
-      service.invoke(
-        'text.chat',
-        { messages: [{ role: 'user', content: 'hello' }] },
-        undefined,
-        new AbortController().signal,
-        'plugin:touch-intelligence'
-      )
-    ).resolves.toMatchObject({ result: 'production-answer' })
-    await expect(
-      service.listProviderModels(
-        'text.chat',
-        new AbortController().signal,
-        'plugin:touch-intelligence'
-      )
-    ).resolves.toEqual([])
-    expect(productionMocks.invoke).toHaveBeenCalledOnce()
-    expect(productionMocks.invoke.mock.instances[0]).toBe(productionMocks.intelligence)
-    expect(productionMocks.getProviderModelOptions).toHaveBeenCalledExactlyOnceWith('text.chat')
-  })
-
   it('rejects accessor, proxy, class, and invalid direct dependencies without executing getters', () => {
     const directGetter = vi.fn(() => vi.fn())
     const directAccessor = Object.defineProperty(

@@ -349,6 +349,9 @@ importers:
       '@sentry/electron':
         specifier: ^7.16.0
         version: 7.16.0(@opentelemetry/core@2.9.0(@opentelemetry/api@1.9.1))(supports-color@10.2.2)
+      '@talex-touch/pi-desktop-reuse':
+        specifier: workspace:*
+        version: link:../../packages/pi-desktop-reuse
       '@talex-touch/tuff-business':
         specifier: workspace:^
         version: link:../../packages/tuff-business
@@ -913,6 +916,8 @@ importers:
         specifier: catalog:dev
         version: 3.3.7(typescript@5.9.3)
 
+  packages/pi-desktop-reuse: {}
+
   packages/pi-extension-tuff: {}
 
   packages/test:
@@ -1393,6 +1398,9 @@ importers:
 
   packages/utils:
     dependencies:
+      '@talex-touch/pi-desktop-reuse':
+        specifier: workspace:*
+        version: link:../pi-desktop-reuse
       '@vueuse/core':
         specifier: ^14.4.0
         version: 14.4.0(vue@3.5.39(typescript@5.9.3))

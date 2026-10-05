@@ -1452,6 +1452,224 @@
     }
   },
   "home": {
+    "workspace": {
+      "imagesUnsupported": "This model doesn't accept images. Remove the images or pick another model; your message stayed in the composer.",
+      "review": {
+        "boundary": "Changes made by Tuff's own file tools (write, delete, copy, move). Commands and MCP tools that write files aren't tracked here and can't be undone from this panel.",
+        "empty": "No file changes recorded in this conversation.",
+        "loadFailed": "Couldn't load file changes.",
+        "loadingDiff": "Loading changes…",
+        "unknown": "unknown",
+        "exists": "exists",
+        "absent": "absent",
+        "bytes": "{count} bytes",
+        "before": "Before",
+        "after": "After",
+        "diff": "Changes in {path}",
+        "undo": "Undo",
+        "confirmUndo": "Confirm undo",
+        "rolledBack": "Restored {count} path(s).",
+        "rollbackRequestFailed": "No confirmation of the undo result. Refresh the change record before retrying.",
+        "line": {
+          "context": "unchanged",
+          "add": "added",
+          "del": "removed"
+        },
+        "operation": {
+          "write": "Write",
+          "delete": "Delete",
+          "copy": "Copy",
+          "move": "Move"
+        },
+        "status": {
+          "recorded": "Recorded",
+          "partial": "Partly recorded",
+          "unsupported": "Not reversible",
+          "rolled_back": "Undone",
+          "rollback_failed": "Undo failed"
+        },
+        "reason": {
+          "binary": "Binary file: no text diff.",
+          "too_large": "Too large to snapshot or diff.",
+          "snapshot_failed": "The before-snapshot couldn't be taken, so this can't be undone.",
+          "snapshot_missing": "The snapshot is gone, so this can't be undone.",
+          "capture_failed": "The file state couldn't be read; unknown values are shown as unknown.",
+          "diff_limit": "Diff cut short at its size limit.",
+          "read_only_evidence": "Inherited from the conversation this branched from: shown for reference, can't be undone here.",
+          "shell_mcp_unsupported": "Written by a command or MCP tool: not tracked per path, no undo.",
+          "operation_failed": "The file operation itself failed.",
+          "partial_failure": "Only part of the operation completed.",
+          "sensitive_content": "Contains credentials, so no snapshot or diff is kept and it can't be undone."
+        },
+        "code": {
+          "REVIEW_NOT_FOUND": "That change record no longer exists.",
+          "REVIEW_READ_ONLY": "This record is read-only here (inherited from a branch source).",
+          "REVIEW_UNSUPPORTED": "This change can't be undone.",
+          "REVIEW_AUTHORITY_CHANGED": "The conversation's project or run changed, so undo was refused.",
+          "REVIEW_PERMISSION_DENIED": "File permission for this project is no longer granted.",
+          "REVIEW_APPROVAL_REQUIRED": "Undo needs approval first.",
+          "REVIEW_PATH_OUTSIDE_ROOT": "A path now resolves outside the project, so undo was refused.",
+          "REVIEW_SYMLINK_CHANGED": "A symlink changed since the edit, so undo was refused.",
+          "REVIEW_CONTENT_CONFLICT": "The file changed after Tuff's edit. Undo was refused so your edits aren't overwritten.",
+          "REVIEW_SNAPSHOT_MISSING": "The snapshot is missing, so nothing was restored.",
+          "REVIEW_SNAPSHOT_INVALID": "The snapshot failed verification, so nothing was restored.",
+          "REVIEW_ROLLBACK_PARTIAL": "Only some paths were restored. Check the paths below.",
+          "REVIEW_ROLLBACK_FAILED": "Undo failed. Files were left as they were where possible.",
+          "REVIEW_PERSIST_FAILED": "Files were restored but the record couldn't be updated."
+        }
+      },
+      "retry": "Retry",
+      "mode": {
+        "menu": "Conversation mode",
+        "chat": "Chat",
+        "agent": "Agent",
+        "chatDesc": "Answers with your provider or CLI, exactly as before.",
+        "agentDesc": "Runs the task with an agent profile and the tools it is allowed.",
+        "branchHint": "This conversation has history: switching mode continues in a new branch and leaves this one as it is.",
+        "branchLocked": "Switching mode creates a branch, which waits until the current reply finishes."
+      },
+      "profile": {
+        "label": "Agent profile",
+        "loadFailed": "Couldn't load agent profiles.",
+        "none": "No agent profile exists yet, so Agent mode has nothing to run.",
+        "noneEnabled": "Every agent profile is switched off. Turn one on below to run in Agent mode.",
+        "unavailable": "The profile this conversation uses is switched off or gone. Choose another one.",
+        "required": "Choose an enabled agent profile before sending in Agent mode.",
+        "summary": "{runtime} · {tools} tools · {approval}",
+        "approval": {
+          "manual": "asks before running",
+          "preauthorized": "pre-authorized"
+        },
+        "enable": "Turn on {name}",
+        "disable": "Turn off {name}"
+      },
+      "queue": {
+        "title": "Queued messages",
+        "count": "{count} of {max} queued",
+        "held": "Paused. Nothing runs until you continue.",
+        "heldInterrupted": "Paused because the app closed during a reply. Nothing runs until you continue.",
+        "heldFailed": "Paused after the last reply failed. Nothing runs until you continue.",
+        "heldStopped": "Paused because you stopped the reply. Nothing runs until you continue.",
+        "heldApproval": "Waiting for an approval before anything else runs.",
+        "resume": "Continue",
+        "next": "Next",
+        "promote": "Send next",
+        "up": "Move up",
+        "down": "Move down",
+        "remove": "Remove from queue",
+        "rowLabel": "Queued {position}: {text}",
+        "attachments": "{count} image(s)",
+        "expand": "Show {count} more",
+        "collapse": "Show less",
+        "full": "The queue is full ({max}). Your message stayed in the composer.",
+        "add": "Add to queue",
+        "addHint": "A reply is running. This message waits in the queue and runs after it."
+      },
+      "run": {
+        "title": "An agent run is waiting for approval",
+        "profile": "Profile",
+        "reason": "Why",
+        "requested": "Requested",
+        "id": "Run",
+        "approve": "Approve run",
+        "reject": "Reject",
+        "scope": "This decision applies to this run of this conversation only. Tool approvals stay separate."
+      },
+      "gateway": {
+        "origin": {
+          "current": "This conversation",
+          "other": "Another conversation",
+          "external": "External call"
+        },
+        "originNote": {
+          "other": "This tool request comes from another conversation, not this one.",
+          "external": "This tool request comes from outside any conversation (for example the local MCP server)."
+        },
+        "risk": {
+          "read": "reads",
+          "write": "writes",
+          "execute": "runs commands"
+        }
+      },
+      "fork": {
+        "fromHere": "Branch from here",
+        "conversation": "Branch conversation",
+        "createdElsewhere": "Branch created. It's in your conversation list."
+      },
+      "panel": {
+        "activity": "Activity",
+        "context": "Context",
+        "review": "Changes"
+      },
+      "activity": {
+        "waiting": "Waiting on you",
+        "runApproval": "Agent run approval",
+        "runId": "Run {id}",
+        "empty": "No replies yet. Each reply and the tools it used appear here.",
+        "turn": {
+          "streaming": "Replying",
+          "complete": "Reply finished",
+          "failed": "Reply failed"
+        }
+      },
+      "context": {
+        "package": "Host context package",
+        "budget": "Budget",
+        "estimate": "Estimate (host)",
+        "sources": "Included",
+        "preparedAt": "Prepared",
+        "packageUnknown": "Unknown. Main hasn't reported a context package for this conversation.",
+        "packageSource": "Assembled and estimated by Tuff before the request; not a provider count.",
+        "currentInputPackageSource": "Current-input package prepared and estimated by Tuff. Conversation history, system rules and native Pi context remain with their own runtime; this is not total model occupancy.",
+        "usage": "Last request, as reported",
+        "input": "Input",
+        "output": "Output",
+        "occupancy": "Request size",
+        "reportedBy": "Reported by",
+        "usageUnknown": "Unknown. The provider didn't report usage for the last reply.",
+        "usageSource": "Exactly what the provider reported for its last request; not remaining context.",
+        "limits": "Model limits",
+        "window": "Context window",
+        "maxOutput": "Max output",
+        "outputNotEnforced": "not sent; the CLI applies its own cap",
+        "limitsSource": "Capability limits from the model binding, not how much is in use.",
+        "unknown": "Unknown",
+        "tokens": "{count} tokens",
+        "compactions": "Compactions",
+        "compactionStart": "Compaction started",
+        "compactionEnd": "Compaction finished",
+        "compactionFailed": "Compaction failed",
+        "compactionsNone": "No compaction in this conversation.",
+        "checkpoints": "Checkpoints and snapshots",
+        "checkpointsNone": "No checkpoint or snapshot recorded.",
+        "source": {
+          "catalog": "catalog",
+          "user": "set by you",
+          "provider": "from provider",
+          "current_input": "this message",
+          "recent_turn": "recent turns",
+          "summary": "summary",
+          "memory": "memory",
+          "retrieval": "retrieval"
+        }
+      },
+      "error": {
+        "unknown": "Something went wrong talking to the workspace.",
+        "WORKSPACE_QUEUE_FULL": "The queue is full. Your message stayed in the composer.",
+        "WORKSPACE_BUSY": "A reply is running. Try again when it finishes.",
+        "WORKSPACE_QUEUE_HELD": "The queue is paused. Continue it first.",
+        "WORKSPACE_NOT_FOUND": "This conversation couldn't be opened.",
+        "WORKSPACE_PROFILE_UNAVAILABLE": "That agent profile is switched off or gone.",
+        "WORKSPACE_PROJECT_UNAVAILABLE": "This conversation's project is no longer available.",
+        "WORKSPACE_MODE_REQUIRES_FORK": "This conversation has history; switching mode needs a new branch.",
+        "WORKSPACE_FORK_BUSY": "Finish or stop the current reply before branching.",
+        "WORKSPACE_FORK_ANCHOR_INVALID": "This reply can't be a branch point: its history can't be matched reliably.",
+        "WORKSPACE_FORK_NATIVE_UNSAFE": "The CLI session can't be branched safely right now.",
+        "WORKSPACE_RUN_NOT_PENDING": "That run is no longer waiting for approval.",
+        "WORKSPACE_STALE_TURN": "That reply has already moved on.",
+        "WORKSPACE_TURN_INTERRUPTED": "The reply stopped before it finished (the app closed or the run ended)."
+      }
+    },
     "greeting": "What shall we do today?",
     "placeholder": "Ask Tuff to do anything",
     "permission": "Permissions",
@@ -5830,7 +6048,59 @@
         "instructions": "System Instructions",
         "instructionsPlaceholder": "Enter system instructions for this provider...",
         "instructionsHint": "Optional system prompt that will be used with this provider",
-        "instructionsEmpty": "Add system prompt"
+        "instructionsEmpty": "Add system prompt",
+        "binding": {
+          "title": "Model settings",
+          "description": "Alias, context and output limits, reasoning and image input per model",
+          "summaryCount": "{count} model(s) customized",
+          "edit": "Configure",
+          "dialogDesc": "These values are what requests actually use. Leave a field empty when you don't know it.",
+          "noModels": "Add a model first, then configure it here.",
+          "model": "Model",
+          "wireId": "Model ID sent",
+          "alias": "Display name",
+          "aliasHint": "Shown wherever the model is listed. Requests always send the model ID.",
+          "contextWindow": "Context window",
+          "contextWindowHint": "A request whose estimated input exceeds this is refused before it is sent.",
+          "maxTokens": "Output limit",
+          "maxTokensHint": "Caps the tokens a reply may use, reasoning included.",
+          "unknownPlaceholder": "Unknown",
+          "unknown": "Unknown",
+          "notEnforced": "Applied by the CLI itself",
+          "thinking": "Reasoning",
+          "thinkingHint": "Auto never sends a reasoning setting. Levels here only decide what can be chosen.",
+          "thinkingRoute": "Built-in table",
+          "thinkingNone": "No reasoning",
+          "thinkingCustom": "Custom levels",
+          "thinkingUnsupportedProvider": "This connection takes no reasoning setting",
+          "thinkingUnsupportedModel": "No reasoning levels",
+          "protocol": "Reasoning protocol",
+          "protocolRoute": "Built-in table",
+          "protocolLegacy": "Token budget",
+          "protocolAdaptive": "Adaptive effort",
+          "defaultLevel": "Default for new conversations",
+          "defaultLevelNone": "Not set (Auto)",
+          "defaultLevelHint": "Only used when a new conversation picks this model. Conversations that already chose a level, including Auto, keep their choice.",
+          "images": "Image input",
+          "imagesCatalog": "Follow catalog",
+          "imagesOn": "Supported",
+          "imagesOff": "Not supported",
+          "imagesHint": "Images are sent only when the model is known to read them.",
+          "imagesAdapterUnsupported": "This connection cannot send images, whatever the model supports.",
+          "imageAccepted": "Images are sent",
+          "imageRefused": "Images are refused",
+          "effective": "In effect",
+          "imageState": {
+            "supported": "Supported",
+            "unsupported": "Not supported",
+            "unknown": "Unknown"
+          },
+          "source": {
+            "user": "Your setting",
+            "catalog": "Catalog",
+            "unknown": "Unknown"
+          }
+        }
       },
       "advanced": {
         "title": "Advanced Configuration",

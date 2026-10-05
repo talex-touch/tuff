@@ -171,7 +171,7 @@ const focusedProviderModels = computed(() => {
     baseUrl: provider.baseUrl
   })
   if (recommendations.length > 0) return recommendations
-  return provider.models?.length ? provider.models : []
+  return (provider.models ?? []).map((binding) => binding.id)
 })
 
 const canEditModels = computed(() => {

@@ -104,7 +104,7 @@ describe('stream audit ledger consistency', () => {
         priority: 1,
         apiKey: 'sk-test-only',
         defaultModel: 'gpt-4o-mini',
-        models: ['gpt-4o-mini'],
+        models: [{ id: 'gpt-4o-mini' }],
         capabilities: ['text.chat']
       },
       vi.fn()

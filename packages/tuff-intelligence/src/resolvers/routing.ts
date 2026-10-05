@@ -11,7 +11,8 @@ export interface IntelligenceProviderRoutingProvider {
   enabled?: boolean
   apiKey?: string | null
   hasApiKey?: boolean
-  models?: string[] | null
+  /** Model bindings; only the stable `id` matters for routing. */
+  models?: ReadonlyArray<{ id: string }> | null
   defaultModel?: string | null
   timeout?: number | null
   priority?: number | null
@@ -84,16 +85,17 @@ function resolveRouteModel(
     return explicitModel
   }
 
+  const providerModelIds = provider.models?.map(binding => binding.id) ?? []
   for (const model of options?.modelPreference ?? []) {
     if (!model) continue
     if (bindingModels.length <= 0 || bindingModels.includes(model)) {
-      if (!provider.models?.length || provider.models.includes(model) || provider.defaultModel === model) {
+      if (providerModelIds.length === 0 || providerModelIds.includes(model) || provider.defaultModel === model) {
         return model
       }
     }
   }
 
-  return bindingModels[0] ?? provider.defaultModel ?? provider.models?.[0]
+  return bindingModels[0] ?? provider.defaultModel ?? providerModelIds[0]
 }
 
 export function resolveIntelligenceProviderRoutes<TProvider extends IntelligenceProviderRoutingProvider>(

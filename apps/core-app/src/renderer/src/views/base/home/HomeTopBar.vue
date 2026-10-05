@@ -25,10 +25,14 @@ const props = defineProps<{
   messageCount: number
   projectName?: string
   projectPath?: string
+  /** The thread has history and Main is idle: it can be branched whole. */
+  canBranch?: boolean
+  branching?: boolean
 }>()
 
 defineEmits<{
   (event: 'toggle-panel'): void
+  (event: 'branch'): void
 }>()
 
 const { t } = useI18n()
@@ -76,6 +80,22 @@ const { t } = useI18n()
     </div>
 
     <div class="HomeTopBar-Actions">
+      <!-- Branches the whole thread into a new conversation (Main's fork); shown only when there
+           is a settled history to branch. -->
+      <button
+        v-if="props.canBranch || props.branching"
+        class="HomeTopBar-IconBtn"
+        type="button"
+        :disabled="props.branching || undefined"
+        :aria-busy="props.branching || undefined"
+        :aria-label="t('home.workspace.fork.conversation')"
+        :title="t('home.workspace.fork.conversation')"
+        @click="$emit('branch')"
+      >
+        <span
+          :class="props.branching ? 'i-ri-loader-4-line HomeTopBar-Spin' : 'i-ri-git-branch-line'"
+        />
+      </button>
       <button
         class="HomeTopBar-IconBtn"
         type="button"
@@ -268,9 +288,29 @@ const { t } = useI18n()
     color 0.15s ease;
   -webkit-app-region: no-drag;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--shell-surface-2);
     color: var(--shell-text-primary);
+  }
+
+  &:disabled {
+    cursor: progress;
+  }
+}
+
+.HomeTopBar-Spin {
+  animation: home-topbar-spin 0.9s linear infinite;
+}
+
+@keyframes home-topbar-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .HomeTopBar-Spin {
+    animation: none;
   }
 }
 </style>

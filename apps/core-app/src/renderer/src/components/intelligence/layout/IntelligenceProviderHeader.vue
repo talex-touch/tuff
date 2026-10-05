@@ -1,5 +1,6 @@
 <script lang="ts" name="IntelligenceProviderHeader" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
+import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
@@ -15,36 +16,6 @@ import {
 } from '~/modules/intelligence/nexus-provider'
 import { resolveProviderIcon } from '~/modules/intelligence/provider-icon-override'
 import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
-
-enum IntelligenceProviderType {
-  OPENAI = 'openai',
-  ANTHROPIC = 'anthropic',
-  DEEPSEEK = 'deepseek',
-  SILICONFLOW = 'siliconflow',
-  LOCAL = 'local',
-  CUSTOM = 'custom'
-}
-
-interface IntelligenceProviderConfig {
-  id: string
-  type: IntelligenceProviderType | string
-  name: string
-  enabled: boolean
-  metadata?: Record<string, unknown>
-  apiKey?: string
-  authRef?: string
-  hasCredential?: boolean
-  baseUrl?: string
-  models?: string[]
-  defaultModel?: string
-  instructions?: string
-  timeout?: number
-  rateLimit?: {
-    requestsPerMinute?: number
-    tokensPerMinute?: number
-  }
-  priority?: number
-}
 
 const props = defineProps<{
   provider: IntelligenceProviderConfig

@@ -3,16 +3,19 @@ import type {
   IntelligenceReasoningLevel,
   ReasoningEffortSetting
 } from '@talex-touch/utils/intelligence/reasoning-effort'
-import {
-  planReasoningEffort,
-  resolveReasoningEffortSupport
-} from '@talex-touch/utils/intelligence/reasoning-effort'
+import type { IntelligenceEffectiveModel } from '@talex-touch/utils/types/intelligence'
+import { planReasoningEffortForSupport } from '@talex-touch/utils/intelligence/reasoning-effort'
 
 /** The pinned model the next send runs on, as the menu knows it. */
 export interface ReasoningRouteChoice {
   providerId: string
   providerType: string
   model: string
+  /**
+   * Main's effective binding for the model. Its `thinking` is the route table with the binding's
+   * own ladder/protocol applied — the exact support Main plans the request from.
+   */
+  binding: Pick<IntelligenceEffectiveModel, 'thinking'>
 }
 
 /** The one line under the effort row, when there is something the user needs to know. */
@@ -48,8 +51,8 @@ export interface ReasoningRowState {
  * The effort row and pill for a setting on a route: `choice` is the resolved pinned model, or
  * `undefined` when the next send is auto-routed.
  *
- * Pure, and built on the same table main plans from, so what the row and the pill say cannot drift
- * from what main sends.
+ * Pure, and planned from the same effective support main plans from, so what the row and the pill
+ * say cannot drift from what main sends — including a ladder or protocol the user set in Settings.
  */
 export function resolveReasoningRow(
   setting: ReasoningEffortSetting,
@@ -61,12 +64,7 @@ export function resolveReasoningRow(
       : { disabled: false, note: { kind: 'auto-route' }, pillLevel: setting }
   }
 
-  const target = {
-    providerType: choice.providerType,
-    providerId: choice.providerId,
-    model: choice.model
-  }
-  const support = resolveReasoningEffortSupport(target)
+  const support = choice.binding.thinking
   if (!support.wire) {
     return {
       disabled: true,
@@ -78,7 +76,7 @@ export function resolveReasoningRow(
   }
   if (setting === 'auto') return { disabled: false, note: null, pillLevel: null }
 
-  const { decision } = planReasoningEffort(setting, target)
+  const { decision } = planReasoningEffortForSupport(setting, support)
   if (decision.status === 'forwarded') {
     return { disabled: false, note: { kind: 'cloud' }, pillLevel: setting }
   }

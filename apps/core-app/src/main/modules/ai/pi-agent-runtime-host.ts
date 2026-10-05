@@ -3,8 +3,15 @@ import type {
   AiAutomationPolicy,
   AiOrchestratorEvent,
   AiOrchestratorExecuteRequest,
-  AiOrchestratorRunRecord
+  AiOrchestratorRunRecord,
+  AiSessionHistoryMessage
 } from '@talex-touch/utils/types/ai-orchestrator'
+import type {
+  IntelligenceMessage,
+  IntelligenceMessageAttachment,
+  IntelligenceReasoningEffort
+} from '@talex-touch/utils/types/intelligence'
+
 import type { UtilityProcess } from 'electron'
 import type {
   PiRuntimeChildPayload,
@@ -49,6 +56,21 @@ import {
   isCredentialLikeKey,
   isLocalPathLikeKey
 } from './sensitive-text'
+/** Main-only execution context. It is never accepted from renderer metadata or sent to the worker. */
+export interface PiWorkspaceAuthority {
+  readonly conversationId: string
+  readonly turnId: string
+  readonly projectId: string | null
+  readonly providerId?: string
+  readonly model?: string
+  readonly reasoningEffort?: IntelligenceReasoningEffort
+  readonly history: AiSessionHistoryMessage[]
+  readonly modelAttachments?: IntelligenceMessageAttachment[]
+  readonly assertAuthority: () => Promise<void>
+  readonly onRunCreated?: (run: AiOrchestratorRunRecord) => Promise<void>
+  readonly onRunResult?: (run: AiOrchestratorRunRecord) => Promise<void>
+  readonly onEvent?: (event: PiRuntimeRunEvent) => Promise<void>
+}
 
 export type PiRuntimeToolCallOutcome = {
   error?: string
@@ -66,6 +88,8 @@ interface ActiveRunContext {
   resolve: (result: PiRuntimeRunResult) => void
   reject: (error: Error) => void
   timeout: NodeJS.Timeout
+  workspace?: PiWorkspaceAuthority
+  pendingEvents: Promise<void>
 }
 
 export interface PiAgentRuntimeHostOptions {
@@ -331,6 +355,7 @@ function textFromContent(content: unknown): string {
       const record = block as Record<string, unknown>
       if (record.type === 'text') return String(record.text || '')
       if (record.type === 'thinking') return String(record.thinking || '')
+      if (record.type === 'image') return ''
       if (record.type === 'toolCall') {
         return `[tool call ${String(record.name)} ${JSON.stringify(record.arguments ?? {})}]`
       }
@@ -339,10 +364,11 @@ function textFromContent(content: unknown): string {
     .join('\n')
 }
 
-function normalizeModelMessages(request: PiRuntimeModelRequest) {
-  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-    { role: 'system', content: BRIDGE_SYSTEM_PROMPT }
-  ]
+function normalizeModelMessages(
+  request: PiRuntimeModelRequest,
+  modelAttachments?: IntelligenceMessageAttachment[]
+): IntelligenceMessage[] {
+  const messages: IntelligenceMessage[] = [{ role: 'system', content: BRIDGE_SYSTEM_PROMPT }]
   if (request.systemPrompt.trim()) {
     messages.push({ role: 'system', content: request.systemPrompt.trim() })
   }
@@ -353,13 +379,18 @@ function normalizeModelMessages(request: PiRuntimeModelRequest) {
     })
   }
 
-  for (const raw of request.messages) {
+  const lastUser = request.messages.findLastIndex(
+    (raw) => raw !== null && typeof raw === 'object' && 'role' in raw && raw.role === 'user'
+  )
+  for (const [index, raw] of request.messages.entries()) {
     if (!raw || typeof raw !== 'object') continue
     const message = raw as Record<string, unknown>
     if (message.role === 'system' || message.role === 'user' || message.role === 'assistant') {
+      const attachments = index === lastUser ? modelAttachments : undefined
       messages.push({
         role: message.role,
-        content: textFromContent(message.content)
+        content: textFromContent(message.content),
+        ...(attachments?.length ? { attachments } : {})
       })
       continue
     }
@@ -527,7 +558,10 @@ export class PiAgentRuntimeHost {
     return this.readyPromise
   }
 
-  async execute(payload: PiRuntimeStartPayload): Promise<PiRuntimeRunResult> {
+  async execute(
+    payload: PiRuntimeStartPayload,
+    workspace?: PiWorkspaceAuthority
+  ): Promise<PiRuntimeRunResult> {
     await this.start()
     if (!this.child) throw new Error('Pi runtime is unavailable')
     if (this.activeRuns.has(payload.run.id)) {
@@ -555,7 +589,9 @@ export class PiAgentRuntimeHost {
         toolCalls: new Map(),
         resolve,
         reject,
-        timeout
+        timeout,
+        workspace,
+        pendingEvents: Promise.resolve()
       })
       try {
         this.post({ type: 'run.start', payload })
@@ -637,12 +673,18 @@ export class PiAgentRuntimeHost {
       case 'tool.request':
         await this.handleToolRequest(message.payload)
         return
-      case 'run.event':
-        if (!this.activeRuns.has(message.payload.runId)) return
-        await this.onEvent?.(message.payload)
+      case 'run.event': {
+        const context = this.activeRuns.get(message.payload.runId)
+        if (!context) return
+        context.pendingEvents = context.pendingEvents.then(async () => {
+          await this.onEvent?.(message.payload)
+        })
+        await context.pendingEvents
         return
+      }
       case 'run.completed': {
         const context = this.activeRuns.get(message.payload.runId)
+        await context?.pendingEvents
         this.settleRun(
           message.payload.runId,
           context?.controller.signal.aborted ? createRunCancelledError() : undefined,
@@ -652,6 +694,7 @@ export class PiAgentRuntimeHost {
       }
       case 'run.failed': {
         const context = this.activeRuns.get(message.runId)
+        await context?.pendingEvents
         this.settleRun(
           message.runId,
           context?.controller.signal.aborted
@@ -662,6 +705,7 @@ export class PiAgentRuntimeHost {
       }
       case 'run.cancelled': {
         const context = this.activeRuns.get(message.runId)
+        await context?.pendingEvents
         this.settleRun(
           message.runId,
           context?.controller.signal.aborted
@@ -684,11 +728,23 @@ export class PiAgentRuntimeHost {
 
     let response: PiRuntimeModelResponse
     try {
+      await context.workspace?.assertAuthority()
       const result = await tuffIntelligence.invoke<string>(
         'text.chat',
-        { messages: normalizeModelMessages(request) },
+        { messages: normalizeModelMessages(request, context.workspace?.modelAttachments) },
         {
-          modelPreference: request.modelPreference.length > 0 ? request.modelPreference : undefined,
+          modelPreference: context.workspace?.model
+            ? [context.workspace.model]
+            : request.modelPreference.length > 0
+              ? request.modelPreference
+              : undefined,
+          ...(context.workspace?.providerId
+            ? { preferredProviderId: context.workspace.providerId }
+            : {}),
+          ...(context.workspace?.reasoningEffort
+            ? { reasoningEffort: context.workspace.reasoningEffort }
+            : {}),
+          signal: context.controller.signal,
           metadata: {
             caller: 'ai-cli-orchestrator',
             runId: request.runId,
@@ -697,6 +753,21 @@ export class PiAgentRuntimeHost {
           }
         }
       )
+      if (context.workspace) {
+        context.pendingEvents = context.pendingEvents.then(async () => {
+          await this.onEvent?.({
+            runId: request.runId,
+            type: 'provider_response',
+            payload: {
+              provider: result.provider,
+              model: result.model,
+              usageReported: result.usageReported === true,
+              ...(result.usageReported && result.usage ? { usage: result.usage } : {})
+            }
+          })
+        })
+        await context.pendingEvents
+      }
       response = {
         requestId: request.requestId,
         runId: request.runId,
@@ -850,6 +921,7 @@ export class PiAgentRuntimeHost {
       }
     }
     if (approval) await this.consumeApproval(context, request, approval, fingerprint)
+    await context.workspace?.assertAuthority()
 
     const startState = await this.beginToolCall?.(
       request.runId,
@@ -866,7 +938,8 @@ export class PiAgentRuntimeHost {
       agentId: 'tuff.pi-coordinator',
       workingDirectory: context.run.cwd,
       signal: context.controller.signal,
-      errorProjection: 'stable'
+      errorProjection: 'stable',
+      ...(context.workspace ? { workspace: context.workspace } : {})
     })
     if (!result.success) {
       if (result.runtimeControl && result.error) {

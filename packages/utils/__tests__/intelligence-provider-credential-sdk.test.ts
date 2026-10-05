@@ -17,7 +17,7 @@ function provider(): IntelligenceProviderStoredConfig {
     enabled: true,
     authRef: 'provider-credential:openai-default',
     hasCredential: true,
-    models: ['gpt-test'],
+    models: [{ id: 'gpt-test' }],
     rateLimit: { requestsPerMinute: 10 },
     metadata: { origin: 'local-settings' },
   }
@@ -111,7 +111,7 @@ describe('intelligence provider credential SDK', () => {
         type: IntelligenceProviderType.CUSTOM,
         name: 'Voice ASR channel',
         enabled: true,
-        models: ['asr-model'],
+        models: [{ id: 'asr-model' }],
         capabilities: ['audio.asr'],
         metadata
       },
@@ -133,7 +133,7 @@ describe('intelligence provider credential SDK', () => {
         type: IntelligenceProviderType.CUSTOM,
         name: 'Voice ASR channel',
         enabled: true,
-        models: ['asr-model'],
+        models: [{ id: 'asr-model' }],
         capabilities: ['audio.asr']
       }
     },
@@ -144,7 +144,7 @@ describe('intelligence provider credential SDK', () => {
         type: IntelligenceProviderType.CUSTOM,
         name: 'Voice ASR channel',
         enabled: true,
-        models: ['asr-model'],
+        models: [{ id: 'asr-model' }],
         capabilities: ['audio.asr'],
         metadata: { voiceAsr: { protocol: 'bailian-paraformer', resourceId: 'wrong' } }
       }
@@ -156,7 +156,7 @@ describe('intelligence provider credential SDK', () => {
         type: IntelligenceProviderType.CUSTOM,
         name: 'Voice ASR channel',
         enabled: true,
-        models: ['asr-model'],
+        models: [{ id: 'asr-model' }],
         capabilities: ['audio.asr'],
         metadata: { voiceAsr: { protocol: 'nexus-pack' } }
       }
@@ -173,7 +173,7 @@ describe('intelligence provider credential SDK', () => {
   it('rejects extra credential fields and oversized nested input before transport', async () => {
     const send = vi.fn()
     const sdk = createIntelligenceSdk({ send } as never)
-    const oversizedModels = Array.from({ length: 257 }, (_, index) => `model-${index}`)
+    const oversizedModels = Array.from({ length: 257 }, (_, index) => ({ id: `model-${index}` }))
 
     await expect(
       sdk.saveProviderConfig({

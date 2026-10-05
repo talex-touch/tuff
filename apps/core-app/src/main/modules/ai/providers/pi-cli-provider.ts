@@ -11,6 +11,7 @@ import type { CliLineEvent } from './cli/cli-process-runtime'
 import type { StoredLocalAiCliSession } from '../../local-ai-cli/session-store'
 import type { PiSessionFileCapture } from '../../local-ai-cli/pi-native-session'
 import type { LocalAiCliProviderId } from '@talex-touch/utils/transport/events/local-ai-cli'
+import type { AgentToolOrigin } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, realpath, rm, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -36,6 +37,7 @@ import {
 } from '../../local-ai-cli/session-store'
 import { getLocalAiCliWorkspaceRoot } from '../../local-ai-cli/workspace-root'
 import { getProject } from '../../project/project-store'
+import { readHostInvokePurpose } from '../intelligence-invoke-purpose'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
 import { collectMessageAttachments } from './attachment-spill'
@@ -81,19 +83,24 @@ export interface PiToolRuntimeConfig {
   url: string
   token: string
   tools: string[]
+  /** Revokes the per-turn gateway scope; called once the run ends however it ends. */
+  release?: () => void
 }
 
 /**
- * Reads the live tool grant at spawn time.
+ * Reads the live tool grant at spawn time, scoped to the Home turn that asked.
  *
  * A getter rather than a value: the user can flip tools on mid-conversation,
  * and the provider is constructed once at registration. Left unset, every run
- * is tool-free — the safe default survives a wiring mistake.
+ * is tool-free — the safe default survives a wiring mistake. It is only ever
+ * called for an invocation Main marked as a genuine Home chat turn
+ * (`markHomeChatInvoke`); titles, voice polishing, plugin completions and the
+ * Agent worker's model bridge never reach it.
  */
-let resolveToolRuntime: (() => PiToolRuntimeConfig | null) | null = null
+let resolveToolRuntime: ((origin: AgentToolOrigin) => PiToolRuntimeConfig | null) | null = null
 
 export function setPiToolRuntimeResolver(
-  resolver: (() => PiToolRuntimeConfig | null) | null
+  resolver: ((origin: AgentToolOrigin) => PiToolRuntimeConfig | null) | null
 ): void {
   resolveToolRuntime = resolver
 }
@@ -301,6 +308,7 @@ export class PiCliProvider extends IntelligenceProvider {
     const releaseConversationLease = home
       ? acquireHomeConversationLease(home.conversationId)
       : undefined
+    let toolRuntime: PiToolRuntimeConfig | null = null
 
     try {
       if (nativeSession && cwd && pointer) {
@@ -323,8 +331,13 @@ export class PiCliProvider extends IntelligenceProvider {
 
       // The answer-only CLIs run tool-less by argv (`--no-tools`, `-c mcp_servers={}`,
       // `--tools ""`), so the tool prompt and the gateway env would advertise capabilities the run
-      // cannot use.
-      const toolRuntime = isPi ? (resolveToolRuntime?.() ?? null) : null
+      // cannot use. Only a turn Main marked as genuine Home chat may resolve tools at all; the
+      // purpose is a Main-only symbol, never the request's own `metadata.surface`.
+      const purpose = readHostInvokePurpose(options)
+      toolRuntime =
+        isPi && purpose?.kind === 'home-chat'
+          ? (resolveToolRuntime?.(purpose.origin) ?? null)
+          : null
       const toolsGranted = (toolRuntime?.tools.length ?? 0) > 0
       const prompt = buildPiPrompt(payload.messages, {
         toolsGranted,
@@ -502,6 +515,8 @@ export class PiCliProvider extends IntelligenceProvider {
       }
       throw error
     } finally {
+      // The gateway scope ends with the run: completion, abort and every error path alike.
+      toolRuntime?.release?.()
       if (isolationRoot) await rm(isolationRoot, { recursive: true, force: true }).catch(() => {})
       releaseNativeLease?.()
       releaseConversationLease?.()
@@ -532,6 +547,7 @@ export class PiCliProvider extends IntelligenceProvider {
     return {
       result: content,
       usage: usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      usageReported: usage !== undefined,
       model: model ?? this.resolveModel(options) ?? 'pi',
       latency: Date.now() - startTime,
       traceId,

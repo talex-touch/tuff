@@ -1,4 +1,5 @@
 import type { IntelligenceProviderConfig } from '../../../types/intelligence'
+import { normalizeModelBinding } from '../../../intelligence/model-binding'
 import { getVoiceAsrMetadata, normalizeVoiceAsrMetadata } from '../../../intelligence/voice-asr'
 
 export type IntelligenceProviderStoredConfig = Omit<IntelligenceProviderConfig, 'apiKey'>
@@ -201,6 +202,42 @@ function requireStringArray(value: unknown, maxEntries: number): string[] {
   return result
 }
 
+const MODEL_BINDING_KEYS: ReadonlySet<string> = new Set([
+  'id',
+  'alias',
+  'contextWindow',
+  'contextWindowSource',
+  'maxTokens',
+  'maxTokensSource',
+  'thinkingLevels',
+  'defaultThinkingLevel',
+  'thinkingProtocol',
+  'supportsImages',
+])
+
+/**
+ * Model bindings exactly as `normalizeModelBinding` would store them: a field it would drop,
+ * rewrite or default makes the request invalid rather than being silently repaired.
+ */
+function requireModelBindings(value: unknown, maxEntries: number): void {
+  if (!Array.isArray(value) || value.length > maxEntries) invalidProviderCredentialRequest()
+  const ids = new Set<string>()
+  for (const entry of value) {
+    const record = requireExactRecord(entry, MODEL_BINDING_KEYS)
+    const id = requireBoundedString(record.id, 512, { exactTrimmed: true })
+    const normalized = normalizeModelBinding(record) as Record<string, unknown> | null
+    if (
+      !normalized ||
+      ids.has(id) ||
+      Object.keys(normalized).length !== Object.keys(record).length ||
+      Object.keys(record).some(key => JSON.stringify(record[key]) !== JSON.stringify(normalized[key]))
+    ) {
+      invalidProviderCredentialRequest()
+    }
+    ids.add(id)
+  }
+}
+
 function validateVoiceAsrChannel(provider: Record<string, unknown>): void {
   const metadata = provider.metadata
   if (metadata !== undefined) {
@@ -231,10 +268,7 @@ function validateVoiceAsrChannel(provider: Record<string, unknown>): void {
     invalidProviderCredentialRequest()
   }
   const models = Array.isArray(provider.models) ? provider.models : []
-  if (
-    !models.some(model => typeof model === 'string' && Boolean(model.trim())) &&
-    (typeof provider.defaultModel !== 'string' || !provider.defaultModel.trim())
-  ) {
+  if (models.length === 0 && (typeof provider.defaultModel !== 'string' || !provider.defaultModel.trim())) {
     invalidProviderCredentialRequest()
   }
 }
@@ -258,7 +292,7 @@ export function normalizeIntelligenceProviderStoredConfig(value: unknown): Intel
       invalidProviderCredentialRequest()
     }
   }
-  if (provider.models !== undefined) requireStringArray(provider.models, PROVIDER_LIST_MAX_ENTRIES)
+  if (provider.models !== undefined) requireModelBindings(provider.models, PROVIDER_LIST_MAX_ENTRIES)
   if (provider.capabilities !== undefined) requireStringArray(provider.capabilities, PROVIDER_CAPABILITY_MAX_ENTRIES)
   if (provider.rateLimit !== undefined) {
     const rateLimit = requireExactRecord(provider.rateLimit, PROVIDER_RATE_LIMIT_KEYS)
