@@ -458,7 +458,8 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
         caller: 'workflow:outer-governed',
         success: true,
         metadata: { operation: 'conversation-title' }
-      })
+      }),
+      { detail: true }
     )
   })
 
@@ -601,12 +602,14 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         success: true,
-        provider: IntelligenceProviderType.CUSTOM,
+        // The channel that answered, by config id — not the type the provider reports (R-A4).
+        provider: 'ordinary-fallback-chat',
         model: 'fallback-model',
         traceId: 'trace-ordinary-fallback',
         usage: fallbackUsage,
         latency: 17
-      })
+      }),
+      { detail: true }
     )
   })
 
@@ -671,7 +674,8 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
         success: false,
         provider: 'failing-primary-chat',
         error: 'INTELLIGENCE_PROVIDER_FAILED'
-      })
+      }),
+      { detail: true }
     )
   })
 
@@ -1192,7 +1196,8 @@ describe('tuffIntelligenceSDK cancellation', () => {
       )
     ).rejects.toThrow('apiKey=secret')
     expect(auditLog).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false, error: 'INTELLIGENCE_PROVIDER_FAILED' })
+      expect.objectContaining({ success: false, error: 'INTELLIGENCE_PROVIDER_FAILED' }),
+      { detail: true }
     )
     expect(JSON.stringify(auditLog.mock.calls)).not.toMatch(/secret|private|apiKey|token=/i)
   })
@@ -2946,13 +2951,15 @@ describe('tuffIntelligenceSDK invoke', () => {
           success: true,
           capabilityId: 'text.chat',
           caller: 'plugin:primary-stream',
-          provider: 'routed-primary',
+          // The selected channel's config id; the chunk's `routed-primary` stays on the events.
+          provider: 'primary-stream',
           model: 'primary-terminal-model',
           traceId: 'trace-primary-terminal',
           usage,
           latency: 73,
           metadata: { operation: 'home-conversation' }
-        })
+        }),
+        { detail: true }
       )
       expect(JSON.stringify(auditLog.mock.calls)).not.toMatch(
         /prompt-secret-canary|prompt-variable-secret-canary|response-secret-canary/i
@@ -3077,12 +3084,14 @@ describe('tuffIntelligenceSDK invoke', () => {
       expect(auditLog).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,
-          provider: 'routed-fallback',
+          // The fallback channel's config id; consumers still see `routed-fallback` above.
+          provider: 'fallback-success-stream',
           model: 'fallback-terminal-model',
           traceId: 'trace-fallback-terminal',
           usage,
           latency: 41
-        })
+        }),
+        { detail: true }
       )
       expect(JSON.stringify(auditLog.mock.calls)).not.toMatch(/primary-secret|private\/provider/i)
       expect(JSON.stringify(warningLog.mock.calls)).toContain('INTELLIGENCE_PROVIDER_FAILED')
@@ -3147,7 +3156,8 @@ describe('tuffIntelligenceSDK invoke', () => {
           provider: 'fallback-terminal-failure',
           model: 'fallback-failure-model',
           usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
-        })
+        }),
+        { detail: true }
       )
       expect(auditLog.mock.calls[0]?.[0].traceId).toMatch(/^trace-/)
       expect(JSON.stringify(auditLog.mock.calls)).not.toMatch(
@@ -3222,12 +3232,14 @@ describe('tuffIntelligenceSDK invoke', () => {
         expect.objectContaining({
           success: false,
           error: 'INTELLIGENCE_PROVIDER_FAILED',
-          provider: 'routed-interrupted',
+          // The selected channel's config id, not the `routed-interrupted` the chunk reported.
+          provider: 'post-delta-primary',
           model: 'interrupted-model',
           traceId: 'trace-post-delta',
           usage,
           latency: 29
-        })
+        }),
+        { detail: true }
       )
       expect(JSON.stringify(auditLog.mock.calls)).not.toMatch(
         /post-delta-secret|private\/interrupted/i

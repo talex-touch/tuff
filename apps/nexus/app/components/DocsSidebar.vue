@@ -244,6 +244,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/template-docs',
     // templates — AI apps
     '/docs/dev/components/template-agent-chat',
+    '/docs/dev/components/template-ai-answer',
     '/docs/dev/components/template-research',
     // templates — Data & flow
     '/docs/dev/components/template-dashboard',

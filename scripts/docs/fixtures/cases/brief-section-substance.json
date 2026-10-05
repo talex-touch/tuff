@@ -1,0 +1,6 @@
+{
+  "caseBase": "valid-final-contract",
+  "files": {
+    "docs/comet/changes/docs-quality-change/brief.md": "# Outcome\n\n```text\nTBD\n```\n\n<!-- outcome goes here -->\n\n`inline code is not prose`\n\n# Scope\n\nNone.\n\n# Non-goals\n\nNone.\n\n# Acceptance examples\n\n## Release\n\n- A live brief whose outcome is only a code fence fails documentation verification.\n"
+  }
+}

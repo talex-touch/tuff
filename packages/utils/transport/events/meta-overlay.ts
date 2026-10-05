@@ -6,6 +6,7 @@
 import type {
   MetaActionExecuteRequest,
   MetaActionExecuteResponse,
+  MetaPageChangeRequest,
   MetaRegisterActionRequest,
   MetaRendererReadyResponse,
   MetaShowRequest,
@@ -43,6 +44,12 @@ export const MetaOverlayEvents = {
      * Check visibility
      */
     isVisible: defineEvent('meta-overlay').module('ui').event('is-visible').define<void, MetaVisibilityResponse>(),
+
+    /**
+     * Tell main the card changed page, or that the page on screen needs a different height.
+     * Accepted only from the overlay renderer; the reply carries nothing.
+     */
+    page: defineEvent('meta-overlay').module('ui').event('page').define<MetaPageChangeRequest, void>(),
   },
 
   // ============================================================================

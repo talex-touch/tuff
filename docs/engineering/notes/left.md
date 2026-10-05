@@ -1,6 +1,6 @@
 # Left（任务梳理）
 
-> ⚠️ **Historical（历史快照，停止维护）**：2026-01 个人任务梳理草稿，清单状态早已漂移。当前事实源以 `ROADMAP.md`、`docs/plan-prd/TODO.md` 与 Trellis 任务为准。
+> ⚠️ **Historical（历史快照，停止维护）**：2026-01 个人任务梳理草稿，清单状态早已漂移。当前事实源以 `ROADMAP.md`、`docs/plan-prd/TODO.md` 与 Comet 变更为准（迁移前任务见 `docs/engineering/workflow/backlog.md`）。
 
 ## 已完成
 - SQLite BUSY 重试封装与接入（OCR / Analytics 写入）。

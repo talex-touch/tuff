@@ -16,6 +16,7 @@ import { createClient } from '@libsql/client'
 import { drizzle } from 'drizzle-orm/libsql'
 import { describe, expect, it, vi } from 'vitest'
 import * as schema from '../../../../db/schema'
+import { tuffIntelligence } from '../../../ai/intelligence-sdk'
 import { EmbeddingService, type EmbeddingDbRouting } from './embedding-service'
 
 vi.mock('../../../ai/intelligence-sdk', () => ({
@@ -84,6 +85,18 @@ describe('EmbeddingService split-aware routing', () => {
     expect(await service.getEmbeddingCount()).toBe(1)
     const results = await service.semanticSearch('hello world')
     expect(results).toEqual([{ sourceId: 'file-1', score: expect.closeTo(1, 5) }])
+
+    // The availability probe, the document and the query embedding are all counted under the
+    // file index's stable usage-ledger caller (AC-B5).
+    const generateCalls = vi.mocked(tuffIntelligence.embedding.generate).mock.calls
+    expect(generateCalls.map(([payload]) => payload)).toEqual([
+      { text: 'test' },
+      { text: 'hello world semantic content' },
+      { text: 'hello world' }
+    ])
+    for (const [, options] of generateCalls) {
+      expect(options).toEqual({ metadata: { caller: 'core.files.embedding' } })
+    }
 
     // Removal routes through the worker too.
     await service.removeFiles(['file-1'])

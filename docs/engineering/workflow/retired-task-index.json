@@ -1,0 +1,3483 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "cfda0a6cd1a13b5606c82d7d9d68112177d3fc9d",
+  "tasks": [
+    {
+      "slug": "clipboard-credential-labels-2026-09-03",
+      "id": "clipboard-credential-labels",
+      "title": "Clipboard credential platform labels",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/archive/tasks/clipboard-credential-labels-2026-09-03/task.json"
+    },
+    {
+      "slug": "07-09-audit-search-system-architecture",
+      "id": "audit-search-system-architecture",
+      "title": "Audit and Remediate Search and System Architecture",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-09-audit-search-system-architecture/task.json"
+    },
+    {
+      "slug": "07-09-unify-search-provider-lifecycle",
+      "id": "unify-search-provider-lifecycle",
+      "title": "Unify Search Provider Lifecycle",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-09-unify-search-provider-lifecycle/task.json"
+    },
+    {
+      "slug": "07-13-search-crossplatform-audit",
+      "id": "search-crossplatform-audit",
+      "title": "Search & cross-platform audit backlog",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-13-search-crossplatform-audit/task.json"
+    },
+    {
+      "slug": "07-17-unify-ota-update-flow",
+      "id": "unify-ota-update-flow",
+      "title": "统一 OTA 更新链路",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-17-unify-ota-update-flow/task.json"
+    },
+    {
+      "slug": "07-17-windows-everything-productionization",
+      "id": "windows-everything-productionization",
+      "title": "Productionize Windows Everything Search",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-17-windows-everything-productionization/task.json"
+    },
+    {
+      "slug": "07-22-ota-one-click-background-update",
+      "id": "ota-one-click-background-update",
+      "title": "OTA 一键预下载与无感更新",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-22-ota-one-click-background-update/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/07-22-ota-one-click-background-update/README.md"
+    },
+    {
+      "slug": "07-24-harden-app-icon-self-healing",
+      "id": "harden-app-icon-self-healing",
+      "title": "应用图标自愈与数据库句柄加固",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-24-harden-app-icon-self-healing/task.json"
+    },
+    {
+      "slug": "07-26-install-launch-v2-4-13-beta-23",
+      "id": "install-launch-v2-4-13-beta-23",
+      "title": "下载安装并启动 v2.4.13-beta.23",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-26-install-launch-v2-4-13-beta-23/task.json"
+    },
+    {
+      "slug": "07-27-bilingual-whats-changed",
+      "id": "bilingual-whats-changed",
+      "title": "提供双语 What's Changed 发布日志",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-27-bilingual-whats-changed/task.json"
+    },
+    {
+      "slug": "07-27-expose-plugin-search-sdk",
+      "id": "expose-plugin-search-sdk",
+      "title": "开放插件 SearchSDK",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-27-expose-plugin-search-sdk/task.json"
+    },
+    {
+      "slug": "07-27-fix-plugin-folder-button",
+      "id": "fix-plugin-folder-button",
+      "title": "修复插件目录按钮无响应",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-27-fix-plugin-folder-button/task.json"
+    },
+    {
+      "slug": "07-27-optimize-core-utility-plugins",
+      "id": "optimize-core-utility-plugins",
+      "title": "优化核心效率插件",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-27-optimize-core-utility-plugins/task.json"
+    },
+    {
+      "slug": "07-27-optimize-intelligence-plugin",
+      "id": "optimize-intelligence-plugin",
+      "title": "优化 Intelligence 插件",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-27-optimize-intelligence-plugin/task.json"
+    },
+    {
+      "slug": "07-27-optimize-translation-plugin",
+      "id": "optimize-translation-plugin",
+      "title": "优化 Translation 插件",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-27-optimize-translation-plugin/task.json"
+    },
+    {
+      "slug": "07-28-migrate-search-index-split-write-paths",
+      "id": "migrate-search-index-split-write-paths",
+      "title": "Migrate search-index split write paths",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-28-migrate-search-index-split-write-paths/task.json"
+    },
+    {
+      "slug": "07-28-rust-native-protocol-screenshot",
+      "id": "rust-native-protocol-screenshot",
+      "title": "Unify Rust native protocol and screenshot runtime",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-28-rust-native-protocol-screenshot/task.json"
+    },
+    {
+      "slug": "07-28-rust-screenshot-mvp",
+      "id": "rust-screenshot-mvp",
+      "title": "Productionize Rust screenshot MVP",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-28-rust-screenshot-mvp/task.json"
+    },
+    {
+      "slug": "07-29-macos-screenshot-capture-core",
+      "id": "macos-screenshot-capture-core",
+      "title": "Build macOS screenshot capture core",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-29-macos-screenshot-capture-core/task.json"
+    },
+    {
+      "slug": "07-29-screenshot-annotation-editor",
+      "id": "screenshot-annotation-editor",
+      "title": "Build screenshot annotation editor",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-29-screenshot-annotation-editor/task.json"
+    },
+    {
+      "slug": "07-29-screenshot-image-pin-history",
+      "id": "screenshot-image-pin-history",
+      "title": "Build image pin and screenshot history",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-29-screenshot-image-pin-history/task.json"
+    },
+    {
+      "slug": "07-29-screenshot-long-capture",
+      "id": "screenshot-long-capture",
+      "title": "Build bounded scrolling capture",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-29-screenshot-long-capture/task.json"
+    },
+    {
+      "slug": "07-29-screenshot-ocr-qr-color",
+      "id": "screenshot-ocr-qr-color",
+      "title": "Integrate screenshot OCR QR and color tools",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-29-screenshot-ocr-qr-color/task.json"
+    },
+    {
+      "slug": "07-29-screenshot-packaged-evidence",
+      "id": "screenshot-packaged-evidence",
+      "title": "Verify screenshot packaging and runtime",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-29-screenshot-packaged-evidence/task.json"
+    },
+    {
+      "slug": "07-30-docs-roadmap-consolidation-cleanup",
+      "id": "docs-roadmap-consolidation-cleanup",
+      "title": "项目文档深度分析与 ROADMAP 沉淀及结构清理",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-30-docs-roadmap-consolidation-cleanup/task.json"
+    },
+    {
+      "slug": "08-03-app-shell-ai-redesign",
+      "id": "app-shell-ai-redesign",
+      "title": "app 壳层与设置界面 AI 化全面重构",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-03-app-shell-ai-redesign/task.json"
+    },
+    {
+      "slug": "08-04-batch-settings-razor",
+      "id": "batch-settings-razor",
+      "title": "批量剃刀：收敛设置选项",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-04-batch-settings-razor/task.json"
+    },
+    {
+      "slug": "08-04-home-conversation",
+      "id": "home-conversation",
+      "title": "首页对话最小闭环",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-04-home-conversation/task.json"
+    },
+    {
+      "slug": "08-04-settings-ia-primitives",
+      "id": "settings-ia-primitives",
+      "title": "设置页信息架构 + 行式基础组件",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-04-settings-ia-primitives/task.json"
+    },
+    {
+      "slug": "08-04-settings-rewrite",
+      "id": "settings-rewrite",
+      "title": "18 个 Setting*.vue 按设计稿重写",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-04-settings-rewrite/task.json"
+    },
+    {
+      "slug": "08-04-shell-chrome-resizable-sidebar",
+      "id": "shell-chrome-resizable-sidebar",
+      "title": "Shell chrome platform adaptation and resizable sidebar",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-04-shell-chrome-resizable-sidebar/task.json"
+    },
+    {
+      "slug": "08-04-shell-fixed-frame",
+      "id": "shell-fixed-frame",
+      "title": "移除 layout 切换特性 + 固定 shell 骨架",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-04-shell-fixed-frame/task.json"
+    },
+    {
+      "slug": "08-05-ai-toolchain-suite",
+      "id": "ai-toolchain-suite",
+      "title": "AI 工具链：组件扩容、工具调用与智能基建",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-ai-toolchain-suite/task.json"
+    },
+    {
+      "slug": "08-05-file-index-data-safety",
+      "id": "file-index-data-safety",
+      "title": "File index data safety",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-file-index-data-safety/task.json"
+    },
+    {
+      "slug": "08-05-full-repo-governance-audit",
+      "id": "full-repo-governance-audit",
+      "title": "Full-repo governance audit → GitHub issues",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-full-repo-governance-audit/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/08-05-full-repo-governance-audit/README.md"
+    },
+    {
+      "slug": "08-05-home-chat-tuffex-ai-fusion",
+      "id": "home-chat-tuffex-ai-fusion",
+      "title": "主界面聊天融合（HomePage 接入 tuffex/ai 系列）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-home-chat-tuffex-ai-fusion/task.json"
+    },
+    {
+      "slug": "08-05-realtime-index-freshness",
+      "id": "realtime-index-freshness",
+      "title": "Realtime index freshness with bounded resource usage",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-realtime-index-freshness/task.json"
+    },
+    {
+      "slug": "08-05-reco-behavior-learning",
+      "id": "reco-behavior-learning",
+      "title": "Behavior learning signals",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-reco-behavior-learning/task.json"
+    },
+    {
+      "slug": "08-05-reco-calendar-signal",
+      "id": "reco-calendar-signal",
+      "title": "Calendar signal",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-reco-calendar-signal/task.json"
+    },
+    {
+      "slug": "08-05-reco-file-activity-signals",
+      "id": "reco-file-activity-signals",
+      "title": "File activity signal pack",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-reco-file-activity-signals/task.json"
+    },
+    {
+      "slug": "08-05-reco-ranking-stats-fix",
+      "id": "reco-ranking-stats-fix",
+      "title": "Fix recommendation ranking and stats identity",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-reco-ranking-stats-fix/task.json"
+    },
+    {
+      "slug": "08-05-reco-signal-substrate",
+      "id": "reco-signal-substrate",
+      "title": "Recommendation signal substrate",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-reco-signal-substrate/task.json"
+    },
+    {
+      "slug": "08-05-reco-system-state-signals",
+      "id": "reco-system-state-signals",
+      "title": "System state signal pack",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-reco-system-state-signals/task.json"
+    },
+    {
+      "slug": "08-05-reco-wire-existing-signals",
+      "id": "reco-wire-existing-signals",
+      "title": "Wire existing recommendation signals",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-reco-wire-existing-signals/task.json"
+    },
+    {
+      "slug": "08-05-search-audit-remediation",
+      "id": "search-audit-remediation",
+      "title": "CoreBox search audit remediation",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-search-audit-remediation/task.json"
+    },
+    {
+      "slug": "08-05-search-hotpath-quadratic-fix",
+      "id": "search-hotpath-quadratic-fix",
+      "title": "Search hot path: eliminate O(n^2) token dedup and per-keystroke recompute",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-search-hotpath-quadratic-fix/task.json"
+    },
+    {
+      "slug": "08-05-search-sort-reaches-ui",
+      "id": "search-sort-reaches-ui",
+      "title": "Search sort reaches UI",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-search-sort-reaches-ui/task.json"
+    },
+    {
+      "slug": "08-05-semantic-catalog-token-boundary",
+      "id": "semantic-catalog-token-boundary",
+      "title": "Semantic catalog token-boundary matching",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-semantic-catalog-token-boundary/task.json"
+    },
+    {
+      "slug": "08-05-skeleton-loading-default",
+      "id": "skeleton-loading-default",
+      "title": "Skeleton 骨架屏成为默认加载态",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-skeleton-loading-default/task.json"
+    },
+    {
+      "slug": "08-05-skeleton-other-async-pages",
+      "id": "skeleton-other-async-pages",
+      "title": "其他异步页面接入骨架加载态",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-skeleton-other-async-pages/task.json"
+    },
+    {
+      "slug": "08-05-skeleton-primitives",
+      "id": "skeleton-primitives",
+      "title": "TuffEx 骨架原语基座与存量收敛",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-skeleton-primitives/task.json"
+    },
+    {
+      "slug": "08-05-skeleton-settings-pages",
+      "id": "skeleton-settings-pages",
+      "title": "设置页接入骨架加载态",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-skeleton-settings-pages/task.json"
+    },
+    {
+      "slug": "08-05-skeleton-spec-rule",
+      "id": "skeleton-spec-rule",
+      "title": "骨架屏加载态规则写入 frontend spec",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-skeleton-spec-rule/task.json"
+    },
+    {
+      "slug": "08-05-tuffex-ai-attachments-toolcards",
+      "id": "tuffex-ai-attachments-toolcards",
+      "title": "附件与工具卡片（TxAttachmentTray + TxToolCallCard + arrow-js Widget 展面）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-tuffex-ai-attachments-toolcards/task.json"
+    },
+    {
+      "slug": "08-05-tuffex-ai-conversation-stream",
+      "id": "tuffex-ai-conversation-stream",
+      "title": "TxConversationStream 会话流（动态高度虚拟滚动 + 触顶历史加载）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-tuffex-ai-conversation-stream/task.json"
+    },
+    {
+      "slug": "08-05-tuffex-ai-elements-port",
+      "id": "tuffex-ai-elements-port",
+      "title": "AI Elements 目录复刻（tuffex ai 系列扩容）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-tuffex-ai-elements-port/task.json"
+    },
+    {
+      "slug": "08-05-tuffex-ai-stream-markdown",
+      "id": "tuffex-ai-stream-markdown",
+      "title": "TxStreamMarkdown 流式 Markdown 渲染（块级增量 + 代码高亮 + mermaid）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-tuffex-ai-stream-markdown/task.json"
+    },
+    {
+      "slug": "08-05-tuffex-ai-suite",
+      "id": "tuffex-ai-suite",
+      "title": "TuffEx AI 组件系列与主界面聊天融合",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-05-tuffex-ai-suite/task.json"
+    },
+    {
+      "slug": "08-06-composer-permission-selector",
+      "id": "composer-permission-selector",
+      "title": "CoreBox composer 权限选择器与 Auto Context 归位",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-06-composer-permission-selector/task.json"
+    },
+    {
+      "slug": "08-06-home-chat-pipeline-fixes",
+      "id": "home-chat-pipeline-fixes",
+      "title": "Home chat pipeline & rendering fixes v2.5",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-06-home-chat-pipeline-fixes/task.json"
+    },
+    {
+      "slug": "08-06-interactive-form-tool",
+      "id": "interactive-form-tool",
+      "title": "交互式表单工具（tuff_render_form）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-06-interactive-form-tool/task.json"
+    },
+    {
+      "slug": "08-06-message-read-aloud",
+      "id": "message-read-aloud",
+      "title": "消息朗读（ttsSpeak 接操作栏）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-06-message-read-aloud/task.json"
+    },
+    {
+      "slug": "08-06-model-menu-sources",
+      "id": "model-menu-sources",
+      "title": "模型菜单接入 pi 目录与应用内提供方模型",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-06-model-menu-sources/task.json"
+    },
+    {
+      "slug": "08-06-reco-negative-feedback",
+      "id": "reco-negative-feedback",
+      "title": "Recommendation negative feedback",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-06-reco-negative-feedback/task.json"
+    },
+    {
+      "slug": "08-06-reco-scenario-playbook",
+      "id": "reco-scenario-playbook",
+      "title": "Recommendation scenario playbook",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-06-reco-scenario-playbook/task.json"
+    },
+    {
+      "slug": "08-06-shell-popover-tuffex",
+      "id": "shell-popover-tuffex",
+      "title": "首页 shell 弹层迁移 TuffEx 原语",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-06-shell-popover-tuffex/task.json"
+    },
+    {
+      "slug": "08-06-skills-local-dirs",
+      "id": "skills-local-dirs",
+      "title": "技能本地目录源（链接语义，不拷贝）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-06-skills-local-dirs/task.json"
+    },
+    {
+      "slug": "08-06-web-search-tool",
+      "id": "web-search-tool",
+      "title": "Web search tool for home chat",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-06-web-search-tool/task.json"
+    },
+    {
+      "slug": "08-07-chat-stream-order-render",
+      "id": "chat-stream-order-render",
+      "title": "对话消息按流顺序渲染",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-07-chat-stream-order-render/task.json"
+    },
+    {
+      "slug": "08-07-home-chain-and-native-search",
+      "id": "home-chain-and-native-search",
+      "title": "首页对话：思考块分段与原生联网搜索",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-07-home-chain-and-native-search/task.json"
+    },
+    {
+      "slug": "08-07-native-web-search",
+      "id": "native-web-search",
+      "title": "接入 provider 原生联网搜索",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-07-native-web-search/task.json"
+    },
+    {
+      "slug": "08-09-home-panel-layering-v2",
+      "id": "home-panel-layering-v2",
+      "title": "Home 会话面板与层级重构",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-09-home-panel-layering-v2/task.json"
+    },
+    {
+      "slug": "08-09-home-preview-tabs",
+      "id": "home-preview-tabs",
+      "title": "右侧 Tabs 预览区",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-09-home-preview-tabs/task.json"
+    },
+    {
+      "slug": "08-09-send-flight-layering",
+      "id": "send-flight-layering",
+      "title": "发送动画层级：输入框恒在消息之上",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-09-send-flight-layering/task.json"
+    },
+    {
+      "slug": "08-09-stream-markdown-polish",
+      "id": "stream-markdown-polish",
+      "title": "流式 Markdown 渲染细化",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-09-stream-markdown-polish/task.json"
+    },
+    {
+      "slug": "08-09-turn-info-float-panel",
+      "id": "turn-info-float-panel",
+      "title": "本轮信息移入顶栏 ⋯ 浮层",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-09-turn-info-float-panel/task.json"
+    },
+    {
+      "slug": "08-09-widget-frontend-sandbox",
+      "id": "widget-frontend-sandbox",
+      "title": "AI 自写 widget 的纯前端沙箱方案",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-09-widget-frontend-sandbox/task.json"
+    },
+    {
+      "slug": "08-14-corebox-hide-focus",
+      "id": "corebox-hide-focus",
+      "title": "修复 CoreBox 隐藏时窗口唤醒",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-14-corebox-hide-focus/task.json"
+    },
+    {
+      "slug": "08-14-mobile-tuff-chat-draft",
+      "id": "mobile-tuff-chat-draft",
+      "title": "移动端 Tuff 聊天应用草案",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-14-mobile-tuff-chat-draft/task.json"
+    },
+    {
+      "slug": "08-15-anchor-delay-service",
+      "id": "anchor-delay-service",
+      "title": "TuffEx Anchor 延迟服务与组合动画",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-15-anchor-delay-service/task.json"
+    },
+    {
+      "slug": "08-18-tuffex-nested-submenu",
+      "id": "tuffex-nested-submenu",
+      "title": "Tuffex nested submenu support + anchor chain fixes + HeaderUserMenu cleanup",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-18-tuffex-nested-submenu/task.json"
+    },
+    {
+      "slug": "08-22-08-22-broaden-corebox-recommendations",
+      "id": "08-22-broaden-corebox-recommendations",
+      "title": "扩展 CoreBox 推荐候选并排除 Tuff 自身",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-22-08-22-broaden-corebox-recommendations/task.json"
+    },
+    {
+      "slug": "08-22-autopaste-plugin-beta-e2e",
+      "id": "autopaste-plugin-beta-e2e",
+      "title": "收敛 AutoPaste 并验收三个插件 Beta",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-22-autopaste-plugin-beta-e2e/task.json"
+    },
+    {
+      "slug": "08-23-ai-permission-sandbox-acceptance",
+      "id": "ai-permission-sandbox-acceptance",
+      "title": "AI 权限与沙盒全链路验收",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-23-ai-permission-sandbox-acceptance/task.json"
+    },
+    {
+      "slug": "08-23-data-telemetry-billing-acceptance",
+      "id": "data-telemetry-billing-acceptance",
+      "title": "数据链路埋点与计费验收",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-23-data-telemetry-billing-acceptance/task.json"
+    },
+    {
+      "slug": "08-23-full-product-completion",
+      "id": "full-product-completion",
+      "title": "Tuff 全链路完成与真实验收",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-23-full-product-completion/task.json"
+    },
+    {
+      "slug": "08-23-product-matrix-plugin-sdk-acceptance",
+      "id": "product-matrix-plugin-sdk-acceptance",
+      "title": "官网功能矩阵与插件 SDK 升级",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-23-product-matrix-plugin-sdk-acceptance/task.json"
+    },
+    {
+      "slug": "08-23-release-cicd-ota-acceptance",
+      "id": "release-cicd-ota-acceptance",
+      "title": "CI/CD 发布与 OTA 真实验收",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/08-23-release-cicd-ota-acceptance/task.json"
+    },
+    {
+      "slug": "09-03-remote-app-alias-catalog",
+      "id": "remote-app-alias-catalog",
+      "title": "Remote application alias catalog",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-03-remote-app-alias-catalog/task.json"
+    },
+    {
+      "slug": "09-04-corebox-reason-grouping",
+      "id": "corebox-reason-grouping",
+      "title": "CoreBox 空态推荐理由分组",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-04-corebox-reason-grouping/task.json"
+    },
+    {
+      "slug": "09-04-corebox-recommend-platform",
+      "id": "corebox-recommend-platform",
+      "title": "CoreBox 推荐层重构:来源注册表、Stream 传输统一与推荐 SDK 开放",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-04-corebox-recommend-platform/task.json"
+    },
+    {
+      "slug": "09-04-empty-state-sections",
+      "id": "empty-state-sections",
+      "title": "空态两段 UI:此刻常用宫格 + 最近案例列表,文案收敛 i18n",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-04-empty-state-sections/task.json"
+    },
+    {
+      "slug": "09-04-reco-sdk-weights",
+      "id": "reco-sdk-weights",
+      "title": "推荐 SDK 与权重函数开放:插件走主排序池",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-04-reco-sdk-weights/task.json"
+    },
+    {
+      "slug": "09-04-reco-source-registry",
+      "id": "reco-source-registry",
+      "title": "推荐来源注册表:替换 item-rebuilder 硬编码 fan-out",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-04-reco-source-registry/task.json"
+    },
+    {
+      "slug": "09-04-transport-resource-unify",
+      "id": "transport-resource-unify",
+      "title": "传输与资源协议统一:port allowlist、推荐 stream 下发、tfile 控制面收敛与 stream: scheme",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-04-transport-resource-unify/task.json"
+    },
+    {
+      "slug": "09-04-unify-voice-session-rust",
+      "id": "unify-voice-session-rust",
+      "title": "Unify Voice Session and Rust Voice Core",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-04-unify-voice-session-rust/task.json"
+    },
+    {
+      "slug": "09-05-clipboard-history-detail-relayout",
+      "id": "clipboard-history-detail-relayout",
+      "title": "剪贴板历史详情页版式重排",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-05-clipboard-history-detail-relayout/task.json"
+    },
+    {
+      "slug": "09-05-color-capability",
+      "id": "color-capability",
+      "title": "颜色能力",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-05-color-capability/task.json"
+    },
+    {
+      "slug": "09-05-file-preview",
+      "id": "file-preview",
+      "title": "文件预览",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-05-file-preview/task.json"
+    },
+    {
+      "slug": "09-05-layout-shell",
+      "id": "layout-shell",
+      "title": "版式骨架",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-05-layout-shell/task.json"
+    },
+    {
+      "slug": "09-05-more-info-disclosure",
+      "id": "more-info-disclosure",
+      "title": "更多信息折叠区",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-05-more-info-disclosure/task.json"
+    },
+    {
+      "slug": "09-05-record-share",
+      "id": "record-share",
+      "title": "记录分享",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-05-record-share/task.json"
+    },
+    {
+      "slug": "09-05-shape-classifier",
+      "id": "shape-classifier",
+      "title": "内容形态分类器与洞察路由",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-05-shape-classifier/task.json"
+    },
+    {
+      "slug": "09-06-local-cli-model-providers",
+      "id": "local-cli-model-providers",
+      "title": "Local AI CLIs as selectable chat providers",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-06-local-cli-model-providers/task.json"
+    },
+    {
+      "slug": "09-06-model-menu-redesign",
+      "id": "model-menu-redesign",
+      "title": "Model switch popup redesign and anchored panel max-height fix",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-06-model-menu-redesign/task.json"
+    },
+    {
+      "slug": "09-06-voice-hud-orb-fusion",
+      "id": "voice-hud-orb-fusion",
+      "title": "语音 HUD 融合 orb 的形态设计",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-06-voice-hud-orb-fusion/task.json"
+    },
+    {
+      "slug": "09-08-nexus-ai-channel-billing",
+      "id": "nexus-ai-channel-billing",
+      "title": "Nexus AI channel billing",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-08-nexus-ai-channel-billing/task.json"
+    },
+    {
+      "slug": "09-08-persist-asr-provider-channels",
+      "id": "persist-asr-provider-channels",
+      "title": "Persist ASR provider channels",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-08-persist-asr-provider-channels/task.json"
+    },
+    {
+      "slug": "09-08-transfer-internal-scroll-search",
+      "id": "transfer-internal-scroll-search",
+      "title": "TxTransfer 面板内部滚动与双侧搜索",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-08-transfer-internal-scroll-search/task.json"
+    },
+    {
+      "slug": "09-08-tuffex-text-morph-engine",
+      "id": "tuffex-text-morph-engine",
+      "title": "tuffex 文本形变引擎（移植 torph）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-08-tuffex-text-morph-engine/task.json"
+    },
+    {
+      "slug": "09-08-voice-dock-stream-and-jank",
+      "id": "voice-dock-stream-and-jank",
+      "title": "语音条：转写文本跟随、波形随宽度、卡顿探针",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-08-voice-dock-stream-and-jank/task.json"
+    },
+    {
+      "slug": "09-10-nexus-signin-activation",
+      "id": "nexus-signin-activation",
+      "title": "Nexus sign-in activation and capability credit billing",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-10-nexus-signin-activation/task.json"
+    },
+    {
+      "slug": "09-10-voice-capture-audio-frontend",
+      "id": "voice-capture-audio-frontend",
+      "title": "语音采集前端链路：抗混叠、自适应静音判定与 VAD 修正",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-10-voice-capture-audio-frontend/task.json"
+    },
+    {
+      "slug": "09-10-voice-polish-length-gate",
+      "id": "voice-polish-length-gate",
+      "title": "Voice polish length gate and content-free telemetry",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-10-voice-polish-length-gate/task.json"
+    },
+    {
+      "slug": "09-12-comet-native-migration",
+      "id": "comet-native-migration",
+      "title": "Migrate repository workflow from Trellis to Comet Native",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-12-comet-native-migration/task.json"
+    },
+    {
+      "slug": "09-13-voice-provider-cloud-pack",
+      "id": "voice-provider-cloud-pack",
+      "title": "Cloud-delivered voice provider pack",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-13-voice-provider-cloud-pack/task.json"
+    },
+    {
+      "slug": "09-23-nexus-admin-console-gaps",
+      "id": "nexus-admin-console-gaps",
+      "title": "Nexus 后台补齐：积分控制台 /admin/credits（原缺页任务收窄）",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-23-nexus-admin-console-gaps/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/09-23-nexus-admin-console-gaps/README.md"
+    },
+    {
+      "slug": "09-23-nexus-base-gallery-sidebar",
+      "id": "nexus-base-gallery-sidebar",
+      "title": "Nexus 基础套件画廊整改 + 文档侧栏重设计",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-23-nexus-base-gallery-sidebar/task.json"
+    },
+    {
+      "slug": "09-23-nexus-docs-perf-cms-remediation",
+      "id": "nexus-docs-perf-cms-remediation",
+      "title": "Nexus docs 静态交付收尾、画廊瘦身与后台补齐",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-23-nexus-docs-perf-cms-remediation/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/09-23-nexus-docs-perf-cms-remediation/README.md"
+    },
+    {
+      "slug": "09-23-nexus-docs-templates-tab",
+      "id": "nexus-docs-templates-tab",
+      "title": "Nexus 组件文档新增「模板 Templates」tab：10 个组件组合模板",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-23-nexus-docs-templates-tab/task.json"
+    },
+    {
+      "slug": "09-23-nexus-gallery-css-graph-slimming",
+      "id": "nexus-gallery-css-graph-slimming",
+      "title": "Nexus suite 画廊按格懒挂载与 docs 样式表合并",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-23-nexus-gallery-css-graph-slimming/task.json"
+    },
+    {
+      "slug": "09-23-nexus-pro-gallery-polish",
+      "id": "nexus-pro-gallery-polish",
+      "title": "Nexus Pro 画廊 specimen 整改 + 格子 reset 按钮",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-23-nexus-pro-gallery-polish/task.json"
+    },
+    {
+      "slug": "09-24-nexus-docs-templates-batch-2",
+      "id": "nexus-docs-templates-batch-2",
+      "title": "Nexus 模板第二批：5 个新风格 + 5 个新章节",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-24-nexus-docs-templates-batch-2/task.json"
+    },
+    {
+      "slug": "09-25-docs-edge-blur",
+      "id": "docs-edge-blur",
+      "title": "Nexus 文档页顶/底边缘渐变模糊修复",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-25-docs-edge-blur/task.json"
+    },
+    {
+      "slug": "09-25-indicator-family-jelly",
+      "id": "indicator-family-jelly",
+      "title": "TabBar / FlatRadio / SidebarNav 接入果冻指示器",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-25-indicator-family-jelly/task.json"
+    },
+    {
+      "slug": "09-25-jelly-indicator-engine",
+      "id": "jelly-indicator-engine",
+      "title": "tuffex 共享果冻指示器引擎（从 Radio 抽出，Radio 迁移）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-25-jelly-indicator-engine/task.json"
+    },
+    {
+      "slug": "09-25-stat-card-glow-badge",
+      "id": "stat-card-glow-badge",
+      "title": "TxStatCard 发光图标徽章",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-25-stat-card-glow-badge/task.json"
+    },
+    {
+      "slug": "09-25-tabs-indicator-redo",
+      "id": "tabs-indicator-redo",
+      "title": "TxTabs 指示器重做 + 画廊变体展示",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-25-tabs-indicator-redo/task.json"
+    },
+    {
+      "slug": "09-25-tuffex-jelly-indicator-polish",
+      "id": "tuffex-jelly-indicator-polish",
+      "title": "tuffex 共享果冻指示器 + Tabs 重做 + 文档页边缘模糊 + StatCard 徽章",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-25-tuffex-jelly-indicator-polish/task.json"
+    },
+    {
+      "slug": "09-26-bound-indexing-memory-icons",
+      "id": "bound-indexing-memory-icons",
+      "title": "Bound Tuff indexing memory and icon storage",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-26-bound-indexing-memory-icons/task.json"
+    },
+    {
+      "slug": "09-26-channel-error-reply-contract",
+      "id": "channel-error-reply-contract",
+      "title": "Channel 错误回复被当作数据 resolve（附带插件图标 tfile 403）",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-26-channel-error-reply-contract/task.json"
+    },
+    {
+      "slug": "09-26-corebox-app-search-fast-lane",
+      "id": "corebox-app-search-fast-lane",
+      "title": "CoreBox 应用搜索优先与索引减负",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-26-corebox-app-search-fast-lane/task.json"
+    },
+    {
+      "slug": "09-26-sortable-list-drag-feel",
+      "id": "sortable-list-drag-feel",
+      "title": "TxSortableList 拖拽跟手 + 弹性让位 / 落位",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-26-sortable-list-drag-feel/task.json"
+    },
+    {
+      "slug": "09-26-status-badge-chip-lighter",
+      "id": "status-badge-chip-lighter",
+      "title": "TxStatusBadge 亮色主题圆盘色阶提亮",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-26-status-badge-chip-lighter/task.json"
+    },
+    {
+      "slug": "09-28-09-28-nexus-provider-scene-unification",
+      "id": "09-28-nexus-provider-scene-unification",
+      "title": "Unify Nexus provider registry and scene routing",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-28-09-28-nexus-provider-scene-unification/task.json"
+    },
+    {
+      "slug": "09-28-macos-watcher-startup-cpu",
+      "id": "macos-watcher-startup-cpu",
+      "title": "Fix macOS file watcher startup CPU saturation",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-28-macos-watcher-startup-cpu/task.json"
+    },
+    {
+      "slug": "09-29-ai-answer-template",
+      "id": "ai-answer-template",
+      "title": "Templates page: AI answer (multi-turn in TxConversationStream)",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-29-ai-answer-template/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/09-29-ai-answer-template/README.md"
+    },
+    {
+      "slug": "09-29-bounded-fd-fzf-file-indexing",
+      "id": "bounded-fd-fzf-file-indexing",
+      "title": "Bounded file indexing with fd and fzf",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-29-bounded-fd-fzf-file-indexing/task.json"
+    },
+    {
+      "slug": "09-29-code-stream-live",
+      "id": "code-stream-live",
+      "title": "TxCodeStream content-driven mode + TxStreamCode alias",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-29-code-stream-live/task.json"
+    },
+    {
+      "slug": "09-29-stream-element-core",
+      "id": "stream-element-core",
+      "title": "TxStreamElement: markdown subset, delegation, citations, one clock, slots + hero showcase",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-29-stream-element-core/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/09-29-stream-element-core/README.md"
+    },
+    {
+      "slug": "09-29-stream-element",
+      "id": "stream-element",
+      "title": "StreamElement: streaming primitives (StreamText, StreamCode) + composer + showcase",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-29-stream-element/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/09-29-stream-element/README.md"
+    },
+    {
+      "slug": "09-29-stream-markdown-motion",
+      "id": "stream-markdown-motion",
+      "title": "TxStreamMarkdown: shared reveal presets + logo caret + live gallery cell",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-29-stream-markdown-motion/task.json"
+    },
+    {
+      "slug": "09-29-stream-text-foundation",
+      "id": "stream-text-foundation",
+      "title": "StreamText foundation: presets, tokens, segmenter, pacer, logo caret, TxStreamText",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-29-stream-text-foundation/task.json"
+    },
+    {
+      "slug": "09-29-tuffex-menu-activation-blink",
+      "id": "tuffex-menu-activation-blink",
+      "title": "TuffEx menu activation blink feedback",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/09-29-tuffex-menu-activation-blink/task.json"
+    },
+    {
+      "slug": "10-02-nexus-admin-console-kit",
+      "id": "nexus-admin-console-kit",
+      "title": "后台统一骨架：外壳闸门、区块/筛选/列表/确认组件与格式化（以管理操作审计页试点）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-console-kit/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-console-kit/README.md"
+    },
+    {
+      "slug": "10-02-nexus-admin-console-overhaul",
+      "id": "nexus-admin-console-overhaul",
+      "title": "Nexus 后台全面重构：统一骨架、逐页迁移、补齐缺页与清理退役代码",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-console-overhaul/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-console-overhaul/README.md"
+    },
+    {
+      "slug": "10-02-nexus-admin-emergency-chain",
+      "id": "nexus-admin-emergency-chain",
+      "title": "应急链路端到端：恢复码、会话列表与吊销",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-emergency-chain/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-emergency-chain/README.md"
+    },
+    {
+      "slug": "10-02-nexus-admin-migrate-accounts",
+      "id": "nexus-admin-migrate-accounts",
+      "title": "用户与订阅页迁移：用户管理、激活码",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-migrate-accounts/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-migrate-accounts/README.md"
+    },
+    {
+      "slug": "10-02-nexus-admin-migrate-ai-services",
+      "id": "nexus-admin-migrate-ai-services",
+      "title": "AI 服务页迁移：AI 概览、服务渠道、AI 调用审计",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-migrate-ai-services/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-migrate-ai-services/README.md"
+    },
+    {
+      "slug": "10-02-nexus-admin-migrate-analytics",
+      "id": "nexus-admin-migrate-analytics",
+      "title": "数据分析页拆分迁移",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-migrate-analytics/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-migrate-analytics/README.md"
+    },
+    {
+      "slug": "10-02-nexus-admin-migrate-content",
+      "id": "nexus-admin-migrate-content",
+      "title": "内容运营页迁移：更新与要闻、资源库（含列表分页）、评论管理",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-migrate-content/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-migrate-content/README.md"
+    },
+    {
+      "slug": "10-02-nexus-admin-migrate-governance",
+      "id": "nexus-admin-migrate-governance",
+      "title": "数据治理页拆分迁移、补全文案键与遥测保留面板",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-migrate-governance/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-migrate-governance/README.md"
+    },
+    {
+      "slug": "10-02-nexus-admin-plugin-moderation",
+      "id": "nexus-admin-plugin-moderation",
+      "title": "插件审核搬进后台 /admin/plugins",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-plugin-moderation/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-plugin-moderation/README.md"
+    },
+    {
+      "slug": "10-02-nexus-admin-release-evidence",
+      "id": "nexus-admin-release-evidence",
+      "title": "发布证据页与 CI 自动写入",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-release-evidence/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-release-evidence/README.md"
+    },
+    {
+      "slug": "10-02-nexus-admin-retired-ai-cleanup",
+      "id": "nexus-admin-retired-ai-cleanup",
+      "title": "清理 10-01 退役的 AI 后台残留代码（含分析页 AI 面板）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-retired-ai-cleanup/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-retired-ai-cleanup/README.md"
+    },
+    {
+      "slug": "10-02-nexus-admin-risk-console",
+      "id": "nexus-admin-risk-console",
+      "title": "风控控制面迁移：IP 封禁列表与解封、手动封禁迁入",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-risk-console/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-risk-console/README.md"
+    },
+    {
+      "slug": "10-02-nexus-admin-single-root-hotfix",
+      "id": "nexus-admin-single-root-hotfix",
+      "title": "热修：两个后台页面多根节点导致切页后主区域空白",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-nexus-admin-single-root-hotfix/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-nexus-admin-single-root-hotfix/README.md"
+    },
+    {
+      "slug": "10-02-tuffex-admin-primitives",
+      "id": "tuffex-admin-primitives",
+      "title": "TuffEx 补齐后台通用件：TxDescriptions、TxDataTable 骨架加载态、TxPagination 每页条数",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-tuffex-admin-primitives/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-tuffex-admin-primitives/README.md"
+    },
+    {
+      "slug": "10-02-tuffex-select-label-double-toggle",
+      "id": "tuffex-select-label-double-toggle",
+      "title": "TuffEx：TxSelect 被 <label> 包住时点击箭头会被吞掉（开关切换两次）",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-02-tuffex-select-label-double-toggle/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-02-tuffex-select-label-double-toggle/README.md"
+    },
+    {
+      "slug": "10-03-audit-insights-page",
+      "id": "audit-insights-page",
+      "title": "审计洞察页重做",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-03-audit-insights-page/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-audit-insights-page/README.md"
+    },
+    {
+      "slug": "10-03-audit-usage-ledger",
+      "id": "audit-usage-ledger",
+      "title": "用量账本：计数常开、全局本地桶、写入端归属、洞察读接口",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-03-audit-usage-ledger/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-audit-usage-ledger/README.md"
+    },
+    {
+      "slug": "10-03-flow-into-metak-drill-in",
+      "id": "flow-into-metak-drill-in",
+      "title": "流转并入 ⌘K 面板做二级页 + 流转页模糊背景",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-03-flow-into-metak-drill-in/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-flow-into-metak-drill-in/README.md"
+    },
+    {
+      "slug": "10-03-insights-shell-kit",
+      "id": "insights-shell-kit",
+      "title": "洞察页共享组件与语音页迁移",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-03-insights-shell-kit/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-insights-shell-kit/README.md"
+    },
+    {
+      "slug": "10-03-intelligence-audit-rebuild",
+      "id": "intelligence-audit-rebuild",
+      "title": "智能审计页按洞察页 shell 重做",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-03-intelligence-audit-rebuild/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-intelligence-audit-rebuild/README.md"
+    },
+    {
+      "slug": "10-03-intelligence-memory-page",
+      "id": "intelligence-memory-page",
+      "title": "记忆独立子页",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-03-intelligence-memory-page/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-intelligence-memory-page/README.md"
+    },
+    {
+      "slug": "10-03-intelligence-settings-revamp",
+      "id": "intelligence-settings-revamp",
+      "title": "塔芙智能设置区改版 + 本机代理探测修复",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-03-intelligence-settings-revamp/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-intelligence-settings-revamp/README.md"
+    },
+    {
+      "slug": "10-03-intelligence-usage-limits",
+      "id": "intelligence-usage-limits",
+      "title": "全局用量上限",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-03-intelligence-usage-limits/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-intelligence-usage-limits/README.md"
+    },
+    {
+      "slug": "10-03-local-agent-detection",
+      "id": "local-agent-detection",
+      "title": "本机代理 CLI 探测修复与去门槛",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-03-local-agent-detection/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-local-agent-detection/README.md"
+    },
+    {
+      "slug": "10-03-mcp-settings-page",
+      "id": "mcp-settings-page",
+      "title": "MCP 独立成页（侧栏技能下方）",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-03-mcp-settings-page/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-mcp-settings-page/README.md"
+    },
+    {
+      "slug": "10-03-modelsdev-pricing",
+      "id": "modelsdev-pricing",
+      "title": "models.dev 定价接入",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-03-modelsdev-pricing/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-modelsdev-pricing/README.md"
+    },
+    {
+      "slug": "10-03-skills-page-revamp",
+      "id": "skills-page-revamp",
+      "title": "能力页改版为技能页（通用技能 / 内置技能 / 手动保存）",
+      "status": "planning",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/10-03-skills-page-revamp/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-skills-page-revamp/README.md"
+    },
+    {
+      "slug": "00-bootstrap-guidelines",
+      "id": "00-bootstrap-guidelines",
+      "title": "Bootstrap Guidelines",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/00-bootstrap-guidelines/task.json"
+    },
+    {
+      "slug": "07-04-fix-recommendation-logo-rendering",
+      "id": "fix-recommendation-logo-rendering",
+      "title": "Fix recommendation logo rendering",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-04-fix-recommendation-logo-rendering/task.json"
+    },
+    {
+      "slug": "07-04-review-wlcb1-new-api-dryrun",
+      "id": "review-wlcb1-new-api-dryrun",
+      "title": "Review wlcb1 new-api update dry-run",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-04-review-wlcb1-new-api-dryrun/task.json"
+    },
+    {
+      "slug": "07-04-update-wlcb1-new-api-docker",
+      "id": "update-wlcb1-new-api-docker",
+      "title": "Update wlcb1 new-api docker",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-04-update-wlcb1-new-api-docker/task.json"
+    },
+    {
+      "slug": "07-09-contain-plugin-window-boundary",
+      "id": "contain-plugin-window-boundary",
+      "title": "Contain Plugin Window Privilege Boundary",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-09-contain-plugin-window-boundary/task.json"
+    },
+    {
+      "slug": "07-09-establish-single-search-index-writer",
+      "id": "establish-single-search-index-writer",
+      "title": "Establish Single Search Index Writer",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-09-establish-single-search-index-writer/task.json"
+    },
+    {
+      "slug": "07-09-gate-search-on-storage-hydration",
+      "id": "gate-search-on-storage-hydration",
+      "title": "Gate Search on Storage Hydration",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-09-gate-search-on-storage-hydration/task.json"
+    },
+    {
+      "slug": "07-09-scope-search-sessions-and-streams",
+      "id": "scope-search-sessions-and-streams",
+      "title": "Scope Search Sessions and Streams",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-09-scope-search-sessions-and-streams/task.json"
+    },
+    {
+      "slug": "07-09-serialize-search-gather-updates",
+      "id": "serialize-search-gather-updates",
+      "title": "Serialize Async Search Gather Updates",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-09-serialize-search-gather-updates/task.json"
+    },
+    {
+      "slug": "07-10-r9-2-compression-snapshot",
+      "id": "r9-2-compression-snapshot",
+      "title": "R9.2 CompressionSnapshot 收口",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-10-r9-2-compression-snapshot/07-10-r9-2-compression-snapshot/task.json"
+    },
+    {
+      "slug": "07-10-r9-2-compression-snapshot",
+      "id": "r9-2-compression-snapshot",
+      "title": "R9.2 CompressionSnapshot 收口",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-10-r9-2-compression-snapshot/task.json"
+    },
+    {
+      "slug": "07-10-r9-2-context-execution-corebox",
+      "id": "r9-2-context-execution-corebox",
+      "title": "R9.2 Context 执行与 CoreBox 控制",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-10-r9-2-context-execution-corebox/07-10-r9-2-context-execution-corebox/task.json"
+    },
+    {
+      "slug": "07-10-r9-2-context-execution-corebox",
+      "id": "r9-2-context-execution-corebox",
+      "title": "R9.2 Context 执行与 CoreBox 控制",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-10-r9-2-context-execution-corebox/task.json"
+    },
+    {
+      "slug": "07-10-r9-2-context-hygiene-p0-p1-closure",
+      "id": "r9-2-context-hygiene-p0-p1-closure",
+      "title": "R9.2 ContextHygiene P0 P1 收口",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-10-r9-2-context-hygiene-p0-p1-closure/task.json"
+    },
+    {
+      "slug": "07-10-r9-2-entrypoints-evidence",
+      "id": "r9-2-entrypoints-evidence",
+      "title": "R9.2 多入口接入与真实 Evidence",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-10-r9-2-entrypoints-evidence/07-10-r9-2-entrypoints-evidence/task.json"
+    },
+    {
+      "slug": "07-10-r9-2-entrypoints-evidence",
+      "id": "r9-2-entrypoints-evidence",
+      "title": "R9.2 多入口接入与真实 Evidence",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-10-r9-2-entrypoints-evidence/task.json"
+    },
+    {
+      "slug": "07-10-r9-2-memory-governance-scope",
+      "id": "r9-2-memory-governance-scope",
+      "title": "R9.2 Memory 治理与作用域隔离",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-10-r9-2-memory-governance-scope/task.json"
+    },
+    {
+      "slug": "07-10-r9-2-memory-review-management",
+      "id": "r9-2-memory-review-management",
+      "title": "R9.2 Memory Review 搜索编辑与来源审计",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-10-r9-2-memory-review-management/task.json"
+    },
+    {
+      "slug": "07-11-context-archived-continuation",
+      "id": "context-archived-continuation",
+      "title": "Productize archived ContextHygiene continuation",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-11-context-archived-continuation/task.json"
+    },
+    {
+      "slug": "07-11-corebox-ai-dispatch-idempotency",
+      "id": "corebox-ai-dispatch-idempotency",
+      "title": "CoreBox AI 输入调度幂等与取消",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-11-corebox-ai-dispatch-idempotency/task.json"
+    },
+    {
+      "slug": "07-11-official-plugin-build-delivery-integrity",
+      "id": "official-plugin-build-delivery-integrity",
+      "title": "Official Plugin Build Delivery Integrity",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-11-official-plugin-build-delivery-integrity/task.json"
+    },
+    {
+      "slug": "07-12-context-tombstone-explain",
+      "id": "context-tombstone-explain",
+      "title": "Productize tombstone context explain",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-12-context-tombstone-explain/task.json"
+    },
+    {
+      "slug": "07-12-workflow-context-packaged-evidence",
+      "id": "workflow-context-packaged-evidence",
+      "title": "Capture packaged Workflow context evidence",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-12-workflow-context-packaged-evidence/task.json"
+    },
+    {
+      "slug": "07-12-workflow-run-structured-clone",
+      "id": "workflow-run-structured-clone",
+      "title": "Fix packaged workflow structured clone",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-12-workflow-run-structured-clone/task.json"
+    },
+    {
+      "slug": "07-13-fix-ranking-dead-features",
+      "id": "fix-ranking-dead-features",
+      "title": "Fix search ranking dead features (semantic + completion)",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-13-fix-ranking-dead-features/task.json"
+    },
+    {
+      "slug": "07-13-omnipanel-context-packaged-evidence",
+      "id": "omnipanel-context-packaged-evidence",
+      "title": "Capture packaged OmniPanel context evidence",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-13-omnipanel-context-packaged-evidence/task.json"
+    },
+    {
+      "slug": "07-13-plugin-localization-sdk-facade",
+      "id": "plugin-localization-sdk-facade",
+      "title": "Implement plugin localization SDK facade",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-13-plugin-localization-sdk-facade/task.json"
+    },
+    {
+      "slug": "07-13-unit-domain-lexicon-v1",
+      "id": "unit-domain-lexicon-v1",
+      "title": "Implement unit Domain Lexicon V1",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-13-unit-domain-lexicon-v1/task.json"
+    },
+    {
+      "slug": "07-14-07-13-local-knowledge-token-budget",
+      "id": "07-13-local-knowledge-token-budget",
+      "title": "Enforce Local Knowledge Token Budget",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-07-13-local-knowledge-token-budget/task.json"
+    },
+    {
+      "slug": "07-14-assistant-display-topology-recovery",
+      "id": "assistant-display-topology-recovery",
+      "title": "Reposition Assistant on Display Changes",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-assistant-display-topology-recovery/task.json"
+    },
+    {
+      "slug": "07-14-assistant-multi-display-position",
+      "id": "assistant-multi-display-position",
+      "title": "Preserve Assistant Position Across Displays",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-assistant-multi-display-position/task.json"
+    },
+    {
+      "slug": "07-14-assistant-renderer-lazy-chunks",
+      "id": "assistant-renderer-lazy-chunks",
+      "title": "Lazy-load Assistant Renderer Surfaces",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-assistant-renderer-lazy-chunks/task.json"
+    },
+    {
+      "slug": "07-14-block-unsafe-context-fallback",
+      "id": "block-unsafe-context-fallback",
+      "title": "Block Unsafe Context Fallback",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-block-unsafe-context-fallback/task.json"
+    },
+    {
+      "slug": "07-14-commit-ollama-stream-after-delta",
+      "id": "commit-ollama-stream-after-delta",
+      "title": "Commit Ollama Stream After Delta",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-commit-ollama-stream-after-delta/task.json"
+    },
+    {
+      "slug": "07-14-context-package-optional-budget",
+      "id": "context-package-optional-budget",
+      "title": "Enforce ContextPackage Optional Budget",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-context-package-optional-budget/task.json"
+    },
+    {
+      "slug": "07-14-detect-bearer-jwt-secrets",
+      "id": "detect-bearer-jwt-secrets",
+      "title": "Detect Bearer and JWT Secrets",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-detect-bearer-jwt-secrets/task.json"
+    },
+    {
+      "slug": "07-14-expose-selection-capture-plugin-sdk",
+      "id": "expose-selection-capture-plugin-sdk",
+      "title": "Expose Selection Capture Plugin SDK",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-expose-selection-capture-plugin-sdk/task.json"
+    },
+    {
+      "slug": "07-14-harden-ollama-multilingual-stream",
+      "id": "harden-ollama-multilingual-stream",
+      "title": "Harden Ollama Multilingual Stream",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-harden-ollama-multilingual-stream/task.json"
+    },
+    {
+      "slug": "07-14-hide-plugin-agent-session-runtime",
+      "id": "hide-plugin-agent-session-runtime",
+      "title": "Hide Plugin Agent Session Runtime",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-hide-plugin-agent-session-runtime/task.json"
+    },
+    {
+      "slug": "07-14-hide-plugin-context-metadata-logs",
+      "id": "hide-plugin-context-metadata-logs",
+      "title": "Hide Plugin Context Metadata Logs",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-hide-plugin-context-metadata-logs/task.json"
+    },
+    {
+      "slug": "07-14-hide-plugin-workflow-control-plane",
+      "id": "hide-plugin-workflow-control-plane",
+      "title": "Hide Plugin Workflow Control Plane",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-hide-plugin-workflow-control-plane/task.json"
+    },
+    {
+      "slug": "07-14-lp-03-context-actions",
+      "id": "lp-03-context-actions",
+      "title": "LP-03 Super Panel-lite Context Actions",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-lp-03-context-actions/task.json"
+    },
+    {
+      "slug": "07-14-multilingual-context-token-estimates",
+      "id": "multilingual-context-token-estimates",
+      "title": "Harden Multilingual Context Token Estimates",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-multilingual-context-token-estimates/task.json"
+    },
+    {
+      "slug": "07-14-normalize-context-token-budgets",
+      "id": "normalize-context-token-budgets",
+      "title": "Normalize Context Token Budgets",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-normalize-context-token-budgets/task.json"
+    },
+    {
+      "slug": "07-14-route-voice-panel-provider-asr",
+      "id": "route-voice-panel-provider-asr",
+      "title": "Route VoicePanel Through Provider ASR",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-route-voice-panel-provider-asr/task.json"
+    },
+    {
+      "slug": "07-14-settle-network-guard-after-stream",
+      "id": "settle-network-guard-after-stream",
+      "title": "Settle Network Guard After Stream",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-settle-network-guard-after-stream/task.json"
+    },
+    {
+      "slug": "07-14-type-ollama-compatibility-404",
+      "id": "type-ollama-compatibility-404",
+      "title": "Type Ollama Compatibility 404",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-14-type-ollama-compatibility-404/task.json"
+    },
+    {
+      "slug": "07-15-07-15-ci-dependabot-reliability",
+      "id": "07-15-ci-dependabot-reliability",
+      "title": "Harden Dependabot and GitHub Actions reliability",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-15-07-15-ci-dependabot-reliability/task.json"
+    },
+    {
+      "slug": "07-15-07-15-corebox-autopaste-shortcut-order",
+      "id": "07-15-corebox-autopaste-shortcut-order",
+      "title": "Fix CoreBox shortcut AutoPaste ordering",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-15-07-15-corebox-autopaste-shortcut-order/task.json"
+    },
+    {
+      "slug": "07-15-07-15-nexus-api-key-release-typecheck",
+      "id": "07-15-nexus-api-key-release-typecheck",
+      "title": "Fix Nexus API key release typecheck",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-15-07-15-nexus-api-key-release-typecheck/task.json"
+    },
+    {
+      "slug": "07-15-07-16-official-plugin-release-build-prerequisites",
+      "id": "07-16-official-plugin-release-build-prerequisites",
+      "title": "Fix official plugin release build prerequisites",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-15-07-16-official-plugin-release-build-prerequisites/task.json"
+    },
+    {
+      "slug": "07-15-clipboard-main-loop-stalls",
+      "id": "clipboard-main-loop-stalls",
+      "title": "Eliminate clipboard main-loop stalls",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-15-clipboard-main-loop-stalls/task.json"
+    },
+    {
+      "slug": "07-15-download-scheduling-reliability",
+      "id": "download-scheduling-reliability",
+      "title": "Fix download scheduling reliability",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-15-download-scheduling-reliability/task.json"
+    },
+    {
+      "slug": "07-15-intelligence-config-idempotency",
+      "id": "intelligence-config-idempotency",
+      "title": "Fix intelligence config idempotency",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-15-intelligence-config-idempotency/task.json"
+    },
+    {
+      "slug": "07-15-progressive-corebox-index-search",
+      "id": "progressive-corebox-index-search",
+      "title": "Progressive CoreBox Search During First Index",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-15-progressive-corebox-index-search/task.json"
+    },
+    {
+      "slug": "07-15-runtime-log-reliability-fixes",
+      "id": "runtime-log-reliability-fixes",
+      "title": "Fix runtime logs and reliability defects",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-15-runtime-log-reliability-fixes/task.json"
+    },
+    {
+      "slug": "07-15-runtime-log-signal-quality",
+      "id": "runtime-log-signal-quality",
+      "title": "Restore high-signal runtime logging",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-15-runtime-log-signal-quality/task.json"
+    },
+    {
+      "slug": "07-15-runtime-process-lifecycles",
+      "id": "runtime-process-lifecycles",
+      "title": "Fix runtime process lifecycles",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-15-runtime-process-lifecycles/task.json"
+    },
+    {
+      "slug": "07-15-storage-persistence-integrity",
+      "id": "storage-persistence-integrity",
+      "title": "Fix storage persistence integrity",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-15-storage-persistence-integrity/task.json"
+    },
+    {
+      "slug": "07-16-converge-trellis-task-doc-state",
+      "id": "converge-trellis-task-doc-state",
+      "title": "Converge Trellis task and documentation state",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-16-converge-trellis-task-doc-state/task.json"
+    },
+    {
+      "slug": "07-16-downloaded-release-acceptance-flow",
+      "id": "downloaded-release-acceptance-flow",
+      "title": "Establish downloaded release acceptance flow",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-16-downloaded-release-acceptance-flow/task.json"
+    },
+    {
+      "slug": "07-16-fix-nexus-sync-batch-ingest",
+      "id": "fix-nexus-sync-batch-ingest",
+      "title": "Fix Nexus sync batch ingest consistency",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-16-fix-nexus-sync-batch-ingest/task.json"
+    },
+    {
+      "slug": "07-16-fix-search-core-test-fixtures",
+      "id": "fix-search-core-test-fixtures",
+      "title": "Fix search core test fixtures",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-16-fix-search-core-test-fixtures/task.json"
+    },
+    {
+      "slug": "07-16-fix-usage-statistics-double-counting",
+      "id": "fix-usage-statistics-double-counting",
+      "title": "Fix usage statistics double counting",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-16-fix-usage-statistics-double-counting/task.json"
+    },
+    {
+      "slug": "07-16-release-blockers-and-automated-reports",
+      "id": "release-blockers-and-automated-reports",
+      "title": "修复发布阻断与自动报告",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-16-release-blockers-and-automated-reports/task.json"
+    },
+    {
+      "slug": "07-16-unify-file-filtering-service",
+      "id": "unify-file-filtering-service",
+      "title": "Unify file filtering service",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-16-unify-file-filtering-service/task.json"
+    },
+    {
+      "slug": "07-17-ai-cli-orchestrator",
+      "id": "ai-cli-orchestrator",
+      "title": "AI CLI 中央调度与 Skills 兼容",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-17-ai-cli-orchestrator/task.json"
+    },
+    {
+      "slug": "07-17-configuration-sqlite-sot",
+      "id": "configuration-sqlite-sot",
+      "title": "Configuration SQLite Source of Truth",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-17-configuration-sqlite-sot/task.json"
+    },
+    {
+      "slug": "07-17-corebox-window-transport-refactor",
+      "id": "corebox-window-transport-refactor",
+      "title": "Harden CoreBox transport and refactor WindowManager",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-17-corebox-window-transport-refactor/task.json"
+    },
+    {
+      "slug": "07-17-ota-ui-release-acceptance",
+      "id": "ota-ui-release-acceptance",
+      "title": "闭环 OTA UI 发布与验收",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-17-ota-ui-release-acceptance/task.json"
+    },
+    {
+      "slug": "07-17-persist-ota-lifecycle",
+      "id": "persist-ota-lifecycle",
+      "title": "持久化 OTA 生命周期状态机",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-17-persist-ota-lifecycle/task.json"
+    },
+    {
+      "slug": "07-17-transport-legacy-cutover-evidence",
+      "id": "transport-legacy-cutover-evidence",
+      "title": "Transport Legacy Cutover Evidence",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-17-transport-legacy-cutover-evidence/task.json"
+    },
+    {
+      "slug": "07-17-transport-messageport-lanes",
+      "id": "transport-messageport-lanes",
+      "title": "Transport MessagePort Lanes",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-17-transport-messageport-lanes/task.json"
+    },
+    {
+      "slug": "07-17-transport-typed-event-hard-cut",
+      "id": "transport-typed-event-hard-cut",
+      "title": "Transport Typed Event Hard Cut",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-17-transport-typed-event-hard-cut/task.json"
+    },
+    {
+      "slug": "07-17-transport-wave-a",
+      "id": "transport-wave-a",
+      "title": "Transport Wave A",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-17-transport-wave-a/task.json"
+    },
+    {
+      "slug": "07-17-unify-ota-install-recovery",
+      "id": "unify-ota-install-recovery",
+      "title": "统一 OTA 安装协调与恢复",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-17-unify-ota-install-recovery/task.json"
+    },
+    {
+      "slug": "07-17-unify-ota-provider-security",
+      "id": "unify-ota-provider-security",
+      "title": "统一 OTA Provider 与安全门禁",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-17-unify-ota-provider-security/task.json"
+    },
+    {
+      "slug": "07-17-widget-sandbox-completion",
+      "id": "widget-sandbox-completion",
+      "title": "Widget Sandbox Completion",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-17-widget-sandbox-completion/task.json"
+    },
+    {
+      "slug": "07-18-nexus-plugin-display-gate",
+      "id": "nexus-plugin-display-gate",
+      "title": "建立 Nexus 插件展示门禁",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-18-nexus-plugin-display-gate/task.json"
+    },
+    {
+      "slug": "07-18-plugin-cli-shim-retirement",
+      "id": "plugin-cli-shim-retirement",
+      "title": "完成 CLI shim 退场",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-18-plugin-cli-shim-retirement/task.json"
+    },
+    {
+      "slug": "07-18-plugin-package-policy",
+      "id": "plugin-package-policy",
+      "title": "落实插件 Package Policy",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-18-plugin-package-policy/task.json"
+    },
+    {
+      "slug": "07-18-plugin-release-evidence",
+      "id": "plugin-release-evidence",
+      "title": "产出插件发布证据",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-18-plugin-release-evidence/task.json"
+    },
+    {
+      "slug": "07-18-plugin-security-scan",
+      "id": "plugin-security-scan",
+      "title": "实施插件 Security Scan",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-18-plugin-security-scan/task.json"
+    },
+    {
+      "slug": "07-18-plugin-signing-trust-chain",
+      "id": "plugin-signing-trust-chain",
+      "title": "建立插件签名信任链",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-18-plugin-signing-trust-chain/task.json"
+    },
+    {
+      "slug": "07-18-plugin-source-package-audit",
+      "id": "plugin-source-package-audit",
+      "title": "构建测试审计插件源码包",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-18-plugin-source-package-audit/task.json"
+    },
+    {
+      "slug": "07-18-plugin-tuffex-supply-chain",
+      "id": "plugin-tuffex-supply-chain",
+      "title": "插件发布与 TuffEx 供应链",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-18-plugin-tuffex-supply-chain/task.json"
+    },
+    {
+      "slug": "07-18-real-tpex-upload-acceptance",
+      "id": "real-tpex-upload-acceptance",
+      "title": "验证真实 TPEX 上传",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-18-real-tpex-upload-acceptance/task.json"
+    },
+    {
+      "slug": "07-20-fix-search-messageport-delivery",
+      "id": "fix-search-messageport-delivery",
+      "title": "修复搜索流 MessagePort 交付",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-20-fix-search-messageport-delivery/task.json"
+    },
+    {
+      "slug": "07-20-unify-operational-error-reporting",
+      "id": "unify-operational-error-reporting",
+      "title": "统一系统错误上报与数据库诊断",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-20-unify-operational-error-reporting/task.json"
+    },
+    {
+      "slug": "07-21-07-20-align-published-release-gates",
+      "id": "07-20-align-published-release-gates",
+      "title": "对齐已发布版本 Release Gate 契约",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-21-07-20-align-published-release-gates/task.json"
+    },
+    {
+      "slug": "07-21-enable-macos-notarization",
+      "id": "enable-macos-notarization",
+      "title": "启用 macOS Developer ID 签名与自动公证",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-21-enable-macos-notarization/task.json"
+    },
+    {
+      "slug": "07-21-nexus-reverse-proxy-design-site",
+      "id": "nexus-reverse-proxy-design-site",
+      "title": "Build and deploy Nexus reverse proxy security design site",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-21-nexus-reverse-proxy-design-site/task.json"
+    },
+    {
+      "slug": "07-26-batch-commit-project-changes",
+      "id": "batch-commit-project-changes",
+      "title": "分批提交当前项目改动",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-26-batch-commit-project-changes/task.json"
+    },
+    {
+      "slug": "07-26-release-v2-4-13-beta-23",
+      "id": "release-v2-4-13-beta-23",
+      "title": "发布 v2.4.13-beta.23",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-26-release-v2-4-13-beta-23/task.json"
+    },
+    {
+      "slug": "07-26-release-v2-4-13-stable",
+      "id": "release-v2-4-13-stable",
+      "title": "发布 v2.4.13 稳定版",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-26-release-v2-4-13-stable/task.json"
+    },
+    {
+      "slug": "07-27-audit-plugin-privileged-security",
+      "id": "audit-plugin-privileged-security",
+      "title": "审计插件高权限能力与隐私安全",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-audit-plugin-privileged-security/task.json"
+    },
+    {
+      "slug": "07-27-batch-commit-current-worktree",
+      "id": "batch-commit-current-worktree",
+      "title": "分批提交当前工作区改动",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-batch-commit-current-worktree/task.json"
+    },
+    {
+      "slug": "07-27-batch-commit-release-v2-4-14-beta-1",
+      "id": "batch-commit-release-v2-4-14-beta-1",
+      "title": "分批提交并发布 v2.4.14-beta.1",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-batch-commit-release-v2-4-14-beta-1/task.json"
+    },
+    {
+      "slug": "07-27-close-superseded-legacy-issues",
+      "id": "close-superseded-legacy-issues",
+      "title": "收口历史需求 #43 #46 #54",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-close-superseded-legacy-issues/task.json"
+    },
+    {
+      "slug": "07-27-converge-project-documentation-gates",
+      "id": "converge-project-documentation-gates",
+      "title": "Converge project documentation and gates",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-converge-project-documentation-gates/task.json"
+    },
+    {
+      "slug": "07-27-diagnose-ubuntu-startup-213",
+      "id": "diagnose-ubuntu-startup-213",
+      "title": "诊断 Ubuntu 启动失败 #213",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-diagnose-ubuntu-startup-213/task.json"
+    },
+    {
+      "slug": "07-27-docs-sot-convergence",
+      "id": "docs-sot-convergence",
+      "title": "Converge documentation source of truth",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-docs-sot-convergence/task.json"
+    },
+    {
+      "slug": "07-27-documentation-quality-gates",
+      "id": "documentation-quality-gates",
+      "title": "Add documentation quality gates",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-documentation-quality-gates/task.json"
+    },
+    {
+      "slug": "07-27-fix-permission-revocation-296",
+      "id": "fix-permission-revocation-296",
+      "title": "修复权限撤销会话失效 #296",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-fix-permission-revocation-296/task.json"
+    },
+    {
+      "slug": "07-27-fix-transport-caller-identity-300",
+      "id": "fix-transport-caller-identity-300",
+      "title": "修正 Transport 调用身份 #300",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-fix-transport-caller-identity-300/task.json"
+    },
+    {
+      "slug": "07-27-harden-docs-content-cache",
+      "id": "harden-docs-content-cache",
+      "title": "Harden nexus docs content cache policy",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-harden-docs-content-cache/task.json"
+    },
+    {
+      "slug": "07-27-harden-plugin-storage-299",
+      "id": "harden-plugin-storage-299",
+      "title": "加固插件 SQLite 与 Secret #299",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-harden-plugin-storage-299/task.json"
+    },
+    {
+      "slug": "07-27-isolate-plugin-prelude-297",
+      "id": "isolate-plugin-prelude-297",
+      "title": "完成插件 Prelude 进程隔离 #297",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-isolate-plugin-prelude-297/task.json"
+    },
+    {
+      "slug": "07-27-peripheral-docs-cleanup",
+      "id": "peripheral-docs-cleanup",
+      "title": "Repair peripheral product documentation",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-peripheral-docs-cleanup/task.json"
+    },
+    {
+      "slug": "07-27-release-v2-4-14-beta-1",
+      "id": "release-v2-4-14-beta-1",
+      "title": "发布 v2.4.14-beta.1",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-release-v2-4-14-beta-1/task.json"
+    },
+    {
+      "slug": "07-27-resolve-open-github-issues",
+      "id": "resolve-open-github-issues",
+      "title": "收口全部开放 GitHub Issues",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-resolve-open-github-issues/task.json"
+    },
+    {
+      "slug": "07-27-roadmap-release-docs",
+      "id": "roadmap-release-docs",
+      "title": "Refresh roadmap and release documentation",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-roadmap-release-docs/task.json"
+    },
+    {
+      "slug": "07-27-secure-plugin-views-298",
+      "id": "secure-plugin-views-298",
+      "title": "启用插件视图安全默认值 #298",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-secure-plugin-views-298/task.json"
+    },
+    {
+      "slug": "07-27-sensitive-data-lifecycle-301",
+      "id": "sensitive-data-lifecycle-301",
+      "title": "实现敏感数据生命周期控制 #301",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-sensitive-data-lifecycle-301/task.json"
+    },
+    {
+      "slug": "07-27-verify-close-issue-295",
+      "id": "verify-close-issue-295",
+      "title": "验证并收口 SQLite 写竞争 #295",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-27-verify-close-issue-295/task.json"
+    },
+    {
+      "slug": "07-28-debug-corebox-end-to-end",
+      "id": "debug-corebox-end-to-end",
+      "title": "Debug CoreBox end to end",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-28-debug-corebox-end-to-end/task.json"
+    },
+    {
+      "slug": "07-28-debug-corebox-nexus",
+      "id": "debug-corebox-nexus",
+      "title": "Detailed CoreBox and Nexus debugging",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-28-debug-corebox-nexus/task.json"
+    },
+    {
+      "slug": "07-28-debug-nexus-end-to-end",
+      "id": "debug-nexus-end-to-end",
+      "title": "Debug Nexus end to end",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-28-debug-nexus-end-to-end/task.json"
+    },
+    {
+      "slug": "07-28-fix-documentation-gate-baseline",
+      "id": "fix-documentation-gate-baseline",
+      "title": "Fix documentation gate baseline",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-28-fix-documentation-gate-baseline/task.json"
+    },
+    {
+      "slug": "07-28-publish-corebox-nexus-issues",
+      "id": "publish-corebox-nexus-issues",
+      "title": "Validate and publish debug issues",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-28-publish-corebox-nexus-issues/task.json"
+    },
+    {
+      "slug": "07-28-rust-native-communication-protocol",
+      "id": "rust-native-communication-protocol",
+      "title": "Build Rust native communication protocol",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-28-rust-native-communication-protocol/task.json"
+    },
+    {
+      "slug": "07-28-tuffex-docs-audit",
+      "id": "tuffex-docs-audit",
+      "title": "tuffex 组件文档与源码一致性审计",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-28-tuffex-docs-audit/task.json"
+    },
+    {
+      "slug": "07-29-screenshot-tool-workflow",
+      "id": "screenshot-tool-workflow",
+      "title": "Build screenshot tool workflow",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-29-screenshot-tool-workflow/task.json"
+    },
+    {
+      "slug": "07-30-fix-file-index-update-redaction-476",
+      "id": "fix-file-index-update-redaction-476",
+      "title": "修复文件索引更新与错误脱敏 #476",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-30-fix-file-index-update-redaction-476/task.json"
+    },
+    {
+      "slug": "07-30-fix-preview-secrets-475",
+      "id": "fix-preview-secrets-475",
+      "title": "修复 Preview Secret 配置 #475",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-30-fix-preview-secrets-475/task.json"
+    },
+    {
+      "slug": "07-31-optimize-settings-section-spacing",
+      "id": "optimize-settings-section-spacing",
+      "title": "统一设置页区块间距",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-31-optimize-settings-section-spacing/task.json"
+    },
+    {
+      "slug": "07-31-remove-version-history",
+      "id": "remove-version-history",
+      "title": "删除版本历史功能",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-31-remove-version-history/task.json"
+    },
+    {
+      "slug": "07-31-sync-merge-cleanup",
+      "id": "sync-merge-cleanup",
+      "title": "同步分支并整理代码",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-31-sync-merge-cleanup/task.json"
+    },
+    {
+      "slug": "07-27-base-anchor-liquid-animation",
+      "id": "base-anchor-liquid-animation",
+      "title": "BaseAnchor liquid drop animation",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/07-27-base-anchor-liquid-animation/task.json"
+    },
+    {
+      "slug": "07-27-optimize-clipboard-plugin",
+      "id": "optimize-clipboard-plugin",
+      "title": "优化 Clipboard 插件",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/07-27-optimize-clipboard-plugin/task.json"
+    },
+    {
+      "slug": "08-01-fix-coreapp-shortcut-scope",
+      "id": "fix-coreapp-shortcut-scope",
+      "title": "修正 CoreApp 快捷键作用域",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-01-fix-coreapp-shortcut-scope/task.json"
+    },
+    {
+      "slug": "08-01-fix-nexus-docs-runtime-credentials",
+      "id": "fix-nexus-docs-runtime-credentials",
+      "title": "修复 Nexus 文档运行时凭据失配",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-01-fix-nexus-docs-runtime-credentials/task.json"
+    },
+    {
+      "slug": "08-02-add-resize-box-nexus-docs",
+      "id": "add-resize-box-nexus-docs",
+      "title": "补齐 TxResizeBox Nexus 文档",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-02-add-resize-box-nexus-docs/task.json"
+    },
+    {
+      "slug": "08-02-publish-next-github-release",
+      "id": "publish-next-github-release",
+      "title": "发布 v2.4.14-beta.2 GitHub Release",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-02-publish-next-github-release/task.json"
+    },
+    {
+      "slug": "08-02-push-coreapp-shortcut-scope",
+      "id": "push-coreapp-shortcut-scope",
+      "title": "推送 CoreApp 快捷键作用域修复",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-02-push-coreapp-shortcut-scope/task.json"
+    },
+    {
+      "slug": "08-03-08-03-repair-packaged-runtime-report",
+      "id": "08-03-repair-packaged-runtime-report",
+      "title": "Repair packaged runtime closure and publish optimization report",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-03-08-03-repair-packaged-runtime-report/task.json"
+    },
+    {
+      "slug": "08-03-optimize-corebox-runtime-lifecycle",
+      "id": "optimize-corebox-runtime-lifecycle",
+      "title": "Optimize CoreBox runtime lifecycle",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-03-optimize-corebox-runtime-lifecycle/task.json"
+    },
+    {
+      "slug": "08-04-db-single-writer-root-fix",
+      "id": "db-single-writer-root-fix",
+      "title": "Database single-writer root fix: land search split, de-amplify write queue",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-04-db-single-writer-root-fix/task.json"
+    },
+    {
+      "slug": "08-04-local-ai-cli-quick-invoke",
+      "id": "local-ai-cli-quick-invoke",
+      "title": "本机 AI CLI 快速调用",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-04-local-ai-cli-quick-invoke/task.json"
+    },
+    {
+      "slug": "08-04-settings-ia-restructure",
+      "id": "settings-ia-restructure",
+      "title": "设置页 IA 重构：拆页与选项收敛",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-04-settings-ia-restructure/task.json"
+    },
+    {
+      "slug": "08-05-attachments-to-model",
+      "id": "attachments-to-model",
+      "title": "附件随发送进入模型（pi @files 通道）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-05-attachments-to-model/task.json"
+    },
+    {
+      "slug": "08-05-home-tool-loop",
+      "id": "home-tool-loop",
+      "title": "首页工具调用链路与交互式 UI 工具",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-05-home-tool-loop/task.json"
+    },
+    {
+      "slug": "08-05-keyword-charset-unification",
+      "id": "keyword-charset-unification",
+      "title": "Keyword charset unification",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-05-keyword-charset-unification/task.json"
+    },
+    {
+      "slug": "08-05-skills-mcp-config",
+      "id": "skills-mcp-config",
+      "title": "skills 与 MCP 后台配置及自动选择导入",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-05-skills-mcp-config/task.json"
+    },
+    {
+      "slug": "08-06-chain-visibility",
+      "id": "chain-visibility",
+      "title": "Chain-of-thought completion visibility",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-06-chain-visibility/task.json"
+    },
+    {
+      "slug": "08-06-devlog-followups",
+      "id": "devlog-followups",
+      "title": "Dev-log follow-ups: conversation PK, shortcut channel, shrink log",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-06-devlog-followups/task.json"
+    },
+    {
+      "slug": "08-06-intelligence-boundary-drift",
+      "id": "intelligence-boundary-drift",
+      "title": "智能边界测试既有失败（actor-boundary 行为漂移）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-06-intelligence-boundary-drift/task.json"
+    },
+    {
+      "slug": "08-06-pi-context-adaptation",
+      "id": "pi-context-adaptation",
+      "title": "pi context adaptation: date, compaction, history budget",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-06-pi-context-adaptation/task.json"
+    },
+    {
+      "slug": "08-06-reco-item-freshness",
+      "id": "reco-item-freshness",
+      "title": "Item freshness recommendations",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-06-reco-item-freshness/task.json"
+    },
+    {
+      "slug": "08-06-semantic-catalog-i18n-aliases",
+      "id": "semantic-catalog-i18n-aliases",
+      "title": "Semantic alias catalog: locale structure + plural expansion",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-06-semantic-catalog-i18n-aliases/task.json"
+    },
+    {
+      "slug": "08-06-send-motion-polish",
+      "id": "send-motion-polish",
+      "title": "Send motion polish (iMessage-grade)",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-06-send-motion-polish/task.json"
+    },
+    {
+      "slug": "08-06-settings-v25-closeout",
+      "id": "settings-v25-closeout",
+      "title": "设置 v2.5 收口:外观对齐画板 + TuffGroupBlock 统一 + 智能并入设置",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-06-settings-v25-closeout/task.json"
+    },
+    {
+      "slug": "08-06-stream-virtual-layout",
+      "id": "stream-virtual-layout",
+      "title": "Conversation stream virtual layout fixes",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-06-stream-virtual-layout/task.json"
+    },
+    {
+      "slug": "08-15-beautiful-ui-port",
+      "id": "beautiful-ui-port",
+      "title": "Port Beautiful UI (beautifului.dev) AI primitives into tuffex + nexus docs",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-15-beautiful-ui-port/task.json"
+    },
+    {
+      "slug": "08-15-clipboard-history-local-verify",
+      "id": "clipboard-history-local-verify",
+      "title": "clipboard-history 本地跑通",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-15-clipboard-history-local-verify/task.json"
+    },
+    {
+      "slug": "08-15-json-formatter-onboarding",
+      "id": "json-formatter-onboarding",
+      "title": "json-formatter 引入与 SDK 适配",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-15-json-formatter-onboarding/task.json"
+    },
+    {
+      "slug": "08-15-local-nexus-publish-path",
+      "id": "local-nexus-publish-path",
+      "title": "本地 Nexus 上架链路打通",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-15-local-nexus-publish-path/task.json"
+    },
+    {
+      "slug": "08-15-local-store-three-plugins",
+      "id": "local-store-three-plugins",
+      "title": "三插件本地市场端到端打通",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-15-local-store-three-plugins/task.json"
+    },
+    {
+      "slug": "08-15-touch-translation-local-verify",
+      "id": "touch-translation-local-verify",
+      "title": "touch-translation 本地跑通",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-15-touch-translation-local-verify/task.json"
+    },
+    {
+      "slug": "08-16-main-process-timeout-hardening",
+      "id": "main-process-timeout-hardening",
+      "title": "主进程轮询与外部调用超时兜底优化",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-16-main-process-timeout-hardening/task.json"
+    },
+    {
+      "slug": "08-23-plugin-install-security-hardening",
+      "id": "plugin-install-security-hardening",
+      "title": "插件安装安全与测试可信度收口",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-23-plugin-install-security-hardening/task.json"
+    },
+    {
+      "slug": "08-30-avatar-status-group-hover",
+      "id": "avatar-status-group-hover",
+      "title": "TxAvatar 状态点裁切修复与头像组悬浮/溢出 popover",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-avatar-status-group-hover/task.json"
+    },
+    {
+      "slug": "08-30-backlog-fixes-batch",
+      "id": "backlog-fixes-batch",
+      "title": "侧边栏与积压缺陷批量修复",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-backlog-fixes-batch/task.json"
+    },
+    {
+      "slug": "08-30-docs-suite-split",
+      "id": "docs-suite-split",
+      "title": "Nexus 开发者文档三套件重构与 tuffex 分包",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-docs-suite-split/task.json"
+    },
+    {
+      "slug": "08-30-master-integration",
+      "id": "master-integration",
+      "title": "master 最终集成收口",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-master-integration/task.json"
+    },
+    {
+      "slug": "08-30-nexus-docs-skeleton",
+      "id": "nexus-docs-skeleton",
+      "title": "Nexus docs page: skeleton loading state",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-nexus-docs-skeleton/task.json"
+    },
+    {
+      "slug": "08-30-nexus-sidebar-component-families",
+      "id": "nexus-sidebar-component-families",
+      "title": "Nexus sidebar: aggregate component family docs into expandable entries",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-nexus-sidebar-component-families/task.json"
+    },
+    {
+      "slug": "08-30-nexus-suite-overviews",
+      "id": "nexus-suite-overviews",
+      "title": "nexus 五套件文档结构：Data 拆分、per-tab overview、Concepts 三组别",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-nexus-suite-overviews/task.json"
+    },
+    {
+      "slug": "08-30-sidebar-navitem-minimal",
+      "id": "sidebar-navitem-minimal",
+      "title": "文档侧边栏 nav item 极简风格改造",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-sidebar-navitem-minimal/task.json"
+    },
+    {
+      "slug": "08-30-sidebar-suite-tabs",
+      "id": "sidebar-suite-tabs",
+      "title": "文档侧边栏下划线 tab 与二级套件切换",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-sidebar-suite-tabs/task.json"
+    },
+    {
+      "slug": "08-30-suite-taxonomy",
+      "id": "suite-taxonomy",
+      "title": "组件文档三套件重分类",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-suite-taxonomy/task.json"
+    },
+    {
+      "slug": "08-30-tuffex-button-icon-consolidation",
+      "id": "tuffex-button-icon-consolidation",
+      "title": "tuffex button/icon 收拢：7 个 Basic 条目合并为 button + icon",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-tuffex-button-icon-consolidation/task.json"
+    },
+    {
+      "slug": "08-30-tuffex-charts-docs",
+      "id": "tuffex-charts-docs",
+      "title": "tuffex-charts nexus 文档与 demo",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-tuffex-charts-docs/task.json"
+    },
+    {
+      "slug": "08-30-tuffex-charts-foundation",
+      "id": "tuffex-charts-foundation",
+      "title": "tuffex-charts 基座与色彩系统",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-tuffex-charts-foundation/task.json"
+    },
+    {
+      "slug": "08-30-tuffex-charts-maps",
+      "id": "tuffex-charts-maps",
+      "title": "tuffex-charts Maps 地图",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-tuffex-charts-maps/task.json"
+    },
+    {
+      "slug": "08-30-tuffex-charts-primitives",
+      "id": "tuffex-charts-primitives",
+      "title": "tuffex-charts 可组合图表原语（Custom Chart 基础）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-tuffex-charts-primitives/task.json"
+    },
+    {
+      "slug": "08-30-tuffex-charts-sankey",
+      "id": "tuffex-charts-sankey",
+      "title": "tuffex-charts Sankey 桑基图",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-tuffex-charts-sankey/task.json"
+    },
+    {
+      "slug": "08-30-tuffex-charts-timeseries",
+      "id": "tuffex-charts-timeseries",
+      "title": "tuffex-charts Timeseries 时序图",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-tuffex-charts-timeseries/task.json"
+    },
+    {
+      "slug": "08-30-tuffex-charts",
+      "id": "tuffex-charts",
+      "title": "tuffex-charts 图表包（对标 kumo Charts 家族，无 echarts）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-tuffex-charts/task.json"
+    },
+    {
+      "slug": "08-30-tuffex-suite-entries",
+      "id": "tuffex-suite-entries",
+      "title": "tuffex base/pro/ai 三入口",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-08/08-30-tuffex-suite-entries/task.json"
+    },
+    {
+      "slug": "07-13-catalog-service-mvp",
+      "id": "catalog-service-mvp",
+      "title": "Implement CatalogService MVP",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/07-13-catalog-service-mvp/task.json"
+    },
+    {
+      "slug": "08-27-nexus-docs-body-ssg",
+      "id": "nexus-docs-body-ssg",
+      "title": "Nexus docs true SSG: prerender doc body into HTML",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/08-27-nexus-docs-body-ssg/task.json"
+    },
+    {
+      "slug": "08-31-anchor-follow-transition",
+      "id": "anchor-follow-transition",
+      "title": "anchor 浮层滚动跟手：动画结束后清 transition",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/08-31-anchor-follow-transition/task.json"
+    },
+    {
+      "slug": "08-31-interactive-cursor-sweep",
+      "id": "interactive-cursor-sweep",
+      "title": "全量补齐可交互组件的 cursor",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/08-31-interactive-cursor-sweep/task.json"
+    },
+    {
+      "slug": "08-31-slider-surface-size",
+      "id": "slider-surface-size",
+      "title": "slider 拖杆改为直接改尺寸（去 scale 缩放）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/08-31-slider-surface-size/task.json"
+    },
+    {
+      "slug": "08-31-tuffex-interaction-polish",
+      "id": "tuffex-interaction-polish",
+      "title": "tuffex 交互细节三修：slider 拖杆尺寸 / 全量 cursor / tooltip 跟手",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/08-31-tuffex-interaction-polish/task.json"
+    },
+    {
+      "slug": "09-01-classic-utility-ai-plugin-suite",
+      "id": "classic-utility-ai-plugin-suite",
+      "title": "扩展经典效率与 AI 插件套件",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-01-classic-utility-ai-plugin-suite/task.json"
+    },
+    {
+      "slug": "09-01-progress-bar-redesign",
+      "id": "progress-bar-redesign",
+      "title": "progress-bar 重设计：去描边轨道 / 渐变填充 / 合成通道扫光",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-01-progress-bar-redesign/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/09-01-progress-bar-redesign/README.md"
+    },
+    {
+      "slug": "09-01-slider-pill-thumb",
+      "id": "slider-pill-thumb",
+      "title": "slider 拖钮改为 Radio 指示条式胶囊，按下回弹收敛",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-01-slider-pill-thumb/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/09-01-slider-pill-thumb/README.md"
+    },
+    {
+      "slug": "09-01-status-badge-dark-tone",
+      "id": "status-badge-dark-tone",
+      "title": "status-badge 暗色语义 token 与图标家族统一",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-01-status-badge-dark-tone/task.json"
+    },
+    {
+      "slug": "09-01-tuffex-gallery-visual-polish",
+      "id": "tuffex-gallery-visual-polish",
+      "title": "tuffex 画廊视觉三修：slider 胶囊拖钮 / progress 重设计 / status-badge 暗色",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-01-tuffex-gallery-visual-polish/task.json"
+    },
+    {
+      "slug": "09-04-dev-update-check-noop",
+      "id": "dev-update-check-noop",
+      "title": "dev 下检查更新按钮静默失效",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-04-dev-update-check-noop/task.json"
+    },
+    {
+      "slug": "09-04-dev-update-download-root-mismatch",
+      "id": "dev-update-download-root-mismatch",
+      "title": "dev 下更新下载被 destination-outside-roots 拒绝",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-04-dev-update-download-root-mismatch/task.json"
+    },
+    {
+      "slug": "09-04-dev-update-flow-untestable",
+      "id": "dev-update-flow-untestable",
+      "title": "修复 dev 模式下更新链路无法验证",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-04-dev-update-flow-untestable/task.json"
+    },
+    {
+      "slug": "09-04-ota-fallback-net-error-classification",
+      "id": "ota-fallback-net-error-classification",
+      "title": "修复 OTA 更新源传输层错误分类导致 GitHub 回退失效",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-04-ota-fallback-net-error-classification/task.json"
+    },
+    {
+      "slug": "09-06-atoll-voice-presentation",
+      "id": "atoll-voice-presentation",
+      "title": "Plan optional Atoll voice presentation",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-06-atoll-voice-presentation/task.json"
+    },
+    {
+      "slug": "09-06-clipboard-classification-and-retention",
+      "id": "clipboard-classification-and-retention",
+      "title": "剪贴板内容分类统一与按类保留策略",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-06-clipboard-classification-and-retention/task.json"
+    },
+    {
+      "slug": "09-06-clipboard-secret-mask-and-interactions",
+      "id": "clipboard-secret-mask-and-interactions",
+      "title": "剪贴板历史：密钥掩码一致性与交互修复",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-06-clipboard-secret-mask-and-interactions/task.json"
+    },
+    {
+      "slug": "09-06-home-model-menu-channels",
+      "id": "home-model-menu-channels",
+      "title": "模型菜单渠道分层：混排 tabs、分组头与行的 item 机制统一",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-06-home-model-menu-channels/task.json"
+    },
+    {
+      "slug": "09-06-home-model-menu-v2",
+      "id": "home-model-menu-v2",
+      "title": "Rebuild the home model menu with provider tabs, search, favorites and hotkeys",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-06-home-model-menu-v2/task.json"
+    },
+    {
+      "slug": "09-06-model-menu-filter-chips",
+      "id": "model-menu-filter-chips",
+      "title": "模型菜单筛选条改用 TxFilterChips：provider 级 chip、滑动指示器与固定单行",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-06-model-menu-filter-chips/task.json"
+    },
+    {
+      "slug": "09-06-tuffex-anchor-max-height",
+      "id": "tuffex-anchor-max-height",
+      "title": "Fix tuffex anchored panel max-height wiped by style binding",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-06-tuffex-anchor-max-height/task.json"
+    },
+    {
+      "slug": "09-07-clipboard-palette-hover",
+      "id": "clipboard-palette-hover",
+      "title": "剪贴板图片主题色带悬浮交互",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-07-clipboard-palette-hover/task.json"
+    },
+    {
+      "slug": "09-08-clipboard-ssh-host-endpoint",
+      "id": "clipboard-ssh-host-endpoint",
+      "title": "剪贴板识别 SSH 与主机端点",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-08-clipboard-ssh-host-endpoint/task.json"
+    },
+    {
+      "slug": "09-09-voice-dictation-polish-mode",
+      "id": "voice-dictation-polish-mode",
+      "title": "Voice dictation polish mode",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-09-voice-dictation-polish-mode/task.json"
+    },
+    {
+      "slug": "09-10-corebox-search-latency",
+      "id": "corebox-search-latency",
+      "title": "Repair CoreBox search startup and main-thread latency",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-10-corebox-search-latency/task.json"
+    },
+    {
+      "slug": "09-12-hapigo-capability-backlog",
+      "id": "hapigo-capability-backlog",
+      "title": "HapiGo capability parity backlog",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-12-hapigo-capability-backlog/task.json"
+    },
+    {
+      "slug": "09-12-unified-app-destinations",
+      "id": "unified-app-destinations",
+      "title": "Unified Tuff destinations and common settings",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-12-unified-app-destinations/task.json"
+    },
+    {
+      "slug": "09-13-external-native-session-adoption",
+      "id": "external-native-session-adoption",
+      "title": "Discover and adopt external native sessions",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-13-external-native-session-adoption/task.json"
+    },
+    {
+      "slug": "09-13-folder-project-native-sessions",
+      "id": "folder-project-native-sessions",
+      "title": "Folder projects and native CLI sessions",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-13-folder-project-native-sessions/task.json"
+    },
+    {
+      "slug": "09-13-nexus-lexi-translation-pricing",
+      "id": "nexus-lexi-translation-pricing",
+      "title": "Nexus translation pricing for Lexi",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-13-nexus-lexi-translation-pricing/task.json"
+    },
+    {
+      "slug": "09-13-pi-desktop-migration-audit",
+      "id": "pi-desktop-migration-audit",
+      "title": "Audit remaining PI Desktop migration candidates",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-13-pi-desktop-migration-audit/task.json"
+    },
+    {
+      "slug": "09-13-pi-desktop-session-convergence",
+      "id": "pi-desktop-session-convergence",
+      "title": "PI Desktop session convergence and migration audit",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-13-pi-desktop-session-convergence/task.json"
+    },
+    {
+      "slug": "09-13-pi-native-session-authority",
+      "id": "pi-native-session-authority",
+      "title": "Cut Pi runtime to native session authority",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-13-pi-native-session-authority/task.json"
+    },
+    {
+      "slug": "09-21-app-freshness-hardening",
+      "id": "app-freshness-hardening",
+      "title": "应用索引新鲜度加固（稳定探针/not-app 重试/事件重排/mdls 宽限/补全开关）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-21-app-freshness-hardening/task.json"
+    },
+    {
+      "slug": "09-21-bui-parity-and-interaction",
+      "id": "bui-parity-and-interaction",
+      "title": "BUI 对齐与交互体验升级",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-21-bui-parity-and-interaction/task.json"
+    },
+    {
+      "slug": "09-21-bui-parity-audit",
+      "id": "bui-parity-audit",
+      "title": "BUI 21 组件全量对齐审计与修复",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-21-bui-parity-audit/task.json"
+    },
+    {
+      "slug": "09-21-card-toast-panel",
+      "id": "card-toast-panel",
+      "title": "卡片交互动效升级与 TxToastPanel",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-21-card-toast-panel/task.json"
+    },
+    {
+      "slug": "09-21-corebox-search-freshness",
+      "id": "corebox-search-freshness",
+      "title": "CoreBox 搜索体验与索引新鲜度修复（父任务）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-21-corebox-search-freshness/task.json"
+    },
+    {
+      "slug": "09-21-file-index-rebuild-deadlock",
+      "id": "file-index-rebuild-deadlock",
+      "title": "修复手动重建文件索引自锁",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-21-file-index-rebuild-deadlock/task.json"
+    },
+    {
+      "slug": "09-21-flowchart-flow-suite",
+      "id": "flowchart-flow-suite",
+      "title": "TxFlowchart 与 flow 文档套件",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-21-flowchart-flow-suite/task.json"
+    },
+    {
+      "slug": "09-21-index-commit-stream-liveness",
+      "id": "index-commit-stream-liveness",
+      "title": "修复长寿命 CoreBox 的 index-committed 流变聋",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-21-index-commit-stream-liveness/task.json"
+    },
+    {
+      "slug": "09-21-search-hotpath-hygiene",
+      "id": "search-hotpath-hygiene",
+      "title": "搜索热路径卫生（abort 复查/base 富化/fast 并发/mtime 秒级比较）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-21-search-hotpath-hygiene/task.json"
+    },
+    {
+      "slug": "09-21-spotlight-deferred-height-hysteresis",
+      "id": "spotlight-deferred-height-hysteresis",
+      "title": "Spotlight 改 deferred 层 + 窗口高度滞回 + stagger 上限",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-21-spotlight-deferred-height-hysteresis/task.json"
+    },
+    {
+      "slug": "09-21-status-mono-redesign",
+      "id": "status-mono-redesign",
+      "title": "Status 族 mono 标签重设计",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-21-status-mono-redesign/task.json"
+    },
+    {
+      "slug": "09-21-tuff-sound-system",
+      "id": "tuff-sound-system",
+      "title": "Web Audio 交互音效系统",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-21-tuff-sound-system/task.json"
+    },
+    {
+      "slug": "09-23-composer-motion-reference",
+      "id": "composer-motion-reference",
+      "title": "Composer 动效：托盘换位 / 墨色悬停 / 芯片模糊变身",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-23-composer-motion-reference/task.json"
+    },
+    {
+      "slug": "09-23-nexus-docs-static-delivery-closeout",
+      "id": "nexus-docs-static-delivery-closeout",
+      "title": "Nexus docs 静态交付收尾：边缘缓存、404.html、/docs 静态重定向",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-23-nexus-docs-static-delivery-closeout/task.json"
+    },
+    {
+      "slug": "09-25-corebox-keyboard-jump",
+      "id": "corebox-keyboard-jump",
+      "title": "CoreBox 下键选中跳到最后一个文件",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-25-corebox-keyboard-jump/task.json"
+    },
+    {
+      "slug": "09-25-corebox-list-motion",
+      "id": "corebox-list-motion",
+      "title": "CoreBox 列表与 item 加载过渡动效优化",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-25-corebox-list-motion/task.json"
+    },
+    {
+      "slug": "09-25-corebox-search-pulse-beam",
+      "id": "corebox-search-pulse-beam",
+      "title": "CoreBox 搜索中状态：整条 bar 背景左→右脉冲 + 底边 beam morph",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-25-corebox-search-pulse-beam/task.json"
+    },
+    {
+      "slug": "09-25-corebox-ux-polish",
+      "id": "corebox-ux-polish",
+      "title": "CoreBox 交互与动效打磨",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-25-corebox-ux-polish/task.json"
+    },
+    {
+      "slug": "09-25-home-assistant-push",
+      "id": "home-assistant-push",
+      "title": "主页个人助理：默认推送与开场引导",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-25-home-assistant-push/task.json"
+    },
+    {
+      "slug": "09-25-home-project-badge-dedupe",
+      "id": "home-project-badge-dedupe",
+      "title": "移除空态问候下重复的项目徽标",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-25-home-project-badge-dedupe/task.json"
+    },
+    {
+      "slug": "09-25-home-session-polish",
+      "id": "home-session-polish",
+      "title": "主页会话体验打磨：项目徽标 / 侧边栏 / 融合组件 / 发送分裂动画",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-25-home-session-polish/task.json"
+    },
+    {
+      "slug": "09-25-send-split-fusion",
+      "id": "send-split-fusion",
+      "title": "发送动画：新消息从输入框融合分裂",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-25-send-split-fusion/task.json"
+    },
+    {
+      "slug": "09-25-sidebar-project-folders",
+      "id": "sidebar-project-folders",
+      "title": "侧边栏项目文件夹化与选中态修正",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-25-sidebar-project-folders/task.json"
+    },
+    {
+      "slug": "09-25-tuffex-choice-card",
+      "id": "tuffex-choice-card",
+      "title": "tuffex 选项卡片组件（图标 + 标题 + 说明，可分步翻页）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-25-tuffex-choice-card/task.json"
+    },
+    {
+      "slug": "09-25-tuffex-fusion-surface",
+      "id": "tuffex-fusion-surface",
+      "title": "tuffex 路径型融合表面组件（长出 / 分裂）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-25-tuffex-fusion-surface/task.json"
+    },
+    {
+      "slug": "09-25-tuffex-prism-glow",
+      "id": "tuffex-prism-glow",
+      "title": "tuffex TxPrismGlow 棱镜光效组件",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-25-tuffex-prism-glow/task.json"
+    },
+    {
+      "slug": "09-26-app-search-in-memory-match",
+      "id": "app-search-in-memory-match",
+      "title": "应用搜索脱离共享读路径 内存匹配",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-app-search-in-memory-match/task.json"
+    },
+    {
+      "slug": "09-26-capability-prompt-corruption",
+      "id": "capability-prompt-corruption",
+      "title": "对话能力提示词被写成能力 ID（聊天变翻译）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-capability-prompt-corruption/task.json"
+    },
+    {
+      "slug": "09-26-composer-controls-redesign",
+      "id": "composer-controls-redesign",
+      "title": "输入框工具栏重做与发送按钮动效（灵动岛式）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-composer-controls-redesign/task.json"
+    },
+    {
+      "slug": "09-26-composer-paste-anywhere",
+      "id": "composer-paste-anywhere",
+      "title": "主页输入框：焦点不在输入框时也能粘贴图片",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-composer-paste-anywhere/task.json"
+    },
+    {
+      "slug": "09-26-corebox-default-shortcut",
+      "id": "corebox-default-shortcut",
+      "title": "CoreBox 默认快捷键改为 Option+Space",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-corebox-default-shortcut/task.json"
+    },
+    {
+      "slug": "09-26-corebox-meta-overlay",
+      "id": "corebox-meta-overlay",
+      "title": "CoreBox 操作面板（meta overlay）居中、背景模糊与展示形式重构",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-corebox-meta-overlay/task.json"
+    },
+    {
+      "slug": "09-26-corebox-pulse-semantics",
+      "id": "corebox-pulse-semantics",
+      "title": "CoreBox 搜索脉冲语义修正",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-corebox-pulse-semantics/task.json"
+    },
+    {
+      "slug": "09-26-corebox-refresh-churn",
+      "id": "corebox-refresh-churn",
+      "title": "CoreBox 结果反复刷新（索引提交刷新风暴）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-corebox-refresh-churn/task.json"
+    },
+    {
+      "slug": "09-26-docs-selfclosing-component-fix",
+      "id": "docs-selfclosing-component-fix",
+      "title": "文档站：自闭合 TuffDocSourceLink 吞掉后续章节",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-docs-selfclosing-component-fix/task.json"
+    },
+    {
+      "slug": "09-26-file-index-bloat-control",
+      "id": "file-index-bloat-control",
+      "title": "文件索引减负 排除缓存目录 断点续扫 图标遗留清理",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-file-index-bloat-control/task.json"
+    },
+    {
+      "slug": "09-26-home-opening-opt-in",
+      "id": "home-opening-opt-in",
+      "title": "Home 开场白默认关闭，设置里可开",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-home-opening-opt-in/task.json"
+    },
+    {
+      "slug": "09-26-reasoning-effort",
+      "id": "reasoning-effort",
+      "title": "推理强度真实接入（自动/低/中/高/极高，含 Nexus 服务端）",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-reasoning-effort/task.json"
+    },
+    {
+      "slug": "09-26-search-read-fast-lane",
+      "id": "search-read-fast-lane",
+      "title": "快层 provider 独立读车道",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-search-read-fast-lane/task.json"
+    },
+    {
+      "slug": "09-26-sidebar-actions-polish",
+      "id": "sidebar-actions-polish",
+      "title": "侧边栏操作清晰化：删除二次确认、项目菜单分组、对话区新建",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-26-sidebar-actions-polish/task.json"
+    },
+    {
+      "slug": "09-27-corebox-action-feedback-hint",
+      "id": "corebox-action-feedback-hint",
+      "title": "CoreBox 操作反馈提示组件：左侧涌现色带 + 文字变换动效",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-27-corebox-action-feedback-hint/task.json"
+    },
+    {
+      "slug": "09-27-update-page-silent-progress",
+      "id": "update-page-silent-progress",
+      "title": "更新设置页重构：默认静默更新 + 进度可见 + 高级项收纳",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-27-update-page-silent-progress/task.json"
+    },
+    {
+      "slug": "09-29-recommendation-usage-refactor",
+      "id": "recommendation-usage-refactor",
+      "title": "推荐引擎、使用统计与常用推荐重构",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-09/09-29-recommendation-usage-refactor/task.json"
+    },
+    {
+      "slug": "10-02-corebox-habitual-ghost-flow-metak",
+      "id": "corebox-habitual-ghost-flow-metak",
+      "title": "CoreBox 常用幽灵宫格空态 + 流转面板 MetaK 化",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-10/10-02-corebox-habitual-ghost-flow-metak/task.json"
+    },
+    {
+      "slug": "10-03-nexus-channel-copy",
+      "id": "nexus-channel-copy",
+      "title": "模型渠道 Nexus 详情文案与标签调整",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-10/10-03-nexus-channel-copy/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/10-03-nexus-channel-copy/README.md"
+    }
+  ]
+}

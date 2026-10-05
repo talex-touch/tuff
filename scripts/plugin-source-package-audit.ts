@@ -166,9 +166,12 @@ function sha256(value: string | Buffer): string {
 
 function parseArgs(argv: string[]): AuditOptions {
   const targets: string[] = []
+  // An engineering evidence report of its own (docs/engineering/reports/README.md: one directory per
+  // evidence report), not a workflow record: the report and the audited artifacts beside it outlive
+  // whichever task or change asked for the run.
   let outputPath = path.join(
     repoRoot,
-    '.trellis/tasks/07-18-plugin-source-package-audit/evidence/source-package-audit.json',
+    'docs/engineering/reports/plugin-source-package-audit/source-package-audit.json',
   )
   let allowDirty = false
   let ephemeralSigning = false

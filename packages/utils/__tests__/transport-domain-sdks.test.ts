@@ -1164,6 +1164,53 @@ describe('transport domain sdk mappings', () => {
     )
   })
 
+  it('intelligence sdk sends the usage ledger reads through their host-only api events', async () => {
+    const transport = createTransportMock()
+    transport.send.mockResolvedValue({ ok: true, result: null })
+    const sdk = createIntelligenceSdk(transport as any)
+
+    await sdk.getUsageInsights({ range: '7d' })
+    await sdk.queryAuditLogs({ caller: null, limit: 1000, offset: 50 })
+    await sdk.queryAuditLogs()
+
+    expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:get-usage-insights',
+    )
+    expect(transport.send.mock.calls[0]?.[1]).toEqual({ range: '7d' })
+    expect(transport.send.mock.calls[1]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:query-audit-logs',
+    )
+    // Clamping is main's job; the SDK forwards the query unchanged, `null` included.
+    expect(transport.send.mock.calls[1]?.[1]).toEqual({ caller: null, limit: 1000, offset: 50 })
+    expect(transport.send.mock.calls[2]?.[1]).toEqual({})
+  })
+
+  it('intelligence sdk reads and replaces the global usage limits through host-only api events', async () => {
+    const transport = createTransportMock()
+    transport.send.mockResolvedValue({ ok: true, result: null })
+    const sdk = createIntelligenceSdk(transport as any)
+    const limits = {
+      requestsPerDay: 3,
+      requestsPerMonth: null,
+      tokensPerDay: null,
+      tokensPerMonth: null,
+      costUsdPerDay: null,
+      costUsdPerMonth: 2.5,
+    }
+
+    await sdk.getUsageLimits()
+    await sdk.setUsageLimits(limits)
+
+    expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:get-usage-limits',
+    )
+    expect(transport.send.mock.calls[1]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:set-usage-limits',
+    )
+    // Validation is main's job; the SDK forwards the full limit set unchanged.
+    expect(transport.send.mock.calls[1]?.[1]).toEqual(limits)
+  })
+
   it('intelligence sdk forwards explicit prompt fields through invoke and text.chat', async () => {
     const transport = createTransportMock()
     transport.send.mockResolvedValue({ ok: true, result: null })

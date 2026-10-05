@@ -42,7 +42,7 @@ Ubuntu 24.04 及以上请安装 `.deb` 而不是 AppImage。24.04 默认限制�
 
 最新稳定版与当前预发布版本均以 [GitHub Releases](https://github.com/talex-touch/tuff/releases) 为准；开发中版本以[根目录 package manifest](./package.json) 与 [CoreApp package manifest](./apps/core-app/package.json) 的声明为准。README 中刻意不再重复具体版本号，以免与实际版本脱节。
 
-`2.4.14` 的公开发布门槛是刻意严格的：macOS、Windows、Linux 三端都必须提供真实安装、N→N+1 升级、启动健康与恢复的验收证据后才能发布。首批公开范围只包含稳定的启动/搜索能力与逐个验证过的官方插件；AI 与未完成的 UI 界面明确标注为 Beta 或暂不可用。详见[当前稳定化计划](./docs/plan-prd/TODO.md)与[跨平台审计](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md)。
+`2.4.14` 的公开发布门槛是刻意严格的：macOS、Windows、Linux 三端都必须提供真实安装、N→N+1 升级、启动健康与恢复的验收证据后才能发布。首批公开范围只包含稳定的启动/搜索能力与逐个验证过的官方插件；AI 与未完成的 UI 界面明确标注为 Beta 或暂不可用。详见[当前稳定化计划](./docs/plan-prd/TODO.md)与[跨平台审计](./docs/engineering/reports/search-crossplatform-audit.md)。
 
 稳定的源码版本不代表三端能力成熟度一致：各平台的能力与降级边界，以该平台自身的验收证据为准。
 

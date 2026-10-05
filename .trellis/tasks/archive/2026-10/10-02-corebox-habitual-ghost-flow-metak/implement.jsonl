@@ -1,7 +1,0 @@
-{"file": ".trellis/spec/main-process/corebox-meta-overlay-contracts.md", "reason": "MetaK 几何常量、高亮板（合成层过渡 + 运动总闸）、窗口拉高与 meta-fill 铺底规则；流转面板照搬这些"}
-{"file": ".trellis/spec/main-process/recommendation-freshness-contracts.md", "reason": "常用区引导契约：不进 sectionsData/items/itemIds/registerItem，焦点从 0、快捷键从 ⌘1，出现常用格子即移除"}
-{"file": ".trellis/spec/frontend/corebox-results-contracts.md", "reason": "CoreBox 渲染端：唯一运动总闸、选区与列表 FLIP、键盘归属；改 BoxGrid 和 CoreBox 键盘时必须遵守"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "加载态规则（行数未知时不用骨架，用 useDeferredLoading 防闪）、无障碍和语义控件、i18n 走消息目录"}
-{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "字号层级、只用 --tx-* token、固定高度用 ring 不用 border、同心圆角、hover 不过渡颜色"}
-{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "新增 useFlowPanelRoom、修改 useResize/useSearch 时的 composable 生命周期与清理规则"}
-{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "MetaPanel 外壳抽取与图标 safelist 派生的依据：相似组件扩展而非复制、单一事实来源"}

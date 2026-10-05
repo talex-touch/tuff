@@ -1,12 +1,12 @@
 # Tuff 当前执行顺序
 
-> Authority: this document is the sole global execution-order source. Live task status, assignee, acceptance criteria, blocker, and evidence are authoritative only in the active [Trellis task tree](../../.trellis/tasks/README.md).
+> Authority: this document is the sole global execution-order source. Live work status, acceptance, blocker, and evidence are authoritative only in its Comet Native change under `docs/comet/changes/` (state written by the Comet Runtime). Work planned before the 2026-10-03 cutover is frozen in the [pre-cutover backlog](../engineering/workflow/backlog.md); a frozen task becomes active again only through a new change that re-confirms its scope.
 
 ## Current order
 
-1. **Close verified release and runtime blockers.** Complete the active OTA, macOS release-evidence, and application-icon acceptance work according to their task-local PRDs. The OTA parent remains concurrently owned; this document does not restate its volatile child status.
-2. **Complete the active search and cross-platform remediation.** The audit parent owns the backlog; active children own Windows productionization and the [search-index split write-path migration](../../.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md). The default-on topology is reconciled; now collect the task-local isolated-profile runtime evidence and preserve `=0` as the emergency rollback.
-3. **Continue remaining independently-owned active tasks** in the order recorded here only after the preceding blocker lane is resolved; task-local PRDs define implementation order and acceptance.
+1. **Close verified release and runtime blockers.** The OTA, macOS release-evidence, and application-icon acceptance work is frozen in the [pre-cutover backlog](../engineering/workflow/backlog.md); resume each one through a new Comet change, using its frozen record, PRD and handoff as evidence. The OTA parent was concurrently owned at cutover; this document does not restate its volatile child status.
+2. **Complete the search and cross-platform remediation.** The [living audit](../engineering/reports/search-crossplatform-audit.md) owns the backlog; Windows productionization and the [search-index split write-path migration](../engineering/workflow/backlog.md#07-28-migrate-search-index-split-write-paths) are frozen records. The default-on topology is reconciled; the isolated-profile runtime evidence is still owed (see the [split acceptance record](../engineering/reports/search-index-split-write-acceptance.md)), and `=0` stays the emergency rollback.
+3. **Continue remaining independently-owned work** in the order recorded here only after the preceding blocker lane is resolved; each change's Comet brief defines its scope and acceptance.
 
 ## Non-negotiable safety gates
 
@@ -14,15 +14,15 @@
 - That flip was proved by three app runs, not by typecheck: schema parity plus a first-launch bootstrap reindex of 4678 items, a second boot that correctly skipped it, and a V2 run with zero `SQLITE_BUSY`, zero cross-home FK failures and zero retry exhaustion. Any future change to the split topology owes the same class of evidence.
 - Historical reports prove only their recorded environment. Packaged and production claims require exact observed artifacts or deployed surfaces; they are never inferred from source state.
 
-## Task-state rules
+## Work-state rules
 
-- Use `python3 ./.trellis/scripts/task.py list` for live task state. Do not copy active counts, branch names, HEADs, dirty-worktree state, or implementation snapshots into this document.
-- A completed task moves to the archive only with completed status or fully checked acceptance criteria plus concrete evidence; children move before parents.
-- Roadmaps, task PRDs, change records, and topical TODOs may describe local scope or immutable history but must not define another global priority order.
+- Read live change state from Comet (`/comet`, or `mise exec -- comet` for the pinned CLI). Do not copy active counts, branch names, HEADs, dirty-worktree state, or implementation snapshots into this document.
+- A change is archived only through Comet Native after independent verification and an explicit archive confirmation. Frozen pre-cutover records are never completed or archived by editing the backlog.
+- Roadmaps, Comet briefs, frozen task records, change records, and topical TODOs may describe local scope or immutable history but must not define another global priority order.
 
 ## Local and historical references
 
-- Search/cross-platform audit: [task PRD](../../.trellis/tasks/07-13-search-crossplatform-audit/prd.md)
+- Search/cross-platform audit: [living audit](../engineering/reports/search-crossplatform-audit.md)
 - AI: [TODO-AI.md](./TODO-AI.md)
 - R3: [TODO-R3.md](./TODO-R3.md)
 - Nexus: [TODO-nexus.md](./TODO-nexus.md)

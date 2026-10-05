@@ -27,7 +27,6 @@ import { TxPrismGlow } from '@talex-touch/tuffex/prism-glow'
 
 import { normalizeCoreBoxIcon } from '~/components/render/icon-color-mode'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
-import FlowSelector from '~/components/flow/FlowSelector.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
 import BoxGrid from '~/components/render/BoxGrid.vue'
 import CoreBoxActionFeedback from '~/components/render/CoreBoxActionFeedback.vue'
@@ -44,7 +43,6 @@ import { useActionPanel } from '../../modules/box/adapter/hooks/useActionPanel'
 import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
 import { useClipboard } from '../../modules/box/adapter/hooks/useClipboard'
 import { useDetach } from '../../modules/box/adapter/hooks/useDetach'
-import { useFlowPanelRoom } from '../../modules/box/adapter/hooks/useFlowPanelRoom'
 import { useFocus } from '../../modules/box/adapter/hooks/useFocus'
 import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
 import { useListFlip } from '../../modules/box/adapter/hooks/useListFlip'
@@ -60,7 +58,7 @@ import { useResultExposure } from '../../modules/box/adapter/hooks/useResultExpo
 import { useSelectionBlock } from '../../modules/box/adapter/hooks/useSelectionBlock'
 import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
 import { useCoreBoxFooterFeedback } from '../../modules/box/meta-actions/footer-feedback'
-import { useMetaPanelFill } from '../../modules/box/meta-actions/meta-panel-fill'
+import { useMetaPanelState } from '../../modules/box/meta-actions/meta-panel-fill'
 import { useCoreBoxTheme } from './theme'
 import BoxInput from './BoxInput.vue'
 import DivisionBoxHeader from './DivisionBoxHeader.vue'
@@ -103,16 +101,6 @@ const clipboardOptions = reactive<IClipboardOptions>({
   activeClipboardSource: null
 })
 
-// The Flow picker is drawn in this window, so it needs the window to fit it as main makes the ⌘K
-// panel fit: useSearch's resize keeps the window at least `floor` tall while the picker is open,
-// and says through `floorApplied` when the floor is what holds it there.
-const {
-  floor: flowPanelFloor,
-  floorApplied: flowPanelFloorApplied,
-  fill: flowPanelFill,
-  update: updateFlowPanelRoom
-} = useFlowPanelRoom()
-
 const {
   searchVal,
   select,
@@ -130,10 +118,7 @@ const {
   deactivateProvider,
   deactivateAllProviders
   // cancelSearch
-} = useSearch(boxOptions, clipboardOptions, {
-  windowFloor: flowPanelFloor,
-  windowFloorApplied: flowPanelFloorApplied
-})
+} = useSearch(boxOptions, clipboardOptions)
 
 // The searching cue waits for the current query's first rows. Once they are up, the deferred layer
 // (the files) still gathering gets the quieter settling status instead (useSearch).
@@ -776,7 +761,7 @@ const detach = useDetach({
 
 // Action Panel hook
 const actionPanel = useActionPanel({
-  openFlowSelector: detach.openFlowSelector,
+  dispatchFlow: detach.dispatchFlow,
   refreshSearch: handleSearchImmediate,
   onActivationState: applyCoreBoxActivationState,
   onPrimaryExecute: handleExecute,
@@ -786,8 +771,9 @@ const actionPanel = useActionPanel({
   }
 })
 
-// The ⌘K panel grew the window for itself: paint the space it added instead of the desktop.
-const metaPanelFill = useMetaPanelFill()
+// The ⌘K panel grew the window for itself: paint the space it added instead of the desktop. And
+// while the card shows a Flow page, everything of CoreBox under it goes out of focus.
+const { fill: metaPanelFill, blur: metaPanelBlur } = useMetaPanelState()
 
 // Channel: focus input
 const unregFocusInput = transport.on(CoreBoxEvents.input.focus, () => focusCoreBoxInput())
@@ -1235,7 +1221,8 @@ const customCss = computed(() => {
       resultHoverClass,
       { 'CoreBox-Wrapper--canvas': isCanvasLayout },
       { 'CoreBox-Wrapper--division-no-header': isDivisionBox && !showDivisionBoxHeader },
-      { 'CoreBox-Wrapper--meta-fill': metaPanelFill || flowPanelFill }
+      { 'CoreBox-Wrapper--meta-fill': metaPanelFill },
+      { 'CoreBox-Wrapper--meta-blur': metaPanelBlur }
     ]"
   >
     <component :is="'style'" v-if="customCss">{{ customCss }}</component>
@@ -1518,18 +1505,6 @@ const customCss = computed(() => {
       />
     </div>
   </div>
-
-  <!-- Flow Selector Panel -->
-  <FlowSelector
-    :visible="detach.flowVisible"
-    :session-id="detach.flowSessionId"
-    :payload="detach.flowPayload"
-    :anchor="detach.flowAnchor"
-    :should-animate="shouldAnimate"
-    @close="detach.closeFlowSelector"
-    @select="detach.dispatchFlow"
-    @room="updateFlowPanelRoom"
-  />
 </template>
 
 <style lang="scss">
@@ -1851,6 +1826,35 @@ div.CoreBoxRes.CoreBoxRes--widget {
   bottom: 0;
 }
 
+// What the sticky footer frosts. CoreBox paints nothing opaque of its own, only the 75% mask over
+// the window material (`.CoreBox-Mask`), and `backdrop-filter` lays its blurred copy over the pixels
+// behind it without removing them: over that translucent backdrop the copy was as translucent, and
+// the rows stayed legible under the footer. This band, the mask's colour at full strength under the
+// rows, gives the blur something opaque to frost, as the `--meta-fill` paint does for a grown window.
+// It moves with the footer (`.CoreBoxFooter-Sticky.display`) and parks out of view with it, keyed
+// off that class through `:has()` rather than CoreBox state: a footer mounted already on screen, as
+// results arrive, shows at once, and so must the band. A class bound from `footerRef` landed a
+// render later and slid the band in under a footer that was already there. A canvas footer sits
+// under the results instead of over them, and gets none.
+.CoreBoxRes-Main:not(.CoreBoxRes-Main--canvas)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  // `h-44px` in `CoreBoxFooter.vue` (`META_PANEL_FOOTER_HEIGHT`).
+  height: 44px;
+  z-index: -1;
+  background-color: var(--tx-fill-color);
+  transform: translateY(100%);
+  pointer-events: none;
+}
+
+.CoreBoxRes-Main:not(.CoreBoxRes-Main--canvas):has(> .CoreBoxFooter-Sticky.display)::before {
+  transform: translateY(0);
+  transition: transform 0.12s ease-out;
+}
+
 .CoreBoxRes-Main > .scroll-area .item-list {
   // The selection block's containing block and the rows' offsetParent, and a stacking context of
   // its own, so the block (z-index: -1) paints under every row and over nothing outside the list.
@@ -1969,11 +1973,10 @@ div.CoreBox {
   background-color: var(--tx-fill-color);
 }
 
-// The ⌘K panel (`useMetaPanelFill`) or the Flow picker (`useFlowPanelRoom`) grew the window. The
-// results have no surface of their own, only the mask above over the window material, so the space
-// the growth added showed a blur of the desktop under the panel's dim. Everything under the header
-// takes the mask's colour at full strength instead: over the mask, behind every row and the
-// footer; the header keeps its material.
+// The ⌘K panel grew the window (`useMetaPanelState`). The results have no surface of their own,
+// only the mask above over the window material, so the space the growth added showed a blur of
+// the desktop under the panel's dim. Everything under the header takes the mask's colour at full
+// strength instead: over the mask, behind every row and the footer; the header keeps its material.
 .CoreBox-Wrapper.CoreBox-Wrapper--meta-fill::before {
   content: '';
   position: absolute;
@@ -1990,6 +1993,35 @@ div.CoreBox {
 .CoreBox-Wrapper.CoreBox-Wrapper--canvas.CoreBox-Wrapper--meta-fill::before {
   inset: 0;
   border-radius: var(--corebox-container-radius, 8px);
+}
+
+// The ⌘K card shows a Flow page (`useMetaPanelState`): the search bar, the results and the footer
+// go out of focus under it, so nothing behind the targets competes with them. `filter` on
+// CoreBox's own content, never `backdrop-filter`: in this transparent window a backdrop filter
+// only samples the page's own pixels and lays its copy over them, and the content stays sharp
+// underneath. An attached plugin view is a view of its own, out of reach of CSS: it keeps only the
+// card's dim.
+.CoreBox-Wrapper > .CoreBox,
+.CoreBox-Wrapper > .CoreBoxRes {
+  transition: filter 0.22s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
+}
+
+.CoreBox-Wrapper.CoreBox-Wrapper--meta-blur > .CoreBox,
+.CoreBox-Wrapper.CoreBox-Wrapper--meta-blur > .CoreBoxRes {
+  filter: blur(8px);
+}
+
+// The motion gate closed: the blur switches, it does not ease.
+@media (prefers-reduced-motion: reduce) {
+  .CoreBox-Wrapper > .CoreBox,
+  .CoreBox-Wrapper > .CoreBoxRes {
+    transition: none;
+  }
+}
+
+html[data-low-battery-motion='1'] .CoreBox-Wrapper > .CoreBox,
+html[data-low-battery-motion='1'] .CoreBox-Wrapper > .CoreBoxRes {
+  transition: none;
 }
 
 // DivisionBox specific styles

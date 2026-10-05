@@ -32,6 +32,12 @@ const ERROR_DETAILS: Record<IntelligenceErrorCode, IntelligenceErrorDetails> = {
     recovery:
       'Retry after quota storage recovers or inspect Intelligence quota configuration.',
   },
+  // Raised by the desktop app when a device-local usage limit is reached. Nexus never emits it;
+  // the entry keeps this map exhaustive over the shared code list.
+  USAGE_LIMIT_REACHED: {
+    reason: 'A usage limit set on this device has been reached.',
+    recovery: 'Wait for the limit to reset or raise it in the app’s audit settings.',
+  },
   MODEL_UNSUPPORTED: {
     reason: 'The selected model does not support this request.',
     recovery: 'Switch to a model that supports the requested capability.',
@@ -221,6 +227,7 @@ export function resolveNexusIntelligenceHttpStatus(
     case 'PERMISSION_DENIED':
       return 403
     case 'QUOTA_EXHAUSTED':
+    case 'USAGE_LIMIT_REACHED':
       return 429
     case 'MODEL_UNSUPPORTED':
     case 'CAPABILITY_UNSUPPORTED':

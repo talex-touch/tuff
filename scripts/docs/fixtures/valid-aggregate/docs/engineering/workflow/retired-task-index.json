@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c",
+  "tasks": [
+    {
+      "slug": "07-20-completed-doc-task",
+      "id": "completed-doc-task",
+      "title": "Completed documentation task",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-20-completed-doc-task/task.json"
+    },
+    {
+      "slug": "07-27-documentation-quality-gates",
+      "id": "documentation-quality-gates",
+      "title": "Documentation quality gates",
+      "status": "in_progress",
+      "disposition": "frozen",
+      "sourcePath": ".trellis/tasks/07-27-documentation-quality-gates/task.json",
+      "handoff": "docs/engineering/workflow/handoffs/07-27-documentation-quality-gates/README.md"
+    }
+  ]
+}

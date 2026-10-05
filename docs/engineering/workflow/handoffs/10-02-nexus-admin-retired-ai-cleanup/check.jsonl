@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/10-02-nexus-admin-retired-ai-cleanup/prd.md", "reason": "Acceptance: atomic commit, residual scan with positive control, before/after API parity"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/research/retired-ai-cleanup.md", "reason": "Keep-list the check must not delete (fixtures, tombstone assertions, audit labels, public SDK types)"}
+{"file": ".trellis/spec/guides/guard-thinking-guide.md", "reason": "Negative-control requirement for the repaired guards"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification commands"}

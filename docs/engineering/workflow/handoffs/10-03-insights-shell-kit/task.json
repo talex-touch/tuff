@@ -1,0 +1,30 @@
+{
+  "id": "insights-shell-kit",
+  "name": "insights-shell-kit",
+  "title": "洞察页共享组件与语音页迁移",
+  "description": "R-E1、R-E2",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-10-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "task/chore/live-work-1003",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "10-03-intelligence-audit-rebuild",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "None. Implementation finished; commit is handled by the convergence coordinator; formal verification will be re-homed into the Comet change after the trellis-to-comet-native migration is archived.",
+    "evidence": "Main session re-verified on 2026-10-03 06:07 PDT: vitest 7 files / 58 tests pass (VoiceInsights.test.ts byte-identical to HEAD); eslint --max-warnings 0 exit 0 with a live stdin positive control; implementer pixel-parity evidence in evidence/README.md and region-report.txt. vue-tsc taken from the implementer report, not re-run.",
+    "nextAction": "Hand the file list to the coordinator for integration; reuse the shared components in the audit insights page task."
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "id": "mcp-settings-page",
+  "name": "mcp-settings-page",
+  "title": "MCP 独立成页（侧栏技能下方）",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-10-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "stage",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "10-03-intelligence-settings-revamp",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "无阻塞。要和 10-03-skills-page-revamp 按顺序改 SettingSkillsMcp.vue，本任务先做。语言文件与 components.d.ts 里有他人未提交的改动。",
+    "evidence": "PRD、design、implement 已经老板确认（2026-10-03）。实现与验证尚未开始。",
+    "nextAction": "按 implement.md 第 1–7 步：先拆出 SettingMcpHost / SettingMcpServers，再新建 IntelligenceMcpPage 并接上 categories、router、i18n、uno safelist，然后瘦身 SettingSkillsMcp 并迁移测试，最后做真实应用验收。"
+  }
+}

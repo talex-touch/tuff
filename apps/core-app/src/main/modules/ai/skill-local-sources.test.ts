@@ -13,6 +13,7 @@ import {
   readEnabledLocalSkill,
   readLocalSkill,
   scanLocalSkills,
+  scanLocalSkillSources,
   setLocalSkillConfigReader,
   withLocalSkillDir,
   withLocalSkillEnabled,
@@ -129,6 +130,62 @@ describe('scanning', () => {
     )
 
     expect(skills).toHaveLength(1)
+  })
+
+  it('remembers every directory that reaches a file and the entry it came through', async () => {
+    const target = await writeSkill(join(root, 'shared', 'audit'), skillDoc('Audit', 'Check it'))
+    await mkdir(join(root, 'lib'), { recursive: true })
+    await symlink(target, join(root, 'lib', 'audit-link'), 'dir')
+    await mkdir(join(root, 'other', 'group'), { recursive: true })
+    await symlink(target, join(root, 'other', 'group', 'audit'), 'dir')
+
+    const [skill] = await scanLocalSkillSources(
+      config({ dirs: [join(root, 'lib'), join(root, 'shared'), join(root, 'other')] })
+    )
+
+    expect(skill).toMatchObject({
+      id: localSkillId(target),
+      path: target,
+      // Reads still go through the first directory, exactly as before every source was kept.
+      sourceDir: join(root, 'lib'),
+      sources: [
+        { sourceDir: join(root, 'lib'), entryPath: join(root, 'lib', 'audit-link') },
+        { sourceDir: join(root, 'shared'), entryPath: join(root, 'shared', 'audit') },
+        { sourceDir: join(root, 'other'), entryPath: join(root, 'other', 'group', 'audit') }
+      ],
+      // The only directory whose real path holds the file.
+      storeDir: join(root, 'shared')
+    })
+  })
+
+  it('has no store directory for a file outside every registered directory', async () => {
+    const target = await writeSkill(join(root, 'bundle', 'audit'), skillDoc('Audit', 'Check it'))
+    await mkdir(join(root, 'lib'), { recursive: true })
+    await symlink(target, join(root, 'lib', 'audit'), 'dir')
+
+    const [skill] = await scanLocalSkillSources(config({ dirs: [join(root, 'lib')] }))
+
+    expect(skill).toMatchObject({ path: target, storeDir: null })
+  })
+
+  it('hands the injection and the MCP host the narrow entry, without the link paths', async () => {
+    const target = await writeSkill(join(root, 'shared', 'audit'), skillDoc('Audit', 'Check it'))
+    await mkdir(join(root, 'lib'), { recursive: true })
+    await symlink(target, join(root, 'lib', 'audit-link'), 'dir')
+
+    const [skill] = await scanLocalSkills(
+      config({ dirs: [join(root, 'lib'), join(root, 'shared')] })
+    )
+
+    expect(Object.keys(skill!).sort()).toEqual([
+      'description',
+      'enabled',
+      'id',
+      'manifestPath',
+      'name',
+      'path',
+      'sourceDir'
+    ])
   })
 
   it('stops at MAX_ENTRIES_PER_DIR skills in one directory', async () => {

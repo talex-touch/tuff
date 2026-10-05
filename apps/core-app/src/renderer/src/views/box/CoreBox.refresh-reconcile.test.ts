@@ -156,13 +156,10 @@ vi.mock('../../modules/box/adapter/hooks/useClipboard', () => ({
 
 vi.mock('../../modules/box/adapter/hooks/useDetach', () => ({
   useDetach: () => ({
-    flowVisible: false,
-    flowSessionId: '',
-    flowPayload: undefined,
-    flowAnchor: 'corner',
-    closeFlowSelector: () => {},
-    dispatchFlow: () => {},
-    openFlowSelector: () => {}
+    detachFeature: async () => {},
+    detachUIMode: async () => {},
+    openFlowPanel: async () => {},
+    dispatchFlow: async () => {}
   })
 }))
 
@@ -232,7 +229,6 @@ const stubs = {
     template: '<div class="normal-list-row" :data-id="item.id">{{ item.render.basic.title }}</div>'
   },
   DivisionBoxHeader: { template: '<div />' },
-  FlowSelector: { template: '<div />' },
   PrefixPart: { template: '<div />' },
   PreviewHistoryPanel: { template: '<div />' },
   TagSection: { template: '<div />' },

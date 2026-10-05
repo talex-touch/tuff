@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c",
+  "tasks": [
+    {
+      "slug": "07-20-completed-doc-task",
+      "id": "completed-doc-task",
+      "title": "Completed documentation task",
+      "status": "completed",
+      "disposition": "historical",
+      "sourcePath": ".trellis/tasks/archive/2026-07/07-20-completed-doc-task/task.json"
+    }
+  ]
+}

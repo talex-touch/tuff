@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Branch and tag policy guard -- the mechanical half of `.trellis/spec/guides/branch-and-release.md`.
+ * Branch and tag policy guard -- the mechanical half of
+ * `docs/engineering/specs/guides/branch-and-release.md`.
  *
  * Two branches are long-lived. `master` is the production line, `stage` is the beta channel, and
  * every other branch is `task/<type>/<slug>`, deleted on merge.
@@ -460,7 +461,7 @@ function main(argv) {
   console.log(
     failed === 0
       ? `== result: pass${warned > 0 ? ` (${warned} warning(s) -- warnings never block)` : ''}`
-      : `== result: ${failed} failure(s) -- see .trellis/spec/guides/branch-and-release.md`,
+      : `== result: ${failed} failure(s) -- see docs/engineering/specs/guides/branch-and-release.md`,
   )
   return failed === 0 ? 0 : 1
 }

@@ -1,6 +1,22 @@
-import { and, eq, gte, sql } from 'drizzle-orm'
+import type { UsageLimits } from '@talex-touch/utils/transport/sdk/domains/intelligence'
+import { and, asc, eq, gte, inArray, sql } from 'drizzle-orm'
+import { scheduleDbWrite } from '../../db/db-write'
 import { intelligenceAuditLogs, intelligenceQuotas, intelligenceUsageStats } from '../../db/schema'
 import { databaseModule } from '../database'
+import { GLOBAL_USAGE_CALLER_ID, GLOBAL_USAGE_CALLER_TYPE } from './usage-ledger/constants'
+import { emptyUsageLimits } from './usage-ledger/usage-limits'
+
+/**
+ * The reserved `intelligence_quotas` row holding the device-local global usage limits (parent
+ * design §3.1): the same `('__global__', 'system')` identity as the global usage bucket it limits.
+ * Per-caller checks query `(caller, 'plugin')` and can never match it; `getAllQuotas()` hides it.
+ */
+const GLOBAL_LIMITS_CALLER_ID = GLOBAL_USAGE_CALLER_ID
+const GLOBAL_LIMITS_CALLER_TYPE = GLOBAL_USAGE_CALLER_TYPE
+
+function isGlobalLimitsRow(callerId: string, callerType: string): boolean {
+  return callerId === GLOBAL_LIMITS_CALLER_ID && callerType === GLOBAL_LIMITS_CALLER_TYPE
+}
 
 /**
  * Quota configuration for a caller
@@ -48,7 +64,13 @@ export interface QuotaCheckResult {
  * IntelligenceQuotaManager - Manages usage quotas and rate limiting
  */
 export class IntelligenceQuotaManager {
-  private quotaCache = new Map<string, QuotaConfig>()
+  /**
+   * `null` caches "no quota row": every built-in `core.*` caller goes through `checkQuota` on each
+   * call, and without it each call would read the table to learn the same absence.
+   */
+  private quotaCache = new Map<string, QuotaConfig | null>()
+  /** Bumped by every quota write, so a lookup that raced one does not cache what it read. */
+  private quotaCacheGeneration = 0
   private usageCache = new Map<string, { usage: CurrentUsage; timestamp: number }>()
   private readonly usageCacheTTL = 10000 // 10 seconds
   /**
@@ -61,9 +83,129 @@ export class IntelligenceQuotaManager {
    * moment they are granted, so a burst binds against the limit immediately.
    */
   private admissions = new Map<string, number[]>()
+  /**
+   * The global usage limits as last read or written. Filled after a commit (`setGlobalLimits`) or
+   * a read that no write overtook, so it never holds anything the database does not.
+   */
+  private globalLimitsCache: UsageLimits | null = null
+  /** Bumped by every write of the reserved row, so a racing read does not cache a stale value. */
+  private globalLimitsGeneration = 0
 
   private getDb() {
     return databaseModule.getDb()
+  }
+
+  /** Any write that may have touched the reserved row through the generic quota API. */
+  private invalidateGlobalLimits(callerId: string, callerType: string): void {
+    if (!isGlobalLimitsRow(callerId, callerType)) return
+    this.globalLimitsGeneration += 1
+    this.globalLimitsCache = null
+  }
+
+  /**
+   * The device-local global usage limits (usage-limits task C1). All `null` when none are set.
+   * Cached; the cache only ever holds what the database holds (`setGlobalLimits` refreshes it after
+   * its commit, and a read overtaken by a write is not cached).
+   */
+  async getGlobalLimits(): Promise<UsageLimits> {
+    if (this.globalLimitsCache) return { ...this.globalLimitsCache }
+
+    const generation = this.globalLimitsGeneration
+    const [row] = await this.getDb()
+      .select()
+      .from(intelligenceQuotas)
+      .where(
+        and(
+          eq(intelligenceQuotas.callerId, GLOBAL_LIMITS_CALLER_ID),
+          eq(intelligenceQuotas.callerType, GLOBAL_LIMITS_CALLER_TYPE)
+        )
+      )
+      .orderBy(asc(intelligenceQuotas.id))
+      .limit(1)
+    const limits: UsageLimits = row
+      ? {
+          requestsPerDay: row.requestsPerDay ?? null,
+          requestsPerMonth: row.requestsPerMonth ?? null,
+          tokensPerDay: row.tokensPerDay ?? null,
+          tokensPerMonth: row.tokensPerMonth ?? null,
+          costUsdPerDay: row.costLimitPerDay ?? null,
+          costUsdPerMonth: row.costLimitPerMonth ?? null
+        }
+      : emptyUsageLimits()
+    if (generation === this.globalLimitsGeneration) this.globalLimitsCache = limits
+    return { ...limits }
+  }
+
+  /**
+   * Replaces the whole global limit set: every field is written, a `null` clears its limit, and the
+   * row is always `enabled` with the per-minute columns empty. Validated by the caller
+   * (`usage-ledger/usage-limits.ts`). One transaction on the primary write lane upserts the reserved
+   * row (and folds away duplicates — the table has no unique key); the cache is refreshed only after
+   * the commit, so a read that follows this call sees what it wrote.
+   */
+  async setGlobalLimits(limits: UsageLimits): Promise<UsageLimits> {
+    const next: UsageLimits = {
+      requestsPerDay: limits.requestsPerDay,
+      requestsPerMonth: limits.requestsPerMonth,
+      tokensPerDay: limits.tokensPerDay,
+      tokensPerMonth: limits.tokensPerMonth,
+      costUsdPerDay: limits.costUsdPerDay,
+      costUsdPerMonth: limits.costUsdPerMonth
+    }
+    const db = this.getDb()
+    await scheduleDbWrite(
+      'intelligence.usage-limits.set',
+      async () => {
+        await db.transaction(async (tx) => {
+          const existing = await tx
+            .select({ id: intelligenceQuotas.id })
+            .from(intelligenceQuotas)
+            .where(
+              and(
+                eq(intelligenceQuotas.callerId, GLOBAL_LIMITS_CALLER_ID),
+                eq(intelligenceQuotas.callerType, GLOBAL_LIMITS_CALLER_TYPE)
+              )
+            )
+            .orderBy(asc(intelligenceQuotas.id))
+          // `null`, never `undefined`: drizzle drops undefined fields from an UPDATE, which would
+          // leave the old limit in place.
+          const values = {
+            requestsPerMinute: null,
+            requestsPerDay: next.requestsPerDay,
+            requestsPerMonth: next.requestsPerMonth,
+            tokensPerMinute: null,
+            tokensPerDay: next.tokensPerDay,
+            tokensPerMonth: next.tokensPerMonth,
+            costLimitPerDay: next.costUsdPerDay,
+            costLimitPerMonth: next.costUsdPerMonth,
+            enabled: true,
+            updatedAt: new Date()
+          }
+          const [first, ...duplicates] = existing
+          if (!first) {
+            await tx.insert(intelligenceQuotas).values({
+              callerId: GLOBAL_LIMITS_CALLER_ID,
+              callerType: GLOBAL_LIMITS_CALLER_TYPE,
+              ...values
+            })
+            return
+          }
+          await tx.update(intelligenceQuotas).set(values).where(eq(intelligenceQuotas.id, first.id))
+          if (duplicates.length > 0) {
+            await tx.delete(intelligenceQuotas).where(
+              inArray(
+                intelligenceQuotas.id,
+                duplicates.map((row) => row.id)
+              )
+            )
+          }
+        })
+      },
+      { priority: 'interactive', dropPolicy: 'none' }
+    )
+    this.globalLimitsGeneration += 1
+    this.globalLimitsCache = next
+    return { ...next }
   }
 
   /**
@@ -124,7 +266,9 @@ export class IntelligenceQuotaManager {
     }
 
     // Update cache
+    this.quotaCacheGeneration += 1
     this.quotaCache.set(`${config.callerType}:${config.callerId}`, config)
+    this.invalidateGlobalLimits(config.callerId, config.callerType)
   }
 
   /**
@@ -138,9 +282,10 @@ export class IntelligenceQuotaManager {
 
     // Check cache
     if (this.quotaCache.has(cacheKey)) {
-      return this.quotaCache.get(cacheKey)!
+      return this.quotaCache.get(cacheKey) ?? null
     }
 
+    const generation = this.quotaCacheGeneration
     const db = this.getDb()
     const rows = await db
       .select()
@@ -153,7 +298,10 @@ export class IntelligenceQuotaManager {
       )
       .limit(1)
 
-    if (rows.length === 0) return null
+    if (rows.length === 0) {
+      if (generation === this.quotaCacheGeneration) this.quotaCache.set(cacheKey, null)
+      return null
+    }
 
     const row = rows[0]
     const config: QuotaConfig = {
@@ -170,7 +318,7 @@ export class IntelligenceQuotaManager {
       enabled: row.enabled
     }
 
-    this.quotaCache.set(cacheKey, config)
+    if (generation === this.quotaCacheGeneration) this.quotaCache.set(cacheKey, config)
     return config
   }
 
@@ -192,7 +340,9 @@ export class IntelligenceQuotaManager {
         )
       )
 
+    this.quotaCacheGeneration += 1
     this.quotaCache.delete(`${callerType}:${callerId}`)
+    this.invalidateGlobalLimits(callerId, callerType)
   }
 
   /**
@@ -389,25 +539,28 @@ export class IntelligenceQuotaManager {
   }
 
   /**
-   * Get all quotas
+   * Get all quotas. Per-caller quotas only: the reserved global-limits row is read through
+   * `getGlobalLimits()`.
    */
   async getAllQuotas(): Promise<QuotaConfig[]> {
     const db = this.getDb()
     const rows = await db.select().from(intelligenceQuotas)
 
-    return rows.map((row) => ({
-      callerId: row.callerId,
-      callerType: row.callerType as 'plugin' | 'user' | 'system',
-      requestsPerMinute: row.requestsPerMinute ?? undefined,
-      requestsPerDay: row.requestsPerDay ?? undefined,
-      requestsPerMonth: row.requestsPerMonth ?? undefined,
-      tokensPerMinute: row.tokensPerMinute ?? undefined,
-      tokensPerDay: row.tokensPerDay ?? undefined,
-      tokensPerMonth: row.tokensPerMonth ?? undefined,
-      costLimitPerDay: row.costLimitPerDay ?? undefined,
-      costLimitPerMonth: row.costLimitPerMonth ?? undefined,
-      enabled: row.enabled
-    }))
+    return rows
+      .filter((row) => !isGlobalLimitsRow(row.callerId, row.callerType))
+      .map((row) => ({
+        callerId: row.callerId,
+        callerType: row.callerType as 'plugin' | 'user' | 'system',
+        requestsPerMinute: row.requestsPerMinute ?? undefined,
+        requestsPerDay: row.requestsPerDay ?? undefined,
+        requestsPerMonth: row.requestsPerMonth ?? undefined,
+        tokensPerMinute: row.tokensPerMinute ?? undefined,
+        tokensPerDay: row.tokensPerDay ?? undefined,
+        tokensPerMonth: row.tokensPerMonth ?? undefined,
+        costLimitPerDay: row.costLimitPerDay ?? undefined,
+        costLimitPerMonth: row.costLimitPerMonth ?? undefined,
+        enabled: row.enabled
+      }))
   }
 
   /**
@@ -452,8 +605,11 @@ export class IntelligenceQuotaManager {
 
   clearCache(): void {
     this.admissions.clear()
+    this.quotaCacheGeneration += 1
     this.quotaCache.clear()
     this.usageCache.clear()
+    this.globalLimitsGeneration += 1
+    this.globalLimitsCache = null
   }
 
   /**

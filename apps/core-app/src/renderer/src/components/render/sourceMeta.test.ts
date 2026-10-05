@@ -353,6 +353,16 @@ describe('CoreBox source metadata', () => {
       actionKey: 'coreBox.resultSignalActions.inspectQuota'
     },
     {
+      code: 'USAGE_LIMIT_REACHED',
+      tone: 'danger',
+      label: 'Failed',
+      reason: 'AI usage limit reached',
+      actionHint:
+        'This is the limit you set in Audit: change it in Settings › Intelligence › Audit, or wait for it to reset.',
+      reasonKey: 'coreBox.resultSignalReasons.usageLimitReached',
+      actionKey: 'coreBox.resultSignalActions.openUsageLimits'
+    },
+    {
       code: 'NETWORK_FAILURE',
       tone: 'danger',
       label: 'Failed',
@@ -425,4 +435,32 @@ describe('CoreBox source metadata', () => {
       })
     }
   )
+
+  it('labels the usage limit from main’s whole sentence, but not a provider’s own limit', () => {
+    const readable = ((key: string, fallback?: string) => {
+      const translations: Record<string, string> = {
+        'coreBox.resultSignals.failed': 'Failed',
+        'coreBox.resultSignalReasons.usageLimitReached': 'AI usage limit reached',
+        'coreBox.resultSignalActions.openUsageLimits': 'Change it in Audit',
+        'coreBox.resultSignalActions.inspectFailure': 'Inspect failure'
+      }
+      return translations[key] ?? fallback ?? key
+    }) as ComposerTranslation
+    const sentence =
+      '[USAGE_LIMIT_REACHED:text.chat] Usage limit reached: requestsPerDay; resets at 2026-10-03T16:00:00.000Z'
+
+    expect(resolveResultSignal(baseItem(withMeta({ errorMessage: sentence })), readable)).toEqual({
+      label: 'Failed',
+      tone: 'danger',
+      reason: 'AI usage limit reached',
+      actionHint: 'Change it in Audit'
+    })
+    // A CLI subscription's own wording is not the limit the user set in Audit.
+    expect(resolveSignalReasonLabel('Claude AI usage limit reached', readable)).toBe(
+      'Claude AI usage limit reached'
+    )
+    expect(resolveSignalActionHint('Claude AI usage limit reached', 'danger', readable)).toBe(
+      'Inspect failure'
+    )
+  })
 })

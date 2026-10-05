@@ -415,8 +415,12 @@ describe('MetaOverlay panel', () => {
       'corebox.actions.groups.open',
       'corebox.actions.groups.host'
     ])
+    // The filter ends the page, and the page fills the card under its header: the filter belongs to
+    // the page, which pushes in and out as one.
     const panel = wrapper.get('.MetaPanel').element
-    expect(panel.lastElementChild?.classList.contains('MetaPanel-Filter')).toBe(true)
+    const page = wrapper.get('.MetaPanel-Page').element
+    expect(panel.lastElementChild?.contains(page)).toBe(true)
+    expect(page.lastElementChild?.classList.contains('MetaPanel-Filter')).toBe(true)
     // The ↵ row does not repeat "打开 "report.pdf"": the header already names the item.
     expect(wrapper.findAll('.meta-action-subtitle')).toHaveLength(0)
 

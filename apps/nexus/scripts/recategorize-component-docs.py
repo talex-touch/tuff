@@ -14,7 +14,7 @@ Categories roll up into seven suites via DocsSidebar's CATEGORY_SUITE_MAP:
 - data 数据:     DataSuite, Charts, Visualization
 - flow 流程:     FlowSuite, Flow
 
-The suite assignment table lives in .trellis/tasks/08-30-docs-suite-split/prd.md;
+The suite assignment originated in retired task 08-30-docs-suite-split (see the frozen task index);
 keep this file, DocsSidebar.vue and app/utils/docs-suites.ts in sync — a doc on
 disk with no entry here makes this script exit with an error. The tuffex entry
 barrels stay base/pro/ai: 'data' and 'flow' are docs-level splits (Visualization
@@ -74,6 +74,7 @@ TAXONOMY: dict[str, list[str]] = {
     ],
     "TemplateAi": [
         "template-agent-chat",
+        "template-ai-answer",
         "template-research",
     ],
     "TemplateData": [

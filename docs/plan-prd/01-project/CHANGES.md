@@ -66,7 +66,7 @@
 
 ### release: close exact beta.19 Gate E integrity evidence
 
-- Published `v2.4.13-beta.19` passed formal `gate-e --strict` with `result: pass` and exit code `0`; the exact source is the [published release gate contract](../../../.trellis/tasks/archive/2026-07/07-21-07-20-align-published-release-gates/prd.md).
+- Published `v2.4.13-beta.19` passed formal `gate-e --strict` with `result: pass` and exit code `0`; the exact source is the [published release gate contract](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/archive/2026-07/07-21-07-20-align-published-release-gates/prd.md).
 - The gate observed remote bilingual notes, the three-platform preferred manifest/Nexus matrix, full GitHub inventory, download URLs, SHA-256, rollback/latest status, and the assets' configured `signatureUrl` payloads. The additional Linux DEB and its `.deb.sig` remained inventory-only rather than a second preferred artifact.
 - This production result is scoped to beta.19. Stable `v2.4.13`, CoreApp install-time pinned-key verification, and OTA lifecycle acceptance require their own evidence.
 

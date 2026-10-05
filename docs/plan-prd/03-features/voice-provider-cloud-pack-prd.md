@@ -2,7 +2,7 @@
 
 > 更新时间：2026-09-13
 > 状态：**v1 / 代码与本地验证完成**（P1-P5 + D3 envelope 均有 focused evidence；Production 签名/存储配置与付费真实 Provider 验收未执行）
-> 任务记录：[`.trellis/tasks/09-13-voice-provider-cloud-pack/prd.md`](../../../.trellis/tasks/09-13-voice-provider-cloud-pack/prd.md)（关联 design.md / implement.md）
+> 任务记录（已冻结）：[`09-13-voice-provider-cloud-pack`](../../engineering/workflow/backlog.md#09-13-voice-provider-cloud-pack)，基线 [`prd.md`](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/09-13-voice-provider-cloud-pack/prd.md)（关联 design.md / implement.md）
 > 目标版本：待定（建议 2.6.x 或独立 R8-G）
 > 质量口径：遵循 [`../PRD-QUALITY-BASELINE.md`](../PRD-QUALITY-BASELINE.md)
 
@@ -72,7 +72,7 @@
 
 ### 2.5 最接近的先例
 
-`.trellis/tasks/09-03-remote-app-alias-catalog/`（status: planning，parent `07-13-catalog-service-mvp`）已经决定：**在 CatalogService 家族里加第二种签名整包类型**，并给出 Nexus 侧路由 `/api/v1/catalogs/:type/latest` 与 `/:type/:packId/:version/:sha256.json`，同时明确 **"No startup fetch, background polling, or renderer-side parsing is introduced"**。
+冻结任务 [`09-03-remote-app-alias-catalog`](../../engineering/workflow/backlog.md#09-03-remote-app-alias-catalog)（status: planning，parent `07-13-catalog-service-mvp`）已经决定：**在 CatalogService 家族里加第二种签名整包类型**，并给出 Nexus 侧路由 `/api/v1/catalogs/:type/latest` 与 `/:type/:packId/:version/:sha256.json`，同时明确 **"No startup fetch, background polling, or renderer-side parsing is introduced"**。
 
 > 本 PRD 与 09-03 的关系：同一家族、同一套验签与激活语义，**但触发策略与本 PRD 第 12 节的决策点冲突**，需要显式裁决（见 D4）。
 
@@ -88,7 +88,7 @@
 | voice typed transport 域 | `packages/utils/transport/sdk/domains/voice.ts`（已修改） |
 | 计费任务记录 | `.trellis/tasks/09-08-nexus-ai-channel-billing/{prd,design,implement}.md`（已修改） |
 
-**结论**：本系统的 **P1 / P2 落点全部不在脏区**（catalog 契约、CoreApp catalog 模块、Nexus catalog 路由），可以独立开工；**P3 会改 `voice-provider-runtime.ts`，必须等上面这批工作提交或明确协调后再动**。这条约束已写入任务 [`implement.md`](../../../.trellis/tasks/09-13-voice-provider-cloud-pack/implement.md)。
+**结论**：本系统的 **P1 / P2 落点全部不在脏区**（catalog 契约、CoreApp catalog 模块、Nexus catalog 路由），可以独立开工；**P3 会改 `voice-provider-runtime.ts`，必须等上面这批工作提交或明确协调后再动**。这条约束已写入任务 [`implement.md`](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/09-13-voice-provider-cloud-pack/implement.md)。
 
 ---
 
@@ -345,9 +345,9 @@ interface VoiceProviderPackV1 {
 ## 13. 关联入口
 
 - Catalog 完成边界：[`../../engineering/catalog-service-boundary.md`](../../engineering/catalog-service-boundary.md)
-- 远程别名目录先例：`.trellis/tasks/09-03-remote-app-alias-catalog/design.md`
+- 远程别名目录先例：冻结任务 [`09-03-remote-app-alias-catalog`](../../engineering/workflow/backlog.md#09-03-remote-app-alias-catalog) 的基线 [`design.md`](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/09-03-remote-app-alias-catalog/design.md)
 - ASR Provider Runtime：[`ai-2.5.8-asr-provider-runtime-prd.md`](./ai-2.5.8-asr-provider-runtime-prd.md)
-- Nexus AI 计费：`.trellis/tasks/09-08-nexus-ai-channel-billing/`
-- 语音会话统一：`.trellis/tasks/09-04-unify-voice-session-rust/`
-- 语音 Provider 通道持久化：`.trellis/tasks/09-08-persist-asr-provider-channels/`
+- Nexus AI 计费：冻结任务 [`09-08-nexus-ai-channel-billing`](../../engineering/workflow/backlog.md#09-08-nexus-ai-channel-billing)
+- 语音会话统一：冻结任务 [`09-04-unify-voice-session-rust`](../../engineering/workflow/backlog.md#09-04-unify-voice-session-rust)
+- 语音 Provider 通道持久化：冻结任务 [`09-08-persist-asr-provider-channels`](../../engineering/workflow/backlog.md#09-08-persist-asr-provider-channels)
 - 质量基线：[`../PRD-QUALITY-BASELINE.md`](../PRD-QUALITY-BASELINE.md)

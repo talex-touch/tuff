@@ -454,8 +454,10 @@ export async function createQuickOpsFlowAiAdapterAuditFromFiles(
   const policyPath =
     input.policyPath ?? 'apps/core-app/src/main/modules/quick-ops/quick-ops-developer-preview.ts'
   const flowBusPath = input.flowBusPath ?? 'apps/core-app/src/main/modules/flow-bus/flow-bus.ts'
+  // The Flow page of the ⌘K card: where the target is picked and consent is asked for.
   const flowSelectorPath =
-    input.flowSelectorPath ?? 'apps/core-app/src/renderer/src/components/flow/FlowSelector.vue'
+    input.flowSelectorPath ??
+    'apps/core-app/src/renderer/src/modules/box/meta-actions/meta-flow-page.ts'
   const aiPaths = input.aiPaths ?? [
     'plugins/touch-quickops/index.js',
     'plugins/touch-quickops/index.test.cjs'

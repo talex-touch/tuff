@@ -6,12 +6,14 @@ import type {
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceStreamChunk,
+  IntelligenceTranslatePayload,
   IntelligenceUsageInfo,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import type { NativeOcrBlock } from '@talex-touch/tuff-native'
+import { translateSystemText } from '@talex-touch/tuff-native/translation'
 import { NetworkHttpStatusError } from '@talex-touch/utils/network'
 import { enterPerfContext } from '../../../utils/perf-context'
 import { getNetworkService } from '../../network'
@@ -281,6 +283,30 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
       for await (const chunk of super.chatStream(payload, options)) {
         yield withLocalStreamCost(chunk)
       }
+    }
+  }
+
+  async translate(
+    payload: IntelligenceTranslatePayload,
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<string>> {
+    if (this.config.metadata?.engine !== 'system-translation') {
+      return super.translate(payload, options)
+    }
+
+    const startedAt = Date.now()
+    const traceId = this.generateTraceId()
+    const translated = await translateSystemText(payload, {
+      timeoutMs: this.resolveRequestTimeout(options, 30_000),
+      signal: (options as LocalProviderRuntimeOptions).signal
+    })
+    return {
+      result: translated.text,
+      usage: withLocalUsageCost(),
+      model: 'system-translation',
+      latency: Date.now() - startedAt,
+      traceId,
+      provider: this.type
     }
   }
 

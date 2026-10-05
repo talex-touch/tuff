@@ -1,5 +1,7 @@
 import type { IntelligenceErrorCode as SharedIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
+import type { UsageLimitInfo } from './usage-ledger/usage-limits'
 import { homedir } from 'node:os'
+import { readUsageLimitInfo, USAGE_LIMIT_REACHED_CODE } from './usage-ledger/usage-limits'
 
 export type IntelligenceErrorCode = SharedIntelligenceErrorCode
 
@@ -14,6 +16,38 @@ export interface NormalizedIntelligenceError {
 function messageOf(error: unknown): string {
   if (error instanceof Error) return error.message || error.name
   return String(error)
+}
+
+const USAGE_LIMIT_PREFIX = /^\[USAGE_LIMIT_REACHED(?::[^\]]*)?\]\s*/
+const USAGE_LIMIT_RESETS_AT = /resets at (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/i
+
+function pad2(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+/** `YYYY-MM-DD HH:mm` in the main process's local time. */
+function formatLocalDateTime(timestamp: number): string {
+  const date = new Date(timestamp)
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(
+    date.getHours()
+  )}:${pad2(date.getMinutes())}`
+}
+
+/**
+ * Which limit refused the call and when it resets, from the structured `usageLimit` or, failing
+ * that, the reset time in the message (`… resets at <ISO>`).
+ */
+function describeUsageLimit(error: unknown, message: string): string {
+  const info: Partial<UsageLimitInfo> = readUsageLimitInfo(error) ?? {}
+  const resetsAt =
+    info.resetsAt ?? Date.parse(USAGE_LIMIT_RESETS_AT.exec(message)?.[1] ?? 'invalid')
+  const limit =
+    info.key === undefined
+      ? 'The usage limit you set is reached'
+      : `The usage limit you set is reached (${info.key}: ${info.used} / ${info.max})`
+  return Number.isFinite(resetsAt)
+    ? `${limit}; it resets at ${formatLocalDateTime(resetsAt)} local time (${new Date(resetsAt).toISOString()}).`
+    : `${limit}.`
 }
 
 export function normalizeIntelligenceError(
@@ -33,6 +67,20 @@ export function normalizeIntelligenceError(
       message,
       reason: 'Nexus provider requires a signed-in account.',
       recovery: 'Sign in to Nexus or switch to another enabled provider.',
+      capabilityId: options.capabilityId
+    }
+  }
+
+  // The user's own global limit, ahead of every quota rule: it is not Nexus credits, a team quota
+  // or a provider 429, and must not be reported as one.
+  if (explicitCode === USAGE_LIMIT_REACHED_CODE || lower.includes('usage_limit_reached')) {
+    return {
+      code: USAGE_LIMIT_REACHED_CODE,
+      // The SDK's message already carries `[USAGE_LIMIT_REACHED:<capability>]`; the wrapper adds it.
+      message: message.replace(USAGE_LIMIT_PREFIX, ''),
+      reason: describeUsageLimit(error, message),
+      recovery:
+        'Wait until the limit resets, or raise or clear it in Settings › Intelligence › Audit.',
       capabilityId: options.capabilityId
     }
   }
@@ -182,6 +230,11 @@ export function toNormalizedIntelligenceError(
   wrapped.recovery = normalized.recovery
   wrapped.capabilityId = normalized.capabilityId
   wrapped.cause = error
+  if (normalized.code === USAGE_LIMIT_REACHED_CODE) {
+    // Main-side callers (background services) read which limit and when it resets from here.
+    const usageLimit = readUsageLimitInfo(error)
+    if (usageLimit) Object.assign(wrapped, { usageLimit })
+  }
   return wrapped
 }
 
@@ -238,12 +291,24 @@ export function redactProviderDetail(text: string, home = homedir()): string {
  * conversation parses (`conversation-error-display.ts`) — so a CLI's 「invalid API key」 reaches the
  * failed bubble instead of a bare UNKNOWN. A plugin gets the code alone: a provider's words can name
  * the user's own endpoints and accounts.
+ *
+ * A call refused by the user's global usage limit carries our own sentence instead — which limit and
+ * when it resets — so the host renderer can name the reset time; it holds nothing user-specific.
  */
 export function toStreamFailure(
   code: string,
   error: unknown,
   options: { host: boolean }
 ): Error & { code: string } {
+  const usageLimit =
+    options.host && code === USAGE_LIMIT_REACHED_CODE ? readUsageLimitInfo(error) : null
+  if (usageLimit) {
+    const resetsAt = new Date(usageLimit.resetsAt).toISOString()
+    return Object.assign(
+      new Error(`[${code}] Usage limit reached: ${usageLimit.key}; resets at ${resetsAt}`),
+      { code }
+    )
+  }
   const raw = options.host ? readProviderDetail(error) : null
   const detail = raw ? redactProviderDetail(raw) : ''
   return Object.assign(new Error(detail ? `[${code}] ${detail}` : code), { code })

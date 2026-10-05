@@ -41,6 +41,10 @@ type HostOnlyIntelligenceMethod
     | 'getTodayStats'
     | 'getMonthStats'
     | 'getUsageStats'
+    | 'getUsageInsights'
+    | 'queryAuditLogs'
+    | 'getUsageLimits'
+    | 'setUsageLimits'
     | 'getLocalEnvironment'
     | 'orchestratorGetSnapshot'
     | 'orchestratorPreviewImport'
@@ -113,6 +117,10 @@ const HOST_ONLY_INTELLIGENCE_METHODS: Record<HostOnlyIntelligenceMethod, true> =
   getTodayStats: true,
   getMonthStats: true,
   getUsageStats: true,
+  getUsageInsights: true,
+  queryAuditLogs: true,
+  getUsageLimits: true,
+  setUsageLimits: true,
   getLocalEnvironment: true,
   orchestratorGetSnapshot: true,
   orchestratorPreviewImport: true,

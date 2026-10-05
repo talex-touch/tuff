@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/10-03-modelsdev-pricing/prd.md", "reason": "acceptance AC-A1–AC-A6 to verify"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/design.md", "reason": "parent §2 contract the implementation must match"}
+{"file": ".trellis/spec/main-process/database-write-contracts.md", "reason": "verify catalog writes go through the scheduler"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "repo-wide quality gates and forbidden patterns"}
