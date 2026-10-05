@@ -50,6 +50,7 @@ import { getUsageInsights } from './usage-insights'
 import {
   emptyUsageLimits,
   getUsageLimits,
+  onUsageLimitsChanged,
   setUsageLimits,
   USAGE_LIMIT_KEYS,
   USAGE_LIMIT_REACHED_CODE,
@@ -264,6 +265,24 @@ describe('storage (AC-C1)', () => {
     expect(await reservedRows()).toHaveLength(1)
   })
 
+  it('tells listeners what is stored after every change, and nothing for a rejected one', async () => {
+    const seen: UsageLimits[] = []
+    const off = onUsageLimitsChanged((limits) => seen.push(limits))
+    try {
+      await setUsageLimits({ requestsPerDay: 3 })
+      await expect(setUsageLimits({ requestsPerDay: 0 })).rejects.toMatchObject({
+        code: 'INVALID_REQUEST'
+      })
+      await setUsageLimits({})
+    } finally {
+      off()
+    }
+    expect(seen).toEqual([{ ...NONE, requestsPerDay: 3 }, NONE])
+    // Unsubscribed: the next change is not heard.
+    await setUsageLimits({ requestsPerDay: 2 })
+    expect(seen).toHaveLength(2)
+    await setUsageLimits({})
+  })
   it('rejects invalid limits as INVALID_REQUEST without writing', async () => {
     await setUsageLimits({ requestsPerDay: 3 })
 

@@ -1,6 +1,6 @@
 {
   "schema": "talex.touch.sensitive-data-inventory/v1",
-  "updatedAt": "2026-09-08",
+  "updatedAt": "2026-10-03",
   "verificationCommand": "corepack pnpm privacy:inventory:verify",
   "entries": [
     {
@@ -198,16 +198,22 @@
       "storageLocations": [
         "primary database: intelligence audit/context/memory tables",
         "primary database: ai_orchestrator_runs/events objective, cwd, output, usage, and allowlisted redacted metadata",
-        "process memory: volatile raw orchestrator request input, reconstructed authority, and bounded ten-second local AI-session metadata cache"
+        "process memory: volatile raw orchestrator request input, reconstructed authority, and bounded ten-second local AI-session metadata cache",
+        "primary database: intelligence_usage_stats usage counters per caller (UTC day/month) and for all callers under the reserved __global__ caller (local day/month), plus the system_config intelligence.usage.global-backfill marker"
       ],
-      "writers": ["Intelligence runtime, Pi orchestrator, and stable tool-result metadata projections"],
+      "writers": [
+        "Intelligence runtime, Pi orchestrator, and stable tool-result metadata projections",
+        "IntelligenceAuditLogger counts every Intelligence call into the per-caller and __global__ usage buckets whether or not audit detail is enabled; enableAudit only decides whether a metadata-only detail row is also written",
+        "one-shot global usage backfill sums retained detail rows into the __global__ bucket"
+      ],
       "readers": [
-        "Intelligence runtime, Pi orchestrator, typed run handlers, audit UI, and main-owned bounded local AI-session metadata reader"
+        "Intelligence runtime, Pi orchestrator, typed run handlers, audit UI, and main-owned bounded local AI-session metadata reader",
+        "host-only getUsageInsights and queryAuditLogs for the audit page, and per-caller quota checks"
       ],
       "exportPolicy": "ordinary audit export is bounded metadata only; owner-visible typed run DTO may expose objective, cwd, and output; raw request input, tool arguments, credentials, endpoints, native errors, and stacks forbidden",
-      "deletionPolicy": "audit detail and archived/expired unpinned context roots only; memory has an independent explicit lifecycle; host-only typed Privacy deletion removes one terminal orchestrator run after an opaque one-shot authority/revision preview, detaches child and automation references, and cascades its events; queued, pending-approval, running, runtime-active, and in-flight-write runs are protected",
-      "retentionPolicy": "the intelligence-context user policy also removes terminal orchestrator run roots with strict updated_at cutoff and keyset paging; cutoff-equal roots, roots with cutoff-fresh events, nonterminal/runtime-active/in-flight-write runs, active/pinned context, and memory/tombstones are protected; the local AI-session projection is process-only, expires after ten seconds, and is never cached after cancellation",
-      "rendererExposure": "typed product/run/audit DTOs may expose owner-visible run content; Privacy delete DTOs expose only run ID, disposition, bounded event count, opaque preview authority, and deleted event count; plugin AI-session DTOs expose only a hashed id, platform, safe project basename, timestamp, state, and turn count; raw request input, transcripts, prompts, stored objective/cwd/output/error/usage/metadata, event payloads, credentials, paths, and raw tool records are excluded",
+      "deletionPolicy": "audit detail and archived/expired unpinned context roots only; memory has an independent explicit lifecycle; host-only typed Privacy deletion removes one terminal orchestrator run after an opaque one-shot authority/revision preview, detaches child and automation references, and cascades its events; queued, pending-approval, running, runtime-active, and in-flight-write runs are protected; audit detail deletion never reduces the usage counters, which hold counts, tokens, latency, and estimated cost only",
+      "retentionPolicy": "the intelligence-context user policy also removes terminal orchestrator run roots with strict updated_at cutoff and keyset paging; cutoff-equal roots, roots with cutoff-fresh events, nonterminal/runtime-active/in-flight-write runs, active/pinned context, and memory/tombstones are protected; the local AI-session projection is process-only, expires after ten seconds, and is never cached after cancellation; usage counters are retained aggregates without prompts, responses, or metadata, written even while audit detail is off and for calls whose detail falls below a retention floor",
+      "rendererExposure": "typed product/run/audit DTOs may expose owner-visible run content; Privacy delete DTOs expose only run ID, disposition, bounded event count, opaque preview authority, and deleted event count; plugin AI-session DTOs expose only a hashed id, platform, safe project basename, timestamp, state, and turn count; raw request input, transcripts, prompts, stored objective/cwd/output/error/usage/metadata, event payloads, credentials, paths, and raw tool records are excluded; host-only usage insights expose aggregate counts, tokens, latency, estimated cost, channel/model/capability/caller keys, and allowlisted audit metadata only",
       "portable": false,
       "migrationStatus": "owner-bound",
       "evidence": [
@@ -221,7 +227,12 @@
         "apps/core-app/src/main/modules/ai/pi-agent-runtime-host.ts#symbol=sanitizeToolOutputForRuntime",
         "apps/core-app/src/main/modules/plugin/host/plugin-local-ai-session-metadata.ts#symbol=createLocalAiSessionMetadataReader",
         "apps/core-app/src/main/modules/plugin/host/plugin-ai-sessions-capabilities.ts#symbol=createFixedPluginAiSessionsService",
-        "apps/core-app/src/main/modules/plugin/host/plugin-local-ai-session-metadata.test.ts#test=rejects cancellation after the final header read without caching fallback metadata"
+        "apps/core-app/src/main/modules/plugin/host/plugin-local-ai-session-metadata.test.ts#test=rejects cancellation after the final header read without caching fallback metadata",
+        "apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts#symbol=IntelligenceAuditLogger",
+        "apps/core-app/src/main/modules/ai/usage-ledger/global-backfill.ts#symbol=runGlobalUsageBackfill",
+        "apps/core-app/src/main/modules/ai/usage-ledger/usage-ledger.integration.test.ts#test=audit off: no detail row, but the global and per-caller buckets both count the call",
+        "apps/core-app/src/main/modules/ai/usage-ledger/usage-ledger.integration.test.ts#test=a call that started before a privacy delete is counted but keeps no detail row",
+        "apps/core-app/src/main/modules/ai/usage-ledger/global-backfill.integration.test.ts#test=leaves nothing behind when the transaction fails, and repeats with the same cutoff"
       ]
     },
     {

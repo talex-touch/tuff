@@ -89,7 +89,8 @@ async function seed(rows: SeedRow[]): Promise<void> {
 
 /** Shanghai: 23:00 local 09-20, 01:00 local 09-21 (an outer row beside it), 11:00 local 09-26. */
 const HISTORY: SeedRow[] = [
-  // Old MODEL_COSTS default price; re-priced to (1000 × 2.5 + 1000 × 10) / 1e6 = 0.0125.
+  // Older than the pricing `since` marker, so its stored cost is replaced by the models.dev
+  // catalog price (the stub above): (1000 × 2.5 + 1000 × 10) / 1e6 = 0.0125.
   {
     traceId: 'hist-1',
     iso: '2026-09-20T15:00:00.000Z',

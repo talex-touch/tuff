@@ -30,6 +30,7 @@ import { computed, getCurrentScope, onScopeDispose, ref, toRaw } from 'vue'
 import { toModelAttachments } from './attachment-payload'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
+  isGovernanceFailure,
   resolveConversationError
 } from './conversation-error-display'
 
@@ -656,7 +657,9 @@ export function useHomeConversation(
       },
       onError: (error) => {
         if (settled) return
-        if (hasProviderActivity || nativePiSessionStarted) {
+        // A refusal (the usage limit, credits, sign-in, permission) answers the same without
+        // streaming: a second request would only be refused again, so the stream's own words stand.
+        if (hasProviderActivity || nativePiSessionStarted || isGovernanceFailure(error)) {
           fail(error)
           return
         }
@@ -687,7 +690,7 @@ export function useHomeConversation(
       // `stream()` rejects when the stream never starts (no stream-capable transport, handshake
       // failure). A defensive activity check also prevents a non-conforming transport from
       // triggering a second billable request after invoking a handler before rejecting.
-      if (hasProviderActivity || nativePiSessionStarted) fail(error)
+      if (hasProviderActivity || nativePiSessionStarted || isGovernanceFailure(error)) fail(error)
       else await fallback(error)
       return
     }

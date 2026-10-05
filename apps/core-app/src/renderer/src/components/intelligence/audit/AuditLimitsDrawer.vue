@@ -11,6 +11,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import InsightsNotice from '~/components/settings/insights/InsightsNotice.vue'
+import { USAGE_LIMIT_LABEL_KEYS } from './audit-labels'
 import AuditZeroCostNotice from './AuditZeroCostNotice.vue'
 
 /**
@@ -76,15 +77,6 @@ const ROWS = [
   month: LimitKey
 }>
 
-const FIELD_KEYS: Record<LimitKey, string> = {
-  requestsPerDay: 'intelligenceAudit.limits.items.requestsPerDay',
-  requestsPerMonth: 'intelligenceAudit.limits.items.requestsPerMonth',
-  tokensPerDay: 'intelligenceAudit.limits.items.tokensPerDay',
-  tokensPerMonth: 'intelligenceAudit.limits.items.tokensPerMonth',
-  costUsdPerDay: 'intelligenceAudit.limits.items.costUsdPerDay',
-  costUsdPerMonth: 'intelligenceAudit.limits.items.costUsdPerMonth'
-}
-
 function isCost(key: LimitKey): boolean {
   return key === 'costUsdPerDay' || key === 'costUsdPerMonth'
 }
@@ -121,12 +113,12 @@ function validate(): string {
   for (const key of Object.keys(EMPTY_LIMITS) as LimitKey[]) {
     const value = draft[key]
     if (value === null) continue
-    const field = t(FIELD_KEYS[key])
+    const field = t(USAGE_LIMIT_LABEL_KEYS[key])
     if (isCost(key)) {
       if (!Number.isFinite(value) || value <= 0) {
         return t('intelligenceAudit.limits.invalidCost', { field })
       }
-    } else if (!Number.isInteger(value) || value <= 0) {
+    } else if (!Number.isSafeInteger(value) || value <= 0) {
       return t('intelligenceAudit.limits.invalidCount', { field })
     }
   }
@@ -205,7 +197,7 @@ function setField(key: LimitKey, value: number | null): void {
             :disabled="saving || reading"
             :decrease-label="t('intelligenceAudit.limits.decrease')"
             :increase-label="t('intelligenceAudit.limits.increase')"
-            :aria-label="t(FIELD_KEYS[key])"
+            :aria-label="t(USAGE_LIMIT_LABEL_KEYS[key])"
             :data-testid="`audit-limit-${key}`"
             @update:model-value="setField(key, $event)"
           />

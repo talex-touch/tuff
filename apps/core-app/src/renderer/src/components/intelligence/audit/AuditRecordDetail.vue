@@ -16,6 +16,7 @@ import {
   formatInteger,
   formatLatency,
   formatPricePerMillion,
+  formatRecordDateTime,
   formatUsd,
   toLocalIsoString
 } from './audit-format'
@@ -74,7 +75,7 @@ const pricingText = computed(() => {
 const metadataEntries = computed(() =>
   Object.entries(props.record.metadata ?? {}).map(([key, value]) => ({
     key,
-    value: typeof value === 'string' ? value : JSON.stringify(value)
+    text: `${key}=${typeof value === 'string' ? value : JSON.stringify(value)}`
   }))
 )
 
@@ -106,6 +107,14 @@ function formatCitation(item: ContextPackageLogExplainItem): string {
     .filter(Boolean)
     .join(' · ')
 }
+
+function sourcesLine(summary: ContextPackageLogSafeSummary): string {
+  return `${t('intelligence.audit.contextSources')}: ${formatSourceTypes(summary)}`
+}
+
+function checkpointLine(checkpoint: ContextCheckpointSafeSummary): string {
+  return [checkpoint.type, checkpoint.reason, checkpoint.contextScope].join(' · ')
+}
 </script>
 
 <template>
@@ -113,7 +122,16 @@ function formatCitation(item: ContextPackageLogExplainItem): string {
     <dl class="AuditRecordDetail-Grid">
       <div>
         <dt>{{ t('intelligenceAudit.records.detail.time') }}</dt>
-        <dd>{{ toLocalIsoString(record.timestamp) }}</dd>
+        <!-- Read as a date and time; the exact instant, offset included, is the export's form. -->
+        <dd>
+          <time
+            :datetime="toLocalIsoString(record.timestamp)"
+            :title="toLocalIsoString(record.timestamp)"
+            data-testid="audit-record-time"
+          >
+            {{ formatRecordDateTime(record.timestamp, locale) }}
+          </time>
+        </dd>
       </div>
       <div>
         <dt>{{ t('intelligenceAudit.records.detail.status') }}</dt>
@@ -203,13 +221,11 @@ function formatCitation(item: ContextPackageLogExplainItem): string {
       <div class="is-wide">
         <dt>{{ t('intelligenceAudit.records.detail.metadata') }}</dt>
         <dd>
-          <span v-if="metadataEntries.length === 0">{{
-            t('intelligenceAudit.records.detail.noMetadata')
-          }}</span>
+          <template v-if="metadataEntries.length === 0">
+            {{ t('intelligenceAudit.records.detail.noMetadata') }}
+          </template>
           <span v-else class="AuditRecordDetail-Meta" data-testid="audit-record-metadata">
-            <code v-for="entry in metadataEntries" :key="entry.key"
-              >{{ entry.key }}={{ entry.value }}</code
-            >
+            <code v-for="entry in metadataEntries" :key="entry.key">{{ entry.text }}</code>
           </span>
         </dd>
       </div>
@@ -241,9 +257,7 @@ function formatCitation(item: ContextPackageLogExplainItem): string {
             <span>{{ summary.itemCount }} {{ t('intelligence.audit.contextItems') }}</span>
           </p>
           <p class="AuditRecordDetail-Line is-secondary">
-            <span
-              >{{ t('intelligence.audit.contextSources') }}: {{ formatSourceTypes(summary) }}</span
-            >
+            <span>{{ sourcesLine(summary) }}</span>
             <span v-if="summary.retrievalItemCount">
               {{ t('intelligence.audit.contextRetrieval') }}: {{ summary.retrievalItemCount }}
             </span>
@@ -318,10 +332,7 @@ function formatCitation(item: ContextPackageLogExplainItem): string {
                 :key="checkpoint.id"
                 class="AuditRecordDetail-Item"
               >
-                <span
-                  >{{ checkpoint.type }} · {{ checkpoint.reason }} ·
-                  {{ checkpoint.contextScope }}</span
-                >
+                <span>{{ checkpointLine(checkpoint) }}</span>
                 <span v-if="checkpoint.metadataKeys.length" class="AuditRecordDetail-Citation">
                   {{ t('intelligence.audit.contextMetadataKeys') }}:
                   {{ checkpoint.metadataKeys.join(', ') }}

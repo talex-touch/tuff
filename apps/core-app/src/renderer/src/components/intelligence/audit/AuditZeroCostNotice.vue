@@ -55,9 +55,11 @@ const rows = computed(() =>
     channel: labels.channel(model.providerId).name,
     status: model.status,
     reason: t(REASON_KEYS[model.status]),
-    calls: t('intelligenceAudit.zeroCost.calls', {
-      count: formatInteger(model.requestCount, locale.value)
-    })
+    calls: t(
+      'intelligenceAudit.zeroCost.callCount',
+      { count: formatInteger(model.requestCount, locale.value) },
+      model.requestCount
+    )
   }))
 )
 
@@ -65,10 +67,19 @@ const callCount = computed(() =>
   props.models.reduce((sum, model) => sum + Math.max(0, model.requestCount), 0)
 )
 
+/** Two counts in one sentence, each worded on its own so neither borrows the other's plural. */
 const title = computed(() =>
   t('intelligenceAudit.zeroCost.title', {
-    models: formatInteger(props.models.length, locale.value),
-    calls: formatInteger(callCount.value, locale.value)
+    models: t(
+      'intelligenceAudit.zeroCost.modelCount',
+      { count: formatInteger(props.models.length, locale.value) },
+      props.models.length
+    ),
+    calls: t(
+      'intelligenceAudit.zeroCost.callCount',
+      { count: formatInteger(callCount.value, locale.value) },
+      callCount.value
+    )
   })
 )
 

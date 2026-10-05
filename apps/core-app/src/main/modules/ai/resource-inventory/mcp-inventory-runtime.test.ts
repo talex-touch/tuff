@@ -1,4 +1,5 @@
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type { McpServerDeclaredProbeRequest } from '@talex-touch/utils/transport/sdk/domains/mcp-servers'
 import type { AiImportedConfigItem } from '@talex-touch/utils/types/ai-orchestrator'
 import type { McpInventoryRuntimeDeps } from './mcp-inventory-runtime'
 import { McpServerEvents } from '@talex-touch/utils/transport/sdk/domains/mcp-servers'
@@ -71,24 +72,29 @@ function spyDeps() {
     })),
     listImportedItems: vi.fn(async () => [manualServer()]),
     setProfileEnabled: vi.fn(async (_itemId: string, _profileId: string, _enabled: boolean) => {}),
-    setItemActive: vi.fn(async (_itemId: string, _active: boolean) => {})
+    setItemActive: vi.fn(async (_itemId: string, _active: boolean) => {}),
+    probeDeclared: vi.fn(async (_request: McpServerDeclaredProbeRequest) => ({
+      ok: true,
+      toolCount: 2
+    }))
   } satisfies McpInventoryRuntimeDeps
 }
 
 describe('MCP inventory channels', () => {
-  it('registers the inventory and the per-server switch, and nothing else', () => {
+  it('registers the inventory, the per-server switch and the declared probe, and nothing else', () => {
     const { transport, handlers } = fakeTransport()
     const cleanup = registerMcpInventoryChannels(transport, spyDeps())
 
     expect([...handlers.keys()].sort()).toEqual([
       'mcp-servers:api:inventory',
+      'mcp-servers:api:probe-declared',
       'mcp-servers:api:set-server-enabled'
     ])
     cleanup()
     expect(handlers.size).toBe(0)
   })
 
-  it('refuses a plugin caller before scanning, reading the store or switching anything', async () => {
+  it('refuses a plugin caller before scanning, reading the store, switching or starting anything', async () => {
     const { transport, handlers } = fakeTransport()
     const deps = spyDeps()
     registerMcpInventoryChannels(transport, deps)
@@ -102,12 +108,25 @@ describe('MCP inventory channels', () => {
         pluginContext
       )
     ).rejects.toThrow('INTELLIGENCE_HOST_ONLY_CAPABILITY')
+    await expect(
+      handlers.get(McpServerEvents.probeDeclared.toEventName())!(
+        {
+          scanId: 'scan-1',
+          candidateId: 'claude:mcp',
+          server: 'context7',
+          key: 'mcp:any',
+          confirmSecrets: true
+        },
+        pluginContext
+      )
+    ).rejects.toThrow('INTELLIGENCE_HOST_ONLY_CAPABILITY')
 
     for (const spy of [
       deps.preview,
       deps.listImportedItems,
       deps.setProfileEnabled,
-      deps.setItemActive
+      deps.setItemActive,
+      deps.probeDeclared
     ])
       expect(spy).not.toHaveBeenCalled()
   })

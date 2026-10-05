@@ -131,7 +131,11 @@ import {
 } from './recommendation-engine'
 import type { UsageBehaviorRow } from '../usage-utils'
 import { recommendationSourceRegistry } from './recommendation-source-registry'
-import { createUsageLimitError } from '../../../ai/usage-ledger/usage-limits'
+import {
+  createUsageLimitError,
+  emptyUsageLimits,
+  notifyUsageLimitsChanged
+} from '../../../ai/usage-ledger/usage-limits'
 
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
@@ -1406,6 +1410,69 @@ describe('RecommendationEngine', () => {
     }
   )
 
+  it('brings the semantic layer back as soon as the limits change, not at the reset', async () => {
+    vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
+    // A monthly limit: left alone, the layer would stay off until June.
+    const resetsAt = Date.parse('2026-05-31T16:00:00.000Z')
+    intelligenceSdkMock.embeddingGenerate.mockRejectedValue(
+      createUsageLimitError('embedding.generate', {
+        key: 'requestsPerMonth',
+        used: 10,
+        max: 10,
+        resetsAt
+      })
+    )
+
+    const engine = new RecommendationEngine(createDbUtils() as never)
+    const internals = engine as unknown as {
+      semanticAiCooldownUntil: number
+      isSemanticAiInCooldown: () => boolean
+    }
+    Object.assign(engine as unknown as Record<string, unknown>, {
+      contextProvider: {
+        getCurrentContext: vi.fn(async () => devFocusCodeContext),
+        generateCacheKey: (context: ContextSignal) =>
+          `${context.time.timeSlot}:${context.time.dayOfWeek}:usage-limit-change`
+      },
+      getRecommendationSemanticSettings: vi.fn(async () => ({
+        localVectorEnabled: false,
+        aiRerankEnabled: false,
+        aiEmbeddingEnabled: true
+      })),
+      calculateContextMatch: vi.fn(() => 0),
+      scheduleTrendBackfill: vi.fn(),
+      getPinnedItems: vi.fn(async () => []),
+      getCandidates: vi.fn(async () => ({
+        items: [
+          {
+            sourceId: 'app-provider',
+            itemId: 'discord',
+            sourceType: 'app',
+            source: 'frequent',
+            usageStats: createUsageStats('discord', { executeCount: 8 })
+          }
+        ],
+        perf: candidatePerf(1, 1)
+      }))
+    })
+
+    await engine.recommend({ limit: 10 })
+    expect(internals.semanticAiCooldownUntil).toBe(resetsAt)
+    expect(internals.isSemanticAiInCooldown()).toBe(true)
+    const callsWhilePaused = intelligenceSdkMock.embeddingGenerate.mock.calls.length
+
+    // The user raises or clears the limit in Audit: on again at once, weeks before June.
+    notifyUsageLimitsChanged(emptyUsageLimits())
+    expect(internals.isSemanticAiInCooldown()).toBe(false)
+
+    // The next recommendation asks the semantic layer again (the paused ranking is not replayed
+    // from the cache). Here the limit still binds, so that one call is refused and pauses it
+    // again — one refusal, no loop.
+    await engine.recommend({ limit: 10 })
+    expect(intelligenceSdkMock.embeddingGenerate.mock.calls.length).toBe(callsWhilePaused + 1)
+    expect(internals.semanticAiCooldownUntil).toBe(resetsAt)
+    intelligenceSdkMock.embeddingGenerate.mockReset()
+  })
   it('uses optional AI rerank scores to improve semantic ranking', async () => {
     vi.setSystemTime(new Date('2026-05-04T09:00:00.000Z'))
     intelligenceSdkMock.ragRerank.mockResolvedValue({

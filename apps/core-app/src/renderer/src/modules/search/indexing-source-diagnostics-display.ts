@@ -20,8 +20,16 @@ import {
   resolveIndexedSourceMaintenanceActions,
   resolveIndexedSourceRecoveryRecommendation
 } from '@talex-touch/utils/search'
+// Relative, never `~/`: this module also runs under Node + tsx
+// (`scripts/settings-indexing-diagnostics-verify.ts`), where the renderer alias does not resolve.
+// Both helpers are alias-free and framework-free for the same reason.
+import { formatResetTime } from '../../components/intelligence/audit/audit-format'
+import { usageLimitLabelKey } from '../../components/intelligence/audit/usage-limit-labels'
 
 export type IndexingSourceTone = 'success' | 'info' | 'warning' | 'danger' | 'muted'
+
+/** The interface's `t`: names the chips put in a message are translated before they go in. */
+export type IndexingSourceTranslate = (key: string) => string
 
 export interface IndexingSourceTaskChip {
   id: 'scan' | 'watch' | 'reconcile' | 'reset'
@@ -366,11 +374,18 @@ function resolveEvidenceChipLabelKey(evidence: IndexedSourceEvidence): string {
     return 'settings.settingFileIndex.sourceEvidenceChip.integrity'
   }
 
+  // Semantic indexing held back by the AI usage limit: which limit, and when it picks up again.
+  if (evidence.id.endsWith(':embedding-pause')) {
+    return 'settings.settingFileIndex.sourceEvidenceChip.embeddingPause'
+  }
+
   return 'settings.settingFileIndex.sourceEvidenceChip.generic'
 }
 
 function resolveEvidenceChipValues(
-  evidence: IndexedSourceEvidence
+  evidence: IndexedSourceEvidence,
+  locale?: string,
+  translate?: IndexingSourceTranslate
 ): Record<string, string | number> {
   const metadata = evidence.metadata ?? {}
 
@@ -401,8 +416,26 @@ function resolveEvidenceChipValues(
     needsRebuild: toEvidenceBoolean(metadata.needsRebuild),
     orphanedKeywordsRemoved: toEvidenceNumber(metadata.orphanedKeywordsRemoved),
     resetSearchIndexRows: toEvidenceNumber(metadata.resetSearchIndexRows),
-    resetScanProgressRows: toEvidenceNumber(metadata.resetScanProgressRows)
+    resetScanProgressRows: toEvidenceNumber(metadata.resetScanProgressRows),
+    limit: formatPauseLimit(metadata.limitKey, translate),
+    resumesAt: formatPauseResumesAt(toOptionalNumber(metadata.pausedUntil), locale)
   }
+}
+
+/**
+ * Which usage limit paused indexing, by the name Audit gives it (「每日请求数」) rather than the
+ * stored key. A key this build does not name is shown as stored.
+ */
+function formatPauseLimit(limitKey: unknown, translate?: IndexingSourceTranslate): string {
+  if (typeof limitKey !== 'string' || !limitKey) return '-'
+  const labelKey = usageLimitLabelKey(limitKey)
+  return labelKey && translate ? translate(labelKey) : limitKey
+}
+
+/** A usage-limit pause's reset time, in the interface's language when it is known. */
+function formatPauseResumesAt(pausedUntil: number | undefined, locale?: string): string {
+  if (pausedUntil === undefined || pausedUntil <= 0) return '-'
+  return locale ? formatResetTime(pausedUntil, locale) : formatIndexingSourceTimestamp(pausedUntil)
 }
 
 function resolveRecentTaskTone(status: IndexedSourceTaskHistoryStatus): IndexingSourceTone {
@@ -705,9 +738,16 @@ export function resolveIndexingSourceAdmissionIssueChips(
   }))
 }
 
+/**
+ * `locale` and `translate` are the interface's: a usage-limit pause names its reset time in that
+ * language and its limit by Audit's name for it, the way the audit page and the refusal copy do.
+ * Without them the time falls back to the runtime's own format and the limit to its stored key.
+ */
 export function resolveIndexingSourceEvidenceChips(
   source: IndexedSourceDiagnostics,
-  limit = 2
+  limit = 2,
+  locale?: string,
+  translate?: IndexingSourceTranslate
 ): IndexingSourceEvidenceChip[] {
   return [...(source.evidence ?? [])]
     .sort(
@@ -720,7 +760,7 @@ export function resolveIndexingSourceEvidenceChips(
       id: evidence.id,
       tone: resolveEvidenceTone(evidence.status),
       labelKey: resolveEvidenceChipLabelKey(evidence),
-      values: resolveEvidenceChipValues(evidence)
+      values: resolveEvidenceChipValues(evidence, locale, translate)
     }))
 }
 

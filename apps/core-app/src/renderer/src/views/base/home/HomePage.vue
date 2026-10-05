@@ -71,7 +71,8 @@ import {
 } from '~/modules/conversation/conversation-title'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
-  CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
+  CONVERSATION_ERROR_PROVIDER_UNAVAILABLE,
+  CONVERSATION_ERROR_USAGE_LIMIT_REACHED
 } from '~/modules/conversation/conversation-error-display'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useAgentTools } from '~/modules/conversation/useAgentTools'
@@ -97,6 +98,10 @@ import { HOME_FEED_MAX_ITEMS } from '~/modules/home-push/feed'
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
 import { useHomePush } from '~/modules/home-push/useHomePush'
 import { modelFamilyIconFor } from '~/modules/intelligence/model-family-icons'
+import {
+  resolveIntelligenceErrorRecovery,
+  USAGE_LIMITS_ROUTE
+} from '~/modules/intelligence/ai-error-recovery'
 import { providerIconForId } from '~/modules/intelligence/provider-icons'
 import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
 import { appSetting } from '~/modules/storage/app-storage'
@@ -119,7 +124,7 @@ import HomeWorkspaceQueue from './workspace/HomeWorkspaceQueue.vue'
  * send. Main owns execution, durable history and queues; this page owns only the current view,
  * draft and the navigation-scoped effects of asynchronous submissions.
  */
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const MAX_INPUT_HEIGHT = 200
 
@@ -289,10 +294,12 @@ const dictation = useComposerDictation({
       kind,
       {
         t,
+        locale: locale.value,
         openRecognitionSettings: () => void router.push('/setting/intelligence/capabilities'),
         openMicrophoneSettings: micSettingsAvailable
           ? () => void dictation.openMicrophoneSettings()
-          : undefined
+          : undefined,
+        openUsageLimits: () => void router.push(USAGE_LIMITS_ROUTE)
       },
       detail
     )
@@ -1094,6 +1101,26 @@ function resolveErrorTitle(code: string | undefined): string {
   if (code === 'WORKSPACE_TURN_INTERRUPTED')
     return t('home.workspace.error.WORKSPACE_TURN_INTERRUPTED')
   return t('home.error.generic')
+}
+
+/**
+ * A turn the usage limit refused, read as the user's own limit rather than a fault: its own title,
+ * the reset time in local words instead of main's English sentence, and the way to the limits in
+ * place of a retry that would only be refused again until then.
+ */
+function resolveUsageLimitFailure(
+  error: { code: string; detail: string } | undefined
+): ReturnType<typeof resolveIntelligenceErrorRecovery> | null {
+  if (error?.code !== CONVERSATION_ERROR_USAGE_LIMIT_REACHED) return null
+  return resolveIntelligenceErrorRecovery(
+    { errorCode: error.code, error: error.detail },
+    t,
+    locale.value
+  )
+}
+
+function openUsageLimits(): void {
+  void router.push(USAGE_LIMITS_ROUTE)
 }
 
 /**
@@ -1949,7 +1976,38 @@ onBeforeUnmount(disposeCommands)
                         <span>{{ t('home.compacting') }}</span>
                       </p>
 
-                      <div v-if="message.status === 'failed'" class="HomePage-Error" role="alert">
+                      <div
+                        v-if="
+                          message.status === 'failed' && resolveUsageLimitFailure(message.error)
+                        "
+                        class="HomePage-Error is-usage-limit"
+                        role="alert"
+                        data-testid="home-usage-limit-error"
+                      >
+                        <span class="i-ri-timer-line HomePage-ErrorIcon" />
+                        <div class="HomePage-ErrorBody">
+                          <p class="HomePage-ErrorTitle">
+                            {{ resolveUsageLimitFailure(message.error)?.title }}
+                          </p>
+                          <p class="HomePage-ErrorDetail">
+                            {{ resolveUsageLimitFailure(message.error)?.detail }}
+                          </p>
+                        </div>
+                        <button
+                          class="HomePage-RetryBtn"
+                          type="button"
+                          data-testid="home-open-usage-limits"
+                          @click="openUsageLimits"
+                        >
+                          {{ resolveUsageLimitFailure(message.error)?.action?.label }}
+                        </button>
+                      </div>
+
+                      <div
+                        v-else-if="message.status === 'failed'"
+                        class="HomePage-Error"
+                        role="alert"
+                      >
                         <span class="i-ri-error-warning-line HomePage-ErrorIcon" />
                         <div class="HomePage-ErrorBody">
                           <p class="HomePage-ErrorTitle">
@@ -2877,6 +2935,28 @@ onBeforeUnmount(disposeCommands)
   // The block itself is already `danger-soft`, so the hover has to go a step deeper to register.
   &:hover {
     background: color-mix(in srgb, var(--shell-danger) 12%, transparent);
+  }
+}
+
+/*
+ * A limit the user set is not a fault: the same block in the warning tone, whose button leads to
+ * the limits instead of retrying a turn that would be refused again.
+ */
+.HomePage-Error.is-usage-limit {
+  background: var(--shell-warning-soft);
+
+  .HomePage-ErrorIcon,
+  .HomePage-ErrorTitle {
+    color: var(--shell-warning);
+  }
+
+  .HomePage-RetryBtn {
+    border-color: var(--shell-warning-border, var(--shell-warning));
+    color: var(--shell-warning);
+
+    &:hover {
+      background: color-mix(in srgb, var(--shell-warning) 12%, transparent);
+    }
   }
 }
 

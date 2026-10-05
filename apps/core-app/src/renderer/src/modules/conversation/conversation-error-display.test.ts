@@ -45,7 +45,7 @@ describe('resolveConversationError', () => {
     const error = resolveConversationError(new Error(`[USAGE_LIMIT_REACHED:text.chat] ${sentence}`))
 
     expect(
-      resolveIntelligenceErrorRecovery({ errorCode: error.code, error: error.detail }, t)
+      resolveIntelligenceErrorRecovery({ errorCode: error.code, error: error.detail }, t, 'en-US')
     ).toMatchObject({
       code: 'usage-limit',
       title: 'AI usage limit reached',

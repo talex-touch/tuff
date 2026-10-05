@@ -176,6 +176,8 @@ export function classifyDictationFailure(error: unknown): DictationFailureNotice
 
 export interface DictationNoticeContext {
   t: (key: string, params?: Record<string, unknown>) => string
+  /** The interface's language, which the reset time a usage-limit notice names is written in. */
+  locale: string
   /** Opens the OS microphone pane; absent where the platform has none (Linux). */
   openMicrophoneSettings?: () => void
   /** Where recognition is set up (`/setting/intelligence/capabilities`). */
@@ -280,7 +282,7 @@ export function showDictationNotice(
     const resetsAt = detail ? Date.parse(detail) : Number.NaN
     const message = Number.isFinite(resetsAt)
       ? context.t('assistant.voicePanel.usageLimitReached', {
-          time: formatUsageLimitResetTime(resetsAt)
+          time: formatUsageLimitResetTime(resetsAt, context.locale)
         })
       : context.t(copy.message)
     toast.warning(message, action ? { action } : undefined)

@@ -35,6 +35,7 @@ import { readBoundedImportFile } from './ai-import-bounded-file'
 import { parseConfig, parseMcpProfiles } from './ai-import-config-parser'
 import { aiImportRuntimeService } from './ai-import-runtime'
 import { aiImportedConfigRuntime, mcpProfilesFromItem } from './ai-imported-config-runtime'
+import { frontmatterFields, frontmatterText } from './frontmatter-fields'
 
 interface SourceLayout {
   provider: AiCliProviderId
@@ -251,23 +252,19 @@ async function findExecutable(command: string): Promise<string | undefined> {
   return undefined
 }
 
+/**
+ * The metadata a candidate's header declares. Read with the lenient header reader the skills page
+ * uses too (`frontmatter-fields.ts`), so a `description: >` block arrives as its text rather than
+ * as ">" — and is what an imported copy keeps as its description — and the lines indented under a
+ * key are never reported as keys of their own.
+ */
 function parseFrontmatter(content: string): CandidateMetadata {
-  if (!content.startsWith('---')) return {}
-  const end = content.indexOf('\n---', 3)
-  if (end < 0) return {}
+  if (!content.startsWith('---') || content.indexOf('\n---', 3) < 0) return {}
   const metadata: CandidateMetadata = { frontmatterKeys: [] }
-  const lines = content.slice(3, end).split(/\r?\n/)
-  for (let index = 0; index < lines.length; index += 1) {
-    const trimmed = lines[index]!.trim()
-    const colonIndex = trimmed.indexOf(':')
-    if (colonIndex <= 0) continue
-    const key = trimmed.slice(0, colonIndex).toLowerCase()
-    if (!/^[\w-]+$/.test(key)) continue
+  for (const field of frontmatterFields(content)) {
+    const key = field.key.toLowerCase()
     metadata.frontmatterKeys!.push(key)
-    const value = trimmed
-      .slice(colonIndex + 1)
-      .trim()
-      .replace(/^['"]|['"]$/g, '')
+    const value = frontmatterText(field)
     if (key === 'name') metadata.name = value
     if (key === 'description') metadata.description = value
     if (key === 'mode') metadata.mode = value
@@ -276,7 +273,7 @@ function parseFrontmatter(content: string): CandidateMetadata {
     }
     if (key === 'paths' || key === 'path' || key === 'globs' || key === 'glob') {
       const globs: string[] = []
-      const inline = value.replace(/^\[|\]$/g, '')
+      const inline = field.inline.replace(/^['"]|['"]$/g, '').replace(/^\[|\]$/g, '')
       if (inline) {
         globs.push(
           ...inline
@@ -285,11 +282,11 @@ function parseFrontmatter(content: string): CandidateMetadata {
             .filter(Boolean)
         )
       } else {
-        while (index + 1 < lines.length) {
-          const match = /^\s*-\s*(.+?)\s*$/.exec(lines[index + 1]!)
+        for (const line of field.continuation) {
+          if (!line.trim()) continue
+          const match = /^\s*-\s*(.+?)\s*$/.exec(line)
           if (!match) break
           globs.push(match[1]!.replace(/^['"]|['"]$/g, ''))
-          index += 1
         }
       }
       metadata.globs = [...new Set([...(metadata.globs ?? []), ...globs])]

@@ -1,3 +1,5 @@
+import { USAGE_LIMIT_REACHED_CODE } from './usage-ledger/usage-limits'
+
 export const APPROVAL_REQUIRED_PREFIX = 'APPROVAL_REQUIRED:'
 export const INTERRUPTED_TOOL_CALL_PREFIX = 'INTERRUPTED_TOOL_CALL:'
 
@@ -92,6 +94,36 @@ export function isRunInterruptedControlError(error: unknown): error is Error {
 
 export function isPiRuntimeControlError(error: unknown): error is Error {
   return error instanceof PiRuntimeControlError
+}
+
+/**
+ * What a run that the user's own usage limit stopped records: the stable code and a fixed sentence,
+ * never the limit's details. The run record persists and a plugin with the agents permission reads
+ * it, so which limit and when it resets stay with the surfaces that read the live limit status.
+ */
+export const AI_RUN_USAGE_LIMIT_REACHED = `${USAGE_LIMIT_REACHED_CODE}: AI usage limit reached.`
+
+/**
+ * A run that failed because the usage limit refused one of its model requests. The worker only
+ * learns that a model request failed — its protocol carries no codes — so the host remembers the
+ * refusal and fails the run with this instead of its generic failure. Not a control error: the run
+ * failed, nothing is to be approved, cancelled or resumed.
+ */
+class PiRunUsageLimitedError extends Error {
+  readonly code = USAGE_LIMIT_REACHED_CODE
+
+  constructor() {
+    super(AI_RUN_USAGE_LIMIT_REACHED)
+    this.name = 'PiRunUsageLimitedError'
+  }
+}
+
+export function createRunUsageLimitedError(): Error {
+  return new PiRunUsageLimitedError()
+}
+
+export function isRunUsageLimitedError(error: unknown): error is Error {
+  return error instanceof PiRunUsageLimitedError
 }
 
 export function parseApprovalRequirement(message: string): PiApprovalRequirement | undefined {

@@ -12,6 +12,7 @@ import type { AuditRecordWindow, AuditStatusFilter } from './useAuditRecords'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxDataTable } from '@talex-touch/tuffex/data-table'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
 import { TxFilterChips } from '@talex-touch/tuffex/filter-chips'
 import { TxPagination } from '@talex-touch/tuffex/pagination'
 import { TxSelect, TxSelectItem } from '@talex-touch/tuffex/select'
@@ -48,7 +49,7 @@ defineOptions({ name: 'AuditRecordsDrawer' })
 
 const props = defineProps<{
   /** The page's window when the drawer opens; the list covers it. */
-  window: AuditRecordWindow | null
+  recordWindow: AuditRecordWindow | null
   /** For filter options (what the window's detail rows contain) and per-model pricing. */
   insights?: UsageInsights | null
   /** Whether call records are being kept right now. */
@@ -62,8 +63,11 @@ const emit = defineEmits<{
   export: [format: AuditExportFormat]
 }>()
 
-const records = inject(AUDIT_RECORDS_KEY)
-if (!records) throw new Error('AuditRecordsDrawer needs the page to provide AUDIT_RECORDS_KEY')
+function missingRecords(): never {
+  throw new Error('AuditRecordsDrawer needs the page to provide AUDIT_RECORDS_KEY')
+}
+
+const records = inject(AUDIT_RECORDS_KEY) ?? missingRecords()
 const {
   filters,
   page,
@@ -82,7 +86,7 @@ const labels = useAuditLabels()
 const context = useAuditRecordContext()
 
 watch(visible, (open) => {
-  if (open && props.window) records.open(props.window)
+  if (open && props.recordWindow) records.open(props.recordWindow)
 })
 
 /* ─── filters ─── */
@@ -238,7 +242,7 @@ watch(selected, async (row) => {
 /* ─── header lines ─── */
 
 const rangeLabel = computed(() => {
-  const range = props.window?.range
+  const range = props.recordWindow?.range
   if (range === 'today') return t('intelligenceAudit.range.today')
   if (range === '7d') return t('intelligenceAudit.range.last7Days')
   return t('intelligenceAudit.range.last30Days')
@@ -247,7 +251,7 @@ const rangeLabel = computed(() => {
 /** The window reaches past what retention keeps: say so, so a short list is not read as quiet. */
 const retentionHint = computed(() => {
   const retentionMs = props.insights?.audit.retentionMs
-  const current = records.window.value
+  const current = records.listWindow.value
   if (retentionMs === null || retentionMs === undefined || !current) return ''
   if (current.endMs - current.startMs <= retentionMs) return ''
   return t('intelligenceAudit.records.retentionHint', {
@@ -277,10 +281,11 @@ const exportProgress = computed(() => {
     <div class="AuditRecords">
       <p class="AuditRecords-Summary" data-testid="audit-records-summary">
         {{
-          t('intelligenceAudit.records.summary', {
-            range: rangeLabel,
-            total: formatInteger(total, locale)
-          })
+          t(
+            'intelligenceAudit.records.summary',
+            { range: rangeLabel, total: formatInteger(total, locale) },
+            total
+          )
         }}
       </p>
 
@@ -387,13 +392,23 @@ const exportProgress = computed(() => {
         :data="rows"
         :row-key="recordKey"
         :loading="loading"
-        :empty-text="t('intelligenceAudit.records.empty')"
         table-layout="fixed"
         highlight-selected
         :selected-keys="selectedKey ? [selectedKey] : []"
         data-testid="audit-records-table"
         @row-click="onRowClick"
       >
+        <!-- Our own empty state: the table's default adds TuffEx's English "No data available yet." -->
+        <template #empty>
+          <TxEmptyState
+            variant="no-data"
+            size="small"
+            layout="vertical"
+            :title="t('intelligenceAudit.records.empty')"
+            description=""
+            data-testid="audit-records-empty"
+          />
+        </template>
         <template #cell-timestamp="{ row }">
           <span class="AuditRecords-Muted">{{ formatRecordTime(row.timestamp, locale) }}</span>
         </template>

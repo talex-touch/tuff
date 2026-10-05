@@ -1,4 +1,5 @@
 import type { ComposerTranslation } from 'vue-i18n'
+import { formatResetTime } from '~/components/intelligence/audit/audit-format'
 
 export interface IntelligenceErrorRecoveryInput {
   error?: string
@@ -29,7 +30,13 @@ export const USAGE_LIMITS_ROUTE = '/setting/intelligence/audit'
  */
 export const USAGE_LIMIT_REACHED_CODE = 'USAGE_LIMIT_REACHED'
 
-const USAGE_LIMIT_RESETS_AT = /resets at (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/i
+/**
+ * The reset instant after `resets at`: right after it in a failed stream's sentence
+ * (`… resets at <ISO>`), in parentheses after the local time in a failed call's reason
+ * (`… it resets at 2026-10-04 00:00 local time (<ISO>).`).
+ */
+const USAGE_LIMIT_RESETS_AT =
+  /resets at\b[^\n]*?\b(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/i
 
 /** Whether a failure's code or text is the global usage-limit refusal. */
 export function isUsageLimitFailure(text: string): boolean {
@@ -47,15 +54,14 @@ export function readUsageLimitResetsAt(text: string): number | null {
   return Number.isFinite(resetsAt) ? resetsAt : null
 }
 
-/** The reset time in this machine's local time: month/day and 24-hour clock. */
-export function formatUsageLimitResetTime(resetsAt: number, locale?: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23'
-  }).format(resetsAt)
+/**
+ * When the limit resets, in the interface's language and this machine's local time — the audit
+ * page's own format (`formatResetTime`), so every surface reads the same: 「10月4日 00:00」,
+ * "Oct 4, 00:00". The locale is the UI's, never the runtime default, which wrote "10/4, 00:00" into
+ * the Chinese interface.
+ */
+export function formatUsageLimitResetTime(resetsAt: number, locale: string): string {
+  return formatResetTime(resetsAt, locale)
 }
 
 function normalizeText(value: unknown): string {
@@ -70,9 +76,14 @@ function includesAny(value: string, patterns: string[]): boolean {
   return patterns.some((pattern) => value.includes(pattern))
 }
 
+/**
+ * `locale` is the interface's (`useI18n().locale`): the reset time a refusal names is written in
+ * it, like every other date the user reads.
+ */
 export function resolveIntelligenceErrorRecovery(
   input: IntelligenceErrorRecoveryInput,
-  t: ComposerTranslation
+  t: ComposerTranslation,
+  locale: string
 ): IntelligenceErrorRecovery {
   const rawError = normalizeText(input.error)
   const normalized = normalizeErrorInput(input).toUpperCase()
@@ -102,7 +113,7 @@ export function resolveIntelligenceErrorRecovery(
               "You've reached the AI usage limit you set in Audit, where you can change it."
             )
           : t('intelligence.errorRecovery.usageLimitDetail', {
-              time: formatUsageLimitResetTime(resetsAt)
+              time: formatUsageLimitResetTime(resetsAt, locale)
             }),
       action: {
         path: USAGE_LIMITS_ROUTE,

@@ -203,6 +203,13 @@ export const AppEvents = {
      * `false` when the window or its renderer could not take the request.
      */
     openSettings: defineEvent('app').module('window').event('open-settings').define<void, boolean>(),
+
+    /**
+     * Reveal the main window on Settings › Intelligence › Audit, where the AI usage limits are
+     * set. Sent by the way out of a call the limit refused on a surface that is not the main
+     * renderer — CoreBox's AI answer, the selection panel. `false` when it could not be shown.
+     */
+    openUsageLimits: defineEvent('app').module('window').event('open-usage-limits').define<void, boolean>(),
   },
 
   /**

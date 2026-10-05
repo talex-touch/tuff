@@ -313,3 +313,93 @@ export function toStreamFailure(
   const detail = raw ? redactProviderDetail(raw) : ''
   return Object.assign(new Error(detail ? `[${code}] ${detail}` : code), { code })
 }
+
+/** A capability id fit for the `[CODE:capability]` prefix: lower-case dotted, nothing else. */
+const CAPABILITY_ID_PATTERN = /^[a-z][a-z0-9_-]*(?:\.[a-z0-9_-]+)*$/
+const CAPABILITY_PREFIX = /^\[[A-Z][A-Z0-9_]*:([^\]\s]+)\]/
+
+/**
+ * Which capability failed: the normalizer's wrapper carries it, an SDK error only in its own
+ * `[CODE:capability]` prefix. `undefined` for anything that is not a plain capability id.
+ */
+function readCapabilityId(error: unknown): string | undefined {
+  const explicit =
+    error && typeof error === 'object' ? (error as { capabilityId?: unknown }).capabilityId : null
+  const candidate =
+    typeof explicit === 'string' ? explicit : CAPABILITY_PREFIX.exec(messageOf(error))?.[1]
+  return candidate && CAPABILITY_ID_PATTERN.test(candidate) ? candidate : undefined
+}
+
+/**
+ * The reason {@link toNormalizedIntelligenceError} already wrote for this code. Normalizing the
+ * wrapper again would classify its rewritten message, which can land on another rule than the
+ * code it carries.
+ */
+function readNormalizedReason(error: unknown, code: string): string | null {
+  if (!error || typeof error !== 'object') return null
+  const wrapped = error as { code?: unknown; reason?: unknown; recovery?: unknown }
+  return wrapped.code === code &&
+    typeof wrapped.reason === 'string' &&
+    wrapped.reason.trim() &&
+    typeof wrapped.recovery === 'string'
+    ? wrapped.reason
+    : null
+}
+
+/**
+ * What a failed capability call (`invoke`, context `execute`, …) answers — the request/response
+ * sibling of {@link toStreamFailure}, under the same rule. A plugin gets the stable code alone. The
+ * app's own renderer gets `[CODE:capability] reason`, the prefix the renderer already parses: the
+ * normalizer's own sentence for the code — for a call the usage limit refused, which limit, how
+ * much of it is used and when it resets in local time — or, where the provider itself said why (a
+ * local CLI's run), those words redacted. Never the raw provider message: it can carry endpoints,
+ * accounts and response bodies.
+ */
+export function toApiFailure(
+  code: string,
+  error: unknown,
+  options: { host: boolean }
+): { error: string; code?: string } {
+  if (!options.host) return { error: code }
+  const capabilityId = readCapabilityId(error)
+  const prefix = `[${code}${capabilityId ? `:${capabilityId}` : ''}]`
+  const said = code === USAGE_LIMIT_REACHED_CODE ? null : readProviderDetail(error)
+  const reason =
+    said ??
+    readNormalizedReason(error, code) ??
+    normalizeIntelligenceError(error, { capabilityId }).reason
+  return { error: `${prefix} ${redactProviderDetail(reason)}`, code }
+}
+
+/** Whether `error` is the usage-limit refusal: by its info anywhere in its causes, or its code. */
+function isUsageLimitRefusal(error: unknown): boolean {
+  if (readUsageLimitInfo(error)) return true
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    (error as { code?: unknown }).code === USAGE_LIMIT_REACHED_CODE
+  )
+}
+
+/**
+ * The usage-limit refusal alone, for channels whose every other failure keeps the public sentence
+ * (the voice channels): `toApiFailure`'s answer for it, `undefined` for anything else.
+ */
+export function projectUsageLimitFailure(
+  error: unknown,
+  options: { host: boolean }
+): { error: string; code?: string } | undefined {
+  return isUsageLimitRefusal(error)
+    ? toApiFailure(USAGE_LIMIT_REACHED_CODE, error, options)
+    : undefined
+}
+
+/**
+ * The stream sibling of {@link projectUsageLimitFailure}: the refusal in `toStreamFailure`'s shape,
+ * anything else returned as it came.
+ */
+export function toUsageLimitStreamFailure(error: unknown, options: { host: boolean }): unknown {
+  return isUsageLimitRefusal(error)
+    ? toStreamFailure(USAGE_LIMIT_REACHED_CODE, error, options)
+    : error
+}

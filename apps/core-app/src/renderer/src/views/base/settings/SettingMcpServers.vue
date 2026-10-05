@@ -1,716 +1,864 @@
 <!--
-  SettingMcpServers Component
+  SettingMcpServers
 
-  The MCP servers the home conversation's agent runtime may start: the ones already adopted, the
-  ones the agents on this machine define that nobody has adopted yet, and a way to type one in.
+  Every MCP server on this machine and in Tuff, one row per server: the servers each local agent
+  (Claude Code, Codex, Pi, …) declares in its own configuration, merged across agents, plus the ones
+  typed in by hand. Each row says which agents declare it and carries Tuff's own switch for that one
+  server.
 
-  A discovered server is listed, but adopting it is a click. Importing one enables a stdio command or
-  an HTTP endpoint the agent runtime may then start, and that is a grant the user has to make rather
-  than one this page makes for them.
+  Read-only toward the agents. Switching a server on imports that server alone into Tuff — after the
+  user confirms moving its credentials, when it has any — and switching it off stops that server
+  alone. Probing one Tuff does not hold starts it alone from the agent's file and stops it after,
+  importing and keeping nothing. No agent's directory or configuration file is ever written.
 -->
 <script lang="ts" name="SettingMcpServers" setup>
-import type { AiImportCandidate, AiImportedConfigItem } from '@talex-touch/tuff-intelligence'
-import type { McpManualServerInput } from '@talex-touch/utils/transport/sdk/domains/mcp-servers'
+import type { DialogButton } from '@talex-touch/tuffex/dialog'
+import type {
+  McpServerInventory,
+  McpServerRow,
+  McpServerTuffState
+} from '@talex-touch/utils/transport/sdk/domains/mcp-servers'
+import type { AiAgentId } from '@talex-touch/utils/types/ai-orchestrator'
+import type { AgentRef } from '~/components/settings/resources/agent-registry'
+import type { ResourceRowTag } from '~/components/settings/resources/types'
+import type { ManualServerDraft, McpProbeState } from './setting-mcp-display'
 import { TxButton } from '@talex-touch/tuffex/button'
-import { TxInput } from '@talex-touch/tuffex/input'
-import { TxModal } from '@talex-touch/tuffex/modal'
-import { useDeferredLoading } from '@talex-touch/tuffex/skeleton'
+import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
+import { TxDrawer } from '@talex-touch/tuffex/drawer'
+import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
+import { TxSearchInput } from '@talex-touch/tuffex/search-input'
+import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
-import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { useIntelligenceSdk, useMcpServersSdk } from '@talex-touch/utils/renderer'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onActivated, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import SettingChip from '~/components/settings/SettingChip.vue'
-import SettingRow from '~/components/settings/SettingRow.vue'
-import SettingSkeleton from '~/components/settings/SettingSkeleton.vue'
-import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import InsightsHeader from '~/components/settings/insights/InsightsHeader.vue'
+import InsightsNotice from '~/components/settings/insights/InsightsNotice.vue'
+import { agentBrand, agentCountsFrom } from '~/components/settings/resources/agent-registry'
+import ResourceAgentBar from '~/components/settings/resources/ResourceAgentBar.vue'
+import ResourceRow from '~/components/settings/resources/ResourceRow.vue'
 import { createRendererLogger } from '~/utils/renderer-log'
-import { agentLabel, displayName, errorMessage, MAX_VISIBLE_ROWS } from './setting-ai-import-shared'
+import { errorMessage } from './setting-ai-import-shared'
 import {
-  isManualMcpServer,
-  parseCommandArgs,
-  parseKeyValueLines,
-  resolveMcpTransport
+  declaredProbeRequestFor,
+  emptyManualDraft,
+  enabledRowCount,
+  filterMcpRows,
+  importRequestFor,
+  importSourceFor,
+  manualDraftFromItem,
+  manualDraftValid,
+  manualInputFromDraft,
+  mcpCredentialNames,
+  mcpFailureKind,
+  mcpProbeTarget,
+  mcpSwitchModel,
+  rowAgentIds
 } from './setting-mcp-display'
+import SettingMcpServerDetail from './SettingMcpServerDetail.vue'
+import SettingMcpServerForm from './SettingMcpServerForm.vue'
 
-type ProbeStatus = 'idle' | 'probing' | 'ok' | 'failed'
+const props = defineProps<{
+  /** The page heading; this section owns the page's title row. */
+  title: string
+}>()
 
-interface ProbeState {
-  status: ProbeStatus
-  toolCount?: number
-  error?: string
+type DrawerView =
+  | { mode: 'detail'; key: string }
+  | { mode: 'edit'; key: string }
+  | { mode: 'create' }
+
+interface ConfirmRequest {
+  title: string
+  message: string
+  confirmLabel: string
+  danger: boolean
+  settled: boolean
+  resolve: (confirmed: boolean) => void
 }
 
-interface ManualDraft {
-  /** Set when editing an existing manual server; `null` creates one. */
-  itemId: string | null
-  name: string
-  transport: 'stdio' | 'streamable-http'
-  command: string
-  args: string
-  env: string
-  url: string
-  headers: string
-}
+/** Rows the skeleton draws. The real count is unknown until the scan lands; this is a typical one. */
+const SKELETON_ROWS = 4
 
-const IDLE_PROBE: ProbeState = { status: 'idle' }
-
-const i18n = useI18n()
-const { t } = i18n
+const { t } = useI18n()
 const aiClient = useIntelligenceSdk()
 const mcpSdk = useMcpServersSdk()
-const mcpServersLog = createRendererLogger('SettingMcpServers')
+const log = createRendererLogger('SettingMcpServers')
 
-/** The snapshot's MCP items. Skills come from the same snapshot and are listed on their own page. */
-const servers = ref<AiImportedConfigItem[]>([])
-const loading = ref(true)
-const loadError = ref('')
-const probeStates = reactive(new Map<string, ProbeState>())
-const showAllMcp = ref(false)
-
-/** Servers found on disk that nobody has adopted yet, plus the scan that found them. */
-const scanId = ref('')
-const discovered = ref<AiImportCandidate[]>([])
-const scanFailed = ref(false)
-const adoptingId = ref('')
-
-const dialogVisible = ref(false)
-const dialogSaving = ref(false)
-const draft = reactive<ManualDraft>(createEmptyDraft())
-
-function createEmptyDraft(): ManualDraft {
-  return {
-    itemId: null,
-    name: '',
-    transport: 'stdio',
-    command: '',
-    args: '',
-    env: '',
-    url: '',
-    headers: ''
-  }
-}
-
-function quoteIfNeeded(value: string): string {
-  return /\s/.test(value) ? `"${value}"` : value
-}
-
-/**
- * Servers nobody has adopted. `added` is what the scanner reports for a config it found with no
- * stored item behind it, which is exactly the "on this machine, not in Tuff yet" set.
- */
-type McpCandidate = Extract<AiImportCandidate, { kind: 'mcp' }>
-
-const discoveredServers = computed<McpCandidate[]>(() =>
-  discovered.value.filter(
-    (candidate): candidate is McpCandidate =>
-      candidate.kind === 'mcp' &&
-      candidate.state === 'added' &&
-      candidate.blockingIssues.length === 0 &&
-      candidate.serverNames.length > 0
-  )
-)
-
-const mcpRows = computed(() => {
-  const sorted = servers.value.slice().sort(byActiveThenName)
-  const visible = showAllMcp.value ? sorted : sorted.slice(0, MAX_VISIBLE_ROWS)
-  return visible.map((item) => {
-    const transport = resolveMcpTransport(item)
-    return {
-      item,
-      title: displayName(item),
-      description: transport.detail || t('settings.skillsMcp.mcp.detailUnknown'),
-      manual: isManualMcpServer(item),
-      transportLabel:
-        transport.kind === 'stdio'
-          ? t('settings.skillsMcp.mcp.transportStdio')
-          : transport.kind === 'streamable-http'
-            ? t('settings.skillsMcp.mcp.transportHttp')
-            : t('settings.skillsMcp.mcp.transportUnknown'),
-      probe: probeStates.get(item.id) ?? IDLE_PROBE
-    }
-  })
-})
-
-function byActiveThenName(left: AiImportedConfigItem, right: AiImportedConfigItem): number {
-  if (left.active !== right.active) return left.active ? -1 : 1
-  return displayName(left).localeCompare(displayName(right))
-}
-
-const hiddenMcpCount = computed(() => Math.max(servers.value.length - MAX_VISIBLE_ROWS, 0))
-const showStateRow = computed(() => loading.value && servers.value.length === 0)
-const showMcpEmptyHint = computed(
-  () =>
-    !loading.value &&
-    !loadError.value &&
-    servers.value.length === 0 &&
-    discoveredServers.value.length === 0
-)
-
-/**
- * Only the first load draws a skeleton. Binding to `loading` would also fire on
- * every retry, swapping already-rendered rows back out for placeholders; this
- * flag never returns to false once the first snapshot has landed.
- */
+const inventory = shallowRef<McpServerInventory | null>(null)
+const loading = ref(false)
+const loadFailed = ref(false)
+/** Set once the first read settles either way; only the first read draws the skeleton. */
 const hasLoaded = ref(false)
 const showSkeleton = useDeferredLoading(() => !hasLoaded.value)
 
+const query = ref('')
+const agentFilter = ref<AiAgentId | null>(null)
+
+/** Rows whose switch has a request in flight; a second flip waits for the first. */
+const pending = reactive(new Set<string>())
+/** The last failure per row, in the page's words, shown in the drawer until the next attempt. */
+const failures = reactive(new Map<string, string>())
+const probes = reactive(new Map<string, McpProbeState>())
+/** Rows whose probe is under way, a confirmation included: a second press waits for the first. */
+const probesInFlight = reactive(new Set<string>())
+
+const drawerVisible = ref(false)
+const drawerView = shallowRef<DrawerView>({ mode: 'create' })
+const draft = ref<ManualServerDraft>(emptyManualDraft())
+const editSecretNames = ref<string[]>([])
+const saving = ref(false)
+const editLoading = ref(false)
+
+const confirmRequest = shallowRef<ConfirmRequest | null>(null)
+
+const rows = computed(() => inventory.value?.rows ?? [])
+const agentCounts = computed(() => agentCountsFrom(inventory.value?.agents ?? [], 'mcp'))
+const agentRefs = computed<AgentRef[]>(() =>
+  agentCounts.value.map(({ agentId, label }) => ({ agentId, label }))
+)
+
+function agentLabel(agentId: AiAgentId): string {
+  return (
+    agentCounts.value.find((agent) => agent.agentId === agentId)?.label ?? agentBrand(agentId).label
+  )
+}
+
+const visibleRows = computed(() =>
+  filterMcpRows(rows.value, { query: query.value, agentId: agentFilter.value, agentLabel })
+)
+const enabledCount = computed(() => enabledRowCount(rows.value))
+const filtering = computed(() => query.value.trim() !== '' || agentFilter.value !== null)
+
+const unreadable = computed(() => inventory.value?.unreadableSources ?? [])
+
+function rowByKey(key: string): McpServerRow | undefined {
+  return rows.value.find((row) => row.key === key)
+}
+
+function rowTags(row: McpServerRow): ResourceRowTag[] {
+  const tags: ResourceRowTag[] = [
+    {
+      key: 'transport',
+      label:
+        row.transport === 'http' ? t('settings.mcpPage.tagHttp') : t('settings.mcpPage.tagStdio')
+    }
+  ]
+  if (row.hasSecrets)
+    tags.push({ key: 'secrets', label: t('settings.mcpPage.tagSecrets'), tone: 'warning' })
+  if (row.tuff.origin === 'manual')
+    tags.push({ key: 'manual', label: t('settings.mcpPage.tagManual'), tone: 'info' })
+  if (row.tuff.state === 'not-imported')
+    tags.push({ key: 'not-imported', label: t('settings.mcpPage.tagNotImported') })
+  if (row.tuff.blockedReason === 'reauth-required')
+    tags.push({ key: 'blocked', label: t('settings.mcpPage.tagReauth'), tone: 'warning' })
+  else if (row.tuff.blockedReason === 'source-missing')
+    tags.push({ key: 'blocked', label: t('settings.mcpPage.tagSourceMissing'), tone: 'warning' })
+  else if (row.tuff.blockedReason === 'invalid')
+    tags.push({ key: 'blocked', label: t('settings.mcpPage.tagInvalid'), tone: 'warning' })
+  return tags
+}
+
+/* ─── reading ─── */
+
 /**
- * The list is capped at `MAX_VISIBLE_ROWS` and always ends with the add row, so a
- * count inside that range is as close as a skeleton can get before the real one lands.
+ * One read is one discovery scan of every agent's configuration plus Tuff's own copies. A failed
+ * read leaves the rows already on screen in place and says so above them; only the very first read
+ * has nothing to keep.
  */
-const skeletonGroups = computed(() => [
-  { label: t('settings.skillsMcp.mcp.label'), rows: 4, description: true, trailing: true }
-])
-
-const draftValid = computed(() => {
-  if (!draft.name.trim()) return false
-  return draft.transport === 'stdio' ? Boolean(draft.command.trim()) : Boolean(draft.url.trim())
-})
-
-function probeChipTone(state: ProbeState): 'neutral' | 'success' | 'danger' {
-  if (state.status === 'ok') return 'success'
-  if (state.status === 'failed') return 'danger'
-  return 'neutral'
-}
-
-function probeChipText(state: ProbeState): string {
-  if (state.status === 'probing') return t('settings.skillsMcp.mcp.stateProbing')
-  if (state.status === 'ok') {
-    return t('settings.skillsMcp.mcp.stateOk', { count: state.toolCount ?? 0 })
-  }
-  if (state.status === 'failed') return t('settings.skillsMcp.mcp.stateFailed')
-  return t('settings.skillsMcp.mcp.stateIdle')
-}
-
-async function loadItems(): Promise<void> {
+async function loadInventory(): Promise<void> {
   loading.value = true
   try {
-    const snapshot = await aiClient.orchestratorGetSnapshot()
-    servers.value = snapshot.importedItems.filter((item) => item.kind === 'mcp')
-    loadError.value = ''
+    inventory.value = await mcpSdk.inventory()
+    loadFailed.value = false
   } catch (error) {
-    mcpServersLog.error('Failed to read the orchestrator snapshot', error)
-    loadError.value = errorMessage(error, t('settings.skillsMcp.loadFailedDesc'))
+    log.error('Failed to read the MCP server inventory', error)
+    loadFailed.value = true
   } finally {
     loading.value = false
     hasLoaded.value = true
   }
 }
 
-async function setItemActive(item: AiImportedConfigItem, active: boolean): Promise<void> {
-  try {
-    const updated = await aiClient.orchestratorSetImportedItemActive({ itemId: item.id, active })
-    servers.value = servers.value.map((candidate) =>
-      candidate.id === updated.id ? updated : candidate
-    )
-  } catch (error) {
-    mcpServersLog.error('Failed to change the imported item state', error)
-    toast.error(errorMessage(error, t('settings.skillsMcp.toggleFailed')))
-    // A change that failed on the way back may still have landed, so the rows are read again
-    // rather than left showing what this page last believed.
-    void loadItems()
+/* ─── the switch ─── */
+
+function patchRowState(key: string, state: McpServerTuffState): void {
+  const current = inventory.value
+  if (!current) return
+  inventory.value = {
+    ...current,
+    rows: current.rows.map((row) => (row.key === key ? { ...row, tuff: state } : row))
   }
 }
 
-/**
- * Finds the servers the local agents already define. A failed scan leaves those rows out rather
- * than blocking the section: the adopted servers still work, and the retry row is right there.
- */
-async function refreshDiscovery(): Promise<void> {
-  try {
-    const scan = await aiClient.orchestratorPreviewImport({})
-    scanId.value = scan.scanId
-    discovered.value = scan.candidates
-    scanFailed.value = false
-  } catch (error) {
-    mcpServersLog.error('Failed to scan local AI CLI configurations', error)
-    scanFailed.value = true
+function failureText(row: McpServerRow, error: unknown, action: 'enable' | 'disable'): string {
+  const name = row.name
+  switch (mcpFailureKind(error)) {
+    case 'reauth':
+      return t('settings.mcpPage.errorReauth', { name })
+    case 'source-changed':
+      return t('settings.mcpPage.errorSourceChanged', { name })
+    case 'secure-store':
+      return t('settings.mcpPage.errorSecureStore', { name })
+    case 'confirmation':
+      return t('settings.mcpPage.errorConfirmation', { name })
+    case 'source-missing':
+      return t('settings.mcpPage.errorSourceMissing', { name })
+    case 'invalid':
+      return t('settings.mcpPage.errorInvalid', { name })
+    default:
+      return t(
+        action === 'disable' ? 'settings.mcpPage.disableFailed' : 'settings.mcpPage.enableFailed',
+        { name, reason: errorMessage(error, t('settings.skillsMcp.toggleFailed')) }
+      )
   }
 }
 
-/**
- * Adopting a server copies its definition into Tuff's store and turns it on for the agent runtime.
- * That is a grant, so it takes a click — and when the definition carries credentials, an explicit
- * confirmation before those values move into the secure store.
- */
-async function adoptServer(candidate: AiImportCandidate): Promise<void> {
-  if (adoptingId.value) return
-  const secretCount = candidate.kind === 'mcp' ? candidate.secretKeyPaths.length : 0
-  if (
-    secretCount > 0 &&
-    !window.confirm(t('settings.skillsMcp.mcp.sensitiveConfirm', { count: secretCount }))
-  )
-    return
+function reportFailure(row: McpServerRow, error: unknown, action: 'enable' | 'disable'): void {
+  log.error(`Failed to switch ${action === 'enable' ? 'on' : 'off'} an MCP server`, error)
+  const message = failureText(row, error, action)
+  failures.set(row.key, message)
+  toast.error(message)
+}
 
-  adoptingId.value = candidate.id
+function confirm(request: Omit<ConfirmRequest, 'settled' | 'resolve'>): Promise<boolean> {
+  confirmRequest.value?.resolve(false)
+  return new Promise((resolve) => {
+    confirmRequest.value = { ...request, settled: false, resolve }
+  })
+}
+
+function settleConfirm(confirmed: boolean): boolean {
+  const request = confirmRequest.value
+  if (request && !request.settled) {
+    request.settled = true
+    request.resolve(confirmed)
+  }
+  return true
+}
+
+/** The dialog's own close (✕, Esc, or after a button): anything not yet answered is a no. */
+function closeConfirm(): void {
+  settleConfirm(false)
+  confirmRequest.value = null
+}
+
+const confirmButtons = computed<DialogButton[]>(() => {
+  const request = confirmRequest.value
+  if (!request) return []
+  return [
+    { content: t('settings.mcpPage.cancel'), type: 'info', onClick: () => settleConfirm(false) },
+    {
+      content: request.confirmLabel,
+      type: request.danger ? 'error' : 'success',
+      onClick: () => settleConfirm(true)
+    }
+  ]
+})
+
+function askSecretConfirmation(row: McpServerRow): Promise<boolean> {
+  const names = mcpCredentialNames(row)
+  return confirm({
+    title: t('settings.mcpPage.secretTitle', { name: row.name }),
+    message:
+      names.length > 0
+        ? t('settings.mcpPage.secretMessage', { names: names.join(', ') })
+        : t('settings.mcpPage.secretMessageGeneric'),
+    confirmLabel: t('settings.mcpPage.secretConfirm'),
+    danger: false
+  })
+}
+
+/**
+ * Switches on a server Tuff does not hold yet: imports this server alone from the first agent file
+ * that declares it.
+ *
+ * Main decides what needs the user: credentials the secure store does not hold yet come back as a
+ * confirmation request, and only then is the user asked — before anything moves. A file that changed
+ * since the scan is scanned again and the import retried once. Every attempt ends with a fresh read,
+ * since an in-place activation reports `unchanged` and only the inventory says what happened.
+ */
+async function enableByImport(row: McpServerRow): Promise<void> {
+  let current = row
+  let confirmed = false
+  let rescanned = false
+  for (;;) {
+    const source = importSourceFor(current)
+    const scanId = inventory.value?.scanId
+    if (!source || !scanId) return
+    try {
+      await aiClient.orchestratorApplyImport(importRequestFor(scanId, current, source, confirmed))
+      await loadInventory()
+      if (rowByKey(row.key)?.tuff.state === 'enabled')
+        toast.success(t('settings.mcpPage.imported', { name: row.name }))
+      return
+    } catch (error) {
+      const kind = mcpFailureKind(error)
+      if (kind === 'confirmation' && !confirmed) {
+        if (!(await askSecretConfirmation(current))) return
+        confirmed = true
+        continue
+      }
+      if (kind === 'source-changed' && !rescanned) {
+        rescanned = true
+        await loadInventory()
+        const fresh = rowByKey(row.key)
+        // Whatever the rescan says it is now is what the row shows; only a server still waiting to
+        // be added is worth a second attempt.
+        if (!fresh || fresh.tuff.state !== 'not-imported') return
+        current = fresh
+        continue
+      }
+      reportFailure(row, error, 'enable')
+      await loadInventory()
+      return
+    }
+  }
+}
+
+async function setServerEnabled(row: McpServerRow, enabled: boolean): Promise<void> {
   try {
-    await aiClient.orchestratorApplyImport({
-      scanId: scanId.value,
-      candidateIds: [candidate.id],
-      ...(secretCount > 0 ? { confirmSecretMigration: true } : {})
-    })
-    toast.success(t('settings.skillsMcp.mcp.adopted'))
-    await Promise.all([loadItems(), refreshDiscovery()])
+    patchRowState(row.key, await mcpSdk.setServerEnabled(row.key, enabled))
   } catch (error) {
-    mcpServersLog.error('Failed to adopt the discovered MCP server', error)
-    toast.error(errorMessage(error, t('settings.skillsMcp.mcp.adoptFailed')))
+    reportFailure(row, error, enabled ? 'enable' : 'disable')
+    // A change that failed on the way back may still have landed.
+    await loadInventory()
+  }
+}
+
+async function onSwitch(row: McpServerRow, value: boolean): Promise<void> {
+  if (pending.has(row.key)) return
+  const model = mcpSwitchModel(row)
+  if (model.mode === 'blocked' || model.checked === value) return
+  pending.add(row.key)
+  failures.delete(row.key)
+  try {
+    if (model.mode === 'import') await enableByImport(row)
+    else await setServerEnabled(row, value)
   } finally {
-    adoptingId.value = ''
+    pending.delete(row.key)
   }
 }
 
-async function probeServer(item: AiImportedConfigItem): Promise<void> {
-  if (probeStates.get(item.id)?.status === 'probing') return
-  probeStates.set(item.id, { status: 'probing' })
+/* ─── probe ─── */
+
+function askProbeSecretConfirmation(row: McpServerRow): Promise<boolean> {
+  const names = mcpCredentialNames(row)
+  return confirm({
+    title: t('settings.mcpPage.probeSecretTitle', { name: row.name }),
+    message:
+      names.length > 0
+        ? t('settings.mcpPage.probeSecretMessage', { names: names.join(', ') })
+        : t('settings.mcpPage.probeSecretMessageGeneric'),
+    confirmLabel: t('settings.mcpPage.probeSecretConfirm'),
+    danger: false
+  })
+}
+
+/** A refusal main explains with a code, in the probe's words; anything else as it came. */
+function probeFailureText(error: string | undefined): string {
+  switch (mcpFailureKind(error)) {
+    case 'reauth':
+      return t('settings.mcpPage.probeReasonReauth')
+    case 'source-changed':
+      return t('settings.mcpPage.probeReasonSourceChanged')
+    case 'source-missing':
+      return t('settings.mcpPage.probeReasonSourceMissing')
+    default:
+      return error || t('settings.skillsMcp.mcp.probeUnknownError')
+  }
+}
+
+/** What the drawer says about a row's probe; nothing to say reads as never probed. */
+function showProbe(key: string, state: McpProbeState | undefined): void {
+  if (state) probes.set(key, state)
+  else probes.delete(key)
+}
+
+/**
+ * Probes a server Tuff does not hold, straight from the first agent file that declares it: main
+ * starts it alone and stops it after, and nothing is imported or kept.
+ *
+ * Main decides what needs the user, as for switching it on: a server with credentials comes back as
+ * a confirmation request before anything starts, and only after a yes is it started with them — used
+ * from memory for that one start. While the user decides nothing runs, so the drawer keeps what it
+ * said before (`previous`). A file that changed since the scan is scanned again and the probe retried
+ * once; a yes carries over only while the server still names the same credentials. Answers null when
+ * there is nothing to show: the user said no, or the rescan took the server away.
+ */
+async function probeDeclared(
+  row: McpServerRow,
+  previous: McpProbeState | undefined
+): Promise<McpProbeState | null> {
+  let current = row
+  let confirmedNames: string[] | null = null
+  let rescanned = false
+  for (;;) {
+    const target = mcpProbeTarget(current)
+    const scanId = inventory.value?.scanId
+    if (target?.mode !== 'declared' || !scanId) return null
+    const result = await mcpSdk.probeDeclared(
+      declaredProbeRequestFor(scanId, current, target.source, confirmedNames !== null)
+    )
+    if (result.ok) return { status: 'ok', toolCount: result.toolCount ?? 0 }
+    const kind = mcpFailureKind(result.error)
+    if (kind === 'confirmation' && confirmedNames === null) {
+      showProbe(row.key, previous)
+      if (!(await askProbeSecretConfirmation(current))) return null
+      showProbe(row.key, { status: 'probing' })
+      confirmedNames = mcpCredentialNames(current)
+      continue
+    }
+    if (kind === 'source-changed' && !rescanned) {
+      rescanned = true
+      await loadInventory()
+      const fresh = rowByKey(row.key)
+      if (!fresh || fresh.tuff.state !== 'not-imported') return null
+      if (confirmedNames?.join('\n') !== mcpCredentialNames(fresh).join('\n')) confirmedNames = null
+      current = fresh
+      continue
+    }
+    return { status: 'failed', error: probeFailureText(result.error) }
+  }
+}
+
+async function probeRow(row: McpServerRow): Promise<void> {
+  const target = mcpProbeTarget(row)
+  if (!target || probesInFlight.has(row.key)) return
+  const previous = probes.get(row.key)
+  probesInFlight.add(row.key)
+  showProbe(row.key, { status: 'probing' })
   try {
-    const result = await mcpSdk.probe(item.id)
-    probeStates.set(
-      item.id,
+    if (target.mode === 'declared') {
+      // Nothing was probed when it answers null: whatever the drawer said before stays.
+      showProbe(row.key, (await probeDeclared(row, previous)) ?? previous)
+      return
+    }
+    const result = await mcpSdk.probe(target.itemId, target.profileId)
+    probes.set(
+      row.key,
       result.ok
         ? { status: 'ok', toolCount: result.toolCount ?? 0 }
         : { status: 'failed', error: result.error || t('settings.skillsMcp.mcp.probeUnknownError') }
     )
   } catch (error) {
-    // A rejected send means the main-process handler is missing or the module never came up —
-    // report it in the row's own chip rather than leaving it stuck on "testing".
-    mcpServersLog.error('MCP probe failed', error)
-    probeStates.set(item.id, {
+    log.error('MCP probe failed', error)
+    probes.set(row.key, {
       status: 'failed',
       error: errorMessage(error, t('settings.skillsMcp.mcp.probeUnavailable'))
     })
+  } finally {
+    probesInFlight.delete(row.key)
   }
 }
 
-function openCreateDialog(): void {
-  Object.assign(draft, createEmptyDraft())
-  dialogVisible.value = true
+/* ─── the drawer ─── */
+
+const drawerRow = computed(() => {
+  const view = drawerView.value
+  return view.mode === 'create' ? undefined : rowByKey(view.key)
+})
+
+const drawerTitle = computed(() => {
+  const view = drawerView.value
+  if (view.mode === 'create') return t('settings.mcpPage.createTitle')
+  const name = drawerRow.value?.name ?? ''
+  return view.mode === 'edit' ? t('settings.mcpPage.editTitle', { name }) : name
+})
+
+const editing = computed(() => drawerView.value.mode !== 'detail')
+const draftValid = computed(() => manualDraftValid(draft.value))
+
+function openRow(row: McpServerRow): void {
+  drawerView.value = { mode: 'detail', key: row.key }
+  drawerVisible.value = true
 }
 
-function openEditDialog(item: AiImportedConfigItem): void {
-  const transport = resolveMcpTransport(item)
-  const next = createEmptyDraft()
-  next.itemId = item.id
-  next.name = displayName(item)
-  if (transport.kind === 'streamable-http') {
-    next.transport = 'streamable-http'
-    next.url = transport.detail
-  } else {
-    const [command = '', ...args] = parseCommandArgs(transport.detail)
-    next.command = command
-    next.args = args.map(quoteIfNeeded).join(' ')
-  }
-  Object.assign(draft, next)
-  dialogVisible.value = true
+function openCreate(): void {
+  draft.value = emptyManualDraft()
+  editSecretNames.value = []
+  drawerView.value = { mode: 'create' }
+  drawerVisible.value = true
 }
 
-function buildManualInput(): McpManualServerInput {
-  const name = draft.name.trim()
-  if (draft.transport === 'streamable-http') {
-    const headers = parseKeyValueLines(draft.headers)
-    return {
-      name,
-      transport: 'streamable-http',
-      url: draft.url.trim(),
-      headers: Object.keys(headers).length > 0 ? headers : undefined
-    }
-  }
-  const env = parseKeyValueLines(draft.env)
-  return {
-    name,
-    transport: 'stdio',
-    command: draft.command.trim(),
-    args: parseCommandArgs(draft.args),
-    env: Object.keys(env).length > 0 ? env : undefined
-  }
-}
-
-async function saveManualServer(): Promise<void> {
-  if (!draftValid.value || dialogSaving.value) return
-  dialogSaving.value = true
+/**
+ * Edits read the stored item itself — the inventory masks arguments, and an edit has to start from
+ * the real ones. Credential values are never read back; the form says what an empty field does.
+ */
+async function startEdit(row: McpServerRow): Promise<void> {
+  const itemId = row.tuff.itemId
+  if (!itemId || row.tuff.origin !== 'manual' || editLoading.value) return
+  editLoading.value = true
   try {
-    const input = buildManualInput()
-    await mcpSdk.upsertManual(draft.itemId ? { ...input, itemId: draft.itemId } : input)
-    dialogVisible.value = false
-    toast.success(t('settings.skillsMcp.dialog.saved'))
-    await loadItems()
+    const snapshot = await aiClient.orchestratorGetSnapshot()
+    const item = snapshot.importedItems.find((candidate) => candidate.id === itemId)
+    if (!item) throw new Error(`MCP server ${itemId} is not configured`)
+    draft.value = manualDraftFromItem(item, row.name)
+    editSecretNames.value = mcpCredentialNames(row)
+    drawerView.value = { mode: 'edit', key: row.key }
   } catch (error) {
-    mcpServersLog.error('Failed to save the manual MCP server', error)
+    log.error('Failed to read the manual MCP server for editing', error)
+    toast.error(errorMessage(error, t('settings.skillsMcp.loadFailedDesc')))
+  } finally {
+    editLoading.value = false
+  }
+}
+
+function cancelEdit(): void {
+  const view = drawerView.value
+  if (view.mode === 'edit') drawerView.value = { mode: 'detail', key: view.key }
+  else drawerVisible.value = false
+}
+
+async function saveDraft(): Promise<void> {
+  if (!draftValid.value || saving.value) return
+  saving.value = true
+  try {
+    const input = manualInputFromDraft(draft.value)
+    const { itemId } = await mcpSdk.upsertManual(
+      draft.value.itemId ? { ...input, itemId: draft.value.itemId } : input
+    )
+    toast.success(t('settings.skillsMcp.dialog.saved'))
+    await loadInventory()
+    // The merge key follows the name and command, so an edit can move the row; find it by item.
+    const saved = rows.value.find((row) => row.tuff.itemId === itemId)
+    if (saved) drawerView.value = { mode: 'detail', key: saved.key }
+    else drawerVisible.value = false
+  } catch (error) {
+    log.error('Failed to save the manual MCP server', error)
     toast.error(errorMessage(error, t('settings.skillsMcp.dialog.saveFailed')))
   } finally {
-    dialogSaving.value = false
+    saving.value = false
   }
 }
 
-async function deleteDraftServer(): Promise<void> {
-  const itemId = draft.itemId
-  if (!itemId) return
-  if (!window.confirm(t('settings.skillsMcp.dialog.deleteConfirm', { name: draft.name }))) return
+async function deleteRow(row: McpServerRow): Promise<void> {
+  const itemId = row.tuff.itemId
+  if (!itemId || row.tuff.origin !== 'manual') return
+  const confirmed = await confirm({
+    title: t('settings.mcpPage.deleteTitle', { name: row.name }),
+    message: t('settings.mcpPage.deleteMessage'),
+    confirmLabel: t('settings.mcpPage.delete'),
+    danger: true
+  })
+  if (!confirmed) return
   try {
     await aiClient.orchestratorDeleteImportedItem({ itemId })
-    probeStates.delete(itemId)
-    dialogVisible.value = false
-    await Promise.all([loadItems(), refreshDiscovery()])
+    probes.delete(row.key)
+    failures.delete(row.key)
+    drawerVisible.value = false
+    toast.success(t('settings.mcpPage.deleted', { name: row.name }))
   } catch (error) {
-    mcpServersLog.error('Failed to delete the MCP server', error)
-    toast.error(errorMessage(error, t('settings.skillsMcp.dialog.deleteFailed')))
+    log.error('Failed to delete the MCP server', error)
+    toast.error(
+      t('settings.mcpPage.deleteFailed', {
+        reason: errorMessage(error, t('settings.skillsMcp.dialog.deleteFailed'))
+      })
+    )
   }
+  await loadInventory()
+}
+
+// A rescan or a delete can take the open row away; the drawer must not keep describing it. A save
+// moves the row on purpose (its key follows its name and command) and re-points the drawer itself.
+watch(drawerRow, (row) => {
+  if (saving.value) return
+  if (drawerVisible.value && drawerView.value.mode !== 'create' && !row) drawerVisible.value = false
+})
+
+function clearFilters(): void {
+  query.value = ''
+  agentFilter.value = null
 }
 
 onMounted(() => {
-  void loadItems()
-  void refreshDiscovery()
+  void loadInventory()
+})
+
+/**
+ * Settings pages stay alive in the background. Coming back reads the machine again — agents may
+ * have gained or lost servers meanwhile — without the skeleton: the old rows stay until the new ones
+ * land.
+ */
+let firstActivation = true
+onActivated(() => {
+  if (firstActivation) {
+    firstActivation = false
+    return
+  }
+  if (!loading.value) void loadInventory()
 })
 </script>
 
 <template>
-  <!--
-    Stands in for the section on first load. The dialog further down stays outside
-    the branch: the user opens it, not the initial fetch.
-  -->
-  <SettingSkeleton v-if="showSkeleton" :groups="skeletonGroups" />
-
-  <!-- The card draws the hairline between its own rows, so none of these rows place one. -->
-  <TuffGroupBlock v-else :name="t('settings.skillsMcp.mcp.label')">
-    <SettingRow
-      v-if="loadError"
-      :title="t('settings.skillsMcp.loadFailed')"
-      :description="loadError"
-    >
-      <template #trailing>
-        <TxButton variant="secondary" size="sm" @click="loadItems">
-          {{ t('settings.skillsMcp.retry') }}
+  <section class="McpServers" data-testid="mcp-servers" :aria-busy="loading">
+    <InsightsHeader :title="props.title" actions-class="McpServers-Actions">
+      <template #actions>
+        <TxButton
+          variant="secondary"
+          :loading="loading && hasLoaded"
+          :disabled="!hasLoaded"
+          data-testid="mcp-servers-rescan"
+          @click="loadInventory"
+        >
+          <span class="i-ri-refresh-line" aria-hidden="true" />
+          <span>{{ t('settings.mcpPage.rescan') }}</span>
+        </TxButton>
+        <TxButton variant="primary" data-testid="mcp-servers-add" @click="openCreate">
+          <span class="i-ri-add-line" aria-hidden="true" />
+          <span>{{ t('settings.mcpPage.add') }}</span>
         </TxButton>
       </template>
-    </SettingRow>
+    </InsightsHeader>
 
-    <template v-else>
-      <SettingRow v-if="showStateRow" :title="t('settings.skillsMcp.loading')" />
+    <InsightsNotice
+      v-if="loadFailed"
+      tone="error"
+      :title="t('settings.mcpPage.scanFailedTitle')"
+      :description="t('settings.mcpPage.scanFailedDesc')"
+      data-testid="mcp-servers-scan-failed"
+    >
+      <template #action>
+        <TxButton variant="flat" size="sm" :loading="loading" @click="loadInventory">
+          {{ t('settings.mcpPage.retry') }}
+        </TxButton>
+      </template>
+    </InsightsNotice>
 
-      <SettingRow
-        v-for="row in mcpRows"
-        :key="row.item.id"
-        :title="row.title"
-        :description="row.description"
-      >
-        <template #trailing>
-          <SettingChip>
-            {{
-              row.manual
-                ? t('settings.skillsMcp.mcp.sourceManual')
-                : t('settings.skillsMcp.mcp.sourceImported')
-            }}
-          </SettingChip>
-          <SettingChip>{{ row.transportLabel }}</SettingChip>
+    <InsightsNotice
+      v-if="unreadable.length > 0"
+      tone="warning"
+      :title="t('settings.mcpPage.unreadableTitle', { count: unreadable.length })"
+      :description="
+        t('settings.mcpPage.unreadableDesc', {
+          paths: unreadable.map((source) => source.sourcePath).join(', ')
+        })
+      "
+      data-testid="mcp-servers-unreadable"
+    />
 
-          <!-- Only the failure state carries a reason worth a tooltip; the other two read fully. -->
-          <TxTooltip
-            v-if="row.probe.status === 'failed'"
-            :content="row.probe.error"
-            :anchor="{ placement: 'top', showArrow: true }"
-          >
-            <SettingChip tone="danger">{{ probeChipText(row.probe) }}</SettingChip>
-          </TxTooltip>
-          <SettingChip v-else :tone="probeChipTone(row.probe)">
-            {{ probeChipText(row.probe) }}
-          </SettingChip>
-
-          <TxButton
-            variant="secondary"
-            size="sm"
-            :loading="row.probe.status === 'probing'"
-            @click="probeServer(row.item)"
-          >
-            {{ t('settings.skillsMcp.mcp.probe') }}
-          </TxButton>
-          <TxButton
-            v-if="row.manual"
-            variant="secondary"
-            size="sm"
-            @click="openEditDialog(row.item)"
-          >
-            {{ t('settings.skillsMcp.mcp.edit') }}
-          </TxButton>
-          <TxSwitch
-            :model-value="row.item.active"
-            @update:model-value="(value) => setItemActive(row.item, Boolean(value))"
-          />
-        </template>
-      </SettingRow>
-
-      <!--
-        Found on this machine, not adopted yet. One row per configuration that defines servers, since
-        that is the unit an import acts on; the description names the servers inside it.
-      -->
-      <SettingRow
-        v-for="candidate in discoveredServers"
-        :key="candidate.id"
-        :title="candidate.name"
-        :description="
-          t('settings.skillsMcp.mcp.discoveredDesc', {
-            count: candidate.serverNames.length,
-            names: candidate.serverNames.join('、')
-          })
-        "
-      >
-        <template #trailing>
-          <SettingChip tone="info">{{ t('settings.skillsMcp.mcp.discoveredChip') }}</SettingChip>
-          <SettingChip>{{ agentLabel(candidate.provider, i18n) }}</SettingChip>
-          <SettingChip v-if="candidate.secretKeyPaths.length > 0" tone="warning">
-            {{ t('settings.skillsMcp.mcp.secretChip') }}
-          </SettingChip>
-          <TxButton
-            size="sm"
-            :loading="adoptingId === candidate.id"
-            @click="adoptServer(candidate)"
-          >
-            {{ t('settings.skillsMcp.mcp.adoptAction') }}
-          </TxButton>
-        </template>
-      </SettingRow>
-
-      <SettingRow
-        v-if="scanFailed"
-        :title="t('settings.skillsMcp.mcp.scanFailed')"
-        :description="t('settings.skillsMcp.mcp.scanFailedDesc')"
-      >
-        <template #trailing>
-          <TxButton variant="secondary" size="sm" @click="refreshDiscovery">
-            {{ t('settings.skillsMcp.mcp.scanAction') }}
-          </TxButton>
-        </template>
-      </SettingRow>
-
-      <SettingRow
-        v-if="hiddenMcpCount > 0"
-        :title="t('settings.skillsMcp.mcp.showAllTitle')"
-        :description="t('settings.skillsMcp.mcp.showAllDesc', { count: hiddenMcpCount })"
-        navigable
-        @activate="showAllMcp = true"
-      />
-
-      <SettingRow
-        :title="t('settings.skillsMcp.mcp.addTitle')"
-        :description="
-          showMcpEmptyHint
-            ? t('settings.skillsMcp.mcp.addDescEmpty')
-            : t('settings.skillsMcp.mcp.addDesc')
-        "
-      >
-        <template #trailing>
-          <TxButton variant="secondary" size="sm" @click="refreshDiscovery">
-            {{ t('settings.skillsMcp.mcp.scanAction') }}
-          </TxButton>
-          <TxButton size="sm" @click="openCreateDialog">
-            {{ t('settings.skillsMcp.mcp.addAction') }}
-          </TxButton>
-        </template>
-      </SettingRow>
-    </template>
-  </TuffGroupBlock>
-
-  <TxModal
-    v-model="dialogVisible"
-    :title="
-      draft.itemId
-        ? t('settings.skillsMcp.dialog.editTitle')
-        : t('settings.skillsMcp.dialog.createTitle')
-    "
-    width="560px"
-  >
-    <div class="SettingMcpServers-Dialog">
-      <label class="SettingMcpServers-Field">
-        <span class="SettingMcpServers-FieldLabel">{{ t('settings.skillsMcp.dialog.name') }}</span>
-        <TxInput
-          v-model="draft.name"
-          :placeholder="t('settings.skillsMcp.dialog.namePlaceholder')"
-          clearable
-        />
-      </label>
-
-      <div class="SettingMcpServers-Field">
-        <span class="SettingMcpServers-FieldLabel">
-          {{ t('settings.skillsMcp.dialog.transport') }}
-        </span>
-        <div class="SettingMcpServers-Segmented">
-          <button
-            type="button"
-            :aria-pressed="draft.transport === 'stdio'"
-            :class="{ 'is-active': draft.transport === 'stdio' }"
-            @click="draft.transport = 'stdio'"
-          >
-            {{ t('settings.skillsMcp.dialog.transportStdio') }}
-          </button>
-          <button
-            type="button"
-            :aria-pressed="draft.transport === 'streamable-http'"
-            :class="{ 'is-active': draft.transport === 'streamable-http' }"
-            @click="draft.transport = 'streamable-http'"
-          >
-            {{ t('settings.skillsMcp.dialog.transportHttp') }}
-          </button>
-        </div>
+    <!-- First read only: the same bar, field and rows the loaded list draws, as placeholders. -->
+    <div
+      v-if="showSkeleton"
+      class="McpServers-Body"
+      aria-hidden="true"
+      data-testid="mcp-servers-skeleton"
+    >
+      <ResourceAgentBar placeholder />
+      <TxSkeleton class="McpServers-SearchPlaceholder" width="100%" :height="32" :radius="12" />
+      <div class="McpServers-List">
+        <ResourceRow v-for="index in SKELETON_ROWS" :key="index" placeholder description-mono />
       </div>
-
-      <template v-if="draft.transport === 'stdio'">
-        <label class="SettingMcpServers-Field">
-          <span class="SettingMcpServers-FieldLabel">
-            {{ t('settings.skillsMcp.dialog.command') }}
-          </span>
-          <TxInput
-            v-model="draft.command"
-            :placeholder="t('settings.skillsMcp.dialog.commandPlaceholder')"
-            clearable
-          />
-        </label>
-
-        <label class="SettingMcpServers-Field">
-          <span class="SettingMcpServers-FieldLabel">
-            {{ t('settings.skillsMcp.dialog.args') }}
-          </span>
-          <TxInput
-            v-model="draft.args"
-            :placeholder="t('settings.skillsMcp.dialog.argsPlaceholder')"
-            clearable
-          />
-        </label>
-
-        <label class="SettingMcpServers-Field">
-          <span class="SettingMcpServers-FieldLabel">{{ t('settings.skillsMcp.dialog.env') }}</span>
-          <textarea
-            v-model="draft.env"
-            class="SettingMcpServers-Textarea"
-            :placeholder="t('settings.skillsMcp.dialog.envPlaceholder')"
-          />
-          <span class="SettingMcpServers-FieldNote">
-            {{ t('settings.skillsMcp.dialog.envNote') }}
-          </span>
-        </label>
-      </template>
-
-      <template v-else>
-        <label class="SettingMcpServers-Field">
-          <span class="SettingMcpServers-FieldLabel">{{ t('settings.skillsMcp.dialog.url') }}</span>
-          <TxInput
-            v-model="draft.url"
-            :placeholder="t('settings.skillsMcp.dialog.urlPlaceholder')"
-            clearable
-          />
-        </label>
-
-        <label class="SettingMcpServers-Field">
-          <span class="SettingMcpServers-FieldLabel">
-            {{ t('settings.skillsMcp.dialog.headers') }}
-          </span>
-          <textarea
-            v-model="draft.headers"
-            class="SettingMcpServers-Textarea"
-            :placeholder="t('settings.skillsMcp.dialog.headersPlaceholder')"
-          />
-          <span class="SettingMcpServers-FieldNote">
-            {{ t('settings.skillsMcp.dialog.envNote') }}
-          </span>
-        </label>
-      </template>
     </div>
 
-    <template #footer>
-      <div class="SettingMcpServers-DialogActions">
-        <TxButton v-if="draft.itemId" variant="secondary" size="sm" @click="deleteDraftServer">
-          {{ t('settings.skillsMcp.dialog.delete') }}
-        </TxButton>
-        <span class="SettingMcpServers-DialogSpacer" />
-        <TxButton variant="secondary" size="sm" @click="dialogVisible = false">
-          {{ t('settings.skillsMcp.dialog.cancel') }}
-        </TxButton>
-        <TxButton
-          size="sm"
-          :disabled="!draftValid"
-          :loading="dialogSaving"
-          @click="saveManualServer"
+    <div v-else-if="inventory" class="McpServers-Body">
+      <ResourceAgentBar
+        v-model="agentFilter"
+        :agents="agentCounts"
+        :enabled="enabledCount"
+        :total="rows.length"
+      />
+
+      <TxSearchInput
+        v-if="rows.length > 0"
+        v-model="query"
+        class="McpServers-Search"
+        :placeholder="t('settings.mcpPage.searchPlaceholder')"
+        :aria-label="t('settings.mcpPage.searchLabel')"
+        data-testid="mcp-servers-search"
+      />
+
+      <div
+        v-if="visibleRows.length > 0"
+        class="McpServers-List"
+        role="group"
+        :aria-label="t('settings.mcpPage.listLabel')"
+        data-testid="mcp-servers-list"
+      >
+        <ResourceRow
+          v-for="row in visibleRows"
+          :key="row.key"
+          :name="row.name"
+          :description="row.summary"
+          description-mono
+          :tags="rowTags(row)"
+          :agents="agentRefs"
+          :configured="rowAgentIds(row)"
+          :active="drawerVisible && drawerRow?.key === row.key"
+          :data-server-key="row.key"
+          @open="openRow(row)"
         >
-          {{ t('settings.skillsMcp.dialog.save') }}
-        </TxButton>
+          <template #trailing>
+            <TxSwitch
+              :model-value="mcpSwitchModel(row).checked"
+              :disabled="mcpSwitchModel(row).mode === 'blocked'"
+              :loading="pending.has(row.key)"
+              :aria-label="t('settings.mcpPage.switchLabel', { name: row.name })"
+              @update:model-value="(value) => onSwitch(row, Boolean(value))"
+            />
+          </template>
+        </ResourceRow>
       </div>
-    </template>
-  </TxModal>
+
+      <TxEmptyState
+        v-else-if="rows.length === 0"
+        class="McpServers-Empty"
+        variant="empty"
+        surface="card"
+        role="status"
+        :title="t('settings.mcpPage.emptyTitle')"
+        :description="t('settings.mcpPage.emptyDesc')"
+        :primary-action="{
+          label: t('settings.mcpPage.add'),
+          type: 'primary',
+          icon: 'i-ri-add-line'
+        }"
+        data-testid="mcp-servers-empty"
+        @primary="openCreate"
+      />
+
+      <TxEmptyState
+        v-else
+        class="McpServers-Empty"
+        variant="search-empty"
+        surface="card"
+        role="status"
+        :title="t('settings.mcpPage.searchEmptyTitle')"
+        :description="t('settings.mcpPage.searchEmptyDesc')"
+        :primary-action="filtering ? { label: t('settings.mcpPage.clearFilters') } : undefined"
+        data-testid="mcp-servers-search-empty"
+        @primary="clearFilters"
+      />
+    </div>
+
+    <TxDrawer v-model:visible="drawerVisible" :title="drawerTitle" size="520px">
+      <SettingMcpServerForm
+        v-if="editing"
+        v-model="draft"
+        :stored-secret-names="drawerView.mode === 'edit' ? editSecretNames : []"
+      />
+      <SettingMcpServerDetail
+        v-else-if="drawerRow"
+        :row="drawerRow"
+        :switch-model="mcpSwitchModel(drawerRow)"
+        :pending="pending.has(drawerRow.key)"
+        :failure="failures.get(drawerRow.key)"
+        :probe="probes.get(drawerRow.key) ?? { status: 'idle' }"
+        :tags="rowTags(drawerRow)"
+        @toggle="(value) => drawerRow && onSwitch(drawerRow, value)"
+        @probe="drawerRow && probeRow(drawerRow)"
+      />
+
+      <!--
+        Always provided: TxDrawer decides once whether a footer exists, so a slot that came and went
+        would leave the form without its buttons. A server an agent declares gets the read-only note
+        where a hand-entered one gets its actions.
+      -->
+      <template #footer>
+        <div v-if="editing" class="McpServers-DrawerActions">
+          <span class="McpServers-Spacer" />
+          <TxButton variant="secondary" size="sm" @click="cancelEdit">
+            {{ t('settings.skillsMcp.dialog.cancel') }}
+          </TxButton>
+          <TxButton
+            variant="primary"
+            size="sm"
+            :disabled="!draftValid"
+            :loading="saving"
+            data-testid="mcp-form-save"
+            @click="saveDraft"
+          >
+            {{ t('settings.skillsMcp.dialog.save') }}
+          </TxButton>
+        </div>
+        <div
+          v-else-if="drawerRow && drawerRow.tuff.origin === 'manual'"
+          class="McpServers-DrawerActions"
+        >
+          <TxButton
+            variant="secondary"
+            size="sm"
+            data-testid="mcp-server-delete"
+            @click="deleteRow(drawerRow)"
+          >
+            {{ t('settings.mcpPage.delete') }}
+          </TxButton>
+          <span class="McpServers-Spacer" />
+          <TxButton
+            variant="primary"
+            size="sm"
+            :loading="editLoading"
+            data-testid="mcp-server-edit"
+            @click="startEdit(drawerRow)"
+          >
+            {{ t('settings.mcpPage.edit') }}
+          </TxButton>
+        </div>
+        <p v-else class="McpServers-DrawerNote" data-testid="mcp-server-read-only">
+          {{ t('settings.mcpPage.readOnlyNote') }}
+        </p>
+      </template>
+    </TxDrawer>
+
+    <TxBottomDialog
+      v-if="confirmRequest"
+      :title="confirmRequest.title"
+      :message="confirmRequest.message"
+      :btns="confirmButtons"
+      :close="closeConfirm"
+    />
+  </section>
 </template>
 
 <style lang="scss" scoped>
-.SettingMcpServers-Dialog {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.SettingMcpServers-Field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.SettingMcpServers-FieldLabel {
+/*
+ * A block, not a flex column: the insights header and notices centre themselves with auto margins
+ * under a max width, and in a flex column those margins would also shrink them to their content.
+ */
+.McpServers {
+  width: 100%;
+  min-width: 0;
   color: var(--shell-text-primary);
-  font-size: var(--shell-fs-body);
 }
 
-.SettingMcpServers-FieldNote {
-  color: var(--shell-text-secondary);
-  font-size: var(--shell-fs-sm);
-  line-height: 1.5;
+.McpServers-Body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--shell-space-4);
 }
 
-.SettingMcpServers-Textarea {
-  min-height: 76px;
-  padding: 8px 10px;
+.McpServers-SearchPlaceholder {
+  --tx-skeleton-base-color: var(--shell-surface-2);
+}
+
+/*
+ * The list's card: one border and radius around rows that draw only the hairline between
+ * themselves. It clips, so a row's hover fill follows the rounded corners.
+ */
+.McpServers-List {
+  overflow: hidden;
   border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-md);
+  border-radius: var(--shell-radius-lg);
   background: var(--shell-bg);
-  color: var(--shell-text-primary);
-  font-family: inherit;
-  font-size: var(--shell-fs-body);
-  resize: vertical;
-  outline: none;
-
-  &:focus {
-    border-color: var(--shell-primary);
-  }
 }
 
-.SettingMcpServers-Segmented {
-  display: inline-flex;
-  gap: 4px;
-  align-self: flex-start;
-  padding: 3px;
-  border-radius: var(--shell-radius-md);
-  background: var(--shell-surface-2);
-
-  button {
-    padding: 5px 14px;
-    border: none;
-    border-radius: var(--shell-radius-sm);
-    background: transparent;
-    color: var(--shell-text-secondary);
-    font-family: inherit;
-    font-size: var(--shell-fs-body);
-    cursor: pointer;
-
-    &.is-active {
-      background: var(--shell-bg);
-      color: var(--shell-text-primary);
-    }
-  }
-}
-
-.SettingMcpServers-DialogActions {
+.McpServers-DrawerActions {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: var(--shell-space-2);
   width: 100%;
 }
 
-.SettingMcpServers-DialogSpacer {
+.McpServers-Spacer {
   flex: 1 1 auto;
+}
+
+.McpServers-DrawerNote {
+  margin: 0;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-sm);
+  line-height: 1.5;
 }
 </style>

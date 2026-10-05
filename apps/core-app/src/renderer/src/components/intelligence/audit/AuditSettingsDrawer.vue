@@ -13,7 +13,7 @@ import SettingRow from '~/components/settings/SettingRow.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 import { appSetting } from '~/modules/storage/app-storage'
-import { formatRetention } from './audit-format'
+import { formatDuration, formatRetention } from './audit-format'
 
 /**
  * The audit page's settings, each control exactly once (parent PRD R-D7): whether call records are
@@ -78,11 +78,8 @@ const cacheValue = computed<string | number>(() =>
 )
 
 function cacheLabel(seconds: number): string {
-  if (seconds % 3600 === 0)
-    return t('intelligenceAudit.settings.cacheHours', { count: seconds / 3600 })
-  return t('intelligenceAudit.settings.cacheMinutes', {
-    count: new Intl.NumberFormat(locale.value, { maximumFractionDigits: 1 }).format(seconds / 60)
-  })
+  if (seconds % 3600 === 0) return formatDuration(seconds / 3600, 'hour', t, locale.value)
+  return formatDuration(seconds / 60, 'minute', t, locale.value)
 }
 
 const cacheOptions = computed(() => {

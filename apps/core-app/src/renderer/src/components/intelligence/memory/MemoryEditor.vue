@@ -16,6 +16,7 @@ import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { computed, ref, shallowRef, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { isMemoryReplaceConflict } from '../../../../../shared/intelligence/memory-errors'
 import { useMemoryLabels } from './memory-labels'
 import {
   DEFAULT_MEMORY_SCOPE,
@@ -310,7 +311,7 @@ async function handleSave() {
     }
     resetCandidateEditor()
   } catch (error) {
-    if (editing && String(error).includes('MEMORY_REPLACE_CONFLICT')) {
+    if (editing && isMemoryReplaceConflict(error)) {
       errorMessage.value = t('intelligence.memoryReview.replaceConflict')
       emit('conflict')
     } else {

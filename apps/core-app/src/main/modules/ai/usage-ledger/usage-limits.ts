@@ -101,9 +101,28 @@ function hasRequestLimit(limits: UsageLimits): boolean {
   return limits.requestsPerDay !== null || limits.requestsPerMonth !== null
 }
 
-function invalidUsageLimits(field?: string): Error & { code: 'INVALID_REQUEST' } {
+/**
+ * What `setUsageLimits` rejects, with the normalizer's `reason` / `recovery` pair so the app's own
+ * renderer is told which field was refused and why (`toApiFailure`), not one public sentence.
+ */
+function invalidUsageLimits(
+  field?: string,
+  problem: 'not-an-object' | 'unknown-key' | 'invalid-value' = 'not-an-object'
+): Error & { code: 'INVALID_REQUEST' } {
+  const reason =
+    problem === 'unknown-key'
+      ? `"${field}" is not a usage limit.`
+      : problem === 'invalid-value' && field
+        ? `${field} must be a positive ${
+            isUsageLimitKey(field) && USAGE_LIMIT_SPECS[field].metric === 'cost'
+              ? 'amount in USD'
+              : 'whole number'
+          }, or empty for no limit.`
+        : 'The usage limits must be an object of limit names.'
   return Object.assign(new Error('INVALID_REQUEST'), {
     code: 'INVALID_REQUEST' as const,
+    reason,
+    recovery: 'Correct the limit and save again.',
     ...(field === undefined ? {} : { field })
   })
 }
@@ -125,13 +144,13 @@ export function normalizeUsageLimitsInput(input: unknown): UsageLimits {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw invalidUsageLimits()
   const record = input as Record<string, unknown>
   for (const key of Object.keys(record)) {
-    if (!isUsageLimitKey(key)) throw invalidUsageLimits(key)
+    if (!isUsageLimitKey(key)) throw invalidUsageLimits(key, 'unknown-key')
   }
   const limits = emptyUsageLimits()
   for (const key of USAGE_LIMIT_KEYS) {
     const value = record[key]
     if (value === undefined || value === null) continue
-    if (!isValidLimitValue(key, value)) throw invalidUsageLimits(key)
+    if (!isValidLimitValue(key, value)) throw invalidUsageLimits(key, 'invalid-value')
     limits[key] = value
   }
   return limits
@@ -482,5 +501,34 @@ export async function getUsageLimits(): Promise<UsageLimits> {
  */
 export async function setUsageLimits(input: unknown): Promise<UsageLimits> {
   const limits = normalizeUsageLimitsInput(input)
-  return (await loadQuotaManager()).intelligenceQuotaManager.setGlobalLimits(limits)
+  const stored = await (await loadQuotaManager()).intelligenceQuotaManager.setGlobalLimits(limits)
+  notifyUsageLimitsChanged(stored)
+  return stored
+}
+
+type UsageLimitsListener = (limits: UsageLimits) => void
+
+const usageLimitsListeners = new Set<UsageLimitsListener>()
+
+/**
+ * Called with the stored limits after every change. Work held back for a limit — file embedding
+ * waits for the reset time — resumes at once when the user raises or clears it, instead of at
+ * local midnight. Returns the unsubscribe.
+ */
+export function onUsageLimitsChanged(listener: UsageLimitsListener): () => void {
+  usageLimitsListeners.add(listener)
+  return () => {
+    usageLimitsListeners.delete(listener)
+  }
+}
+
+/** Tells every listener; one that throws is logged and does not stop the others. */
+export function notifyUsageLimitsChanged(limits: UsageLimits): void {
+  for (const listener of [...usageLimitsListeners]) {
+    try {
+      listener({ ...limits })
+    } catch (error) {
+      usageLimitsLog.warn('A usage-limits listener failed', { error })
+    }
+  }
 }

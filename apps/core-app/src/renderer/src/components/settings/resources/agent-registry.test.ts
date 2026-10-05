@@ -10,7 +10,9 @@ import {
   agentCountsFrom,
   agentIconClass,
   agentMonogram,
-  agentMonogramTone
+  agentMonogramTone,
+  agentStripWidth,
+  foldAgentMarks
 } from './agent-registry'
 
 /** Resolves from this file, so the set is the one installed for core-app. */
@@ -196,5 +198,62 @@ describe('AGENT_ICON_CLASSES', () => {
   it('keeps its module free of runtime imports, so the config loader can evaluate it', () => {
     const source = readFileSync(path.resolve(__dirname, 'agent-icons.ts'), 'utf8')
     expect(source).not.toMatch(/^import\s(?!type\b)/m)
+  })
+})
+
+describe('foldAgentMarks', () => {
+  const metrics = { mark: 16, gap: 4, more: 22 }
+  /** Eleven agents in bar order; only Pi and Gemini hold the item. */
+  const marks = [
+    'pi',
+    'claude',
+    'factory',
+    'kilocode',
+    'kiro',
+    'oh-my-pi',
+    'codebuddy',
+    'qoder',
+    'reasonix',
+    'opencode',
+    'gemini'
+  ].map((id) => ({ id, configured: id === 'pi' || id === 'gemini' }))
+  const ids = (list: Array<{ id: string }>) => list.map((mark) => mark.id)
+
+  it('shows every mark when they fit, or while the width is not known', () => {
+    expect(agentStripWidth(11, metrics)).toBe(216)
+    expect(foldAgentMarks(marks, 216, metrics).folded).toEqual([])
+    expect(foldAgentMarks(marks, null, metrics).shown).toHaveLength(11)
+    expect(foldAgentMarks(marks, 0, metrics).shown).toHaveLength(11)
+  })
+
+  it('folds the marks that do not fit into the end, dimmed ones before lit ones', () => {
+    // 120px: five marks (5 × 20 = 100) and the 22px badge fit.
+    const { shown, folded } = foldAgentMarks(marks, 122, metrics)
+
+    expect(ids(shown)).toEqual(['pi', 'claude', 'factory', 'kilocode', 'gemini'])
+    expect(ids(folded)).toEqual(['kiro', 'oh-my-pi', 'codebuddy', 'qoder', 'reasonix', 'opencode'])
+    // Gemini is last in the bar but holds the item: it is not the one that disappears.
+    expect(folded.some((mark) => mark.configured)).toBe(false)
+  })
+
+  it('keeps the order of the bar among what it shows', () => {
+    const { shown } = foldAgentMarks(marks, 82, metrics)
+    // Three slots: both lit marks, then the first dimmed one, drawn in bar order.
+    expect(ids(shown)).toEqual(['pi', 'claude', 'gemini'])
+  })
+
+  it('folds a lit mark only when the lit marks alone do not fit', () => {
+    const allLit = marks.map((mark) => ({ ...mark, configured: true }))
+    const { shown, folded } = foldAgentMarks(allLit, 62, metrics)
+
+    expect(ids(shown)).toEqual(['pi', 'claude'])
+    expect(folded).toHaveLength(9)
+    expect(folded.every((mark) => mark.configured)).toBe(true)
+  })
+
+  it('folds everything into the badge when not even one mark fits beside it', () => {
+    const { shown, folded } = foldAgentMarks(marks, 30, metrics)
+    expect(shown).toEqual([])
+    expect(folded).toHaveLength(11)
   })
 })

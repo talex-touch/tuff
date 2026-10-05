@@ -305,9 +305,10 @@ function assertSelectionsFit(
  * copy of one cannot run, and its stored item is marked invalid, which stops every server in it.
  *
  * Read off a dry run of the same sanitizer the import uses, on a copy of the MCP roots, so the answer
- * cannot drift from what the import would do.
+ * cannot drift from what the import would do. The settings page's probe of a server Tuff does not
+ * hold asks the same question, so a server the import would refuse is not started for a probe either.
  */
-function serversNeedingReauthentication(
+export function serversNeedingReauthentication(
   config: Record<string, unknown>,
   candidateId: string
 ): Set<string> {

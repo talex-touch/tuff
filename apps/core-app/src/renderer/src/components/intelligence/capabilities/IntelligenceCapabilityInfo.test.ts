@@ -4,7 +4,7 @@ import type {
   IntelligenceProviderConfig
 } from '@talex-touch/tuff-intelligence'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, nextTick, reactive, ref } from 'vue'
 import type { CapabilityBinding } from './types'
@@ -24,13 +24,6 @@ vi.mock('@talex-touch/tuffex/button', () => ({
     emits: ['click'],
     template:
       '<button :disabled="disabled || loading" @click="$emit(\'click\', $event)"><slot /></button>'
-  }
-}))
-
-vi.mock('@talex-touch/tuffex/scroll', () => ({
-  TxScroll: {
-    name: 'TxScroll',
-    template: '<section><slot name="header" /><slot /><slot name="footer" /></section>'
   }
 }))
 
@@ -72,10 +65,7 @@ type InfoProps = {
   providers: IntelligenceProviderConfig[]
   bindings: CapabilityBinding[]
   isTesting: boolean
-  hasPendingChanges: boolean
-  isSaving: boolean
-  saveState: 'idle' | 'dirty' | 'saved' | 'error'
-  saveErrorDetail: string
+  testBlockedReason?: string
   onUpdatePrompt: (capabilityId: string, prompt: string) => void
 }
 
@@ -113,9 +103,6 @@ function mountInfo(overrides: Partial<InfoProps> = {}): VueWrapper {
         { providerId: 'dashscope', enabled: true, priority: 1, models: [], provider: dashscope }
       ],
       isTesting: false,
-      hasPendingChanges: false,
-      isSaving: false,
-      saveState: 'idle',
       ...overrides
     },
     global: { stubs }
@@ -206,44 +193,81 @@ describe('intelligenceCapabilityInfo model transfer drawer', () => {
   })
 })
 
-describe('intelligenceCapabilityInfo autosave status', () => {
-  it('reports a write in flight as saving, over any earlier error state', async () => {
-    const wrapper = mountInfo({ isSaving: true })
-
-    const status = wrapper.get('.capability-info__save-status')
-    expect(status.attributes('data-status')).toBe('saving')
-    expect(status.text()).toBe('settings.intelligence.autoSaveSaving')
-
-    await wrapper.setProps({ saveState: 'error', saveErrorDetail: 'disk full' })
-
-    expect(status.attributes('data-status')).toBe('saving')
-    expect(status.text()).toBe('settings.intelligence.autoSaveSaving')
-
-    wrapper.unmount()
-  })
-
-  it('surfaces the failing write reason instead of a bare failure message', async () => {
-    const wrapper = mountInfo({ saveState: 'error', saveErrorDetail: 'disk full' })
-
-    const status = wrapper.get('.capability-info__save-status')
-    expect(status.attributes('data-status')).toBe('error')
-    expect(status.text()).toBe('settings.intelligence.capabilitySaveErrorWithDetail')
-
-    await wrapper.setProps({ saveErrorDetail: '' })
-
-    expect(status.text()).toBe('settings.intelligence.capabilitySaveError')
-
-    wrapper.unmount()
-  })
-
+describe('intelligenceCapabilityInfo test gating', () => {
   it('leaves the header with the test action as its only button', () => {
-    const wrapper = mountInfo({ hasPendingChanges: true, saveState: 'dirty' })
+    const wrapper = mountInfo()
 
     const actions = wrapper.get('.capability-info__header-actions')
     expect(actions.findAll('button').map((button) => button.text())).toEqual([
       'settings.intelligence.capabilityTest'
     ])
-    expect(wrapper.find('.capability-info__save-button').exists()).toBe(false)
+    // The editor no longer reports a save state of its own: saving belongs to its owner.
+    expect(wrapper.find('.capability-info__save-status').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('holds the test back while there are unsaved changes, and says why beside the button', async () => {
+    const wrapper = mountInfo({ testBlockedReason: 'Save your changes before testing.' })
+
+    const button = buttonByLabel(wrapper, 'settings.intelligence.capabilityTest')
+    const hint = wrapper.get('.capability-info__test-hint')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(hint.text()).toBe('Save your changes before testing.')
+    expect(button.attributes('aria-describedby')).toBe(hint.attributes('id'))
+
+    await wrapper.setProps({ testBlockedReason: undefined })
+
+    expect(button.attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('.capability-info__test-hint').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('opens the test when nothing is unsaved', async () => {
+    const wrapper = mountInfo()
+
+    await buttonByLabel(wrapper, 'settings.intelligence.capabilityTest').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('test-section-stub').exists()).toBe(true)
+    expect((wrapper.vm as unknown as { hasOpenDrawer: () => boolean }).hasOpenDrawer()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('hands over a prompt still being typed before testing, and stays closed when that leaves changes unsaved', async () => {
+    // What the skills page does: an edit lands in its draft, and a draft holds the test.
+    const wrapper: VueWrapper = mountInfo({
+      onUpdatePrompt: () => {
+        void wrapper.setProps({ testBlockedReason: 'Save your changes before testing.' })
+      }
+    })
+
+    await buttonByLabel(wrapper, 'settings.intelligence.editPrompt').trigger('click')
+    // Typed, and the 800 ms hand-over has not run yet.
+    await wrapper.get('textarea.flat-markdown-stub').setValue('先别测')
+    await buttonByLabel(wrapper, 'settings.intelligence.capabilityTest').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.emitted('updatePrompt')?.at(-1)).toEqual(['audio.asr', '先别测'])
+    expect(wrapper.find('test-section-stub').exists()).toBe(false)
+    expect(wrapper.get('.capability-info__test-hint').text()).toBe(
+      'Save your changes before testing.'
+    )
+
+    wrapper.unmount()
+  })
+
+  it('refuses a test request that arrives while the test is held back', async () => {
+    const wrapper = mountInfo()
+
+    await buttonByLabel(wrapper, 'settings.intelligence.capabilityTest').trigger('click')
+    await flushPromises()
+    await wrapper.setProps({ testBlockedReason: 'Save your changes before testing.' })
+    wrapper.findComponent({ name: 'TestSection' }).vm.$emit('test', { userInput: 'hi' })
+
+    expect(wrapper.emitted('test')).toBeUndefined()
 
     wrapper.unmount()
   })
@@ -363,9 +387,6 @@ describe('intelligenceCapabilityInfo capability switch', () => {
             providers: [],
             bindings: [],
             isTesting: false,
-            hasPendingChanges: false,
-            isSaving: false,
-            saveState: 'idle',
             onUpdatePrompt: stalePageUpdatePrompt
           })
         ])

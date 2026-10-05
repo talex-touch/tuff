@@ -1,8 +1,5 @@
 <script setup lang="ts">
-import type {
-  UsageLimits,
-  UsageLimitsStatus
-} from '@talex-touch/utils/transport/sdk/domains/intelligence'
+import type { UsageLimitsStatus } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCard } from '@talex-touch/tuffex/card'
 import { TxProgressBar } from '@talex-touch/tuffex/progress-bar'
@@ -10,6 +7,7 @@ import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatCompact, formatInteger, formatResetTime, formatUsd } from './audit-format'
+import { USAGE_LIMIT_LABEL_KEYS } from './audit-labels'
 
 /**
  * How far the configured global limits are from their tops (parent PRD R-C6 / R-D5).
@@ -34,15 +32,6 @@ const { t, locale } = useI18n()
 
 type LimitItem = UsageLimitsStatus['items'][number]
 
-const LABEL_KEYS: Record<keyof UsageLimits, string> = {
-  requestsPerDay: 'intelligenceAudit.limits.items.requestsPerDay',
-  requestsPerMonth: 'intelligenceAudit.limits.items.requestsPerMonth',
-  tokensPerDay: 'intelligenceAudit.limits.items.tokensPerDay',
-  tokensPerMonth: 'intelligenceAudit.limits.items.tokensPerMonth',
-  costUsdPerDay: 'intelligenceAudit.limits.items.costUsdPerDay',
-  costUsdPerMonth: 'intelligenceAudit.limits.items.costUsdPerMonth'
-}
-
 function formatAmount(item: LimitItem, value: number): string {
   if (item.metric === 'cost') return formatUsd(value, locale.value)
   if (item.metric === 'tokens') return formatCompact(value, locale.value)
@@ -64,7 +53,7 @@ const rows = computed(() =>
     return {
       key: item.key,
       state: item.state,
-      label: t(LABEL_KEYS[item.key]),
+      label: t(USAGE_LIMIT_LABEL_KEYS[item.key]),
       usage: t('intelligenceAudit.limits.usage', {
         used: formatAmount(item, item.used),
         max: formatAmount(item, item.max)

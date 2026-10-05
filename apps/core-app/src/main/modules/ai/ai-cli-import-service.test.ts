@@ -338,6 +338,26 @@ describe('aiCliImportService preview', () => {
     })
     expect(importedConfigRuntimeMocks.refresh).toHaveBeenCalledOnce()
   })
+  it('reads a block-scalar description as its text, which is what an imported copy keeps', async () => {
+    const workspace = join(fixtureRoot, 'workspace')
+    // The shape of `bggg-creator-image2ppt/SKILL.md` (2026-10-03): a folded description whose
+    // indented lines carry colons of their own.
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.pi/skills/image2ppt/SKILL.md',
+      '---\nname: image2ppt\ndescription: >\n  Turn screenshots into an editable deck.\n  Use when: the user asks for image2ppt.\n---\nBody.\n'
+    )
+
+    const scan = await new AiCliImportService().preview({ cwd: workspace, providerIds: ['pi'] })
+    const skill = scan.candidates.find((item) => item.kind === 'skill' && item.name === 'image2ppt')
+
+    expect(skill).toMatchObject({
+      description: 'Turn screenshots into an editable deck. Use when: the user asks for image2ppt.',
+      // "Use when" sits under `description`; it is not a key of its own and is not reported.
+      ignoredFields: []
+    })
+  })
+
   it('normalizes rule frontmatter path lists and reports unknown keys without widening the rule contract', async () => {
     const workspace = join(fixtureRoot, 'workspace')
     await writeFixture(

@@ -4,6 +4,7 @@ import {
   PROVIDER_DETAIL_MAX_CHARS,
   readProviderDetail,
   redactProviderDetail,
+  toApiFailure,
   toNormalizedIntelligenceError,
   toStreamFailure
 } from './intelligence-error-normalizer'
@@ -213,5 +214,73 @@ describe('the global usage limit (USAGE_LIMIT_REACHED)', () => {
     const plugin = toStreamFailure('USAGE_LIMIT_REACHED', wrapped, { host: false })
     expect(plugin.message).toBe('USAGE_LIMIT_REACHED')
     expect(plugin.code).toBe('USAGE_LIMIT_REACHED')
+  })
+
+  it('answers a refused call with the code and its reason for the app, the code for a plugin', () => {
+    const reason =
+      'The usage limit you set is reached (requestsPerDay: 3 / 3); it resets at 2026-10-04 00:00 local time (2026-10-03T16:00:00.000Z).'
+    // The module boundary's wrapper, and the SDK's own error that a Context execution rethrows.
+    const wrapped = toNormalizedIntelligenceError(refusal(), { capabilityId: 'text.chat' })
+    for (const error of [wrapped, refusal()]) {
+      expect(toApiFailure('USAGE_LIMIT_REACHED', error, { host: true })).toEqual({
+        error: `[USAGE_LIMIT_REACHED:text.chat] ${reason}`,
+        code: 'USAGE_LIMIT_REACHED'
+      })
+      expect(toApiFailure('USAGE_LIMIT_REACHED', error, { host: false })).toEqual({
+        error: 'USAGE_LIMIT_REACHED'
+      })
+    }
+  })
+})
+
+describe('what a failed capability call answers (toApiFailure)', () => {
+  it('gives the app the reason for the code, never the provider message', () => {
+    const leaky = new Error(
+      '401 Unauthorized at https://gateway.example.test/v1?key=sk-secret-123456'
+    )
+    const wrapped = toNormalizedIntelligenceError(leaky, { capabilityId: 'text.chat' })
+    const host = toApiFailure('UNKNOWN', wrapped, { host: true })
+    expect(host).toEqual({
+      error: '[UNKNOWN:text.chat] The intelligence request failed with an unclassified error.',
+      code: 'UNKNOWN'
+    })
+    expect(toApiFailure('UNKNOWN', wrapped, { host: false })).toEqual({ error: 'UNKNOWN' })
+  })
+
+  it('takes the reason the normalizer wrapped in, and no `reason` a provider error brought', () => {
+    const wrapped = toNormalizedIntelligenceError(new Error('quota exceeded'), {
+      capabilityId: 'text.chat'
+    })
+    expect(wrapped.code).toBe('QUOTA_EXHAUSTED')
+    expect(toApiFailure('QUOTA_EXHAUSTED', wrapped, { host: true }).error).toBe(
+      '[QUOTA_EXHAUSTED:text.chat] The caller has exhausted its request, token, or cost quota.'
+    )
+    // A provider's own error object can carry a `reason` of its own; only the wrapper's is ours.
+    const foreign = Object.assign(new Error('boom'), {
+      code: 'UNKNOWN',
+      reason: 'account acme-corp suspended'
+    })
+    expect(toApiFailure('UNKNOWN', foreign, { host: true }).error).toBe(
+      '[UNKNOWN] The intelligence request failed with an unclassified error.'
+    )
+  })
+
+  it('passes on what a local CLI said, redacted, as a failed stream does', () => {
+    const said = 'auth failed: api_key=hunter22 rejected'
+    const cliError = Object.assign(new Error(`[CodexCliProvider] run failed: ${said}`), {
+      providerDetail: said
+    })
+    const wrapped = toNormalizedIntelligenceError(cliError, { capabilityId: 'text.chat' })
+    expect(toApiFailure('UNKNOWN', wrapped, { host: true }).error).toBe(
+      '[UNKNOWN:text.chat] auth failed: api_key=… rejected'
+    )
+  })
+
+  it('names the capability only when it is a plain capability id', () => {
+    expect(toApiFailure('UNKNOWN', new Error('boom'), { host: true }).error).toBe(
+      '[UNKNOWN] The intelligence request failed with an unclassified error.'
+    )
+    const odd = Object.assign(new Error('boom'), { capabilityId: 'text.chat] [FAKE' })
+    expect(toApiFailure('UNKNOWN', odd, { host: true }).error.startsWith('[UNKNOWN] ')).toBe(true)
   })
 })

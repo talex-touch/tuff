@@ -1,14 +1,24 @@
 <script lang="ts" setup>
 import type { IntelligenceCapabilityConfig } from '@talex-touch/tuff-intelligence'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
+/**
+ * The top of a built-in skill's drawer: its id and kind, what it does, and the drawer's actions.
+ *
+ * The skill's name is the drawer's own title, so it is not repeated here. The header scrolls with
+ * the drawer body; it is not a window drag region — it sits in a panel over the page, not in the
+ * window's title bar.
+ */
 const props = defineProps<{
   capability: IntelligenceCapabilityConfig
 }>()
 
+const { t } = useI18n()
+
 const capabilityType = computed(() => {
   const meta = props.capability.metadata as { type?: string } | undefined
-  return typeof meta?.type === 'string' ? meta.type : 'capability'
+  return typeof meta?.type === 'string' ? meta.type : t('settings.skillsPage.typeBadge')
 })
 </script>
 
@@ -23,10 +33,7 @@ const capabilityType = computed(() => {
           <span class="capability-header__id">{{ capability.id }}</span>
           <span class="capability-header__type-badge">{{ capabilityType }}</span>
         </div>
-        <h1 class="capability-header__title">
-          {{ capability.label || capability.id }}
-        </h1>
-        <p class="capability-header__description">
+        <p v-if="capability.description" class="capability-header__description">
           {{ capability.description }}
         </p>
       </div>
@@ -39,16 +46,11 @@ const capabilityType = computed(() => {
 
 <style lang="scss" scoped>
 .capability-header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  padding: 0.875rem 1.25rem 0.75rem;
-  background: var(--tx-bg-color);
+  padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--tx-border-color-lighter);
-  -webkit-app-region: drag;
 }
 
 .capability-header__notice {
@@ -77,7 +79,6 @@ const capabilityType = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.5rem;
 }
 
 .capability-header__id {
@@ -100,24 +101,12 @@ const capabilityType = computed(() => {
   letter-spacing: 0.05em;
 }
 
-.capability-header__title {
-  font-size: 1rem;
-  font-weight: 700;
-  margin: 0 0 0.375rem;
-  color: var(--tx-text-color-primary);
-  line-height: 1.35;
-}
-
 .capability-header__description {
-  display: -webkit-box;
-  margin: 0;
+  margin: 0.5rem 0 0;
   color: var(--tx-text-color-regular);
   max-width: 48rem;
   line-height: 1.45;
   font-size: 0.8125rem;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .capability-header__actions {
@@ -125,7 +114,5 @@ const capabilityType = computed(() => {
   align-items: center;
   justify-content: flex-end;
   flex: 0 0 auto;
-  padding-top: 0.25rem;
-  -webkit-app-region: no-drag;
 }
 </style>

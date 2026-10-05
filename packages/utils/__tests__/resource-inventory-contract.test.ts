@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { isPluginFacingEvent } from '../transport/security/plugin-facing-events'
 import { createMcpServersSdk, MCP_SECRET_MASK, McpServerEvents } from '../transport/sdk/domains/mcp-servers'
 import { createSkillLocalSdk, SkillLocalEvents } from '../transport/sdk/domains/skill-local'
+import { isPluginFacingEvent } from '../transport/security/plugin-facing-events'
 import { aiAgentLabel, isKnownAiAgentId, KNOWN_AI_AGENT_IDS } from '../types/ai-orchestrator'
 
 /** A transport that records what each SDK call sends, as `[event name, payload]`. */
@@ -65,6 +65,7 @@ describe('mcp-servers domain', () => {
     ])
     expect(MCP_SECRET_MASK).not.toMatch(/\w/)
   })
+
 })
 
 describe('resource inventory is host-only', () => {
@@ -74,7 +75,7 @@ describe('resource inventory is host-only', () => {
     )
     // Positive control: the allowlist answers yes for something plugins do reach.
     expect(isPluginFacingEvent('intelligence:api:invoke')).toBe(true)
-    expect(names).toHaveLength(9)
+    expect(names).toHaveLength(10)
     for (const name of names) expect(isPluginFacingEvent(name)).toBe(false)
   })
 })

@@ -2797,7 +2797,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         backlog: this.getIndexBacklogSnapshot(),
         incrementalPersist: this.incrementalPersistSnapshotService.getSnapshot(),
         ftsWrite: this.ftsWriteSnapshotService.getSnapshot(),
-        ftsDelete: this.ftsDeleteSnapshotService.getSnapshot()
+        ftsDelete: this.ftsDeleteSnapshotService.getSnapshot(),
+        embeddingPause: this.embeddingService?.getUsageLimitPause() ?? null
       })
     ]
   }

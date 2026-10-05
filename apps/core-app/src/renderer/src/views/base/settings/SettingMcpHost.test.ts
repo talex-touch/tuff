@@ -23,10 +23,14 @@ const clipboard = vi.hoisted(() => ({ writeText: vi.fn() }))
  * Clicking a `TxButton` runs the `v-wave` directive, which asks for the
  * reduced-motion preference before drawing. jsdom implements no media queries,
  * so without this stub every click raises inside the directive.
+ *
+ * Reduced motion is on, so the directive draws no ripple at all: a ripple's
+ * cleanup timers could otherwise fire after this file's environment is torn
+ * down (`document is not defined` under a loaded batch run).
  */
 vi.hoisted(() => {
   vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: false,
+    matches: query.includes('prefers-reduced-motion'),
     media: query,
     onchange: null,
     addEventListener: vi.fn(),
@@ -38,38 +42,56 @@ vi.hoisted(() => {
 })
 
 vi.mock('@talex-touch/utils/renderer', () => ({
-  /** Read by the MCP servers section the page renders beside this one. */
+  /** Read by the MCP servers section the page renders above this one. */
   useIntelligenceSdk: () => ({
-    orchestratorGetSnapshot: vi.fn().mockResolvedValue({
-      importedItems: [
-        {
-          id: 'mcp-1',
-          kind: 'mcp',
-          name: 'fs',
-          active: true,
-          state: 'active',
-          origin: 'manual',
-          payload: { transport: { type: 'stdio', command: 'npx' } }
-        },
-        // A pre-contract row: no sourceId/candidateId. This is the shape that
-        // blanked the live settings page — it must render, not throw.
-        {
-          id: 'mcp-legacy',
-          kind: 'mcp',
-          name: 'legacy-server',
-          active: true,
-          state: 'active'
-        }
-      ]
-    }),
-    orchestratorPreviewImport: vi.fn().mockResolvedValue({ scanId: 'scan-1', candidates: [] }),
+    orchestratorGetSnapshot: vi.fn().mockResolvedValue({ importedItems: [] }),
     orchestratorApplyImport: vi.fn(),
-    orchestratorSetImportedItemActive: vi.fn(),
     orchestratorDeleteImportedItem: vi.fn()
   }),
   useMcpServersSdk: () => ({
+    inventory: vi.fn().mockResolvedValue({
+      scanId: 'scan-1',
+      agents: [{ agentId: 'claude', label: 'Claude Code', skillCount: null, mcpServerCount: 1 }],
+      unreadableSources: [],
+      rows: [
+        {
+          key: 'mcp:fs',
+          name: 'fs',
+          transport: 'stdio',
+          summary: 'npx',
+          detail: { command: 'npx', args: [], envNames: [], headerNames: [] },
+          hasSecrets: false,
+          agents: [],
+          tuff: {
+            state: 'enabled',
+            itemId: 'manual:1',
+            profileId: 'manual.1',
+            origin: 'manual',
+            provider: 'manual'
+          }
+        },
+        {
+          key: 'mcp:context7',
+          name: 'context7',
+          transport: 'stdio',
+          summary: 'npx -y @upstash/context7-mcp',
+          detail: {
+            command: 'npx',
+            args: ['-y', '@upstash/context7-mcp'],
+            envNames: [],
+            headerNames: []
+          },
+          hasSecrets: false,
+          agents: [
+            { agentId: 'claude', sourcePath: '/Users/me/.claude.json', candidateId: 'claude:mcp' }
+          ],
+          tuff: { state: 'not-imported' }
+        }
+      ]
+    }),
+    setServerEnabled: vi.fn(),
     probe: vi.fn().mockResolvedValue({ ok: true, toolCount: 3 }),
-    upsertManual: vi.fn().mockResolvedValue({ itemId: 'mcp-1' })
+    upsertManual: vi.fn().mockResolvedValue({ itemId: 'manual:1' })
   }),
   useMcpHostSdk: () => host
 }))
@@ -79,7 +101,8 @@ vi.mock('vue-i18n', () => ({
   useI18n: () => ({
     t: (key: string, params?: Record<string, unknown>) =>
       params ? `${key}:${JSON.stringify(params)}` : key,
-    te: () => true
+    te: () => true,
+    locale: { value: 'en-US' }
   })
 }))
 vi.mock('vue-sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
@@ -147,11 +170,20 @@ function rowNamed(wrapper: VueWrapper, title: string): DOMWrapper<Element> {
   return row
 }
 
-/** The pasteable block, told apart from the rows by its own card title. */
+/** A server row of the list above the host card, found by the server's name. */
+function serverRowNamed(wrapper: VueWrapper, name: string): DOMWrapper<Element> {
+  const row = wrapper
+    .findAll('.ResourceRow')
+    .find((candidate) => candidate.find('.ResourceRow-Name').text() === name)
+  if (!row) throw new Error(`no server row named ${name}`)
+  return row
+}
+
+/** The pasteable block, told apart from the rows by its own title. */
 function blockNamed(wrapper: VueWrapper, title: string): DOMWrapper<Element> {
   const block = wrapper
-    .findAll('.TBlockSlot-Container')
-    .find((candidate) => candidate.find('.TBlockSlot-TitleRow h5').text() === title)
+    .findAll('.SettingMcpHost-Config')
+    .find((candidate) => candidate.find('h3').text() === title)
   if (!block) throw new Error(`no block titled ${title}`)
   return block
 }
@@ -344,12 +376,12 @@ describe('settingMcpHost local MCP server section', () => {
       running: false,
       endpoint: null
     })
-    // The whole MCP page, so the servers section beside this one supplies real neighbours.
+    // The whole MCP page, so the server list above this card supplies real neighbours.
     const wrapper = mount(IntelligenceMcpPage)
     await flushPromises()
 
-    const neighbours = ['fs', 'legacy-server']
-    const before = neighbours.map((title) => rowNamed(wrapper, title).text())
+    const neighbours = ['fs', 'context7']
+    const before = neighbours.map((name) => serverRowNamed(wrapper, name).html())
     expect(
       switchOf(rowNamed(wrapper, 'settings.skillsMcp.host.enableTitle')).attributes('aria-checked')
     ).toBe('false')
@@ -363,6 +395,46 @@ describe('settingMcpHost local MCP server section', () => {
       switchOf(rowNamed(wrapper, 'settings.skillsMcp.host.enableTitle')).attributes('aria-checked')
     ).toBe('true')
     expect(wrapper.text()).toContain(ENDPOINT)
-    expect(neighbours.map((title) => rowNamed(wrapper, title).text())).toEqual(before)
+    expect(neighbours.map((name) => serverRowNamed(wrapper, name).html())).toEqual(before)
+  })
+
+  it('draws a read failure as a failure inside its own card, never as a switch reading off', async () => {
+    host.getState.mockRejectedValue(new Error('ipc closed'))
+    const wrapper = mount(SettingMcpHost)
+    await flushPromises()
+
+    const card = wrapper.find('.SettingMcpHost-Card')
+    expect(card.text()).toContain('settings.skillsMcp.host.loadFailed')
+    expect(card.find('button[role="switch"]').exists()).toBe(false)
+    expect(card.text()).not.toContain('settings.skillsMcp.host.stopped')
+    // The section is named by its own heading, so the failure is attributable to it.
+    const section = wrapper.find('section.SettingMcpHost')
+    const heading = section.find('h2')
+    expect(section.attributes('aria-labelledby')).toBe(heading.attributes('id'))
+    expect(heading.text()).toBe('settings.skillsMcp.host.label')
+  })
+})
+
+describe('settingMcpHost: test hygiene', () => {
+  /**
+   * The guard behind the reduced-motion stub at the top of this file: a pressed `TxButton` draws no
+   * ripple, so no ripple timer is left to fire after the environment is torn down.
+   */
+  it('draws no button ripple, so nothing outlives the test', async () => {
+    const wrapper = await mountSection(LISTENING)
+    const reveal = buttonLabelled(
+      rowNamed(wrapper, 'settings.skillsMcp.host.tokenTitle'),
+      'settings.skillsMcp.host.reveal'
+    )
+    // TxButton loads its ripple directive with a dynamic import; wait until it has attached.
+    await vi.waitFor(() => expect(reveal.attributes('data-v-wave-boundary')).toBe('true'), {
+      timeout: 5000,
+      interval: 10
+    })
+
+    await reveal.trigger('click')
+
+    expect(reveal.element.querySelector('[data-v-wave-container-internal]')).toBeNull()
+    wrapper.unmount()
   })
 })

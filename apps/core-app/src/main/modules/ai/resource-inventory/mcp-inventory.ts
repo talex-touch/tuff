@@ -166,6 +166,13 @@ function factsFromConfig(profile: ParsedMcpProfile): ServerFacts | null {
   return null
 }
 
+/**
+ * The row key the inventory gives a server an agent's file declares; null for one it does not list.
+ * A probe of that server checks the file still says what the row showed.
+ */
+export function declaredServerKey(profile: ParsedMcpProfile): string | null {
+  return factsFromConfig(profile)?.key ?? null
+}
 /** A server as Tuff stored it — credentials already moved out, references in their place. */
 function factsFromStored(profile: IntelligenceMcpProfile): ServerFacts | null {
   const reauth = profile.metadata?.reauthRequired === true
@@ -200,12 +207,20 @@ function isWithin(root: string, candidate: string): boolean {
 }
 
 /**
+ * The directory an agent's MCP file is read within: the agent's own directory, or for a file kept
+ * beside it (`~/.claude.json` next to `~/.claude`), the file's own directory — the containment the
+ * scan used. The rows and a probe of one of their servers read through the same one.
+ */
+export function mcpFileContainment(sourceRoot: string, filePath: string): string {
+  return isWithin(sourceRoot, filePath) ? sourceRoot : dirname(filePath)
+}
+
+/**
  * Reads the MCP configuration files a discovery scan found, bounded and in place.
  *
  * Only this machine's own (user-scope) files count: a project file is whatever folder the app was
  * started in, which says nothing about the agents installed here. A file is read through the same
- * containment the scan used — the agent's directory, or for an MCP file kept beside it
- * (`~/.claude.json` next to `~/.claude`), the file's own directory.
+ * containment the scan used ({@link mcpFileContainment}).
  */
 export async function loadMcpDiscovery(
   scan: AiImportScanResult,
@@ -220,9 +235,7 @@ export async function loadMcpDiscovery(
     const source = sources.get(candidate.sourceId)
     if (!source) continue
     const where = { agentId: candidate.provider, sourcePath: candidate.path }
-    const containedBy = isWithin(source.rootPath, candidate.path)
-      ? source.rootPath
-      : dirname(candidate.path)
+    const containedBy = mcpFileContainment(source.rootPath, candidate.path)
 
     let parsed: Record<string, unknown> | null
     try {

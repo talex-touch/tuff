@@ -9,7 +9,6 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { settingCategoryChildren } from '~/modules/settings/categories'
 import { appSetting } from '~/modules/storage/app-storage'
 import SettingAssistant from '../SettingAssistant.vue'
-import SettingSkillsMcp from '../SettingSkillsMcp.vue'
 import SettingLocalAiCli from '../SettingLocalAiCli.vue'
 
 const { t } = useI18n()
@@ -28,8 +27,10 @@ const subPages = computed(() =>
     <!-- One shared group: the master switch, its floating entry, and the wake-word placeholder. -->
     <SettingAssistant mode="all" />
 
-    <!-- What the home conversation can reach beyond the model: its skills. MCP has its own page. -->
-    <SettingSkillsMcp />
+    <!--
+      Skills and the skill directories moved to the skills page, MCP to its own page; both are
+      reached from the nav.
+    -->
 
     <!--
       Re-homed from AppSettings.vue, which the category split removed. master added this section

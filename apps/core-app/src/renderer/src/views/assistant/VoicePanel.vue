@@ -333,7 +333,7 @@ const emit = defineEmits<{
 }>()
 
 const transport = useTuffTransport()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const runtimeConfig = ref<AssistantRuntimeConfig>({
   enabled: false,
   language: 'zh',
@@ -1017,7 +1017,7 @@ function classifyFailure(error: unknown): Notice {
         resetsAt === null
           ? t('assistant.voicePanel.usageLimitReachedNoTime')
           : t('assistant.voicePanel.usageLimitReached', {
-              time: formatUsageLimitResetTime(resetsAt)
+              time: formatUsageLimitResetTime(resetsAt, locale.value)
             }),
       tone: 'warning',
       retry: false

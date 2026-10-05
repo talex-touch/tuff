@@ -3,8 +3,13 @@ import type { WorkflowStepKind } from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
+import {
+  isUsageLimitFailure,
+  resolveIntelligenceErrorRecovery
+} from '~/modules/intelligence/ai-error-recovery'
 import {
   filterReviewQueueItems,
   resolveReviewQueueActionHint,
@@ -16,7 +21,8 @@ import {
   type WorkflowReviewQueueItem
 } from '~/modules/hooks/useWorkflowEditor'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const router = useRouter()
 
 const {
   workflows,
@@ -59,6 +65,31 @@ const {
 } = useWorkflowEditor()
 
 const reviewQueueFilter = ref<WorkflowReviewQueueFilter>('all')
+
+function usageLimitRecovery(error: unknown) {
+  return typeof error === 'string' && isUsageLimitFailure(error)
+    ? resolveIntelligenceErrorRecovery({ error }, t, locale.value)
+    : null
+}
+
+/**
+ * A run the user's own usage limit stopped says so in the interface's language — the limit set in
+ * Audit is used up — with the way there, instead of the run's stable code on every step. Every
+ * other failure keeps the message it came with.
+ */
+const runUsageLimit = computed(() => {
+  const run = currentRun.value
+  if (run?.status !== 'failed') return null
+  for (const error of [run.error, ...run.steps.map((step) => step.error)]) {
+    const recovery = usageLimitRecovery(error)
+    if (recovery) return recovery
+  }
+  return null
+})
+
+function stepErrorText(error: string): string {
+  return usageLimitRecovery(error)?.title ?? error
+}
 
 const runStatusText = computed(() => {
   switch (currentRun.value?.status) {
@@ -249,6 +280,10 @@ async function handleRun(): Promise<void> {
       toast.info(t('intelligence.workflow.toastWaitingApproval'))
       return
     }
+    if (runUsageLimit.value) {
+      toast.error(runUsageLimit.value.title)
+      return
+    }
     toast.success(t('intelligence.workflow.toastRunCompleted'))
   } catch (error) {
     toast.error(resolveValidationMessage(error))
@@ -264,6 +299,10 @@ async function handleResume(): Promise<void> {
     }
     if (result.status === 'waiting_approval') {
       toast.info(t('intelligence.workflow.toastStillWaitingApproval'))
+      return
+    }
+    if (runUsageLimit.value) {
+      toast.error(runUsageLimit.value.title)
       return
     }
     toast.success(t('intelligence.workflow.toastResumed'))
@@ -797,6 +836,23 @@ onMounted(async () => {
           <div v-if="executionError" class="runtime-error">
             {{ executionError }}
           </div>
+          <div
+            v-if="runUsageLimit"
+            class="runtime-error runtime-error--usage-limit"
+            role="alert"
+            data-testid="workflow-usage-limit"
+          >
+            <strong>{{ runUsageLimit.title }}</strong>
+            <span>{{ runUsageLimit.detail }}</span>
+            <TxButton
+              v-if="runUsageLimit.action"
+              size="sm"
+              data-testid="workflow-open-usage-limits"
+              @click="router.push(runUsageLimit.action.path)"
+            >
+              {{ runUsageLimit.action.label }}
+            </TxButton>
+          </div>
         </div>
 
         <div class="subsection">
@@ -898,7 +954,7 @@ onMounted(async () => {
                 formatJson(step.output)
               }}</pre>
               <div v-if="step.error" class="runtime-error">
-                {{ step.error }}
+                {{ stepErrorText(step.error) }}
               </div>
               <div
                 v-else-if="currentRunStepSummaries[stepSummaryKey(step, index)]?.errorCode"
@@ -1382,6 +1438,13 @@ textarea {
   color: var(--tx-color-danger);
   font-size: 12px;
   white-space: pre-wrap;
+}
+
+.runtime-error--usage-limit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 .review-action-hint {

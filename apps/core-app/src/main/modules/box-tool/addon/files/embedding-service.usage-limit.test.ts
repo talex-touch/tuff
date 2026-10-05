@@ -8,7 +8,10 @@ import { drizzle } from 'drizzle-orm/libsql'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../../../../db/schema'
 import { tuffIntelligence } from '../../../ai/intelligence-sdk'
-import { createUsageLimitError } from '../../../ai/usage-ledger/usage-limits'
+import {
+  createUsageLimitError,
+  notifyUsageLimitsChanged
+} from '../../../ai/usage-ledger/usage-limits'
 import { EmbeddingService } from './embedding-service'
 
 vi.mock('../../../ai/intelligence-sdk', () => ({
@@ -141,6 +144,37 @@ describe('EmbeddingService under the global usage limit', () => {
     expect(generate).toHaveBeenCalledTimes(2)
   })
 
+  it('resumes as soon as the limits change, not at the reset time', async () => {
+    const service = await createService()
+    // The availability probe is refused: paused until the reset, nothing sent for the files.
+    generate.mockRejectedValueOnce(refusal()).mockResolvedValue(vector())
+
+    await expect(service.indexFiles(files(3))).resolves.toEqual({
+      indexed: 0,
+      skipped: 3,
+      failed: 0
+    })
+    expect(service.getUsageLimitPause()?.pausedUntil).toBe(RESETS_AT)
+    expect(generate).toHaveBeenCalledTimes(1)
+
+    // The user clears the limit in Audit, long before the reset time.
+    notifyUsageLimitsChanged({
+      requestsPerDay: null,
+      requestsPerMonth: null,
+      tokensPerDay: null,
+      tokensPerMonth: null,
+      costUsdPerDay: null,
+      costUsdPerMonth: null
+    })
+    expect(service.getUsageLimitPause()).toBeNull()
+    // Probed again, then both files embedded.
+    await expect(service.indexFiles(files(2))).resolves.toEqual({
+      indexed: 2,
+      skipped: 0,
+      failed: 0
+    })
+    expect(generate).toHaveBeenCalledTimes(4)
+  })
   it('keeps other failures on their old path: logged per file, not a pause', async () => {
     const service = await createService()
     generate

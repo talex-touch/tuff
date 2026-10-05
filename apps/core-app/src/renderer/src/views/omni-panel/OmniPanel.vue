@@ -41,9 +41,13 @@ import { filterOmniPanelFeatures } from './filter-features'
 import { ensureValidFocusIndex, resolveFocusedItem, resolveNextFocusIndex } from './interaction'
 import { resolveOmniPanelSelectionRecovery } from './selection-recovery'
 import { resolveIntelligenceErrorRecovery } from '../../modules/intelligence/ai-error-recovery'
+import {
+  requestUsageLimitsPage,
+  resolveDetachedRecoveryAction
+} from '../../modules/intelligence/usage-limits-door'
 import { createRendererLogger } from '../../utils/renderer-log'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const transport = useTuffTransport()
 const intelligence = useIntelligenceSdk()
 const localAiCli = createLocalAiCliSdk(transport)
@@ -169,10 +173,35 @@ const aiPreviewErrorRecovery = computed(() =>
   aiPreview.value?.status === 'error'
     ? resolveIntelligenceErrorRecovery(
         { error: aiPreview.value.error, errorCode: aiPreview.value.errorCode },
-        t
+        t,
+        locale.value
       )
     : null
 )
+
+/**
+ * The way out the recovery names, when this window can take it: Audit lives in the main window,
+ * which main reveals and routes — the panel has its own renderer.
+ */
+const aiPreviewRecoveryAction = computed(() =>
+  resolveDetachedRecoveryAction(aiPreviewErrorRecovery.value)
+)
+const openingAiPreviewRecovery = ref(false)
+
+async function openAiPreviewRecovery(): Promise<void> {
+  if (!aiPreviewRecoveryAction.value || openingAiPreviewRecovery.value) return
+  openingAiPreviewRecovery.value = true
+  try {
+    if (!(await requestUsageLimitsPage(transport))) {
+      toast.error(t('corebox.omniPanel.openUsageLimitsFailed'))
+      return
+    }
+    // The panel floats over the app it was opened from; it steps aside for the page it opened.
+    await closePanel()
+  } finally {
+    openingAiPreviewRecovery.value = false
+  }
+}
 
 watch(
   () => filteredFeatures.value.length,
@@ -380,7 +409,9 @@ async function executeAiFeature(
       errorCode: normalizedError.errorCode
     }
     aiClipboardError.value = ''
-    toast.error(normalizedError.message)
+    // The recovery's own title, not the failure's text: main now says which code and why, in
+    // English, and the preview card under the toast already shows the reason and the way out.
+    toast.error(aiPreviewErrorRecovery.value?.title ?? normalizedError.message)
   } finally {
     executingId.value = null
   }
@@ -632,6 +663,7 @@ onBeforeUnmount(() => {
         <span>{{ aiPreviewErrorRecovery?.detail }}</span>
         <small
           v-if="
+            !aiPreviewRecoveryAction &&
             aiPreviewErrorRecovery?.code !== 'unknown' &&
             aiPreview.error &&
             aiPreview.error !== aiPreviewErrorRecovery?.detail
@@ -639,6 +671,16 @@ onBeforeUnmount(() => {
         >
           {{ aiPreview.error }}
         </small>
+        <TxButton
+          v-if="aiPreviewRecoveryAction"
+          size="sm"
+          class="OmniPanelAiPreview__recovery"
+          :loading="openingAiPreviewRecovery"
+          data-testid="omni-panel-ai-recovery-action"
+          @click="openAiPreviewRecovery"
+        >
+          {{ aiPreviewRecoveryAction.label }}
+        </TxButton>
       </div>
       <pre v-else class="OmniPanelAiPreview__result">{{ aiPreview.resultText }}</pre>
       <div v-if="aiClipboardError" class="OmniPanelAiPreview__actionError">
@@ -875,6 +917,12 @@ onBeforeUnmount(() => {
   color: var(--tx-text-color-secondary);
   font-size: 9px;
   word-break: break-word;
+}
+
+/* The way out, under the reason it answers. */
+.OmniPanelAiPreview__recovery {
+  align-self: flex-start;
+  margin-top: 2px;
 }
 
 .OmniPanelAiPreview__actionError {

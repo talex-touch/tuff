@@ -117,3 +117,50 @@ export function agentCountsFrom(
   }
   return counts
 }
+
+/** The sizes a row's agent strip is laid out with, in px. */
+export interface AgentStripMetrics {
+  /** Edge of one mark. */
+  mark: number
+  /** Space after a mark: between two marks, and before the "+N" badge. */
+  gap: number
+  /** Room the "+N" badge takes. */
+  more: number
+}
+
+/** The compact strip a row draws: small marks, close together. */
+export const AGENT_STRIP_METRICS: Readonly<AgentStripMetrics> = Object.freeze({
+  mark: 16,
+  gap: 4,
+  more: 22
+})
+
+/** Width of a strip showing all `count` marks. */
+export function agentStripWidth(count: number, metrics: AgentStripMetrics): number {
+  return count > 0 ? count * metrics.mark + (count - 1) * metrics.gap : 0
+}
+
+/**
+ * Which marks a strip `width` px wide shows, and which fold into its "+N". Every mark when they all
+ * fit, and whenever the width is not known yet.
+ *
+ * Otherwise the marks keep their order and the ones that do not fit fold from the end — dimmed
+ * marks before lit ones: an agent that holds the item stays in view as long as there is room for
+ * it, and a lit mark folds only when the lit marks alone do not fit.
+ */
+export function foldAgentMarks<T extends { configured: boolean }>(
+  marks: readonly T[],
+  width: number | null,
+  metrics: AgentStripMetrics
+): { shown: T[]; folded: T[] } {
+  if (width === null || !(width > 0) || agentStripWidth(marks.length, metrics) <= width)
+    return { shown: [...marks], folded: [] }
+  const capacity = Math.max(0, Math.floor((width - metrics.more) / (metrics.mark + metrics.gap)))
+  const kept = new Set<T>()
+  for (const mark of marks) if (mark.configured && kept.size < capacity) kept.add(mark)
+  for (const mark of marks) if (!mark.configured && kept.size < capacity) kept.add(mark)
+  return {
+    shown: marks.filter((mark) => kept.has(mark)),
+    folded: marks.filter((mark) => !kept.has(mark))
+  }
+}

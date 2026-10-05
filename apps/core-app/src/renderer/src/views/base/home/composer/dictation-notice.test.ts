@@ -146,7 +146,11 @@ describe('showDictationNotice', () => {
 
   it('offers the recognition settings for a recognition problem', () => {
     const openRecognitionSettings = vi.fn()
-    showDictationNotice('recognition-not-configured', { t, openRecognitionSettings })
+    showDictationNotice('recognition-not-configured', {
+      t,
+      locale: 'en-US',
+      openRecognitionSettings
+    })
     const [message, options] = toast.warning.mock.calls.at(-1)!
     expect(message).toBe('assistant.voicePanel.voiceRecognitionNotConfigured')
     options.action.onClick()
@@ -157,6 +161,7 @@ describe('showDictationNotice', () => {
     const openMicrophoneSettings = vi.fn()
     showDictationNotice('microphone-denied', {
       t,
+      locale: 'en-US',
       openRecognitionSettings: vi.fn(),
       openMicrophoneSettings
     })
@@ -164,12 +169,16 @@ describe('showDictationNotice', () => {
       'assistant.voicePanel.openMicrophoneSettings'
     )
 
-    showDictationNotice('microphone-denied', { t, openRecognitionSettings: vi.fn() })
+    showDictationNotice('microphone-denied', {
+      t,
+      locale: 'en-US',
+      openRecognitionSettings: vi.fn()
+    })
     expect(toast.warning.mock.calls.at(-1)![1]).toBeUndefined()
   })
 
   it('shows an unclassified failure as an error without an action', () => {
-    showDictationNotice('failed', { t, openRecognitionSettings: vi.fn() })
+    showDictationNotice('failed', { t, locale: 'en-US', openRecognitionSettings: vi.fn() })
     expect(toast.error).toHaveBeenLastCalledWith(
       'assistant.voicePanel.voiceTranscribeFailed',
       undefined
@@ -183,7 +192,7 @@ describe('showDictationNotice', () => {
   ] as const)('shows %s as its own error with nothing to open', (kind, key) => {
     // Each capture kind is a different fact — this install, this OS, or an unnamed reason — and
     // none of them is fixed by a settings pane, so the toast is an error with no action.
-    showDictationNotice(kind, { t, openRecognitionSettings: vi.fn() })
+    showDictationNotice(kind, { t, locale: 'en-US', openRecognitionSettings: vi.fn() })
     expect(toast.error).toHaveBeenLastCalledWith(key, undefined)
   })
 
@@ -191,7 +200,7 @@ describe('showDictationNotice', () => {
     const openRecognitionSettings = vi.fn()
     showDictationNotice(
       'recognition-not-configured',
-      { t, openRecognitionSettings },
+      { t, locale: 'en-US', openRecognitionSettings },
       'the route is gone'
     )
     const [message, options] = toast.warning.mock.calls.at(-1)!
@@ -230,24 +239,37 @@ describe('the global usage limit the user set in Audit', () => {
     const openUsageLimits = vi.fn()
     showDictationNotice(
       'usage-limit',
-      { t: tNamed, openRecognitionSettings: vi.fn(), openUsageLimits },
+      { t: tNamed, locale: 'zh-CN', openRecognitionSettings: vi.fn(), openUsageLimits },
       resetsAtIso
     )
     const [message, options] = toast.warning.mock.calls.at(-1)!
     expect(message).toBe(
       `assistant.voicePanel.usageLimitReached ${JSON.stringify({
-        time: formatUsageLimitResetTime(Date.parse(resetsAtIso))
+        time: formatUsageLimitResetTime(Date.parse(resetsAtIso), 'zh-CN')
       })}`
     )
+    // The interface's language, never the runtime's numeric "10/4, 00:00".
+    expect(message).toMatch(/\d+月\d+日 \d{2}:\d{2}/)
     // The ISO instant is folded into the headline, never shown as a raw description.
     expect(options.description).toBeUndefined()
     expect(options.action.label).toBe('assistant.voicePanel.openUsageLimits')
     options.action.onClick()
     expect(openUsageLimits).toHaveBeenCalledOnce()
+
+    showDictationNotice(
+      'usage-limit',
+      { t: tNamed, locale: 'en-US', openRecognitionSettings: vi.fn() },
+      resetsAtIso
+    )
+    expect(toast.warning.mock.calls.at(-1)![0]).toMatch(/[A-Z][a-z]{2} \d+, \d{2}:\d{2}/)
   })
 
   it('falls back to the copy without a time, and no button where Audit cannot be opened', () => {
-    showDictationNotice('usage-limit', { t: tNamed, openRecognitionSettings: vi.fn() })
+    showDictationNotice('usage-limit', {
+      t: tNamed,
+      locale: 'en-US',
+      openRecognitionSettings: vi.fn()
+    })
     expect(toast.warning).toHaveBeenLastCalledWith(
       'assistant.voicePanel.usageLimitReachedNoTime',
       undefined

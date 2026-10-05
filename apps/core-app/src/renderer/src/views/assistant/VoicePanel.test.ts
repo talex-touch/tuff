@@ -126,7 +126,9 @@ vi.mock('vue-i18n', () => ({
             'This system has no microphone settings pane to open',
           'assistant.voicePanel.stopAndTranscribe': 'Stop and transcribe'
         }[key] ?? key
-      )
+      ),
+    // The interface's language, which the usage-limit reset time is written in.
+    locale: { value: 'en-US' }
   })
 }))
 
@@ -765,7 +767,8 @@ describe('VoicePanel session control', () => {
         { code: 'USAGE_LIMIT_REACHED' }
       ),
       `Reached the AI usage limit you set in Audit — resets ${formatUsageLimitResetTime(
-        Date.parse('2026-10-03T16:00:00.000Z')
+        Date.parse('2026-10-03T16:00:00.000Z'),
+        'en-US'
       )}`,
       'voice-dock--warning'
     ],

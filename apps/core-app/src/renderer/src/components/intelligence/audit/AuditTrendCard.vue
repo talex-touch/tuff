@@ -134,7 +134,11 @@ const yTickFormat = computed(() =>
 const xTickCount = computed(() => (days.value.length > 10 ? 6 : Math.max(1, days.value.length)))
 
 const ariaDescription = computed(() =>
-  t(`intelligenceAudit.trend.aria.${metric.value}`, { days: days.value.length })
+  t(
+    `intelligenceAudit.trend.aria.${metric.value}`,
+    { days: formatInteger(days.value.length, locale.value) },
+    days.value.length
+  )
 )
 </script>
 
@@ -173,7 +177,13 @@ const ariaDescription = computed(() =>
       </template>
     </div>
 
+    <!--
+      Keyed by the metric: a new chart per metric, not new series in the old one. `TxBarSeries`
+      stacks in the order series register, and when a keyed list is swapped wholesale Vue mounts
+      the new members last-first — so switching Token → 请求 drew 失败 under 成功.
+    -->
     <TxTimeseriesChart
+      :key="metric"
       class="AuditTrendCard-Chart"
       type="bar"
       :loading="loading || !insights"

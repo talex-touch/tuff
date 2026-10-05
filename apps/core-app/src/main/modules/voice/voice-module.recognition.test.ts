@@ -50,9 +50,12 @@ vi.mock('../../core/runtime-accessor', () => ({
     }
   }))
 }))
-vi.mock('../../utils/logger', () => ({
-  createLogger: vi.fn(() => ({ info: vi.fn(), success: vi.fn(), warn: vi.fn(), error: vi.fn() }))
-}))
+vi.mock('../../utils/logger', () => {
+  // `child` too: the module's usage-limit projection loads the usage-limit gate, whose own logger
+  // is a child of the Intelligence one.
+  const logger = { info: vi.fn(), success: vi.fn(), warn: vi.fn(), error: vi.fn() }
+  return { createLogger: vi.fn(() => ({ ...logger, child: () => logger })) }
+})
 vi.mock('../abstract-base-module', () => ({
   BaseModule: class {
     constructor(_key: symbol) {}

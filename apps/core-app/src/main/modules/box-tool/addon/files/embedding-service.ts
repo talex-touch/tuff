@@ -7,7 +7,7 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { embeddings as embeddingsSchema } from '../../../../db/schema'
 import { scheduleDbWrite } from '../../../../db/db-write'
 import { tuffIntelligence } from '../../../ai/intelligence-sdk'
-import { readUsageLimitInfo } from '../../../ai/usage-ledger/usage-limits'
+import { onUsageLimitsChanged, readUsageLimitInfo } from '../../../ai/usage-ledger/usage-limits'
 import { enterPerfContext } from '../../../../utils/perf-context'
 
 const logger = getLogger('EmbeddingService')
@@ -82,7 +82,54 @@ export class EmbeddingService {
   private queryCache = new Map<string, CachedEmbedding>()
   private usageLimitPause: EmbeddingUsageLimitPause | null = null
 
-  constructor(private readonly routing: EmbeddingDbRouting) {}
+  constructor(private readonly routing: EmbeddingDbRouting) {
+    // Raising or clearing the limit is the user saying "go on": the pause lifts now, not at the
+    // reset time. If a limit still binds, the next call is refused before any provider work and
+    // pauses again — one refusal, no loop.
+    onUsageLimitsChanged(() => this.liftUsageLimitPause())
+  }
+
+  /** Lifts a usage-limit pause because the limits changed; a no-op when none is held. */
+  private liftUsageLimitPause(): void {
+    if (!this.usageLimitPause) return
+    this.usageLimitPause = null
+    logger.info('File embedding resumes: the AI usage limits changed')
+  }
+
+  /** The usage-limit pause in force, or null; a pause whose reset time has passed is lifted here. */
+  getUsageLimitPause(now: number = Date.now()): EmbeddingUsageLimitPause | null {
+    const pause = this.usageLimitPause
+    if (!pause) return null
+    if (now >= pause.pausedUntil) {
+      this.usageLimitPause = null
+      logger.info('File embedding resumes: the AI usage limit has reset')
+      return null
+    }
+    return { ...pause }
+  }
+
+  /**
+   * True when `error` is the usage-limit refusal, which pauses embedding until the limit resets:
+   * logged once per pause, never retried. Any other failure is left to the caller.
+   */
+  private pauseOnUsageLimit(error: unknown): boolean {
+    const info = readUsageLimitInfo(error)
+    if (!info) return false
+    const current = this.usageLimitPause
+    this.usageLimitPause = {
+      reason: 'USAGE_LIMIT_REACHED',
+      limitKey: info.key,
+      pausedUntil: Math.max(current?.pausedUntil ?? 0, info.resetsAt)
+    }
+    if (!current) {
+      logger.warn(
+        `File embedding paused: AI usage limit ${info.key} reached; resumes after ${new Date(
+          this.usageLimitPause.pausedUntil
+        ).toISOString()}`
+      )
+    }
+    return true
+  }
 
   /** The usage-limit pause in force, or null; a pause whose reset time has passed is lifted here. */
   getUsageLimitPause(now: number = Date.now()): EmbeddingUsageLimitPause | null {

@@ -125,12 +125,51 @@ export interface McpServerSetEnabledRequest {
   enabled: boolean
 }
 
+export interface McpServerProbeRequest {
+  /** The stored item ({@link McpServerTuffState.itemId}). */
+  itemId: string
+  /** One server of that item ({@link McpServerTuffState.profileId}); omitted probes all of them. */
+  profileId?: string
+}
+
+/**
+ * A probe of a server Tuff does not hold — one an agent's own configuration declares. Main reads the
+ * definition again from that file, starts the server alone for the probe and stops it after; nothing
+ * is imported or stored, and a credential is used in memory for that one start only.
+ */
+export interface McpServerDeclaredProbeRequest {
+  /** {@link McpServerInventory.scanId}: the scan the row came from. */
+  scanId: string
+  /** The discovery candidate to read the server from: one agent's configuration file. */
+  candidateId: string
+  /** The server's name in that file. */
+  server: string
+  /**
+   * {@link McpServerRow.key}: the definition the user is looking at. A file that now defines the
+   * server differently is refused rather than probed.
+   */
+  key: string
+  /** The user agreed to the server's credentials being used, in memory, for this one start. */
+  confirmSecrets?: boolean
+}
 export const McpServerEvents = {
-  /** Renderer → main: connect and list tools, report liveness. */
+  /**
+   * Renderer → main: connect and list tools, report liveness. With `profileId`, only that server of
+   * the stored item is started; without it, every server the item holds is.
+   */
   probe: defineEvent('mcp-servers')
     .module('api')
     .event('probe')
-    .define<{ itemId: string }, McpProbeResult>(),
+    .define<McpServerProbeRequest, McpProbeResult>(),
+  /**
+   * Renderer → main: probe a server Tuff does not hold, straight from the agent's file that declares
+   * it — started alone, stopped after, nothing imported or stored. A server with credentials needs
+   * `confirmSecrets`; without it main answers `AI_IMPORT_SECRET_CONFIRMATION_REQUIRED`.
+   */
+  probeDeclared: defineEvent('mcp-servers')
+    .module('api')
+    .event('probe-declared')
+    .define<McpServerDeclaredProbeRequest, McpProbeResult>(),
   /** Renderer → main: create (or update by id) a manual server item. */
   upsertManual: defineEvent('mcp-servers')
     .module('api')
@@ -152,7 +191,10 @@ export const McpServerEvents = {
 } as const
 
 export interface McpServersSdk {
-  probe: (itemId: string) => Promise<McpProbeResult>
+  /** With `profileId`, starts only that server; the settings page always names one. */
+  probe: (itemId: string, profileId?: string) => Promise<McpProbeResult>
+  /** Probes a server Tuff does not hold, from the agent's file; nothing is imported or stored. */
+  probeDeclared: (request: McpServerDeclaredProbeRequest) => Promise<McpProbeResult>
   upsertManual: (
     input: McpManualServerInput & { itemId?: string },
   ) => Promise<{ itemId: string }>
@@ -164,7 +206,9 @@ export function createMcpServersSdk(
   transport: Pick<ITuffTransport, 'send'>,
 ): McpServersSdk {
   return {
-    probe: itemId => transport.send(McpServerEvents.probe, { itemId }),
+    probe: (itemId, profileId) =>
+      transport.send(McpServerEvents.probe, profileId ? { itemId, profileId } : { itemId }),
+    probeDeclared: request => transport.send(McpServerEvents.probeDeclared, request),
     upsertManual: input => transport.send(McpServerEvents.upsertManual, input),
     inventory: () => transport.send(McpServerEvents.inventory, undefined),
     setServerEnabled: (key, enabled) =>

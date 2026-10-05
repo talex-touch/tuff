@@ -144,7 +144,9 @@ vi.mock('../../../../db/sqlite-retry', () => ({
 
 vi.mock('./embedding-service', () => ({
   EmbeddingService: vi.fn(() => ({
-    semanticSearch: vi.fn(async () => [])
+    semanticSearch: vi.fn(async () => []),
+    // Read by the indexed-source evidence: null while embedding runs.
+    getUsageLimitPause: vi.fn(() => null)
   }))
 }))
 
@@ -1529,6 +1531,42 @@ describe('file-provider startup readiness', () => {
       )
     } finally {
       provider.dbUtils = originalDbUtils
+    }
+  })
+
+  it('says in the diagnostics that the AI usage limit paused embedding, and until when', async () => {
+    const provider = fileProvider as unknown as FileProviderIndexingLifecycleTestApi
+    const internals = fileProvider as unknown as { embeddingService: unknown }
+    const originalDbUtils = provider.dbUtils
+    const originalEmbedding = internals.embeddingService
+    const pausedUntil = Date.parse('2026-10-04T07:00:00.000Z')
+
+    provider.dbUtils = null
+    try {
+      internals.embeddingService = { getUsageLimitPause: () => null }
+      const running = await provider.getIndexedSourceEvidence()
+      expect(running.map((row) => row.id)).not.toContain('file-provider:embedding-pause')
+
+      internals.embeddingService = {
+        getUsageLimitPause: () => ({
+          reason: 'USAGE_LIMIT_REACHED',
+          limitKey: 'requestsPerDay',
+          pausedUntil
+        })
+      }
+      const paused = await provider.getIndexedSourceEvidence()
+      expect(paused).toContainEqual(
+        expect.objectContaining({
+          id: 'file-provider:embedding-pause',
+          label: 'File embedding',
+          status: 'degraded',
+          reason: 'USAGE_LIMIT_REACHED',
+          metadata: { limitKey: 'requestsPerDay', pausedUntil }
+        })
+      )
+    } finally {
+      provider.dbUtils = originalDbUtils
+      internals.embeddingService = originalEmbedding
     }
   })
 

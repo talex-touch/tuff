@@ -14,6 +14,7 @@ import {
   latencyParts
 } from './audit-format'
 import { otherTokens } from './audit-trend'
+import { zeroCostModelsWithUsage } from './audit-zero-cost'
 import AuditZeroCostNotice from './AuditZeroCostNotice.vue'
 
 /**
@@ -32,6 +33,9 @@ const props = defineProps<{
 
 const { t, locale } = useI18n()
 
+const zeroCostModels = computed(() =>
+  props.insights ? zeroCostModelsWithUsage(props.insights) : []
+)
 /**
  * Input, output and — only when a provider reported tokens on neither side — the remainder, in
  * the trend chart's colours and order, so the split here and the bars below read as one key.
@@ -211,7 +215,7 @@ const supportMetrics = computed(() => {
       <div v-if="loading || !insights" class="AuditHeadline-SkeletonCaption">
         <TxSkeleton :width="280" :height="11" :radius="4" />
       </div>
-      <AuditZeroCostNotice v-else variant="inline" :models="insights.zeroCostModels" />
+      <AuditZeroCostNotice v-else variant="inline" :models="zeroCostModels" />
     </div>
   </section>
 </template>
@@ -219,6 +223,13 @@ const supportMetrics = computed(() => {
 <style scoped lang="scss">
 .AuditHeadline {
   display: grid;
+  /*
+   * One track that may shrink below its content. With the default `auto` track the one-line cost
+   * basis below — `nowrap`, and as long as its model list — sized the whole grid, and the
+   * headline spilled out of the 760 px column it sits in.
+   */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--shell-space-4);
 }
 
@@ -303,6 +314,7 @@ const supportMetrics = computed(() => {
 }
 
 .AuditHeadline-CostBasis {
+  min-width: 0;
   min-height: calc(var(--shell-fs-caption) * 1.5);
   font-size: var(--shell-fs-caption);
   line-height: 1.5;

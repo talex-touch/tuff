@@ -13,7 +13,7 @@ import {
 } from '~/modules/intelligence/nexus-provider'
 import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
 import { resolveProviderIcon } from '~/modules/intelligence/provider-icon-override'
-import { providerIconFor } from '~/modules/intelligence/provider-icons'
+import { providerIconFor, providerIconForId } from '~/modules/intelligence/provider-icons'
 import { usePluginStore } from '~/stores/plugin'
 import {
   buildPluginCallerNames,
@@ -52,6 +52,13 @@ export function useAuditLabels(): AuditLabels {
         icon: isNexusManagedProvider(config)
           ? TUFF_NEXUS_PROVIDER_ICON
           : resolveProviderIcon(config, getProviderChannelType(config))
+      }
+    }
+    if (label.builtin) {
+      // A CLI gets its own mark; system OCR the local server glyph.
+      return {
+        ...label,
+        icon: providerIconForId(id, id === 'local-system-ocr' ? 'local' : 'custom')
       }
     }
     return { ...label, icon: label.legacyType ? providerIconFor(id) : null }

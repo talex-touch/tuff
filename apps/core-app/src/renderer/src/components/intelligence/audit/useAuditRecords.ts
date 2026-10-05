@@ -63,12 +63,12 @@ export interface AuditRecordWindow {
  * stable over a list that does not grow at the top while it is being paged.
  */
 export function buildAuditLogQuery(
-  window: Pick<AuditRecordWindow, 'startMs' | 'endMs'>,
+  span: Pick<AuditRecordWindow, 'startMs' | 'endMs'>,
   filters: AuditRecordFilters
 ): Omit<AuditLogQuery, 'offset' | 'limit'> {
   const query: Omit<AuditLogQuery, 'offset' | 'limit'> = {
-    startMs: window.startMs,
-    endMs: window.endMs
+    startMs: span.startMs,
+    endMs: span.endMs
   }
   if (filters.status !== 'all') query.success = filters.status === 'success'
   if (filters.providerId) query.providerId = filters.providerId
@@ -79,8 +79,8 @@ export function buildAuditLogQuery(
 }
 
 /** The window as of now: never past this moment, so the list cannot grow while it is read. */
-function pinWindow(window: AuditRecordWindow, now = Date.now()): AuditRecordWindow {
-  return { ...window, endMs: Math.min(window.endMs, now + 1) }
+function pinWindow(span: AuditRecordWindow, now = Date.now()): AuditRecordWindow {
+  return { ...span, endMs: Math.min(span.endMs, now + 1) }
 }
 
 export interface AuditExportState extends AuditExportProgress {
@@ -96,7 +96,8 @@ export type AuditExportOutcome =
 export function useAuditRecords() {
   const sdk = useIntelligenceSdk()
 
-  const window = shallowRef<AuditRecordWindow | null>(null)
+  /** The window the list was last opened on, held at that moment (see `pinWindow`). */
+  const listWindow = shallowRef<AuditRecordWindow | null>(null)
   const filters = reactive<AuditRecordFilters>({
     status: 'all',
     providerId: AUDIT_FILTER_ANY,
@@ -135,7 +136,7 @@ export function useAuditRecords() {
   })
 
   async function loadPage(): Promise<void> {
-    const current = window.value
+    const current = listWindow.value
     if (!current || disposed) return
     const ticket = ++revision
     loading.value = true
@@ -162,7 +163,7 @@ export function useAuditRecords() {
    * chose, and the export reads them too.
    */
   function open(next: AuditRecordWindow): void {
-    window.value = pinWindow(next)
+    listWindow.value = pinWindow(next)
     page.value = 1
     selectedKey.value = null
     void loadPage()
@@ -273,7 +274,7 @@ export function useAuditRecords() {
   })
 
   return {
-    window,
+    listWindow,
     filters,
     page,
     pageCount,

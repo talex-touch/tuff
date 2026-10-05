@@ -93,6 +93,7 @@ function createHarness() {
 
   return {
     admin: createMcpServerAdmin(deps),
+    deps,
     items,
     persisted,
     secureStore,
@@ -371,6 +372,100 @@ describe('mcp server admin: probe', () => {
     expect([...harness.registered.keys()]).toEqual(['one', 'two'])
   })
 
+  /** One imported file, three servers: the settings page probes the one its drawer shows. */
+  function threeServerItem(overrides: { active?: boolean; twoEnabled?: boolean } = {}) {
+    return itemFromManual(
+      {
+        itemId: 'import-item',
+        kind: 'mcp',
+        name: 'Imported',
+        projection: {
+          mcpProfiles: [
+            { id: 'one', name: 'Docs', transport: { type: 'stdio', command: 'docs' } },
+            {
+              id: 'two',
+              name: 'Issues',
+              enabled: overrides.twoEnabled ?? true,
+              transport: { type: 'stdio', command: 'issues' }
+            },
+            { id: 'three', name: 'Search', transport: { type: 'stdio', command: 'search' } }
+          ]
+        },
+        snapshot: {},
+        secrets: [],
+        fingerprint: 'x'
+      },
+      { active: overrides.active ?? true }
+    )
+  }
+
+  it('starts only the named server, never its neighbours from the same file', async () => {
+    const harness = createHarness()
+    const item = threeServerItem()
+    harness.items.set(item.id, item)
+    harness.serverTools.set('one', new Error('must not be started'))
+    harness.serverTools.set('two', [{}, {}])
+    harness.serverTools.set('three', new Error('must not be started'))
+
+    await expect(harness.admin.probe(item.id, 'two')).resolves.toEqual({ ok: true, toolCount: 2 })
+    expect([...harness.registered.keys()]).toEqual(['two'])
+    // Running already (item on, server on): the probe leaves it registered for the runtime.
+    expect(harness.unregistered).toEqual([])
+  })
+
+  it('probes a server switched off on its own, then drops it so nothing keeps running', async () => {
+    const harness = createHarness()
+    const item = threeServerItem({ twoEnabled: false })
+    harness.items.set(item.id, item)
+    harness.serverTools.set('two', [{}])
+
+    await expect(harness.admin.probe(item.id, 'two')).resolves.toEqual({ ok: true, toolCount: 1 })
+    expect(harness.unregistered).toEqual(['two'])
+    expect(harness.registered.has('two')).toBe(false)
+  })
+
+  it('registers a switched-off server as on for the probe, since the registry lists no tools of a disabled one', async () => {
+    const harness = createHarness()
+    const item = threeServerItem({ twoEnabled: false })
+    harness.items.set(item.id, item)
+    const seen: Array<boolean | undefined> = []
+    harness.serverTools.set('two', [{}])
+    const register = harness.deps.registerProfile
+    harness.deps.registerProfile = (profile) => {
+      seen.push(profile.enabled)
+      register(profile)
+    }
+    const admin = createMcpServerAdmin(harness.deps)
+
+    await admin.probe(item.id, 'two')
+    expect(seen).toEqual([true])
+  })
+
+  it('drops a named server again when its whole file is switched off', async () => {
+    const harness = createHarness()
+    const item = threeServerItem({ active: false })
+    harness.items.set(item.id, item)
+    harness.serverTools.set('three', [{}, {}, {}])
+
+    await expect(harness.admin.probe(item.id, 'three')).resolves.toEqual({
+      ok: true,
+      toolCount: 3
+    })
+    expect(harness.unregistered).toEqual(['three'])
+  })
+
+  it('reports a named server the entry does not hold, without starting anything', async () => {
+    const harness = createHarness()
+    const item = threeServerItem()
+    harness.items.set(item.id, item)
+
+    await expect(harness.admin.probe(item.id, 'four')).resolves.toEqual({
+      ok: false,
+      error: 'MCP server four is not part of import-item'
+    })
+    expect(harness.registered.size).toBe(0)
+  })
+
   it('does not call a server that is disabled pending re-authentication', async () => {
     const harness = createHarness()
     const item = itemFromManual({
@@ -383,7 +478,10 @@ describe('mcp server admin: probe', () => {
             id: 'one',
             name: 'Docs',
             enabled: false,
-            transport: { type: 'stdio', command: 'docs' }
+            transport: { type: 'stdio', command: 'docs' },
+            // How the importer stores it: switched off *and* marked, so a server the user merely
+            // switched off is not mistaken for one that cannot authenticate.
+            metadata: { reauthRequired: true }
           }
         ]
       },
@@ -395,6 +493,10 @@ describe('mcp server admin: probe', () => {
     harness.serverTools.set('one', new Error('should not be called'))
 
     await expect(harness.admin.probe(item.id)).resolves.toEqual({
+      ok: false,
+      error: 'Docs: disabled until its credentials are re-entered'
+    })
+    await expect(harness.admin.probe(item.id, 'one')).resolves.toEqual({
       ok: false,
       error: 'Docs: disabled until its credentials are re-entered'
     })

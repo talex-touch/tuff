@@ -27,6 +27,7 @@ import { createHash } from 'node:crypto'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
 import { createLogger } from '../../utils/logger'
+import { frontmatterFields, frontmatterText } from './frontmatter-fields'
 
 const localSkillLog = createLogger('Intelligence').child('LocalSkills')
 
@@ -158,25 +159,20 @@ async function hasManifest(dirPath: string): Promise<boolean> {
 }
 
 /**
- * `name` and `description` out of a `---` fenced header.
+ * `name` and `description` out of a `---` fenced header, each as one line of text.
  *
- * Same two keys and same tolerance as the CLI environment scanner: an unfenced
- * or malformed file is not an error, it just has no metadata.
+ * Read with the lenient header reader the import scanner uses too (`frontmatter-fields.ts`): a
+ * value may be quoted, continue on indented lines, or be a `>`/`|` block scalar, and an unfenced or
+ * malformed file is not an error, it just has no metadata.
  */
 export function parseSkillFrontmatter(content: string): { name?: string; description?: string } {
-  if (!content.startsWith('---')) return {}
-  const end = content.indexOf('\n---', 3)
-  if (end < 0) return {}
-
   const result: { name?: string; description?: string } = {}
-  for (const line of content.slice(3, end).split(/\r?\n/)) {
-    // `\S.*` rather than `.+` so the leading-space run has nothing to trade
-    // characters with — a blank value simply fails to match.
-    const match = /^([\w-]+):\s*(\S.*)$/.exec(line.trim())
-    if (!match) continue
-    const value = match[2]!.trim().replace(/^["']|["']$/g, '')
-    if (match[1] === 'name') result.name = value
-    if (match[1] === 'description') result.description = value
+  for (const field of frontmatterFields(content)) {
+    if (field.key !== 'name' && field.key !== 'description') continue
+    const text = frontmatterText(field)
+    // A key with no value leaves the field unset, so the caller's fallback (the directory name)
+    // still applies.
+    if (text) result[field.key] = text
   }
   return result
 }

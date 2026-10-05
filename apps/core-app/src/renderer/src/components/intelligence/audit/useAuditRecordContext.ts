@@ -1,7 +1,7 @@
 /**
  * The context packages and checkpoints behind one call record, loaded when its row is opened.
  *
- * Moved from `IntelligenceAuditLogs.vue` with its behaviour unchanged: packages by trace (up to
+ * Moved over from the audit page's old log list with its behaviour unchanged: packages by trace (up to
  * five), then checkpoints for every session those packages belong to (up to five each). Each is
  * fetched once per drawer; a failure is remembered rather than retried on every reopen of the row.
  */

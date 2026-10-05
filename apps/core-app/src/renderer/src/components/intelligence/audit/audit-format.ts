@@ -4,6 +4,10 @@
  *
  * Everything takes the locale explicitly so a test can pin it, and nothing here reads `t()`:
  * the words around these figures are the components'.
+ *
+ * No imports, and none to be added — no `~/` alias, no Vue, no i18n instance: the file-index
+ * diagnostics display uses `formatResetTime` and also runs under Node + tsx
+ * (`scripts/settings-indexing-diagnostics-verify.ts`).
  */
 
 export const DAY_MS = 86_400_000
@@ -195,25 +199,48 @@ export function formatTokenLimit(value: number | null | undefined, locale: strin
 
 const HOUR_MS = 3_600_000
 
+/** `t` as the formatters below call it: a key, its named values, and a count picking the form. */
+export type AuditTranslate = (
+  key: string,
+  named?: Record<string, unknown>,
+  plural?: number
+) => string
+
+const DURATION_KEYS = {
+  minute: 'intelligenceAudit.duration.minutes',
+  hour: 'intelligenceAudit.duration.hours',
+  day: 'intelligenceAudit.duration.days'
+} as const
+
+/**
+ * A duration in one unit, worded by the locale files: English picks "1 day" or "30 days" by the
+ * count, and Chinese keeps the space the rest of its copy puts between a number and its unit
+ * ("30 天", like 「近 30 天」) — `Intl`'s unit style writes "30天".
+ */
+export function formatDuration(
+  value: number,
+  unit: 'minute' | 'hour' | 'day',
+  t: AuditTranslate,
+  locale: string
+): string {
+  const count = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)
+  return t(DURATION_KEYS[unit], { count }, value)
+}
 /**
  * How long call records are kept: whole days when it is whole days, hours otherwise (the privacy
  * policy goes down to one hour); `null` is a policy that never deletes them.
  */
 export function formatRetention(
   retentionMs: number | null,
-  t: (key: string, params?: Record<string, unknown>) => string,
+  t: AuditTranslate,
   locale: string
 ): string {
   if (retentionMs === null || !Number.isFinite(retentionMs)) {
     return t('intelligenceAudit.retention.forever')
   }
   const days = retentionMs / DAY_MS
-  if (days >= 1 && Number.isInteger(days)) {
-    return t('intelligenceAudit.retention.days', { count: formatInteger(days, locale) })
-  }
-  return t('intelligenceAudit.retention.hours', {
-    count: formatInteger(Math.max(1, Math.round(retentionMs / HOUR_MS)), locale)
-  })
+  if (days >= 1 && Number.isInteger(days)) return formatDuration(days, 'day', t, locale)
+  return formatDuration(Math.max(1, Math.round(retentionMs / HOUR_MS)), 'hour', t, locale)
 }
 
 /** When a limit resets: a local date and time, 24-hour. */
@@ -239,6 +266,18 @@ export function formatRecordTime(timestamp: number, locale: string): string {
   }).format(new Date(timestamp))
 }
 
+/** A record's whole local date and time, to the second: the detail's form of the list's time. */
+export function formatRecordDateTime(timestamp: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  }).format(new Date(timestamp))
+}
 function pad(value: number, width = 2): string {
   return String(Math.abs(Math.trunc(value))).padStart(width, '0')
 }

@@ -22,6 +22,7 @@ export type AppDestinationId =
   | 'settings-intelligence'
   | 'settings-channels'
   | 'settings-voice'
+  | 'settings-audit'
   | 'settings-plugins'
   | 'settings-applications'
   | 'settings-file-index'
@@ -352,6 +353,22 @@ const APP_DESTINATION_LIST: readonly AppDestinationDefinition[] = [
     searchable: true,
     advanced: false,
     commonSetting: true
+  },
+  {
+    /**
+     * Where the AI usage limits are set. Not a search door: it is the way out of a call the limit
+     * refused, opened from CoreBox's AI answer and the selection panel — surfaces that are not the
+     * main window and so cannot route it themselves (`AppEvents.window.openUsageLimits`).
+     */
+    id: 'settings-audit',
+    route: '/setting/intelligence/audit',
+    titleKey: 'settingsIntelligenceHub.audit',
+    subtitleKey: 'settingsIntelligenceHub.auditDesc',
+    icon: 'i-ri-file-chart-line',
+    aliases: { en: [], zh: [], pinyin: [] },
+    searchable: false,
+    advanced: false,
+    commonSetting: false
   },
   {
     id: 'settings-plugins',

@@ -12,7 +12,8 @@ import {
   INTELLIGENCE_CONVERSATION_TITLE_OPERATION,
   INTELLIGENCE_HOME_OPENING_OPERATION,
   INTELLIGENCE_HOME_SURFACE,
-  IntelligenceProviderType
+  IntelligenceProviderType,
+  PI_CLI_PROVIDER_ID
 } from '@talex-touch/utils/types/intelligence'
 
 export type AuditTranslate = (key: string, params?: Record<string, unknown>) => string
@@ -32,7 +33,22 @@ export interface AuditChannelLabel {
   deleted: boolean
   /** Only a type was recorded: rows written before audit rows carried the channel id. */
   legacyType: boolean
+  /** A channel the main process adds at run time (system OCR, a local CLI). */
+  builtin?: boolean
 }
+
+/**
+ * Channels the main process adds at run time and never stores (`intelligence-config.ts`): system
+ * OCR and the local AI CLIs. They are missing from the stored channel list, so without this table
+ * every call they answered — every Pi, Codex or Claude Code turn — would read as a deleted channel.
+ */
+export const BUILTIN_CHANNEL_LABEL_KEYS: Readonly<Record<string, string>> = Object.freeze({
+  'local-system-ocr': 'intelligenceAudit.channels.systemOcr',
+  [PI_CLI_PROVIDER_ID]: 'intelligenceAudit.channels.piCli',
+  'omp-cli': 'intelligenceAudit.channels.ompCli',
+  'codex-cli': 'intelligenceAudit.channels.codexCli',
+  'claude-cli': 'intelligenceAudit.channels.claudeCli'
+})
 
 /**
  * Channel types older rows recorded in place of the channel id (parent PRD, data quality).
@@ -60,6 +76,11 @@ export function resolveChannelLabel(
   if (channel) {
     return { id, name: channel.name || channel.id, deleted: false, legacyType: false }
   }
+  const builtinKey = Object.hasOwn(BUILTIN_CHANNEL_LABEL_KEYS, id)
+    ? BUILTIN_CHANNEL_LABEL_KEYS[id]
+    : undefined
+  if (builtinKey)
+    return { id, name: t(builtinKey), deleted: false, legacyType: false, builtin: true }
   const typeKey = Object.hasOwn(LEGACY_TYPE_LABEL_KEYS, id) ? LEGACY_TYPE_LABEL_KEYS[id] : undefined
   if (typeKey) return { id, name: t(typeKey), deleted: false, legacyType: true }
   return { id, name: t('intelligenceAudit.channels.deleted'), deleted: true, legacyType: false }
@@ -177,3 +198,6 @@ export function resolveCapabilityLabel(
   const capability = Object.hasOwn(capabilities, id) ? capabilities[id] : undefined
   return capability?.label || id
 }
+
+/** The usage limits' names live in an alias-free module the Node-run diagnostics can load too. */
+export { USAGE_LIMIT_LABEL_KEYS, usageLimitLabelKey } from './usage-limit-labels'

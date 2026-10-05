@@ -24,6 +24,7 @@ import {
   formatTokenLimit,
   formatUsd
 } from './audit-format'
+import { zeroCostModelsWithUsage } from './audit-zero-cost'
 import AuditZeroCostNotice from './AuditZeroCostNotice.vue'
 import { useAuditLabels } from './useAuditLabels'
 
@@ -149,7 +150,14 @@ const rows = computed<BreakdownView[]>(() => {
           // `''` rows are split again by operation, so the caller alone is not unique.
           rowKey: JSON.stringify([row.key, row.operation ?? null]),
           name: caller.label,
-          detail: caller.kind === 'plugin' || caller.kind === 'core' ? row.key : '',
+          // A row without a caller says so — the records drawer's filter uses the same words.
+          // Otherwise the older Home rows read as a second copy of the `core.home.*` row.
+          detail:
+            row.key === ''
+              ? t('intelligenceAudit.records.callerNone')
+              : caller.kind === 'plugin' || caller.kind === 'core'
+                ? row.key
+                : '',
           deleted: false
         }
       })
@@ -182,14 +190,17 @@ const ranked = computed(() =>
     .sort((left, right) => right.share - left.share)
 )
 
+/** A rank's colour: its slot in the top five, or the grey of 其他 for the rows folded into it. */
 const colorByKey = computed(() => {
   const colors = new Map<string, string>()
-  ranked.value.slice(0, TOP_COUNT).forEach((entry, index) => {
+  ranked.value.forEach((entry, index) => {
     colors.set(entry.row.rowKey, SEGMENT_COLORS[index] ?? OTHER_COLOR)
   })
   return colors
 })
 
+/** The rows 其他 stands for: ranked past the top five, each with a share of its own. */
+const otherKeys = computed(() => ranked.value.slice(TOP_COUNT).map((entry) => entry.row.rowKey))
 const segments = computed<AllocationSegment[]>(() => {
   const total = ranked.value.reduce((sum, entry) => sum + entry.share, 0)
   if (total <= 0) return []
@@ -222,14 +233,26 @@ const percentFormatter = computed(() => {
 
 /**
  * The share bar is a radio group, so one segment is always picked — the largest until the reader
- * picks another. The table tints the same row, so the two never disagree about which is meant.
+ * picks another. The table tints the same row (every folded row, for 其他), so the two never
+ * disagree about which is meant.
  */
 const highlightedKeys = computed(() => {
   const key = activeSegment.value ?? segments.value[0]?.key
-  return key && key !== OTHER_KEY ? [key] : []
+  if (!key) return []
+  return key === OTHER_KEY ? otherKeys.value : [key]
 })
 
+/**
+ * Column widths. The model dimension adds two columns, so its figures are set tighter: the card's
+ * body is under 700 px wide and the model name still needs room.
+ */
+const WIDTHS = {
+  wide: { requestCount: 88, totalTokens: 96, estimatedCostUsd: 104, failureCount: 72 },
+  model: { requestCount: 64, totalTokens: 72, estimatedCostUsd: 88, failureCount: 56 }
+}
+
 const columns = computed<DataTableColumn<BreakdownView>[]>(() => {
+  const widths = dimension.value === 'model' ? WIDTHS.model : WIDTHS.wide
   const base: DataTableColumn<BreakdownView>[] = [
     {
       key: 'name',
@@ -243,7 +266,7 @@ const columns = computed<DataTableColumn<BreakdownView>[]>(() => {
       align: 'right',
       nowrap: true,
       sortable: true,
-      width: 88
+      width: widths.requestCount
     },
     {
       key: 'totalTokens',
@@ -251,7 +274,7 @@ const columns = computed<DataTableColumn<BreakdownView>[]>(() => {
       align: 'right',
       nowrap: true,
       sortable: true,
-      width: 96
+      width: widths.totalTokens
     },
     {
       key: 'estimatedCostUsd',
@@ -259,7 +282,7 @@ const columns = computed<DataTableColumn<BreakdownView>[]>(() => {
       align: 'right',
       nowrap: true,
       sortable: true,
-      width: 104
+      width: widths.estimatedCostUsd
     },
     {
       key: 'failureCount',
@@ -267,7 +290,7 @@ const columns = computed<DataTableColumn<BreakdownView>[]>(() => {
       align: 'right',
       nowrap: true,
       sortable: true,
-      width: 72
+      width: widths.failureCount
     }
   ]
   if (dimension.value !== 'model') return base
@@ -278,18 +301,57 @@ const columns = computed<DataTableColumn<BreakdownView>[]>(() => {
       title: t('intelligenceAudit.breakdown.columns.price'),
       align: 'right',
       nowrap: true,
-      width: 168
+      width: 136
     },
     {
       key: 'limits',
       title: t('intelligenceAudit.breakdown.columns.limits'),
       align: 'right',
       nowrap: true,
-      width: 120
+      width: 108
     }
   ]
 })
 
+interface SkeletonRow {
+  key: string
+}
+
+/** The skeleton's placeholder rows: five, about what a channel breakdown holds. */
+const SKELETON_ROWS: SkeletonRow[] = Array.from({ length: 5 }, (_, index) => ({
+  key: `skeleton-${index}`
+}))
+
+/**
+ * The loaded table's columns for the skeleton — same titles, widths and sort buttons, so the same
+ * header height. The skeleton table is `inert`, so those buttons cannot be reached.
+ */
+const skeletonColumns = computed<DataTableColumn<SkeletonRow>[]>(() =>
+  columns.value.map(({ key, title, align, nowrap, width, auto, sortable }) => ({
+    key,
+    title,
+    align,
+    nowrap,
+    width,
+    auto,
+    sortable
+  }))
+)
+
+/** The price cell's tooltip: which number is input and which output, and per how many tokens. */
+function priceTitle(pricing: ModelPricing): string {
+  return t('intelligenceAudit.records.detail.priceValue', {
+    input: formatPricePerMillion(pricing.inputPerMTokens, locale.value),
+    output: formatPricePerMillion(pricing.outputPerMTokens, locale.value)
+  })
+}
+
+function limitsTitle(pricing: ModelPricing): string {
+  return t('intelligenceAudit.breakdown.limitsValue', {
+    context: formatTokenLimit(pricing.contextTokens, locale.value),
+    output: formatTokenLimit(pricing.outputLimitTokens, locale.value)
+  })
+}
 const PRICING_LABEL_KEYS: Record<ModelPricing['status'], string> = {
   priced: 'intelligenceAudit.pricing.priced',
   free: 'intelligenceAudit.pricing.free',
@@ -321,7 +383,9 @@ const coverage = computed(() => {
   }
 })
 
-const zeroCostModels = computed(() => props.insights?.zeroCostModels ?? [])
+const zeroCostModels = computed(() =>
+  props.insights ? zeroCostModelsWithUsage(props.insights) : []
+)
 </script>
 
 <template>
@@ -346,19 +410,44 @@ const zeroCostModels = computed(() => props.insights?.zeroCostModels ?? [])
     </header>
 
     <template v-if="loading || !insights">
-      <!-- The share bar's track and a row of chips, then table rows: the loaded card's parts. -->
+      <!--
+        The loaded card's own parts at their loaded sizes, so nothing below it moves when the
+        numbers arrive: the share label, the bar and its legend, then the table itself — the same
+        header and row height — holding five placeholder rows.
+      -->
       <div class="AuditBreakdownCard-Share AuditBreakdownCard-ShareSkeleton">
+        <p class="AuditBreakdownCard-ShareLabel">
+          <TxSkeleton
+            class="AuditBreakdownCard-InlineSkeleton"
+            :width="72"
+            :height="10"
+            :radius="4"
+          />
+        </p>
         <TxSkeleton width="100%" :height="36" :radius="18" />
+        <!-- 20.5 px: the loaded legend's chip, 11 px text in 2 px of padding. -->
         <div class="AuditBreakdownCard-ChipSkeletons">
-          <TxSkeleton v-for="index in 4" :key="index" :width="88" :height="24" :radius="12" />
+          <TxSkeleton v-for="index in 4" :key="index" :width="88" :height="20.5" :radius="10" />
         </div>
       </div>
-      <div class="AuditBreakdownCard-RowSkeletons">
-        <div v-for="index in 5" :key="index" class="AuditBreakdownCard-RowSkeleton">
-          <TxSkeleton :width="index % 2 ? 180 : 140" :height="12" :radius="4" />
-          <TxSkeleton :width="220" :height="12" :radius="4" />
-        </div>
-      </div>
+      <TxDataTable
+        class="AuditBreakdownCard-Table"
+        :columns="skeletonColumns"
+        :data="SKELETON_ROWS"
+        row-key="key"
+        :hover="false"
+        inert
+        data-testid="audit-breakdown-table-skeleton"
+      >
+        <template v-for="column in skeletonColumns" :key="column.key" #[`cell-${column.key}`]>
+          <TxSkeleton
+            class="AuditBreakdownCard-InlineSkeleton"
+            :width="column.key === 'name' ? 140 : 36"
+            :height="12"
+            :radius="4"
+          />
+        </template>
+      </TxDataTable>
     </template>
 
     <template v-else>
@@ -459,7 +548,7 @@ const zeroCostModels = computed(() => props.insights?.zeroCostModels ?? [])
               <span
                 v-if="row.pricing.status === 'priced'"
                 class="AuditBreakdownCard-Price"
-                :title="row.pricing.catalogProvider ?? undefined"
+                :title="priceTitle(row.pricing)"
               >
                 {{ formatPricePerMillion(row.pricing.inputPerMTokens, locale) }}
                 /
@@ -471,11 +560,11 @@ const zeroCostModels = computed(() => props.insights?.zeroCostModels ?? [])
             </template>
           </template>
           <template #cell-limits="{ row }">
-            <template v-if="row.pricing">
+            <span v-if="row.pricing" :title="limitsTitle(row.pricing)">
               {{ formatTokenLimit(row.pricing.contextTokens, locale) }}
               /
               {{ formatTokenLimit(row.pricing.outputLimitTokens, locale) }}
-            </template>
+            </span>
           </template>
         </TxDataTable>
 
@@ -516,31 +605,41 @@ const zeroCostModels = computed(() => props.insights?.zeroCostModels ?? [])
   display: grid;
   gap: var(--shell-space-2);
   margin-top: var(--shell-space-4);
+
+  /*
+   * TuffEx lays the legend out as one row that never wraps: six callers squeezed every chip
+   * until its name broke mid-word (「应用内其 / 他」). Whole chips wrap to a second line instead.
+   */
+  :deep(.tx-bui-allocation-bar__legend) {
+    flex-wrap: wrap;
+  }
+
+  :deep(.tx-bui-allocation-bar__chip) {
+    white-space: nowrap;
+  }
 }
 
 .AuditBreakdownCard-ShareLabel {
   margin: 0;
   color: var(--shell-text-muted);
   font-size: var(--shell-fs-caption);
+  /* Explicit, so the skeleton's label line is the same height without any text in it. */
+  line-height: 1.5;
+}
+
+/*
+ * A placeholder sitting on a text line rather than replacing it: an inline block keeps the line's
+ * strut, so a placeholder row is exactly as tall as a row of text.
+ */
+.AuditBreakdownCard-InlineSkeleton {
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .AuditBreakdownCard-ChipSkeletons {
   display: flex;
   flex-wrap: wrap;
   gap: var(--shell-space-2);
-}
-
-.AuditBreakdownCard-RowSkeletons {
-  display: grid;
-  margin-top: var(--shell-space-4);
-}
-
-.AuditBreakdownCard-RowSkeleton {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 44px;
-  border-bottom: 1px solid var(--shell-border);
 }
 
 /*
@@ -554,7 +653,9 @@ const zeroCostModels = computed(() => props.insights?.zeroCostModels ?? [])
   margin-top: var(--shell-space-4);
   border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius-md);
-  overflow: hidden;
+  /* Scrolls rather than clips: a column cut off at the card's edge reads as missing data. */
+  overflow-x: auto;
+  overflow-y: hidden;
   font-variant-numeric: tabular-nums;
 }
 
@@ -647,10 +748,6 @@ const zeroCostModels = computed(() => props.insights?.zeroCostModels ?? [])
 @media (max-width: 900px) {
   .AuditBreakdownCard {
     padding: var(--shell-space-5);
-  }
-
-  .AuditBreakdownCard-Table {
-    overflow-x: auto;
   }
 }
 </style>
