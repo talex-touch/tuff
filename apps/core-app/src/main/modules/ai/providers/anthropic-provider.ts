@@ -21,9 +21,15 @@ import { ChatAnthropic } from '@langchain/anthropic'
 import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { toLangChainAnthropicThinkingFields } from '@talex-touch/utils/intelligence/reasoning-effort'
+import { readModelPlan } from '../model-request-plan'
 import { readReasoningPlan } from '../reasoning-effort-runtime'
 import { IntelligenceProvider } from '../runtime/base-provider'
-import { extractReasoningContent, extractTextContent } from './langchain-openai-compatible-provider'
+import {
+  extractReasoningContent,
+  extractTextContent,
+  hasReportedUsage,
+  toLangChainUserMessage
+} from './langchain-openai-compatible-provider'
 
 const DEFAULT_BASE_URL = 'https://api.anthropic.com/v1'
 
@@ -57,7 +63,7 @@ function toLangChainMessages(messages: IntelligenceMessage[]): BaseMessage[] {
     .map((message) =>
       message.role === 'assistant'
         ? new AIMessage(message.content)
-        : new HumanMessage(message.content)
+        : toLangChainUserMessage(message)
     )
   if (system.length === 0) return turns
   return [new SystemMessage(system.map((message) => message.content).join('\n\n')), ...turns]
@@ -184,11 +190,36 @@ export class AnthropicProvider extends IntelligenceProvider {
       streaming: params.streaming === true
     })
 
+    // The model's known output cap (its binding) bounds the whole ceiling, thinking included; the
+    // thinking budget then shrinks so it stays below that ceiling as the API requires.
+    const modelCap = readModelPlan(params.options)?.maxOutputTokens.value
+    const requestedMaxTokens = thinking?.maxTokens ?? params.maxTokens ?? DEFAULT_MAX_TOKENS
+    const maxTokens = Math.min(
+      requestedMaxTokens,
+      modelCap ?? Infinity,
+      params.maxTokens ?? Infinity
+    )
+    if (thinking && !thinking.invocationKwargs && maxTokens <= 1024) {
+      throw Object.assign(
+        new Error(
+          'MODEL_REASONING_OUTPUT_BUDGET: extended thinking requires an output limit above 1024 tokens'
+        ),
+        { code: 'MODEL_UNSUPPORTED', reason: 'MODEL_REASONING_OUTPUT_BUDGET' }
+      )
+    }
+    const thinkingConfig =
+      thinking && thinking.thinking.budget_tokens >= maxTokens
+        ? {
+            ...thinking.thinking,
+            budget_tokens: Math.max(1024, maxTokens - 1024)
+          }
+        : thinking?.thinking
+
     const modelConfig = {
       anthropicApiKey: this.config.apiKey,
       model: params.model,
       temperature: thinking?.temperature ?? params.temperature ?? 0.7,
-      maxTokens: thinking?.maxTokens ?? params.maxTokens ?? DEFAULT_MAX_TOKENS,
+      maxTokens,
       streaming: params.streaming,
       timeout: params.options.timeout ?? this.config.timeout ?? 30_000,
       anthropicApiUrl: baseUrl,
@@ -197,7 +228,7 @@ export class AnthropicProvider extends IntelligenceProvider {
       },
       ...(thinking
         ? {
-            thinking: thinking.thinking,
+            thinking: thinkingConfig,
             ...(thinking.invocationKwargs ? { invocationKwargs: thinking.invocationKwargs } : {})
           }
         : {})
@@ -240,6 +271,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     return {
       result: content,
       usage: resolveUsageInfo(rawMessage),
+      usageReported: hasReportedUsage(rawMessage),
       model: modelName,
       latency: Date.now() - startTime,
       traceId,

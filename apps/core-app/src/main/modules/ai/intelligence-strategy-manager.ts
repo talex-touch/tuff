@@ -95,7 +95,8 @@ class DefaultStrategyManager implements StrategyManager {
       for (const preferredModel of options.modelPreference) {
         const providerWithModel = sortedProviders.find(
           (provider) =>
-            provider.models?.includes(preferredModel) || provider.defaultModel === preferredModel
+            provider.models?.some((binding) => binding.id === preferredModel) ||
+            provider.defaultModel === preferredModel
         )
         if (providerWithModel) {
           return {

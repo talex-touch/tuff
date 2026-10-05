@@ -67,7 +67,12 @@ function createProvider() {
     apiKey: 'test-api-key',
     baseUrl: 'https://openai.example.test/v1',
     defaultModel: 'whisper-1',
-    models: ['whisper-1', 'gpt-4o-transcribe', 'gpt-image-1', 'gpt-image-edit-test'],
+    models: [
+      { id: 'whisper-1' },
+      { id: 'gpt-4o-transcribe' },
+      { id: 'gpt-image-1' },
+      { id: 'gpt-image-edit-test' }
+    ],
     capabilities: ['audio.stt', 'audio.transcribe', 'image.generate', 'image.edit'],
     priority: 1
   })
@@ -82,7 +87,7 @@ function createSiliconflowProvider() {
     apiKey: 'siliconflow-api-key',
     baseUrl: 'https://siliconflow.example.test/v1',
     defaultModel: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
-    models: ['deepseek-ai/DeepSeek-R1-0528-Qwen3-8B'],
+    models: [{ id: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B' }],
     capabilities: ['audio.tts'],
     priority: 1
   })
@@ -97,7 +102,7 @@ function createTimeoutProvider(timeout?: number) {
     apiKey: 'test-api-key',
     baseUrl: 'https://openai.example.test/v1',
     defaultModel: 'gpt-4o-mini',
-    models: ['gpt-4o-mini', 'text-embedding-3-small'],
+    models: [{ id: 'gpt-4o-mini' }, { id: 'text-embedding-3-small' }],
     capabilities: ['text.chat', 'text.embedding'],
     timeout,
     priority: 1

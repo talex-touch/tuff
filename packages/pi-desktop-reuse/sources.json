@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "package": "@talex-touch/pi-desktop-reuse",
+  "license": "LGPL-3.0-only",
+  "upstream": {
+    "name": "PI-Desktop",
+    "repository": "https://github.com/vastsa/PI-Desktop",
+    "commit": "3b036cc7810e18b3ef7689a2b93385125a8d0a3f",
+    "tree": "https://github.com/vastsa/PI-Desktop/tree/3b036cc7810e18b3ef7689a2b93385125a8d0a3f",
+    "license": "LGPL-3.0-only",
+    "attribution": "PI-Desktop contributors; the project author is vastsa (upstream apps/desktop/package.json). The mapped upstream files carry no per-file copyright notices; the upstream LICENSE text and any original notices are retained.",
+    "licenseFile": {
+      "path": "LICENSE",
+      "gitBlob": "0a041280bd00a9d068f503b8ee7ce35214bd24a1",
+      "sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118"
+    }
+  },
+  "licenseTexts": {
+    "LICENSE": {
+      "title": "GNU Lesser General Public License, Version 3, 29 June 2007",
+      "sha256": "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118"
+    },
+    "COPYING": {
+      "title": "GNU General Public License, Version 3, 29 June 2007",
+      "sha256": "7fa7e56c0db71105f4b59a6a0ac40225eb059876f85cd380383f7d7a066e68be"
+    }
+  },
+  "files": [
+    {
+      "path": "src/context-usage.ts",
+      "kind": "excerpt",
+      "typeOnly": false,
+      "upstream": [
+        {
+          "path": "apps/desktop/src/lib/context-usage.ts",
+          "gitBlob": "ac4606bc5affba505c2475bdde32f2b020e43f67",
+          "sha256": "c2d3b91c71b87867974cc667b239dfdb52d4dd327ca9e00c537fe76c80fa46b8"
+        }
+      ],
+      "modifications": "Only positiveTokenCount, usageTokenTotal and contextOccupancyTokens are kept, with logic unchanged. The upstream DEFAULT_CONTEXT_WINDOW fallback and the remaining-capacity calculations built on it are removed so an unknown context window stays unknown. MessageUsage is imported from ./types/message-stream; formatting follows the Tuff repository."
+    },
+    {
+      "path": "src/errors.ts",
+      "kind": "derived",
+      "typeOnly": false,
+      "upstream": [
+        {
+          "path": "packages/agent-host/src/errors.ts",
+          "gitBlob": "acaa9eb7065b0ea2af6c34523db9e8070f14f96d",
+          "sha256": "d4f07faefcbef5bc48aa8cf029e1b441930f5bdbd19a5fccc7cb5347bf45e1eb"
+        }
+      ],
+      "modifications": "Keeps the racpError(code, message, options) factory that turn-queue.ts calls, but no RACP server or RacpError/toRemoteError wire type is embedded. The factory returns a WorkspaceQueueError carrying the code and optional queue-capacity details, and maps upstream AGENT_BUSY to Tuff's WORKSPACE_QUEUE_FULL; the retriable table from @pi-desktop/shared is dropped."
+    },
+    {
+      "path": "src/ports.ts",
+      "kind": "subset",
+      "typeOnly": true,
+      "upstream": [
+        {
+          "path": "packages/agent-host/src/ports.ts",
+          "gitBlob": "eb8d9dbd37238e5745da4348202317605fe07d63",
+          "sha256": "3fec0011d5844eb6c63e294efec8068c9d711f9b60119a6dca4e682d623f58da"
+        }
+      ],
+      "modifications": "Only the QueuedTurnRecord, QueueReorderDirection and QueueStore declarations used by turn-queue.ts are kept. Queue ordering fields (id, sessionId, content, inputHash, numeric priority, createdAt) are preserved; remote RACP principals and permission grants are removed, and an opaque payload carries the Main-validated immutable input. MemoryQueueStore and the other upstream ports are not carried."
+    },
+    {
+      "path": "src/turn-queue.ts",
+      "kind": "adapted",
+      "typeOnly": false,
+      "upstream": [
+        {
+          "path": "packages/agent-host/src/turn-queue.ts",
+          "gitBlob": "4e19b7eca824c44e5253db991a67c2056f8d122e",
+          "sha256": "ad736442e91aa4f97e25b6f5d0c8987636e58e97139d8775e0122be30cf31163"
+        }
+      ],
+      "modifications": "Upstream text copied verbatim, including its formatting, with two changes: the LGPL source header is added, and a hold(sessionId) method is added so a stop or failed turn holds pending inputs until an explicit resume. Its ./errors.js and ./ports.js imports resolve to the narrow Tuff adapters in this package."
+    },
+    {
+      "path": "src/message-stream.ts",
+      "kind": "adapted",
+      "typeOnly": false,
+      "upstream": [
+        {
+          "path": "packages/shared/src/message-stream.ts",
+          "gitBlob": "e320e3547d164ec95f12ed70a08251868e63f267",
+          "sha256": "494502c0192c6c8e1201a4979408225961da6a8a4d115a1b3e6d8b6f1aee2af3"
+        }
+      ],
+      "modifications": "Logic unchanged. Types are imported from the narrowed ./types/message-stream subset instead of the upstream ./types.js barrel; upstream double-quote/semicolon formatting is converted to the Tuff repository style."
+    },
+    {
+      "path": "src/model-catalog.ts",
+      "kind": "adapted",
+      "typeOnly": false,
+      "upstream": [
+        {
+          "path": "packages/shared/src/model-catalog.ts",
+          "gitBlob": "f104a9539d7ae85eed393e671954fde44766832d",
+          "sha256": "a5f9c597c0738efcd6ed2bab037406a6e77bcbc4ee9d32617f7e71d8cff9c72b"
+        }
+      ],
+      "modifications": "Logic unchanged. Imports point at the sibling ./thinking-levels and ./types/models files instead of the upstream barrel; formatting follows the Tuff repository."
+    },
+    {
+      "path": "src/review.ts",
+      "kind": "translated",
+      "typeOnly": false,
+      "upstream": [
+        {
+          "path": "crates/host-core/src/review.rs",
+          "gitBlob": "0885a9af2486a868c92913140760f93c908e6eeb",
+          "sha256": "4eec0f9ef7234d9182a66a3522de65220c9efff77e7aab0321600547ca27bff8"
+        }
+      ],
+      "modifications": "The pure review-evidence logic is translated from Rust to TypeScript: snapshot and preview bounds (16 MiB, 512 KiB, 4000 lines, 2,000,000 LCS cells, 3 context lines), the NUL-or-invalid-UTF-8 binary rule, str::lines splitting, the LCS edit script (diff_ops), hunk construction (make_hunks), line counts and the unchanged-since guard of rollback_change. The LCS table is a flat Uint32Array and the edit script keeps line indices instead of cloned strings; oversized, over-budget and binary previews are reported as separate tooLarge/truncated/binary flags and uncomputed counts are omitted rather than reported as zero. Filesystem access, snapshot directories and rollback I/O are not carried over; Tuff Main owns capture, persistence, locking and authorized rollback."
+    },
+    {
+      "path": "src/session-fork.ts",
+      "kind": "translated",
+      "typeOnly": false,
+      "upstream": [
+        {
+          "path": "crates/host-core/src/sessions.rs",
+          "lines": "880-1018",
+          "gitBlob": "b861661144bce5711a2f6a489ef4e7a75246cc73",
+          "sha256": "01ddad3e7047352103d66cc6050ce47b2f2b066f1465a67ef71838412c509b7b"
+        }
+      ],
+      "modifications": "collect_tool_call_ids, clone_records_for_fork and clone_compaction_for_fork are translated from Rust to TypeScript. Tuff message meta.parts replace upstream content blocks; message, tool-call, turn, compaction, checkpoint and snapshot identity references are remapped to fresh ids while ordinary message text is never rewritten. Only public metadata is carried into a fork: runtime grants, native session pointers, queue state, filesystem paths and approval/rollback authority are stripped, and review evidence stays in private rows handled by Tuff Main. Persistence and Pi native JSONL handling are not carried over."
+    },
+    {
+      "path": "src/thinking-levels.ts",
+      "kind": "adapted",
+      "typeOnly": false,
+      "upstream": [
+        {
+          "path": "packages/shared/src/thinking-levels.ts",
+          "gitBlob": "9a077cf872d9bf04ffed18a751611f6f5bde7016",
+          "sha256": "60ee4dd5200a81a2269562913574fe127188a9ae223ff47f4e7c7fb998ed19d6"
+        }
+      ],
+      "modifications": "Logic unchanged. The upstream ./types.js barrel import points at ./types/models; formatting follows the Tuff repository."
+    },
+    {
+      "path": "src/types/message-stream.ts",
+      "kind": "subset",
+      "typeOnly": true,
+      "upstream": [
+        {
+          "path": "packages/shared/src/types/messages.ts",
+          "gitBlob": "4532533aae523ba86cc9cf9ec04b6ea55d0067d4",
+          "sha256": "f27ff7c336902b061f44cb50c1561d69148f86ba3995fa53b75aed8bd59b7f84"
+        },
+        {
+          "path": "packages/shared/src/types/agent.ts",
+          "gitBlob": "b747fab5ea48aa92a299ee44f4df1484fd5e81da",
+          "sha256": "2242eb10c7ade35f65b96e62ea558829e33692a4db9dd86a9deb9d146a60e868"
+        }
+      ],
+      "modifications": "Only the UiMessage, MessageUsage, message_update AgentEvent and AgentEventEnvelope fields read by message-stream.ts and context-usage.ts are kept. Upstream-only payloads (model system blocks, voice/session origins, tool rows, plan and permission events) are dropped, hostedSearch is kept opaque, and one field is added: host, the Tuff host projection a snapshot carries and a delta preserves untouched."
+    },
+    {
+      "path": "src/types/models.ts",
+      "kind": "subset",
+      "typeOnly": false,
+      "upstream": [
+        {
+          "path": "packages/shared/src/types/models.ts",
+          "lines": "1-353",
+          "gitBlob": "47d436f6b6f9645212405bdb545fb7a55b548d12",
+          "sha256": "c0170af47897c085f195bbfe6d8b422111c603cd069dbde5ebbd61e14f46d28f"
+        }
+      ],
+      "modifications": "Logic unchanged. Only the model vocabulary (upstream lines 1-353) is kept; the theme/appearance types after ModelInfo are dropped because Tuff does not read them. Formatting follows the Tuff repository."
+    }
+  ]
+}

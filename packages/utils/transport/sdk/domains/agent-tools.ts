@@ -1,6 +1,9 @@
 import type { ITuffTransport } from '../../types'
 import { defineEvent } from '../../event/builder'
 
+/** Maximum confirmation wait; Main may shorten it, but awaiting callers must outlive it. */
+export const AGENT_TOOL_CONFIRMATION_TIMEOUT_MS = 2 * 60 * 1000
+
 export type AgentToolRisk = 'read' | 'write' | 'execute'
 
 /**
@@ -80,6 +83,13 @@ export interface FormSpec {
   submitLabel?: string
 }
 
+/** Assigned by Main from an admitted turn, never from tool arguments or caller metadata. */
+export interface AgentToolOrigin {
+  conversationId: string
+  turnId?: string
+  toolCallId?: string
+}
+
 export interface AgentToolConfirmRequest {
   requestId: string
   tool: string
@@ -87,6 +97,7 @@ export interface AgentToolConfirmRequest {
   summary: string
   /** Serialized arguments, pretty-printed for display. */
   input: string
+  origin?: AgentToolOrigin
 }
 
 export interface AgentToolConfirmDecision {

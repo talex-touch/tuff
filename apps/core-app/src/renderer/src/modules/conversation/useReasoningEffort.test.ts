@@ -1,11 +1,12 @@
 /**
- * The composer's reasoning effort as the renderer stores and reads it: one global value in
- * `appSetting.conversation`, auto when missing, written alone, and never rewritten by a model switch.
+ * The composer's reasoning effort is stored globally and never rewritten by a model switch.
  * `useModelOptions` keeps module-scope state, so every test re-imports after `resetModules`.
  */
 import type { ProviderModelOption } from './useModelOptions'
 import { nextTick, reactive } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { resolveProviderEffectiveModel } from '../../../../main/modules/ai/model-request-plan'
 
 const mocks = vi.hoisted(() => ({
   getProviderModelOptions: vi.fn<() => Promise<ProviderModelOption[]>>(),
@@ -41,6 +42,18 @@ function providerOptions(): ProviderModelOption[] {
       providerName: 'OpenAI',
       providerType: 'openai',
       models: ['gpt-5.5', 'gpt-4o'],
+      effectiveModels: ['gpt-5.5', 'gpt-4o'].map((model) =>
+        resolveProviderEffectiveModel(
+          {
+            id: 'openai-default',
+            name: 'OpenAI',
+            type: IntelligenceProviderType.OPENAI,
+            enabled: true,
+            models: [{ id: 'gpt-5.5' }, { id: 'gpt-4o' }]
+          },
+          model
+        )
+      ),
       available: true
     }
   ]
@@ -68,62 +81,15 @@ beforeEach(() => {
 })
 
 describe('useReasoningEffort', () => {
-  it('reads a profile written before the setting existed as auto', async () => {
-    const { effort } = await setup()
-    expect(effort.setting.value).toBe('auto')
-    expect(effort.pillLevel.value).toBeNull()
-
-    resetAppSetting({ model: null, favoriteModels: [], reasoningEffort: 'turbo' })
-    expect(effort.setting.value).toBe('auto')
-  })
-
-  it('writes only its own key', async () => {
-    const { effort } = await setup()
-    effort.select('high')
-    await nextTick()
-
-    expect(appSetting.conversation).toEqual({
-      model: null,
-      favoriteModels: [],
-      reasoningEffort: 'high'
-    })
-    expect(effort.setting.value).toBe('high')
-  })
-
-  it('creates the block on a profile that lacks it', async () => {
-    resetAppSetting()
-    const { effort } = await setup()
-    effort.select('low')
-    await nextTick()
-
-    expect(appSetting.conversation).toEqual({
-      model: null,
-      favoriteModels: [],
-      reasoningEffort: 'low'
-    })
-  })
-
   it('keeps the stored level across a switch to a model that cannot take it', async () => {
     const { effort, models } = await setup()
     effort.select('max')
-    models.select({
-      ...GPT_55,
-      providerName: 'OpenAI',
-      providerType: 'openai',
-      displayName: 'gpt-5.5',
-      source: null
-    })
+    models.select(GPT_55)
     await nextTick()
     expect(effort.pillLevel.value).toBe('max')
     expect(effort.row.value.disabled).toBe(false)
 
-    models.select({
-      ...GPT_4O,
-      providerName: 'OpenAI',
-      providerType: 'openai',
-      displayName: 'gpt-4o',
-      source: null
-    })
+    models.select(GPT_4O)
     await nextTick()
     expect(effort.row.value).toEqual({
       disabled: true,

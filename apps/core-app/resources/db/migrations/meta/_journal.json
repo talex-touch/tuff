@@ -365,6 +365,13 @@
       "when": 1786838400000,
       "tag": "0051_usage_execute_events",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1786924800000,
+      "tag": "0052_conversation_workspaces",
+      "breakpoints": true
     }
   ]
 }

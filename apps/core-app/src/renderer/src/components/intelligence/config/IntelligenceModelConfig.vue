@@ -4,6 +4,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { TxTransfer } from '@talex-touch/tuffex/transfer'
+import { providerModelIds } from '@talex-touch/utils/intelligence/model-binding'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { computed, ref, watch } from 'vue'
@@ -11,6 +12,7 @@ import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
+import IntelligenceModelBindingEditor from './IntelligenceModelBindingEditor.vue'
 import IntelligencePromptSelector from './IntelligencePromptSelector.vue'
 
 const props = defineProps<{
@@ -26,14 +28,25 @@ const emits = defineEmits<{
 const { t } = useI18n()
 const aiClient = useIntelligenceSdk()
 
-// 使用 reactive 计算属性直接操作存储
+/**
+ * The provider's model ids, edited as a list. Writing a list keeps the binding (alias, limits,
+ * thinking, images) of every id that stays; a new id starts as a bare, unknown binding.
+ */
 const localModels = computed({
-  get: () => props.modelValue.models || [],
+  get: () => providerModelIds(props.modelValue),
   set: (value: string[]) => {
-    intelligenceSettings.updateProvider(props.modelValue.id, { models: value })
+    const stored = props.modelValue.models ?? []
+    intelligenceSettings.updateProvider(props.modelValue.id, {
+      models: value.map((id) => stored.find((binding) => binding.id === id) ?? { id })
+    })
     emits('change')
   }
 })
+
+/** Models with anything configured beyond their id. */
+const configuredBindingCount = computed(
+  () => (props.modelValue.models ?? []).filter((binding) => Object.keys(binding).length > 1).length
+)
 
 const localDefaultModel = computed({
   get: () => props.modelValue.defaultModel || '',
@@ -146,10 +159,11 @@ const transferData = computed(() => {
 
   return Array.from(pool)
     .sort((a, b) => a.localeCompare(b))
-    .map((model) => ({
-      key: model,
-      label: model
-    }))
+    .map((model) => {
+      // The alias names the model; the id stays visible because it is what requests send.
+      const alias = props.modelValue.models?.find((binding) => binding.id === model)?.alias
+      return { key: model, label: alias ? `${alias} · ${model}` : model }
+    })
 })
 
 const transferSelectedModels = computed<string[]>({
@@ -168,6 +182,8 @@ const showInstructionsDrawer = ref(false)
 const modelsDialogSource = ref<HTMLElement | null>(null)
 const defaultModelDialogSource = ref<HTMLElement | null>(null)
 const instructionsDialogSource = ref<HTMLElement | null>(null)
+const showBindingsDrawer = ref(false)
+const bindingsDialogSource = ref<HTMLElement | null>(null)
 const isFetching = ref(false)
 
 const defaultModelSummary = computed(() => {
@@ -248,6 +264,12 @@ function openDefaultModelDrawer(event?: MouseEvent) {
   showDefaultModelDrawer.value = true
 }
 
+function openBindingsDrawer(event?: MouseEvent) {
+  if (props.disabled || localModels.value.length === 0) return
+  bindingsDialogSource.value = resolveDialogSource(event)
+  showBindingsDrawer.value = true
+}
+
 function openInstructionsDrawer(event?: MouseEvent) {
   if (props.disabled) return
   instructionsDialogSource.value = resolveDialogSource(event)
@@ -326,7 +348,8 @@ async function handleFetchModels() {
       name: props.modelValue.name,
       enabled: true,
       baseUrl: props.modelValue.baseUrl,
-      models: [...localModels.value],
+      // Discovery only needs the ids; the bindings stay in storage untouched.
+      models: localModels.value.map((id) => ({ id })),
       timeout: props.modelValue.timeout || 30000
     }
 
@@ -414,6 +437,30 @@ watch(
         @click="openDefaultModelDrawer"
       >
         <span>{{ defaultModelSummary }}</span>
+        <i class="i-carbon-chevron-right" />
+      </TxButton>
+    </TuffBlockSlot>
+
+    <!-- Per-model settings: alias, limits, thinking, image input -->
+    <TuffBlockSlot
+      :title="t('intelligence.config.model.binding.title')"
+      :description="
+        configuredBindingCount > 0
+          ? t('intelligence.config.model.binding.summaryCount', { count: configuredBindingCount })
+          : t('intelligence.config.model.binding.description')
+      "
+      default-icon="i-carbon-settings-adjust"
+      active-icon="i-carbon-settings-adjust"
+      :active="configuredBindingCount > 0"
+      :disabled="disabled || localModels.length === 0"
+    >
+      <TxButton
+        variant="flat"
+        class="config-action-button"
+        :disabled="disabled || localModels.length === 0"
+        @click="openBindingsDrawer"
+      >
+        <span>{{ t('intelligence.config.model.binding.edit') }}</span>
         <i class="i-carbon-chevron-right" />
       </TxButton>
     </TuffBlockSlot>
@@ -561,6 +608,22 @@ watch(
       <IntelligencePromptSelector
         v-model="localInstructions"
         @update:model-value="handleInstructionsChange"
+      />
+    </FlipDialog>
+
+    <!-- Model Settings Dialog -->
+    <FlipDialog
+      v-model="showBindingsDrawer"
+      :reference="bindingsDialogSource"
+      :header-title="t('intelligence.config.model.binding.title')"
+      :header-desc="t('intelligence.config.model.binding.dialogDesc')"
+      size="lg"
+      max-height="calc(86dvh - 24px)"
+    >
+      <IntelligenceModelBindingEditor
+        :provider="modelValue"
+        :disabled="disabled"
+        @change="emits('change')"
       />
     </FlipDialog>
   </div>

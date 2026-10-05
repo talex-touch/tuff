@@ -90,7 +90,7 @@ describe('stream audit ledger consistency', () => {
         enabled: true,
         priority: 1,
         defaultModel: 'gpt-4o-mini',
-        models: ['gpt-4o-mini'],
+        models: [{ id: 'gpt-4o-mini' }],
         capabilities: ['text.chat']
       },
       vi.fn()

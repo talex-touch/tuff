@@ -85,8 +85,8 @@ export interface ConversationMessage {
   error?: ConversationError
   meta?: ConversationTurnMeta
   /**
-   * What the bubble renders: display URLs owned by the composer, never stored (`toSaveRequest`
-   * maps fields explicitly) and never sent as-is — an object URL means nothing outside this window.
+   * Display URLs owned by the composer or issued for Main-managed attachment copies.
+   * Object URLs are never used as durable references or sent unchanged across processes.
    */
   attachments?: AiAttachment[]
   /**
@@ -130,9 +130,27 @@ export interface ConversationIntelligenceSdk {
   }
 }
 
+/** A projection of Main-owned state; submitting never starts a renderer-owned turn. */
+export interface WorkspaceConversationAdapter {
+  readonly messages: ConversationMessage[]
+  readonly isStreaming: boolean
+  readonly isCompacting: boolean
+  send: (
+    text: string,
+    attachments?: AiAttachment[],
+    options?: ConversationSendOptions
+  ) => Promise<void>
+  stop: () => void
+  retry: () => Promise<void>
+  reset?: () => void
+  restore?: (messages: ConversationMessage[]) => void
+}
+
 export interface UseHomeConversationOptions {
   /** Injectable for tests; defaults to the renderer intelligence SDK. */
   sdk?: ConversationIntelligenceSdk
+  /** Home uses the durable workspace authority; absence preserves standalone SDK consumers. */
+  workspace?: () => WorkspaceConversationAdapter | undefined
   /** Read at send time, not at setup, so changing the model mid-conversation takes effect. */
   routing?: () => ConversationRouting | undefined
   /**
@@ -677,6 +695,12 @@ export function useHomeConversation(
     attachments?: AiAttachment[],
     sendOptions: ConversationSendOptions = {}
   ): Promise<void> {
+    if (options.workspace) {
+      const workspace = options.workspace()
+      if (!workspace) throw new Error('CONVERSATION_WORKSPACE_UNAVAILABLE')
+      await workspace.send(rawText, attachments, sendOptions)
+      return
+    }
     const text = rawText.trim()
     if (!text || streaming.value) return
 
@@ -714,6 +738,12 @@ export function useHomeConversation(
   }
 
   async function retry(): Promise<void> {
+    if (options.workspace) {
+      const workspace = options.workspace()
+      if (!workspace) throw new Error('CONVERSATION_WORKSPACE_UNAVAILABLE')
+      await workspace.retry()
+      return
+    }
     if (streaming.value) return
 
     const last = messages.value[messages.value.length - 1]
@@ -728,6 +758,10 @@ export function useHomeConversation(
   }
 
   function stop(): void {
+    if (options.workspace) {
+      options.workspace()?.stop()
+      return
+    }
     activeTurn?.cancel()
   }
 
@@ -754,11 +788,21 @@ export function useHomeConversation(
   }
 
   function reset(): void {
+    if (options.workspace) {
+      options.workspace()?.reset?.()
+      messages.value = []
+      return
+    }
     discardActiveTurn()
     messages.value = []
   }
 
   function restore(restored: ConversationMessage[]): void {
+    if (options.workspace) {
+      options.workspace()?.restore?.(restored)
+      messages.value = restored.map((message) => ({ ...message }))
+      return
+    }
     discardActiveTurn()
     messages.value = restored.map((message) => ({ ...message }))
   }
@@ -772,14 +816,16 @@ export function useHomeConversation(
     })
   }
 
+  const visibleMessages = computed(() => options.workspace?.()?.messages ?? messages.value)
+
   return {
-    messages: computed(() => messages.value),
-    isStreaming: computed(() => streaming.value),
-    isEmpty: computed(() => messages.value.length === 0),
-    isCompacting: computed(() => compacting.value),
+    messages: visibleMessages,
+    isStreaming: computed(() => options.workspace?.()?.isStreaming ?? streaming.value),
+    isEmpty: computed(() => visibleMessages.value.length === 0),
+    isCompacting: computed(() => options.workspace?.()?.isCompacting ?? compacting.value),
     lastTurn: computed(() => {
-      for (let index = messages.value.length - 1; index >= 0; index -= 1) {
-        const message = messages.value[index]
+      for (let index = visibleMessages.value.length - 1; index >= 0; index -= 1) {
+        const message = visibleMessages.value[index]
         if (message?.role === 'assistant' && message.meta) return message.meta
       }
       return undefined

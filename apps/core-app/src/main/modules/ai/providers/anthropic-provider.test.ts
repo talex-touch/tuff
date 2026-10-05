@@ -29,7 +29,7 @@ function createProvider(
     apiKey: 'test-api-key',
     baseUrl: 'https://anthropic.example.test/v1',
     defaultModel: 'claude-3-5-sonnet-20241022',
-    models: ['claude-3-5-sonnet-20241022'],
+    models: [{ id: 'claude-3-5-sonnet-20241022' }],
     capabilities: ['image.caption', 'image.analyze'],
     timeout: 22_000,
     ...overrides,

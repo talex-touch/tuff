@@ -1,3 +1,4 @@
+import type { ReasoningEffortSetting, ReasoningEffortWire } from '../intelligence/reasoning-effort'
 import { NEXUS_BASE_URL } from '../env'
 import { TUFF_NEXUS_PROVIDER_ID } from '../intelligence/nexus-provider'
 
@@ -324,6 +325,102 @@ export interface IntelligenceVisionOcrPayload {
   includeKeywords?: boolean
 }
 
+/** Where a stored model limit came from: `catalog` follows the published value, `user` is pinned. */
+export type IntelligenceModelLimitSource = 'catalog' | 'user'
+
+/** Canonical thinking ladder shared with PI-Desktop (`@talex-touch/pi-desktop-reuse/types/models`). */
+export type IntelligenceThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+/** A thinking selector value; `omit` sends no reasoning override (Tuff's `auto`). */
+export type IntelligenceSessionThinkingLevel = IntelligenceThinkingLevel | 'omit'
+
+/** Request protocol a model uses when thinking is enabled (Anthropic budget vs adaptive effort). */
+export type IntelligenceThinkingProtocol = 'legacy' | 'adaptive'
+
+/**
+ * Provider-local settings of one model, persisted in `IntelligenceProviderConfig.models`.
+ *
+ * `id` is the stable wire identity a request is addressed with; `alias` is display only and is
+ * never sent upstream. Every other field is optional: absent means "unknown", which readers treat
+ * conservatively (no claimed window, no implied reasoning, no image input) unless a catalog that
+ * Main actually reads publishes the value. Limits carry their own provenance so a catalog refresh
+ * never replaces a value the user typed.
+ */
+export interface IntelligenceModelBinding {
+  /** Stable model id sent to the provider. */
+  id: string
+  /** Display name shown wherever the model is labelled. */
+  alias?: string
+  /** Context window in tokens; absent when unknown. */
+  contextWindow?: number
+  contextWindowSource?: IntelligenceModelLimitSource
+  /** Output cap in tokens; absent when unknown. */
+  maxTokens?: number
+  maxTokensSource?: IntelligenceModelLimitSource
+  /**
+   * Enabled thinking levels. Absent follows the catalog/route table; `[]` explicitly marks a model
+   * without reasoning; a non-empty list is the user's ladder.
+   */
+  thinkingLevels?: IntelligenceThinkingLevel[]
+  /**
+   * Explicit default for a NEW session preference. `omit` is auto; `null`/absent means none. Never
+   * applied to a session that already stored a choice, including an explicit auto.
+   */
+  defaultThinkingLevel?: IntelligenceSessionThinkingLevel | null
+  /** Anthropic request protocol override; absent follows the route table. */
+  thinkingProtocol?: IntelligenceThinkingProtocol
+  /** Image input override: a boolean is pinned, `null`/absent follows the catalog. */
+  supportsImages?: boolean | null
+}
+
+/** Provenance of one effective value: the user's binding, a catalog Main read, or nothing known. */
+export type IntelligenceEffectiveValueSource = 'user' | 'catalog' | 'unknown'
+
+export interface IntelligenceEffectiveModelLimit {
+  /** Absent when the source is `unknown`. */
+  value?: number
+  source: IntelligenceEffectiveValueSource
+}
+
+/**
+ * The one resolved view of `(providerId, modelId)` that Settings, Home, the Agent model bridge and
+ * the provider adapters all read (`resolveEffectiveModel` in
+ * `@talex-touch/utils/intelligence/model-binding`). Limits are capability limits, never occupancy.
+ */
+export interface IntelligenceEffectiveModel {
+  providerId: string
+  /** Stable wire id; the only id ever sent upstream. */
+  modelId: string
+  alias?: string
+  /** `alias ?? modelId`. */
+  label: string
+  contextWindow: IntelligenceEffectiveModelLimit
+  maxOutputTokens: IntelligenceEffectiveModelLimit & {
+    /** Whether the adapter sends the cap with the request; CLI adapters apply their own. */
+    enforced: boolean
+  }
+  thinking: {
+    /** How the route spells a level; `null` when nothing can be sent. */
+    wire: ReasoningEffortWire | null
+    /** Levels this route and model accept, weakest first; empty whenever `wire` is `null`. */
+    levels: IntelligenceReasoningLevel[]
+    unsupported?: 'provider' | 'model'
+    source: IntelligenceEffectiveValueSource
+    protocol?: IntelligenceThinkingProtocol
+    /** Explicit per-model default for a new session preference; absent when none was configured. */
+    defaultSetting?: ReasoningEffortSetting
+  }
+  imageInput: {
+    state: 'supported' | 'unsupported' | 'unknown'
+    /** The binding override; `null` follows the catalog. */
+    override: boolean | null
+    /** Whether this provider adapter actually transports chat image attachments. */
+    adapter: boolean
+    /** What Main's request gate does with image attachments for this model. */
+    accepted: boolean
+  }
+}
+
 /**
  * Configuration for an intelligence provider.
  */
@@ -346,8 +443,8 @@ export interface IntelligenceProviderConfig {
   baseUrl?: string
   /** Rate limit configuration. */
   rateLimit?: IntelligenceProviderRateLimit
-  /** Available models. */
-  models?: string[]
+  /** Model bindings: stable ids plus their limits, thinking and image settings. */
+  models?: IntelligenceModelBinding[]
   /** Default model to use. */
   defaultModel?: string
   /** System instructions. */
@@ -556,6 +653,11 @@ export interface IntelligenceInvokeResult<T = any> {
   result: T
   /** Token usage information. */
   usage: IntelligenceUsageInfo
+  /**
+   * True only when the provider reported these counts. Absent/false means `usage` is a zero or
+   * otherwise unreported placeholder and must not be shown as measured usage.
+   */
+  usageReported?: boolean
   /** Model used for the request. */
   model: string
   /** Request latency in milliseconds. */
@@ -2909,7 +3011,7 @@ export const DEFAULT_PROVIDERS: IntelligenceProviderConfig[] = [
     enabled: false,
     priority: 1,
     baseUrl: `${NEXUS_BASE_URL}/v1`,
-    models: ['gpt-4o', 'gpt-4o-mini'],
+    models: [{ id: 'gpt-4o' }, { id: 'gpt-4o-mini' }],
     defaultModel: 'gpt-4o-mini',
     timeout: 30000,
     rateLimit: {},

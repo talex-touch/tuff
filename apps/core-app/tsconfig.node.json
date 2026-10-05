@@ -15,6 +15,8 @@
     "paths": {
       "@/*": ["src/main/*"],
       "@core-box/*": ["packages/utils/core-box/*"],
+      "@talex-touch/pi-desktop-reuse/*": ["packages/pi-desktop-reuse/src/*"],
+      "@talex-touch/tuffex/ai-elements": ["packages/tuffex/packages/components/src/ai-elements/src/types.ts"],
       "@talex-touch/utils": ["packages/utils"],
       "@talex-touch/tuff-native": ["packages/tuff-native"],
       "@talex-touch/tuff-native/*": ["packages/tuff-native/*"],

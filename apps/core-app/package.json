@@ -108,6 +108,7 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@prebuilt-binary/fd": "10.4.2",
     "@sentry/electron": "^7.16.0",
+    "@talex-touch/pi-desktop-reuse": "workspace:*",
     "@talex-touch/tuff-business": "workspace:^",
     "@talex-touch/tuff-intelligence": "workspace:^",
     "@talex-touch/tuff-voice": "workspace:^",

@@ -24,7 +24,7 @@ describe('fetchProviderModels', () => {
       priority: 1,
       apiKey: 'app-token',
       baseUrl: 'https://nexus.example.com/v1',
-      models: ['gpt-4o-mini', 'gpt-4o-mini', 'gpt-4o'],
+      models: [{ id: 'gpt-4o-mini' }, { id: 'gpt-4o-mini' }, { id: 'gpt-4o' }],
       defaultModel: 'gpt-4o-mini',
       metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
     })
@@ -97,7 +97,7 @@ describe('fetchProviderModels', () => {
           enabled: true,
           priority: 3,
           baseUrl: 'http://localhost:11434',
-          models: ['stale-model']
+          models: [{ id: 'stale-model' }]
         },
         {
           allowStoredFallback: false,

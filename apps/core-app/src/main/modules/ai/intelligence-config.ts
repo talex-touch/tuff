@@ -22,6 +22,10 @@ import {
   ON_DEVICE_ASR_CHANNEL_TYPE,
   TUFF_LOCAL_ASR_PROVIDER_ID
 } from '@talex-touch/utils/intelligence/voice-asr'
+import {
+  needsModelBindingMigration,
+  normalizeModelBindings
+} from '@talex-touch/utils/intelligence/model-binding'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { getSanitizedAuthSessionState, subscribeAuthState } from '../auth'
@@ -62,7 +66,7 @@ const INTERNAL_SYSTEM_OCR_PROVIDER: IntelligenceProviderConfig = {
   name: 'System OCR',
   enabled: true,
   priority: 0,
-  models: ['system-ocr'],
+  models: [{ id: 'system-ocr' }],
   timeout: 30000,
   capabilities: ['vision.ocr'],
   metadata: {
@@ -350,7 +354,8 @@ export function ensureLocalAsrRoute(installedModelIds: string[]): void {
     name: provider?.name ?? 'Local Speech',
     enabled: true,
     capabilities: ['audio.asr'],
-    models: [modelId],
+    // The installed model keeps whatever binding the user gave it; a new one starts bare.
+    models: [provider?.models?.find((candidate) => candidate.id === modelId) ?? { id: modelId }],
     defaultModel: modelId,
     metadata: {
       ...providerMetadata,
@@ -894,6 +899,15 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
     changed = true
   }
 
+  // One-time, lossless: a legacy `models: string[]` becomes bare bindings (id only, every other
+  // field unknown) in the same order; ids, defaultModel, authRef and metadata are untouched.
+  for (const provider of config.providers) {
+    if (needsModelBindingMigration(provider.models)) {
+      provider.models = normalizeModelBindings(provider.models)
+      changed = true
+    }
+  }
+
   const nexusDefault = DEFAULT_PROVIDERS.find((provider) => provider.id === TUFF_NEXUS_PROVIDER_ID)
   if (
     nexusDefault &&
@@ -913,6 +927,20 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
     }
     if (JSON.stringify(nexusProvider.capabilities ?? []) !== JSON.stringify([...capabilities])) {
       nexusProvider.capabilities = [...capabilities]
+      changed = true
+    }
+  }
+
+  // Settings and requests share the persisted channel authority. Runtime-only
+  // disabled channels cannot be selected or explicitly enabled by a new install.
+  for (const [provider, executable] of [
+    [OMP_CLI_PROVIDER, getResolvedOmpExecutable()],
+    [PI_CLI_PROVIDER, getResolvedPiExecutable()],
+    [CODEX_CLI_PROVIDER, getResolvedCodexExecutable()],
+    [CLAUDE_CLI_PROVIDER, getResolvedClaudeExecutable()]
+  ] as const) {
+    if (executable && !config.providers.some((candidate) => candidate.id === provider.id)) {
+      config.providers.push(cloneValue(provider))
       changed = true
     }
   }

@@ -33,6 +33,7 @@ import type {
   IntelligenceContextExecutionRequest,
   IntelligenceContextExecutionResult,
   IntelligenceContextStreamEvent,
+  IntelligenceEffectiveModel,
   IntelligenceEmbeddingPayload,
   IntelligenceGrammarCheckPayload,
   IntelligenceGrammarCheckResult,
@@ -188,7 +189,14 @@ export interface IntelligenceProviderModelOption {
   providerId: string;
   providerName: string;
   providerType: string;
+  /** Stable model ids, in menu order. */
   models: string[];
+  /**
+   * Main's effective binding for each id in `models`, same order: alias/label, limits with
+   * provenance, thinking support and image acceptance. Host surfaces only; plugin projections
+   * keep the id list.
+   */
+  effectiveModels: IntelligenceEffectiveModel[];
   defaultModel: string | null;
   capabilities: string[];
   available: boolean;

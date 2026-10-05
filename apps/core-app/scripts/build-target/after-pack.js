@@ -10,6 +10,9 @@ const {
 } = require('./runtime-modules')
 const { OFFICIAL_PLUGIN_BUILD_TARGETS } = require('../lib/touch-translation-runtime-sync')
 const { createPackagedBuildAttestation } = require('./build-attestation')
+const {
+  verifyPackagedBundle: verifyPackagedPiDesktopReuseLegal
+} = require('../legal/pi-desktop-reuse-legal.cjs')
 
 function ensureMacMainAppLsuiElement(context) {
   if (context.electronPlatformName !== 'darwin') return
@@ -404,6 +407,11 @@ module.exports = async function afterPack(context) {
   if (!resourcesDir) {
     throw new Error('[afterPack] Cannot locate packaged resources for build attestation')
   }
+  const legal = verifyPackagedPiDesktopReuseLegal({
+    appRoot: context.packager.projectDir,
+    resourcesDir
+  })
+  console.log(`[afterPack] Verified packaged pi-desktop-reuse legal bundle: ${legal.packagedDir}`)
   const attestation = await createPackagedBuildAttestation({
     resourcesDir,
     projectDir: context.packager.projectDir,

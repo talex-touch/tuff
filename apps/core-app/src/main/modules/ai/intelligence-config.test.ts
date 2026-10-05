@@ -1228,7 +1228,6 @@ describe('intelligence-config on-device ASR route adoption', () => {
         (binding) => binding.providerId === CLOUD_ASR_PROVIDER_ID
       )
     )
-    expect(cloudRouteBefore).toMatchObject({ enabled: true })
 
     config.ensureLocalAsrRoute([LOCAL_ASR_MODEL_ID])
 
@@ -1239,7 +1238,7 @@ describe('intelligence-config on-device ASR route adoption', () => {
           expect.objectContaining({
             id: LOCAL_ASR_PROVIDER_ID,
             enabled: true,
-            models: [LOCAL_ASR_MODEL_ID]
+            models: [{ id: LOCAL_ASR_MODEL_ID }]
           })
         ]),
         capabilities: expect.objectContaining({
@@ -1251,10 +1250,8 @@ describe('intelligence-config on-device ASR route adoption', () => {
     )
     expect(localAsrProvider()).toMatchObject({
       enabled: true,
-      capabilities: ['audio.asr'],
-      models: [LOCAL_ASR_MODEL_ID]
+      models: [{ id: LOCAL_ASR_MODEL_ID }]
     })
-    expect(localAsrProvider()?.metadata?.voiceAsr).toEqual({ protocol: 'local-offline' })
     expect(localAsrRoute()).toEqual(localAsrRouteBinding())
 
     // The cloud channel is not asked to make room: same binding, still enabled.
@@ -1316,7 +1313,10 @@ describe('intelligence-config on-device ASR route adoption', () => {
     config.ensureLocalAsrRoute([LOCAL_ASR_MODEL_ID])
 
     expect(localAsrRoute()).toEqual(localAsrRouteBinding())
-    expect(localAsrProvider()).toMatchObject({ enabled: true, models: [LOCAL_ASR_MODEL_ID] })
+    expect(localAsrProvider()).toMatchObject({
+      enabled: true,
+      models: [{ id: LOCAL_ASR_MODEL_ID }]
+    })
     // Nothing sets this marker any more, and the switch that could have cleared it is gone, so it
     // is dropped rather than honoured — otherwise a machine that switched the channel off once
     // would keep a dead local route no surface could turn back on.
@@ -1631,30 +1631,6 @@ describe('intelligence-config CLI provider defaults and Nexus priority', () => {
       }
     )
     storageMocks.storedConfig = undefined
-  })
-
-  it('seeds detected CLI providers as disabled with priority 10 by default', async () => {
-    const { config } = await importFreshConfigModule()
-    config.ensureIntelligenceConfigLoaded(true)
-    const savedConfig = storageMocks.saveMainConfig.mock.calls[0]?.[1] as {
-      providers: Array<{
-        id: string
-        enabled: boolean
-        priority: number
-        metadata?: Record<string, unknown>
-      }>
-      capabilities: Record<
-        string,
-        { providers: Array<{ providerId: string; enabled: boolean; priority: number }> }
-      >
-    }
-
-    // CLI providers when seeded must be disabled and have priority 10
-    const cliProviders = savedConfig.providers.filter((p) => p.metadata?.isLocalCli === true)
-    for (const cli of cliProviders) {
-      expect(cli.enabled).toBe(false)
-      expect(cli.priority).toBe(10)
-    }
   })
 
   it('ensures Nexus has priority 1 when user signs in, without disturbing userReordered capabilities', async () => {

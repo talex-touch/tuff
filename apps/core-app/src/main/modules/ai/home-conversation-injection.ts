@@ -47,6 +47,16 @@ function wantsHomeInjection(
  * so the only cost on an unconfigured machine is one store read. Re-read per turn rather than
  * cached: enabling a skill has to take effect on the next send, not on the next app start.
  */
+export function applyHomeConversationInjection(
+  payload: IntelligenceChatPayload,
+  options: IntelligenceInvokeOptions | undefined,
+  isPluginCaller: boolean
+): Promise<IntelligenceChatPayload>
+export function applyHomeConversationInjection(
+  payload: unknown,
+  options: IntelligenceInvokeOptions | undefined,
+  isPluginCaller: boolean
+): Promise<unknown>
 export async function applyHomeConversationInjection(
   payload: unknown,
   options: IntelligenceInvokeOptions | undefined,

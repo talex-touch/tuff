@@ -68,6 +68,7 @@ import {
 } from './intelligence-error-normalizer'
 import { applyHomeConversationInjection } from './home-conversation-injection'
 import { getIntelligenceLocalEnvironment } from './intelligence-local-environment'
+import { markHomeChatInvoke, resolveHomeChatOrigin } from './intelligence-invoke-purpose'
 import { aiCliOrchestrator } from './ai-cli-orchestrator'
 import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
@@ -531,6 +532,18 @@ function bindPluginInvokeCaller(
   delete metadata.approvalGranted
   delete metadata.approvedAt
   return { ...scoped, metadata }
+}
+
+/**
+ * Marks the options as a genuine Home chat turn when Main can prove it is one; otherwise returns
+ * them unchanged (model-only). The marker is never read from the request itself.
+ */
+async function withHomeChatPurpose(
+  options: IntelligenceInvokeOptions | undefined,
+  context: Pick<HandlerContext, 'plugin'>
+): Promise<IntelligenceInvokeOptions | undefined> {
+  const origin = await resolveHomeChatOrigin(options, context)
+  return origin && options ? markHomeChatInvoke(options, origin) : options
 }
 
 const AUTONOMOUS_INTELLIGENCE_CAPABILITIES: Record<string, true> = {
@@ -1411,7 +1424,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         }
 
         const { capabilityId, payload, options } = data
-        const scopedOptions = bindPluginInvokeCaller(options, context)
+        const scopedOptions = await withHomeChatPurpose(
+          bindPluginInvokeCaller(options, context),
+          context
+        )
         await assertAutonomousIntelligencePermission(capabilityId, data, context)
         ensureIntelligenceConfigLoaded()
         if (capabilityId === 'agent.run' || capabilityId === 'workflow.execute') {
@@ -1449,7 +1465,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         }
 
         const { capabilityId, payload, options } = data
-        const scopedOptions = bindPluginInvokeCaller(options, streamContext)
+        const scopedOptions = await withHomeChatPurpose(
+          bindPluginInvokeCaller(options, streamContext),
+          streamContext
+        )
         await assertAutonomousIntelligencePermission(capabilityId, data, streamContext)
         ensureIntelligenceConfigLoaded()
         const streamPayload = await applyHomeConversationInjection(

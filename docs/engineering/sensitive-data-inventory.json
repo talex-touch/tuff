@@ -249,22 +249,28 @@
     {
       "id": "home-conversation-content",
       "classification": "user-content",
-      "owner": "ConversationModule/SyncModule",
+      "owner": "ConversationModule/ConversationWorkspaceService/FileReviewService/SyncModule",
       "storageLocations": [
         "database.db: conversations/conversation_messages",
         "database.db: conversation_sync_state (opaque ids, dirty revisions, and deletion timestamps only)",
+        "database.db local-only: conversation_workspaces, conversation_queued_inputs, conversation_workspace_receipts, conversation_attachments, conversation_message_attachments, conversation_file_reviews",
+        "main-owned userData/conversation-attachments/<sha256(conversationId)> regular UUID image copies; original user files excluded",
         "Nexus sync payload/blob storage (device-key encrypted ciphertext)"
       ],
-      "writers": ["typed Conversation SDK", "main-owned encrypted sync apply"],
+      "writers": ["host-only typed Conversation/Agent Workspace/Review SDKs", "Main queue admission and bounded canonical message projection", "authorized file tool before/after review lifecycle", "main-owned encrypted sync apply"],
       "readers": ["host conversation UI", "main-owned encrypted sync collector"],
-      "exportPolicy": "account/device cloud sync only as device-key encrypted per-conversation payloads; never plaintext logs, analytics, ordinary config, or plugin storage",
-      "deletionPolicy": "local delete transaction writes a durable tombstone; sync acknowledgement clears the local marker after the encrypted remote delete is accepted",
-      "retentionPolicy": "until explicit conversation deletion or app-data reset; tombstones persist only until sync acknowledgement",
-      "rendererExposure": "typed conversation list/detail DTOs to host renderer only; plugins are rejected at the transport boundary",
+      "exportPolicy": "account/device cloud sync only as device-key encrypted per-conversation public content; outgoing and incoming metadata allowlists exclude native pointers, project roots, queue/runtime/approval authority, private attachment paths and previews, review snapshots and credentials; local workspace/review tables never portable or ordinary-exported; no plaintext logs, analytics, config or plugin storage",
+      "deletionPolicy": "both local and sync deletion fence new admission, cancel and settle active execution, await rollback, then delete the root/tombstone in the existing primary writer transaction; FK cascade clears workspace/queue/receipt/attachment/review rows including private snapshot payloads; after commit remove only the Main-owned hashed attachment directory and regular UUID images; original project files, parent/other sessions and external native JSONL files are never deleted",
+      "retentionPolicy": "until explicit conversation deletion or app-data reset; queues capped at 8 inputs and start held after restart; attachment images capped at 10 MiB each; review snapshots capped at 16 MiB per path, textual preview at 512 KiB with bounded line/LCS work; sensitive credential/auth content is explicitly non-reversible and never snapshotted; tombstones persist only until sync acknowledgement",
+      "rendererExposure": "host-only typed public conversation/workspace/review DTOs and owned tfile image descriptors; no snapshot bytes, private roots, native pointers, saved grants, API keys or OAuth credentials; plugins rejected at every transport boundary",
       "portable": false,
-      "migrationStatus": "encrypted-per-conversation-sync-with-durable-tombstones",
+      "migrationStatus": "additive-0052-primary-owned; no auxiliary copy or second SQLite writer; encrypted public conversation sync unchanged",
       "evidence": [
         "apps/core-app/src/main/modules/conversation/conversation-store.ts#symbol=applyConversationSyncSnapshot",
+        "apps/core-app/src/main/modules/conversation/workspace-service.ts#symbol=ConversationWorkspaceService",
+        "apps/core-app/src/main/modules/conversation/workspace-runner.ts#symbol=ConversationWorkspaceRunner",
+        "apps/core-app/src/main/modules/conversation/file-review-service.ts#symbol=FileReviewService",
+        "apps/core-app/src/main/modules/conversation/workspace-attachments.ts#symbol=WorkspaceAttachmentStore",
         "apps/core-app/src/main/modules/sync/index.ts#symbol=collectStorageSnapshots"
       ]
     },

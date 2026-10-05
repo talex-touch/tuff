@@ -21,6 +21,7 @@ import {
   type StableToolErrorProjection
 } from '../tool-error-projection'
 import { isApprovalRequiredControlError } from '../pi-agent-runtime-control-error'
+import type { PiWorkspaceAuthority } from '../pi-agent-runtime-host'
 
 const toolRegistryLog = createLogger('Intelligence').child('ToolRegistry')
 const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')
@@ -37,6 +38,13 @@ export interface ToolExecutionContext {
   workingDirectory?: string
   signal?: AbortSignal
   errorProjection?: 'stable'
+  /**
+   * Main-only conversation/turn/project authority, passed explicitly by the Pi runtime host after
+   * its gate and `assertAuthority()`. Never derived from task ids, agent ids or request metadata.
+   * When present, `taskId` is the persisted run id and `workingDirectory` that run's cwd; file
+   * mutations then run through the conversation file review lifecycle.
+   */
+  workspace?: PiWorkspaceAuthority
 }
 
 /**

@@ -44,7 +44,14 @@ export function collectMessageAttachments(
   return messages.flatMap((message) => message.attachments ?? [])
 }
 
-function decode(attachment: IntelligenceMessageAttachment): { bytes: Buffer; ext: string } | null {
+/**
+ * One attachment as a validated image: MIME type from the verified data-URL prefix, the base64
+ * body and its decoded bytes within the per-attachment ceiling; `null` for anything else. CLI
+ * spills and the API adapters' image parts both go through it, so one rule decides what is sent.
+ */
+export function decodeImageAttachment(
+  attachment: IntelligenceMessageAttachment
+): { bytes: Buffer; ext: string; mediaType: string; base64: string } | null {
   const match = DATA_URL.exec(attachment.dataUrl ?? '')
   if (!match) {
     spillLog.warn('Skipping attachment: not a supported image data URL', {
@@ -68,7 +75,7 @@ function decode(attachment: IntelligenceMessageAttachment): { bytes: Buffer; ext
     return null
   }
 
-  return { bytes, ext: EXTENSIONS[mimeSubtype] ?? 'png' }
+  return { bytes, ext: EXTENSIONS[mimeSubtype] ?? 'png', mediaType: `image/${mimeSubtype}`, base64 }
 }
 
 /**
@@ -85,7 +92,7 @@ export async function spillAttachments(
   const paths: string[] = []
 
   for (const attachment of attachments) {
-    const decoded = decode(attachment)
+    const decoded = decodeImageAttachment(attachment)
     if (!decoded) continue
 
     const path = join(tmpdir(), `tuff-attach-${randomUUID()}.${decoded.ext}`)

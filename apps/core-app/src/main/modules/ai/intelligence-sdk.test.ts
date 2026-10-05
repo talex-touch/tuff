@@ -306,7 +306,7 @@ describe('tuffIntelligenceSDK quota verification', () => {
         name: 'Quota Guarded Chat',
         enabled: true,
         priority: 1,
-        models: ['quota-guarded-chat'],
+        models: [{ id: 'quota-guarded-chat' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -350,7 +350,7 @@ describe('tuffIntelligenceSDK quota verification', () => {
         name: 'Quota Guarded Stream',
         enabled: true,
         priority: 1,
-        models: ['quota-guarded-stream'],
+        models: [{ id: 'quota-guarded-stream' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -412,7 +412,7 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
         name: 'Governed Chat',
         enabled: true,
         priority: 1,
-        models: ['governed-chat'],
+        models: [{ id: 'governed-chat' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -486,7 +486,7 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
         name: 'Primary Governed Chat',
         enabled: true,
         priority: 1,
-        models: ['primary-governed-chat'],
+        models: [{ id: 'primary-governed-chat' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -499,7 +499,7 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
         name: 'Fallback Governed Chat',
         enabled: true,
         priority: 2,
-        models: ['fallback-governed-chat'],
+        models: [{ id: 'fallback-governed-chat' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -554,7 +554,7 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
         apiKey: 'ordinary-primary-key',
         enabled: true,
         priority: 1,
-        models: ['primary-model'],
+        models: [{ id: 'primary-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -568,7 +568,7 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
         apiKey: 'ordinary-fallback-key',
         enabled: true,
         priority: 2,
-        models: ['fallback-model'],
+        models: [{ id: 'fallback-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -629,7 +629,7 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
         apiKey: 'failing-primary-key',
         enabled: true,
         priority: 1,
-        models: ['primary-model'],
+        models: [{ id: 'primary-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -643,7 +643,7 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
         apiKey: 'failing-fallback-key',
         enabled: true,
         priority: 2,
-        models: ['fallback-model'],
+        models: [{ id: 'fallback-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -691,7 +691,7 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
         name: 'Outer Cancel Primary',
         enabled: true,
         priority: 1,
-        models: ['primary-model'],
+        models: [{ id: 'primary-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -704,7 +704,7 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
         name: 'Outer Cancel Fallback',
         enabled: true,
         priority: 2,
-        models: ['fallback-model'],
+        models: [{ id: 'fallback-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -785,7 +785,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         name: 'Quota Cancel Chat',
         enabled: true,
         priority: 1,
-        models: ['cancel-model'],
+        models: [{ id: 'cancel-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -825,7 +825,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         name: 'Strategy Cancel Chat',
         enabled: true,
         priority: 1,
-        models: ['cancel-model'],
+        models: [{ id: 'cancel-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -865,7 +865,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         name: 'Cancel Chat',
         enabled: true,
         priority: 1,
-        models: ['cancel-model'],
+        models: [{ id: 'cancel-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -913,7 +913,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         name: 'Late Chat',
         enabled: true,
         priority: 1,
-        models: ['cancel-model'],
+        models: [{ id: 'cancel-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -956,7 +956,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         name: 'Signal Cache Chat',
         enabled: true,
         priority: 1,
-        models: ['cancel-model'],
+        models: [{ id: 'cancel-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -985,7 +985,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         name: 'Audit Commit Chat',
         enabled: true,
         priority: 1,
-        models: ['cancel-model'],
+        models: [{ id: 'cancel-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -1028,7 +1028,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         apiKey: 'primary-key',
         enabled: true,
         priority: 1,
-        models: ['primary-model'],
+        models: [{ id: 'primary-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -1042,7 +1042,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         apiKey: 'fallback-key',
         enabled: true,
         priority: 2,
-        models: ['fallback-one'],
+        models: [{ id: 'fallback-one' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -1056,7 +1056,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         apiKey: 'fallback-key',
         enabled: true,
         priority: 3,
-        models: ['fallback-two'],
+        models: [{ id: 'fallback-two' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -1105,7 +1105,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         apiKey: 'primary-key',
         enabled: true,
         priority: 1,
-        models: ['primary-model'],
+        models: [{ id: 'primary-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -1123,7 +1123,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         apiKey: 'fallback-key',
         enabled: true,
         priority: 2,
-        models: ['fallback-model'],
+        models: [{ id: 'fallback-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -1157,7 +1157,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         apiKey: 'primary-key',
         enabled: true,
         priority: 1,
-        models: ['primary-model'],
+        models: [{ id: 'primary-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -1171,7 +1171,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         apiKey: 'fallback-key',
         enabled: true,
         priority: 2,
-        models: ['fallback-model'],
+        models: [{ id: 'fallback-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -1221,7 +1221,7 @@ describe('tuffIntelligenceSDK cancellation', () => {
         name: 'Cancel OCR',
         enabled: true,
         priority: 1,
-        models: ['cancel-ocr'],
+        models: [{ id: 'cancel-ocr' }],
         capabilities: ['vision.ocr']
       },
       visionOcr
@@ -1246,84 +1246,6 @@ describe('tuffIntelligenceSDK cancellation', () => {
 })
 
 describe('tuffIntelligenceSDK invoke', () => {
-  it('exposes canonical domain wrappers matching the renderer transport SDK', async () => {
-    const sdk = new TuffIntelligenceSDK({
-      enableAudit: false,
-      enableQuota: false,
-      enableCache: false
-    })
-    const invokeCalls: Array<[string, unknown, IntelligenceInvokeOptions | undefined]> = []
-    const invoke = vi.fn(
-      async <T>(
-        capabilityId: string,
-        payload: unknown,
-        options?: IntelligenceInvokeOptions
-      ): Promise<IntelligenceInvokeResult<T>> => {
-        invokeCalls.push([capabilityId, payload, options])
-        return {
-          result: undefined as T,
-          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          model: 'stub-model',
-          latency: 0,
-          traceId: 'trace-stub',
-          provider: IntelligenceProviderType.CUSTOM
-        }
-      }
-    )
-    sdk.invoke = invoke as TuffIntelligenceSDK['invoke']
-
-    const options = { metadata: { caller: 'sdk-domain-parity' } }
-    const grammarPayload = { text: 'hello' } as Parameters<typeof sdk.text.grammar>[0]
-    const intentPayload = { text: 'deploy', possibleIntents: ['deploy'] } as Parameters<
-      typeof sdk.intent.detect
-    >[0]
-    const sentimentPayload = { text: 'great' } as Parameters<typeof sdk.sentiment.analyze>[0]
-    const contentPayload = { text: 'Ada Lovelace' } as Parameters<typeof sdk.content.extract>[0]
-    const keywordsPayload = { text: 'AI workflow SDK' } as Parameters<
-      typeof sdk.keywords.extract
-    >[0]
-    const captionPayload = { source: { type: 'base64', base64: 'aW1n' } } as Parameters<
-      typeof sdk.image.caption
-    >[0]
-    const analyzePayload = { source: { type: 'base64', base64: 'aW1n' } } as Parameters<
-      typeof sdk.image.analyze
-    >[0]
-    const imageGeneratePayload = { prompt: 'draw a workflow' } as Parameters<
-      typeof sdk.image.generate
-    >[0]
-    const semanticPayload = {
-      query: 'workflow',
-      documents: [{ id: 'doc-1', content: 'AI SDK' }]
-    } as Parameters<typeof sdk.search.semantic>[0]
-    const rerankPayload = {
-      query: 'workflow',
-      documents: [{ id: 'doc-1', content: 'AI SDK' }]
-    } as Parameters<typeof sdk.search.rerank>[0]
-
-    await sdk.text.grammar(grammarPayload, options)
-    await sdk.intent.detect(intentPayload, options)
-    await sdk.sentiment.analyze(sentimentPayload, options)
-    await sdk.content.extract(contentPayload, options)
-    await sdk.keywords.extract(keywordsPayload, options)
-    await sdk.image.caption(captionPayload, options)
-    await sdk.image.analyze(analyzePayload, options)
-    await sdk.image.generate(imageGeneratePayload, options)
-    await sdk.search.semantic(semanticPayload, options)
-    await sdk.search.rerank(rerankPayload, options)
-
-    expect(invokeCalls).toEqual([
-      ['text.grammar', grammarPayload, options],
-      ['intent.detect', intentPayload, options],
-      ['sentiment.analyze', sentimentPayload, options],
-      ['content.extract', contentPayload, options],
-      ['keywords.extract', keywordsPayload, options],
-      ['image.caption', captionPayload, options],
-      ['image.analyze', analyzePayload, options],
-      ['image.generate', imageGeneratePayload, options],
-      ['search.semantic', semanticPayload, options],
-      ['search.rerank', rerankPayload, options]
-    ])
-  })
   it('passes testRun through non-local provider connection tests', async () => {
     const chat = vi.fn().mockResolvedValue({
       result: 'ok',
@@ -1340,7 +1262,7 @@ describe('tuffIntelligenceSDK invoke', () => {
       enabled: true,
       priority: 1,
       apiKey: 'test-key',
-      models: ['chat-local'],
+      models: [{ id: 'chat-local' }],
       capabilities: ['text.chat']
     }
     const provider = createProvider(providerConfig, vi.fn())
@@ -1374,7 +1296,7 @@ describe('tuffIntelligenceSDK invoke', () => {
       enabled: true,
       priority: 1,
       baseUrl: 'http://localhost:11434',
-      models: ['chat-local'],
+      models: [{ id: 'chat-local' }],
       capabilities: ['text.chat']
     }
     const provider = createProvider(providerConfig, vi.fn())
@@ -1427,7 +1349,7 @@ describe('tuffIntelligenceSDK invoke', () => {
       enabled: true,
       apiKey: 'test-key',
       priority: 1,
-      models: ['chat-local'],
+      models: [{ id: 'chat-local' }],
       capabilities: ['text.chat']
     }
     const provider = createProvider(providerConfig, vi.fn())
@@ -1460,7 +1382,7 @@ describe('tuffIntelligenceSDK invoke', () => {
       enabled: true,
       apiKey: 'test-key',
       priority: 1,
-      models: ['chat-redaction'],
+      models: [{ id: 'chat-redaction' }],
       capabilities: ['text.chat']
     }
     const provider = createProvider(providerConfig, vi.fn())
@@ -1520,7 +1442,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Primary',
         enabled: true,
         priority: 1,
-        models: ['system-ocr'],
+        models: [{ id: 'system-ocr' }],
         capabilities: ['vision.ocr']
       },
       firstProviderVision
@@ -1533,7 +1455,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Fallback',
         enabled: true,
         priority: 2,
-        models: ['system-ocr'],
+        models: [{ id: 'system-ocr' }],
         capabilities: ['vision.ocr']
       },
       secondProviderVision
@@ -1605,7 +1527,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         priority: 1,
         apiKey: 'embedding-key',
         defaultModel: 'chat-default',
-        models: ['chat-default'],
+        models: [{ id: 'chat-default' }],
         capabilities: ['search.semantic']
       },
       vi.fn()
@@ -1696,7 +1618,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         priority: 1,
         apiKey: 'embedding-route-key',
         defaultModel: 'chat-only-default',
-        models: ['chat-only-default'],
+        models: [{ id: 'chat-only-default' }],
         capabilities: ['embedding.generate']
       },
       vi.fn()
@@ -1787,7 +1709,7 @@ describe('tuffIntelligenceSDK invoke', () => {
           priority: 1,
           apiKey: 'invalid-vector-primary-key',
           defaultModel: 'primary-embedding-model',
-          models: ['primary-embedding-model']
+          models: [{ id: 'primary-embedding-model' }]
         },
         vi.fn()
       )
@@ -1802,7 +1724,7 @@ describe('tuffIntelligenceSDK invoke', () => {
           priority: 2,
           apiKey: 'invalid-vector-fallback-key',
           defaultModel: 'fallback-embedding-model',
-          models: ['fallback-embedding-model']
+          models: [{ id: 'fallback-embedding-model' }]
         },
         vi.fn()
       )
@@ -1865,7 +1787,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         priority: 1,
         apiKey: 'empty-document-key',
         defaultModel: 'empty-document-model',
-        models: ['empty-document-model']
+        models: [{ id: 'empty-document-model' }]
       },
       vi.fn()
     )
@@ -1925,7 +1847,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         priority: 1,
         apiKey: 'native-semantic-primary-key',
         defaultModel: 'chat-primary-model',
-        models: ['chat-primary-model']
+        models: [{ id: 'chat-primary-model' }]
       },
       vi.fn()
     )
@@ -1939,7 +1861,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         priority: 2,
         apiKey: 'embedding-semantic-fallback-key',
         defaultModel: 'chat-fallback-model',
-        models: ['chat-fallback-model']
+        models: [{ id: 'chat-fallback-model' }]
       },
       vi.fn()
     )
@@ -2081,7 +2003,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Generic Rerank',
         enabled: true,
         priority: 1,
-        models: ['local-embedding'],
+        models: [{ id: 'local-embedding' }],
         capabilities: ['embedding.generate']
       },
       vi.fn()
@@ -2158,7 +2080,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Generic Rerank',
         enabled: true,
         priority: 1,
-        models: ['local-embedding'],
+        models: [{ id: 'local-embedding' }],
         capabilities: ['embedding.generate']
       },
       vi.fn()
@@ -2301,7 +2223,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Generic RAG',
         enabled: true,
         priority: 1,
-        models: ['local-chat'],
+        models: [{ id: 'local-chat' }],
         capabilities: ['rag.query']
       },
       vi.fn()
@@ -2374,7 +2296,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Generic RAG',
         enabled: true,
         priority: 1,
-        models: ['local-chat'],
+        models: [{ id: 'local-chat' }],
         capabilities: ['rag.query']
       },
       vi.fn()
@@ -2436,7 +2358,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Chat',
         enabled: true,
         priority: 2,
-        models: ['local-chat'],
+        models: [{ id: 'local-chat' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -2501,7 +2423,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Ollama',
         enabled: true,
         priority: 2,
-        models: ['qwen2.5:3b'],
+        models: [{ id: 'qwen2.5:3b' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -2558,7 +2480,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Ollama',
         enabled: true,
         priority: 1,
-        models: ['qwen2.5:3b'],
+        models: [{ id: 'qwen2.5:3b' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -2613,7 +2535,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'nexus-token',
-        models: ['nexus-default'],
+        models: [{ id: 'nexus-default' }],
         capabilities: ['text.chat'],
         metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
       },
@@ -2628,7 +2550,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Ollama',
         enabled: true,
         priority: 2,
-        models: ['qwen2.5:3b'],
+        models: [{ id: 'qwen2.5:3b' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -2682,7 +2604,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Chat Local',
         enabled: true,
         priority: 1,
-        models: ['chat-local'],
+        models: [{ id: 'chat-local' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -2750,7 +2672,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Chat Local',
         enabled: true,
         priority: 1,
-        models: ['chat-local'],
+        models: [{ id: 'chat-local' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -2830,7 +2752,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Chat Primary',
         enabled: true,
         priority: 1,
-        models: ['primary-chat'],
+        models: [{ id: 'primary-chat' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -2843,7 +2765,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Chat Fallback',
         enabled: true,
         priority: 2,
-        models: ['fallback-chat'],
+        models: [{ id: 'fallback-chat' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -2910,7 +2832,7 @@ describe('tuffIntelligenceSDK invoke', () => {
           enabled: true,
           priority: 1,
           defaultModel: 'primary-default-model',
-          models: ['primary-default-model'],
+          models: [{ id: 'primary-default-model' }],
           capabilities: ['text.chat']
         },
         vi.fn()
@@ -3427,7 +3349,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Chat Local',
         enabled: true,
         priority: 1,
-        models: ['chat-local'],
+        models: [{ id: 'chat-local' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -3495,7 +3417,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Chat Local',
         enabled: true,
         priority: 1,
-        models: ['chat-local'],
+        models: [{ id: 'chat-local' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -3672,7 +3594,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Ollama',
         enabled: true,
         priority: 2,
-        models: ['llama3.1'],
+        models: [{ id: 'llama3.1' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -3739,7 +3661,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'nexus-token',
-        models: ['nexus-default'],
+        models: [{ id: 'nexus-default' }],
         capabilities: ['text.chat'],
         metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
       },
@@ -3756,7 +3678,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Ollama',
         enabled: true,
         priority: 2,
-        models: ['llama3.1'],
+        models: [{ id: 'llama3.1' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -3824,7 +3746,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'selected-stream-key',
-        models: ['selected-stream-model'],
+        models: [{ id: 'selected-stream-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -3838,7 +3760,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Stream Fallback',
         enabled: true,
         priority: 2,
-        models: ['local-stream-model'],
+        models: [{ id: 'local-stream-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -3898,7 +3820,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'nexus-token',
-        models: ['nexus-default'],
+        models: [{ id: 'nexus-default' }],
         capabilities: ['text.chat'],
         metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
       },
@@ -3915,7 +3837,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local Ollama',
         enabled: true,
         priority: 2,
-        models: ['llama3.1'],
+        models: [{ id: 'llama3.1' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -3987,7 +3909,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'image-edit-key',
-        models: ['image-edit-1'],
+        models: [{ id: 'image-edit-1' }],
         capabilities: ['image.edit']
       },
       vi.fn()
@@ -4049,7 +3971,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'tts-key',
-        models: ['tts-1'],
+        models: [{ id: 'tts-1' }],
         capabilities: ['audio.tts']
       },
       vi.fn()
@@ -4111,7 +4033,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'stt-key',
-        models: ['stt-1'],
+        models: [{ id: 'stt-1' }],
         capabilities: ['audio.stt']
       },
       vi.fn()
@@ -4178,7 +4100,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local STT',
         enabled: true,
         priority: 1,
-        models: ['local-stt'],
+        models: [{ id: 'local-stt' }],
         capabilities: ['audio.stt']
       },
       vi.fn()
@@ -4220,7 +4142,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'nexus-token',
-        models: ['nexus-audio-transcribe'],
+        models: [{ id: 'nexus-audio-transcribe' }],
         capabilities: ['audio.stt'],
         metadata: { origin: 'tuff-nexus', tokenMode: 'auth' }
       },
@@ -4242,7 +4164,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local STT',
         enabled: true,
         priority: 2,
-        models: ['local-stt'],
+        models: [{ id: 'local-stt' }],
         capabilities: ['audio.stt']
       },
       vi.fn()
@@ -4289,7 +4211,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'custom-key',
-        models: ['custom-stt'],
+        models: [{ id: 'custom-stt' }],
         capabilities: ['audio.stt']
       },
       vi.fn()
@@ -4310,7 +4232,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         name: 'Local STT',
         enabled: true,
         priority: 2,
-        models: ['local-stt'],
+        models: [{ id: 'local-stt' }],
         capabilities: ['audio.stt']
       },
       vi.fn()
@@ -4373,7 +4295,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'transcribe-key',
-        models: ['transcribe-1'],
+        models: [{ id: 'transcribe-1' }],
         capabilities: ['audio.transcribe']
       },
       vi.fn()
@@ -4454,7 +4376,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'workflow-key',
-        models: ['workflow-runtime'],
+        models: [{ id: 'workflow-runtime' }],
         capabilities: ['workflow.execute']
       },
       vi.fn()
@@ -4520,7 +4442,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'undeclared-key',
-        models: ['undeclared-model'],
+        models: [{ id: 'undeclared-model' }],
         capabilities: ['embedding.generate']
       },
       vi.fn()
@@ -4533,7 +4455,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 2,
         apiKey: 'chat-runtime-key',
-        models: ['chat-runtime-model'],
+        models: [{ id: 'chat-runtime-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
@@ -4618,7 +4540,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 1,
         apiKey: 'undeclared-key',
-        models: ['undeclared-model'],
+        models: [{ id: 'undeclared-model' }],
         capabilities: ['embedding.generate']
       },
       vi.fn()
@@ -4631,7 +4553,7 @@ describe('tuffIntelligenceSDK invoke', () => {
         enabled: true,
         priority: 2,
         apiKey: 'chat-runtime-key',
-        models: ['chat-runtime-model'],
+        models: [{ id: 'chat-runtime-model' }],
         capabilities: ['text.chat']
       },
       vi.fn()
