@@ -1,4 +1,5 @@
 import type { IntelligenceInvokeResult } from '@talex-touch/utils/types/intelligence'
+import { INTELLIGENCE_CONVERSATION_TITLE_OPERATION } from '@talex-touch/utils/types/intelligence'
 import { describe, expect, it, vi } from 'vitest'
 import type { TitleChatSdk } from './conversation-title'
 import {

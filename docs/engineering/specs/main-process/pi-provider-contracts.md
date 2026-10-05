@@ -114,6 +114,11 @@ catalogue `pi update` maintains). `auth.json` is never opened.
   ship a key by accident. Warn lines carry a fixed reason string, never a
   caught error: V8's `JSON.parse` message quotes source text, which here is
   credential-bearing.
+- **Provider bindings are typed**: `IntelligenceProviderConfig.models` holds
+  `IntelligenceModelBinding` objects (`{ id: 'system-translation' }`), not bare
+  model IDs. Native catalogue readers may return string IDs, but configuration
+  assembly and test Providers convert them to bindings before model resolution;
+  the same contract applies to internal OCR and translation Providers.
 - **Sync on purpose**: `getProviderModelOptions` feeds the plugin host through
   a frozen sync dependency (`plugin-intelligence-host-service.ts`), so the
   reader stays `readFileSync` + an mtime/size-signature cache instead of going

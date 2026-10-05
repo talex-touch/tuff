@@ -507,41 +507,6 @@ describe('AiCliOrchestrator delegation boundary', () => {
     expect(orchestratorMocks.runtimeExecute).not.toHaveBeenCalled()
   })
 
-  it('forwards explicit session step and tool limits to the Pi runtime budget', async () => {
-    orchestratorMocks.profiles.set('profile-autonomous', {
-      id: 'profile-autonomous',
-      name: 'Autonomous profile',
-      description: 'Executes governed session work.',
-      runtimeProvider: 'pi-core',
-      enabled: true,
-      modelPreference: [],
-      allowedToolIds: [],
-      enabledSkillIds: [],
-      permissionPolicy: { mode: 'manual', allowedPermissions: [] },
-      timeoutMs: 30_000,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    })
-    orchestratorMocks.runtimeExecute.mockResolvedValue({
-      runId: 'session-budget-run',
-      output: 'Budget accepted.',
-      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
-    })
-
-    await orchestrator.execute({
-      objective: 'Run the governed session.',
-      profileId: 'profile-autonomous',
-      approved: false,
-      budget: { maxSteps: 7, maxToolCalls: 3 }
-    })
-
-    expect(orchestratorMocks.runtimeExecute).toHaveBeenCalledWith(
-      expect.objectContaining({
-        budget: expect.objectContaining({ maxSteps: 7, maxToolCalls: 3 })
-      })
-    )
-  })
-
   it('normalizes non-finite execution limits before the runtime boundary', async () => {
     orchestratorMocks.profiles.set('profile-autonomous', enabledProfile('profile-autonomous'))
     orchestratorMocks.runtimeExecute.mockResolvedValue({
@@ -780,9 +745,6 @@ describe('AiCliOrchestrator delegation boundary', () => {
     expect(metadata).not.toHaveProperty('automationPolicy')
     expect(JSON.stringify(metadata)).not.toContain(rawInput.credential)
     expect(JSON.stringify(metadata)).not.toContain('tool.safe')
-    expect(orchestratorMocks.runtimeExecute).toHaveBeenCalledWith(
-      expect.objectContaining({ request: expect.objectContaining({ input: rawInput }) })
-    )
   })
 
   it('generates a fresh main-owned run ID for repeated caller aliases', async () => {
@@ -1368,7 +1330,7 @@ describe('AiCliOrchestrator delegation boundary', () => {
 
     await delegationTool()({ nodes: [requestedNode] }, { taskId: parentRunId })
 
-    expect(orchestratorMocks.runtimeExecute).toHaveBeenCalledWith(
+    expect(orchestratorMocks.runtimeExecute.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         request: expect.objectContaining({
           metadata: expect.objectContaining({

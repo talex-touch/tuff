@@ -86,7 +86,7 @@ const INTERNAL_SYSTEM_TRANSLATION_PROVIDER: IntelligenceProviderConfig = {
   name: 'macOS Translation',
   enabled: true,
   priority: 0,
-  models: ['system-translation'],
+  models: [{ id: 'system-translation' }],
   defaultModel: 'system-translation',
   timeout: 30_000,
   capabilities: ['text.translate'],
