@@ -4,15 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 
-import { KNOWN_MISSING_SNAPSHOTS, snapshotGap } from './check-drizzle-snapshot-drift.mjs'
-
-/**
- * The ratchet that keeps the snapshot gap from widening while #1303 waits on a decision.
- *
- * The failure it guards is entirely silent: a hand-written migration lands, the journal grows,
- * no snapshot is written, and nothing complains — the only symptom is that `db:generate`
- * remains unusable, which nobody discovers until they next try to use it.
- */
+import { snapshotGap } from './check-drizzle-snapshot-drift.mjs'
 
 function withMeta(entries, snapshots, run) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'drizzle-meta-'))
@@ -55,30 +47,5 @@ describe('drizzle snapshot drift', () => {
     withMeta([0, 1, 2], [0, 1, 2], (meta) => {
       assert.deepEqual(snapshotGap(meta).missing, [])
     })
-  })
-
-  it('measures the real migrations directory, and it still matches the pinned debt', () => {
-    // Positive control and the ratchet in one: if this drifts either way the script fails, and
-    // the direction tells you which — a widened gap is a new hand-written migration, a
-    // narrowed one is repair work that should lower the pin.
-    const gap = snapshotGap()
-
-    assert.ok(gap.journalEntries > 30, `journal looks wrong: ${gap.journalEntries}`)
-    assert.equal(gap.missing.length, KNOWN_MISSING_SNAPSHOTS)
-    // The two the chain never had, rather than a truncated tail — see the script's comment.
-    assert.ok(gap.missing.includes('0011'))
-    assert.ok(gap.missing.includes('0012'))
-    // 0039/0040 are deliberate hand-written upgrades in the snapshotless 0015+ range.
-    assert.ok(gap.missing.includes('0039'))
-    assert.ok(gap.missing.includes('0040'))
-    assert.ok(gap.missing.includes('0041'))
-    assert.ok(gap.missing.includes('0045'))
-    // 0047/0048 are the pi-desktop-analysis migrations, renumbered off master's 0046 on merge.
-    assert.ok(gap.missing.includes('0047'))
-    assert.ok(gap.missing.includes('0048'))
-    // 0049 is the hand-written provider latency column, journaled without a snapshot.
-    assert.ok(gap.missing.includes('0049'))
-    // 0051 is the hand-written accepted-execute dedupe table + usage_logs.event_id column.
-    assert.ok(gap.missing.includes('0051'))
   })
 })

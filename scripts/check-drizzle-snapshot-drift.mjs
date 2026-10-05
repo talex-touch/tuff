@@ -87,8 +87,14 @@ const META = path.join(REPO_ROOT, 'apps/core-app/resources/db/migrations/meta')
  * counting. Both homes that create the tables — the migration chain and the aux `ensureAuxTables`
  * DDL plus its guarded ALTER — are pinned by usage-execute-events-schema.test.ts. This records
  * only the known gap; it does not regenerate or claim to repair snapshot history.
+ *
+ * Raised 38 → 39 on 2026-10-05 for the accepted PI workspace migration
+ * `0052_conversation_workspaces`: its queue, receipts, attachments and review tables follow the
+ * documented hand-written 0015+ policy. Its journal timestamp is the new maximum; the
+ * existing-profile migration and aux DDL are covered by the workspace storage contracts.
+ * This records that one known addition, not a repaired or regenerated snapshot chain.
  */
-export const KNOWN_MISSING_SNAPSHOTS = 38
+export const KNOWN_MISSING_SNAPSHOTS = 39
 
 export function snapshotGap(metaDir = META) {
   const journal = JSON.parse(readFileSync(path.join(metaDir, '_journal.json'), 'utf8'))
