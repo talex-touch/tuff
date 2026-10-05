@@ -14,7 +14,8 @@
 
   padding: 0 0.5rem;
   min-width: 80px;
-  height: 32px;
+  --tx-button-height: 32px;
+  height: var(--tx-button-height);
 
   user-select: none;
   /*
@@ -43,13 +44,6 @@
     --tx-button-radius: 999px;
   }
 
-  &.circle {
-    --tx-button-radius: 999px;
-    padding: 0;
-    min-width: 32px;
-    width: 32px;
-    height: 32px;
-  }
 
   &.circle.block {
     width: 100%;
@@ -307,7 +301,8 @@
 
   &.tx-size-sm {
     padding: 0 0.5rem;
-    height: 26px;
+    --tx-button-height: 26px;
+    height: var(--tx-button-height);
     min-width: 60px;
     font-size: 13px;
     --tx-button-radius: 10px;
@@ -315,15 +310,24 @@
 
   &.variant-flat.tx-size-sm {
     padding: 0 0.75rem;
-    height: 32px;
+    --tx-button-height: 32px;
+    height: var(--tx-button-height);
     min-width: 32px;
     font-size: 13px;
   }
 
   &.tx-size-lg {
     padding: 0 1.5rem;
-    height: 38px;
+    --tx-button-height: 38px;
+    height: var(--tx-button-height);
     font-size: 15px;
+  }
+  &.circle:not(.block) {
+    --tx-button-radius: 999px;
+    padding: 0;
+    min-width: var(--tx-button-height);
+    width: var(--tx-button-height);
+    height: var(--tx-button-height);
   }
 }
 

@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import type { TxSelectValue } from '@talex-touch/tuffex/select'
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 
 const { locale } = useI18n()
 const value = ref<TxSelectValue>('engineering')
+const controlId = useId()
 
 const labels = computed(() => {
   if (locale.value === 'zh') {
     return {
+      team: '团队',
       placeholder: '请选择',
       selected: '当前选中',
-      hint: '基础选择器会用选项 label 回填触发器文本。',
+      hint: '点击上方标签可聚焦选择器；id 和可访问名称直接传给内部输入框。',
       options: [
         { value: 'design', label: '设计团队' },
         { value: 'engineering', label: '工程团队' },
@@ -20,9 +22,10 @@ const labels = computed(() => {
   }
 
   return {
+    team: 'Team',
     placeholder: 'Please select',
     selected: 'Selected',
-    hint: 'The selected option label is mirrored into the trigger input.',
+    hint: 'Click the label to focus the select; id and accessible names reach its input directly.',
     options: [
       { value: 'design', label: 'Design team' },
       { value: 'engineering', label: 'Engineering team' },
@@ -33,8 +36,9 @@ const labels = computed(() => {
 </script>
 
 <template>
-  <div class="tx-demo tx-demo__col tx-demo--max-400">
-    <TuffSelect v-model="value" :placeholder="labels.placeholder">
+  <div class="tx-demo tx-demo__col tx-demo--max-400 not-prose">
+    <label :for="controlId">{{ labels.team }}</label>
+    <TuffSelect :id="controlId" v-model="value" :placeholder="labels.placeholder" :aria-label="labels.team">
       <TuffSelectItem
         v-for="option in labels.options"
         :key="option.value"

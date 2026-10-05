@@ -2,11 +2,10 @@
 import type { ProviderRegistryAdmin } from '~/composables/useProviderRegistryAdmin'
 import type { ProviderRegistryTab } from '~/utils/admin-provider-registry'
 import type { ProviderRegistryRecord, SceneRegistryRecord } from '~/utils/provider-registry-admin'
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import AdminConfirmDialog from '~/components/admin/AdminConfirmDialog.vue'
 import { useAdminFormat } from '~/composables/useAdminFormat'
 import { useProviderRegistryPanel } from '~/composables/useProviderRegistryPanel'
-import { isModalKey } from '~/utils/admin-provider-registry'
 import ProviderRegistryCheckDrawer from './ProviderRegistryCheckDrawer.vue'
 import ProviderRegistryHealthTab from './ProviderRegistryHealthTab.vue'
 import ProviderRegistryProviderDrawer from './ProviderRegistryProviderDrawer.vue'
@@ -31,16 +30,6 @@ const props = defineProps<{
 const { t } = useI18n()
 const format = useAdminFormat()
 const admin = props.admin
-
-// The confirm dialog can sit over a drawer. TxDrawer listens for Tab and Escape on
-// `document` whatever is on top, so keys the dialog has handled stop at <body>:
-// otherwise Escape closes the drawer too and Tab pulls focus back into it.
-function keepModalKeys(event: KeyboardEvent) {
-  if (isModalKey(event))
-    event.stopPropagation()
-}
-onMounted(() => document.body.addEventListener('keydown', keepModalKeys))
-onBeforeUnmount(() => document.body.removeEventListener('keydown', keepModalKeys))
 
 const activeTab = ref<{ refresh: () => Promise<void> } | null>(null)
 

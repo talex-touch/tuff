@@ -26,7 +26,6 @@ import {
   healthStatusLabel,
   HEALTH_LIST_DEFAULTS,
   invalidBindingReasonLabel,
-  isModalKey,
   providerMatchesSearch,
   readinessLabel,
   readinessTone,
@@ -328,21 +327,5 @@ describe('errors', () => {
     const transport = Object.assign(new Error('[PATCH] "/api/dashboard/provider-registry/providers/a": 500'), { data: null })
     expect(resolveProviderRegistryError(transport, en, 'Failed to update provider.')).toBe('Failed to update provider.')
     expect(resolveProviderRegistryError({ data: { message: 'Provider name is taken.' } }, en, 'Failed')).toBe('Provider name is taken.')
-  })
-})
-
-describe('keys a confirm dialog handles', () => {
-  const inModal = { closest: (selector: string) => (selector === '.tx-modal__overlay' ? {} : null) }
-  const inDrawer = { closest: () => null }
-
-  it('keeps Tab and Escape pressed inside a modal from reaching a drawer underneath', () => {
-    expect(isModalKey({ key: 'Escape', target: inModal as never })).toBe(true)
-    expect(isModalKey({ key: 'Tab', target: inModal as never })).toBe(true)
-  })
-
-  it('leaves other keys, and keys pressed in the drawer, alone', () => {
-    expect(isModalKey({ key: 'Enter', target: inModal as never })).toBe(false)
-    expect(isModalKey({ key: 'Escape', target: inDrawer as never })).toBe(false)
-    expect(isModalKey({ key: 'Escape', target: null })).toBe(false)
   })
 })

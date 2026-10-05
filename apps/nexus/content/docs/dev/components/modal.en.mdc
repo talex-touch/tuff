@@ -103,7 +103,7 @@ code: |
 - The overlay exposes `role="dialog"`, `aria-modal="true"`, and `tabindex="-1"`.
 - With the default header and non-empty `title`, the dialog links `aria-labelledby` to the generated heading.
 - Opening focuses the overlay root. Closing or unmounting restores the element focused before opening.
-- Tab and Shift+Tab cycle focus within the dialog (focus trap), so focus cannot reach the page behind the modal.
+- Tab and Shift+Tab cycle inside the topmost visible modal. Keyboard ownership follows live dialog semantics and z-index, so disabling the focused submit button does not let the drawer underneath consume Escape; the next Tab returns focus to the modal even if the browser moved it to `body`.
 - Backdrop click, Escape, and the close button all emit `update:modelValue(false)` followed by `close`.
 - With `fullscreen`, the overlay keeps its dialog semantics, focus trap, Escape handling and focus restore; only the layout changes — the panel stretches to the visible viewport and its header/body/footer become a fixed-bar column with the body scrolling.
 - The fullscreen panel covers the whole overlay, so there is no backdrop region left to click: Escape and the close button are the dismissals. Keep a visible close affordance in the header or footer.

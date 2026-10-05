@@ -1,5 +1,10 @@
 import type { TuffQuery } from '@talex-touch/utils/core-box'
 import type { ISortMiddleware, TuffItem } from '../types'
+import {
+  APP_DESTINATION_ITEM_IDS,
+  APP_DESTINATION_PROVIDER_ID,
+  resolveAppDestinationQuery
+} from '../../../../../shared/app-destinations'
 import { calculateSearchBehaviorScore } from '../usage-utils'
 
 const DEFAULT_KIND_BIAS: Record<string, number> = {
@@ -21,6 +26,9 @@ const APP_TITLE_PREFIX_INTENT_BONUS = 480_000
 const APP_TITLE_SUBSTRING_INTENT_BONUS = 180_000
 const APP_EXACT_TOKEN_INTENT_BONUS = 6_200_000
 const APP_PREFIX_TOKEN_INTENT_BONUS = 5_700_000
+// A cold-start preference below the smallest app-intent bonus (180,000).
+// It applies only to the host-owned destination matching the current query.
+const APP_DESTINATION_INTENT_BONUS = 90_000
 /**
  * Ceiling for the plugin-supplied `feature.priority` from a manifest.
  *
@@ -279,6 +287,20 @@ function getAppAliasIntentBonus(item: TuffItem, searchKey?: string): number {
   return hasSearchTokenPrefixMatch(item, normalizedKey) ? APP_PREFIX_TOKEN_INTENT_BONUS : 0
 }
 
+function getAppDestinationIntentBonus(item: TuffItem, searchKey?: string): number {
+  if (
+    !searchKey ||
+    item.source?.type !== 'system' ||
+    item.source.id !== APP_DESTINATION_PROVIDER_ID
+  )
+    return 0
+
+  const destination = resolveAppDestinationQuery(searchKey)
+  return destination?.searchable && item.id === APP_DESTINATION_ITEM_IDS[destination.id]
+    ? APP_DESTINATION_INTENT_BONUS
+    : 0
+}
+
 /**
  * Calculate match score based on title and source.id matching
  * @param item - TuffItem to calculate score for
@@ -427,7 +449,8 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
     recency * RECENCY_SCORE_MULTIPLIER +
     kindBias * KIND_SCORE_MULTIPLIER +
     appTitleIntentBonus +
-    appAliasIntentBonus
+    appAliasIntentBonus +
+    getAppDestinationIntentBonus(item, searchKey)
 
   return finalScore
 }

@@ -17,6 +17,11 @@ touching recommendation cache invalidation. Introduced by 08-06-reco-item-freshn
 - Default destination identity: `APP_DESTINATION_PROVIDER_ID`,
   `APP_DESTINATION_ITEM_ID_PREFIX` and `APP_DESTINATION_ITEM_IDS` in `shared/app-destinations.ts`.
   The provider and recommendation pool share them; main-window keeps its existing bare id.
+- Query ranking: `tuff-sorter.ts` adds 90,000 only when the source is the host's
+  `APP_DESTINATION_PROVIDER_ID` and the item id matches the destination resolved
+  from the current query. The bonus is below the smallest app-intent bonus
+  (180,000); it does not change aliases, pin partitions, usage history, or the
+  empty-query recommendation pool. Rebuilt items use the same identity check.
 
 ### 3. Contracts
 

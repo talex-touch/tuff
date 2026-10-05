@@ -124,17 +124,6 @@ function handlePageSizeChange(value: TxSelectModelValue) {
   emit('pageSizeChange', size)
 }
 
-// TxSelect has no prop that names its combobox. A wrapping <label> is not the
-// way out: label activation re-dispatches a click on the trigger's padding or
-// arrow to the input, and TxBaseAnchor toggles on every click it sees in the
-// capture phase, so the panel would open and close at once (read from the code,
-// not measured). The combobox is pointed at the visible label instead.
-// `role="combobox"` is TxSelect's tested accessibility contract, not a private
-// class name.
-function nameSizeSelect(instance: unknown) {
-  const root = (instance as { $el?: Element } | null)?.$el
-  root?.querySelector?.('[role="combobox"]')?.setAttribute('aria-labelledby', pageSizeLabelId)
-}
 </script>
 
 <template>
@@ -226,7 +215,7 @@ function nameSizeSelect(instance: unknown) {
     <div v-if="pageSizeOptions.length" class="tx-pagination__size">
       <span :id="pageSizeLabelId" class="tx-pagination__size-label">{{ pageSizeLabel }}</span>
       <TxSelect
-        :ref="nameSizeSelect"
+        :aria-labelledby="pageSizeLabelId"
         :model-value="pageSize"
         :options="pageSizeOptions"
         style="width: 88px"

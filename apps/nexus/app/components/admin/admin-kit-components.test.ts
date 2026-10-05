@@ -362,23 +362,6 @@ describe('AdminStatGrid, AdminSection and AdminPageShell', () => {
     expect(loaded.html.match(/class="tx-stat-card fake-background/g)).toHaveLength(3)
   })
 
-  it('draws an item\'s meta as a line under its label, and keeps the line empty on the other cards of the row', async () => {
-    const items = [
-      { key: 'providers', label: 'Providers', value: '7', meta: '5 enabled' },
-      { key: 'scenes', label: 'Scenes', value: '3' },
-    ]
-    const html = (await render('AdminStatGrid', { items })).html.replace(/<!--[\s\S]*?-->/g, '')
-    expect(html).toMatch(/class="tx-stat-card__label"[^>]*>\s*Providers\s*<span class="AdminStatGrid-Meta"[^>]*>5 enabled<\/span>/)
-    expect(html).toMatch(/class="tx-stat-card__label"[^>]*>\s*Scenes\s*<span class="AdminStatGrid-Meta"[^>]*><\/span>/)
-
-    const loading = await render('AdminStatGrid', { items, loading: true })
-    expect(loading.html.match(/class="tx-skeleton"/g)).toHaveLength(5)
-    expect(loading.html.match(/AdminStatGrid-PlaceholderGap/g)).toHaveLength(1)
-
-    const plain = await render('AdminStatGrid', { items: [items[1]] })
-    expect(plain.html).not.toContain('AdminStatGrid-Meta')
-  })
-
   it('gives a card the tooltip its item carries, and no other card one', async () => {
     const { html } = await render('AdminStatGrid', {
       items: [

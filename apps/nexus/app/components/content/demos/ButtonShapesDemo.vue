@@ -5,8 +5,8 @@ const { locale } = useI18n()
 
 const labels = computed(() => {
   if (locale.value === 'zh')
-    return { dashed: '虚线', plain: '朴素', round: '圆角' }
-  return { dashed: 'Dashed', plain: 'Plain', round: 'Round' }
+    return { dashed: '虚线', plain: '朴素', round: '圆角', small: '小号编辑', medium: '默认编辑', large: '大号编辑' }
+  return { dashed: 'Dashed', plain: 'Plain', round: 'Round', small: 'Small edit', medium: 'Default edit', large: 'Large edit' }
 })
 </script>
 
@@ -21,6 +21,8 @@ const labels = computed(() => {
     <TxButton round variant="primary">
       {{ labels.round }}
     </TxButton>
-    <TxButton circle icon="i-carbon-edit" />
+    <TxButton circle size="sm" icon="i-carbon-edit" :aria-label="labels.small" />
+    <TxButton circle icon="i-carbon-edit" :aria-label="labels.medium" />
+    <TxButton circle size="lg" icon="i-carbon-edit" :aria-label="labels.large" />
   </div>
 </template>

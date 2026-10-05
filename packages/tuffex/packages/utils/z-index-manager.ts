@@ -70,6 +70,27 @@ function parseCssZIndex(value: string): number | null {
   return n
 }
 
+/** Resolve keyboard ownership from live dialog semantics, including across source/dist instances. */
+export function isTopmostModalDialog(dialog: HTMLElement | null): boolean {
+  if (!dialog?.isConnected)
+    return false
+
+  const currentZIndex = parseCssZIndex(getComputedStyle(dialog).zIndex) ?? 0
+  const dialogs = dialog.ownerDocument.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]:not([aria-hidden="true"]):not([inert])')
+  for (const candidate of dialogs) {
+    if (candidate === dialog)
+      continue
+    const style = getComputedStyle(candidate)
+    if (style.display === 'none' || style.visibility === 'hidden')
+      continue
+    const candidateZIndex = parseCssZIndex(style.zIndex) ?? 0
+    if (candidateZIndex > currentZIndex
+      || (candidateZIndex === currentZIndex && (dialog.compareDocumentPosition(candidate) & Node.DOCUMENT_POSITION_FOLLOWING)))
+      return false
+  }
+  return true
+}
+
 function resolveSeedFromCssVar(): number | null {
   if (!hasWindow() || !hasDocument())
     return null

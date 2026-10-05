@@ -13,9 +13,9 @@ import { useAdminFieldControl } from '~/composables/useAdminFieldControl'
  *   marks the control `aria-invalid`.
  * - The label never wraps the control: a wrapping `<label>` makes `TxSelect` open
  *   and close at once. Pass `for` with the id of a control that forwards `id` to
- *   its `<input>` (TuffInput, TxSearchInput), or of a single `TxSelect` given that
- *   id by `v-admin-control-id`; without it the first combobox or input inside is
- *   pointed at the label through `aria-labelledby` (a `multiple` select's).
+ *   its control (TuffInput, TxSearchInput, single TxSelect); without it the first
+ *   combobox or input inside is pointed at the label through `aria-labelledby`
+ *   (a `multiple` select's).
  * - The field writes those three attributes on its control itself
  *   (`useAdminFieldControl`, shared with `AdminFilterField`), so the page does not
  *   bind them on the control as well. The slot's `labelId` and `hintId` are for a
