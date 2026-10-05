@@ -2,8 +2,8 @@ schema: comet.native.v4
 name: pi-desktop-agent-workspace-reuse
 language: zh-CN
 phase: archive
-status: active
-state_version: 28
+status: done
+state_version: 30
 brief: brief.md
 document_constraints_version: 2
 shape_confirmation_hash: 4028b94543d30af09c11ae3f671e49ecf4e3de3d5bc077bcddff5b65e0f40bb0
@@ -15,9 +15,9 @@ workspace:
   isolation: worktree
   change_branch: comet/pi-desktop-agent-workspace-reuse
   target_branch: task/chore/live-work-1003
-  finish: null
+  finish: merge
 loop:
-  stage: archive-ready
+  stage: done
   goal_cycle: 2
   iteration: 7
   attempt: 1
@@ -26,7 +26,7 @@ loop:
   no_progress_count: 0
   execution_failure_count: 0
   previous_unresolved_ids: []
-  next_action: archive
+  next_action: null
 acceptance:
   - id: A1
     source: brief.md
@@ -1241,5 +1241,5 @@ history_overflow:
     recovery: 0
 verification_result: pass
 verification_report: verification.md
-archived: false
+archived: true
 created_at: 2026-10-03T17:12:22.403Z
