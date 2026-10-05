@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { ComponentPublicInstance } from 'vue'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import type { TuffItem } from '@talex-touch/utils'
 import type { IFeatureCommand, IPluginFeature } from '@talex-touch/utils/plugin'
 import { TxButton } from '@talex-touch/tuffex/button'
@@ -140,57 +140,94 @@ const shortcutStatus = ref<ShortcutStatus | null>(null)
 const shortcutSaving = ref(false)
 const shortcutError = ref('')
 
+let latestShortcutRead = 0
+let latestShortcutSave = 0
+let shortcutViewDisposed = false
+
+async function refreshFeatureShortcut(): Promise<void> {
+  const pluginName = props.pluginName
+  const featureId = props.feature?.id
+  const request = ++latestShortcutRead
+  if (!pluginName || !featureId || shortcutSaving.value) return
+  try {
+    const bindings = await shortconApi.getFeatureShortcuts(pluginName)
+    if (
+      shortcutViewDisposed ||
+      request !== latestShortcutRead ||
+      shortcutSaving.value ||
+      props.pluginName !== pluginName ||
+      props.feature?.id !== featureId
+    )
+      return
+    const binding = bindings[featureId]
+    shortcutDraft.value = binding?.accelerator ?? ''
+    shortcutStatus.value = binding?.status ?? null
+  } catch (error) {
+    if (!shortcutViewDisposed && request === latestShortcutRead) {
+      featureDetailLog.warn('Failed to load the feature shortcut', error)
+    }
+  }
+}
+
+const stopShortcutChanges = shortconApi.onChanged(() => {
+  void refreshFeatureShortcut()
+})
+
 watch(
   () => [props.pluginName, props.feature?.id] as const,
-  async ([pluginName, featureId]) => {
+  () => {
+    ++latestShortcutSave
+    shortcutSaving.value = false
     shortcutDraft.value = ''
     shortcutStatus.value = null
     shortcutError.value = ''
-    if (!pluginName || !featureId) return
-
-    try {
-      const bindings = await shortconApi.getFeatureShortcuts(pluginName)
-      // The card may have moved on to another feature while this was in flight.
-      if (props.pluginName !== pluginName || props.feature?.id !== featureId) return
-      const binding = bindings[featureId]
-      shortcutDraft.value = binding?.accelerator ?? ''
-      shortcutStatus.value = binding?.status ?? null
-    } catch (error) {
-      featureDetailLog.warn('Failed to load the feature shortcut', error)
-    }
+    void refreshFeatureShortcut()
   },
   { immediate: true }
 )
 
 async function commitShortcut(accelerator: string): Promise<void> {
+  const pluginName = props.pluginName
   const featureId = props.feature?.id
-  if (!featureId || !props.pluginName || shortcutSaving.value) return
+  if (!featureId || !pluginName || shortcutSaving.value) return
 
+  const save = ++latestShortcutSave
+  ++latestShortcutRead
+  const isCurrent = () =>
+    !shortcutViewDisposed &&
+    save === latestShortcutSave &&
+    props.pluginName === pluginName &&
+    props.feature?.id === featureId
   const previous = shortcutDraft.value
   shortcutDraft.value = accelerator
   shortcutSaving.value = true
   shortcutError.value = ''
   try {
-    const accepted = await shortconApi.setFeatureShortcut(props.pluginName, featureId, accelerator)
+    const accepted = await shortconApi.setFeatureShortcut(pluginName, featureId, accelerator)
+    if (!isCurrent()) return
     if (!accepted) {
-      // A refusal means the host stored nothing, so the field must go back to what is bound.
       shortcutDraft.value = previous
       shortcutError.value = t('plugin.features.shortcut.invalid')
-      return
     }
-    // Re-read rather than assume: the host decides the verdict, and a key that another shortcut
-    // already owns is stored but reports a conflict instead of firing.
-    const bindings = await shortconApi.getFeatureShortcuts(props.pluginName)
-    const binding = bindings[featureId]
-    shortcutDraft.value = binding?.accelerator ?? ''
-    shortcutStatus.value = binding?.status ?? null
   } catch (error) {
+    if (!isCurrent()) return
+    shortcutDraft.value = previous
     featureDetailLog.error('Failed to save the feature shortcut', error)
     shortcutError.value = t('plugin.features.shortcut.saveFailed')
   } finally {
-    shortcutSaving.value = false
+    if (isCurrent()) {
+      shortcutSaving.value = false
+      await refreshFeatureShortcut()
+    }
   }
 }
+
+onBeforeUnmount(() => {
+  shortcutViewDisposed = true
+  ++latestShortcutRead
+  ++latestShortcutSave
+  stopShortcutChanges()
+})
 
 /**
  * What the key actually does when pressed, in the feature's own terms.

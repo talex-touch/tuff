@@ -1,10 +1,20 @@
+import type { Client } from '@libsql/client'
+import type { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
+import type { StorageCache } from './storage-cache'
+import type { StorageLRUManager } from './storage-lru-manager'
 import { mkdtempSync, readFileSync as readNodeFileSync, writeFileSync } from 'node:fs'
+import { mkdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { StorageList } from '@talex-touch/utils'
+import { createClient } from '@libsql/client'
+import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StorageModule } from './index'
+import { databaseModule } from '../database'
+import { buildFeatureShortcutId } from '../plugin/services/feature-shortcut-id'
+import { ApplicationConfigRepository } from './app-config-repository'
 
 const readFileSyncSpy = vi.hoisted(() => vi.fn())
 const transportMocks = vi.hoisted(() => ({
@@ -387,4 +397,183 @@ describe('StorageModule', () => {
 
     await storage.onDestroy()
   })
+})
+
+describe('StorageModule cold shortcut configuration persistence', () => {
+  const key = StorageList.SHORTCUT_SETTING
+  const initialRevision = 8
+  const systemShortcut: Shortcut = {
+    id: 'core.test.cold-save',
+    accelerator: 'Control+F17',
+    type: ShortcutType.MAIN,
+    meta: { creationTime: 1, modificationTime: 1, author: 'system', enabled: true }
+  }
+  const initialConfig: Shortcut[] = [systemShortcut]
+  const featureBinding: Shortcut = {
+    id: buildFeatureShortcutId('demo', 'translate'),
+    accelerator: 'Control+F18',
+    type: ShortcutType.FEATURE,
+    meta: {
+      creationTime: 2,
+      modificationTime: 2,
+      author: 'demo',
+      enabled: true,
+      featureId: 'translate'
+    }
+  }
+  const migrationUrl = new URL(
+    '../../../../resources/db/migrations/0029_app_config_sot.sql',
+    import.meta.url
+  )
+  const liveModules = new Set<StorageModule>()
+  let directory: string
+  let configDir: string
+  let databasePath: string
+  let client: Client
+
+  beforeEach(async () => {
+    vi.stubEnv('TALEX_CONFIG_STORAGE_BACKEND', 'sqlite')
+    directory = mkdtempSync(path.join(tmpdir(), 'tuff-storage-cold-save-'))
+    configDir = path.join(directory, 'config')
+    databasePath = path.join(directory, 'app-config.sqlite')
+    await mkdir(configDir)
+    client = createClient({ url: `file:${databasePath}` })
+    const migration = await readFile(migrationUrl, 'utf8')
+    for (const statement of migration.split('--> statement-breakpoint')) {
+      if (statement.trim()) await client.execute(statement)
+    }
+    // Only inject the database connection; repository SQL, cache, LRU and flushing stay real.
+    vi.spyOn(databaseModule, 'getClient').mockImplementation(() => client)
+    readFileSyncSpy.mockImplementation((filePath: string, encoding: BufferEncoding) =>
+      readNodeFileSync(filePath, encoding)
+    )
+    const repository = new ApplicationConfigRepository({ client, legacyRoot: configDir })
+    expect((await repository.initialize()).backend).toBe('sqlite')
+    await repository.persist({
+      key,
+      serialized: JSON.stringify(initialConfig),
+      revision: initialRevision,
+      deleted: false
+    })
+  })
+
+  afterEach(async () => {
+    try {
+      for (const storage of liveModules) await storage.onDestroy()
+    } finally {
+      liveModules.clear()
+      client.close()
+      await rm(directory, { recursive: true, force: true })
+      vi.restoreAllMocks()
+      vi.unstubAllEnvs()
+      readFileSyncSpy.mockReset()
+      transportMocks.on.mockClear()
+      transportMocks.onStream.mockClear()
+    }
+  })
+
+  async function startStorage(): Promise<StorageModule> {
+    const storage = new StorageModule()
+    liveModules.add(storage)
+    await storage.init({
+      app: { channel: {} },
+      file: { create: true, dirName: 'config', dirPath: configDir }
+    } as unknown as Parameters<StorageModule['init']>[0])
+    expect(storage.getCacheStats().backend).toBe('sqlite')
+    return storage
+  }
+
+  async function stopStorage(storage: StorageModule): Promise<void> {
+    await storage.onDestroy()
+    liveModules.delete(storage)
+  }
+
+  async function reopenStorage(): Promise<StorageModule> {
+    client.close()
+    client = createClient({ url: `file:${databasePath}` })
+    return await startStorage()
+  }
+
+  async function evictShortcutConfig(storage: StorageModule): Promise<void> {
+    // Expose the existing eviction seam without replacing the module's cache or LRU manager.
+    const eviction = storage as unknown as { cache: StorageCache; lruManager: StorageLRUManager }
+    await eviction.lruManager.forceEvict(key)
+    expect(eviction.cache.has(key)).toBe(false)
+    expect(storage.getVersion(key)).toBe(0)
+  }
+
+  it.each(['persistConfigNow', 'shutdown flush'] as const)(
+    'keeps a FEATURE binding and both saved enablement choices after cold writes via %s',
+    async (flush) => {
+      let storage = await startStorage()
+      expect(storage.getConfigWithVersion(key)).toEqual({
+        data: initialConfig,
+        version: initialRevision
+      })
+      let previousRevision = initialRevision
+      // The shortcut owner retains its own array while StorageModule's LRU entry is absent.
+      for (const enabled of [false, true]) {
+        const nextConfig: Shortcut[] = [
+          { ...systemShortcut, meta: { ...systemShortcut.meta, enabled } },
+          featureBinding
+        ]
+        await evictShortcutConfig(storage)
+        const result = storage.saveConfig(key, JSON.stringify(nextConfig))
+        expect(result.success).toBe(true)
+        expect(result.version).toBeGreaterThan(previousRevision)
+        if (flush === 'persistConfigNow') await storage.persistConfigNow(key)
+        else await stopStorage(storage)
+
+        // Read the actual SQLite row before any subsequent getConfig can rehydrate the cache.
+        const persisted = await client.execute({
+          sql: 'SELECT value, revision, deleted FROM app_config_entries WHERE key = ?',
+          args: [key]
+        })
+        const row = persisted.rows[0]!
+        expect(JSON.parse(String(row.value))).toEqual(nextConfig)
+        expect(Number(row.deleted)).toBe(0)
+        expect(Number(row.revision)).toBe(result.version)
+        expect(Number(row.revision)).toBeGreaterThan(previousRevision)
+        previousRevision = Number(row.revision)
+
+        if (flush === 'persistConfigNow') await stopStorage(storage)
+        storage = await reopenStorage()
+        expect(storage.getConfigWithVersion(key)).toEqual({
+          data: nextConfig,
+          version: previousRevision
+        })
+      }
+    }
+  )
+
+  it.each(['persistConfigNow', 'shutdown flush'] as const)(
+    'persists a tombstone for an evicted high-revision key via %s and reads it cleared after reopening',
+    async (flush) => {
+      const storage = await startStorage()
+      expect(storage.getConfigWithVersion(key)).toEqual({
+        data: initialConfig,
+        version: initialRevision
+      })
+      await evictShortcutConfig(storage)
+      const result = storage.saveConfig(key, undefined, true)
+      expect(result.success).toBe(true)
+      expect(result.version).toBeGreaterThan(initialRevision)
+      if (flush === 'persistConfigNow') await storage.persistConfigNow(key)
+      else await stopStorage(storage)
+
+      const persisted = await client.execute({
+        sql: 'SELECT value, revision, deleted FROM app_config_entries WHERE key = ?',
+        args: [key]
+      })
+      const row = persisted.rows[0]!
+      expect(JSON.parse(String(row.value))).toEqual({})
+      expect(Number(row.deleted)).toBe(1)
+      expect(Number(row.revision)).toBe(result.version)
+      expect(Number(row.revision)).toBeGreaterThan(initialRevision)
+
+      if (flush === 'persistConfigNow') await stopStorage(storage)
+      const restarted = await reopenStorage()
+      expect(restarted.getConfigWithVersion(key)).toEqual({ data: {}, version: result.version })
+    }
+  )
 })

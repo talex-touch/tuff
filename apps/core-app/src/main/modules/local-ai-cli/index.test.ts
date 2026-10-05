@@ -30,6 +30,7 @@ import { drizzle } from 'drizzle-orm/libsql'
 import { migrate } from 'drizzle-orm/libsql/migrator'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LocalAiCliModule } from './index'
+import * as piNativeSession from './pi-native-session'
 import { markLocalAiCliSessionState, upsertLocalAiCliSession } from './session-store'
 
 const testDir = dirname(fileURLToPath(import.meta.url))
@@ -1846,5 +1847,278 @@ describe('localAiCli platform gate and quick-open shortcut', () => {
     await readStatus({ refresh: true })
     expect(refreshExecutablesMock).toHaveBeenCalledTimes(1)
     expect(resolveAllProviderStatusesMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('localAiCli Pi final-attempt lifecycle', () => {
+  async function beginRun() {
+    const { transport } = await initModule()
+    const pointer = await seedPointer({ nativeSessionId: 'pi-retry', expectedHeadId: PI_BASE_LEAF })
+    const sessionFile = await writePiSessionFile('pi-retry', piBaseEntries)
+    const child = expectSpawn()
+    const stream = taskStream()
+    const run = startTask(transport, taskPayload({ sessionRef: pointer.id }), stream.context)
+    await waitFor(() => child.framesOfType('get_state').length === 1, 'initial state request')
+    child.sendLine({
+      type: 'response',
+      command: 'get_state',
+      success: true,
+      data: { sessionId: 'pi-retry', sessionFile }
+    })
+    await waitFor(() => child.framesOfType('get_entries').length === 1, 'initial head request')
+    child.sendLine({
+      type: 'response',
+      command: 'get_entries',
+      success: true,
+      data: { entries: piBaseEntries, leafId: PI_BASE_LEAF }
+    })
+    await waitFor(() => child.framesOfType('prompt').length === 1, 'prompt after native capture')
+    const user = piEntry('u3', PI_BASE_LEAF, 'user', 'second question')
+    const assistant = piEntry('a3', 'u3', 'assistant', 'retry answer')
+    const post = { entries: [...piBaseEntries, user, assistant], leafId: assistant.id }
+    const append = () => appendFile(sessionFile, piEntryLine(user) + piEntryLine(assistant))
+    return { pointer, child, stream, run, post, append, sessionFile }
+  }
+
+  it.each([
+    { name: 'agent_end without retry', event: { type: 'agent_end' } },
+    { name: 'agent_end with explicit false', event: { type: 'agent_end', willRetry: false } },
+    { name: 'agent_settled after retry', event: { type: 'agent_settled', willRetry: true } }
+  ])('keeps retry alive and verifies exactly once at $name', async ({ event }) => {
+    const { pointer, child, stream, run, post, append } = await beginRun()
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'first attempt; ' }
+    })
+    child.sendLine({ type: 'agent_end', willRetry: true })
+    child.sendLine({ type: 'auto_retry_start', attempt: 1, maxAttempts: 3, delayMs: 1 })
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'retry answer' }
+    })
+    // This positive control is queued after agent_end: reaching it proves the retry event was consumed.
+    await waitFor(
+      () =>
+        stream.chunks.some((chunk) => chunk.type === 'text-delta' && chunk.text === 'retry answer'),
+      'retry text while task stays live'
+    )
+    expect(child.framesOfType('get_entries')).toHaveLength(1)
+    expect(child.frames().filter((frame) => frame.id === 'tuff-after')).toEqual([])
+    expect(child.kills).toBe(0)
+    expect(stream.isEnded()).toBe(false)
+    expect(stream.chunks.filter((chunk) => chunk.type === 'complete')).toEqual([])
+    expect((await pointerRow(pointer.id))?.expected_head_id).toBe(PI_BASE_LEAF)
+
+    await append()
+    child.sendLine(event)
+    child.sendLine({ type: 'agent_end' })
+    child.sendLine({ type: 'agent_settled' })
+    await waitFor(() => child.framesOfType('get_entries').length === 2, 'single final head request')
+    child.sendLine({ type: 'response', command: 'get_entries', success: true, data: post })
+    // Queued after verification: none of these may change the answer, head, or successful outcome.
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'LATE_CANARY' }
+    })
+    child.sendLine({ type: 'response', command: 'get_entries', success: true, data: post })
+    child.sendLine({ type: 'agent_end' })
+    child.sendLine({ type: 'agent_settled' })
+    await run
+    expect(child.frames().filter((frame) => frame.id === 'tuff-after')).toHaveLength(1)
+    expect(child.framesOfType('get_entries')).toHaveLength(2)
+    expect(child.kills).toBe(1)
+    expect(stream.chunks.filter((chunk) => chunk.type === 'complete')).toEqual([
+      { type: 'complete', callId: expect.any(String), text: 'first attempt; retry answer' }
+    ])
+    expect(
+      stream.chunks.some(
+        (chunk) => chunk.type === 'text-delta' && chunk.text.includes('LATE_CANARY')
+      )
+    ).toBe(false)
+    expect((await pointerRow(pointer.id))?.expected_head_id).toBe('a3')
+    expect((await pointerRow(pointer.id))?.state).toBe('available')
+  })
+
+  it.each([
+    {
+      name: 'final agent_end after an errored assistant message',
+      finalEvents: [{ type: 'agent_end', willRetry: false }, { type: 'agent_settled' }]
+    },
+    {
+      name: 'exhausted auto_retry_end followed by agent_settled',
+      finalEvents: [
+        {
+          type: 'auto_retry_end',
+          success: false,
+          attempt: 1,
+          finalError: 'provider retries exhausted'
+        },
+        { type: 'agent_settled' },
+        { type: 'agent_end', willRetry: false }
+      ]
+    }
+  ])('does not verify or complete failed upstream output at $name', async ({ finalEvents }) => {
+    const { pointer, child, stream, run, sessionFile } = await beginRun()
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'FAILED_ATTEMPT_PREVIEW' }
+    })
+    child.sendLine({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'FAILED_ATTEMPT_PREVIEW' }],
+        stopReason: 'error',
+        errorMessage: 'provider temporarily unavailable'
+      }
+    })
+    child.sendLine({ type: 'agent_end', willRetry: true })
+    child.sendLine({ type: 'auto_retry_start', attempt: 1, maxAttempts: 1, delayMs: 1 })
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'FAILED_RETRY_PREVIEW' }
+    })
+    // Reaching the next attempt proves the errored message and retrying end were consumed.
+    await waitFor(
+      () =>
+        child.kills > 0 ||
+        stream.chunks.some(
+          (chunk) => chunk.type === 'text-delta' && chunk.text === 'FAILED_RETRY_PREVIEW'
+        ),
+      'retry output after an errored attempt'
+    )
+    expect(stream.chunks).toContainEqual({
+      type: 'text-delta',
+      callId: expect.any(String),
+      text: 'FAILED_RETRY_PREVIEW'
+    })
+    expect(child.kills).toBe(0)
+    expect(stream.isEnded()).toBe(false)
+    expect(child.frames().filter((frame) => frame.id === 'tuff-after')).toEqual([])
+    expect(child.framesOfType('get_entries')).toHaveLength(1)
+    expect(
+      stream.chunks.filter((chunk) => chunk.type === 'failed' || chunk.type === 'complete')
+    ).toEqual([])
+    expect((await pointerRow(pointer.id))?.expected_head_id).toBe(PI_BASE_LEAF)
+
+    const user = piEntry('u3', PI_BASE_LEAF, 'user', 'second question')
+    const failedAssistant = {
+      ...piEntry('a3', 'u3', 'assistant', 'FAILED_RETRY_PREVIEW'),
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'FAILED_RETRY_PREVIEW' }],
+        stopReason: 'error',
+        errorMessage: 'provider retries exhausted'
+      }
+    }
+    await appendFile(sessionFile, piEntryLine(user) + piEntryLine(failedAssistant))
+    child.sendLine({ type: 'message_end', message: failedAssistant.message })
+    for (const event of finalEvents) child.sendLine(event)
+    // RPC may exit 0 despite provider failure; EOF drains all queued protocol events.
+    child.close(0)
+    await run
+    expect(child.frames().filter((frame) => frame.id === 'tuff-after')).toEqual([])
+    expect(child.framesOfType('get_entries')).toHaveLength(1)
+    expect(stream.chunks.filter((chunk) => chunk.type === 'complete')).toEqual([])
+    expect(stream.chunks.filter((chunk) => chunk.type === 'failed')).toEqual([
+      { type: 'failed', callId: expect.any(String), code: 'PROCESS_EXITED', recoverable: true }
+    ])
+    expect(stream.isEnded()).toBe(true)
+    const stored = await pointerRow(pointer.id)
+    expect(stored?.expected_head_id).toBe(PI_BASE_LEAF)
+    expect(stored?.state).toBe('available')
+  })
+
+  it('cancelling during retry ignores queued text/end/entries and never advances the head', async () => {
+    const { pointer, child, stream, run, post, append } = await beginRun()
+    await append()
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'partial' }
+    })
+    child.sendLine({ type: 'agent_end', willRetry: true })
+    await waitFor(
+      () => stream.chunks.some((chunk) => chunk.type === 'text-delta'),
+      'partial answer before cancellation'
+    )
+    stream.controller.abort()
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'LATE_CANARY' }
+    })
+    child.sendLine({ type: 'agent_settled' })
+    child.sendLine({ type: 'response', command: 'get_entries', success: true, data: post })
+    await run
+    expect(stream.chunks.filter((chunk) => chunk.type === 'cancelled')).toEqual([
+      { type: 'cancelled', callId: expect.any(String) }
+    ])
+    expect(stream.chunks.filter((chunk) => chunk.type === 'complete')).toEqual([])
+    expect(
+      stream.chunks.some((chunk) => chunk.type === 'text-delta' && chunk.text === 'LATE_CANARY')
+    ).toBe(false)
+    expect(child.frames().filter((frame) => frame.id === 'tuff-after')).toEqual([])
+    expect((await pointerRow(pointer.id))?.expected_head_id).toBe(PI_BASE_LEAF)
+  })
+
+  it('cancelling while real native verification is suspended prevents its late successful head commit', async () => {
+    const verify = piNativeSession.verifyPiSessionAppend
+    let release!: () => void
+    let entered = false
+    const gate = new Promise<void>((resolveGate) => {
+      release = resolveGate
+    })
+    const verifier = vi
+      .spyOn(piNativeSession, 'verifyPiSessionAppend')
+      .mockImplementationOnce(async (input) => {
+        const head = await verify(input)
+        entered = true
+        await gate
+        return head
+      })
+    try {
+      const { pointer, child, stream, run, post, append } = await beginRun()
+      await append()
+      child.sendLine({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', delta: 'answer' }
+      })
+      child.sendLine({ type: 'agent_settled' })
+      await waitFor(() => child.framesOfType('get_entries').length === 2, 'final head request')
+      child.sendLine({ type: 'response', command: 'get_entries', success: true, data: post })
+      await waitFor(() => entered, 'verified native append awaiting release')
+      stream.controller.abort()
+      release()
+      child.sendLine({ type: 'agent_end' })
+      await run
+      expect(stream.chunks.filter((chunk) => chunk.type === 'cancelled')).toEqual([
+        { type: 'cancelled', callId: expect.any(String) }
+      ])
+      expect(stream.chunks.filter((chunk) => chunk.type === 'complete')).toEqual([])
+      expect((await pointerRow(pointer.id))?.expected_head_id).toBe(PI_BASE_LEAF)
+      expect(child.framesOfType('get_entries')).toHaveLength(2)
+    } finally {
+      release()
+      verifier.mockRestore()
+    }
+  })
+
+  it('a protocol failure before queued final events stays failed and leaves the original native head', async () => {
+    const { pointer, child, stream, run, post, append } = await beginRun()
+    await append()
+    child.sendLine({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'partial' }
+    })
+    child.sendLine('not-json')
+    child.sendLine({ type: 'agent_end' })
+    child.sendLine({ type: 'agent_settled' })
+    child.sendLine({ type: 'response', command: 'get_entries', success: true, data: post })
+    await run
+    expect(stream.chunks.filter((chunk) => chunk.type === 'failed')).toEqual([
+      { type: 'failed', callId: expect.any(String), code: 'PROTOCOL_INVALID', recoverable: true }
+    ])
+    expect(stream.chunks.filter((chunk) => chunk.type === 'complete')).toEqual([])
+    expect(child.framesOfType('get_entries')).toHaveLength(1)
+    expect((await pointerRow(pointer.id))?.expected_head_id).toBe(PI_BASE_LEAF)
   })
 })

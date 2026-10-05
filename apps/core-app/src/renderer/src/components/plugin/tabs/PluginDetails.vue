@@ -8,7 +8,7 @@ import { TxTag } from '@talex-touch/tuffex/tag'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { toast } from 'vue-sonner'
-import { onMounted, reactive, toRef, watch } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolvePluginSdkBlockedState } from '../../../../../shared/plugin-sdk-blocked'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
@@ -84,6 +84,11 @@ const shortcutsLoading = ref(false)
 const shortcuts = ref<ShortcutWithStatus[]>([])
 const manifestDialogVisible = ref(false)
 const manifestDialogSource = ref<HTMLElement | null>(null)
+let latestShortcutRead = 0
+let shortcutOwnerVersion = 0
+let shortcutViewDisposed = false
+const shortcutSaveRuns = new Map<string, number>()
+const savingShortcutIds = new Set<string>()
 
 const hasDevChanges = computed(() => {
   const original = originalDevSettings.value
@@ -206,31 +211,60 @@ function openExternalUrl(url: string): void {
   void appSdk.openExternal(url)
 }
 
-async function loadShortcuts() {
+async function loadShortcuts(): Promise<void> {
+  const request = ++latestShortcutRead
+  const owner = shortcutOwnerVersion
   shortcutsLoading.value = true
   try {
-    shortcuts.value = await shortconApi.getAll()
-  } catch (e) {
-    pluginDetailsLog.error('Failed to load shortcuts:', e)
+    const next = await shortconApi.getAll()
+    if (shortcutViewDisposed || request !== latestShortcutRead || owner !== shortcutOwnerVersion)
+      return
+    const current = new Map(shortcuts.value.map((shortcut) => [shortcut.id, shortcut]))
+    shortcuts.value = next.map((shortcut) =>
+      savingShortcutIds.has(shortcut.id) ? (current.get(shortcut.id) ?? shortcut) : shortcut
+    )
+  } catch (error) {
+    if (!shortcutViewDisposed && request === latestShortcutRead && owner === shortcutOwnerVersion) {
+      pluginDetailsLog.error('Failed to load shortcuts:', error)
+    }
   } finally {
-    shortcutsLoading.value = false
+    if (!shortcutViewDisposed && request === latestShortcutRead && owner === shortcutOwnerVersion) {
+      shortcutsLoading.value = false
+    }
   }
 }
 
+const stopShortcutChanges = shortconApi.onChanged(() => {
+  void loadShortcuts()
+})
+
 async function updatePluginShortcut(id: string, newAccelerator: string): Promise<void> {
   if (!id || !newAccelerator) return
+  const owner = shortcutOwnerVersion
+  const save = (shortcutSaveRuns.get(id) ?? 0) + 1
+  shortcutSaveRuns.set(id, save)
+  savingShortcutIds.add(id)
+  ++latestShortcutRead
+  const isCurrent = () =>
+    !shortcutViewDisposed && owner === shortcutOwnerVersion && shortcutSaveRuns.get(id) === save
   const target = shortcuts.value.find((item) => item.id === id)
   const previousValue = target?.accelerator
-
-  if (target) {
-    target.accelerator = newAccelerator
+  if (target) target.accelerator = newAccelerator
+  try {
+    const success = await shortconApi.update(id, newAccelerator)
+    if (isCurrent() && !success && target && previousValue !== undefined) {
+      target.accelerator = previousValue
+    }
+  } catch (error) {
+    if (!isCurrent()) return
+    if (target && previousValue !== undefined) target.accelerator = previousValue
+    pluginDetailsLog.error('Failed to save shortcut:', error)
+  } finally {
+    if (isCurrent()) {
+      savingShortcutIds.delete(id)
+      await loadShortcuts()
+    }
   }
-
-  const success = await shortconApi.update(id, newAccelerator)
-  if (!success && target && previousValue) {
-    target.accelerator = previousValue
-  }
-  await loadShortcuts()
 }
 
 async function copyPluginId(): Promise<void> {
@@ -297,6 +331,11 @@ onMounted(() => {
 watch(
   () => plugin.value.name,
   () => {
+    ++shortcutOwnerVersion
+    ++latestShortcutRead
+    shortcutSaveRuns.clear()
+    savingShortcutIds.clear()
+    shortcuts.value = []
     manifestData.value = null
     originalDevSettings.value = null
     manifestDialogVisible.value = false
@@ -305,6 +344,15 @@ watch(
     void loadShortcuts()
   }
 )
+
+onBeforeUnmount(() => {
+  shortcutViewDisposed = true
+  ++shortcutOwnerVersion
+  ++latestShortcutRead
+  stopShortcutChanges()
+  shortcutSaveRuns.clear()
+  savingShortcutIds.clear()
+})
 
 function openManifestDialog(event: MouseEvent): void {
   if (!canViewManifestJson.value) return

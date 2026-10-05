@@ -911,13 +911,13 @@ private renameRecordedMacModifiers(): void
     when there is no modifier, when the key token itself is spelled like a macOS modifier, or when
     renaming would duplicate a modifier (`Command+Super+E` → `Super+Super+E`). A value the user can
     still see and fix beats one silently rewritten into something else.
-- **Each record is written on its own, with rollback.** `updateShortcutAccelerator` sets the value in
-  memory before it saves, so a failed save leaves the new value in memory.
-  - The catch puts the old value back. The restore also sets before it saves, so it gets its own
-    empty try/catch: a failed write-back cannot throw out of `onInit`, where it would fail the
-    shortcut module and, with it, startup.
-  - A record whose write failed keeps its old value, in the store and in this run. The next
-    record's save writes the whole store, with the old value in it, and the next launch tries again.
+- **Each record is committed only after its save is accepted.** `ShortcutStorage` builds a replacement
+  value and saves it before publishing it in memory. A thrown save or explicit `success: false`
+  keeps the old value; no second write-back is necessary.
+  - A later record's save cannot accidentally persist an earlier rejected edit.
+  - Binding a key and its enablement uses one save, not two independently accepted writes.
+  - `StorageModule.saveConfig` reloads an evicted key's persisted revision before any write or clear,
+    so SQLite's monotonic-revision guard cannot silently reject a runtime shortcut edit as revision 1.
 - **Idempotent.** A renamed value has nothing left to rename, so a second launch writes nothing.
 - **Runs after the storage is built and before the first pass.** It needs `useMainStorage()`, so
   `shortcutModule` comes after `storageModule` in `foregroundModulesToLoad`. It runs before the first
@@ -992,18 +992,8 @@ const renamed = renameMacOnlyModifiers(shortcut.accelerator)
 ```
 
 ```ts
-// Wrong: a failed write-back escapes onInit and takes startup down
+// Correct: a rejected save leaves the old record intact, so startup only reports the failure.
 } catch (error) {
-  storage.updateShortcutAccelerator(shortcut.id, shortcut.accelerator)
-}
-
-// Correct: the restore sets before it saves, so its own failure is safe to swallow
-} catch (error) {
-  try {
-    storage.updateShortcutAccelerator(shortcut.id, shortcut.accelerator)
-  } catch {
-    // Already restored in memory.
-  }
   shortconLog.warn(`Could not rename ${shortcut.id}; kept ${shortcut.accelerator}`, { error })
 }
 ```
