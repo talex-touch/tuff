@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   estimateMetaPanelHeight,
   extendMetaPanelHeightForPluginRows,
+  META_FLOW_CONFIRM_PANEL_HEIGHT,
   META_PANEL_MAX_HEIGHT,
   resolveMetaOverlayWindowHeight,
   resolveMetaPanelBottomInset,
@@ -85,5 +86,12 @@ describe('extendMetaPanelHeightForPluginRows', () => {
     expect(extendMetaPanelHeightForPluginRows(200, 2)).toBe(200 + 4 + 24 + 64)
     expect(extendMetaPanelHeightForPluginRows(200, 0)).toBe(200)
     expect(extendMetaPanelHeightForPluginRows(400, 5)).toBe(META_PANEL_MAX_HEIGHT)
+  })
+})
+
+describe('META_FLOW_CONFIRM_PANEL_HEIGHT', () => {
+  it('fits the confirmation with its buttons wrapped onto two rows, as English lays them out', () => {
+    // 40 + 12 + 20 + 4 + 72 + 12 + (26 + 8 + 26) + 12, the card measured in the real window.
+    expect(META_FLOW_CONFIRM_PANEL_HEIGHT).toBe(232)
   })
 })

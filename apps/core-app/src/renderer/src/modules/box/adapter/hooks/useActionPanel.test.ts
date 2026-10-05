@@ -3,7 +3,10 @@ import type { TuffItem } from '@talex-touch/utils'
 import { AppEvents, ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { onBeforeUnmount } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { COREBOX_PRIMARY_ACTION_ID } from '../../../../../../shared/events/corebox-scenes'
+import {
+  COREBOX_FLOW_TRANSFER_ACTION_ID,
+  COREBOX_PRIMARY_ACTION_ID
+} from '../../../../../../shared/events/corebox-scenes'
 import {
   clearCoreBoxFooterFeedback,
   useCoreBoxFooterFeedback
@@ -549,5 +552,44 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
     expect(state.logError).toHaveBeenCalledExactlyOnceWith('Settings destination unavailable')
     // The search window still goes away: nothing would clear it if the reveal failed.
     expect(sentEvents()).toContain(CoreBoxEvents.ui.hide)
+  })
+
+  it('dispatches the transfer to the Flow target picked on the ⌘K card', async () => {
+    const dispatchFlow = vi.fn(async () => {})
+    useActionPanel({ dispatchFlow })
+    const item = createItem()
+    const flow = { targetId: 'quickops.stop-all', confirmationToken: 'confirm-token' }
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({
+      actionId: COREBOX_FLOW_TRANSFER_ACTION_ID,
+      item,
+      flow
+    })
+    await settle()
+
+    expect(dispatchFlow).toHaveBeenCalledExactlyOnceWith(item, flow)
+    // Nothing else runs for it: no execute, no fallback.
+    expect(state.send).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { name: 'no Flow target', flow: undefined },
+    { name: 'a target without an id', flow: { consentToken: 'consent-token' } },
+    { name: 'an empty target id', flow: { targetId: '' } }
+  ])('sends nothing for a transfer with $name', async ({ flow }) => {
+    const dispatchFlow = vi.fn(async () => {})
+    useActionPanel({ dispatchFlow })
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({
+      actionId: COREBOX_FLOW_TRANSFER_ACTION_ID,
+      item: createItem(),
+      flow
+    })
+    await settle()
+
+    // The card opens its Flow page itself; a transfer reaches CoreBox only with a target.
+    expect(dispatchFlow).not.toHaveBeenCalled()
+    expect(state.send).not.toHaveBeenCalled()
+    expect(footerFeedback.value).toBeNull()
   })
 })

@@ -21,8 +21,8 @@
 - `packages/tuff-native/native-core/`
 - `packages/tuff-native/native-napi/`
 - `apps/core-app/src/main/modules/native-capabilities/native-transport.ts`
-- `.trellis/spec/frontend/native-resource-protocols.md`
-- `.trellis/tasks/07-28-rust-native-communication-protocol/design.md`
+- [`docs/engineering/specs/frontend/native-resource-protocols.md`](./engineering/specs/frontend/native-resource-protocols.md)
+- 已归档任务记录 [`07-28-rust-native-communication-protocol/design.md`](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/archive/2026-07/07-28-rust-native-communication-protocol/design.md)
 - `docs/script-native-build-distribution.md`
 - `docs/script-native-capability-matrix.md`
 

@@ -188,7 +188,7 @@
         "apps/core-app/src/main/modules/privacy/owners/search-retention-owner.ts#symbol=createSearchRetentionOwner",
         "apps/core-app/src/main/db/utils.ts#symbol=recordExecuteTransaction",
         "apps/core-app/src/main/db/utils.ts#symbol=getUsageBehaviorBatch",
-        ".trellis/tasks/archive/2026-07/07-27-sensitive-data-lifecycle-301/research/retention-surfaces.md#heading=3. Search detail, contextual behavior, and caches"
+        "docs/engineering/reports/sensitive-data-lifecycle-301/retention-surfaces.md#heading=3. Search detail, contextual behavior, and caches"
       ]
     },
     {

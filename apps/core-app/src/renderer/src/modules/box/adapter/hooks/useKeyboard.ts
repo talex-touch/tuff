@@ -1,4 +1,4 @@
-import type { IProviderActivate, TuffItem, TuffSection } from '@talex-touch/utils'
+import type { FlowTargetInfo, IProviderActivate, TuffItem, TuffSection } from '@talex-touch/utils'
 import type { MetaShowRequest } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
@@ -18,6 +18,7 @@ import {
   isImeComposing,
   resolveMetaActionShortcut
 } from '../../meta-actions/meta-action-model'
+import { estimateFlowTargetsPanelHeight } from '../../meta-actions/meta-flow-page'
 import { createCoreBoxKeyTransport } from '../transport/key-transport'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import { resolveVisibleBoxGridColumnCount } from '~/components/render/box-grid-layout'
@@ -222,7 +223,6 @@ const isMac = rendererPlatformState.isMac
 /**
  * Whether CoreBox is showing its footer. The ⌘K panel sits just above it when it is, and drops to
  * the window corner when it is not: plugin UI mode, no results, or an item that hides the footer.
- * The Flow picker (`useDetach`) anchors by the same rule.
  */
 export function isCoreBoxFooterShown(): boolean {
   return Boolean(document.querySelector('.CoreBoxFooter-Sticky.display'))
@@ -231,16 +231,29 @@ export function isCoreBoxFooterShown(): boolean {
 /**
  * The ⌘K show request: the item's actions plus where the panel anchors and how tall it needs to
  * be, so main grows the window only when the panel would not fit in it.
+ *
+ * `page: 'flow'` opens the card straight on its Flow page (`useDetach.openFlowPanel`), sized for
+ * the `flowTargets` fetched for it rather than for the action list.
  */
 export function buildCoreBoxMetaShowRequest(
   item: TuffItem,
-  options: { footerShown: boolean }
+  options: { footerShown: boolean; page?: 'actions' | 'flow'; flowTargets?: FlowTargetInfo[] }
 ): MetaShowRequest {
   const request = buildMetaShowRequest(item)
+  const anchor = options.footerShown ? 'footer' : 'corner'
+  if (options.page === 'flow') {
+    return {
+      ...request,
+      anchor,
+      page: 'flow',
+      ...(options.flowTargets ? { flowTargets: options.flowTargets } : {}),
+      desiredPanelHeight: estimateFlowTargetsPanelHeight(options.flowTargets ?? [])
+    }
+  }
   const model = buildMetaActionModel(request, { platform: rendererPlatformState.platform })
   return {
     ...request,
-    anchor: options.footerShown ? 'footer' : 'corner',
+    anchor,
     desiredPanelHeight: estimateMetaActionPanelHeight(model)
   }
 }
@@ -593,8 +606,8 @@ export function useKeyboard(
   function runResultListActionShortcut(event: KeyboardEvent): boolean {
     if (!event.metaKey && !event.ctrlKey) return false
     if (isImeComposing(event)) return false
-    // An in-page layer that owns the keyboard: the calculation history or the Flow picker.
-    if (window.__coreboxHistoryVisible || document.querySelector('.FlowSelector')) return false
+    // An in-page layer that owns the keyboard: the calculation history.
+    if (window.__coreboxHistoryVisible) return false
 
     const item = resolveQuickActionsItem(res.value, boxOptions.focus, activeActivations.value)
     if (!item) return false
@@ -916,7 +929,7 @@ export function useKeyboard(
        * This allows users to "pop out" the currently focused item into
        * an independent DivisionBox window for persistent access.
        *
-       * With Shift: Opens Flow selector to transfer data to another plugin
+       * With Shift: Opens the ⌘K card on its Flow page to transfer data to another plugin
        */
       if ((event.metaKey || event.ctrlKey) && !event.altKey) {
         if (event.repeat) {

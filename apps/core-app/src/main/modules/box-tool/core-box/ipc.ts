@@ -22,6 +22,9 @@ import type {
 import type {
   MetaAction,
   MetaActionExecuteRequest,
+  MetaFlowSelection,
+  MetaPageChangeRequest,
+  MetaPanelPage,
   MetaShowRequest
 } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { TouchApp } from '../../../core/touch-app'
@@ -32,7 +35,10 @@ import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { createLogger } from '../../../utils/logger'
-import { coreBoxImageTranslateEvent } from '../../../../shared/events/corebox-scenes'
+import {
+  COREBOX_FLOW_TRANSFER_ACTION_ID,
+  coreBoxImageTranslateEvent
+} from '../../../../shared/events/corebox-scenes'
 import { extendMetaPanelHeightForPluginRows } from '../../../../shared/meta-overlay-geometry'
 import { pluginModule } from '../../plugin/plugin-module'
 import { OnboardingGateError } from '../../storage'
@@ -50,6 +56,74 @@ import { COREBOX_MIN_HEIGHT, getCoreBoxWindow, windowManager } from './window'
 const metaOverlayIpcLog = createLogger('CoreBox').child('MetaOverlayIpc')
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+
+const META_PANEL_PAGES: ReadonlySet<string> = new Set<MetaPanelPage>([
+  'actions',
+  'flow',
+  'flow-confirm'
+])
+
+/**
+ * Reads a `ui.page` payload, or `null` when any field is malformed: a page main does not know, a
+ * `canGoBack` that is not a boolean, or a height that is present but not a finite positive number.
+ */
+function parseMetaPageChange(value: unknown): MetaPageChangeRequest | null {
+  if (!value || typeof value !== 'object') return null
+  const { page, canGoBack, desiredPanelHeight } = value as Record<string, unknown>
+  if (typeof page !== 'string' || !META_PANEL_PAGES.has(page)) return null
+  if (typeof canGoBack !== 'boolean') return null
+  if (desiredPanelHeight === undefined) {
+    return { page: page as MetaPanelPage, canGoBack }
+  }
+  if (
+    typeof desiredPanelHeight !== 'number' ||
+    !Number.isFinite(desiredPanelHeight) ||
+    desiredPanelHeight <= 0
+  ) {
+    return null
+  }
+  return { page: page as MetaPanelPage, canGoBack, desiredPanelHeight }
+}
+
+/**
+ * The Flow selection an `action.execute` may carry, rebuilt from its known fields, or `undefined`
+ * when there is none or it cannot be relayed: it only ends the transfer action, its target must be
+ * a non-empty string, and each token a string when present. A dropped selection leaves a transfer
+ * with nothing to dispatch, and CoreBox dispatches nothing. Logged by presence only: the tokens
+ * are capabilities, and the target says what the user is sending where.
+ */
+function resolveMetaFlowSelection(
+  request: MetaActionExecuteRequest
+): MetaFlowSelection | undefined {
+  const flow: unknown = request.flow
+  if (flow === undefined) return undefined
+
+  const { targetId, consentToken, confirmationToken } =
+    flow && typeof flow === 'object' ? (flow as Record<string, unknown>) : {}
+  const valid =
+    request.actionId === COREBOX_FLOW_TRANSFER_ACTION_ID &&
+    typeof targetId === 'string' &&
+    targetId.length > 0 &&
+    (consentToken === undefined || typeof consentToken === 'string') &&
+    (confirmationToken === undefined || typeof confirmationToken === 'string')
+  if (!valid) {
+    metaOverlayIpcLog.warn('Dropped a malformed Flow selection from action.execute', {
+      meta: {
+        actionId: request.actionId,
+        hasTargetId: typeof targetId === 'string' && targetId.length > 0,
+        hasConsentToken: consentToken !== undefined,
+        hasConfirmationToken: confirmationToken !== undefined
+      }
+    })
+    return undefined
+  }
+
+  return {
+    targetId: targetId as string,
+    ...(consentToken === undefined ? {} : { consentToken: consentToken as string }),
+    ...(confirmationToken === undefined ? {} : { confirmationToken: confirmationToken as string })
+  }
+}
 
 function resolveSearchCaller(surface: unknown, senderId: number): SearchCallerIdentity {
   let kind: CoreBoxSearchSurface = 'core-box'
@@ -621,7 +695,8 @@ export class IpcManager {
             builtinActions: request.builtinActions?.length ?? 0,
             itemActions: request.itemActions?.length ?? 0,
             anchor: request.anchor ?? null,
-            desiredPanelHeight: request.desiredPanelHeight ?? null
+            desiredPanelHeight: request.desiredPanelHeight ?? null,
+            page: request.page ?? null
           }
         })
         // No forced expand: the manager grows CoreBox only when the panel does not fit, and hands
@@ -629,8 +704,9 @@ export class IpcManager {
         // lists, where the vibrancy material showed the desktop behind CoreBox.
         const pluginActions = metaOverlayManager.getPluginActions()
         request.pluginActions = pluginActions
-        if (typeof request.desiredPanelHeight === 'number') {
-          // The renderer that sized the panel cannot see the registered plugin actions.
+        // The renderer that sized the action list cannot see the registered plugin actions. A
+        // card opening on its Flow page is sized for the Flow targets, which they are not among.
+        if (typeof request.desiredPanelHeight === 'number' && request.page !== 'flow') {
           request.desiredPanelHeight = extendMetaPanelHeightForPluginRows(
             request.desiredPanelHeight,
             pluginActions.filter((action) => action.render?.disabled !== true).length
@@ -638,6 +714,32 @@ export class IpcManager {
         }
         metaOverlayManager.show(request)
         return { accepted: true }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(MetaOverlayEvents.ui.page, (request, context: HandlerContext) => {
+        const senderId = context?.sender?.id
+        if (typeof senderId !== 'number' || !metaOverlayManager.ownsRenderer(senderId)) {
+          metaOverlayIpcLog.warn('Rejected ui.page from non-overlay renderer', {
+            meta: { senderId: senderId ?? null }
+          })
+          return
+        }
+
+        const change = parseMetaPageChange(request)
+        if (!change) {
+          metaOverlayIpcLog.debug('Dropped a malformed ui.page', { meta: { senderId } })
+          return
+        }
+        metaOverlayIpcLog.debug('ui.page received', {
+          meta: {
+            page: change.page,
+            canGoBack: change.canGoBack,
+            desiredPanelHeight: change.desiredPanelHeight ?? null
+          }
+        })
+        metaOverlayManager.changePage(change)
       })
     )
 
@@ -667,7 +769,8 @@ export class IpcManager {
         }
 
         const payload = request as MetaActionExecuteRequest & { item?: TuffItem }
-        return await metaOverlayManager.executeAction(payload.actionId, payload.item)
+        const flow = resolveMetaFlowSelection(payload)
+        return await metaOverlayManager.executeAction(payload.actionId, payload.item, flow)
       })
     )
 

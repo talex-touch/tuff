@@ -1,3 +1,0 @@
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Focused test, typecheck, and diff verification requirements"}
-{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Review typed transport and runtime validation contracts"}
-{"file": ".trellis/spec/frontend/plugin-runtime-security.md", "reason": "Review privileged Electron handler fail-closed behavior"}

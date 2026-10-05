@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "Type scale, token-only colour, ring vs border, concentric radii for the new TxDescriptions and the skeleton rows"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "Component change ships its zh/en docs, demos and every wrapper component's docs in the same commit"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Loading States (:311-341) the skeleton variant must satisfy; TuffEx Suite Taxonomy for placing the new component"}
+{"file": ".trellis/spec/frontend/nexus-docs-structure.md", "reason": "Nexus component doc page structure and frontmatter"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/design.md", "reason": "Parent contract for the three primitives (section 2.1) that the admin kit will consume"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verification commands and lint rules"}

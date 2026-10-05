@@ -1,4 +1,0 @@
-{"file":".trellis/spec/frontend/index.md","reason":"Project quality gate and package conventions."}
-{"file":".trellis/spec/frontend/type-safety.md","reason":"Review typed writer/readiness/generation contracts and boundary behavior."}
-{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Review lint, typecheck, focused tests, and behavioral evidence."}
-{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify end-to-end mutation, visibility, rollback, and cache flow."}

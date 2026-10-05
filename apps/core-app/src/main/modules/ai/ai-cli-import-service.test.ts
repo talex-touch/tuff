@@ -1,5 +1,6 @@
 import type {
   AiImportCandidate,
+  AiImportedConfigItem,
   AiImportScanResult
 } from '@talex-touch/utils/types/ai-orchestrator'
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
@@ -12,6 +13,7 @@ import { AiCliImportService } from './ai-cli-import-service'
 const importStoreMocks = vi.hoisted(() => {
   const state = {
     activeCandidates: [] as AiImportCandidate[],
+    importedItems: [] as AiImportedConfigItem[],
     scans: new Map<string, AiImportScanResult>()
   }
   return {
@@ -20,6 +22,7 @@ const importStoreMocks = vi.hoisted(() => {
       state.scans.set(scan.scanId, scan)
     }),
     listActiveImportCandidates: vi.fn(async () => state.activeCandidates),
+    listImportedItems: vi.fn(async () => state.importedItems),
     getImportScan: vi.fn(async (scanId: string) => state.scans.get(scanId) ?? null),
     applyPreparedImportScan: vi.fn()
   }
@@ -44,7 +47,9 @@ vi.mock('./ai-import-runtime', () => ({
 }))
 
 vi.mock('./ai-imported-config-runtime', () => ({
-  aiImportedConfigRuntime: importedConfigRuntimeMocks
+  aiImportedConfigRuntime: importedConfigRuntimeMocks,
+  mcpProfilesFromItem: (item: AiImportedConfigItem) =>
+    (item.normalizedProjection?.mcpProfiles as unknown[] | undefined) ?? []
 }))
 
 const originalEnvironment = {
@@ -74,6 +79,7 @@ describe('aiCliImportService preview', () => {
     vi.setSystemTime(new Date('2026-07-17T12:00:00.000Z'))
     vi.clearAllMocks()
     importStoreMocks.state.activeCandidates = []
+    importStoreMocks.state.importedItems = []
     importStoreMocks.state.scans.clear()
     fixtureRoot = await realpath(await mkdtemp(join(tmpdir(), 'tuff-ai-cli-import-')))
     process.env.HOME = join(fixtureRoot, 'home')
@@ -318,13 +324,18 @@ describe('aiCliImportService preview', () => {
 
     await expect(service.apply({ scanId: scan.scanId, candidateIds: [] })).resolves.toEqual(result)
 
+    // No server pick, so nothing is merged with what Tuff holds and no item is switched on.
     expect(importRuntimeMocks.prepare).toHaveBeenCalledWith(
       scan.cwd,
       [],
       expect.any(Object),
-      scan.sources
+      scan.sources,
+      new Map()
     )
-    expect(importStoreMocks.applyPreparedImportScan).toHaveBeenCalledWith(scan.scanId, [])
+    expect(importStoreMocks.applyPreparedImportScan).toHaveBeenCalledWith(scan.scanId, [], {
+      activate: new Set(),
+      basedOn: new Map()
+    })
     expect(importedConfigRuntimeMocks.refresh).toHaveBeenCalledOnce()
   })
   it('normalizes rule frontmatter path lists and reports unknown keys without widening the rule contract', async () => {
@@ -431,6 +442,124 @@ describe('aiCliImportService preview', () => {
       ['project', `Codex MCP · Project ${join('.codex', 'config.toml')}`]
     ])
   })
+
+  it('carries the directory a file kept beside the config directory was read within', async () => {
+    const home = join(fixtureRoot, 'home')
+    await writeFixture(fixtureRoot, 'home/.claude/settings.json', '{}')
+    await writeFixture(
+      fixtureRoot,
+      'home/.claude.json',
+      JSON.stringify({ mcpServers: { context7: { command: 'npx', args: ['ctx7'] } } })
+    )
+    await writeFixture(
+      fixtureRoot,
+      'home/.pi/agent/mcp.json',
+      JSON.stringify({ mcpServers: { files: { command: 'npx' } } })
+    )
+
+    const workspace = join(fixtureRoot, 'workspace')
+    await mkdir(workspace, { recursive: true })
+
+    const scan = await new AiCliImportService().preview({
+      cwd: workspace,
+      providerIds: ['claude', 'pi']
+    })
+
+    expect(
+      scan.candidates
+        .filter((candidate) => candidate.scope === 'user')
+        .map((candidate) => [candidate.provider, candidate.kind, candidate.containedBy])
+    ).toEqual([
+      ['claude', 'config', undefined],
+      // `~/.claude.json` is not inside `~/.claude`: apply has to read it where discovery did.
+      ['claude', 'mcp', home],
+      // pi's own directory is its source root; there is nothing else to carry.
+      ['pi', 'mcp', undefined]
+    ])
+  })
+
+  it('takes servers of a file whose stored copy is invalid only through a pick', async () => {
+    const workspace = join(fixtureRoot, 'workspace')
+    await writeFixture(
+      fixtureRoot,
+      'workspace/.mcp.json',
+      JSON.stringify({
+        mcpServers: {
+          local: { command: 'node', args: ['local.js'] },
+          remote: { url: 'https://mcp.example.test/v1', oauth: { clientId: 'remote' } }
+        }
+      })
+    )
+    const service = new AiCliImportService()
+    const first = await service.preview({ cwd: workspace, providerIds: ['claude'] })
+    const stored = first.candidates.find((item) => item.kind === 'mcp')!
+    importStoreMocks.state.activeCandidates = [{ ...stored, state: 'invalid' }]
+    importStoreMocks.state.importedItems = [
+      {
+        id: 'item-1',
+        candidateId: stored.id,
+        sourceId: stored.sourceId,
+        provider: 'claude',
+        sourceScope: 'project',
+        targetScope: 'workspace',
+        kind: 'mcp',
+        name: stored.name,
+        sourceKey: stored.sourceKey,
+        normalizedProjection: {
+          mcpProfiles: [
+            { id: 'p-local', name: 'local', enabled: true, transport: { type: 'stdio' } },
+            { id: 'p-remote', name: 'remote', enabled: false, transport: { type: 'stdio' } }
+          ]
+        },
+        secrets: [{ keyPath: 'mcpServers.remote.oauth', reauthRequired: true }],
+        state: 'invalid',
+        revisionId: 'revision-1',
+        active: true,
+        createdAt: 1,
+        updatedAt: 7
+      }
+    ]
+    const scan = await service.preview({ cwd: workspace, providerIds: ['claude'] })
+    const candidate = scan.candidates.find((item) => item.kind === 'mcp')!
+    expect(candidate.state).toBe('invalid')
+    const transaction = { items: [], createdContentRefs: [], secretUndo: [] }
+    importRuntimeMocks.prepare.mockResolvedValue(transaction)
+    importStoreMocks.applyPreparedImportScan.mockResolvedValue({ items: [] })
+
+    await expect(
+      service.apply({ scanId: scan.scanId, candidateIds: [candidate.id] })
+    ).rejects.toThrow('Import selection contains stale, blocked, or missing candidates')
+    expect(importRuntimeMocks.prepare).not.toHaveBeenCalled()
+
+    const request = {
+      scanId: scan.scanId,
+      candidateIds: [candidate.id],
+      mcpServers: { [candidate.id]: { include: ['local'] } }
+    }
+    await service.apply(request)
+
+    // Nothing in the invalid copy runs, so the server it holds is handed over as not running; the
+    // commit switches the item on and is refused if the item changed since it was read.
+    expect(importRuntimeMocks.prepare).toHaveBeenCalledWith(
+      scan.cwd,
+      [candidate],
+      request,
+      scan.sources,
+      new Map([
+        [
+          candidate.id,
+          new Map([
+            ['local', { running: false }],
+            ['remote', { running: false }]
+          ])
+        ]
+      ])
+    )
+    expect(importStoreMocks.applyPreparedImportScan).toHaveBeenCalledWith(scan.scanId, [], {
+      activate: new Set([candidate.id]),
+      basedOn: new Map([[candidate.id, { itemId: 'item-1', updatedAt: 7, active: true }]])
+    })
+  })
 })
 
 describe('aiCliImportService canonical ingress', () => {
@@ -441,6 +570,7 @@ describe('aiCliImportService canonical ingress', () => {
     vi.setSystemTime(new Date('2026-07-17T12:00:00.000Z'))
     vi.clearAllMocks()
     importStoreMocks.state.activeCandidates = []
+    importStoreMocks.state.importedItems = []
     importStoreMocks.state.scans.clear()
     fixtureRoot = await realpath(await mkdtemp(join(tmpdir(), 'tuff-ai-cli-import-ingress-')))
     process.env.HOME = join(fixtureRoot, 'home')

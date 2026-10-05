@@ -1,0 +1,6 @@
+{
+  "caseBase": "valid-final-contract",
+  "files": {
+    "docs/engineering/workflow/retired-task-index.json": "{\n  \"schemaVersion\": 1,\n  \"tasks\": [\n"
+  }
+}

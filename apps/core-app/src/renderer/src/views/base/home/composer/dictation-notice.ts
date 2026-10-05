@@ -4,6 +4,11 @@ import {
   VOICE_CAPTURE_UNAVAILABLE_CODES
 } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { toast } from 'vue-sonner'
+import {
+  formatUsageLimitResetTime,
+  isUsageLimitFailure,
+  readUsageLimitResetsAt
+} from '~/modules/intelligence/ai-error-recovery'
 
 /**
  * What the composer's dictation has to tell the user, and how. The session reports a kind; the page
@@ -19,6 +24,7 @@ export type DictationNoticeKind =
   | 'microphone-denied'
   | 'microphone-missing'
   | 'microphone-unresponsive'
+  | 'usage-limit'
   | 'quota'
   | 'busy'
   | 'failed'
@@ -98,7 +104,10 @@ function failureDetail(error: unknown): string | undefined {
 /** The notice for one failure, plus the sentence it came from. */
 export interface DictationFailureNotice {
   kind: DictationNoticeKind
-  /** The failure's own words, when they say more than the notice's own copy. */
+  /**
+   * The failure's own words, when they say more than the notice's own copy. For `usage-limit` it is
+   * the limit's reset instant (ISO, from main), which the notice turns into local time.
+   */
   detail?: string
 }
 
@@ -152,23 +161,33 @@ export function classifyDictationFailure(error: unknown): DictationFailureNotice
   if (/VOICE_ASR_NOT_CONFIGURED/.test(haystack)) return withDetail('recognition-not-configured')
   if (/VOICE_ASR_(?:PROVIDER|CREDENTIAL)_UNAVAILABLE/.test(haystack))
     return withDetail('recognition-unavailable')
+  // The limit the user set in Audit, before the quota rule: not Nexus credits. Its main-side
+  // sentence is English and technical, so only the reset time rides along.
+  if (isUsageLimitFailure(haystack)) {
+    const resetsAt = readUsageLimitResetsAt(raw)
+    return resetsAt === null
+      ? bare('usage-limit')
+      : { kind: 'usage-limit', detail: new Date(resetsAt).toISOString() }
+  }
   if (/QUOTA|CREDIT|INSUFFICIENT_BALANCE/.test(haystack)) return withDetail('quota')
   if (CONGESTED.test(haystack)) return withDetail('busy')
   return withDetail('failed')
 }
 
 export interface DictationNoticeContext {
-  t: (key: string) => string
+  t: (key: string, params?: Record<string, unknown>) => string
   /** Opens the OS microphone pane; absent where the platform has none (Linux). */
   openMicrophoneSettings?: () => void
   /** Where recognition is set up (`/setting/intelligence/capabilities`). */
   openRecognitionSettings: () => void
+  /** Where the global AI usage limits are set (`USAGE_LIMITS_ROUTE`); no button without it. */
+  openUsageLimits?: () => void
 }
 
 interface NoticeCopy {
   message: string
   tone: 'warning' | 'error'
-  action?: 'microphone' | 'recognition'
+  action?: 'microphone' | 'recognition' | 'usage-limits'
 }
 
 const COPY: Record<DictationNoticeKind, NoticeCopy> = {
@@ -214,6 +233,12 @@ const COPY: Record<DictationNoticeKind, NoticeCopy> = {
     tone: 'warning',
     action: 'microphone'
   },
+  // Without a reset time; with one, `showDictationNotice` names it (`usageLimitReached`).
+  'usage-limit': {
+    message: 'assistant.voicePanel.usageLimitReachedNoTime',
+    tone: 'warning',
+    action: 'usage-limits'
+  },
   quota: { message: 'assistant.voicePanel.quotaExhausted', tone: 'warning' },
   busy: { message: 'assistant.voicePanel.serviceBusy', tone: 'warning' },
   failed: { message: 'assistant.voicePanel.voiceTranscribeFailed', tone: 'error' },
@@ -244,7 +269,23 @@ export function showDictationNotice(
             label: context.t('assistant.voicePanel.openMicrophoneSettings'),
             onClick: context.openMicrophoneSettings
           }
-        : undefined
+        : copy.action === 'usage-limits' && context.openUsageLimits
+          ? {
+              label: context.t('assistant.voicePanel.openUsageLimits'),
+              onClick: context.openUsageLimits
+            }
+          : undefined
+  if (kind === 'usage-limit') {
+    // `detail` is the reset instant here, folded into the headline rather than shown raw.
+    const resetsAt = detail ? Date.parse(detail) : Number.NaN
+    const message = Number.isFinite(resetsAt)
+      ? context.t('assistant.voicePanel.usageLimitReached', {
+          time: formatUsageLimitResetTime(resetsAt)
+        })
+      : context.t(copy.message)
+    toast.warning(message, action ? { action } : undefined)
+    return
+  }
   const options = { ...(action ? { action } : {}), ...(detail ? { description: detail } : {}) }
   const show = copy.tone === 'error' ? toast.error : toast.warning
   show(context.t(copy.message), Object.keys(options).length ? options : undefined)

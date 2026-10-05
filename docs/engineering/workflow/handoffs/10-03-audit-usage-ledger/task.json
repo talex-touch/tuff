@@ -1,0 +1,30 @@
+{
+  "id": "audit-usage-ledger",
+  "name": "audit-usage-ledger",
+  "title": "用量账本：计数常开、全局本地桶、写入端归属、洞察读接口",
+  "description": "R-A1–R-A10",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-10-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "task/chore/live-work-1003",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "10-03-intelligence-audit-rebuild",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "Spec and sensitive-data-inventory updates (B11) are deferred: the trellis-to-comet-native migration is moving .trellis/spec into docs/engineering/specs and editing the inventory; drafts go into this task dir. Git is handled by the coordinator.",
+    "evidence": "Prerequisite pricing task verified 2026-10-03 06:32 PDT (vitest 49/49, eslint clean, MODEL_COSTS removed). Acceptance AC-B1–AC-B10 will record test names and timings here.",
+    "nextAction": "Pin the contract types first, then implement always-on counting, the local global bucket, backfill, provider/caller attribution and the two host-only read APIs per implement.md."
+  }
+}

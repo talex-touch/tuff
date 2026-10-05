@@ -1,7 +1,7 @@
 /**
- * The filter of the panels drawn on `MetaPanel`: the ⌘K action panel (`views/meta/MetaOverlay.vue`)
- * and the Flow picker (`components/flow/FlowSelector.vue`). One matcher, so the same query finds
- * rows the same way in both.
+ * The filter of the pages drawn on `MetaPanel`: the ⌘K action list (`views/meta/MetaOverlay.vue`)
+ * and the Flow targets (`meta-flow-page.ts`). One matcher, so the same query finds rows the same way
+ * on both.
  */
 
 /** The filter field's value as `matchesMetaPanelQuery` reads it: trimmed and lower-cased. */

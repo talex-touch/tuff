@@ -29,6 +29,10 @@ import {
   IntelligenceCapabilityType,
   IntelligenceProviderType
 } from '@talex-touch/tuff-intelligence'
+import {
+  closeSystemTranslation,
+  getSystemTranslationStatus
+} from '@talex-touch/tuff-native/translation'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/types'
 import {
@@ -73,6 +77,7 @@ import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
 import { registerMcpServerAdminChannels } from './mcp-server-admin-runtime'
 import { registerSkillLocalChannels } from './skill-local-runtime'
+import { registerMcpInventoryChannels } from './resource-inventory/mcp-inventory-runtime'
 import { getProviderModelOptions } from './intelligence-provider-model-options'
 import {
   setIntelligenceAutonomousRuntimeAdapter,
@@ -98,7 +103,15 @@ import { DeepSeekProvider } from './providers/deepseek-provider'
 import { OpenAIProvider } from './providers/openai-provider'
 import { SiliconflowProvider } from './providers/siliconflow-provider'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
+import {
+  startPricingCatalogSchedule,
+  stopPricingCatalogSchedule
+} from './pricing/models-dev-catalog'
 import { tuffIntelligenceRuntime } from './tuff-intelligence-runtime'
+import { queryAuditLogPage } from './usage-ledger/audit-log-query'
+import { HOST_CHAT_DEFAULT_CALLER, HOST_TTS_DEFAULT_CALLER } from './usage-ledger/constants'
+import { withHostDefaultCaller } from './usage-ledger/host-callers'
+import { getUsageInsights } from './usage-ledger/usage-insights'
 
 const intelligenceLog = createLogger('Intelligence')
 const INTELLIGENCE_STREAM_KEEPALIVE_MS = 10_000
@@ -712,6 +725,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   private agentChannelsCleanup: (() => void) | null = null
   private mcpServerAdminCleanup: (() => void) | null = null
   private skillLocalCleanup: (() => void) | null = null
+  private mcpInventoryCleanup: (() => void) | null = null
   private agentRuntimePromise: Promise<void> | null = null
 
   constructor() {
@@ -758,7 +772,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     // 必须在首次应用配置之前 settle：provider 列表的组装是同步的，探测未完成时 pi provider 会被
     // 当成不存在而整轮缺席，直到下一次配置变更才补上。
-    await this.probeLocalCliProviders()
+    await Promise.all([
+      this.probeLocalCliProviders(),
+      getSystemTranslationStatus({ timeoutMs: 5_000 }).catch((error) => {
+        intelligenceLog.warn('Native translation probe failed; keeping existing providers', {
+          error
+        })
+      })
+    ])
 
     // 新 manager 必须先强制应用一次配置；后续订阅的当前值回放会被 signature 去重
     ensureIntelligenceConfigLoaded(true)
@@ -768,11 +789,17 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     this.startAgentRuntime()
 
+    // models.dev 定价目录在后台检查：首检至少 30 秒后且越过启动写入窗口，之后每小时复查，
+    // 超过 24 小时才真正拉取；不阻塞初始化，也不阻塞任何调用。
+    startPricingCatalogSchedule()
+
     intelligenceLog.success('Intelligence module initialized')
   }
 
   async onDestroy(): Promise<void> {
     intelligenceLog.info('Destroying Intelligence module')
+    closeSystemTranslation()
+    stopPricingCatalogSchedule()
     // Only wait for a runtime that was actually started. waitForAgentRuntime() starts one on
     // demand -- which is what the request paths at agent.run, workflow.execute and the agent
     // channels rely on -- but at teardown that means registering builtin tools and agents and
@@ -796,6 +823,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     if (this.skillLocalCleanup) {
       this.skillLocalCleanup()
       this.skillLocalCleanup = null
+    }
+    if (this.mcpInventoryCleanup) {
+      this.mcpInventoryCleanup()
+      this.mcpInventoryCleanup = null
     }
     await Promise.all([agentManager.shutdown(), aiCliOrchestrator.shutdown()])
     await intelligenceMcpRegistry.closeAll()
@@ -1274,6 +1305,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerAiCliOrchestratorChannels(registerSafe)
     this.mcpServerAdminCleanup ??= registerMcpServerAdminChannels(this.transport)
     this.skillLocalCleanup ??= registerSkillLocalChannels(this.transport)
+    this.mcpInventoryCleanup ??= registerMcpInventoryChannels(this.transport)
     this.registerQuotaChannels(registerSafe)
     this.registerOrchestrationChannels(registerHostOnlySafe)
     this.registerWorkflowChannels(registerHostOnlySafe)
@@ -1493,7 +1525,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       'intelligence.basic',
       async (data, context) => {
         ensureIntelligenceConfigLoaded()
-        return await intelligenceTtsService.speak(bindPluginMetadataCaller(data, context))
+        return await intelligenceTtsService.speak(
+          withHostDefaultCaller(
+            bindPluginMetadataCaller(data, context),
+            Boolean(context.plugin),
+            HOST_TTS_DEFAULT_CALLER
+          )
+        )
       }
     )
 
@@ -1506,7 +1544,11 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           throw new Error('Invalid chat payload')
         }
 
-        const scopedData = bindPluginMetadataCaller(data, context)
+        const scopedData = withHostDefaultCaller(
+          bindPluginMetadataCaller(data, context),
+          Boolean(context.plugin),
+          HOST_CHAT_DEFAULT_CALLER
+        )
         const { messages, providerId, model, promptTemplate, promptVariables, metadata } =
           scopedData
 
@@ -1951,6 +1993,44 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       const { callerId, periodType, startPeriod, endPeriod } = data
       return await tuffIntelligence.getUsageStats(callerId, periodType, startPeriod, endPeriod)
     })
+
+    registerSafe(
+      intelligenceApiEvents.getUsageInsights,
+      'Get usage insights',
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        return await getUsageInsights(data)
+      }
+    )
+
+    registerSafe(
+      intelligenceApiEvents.queryAuditLogs,
+      'Query audit logs',
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        return await queryAuditLogPage(data)
+      }
+    )
+
+    registerSafe(
+      intelligenceApiEvents.getUsageLimits,
+      'Get usage limits',
+      async (_data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        const { getUsageLimits } = await import('./usage-ledger/usage-limits')
+        return await getUsageLimits()
+      }
+    )
+
+    registerSafe(
+      intelligenceApiEvents.setUsageLimits,
+      'Set usage limits',
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        const { setUsageLimits } = await import('./usage-ledger/usage-limits')
+        return await setUsageLimits(data)
+      }
+    )
   }
 
   private registerEnvironmentChannels(

@@ -178,7 +178,7 @@ function verifyNativeModules(strict, target) {
 
   const message =
     `Required native modules missing from ${releaseDir}: ${missingModuleNames.join(', ')}. ` +
-    'Run `pnpm --filter @talex-touch/tuff-native rebuild` to produce them.'
+    'Run the native package rebuild, build:audio, and (on macOS) build:translation scripts to produce them.'
 
   if (strict || target === 'win') {
     throw new Error(message)
@@ -670,6 +670,14 @@ function build() {
       console.warn(`Warning: Failed to ensure platform modules: ${err.message}`)
     }
 
+    if (normalizedTarget === 'mac' && process.platform === 'darwin') {
+      execFileSync(
+        process.execPath,
+        [path.join(nativeAddonReleaseDir(projectRoot), '..', '..', 'scripts', 'build-translation.js'), '--universal'],
+        { stdio: 'inherit' }
+      )
+    }
+
     if (skipInstallAppDeps) {
       console.log('Skipping electron-builder install-app-deps step (SKIP_INSTALL_APP_DEPS=true)\n')
       verifyNativeModules(process.env.CI === 'true', normalizedTarget)
@@ -710,7 +718,7 @@ function build() {
         })
         if (restoredAddons.length > 0) {
           console.log(
-            `[build-target] Restored the Cargo-built addons install-app-deps removed: ${restoredAddons.join(', ')}\n`
+            `[build-target] Restored the separately built native artifacts install-app-deps removed: ${restoredAddons.join(', ')}\n`
           )
         }
         verifyNativeModules(process.env.CI === 'true', normalizedTarget)

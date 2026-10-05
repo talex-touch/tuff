@@ -14,6 +14,7 @@ const httpStatusCases: Array<{
   { code: 'INVALID_REQUEST', statusCode: 400 },
   { code: 'PERMISSION_DENIED', statusCode: 403 },
   { code: 'QUOTA_EXHAUSTED', statusCode: 429 },
+  { code: 'USAGE_LIMIT_REACHED', statusCode: 429 },
   { code: 'PROVIDER_UNAVAILABLE', statusCode: 503 },
   { code: 'MODEL_UNSUPPORTED', statusCode: 422 },
   { code: 'CAPABILITY_UNSUPPORTED', statusCode: 422 },

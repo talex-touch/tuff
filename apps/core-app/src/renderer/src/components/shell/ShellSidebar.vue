@@ -19,6 +19,7 @@ import ShellConversationList from './ShellConversationList.vue'
 import ShellNavGroup from './ShellNavGroup.vue'
 import ShellNavItem from './ShellNavItem.vue'
 import ShellSearchEntry from './ShellSearchEntry.vue'
+import ShellUpdateNotice from './ShellUpdateNotice.vue'
 
 /** How long the rail snap animates. Short enough to still feel like a latch, not a slide. */
 const SNAP_DURATION = 200
@@ -190,6 +191,8 @@ const isNewChatActive = computed(
         </ShellNavItem>
       </div>
     </Transition>
+
+    <ShellUpdateNotice />
 
     <!--
       Resize grip along the trailing edge. It opts out of the window drag region; without that

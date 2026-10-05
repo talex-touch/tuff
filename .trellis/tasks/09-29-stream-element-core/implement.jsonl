@@ -1,9 +1,0 @@
-{"file": ".trellis/tasks/09-29-stream-element/design.md", "reason": "parent design: the shared contracts this child implements"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "structure, slots, ready content vs reveal motion"}
-{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "tokens, motion, accessibility"}
-{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "docs, demos, gallery specimens"}
-{"file": ".trellis/spec/frontend/nexus-docs-structure.md", "reason": "page shape"}
-{"file": ".trellis/tasks/09-29-stream-element/research/ai-suite-building-blocks.md", "reason": "showcase building blocks"}
-{"file": ".trellis/tasks/09-29-stream-element/research/existing-streaming-components.md", "reason": "block-stream and inline-markup completion"}
-{"file": ".trellis/tasks/09-29-stream-element/research/motion-references.md", "reason": "kobra structure: citations as tokens, code block chrome"}
-{"file": ".trellis/tasks/09-29-stream-element/research/prior-decisions.md", "reason": "parts vocabulary decisions"}

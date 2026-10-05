@@ -105,7 +105,7 @@ const rootStyle = computed(() => spring.value
 
 <style lang="scss">
 // Values calibrated on 2026-09-27 against a prototype of this DOM, in light and dark:
-// `.trellis/tasks/09-27-corebox-action-feedback-hint/research/visual-calibration.md`.
+// Retired task 09-27-corebox-action-feedback-hint, research/visual-calibration.md.
 //
 // Not scoped, as in TxChoiceCard: every selector carries the `tx-status-hint` prefix, so
 // nothing reaches past the component, and the scope attribute on each selector plus the

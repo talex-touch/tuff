@@ -174,14 +174,15 @@ jobs:
       # default appeared in eight consecutive reports, three days after the default was inverted.
       #
       # The 2026-08-12 report named `07-26-install-launch-v2-4-13-beta-23` as an in-progress task
-      # missing metadata. No such directory exists, active or archived. That is a directory lookup
-      # to catch, and a report naming a task nobody can open is the cheapest possible evidence that
-      # its author did not query the tree.
+      # missing metadata. No such task was in the committed record, active or archived. That is a
+      # lookup to catch, and a report naming a task nobody can open is the cheapest possible
+      # evidence that its author did not query the record.
       #
-      # Only task existence is checked. Counts and prose are not: parsing "至少 X 项" out of two
-      # languages fails in ways nobody can act on, and the field-presence claim is already
-      # docs:verify's DOC-TASK-META rule. Reports dated on or before the gate date are history and
-      # exempt, which is #1107's own fourth acceptance criterion.
+      # Only task identity is checked, against the retired task registry
+      # (docs/engineering/workflow/retired-task-index.json) -- a missing, malformed or empty registry
+      # fails the step instead of passing it. Counts and prose are not: parsing "至少 X 项" out of
+      # two languages fails in ways nobody can act on. Reports dated on or before the gate date are
+      # history and exempt, which is #1107's own fourth acceptance criterion.
       - name: Check maintenance-audit report claims
         run: pnpm check audit-report-claims && pnpm check audit-report-claims --self-test
 
@@ -269,7 +270,7 @@ jobs:
 
       # actionlint was named an "external acceptance gap" in #482 on the grounds that it was
       # unavailable locally. It was not unavailable -- it was never wired: zero references outside
-      # .trellis task records, none in any workflow, script, or mise.toml.
+      # the (since retired) task records, none in any workflow, script, or mise.toml.
       #
       # This starts green, but not on the first measurement: without shellcheck installed the run
       # reported 0 findings, and with it (as on every GitHub runner) the same command reported 32,

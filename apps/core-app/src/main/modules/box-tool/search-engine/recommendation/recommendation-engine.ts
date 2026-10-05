@@ -48,6 +48,7 @@ import {
 import { recommendationExposureService } from './recommendation-exposure-service'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { createLogger } from '../../../../utils/logger'
+import { readUsageLimitInfo } from '../../../ai/usage-ledger/usage-limits'
 import {
   DAY_MS,
   BEHAVIOR_SCORE_MAX,
@@ -3140,6 +3141,21 @@ export class RecommendationEngine {
     }
   }
 
+  /**
+   * The user's global AI usage limit refused a semantic call (usage-limits task C5): the semantic
+   * layer stays off until the limit resets (the next local day or month) and ranking falls back to
+   * the non-semantic score. Not a failure of the semantic AI, so the failure count is left alone.
+   */
+  private pauseSemanticAiOnUsageLimit(error: unknown): boolean {
+    const usageLimit = readUsageLimitInfo(error)
+    if (!usageLimit) return false
+    this.semanticAiCooldownUntil = Math.max(this.semanticAiCooldownUntil, usageLimit.resetsAt)
+    recommendationLog.debug('Semantic AI off until the AI usage limit resets', {
+      meta: { limitKey: usageLimit.key, resetsAt: usageLimit.resetsAt }
+    })
+    return true
+  }
+
   private async applyAiEmbeddingScores(
     scored: ScoredItem[],
     semanticProfile: RecommendationSemanticProfile | null,
@@ -3212,7 +3228,7 @@ export class RecommendationEngine {
         }))
         .sort((a, b) => b.score - a.score)
     } catch (error) {
-      this.recordSemanticAiFailure()
+      if (!this.pauseSemanticAiOnUsageLimit(error)) this.recordSemanticAiFailure()
       recommendationLog.debug('AI embedding recommendation score skipped', {
         meta: toErrorMeta(error)
       })
@@ -3291,7 +3307,7 @@ export class RecommendationEngine {
         })
         .sort((a, b) => b.score - a.score)
     } catch (error) {
-      this.recordSemanticAiFailure()
+      if (!this.pauseSemanticAiOnUsageLimit(error)) this.recordSemanticAiFailure()
       recommendationLog.debug('AI recommendation rerank skipped', {
         meta: toErrorMeta(error)
       })

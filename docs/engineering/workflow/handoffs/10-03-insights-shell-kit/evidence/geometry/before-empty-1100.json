@@ -1,0 +1,68 @@
+{
+  "viewport": "1100x820",
+  "header": {
+    "box": {
+      "x": 300,
+      "y": 56,
+      "w": 760,
+      "h": 87.2
+    },
+    "flexDirection": "row",
+    "alignItems": "flex-end",
+    "marginBottom": "24px"
+  },
+  "h1": {
+    "box": {
+      "x": 300,
+      "y": 56,
+      "w": 104,
+      "h": 31.2
+    },
+    "fontSize": "26px",
+    "fontWeight": "600",
+    "lineHeight": "31.2px",
+    "userSelect": "none",
+    "color": "rgb(245, 245, 247)"
+  },
+  "actions": {
+    "box": {
+      "x": 300,
+      "y": 111.2,
+      "w": 760.5,
+      "h": 32
+    },
+    "flexDirection": "row",
+    "gap": "8px",
+    "marginRight": "0px"
+  },
+  "actionChildren": [
+    {
+      "id": "voice-status-alert",
+      "box": {
+        "x": 300,
+        "y": 112.2,
+        "w": 584.5,
+        "h": 30
+      }
+    },
+    {
+      "id": "voice-insights-records-jump",
+      "box": {
+        "x": 892.5,
+        "y": 111.2,
+        "w": 80,
+        "h": 32
+      }
+    },
+    {
+      "id": "voice-insights-more",
+      "box": {
+        "x": 980.5,
+        "y": 111.2,
+        "w": 80,
+        "h": 32
+      }
+    }
+  ],
+  "metrics": []
+}

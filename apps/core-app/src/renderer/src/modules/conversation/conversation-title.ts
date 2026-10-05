@@ -6,6 +6,12 @@ import type {
 import { INTELLIGENCE_CONVERSATION_TITLE_OPERATION } from '@talex-touch/utils/types/intelligence'
 
 /**
+ * Stable usage-ledger caller of the title request (audit rebuild design §1.4). Safe to send: the
+ * request carries no Home surface marker, so the Pi native-session guard does not apply.
+ */
+const CONVERSATION_TITLE_CALLER = 'core.home.conversation-title'
+
+/**
  * Generates the short conversation title HomePage's working title stands in for (#969).
  *
  * The working title is the user's opening message verbatim, which a long prompt turns into a
@@ -182,7 +188,10 @@ export async function generateConversationTitle(
       },
       {
         timeout: 10_000,
-        metadata: { operation: INTELLIGENCE_CONVERSATION_TITLE_OPERATION }
+        metadata: {
+          caller: CONVERSATION_TITLE_CALLER,
+          operation: INTELLIGENCE_CONVERSATION_TITLE_OPERATION
+        }
       }
     )
     return normalizeGeneratedTitle(result?.result ?? null)

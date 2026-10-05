@@ -1,0 +1,30 @@
+{
+  "id": "intelligence-memory-page",
+  "name": "intelligence-memory-page",
+  "title": "记忆独立子页",
+  "description": "R-F1–R-F7",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-10-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "task/chore/live-work-1003",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "10-03-intelligence-audit-rebuild",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "None for components; registration (categories.ts, router.ts, uno.config.ts, lang JSON) waits until the sibling MCP page task stops editing those files. Git is handled by the coordinator.",
+    "evidence": "Plan reviewed by the boss on 2026-10-03; acceptance AC-M1–AC-M6 will record migrated memory tests, smoke/translation tests and dev-instance screenshots under evidence/.",
+    "nextAction": "Build memory list/detail/editor components and memory-scope.ts with tests, then register the memory sub-page after the MCP entry and verify in a dev instance."
+  }
+}

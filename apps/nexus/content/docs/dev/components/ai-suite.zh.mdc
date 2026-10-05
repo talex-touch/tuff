@@ -328,5 +328,5 @@ code: |
 - 上游为自驱动 demo（内容硬编码 + 定时器时间轴）；移植后组件全部受控，时间轴仅存在于本页各 demo 内。
 - reduced-motion 逐组件显式实现：只砍补间不砍状态机，延迟一并归零（相对上游全局 `*` 规则的有意偏离）。
 - 高对比主题（`data-tx-contrast='high'`）下 `--tx-bui-*` 保持原值，为已知限制。
-- 17 的图表区在 2026-08 首次移植时，上游自己渲染为 "No data to display"，当时没有视觉基线可比，图表只按规格实现。上游此后补上了完整的 scrub 呈现层（扫描线、深色 tooltip、序列色点、虚线基准线、曲线端点），我方尚未跟进——差距记录在 `.trellis/tasks/09-21-bui-parity-audit/`。
+- 17 的图表区在 2026-08 首次移植时，上游自己渲染为 "No data to display"，当时没有视觉基线可比，图表只按规格实现。上游此后补上了完整的 scrub 呈现层（扫描线、深色 tooltip、序列色点、虚线基准线、曲线端点），我方尚未跟进。差距的历史来源记录在 `docs/engineering/workflow/retired-task-index.json` 的 `09-21-bui-parity-audit` 条目。
 - 全部组件源码文件头携带 MIT 署名：Adapted from Beautiful UI, © 2026 Shane Levine, MIT。

@@ -94,7 +94,7 @@ describe('plugin window boundary contract', () => {
 
   it('routes contextual detach through the owning CoreBox boundary', () => {
     const detachStart = detachHookSource.indexOf('async function detachUIMode')
-    const detachEnd = detachHookSource.indexOf('function openFlowSelector', detachStart)
+    const detachEnd = detachHookSource.indexOf('async function openFlowPanel', detachStart)
     const detachHandler = detachHookSource.slice(detachStart, detachEnd)
 
     expect(detachHandler).toContain('CoreBoxEvents.uiMode.detach')

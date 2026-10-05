@@ -91,11 +91,12 @@ describe('plugin source package audit contracts', () => {
       ephemeralSigning: false,
       skipPrerequisites: false,
       repeat: 2,
-      outputPath: path.join(
-        repoRoot,
-        '.trellis/tasks/07-18-plugin-source-package-audit/evidence/source-package-audit.json',
-      ),
     })
+    // The report is engineering evidence of its own, not a workflow record: it must outlive the
+    // retired task tree and must not land in local Comet runtime state.
+    expect(path.relative(repoRoot, defaults.outputPath).split(path.sep).join('/')).toMatch(
+      /^docs\/engineering\/reports\/[^/]+\/[^/]+\.json$/,
+    )
     expect(defaults.artifactDirectory).toBe(path.join(path.dirname(defaults.outputPath), 'artifacts'))
 
     const overrides = parseArgs([
@@ -104,7 +105,7 @@ describe('plugin source package audit contracts', () => {
       '--target',
       'touch-intelligence',
       '--output',
-      '.trellis/audit-fixtures/custom-report.json',
+      'tmp/plugin-audit/custom-report.json',
       '--allow-dirty',
       '--ephemeral-signing',
       '--skip-prerequisites',
@@ -113,7 +114,7 @@ describe('plugin source package audit contracts', () => {
     ])
     expect(overrides).toMatchObject({
       targets: ['touch-translation', 'touch-intelligence'],
-      outputPath: path.join(repoRoot, '.trellis/audit-fixtures/custom-report.json'),
+      outputPath: path.join(repoRoot, 'tmp/plugin-audit/custom-report.json'),
       allowDirty: true,
       ephemeralSigning: true,
       skipPrerequisites: true,

@@ -283,27 +283,36 @@ describe('verifyPackagedEverythingNative', () => {
 })
 
 describe('verifyPackagedNativeAddons', () => {
-  it('accepts a darwin package whose OCR and audio addons survived packaging', async () => {
-    const { appOutDir } = await createPackagedNativeAddonFixture([
-      'tuff_native_ocr.node',
-      'tuff_native_audio.node'
-    ])
-
-    expect(() =>
-      verifyPackagedNativeAddons({ appOutDir, electronPlatformName: 'darwin' }, { strict: true })
-    ).not.toThrow()
-  })
-
   it('rejects a strict darwin package that lost the audio addon', async () => {
     const { appOutDir, releaseDir } = await createPackagedNativeAddonFixture([
       'tuff_native_ocr.node',
-      'tuff_native_audio.node'
+      'tuff_native_audio.node',
+      'tuff-native-translation'
     ])
     await fs.rm(path.join(releaseDir, 'tuff_native_audio.node'))
 
     expect(() =>
       verifyPackagedNativeAddons({ appOutDir, electronPlatformName: 'darwin' }, { strict: true })
     ).toThrow(/Packaged native addons missing from .*: tuff_native_audio\.node\./)
+  })
+
+  it('rejects a strict darwin package when only the translation helper is removed', async () => {
+    const helperName = 'tuff-native-translation'
+    const { appOutDir, releaseDir } = await createPackagedNativeAddonFixture([
+      'tuff_native_ocr.node',
+      'tuff_native_audio.node',
+      helperName
+    ])
+    const context = { appOutDir, electronPlatformName: 'darwin' }
+
+    // Positive control: this exact package is valid before losing the helper.
+    verifyPackagedNativeAddons(context, { strict: true })
+
+    await fs.rm(path.join(releaseDir, helperName))
+
+    expect(() => verifyPackagedNativeAddons(context, { strict: true })).toThrow(
+      /tuff-native-translation/
+    )
   })
 
   it('only warns for a non-strict package that lost the audio addon', async () => {

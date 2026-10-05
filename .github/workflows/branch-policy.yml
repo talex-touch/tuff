@@ -1,4 +1,4 @@
-# Branch/tag policy guard -- the mechanical half of .trellis/spec/guides/branch-and-release.md.
+# Branch/tag policy guard -- the mechanical half of docs/engineering/specs/guides/branch-and-release.md.
 #
 # Its own workflow rather than a step in ci.yml: the ancestry check needs the full graph, and the
 # ci.yml jobs check out shallow. A shallow clone makes `git merge-base --is-ancestor` answer "no" for

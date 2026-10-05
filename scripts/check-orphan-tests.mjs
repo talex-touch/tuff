@@ -122,8 +122,6 @@ export const COVERAGE = [
     command: 'test-command: pnpm test',
   },
   { root: 'scripts', workflow: '.github/workflows/ci.yml', command: 'pnpm test:scripts' },
-  // Fixtures consumed by scripts/docs.test.mjs, not suites of their own.
-  { root: '.trellis/tasks', workflow: '.github/workflows/ci.yml', command: 'mise run docs:verify' },
 ]
 
 /**

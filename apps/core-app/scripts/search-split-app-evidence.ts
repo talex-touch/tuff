@@ -2,7 +2,7 @@
 /**
  * Application evidence for the search-index split, collected from an **isolated** CoreApp profile.
  *
- *   .trellis/tasks/07-28-migrate-search-index-split-write-paths/acceptance.md
+ *   docs/engineering/reports/search-index-split-write-acceptance.md
  *
  * The release gate (`prd.md` R3) asks for a CoreApp run that proves, in one place: worker-owned
  * `search-index.db`, provider readiness ordering, app/file count and query parity, no
@@ -1850,7 +1850,7 @@ export function assembleReport(
       failures.length === 0
         ? [
             `cross-check the profile with: pnpm -C apps/core-app run search-split:topology:verify -- --profile ${options.profile} --expect-split`,
-            'attach the redacted summary to .trellis/tasks/07-28-migrate-search-index-split-write-paths/acceptance.md'
+            'attach the redacted summary to docs/engineering/reports/search-index-split-write-acceptance.md'
           ]
         : [
             `read the failing phase JSON under ${evidenceDir}`,

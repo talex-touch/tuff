@@ -360,6 +360,15 @@ if (process.env.TUFF_DISABLE_NATIVE_AUDIO !== '1') {
   })
 }
 
+if (process.platform === 'darwin') {
+  const nativeRoot = path.dirname(require.resolve('@talex-touch/tuff-native/translation'))
+  execFileSync(process.execPath, [path.join(nativeRoot, 'scripts', 'build-translation.js')], {
+    cwd: nativeRoot,
+    env,
+    stdio: 'inherit'
+  })
+}
+
 // macOS 26/27 (Tahoe) can crash the Electron *browser* process with a V8
 // JIT-page fault (electron/electron#51351). app.commandLine (see precore.ts)
 // only reaches renderer/child V8 — the browser process's V8 is already

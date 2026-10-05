@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/design.md", "reason": "parent design §2: catalog format, resolution order, cost formula, since marker"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/prd.md", "reason": "parent requirements R-B1–R-B5, decisions D11–D13, models.dev measured facts"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/research/audit-data-layer.md", "reason": "provider column semantics, MODEL_COSTS behaviour, Nexus credits, Pi reported cost"}
+{"file": ".trellis/spec/main-process/database-write-contracts.md", "reason": "single-writer scheduler, background priority, sqlite retry for the catalog row"}
+{"file": ".trellis/spec/main-process/network-error-classification-contracts.md", "reason": "how network failures are classified when the catalog fetch fails"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "single pricing source; do not leave a second cost table behind"}

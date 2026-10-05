@@ -1,0 +1,22 @@
+file: apps/nexus/server/utils/tuffIntelligenceLabService.ts
+total lines: 2079
+top-level declarations: 73 (live 73, unreachable 0)
+live declaration lines: 1885; unreachable declaration lines: 0
+roots: invokeIntelligenceCapability, streamIntelligenceCapability, listIntelligenceLabProviders, resolveIntelligenceProviderRuntimeContexts, probeIntelligenceLabProvider, NexusIntelligenceInvokePayload
+
+unreachable declarations:
+
+imports no longer used by live declarations: none
+
+exported names:
+  ResolvedProviderContext 
+  isRetryableInvokeError 
+  resolveIntelligenceProviderRuntimeContexts 
+  probeIntelligenceLabProvider 
+  NexusIntelligenceInvokePayload 
+  NexusIntelligenceInvokeResult 
+  NexusIntelligenceStreamMeta 
+  NexusIntelligenceStreamHooks 
+  invokeIntelligenceCapability 
+  streamIntelligenceCapability 
+  listIntelligenceLabProviders 

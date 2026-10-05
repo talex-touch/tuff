@@ -1,0 +1,6 @@
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/design.md", "reason": "parent design §4: component list, props, placement in CoreApp"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/prd.md", "reason": "decision D7 and requirements R-E1–R-E3"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "component patterns, semantic controls, loading-state rules"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "type scale, spacing, ring-vs-border rules the moved styles must keep"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "extract shared instead of copying the voice page styles"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "CDP instance ownership before screenshots"}

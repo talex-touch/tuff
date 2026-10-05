@@ -15,7 +15,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import * as schema from '../../db/schema'
-import { intelligenceAuditLogs, intelligenceUsageStats } from '../../db/schema'
+import { intelligenceAuditLogs, intelligenceUsageStats, systemConfig } from '../../db/schema'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import './intelligence-test-harness'
 import { intelligenceAuditLogger } from './intelligence-audit-logger'
@@ -23,6 +23,8 @@ import { intelligenceCapabilityRegistry } from './intelligence-capability-regist
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { setIntelligenceProviderManager, TuffIntelligenceSDK } from './intelligence-sdk'
 import { createChatProvider, FakeProviderManager } from './intelligence-test-harness'
+import modelsDevFixture from './pricing/__fixtures__/models-dev-subset.json'
+import { compactModelsDevCatalog, PRICING_CATALOG_CONFIG_KEY } from './pricing/models-dev-catalog'
 
 const testDir = dirname(fileURLToPath(import.meta.url))
 const migrationsFolder = resolve(testDir, '../../../../resources/db/migrations')
@@ -43,6 +45,17 @@ beforeAll(async () => {
   client = createClient({ url: `file:${join(tempDir, 'ledger.sqlite')}` })
   db = drizzle(client, { schema })
   await migrate(db, { migrationsFolder })
+  // Cost anchor basis (2026-10-03): audit costs are priced at flush time from the stored
+  // models.dev catalog instead of the retired fixed table. The fixture cut lists openai
+  // gpt-4o-mini at $0.15 / $0.6 per 1M tokens. Since the usage ledger (R-A4) the row records the
+  // selected channel's config id `ledger-provider` — a custom channel with no base URL — so the
+  // model family (gpt → openai) prices 1000 + 500 tokens at 0.00045, the same figure the old
+  // table produced. (A local channel would price at 0, which is why the channel is custom.)
+  await db.insert(systemConfig).values({
+    key: PRICING_CATALOG_CONFIG_KEY,
+    value: JSON.stringify(compactModelsDevCatalog(modelsDevFixture)),
+    updatedAt: Date.now()
+  })
   await intelligenceAuditLogger.destroy()
   intelligenceQuotaManager.clearCache()
 }, 60_000)
@@ -63,7 +76,7 @@ describe('stream audit ledger consistency', () => {
       type: IntelligenceCapabilityType.CHAT,
       name: 'Ledger Chat',
       description: 'synthetic stream ledger integration',
-      supportedProviders: [IntelligenceProviderType.LOCAL]
+      supportedProviders: [IntelligenceProviderType.CUSTOM]
     })
 
     async function* streamChunks() {
@@ -85,10 +98,11 @@ describe('stream audit ledger consistency', () => {
     const provider = createChatProvider(
       {
         id: 'ledger-provider',
-        type: IntelligenceProviderType.LOCAL,
+        type: IntelligenceProviderType.CUSTOM,
         name: 'Ledger Provider',
         enabled: true,
         priority: 1,
+        apiKey: 'sk-test-only',
         defaultModel: 'gpt-4o-mini',
         models: ['gpt-4o-mini'],
         capabilities: ['text.chat']
@@ -155,7 +169,8 @@ describe('stream audit ledger consistency', () => {
     expect(auditRows[0]).toMatchObject({
       traceId: 'trace-ledger-integration',
       capabilityId: 'text.chat',
-      provider: 'ledger-runtime',
+      // The selected channel's config id; the `end` event above keeps the chunk's provider.
+      provider: 'ledger-provider',
       model: 'gpt-4o-mini',
       promptTokens: 1000,
       completionTokens: 500,

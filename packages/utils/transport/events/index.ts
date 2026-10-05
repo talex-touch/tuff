@@ -112,6 +112,9 @@ import type {
   CoreBoxContextActionsOpenRequest,
   CoreBoxDetachUIViewRequest,
   CoreBoxExecuteRequest,
+  CoreBoxFocusFailureNotification,
+  CoreBoxFocusProbeRequest,
+  CoreBoxFocusProbeResponse,
   CoreBoxForwardKeyEvent,
   CoreBoxGetBoundsResponse,
   CoreBoxHideRequest,
@@ -1025,6 +1028,16 @@ export const CoreBoxEvents = {
     focusWindow: defineEvent('core-box').module('ui').event('focus-window').define<void, FocusWindowResponse>(),
 
     /**
+     * Probe the CoreBox renderer for its current DOM focus snapshot.
+     * Fire-and-forget from main to renderer; the renderer replies via
+     * `focusProbeResult`.
+     */
+    focusProbe: defineEvent('core-box')
+      .module('ui')
+      .event('focus-probe')
+      .define<CoreBoxFocusProbeRequest, void>(),
+
+    /**
      * Forward a key event to the attached UI view.
      */
     forwardKeyEvent: defineEvent('core-box')
@@ -1077,6 +1090,25 @@ export const CoreBoxEvents = {
      * Notify a plugin UI that its CoreBox surface should resume.
      */
     resume: defineEvent('core-box').module('ui').event('resume').define<CoreBoxUiResumePayload, void>(),
+
+    /**
+     * Renderer-to-main result of a focus probe. Fire-and-forget so the
+     * IPC channel never blocks on a missing reply.
+     */
+    focusProbeResult: defineEvent('core-box')
+      .module('ui')
+      .event('focus-probe-result')
+      .define<CoreBoxFocusProbeResponse, void>(),
+
+    /**
+     * Renderer-to-main notification that a focus attempt failed.
+     * Fire-and-forget with a fixed code and safe status; never carries
+     * raw DOM values or input content.
+     */
+    focusFailure: defineEvent('core-box')
+      .module('ui')
+      .event('focus-failure')
+      .define<CoreBoxFocusFailureNotification, void>(),
   },
 
   /**

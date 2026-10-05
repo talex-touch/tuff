@@ -1,10 +1,10 @@
 ---
 title: "Transition 动效"
-description: "用于带 key 内容切换、列表动效与平滑尺寸变化的通用过渡封装。"
+description: "用于带 key 内容切换、层级推入翻页、列表动效与平滑尺寸变化的通用过渡封装。"
 category: Effects
 status: beta
 since: 0.3.4
-tags: [transition, motion, list, auto-size]
+tags: [transition, motion, list, auto-size, navigation]
 syncStatus: reviewed
 verified: true
 ---
@@ -14,6 +14,7 @@ verified: true
 ### 最佳实践
 
 - 带 key 的面板切换优先使用 `mode="out-in"`，保证旧内容先离场，新内容再进入。
+- 层级导航（进入子页、返回上一页）用 `TxTransitionPush`：进入传 `direction="forward"`，返回传 `"back"`。平级的标签切换不是推入，继续用淡入淡出。
 - 内容高度变化时用 `smooth-size`；列表和重复行使用普通 `fade` / `slide-fade` / `rebound`。
 - 列表 key 使用稳定业务 id。文档示例可以用 `Date.now()`，生产可排序列表不要用临时下标。
 - 高频动效保持短时长；`rebound` 只用于小面积、允许轻微回弹的反馈。
@@ -44,6 +45,16 @@ verified: true
 | `height` | `boolean` | `true` | 通过 `TxAutoSizer` 动画高度变化。 |
 | `motion` | `'fade' \| 'slide-fade' \| 'rebound'` | `'fade'` | 外层动画尺寸时，内部内容使用的动效。 |
 
+### TxTransitionPush Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `direction` | `'forward' \| 'back'` | `'forward'` | `forward` 让新页从行内结束方向推入、旧页向开始方向推出；`back` 反过来。容器为 RTL 时左右自动镜像。 |
+| `duration` | `number` | `220` | 推入与高度过渡的时长（ms）。`0` 直接替换，不产生任何动画。 |
+| `easing` | `string` | `'cubic-bezier(0.23, 1, 0.32, 1)'` | 推入、淡入淡出与高度过渡共用的缓动函数。由 Web Animations 使用，不能写 CSS 变量。 |
+| `height` | `boolean` | `true` | 切换时容器高度从旧页过渡到新页，结束后回到 `auto`。 |
+| `appear` | `boolean` | `false` | 首次挂载时第一页也按 `direction` 推入；没有旧页，不做高度过渡。 |
+
 ### 语义化组件
 
 | 组件 | 预设 |
@@ -52,18 +63,22 @@ verified: true
 | `TxTransitionSlideFade` | `slide-fade` |
 | `TxTransitionRebound` | `rebound` |
 | `TxTransitionSmoothSize` | 支持尺寸动画的封装，可配置内部 `motion` |
+| `TxTransitionPush` | 层级翻页：横向推入，切换时过渡容器高度；独立实现，不走 `preset` |
 
 ### Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| - | - | 没有组件自定义事件。非 smooth 模式会把 Vue transition 监听器属性转发给底层 `Transition` / `TransitionGroup`；smooth-size 模式会把 attrs 转发给 `TxAutoSizer`。 |
+| - | - | `TxTransition` 与上面的预设组件没有组件自定义事件。非 smooth 模式会把 Vue transition 监听器属性转发给底层 `Transition` / `TransitionGroup`；smooth-size 模式会把 attrs 转发给 `TxAutoSizer`。 |
+| `before-enter` | `(el: Element)` | `TxTransitionPush`：新页插入之前触发。 |
+| `after-enter` | `(el: Element)` | `TxTransitionPush`：新页推入完成后触发；被下一次切换打断的进入不触发。 |
+| `after-leave` | `(el: Element)` | `TxTransitionPush`：旧页移出 DOM 后触发，包括推入中途被同 key 的新页提前替换。 |
 
 ### Slots
 
 | 插槽名 | Props | 说明 |
 |------|-------|------|
-| `default` | - | 单个带 key 子节点用于 `Transition`；`group=true` 时放置多个带稳定 key 的列表子节点。 |
+| `default` | - | 单个带 key 子节点用于 `Transition`；`group=true` 时放置多个带稳定 key 的列表子节点。`TxTransitionPush` 只接受单个带 key 的子元素，key 变化即翻页。 |
 
 ## 内容切换（X）
 
@@ -229,23 +244,83 @@ code: |
 ---
 :::
 
+## 推入翻页（Z）
+
+### Transition Push
+:::TuffDemoWrapper{demo="TransitionTransitionPushDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const pages = [
+    { id: 'actions', title: '操作', rows: ['复制路径', '在访达中显示', '流转到…'] },
+    { id: 'targets', title: '选择目标', rows: ['剪贴板历史', '系统信息', '快速笔记', '翻译', '截图标注'] },
+    { id: 'confirm', title: '确认', rows: ['仅本次允许', '始终允许'] },
+  ]
+
+  const depth = ref(0)
+  const direction = ref<'forward' | 'back'>('forward')
+  const page = computed(() => pages[depth.value])
+
+  function next() {
+    direction.value = 'forward'
+    depth.value = Math.min(depth.value + 1, pages.length - 1)
+  }
+
+  function back() {
+    direction.value = 'back'
+    depth.value = Math.max(depth.value - 1, 0)
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+      <TxButton size="sm" :disabled="depth === 0" @click="back">
+        返回
+      </TxButton>
+      <TxButton size="sm" type="primary" :disabled="depth === pages.length - 1" @click="next">
+        下一页
+      </TxButton>
+    </div>
+
+    <div style="width: 320px; border: 1px solid var(--tx-border-color-lighter); border-radius: 12px;">
+      <div style="padding: 10px 12px 4px; font-weight: 600;">
+        {{ page.title }}
+      </div>
+      <TxTransitionPush :direction="direction">
+        <ul :key="page.id" style="margin: 0; padding: 4px 6px 6px; list-style: none;">
+          <li v-for="row in page.rows" :key="row" style="padding: 7px 8px;">
+            {{ row }}
+          </li>
+        </ul>
+      </TxTransitionPush>
+    </div>
+  </template>
+---
+:::
+
 ## 概述
 
 - `class` 与 `style` 会合并到外层 `.tx-transition`；非 smooth 模式下，其余 attrs 转发给 `Transition` / `TransitionGroup`。
 - `smooth-size` 是单子节点模式。它用 `TxAutoSizer` 包住内容，默认只动画高度，并在测量期间隐藏溢出。
 - `group=true` 会切换为 `TransitionGroup`；此时 `mode` 不生效，每个列表项都必须有稳定 key。
+- `TxTransitionPush` 也是单子节点模式，新旧两页同时运动、不设 `mode`：旧页按原位与原尺寸固定为 `position: absolute` 并加上 `inert`（不再接收指针、Tab 与辅助技术），新页留在文档流里决定容器高度。焦点如果在旧页里会随之丢失，换页时由使用方把焦点交给新页。
+- 容器高度只在切换那一刻从旧页过渡到新页，结束后回到 `auto`。运动期间容器 `overflow: clip`，不是 `hidden`，所以换页后立刻聚焦新页也不会把容器滚走；静止时不裁剪，页内的焦点环不会被切掉。
+- 切换被打断时从当前绘制的位置继续：容器从正在过渡的高度出发，正在进入的页从当下位置离场；推入中途回到同一个 key 时，回来的页从旧页停下的位置滑回。
 - 各预设共用 `--tx-transition-duration` 与 `--tx-transition-easing` CSS 变量；`rebound` 的 enter 阶段刻意使用弹性曲线。
-- 在 `prefers-reduced-motion: reduce` 下，所有预设都会收敛到近乎瞬时的时长并去掉 `translateY`/`scale` 偏移，切换与列表动效仍能完成、只是不再有动画。
+- 在 `prefers-reduced-motion: reduce` 下，所有预设都会收敛到近乎瞬时的时长并去掉 `translateY`/`scale` 偏移，切换与列表动效仍能完成、只是不再有动画。`TxTransitionPush` 改为 120ms 的原位淡入淡出，高度直接落定；`duration` 为 `0` 时直接替换，不产生任何动画。
 
 ## 技术实现
 
 - **属性说明:** `class` 与 `style` 会落到 `.tx-transition` 包装层；非样式 attrs 会转发给 Vue `Transition` / `TransitionGroup`，因此测试中不会出现在包装层上。
 - **smooth-size 说明:** 只有 `group=false` 时，`preset="smooth-size"` 才会委托给 `TxTransitionSmoothSize`。列表分组场景仍会渲染为 transition name，不建议使用，因为尺寸感知包装器面向单子节点。
-- **实测覆盖:** `transition.test.ts` 覆盖 preset 到 name 的映射、时长 CSS 变量、group tag、smooth-size 委托、`TxAutoSizer` 尺寸 prop 转发、语义化包装组件 preset、attrs 转发与 slot 渲染。
+- **push 说明:** `TxTransitionPush` 用 `<Transition :css="false">` 的 JS 钩子驱动 Web Animations：页面动 `translate`，不占用页面自身的 `transform`；容器动 `height`。离场动画以 `fill: 'forwards'` 停在最后一帧，直到 Vue 移除节点。被打断的页按 `getComputedTiming().progress` 算出当前绘制的位置。`class`、`style` 与其余 attrs 落在 `.tx-transition-push` 根节点上。
+- **实测覆盖:** `transition.test.ts` 覆盖 preset 到 name 的映射、时长 CSS 变量、group tag、smooth-size 委托、`TxAutoSizer` 尺寸 prop 转发、语义化包装组件 preset、attrs 转发与 slot 渲染；`TxTransitionPush` 覆盖两个方向与 RTL 镜像的位移关键帧、离场页的固定与 `inert`、容器高度的 `[旧, 新]` 关键帧（含只离场不进入）、`height=false`、`duration=0`、减弱动效下的淡入淡出、中途打断与同 key 折返、`appear` 与卸载时取消动画。
 
-- Component sources: `packages/tuffex/packages/components/src/transition/src/TxTransition.vue`、`TxTransitionSmoothSize.vue`、`TxTransitionFade.vue`、`TxTransitionSlideFade.vue` 与 `TxTransitionRebound.vue`。
-- Types: `packages/tuffex/packages/components/src/transition/src/types.ts` 导出 `TransitionPreset`、`TxTransitionProps` 与 `TxTransitionSmoothSizeProps`。
+- Component sources: `packages/tuffex/packages/components/src/transition/src/TxTransition.vue`、`TxTransitionSmoothSize.vue`、`TxTransitionFade.vue`、`TxTransitionSlideFade.vue`、`TxTransitionRebound.vue` 与 `TxTransitionPush.vue`。
+- Types: `packages/tuffex/packages/components/src/transition/src/types.ts` 导出 `TransitionPreset`、`TxTransitionProps`、`TxTransitionSmoothSizeProps`、`TransitionPushDirection` 与 `TxTransitionPushProps`。
 - Export alias: `packages/tuffex/packages/components/src/transition/index.ts` 导出可安装 transition 别名、原始 `Tx*` 组件、prop 类型与实例类型。
-- Coverage: `packages/tuffex/packages/components/src/transition/__tests__/transition.test.ts` 覆盖 preset 映射、smooth-size 行为、语义化组件、attrs、样式与 slot。
+- Coverage: `packages/tuffex/packages/components/src/transition/__tests__/transition.test.ts` 覆盖 preset 映射、smooth-size 行为、语义化组件、attrs、样式、slot 与 `TxTransitionPush` 的推入、高度、打断和降级路径。
 
 <TuffDocSourceLink />

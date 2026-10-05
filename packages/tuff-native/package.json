@@ -31,6 +31,11 @@
       "require": "./audio.js",
       "default": "./audio.js"
     },
+    "./translation": {
+      "types": "./translation.d.ts",
+      "require": "./translation.js",
+      "default": "./translation.js"
+    },
     "./screenshot-protocol": {
       "types": "./screenshot-protocol.d.ts",
       "require": "./screenshot-protocol.js",
@@ -56,6 +61,11 @@
     "scripts/verify-screenshot-production.js",
     "scripts/verify-audio-production.js",
     "scripts/build-audio.js",
+    "scripts/build-translation.js",
+    "native-translation/TranslationHelper.swift",
+    "translation.js",
+    "translation.d.ts",
+    "build/Release/tuff-native-translation",
     "protocol-contract.js",
     "protocol-contract.d.ts",
     "protocol.js",
@@ -109,6 +119,7 @@
     "build": "node-gyp configure build",
     "build:screenshot": "node scripts/build-screenshot.js",
     "build:audio": "node scripts/build-audio.js",
+    "build:translation": "node scripts/build-translation.js",
     "build:protocol-fixture": "node scripts/build-protocol-fixture.js",
     "test:protocol": "node --test protocol-contract.test.js protocol-napi.test.js protocol-carrier.test.js protocol-package.test.js protocol-error-cause.test.js protocol-error-envelope.test.js",
     "test:screenshot-protocol": "node --test screenshot-addon-contract.test.js screenshot-protocol.test.js",

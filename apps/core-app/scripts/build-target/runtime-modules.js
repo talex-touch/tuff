@@ -102,6 +102,9 @@ const PLATFORM_RUNTIME_MODULE_MAP = RUNTIME_MODULE_MANIFEST.platform.modules
  */
 function requiredNativeAddonNames(target) {
   const names = ['tuff_native_ocr.node', 'tuff_native_audio.node']
+  if (target === 'mac' || target === 'darwin') {
+    names.push('tuff-native-translation')
+  }
   if (target === 'win' || target === 'win32') {
     names.push('tuff_native_everything.node')
   }

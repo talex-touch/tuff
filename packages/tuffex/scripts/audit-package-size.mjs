@@ -76,7 +76,7 @@ const fullStyleImportBudgets = [
 // carries only 0.2 KiB of component styles, so it is not leaking -- it simply outgrew a two-month
 // -old number.
 const LIMITS = {
-  // 32 -> 40 on 2026-08-15 for the Beautiful UI port (.trellis/tasks/08-15-beautiful-ui-port):
+  // 32 -> 40 on 2026-08-15 for the Beautiful UI port (retired task 08-15-beautiful-ui-port):
   // base.css gains the `--tx-bui-*` token layer (33 tokens x 2 themes + shadow/radius/mono
   // entries, ~2.7 KiB) against 2.4 KiB of headroom. Re-measure and trim the slack once the
   // BUI component family lands.
@@ -133,7 +133,7 @@ const LIMITS = {
   // entry to 576.3 KiB against a 576.0 limit. Same contract as every note above:
   // actuals plus minimal headroom, growth from here fails.
   // 584 -> 600 on 2026-09-22: the Beautiful UI parity round
-  // (.trellis/tasks/archive/2026-09/09-21-bui-parity-and-interaction) adds three
+  // (retired task 09-21-bui-parity-and-interaction) adds three
   // component stylesheets — flowchart 2.3 KiB, agent-screen 1.8, toast-panel 1.3 —
   // and grows the ones it reworked: status-badge's chip, diff-table's accept
   // layer, code-stream's diff rows, approval-card's skip, recommendation-card's
@@ -141,7 +141,7 @@ const LIMITS = {
   // Measured 595.4 KiB. Same contract as every note above: actuals plus minimal
   // headroom, growth from here fails.
   // 600 -> 608 on 2026-09-24: two tasks landed together, measured together at 606.0 KiB.
-  // .trellis/tasks/09-23-composer-motion-reference adds `mode-chip` (4.0 KiB, new) and
+  // Retired task 09-23-composer-motion-reference adds `mode-chip` (4.0 KiB, new) and
   // reworks `chat`'s composer into a shell/card with a tray and icon buttons (~2.9 KiB
   // more), plus the text transformer's setup-state and reduced-motion rules (~0.2 KiB).
   // 09-23-nexus-base-gallery-sidebar grows `empty-state` (+2.6 KiB: the error
@@ -166,7 +166,7 @@ const LIMITS = {
   // (`borrowedStyleDeps` in packages/script/build/component-styles.ts). So the full bundle grew
   // by the new components alone while the on-demand set came down. Measured 615.9 KiB. Same
   // contract as every note above: actuals plus minimal headroom, growth from here fails.
-  // 618 -> 623 on 2026-09-27: `status-hint` (TxStatusHint, .trellis/tasks/09-27-corebox-action-
+  // 618 -> 623 on 2026-09-27: `status-hint` (TxStatusHint, retired task 09-27-corebox-action-
   // feedback-hint) ships its own stylesheet, 4.9 KiB (5054 B), and the full bundle went 616.1 ->
   // 621.0 KiB with it and nothing else (the on-demand set moved by the same 4.9 KiB, 163 -> 164
   // stylesheets, and stays under its limit). Checked for the inlining this limit exists to catch:
@@ -175,16 +175,16 @@ const LIMITS = {
   // before asking, 5.7 -> 4.9 KiB: unscoped as TxChoiceCard is, and no `-webkit-` mask duplicate.
   // Same contract as every note above: actuals plus minimal headroom, growth from here fails.
   // 623 -> 626 on 2026-09-30: `stream-text` (TxStreamText and TxStreamCaret,
-  // .trellis/tasks/09-29-stream-text-foundation) ships its own stylesheet, 3.2 KiB (3231 B), all
+  // retired task 09-29-stream-text-foundation) ships its own stylesheet, 3.2 KiB (3231 B), all
   // of it present verbatim in components.css. The full bundle measured 624.7 KiB with it and
   // 621.5 without (the 09-28 effect ports had used 0.5 KiB of the headroom left above). Checked
   // for the inlining this limit exists to catch: the sheet carries only `.tx-stream-text*` and
   // `.tx-stream-caret*` rules and its own `tx-stream-*` keyframes, none of the inline-citation or
   // liquid rules it reaches through style-deps. Same contract as every note above: actuals plus
   // minimal headroom, growth from here fails.
-  // 626 -> 629 on 2026-09-30: `stream-element` (TxStreamElement, .trellis/tasks/09-29-stream-element-
-  // core) ships its own stylesheet, 2.4 KiB (2418 B), all of it present verbatim in components.css.
-  // The full bundle went 625.7 -> 628.0 KiB with it and nothing else; it grew by 2356 B because the
+  // 626 -> 629 on 2026-09-30: `stream-element` (TxStreamElement, retired task 09-29-stream-element-
+  // core) ships its own stylesheet, 2.4 KiB (2484 B), all of it present verbatim in components.css.
+  // The full bundle went 625.7 -> 628.1 KiB with it and nothing else; it grew by 2422 B because the
   // bundler folds the one keyframes the sheet shares with its siblings. Checked for the inlining this
   // limit exists to catch: the sheet carries only `.tx-stream-element*` rules and the
   // `tx-stream-fade-blur` keyframes its blocks enter with, none of the stream-text, code-stream or

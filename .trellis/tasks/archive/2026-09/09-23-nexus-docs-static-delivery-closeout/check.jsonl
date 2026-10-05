@@ -1,3 +1,0 @@
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Check conventions for Nexus changes"}
-{"file": ".trellis/spec/frontend/nexus-docs-static-delivery.md", "reason": "Verify _headers rule count, _routes.json patterns and early hints still satisfy the guard after adding 404.html, root header blocks and static redirects"}
-{"file": ".trellis/tasks/09-23-nexus-docs-perf-cms-remediation/research/audit-2026-09-23.md", "reason": "Baseline gate output and production probes to compare against"}

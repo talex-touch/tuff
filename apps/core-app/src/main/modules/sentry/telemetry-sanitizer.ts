@@ -125,6 +125,7 @@ const SENSITIVE_KEY_PATTERN =
   /(query|text|keyword|path|file|folder|url|email|token|secret|password|credential|clipboard|content|prompt|response|html|image|screenshot|body|payload|stack|trace|meta|errorMessage|request|headers|cookie)/i
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9_.:-]+$/
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const SAFE_EVENT_MESSAGE = 'redacted'
 
 function normalizeString(value: unknown, maxLength = MAX_STRING_LENGTH): string | undefined {
@@ -332,6 +333,110 @@ function sanitizeErrorMetadata(
   return Object.keys(output).length ? output : undefined
 }
 
+/**
+ * Sanitize a CoreBox focus telemetry metadata block.
+ *
+ * Only the allowlisted fields (kind, code, stage, success, summonId, sampleIndex)
+ * are accepted. Any other key — even if it would normally pass through a generic
+ * or performance sanitizer — is rejected entirely, so callers cannot smuggle raw
+ * data through the metadata channel.
+ */
+const COREBOX_FOCUS_METADATA_KEYS = new Set([
+  'kind',
+  'code',
+  'stage',
+  'success',
+  'summonId',
+  'sampleIndex'
+])
+
+const COREBOX_FOCUS_KINDS = new Set(['summon', 'dismiss', 'blur_hide', 'focus', 'pin'])
+const COREBOX_FOCUS_STAGES = new Set([
+  'attempted',
+  'grace_started',
+  'shown',
+  'focus_granted',
+  'focus_denied',
+  'focus_failed',
+  'hidden',
+  'cancelled',
+  'aborted'
+])
+const COREBOX_FOCUS_CODES = new Set([
+  'window_not_ready',
+  'window_destroyed',
+  'create_failed',
+  'already_visible',
+  'already_hidden',
+  'grace_suppressed',
+  'onboarding_blocked',
+  'focus_error',
+  'unexpected_active_element',
+  'missing_target',
+  'native_transport_error',
+  'ok',
+  'cancelled_by_user',
+  'cancelled_by_shortcut_toggle',
+  'cancelled_by_blur'
+])
+
+function sanitizeCoreBoxFocusMetadata(
+  metadata: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  if (!metadata) return undefined
+
+  // Reject any metadata that contains keys outside the allowlist — this is the
+  // focus telemetry channel, not a general-purpose metadata bucket.
+  const keys = Object.keys(metadata)
+  if (keys.length === 0) return undefined
+  for (const key of keys) {
+    if (!COREBOX_FOCUS_METADATA_KEYS.has(key)) return undefined
+  }
+
+  const output: Record<string, unknown> = {}
+
+  const kind = normalizeString(metadata.kind, 64)
+  if (!kind || !COREBOX_FOCUS_KINDS.has(kind)) return undefined
+  output.kind = kind
+
+  const code = normalizeString(metadata.code, 96)
+  if (!code || !COREBOX_FOCUS_CODES.has(code)) return undefined
+  output.code = code
+
+  const stage = normalizeString(metadata.stage, 32)
+  if (!stage || !COREBOX_FOCUS_STAGES.has(stage)) return undefined
+  output.stage = stage
+
+  if (typeof metadata.success !== 'boolean') return undefined
+  output.success = metadata.success
+
+  const summonId = metadata.summonId
+  if (typeof summonId !== 'string' || !UUID_PATTERN.test(summonId)) return undefined
+  output.summonId = summonId
+
+  const sampleIndex = normalizeNumber(metadata.sampleIndex, { min: 0, max: 1_000_000 })
+  if (sampleIndex === undefined) return undefined
+  output.sampleIndex = sampleIndex
+
+  return output
+}
+
+function sanitizePerformanceOrFocusMetadata(
+  metadata: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  const focus = sanitizeCoreBoxFocusMetadata(metadata)
+  if (focus) return focus
+  return sanitizePerformanceMetadata(metadata)
+}
+
+function sanitizeErrorOrFocusMetadata(
+  metadata: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  const focus = sanitizeCoreBoxFocusMetadata(metadata)
+  if (focus) return focus
+  return sanitizeErrorMetadata(metadata)
+}
+
 function sanitizeGenericMetadata(
   metadata: Record<string, unknown> | undefined
 ): Record<string, unknown> | undefined {
@@ -360,8 +465,8 @@ function sanitizeMetadata(
 ): Record<string, unknown> | undefined {
   if (eventType === 'search') return sanitizeSearchMetadata(metadata)
   if (eventType === 'feature_use') return sanitizeFeatureUseMetadata(metadata)
-  if (eventType === 'performance') return sanitizePerformanceMetadata(metadata)
-  if (eventType === 'error') return sanitizeErrorMetadata(metadata)
+  if (eventType === 'performance') return sanitizePerformanceOrFocusMetadata(metadata)
+  if (eventType === 'error') return sanitizeErrorOrFocusMetadata(metadata)
   return sanitizeGenericMetadata(metadata)
 }
 
@@ -394,6 +499,25 @@ export function sanitizeNexusTelemetryEvent(
     metadata,
     isAnonymous: !userId
   }
+}
+
+function sanitizeCoreBoxFocusContext(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const output: Record<string, unknown> = {}
+
+  // Only UUID-shaped summonId and bounded sampleIndex pass through — both are
+  // correlation IDs, never free-form text or PII.
+  const raw = value as Record<string, unknown>
+  const summonId = raw.summonId
+  if (typeof summonId === 'string' && UUID_PATTERN.test(summonId)) {
+    output.summonId = summonId
+  }
+  const sampleIndex = raw.sampleIndex
+  if (typeof sampleIndex === 'number' && Number.isFinite(sampleIndex) && sampleIndex >= 0) {
+    output.sampleIndex = Math.min(Math.floor(sampleIndex), 1_000_000)
+  }
+
+  return Object.keys(output).length ? output : undefined
 }
 
 function sanitizeSentryContext(value: unknown): unknown {
@@ -452,9 +576,11 @@ export function sanitizeSentryEvent<T extends Sentry.Event>(event: T): T {
   if (event.contexts) {
     const environment = sanitizeSentryContext(event.contexts.environment)
     const operational = sanitizeSentryContext(event.contexts.operational)
+    const coreboxFocus = sanitizeCoreBoxFocusContext(event.contexts.corebox_focus)
     event.contexts = {
       ...(environment ? { environment: environment as Record<string, unknown> } : {}),
-      ...(operational ? { operational: operational as Record<string, unknown> } : {})
+      ...(operational ? { operational: operational as Record<string, unknown> } : {}),
+      ...(coreboxFocus ? { corebox_focus: coreboxFocus as Record<string, unknown> } : {})
     }
     if (Object.keys(event.contexts).length === 0) event.contexts = undefined
   }

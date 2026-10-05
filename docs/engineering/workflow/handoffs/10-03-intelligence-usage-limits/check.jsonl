@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/10-03-intelligence-usage-limits/prd.md", "reason": "acceptance AC-C1–AC-C6 to verify"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/design.md", "reason": "parent §3 contract the implementation must match"}
+{"file": ".trellis/spec/frontend/plugin-runtime-security.md", "reason": "verify new events stay host-only"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "repo-wide quality gates"}

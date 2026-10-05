@@ -3,7 +3,6 @@
   "files": {
     "AGENTS.md": "# Poison\n\nThis excluded agent file contains a NUL byte: \u0000\n",
     ".github/nul-poison.md": "# Poison\n\nThis excluded workflow file contains a NUL byte: \u0000\n",
-    ".trellis/internal/nul-poison.md": "# Poison\n\nThis excluded Trellis file contains a NUL byte: \u0000\n",
     "coverage/nul-poison.md": "# Poison\n\nThis excluded coverage file contains a NUL byte: \u0000\n",
     "dist/nul-poison.md": "# Poison\n\nThis excluded build file contains a NUL byte: \u0000\n",
     "docs/engineering/reports/nul-poison.md": "# Poison\n\nThis excluded report file contains a NUL byte: \u0000\n",
@@ -14,7 +13,6 @@
   },
   "trackedAdd": [
     ".github/nul-poison.md",
-    ".trellis/internal/nul-poison.md",
     "AGENTS.md",
     "coverage/nul-poison.md",
     "dist/nul-poison.md",
