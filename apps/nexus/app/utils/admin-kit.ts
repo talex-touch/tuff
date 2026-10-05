@@ -112,8 +112,8 @@ export function shouldShowAdminPager({ total, limit, page, pageSizes = [] }: Adm
 
 /**
  * Controls a labelled field (`AdminFilterField`, `AdminFormField`) can find on its
- * own when it is not given the control's id. `TxSelect` takes no id, so this is
- * how a select gets its label.
+ * own when it is not given the control's id, including a multi-select whose
+ * combobox cannot be associated through a native label's `for`.
  */
 export const ADMIN_FIELD_CONTROL_SELECTOR = '[role="combobox"], input, select, textarea'
 
@@ -139,25 +139,6 @@ export function findAdminFieldControl(root: AdminFieldRoot | null | undefined, c
   if (controlId)
     return root.querySelector(`[id="${controlId.replace(/["\\]/g, '\\$&')}"]`)
   return root.querySelector(ADMIN_FIELD_CONTROL_SELECTOR)
-}
-
-/**
- * Names a control that has no visible label, a row editor's select say, after
- * `label`. An `aria-label` attribute on `TxSelect` stays on its root `div`, which
- * no reader announces, so the name goes on the combobox inside, found the way a
- * field finds its control.
- */
-export function nameAdminControl(root: AdminFieldRoot | null | undefined, label: string): void {
-  findAdminFieldControl(root)?.setAttribute('aria-label', label)
-}
-
-/**
- * Gives the control inside `root` the id an `AdminFormField`'s `for` points at.
- * `TxSelect` takes no id and leaves an `id` attribute on its root `div`, which a
- * `<label for>` cannot name, so the id goes on the combobox inside.
- */
-export function identifyAdminControl(root: AdminFieldRoot | null | undefined, id: string): void {
-  findAdminFieldControl(root)?.setAttribute('id', id)
 }
 
 /**

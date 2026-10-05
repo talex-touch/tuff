@@ -1,8 +1,8 @@
 <script lang="ts" setup>
 import type { CSSProperties } from 'vue'
-import { computed, nextTick, onUnmounted, ref, useId, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { hasDocument } from '../../../../utils/env'
-import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
 
 // Resolved in setup: inject is only valid here, while allocation happens later.
 const zIndexAllocator = useZIndexAllocator()
@@ -100,18 +100,36 @@ function trapFocus(event: KeyboardEvent) {
   }
   const active = hasDocument() ? document.activeElement : null
   if (event.shiftKey) {
-    if (active === first || active === root) {
+    if (!root.contains(active) || active === first || active === root) {
       event.preventDefault()
       last.focus()
     }
   }
-  else if (active === last) {
+  else if (!root.contains(active) || active === root || active === last) {
     event.preventDefault()
     first.focus()
   }
 }
 
+function handleKeydown(event: KeyboardEvent) {
+  if (!visible.value || event.defaultPrevented || (event.key !== 'Tab' && event.key !== 'Escape'))
+    return
+  if (!isTopmostModalDialog(overlayRef.value))
+    return
+  if (event.key === 'Tab') {
+    trapFocus(event)
+    return
+  }
+  event.preventDefault()
+  close()
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
+
 onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
   if (previouslyFocusedElement) {
     previouslyFocusedElement.focus()
   }
@@ -132,8 +150,6 @@ onUnmounted(() => {
         :aria-labelledby="title ? titleId : undefined"
         :style="{ zIndex }"
         @click.self="close"
-        @keydown.esc="close"
-        @keydown.tab="trapFocus"
       >
         <div class="tx-modal__content" :class="{ 'tx-modal__content--fullscreen': fullscreen }" :style="contentStyle">
           <header v-if="title || $slots.header" class="tx-modal__header">

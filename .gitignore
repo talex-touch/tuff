@@ -212,3 +212,8 @@ test-reports/
 
 # Local agent config (omp skills / settings), per checkout — never committed
 /.omp/
+# >>> Comet managed project state >>>
+!/.comet/
+/.comet/*
+!/.comet/config.yaml
+# <<< Comet managed project state <<<

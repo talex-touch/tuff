@@ -206,29 +206,4 @@ describe('ProviderRegistryProviderDrawer', () => {
     expect(html).toMatch(/vip\s+· requests 20,000\s+· tokens 1,000,000/)
   })
 
-  it('gives each capability row a capability and a metering select, each named for a reader, and no schema field', async () => {
-    const html = await render('ProviderDrawer', { admin: fakeAdmin(), mode: 'create', provider: null, open: true })
-    // `v-admin-control-label` names the combobox inside on mount (utils/admin-kit.test.ts);
-    // the server render marks the select it sits on.
-    const named = [...html.matchAll(/<div\b[^>]*\sdata-admin-control-label="([^"]+)"[^>]*>/g)]
-
-    expect(named.map(match => match[1])).toEqual(['Capability, row 1', 'Metering unit, row 1'])
-    expect(named.every(match => /class="tuff-select\b/.test(match[0]))).toBe(true)
-    // An `aria-label` left on the select's root `div` would name nothing.
-    expect(html).not.toMatch(/<div[^>]*class="tuff-select\b[^"]*"[^>]*aria-label=/)
-    expect(html).not.toMatch(/schema/i)
-  })
-
-  it('ties every block field\'s label to its control with `for`, selects included', async () => {
-    const html = await render('ProviderDrawer', { admin: fakeAdmin(), mode: 'create', provider: null, open: true })
-    const fors = [...html.matchAll(/<label[^>]*\sfor="([^"]+)"/g)].map(match => match[1]!)
-    const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]!))
-    // A select's combobox gets its id on mount (`v-admin-control-id`); the server render marks the select.
-    const selectIds = new Set([...html.matchAll(/\sdata-admin-control-id="([^"]+)"/g)].map(match => match[1]!))
-
-    expect(html).not.toMatch(/<span[^>]*class="AdminFormField-Label"/)
-    expect(fors.length).toBeGreaterThanOrEqual(10)
-    expect(selectIds.size).toBe(6)
-    expect(fors.filter(id => !ids.has(id) && !selectIds.has(id))).toEqual([])
-  })
 })

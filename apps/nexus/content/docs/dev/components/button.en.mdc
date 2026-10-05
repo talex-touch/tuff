@@ -133,7 +133,7 @@ code: |
 
 ### Shapes
 
-Adjust shapes with `plain` / `round` / `circle` / `dashed`.
+Adjust shapes with `plain` / `round` / `circle` / `dashed`. Non-block circles follow the selected height: `sm` is 26×26, `md` is 32×32, and `lg` is 38×38; the flat `sm` variant keeps its 32×32 size.
 
 ::TuffDemoWrapper{demo="ButtonShapesDemo" code-lang="vue"}
 ---
@@ -142,7 +142,9 @@ code: |
     <TxButton dashed>Dashed</TxButton>
     <TxButton plain variant="primary">Plain</TxButton>
     <TxButton round variant="primary">Round</TxButton>
-    <TxButton circle icon="i-carbon-edit" />
+    <TxButton circle size="sm" icon="i-carbon-edit" aria-label="Small edit" />
+    <TxButton circle icon="i-carbon-edit" aria-label="Default edit" />
+    <TxButton circle size="lg" icon="i-carbon-edit" aria-label="Large edit" />
   </template>
 ---
 ::
@@ -496,6 +498,7 @@ code: |
 
 - `variant` wins over semantic `type`; when `variant` is absent, `type="text"` maps to the `ghost` variant and other semantic types map to their matching variants.
 - Size has exactly three tiers: `sm`, `md`, `lg`. The older spellings `large`, `small` and `mini` are gone from the type but are still normalized at runtime (`large` → `lg`, `small` / `mini` → `sm`), because consumers of published builds pass them from plain JS.
+- `--tx-button-height` is the shared size variable used by the button height and non-block circle width. Circle shape removes ordinary horizontal padding and minimum width; `block + circle` keeps the existing full-width text layout.
 - `disabled` and `loading` both disable the native `<button>` and suppress the emitted `click` event.
 - `loadingVariant="bar"` is only visible for `block` buttons; icon-only / inline buttons use the spinner slot or overlay spinner.
 - Non-block, non-circle buttons animate loading width changes with a size FLIP transition.
