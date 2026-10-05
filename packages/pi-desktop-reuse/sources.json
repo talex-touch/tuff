@@ -142,7 +142,7 @@
           "sha256": "60ee4dd5200a81a2269562913574fe127188a9ae223ff47f4e7c7fb998ed19d6"
         }
       ],
-      "modifications": "Logic unchanged. The upstream ./types.js barrel import points at ./types/models; formatting follows the Tuff repository."
+      "modifications": "Logic unchanged. The upstream ./types.js barrel import points at ./types/models; formatting follows the Tuff repository. Bounded canonical-ladder indices use erased non-null assertions for strict noUncheckedIndexedAccess consumers."
     },
     {
       "path": "src/types/message-stream.ts",
@@ -174,7 +174,7 @@
           "sha256": "c0170af47897c085f195bbfe6d8b422111c603cd069dbde5ebbd61e14f46d28f"
         }
       ],
-      "modifications": "Logic unchanged. Only the model vocabulary (upstream lines 1-353) is kept; the theme/appearance types after ModelInfo are dropped because Tuff does not read them. Formatting follows the Tuff repository."
+      "modifications": "Logic unchanged. Only the model vocabulary (upstream lines 1-353) is kept; the theme/appearance types after ModelInfo are dropped because Tuff does not read them. Formatting follows the Tuff repository. Vendor-part indices use erased non-null assertions: loop indices are bounded and String.split always produces at least one part."
     }
   ]
 }

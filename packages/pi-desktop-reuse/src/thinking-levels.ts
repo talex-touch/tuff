@@ -6,8 +6,10 @@
 //
 // Logic unchanged. Tuff adaptation (LGPL-3.0-only derivative, not MPL): the
 // `./types.js` barrel import points at `./types/models`, and the upstream
-// formatting follows this repository. Settings, the Home picker and Main's
-// request planner reach it through `@talex-touch/utils/intelligence/model-binding`.
+// formatting follows this repository. Bounded ladder indices use type-only
+// non-null assertions for consumers with noUncheckedIndexedAccess enabled.
+// Settings, the Home picker and Main's request planner reach it through
+// `@talex-touch/utils/intelligence/model-binding`.
 
 import {
   SESSION_THINKING_LEVELS,
@@ -64,7 +66,7 @@ export function highestSupportedThinkingLevel(
 ): ThinkingLevel {
   const supported = new Set(levels ?? [])
   for (let index = THINKING_LEVELS.length - 1; index >= 0; index -= 1) {
-    const level = THINKING_LEVELS[index]
+    const level = THINKING_LEVELS[index]!
     if (supported.has(level)) return level
   }
   return 'off'
@@ -89,11 +91,11 @@ export function nearestSupportedThinkingLevel(
   if (supported.has(requested)) return requested
   const requestedIndex = THINKING_LEVELS.indexOf(requested)
   for (let index = requestedIndex; index < THINKING_LEVELS.length; index += 1) {
-    const candidate = THINKING_LEVELS[index]
+    const candidate = THINKING_LEVELS[index]!
     if (supported.has(candidate)) return candidate
   }
   for (let index = requestedIndex - 1; index >= 0; index -= 1) {
-    const candidate = THINKING_LEVELS[index]
+    const candidate = THINKING_LEVELS[index]!
     if (supported.has(candidate)) return candidate
   }
   return 'off'

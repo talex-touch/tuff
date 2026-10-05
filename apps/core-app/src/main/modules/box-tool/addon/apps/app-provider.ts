@@ -1637,10 +1637,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return this.sourceScanner.partitionDbApps(apps)
   }
 
-  private buildScannedAppsMap(scannedApps: ScannedAppInfo[]): Map<string, ScannedAppInfo> {
-    return this.sourceScanner.buildScannedAppsMap(scannedApps)
-  }
-
   private async loadScannedApps(options?: { forceRefresh?: boolean }): Promise<ScannedAppInfo[]> {
     return await this.sourceScanner.loadScannedApps(options)
   }
@@ -2331,7 +2327,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       precision: 2
     })
 
-    const scannedAppsMap = this.buildScannedAppsMap(scannedApps)
+    const scannedAppsMap = this.sourceScanner.buildScannedAppsMap(scannedApps)
     const existingIds = new Set(dbScannedAppsWithExtensions.map((app) => this.resolveDbAppKey(app)))
     const toAdd = scannedApps.filter((app) => {
       const uniqueId = this.resolveScannedAppKey(app)
@@ -2714,7 +2710,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       unit: 's',
       precision: 2
     })
-    const scannedAppsMap = this.buildScannedAppsMap(scannedApps)
+    const scannedAppsMap = this.sourceScanner.buildScannedAppsMap(scannedApps)
 
     const dbLoadStart = startTiming()
     const dbApps = await this.dbUtils!.getFilesByType('app')

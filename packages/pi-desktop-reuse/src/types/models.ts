@@ -151,11 +151,11 @@ function canonicalVendor(prefix: string): string {
 function extractKnownVendor(id: string): string | undefined {
   const parts = id.split('/')
   for (let i = 0; i < parts.length - 1; i++) {
-    const part = parts[i]
+    const part = parts[i]!
     if (MODEL_VENDOR_PREFIXES.has(part)) return canonicalVendor(part)
   }
 
-  const lastPart = parts[parts.length - 1]
+  const lastPart = parts[parts.length - 1]!
   for (const prefix of MODEL_VENDOR_PREFIXES) {
     if (lastPart === prefix || lastPart.startsWith(`${prefix}-`) || lastPart.startsWith(`${prefix}.`)) {
       return canonicalVendor(prefix)

@@ -128,7 +128,7 @@ describe('tuffIntelligence Provider Testing Service', () => {
         name: 'Test Timeout',
         enabled: true,
         apiKey: 'test-key',
-        models: [SYNTHETIC_TEST_MODEL],
+        models: [{ id: SYNTHETIC_TEST_MODEL }],
         timeout,
       }
 
@@ -171,7 +171,7 @@ describe('tuffIntelligence Provider Testing Service', () => {
         name: 'Test Latency',
         enabled: true,
         apiKey: 'invalid-key',
-        models: [SYNTHETIC_TEST_MODEL],
+        models: [{ id: SYNTHETIC_TEST_MODEL }],
         timeout: 5000,
       }
 
