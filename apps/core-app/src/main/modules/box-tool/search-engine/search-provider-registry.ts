@@ -172,8 +172,8 @@ export function collectSearchProviderIdsForIndexedSource(
 export interface SearchProviderRegistryDeps {
   getTouchApp: () => TouchApp | null
   /**
-   * The index reader a provider's context should carry. The provider is passed so the owner can
-   * hand fast-layer providers a reader whose queue is not shared with the deferred file queries.
+   * Interactive reads are selected by provider priority. Without a provider, returns the existing
+   * non-interactive reader for maintenance that must not occupy a fast provider's queue.
    */
   getSearchIndexService: (provider?: ISearchProvider<ProviderContext>) => SearchIndexService | null
   beforeProvidersLoad?: (reason: string) => Promise<void>
@@ -458,14 +458,18 @@ export class SearchProviderRegistry {
   private async load(provider: ISearchProvider<ProviderContext>): Promise<void> {
     const touchApp = this.deps.getTouchApp()
     const searchIndex = this.deps.getSearchIndexService(provider)
-    if (!touchApp || !searchIndex) throw new Error('SEARCH_PROVIDER_CONTEXT_UNAVAILABLE')
+    const maintenanceSearchIndex = this.deps.getSearchIndexService()
+    if (!touchApp || !searchIndex || !maintenanceSearchIndex) {
+      throw new Error('SEARCH_PROVIDER_CONTEXT_UNAVAILABLE')
+    }
     const startedAt = Date.now()
     try {
       await provider.onLoad?.({
         touchApp,
         databaseManager: databaseModule,
         storageManager: storageModule,
-        searchIndex
+        searchIndex,
+        maintenanceSearchIndex
       })
       log.info(`Provider '${provider.id}' loaded in ${Date.now() - startedAt}ms`)
     } catch (error) {

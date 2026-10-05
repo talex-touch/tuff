@@ -1,0 +1,66 @@
+schema: comet.native.v4
+name: app-index-startup-health-isolation
+language: zh-CN
+phase: build
+status: active
+state_version: 3
+brief: brief.md
+document_constraints_version: 2
+shape_confirmation_hash: a4c94898d738d726c427021752069137ca3cf4e52dfa1b7a6de46e584c6ba4b8
+spec_changes:
+  - capability: app-index-health
+    operation: create
+    source: specs/app-index-health/spec.md
+workspace:
+  isolation: worktree
+  change_branch: comet/app-index-startup-health-isolation
+  target_branch: task/chore/live-work-1003
+  finish: null
+loop:
+  stage: building
+  goal_cycle: 1
+  iteration: 1
+  attempt: 0
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: submit-builder-candidate
+acceptance:
+  - id: A1
+    source: brief.md
+    text: 启动完整性计数保留真实 FTS 结果，但不在交互快通道执行；超过 3 秒的该计数不使快通道读 Worker
+      被淘汰，也不阻止同一期间的应用搜索读取完成。
+    result: pending
+    reason: null
+  - id: A2
+    source: brief.md
+    text: 计数超时、读 Worker 不可用或冷却时，健康结果明确为计数未知；启动健康检查不按零条触发补建，recent-backfill
+      判断不因读取失败绕过近期完成保护，诊断也不将失败报告成真实零条。
+    result: pending
+    reason: null
+  - id: A3
+    source: brief.md
+    text: 在计数可读时，真实空索引或磁盘上存在有效但未入库的应用仍按既有门禁请求补建；健康或正在预热的索引不重复补建；watch/诊断的正常
+      meta-backed 计数与退出收尾保持原行为。
+    result: pending
+    reason: null
+builder_handoff: null
+blockers: []
+verification: null
+history: []
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pending
+verification_report: null
+archived: false
+created_at: 2026-10-03T14:12:02.986Z
