@@ -9,7 +9,6 @@ import { TuffInput } from '@talex-touch/tuffex/input'
 import { TuffSelect, TuffSelectItem } from '@talex-touch/tuffex/select'
 import { computed, useId } from 'vue'
 import AdminFormField from '~/components/admin/AdminFormField.vue'
-import { vAdminControlId, vAdminControlLabel } from '~/composables/useAdminFieldControl'
 import { ADMIN_FORMAT_EMPTY, useAdminFormat } from '~/composables/useAdminFormat'
 
 const props = defineProps<{
@@ -91,7 +90,7 @@ function quotaLimit(value: unknown): string {
         </p>
         <section class="RegistryForm-Grid">
           <AdminFormField :label="t('dashboard.providerRegistry.fields.serviceCategory', 'Service category')" :for="fieldId('service-category')">
-            <TuffSelect v-model="admin.providerServiceCategoryId.value" v-admin-control-id="fieldId('service-category')" class="RegistryForm-Control" @change="admin.applyProviderServiceCategory">
+            <TuffSelect :id="fieldId('service-category')" v-model="admin.providerServiceCategoryId.value" class="RegistryForm-Control" @change="admin.applyProviderServiceCategory">
               <TuffSelectItem
                 v-for="category in admin.providerServiceCategoryOptions.value"
                 :key="category.value"
@@ -101,7 +100,7 @@ function quotaLimit(value: unknown): string {
             </TuffSelect>
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.preset', 'Preset')" :for="fieldId('preset')">
-            <TuffSelect v-model="admin.providerTemplateId.value" v-admin-control-id="fieldId('preset')" class="RegistryForm-Control" @change="admin.applyProviderTemplate">
+            <TuffSelect :id="fieldId('preset')" v-model="admin.providerTemplateId.value" class="RegistryForm-Control" @change="admin.applyProviderTemplate">
               <TuffSelectItem v-for="template in admin.providerTemplateOptions.value" :key="template.value" :value="template.value" :label="template.label" />
             </TuffSelect>
           </AdminFormField>
@@ -112,22 +111,22 @@ function quotaLimit(value: unknown): string {
             <TuffInput :id="fieldId('display-name')" v-model="admin.providerForm.displayName" class="RegistryForm-Control" />
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.vendor', 'Vendor')" :for="fieldId('vendor')">
-            <TuffSelect v-model="admin.providerForm.vendor" v-admin-control-id="fieldId('vendor')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('vendor')" v-model="admin.providerForm.vendor" class="RegistryForm-Control">
               <TuffSelectItem v-for="vendor in admin.providerVendorOptions" :key="vendor" :value="vendor" :label="valueLabel(vendor)" />
             </TuffSelect>
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.adapter', 'Adapter format')" :for="fieldId('adapter')">
-            <TuffSelect v-model="admin.providerForm.adapterKey" v-admin-control-id="fieldId('adapter')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('adapter')" v-model="admin.providerForm.adapterKey" class="RegistryForm-Control">
               <TuffSelectItem v-for="adapter in admin.providerAdapterOptions.value" :key="adapter.value" :value="adapter.value" :label="adapter.label" />
             </TuffSelect>
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.status', 'Status')" :for="fieldId('status')">
-            <TuffSelect v-model="admin.providerForm.status" v-admin-control-id="fieldId('status')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('status')" v-model="admin.providerForm.status" class="RegistryForm-Control">
               <TuffSelectItem v-for="status in admin.providerStatusOptions" :key="status" :value="status" :label="valueLabel(status)" />
             </TuffSelect>
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.authType', 'Auth type')" :for="fieldId('auth-type')">
-            <TuffSelect v-model="admin.providerForm.authType" v-admin-control-id="fieldId('auth-type')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('auth-type')" v-model="admin.providerForm.authType" class="RegistryForm-Control">
               <TuffSelectItem v-for="type in admin.authTypeOptions" :key="type" :value="type" :label="valueLabel(type)" />
             </TuffSelect>
           </AdminFormField>
@@ -168,8 +167,8 @@ function quotaLimit(value: unknown): string {
             </AdminFormField>
             <AdminFormField v-if="createModelOptions.length" :label="t('dashboard.providerRegistry.fields.defaultModel', 'Default model')" :for="fieldId('default-model')">
               <TuffSelect
+                :id="fieldId('default-model')"
                 v-model="admin.providerForm.defaultModel"
-                v-admin-control-id="fieldId('default-model')"
                 class="RegistryForm-Control"
                 searchable
                 :search-placeholder="t('dashboard.providerRegistry.providers.modelSearchPlaceholder', 'Search models...')"
@@ -202,7 +201,7 @@ function quotaLimit(value: unknown): string {
             <div v-for="(row, index) in admin.capabilityRows.value" :key="index" class="RegistryRows-Row is-create">
               <TuffSelect
                 v-model="row.capability"
-                v-admin-control-label="rowLabel(t('dashboard.providerRegistry.fields.capability', 'Capability'), index)"
+                :aria-label="rowLabel(t('dashboard.providerRegistry.fields.capability', 'Capability'), index)"
                 class="RegistryForm-Control"
                 :placeholder="t('dashboard.providerRegistry.fields.capability', 'Capability')"
                 @change="admin.applyProviderCapabilityTemplate(row, $event)"
@@ -216,7 +215,7 @@ function quotaLimit(value: unknown): string {
               </TuffSelect>
               <TuffSelect
                 v-model="row.meteringUnit"
-                v-admin-control-label="rowLabel(t('dashboard.providerRegistry.fields.meteringUnit', 'Metering unit'), index)"
+                :aria-label="rowLabel(t('dashboard.providerRegistry.fields.meteringUnit', 'Metering unit'), index)"
                 class="RegistryForm-Control"
                 :placeholder="t('dashboard.providerRegistry.fields.meteringUnit', 'Metering unit')"
               >
@@ -251,22 +250,22 @@ function quotaLimit(value: unknown): string {
               <TuffInput :id="fieldId('edit-display-name')" v-model="editPanel.displayName" class="RegistryForm-Control" />
             </AdminFormField>
             <AdminFormField :label="t('dashboard.providerRegistry.fields.vendor', 'Vendor')" :for="fieldId('edit-vendor')">
-              <TuffSelect v-model="editPanel.vendor" v-admin-control-id="fieldId('edit-vendor')" class="RegistryForm-Control">
+              <TuffSelect :id="fieldId('edit-vendor')" v-model="editPanel.vendor" class="RegistryForm-Control">
                 <TuffSelectItem v-for="vendor in admin.providerVendorOptions" :key="vendor" :value="vendor" :label="valueLabel(vendor)" />
               </TuffSelect>
             </AdminFormField>
             <AdminFormField :label="t('dashboard.providerRegistry.fields.adapter', 'Adapter format')" :for="fieldId('edit-adapter')">
-              <TuffSelect v-model="editPanel.adapterKey" v-admin-control-id="fieldId('edit-adapter')" class="RegistryForm-Control">
+              <TuffSelect :id="fieldId('edit-adapter')" v-model="editPanel.adapterKey" class="RegistryForm-Control">
                 <TuffSelectItem v-for="adapter in admin.providerAdapterOptions.value" :key="adapter.value" :value="adapter.value" :label="adapter.label" />
               </TuffSelect>
             </AdminFormField>
             <AdminFormField :label="t('dashboard.providerRegistry.fields.status', 'Status')" :for="fieldId('edit-status')">
-              <TuffSelect v-model="editPanel.status" v-admin-control-id="fieldId('edit-status')" class="RegistryForm-Control">
+              <TuffSelect :id="fieldId('edit-status')" v-model="editPanel.status" class="RegistryForm-Control">
                 <TuffSelectItem v-for="status in admin.providerStatusOptions" :key="status" :value="status" :label="valueLabel(status)" />
               </TuffSelect>
             </AdminFormField>
             <AdminFormField :label="t('dashboard.providerRegistry.fields.authType', 'Auth type')" :for="fieldId('edit-auth-type')">
-              <TuffSelect v-model="editPanel.authType" v-admin-control-id="fieldId('edit-auth-type')" class="RegistryForm-Control">
+              <TuffSelect :id="fieldId('edit-auth-type')" v-model="editPanel.authType" class="RegistryForm-Control">
                 <TuffSelectItem v-for="type in admin.authTypeOptions" :key="type" :value="type" :label="valueLabel(type)" />
               </TuffSelect>
             </AdminFormField>
@@ -316,8 +315,8 @@ function quotaLimit(value: unknown): string {
             </AdminFormField>
             <AdminFormField v-if="editModelOptions.length" :label="t('dashboard.providerRegistry.fields.defaultModel', 'Default model')" :for="fieldId('edit-default-model')">
               <TuffSelect
+                :id="fieldId('edit-default-model')"
                 v-model="editPanel.defaultModel"
-                v-admin-control-id="fieldId('edit-default-model')"
                 class="RegistryForm-Control"
                 searchable
                 :search-placeholder="t('dashboard.providerRegistry.providers.modelSearchPlaceholder', 'Search models...')"
@@ -344,7 +343,7 @@ function quotaLimit(value: unknown): string {
               <TuffInput :id="fieldId('edit-auth-ref')" v-model="editPanel.authRef" class="RegistryForm-Control is-mono" />
             </AdminFormField>
             <AdminFormField :label="t('dashboard.providerRegistry.fields.ownerScope', 'Owner scope')" :for="fieldId('edit-owner-scope')">
-              <TuffSelect v-model="editPanel.ownerScope" v-admin-control-id="fieldId('edit-owner-scope')" class="RegistryForm-Control">
+              <TuffSelect :id="fieldId('edit-owner-scope')" v-model="editPanel.ownerScope" class="RegistryForm-Control">
                 <TuffSelectItem v-for="scope in admin.ownerScopeOptions" :key="scope" :value="scope" :label="valueLabel(scope)" />
               </TuffSelect>
             </AdminFormField>
@@ -390,7 +389,7 @@ function quotaLimit(value: unknown): string {
                 <TuffSelect
                   v-if="editModelOptions.length"
                   v-model="row.providerModel"
-                  v-admin-control-label="rowLabel(t('dashboard.providerRegistry.fields.providerModel', 'Model'), index)"
+                  :aria-label="rowLabel(t('dashboard.providerRegistry.fields.providerModel', 'Model'), index)"
                   class="RegistryForm-Control"
                   searchable
                   :search-placeholder="t('dashboard.providerRegistry.providers.modelSearchPlaceholder', 'Search models...')"
@@ -447,7 +446,7 @@ function quotaLimit(value: unknown): string {
             <TuffInput :id="fieldId('quota-name')" v-model="quotaPanel.name" class="RegistryForm-Control" />
           </AdminFormField>
           <AdminFormField :label="t('dashboard.providerRegistry.fields.status', 'Status')" :for="fieldId('quota-enabled')">
-            <TuffSelect v-model="quotaPanel.enabled" v-admin-control-id="fieldId('quota-enabled')" class="RegistryForm-Control">
+            <TuffSelect :id="fieldId('quota-enabled')" v-model="quotaPanel.enabled" class="RegistryForm-Control">
               <TuffSelectItem value="enabled" :label="t('dashboard.providerRegistry.quota.enabled', 'enabled')" />
               <TuffSelectItem value="disabled" :label="t('dashboard.providerRegistry.quota.disabled', 'disabled')" />
             </TuffSelect>

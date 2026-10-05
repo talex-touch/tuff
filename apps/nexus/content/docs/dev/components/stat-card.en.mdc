@@ -15,6 +15,8 @@ verified: true
 
 Base card layout without trend/progress enhancement. `iconClass` renders the whole icon, bare, on the right, vertically centered in the same slot as the progress variant's ring, and its color is drawn out into an aura across the right of the card: three soft blobs in the icon's hue, a neighboring hue and a lighter tint drift slowly and fade out toward the text. A color class in `iconClass` sets that color; without one the icon and its aura are primary, and an explicit grey such as `--tx-color-info` keeps a grey icon with no aura. The example shows four tones in turn: primary (`clickable`), success, warning and neutral.
 
+`meta` and the `meta` slot work in both variants, including cards with an insight. The default layout places the line below the label; omit both to keep the original compact layout. The first card below demonstrates a default meta line.
+
 ::TuffDemoWrapper{demo="StatCardDefaultVariantDemo" code-lang="vue"}
 ---
 code: |
@@ -23,6 +25,7 @@ code: |
       <TxStatCard
         :value="2847"
         label="Total plugins"
+        meta="Includes enabled and disabled plugins"
         icon-class="i-carbon-download text-[var(--tx-color-primary)]"
         clickable
       />
@@ -245,7 +248,7 @@ code: |
 | `insight` | `StatCardInsight` | - | Change indicator object (moves label to top). |
 | `variant` | `StatCardVariant` | `'default'` | Layout variant (`default` \| `progress`). |
 | `progress` | `number` | - | Progress percent. Passing this enables the progress variant and clamps the ring to 0-100. |
-| `meta` | `string` | - | Bottom meta line for progress variant; ignored when the `meta` slot is present. |
+| `meta` | `string` | - | Supporting line in default and progress layouts, including insight cards; the `meta` slot takes precedence. |
 
 ### StatCardInsight
 
@@ -265,7 +268,7 @@ code: |
 |------|------|
 | `value` | Custom value area. |
 | `label` | Custom label area. |
-| `meta` | Meta line for progress variant. |
+| `meta` | Supporting line in every layout. Omitted together with `meta`, it reserves no extra line. |
 
 ### CSS Variables
 
@@ -277,6 +280,7 @@ code: |
 
 ## Overview
 
+- Metadata renders once after the label or insight content in the default layout and at the bottom of the progress layout. A host aligning a row of cards can reserve the same line on empty cards with an `aria-hidden` spacer in the `meta` slot.
 - Glyph: the default and insight layouts draw `iconClass` bare — no tile, ring, shadow or glow — on the right, vertically centered in the same 72px slot as the progress ring, so the icon shows whole instead of being cropped by the card's edge; the content column keeps the slot plus 8px clear. The component owns the glyph size (30px) — its selector outranks host utilities such as `text-6xl`, so size classes have no effect — while a color class in `iconClass` still tints the icon, and an icon without one inherits primary. The progress layout draws the icon at 22px in the center of the ring and renders no separate glyph.
 - Aura: behind the glyph (or the ring) the icon's color is drawn out across the right of the card. Three blurred (34px) blobs — the color mixed 55:45 with the page color (`--tx-bg-color`) at 24%, the same mix with its hue turned 42° in OKLCH at 20%, and the color itself at 12% (small, the field's core, in the top-right corner rather than behind the glyph) — drift, turn and stretch on 17s, 21s and 13s cycles, so together they read as one field slowly changing shape. A mask keeps it on the right: fully shown over the right-most 10% of the card and gone 62% of the way across, so the figures sit on the plain card. It fades in over 0.8s once the color has been read. The two large blobs are mixed towards the page color, so the aura is deep on the dark theme and pale on the light one rather than a glare that swallows the icon (2026-09-26 review of the dark theme: 'too bright, the icon does not stand out'); a second review the same day found it 'still quite conspicuous', so all three were roughly halved and the mask narrowed — the aura is a wash behind the figure, not a second subject beside it; a third review asked for 'fainter, blurrier, with a little grain', so the blobs lost another third of their strength, the blur went from 22px to 34px, and the layer carries SVG fractal noise (`feTurbulence`, tiled at 140px, overlaid at 14%). The grain lives inside the aura, so it appears with the aura's mask and fade, and it never moves. Where relative color (`oklch(from …)`) is unsupported, the neighbor falls back to a 17% pool of the same mix.
 - Glyph ink: on a tinted card the icon's color is pulled 45% towards the text color (`--tx-text-color-primary`), the opposite way from the aura — deeper than a pale light-theme aura, lighter than a deep dark-theme one — or it would all but vanish over an aura of its own hue. A color class in `iconClass` still picks the hue: the component lifts this ink before it reads the icon's color, so the re-read after a theme switch never mixes an already mixed color.

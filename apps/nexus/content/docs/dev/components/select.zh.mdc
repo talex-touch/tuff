@@ -15,6 +15,7 @@ verified: true
 
 - 数据驱动列表优先使用 `options`；少量静态模板且需要内联自定义标记时再使用 `TuffSelectItem`。
 - 同一组选项不要混用 `options` 和 slot item；存在 `options` 时由 `options` 模式负责渲染，slot item 只在无 prop options 时注册。
+- 单选用相邻的 `<label for>` 与 `id` 关联，或直接传入 `aria-label`。多选用 `aria-label` 或 `aria-labelledby` 命名；不要用 label 包裹整个选择器。
 - 远程搜索请求放在宿主层处理，并用 `searchDebounce` 控制请求频率。
 - 需要让创建值在后续打开下拉时出现时，应在宿主的 options store 中持久化 `create` 结果。
 - `modelValue` 类型必须与 `multiple` 对齐；单选使用标量，多选使用数组。
@@ -110,13 +111,15 @@ verified: true
 code: |
   <script setup lang="ts">
   import type { TxSelectValue } from '@talex-touch/tuffex'
-  import { ref } from 'vue'
+  import { ref, useId } from 'vue'
 
   const value = ref<TxSelectValue>('engineering')
+  const controlId = useId()
   </script>
 
   <template>
-    <TuffSelect v-model="value" placeholder="请选择">
+    <label :for="controlId">团队</label>
+    <TuffSelect :id="controlId" v-model="value" placeholder="请选择" aria-label="团队">
       <TuffSelectItem value="design" label="设计团队" />
       <TuffSelectItem value="engineering" label="工程团队" />
       <TuffSelectItem value="support" label="支持团队" />
@@ -444,6 +447,7 @@ code: |
 - `allowCreate` 只负责从当前输入生成 `{ value, label }` 并触发 `create`；如果新选项需要再次出现在列表中，业务侧应把它追加到 `options`。
 - value 先于选项挂载传入时，Select 会在选项注册后解析展示 label。有限数字形式的字符串和数字会按数值相等匹配。
 - 可访问性角色：触发器是 `combobox`，带 `aria-haspopup="listbox"`，`aria-expanded` 绑定展开状态；下拉列表是 `listbox`（`multiple` 模式下追加 `aria-multiselectable`）；每个选项是 `option`，`aria-selected` 反映选中状态。
+- `id`、可访问名称及其他控件属性在首次渲染和更新时传给实际 combobox，不再停留在外层布局 div；`class` 和 `style` 仍作用于外层。单选标签指向输入框，多选名称指向既有的 combobox 容器。
 
 ## 技术实现
 

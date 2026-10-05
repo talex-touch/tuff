@@ -12,16 +12,25 @@ verified: true
 ## 用法
 
 ### Basic Drawer
-最常见的抽屉用法。
+基础抽屉与上层确认框。Tab 留在确认框内，Escape 只关闭确认框，不连带关闭抽屉。
 :::TuffDemoWrapper{demo="DrawerBasicDrawerDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  const visible1 = ref(false)
+  const confirmVisible = ref(false)
+  </script>
   <template>
     <TxButton @click="visible1 = true">打开抽屉</TxButton>
     <TxDrawer v-model:visible="visible1" title="设置">
       <p>这是抽屉的内容区域，你可以在这里放置任何内容。</p>
       <p>支持自定义尺寸、方向、Header/Footer、遮罩和关闭行为。</p>
+      <TxButton @click="confirmVisible = true">打开确认框</TxButton>
     </TxDrawer>
+    <TxModal v-model="confirmVisible" title="确认操作">
+      <TxButton @click="confirmVisible = false">取消</TxButton>
+    </TxModal>
   </template>
 ---
 :::
@@ -350,6 +359,7 @@ code: |
 - Drawer 根节点暴露 `role="dialog"`、`aria-modal="true"`；有 Header 时通过实例级 `aria-labelledby` 关联标题，关闭 Header 时用 `title` 作为 `aria-label` 兜底。
 - 打开时聚焦抽屉根节点；隐藏或卸载时恢复到打开前的焦点元素。
 - 关闭按钮、遮罩点击和 Escape 默认都会触发 `update:visible(false)` 与 `close`；`closeOnClickMask=false` 或 `closeOnPressEscape=false` 会分别阻断对应关闭路径。
+- 已由其他控件处理的按键，以及来自另一个模态对话框的按键，不再由抽屉重复处理。上层确认框独占 Tab、Shift+Tab 和 Escape，页面无需判断内部 CSS 类名或拦截 body 事件。
 - `showClose=false` 会移除默认关闭按钮，但不影响遮罩和 Escape 的配置化关闭能力。
 - `mobileAdapt=true` 时移动端会强制从底部弹出；需要保持原方向时设置 `:mobile-adapt="false"`。
 

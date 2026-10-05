@@ -4,8 +4,6 @@ import {
   adminIdentityInitial,
   canConfirmAdminAction,
   findAdminFieldControl,
-  identifyAdminControl,
-  nameAdminControl,
   resolveAdminIdentity,
   shouldShowAdminPager,
   syncAdminFieldControl,
@@ -109,34 +107,6 @@ describe('findAdminFieldControl', () => {
     expect(findAdminFieldControl(root)).toBe(control)
     expect(selectors).toEqual(['[id="v-0-1"]', '[id="odd\\"id"]', ADMIN_FIELD_CONTROL_SELECTOR])
     expect(findAdminFieldControl(null, 'v-0-1')).toBeNull()
-  })
-})
-
-describe('nameAdminControl', () => {
-  it('names the combobox or input inside, not the element it is given', () => {
-    const control = fakeControl()
-    const selectors: string[] = []
-    nameAdminControl({
-      querySelector: (selector: string) => {
-        selectors.push(selector)
-        return control
-      },
-    }, 'Model, row 2')
-
-    expect(control.values.get('aria-label')).toBe('Model, row 2')
-    expect(selectors).toEqual([ADMIN_FIELD_CONTROL_SELECTOR])
-    expect(() => nameAdminControl({ querySelector: () => null }, 'Model, row 2')).not.toThrow()
-    expect(() => nameAdminControl(null, 'Model, row 2')).not.toThrow()
-  })
-})
-
-describe('identifyAdminControl', () => {
-  it('gives the combobox or input inside the id, so a `<label for>` names it', () => {
-    const control = fakeControl()
-    identifyAdminControl({ querySelector: () => control }, 'v-0-vendor')
-
-    expect(control.values.get('id')).toBe('v-0-vendor')
-    expect(() => identifyAdminControl(null, 'v-0-vendor')).not.toThrow()
   })
 })
 

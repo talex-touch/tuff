@@ -193,7 +193,7 @@ code: |
 - 默认导航箭头是内置 SVG，不依赖宿主生成图标样式；自定义图标类仍由 `TxIcon` 渲染。
 - 提供 `pageSizes` 时，页码列表与信息区之间会出现 `div.tx-pagination__size`：一个可见的 `span.tx-pagination__size-label`，以及一个 88px 宽的 `TxSelect`，其 combobox 通过 `aria-labelledby` 指向该标签。nav 会加上 `has-page-size`，把页码列表、选择器与信息区排成居中的一行，空间不足时换行。不提供 `pageSizes`（或只有无效条数）时这些都不会渲染。
 - 选择条数时先触发 `update:pageSize` 再触发 `pageSizeChange`，并且只在条数与 `pageSize` 不同时触发。`currentPage` 交给宿主处理；如果更大的条数让总页数少于当前页，已有的越界修正会以最后一页触发 `update:currentPage`。
-- 选择器是一个 `TxSelect`，因为 TxSelect 自身没有命名用的属性，所以通过 `aria-labelledby` 命名。按需样式插件会随分页一起加载 TxSelect 的样式；手动引入样式时，需要再引入 `select/style.css` 及其依赖的样式。
+- 每页条数选择器直接把 `aria-labelledby` 传给 `TxSelect`，从首次渲染起就关联到 combobox，无需 ref 回调改写 DOM。按需样式插件会随分页加载选择器样式；手动引入时仍需 `select/style.css` 及其依赖。
 
 ## 技术实现
 

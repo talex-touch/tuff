@@ -12,16 +12,25 @@ verified: true
 ## Usage
 
 ### Basic Drawer
-The common drawer pattern.
+The common drawer pattern, with a confirmation dialog above it. Tab stays in the confirmation and Escape closes only the confirmation.
 :::TuffDemoWrapper{demo="DrawerBasicDrawerDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  const visible1 = ref(false)
+  const confirmVisible = ref(false)
+  </script>
   <template>
     <TxButton @click="visible1 = true">Open Drawer</TxButton>
     <TxDrawer v-model:visible="visible1" title="Settings">
       <p>This is the drawer content area.</p>
       <p>Supports custom size, direction, Header/Footer, mask, and close behavior.</p>
+      <TxButton @click="confirmVisible = true">Open confirmation</TxButton>
     </TxDrawer>
+    <TxModal v-model="confirmVisible" title="Confirm action">
+      <TxButton @click="confirmVisible = false">Cancel</TxButton>
+    </TxModal>
   </template>
 ---
 :::
@@ -350,6 +359,7 @@ code: |
 - The drawer root exposes `role="dialog"` and `aria-modal="true"`; with a header it links the title through instance-scoped `aria-labelledby`, and without a header it falls back to `title` as `aria-label`.
 - Opening the drawer focuses the drawer root; hiding or unmounting restores focus to the element that was active before opening.
 - The close button, mask click, and Escape close paths emit `update:visible(false)` and `close` by default; `closeOnClickMask=false` and `closeOnPressEscape=false` block their respective paths.
+- Keys already handled by another control, or originating in another modal dialog, are not handled again by the drawer. A confirmation above the drawer owns Tab, Shift+Tab and Escape without a page-level CSS-class or body-event guard.
 - `showClose=false` removes the default close button without changing mask or Escape behavior.
 - `mobileAdapt=true` forces bottom direction on mobile; set `:mobile-adapt="false"` to preserve the requested direction.
 
