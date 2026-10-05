@@ -287,7 +287,7 @@ function providerConfig(id: string, priority: number): IntelligenceProviderConfi
     enabled: true,
     priority,
     defaultModel: 'gpt-4o-mini',
-    models: ['gpt-4o-mini'],
+    models: [{ id: 'gpt-4o-mini' }],
     capabilities: ['text.chat']
   }
 }

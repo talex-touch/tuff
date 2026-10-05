@@ -62,8 +62,9 @@ function resolveOllamaBaseUrl(provider: IntelligenceProviderConfig): string {
   return suffix ? normalized.slice(0, -suffix.length).replace(/\/+$/, '') : normalized
 }
 
+/** Discovery answers in ids; stored bindings contribute only theirs, never their user fields. */
 function getStoredModels(provider: IntelligenceProviderConfig): string[] {
-  return provider.models?.length ? [...new Set(provider.models)] : []
+  return [...new Set((provider.models ?? []).map((binding) => binding.id))]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

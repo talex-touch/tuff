@@ -1,0 +1,74 @@
+@talex-touch/pi-desktop-reuse
+NOTICE
+
+This package is part of Tuff (https://github.com/talex-touch/tuff). It contains
+code copied, adapted, excerpted or translated from PI-Desktop.
+
+Upstream project : PI-Desktop
+Repository       : https://github.com/vastsa/PI-Desktop
+Pinned commit    : 3b036cc7810e18b3ef7689a2b93385125a8d0a3f
+Upstream tree    : https://github.com/vastsa/PI-Desktop/tree/3b036cc7810e18b3ef7689a2b93385125a8d0a3f
+Attribution      : PI-Desktop contributors; the project author is vastsa (upstream apps/desktop/package.json). The mapped upstream files carry no per-file copyright notices; the upstream LICENSE text and any original notices are retained.
+License          : GNU Lesser General Public License, version 3 only
+                   (LGPL-3.0-only). The full LGPL text is in LICENSE; it
+                   incorporates the GNU General Public License, version 3,
+                   whose full text is in COPYING.
+
+Tuff's modifications to these files are distributed under the same
+LGPL-3.0-only license. They are not relicensed under MPL-2.0, which covers
+Tuff's own files outside this package.
+
+
+Files and their upstream sources
+--------------------------------
+
+Every file below was modified. Each file carries an SPDX header naming its
+upstream path(s) and the pinned commit; sources.json records the upstream git
+blob id, the upstream SHA-256 and a description of every change.
+
+  src/context-usage.ts         excerpt of  apps/desktop/src/lib/context-usage.ts
+  src/errors.ts                derived from packages/agent-host/src/errors.ts
+  src/message-stream.ts        adapted from packages/shared/src/message-stream.ts
+  src/model-catalog.ts         adapted from packages/shared/src/model-catalog.ts
+  src/ports.ts                 subset of   packages/agent-host/src/ports.ts
+  src/review.ts                translated  crates/host-core/src/review.rs (Rust to TypeScript)
+  src/session-fork.ts          translated  crates/host-core/src/sessions.rs (lines 880-1018, Rust to TypeScript)
+  src/thinking-levels.ts       adapted from packages/shared/src/thinking-levels.ts
+  src/turn-queue.ts            adapted from packages/agent-host/src/turn-queue.ts
+  src/types/message-stream.ts  subset of   packages/shared/src/types/messages.ts
+                               and         packages/shared/src/types/agent.ts
+  src/types/models.ts          subset of   packages/shared/src/types/models.ts (lines 1-353)
+
+
+How Tuff combines this Library
+------------------------------
+
+electron-vite compiles these modules into Tuff's Electron main-process,
+preload and renderer bundles. They are not shipped as a separately
+replaceable shared library, so Tuff does not rely on LGPL section 4(d)(1).
+
+Under LGPL section 4(d)(0), every packaged Tuff build ships the following in
+its resources directory under legal/pi-desktop-reuse/:
+
+  LICENSE                             GNU LGPL v3 text
+  COPYING                             GNU GPL v3 text
+  NOTICE                              this file
+  BUILDING.md                         rebuild and recombination instructions
+  sources.json                        file-level upstream mapping
+  corresponding-source.tar.gz         Minimal Corresponding Source of this
+                                      Library plus the Corresponding
+                                      Application Code it was built with
+  corresponding-source.tar.gz.sha256  SHA-256 of the archive
+  source-manifest.json                every archived file with its SHA-256,
+                                      size and build role, the importers of
+                                      each Library file, and digests of the
+                                      main/preload/renderer outputs it matches
+
+The archive is produced from the modules the build actually loaded. It is
+identified by its SHA-256, not by a Git URL. Tuff's application code inside
+the archive stays under the license its package declares: the archived root
+LICENSE is MPL-2.0, and some workspace packages (for example tuffex) declare
+MIT in their archived package.json or LICENSE. Both permit modification and
+recombination.
+BUILDING.md explains how to rebuild the bundles with a modified version of
+this Library and run the result without any release signing credentials.

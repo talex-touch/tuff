@@ -245,7 +245,7 @@ describe('Nexus default provider invoke smoke', () => {
       name: 'Local Smoke',
       enabled: true,
       priority: 2,
-      models: ['local-model'],
+      models: [{ id: 'local-model' }],
       capabilities: ['text.chat']
     })
     setIntelligenceProviderManager(manager)

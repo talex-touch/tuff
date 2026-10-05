@@ -1,4 +1,5 @@
 import type { IncomingMessage, Server } from 'node:http'
+import type { AgentToolOrigin } from '@talex-touch/utils/transport/sdk/domains/agent-tools'
 import type { StableToolErrorCode, StableToolErrorProjection } from '../ai/tool-error-projection'
 import type { ToolCallPlan, ToolDefinition, ToolResult, ToolRisk } from './tool-registry'
 import { Buffer } from 'node:buffer'
@@ -16,6 +17,7 @@ export interface ConfirmationRequest {
   risk: ToolDefinition['risk']
   summary: string
   input: string
+  origin?: AgentToolOrigin
 }
 
 export interface ConfirmationDecision {
@@ -65,9 +67,23 @@ export interface ToolGatewayOptions {
   onAudit?: (event: AgentToolAuditEvent) => void
 }
 
+export interface ToolGatewayScopeRuntime {
+  token: string
+  release: () => void
+}
+
+interface ActiveGatewayScope {
+  token: string
+  origin: AgentToolOrigin
+  remembered: Set<string>
+  active: Set<AbortController>
+}
+
 export interface ToolGatewayHandle {
   url: string
   token: string
+  /** Revocation refuses new calls and cancels this turn's pending confirmation waits. */
+  scope: (origin: AgentToolOrigin) => ToolGatewayScopeRuntime
   /** Clears remembered approvals — call when a new conversation starts. */
   resetSessionApprovals: () => void
   close: () => Promise<void>
@@ -174,6 +190,8 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
   const token = randomBytes(32).toString('hex')
   /** Tools the user chose to stop being asked about, for this session only. */
   const remembered = new Set<string>()
+  const conversationApprovals = new Map<string, Set<string>>()
+  const scopes = new Map<string, ActiveGatewayScope>()
   const activeCalls = new Set<AbortController>()
   let closing = false
   let closePromise: Promise<void> | null = null
@@ -182,6 +200,7 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
     const clientAbortController = new AbortController()
     activeCalls.add(clientAbortController)
     const abortClientCall = (): void => clientAbortController.abort()
+    let scope: ActiveGatewayScope | undefined
     const abortOnPrematureResponseClose = (): void => {
       if (!response.writableEnded) abortClientCall()
     }
@@ -209,10 +228,13 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
 
       const authorization = request.headers.authorization ?? ''
       const presented = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
-      if (!constantTimeEquals(presented, token)) {
+      scope = scopes.get(presented)
+      if (!constantTimeEquals(presented, scope?.token ?? token)) {
         reply(401, { error: 'Unauthorized' })
         return
       }
+      scope?.active.add(clientAbortController)
+      const callApprovals = scope?.remembered ?? remembered
 
       const startedAt = Date.now()
       let callId: string = randomUUID()
@@ -341,7 +363,7 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
         return
       }
       auditCall()
-      if (remembered.has(plan.rememberKey)) {
+      if (callApprovals.has(plan.rememberKey)) {
         auditDecision('remembered')
       } else {
         let decision: ConfirmationDecision | typeof CALL_ABORTED
@@ -353,7 +375,8 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
                 tool: tool.name,
                 risk: plan.risk,
                 summary: plan.summary,
-                input: JSON.stringify(args, null, 2)
+                input: JSON.stringify(args, null, 2),
+                ...(scope ? { origin: { ...scope.origin, toolCallId: callId } } : {})
               },
               clientAbortController.signal
             ),
@@ -381,7 +404,7 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
         }
         // Write/execute tools re-ask every time no matter what the user
         // ticked — a single yes must not become a standing grant.
-        if (decision.remember && isRememberable(plan.risk)) remembered.add(plan.rememberKey)
+        if (decision.remember && isRememberable(plan.risk)) callApprovals.add(plan.rememberKey)
       }
 
       if (clientAbortController.signal.aborted || closing) {
@@ -396,6 +419,7 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
       }
     })().finally(() => {
       activeCalls.delete(clientAbortController)
+      scope?.active.delete(clientAbortController)
       request.removeListener('aborted', abortClientCall)
       response.removeListener('close', abortOnPrematureResponseClose)
     })
@@ -415,11 +439,36 @@ export async function startToolGateway(options: ToolGatewayOptions): Promise<Too
   return {
     url: `http://127.0.0.1:${port}/invoke`,
     token,
-    resetSessionApprovals: () => remembered.clear(),
+    scope: (origin) => {
+      if (closing) throw new Error('TOOL_GATEWAY_CLOSED')
+      const scopedToken = randomBytes(32).toString('hex')
+      const approvals = conversationApprovals.get(origin.conversationId) ?? new Set<string>()
+      conversationApprovals.set(origin.conversationId, approvals)
+      const record = {
+        token: scopedToken,
+        origin: { ...origin },
+        remembered: approvals,
+        active: new Set<AbortController>()
+      }
+      scopes.set(scopedToken, record)
+      return {
+        token: scopedToken,
+        release: () => {
+          if (!scopes.delete(scopedToken)) return
+          for (const controller of record.active) controller.abort()
+        }
+      }
+    },
+    resetSessionApprovals: () => {
+      remembered.clear()
+      for (const approvals of conversationApprovals.values()) approvals.clear()
+    },
     close: () => {
       if (closePromise) return closePromise
 
       closing = true
+      scopes.clear()
+      conversationApprovals.clear()
       let resolveClose!: () => void
       closePromise = new Promise<void>((resolve) => {
         resolveClose = resolve

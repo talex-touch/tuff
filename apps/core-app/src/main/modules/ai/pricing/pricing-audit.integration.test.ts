@@ -90,7 +90,7 @@ function installChannel(options: { id: string; traceId: string; nexus?: boolean 
       apiKey: 'sk-test-only',
       baseUrl: 'https://gateway.example.net/v1',
       defaultModel: 'gpt-4o-mini',
-      models: ['gpt-4o-mini'],
+      models: [{ id: 'gpt-4o-mini' }],
       capabilities: ['text.chat'],
       metadata: options.nexus ? { origin: 'tuff-nexus' } : undefined
     },

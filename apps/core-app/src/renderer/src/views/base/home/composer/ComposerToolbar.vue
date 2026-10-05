@@ -171,6 +171,9 @@ defineExpose({ launch })
         @update:mode="emit('update:permissionMode', $event)"
         @reset="emit('reset-approvals')"
       />
+      <!-- The host's execution controls: Chat / Agent and its profile, and the queue key while Main
+           is busy. Same 32px family, left of the model so the row reads "how" before "with what". -->
+      <slot name="mode" />
     </div>
 
     <div class="ComposerToolbar-Right">

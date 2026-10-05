@@ -2045,3 +2045,108 @@ export const localAiCliSessions = sqliteTable(
     )
   })
 )
+
+/** Local execution authority is separate from portable conversation content. */
+export const conversationWorkspaces = sqliteTable('conversation_workspaces', {
+  conversationId: text('conversation_id')
+    .primaryKey()
+    .references(() => conversations.id, { onDelete: 'cascade' }),
+  settingsJson: text('settings_json').notNull(),
+  status: text('status').notNull().default('idle'),
+  queueHeld: integer('queue_held', { mode: 'boolean' }).notNull().default(false),
+  activeTurnId: text('active_turn_id'),
+  runId: text('run_id'),
+  contextJson: text('context_json'),
+  pendingRunJson: text('pending_run_json'),
+  revision: integer('revision').notNull().default(0),
+  updatedAt: integer('updated_at').notNull()
+})
+
+export const conversationQueuedInputs = sqliteTable(
+  'conversation_queued_inputs',
+  {
+    id: text('id').notNull(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    inputJson: text('input_json').notNull(),
+    inputHash: text('input_hash').notNull(),
+    priority: integer('priority'),
+    position: integer('position').notNull(),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.conversationId, table.id] }),
+    orderIdx: index('idx_conversation_queue_order').on(table.conversationId, table.position)
+  })
+)
+
+export const conversationWorkspaceReceipts = sqliteTable(
+  'conversation_workspace_receipts',
+  {
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    id: text('id').notNull(),
+    inputHash: text('input_hash').notNull(),
+    status: text('status').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({ pk: primaryKey({ columns: [table.conversationId, table.id] }) })
+)
+
+export const conversationAttachments = sqliteTable(
+  'conversation_attachments',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    relativePath: text('relative_path').notNull(),
+    mimeType: text('mime_type').notNull(),
+    name: text('name'),
+    size: integer('size').notNull(),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({ ownerIdx: index('idx_conversation_attachments_owner').on(table.conversationId) })
+)
+
+export const conversationMessageAttachments = sqliteTable(
+  'conversation_message_attachments',
+  {
+    conversationId: text('conversation_id').notNull(),
+    messageId: text('message_id').notNull(),
+    attachmentId: text('attachment_id')
+      .notNull()
+      .references(() => conversationAttachments.id, { onDelete: 'cascade' })
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.conversationId, table.messageId, table.attachmentId] }),
+    messageFk: foreignKey({
+      columns: [table.conversationId, table.messageId],
+      foreignColumns: [conversationMessages.conversationId, conversationMessages.id]
+    }).onDelete('cascade')
+  })
+)
+
+/** Public JSON is selected separately; snapshot bytes never enter list/get/fork projections. */
+export const conversationFileReviews = sqliteTable(
+  'conversation_file_reviews',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    runId: text('run_id').notNull(),
+    turnId: text('turn_id').notNull(),
+    projectId: text('project_id').notNull(),
+    publicJson: text('public_json').notNull(),
+    recordJson: text('record_json').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    ownerIdx: index('idx_conversation_file_reviews_owner').on(table.conversationId, table.createdAt)
+  })
+)

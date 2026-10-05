@@ -90,6 +90,7 @@ import { isOuterGovernedInvocation } from './intelligence-invoke-governance'
 import { toNormalizedIntelligenceError } from './intelligence-error-normalizer'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { strategyManager } from './intelligence-strategy-manager'
+import { planChatModelRequest } from './model-request-plan'
 import { fetchProviderModels } from './provider-models'
 import {
   planProviderReasoning,
@@ -498,7 +499,7 @@ function providerHasUsableAsrConfiguration(provider: IntelligenceProviderConfig)
     return false
   }
   return Boolean(
-    provider.models?.some((model) => typeof model === 'string' && Boolean(model.trim())) ||
+    (provider.models?.length ?? 0) > 0 ||
     (typeof provider.defaultModel === 'string' && provider.defaultModel.trim())
   )
 }
@@ -1129,10 +1130,16 @@ export class TuffIntelligenceSDK {
         }
 
         const chatPayload = payload as IntelligenceChatPayload
-        const nextPayload: IntelligenceChatPayload = {
-          ...chatPayload,
-          messages: sdk.applyPromptTemplate(chatPayload.messages ?? [], renderedTemplate)
-        }
+        // The model's effective binding (image gate, window gate, output cap) for this provider.
+        const plannedChat = planChatModelRequest(
+          {
+            ...chatPayload,
+            messages: sdk.applyPromptTemplate(chatPayload.messages ?? [], renderedTemplate)
+          },
+          providerRuntimeOptions,
+          providerConfig
+        )
+        const nextPayload = plannedChat.payload
         const startTime = Date.now()
         const provisionalTraceId = intelligenceAuditLogger.generateTraceId()
         const configuredModel =
@@ -1181,7 +1188,7 @@ export class TuffIntelligenceSDK {
         throwIfIntelligenceCancelled(signal)
         const providerStream = provider.chatStream(
           nextPayload,
-          withReasoningPlan(providerRuntimeOptions, reasoningPlan)
+          withReasoningPlan(plannedChat.options, reasoningPlan)
         )
         let providerStreamDone = false
         try {
@@ -1575,10 +1582,8 @@ export class TuffIntelligenceSDK {
     const providerModels = new Set<string>()
     const { defaultModel, models } = selectedProvider
     if (defaultModel) providerModels.add(defaultModel)
-    if (Array.isArray(models)) {
-      for (const model of models) {
-        if (model) providerModels.add(model)
-      }
+    for (const binding of models ?? []) {
+      providerModels.add(binding.id)
     }
 
     const capabilityModels =
@@ -2078,11 +2083,15 @@ export class TuffIntelligenceSDK {
           chatPayload.messages ?? [],
           renderedTemplate
         )
-        const nextPayload: IntelligenceChatPayload = {
-          ...chatPayload,
-          messages: promptAppliedMessages
-        }
-        return (await provider.chat(nextPayload, runtimeOptions)) as IntelligenceInvokeResult<T>
+        const planned = planChatModelRequest(
+          { ...chatPayload, messages: promptAppliedMessages },
+          runtimeOptions,
+          provider.getConfig()
+        )
+        return (await provider.chat(
+          planned.payload,
+          planned.options
+        )) as IntelligenceInvokeResult<T>
       }
 
       case 'embedding':
@@ -2587,10 +2596,15 @@ export class TuffIntelligenceSDK {
       throw new Error(`[Intelligence] Provider ${strategyResult.selectedProvider.id} not found`)
     }
 
-    yield* provider.chatStream(
+    const planned = planChatModelRequest(
       payload as IntelligenceChatPayload,
+      runtimeOptions,
+      strategyResult.selectedProvider
+    )
+    yield* provider.chatStream(
+      planned.payload,
       withReasoningPlan(
-        runtimeOptions,
+        planned.options,
         planProviderReasoning(
           runtimeOptions,
           strategyResult.selectedProvider,
@@ -3082,7 +3096,7 @@ export class TuffIntelligenceSDK {
           timestamp
         }
       }
-      const configuredModel = providerConfig.defaultModel || providerConfig.models?.[0]
+      const configuredModel = providerConfig.defaultModel || providerConfig.models?.[0]?.id
       const availableModels = configuredModel
         ? [configuredModel]
         : await fetchProviderModels(providerConfig, {

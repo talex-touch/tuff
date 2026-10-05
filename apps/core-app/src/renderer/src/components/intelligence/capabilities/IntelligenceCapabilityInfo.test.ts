@@ -89,7 +89,7 @@ function createProvider(
     name,
     type: IntelligenceProviderType.LOCAL,
     enabled: true,
-    models: ['qwen-audio-3.0-asr-flash'],
+    models: [{ id: 'qwen-audio-3.0-asr-flash' }],
     capabilities: ['audio.asr'],
     ...overrides
   }

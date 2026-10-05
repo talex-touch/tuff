@@ -1,25 +1,54 @@
 <script lang="ts" name="HomeSidePanel" setup>
-import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
+import type {
+  WorkspaceContextProjection,
+  WorkspacePendingRun
+} from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import type {
+  ConversationMessage,
+  ConversationTurnMeta
+} from '~/modules/conversation/useHomeConversation'
+import type {
+  ActivityGatewayApproval,
+  ActivityTurn
+} from '~/modules/conversation/workspace-activity'
+import type { HomeModelLimits } from '~/modules/conversation/workspace-panel'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { buildPreviewIndex } from '~/modules/conversation/preview-index'
+import { useConversationReview } from '~/modules/conversation/useConversationReview'
+import HomePreviewActivity from './preview/HomePreviewActivity.vue'
 import HomePreviewArtifacts from './preview/HomePreviewArtifacts.vue'
+import HomePreviewContext from './preview/HomePreviewContext.vue'
+import HomePreviewReview from './preview/HomePreviewReview.vue'
 import HomePreviewSources from './preview/HomePreviewSources.vue'
 import HomePreviewToolCalls from './preview/HomePreviewToolCalls.vue'
 import HomePreviewWidgets from './preview/HomePreviewWidgets.vue'
 
 /**
  * The right panel behind the top bar's `panel-right` toggle: a preview of what
- * the conversation produced, so nothing has to be found by scrolling back.
+ * the conversation produced, so nothing has to be found by scrolling back, plus
+ * the workspace's context and activity as Main reports them.
  *
  * Scope is the whole conversation, not the last turn — "I don't want to scroll
  * back" is the entire point, and a per-turn index would not answer it.
  *
- * Every row is derived from a part that exists on a message. A tab with nothing
- * to derive says so; it does not fill itself with plausible-looking rows.
+ * Every row is derived from a part that exists on a message or a fact Main
+ * reported. A tab with nothing to derive says so; it does not fill itself with
+ * plausible-looking rows.
  */
-const props = defineProps<{ messages: ConversationMessage[] }>()
+const props = defineProps<{
+  messages: ConversationMessage[]
+  /** The thread on screen; file reviews are read for it while the panel is open. */
+  conversationId: string | null
+  context?: WorkspaceContextProjection
+  turn?: ConversationTurnMeta
+  limits?: HomeModelLimits
+  activityTurns: ActivityTurn[]
+  gateway: ActivityGatewayApproval[]
+  pendingRun?: WorkspacePendingRun
+  loading: boolean
+}>()
 
 const emit = defineEmits<{ (event: 'locate', messageIndex: number): void }>()
 
@@ -41,6 +70,9 @@ const counts = computed(() => ({
   toolCalls: index.value.toolCalls.length,
   sources: index.value.sources.length
 }))
+
+/** Host file-change records: read only while the panel is mounted, i.e. open. */
+const review = useConversationReview(() => props.conversationId)
 
 function locate(messageIndex: number): void {
   emit('locate', messageIndex)
@@ -94,6 +126,49 @@ function locate(messageIndex: number): void {
         </template>
         <HomePreviewSources :items="index.sources" />
       </TxTabItem>
+
+      <TxTabItem name="activity">
+        <template #name>
+          {{ t('home.workspace.panel.activity') }}
+          <span v-if="gateway.length || pendingRun" class="HomeSidePanel-Count">
+            {{ gateway.length + (pendingRun ? 1 : 0) }}
+          </span>
+        </template>
+        <HomePreviewActivity
+          :turns="activityTurns"
+          :gateway="gateway"
+          :run="pendingRun"
+          :loading="loading"
+          @locate="locate"
+        />
+      </TxTabItem>
+
+      <TxTabItem name="context">
+        <template #name>{{ t('home.workspace.panel.context') }}</template>
+        <HomePreviewContext :context="context" :turn="turn" :limits="limits" :loading="loading" />
+      </TxTabItem>
+
+      <TxTabItem name="review">
+        <template #name>
+          {{ t('home.workspace.panel.review') }}
+          <span v-if="review.records.value.length" class="HomeSidePanel-Count">
+            {{ review.records.value.length }}
+          </span>
+        </template>
+        <HomePreviewReview
+          :records="review.records.value"
+          :loading="review.loading.value"
+          :load-error="review.loadError.value"
+          :detail="review.detail.value"
+          :detail-loading="review.detailLoading.value"
+          :rolling-back="review.rollingBack.value"
+          :last-rollback="review.lastRollback.value"
+          @open="review.open"
+          @close="review.close"
+          @rollback="review.rollback"
+          @reload="review.reload"
+        />
+      </TxTabItem>
     </TxTabs>
   </aside>
 </template>
@@ -121,6 +196,18 @@ function locate(messageIndex: number): void {
 .HomeSidePanel-Tabs {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+
+  // Keep all seven sections reachable inside the panel's fixed-width slot.
+  :deep(.tx-tabs__nav-bar),
+  :deep(.tx-tabs__nav-inner) {
+    min-width: 0;
+  }
+
+  :deep(.tx-tab-item) {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
 }
 
 .HomeSidePanel-Count {

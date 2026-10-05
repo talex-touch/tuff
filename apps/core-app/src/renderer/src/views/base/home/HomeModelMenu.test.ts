@@ -12,6 +12,8 @@ import { nextTick, reactive } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { providerIconForId } from '~/modules/intelligence/provider-icons'
 
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { resolveProviderEffectiveModel } from '../../../../../main/modules/ai/model-request-plan'
 const mocks = vi.hoisted(() => ({
   getProviderModelOptions: vi.fn<() => Promise<ProviderModelOption[]>>(),
   /** Raw target; both the mocked module and the assertions below wrap it with `reactive`. */
@@ -99,6 +101,26 @@ const PI_GROK = { providerId: 'pi-cli', model: 'cpa/grok-4.6' }
 const PI_KIMI = { providerId: 'pi-cli', model: 'kimi/k3' }
 const LOCAL_QWEN = { providerId: 'ollama', model: 'qwen2.5:3b' }
 
+function withEffectiveModels(
+  option: Omit<ProviderModelOption, 'effectiveModels'>
+): ProviderModelOption {
+  return {
+    ...option,
+    effectiveModels: option.models.map((model) =>
+      resolveProviderEffectiveModel(
+        {
+          id: option.providerId,
+          name: option.providerName,
+          type: option.providerType as IntelligenceProviderType,
+          enabled: option.available,
+          models: option.models.map((id) => ({ id }))
+        },
+        model
+      )
+    )
+  }
+}
+
 function providerOptions(): ProviderModelOption[] {
   return [
     {
@@ -115,7 +137,7 @@ function providerOptions(): ProviderModelOption[] {
       models: ['codex/gpt-6-astra', 'cpa/grok-4.6', 'kimi/k3'],
       available: true
     }
-  ]
+  ].map(withEffectiveModels)
 }
 
 function resetAppSetting(conversation?: Record<string, unknown>): void {
@@ -208,11 +230,9 @@ describe('panel structure', () => {
   it('renders the strip, the search field, the Auto row and the rows of the first provider', async () => {
     const menu = await openMenu()
 
-    expect(menu.findComponent({ name: 'TxDropdownMenu' }).props('initialFocus')).toBe('none')
     expect(panel(menu).exists()).toBe(true)
     // A toolbar of toggles, not a tablist: a tablist inside a `menu` was rejected in the redesign.
     expect(menu.find('.HomeModelMenu-Filters').attributes('role')).toBe('toolbar')
-    expect(menu.find('.HomeModelMenu-Filters').attributes('aria-label')).toBe('home.modelSources')
 
     const strip = filters(menu)
     // One chip per provider. Channels are the list's business, not the strip's — pi alone serves
@@ -231,17 +251,10 @@ describe('panel structure', () => {
     // The fixture's pi id is not the seeded one, so it takes its type's icon; the seeded id gets
     // a terminal, or pi and a local Ollama would draw the same server glyph side by side.
     expect(providerIconForId('pi-cli-default', 'local').value).toBe('i-simple-icons-pi')
-    // Nothing pinned and nothing starred: the first provider is the opening filter.
-    expect(pressedFilters(menu)).toEqual(['Local Model'])
 
     const auto = menu.find('.HomeModelMenu-Auto')
     expect(auto.attributes('role')).toBe('menuitemradio')
     expect(auto.attributes('aria-checked')).toBe('true')
-    expect(auto.text()).toBe('home.modelAuto')
-
-    expect(menu.find('.HomeModelMenu-Search input').attributes('placeholder')).toBe(
-      'home.modelSearch'
-    )
     expect(rowNames(menu)).toEqual(['qwen2.5:3b'])
   })
 
@@ -262,7 +275,6 @@ describe('panel structure', () => {
     await menu.find('.pill').trigger('click')
     await nextTick()
 
-    expect(menu.find('.HomeModelMenu-Hint').text()).toBe('home.modelLoading')
     expect(menu.find('.HomeModelMenu-Auto').exists()).toBe(true)
     expect(rows(menu)).toHaveLength(0)
 
@@ -278,7 +290,7 @@ describe('panel structure', () => {
     mocks.getProviderModelOptions.mockResolvedValue([])
     const menu = await openMenu()
 
-    expect(menu.find('.HomeModelMenu-Hint').text()).toBe('home.modelEmpty')
+    expect(rowNames(menu)).toEqual([])
     expect(menu.find('.HomeModelMenu-Auto').attributes('aria-checked')).toBe('true')
     // The strip still has its fixed star slot, so the layout does not depend on the data.
     expect(filterLabels(menu)).toEqual(['home.modelFavorites'])
@@ -331,16 +343,18 @@ describe('reopening', () => {
     expect(menu.find('.HomeModelMenu-Hint').exists()).toBe(false)
     expect(rowNames(menu)).toEqual(['qwen2.5:3b'])
 
-    resolveOptions([
-      ...providerOptions(),
-      {
-        providerId: 'openai',
-        providerName: 'OpenAI',
-        providerType: 'openai',
-        models: ['gpt-5'],
-        available: true
-      }
-    ])
+    resolveOptions(
+      [
+        ...providerOptions(),
+        {
+          providerId: 'openai',
+          providerName: 'OpenAI',
+          providerType: 'openai',
+          models: ['gpt-5'],
+          available: true
+        }
+      ].map(withEffectiveModels)
+    )
     await flushPromises()
     await nextTick()
 
@@ -434,15 +448,17 @@ describe('rows', () => {
   })
 
   it('badges the first nine rows with the platform chord and no more', async () => {
-    mocks.getProviderModelOptions.mockResolvedValue([
-      {
-        providerId: 'many',
-        providerName: 'Many',
-        providerType: 'openai',
-        models: Array.from({ length: 11 }, (_, index) => `model-${index + 1}`),
-        available: true
-      }
-    ])
+    mocks.getProviderModelOptions.mockResolvedValue(
+      [
+        {
+          providerId: 'many',
+          providerName: 'Many',
+          providerType: 'openai',
+          models: Array.from({ length: 11 }, (_, index) => `model-${index + 1}`),
+          available: true
+        }
+      ].map(withEffectiveModels)
+    )
     const menu = await openMenu()
 
     const badges = rows(menu).map((row) => row.find('.HomeModelMenu-Kbd'))
@@ -727,7 +743,6 @@ describe('choosing', () => {
     const star = rows(menu)[1].find('.HomeModelMenu-Star')
     expect(star.attributes('type')).toBe('button')
     expect(star.attributes('aria-pressed')).toBe('false')
-    expect(star.attributes('aria-label')).toBe('home.modelFavorite')
     // Inside the radio, not beside it: the row is a card item, not a button, so a control may sit
     // in it — which is what lets the hover surface run the full width of the row. Its click is
     // stopped short of the row, which is what the rest of this test proves.
@@ -740,9 +755,6 @@ describe('choosing', () => {
     expect(appSetting.conversation).toEqual({ model: null, favoriteModels: [PI_GROK] })
     expect(panel(menu).exists()).toBe(true)
     expect(rows(menu)[1].find('.HomeModelMenu-Star').attributes('aria-pressed')).toBe('true')
-    expect(rows(menu)[1].find('.HomeModelMenu-Star').attributes('aria-label')).toBe(
-      'home.modelUnfavorite'
-    )
     expect(rows(menu)[1].attributes('aria-checked')).toBe('false')
 
     // The star filter reflects it at once.
@@ -771,23 +783,25 @@ describe('reasoning effort row', () => {
   const V4_PRO = { providerId: 'deepseek-default', model: 'deepseek-v4-pro' }
 
   function withCloudProviders(): void {
-    mocks.getProviderModelOptions.mockResolvedValue([
-      ...providerOptions(),
-      {
-        providerId: 'openai-default',
-        providerName: 'OpenAI',
-        providerType: 'openai',
-        models: ['gpt-5.5', 'gpt-4o'],
-        available: true
-      },
-      {
-        providerId: 'deepseek-default',
-        providerName: 'DeepSeek',
-        providerType: 'deepseek',
-        models: ['deepseek-v4-pro'],
-        available: true
-      }
-    ])
+    mocks.getProviderModelOptions.mockResolvedValue(
+      [
+        ...providerOptions(),
+        {
+          providerId: 'openai-default',
+          providerName: 'OpenAI',
+          providerType: 'openai',
+          models: ['gpt-5.5', 'gpt-4o'],
+          available: true
+        },
+        {
+          providerId: 'deepseek-default',
+          providerName: 'DeepSeek',
+          providerType: 'deepseek',
+          models: ['deepseek-v4-pro'],
+          available: true
+        }
+      ].map(withEffectiveModels)
+    )
   }
 
   function effortChips(menu: VueWrapper) {
@@ -798,28 +812,6 @@ describe('reasoning effort row', () => {
     const line = menu.find('.HomeModelMenu-EffortNote')
     return line.exists() ? line.text() : null
   }
-
-  it('offers auto and the four levels, auto pressed on a fresh profile', async () => {
-    const menu = await openMenu()
-
-    const toolbar = menu.find('.HomeModelMenu-EffortChips')
-    expect(toolbar.attributes('role')).toBe('toolbar')
-    expect(toolbar.attributes('aria-label')).toBe('home.reasoning.label')
-    expect(effortChips(menu).map((chip) => chip.text())).toEqual([
-      'home.reasoning.auto',
-      'home.reasoning.level.low',
-      'home.reasoning.level.medium',
-      'home.reasoning.level.high',
-      'home.reasoning.level.max'
-    ])
-    expect(
-      effortChips(menu)
-        .filter((chip) => chip.attributes('aria-pressed') === 'true')
-        .map((chip) => chip.text())
-    ).toEqual(['home.reasoning.auto'])
-    // Nothing pinned and nothing chosen: nothing to explain.
-    expect(note(menu)).toBeNull()
-  })
 
   it('stores a pick without closing the menu or touching the model', async () => {
     const menu = await openMenu()

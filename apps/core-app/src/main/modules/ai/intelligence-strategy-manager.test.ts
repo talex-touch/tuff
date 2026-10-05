@@ -13,7 +13,7 @@ const providers: IntelligenceProviderConfig[] = [
     name: 'Third priority provider',
     enabled: true,
     priority: 30,
-    models: ['third-model']
+    models: [{ id: 'third-model' }]
   },
   {
     id: 'provider-first',
@@ -21,7 +21,7 @@ const providers: IntelligenceProviderConfig[] = [
     name: 'First priority provider',
     enabled: true,
     priority: 10,
-    models: ['first-model']
+    models: [{ id: 'first-model' }]
   },
   {
     id: 'provider-second',
@@ -29,7 +29,7 @@ const providers: IntelligenceProviderConfig[] = [
     name: 'Second priority provider',
     enabled: true,
     priority: 20,
-    models: ['second-model']
+    models: [{ id: 'second-model' }]
   }
 ]
 

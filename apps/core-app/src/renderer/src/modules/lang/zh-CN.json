@@ -1450,6 +1450,224 @@
     }
   },
   "home": {
+    "workspace": {
+      "imagesUnsupported": "该模型不接受图片。请移除图片或换用其他模型，消息仍保留在输入框中。",
+      "review": {
+        "boundary": "这里记录 Tuff 自身文件工具（写入、删除、复制、移动）造成的变更。命令行和 MCP 工具写入的文件不在此跟踪，也无法从此处撤销。",
+        "empty": "此会话没有记录文件变更。",
+        "loadFailed": "无法读取文件变更。",
+        "loadingDiff": "正在读取变更…",
+        "unknown": "未知",
+        "exists": "存在",
+        "absent": "不存在",
+        "bytes": "{count} 字节",
+        "before": "修改前",
+        "after": "修改后",
+        "diff": "{path} 的变更",
+        "undo": "撤销",
+        "confirmUndo": "确认撤销",
+        "rolledBack": "已恢复 {count} 个路径。",
+        "rollbackRequestFailed": "未收到撤销结果，请先刷新变更记录，再决定是否重试。",
+        "line": {
+          "context": "未改动",
+          "add": "新增",
+          "del": "删除"
+        },
+        "operation": {
+          "write": "写入",
+          "delete": "删除",
+          "copy": "复制",
+          "move": "移动"
+        },
+        "status": {
+          "recorded": "已记录",
+          "partial": "部分记录",
+          "unsupported": "不可撤销",
+          "rolled_back": "已撤销",
+          "rollback_failed": "撤销失败"
+        },
+        "reason": {
+          "binary": "二进制文件，无文本差异。",
+          "too_large": "文件过大，无法快照或比较。",
+          "snapshot_failed": "未能建立修改前快照，无法撤销。",
+          "snapshot_missing": "快照已不存在，无法撤销。",
+          "capture_failed": "无法读取文件状态，未知值显示为未知。",
+          "diff_limit": "差异已按大小上限截断。",
+          "read_only_evidence": "继承自分支来源会话，仅供参考，不能在此撤销。",
+          "shell_mcp_unsupported": "由命令或 MCP 工具写入，未逐路径跟踪，不可撤销。",
+          "operation_failed": "文件操作本身失败。",
+          "partial_failure": "操作仅部分完成。",
+          "sensitive_content": "包含凭据，不保存快照或差异，也无法撤销。"
+        },
+        "code": {
+          "REVIEW_NOT_FOUND": "该变更记录已不存在。",
+          "REVIEW_READ_ONLY": "此记录在此为只读（继承自分支来源）。",
+          "REVIEW_UNSUPPORTED": "此变更无法撤销。",
+          "REVIEW_AUTHORITY_CHANGED": "会话的项目或运行已变化，已拒绝撤销。",
+          "REVIEW_PERMISSION_DENIED": "已不再拥有此项目的文件权限。",
+          "REVIEW_APPROVAL_REQUIRED": "撤销需要先获得批准。",
+          "REVIEW_PATH_OUTSIDE_ROOT": "路径现在指向项目外，已拒绝撤销。",
+          "REVIEW_SYMLINK_CHANGED": "符号链接在修改后发生变化，已拒绝撤销。",
+          "REVIEW_CONTENT_CONFLICT": "文件在 Tuff 修改后又被改动，为避免覆盖你的修改已拒绝撤销。",
+          "REVIEW_SNAPSHOT_MISSING": "快照缺失，未恢复任何内容。",
+          "REVIEW_SNAPSHOT_INVALID": "快照校验失败，未恢复任何内容。",
+          "REVIEW_ROLLBACK_PARTIAL": "仅部分路径已恢复，请查看下方路径。",
+          "REVIEW_ROLLBACK_FAILED": "撤销失败，已尽可能保持文件原状。",
+          "REVIEW_PERSIST_FAILED": "文件已恢复，但记录未能更新。"
+        }
+      },
+      "retry": "重试",
+      "mode": {
+        "menu": "会话模式",
+        "chat": "对话",
+        "agent": "Agent",
+        "chatDesc": "使用你的 Provider 或 CLI 回答，与之前一致。",
+        "agentDesc": "用 Agent profile 及其允许的工具执行任务。",
+        "branchHint": "此会话已有历史：切换模式会在新分支中继续，当前会话保持不变。",
+        "branchLocked": "切换模式会创建分支，需等当前回复结束。"
+      },
+      "profile": {
+        "label": "Agent profile",
+        "loadFailed": "无法读取 Agent profile。",
+        "none": "还没有任何 Agent profile，Agent 模式无可运行的配置。",
+        "noneEnabled": "所有 Agent profile 均已关闭。在下方开启一个即可使用 Agent 模式。",
+        "unavailable": "此会话使用的 profile 已关闭或不存在，请另选一个。",
+        "required": "Agent 模式下发送前，请先选择一个已开启的 profile。",
+        "summary": "{runtime} · {tools} 个工具 · {approval}",
+        "approval": {
+          "manual": "运行前询问",
+          "preauthorized": "已预授权"
+        },
+        "enable": "开启 {name}",
+        "disable": "关闭 {name}"
+      },
+      "queue": {
+        "title": "排队消息",
+        "count": "已排队 {count} / {max}",
+        "held": "已暂停，继续前不会执行任何内容。",
+        "heldInterrupted": "回复期间应用已关闭，队列已暂停；继续前不会执行。",
+        "heldFailed": "上一条回复失败，队列已暂停；继续前不会执行。",
+        "heldStopped": "你停止了回复，队列已暂停；继续前不会执行。",
+        "heldApproval": "正在等待审批，其余内容暂不执行。",
+        "resume": "继续",
+        "next": "下一条",
+        "promote": "下一条发送",
+        "up": "上移",
+        "down": "下移",
+        "remove": "移出队列",
+        "rowLabel": "排队第 {position} 条：{text}",
+        "attachments": "{count} 张图片",
+        "expand": "再显示 {count} 条",
+        "collapse": "收起",
+        "full": "队列已满（{max} 条），消息仍保留在输入框中。",
+        "add": "加入队列",
+        "addHint": "正在回复中，此消息会进入队列，在当前回复结束后执行。"
+      },
+      "run": {
+        "title": "Agent 运行等待你批准",
+        "profile": "Profile",
+        "reason": "原因",
+        "requested": "请求时间",
+        "id": "运行",
+        "approve": "批准运行",
+        "reject": "拒绝",
+        "scope": "此决定只作用于本会话的这次运行；工具审批另行处理。"
+      },
+      "gateway": {
+        "origin": {
+          "current": "当前会话",
+          "other": "其他会话",
+          "external": "外部调用"
+        },
+        "originNote": {
+          "other": "此工具请求来自另一个会话，并非当前会话。",
+          "external": "此工具请求不属于任何会话（例如本地 MCP 服务）。"
+        },
+        "risk": {
+          "read": "读取",
+          "write": "写入",
+          "execute": "执行命令"
+        }
+      },
+      "fork": {
+        "fromHere": "从这里分支",
+        "conversation": "分支此会话",
+        "createdElsewhere": "分支已创建，可在会话列表中找到。"
+      },
+      "panel": {
+        "activity": "活动",
+        "context": "上下文",
+        "review": "变更"
+      },
+      "activity": {
+        "waiting": "等待你处理",
+        "runApproval": "Agent 运行审批",
+        "runId": "运行 {id}",
+        "empty": "还没有回复。每次回复及其使用的工具会显示在这里。",
+        "turn": {
+          "streaming": "回复中",
+          "complete": "回复完成",
+          "failed": "回复失败"
+        }
+      },
+      "context": {
+        "package": "宿主上下文包",
+        "budget": "预算",
+        "estimate": "估算（宿主）",
+        "sources": "包含",
+        "preparedAt": "准备时间",
+        "packageUnknown": "未知：Main 尚未报告此会话的上下文包。",
+        "packageSource": "由 Tuff 在请求前组装并估算，并非 Provider 计数。",
+        "currentInputPackageSource": "由 Tuff 准备并估算的本轮输入包。历史、系统规则和 Pi 原生上下文仍由各自执行器持有；此数值不代表模型全部上下文占用。",
+        "usage": "上一次请求（Provider 报告）",
+        "input": "输入",
+        "output": "输出",
+        "occupancy": "请求大小",
+        "reportedBy": "报告方",
+        "usageUnknown": "未知：Provider 未报告上一次回复的用量。",
+        "usageSource": "仅为 Provider 对上一次请求的报告，并非剩余上下文。",
+        "limits": "模型限制",
+        "window": "上下文窗口",
+        "maxOutput": "最大输出",
+        "outputNotEnforced": "未随请求发送，由 CLI 自行限制",
+        "limitsSource": "来自模型绑定的能力上限，不代表当前占用。",
+        "unknown": "未知",
+        "tokens": "{count} tokens",
+        "compactions": "压缩",
+        "compactionStart": "开始压缩",
+        "compactionEnd": "压缩完成",
+        "compactionFailed": "压缩失败",
+        "compactionsNone": "此会话未发生压缩。",
+        "checkpoints": "检查点与快照",
+        "checkpointsNone": "没有记录检查点或快照。",
+        "source": {
+          "catalog": "目录",
+          "user": "你设置的",
+          "provider": "来自 Provider",
+          "current_input": "本条消息",
+          "recent_turn": "最近回合",
+          "summary": "摘要",
+          "memory": "记忆",
+          "retrieval": "检索"
+        }
+      },
+      "error": {
+        "unknown": "与工作区通信时出错。",
+        "WORKSPACE_QUEUE_FULL": "队列已满，消息仍保留在输入框中。",
+        "WORKSPACE_BUSY": "正在回复中，请在结束后重试。",
+        "WORKSPACE_QUEUE_HELD": "队列已暂停，请先继续。",
+        "WORKSPACE_NOT_FOUND": "无法打开此会话。",
+        "WORKSPACE_PROFILE_UNAVAILABLE": "该 Agent profile 已关闭或不存在。",
+        "WORKSPACE_PROJECT_UNAVAILABLE": "此会话绑定的项目已不可用。",
+        "WORKSPACE_MODE_REQUIRES_FORK": "此会话已有历史，切换模式需要新建分支。",
+        "WORKSPACE_FORK_BUSY": "请先结束或停止当前回复再分支。",
+        "WORKSPACE_FORK_ANCHOR_INVALID": "无法可靠匹配此回复的历史，不能作为分支点。",
+        "WORKSPACE_FORK_NATIVE_UNSAFE": "CLI 会话当前无法安全分支。",
+        "WORKSPACE_RUN_NOT_PENDING": "该运行已不在等待审批。",
+        "WORKSPACE_STALE_TURN": "该回复已经结束。",
+        "WORKSPACE_TURN_INTERRUPTED": "回复在完成前已中断（应用关闭或运行结束）。"
+      }
+    },
     "greeting": "今天想做点什么？",
     "placeholder": "塔芙来帮你做任何事",
     "permission": "权限",
@@ -5827,7 +6045,59 @@
         "instructions": "系统指令",
         "instructionsPlaceholder": "输入此提供商的系统指令...",
         "instructionsHint": "可选的系统提示词，将与此提供商一起使用",
-        "instructionsEmpty": "设置系统指令"
+        "instructionsEmpty": "设置系统指令",
+        "binding": {
+          "title": "模型设置",
+          "description": "按模型设置别名、上下文与输出上限、推理与图片输入",
+          "summaryCount": "已自定义 {count} 个模型",
+          "edit": "配置",
+          "dialogDesc": "这里的值就是请求实际使用的值。不确定的项请留空。",
+          "noModels": "请先添加模型，再在这里配置。",
+          "model": "模型",
+          "wireId": "实际发送的模型 ID",
+          "alias": "显示名称",
+          "aliasHint": "在列出模型的地方显示；请求始终发送模型 ID。",
+          "contextWindow": "上下文窗口",
+          "contextWindowHint": "估算输入超过此值的请求会在发送前被拒绝。",
+          "maxTokens": "输出上限",
+          "maxTokensHint": "限制单次回复可用的 token（含推理）。",
+          "unknownPlaceholder": "未知",
+          "unknown": "未知",
+          "notEnforced": "由 CLI 自行限制",
+          "thinking": "推理",
+          "thinkingHint": "自动永远不发送推理参数；这里的档位只决定可选范围。",
+          "thinkingRoute": "内置表",
+          "thinkingNone": "不支持推理",
+          "thinkingCustom": "自定义档位",
+          "thinkingUnsupportedProvider": "此连接不接受推理参数",
+          "thinkingUnsupportedModel": "没有推理档位",
+          "protocol": "推理协议",
+          "protocolRoute": "内置表",
+          "protocolLegacy": "Token 预算",
+          "protocolAdaptive": "自适应强度",
+          "defaultLevel": "新会话默认推理",
+          "defaultLevelNone": "不设置（自动）",
+          "defaultLevelHint": "仅在新会话选中此模型时使用；已选过档位（包括自动）的会话保持原选择。",
+          "images": "图片输入",
+          "imagesCatalog": "跟随目录",
+          "imagesOn": "支持",
+          "imagesOff": "不支持",
+          "imagesHint": "只有确认模型能读取图片时才会发送图片。",
+          "imagesAdapterUnsupported": "此连接无法发送图片，与模型能力无关。",
+          "imageAccepted": "会发送图片",
+          "imageRefused": "会拒绝图片",
+          "effective": "当前生效",
+          "imageState": {
+            "supported": "支持",
+            "unsupported": "不支持",
+            "unknown": "未知"
+          },
+          "source": {
+            "user": "你的设置",
+            "catalog": "目录",
+            "unknown": "未知"
+          }
+        }
       },
       "advanced": {
         "title": "高级配置",

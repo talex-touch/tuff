@@ -8,7 +8,15 @@ import packageJson from '../../package.json'
 
 globalThis.$pkg = packageJson
 
-if (!app.isPackaged) {
+const isolatedUserDataPath = process.env.TUFF_STARTUP_BENCHMARK_USER_DATA_DIR?.trim()
+if (isolatedUserDataPath) {
+  const isolatedRoot = path.resolve(isolatedUserDataPath)
+  fse.ensureDirSync(isolatedRoot)
+  // Session paths are captured before precore runs; changing only userData there
+  // isolates SQLite but leaves Chromium writing the real dev profile.
+  app.setPath('userData', isolatedRoot)
+  app.setPath('sessionData', isolatedRoot)
+} else if (!app.isPackaged) {
   const devUserDataPath = path.join(app.getPath('appData'), `${packageJson.name}-dev`)
   if (app.getPath('userData') !== devUserDataPath) {
     app.setPath('userData', devUserDataPath)

@@ -1,7 +1,4 @@
-import type {
-  ConversationRecord,
-  ConversationSaveRequest
-} from '@talex-touch/utils/transport/sdk/domains/conversation'
+import type { ConversationRecord } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import type { Ref } from 'vue'
 import type { ConversationMessage } from './useHomeConversation'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -9,7 +6,7 @@ import {
   ConversationEvents,
   createConversationSdk
 } from '@talex-touch/utils/transport/sdk/domains/conversation'
-import { ref, toRaw } from 'vue'
+import { ref } from 'vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 export interface UseConversationHistoryReturn {
@@ -24,12 +21,11 @@ export interface UseConversationHistoryReturn {
   load: (
     id: string
   ) => Promise<{ title: string; messages: ConversationMessage[]; projectId: string | null } | null>
-  persist: (
-    id: string,
-    title: string,
-    messages: ConversationMessage[],
-    projectId: string | null
-  ) => Promise<void>
+  /**
+   * Retitles a stored conversation without touching its messages — the only write Home makes to a
+   * thread Main owns, so a title upgrade can never overwrite the history with an older snapshot.
+   */
+  rename: (id: string, title: string) => Promise<void>
   remove: (id: string) => Promise<void>
 }
 
@@ -40,75 +36,10 @@ export function createConversationId(): string {
   return crypto.randomUUID()
 }
 
-/** Caps stored tool output/log/text spans so one verbose tool cannot bloat the row. */
-const STORED_PART_TEXT_LIMIT = 8 * 1024
-
 /**
- * Parts survive persistence inside `meta.parts`. The JSON round-trip both
- * detaches from the reactive proxies (structuredClone rejects them) and
- * guarantees the payload is plain data; long fields are truncated afterwards.
- */
-function toStoredParts(parts: ConversationMessage['parts']): unknown[] | undefined {
-  if (!parts || parts.length === 0) return undefined
-  const plain = JSON.parse(JSON.stringify(parts)) as Array<Record<string, unknown>>
-  for (const part of plain) {
-    // A text part *is* the answer — the body renders prose from these, so a cap
-    // here would reload a long reply visibly cut off at 8KB. Reasoning spans and
-    // tool payloads are still trail material, and stay capped.
-    const keys =
-      part.type === 'text' ? ([] as const) : (['text', 'output', 'logs', 'input', 'error'] as const)
-    for (const key of keys) {
-      const value = part[key]
-      if (typeof value === 'string' && value.length > STORED_PART_TEXT_LIMIT) {
-        part[key] = `${value.slice(0, STORED_PART_TEXT_LIMIT)}…`
-      }
-    }
-  }
-  return plain
-}
-
-function toSaveRequest(
-  id: string,
-  title: string,
-  messages: ConversationMessage[],
-  projectId: string | null
-): ConversationSaveRequest {
-  return {
-    id,
-    title,
-    projectId,
-    /**
-     * A streaming placeholder is stored as `failed`, not as `streaming`: the stream cannot survive
-     * the write, so a reload would otherwise restore a bubble that waits forever for deltas that
-     * will never arrive.
-     */
-    messages: messages.map((message) => {
-      const storedParts = toStoredParts(message.parts)
-      // `toRaw`: reading `meta` off a reactive message returns a Proxy, and the transport's
-      // structuredClone rejects proxies — every save would fail. The spread keeps the stored
-      // object detached from the live one.
-      const meta =
-        message.meta || storedParts
-          ? ({
-              ...(message.meta ? toRaw(message.meta) : {}),
-              ...(storedParts ? { parts: storedParts } : {})
-            } as Record<string, unknown>)
-          : undefined
-      return {
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        status: message.status === 'streaming' ? 'failed' : message.status,
-        meta
-      }
-    })
-  }
-}
-
-/**
- * Module-scoped on purpose: HomePage persists while ShellConversationList
- * renders, and both must read the same list — per-call refs would leave the
- * sidebar stale after every send, since `persist` refreshes only its own copy.
+ * Module-scoped on purpose: HomePage refreshes after Main settles a turn while
+ * ShellConversationList renders, and both must read the same list — per-call refs
+ * would leave the sidebar stale, since `refresh` updates only its own copy.
  */
 const conversations = ref<ConversationRecord[]>([])
 const loading = ref(false)
@@ -174,14 +105,8 @@ export function useConversationHistory(): UseConversationHistoryReturn {
     return { title: detail.title ?? '', messages, projectId: detail.projectId }
   }
 
-  async function persist(
-    id: string,
-    title: string,
-    messages: ConversationMessage[],
-    projectId: string | null
-  ): Promise<void> {
-    if (messages.length === 0) return
-    await sdk.save(toSaveRequest(id, title, messages, projectId))
+  async function rename(id: string, title: string): Promise<void> {
+    await sdk.rename(id, title)
     await refresh()
   }
 
@@ -190,5 +115,5 @@ export function useConversationHistory(): UseConversationHistoryReturn {
     await refresh()
   }
 
-  return { conversations, loading, refresh, load, persist, remove }
+  return { conversations, loading, refresh, load, rename, remove }
 }

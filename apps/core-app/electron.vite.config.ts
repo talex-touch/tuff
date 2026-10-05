@@ -17,6 +17,7 @@ import Components from 'unplugin-vue-components/vite'
 import VueSetupExtend from 'vite-plugin-vue-setup-extend'
 import generatorInformation from './generator-information'
 import { tuffexOnDemandStylePlugin } from '../../packages/tuffex/packages/script/build/on-demand-style-plugin'
+import type * as PiDesktopReuseLegal from './scripts/legal/pi-desktop-reuse-legal.cjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -28,6 +29,7 @@ const tuffexRoot = path.join(workspaceRoot, 'packages', 'tuffex')
 const tuffBusinessRoot = path.join(workspaceRoot, 'packages', 'tuff-business')
 const tuffIntelligenceRoot = path.join(workspaceRoot, 'packages', 'tuff-intelligence')
 const tuffVoiceRoot = path.join(workspaceRoot, 'packages', 'tuff-voice')
+const piDesktopReuseRoot = path.join(workspaceRoot, 'packages', 'pi-desktop-reuse', 'src')
 const utilsRoot = path.join(workspaceRoot, 'packages', 'utils')
 const tuffexSourceEntry = path.join(tuffexRoot, 'packages', 'components', 'src', 'index.ts')
 const tuffexBaseStyleEntry = path.join(tuffexRoot, 'packages', 'components', 'style', 'index.scss')
@@ -223,6 +225,18 @@ async function resolveSentryRendererPlugins(): Promise<Plugin[]> {
 const sentryRendererPlugins = await resolveSentryRendererPlugins()
 type ElectronVitePlugins = NonNullable<UserConfig['renderer']>['plugins']
 
+/**
+ * LGPL-3.0 delivery for @talex-touch/pi-desktop-reuse: every build target reports the modules it
+ * actually loaded, and once main, preload and renderer are written the corresponding-source
+ * bundle is produced under out/legal/pi-desktop-reuse; missing legal files or mappings fail the
+ * build. Loaded through createRequire so the config bundler keeps it a plain CommonJS script.
+ */
+const piDesktopReuseLegal = (
+  createRequire(import.meta.url)(
+    './scripts/legal/pi-desktop-reuse-legal.cjs'
+  ) as typeof PiDesktopReuseLegal
+).createPiDesktopReuseLegalCollector({ appRoot: __dirname })
+
 export default defineConfig({
   main: {
     plugins: [
@@ -241,6 +255,7 @@ export default defineConfig({
         ],
         exclude: [
           'chalk', // Chalk 5 为 ESM-only，主进程 CJS 必须内联以保留 default export
+          '@talex-touch/pi-desktop-reuse',
           '@talex-touch/utils', // workspace 包必须打包
           '@talex-touch/tuff-intelligence', // 避免运行时直接加载 TS ESM 源码导致导入解析失败
           '@talex-touch/tuff-voice', // Provider protocol source must be bundled for Node ESM resolution
@@ -250,13 +265,15 @@ export default defineConfig({
           // 归 apps/core-app 自己所有，见 package.json 的 dependencies
           'yaml'
         ]
-      })
+      }),
+      piDesktopReuseLegal.plugin('main')
     ],
     resolve: {
       alias: {
         // 强制 @libsql/isomorphic-ws 使用 web 版本而不是 node 版本
         // 这样就不会引入 ws 模块，避免原生依赖问题
         '@libsql/isomorphic-ws': '@libsql/isomorphic-ws/web.mjs',
+        '@talex-touch/pi-desktop-reuse': piDesktopReuseRoot,
         '@talex-touch/tuff-voice': tuffVoiceSourceEntry
       }
     },
@@ -337,11 +354,13 @@ export default defineConfig({
       externalizeDepsPlugin({
         exclude: [
           '@electron-toolkit/preload',
+          '@talex-touch/pi-desktop-reuse',
           '@talex-touch/utils', // workspace 包必须打包
           '@talex-touch/tuff-intelligence'
         ]
       }),
-      standaloneSandboxedPreloadPlugin()
+      standaloneSandboxedPreloadPlugin(),
+      piDesktopReuseLegal.plugin('preload')
     ],
     build: {
       sourcemap: enableSourcemap,
@@ -367,6 +386,10 @@ export default defineConfig({
         {
           find: /^assets\//,
           replacement: `${path.join(rendererPath, 'assets')}/`
+        },
+        {
+          find: /^@talex-touch\/pi-desktop-reuse\/(.+)$/,
+          replacement: path.join(piDesktopReuseRoot, '$1')
         },
         ...tuffexAliases,
         ...tuffBusinessAliases,
@@ -418,7 +441,8 @@ export default defineConfig({
       VueI18nPlugin({
         runtimeOnly: false
       }),
-      ...sentryRendererPlugins
+      ...sentryRendererPlugins,
+      piDesktopReuseLegal.plugin('renderer')
     ] as unknown as ElectronVitePlugins
   }
 })

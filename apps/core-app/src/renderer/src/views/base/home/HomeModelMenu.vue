@@ -27,9 +27,9 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { matchesModelQuery, modelSubtitle } from '~/modules/conversation/model-display'
 import { reasoningLevelLabelKey } from '~/modules/conversation/reasoning-effort-display'
+import { useHomeModelScope } from '~/modules/conversation/home-model-scope'
 import { useModelFavorites } from '~/modules/conversation/useModelFavorites'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
-import { useReasoningEffort } from '~/modules/conversation/useReasoningEffort'
 import { modelFamilyIconFor } from '~/modules/intelligence/model-family-icons'
 import {
   modelSourceIconFor,
@@ -55,13 +55,18 @@ const props = withDefaults(defineProps<{ placement?: 'bottom-start' | 'top-end' 
 })
 
 const { t } = useI18n()
-const { choices, loaded, ensureLoaded, select, isSelected, resolvedChoice } = useModelOptions()
+const { choices, loaded, ensureLoaded } = useModelOptions()
+/**
+ * Whose choice the rows and the effort strip edit: the open conversation's own settings when Main
+ * holds it, the global default on a blank Home (`home-model-scope`).
+ */
+const { select, isSelected, resolvedChoice, effortSetting, effortRow, selectEffort } =
+  useHomeModelScope()
 const { isFavorite, toggle: toggleFavorite } = useModelFavorites()
-const { setting: effortSetting, row: effortRow, select: selectEffort } = useReasoningEffort()
 
 /**
- * The effort row: 自动 · 低 · 中 · 高 · 极高, one global choice shown against the model the next send
- * pins. Every level stays pickable on a route that takes one — a model that lacks a level rounds to
+ * The effort row: 自动 · 低 · 中 · 高 · 极高, the scope's one choice shown against the model the next
+ * send pins. Every level stays pickable on a route that takes one — a model that lacks a level rounds to
  * its nearest, and the note says to which — and the whole row goes inert, with its reason, on a
  * route that takes none. Disabled rather than hidden: this menu is where the model changes, and a row
  * that came and went with the selection would read as a setting that is sometimes lost.
