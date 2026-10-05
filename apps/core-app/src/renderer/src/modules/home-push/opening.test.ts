@@ -138,10 +138,11 @@ describe('home opening state machine', () => {
     expect(call.payload.maxTokens).toBeGreaterThanOrEqual(2 * HOME_OPENING_MAX_CODEPOINTS)
     expect(call.payload.maxTokens).toBeLessThanOrEqual(400)
     // Exactly this: a surface would inject skills and open a native session, and the composer's
-    // effort would think hard about two sentences of greeting.
+    // effort would think hard about two sentences of greeting. The caller is the opening's stable
+    // usage-ledger id (AC-B5).
     expect(call.invokeOptions).toEqual({
       timeout: HOME_OPENING_WAIT_MS,
-      metadata: { operation: INTELLIGENCE_HOME_OPENING_OPERATION }
+      metadata: { caller: 'core.home.opening', operation: INTELLIGENCE_HOME_OPENING_OPERATION }
     })
 
     // A pinned model is the chat's route, so it is the opening's too — read as each one starts.
@@ -151,7 +152,7 @@ describe('home opening state machine', () => {
       preferredProviderId: 'claude-cli',
       modelPreference: ['claude-opus-5-5'],
       timeout: HOME_OPENING_WAIT_MS,
-      metadata: { operation: INTELLIGENCE_HOME_OPENING_OPERATION }
+      metadata: { caller: 'core.home.opening', operation: INTELLIGENCE_HOME_OPENING_OPERATION }
     })
   })
 

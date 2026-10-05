@@ -27,6 +27,7 @@ import { createHash } from 'node:crypto'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
 import { createLogger } from '../../utils/logger'
+import { frontmatterFields, frontmatterText } from './frontmatter-fields'
 
 const localSkillLog = createLogger('Intelligence').child('LocalSkills')
 
@@ -77,6 +78,34 @@ export interface LocalSkillEntry {
   /** The registered directory this was found under, as configured. */
   sourceDir: string
   enabled: boolean
+}
+
+/** One place a registered directory reaches a skill. */
+export interface LocalSkillSource {
+  /** The registered directory, as configured. */
+  sourceDir: string
+  /**
+   * The entry under it as that directory lists it — the link site, before any symlink is followed.
+   * Two agents linking one file have two entries and one real path.
+   */
+  entryPath: string
+}
+
+/**
+ * A scanned skill with everything the scan saw on the way to it.
+ *
+ * {@link LocalSkillEntry} keeps only the first directory that reached a file, which is all the
+ * injection and the reader need. The settings page needs the rest: which agents link the file, and
+ * which directory physically holds it.
+ */
+export interface LocalSkillScanEntry extends LocalSkillEntry {
+  /** Every registered directory that reaches this file, in scan order; `sourceDir` is the first. */
+  sources: LocalSkillSource[]
+  /**
+   * The registered directory whose real path contains the file's — where it is physically stored —
+   * or null when none does (a link into an app bundle, say).
+   */
+  storeDir: string | null
 }
 
 export const EMPTY_LOCAL_SKILL_CONFIG: LocalSkillConfig = { dirs: [], disabledIds: [] }
@@ -130,25 +159,20 @@ async function hasManifest(dirPath: string): Promise<boolean> {
 }
 
 /**
- * `name` and `description` out of a `---` fenced header.
+ * `name` and `description` out of a `---` fenced header, each as one line of text.
  *
- * Same two keys and same tolerance as the CLI environment scanner: an unfenced
- * or malformed file is not an error, it just has no metadata.
+ * Read with the lenient header reader the import scanner uses too (`frontmatter-fields.ts`): a
+ * value may be quoted, continue on indented lines, or be a `>`/`|` block scalar, and an unfenced or
+ * malformed file is not an error, it just has no metadata.
  */
 export function parseSkillFrontmatter(content: string): { name?: string; description?: string } {
-  if (!content.startsWith('---')) return {}
-  const end = content.indexOf('\n---', 3)
-  if (end < 0) return {}
-
   const result: { name?: string; description?: string } = {}
-  for (const line of content.slice(3, end).split(/\r?\n/)) {
-    // `\S.*` rather than `.+` so the leading-space run has nothing to trade
-    // characters with — a blank value simply fails to match.
-    const match = /^([\w-]+):\s*(\S.*)$/.exec(line.trim())
-    if (!match) continue
-    const value = match[2]!.trim().replace(/^["']|["']$/g, '')
-    if (match[1] === 'name') result.name = value
-    if (match[1] === 'description') result.description = value
+  for (const field of frontmatterFields(content)) {
+    if (field.key !== 'name' && field.key !== 'description') continue
+    const text = frontmatterText(field)
+    // A key with no value leaves the field unset, so the caller's fallback (the directory name)
+    // still applies.
+    if (text) result[field.key] = text
   }
   return result
 }
@@ -157,6 +181,8 @@ interface LocalSkillLocation {
   path: string
   manifestPath: string
   sourceDir: string
+  /** How `sourceDir` lists it: `path` before symlinks were followed. */
+  entryPath: string
 }
 
 /**
@@ -166,10 +192,14 @@ interface LocalSkillLocation {
  * and are not descended into. A directory without one is walked, because agents group their skills
  * (`~/.codex/skills/.system/<skill>`). Both the depth and the total directory count are bounded so a
  * mis-picked root cannot turn one scan into a walk of the disk.
+ *
+ * `dir` is always a real path; `entryDir` is the same directory as the registered root lists it, so
+ * a skill reached through a link remembers the link it was reached through.
  */
 async function collectSkillLocations(
   sourceDir: string,
   dir: string,
+  entryDir: string,
   depth: number,
   budget: { directories: number },
   locations: LocalSkillLocation[]
@@ -179,7 +209,12 @@ async function collectSkillLocations(
   budget.directories -= 1
 
   if (await hasManifest(dir)) {
-    locations.push({ path: dir, manifestPath: join(dir, 'SKILL.md'), sourceDir })
+    locations.push({
+      path: dir,
+      manifestPath: join(dir, 'SKILL.md'),
+      sourceDir,
+      entryPath: entryDir
+    })
     if (depth > 0) return
   }
   let names: string[]
@@ -200,16 +235,36 @@ async function collectSkillLocations(
     try {
       // A symlinked entry resolves to its target, and the target — not the link
       // site — becomes the boundary its reads may not leave.
-      await collectSkillLocations(sourceDir, await realpath(child), depth + 1, budget, locations)
+      await collectSkillLocations(
+        sourceDir,
+        await realpath(child),
+        join(entryDir, name),
+        depth + 1,
+        budget,
+        locations
+      )
     } catch {
       continue
     }
   }
 }
 
-/** Every skill directory the config points at, deduplicated by real path. */
-async function locationsFor(config: LocalSkillConfig): Promise<Map<string, LocalSkillLocation>> {
-  const byId = new Map<string, LocalSkillLocation>()
+/** Every place one real skill directory was reached from; the first is the one reads go through. */
+interface SkillReach {
+  location: LocalSkillLocation
+  sources: LocalSkillSource[]
+}
+
+interface ScannedLocations {
+  byId: Map<string, SkillReach>
+  /** Registered directories that resolved this scan, with their real paths, in config order. */
+  roots: Array<{ dir: string; realPath: string }>
+}
+
+/** Every skill directory the config points at, merged by real path. */
+async function scanLocations(config: LocalSkillConfig): Promise<ScannedLocations> {
+  const byId = new Map<string, SkillReach>()
+  const roots: ScannedLocations['roots'] = []
   const budget = { directories: MAX_SCANNED_DIRECTORIES }
   for (const dir of config.dirs) {
     let root: string
@@ -221,8 +276,9 @@ async function locationsFor(config: LocalSkillConfig): Promise<Map<string, Local
       localSkillLog.warn(`Skill directory is unreachable: ${dir}`)
       continue
     }
+    roots.push({ dir, realPath: root })
     const locations: LocalSkillLocation[] = []
-    await collectSkillLocations(dir, root, 0, budget, locations)
+    await collectSkillLocations(dir, root, dir, 0, budget, locations)
     if (locations.length >= MAX_ENTRIES_PER_DIR) {
       localSkillLog.warn(
         `Skill directory ${dir} holds more than ${MAX_ENTRIES_PER_DIR} skills; the rest are ignored`
@@ -230,10 +286,47 @@ async function locationsFor(config: LocalSkillConfig): Promise<Map<string, Local
     }
     for (const location of locations) {
       const id = localSkillId(location.path)
-      if (!byId.has(id)) byId.set(id, location)
+      const source = { sourceDir: location.sourceDir, entryPath: location.entryPath }
+      const reach = byId.get(id)
+      // The first directory to reach a file stays the one reads go through, so ids and the reader's
+      // boundary are exactly what they were before every source was kept.
+      if (!reach) byId.set(id, { location, sources: [source] })
+      else if (
+        !reach.sources.some(
+          (known) => known.sourceDir === source.sourceDir && known.entryPath === source.entryPath
+        )
+      )
+        reach.sources.push(source)
     }
   }
-  return byId
+  return { byId, roots }
+}
+
+/** Every skill directory the config points at, deduplicated by real path. */
+async function locationsFor(config: LocalSkillConfig): Promise<Map<string, LocalSkillLocation>> {
+  const { byId } = await scanLocations(config)
+  return new Map([...byId].map(([id, reach]) => [id, reach.location]))
+}
+
+/**
+ * The registered directory that physically holds a skill: of those whose real path contains the
+ * skill's, the most specific one, then one that is not itself a link, then config order. A library
+ * linked in wholesale (an agent's `skills` that is a symlink to `~/.agents/skills`) therefore loses
+ * to the directory it points at.
+ */
+function storeDirFor(skillPath: string, roots: ScannedLocations['roots']): string | null {
+  let best: { dir: string; realPath: string; physical: boolean } | null = null
+  for (const root of roots) {
+    if (!isInside(root.realPath, skillPath)) continue
+    const candidate = { ...root, physical: root.dir === root.realPath }
+    if (
+      !best ||
+      candidate.realPath.length > best.realPath.length ||
+      (candidate.realPath.length === best.realPath.length && candidate.physical && !best.physical)
+    )
+      best = candidate
+  }
+  return best?.dir ?? null
 }
 
 async function readManifest(
@@ -251,16 +344,20 @@ async function readManifest(
 }
 
 /**
- * Every skill the registered directories currently hold, metadata only.
+ * Every skill the registered directories currently hold, metadata only, with every directory that
+ * reaches each one.
  *
  * Failures are per-entry: one unreadable `SKILL.md` drops that skill and leaves
  * the rest of the library listed.
  */
-export async function scanLocalSkills(config: LocalSkillConfig): Promise<LocalSkillEntry[]> {
+export async function scanLocalSkillSources(
+  config: LocalSkillConfig
+): Promise<LocalSkillScanEntry[]> {
   const disabled = new Set(config.disabledIds)
-  const entries: LocalSkillEntry[] = []
+  const entries: LocalSkillScanEntry[] = []
+  const { byId, roots } = await scanLocations(config)
 
-  for (const [id, location] of await locationsFor(config)) {
+  for (const [id, { location, sources }] of byId) {
     let frontmatter: { name?: string; description?: string }
     try {
       // Header only: a scan reads every manifest in every linked library, and the
@@ -277,11 +374,35 @@ export async function scanLocalSkills(config: LocalSkillConfig): Promise<LocalSk
       path: location.path,
       manifestPath: location.manifestPath,
       sourceDir: location.sourceDir,
-      enabled: !disabled.has(id)
+      enabled: !disabled.has(id),
+      sources,
+      storeDir: storeDirFor(location.path, roots)
     })
   }
 
   return entries.sort((left, right) => left.name.localeCompare(right.name))
+}
+
+/**
+ * Every skill the registered directories currently hold, metadata only.
+ *
+ * Failures are per-entry: one unreadable `SKILL.md` drops that skill and leaves
+ * the rest of the library listed.
+ */
+export async function scanLocalSkills(config: LocalSkillConfig): Promise<LocalSkillEntry[]> {
+  // Projected rather than passed through: these entries reach the injection and the MCP host, which
+  // have no business carrying every link path the scan saw.
+  return (await scanLocalSkillSources(config)).map(
+    ({ id, name, description, path, manifestPath, sourceDir, enabled }) => ({
+      id,
+      name,
+      description,
+      path,
+      manifestPath,
+      sourceDir,
+      enabled
+    })
+  )
 }
 
 export async function scanEnabledLocalSkills(config: LocalSkillConfig): Promise<LocalSkillEntry[]> {
@@ -306,11 +427,11 @@ export async function readLocalSkill(config: LocalSkillConfig, skillId: string):
 /** Registered directories with the skills each one contributes. */
 export interface LocalSkillSnapshot {
   dirs: string[]
-  skills: LocalSkillEntry[]
+  skills: LocalSkillScanEntry[]
 }
 
 export async function localSkillSnapshot(config: LocalSkillConfig): Promise<LocalSkillSnapshot> {
-  return { dirs: [...config.dirs], skills: await scanLocalSkills(config) }
+  return { dirs: [...config.dirs], skills: await scanLocalSkillSources(config) }
 }
 
 /**

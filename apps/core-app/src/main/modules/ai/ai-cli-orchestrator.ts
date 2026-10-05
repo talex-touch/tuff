@@ -50,13 +50,15 @@ import {
   sanitizeToolOutputForRuntime
 } from './pi-agent-runtime-host'
 import {
+  AI_RUN_USAGE_LIMIT_REACHED,
   approvalRequirementFromControlError,
   createApprovalRequiredError,
   createRunInterruptedError,
   INTERRUPTED_TOOL_CALL_PREFIX,
   isInterruptedToolCallControlError,
   isRunCancelledControlError,
-  isRunInterruptedControlError
+  isRunInterruptedControlError,
+  isRunUsageLimitedError
 } from './pi-agent-runtime-control-error'
 import { formatStableToolError, projectToolErrorCode } from './tool-error-projection'
 
@@ -1298,7 +1300,9 @@ export class AiCliOrchestrator {
             ? AI_RUN_CANCELLED
             : status === 'interrupted'
               ? AI_RUN_INTERRUPTED
-              : AI_RUN_FAILED
+              : isRunUsageLimitedError(error)
+                ? AI_RUN_USAGE_LIMIT_REACHED
+                : AI_RUN_FAILED
         const completedAt = status === 'pending_approval' ? undefined : Date.now()
         const persisted = await aiOrchestratorStore.getOrchestratorRun(run.id)
         const metadata = projectPersistedRunMetadata(persisted?.metadata ?? run.metadata)

@@ -1,0 +1,253 @@
+schema: comet.native.v4
+name: intelligence-audit-skills-mcp
+language: zh-CN
+phase: build
+status: active
+state_version: 3
+brief: brief.md
+document_constraints_version: 2
+shape_confirmation_hash: ae3de32539531e4213a9ebc5adcfd941410721099b294399be9aa95ace7cc705
+spec_changes:
+  - capability: intelligence-memory
+    operation: create
+    source: specs/intelligence-memory/spec.md
+  - capability: intelligence-usage-audit
+    operation: create
+    source: specs/intelligence-usage-audit/spec.md
+  - capability: local-ai-resources
+    operation: create
+    source: specs/local-ai-resources/spec.md
+workspace:
+  isolation: worktree
+  change_branch: comet/intelligence-audit-skills-mcp
+  target_branch: task/chore/live-work-1003
+  finish: null
+loop:
+  stage: building
+  goal_cycle: 1
+  iteration: 1
+  attempt: 0
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: submit-builder-candidate
+acceptance:
+  - id: A1
+    source: brief.md
+    text: A1（原 AC-1）关闭审计时发起一次调用，明细表没有新行，全局桶与按调用方计数都加 1；开启审计时两者都增加，且计数与明细行的整数一致。
+    result: pending
+    reason: null
+  - id: A2
+    source: brief.md
+    text: A2（原 AC-2）全局桶按主进程本地时区切日：东八区 07:59 与 08:01（跨 UTC
+      日界）的两次调用落在同一个本地日，跨本地零点的两次调用落在两个本地日；用固定时间戳加显式时区（Asia/Shanghai 与
+      America/Los_Angeles）的测试证明。
+    result: pending
+    reason: null
+  - id: A3
+    source: brief.md
+    text: A3（原 AC-3）一次含两次内层模型调用的 `agent.run` 只让全局桶的请求数加 2、Token 为内层之和，外层行不重复计入。
+    result: pending
+    reason: null
+  - id: A4
+    source: brief.md
+    text: A4（原 AC-4）用含历史明细的临时库首次启动时，回填结果等于按本地日重算的期望；再次启动不重复回填；在回填事务中途注入失败，库里不留回填数据。
+    result: pending
+    reason: null
+  - id: A5
+    source: brief.md
+    text: A5（原 AC-5）同一自定义渠道的 chat、embedding、失败三类调用，审计行 `provider` 都记该渠道配置 id；Home
+      对话、CoreBox 上下文动作、剪贴板 OCR、文件 embedding 的新行 `caller` 是对应的 `core.*` 值。
+    result: pending
+    reason: null
+  - id: A6
+    source: brief.md
+    text: A6（原 AC-6）全新 profile 首启后 `enableAudit` 为 true；已有 false 的 profile 升级后仍为
+      false。
+    result: pending
+    reason: null
+  - id: A7
+    source: brief.md
+    text: A7（原 AC-7）本次新增的用量洞察、调用记录、全局上限、MCP 清单与技能清单接口对插件来源返回
+      `INTELLIGENCE_HOST_ONLY_CAPABILITY`，`plugin-facing-events.test.ts`
+      通过；`queryAuditLogs` 的 `limit` 超过 200 时截断为 200，`total` 与筛选条件一致。
+    result: pending
+    reason: null
+  - id: A8
+    source: brief.md
+    text: A8（原 AC-8）一次调用完成后 2 秒内，`getUsageInsights` 返回的今日请求数已包含它，不必等落库。
+    result: pending
+    reason: null
+  - id: A9
+    source: brief.md
+    text: A9（原 AC-9）用 models.dev 子集夹具证明：官方 OpenAI 渠道的 `gpt-4o` 按 `openai` 价格计费；base
+      URL 为 `dashscope.aliyuncs.com` 的自定义渠道解析到 `alibaba-cn`；未知网关上的
+      `claude-sonnet-4-5` 按 `anthropic` 原厂价；Ollama 模型记「本地」、Nexus 记「Nexus
+      积分」、未收录模型记「未找到定价」，三者费用为 0；离线且无缓存时全部为「未找到定价」且调用不被阻塞；ETag 命中时不重写缓存。
+    result: pending
+    reason: null
+  - id: A10
+    source: brief.md
+    text: A10（原 AC-10）设置「每日 3 次请求」后读回一致；传 `null` 清除后读回不限；重启后读回仍一致；该设置不出现在同步载荷里。
+    result: pending
+    reason: null
+  - id: A11
+    source: brief.md
+    text: A11（原 AC-11）设「每日 3 次请求」时，任意调用方（含无 caller 的 Home 对话与后台 embedding）的第 4
+      次调用被拒，缓存命中既不被拒也不计数，跨本地零点后恢复；「每日 Token」与「每日费用」上限各有一条同类测试。
+    result: pending
+    reason: null
+  - id: A12
+    source: brief.md
+    text: A12（原 AC-12，按 R-C4 补界面入口）被拒错误的 code 为 `USAGE_LIMIT_REACHED`，reason
+      含上限项与本地重置时间；`ai-error-recovery` 对它给出本地上限文案而不是 Nexus 积分文案，`QUOTA_EXHAUSTED`
+      仍给原文案；CoreBox AI 答案、OmniPanel、VoicePanel、Home 听写提示、Home 对话、CoreBox
+      结果信号六个入口各有测试覆盖；宿主渲染层拿到的是这个错误码而不是「The operation failed. Please
+      retry.」，CoreBox AI 答案、OmniPanel 与 Home 对话显示打开审计页的入口。
+    result: pending
+    reason: null
+  - id: A13
+    source: brief.md
+    text: A13（原 AC-13）文件 embedding 在上限触发后停止后续批次、不进入重试循环，文件索引诊断里显示暂停原因。
+    result: pending
+    reason: null
+  - id: A14
+    source: brief.md
+    text: A14（原 AC-14）在隔离 dev 实例中用 CDP
+      截图依次验证审计页：有数据时的指标、趋势、去向四维与限额卡；审计未开启；区间无调用；读取失败；首次加载骨架无版式跳动；记录抽屉的筛选、分页、详情，以及导出的
+      CSV 内容与筛选一致；设置抽屉的开关生效。
+    result: pending
+    reason: null
+  - id: A15
+    source: brief.md
+    text: A15（原 AC-15）趋势图 X 轴是本地日期，没有被逐字拆开的星期标签；零值日没有柱。
+    result: pending
+    reason: null
+  - id: A16
+    source: brief.md
+    text: A16（原 AC-16）区间内有 Ollama 模型与一个未收录模型的调用时，估算费用指标、按模型拆解、费用上限设置三处都列出这两个模型及原因。
+    result: pending
+    reason: null
+  - id: A17
+    source: brief.md
+    text: A17（原
+      AC-17）`IntelligenceUsageStats`、`IntelligenceUsageChart`、`IntelligenceAuditLogs`、`IntelligenceAuditOverlay`、`IntelligenceGlobalSettings`
+      五个旧组件已删除，全仓无引用；审计页不再出现记忆复核；`translation-coverage.test.ts` 通过。
+    result: pending
+    reason: null
+  - id: A18
+    source: brief.md
+    text: A18（原 AC-18）`VoiceInsights.test.ts`
+      全绿；语音页迁移前后的同尺寸截图逐区域对比无差异（数据不同除外）；审计页与语音页的标题行和指标卡用同一组共享组件。
+    result: pending
+    reason: null
+  - id: A19
+    source: brief.md
+    text: A19（原 AC-19）侧栏出现「记忆」，进入时高亮，图标不是空框，顺序符合 D5；`categories.smoke.test.ts` 通过；直链
+      `/setting/intelligence/memory` 与 `/intelligence/memory` 都能打开。
+    result: pending
+    reason: null
+  - id: A20
+    source: brief.md
+    text: A20（原 AC-20）新建记忆默认范围为全局；不生效的范围在选择处、列表、详情都有标记；删除要确认，删除后有提示；替换后选中新
+      id；冲突后重载并保持选中；离开再回来列表会刷新；迁移后的记忆测试全绿。
+    result: pending
+    reason: null
+  - id: A21
+    source: brief.md
+    text: A21（原 AC-21）`docs/engineering/specs/` 下相关 spec 与
+      `docs/engineering/sensitive-data-inventory.json` 已更新，敏感数据清单校验与
+      `coreapp-ui-contract` 检查都通过。
+    result: pending
+    reason: null
+  - id: A22
+    source: brief.md
+    text: A22（原 AC-22）core-app 的 node 与 web 类型检查通过，包内 eslint 不新增错误，涉及的 vitest
+      全绿，`git diff --check` 干净。
+    result: pending
+    reason: null
+  - id: A23
+    source: brief.md
+    text: A23（原 AC-23，按现状改写）侧栏「塔芙智能」组的最终顺序是 智能 / 模型渠道 / 语音输入 / 技能 / MCP / 记忆；本
+      change 对共享文件只带入本任务自己的改动，不带入、也不覆盖其他会话的改动。
+    result: pending
+    reason: null
+  - id: A24
+    source: brief.md
+    text: A24 本机装了 Claude、Codex、Pi 时，技能页统计条只显示这三家，数量与各代理目录里的技能数一致；点「Codex」后清单只剩
+      Codex 有的技能，再点一次恢复全部。
+    result: pending
+    reason: null
+  - id: A25
+    source: brief.md
+    text: A25 同一份技能文件被 Claude、Pi 软链接共享时，清单只有一行，行内 Claude、Pi
+      图标点亮，存放位置显示它的物理根；同名但不是同一文件的技能分成两行。
+    result: pending
+    reason: null
+  - id: A26
+    source: brief.md
+    text: A26 打开「对话」内置技能抽屉、改了模型却不保存就关闭时，先询问保存 / 放弃 /
+      取消；有未保存改动时「测试」不可用；保存后配置写入，「测试」恢复可用。
+    result: pending
+    reason: null
+  - id: A27
+    source: brief.md
+    text: A27 Claude 与 Codex 都配置了 context7（同一命令）时，MCP 清单只有一行，两个图标点亮；只开启 context7
+      时，同一配置文件里的其他服务器保持未启用；关闭 context7 不影响 pencil。
+    result: pending
+    reason: null
+  - id: A28
+    source: brief.md
+    text: A28
+      含敏感值的服务器开启前要确认；抽屉里环境变量的值显示为掩码；开启失败时显示具体原因（需要确认敏感值、需要重新授权、配置在预览后被改），而不是通用失败文案。
+    result: pending
+    reason: null
+  - id: A29
+    source: brief.md
+    text: A29 技能页与 MCP 页在真机上截图：有数据、加载骨架、扫描失败、空态，暗色和亮色各一套；标题行与语音页、审计页一致。
+    result: pending
+    reason: null
+  - id: A30
+    source: brief.md
+    text: A30 技能页与 MCP 页的扫描、合并、筛选和启停不向任何代理目录或 CLI 配置文件写入，开关只改变 Tuff
+      自己的状态；测试用文件树前后快照证明。
+    result: pending
+    reason: null
+  - id: A31
+    source: brief.md
+    text: A31 页面文案与侧栏里的「能力」全部改称「技能 /
+      Skills」，和提示词页共用的文案不受影响；智能页不再有「技能」「本地技能目录」两组；技能页的「添加目录」可以管理用户链接的技能目录。
+    result: pending
+    reason: null
+  - id: A32
+    source: brief.md
+    text: A32 MCP 页清单下方保留「本机 MCP 服务 · 让其他 AI 调用
+      Tuff」卡片，功能不变；令牌掩码、读取失败不显示成「未开启」、含敏感值先确认这三条安全行为不变，原有测试迁移后通过。
+    result: pending
+    reason: null
+  - id: A33
+    source: brief.md
+    text: A33
+      手动添加的服务器在清单里占一行，抽屉里可以编辑，也可以确认后删除；任一服务器的抽屉都展示来源代理与配置文件路径、命令与参数、环境变量名，并能只探测这一台服务器。
+    result: pending
+    reason: null
+builder_handoff: null
+blockers: []
+verification: null
+history: []
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pending
+verification_report: null
+archived: false
+created_at: 2026-10-03T19:33:04.344Z

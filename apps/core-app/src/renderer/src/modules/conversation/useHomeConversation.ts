@@ -30,6 +30,7 @@ import { computed, getCurrentScope, onScopeDispose, ref, toRaw } from 'vue'
 import { toModelAttachments } from './attachment-payload'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
+  isGovernanceFailure,
   resolveConversationError
 } from './conversation-error-display'
 
@@ -206,6 +207,11 @@ export function useHomeConversation(
     }
     // The surface marker rides every turn, pinned model or not: it is what tells main this is a
     // user conversation rather than a capability test running on the same `text.chat` id.
+    //
+    // Deliberately no `caller`: main counts these turns as `core.home.conversation` from the
+    // surface marker (`resolveUsageCaller` in `intelligence-sdk.ts`). A Home-surface request that
+    // names a caller is refused by the Pi native-session guard (`resolveHomeSessionContext` in
+    // `providers/pi-cli-provider.ts`), which is how a plugin is kept from impersonating Home.
     return {
       ...(routing?.providerId ? { preferredProviderId: routing.providerId } : {}),
       ...(routing?.model ? { modelPreference: [routing.model] } : {}),
@@ -633,7 +639,9 @@ export function useHomeConversation(
       },
       onError: (error) => {
         if (settled) return
-        if (hasProviderActivity || nativePiSessionStarted) {
+        // A refusal (the usage limit, credits, sign-in, permission) answers the same without
+        // streaming: a second request would only be refused again, so the stream's own words stand.
+        if (hasProviderActivity || nativePiSessionStarted || isGovernanceFailure(error)) {
           fail(error)
           return
         }
@@ -664,7 +672,7 @@ export function useHomeConversation(
       // `stream()` rejects when the stream never starts (no stream-capable transport, handshake
       // failure). A defensive activity check also prevents a non-conforming transport from
       // triggering a second billable request after invoking a handler before rejecting.
-      if (hasProviderActivity || nativePiSessionStarted) fail(error)
+      if (hasProviderActivity || nativePiSessionStarted || isGovernanceFailure(error)) fail(error)
       else await fallback(error)
       return
     }

@@ -54,15 +54,6 @@ vi.mock('../SettingAssistant.vue', () => ({
   })
 }))
 
-vi.mock('../SettingSkillsMcp.vue', () => ({
-  default: defineComponent({
-    name: 'SettingSkillsMcp',
-    setup() {
-      return () => h('div', { class: 'setting-skills-mcp-mounted' })
-    }
-  })
-}))
-
 vi.mock('../SettingLocalAiCli.vue', () => ({
   default: defineComponent({
     name: 'SettingLocalAiCli',
@@ -82,5 +73,14 @@ describe('SettingIntelligencePage', () => {
     // the settings surface shipped to real Electron; this marker only exists once it resolves.
     expect(wrapper.find('.setting-local-ai-cli-mounted').exists()).toBe(true)
     expect(wrapper.find('settinglocalaicli').exists()).toBe(false)
+  })
+
+  it('no longer carries the skills and skill-directory groups, which live on the skills page', () => {
+    const wrapper = mount(SettingIntelligencePage)
+
+    // Only the sections the page composes remain: the assistant, Local AI CLI, and the hub list.
+    expect(wrapper.find('.setting-assistant-mounted').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('settings.skillsMcp')
+    expect(wrapper.find('settingskillsmcp').exists()).toBe(false)
   })
 })

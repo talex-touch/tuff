@@ -2941,7 +2941,9 @@ export const DEFAULT_PROVIDERS: IntelligenceProviderConfig[] = [
 
 export const DEFAULT_GLOBAL_CONFIG: IntelligenceGlobalConfig = {
   defaultStrategy: 'adaptive-default',
-  enableAudit: false,
+  // On for new installs (audit rebuild D8). Usage is counted either way; this only decides whether
+  // each call also keeps a metadata-only detail row. Existing persisted values are never rewritten.
+  enableAudit: true,
   enableCache: true,
   enableQuota: true,
   cacheExpiration: 3600,

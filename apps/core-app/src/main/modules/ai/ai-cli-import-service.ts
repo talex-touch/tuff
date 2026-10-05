@@ -4,6 +4,7 @@ import type {
   AiImportApplyRequest,
   AiImportApplyResult,
   AiImportCandidate,
+  AiImportedConfigItem,
   AiImportItemKind,
   AiImportPreviewRequest,
   AiImportScanResult,
@@ -11,6 +12,8 @@ import type {
   AiImportSourceSnapshot,
   AiMcpImportCandidate
 } from '@talex-touch/utils/types/ai-orchestrator'
+import type { AiImportHeldMcpServers } from './ai-import-runtime'
+import type { AiPreparedImportCommitOptions } from './ai-orchestrator-store'
 import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { access, opendir, realpath, stat } from 'node:fs/promises'
@@ -31,7 +34,8 @@ import { aiOrchestratorStore } from './ai-orchestrator-store'
 import { readBoundedImportFile } from './ai-import-bounded-file'
 import { parseConfig, parseMcpProfiles } from './ai-import-config-parser'
 import { aiImportRuntimeService } from './ai-import-runtime'
-import { aiImportedConfigRuntime } from './ai-imported-config-runtime'
+import { aiImportedConfigRuntime, mcpProfilesFromItem } from './ai-imported-config-runtime'
+import { frontmatterFields, frontmatterText } from './frontmatter-fields'
 
 interface SourceLayout {
   provider: AiCliProviderId
@@ -248,23 +252,19 @@ async function findExecutable(command: string): Promise<string | undefined> {
   return undefined
 }
 
+/**
+ * The metadata a candidate's header declares. Read with the lenient header reader the skills page
+ * uses too (`frontmatter-fields.ts`), so a `description: >` block arrives as its text rather than
+ * as ">" — and is what an imported copy keeps as its description — and the lines indented under a
+ * key are never reported as keys of their own.
+ */
 function parseFrontmatter(content: string): CandidateMetadata {
-  if (!content.startsWith('---')) return {}
-  const end = content.indexOf('\n---', 3)
-  if (end < 0) return {}
+  if (!content.startsWith('---') || content.indexOf('\n---', 3) < 0) return {}
   const metadata: CandidateMetadata = { frontmatterKeys: [] }
-  const lines = content.slice(3, end).split(/\r?\n/)
-  for (let index = 0; index < lines.length; index += 1) {
-    const trimmed = lines[index]!.trim()
-    const colonIndex = trimmed.indexOf(':')
-    if (colonIndex <= 0) continue
-    const key = trimmed.slice(0, colonIndex).toLowerCase()
-    if (!/^[\w-]+$/.test(key)) continue
+  for (const field of frontmatterFields(content)) {
+    const key = field.key.toLowerCase()
     metadata.frontmatterKeys!.push(key)
-    const value = trimmed
-      .slice(colonIndex + 1)
-      .trim()
-      .replace(/^['"]|['"]$/g, '')
+    const value = frontmatterText(field)
     if (key === 'name') metadata.name = value
     if (key === 'description') metadata.description = value
     if (key === 'mode') metadata.mode = value
@@ -273,7 +273,7 @@ function parseFrontmatter(content: string): CandidateMetadata {
     }
     if (key === 'paths' || key === 'path' || key === 'globs' || key === 'glob') {
       const globs: string[] = []
-      const inline = value.replace(/^\[|\]$/g, '')
+      const inline = field.inline.replace(/^['"]|['"]$/g, '').replace(/^\[|\]$/g, '')
       if (inline) {
         globs.push(
           ...inline
@@ -282,11 +282,11 @@ function parseFrontmatter(content: string): CandidateMetadata {
             .filter(Boolean)
         )
       } else {
-        while (index + 1 < lines.length) {
-          const match = /^\s*-\s*(.+?)\s*$/.exec(lines[index + 1]!)
+        for (const line of field.continuation) {
+          if (!line.trim()) continue
+          const match = /^\s*-\s*(.+?)\s*$/.exec(line)
           if (!match) break
           globs.push(match[1]!.replace(/^['"]|['"]$/g, ''))
-          index += 1
         }
       }
       metadata.globs = [...new Set([...(metadata.globs ?? []), ...globs])]
@@ -462,6 +462,10 @@ async function buildCandidate(
   const { containedBy = source.rootPath, nameOverride, agentLabel } = options
   try {
     const { canonicalPath, content, updatedAt } = await readCandidateFile(containedBy, path)
+    // A file held to a directory other than the source's root carries that directory, so applying
+    // it re-reads the file under the same containment rather than one it was never inside.
+    const ownContainment =
+      options.containedBy === undefined ? undefined : await realpath(options.containedBy)
     const extension = extname(canonicalPath).toLowerCase()
     const metadata =
       kind === 'mcp'
@@ -480,6 +484,9 @@ async function buildCandidate(
       kind,
       name: nameOverride ?? candidateName(canonicalPath, metadata),
       path: canonicalPath,
+      ...(ownContainment && ownContainment !== source.rootPath
+        ? { containedBy: ownContainment }
+        : {}),
       fingerprint: hash(content),
       updatedAt,
       warnings: [] as string[],
@@ -697,6 +704,100 @@ async function scanSource(
   return { source, candidates }
 }
 
+/**
+ * Checks a request's server picks against the scan they name, before any file is read or secret
+ * looked at: each must be for an MCP candidate this apply selects from that scan, and may only name
+ * servers the scan found in it.
+ */
+function assertServerPicksFitScan(
+  scan: AiImportScanResult,
+  selectedIds: ReadonlySet<string>,
+  picks: AiImportApplyRequest['mcpServers']
+): void {
+  if (picks === undefined) return
+  if (!picks || typeof picks !== 'object' || Array.isArray(picks))
+    throw new Error('mcpServers must map candidate ids to server picks')
+  const isNameList = (value: unknown): value is string[] =>
+    Array.isArray(value) && value.every((name) => typeof name === 'string')
+  const candidates = new Map(scan.candidates.map((candidate) => [candidate.id, candidate]))
+  for (const [candidateId, pick] of Object.entries(picks)) {
+    if (!selectedIds.has(candidateId))
+      throw new Error(
+        `MCP server selection names candidate ${candidateId}, which this apply does not select`
+      )
+    const candidate = candidates.get(candidateId)
+    if (!candidate)
+      throw new Error(
+        `MCP server selection names candidate ${candidateId}, which scan ${scan.scanId} did not find`
+      )
+    if (candidate.kind !== 'mcp')
+      throw new Error(`MCP server selection names candidate ${candidateId}, which is not MCP`)
+    const include: unknown = pick?.include
+    const disabled: unknown = pick?.disabled ?? []
+    if (!isNameList(include) || !isNameList(disabled))
+      throw new Error(`MCP server selection for candidate ${candidateId} must list server names`)
+    if (include.length === 0) throw new Error(`MCP candidate ${candidateId} selects no server`)
+    const declared = new Set(candidate.serverNames)
+    const undeclared = [...new Set(include.filter((name) => !declared.has(name)))]
+    if (undeclared.length > 0)
+      throw new Error(
+        `MCP candidate ${candidateId} does not declare server ${undeclared.join(', ')}`
+      )
+    const stray = [...new Set(disabled.filter((name) => !include.includes(name)))]
+    if (stray.length > 0)
+      throw new Error(
+        `MCP candidate ${candidateId} switches off server ${stray.join(', ')} it does not import`
+      )
+  }
+}
+
+/** The servers of a stored MCP item, by name, each with whether the runtime runs it now. */
+function heldServers(item: AiImportedConfigItem): AiImportHeldMcpServers {
+  const live = item.active && item.state === 'active'
+  return new Map(
+    mcpProfilesFromItem(item).map((profile) => [
+      profile.name,
+      { running: live && profile.enabled !== false }
+    ])
+  )
+}
+
+/**
+ * For each MCP candidate a request picks servers of: the servers Tuff already holds from it, which
+ * the pick adds to, and what the commit must honour — the item that was read, so a switch flipped
+ * before the commit is not silently undone, and whether the pick turns a server on, which the item
+ * then has to run for. A request without picks merges nothing.
+ */
+async function mergeWithHeldServers(
+  selected: AiImportCandidate[],
+  picks: AiImportApplyRequest['mcpServers']
+): Promise<{
+  held: Map<string, AiImportHeldMcpServers>
+  commit: AiPreparedImportCommitOptions
+}> {
+  const held = new Map<string, AiImportHeldMcpServers>()
+  const basedOn = new Map<string, { itemId: string; updatedAt: number; active: boolean } | null>()
+  const activate = new Set<string>()
+  const picked = selected.filter((candidate) => candidate.kind === 'mcp' && picks?.[candidate.id])
+  if (picked.length > 0) {
+    const items = await aiOrchestratorStore.listImportedItems()
+    for (const candidate of picked) {
+      const pick = picks![candidate.id]!
+      const item = items.find(
+        (stored) => stored.candidateId === candidate.id && stored.kind === 'mcp'
+      )
+      basedOn.set(
+        candidate.id,
+        item ? { itemId: item.id, updatedAt: item.updatedAt, active: item.active } : null
+      )
+      if (item) held.set(candidate.id, heldServers(item))
+      const switchedOff = new Set(pick.disabled ?? [])
+      if (pick.include.some((name) => !switchedOff.has(name))) activate.add(candidate.id)
+    }
+  }
+  return { held, commit: { activate, basedOn } }
+}
+
 export class AiCliImportService {
   private importMutex: Promise<void> = Promise.resolve()
 
@@ -800,27 +901,34 @@ export class AiCliImportService {
       const scan = await aiOrchestratorStore.getImportScan(request.scanId)
       if (!scan) throw new Error(`Import scan ${request.scanId} not found`)
       const selectedIds = new Set(request.candidateIds)
+      assertServerPicksFitScan(scan, selectedIds, request.mcpServers)
       const selected = scan.candidates.filter(
         (candidate) =>
           selectedIds.has(candidate.id) &&
           candidate.state !== 'source-missing' &&
-          candidate.state !== 'invalid' &&
+          // A stored copy is invalid because one of its servers needs re-authentication. Picking
+          // servers can leave that one out (prepare refuses a pick that names it); taking the whole
+          // file again cannot.
+          (candidate.state !== 'invalid' || request.mcpServers?.[candidate.id] !== undefined) &&
           candidate.blockingIssues.length === 0
       )
       if (selected.length !== selectedIds.size)
         throw new Error('Import selection contains stale, blocked, or missing candidates')
 
+      const merge = await mergeWithHeldServers(selected, request.mcpServers)
       const transaction = await aiImportRuntimeService.prepare(
         scan.cwd,
         selected,
         request,
-        scan.sources
+        scan.sources,
+        merge.held
       )
       let result: AiImportApplyResult
       try {
         result = await aiOrchestratorStore.applyPreparedImportScan(
           request.scanId,
-          transaction.items
+          transaction.items,
+          merge.commit
         )
       } catch (error) {
         await aiImportRuntimeService.rollback(transaction)

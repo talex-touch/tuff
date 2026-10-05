@@ -181,6 +181,11 @@ export interface IntelligenceAuditLogEntry {
   success: boolean;
   error?: string;
   estimatedCost?: number;
+  /**
+   * The audit logger's allowlisted keys only (`operation`, `source`, `reasoning*`, …), each a
+   * boolean, a finite number or a bounded identifier. Never prompt, response or path content.
+   */
+  metadata?: Record<string, unknown>;
 }
 
 export interface IntelligenceUsageSummary {
@@ -255,6 +260,168 @@ export interface IntelligenceAuditLogQueryOptions {
   success?: boolean;
   limit?: number;
   offset?: number;
+}
+
+// ── Usage ledger (host-only; audit rebuild parent design §1.5, §3.2, §3.5) ────────────────────
+//
+// Shared contract of the usage ledger, usage limits and audit insights page tasks. Totals and day
+// series come from the global bucket: every caller (callers missing included), keyed by the main
+// process's local calendar day/month, with `agent.run` / `workflow.execute` outer rows excluded.
+
+/** Today, or the last 7 / 30 local calendar days including today. */
+export type UsageRange = "today" | "7d" | "30d";
+
+export interface UsageTotals {
+  requestCount: number;
+  successCount: number;
+  failureCount: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  /** Estimated USD; calls whose model is not `priced` contribute 0. */
+  estimatedCostUsd: number;
+  /** Request-weighted mean; null when there were no requests. */
+  avgLatencyMs: number | null;
+}
+
+/**
+ * - `priced`: models.dev lists a non-zero input or output price.
+ * - `free`: models.dev lists the model at 0 / 0.
+ * - `local`: runs on this machine (local channels, system OCR, local CLIs).
+ * - `credits`: billed in Nexus credits, never converted to USD.
+ * - `unpriced`: no catalog, no matching provider or model, or a listed model without a price.
+ */
+export type PricingStatus = "priced" | "free" | "local" | "credits" | "unpriced";
+
+export interface ModelPricing {
+  status: PricingStatus;
+  resolvedVia: "channel-type" | "base-url" | "model-family" | null;
+  catalogProvider: string | null;
+  catalogModel: string | null;
+  /** USD per 1M input tokens. */
+  inputPerMTokens: number | null;
+  /** USD per 1M output tokens. */
+  outputPerMTokens: number | null;
+  contextTokens: number | null;
+  outputLimitTokens: number | null;
+}
+
+export interface BreakdownRow {
+  /**
+   * Channel config id, capability id or raw caller (a missing caller is `''`); a model row's key
+   * is an opaque unique id, read `providerId` / `model` instead. Callers are opaque identifiers:
+   * never split them on separators.
+   */
+  key: string;
+  /** Caller dimension only: rows without a caller are split again by `metadata.operation` (Home). */
+  operation?: string;
+  requestCount: number;
+  failureCount: number;
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
+  estimatedCostUsd: number;
+}
+
+export interface ModelBreakdownRow extends BreakdownRow {
+  providerId: string;
+  model: string;
+  pricing: ModelPricing;
+}
+
+/** Device-local global limits; `null` means no limit. Cost limits are estimated USD. */
+export interface UsageLimits {
+  requestsPerDay: number | null;
+  requestsPerMonth: number | null;
+  tokensPerDay: number | null;
+  tokensPerMonth: number | null;
+  costUsdPerDay: number | null;
+  costUsdPerMonth: number | null;
+}
+
+export interface UsageLimitsStatus {
+  limits: UsageLimits;
+  /** One item per configured limit; empty when nothing is configured. */
+  items: Array<{
+    key: keyof UsageLimits;
+    period: "day" | "month";
+    metric: "requests" | "tokens" | "cost";
+    max: number;
+    used: number;
+    ratio: number;
+    /** `warn` once `ratio >= 0.8`. */
+    state: "ok" | "warn" | "reached";
+    /** Next local midnight / first local midnight of next month. */
+    resetsAt: number;
+  }>;
+}
+
+export interface UsageInsights {
+  /** IANA zone of the main process; day keys below are local calendar days in it. */
+  timezone: string;
+  /** `startMs` inclusive, `endMs` exclusive, both local midnights. */
+  window: {
+    range: UsageRange;
+    startDay: string;
+    endDay: string;
+    startMs: number;
+    endMs: number;
+  };
+  /** Global bucket plus calls not yet flushed to the database. */
+  totals: UsageTotals;
+  /** Sparse: days without calls are omitted, the renderer fills them in. */
+  days: Array<{ day: string } & UsageTotals>;
+  /** From detail rows only (audit on, inside retention), outer agent/workflow rows excluded. */
+  breakdown: {
+    coverage: { detailRequests: number; totalRequests: number };
+    channel: BreakdownRow[];
+    model: ModelBreakdownRow[];
+    capability: BreakdownRow[];
+    caller: BreakdownRow[];
+  };
+  /** Models in the window whose calls add 0 to the estimated cost, and why. */
+  zeroCostModels: Array<{
+    providerId: string;
+    model: string;
+    status: PricingStatus;
+    requestCount: number;
+  }>;
+  limits: UsageLimitsStatus;
+  audit: {
+    enabled: boolean;
+    /** Detail retention; null keeps detail rows forever. */
+    retentionMs: number | null;
+    oldestDetailMs: number | null;
+  };
+  pricing: {
+    source: "models.dev";
+    fetchedAt: number | null;
+    checkedAt: number | null;
+    available: boolean;
+  };
+}
+
+export interface AuditLogQuery {
+  /** Inclusive. */
+  startMs?: number;
+  /** Exclusive. */
+  endMs?: number;
+  success?: boolean;
+  providerId?: string;
+  /** `null` (or `''`) selects rows without a caller. */
+  caller?: string | null;
+  capabilityId?: string;
+  model?: string;
+  offset?: number;
+  /** Clamped to 1..200; defaults to 50. */
+  limit?: number;
+}
+
+export interface AuditLogPage {
+  /** Newest first. */
+  rows: IntelligenceAuditLogEntry[];
+  /** Rows matching the filters, ignoring `offset` / `limit`. */
+  total: number;
 }
 
 export interface IntelligenceChatRequest {
@@ -715,6 +882,18 @@ export interface IntelligenceSdk {
     startPeriod?: string;
     endPeriod?: string;
   }) => Promise<IntelligenceUsageSummary[]>;
+  /** Host-only. */
+  getUsageInsights: (payload: { range: UsageRange }) => Promise<UsageInsights>;
+  /** Host-only. */
+  queryAuditLogs: (query?: AuditLogQuery) => Promise<AuditLogPage>;
+  /** Host-only. The device-local global usage limits; every field `null` when none is set. */
+  getUsageLimits: () => Promise<UsageLimits>;
+  /**
+   * Host-only. Replaces the whole limit set (`null` or a missing key clears that limit) and
+   * resolves to what is stored. Requests and tokens must be positive integers and cost a positive
+   * USD amount, otherwise `INVALID_REQUEST`.
+   */
+  setUsageLimits: (limits: UsageLimits) => Promise<UsageLimits>;
 
   getQuota: (payload: {
     callerId: string;
@@ -1037,6 +1216,22 @@ export const intelligenceApiEvents = {
       },
       IntelligenceApiResponse<IntelligenceUsageSummary[]>
     >(),
+  getUsageInsights: defineEvent("intelligence")
+    .module("api")
+    .event("get-usage-insights")
+    .define<{ range: UsageRange }, IntelligenceApiResponse<UsageInsights>>(),
+  queryAuditLogs: defineEvent("intelligence")
+    .module("api")
+    .event("query-audit-logs")
+    .define<AuditLogQuery, IntelligenceApiResponse<AuditLogPage>>(),
+  getUsageLimits: defineEvent("intelligence")
+    .module("api")
+    .event("get-usage-limits")
+    .define<void, IntelligenceApiResponse<UsageLimits>>(),
+  setUsageLimits: defineEvent("intelligence")
+    .module("api")
+    .event("set-usage-limits")
+    .define<UsageLimits, IntelligenceApiResponse<UsageLimits>>(),
   getQuota: defineEvent("intelligence")
     .module("api")
     .event("get-quota")
@@ -1724,6 +1919,37 @@ export function createIntelligenceSdk(
         payload,
       );
       return assertApiResponse(response, "Failed to get usage stats");
+    },
+
+    async getUsageInsights(payload) {
+      const response = await transport.send(
+        intelligenceApiEvents.getUsageInsights,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to get usage insights");
+    },
+
+    async queryAuditLogs(query = {}) {
+      const response = await transport.send(
+        intelligenceApiEvents.queryAuditLogs,
+        query,
+      );
+      return assertApiResponse(response, "Failed to query audit logs");
+    },
+
+    async getUsageLimits() {
+      const response = await transport.send(
+        intelligenceApiEvents.getUsageLimits,
+      );
+      return assertApiResponse(response, "Failed to get usage limits");
+    },
+
+    async setUsageLimits(limits) {
+      const response = await transport.send(
+        intelligenceApiEvents.setUsageLimits,
+        limits,
+      );
+      return assertApiResponse(response, "Failed to set usage limits");
     },
 
     async getQuota(payload) {

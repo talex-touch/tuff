@@ -48,6 +48,7 @@ import {
 import { recommendationExposureService } from './recommendation-exposure-service'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { createLogger } from '../../../../utils/logger'
+import { onUsageLimitsChanged, readUsageLimitInfo } from '../../../ai/usage-ledger/usage-limits'
 import {
   DAY_MS,
   BEHAVIOR_SCORE_MAX,
@@ -518,6 +519,8 @@ export class RecommendationEngine {
    */
   private semanticAiFailures = 0
   private semanticAiCooldownUntil = 0
+  /** The cooldown in force is the usage limit's pause, which a change of limits lifts. */
+  private semanticAiPausedByUsageLimit = false
   private static readonly SEMANTIC_AI_FAILURE_THRESHOLD = 3
   private static readonly SEMANTIC_AI_COOLDOWN_MS = 5 * 60 * 1000
 
@@ -557,6 +560,10 @@ export class RecommendationEngine {
       return recommendationSourceRegistry.registerSource(source)
     })
     this.disposeOwnedSources.push(bindPluginRecommendationApi(this))
+    // Raising or clearing the limit in Audit is the user saying "go on": the semantic layer comes
+    // back now, not at the reset (for a monthly limit, next month). If a limit still binds, the
+    // next semantic call is refused before any provider work and pauses it again.
+    this.disposeOwnedSources.push(onUsageLimitsChanged(() => this.liftSemanticAiUsageLimitPause()))
 
     this.startBackgroundRefresh()
     this.startTelemetryReport()
@@ -3120,6 +3127,7 @@ export class RecommendationEngine {
     if (Date.now() < this.semanticAiCooldownUntil) return true
     // cooldown elapsed — reset and allow a probe attempt
     this.semanticAiCooldownUntil = 0
+    this.semanticAiPausedByUsageLimit = false
     this.semanticAiFailures = 0
     return false
   }
@@ -3127,6 +3135,7 @@ export class RecommendationEngine {
   private recordSemanticAiSuccess(): void {
     this.semanticAiFailures = 0
     this.semanticAiCooldownUntil = 0
+    this.semanticAiPausedByUsageLimit = false
   }
 
   private recordSemanticAiFailure(): void {
@@ -3138,6 +3147,34 @@ export class RecommendationEngine {
         meta: { cooldownMs: RecommendationEngine.SEMANTIC_AI_COOLDOWN_MS }
       })
     }
+  }
+
+  /**
+   * The user's global AI usage limit refused a semantic call (usage-limits task C5): the semantic
+   * layer stays off until the limit resets (the next local day or month) and ranking falls back to
+   * the non-semantic score. Not a failure of the semantic AI, so the failure count is left alone.
+   */
+  private pauseSemanticAiOnUsageLimit(error: unknown): boolean {
+    const usageLimit = readUsageLimitInfo(error)
+    if (!usageLimit) return false
+    this.semanticAiCooldownUntil = Math.max(this.semanticAiCooldownUntil, usageLimit.resetsAt)
+    this.semanticAiPausedByUsageLimit = true
+    recommendationLog.debug('Semantic AI off until the AI usage limit resets', {
+      meta: { limitKey: usageLimit.key, resetsAt: usageLimit.resetsAt }
+    })
+    return true
+  }
+
+  /**
+   * The limits changed in Audit: the semantic layer comes back now instead of at the reset, and
+   * results ranked without it are dropped so the next open ranks with it.
+   */
+  private liftSemanticAiUsageLimitPause(): void {
+    if (!this.semanticAiPausedByUsageLimit) return
+    this.semanticAiPausedByUsageLimit = false
+    this.semanticAiCooldownUntil = 0
+    recommendationLog.debug('Semantic AI back on: the AI usage limits changed')
+    this.invalidateCache()
   }
 
   private async applyAiEmbeddingScores(
@@ -3212,7 +3249,7 @@ export class RecommendationEngine {
         }))
         .sort((a, b) => b.score - a.score)
     } catch (error) {
-      this.recordSemanticAiFailure()
+      if (!this.pauseSemanticAiOnUsageLimit(error)) this.recordSemanticAiFailure()
       recommendationLog.debug('AI embedding recommendation score skipped', {
         meta: toErrorMeta(error)
       })
@@ -3291,7 +3328,7 @@ export class RecommendationEngine {
         })
         .sort((a, b) => b.score - a.score)
     } catch (error) {
-      this.recordSemanticAiFailure()
+      if (!this.pauseSemanticAiOnUsageLimit(error)) this.recordSemanticAiFailure()
       recommendationLog.debug('AI recommendation rerank skipped', {
         meta: toErrorMeta(error)
       })

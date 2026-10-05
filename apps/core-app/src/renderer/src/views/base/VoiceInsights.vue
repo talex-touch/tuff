@@ -8,21 +8,24 @@ import type { CSSProperties } from 'vue'
 import type { DataTableColumn } from '@talex-touch/tuffex/data-table'
 import type { DialogButton } from '@talex-touch/tuffex/dialog'
 import type { StatusTone } from '@talex-touch/tuffex/status-badge'
+import type { InsightsMenuItem } from '~/components/settings/insights/types'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxCard } from '@talex-touch/tuffex/card'
 import { TxDataTable } from '@talex-touch/tuffex/data-table'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import { TxPagination } from '@talex-touch/tuffex/pagination'
-import { TxPopover } from '@talex-touch/tuffex/popover'
 import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxSkeleton, useDeferredLoading } from '@talex-touch/tuffex/skeleton'
 import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
-import { TxTextMorph } from '@talex-touch/tuffex/text-morph'
-import { TxTooltip } from '@talex-touch/tuffex/tooltip'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import VoiceRecordDetails from '~/components/intelligence/voice/VoiceRecordDetails.vue'
+import InsightsHeader from '~/components/settings/insights/InsightsHeader.vue'
+import InsightsHeroMetric from '~/components/settings/insights/InsightsHeroMetric.vue'
+import InsightsMenu from '~/components/settings/insights/InsightsMenu.vue'
+import InsightsMetricCard from '~/components/settings/insights/InsightsMetricCard.vue'
+import InsightsNotice from '~/components/settings/insights/InsightsNotice.vue'
 import { appSetting } from '~/modules/storage/app-storage'
 import { createVoiceSdk, voiceApiEvents } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -194,7 +197,6 @@ const heatmapScroller = ref<HTMLElement | null>(null)
  */
 const RECORDS_PER_PAGE = 12
 
-const menuOpen = ref(false)
 const recordsOpen = ref(false)
 const recordPage = ref(1)
 /**
@@ -873,10 +875,39 @@ function openRetentionSettings(): void {
   emit('open-settings')
 }
 
-/** A menu item closes the menu, then acts. Leaving it open over a dialog is its own bug. */
-function runFromMenu(action: () => void | Promise<void>): void {
-  menuOpen.value = false
-  void action()
+/**
+ * What sits behind the dots. The availability rules are the page's; closing the menu before an
+ * item acts is `InsightsMenu`'s.
+ */
+const menuItems = computed<InsightsMenuItem[]>(() => [
+  {
+    key: 'share',
+    icon: 'i-ri-share-forward-line',
+    label: t('voiceInsights.actions.share'),
+    disabled: !hasData.value || refreshing.value || clearing.value || copyPending.value,
+    testId: 'voice-insights-share'
+  },
+  {
+    key: 'settings',
+    icon: 'i-ri-settings-3-line',
+    label: t('voiceInsights.actions.settings'),
+    testId: 'voice-insights-settings'
+  },
+  {
+    key: 'clear',
+    icon: 'i-ri-delete-bin-6-line',
+    label: t('voiceInsights.actions.clear'),
+    disabled: !hasData.value || refreshing.value || copyPending.value || clearing.value,
+    danger: true,
+    separatorBefore: true,
+    testId: 'voice-insights-clear'
+  }
+])
+
+function runMenuItem(key: string): void {
+  if (key === 'share') void copyShareSummary()
+  else if (key === 'settings') emit('open-settings')
+  else if (key === 'clear') requestClear()
 }
 
 onBeforeUnmount(() => {
@@ -898,27 +929,32 @@ onBeforeUnmount(() => {
     :aria-busy="!hasLoaded || refreshing || clearing"
   >
     <!--
-      The whole header, in one row, owned by the content rather than the shell.
-      The shell's title row could hold a heading and one thing beside it; this page's header is a
-      heading, the date counting started, three actions and a status alert. Splitting it across
-      two owners is what kept leaving a band of blank between the title and the buttons.
+      The whole header, in one row, owned by the content rather than the shell (`InsightsHeader`).
+      This page's header is a heading, the recogniser's status and two actions.
+
+      The `VoiceInsights-*` classes on the kit components below carry no styles — the kit owns
+      those. They are this page's own handles: its tests find the header, the actions row, the
+      menu and the cards by them.
     -->
     <!--
       No refresh button. The page loads on mount and reloads itself after the only two actions
       that change anything, so the button served a case that does not arise — except a failed
       load, and that notice already carries its own retry.
     -->
-    <header class="VoiceInsights-Hero">
-      <div class="VoiceInsights-HeroCopy">
-        <!--
-          The nav label is the heading. It carried a slogan under it for a while, which meant the
-          page said where you were and then said something else about itself in a bigger size —
-          two headings for one screen.
-        -->
-        <h1 v-if="eyebrow">{{ eyebrow }}</h1>
-      </div>
-      <div class="VoiceInsights-HeroActions shell-chrome-safe-inline-end">
+    <!--
+      The nav label is the heading. It carried a slogan under it for a while, which meant the
+      page said where you were and then said something else about itself in a bigger size —
+      two headings for one screen.
+    -->
+    <InsightsHeader
+      class="VoiceInsights-Hero"
+      actions-class="VoiceInsights-HeroActions"
+      :title="eyebrow"
+    >
+      <template #status>
         <slot name="status" />
+      </template>
+      <template #actions>
         <!--
           Never disabled. A log is something to look at, and with zero rows the drawer still has
           something to say — it names the retention switch that decides whether rows are written at
@@ -935,90 +971,56 @@ onBeforeUnmount(() => {
           Delete especially: clearing every number on the page is not undoable, and it used to sit
           one stray click from the refresh button. Opening a menu first is the whole safeguard.
         -->
-        <TxPopover v-model="menuOpen" placement="bottom-end" :offset="6" :min-width="176">
-          <template #reference>
-            <TxButton
-              :aria-label="t('voiceInsights.actions.more')"
-              data-testid="voice-insights-more"
-            >
-              <span class="i-ri-more-fill" aria-hidden="true" />
-            </TxButton>
-          </template>
-          <div class="VoiceInsights-Menu">
-            <button
-              type="button"
-              :disabled="!hasData || refreshing || clearing || copyPending"
-              data-testid="voice-insights-share"
-              @click="runFromMenu(copyShareSummary)"
-            >
-              <span class="i-ri-share-forward-line" aria-hidden="true" />
-              <span>{{ t('voiceInsights.actions.share') }}</span>
-            </button>
-            <button
-              type="button"
-              data-testid="voice-insights-settings"
-              @click="runFromMenu(() => emit('open-settings'))"
-            >
-              <span class="i-ri-settings-3-line" aria-hidden="true" />
-              <span>{{ t('voiceInsights.actions.settings') }}</span>
-            </button>
-            <div class="VoiceInsights-MenuRule" role="separator" />
-            <button
-              type="button"
-              class="is-danger"
-              :disabled="!hasData || refreshing || copyPending || clearing"
-              data-testid="voice-insights-clear"
-              @click="runFromMenu(requestClear)"
-            >
-              <span class="i-ri-delete-bin-6-line" aria-hidden="true" />
-              <span>{{ t('voiceInsights.actions.clear') }}</span>
-            </button>
-          </div>
-        </TxPopover>
-      </div>
-    </header>
+        <InsightsMenu
+          class="VoiceInsights-Menu"
+          :items="menuItems"
+          :label="t('voiceInsights.actions.more')"
+          trigger-test-id="voice-insights-more"
+          @select="runMenuItem"
+        />
+      </template>
+    </InsightsHeader>
 
-    <div
+    <InsightsNotice
       v-if="loadFailed"
-      class="VoiceInsights-Notice is-error"
+      tone="error"
+      :title="t('voiceInsights.error.title')"
+      :description="t('voiceInsights.error.description')"
       data-testid="voice-insights-error"
-      role="alert"
     >
-      <div>
-        <strong>{{ t('voiceInsights.error.title') }}</strong>
-        <span>{{ t('voiceInsights.error.description') }}</span>
-      </div>
-      <TxButton variant="flat" size="sm" :loading="refreshing" @click="loadInsights(true)">
-        {{ t('voiceInsights.actions.retry') }}
-      </TxButton>
-    </div>
+      <template #action>
+        <TxButton variant="flat" size="sm" :loading="refreshing" @click="loadInsights(true)">
+          {{ t('voiceInsights.actions.retry') }}
+        </TxButton>
+      </template>
+    </InsightsNotice>
 
-    <div
+    <InsightsNotice
       v-if="copyFailed"
-      class="VoiceInsights-Notice is-error"
+      tone="error"
+      :description="t('voiceInsights.share.copyFailed')"
       data-testid="voice-insights-copy-error"
-      role="alert"
     >
-      <span>{{ t('voiceInsights.share.copyFailed') }}</span>
-      <TxButton variant="flat" size="sm" :loading="copyPending" @click="copyShareSummary">
-        {{ t('voiceInsights.actions.retry') }}
-      </TxButton>
-    </div>
+      <template #action>
+        <TxButton variant="flat" size="sm" :loading="copyPending" @click="copyShareSummary">
+          {{ t('voiceInsights.actions.retry') }}
+        </TxButton>
+      </template>
+    </InsightsNotice>
 
-    <div
+    <InsightsNotice
       v-if="postClearRefreshFailed"
-      class="VoiceInsights-Notice is-warning"
+      tone="warning"
+      :title="t('voiceInsights.clear.refreshNeededTitle')"
+      :description="t('voiceInsights.clear.refreshNeededDescription')"
       data-testid="voice-insights-clear-refresh-warning"
-      role="status"
     >
-      <div>
-        <strong>{{ t('voiceInsights.clear.refreshNeededTitle') }}</strong>
-        <span>{{ t('voiceInsights.clear.refreshNeededDescription') }}</span>
-      </div>
-      <TxButton variant="flat" size="sm" :loading="refreshing" @click="loadInsights(true)">
-        {{ t('voiceInsights.actions.refresh') }}
-      </TxButton>
-    </div>
+      <template #action>
+        <TxButton variant="flat" size="sm" :loading="refreshing" @click="loadInsights(true)">
+          {{ t('voiceInsights.actions.refresh') }}
+        </TxButton>
+      </template>
+    </InsightsNotice>
 
     <div
       v-if="!hasLoaded"
@@ -1028,11 +1030,11 @@ onBeforeUnmount(() => {
     >
       <span class="VoiceInsights-SrOnly">{{ t('voiceInsights.loading') }}</span>
       <template v-if="showSkeleton">
-        <div class="VoiceInsights-Metrics" aria-hidden="true">
-          <TxCard v-for="index in 3" :key="index" class="VoiceInsights-Metric" shadow="none">
+        <div class="VoiceInsights-SupportGrid" aria-hidden="true">
+          <InsightsMetricCard v-for="index in 3" :key="index">
             <TxSkeleton :width="148" :height="28" :radius="4" />
             <TxSkeleton :width="92" :height="12" :radius="4" />
-          </TxCard>
+          </InsightsMetricCard>
         </div>
         <TxCard class="VoiceInsights-Activity" shadow="none" aria-hidden="true">
           <div class="VoiceInsights-HeatmapHeader">
@@ -1063,49 +1065,28 @@ onBeforeUnmount(() => {
 
     <main v-else-if="insights" class="VoiceInsights-Canvas" data-testid="voice-insights-data">
       <section class="VoiceInsights-Headline" :aria-label="t('voiceInsights.metrics.label')">
-        <article
+        <InsightsHeroMetric
           v-if="heroMetric"
-          class="VoiceInsights-Hero2"
+          :label="heroMetric.label"
+          :value="heroMetric.value"
+          :note="heroMetric.note"
+          note-test-id="voice-insights-saved-basis"
           data-testid="voice-insights-hero-metric"
           :data-metric="heroMetric.key"
-        >
-          <p class="VoiceInsights-Hero2Label">
-            {{ heroMetric.label }}
-            <!--
-              The basis rides the label, not the body.
-              It is a caveat about how the number was derived, not a second number, and printing
-              it under the value made the one card that carries a caveat taller than the ones that
-              do not. On hover it is still one gesture away, and the row stops being ragged.
-            -->
-            <TxTooltip v-if="heroMetric.note" :content="heroMetric.note">
-              <span
-                class="VoiceInsights-Hero2Basis i-carbon-information"
-                data-testid="voice-insights-saved-basis"
-                role="img"
-                :aria-label="heroMetric.note"
-                tabindex="0"
-              />
-            </TxTooltip>
-          </p>
-          <div class="VoiceInsights-Hero2Value">
-            <strong><TxTextMorph :text="heroMetric.value" /></strong>
-          </div>
-        </article>
+        />
 
-        <div class="VoiceInsights-Metrics">
-          <TxCard
+        <div class="VoiceInsights-SupportGrid">
+          <InsightsMetricCard
             v-for="metric in supportMetrics"
             :key="metric.key"
             class="VoiceInsights-Metric"
-            shadow="none"
+            value-class="VoiceInsights-MetricValue"
+            :value="metric.value"
+            :unit="metric.unit"
+            :label="metric.label"
+            :note="metric.note"
             :data-metric="metric.key"
-          >
-            <div class="VoiceInsights-MetricValue">
-              <strong><TxTextMorph :text="metric.value" /></strong>
-              <span v-if="metric.unit">{{ metric.unit }}</span>
-            </div>
-            <p>{{ metric.label }}</p>
-          </TxCard>
+          />
         </div>
       </section>
 
@@ -1477,90 +1458,11 @@ onBeforeUnmount(() => {
   color: var(--shell-text-primary);
 }
 
-/* Only the actions live here now, so they sit at the end rather than opposite a copy block. */
-/*
- * The header row. It used to hold nothing but the buttons, right-aligned against an empty half —
- * which is what put a band of blank page between the title and the first number.
- */
-.VoiceInsights-Hero {
-  display: flex;
-  gap: var(--shell-space-5);
-  align-items: flex-end;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  max-width: 1440px;
-  margin: 0 auto var(--shell-space-5);
-}
-
-/* The heading never gives way; the row beside it wraps or truncates first. */
-.VoiceInsights-HeroCopy {
-  display: flex;
-  min-width: 0;
-  flex: none;
-  flex-direction: column;
-  gap: var(--shell-space-1);
-
-  h1 {
-    margin: 0;
-    font-size: var(--shell-fs-h1);
-    font-weight: 600;
-    line-height: 1.2;
-    /* Chrome, and it sits in the window's drag strip where a stray selection is the usual result
-       of trying to move the window. */
-    user-select: none;
-  }
-}
-
 .VoiceInsights-HeatmapHeader h3 small {
   margin-left: var(--shell-space-2);
   color: var(--shell-text-muted);
   font-size: var(--shell-fs-caption);
   font-weight: normal;
-}
-
-.VoiceInsights-HeroActions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: var(--shell-space-2);
-}
-
-.VoiceInsights-Notice {
-  display: flex;
-  gap: var(--shell-space-4);
-  align-items: center;
-  justify-content: space-between;
-  max-width: 1440px;
-  margin: 0 auto var(--shell-space-4);
-  padding: var(--shell-space-3) var(--shell-space-4);
-  border: 1px solid var(--shell-border);
-  border-radius: var(--shell-radius-lg);
-  background: var(--shell-bg);
-  color: var(--shell-text-regular);
-
-  &.is-error {
-    border-color: var(--shell-danger-border);
-    background: var(--shell-danger-soft);
-    color: var(--shell-danger);
-  }
-
-  &.is-warning {
-    border-color: var(--shell-warning-border);
-    background: var(--shell-warning-soft);
-    color: var(--shell-warning);
-  }
-
-  > div {
-    display: flex;
-    flex-direction: column;
-    gap: var(--shell-space-1);
-  }
-
-  strong,
-  span {
-    font-size: var(--shell-fs-body);
-    line-height: 1.4;
-  }
 }
 
 /*
@@ -1583,56 +1485,10 @@ onBeforeUnmount(() => {
 }
 
 /*
- * The conclusion, at the size of a conclusion.
- *
- * Its basis line sits inside the same card rather than under the section: a number this large is
- * the one most likely to be read as measured, and the sentence that says it is an estimate has
- * to be impossible to scroll past separately from it.
+ * The cards' columns. The cards are the kit's; how many sit in a row is the page's — three here,
+ * one per supporting figure.
  */
-.VoiceInsights-Hero2 {
-  display: flex;
-  flex-direction: column;
-  gap: var(--shell-space-2);
-}
-
-.VoiceInsights-Hero2Label {
-  display: flex;
-  margin: 0;
-  align-items: center;
-  color: var(--shell-text-secondary);
-  font-size: var(--shell-fs-sm);
-  gap: var(--shell-space-2);
-}
-
-/* Warning-coloured because the caveat is the point: the number under it is an estimate. */
-.VoiceInsights-Hero2Basis {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  color: var(--shell-warning);
-  cursor: help;
-}
-
-.VoiceInsights-Hero2Value {
-  display: flex;
-  gap: var(--shell-space-3);
-  align-items: baseline;
-  flex-wrap: wrap;
-
-  > strong {
-    color: var(--shell-text-primary);
-    font-size: var(--shell-fs-display);
-    font-weight: 600;
-    line-height: 1.1;
-  }
-
-  > span {
-    color: var(--shell-text-secondary);
-    font-size: var(--shell-fs-sm);
-  }
-}
-
-.VoiceInsights-Metrics {
+.VoiceInsights-SupportGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--shell-space-5);
@@ -1678,71 +1534,6 @@ onBeforeUnmount(() => {
     background: var(--shell-primary);
     flex: 1;
   }
-}
-
-.VoiceInsights-Metric {
-  display: flex;
-  min-width: 0;
-  min-height: 116px;
-  flex-direction: column;
-  justify-content: center;
-  box-sizing: border-box;
-  padding: var(--shell-space-5);
-
-  > p {
-    margin: var(--shell-space-2) 0 0;
-    color: var(--shell-text-secondary);
-    font-size: var(--shell-fs-md);
-  }
-
-  > small {
-    margin-top: var(--shell-space-2);
-    color: var(--shell-text-muted);
-    font-size: var(--shell-fs-caption);
-    line-height: 1.4;
-  }
-}
-
-.VoiceInsights-MetricValue {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--shell-space-2);
-  align-items: baseline;
-  min-width: 0;
-  font-variant-numeric: tabular-nums;
-
-  > strong {
-    min-width: 0;
-    color: var(--shell-text-primary);
-    font-size: var(--shell-fs-display);
-    font-weight: 700;
-    letter-spacing: -0.025em;
-    line-height: 1.15;
-    overflow-wrap: anywhere;
-  }
-
-  > span {
-    color: var(--shell-text-regular);
-    font-size: var(--shell-fs-md);
-    font-weight: 600;
-  }
-}
-
-/*
- * The morph renders its own element inside the value, and it needs two things back.
- *
- * The rules above were descendant selectors, so `span` reached the morph's root and dressed the
- * figure in the unit's size, weight and colour — the number shrank to look like "字". And the
- * engine sets `vertical-align: top` on that root, which moves the row's baseline to the bottom
- * of an inline-block and drops the unit onto what looks like a second line. Both are only
- * visible in a browser: jsdom computes no layout, so nothing in the suite could see either.
- */
-.VoiceInsights-MetricValue .tx-text-morph,
-.VoiceInsights-Hero2Value .tx-text-morph {
-  color: inherit;
-  font: inherit;
-  letter-spacing: inherit;
-  vertical-align: baseline;
 }
 
 .VoiceInsights-Activity,
@@ -2066,48 +1857,6 @@ onBeforeUnmount(() => {
   font-size: var(--shell-space-7);
 }
 
-/* The menu behind the dots. Plain buttons: a list of three needs no widget. */
-.VoiceInsights-Menu {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-
-  button {
-    display: flex;
-    align-items: center;
-    padding: var(--shell-space-2) var(--shell-space-3);
-    border: none;
-    border-radius: var(--shell-radius-md);
-    background: transparent;
-    color: var(--shell-text-primary);
-    font-family: inherit;
-    font-size: var(--shell-fs-body);
-    gap: var(--shell-space-3);
-    cursor: pointer;
-    text-align: left;
-
-    &:hover:not(:disabled) {
-      background: var(--shell-surface);
-    }
-
-    &:disabled {
-      color: var(--shell-text-muted);
-      cursor: not-allowed;
-    }
-
-    &.is-danger {
-      color: var(--shell-danger);
-    }
-  }
-}
-
-/* The one irreversible item is fenced off from the two that are not. */
-.VoiceInsights-MenuRule {
-  height: 1px;
-  margin: var(--shell-space-1) 0;
-  background: var(--shell-border);
-}
-
 /*
  * No padding of its own.
  *
@@ -2243,22 +1992,12 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 680px) {
-  .VoiceInsights-Hero,
   .VoiceInsights-HeatmapHeader,
   .VoiceInsights-ReportIntro {
     flex-direction: column;
   }
 
-  .VoiceInsights-HeroActions {
-    width: 100%;
-    margin-right: 0;
-
-    > * {
-      flex: 1 1 0;
-    }
-  }
-
-  .VoiceInsights-Metrics {
+  .VoiceInsights-SupportGrid {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--shell-space-4);
   }
@@ -2270,25 +2009,12 @@ onBeforeUnmount(() => {
   .VoiceInsights-ReportIntro > :last-child {
     align-self: flex-start;
   }
-
-  .VoiceInsights-Notice {
-    align-items: flex-start;
-  }
 }
 
 @media (max-width: 480px) {
-  .VoiceInsights-HeroActions,
-  .VoiceInsights-Notice,
   .VoiceInsights-ReportStats {
+    display: flex;
     flex-direction: column;
-  }
-
-  .VoiceInsights-Notice {
-    display: flex;
-  }
-
-  .VoiceInsights-ReportStats {
-    display: flex;
   }
 }
 </style>

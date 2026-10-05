@@ -1581,6 +1581,12 @@ export class CommonChannelModule extends BaseModule {
         const result = getAppDestinationNavigationService(touchApp).open('settings-overview')
         return result.status !== 'unavailable'
       }),
+      // The way out of a call the usage limit refused, from a surface with its own renderer.
+      transport.on(AppEvents.window.openUsageLimits, (_payload, context) => {
+        this.assertHostOnly(context, 'window.openUsageLimits')
+        const result = getAppDestinationNavigationService(touchApp).open('settings-audit')
+        return result.status !== 'unavailable'
+      }),
       transport.on(AppEvents.debug.openDevTools, (payload, context) => {
         // DevTools runs arbitrary JS in the main renderer and exposes everything it holds, so a
         // plugin view reaching this handler is a way out of the plugin sandbox (#783).

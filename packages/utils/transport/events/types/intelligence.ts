@@ -3,6 +3,12 @@ export const INTELLIGENCE_ERROR_CODES = [
   "PROVIDER_UNAVAILABLE",
   "QUOTA_EXHAUSTED",
   "QUOTA_CHECK_UNAVAILABLE",
+  /**
+   * The device-local global usage limit the user set in Settings › Intelligence › Audit is
+   * reached. Distinct from `QUOTA_EXHAUSTED` (Nexus credits, team quota, provider 429): its
+   * message never contains "quota", "credit", "rate limit" or "too many requests".
+   */
+  "USAGE_LIMIT_REACHED",
   "MODEL_UNSUPPORTED",
   "PERMISSION_DENIED",
   "NETWORK_FAILURE",

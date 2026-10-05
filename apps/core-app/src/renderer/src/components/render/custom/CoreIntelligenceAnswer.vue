@@ -4,11 +4,15 @@ import type { AiElementMessage } from '@talex-touch/tuffex/ai-elements'
 import { TxAiConversation } from '@talex-touch/tuffex/ai-elements'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { ClipboardEvents } from '@talex-touch/utils/transport/events'
+import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { resolveIntelligenceErrorRecovery } from '~/modules/intelligence/ai-error-recovery'
+import {
+  requestUsageLimitsPage,
+  resolveDetachedRecoveryAction
+} from '~/modules/intelligence/usage-limits-door'
 import { createRendererLogger } from '~/utils/renderer-log'
 import {
   resolveIntelligenceMetaChips,
@@ -21,7 +25,7 @@ const props = defineProps<{
   payload?: Record<string, unknown>
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const transport = useTuffTransport()
 const coreIntelligenceLog = createRendererLogger('CoreIntelligenceAnswer')
 const copyError = ref('')
@@ -102,8 +106,32 @@ const conversationMessages = computed<AiElementMessage[]>(() => {
 
 const showUsage = computed(() => usageLabel.value.length > 0)
 const metaChips = computed(() => resolveIntelligenceMetaChips(aiData.value, t))
-const errorRecovery = computed(() => resolveIntelligenceErrorRecovery(aiData.value, t))
+const errorRecovery = computed(() =>
+  resolveIntelligenceErrorRecovery(aiData.value, t, locale.value)
+)
 const statusHint = computed(() => resolveIntelligenceStatusHint(aiData.value, t))
+
+/**
+ * The way out the recovery names, when this window can take it: Audit lives in the main window,
+ * which main reveals and routes (CoreBox has its own renderer and cannot).
+ */
+const recoveryAction = computed(() => resolveDetachedRecoveryAction(errorRecovery.value))
+const openingRecovery = ref(false)
+
+async function openRecoveryAction(): Promise<void> {
+  if (!recoveryAction.value || openingRecovery.value) return
+  openingRecovery.value = true
+  try {
+    if (!(await requestUsageLimitsPage(transport))) {
+      toast.error(t('coreBox.intelligence.openUsageLimitsFailed'))
+      return
+    }
+    // Asked for first, so the reveal is already under way when CoreBox steps aside.
+    await transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
+  } finally {
+    openingRecovery.value = false
+  }
+}
 
 watch(
   () => [aiData.value.requestId, aiData.value.status],
@@ -175,9 +203,27 @@ function copyAnswer(): void {
     <div v-else-if="hasError" class="CoreIntelligence__error">
       <strong>{{ errorRecovery.title }}</strong>
       <span>{{ errorRecovery.detail }}</span>
-      <small v-if="errorRecovery.code !== 'unknown' && errorMessage !== errorRecovery.detail">
+      <!-- The raw line stays out when there is a way out: the reason above already says it all. -->
+      <small
+        v-if="
+          !recoveryAction &&
+          errorRecovery.code !== 'unknown' &&
+          errorMessage !== errorRecovery.detail
+        "
+      >
         {{ errorMessage }}
       </small>
+      <TxButton
+        v-if="recoveryAction"
+        size="sm"
+        native-type="button"
+        class="CoreIntelligence__recovery"
+        :loading="openingRecovery"
+        data-testid="core-intelligence-recovery-action"
+        @click="openRecoveryAction"
+      >
+        {{ recoveryAction.label }}
+      </TxButton>
     </div>
 
     <footer class="CoreIntelligence__footer">
@@ -367,6 +413,12 @@ function copyAnswer(): void {
   color: var(--tx-text-color-secondary);
   font-size: 11px;
   word-break: break-word;
+}
+
+/* The way out sits under the reason it answers, at the reading start of the card. */
+.CoreIntelligence__recovery {
+  align-self: flex-start;
+  margin-top: 4px;
 }
 
 .CoreIntelligence__inlineError {

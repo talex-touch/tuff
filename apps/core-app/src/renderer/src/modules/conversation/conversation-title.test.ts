@@ -171,7 +171,11 @@ describe('generateConversationTitle', () => {
     expect(payload.temperature).toBeLessThanOrEqual(0.5)
     expect(payload.maxTokens).toBeLessThanOrEqual(64)
     expect(options?.timeout).toBeLessThanOrEqual(15_000)
-    expect(options?.metadata).toEqual({ operation: INTELLIGENCE_CONVERSATION_TITLE_OPERATION })
+    expect(options?.metadata).toEqual({
+      // The title request's stable usage-ledger caller (AC-B5).
+      caller: 'core.home.conversation-title',
+      operation: INTELLIGENCE_CONVERSATION_TITLE_OPERATION
+    })
   })
 
   it('clips long transcripts before they reach the prompt', async () => {

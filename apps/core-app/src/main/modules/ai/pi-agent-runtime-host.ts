@@ -33,6 +33,7 @@ import {
   createInterruptedToolCallError,
   createRunCancelledError,
   createRunInterruptedError,
+  createRunUsageLimitedError,
   isInterruptedToolCallMessage,
   isPiRuntimeControlError,
   parseApprovalRequirement
@@ -49,6 +50,7 @@ import {
   isCredentialLikeKey,
   isLocalPathLikeKey
 } from './sensitive-text'
+import { isUsageLimitError } from './usage-ledger/usage-limits'
 
 export type PiRuntimeToolCallOutcome = {
   error?: string
@@ -66,6 +68,11 @@ interface ActiveRunContext {
   resolve: (result: PiRuntimeRunResult) => void
   reject: (error: Error) => void
   timeout: NodeJS.Timeout
+  /**
+   * The user's usage limit refused one of this run's model requests. The worker is only told the
+   * request failed (its protocol carries no codes); a run that then fails is failed as refused.
+   */
+  usageLimitRefused: boolean
 }
 
 export interface PiAgentRuntimeHostOptions {
@@ -555,7 +562,8 @@ export class PiAgentRuntimeHost {
         toolCalls: new Map(),
         resolve,
         reject,
-        timeout
+        timeout,
+        usageLimitRefused: false
       })
       try {
         this.post({ type: 'run.start', payload })
@@ -656,7 +664,9 @@ export class PiAgentRuntimeHost {
           message.runId,
           context?.controller.signal.aborted
             ? createRunCancelledError()
-            : new Error('Pi runtime worker reported failure')
+            : context?.usageLimitRefused
+              ? createRunUsageLimitedError()
+              : new Error('Pi runtime worker reported failure')
         )
         return
       }
@@ -710,7 +720,10 @@ export class PiAgentRuntimeHost {
         provider: result.provider,
         model: result.model
       }
-    } catch {
+    } catch (error) {
+      // The worker's protocol carries no codes, so it is told only that the request failed. The run
+      // remembers why when it was the user's usage limit: a run that fails next is failed as refused.
+      if (isUsageLimitError(error)) context.usageLimitRefused = true
       response = {
         requestId: request.requestId,
         runId: request.runId,

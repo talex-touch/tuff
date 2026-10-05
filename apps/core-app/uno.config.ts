@@ -14,6 +14,7 @@ import { APP_DESTINATION_ICON_CLASSES } from './src/shared/app-destinations'
 import { BUILTIN_FLOW_TARGET_ICON_CLASSES } from './src/shared/flow-target-icons'
 import { MODEL_FAMILY_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-family-icons'
 import { MODEL_SOURCE_ICON_CLASSES } from './src/renderer/src/modules/intelligence/model-source-icons'
+import { AGENT_ICON_CLASSES } from './src/renderer/src/components/settings/resources/agent-icons'
 import { MAIN_WINDOW_COMMAND_ICON_CLASSES } from './src/renderer/src/modules/shortcuts/main-window-command-catalog'
 import { HOME_PUSH_ICON_CLASSES } from './src/renderer/src/modules/home-push/icons'
 import {
@@ -53,7 +54,8 @@ const SETTINGS_CATEGORY_ICONS = [
   'i-ri-information-line',
   // Sub-page `navIcon`s live in the same `.ts` table, so the extractor never sees them either.
   // The MCP page's is listed rather than left to a template that happens to name the same class.
-  'i-ri-plug-line'
+  'i-ri-plug-line',
+  'i-ri-brain-line'
 ]
 
 /**
@@ -87,6 +89,9 @@ const HOME_PUSH_ICONS_MODULE = fileURLToPath(
 const FLOW_TARGET_ICONS_MODULE = fileURLToPath(
   new URL('./src/shared/flow-target-icons.ts', import.meta.url)
 )
+const AGENT_ICONS_MODULE = fileURLToPath(
+  new URL('./src/renderer/src/components/settings/resources/agent-icons.ts', import.meta.url)
+)
 
 export default defineConfig({
   // The dev server watches only the config file itself. Without this, a new icon in the table
@@ -99,7 +104,8 @@ export default defineConfig({
     ICON_PICKER_CATALOG_MODULE,
     MAIN_WINDOW_COMMAND_CATALOG_MODULE,
     HOME_PUSH_ICONS_MODULE,
-    FLOW_TARGET_ICONS_MODULE
+    FLOW_TARGET_ICONS_MODULE,
+    AGENT_ICONS_MODULE
   ],
   safelist: [
     ...COREBOX_ACTION_ICONS,
@@ -141,7 +147,11 @@ export default defineConfig({
     // `ri:<name>` strings that no template ever names, and the flow picker draws them as
     // `i-ri-<name>`. A literal list, since main's modules cannot be evaluated here; its test reads
     // main's sources so a target added there cannot ship an invisible glyph.
-    ...BUILTIN_FLOW_TARGET_ICON_CLASSES
+    ...BUILTIN_FLOW_TARGET_ICON_CLASSES,
+    // Agent brand marks on the skills and MCP pages
+    // (`renderer/src/components/settings/resources/agent-icons.ts`): the agent bar, each row's
+    // icon strip and the drawer draw them from inventory data, so no template names a class.
+    ...AGENT_ICON_CLASSES
   ],
   theme: {
     colors: {

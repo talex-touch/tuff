@@ -6,7 +6,6 @@ import type {
 } from '@talex-touch/tuff-intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { TxButton } from '@talex-touch/tuffex/button'
-import { TxSpinner } from '@talex-touch/tuffex/spinner'
 import {
   getVoiceCapabilityRecommendedModels,
   isOnDeviceAsrBinding
@@ -14,7 +13,6 @@ import {
 import { useI18n } from 'vue-i18n'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
 import FlatMarkdown from '~/components/base/input/FlatMarkdown.vue'
-import { TxScroll } from '@talex-touch/tuffex/scroll'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import CapabilityHeader from './CapabilityHeader.vue'
@@ -23,16 +21,21 @@ import CapabilityOverview from './CapabilityOverview.vue'
 import ProviderList from './ProviderList.vue'
 import TestSection from './TestSection.vue'
 
+/**
+ * One built-in skill's editor: its channels, the models each channel tries, its prompt, and a test.
+ *
+ * It shows what it is given and reports every edit; where an edit goes is the owner's decision. The
+ * skills page keeps edits in a draft until the user saves, so the test — which runs against the
+ * saved configuration — is held back while there is anything unsaved (`testBlockedReason`).
+ */
 const props = defineProps<{
   capability: IntelligenceCapabilityConfig
   providers: IntelligenceProviderConfig[]
   bindings: CapabilityBinding[]
   isTesting: boolean
   testResult?: CapabilityTestResult | null
-  hasPendingChanges: boolean
-  isSaving: boolean
-  saveState: 'idle' | 'dirty' | 'saved' | 'error'
-  saveErrorDetail?: string
+  /** Why the test cannot run now, said beside the disabled test button. */
+  testBlockedReason?: string
 }>()
 
 const emits = defineEmits<{
@@ -70,6 +73,7 @@ const focusedProviderId = ref<string>('')
 const showModelDrawer = ref(false)
 const showPromptDrawer = ref(false)
 const showTestDrawer = ref(false)
+const testHintId = useId()
 let promptTimer: number | null = null
 
 const providerMetaMap = computed(
@@ -89,7 +93,7 @@ const isBindingOnlyTest = computed(() => props.capability.id === 'audio.asr')
 const testDescription = computed(() =>
   isBindingOnlyTest.value
     ? t('settings.intelligence.capabilityAsrBindingTestDesc')
-    : t('settings.intelligence.capabilityTestDesc')
+    : t('settings.skillsPage.testDesc')
 )
 
 const totalModelsCount = computed(() => {
@@ -277,7 +281,14 @@ function openPromptDrawer(): void {
   showPromptDrawer.value = true
 }
 
-function openTestDrawer(): void {
+/**
+ * A prompt still being typed is an edit the owner has not heard of yet, so it is handed over first;
+ * if that leaves the owner with unsaved changes, the test stays closed and the button says why.
+ */
+async function openTestDrawer(): Promise<void> {
+  flushPrompt()
+  await nextTick()
+  if (props.testBlockedReason) return
   showTestDrawer.value = true
 }
 
@@ -288,34 +299,16 @@ function handleTest(options?: {
   promptVariables?: Record<string, unknown>
   userInput?: string
 }): void {
-  if (props.isTesting) return
+  if (props.isTesting || props.testBlockedReason) return
   emits('test', options)
 }
 
-/**
- * The single header indicator that replaced the status line plus manual save button: the page
- * autosaves, so the box only has to say where the write stands — including the error text,
- * which is the one state the user must be able to read.
- */
-const saveStatusIcon = computed(() => {
-  if (props.saveState === 'saved') return 'i-carbon-checkmark'
-  if (props.saveState === 'error') return 'i-carbon-warning-alt'
-  if (props.hasPendingChanges) return 'i-carbon-dot-mark'
-  return 'i-carbon-checkmark-outline'
-})
+/** A nested drawer is open: an Escape meant for it is not a request to close the owner's. */
+function hasOpenDrawer(): boolean {
+  return showModelDrawer.value || showPromptDrawer.value || showTestDrawer.value
+}
 
-const saveStatusText = computed(() => {
-  if (props.isSaving) return t('settings.intelligence.autoSaveSaving')
-  if (props.saveState === 'saved') return t('settings.intelligence.autoSaveSaved')
-  if (props.saveState === 'error') {
-    const detail = props.saveErrorDetail?.trim()
-    return detail
-      ? t('settings.intelligence.capabilitySaveErrorWithDetail', { detail })
-      : t('settings.intelligence.capabilitySaveError')
-  }
-  if (props.hasPendingChanges) return t('settings.intelligence.autoSavePending')
-  return t('settings.intelligence.autoSaveEnabled')
-})
+defineExpose({ flushPrompt, hasOpenDrawer })
 
 watch(
   () => [props.providers, props.capability.id],
@@ -344,37 +337,29 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <TxScroll>
-    <template #header>
-      <CapabilityHeader :capability="capability">
-        <template #actions>
-          <div class="capability-info__header-actions">
-            <div
-              class="capability-info__save-status"
-              :data-status="isSaving ? 'saving' : saveState"
-              role="status"
-              aria-live="polite"
-            >
-              <TxSpinner v-if="isSaving" :size="14" :label="saveStatusText" />
-              <i v-else :class="saveStatusIcon" aria-hidden="true" />
-              <span>{{ saveStatusText }}</span>
-            </div>
-            <TxButton
-              class="capability-info__test-button"
-              variant="flat"
-              type="primary"
-              :disabled="shownBindings.length === 0"
-              @click="openTestDrawer"
-            >
-              <i class="i-carbon-play-filled" aria-hidden="true" />
-              <span>{{ t('settings.intelligence.capabilityTest') }}</span>
-            </TxButton>
-          </div>
-        </template>
-      </CapabilityHeader>
-    </template>
+  <div class="capability-info">
+    <CapabilityHeader :capability="capability">
+      <template #actions>
+        <div class="capability-info__header-actions">
+          <TxButton
+            class="capability-info__test-button"
+            variant="flat"
+            type="primary"
+            :disabled="shownBindings.length === 0 || Boolean(testBlockedReason)"
+            :aria-describedby="testBlockedReason ? testHintId : undefined"
+            @click="openTestDrawer"
+          >
+            <i class="i-carbon-play-filled" aria-hidden="true" />
+            <span>{{ t('settings.intelligence.capabilityTest') }}</span>
+          </TxButton>
+          <p v-if="testBlockedReason" :id="testHintId" class="capability-info__test-hint">
+            {{ testBlockedReason }}
+          </p>
+        </div>
+      </template>
+    </CapabilityHeader>
 
-    <template #default>
+    <div class="capability-info__body">
       <CapabilityOverview
         :active-count="activeBindingCount"
         :total-bindings="capability.providers?.length || 0"
@@ -446,8 +431,8 @@ onBeforeUnmount(() => {
           </TuffBlockSlot>
         </template>
       </TuffGroupBlock>
-    </template>
-  </TxScroll>
+    </div>
+  </div>
 
   <TxDrawer
     v-model:visible="showModelDrawer"
@@ -479,10 +464,7 @@ onBeforeUnmount(() => {
     </div>
   </TxDrawer>
 
-  <TxDrawer
-    v-model:visible="showTestDrawer"
-    :title="t('settings.intelligence.capabilityTestTitle')"
-  >
+  <TxDrawer v-model:visible="showTestDrawer" :title="t('settings.skillsPage.testTitle')">
     <div class="capability-info__drawer">
       <p class="capability-info__drawer-description">
         {{ testDescription }}
@@ -527,30 +509,23 @@ onBeforeUnmount(() => {
 
 .capability-info__header-actions {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.375rem;
   max-width: 100%;
 }
 
-.capability-info__save-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  max-width: 18rem;
+.capability-info__test-hint {
+  max-width: 14rem;
+  margin: 0;
   color: var(--tx-text-color-secondary);
   font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: right;
+}
 
-  span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  &[data-status='error'] {
-    color: var(--tx-color-danger);
-  }
+.capability-info__body {
+  padding-top: 0.75rem;
 }
 
 .capability-info__test-button {
