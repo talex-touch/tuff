@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
  * and a rule that reads right in source can still land outside the block it was meant for:
  *
  * - a hover changes colour at once, so fill / ink / ring transition only under `.is-morphing`
- *   (`tuffex-design-rules.md` › Motion);
+ *   (`tuffex-design-rules.md` › Motion) — and only the send key has such a morph at all;
  * - every transition and animation is declared inside `prefers-reduced-motion: no-preference`, so
  *   reduced motion never starts one and each element rests in its declared, final style — the one
  *   form this directory uses (the same rule's inverse form, as TxChoiceCard does).
@@ -130,7 +130,9 @@ describe('composer toolbar style contract', () => {
         'ComposerToolbar.vue'
       ])
     )
-    for (const file of ['ComposerChip.vue', 'ComposerSendIsland.vue', 'ComposerMic.vue']) {
+    // Only the send key morphs between its faces; the chips land a new value in the same frame
+    // (`home-composer` › 换档不做变形动画) and the microphone key swaps its glyph at once.
+    for (const file of ['ComposerSendIsland.vue']) {
       const morphs = styleRules.filter(
         (rule) =>
           rule.file === file &&

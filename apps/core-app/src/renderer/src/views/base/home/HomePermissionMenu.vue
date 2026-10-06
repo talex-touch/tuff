@@ -4,12 +4,14 @@ import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ComposerChip from './composer/ComposerChip.vue'
+import { focusWhenShown } from './focus-when-shown'
 
 /**
- * The composer's permission pill and the menu behind it. The pill lives inside the component
- * because everything on it — label, icon, warning tint — is derived from the mode; the mode
- * itself stays the caller's (it is an `appSetting` slice the settings layer owns). Anchoring,
- * outside-click, Escape and arrow traversal come from TxDropdownMenu.
+ * The composer's permission chip and the menu behind it: three rows — name, icon, the current one
+ * checked — with each mode's sentence as the row's hover title instead of a second line
+ * (`home-composer` › 权限弹层). The mode itself stays the caller's (an `appSetting` slice the
+ * settings layer owns). Anchoring, outside-click, Escape and arrow traversal come from
+ * TxDropdownMenu; opening focus is placed here, on the current mode.
  */
 const props = defineProps<{ mode: AgentToolsMode }>()
 
@@ -21,7 +23,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-/** The three permission modes in menu order; the icon doubles as the pill's. */
+/** The three permission modes in menu order; the icon doubles as the chip's. */
 const PERMISSION_MODES = [
   { mode: 'off', icon: 'i-ri-shield-line' },
   { mode: 'review', icon: 'i-ri-shield-check-line' },
@@ -29,39 +31,25 @@ const PERMISSION_MODES = [
 ] as const
 
 const open = ref(false)
-/** True while the 「完全允许」 consequence step has replaced the mode list. */
-const confirming = ref(false)
+/**
+ * 「完全允许」 has been chosen once and waits for the second activation that applies it. It is a
+ * standing grant over every tool the model can reach, so it is never one click away — but the
+ * second step stays in its own row instead of replacing the menu.
+ */
+const arming = ref(false)
 const triggerWrapRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
-const cancelRef = ref<HTMLButtonElement | null>(null)
 /**
- * Focus goes back to the pill only when the menu closed from the keyboard or a choice —
- * an outside click moved focus somewhere deliberate, and yanking it back would fight the user.
+ * Focus goes back to the chip only when the menu closed from the keyboard or a choice — an
+ * outside click moved focus somewhere deliberate, and yanking it back would fight the user.
  */
 let restoreFocusOnClose = false
 
-const pillIcon = computed(
+const chipIcon = computed(
   () => PERMISSION_MODES.find((option) => option.mode === props.mode)?.icon ?? 'i-ri-shield-line'
 )
 
-/**
- * Tools on and asking first is an ordinary enabled state, so it carries the accent. 「完全允许」 has
- * to stay visible as a state, not just a label the eye skips: every tool call runs unasked while it
- * is on. The shell has no warning ramp, and the alarm one is the honest read — it also re-points
- * under `html.contrast`, which a hand-picked amber would not.
- */
-const pillTone = computed(() =>
-  props.mode === 'full' ? 'danger' : props.mode === 'review' ? 'info' : 'muted'
-)
-
-/** Queried rather than collected through refs: moving focus is a DOM concern either way. */
-function focusCheckedOption(): void {
-  const index = PERMISSION_MODES.findIndex((option) => option.mode === props.mode)
-  const buttons = Array.from(
-    panelRef.value?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? []
-  )
-  buttons[Math.max(index, 0)]?.focus()
-}
+const chipLabel = computed(() => t(`home.permissionMode.${props.mode}`))
 
 function closeMenu(): void {
   restoreFocusOnClose = true
@@ -69,26 +57,13 @@ function closeMenu(): void {
 }
 
 function choose(mode: AgentToolsMode): void {
-  if (mode === 'full' && props.mode !== 'full') {
-    // Never one click away: 「完全允许」 is a standing grant over every tool the model can
-    // reach, so it costs an explicit second step that states what it means.
-    confirming.value = true
-    void nextTick(() => cancelRef.value?.focus())
+  if (mode === 'full' && props.mode !== 'full' && !arming.value) {
+    arming.value = true
     return
   }
+  arming.value = false
   emit('update:mode', mode)
   closeMenu()
-}
-
-function confirmFull(): void {
-  emit('update:mode', 'full')
-  closeMenu()
-}
-
-function cancelFull(): void {
-  // Leaving the consequence step keeps the mode untouched.
-  confirming.value = false
-  void nextTick(focusCheckedOption)
 }
 
 function requestReset(): void {
@@ -96,16 +71,22 @@ function requestReset(): void {
   emit('reset')
 }
 
-/** The anchor closes on Escape by itself; this only marks that focus should return to the pill. */
+/** The anchor closes on Escape by itself; this only marks that focus should return to the chip. */
 function onPanelKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') restoreFocusOnClose = true
 }
 
 watch(open, (isOpen) => {
-  // Reopening always starts at the list: an abandoned consequence step is not a pending choice.
-  confirming.value = false
+  // Every open starts plain: an abandoned confirmation is not a pending choice.
+  arming.value = false
   if (isOpen) {
     restoreFocusOnClose = false
+    // On the current mode, so the arrows start from it.
+    focusWhenShown(
+      () =>
+        panelRef.value?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]'),
+      () => open.value
+    )
     return
   }
   if (restoreFocusOnClose) {
@@ -118,103 +99,86 @@ watch(open, (isOpen) => {
   <TxDropdownMenu
     v-model="open"
     placement="top-start"
-    :min-width="304"
+    initial-focus="none"
+    :min-width="208"
     :panel-radius="12"
     :panel-padding="6"
     panel-background="pure"
   >
     <template #trigger>
-      <!-- display: contents — the wrapper exists only so closing can find the pill to refocus. -->
+      <!-- display: contents — the wrapper exists only so closing can find the chip to refocus. -->
       <span ref="triggerWrapRef" class="HomePermissionMenu-TriggerWrap">
-        <!-- The composer's tonal chip: 「自动审阅」 carries the accent, 「完全允许」 the alarm hue, and
-             a mode change blur-replaces the shield and crossfades the value. It folds to the shield
-             alone in a narrow toolbar; the full state stays in the accessible name. -->
+        <!-- Folds to the shield alone in a narrow toolbar; the full state stays in the name. -->
         <ComposerChip
-          class="HomePermissionMenu-Pill"
-          :tone="pillTone"
-          :icon="pillIcon"
-          :prefix="`${t('home.permission')} ·`"
-          :label="t(`home.permissionMode.${props.mode}`)"
+          class="HomePermissionMenu-Chip"
+          :danger="props.mode === 'full'"
+          :icon="chipIcon"
+          :label="chipLabel"
+          :open="open"
           collapsible
+          aria-haspopup="menu"
           :aria-expanded="open"
-          :aria-label="`${t('home.permission')} · ${t(`home.permissionMode.${props.mode}`)}`"
+          :aria-label="`${t('home.permission')} · ${chipLabel}`"
           :title="t(`home.permissionHint.${props.mode}`)"
         />
       </span>
     </template>
 
     <div ref="panelRef" class="HomePermissionMenu" @keydown="onPanelKeydown">
-      <template v-if="!confirming">
-        <div class="HomePermissionMenu-Options" role="group" :aria-label="t('home.permissionMenu')">
-          <button
-            v-for="option in PERMISSION_MODES"
-            :key="option.mode"
-            class="HomePermissionMenu-Option"
-            type="button"
-            role="menuitemradio"
-            :data-mode="option.mode"
-            :aria-checked="props.mode === option.mode"
-            @click="choose(option.mode)"
-          >
-            <span :class="option.icon" class="HomePermissionMenu-Icon" />
-            <span class="HomePermissionMenu-Label">
-              <span>{{ t(`home.permissionMode.${option.mode}`) }}</span>
-              <span class="HomePermissionMenu-Hint">
-                {{ t(`home.permissionHint.${option.mode}`) }}
-              </span>
-            </span>
+      <div class="HomePermissionMenu-Options" role="group" :aria-label="t('home.permissionMenu')">
+        <button
+          v-for="option in PERMISSION_MODES"
+          :key="option.mode"
+          class="HomePermissionMenu-Option"
+          :class="{ 'is-arming': option.mode === 'full' && arming }"
+          type="button"
+          role="menuitemradio"
+          :data-mode="option.mode"
+          :aria-checked="props.mode === option.mode"
+          :title="t(`home.permissionHint.${option.mode}`)"
+          :aria-describedby="
+            option.mode === 'full' && arming ? 'home-permission-arm-hint' : undefined
+          "
+          @click="choose(option.mode)"
+        >
+          <span :class="option.icon" class="HomePermissionMenu-Icon" aria-hidden="true" />
+          <span class="HomePermissionMenu-Label">
+            <span>{{ t(`home.permissionMode.${option.mode}`) }}</span>
             <span
-              v-if="props.mode === option.mode"
-              class="i-ri-check-line HomePermissionMenu-Check"
-            />
-          </button>
-        </div>
+              v-if="option.mode === 'full' && arming"
+              id="home-permission-arm-hint"
+              class="HomePermissionMenu-ArmHint"
+            >
+              {{ t('home.permissionFullArm') }}
+            </span>
+          </span>
+          <span
+            v-if="props.mode === option.mode"
+            class="i-ri-check-line HomePermissionMenu-Check"
+            aria-hidden="true"
+          />
+        </button>
+      </div>
 
-        <!-- Only under 「自动审阅」: with no confirmations to remember, the
-             other two modes have nothing to reset. -->
-        <template v-if="props.mode === 'review'">
-          <div class="HomePermissionMenu-Divider" />
-          <button
-            class="HomePermissionMenu-Reset"
-            type="button"
-            role="menuitem"
-            @click="requestReset"
-          >
-            <span class="i-ri-eraser-line" />
-            <span>{{ t('home.permissionResetApprovals') }}</span>
-          </button>
-        </template>
+      <!-- Only under 「自动审阅」: with no confirmations to remember, the other two modes have
+           nothing to reset. -->
+      <template v-if="props.mode === 'review'">
+        <div class="HomePermissionMenu-Divider" role="separator" />
+        <button
+          class="HomePermissionMenu-Reset"
+          type="button"
+          role="menuitem"
+          @click="requestReset"
+        >
+          <span class="i-ri-eraser-line" aria-hidden="true" />
+          <span>{{ t('home.permissionResetApprovals') }}</span>
+        </button>
       </template>
 
-      <!-- `group` rather than `alertdialog`: focus moves here but is not
-           trapped, and claiming modality we do not implement would mislead. -->
-      <div
-        v-else
-        class="HomePermissionMenu-Confirm"
-        role="group"
-        aria-labelledby="home-permission-confirm-title"
-        aria-describedby="home-permission-confirm-desc"
-      >
-        <p id="home-permission-confirm-title" class="HomePermissionMenu-ConfirmTitle">
-          {{ t('home.permissionFullConfirmTitle') }}
-        </p>
-        <p id="home-permission-confirm-desc" class="HomePermissionMenu-ConfirmDesc">
-          {{ t('home.permissionFullConfirmDesc') }}
-        </p>
-        <div class="HomePermissionMenu-ConfirmActions">
-          <button
-            ref="cancelRef"
-            class="HomePermissionMenu-Cancel"
-            type="button"
-            @click="cancelFull"
-          >
-            {{ t('home.permissionFullConfirmCancel') }}
-          </button>
-          <button class="HomePermissionMenu-Apply" type="button" @click="confirmFull">
-            {{ t('home.permissionFullConfirmApply') }}
-          </button>
-        </div>
-      </div>
+      <!-- The armed row's sentence, said once when it appears. -->
+      <span class="HomePermissionMenu-Status" role="status" aria-live="polite">
+        {{ arming ? t('home.permissionFullArm') : '' }}
+      </span>
     </div>
   </TxDropdownMenu>
 </template>
@@ -237,11 +201,13 @@ watch(open, (isOpen) => {
   gap: 1px;
 }
 
-.HomePermissionMenu-Option {
+.HomePermissionMenu-Option,
+.HomePermissionMenu-Reset {
   display: flex;
   gap: 10px;
-  align-items: flex-start;
-  padding: 8px 9px;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 9px;
   border: none;
   border-radius: var(--shell-radius-sm);
   background: transparent;
@@ -255,36 +221,50 @@ watch(open, (isOpen) => {
     background: var(--shell-surface);
   }
 
-  /* The risky option is marked in the list too, so the choice reads before it is made. */
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: -2px;
+  }
+}
+
+.HomePermissionMenu-Option {
+  /* The risky mode is marked in the list too, so the choice reads before it is made. */
   &[data-mode='full'] .HomePermissionMenu-Icon {
     color: var(--shell-danger);
+  }
+
+  /* Waiting for the second activation: the row itself carries the warning. */
+  &.is-arming,
+  &.is-arming:hover {
+    align-items: flex-start;
+    background: var(--shell-danger-soft);
   }
 }
 
 .HomePermissionMenu-Icon {
   flex: none;
-  margin-top: 2px;
   color: var(--shell-text-secondary);
+  font-size: 16px;
 }
 
 .HomePermissionMenu-Label {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 
-.HomePermissionMenu-Hint {
-  color: var(--shell-text-muted);
+.HomePermissionMenu-ArmHint {
+  color: var(--shell-danger);
   font-size: var(--shell-fs-caption);
   line-height: 1.45;
 }
 
 .HomePermissionMenu-Check {
   flex: none;
-  margin-top: 2px;
   color: var(--shell-primary);
+  font-size: 15px;
 }
 
 .HomePermissionMenu-Divider {
@@ -293,81 +273,20 @@ watch(open, (isOpen) => {
 }
 
 .HomePermissionMenu-Reset {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 7px 9px;
-  border: none;
-  border-radius: var(--shell-radius-sm);
-  background: transparent;
-  color: var(--shell-text-regular);
-  text-align: left;
-  font-family: inherit;
-  font-size: var(--shell-fs-sm);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--shell-surface);
-  }
-}
-
-.HomePermissionMenu-Confirm {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 9px 8px;
-}
-
-.HomePermissionMenu-ConfirmTitle {
-  margin: 0;
-  color: var(--shell-danger);
-  font-size: var(--shell-fs-body);
-  font-weight: 600;
-}
-
-.HomePermissionMenu-ConfirmDesc {
-  margin: 0;
-  color: var(--shell-text-secondary);
-  font-size: var(--shell-fs-sm);
-  line-height: 1.55;
-}
-
-.HomePermissionMenu-ConfirmActions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.HomePermissionMenu-Cancel,
-.HomePermissionMenu-Apply {
-  height: 28px;
-  padding: 0 12px;
-  border-radius: var(--shell-radius-full);
-  font-family: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Cancel keeps the ordinary weight and the confirm stays an outline: the grant is the
-   consequential click, so it must not be the one the eye lands on first. */
-.HomePermissionMenu-Cancel {
-  border: 1px solid var(--shell-border-strong);
-  background: transparent;
   color: var(--shell-text-regular);
 
-  &:hover {
-    background: var(--shell-surface);
+  span:first-child {
+    color: var(--shell-text-secondary);
+    font-size: 16px;
   }
 }
 
-.HomePermissionMenu-Apply {
-  border: 1px solid var(--shell-danger-border);
-  background: var(--shell-danger-soft);
-  color: var(--shell-danger);
-
-  &:hover {
-    background: color-mix(in srgb, var(--shell-danger) 12%, transparent);
-  }
+.HomePermissionMenu-Status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 </style>

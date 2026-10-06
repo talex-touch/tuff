@@ -20,7 +20,7 @@ import type {
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createAgentWorkspaceSdk } from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
-import { computed, getCurrentScope, onScopeDispose, ref, shallowRef, watch } from 'vue'
+import { computed, getCurrentScope, onScopeDispose, ref, shallowRef, toRaw, watch } from 'vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { toModelAttachments } from './attachment-payload'
 import { createLatestOnly } from './latest-only'
@@ -591,7 +591,9 @@ export function useAgentWorkspace(options: UseAgentWorkspaceOptions): UseAgentWo
     if (profileSaving.value) return
     profileSaving.value = profile.id
     try {
-      const saved = await intelligence.orchestratorSaveProfile({ ...profile, enabled })
+      // The row comes out of the reactive list: spread, its nested fields (tool ids, policy) stay
+      // proxies, and the IPC's structured clone refuses them. The raw record clones.
+      const saved = await intelligence.orchestratorSaveProfile({ ...toRaw(profile), enabled })
       profiles.value = profiles.value.map((entry) => (entry.id === saved.id ? saved : entry))
     } catch (error) {
       options.onError(toAgentWorkspaceError(error), 'profile.save')

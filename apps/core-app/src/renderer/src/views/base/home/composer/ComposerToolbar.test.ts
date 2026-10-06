@@ -81,8 +81,6 @@ async function advance(ms: number): Promise<void> {
   await nextTick()
 }
 
-const silence = new Array<number>(COMPOSER_MOTION.mic.levelHistory).fill(0)
-
 function mountToolbar(props: Record<string, unknown> = {}): VueWrapper {
   return mount(ComposerToolbar, {
     props: {
@@ -90,7 +88,6 @@ function mountToolbar(props: Record<string, unknown> = {}): VueWrapper {
       model: { label: 'Claude Opus', effort: '高' },
       sendState: 'ready',
       micState: 'idle',
-      micLevels: silence,
       ...props
     },
     attachTo: document.body
@@ -148,28 +145,59 @@ describe('ComposerToolbar', () => {
     wrapper.unmount()
   })
 
-  it('measures the model pill when dictation starts and covers it with the capsule', async () => {
+  it('keeps only what a dictation session needs: the left cluster and the model step out', async () => {
     const wrapper = mountToolbar()
+    const left = wrapper.get('.ComposerToolbar-Left').element as HTMLElement
     const modelSlot = wrapper.get('.ComposerToolbar-ModelSlot').element as HTMLElement
-    const micSlot = wrapper.get('.ComposerToolbar-MicSlot').element as HTMLElement
-    Object.defineProperty(modelSlot, 'offsetLeft', { value: 0, configurable: true })
-    Object.defineProperty(micSlot, 'offsetLeft', { value: 118, configurable: true })
-    Object.defineProperty(micSlot, 'offsetWidth', { value: 32, configurable: true })
+    expect(left.hasAttribute('inert')).toBe(false)
+    expect(modelSlot.hasAttribute('inert')).toBe(false)
 
-    await wrapper.setProps({ micState: 'starting' })
-    const mic = wrapper.get('button.ComposerMic')
-    expect(mic.attributes('style')).toContain('--composer-mic-capsule: 150px')
+    await wrapper.setProps({ micState: 'listening', micElapsedMs: 7400 })
 
-    // The model pill gives way while it is covered: hidden, inert, out of the tree.
-    expect(modelSlot.hasAttribute('inert')).toBe(true)
-    expect(modelSlot.getAttribute('aria-hidden')).toBe('true')
-    expect(
-      calls.some((call) => call.target === modelSlot && call.keyframes.at(-1)?.opacity === 0)
-    ).toBe(true)
+    // Hidden, inert and out of the accessibility tree: no pointer, no Tab stop, nothing read.
+    expect(wrapper.classes()).toContain('is-dictating')
+    for (const element of [left, modelSlot]) {
+      expect(element.hasAttribute('inert')).toBe(true)
+      expect(element.getAttribute('aria-hidden')).toBe('true')
+    }
+    expect(modelSlot.classList.contains('is-yielded')).toBe(true)
+    // The microphone and the send key stay: one stops the session, the other finishes and sends.
+    expect(wrapper.get('.ComposerToolbar-MicSlot').attributes('inert')).toBeUndefined()
+    expect(wrapper.get('button.ComposerMic').classes()).toContain('is-live')
 
     await wrapper.setProps({ micState: 'idle' })
-    await advance(COMPOSER_MOTION.micYield.backDelayMs)
+    expect(left.hasAttribute('inert')).toBe(false)
     expect(modelSlot.hasAttribute('inert')).toBe(false)
+    expect(wrapper.classes()).not.toContain('is-dictating')
+    wrapper.unmount()
+  })
+
+  it("shows the session's state where the left cluster was, and reads it once per state", async () => {
+    const wrapper = mountToolbar({ micState: 'starting' })
+    const status = (): string => wrapper.get('.ComposerToolbar-Status').text()
+    const live = (): string => wrapper.get('.ComposerToolbar-LiveStatus').text()
+    expect(wrapper.get('.ComposerToolbar-Status').attributes('aria-hidden')).toBe('true')
+    expect(wrapper.get('.ComposerToolbar-LiveStatus').attributes('role')).toBe('status')
+
+    expect(wrapper.find('.ComposerToolbar-Spinner').exists()).toBe(true)
+    expect(status()).toContain('assistant.voicePanel.voicePreparing')
+    expect(live()).toBe('assistant.voicePanel.voicePreparing')
+
+    await wrapper.setProps({ micState: 'listening', micElapsedMs: 67_000 })
+    expect(wrapper.find('.ComposerToolbar-RecDot').exists()).toBe(true)
+    expect(status()).toContain('home.composer.dictationListening')
+    expect(wrapper.get('.ComposerToolbar-Timer').text()).toBe('1:07')
+    expect(wrapper.get('.ComposerToolbar-EscHint').text()).toBe('· home.composer.dictationEscHint')
+    // The timer ticks for the eye only.
+    expect(live()).toBe('home.composer.dictationListening')
+
+    await wrapper.setProps({ micState: 'finishing' })
+    expect(status()).toContain('home.composer.dictationFinishing')
+    expect(live()).toBe('home.composer.dictationFinishing')
+
+    await wrapper.setProps({ micState: 'idle', micOutcome: 'inserted' })
+    expect(status()).toBe('')
+    expect(live()).toBe('home.composer.dictationInserted')
     wrapper.unmount()
   })
 
