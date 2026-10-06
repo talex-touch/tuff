@@ -617,6 +617,11 @@ const codeSample = 'export function greet(name: string) {\n  return \'Hello \' +
 // JSON is the editor's default language and the one it lints; six lines fit
 // the stage at the editor's natural height, so nothing has to crop it.
 const manifestSample = '{\n  "id": "com.talex.clipboard",\n  "version": "1.2.0",\n  "sdkapi": 260713,\n  "features": ["history", "pin"]\n}'
+const terminalLines = computed(() => [
+  '\x1B[32mTuffEx TxTerminal\x1B[0m',
+  localeKey.value === 'zh' ? 'ANSI 颜色 · 中文日志 ✓' : 'ANSI colors · Unicode logs ✓',
+  localeKey.value === 'zh' ? '只读显示，无进程' : 'Read-only display, no process',
+])
 // A ref, not a computed: the reader edits it in the dialog. Seeded in the
 // page's language once; switching locale keeps whatever they wrote.
 const markdownDraft = ref(localeKey.value === 'zh'
@@ -2953,6 +2958,26 @@ async function copyInstall() {
           <ClientOnly>
             <div class="docs-gallery__block">
               <TxSearchPanel v-model="searchPanelValue" :items="searchPanelItems" />
+            </div>
+            <template #fallback>
+              <div class="docs-gallery__ph" />
+            </template>
+          </ClientOnly>
+        </div>
+      </section>
+
+      <section class="docs-gallery__cell">
+        <NuxtLink class="docs-gallery__label" :to="docPath('terminal')">
+          {{ cellLabel('Terminal', '终端显示') }}
+        </NuxtLink>
+        <div class="docs-gallery__stage not-prose">
+          <ClientOnly>
+            <div class="docs-gallery__block docs-gallery__block--wide" style="height: 176px">
+              <TxTerminal
+                read-only
+                :lines="terminalLines"
+                :labels="{ ariaLabel: cellLabel('Terminal output', '终端输出') }"
+              />
             </div>
             <template #fallback>
               <div class="docs-gallery__ph" />

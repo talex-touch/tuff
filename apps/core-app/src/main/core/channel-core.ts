@@ -975,7 +975,8 @@ class TouchChannel {
     win: Electron.BrowserWindow | WebContentsView | undefined,
     type: ChannelType,
     eventName: string,
-    arg: unknown
+    arg: unknown,
+    plugin?: PluginActivationIdentity
   ): void {
     const webContents = getWebContents(win)
 
@@ -985,11 +986,13 @@ class TouchChannel {
 
     const data = {
       code: DataCode.SUCCESS,
-      data: arg,
+      data: plugin ? { ...toRecord(arg), plugin: plugin.name } : arg,
       name: eventName,
+      ...(plugin ? { plugin: plugin.name } : {}),
       header: {
         status: 'request',
-        type
+        type,
+        ...(plugin ? { uniqueKey: plugin.key } : {})
       }
     } as RawStandardChannelData
 

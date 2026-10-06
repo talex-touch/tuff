@@ -206,6 +206,7 @@ TAXONOMY: dict[str, list[str]] = {
         "search-panel",
         "markdown-editor",
         "code-editor",
+        "terminal",
         "virtual-list",
         "version-capsule",
     ],

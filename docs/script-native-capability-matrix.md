@@ -10,7 +10,8 @@
 - 不可用能力统一给出降级提示与可探测性要求。
 
 ## References
-- apps/core-app/src/main/modules/terminal/terminal.manager.ts
+- apps/core-app/src/main/modules/terminal/index.ts
+- apps/core-app/src/main/modules/terminal/pty-session-core.ts
 - plugins/touch-system-actions/index.js
 - apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts
 - apps/core-app/src/main/modules/update/update-system.ts

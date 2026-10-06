@@ -9,6 +9,7 @@ import {
 import { TuffMainTransport } from "../transport/sdk/main-transport";
 import { defineRawEvent } from "../transport/event/builder";
 import { PluginEvents } from "../transport/events";
+import { TerminalEvents } from "../transport/events/terminal";
 import { describe, expect, it, vi } from "vitest";
 
 const { ipcHandle, browserWindowMock } = vi.hoisted(() => ({
@@ -209,5 +210,85 @@ describe("TuffMainTransport caller identity", () => {
     expect(isAuthoritativePluginContext(trusted)).toBe(true);
     expect(trusted.identity?.authority).toBe("test");
     expect(isAuthoritativePluginContext(copied)).toBe(false);
+  });
+});
+
+describe("TuffMainTransport owner notifications", () => {
+  it("delivers to the bound sender only and rejects copied, foreign, rotated and revoked plugin identities", async () => {
+    const current = activation();
+    const { transport, handlers, channel, keyManager } = createHarness(current);
+    const event = identityEvent("channel");
+    const dispose = transport.on(event, (_payload, context) => context);
+    const owner = { id: 91, isDestroyed: () => false } as HandlerContext["sender"];
+    const foreign = { id: 91, isDestroyed: () => false } as HandlerContext["sender"];
+    const other = activation({ name: "plugin-b", pluginInstanceId: "instance-b", key: "other-key" });
+    const otherOwner = { id: 93, isDestroyed: () => false } as HandlerContext["sender"];
+    const active = new Map<string, PluginActivationIdentity>([[current.name, current], [other.name, other]]);
+    const recipients = new Map<HandlerContext["sender"], PluginActivationIdentity>([[owner, current], [otherOwner, other]]);
+    keyManager.resolveIdentity.mockImplementation(key => [...active.values()].find(identity => identity.key === key));
+    keyManager.resolveCurrentIdentity.mockImplementation(name => active.get(name));
+    keyManager.resolveSenderIdentity.mockImplementation((sender: HandlerContext["sender"]) => recipients.get(sender));
+    try {
+      const handle = handlers.get(`plugin:${event.toEventName()}`);
+      if (!handle) throw new Error("Missing plugin identity handler");
+      const context = await handle({
+        data: {}, plugin: current.name, pluginIdentity: { ...current },
+        header: { event: { sender: owner }, uniqueKey: current.key },
+      }) as HandlerContext;
+      const otherContext = await handle({
+        data: {}, plugin: other.name, pluginIdentity: { ...other },
+        header: { event: { sender: otherOwner }, uniqueKey: other.key },
+      }) as HandlerContext;
+      const output = { id: "terminal-private", data: "secret output" };
+      expect(transport.notifyTo(owner, TerminalEvents.session.data, output, context.plugin)).toBe(true);
+      expect(channel.broadcastTo).toHaveBeenCalledWith(
+        { webContents: owner }, "plugin", TerminalEvents.session.data.toEventName(), output, current,
+      );
+      expect(transport.notifyTo(foreign, TerminalEvents.session.data, output, context.plugin)).toBe(false);
+      expect(transport.notifyTo(owner, TerminalEvents.session.data, output, {
+        ...context.plugin!, identity: { ...context.plugin!.identity! },
+      })).toBe(false);
+      current.activationGeneration += 1;
+      expect(transport.notifyTo(owner, TerminalEvents.session.data, output, context.plugin)).toBe(false);
+      current.activationGeneration -= 1;
+      current.pluginInstanceId = "replacement-instance";
+      expect(transport.notifyTo(owner, TerminalEvents.session.data, output, context.plugin)).toBe(false);
+      current.pluginInstanceId = "instance-a";
+      current.key = "rotated-key";
+      expect(transport.notifyTo(owner, TerminalEvents.session.data, output, context.plugin)).toBe(false);
+      current.key = "current-key";
+      recipients.delete(owner);
+      expect(transport.notifyTo(owner, TerminalEvents.session.data, output, context.plugin)).toBe(false);
+      recipients.set(owner, current);
+      active.delete(current.name);
+      expect(transport.notifyTo(owner, TerminalEvents.session.data, output, context.plugin)).toBe(false);
+      const otherOutput = { id: "other-terminal", data: "other process output" };
+      expect(transport.notifyTo(otherOwner, TerminalEvents.session.data, otherOutput, otherContext.plugin)).toBe(true);
+      expect(channel.broadcastTo).toHaveBeenCalledWith(
+        { webContents: otherOwner }, "plugin", TerminalEvents.session.data.toEventName(), otherOutput, other,
+      );
+      expect(channel.broadcastTo).toHaveBeenCalledTimes(2);
+      expect(channel.broadcastPlugin).not.toHaveBeenCalled();
+      expect(channel.sendTo).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it("drops host notifications after sender destruction and refuses the host lane for a plugin recipient", () => {
+    const { transport, channel, keyManager } = createHarness();
+    let destroyed = false;
+    const owner = { id: 92, isDestroyed: () => destroyed } as HandlerContext["sender"];
+    const exit = { id: "terminal-private", exitCode: 0 };
+    expect(transport.notifyTo(owner, TerminalEvents.session.exit, exit)).toBe(true);
+    expect(channel.broadcastTo).toHaveBeenCalledWith(
+      { webContents: owner }, "main", TerminalEvents.session.exit.toEventName(), exit, undefined,
+    );
+    destroyed = true;
+    expect(transport.notifyTo(owner, TerminalEvents.session.exit, exit)).toBe(false);
+    destroyed = false;
+    keyManager.resolveSenderIdentity.mockReturnValue(activation());
+    expect(transport.notifyTo(owner, TerminalEvents.session.exit, exit)).toBe(false);
+    expect(channel.broadcastTo).toHaveBeenCalledTimes(1);
   });
 });

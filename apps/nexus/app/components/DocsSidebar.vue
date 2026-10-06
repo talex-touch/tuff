@@ -360,6 +360,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/search-panel',
     '/docs/dev/components/markdown-editor',
     '/docs/dev/components/code-editor',
+    '/docs/dev/components/terminal',
     '/docs/dev/components/virtual-list',
     '/docs/dev/components/version-capsule',
     // pro — Effects

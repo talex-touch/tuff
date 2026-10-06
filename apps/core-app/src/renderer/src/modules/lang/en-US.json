@@ -3653,7 +3653,12 @@
     "accept": "Accept"
   },
   "terminal": {
-    "title": "TERMINAL"
+    "title": "TERMINAL",
+    "start": "Run command",
+    "stop": "Stop",
+    "failed": "Could not start the terminal command",
+    "exit": "Process exited ({code})",
+    "closed": "closed"
   },
   "app": {
     "title": "Tuff"

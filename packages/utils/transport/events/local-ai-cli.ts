@@ -14,7 +14,6 @@ export const LOCAL_AI_CLI_LIMITS = Object.freeze({
   contextItems: 3,
   contextChars: 16_384,
   terminalInputChars: 16_384,
-  terminalChunkChars: 65_536,
   terminalCols: 400,
   terminalRows: 200,
 })
@@ -172,6 +171,8 @@ export interface LocalAiCliTerminalCreateRequest {
   rows: number
   projectId?: string
   sessionRef?: string
+  /** SDK-issued internal cancellation correlation, never caller ownership. */
+  creationToken?: string
 }
 
 export interface LocalAiCliTerminalCreateResult {
@@ -189,9 +190,9 @@ export interface LocalAiCliTerminalResizeRequest {
   rows: number
 }
 
-export interface LocalAiCliTerminalKillRequest {
-  sessionId: string
-}
+export type LocalAiCliTerminalKillRequest =
+  | { sessionId: string, creationToken?: never }
+  | { creationToken: string, sessionId?: never }
 
 export interface LocalAiCliTerminalData {
   sessionId: string
@@ -200,7 +201,7 @@ export interface LocalAiCliTerminalData {
 
 export interface LocalAiCliTerminalExit {
   sessionId: string
-  exitCode: number
+  exitCode: number | null
   signal?: number
 }
 
@@ -314,6 +315,9 @@ export function normalizeLocalAiCliTerminalCreateRequest(
   }
   const projectId = normalizeLocalAiCliProjectId(value.projectId)
   const sessionRef = normalizeLocalAiCliSessionRef(value.sessionRef)
+  if (value.creationToken !== undefined && typeof value.creationToken !== 'string') {
+    throw new Error('LOCAL_AI_CLI_REQUEST_INVALID')
+  }
   return {
     provider: value.provider as LocalAiCliProviderId,
     access: value.access as LocalAiCliAccess,
@@ -321,6 +325,7 @@ export function normalizeLocalAiCliTerminalCreateRequest(
     rows: typeof value.rows === 'number' ? value.rows : 0,
     ...(projectId ? { projectId } : {}),
     ...(sessionRef ? { sessionRef } : {}),
+    ...(typeof value.creationToken === 'string' ? { creationToken: value.creationToken } : {}),
   }
 }
 

@@ -1,5 +1,6 @@
 import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
+import type { TuffEvent } from '@talex-touch/utils/transport'
 import type {
   LocalAiCliErrorCode,
   LocalAiCliPasteBackRequest,
@@ -11,16 +12,19 @@ import type {
   LocalAiCliStatus,
   LocalAiCliStatusRequest,
   LocalAiCliTaskChunk,
-  LocalAiCliTerminalCreateRequest,
-  LocalAiCliTerminalExit
+  LocalAiCliTerminalCreateRequest
 } from '@talex-touch/utils/transport/events/local-ai-cli'
-import type { HandlerContext, StreamContext } from '@talex-touch/utils/transport/main'
+import type {
+  HandlerContext,
+  ITuffTransportMain,
+  StreamContext
+} from '@talex-touch/utils/transport/main'
 import type { WebContents } from 'electron'
-import type { IPty } from 'node-pty'
 import type { ChildProcess } from 'node:child_process'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { PiEntriesSnapshot, PiSessionFileCapture } from './pi-native-session'
 import type { StoredLocalAiCliSession } from './session-store'
+import type { PtySessionOwner } from '../terminal/pty-session-core'
 import { randomUUID } from 'node:crypto'
 import { mkdir, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -36,7 +40,7 @@ import {
   normalizeLocalAiCliTerminalCreateRequest
 } from '@talex-touch/utils/transport/events/local-ai-cli'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { BrowserWindow, clipboard, dialog } from 'electron'
+import { clipboard, dialog } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
 import {
@@ -52,6 +56,7 @@ import { getProject, touchProject } from '../project/project-store'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { activeAppService } from '../system/active-app'
 import { sendPlatformShortcut } from '../system/desktop-shortcut'
+import { ptySessionCore, watchPtyOwner } from '../terminal/pty-session-core'
 import { LocalAiCliApprovalBroker } from './approval-broker'
 import {
   refreshLocalAiCliExecutables,
@@ -94,23 +99,13 @@ const DEFAULT_ROWS = 30
 const LOCAL_AI_CLI_SHORTCUT_ID = 'local-ai-cli.quick-open'
 const LOCAL_AI_CLI_SHORTCUT_OWNER = 'core-app:local-ai-cli'
 
-type MainTransport = ReturnType<typeof getTuffTransportMain>
+type MainTransport = ITuffTransportMain
 
 interface TaskProcessSession {
   process?: ChildProcess
   abortController?: AbortController
   releaseLease?: () => void
   done?: Promise<void>
-}
-
-interface TerminalSession {
-  ownerId: number
-  process: IPty
-  dataSubscription: { dispose: () => void }
-  exitSubscription: { dispose: () => void }
-  sender: WebContents
-  senderDestroyed: () => void
-  releaseLease?: () => void
 }
 
 interface LocalAiCliExecution {
@@ -304,7 +299,7 @@ export class LocalAiCliModule extends BaseModule {
   private readonly disposers: Array<() => void> = []
   private readonly approvals = new LocalAiCliApprovalBroker()
   private readonly taskProcesses = new Map<string, TaskProcessSession>()
-  private readonly terminalSessions = new Map<string, TerminalSession>()
+  private terminalLifecycle = new AbortController()
   private readonly nativeSessionLeases = nativeSessionLeaseRegistry
   private workspacePath = ''
   private pendingPanelReturnUntil = 0
@@ -325,6 +320,7 @@ export class LocalAiCliModule extends BaseModule {
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)
+    this.terminalLifecycle = new AbortController()
     this.destinationRuntime = runtime.app
     this.workspacePath = join(this.requireDirPath(ctx), 'workspace')
     await mkdir(this.workspacePath, { recursive: true })
@@ -484,18 +480,28 @@ export class LocalAiCliModule extends BaseModule {
         return await this.createTerminal(payload, ownerId, context.sender as WebContents)
       }),
       transport.on(LocalAiCliEvents.terminal.write, (payload, context) => {
-        this.writeTerminal(payload?.sessionId, payload?.data, assertHostContext(context))
+        this.writeTerminal(
+          payload?.sessionId,
+          payload?.data,
+          assertHostContext(context),
+          context.sender as WebContents
+        )
       }),
       transport.on(LocalAiCliEvents.terminal.resize, (payload, context) => {
         this.resizeTerminal(
           payload?.sessionId,
           payload?.cols,
           payload?.rows,
-          assertHostContext(context)
+          assertHostContext(context),
+          context.sender as WebContents
         )
       }),
       transport.on(LocalAiCliEvents.terminal.kill, (payload, context) => {
-        this.killTerminal(payload?.sessionId, assertHostContext(context))
+        const ownerId = assertHostContext(context)
+        const sender = context.sender as WebContents
+        return payload?.sessionId !== undefined
+          ? this.killTerminal(payload.sessionId, ownerId, sender)
+          : this.cancelTerminalCreation(payload?.creationToken, ownerId, sender)
       })
     )
   }
@@ -1473,124 +1479,160 @@ export class LocalAiCliModule extends BaseModule {
     ownerId: number,
     sender: WebContents
   ): Promise<{ sessionId: string }> {
+    const owner = this.terminalOwner(ownerId, sender)
     const request = normalizeLocalAiCliTerminalCreateRequest(rawRequest)
-    const provider = getLocalAiCliProviderDefinition(request.provider).id
-    const status = await this.requireRunnableProvider(provider, request.access)
-    const execution = await this.resolveLocalAiCliExecution(request)
-    if (request.access === 'workspace-write' && !status.capabilities.terminalWriteApproval) {
-      throw new Error('LOCAL_AI_CLI_WRITE_APPROVAL_UNAVAILABLE')
-    }
-    if (execution.pointer && !status.capabilities.terminalResume) {
-      throw new Error('PROVIDER_RESUME_UNSUPPORTED')
-    }
-    const releaseLease = execution.pointer ? this.acquirePointerLease(execution.pointer) : undefined
-    const pty = await import('node-pty')
-    const sessionId = randomUUID()
-    let process: IPty
+    const creation = ptySessionCore.reserveCreate(
+      owner,
+      request.creationToken ?? randomUUID(),
+      this.terminalLifecycle.signal
+    )
+    const watcher = watchPtyOwner(sender, creation.signal)
+    let releaseLease: (() => void) | undefined
     try {
-      process = pty.spawn(
-        status.executablePath!,
-        terminalArgs(provider, request.access, execution.pointer?.nativeSessionId),
-        {
-          name: 'xterm-256color',
-          cols: terminalSize(request.cols, DEFAULT_COLS, LOCAL_AI_CLI_LIMITS.terminalCols),
-          rows: terminalSize(request.rows, DEFAULT_ROWS, LOCAL_AI_CLI_LIMITS.terminalRows),
-          cwd: execution.cwd,
-          env: withExecutableDirOnPath(sanitizedChildEnv(), status.executablePath!)
+      const provider = getLocalAiCliProviderDefinition(request.provider).id
+      const status = await this.requireRunnableProvider(provider, request.access)
+      if (watcher.signal.aborted) throw new Error('TERMINAL_CREATE_CANCELLED')
+      const execution = await this.resolveLocalAiCliExecution(request)
+      if (request.access === 'workspace-write' && !status.capabilities.terminalWriteApproval) {
+        throw new Error('LOCAL_AI_CLI_WRITE_APPROVAL_UNAVAILABLE')
+      }
+      if (execution.pointer && !status.capabilities.terminalResume) {
+        throw new Error('PROVIDER_RESUME_UNSUPPORTED')
+      }
+      if (watcher.signal.aborted) throw new Error('TERMINAL_CREATE_CANCELLED')
+      if (execution.pointer) {
+        const release = this.acquirePointerLease(execution.pointer)
+        let released = false
+        releaseLease = () => {
+          if (released) return
+          released = true
+          release()
         }
-      )
+        ptySessionCore.setCreationDisposer(creation, releaseLease)
+      }
+      const { id } = await ptySessionCore.create({
+        owner,
+        command: status.executablePath!,
+        args: terminalArgs(provider, request.access, execution.pointer?.nativeSessionId),
+        cols: terminalSize(request.cols, DEFAULT_COLS, LOCAL_AI_CLI_LIMITS.terminalCols),
+        rows: terminalSize(request.rows, DEFAULT_ROWS, LOCAL_AI_CLI_LIMITS.terminalRows),
+        cwd: execution.cwd,
+        env: sanitizedChildEnv(),
+        signal: watcher.signal,
+        creation,
+        onDispose: releaseLease,
+        onData: (sessionId, data) =>
+          this.sendTerminalEvent(sender, LocalAiCliEvents.terminal.data, {
+            sessionId,
+            data
+          }),
+        onExit: (sessionId, exit) =>
+          this.sendTerminalEvent(sender, LocalAiCliEvents.terminal.exit, {
+            sessionId,
+            ...exit
+          })
+      })
+      if (execution.pointer) await this.touchNativeSession(execution.pointer)
+      return { sessionId: id }
     } catch (error) {
+      await ptySessionCore.cancelCreation(creation.token, owner)
       releaseLease?.()
       throw error
+    } finally {
+      watcher.dispose()
+      ptySessionCore.discardCreate(creation)
     }
-
-    const targetWindowId = BrowserWindow.fromWebContents(sender)?.id
-    const dataSubscription = process.onData((data: string) => {
-      if (sender.isDestroyed() || !this.transport || targetWindowId === undefined) return
-      this.transport.broadcastToWindow(targetWindowId, LocalAiCliEvents.terminal.data, {
-        sessionId,
-        data: data.slice(0, LOCAL_AI_CLI_LIMITS.terminalChunkChars)
-      })
-    })
-    const exitSubscription = process.onExit(
-      ({ exitCode, signal }: { exitCode: number; signal?: number }) => {
-        this.disposeTerminalSession(sessionId)
-        if (sender.isDestroyed() || !this.transport || targetWindowId === undefined) return
-        const payload: LocalAiCliTerminalExit = {
-          sessionId,
-          exitCode,
-          ...(typeof signal === 'number' ? { signal } : {})
-        }
-        this.transport.broadcastToWindow(targetWindowId, LocalAiCliEvents.terminal.exit, payload)
-      }
-    )
-    const senderDestroyed = (): void => {
-      process.kill()
-      this.disposeTerminalSession(sessionId)
-    }
-    sender.once('destroyed', senderDestroyed)
-    this.terminalSessions.set(sessionId, {
-      ownerId,
-      process,
-      dataSubscription,
-      exitSubscription,
-      sender,
-      senderDestroyed,
-      releaseLease
-    })
-    if (execution.pointer) {
-      try {
-        await this.touchNativeSession(execution.pointer)
-      } catch (error) {
-        process.kill()
-        this.disposeTerminalSession(sessionId)
-        throw error
-      }
-    }
-    return { sessionId }
   }
 
-  private requireTerminalSession(sessionId: unknown, ownerId: number): TerminalSession {
+  private terminalOwner(ownerId: number, sender: WebContents): PtySessionOwner {
+    if (!sender || sender.id !== ownerId || sender.isDestroyed()) {
+      throw new Error('LOCAL_AI_CLI_HOST_ONLY')
+    }
+    return { scope: 'local-ai-cli', sender }
+  }
+
+  private sendTerminalEvent<T extends { sessionId: string }>(
+    sender: WebContents,
+    event: TuffEvent<T, void>,
+    payload: T
+  ): void {
+    if (sender.isDestroyed() || !this.transport) return
+    try {
+      this.transport.notifyTo(sender, event, payload)
+    } catch {
+      localAiCliLog.debug('Terminal delivery failed', { meta: { sessionId: payload.sessionId } })
+    }
+  }
+
+  private writeTerminal(
+    sessionId: unknown,
+    data: unknown,
+    ownerId: number,
+    sender: WebContents
+  ): void {
     if (typeof sessionId !== 'string') throw new Error('LOCAL_AI_CLI_TERMINAL_INVALID')
-    const session = this.terminalSessions.get(sessionId)
-    if (!session || session.ownerId !== ownerId) {
-      throw new Error('LOCAL_AI_CLI_TERMINAL_NOT_FOUND')
-    }
-    return session
-  }
-
-  private writeTerminal(sessionId: unknown, data: unknown, ownerId: number): void {
-    const session = this.requireTerminalSession(sessionId, ownerId)
     if (typeof data !== 'string' || data.length > LOCAL_AI_CLI_LIMITS.terminalInputChars) {
       throw new Error('LOCAL_AI_CLI_TERMINAL_INPUT_INVALID')
     }
-    session.process.write(data)
-  }
-
-  private resizeTerminal(sessionId: unknown, cols: unknown, rows: unknown, ownerId: number): void {
-    const session = this.requireTerminalSession(sessionId, ownerId)
-    session.process.resize(
-      terminalSize(cols, DEFAULT_COLS, LOCAL_AI_CLI_LIMITS.terminalCols),
-      terminalSize(rows, DEFAULT_ROWS, LOCAL_AI_CLI_LIMITS.terminalRows)
+    this.controlTerminal(() =>
+      ptySessionCore.write(sessionId, this.terminalOwner(ownerId, sender), data)
     )
   }
 
-  private killTerminal(sessionId: unknown, ownerId: number): void {
-    const session = this.requireTerminalSession(sessionId, ownerId)
-    session.process.kill()
-    this.disposeTerminalSession(sessionId as string)
+  private resizeTerminal(
+    sessionId: unknown,
+    cols: unknown,
+    rows: unknown,
+    ownerId: number,
+    sender: WebContents
+  ): void {
+    if (typeof sessionId !== 'string') throw new Error('LOCAL_AI_CLI_TERMINAL_INVALID')
+    this.controlTerminal(() =>
+      ptySessionCore.resize(
+        sessionId,
+        this.terminalOwner(ownerId, sender),
+        terminalSize(cols, DEFAULT_COLS, LOCAL_AI_CLI_LIMITS.terminalCols),
+        terminalSize(rows, DEFAULT_ROWS, LOCAL_AI_CLI_LIMITS.terminalRows)
+      )
+    )
   }
 
-  private disposeTerminalSession(sessionId: string): void {
-    const session = this.terminalSessions.get(sessionId)
-    if (!session) return
-    session.dataSubscription.dispose()
-    session.sender.removeListener('destroyed', session.senderDestroyed)
-    session.releaseLease?.()
-    this.terminalSessions.delete(sessionId)
+  private async killTerminal(
+    sessionId: unknown,
+    ownerId: number,
+    sender: WebContents
+  ): Promise<void> {
+    if (typeof sessionId !== 'string') throw new Error('LOCAL_AI_CLI_TERMINAL_INVALID')
+    if (!(await ptySessionCore.close(sessionId, this.terminalOwner(ownerId, sender)))) {
+      throw new Error('LOCAL_AI_CLI_TERMINAL_NOT_FOUND')
+    }
+  }
+
+  private async cancelTerminalCreation(
+    token: unknown,
+    ownerId: number,
+    sender: WebContents
+  ): Promise<void> {
+    if (typeof token !== 'string') throw new Error('LOCAL_AI_CLI_TERMINAL_INVALID')
+    if (!(await ptySessionCore.cancelCreation(token, this.terminalOwner(ownerId, sender)))) {
+      throw new Error('LOCAL_AI_CLI_TERMINAL_NOT_FOUND')
+    }
+  }
+
+  private controlTerminal(run: () => void): void {
+    try {
+      run()
+    } catch (error) {
+      if (error instanceof Error && error.message === 'TERMINAL_SESSION_NOT_FOUND') {
+        throw new Error('LOCAL_AI_CLI_TERMINAL_NOT_FOUND')
+      }
+      throw error
+    }
   }
 
   async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
+    this.terminalLifecycle.abort()
+    await ptySessionCore.closeScope('local-ai-cli')
     shortcutModule.unregisterMainShortcut(LOCAL_AI_CLI_SHORTCUT_ID)
     this.quickOpenShortcutRegistered = false
     this.lastMasterSwitch = null
@@ -1606,10 +1648,7 @@ export class LocalAiCliModule extends BaseModule {
     }
     await Promise.allSettled(taskCompletions)
     this.taskProcesses.clear()
-    for (const [sessionId, session] of this.terminalSessions) {
-      session.process.kill()
-      this.disposeTerminalSession(sessionId)
-    }
+    // PTY listeners, sender watches and native leases have already converged in the shared core.
     setLocalAiCliWorkspaceRoot(null)
     this.transport = null
     this.destinationRuntime = null

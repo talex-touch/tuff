@@ -3653,7 +3653,12 @@
     "accept": "接受"
   },
   "terminal": {
-    "title": "终端"
+    "title": "终端",
+    "start": "执行命令",
+    "stop": "停止",
+    "failed": "无法启动终端命令",
+    "exit": "进程已退出（{code}）",
+    "closed": "已关闭"
   },
   "app": {
     "title": "Tuff"

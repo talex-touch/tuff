@@ -1,3 +1,5 @@
+import type { PluginActivationIdentity } from './types'
+
 export enum ChannelType {
   MAIN = "main",
   PLUGIN = "plugin",
@@ -51,6 +53,7 @@ export interface ITouchChannel {
     type: ChannelType,
     eventName: string,
     arg?: any,
+    plugin?: PluginActivationIdentity,
   ) => void;
   broadcastPlugin: (pluginName: string, eventName: string, arg?: any) => void;
   requestKey: (name: string) => string;
