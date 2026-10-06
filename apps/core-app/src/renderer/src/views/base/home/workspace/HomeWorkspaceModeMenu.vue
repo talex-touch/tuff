@@ -4,9 +4,10 @@ import type { AiAgentProfile } from '@talex-touch/utils/types/ai-orchestrator'
 import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ComposerChip from '../composer/ComposerChip.vue'
+import { useEscapeReturnsFocus } from '../escape-returns-focus'
 import { focusWhenShown } from '../focus-when-shown'
 
 /**
@@ -48,6 +49,7 @@ const open = ref(false)
 const view = ref<'main' | 'manage'>('main')
 const triggerWrapRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
+const retryRef = ref<HTMLButtonElement | null>(null)
 let restoreFocusOnClose = false
 
 const selectedProfile = computed(() =>
@@ -117,48 +119,50 @@ function toggleProfile(profile: AiAgentProfile, enabled: boolean): void {
   emit('toggle-profile', profile, enabled)
 }
 
-/**
- * Escape returns focus to the chip when it was in the menu, or had already fallen to the page — a
- * press on a locked row lands on the group behind it (`[aria-disabled]` takes no pointer), which
- * takes focus. Focus the user moved elsewhere stays there. The anchor closes on Escape at the
- * document, wherever focus is, so this listens there too, while the menu is open.
- */
-function onDocumentKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape') return
-  const active = document.activeElement
-  if (
-    !active ||
-    active === document.body ||
-    panelRef.value?.contains(active) ||
-    triggerWrapRef.value?.contains(active)
-  ) {
+/** The current choice, or the first row that takes a pick: where focus starts, and where it lands. */
+function currentRow(): HTMLElement | null | undefined {
+  return (
+    panelRef.value?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]') ??
+    panelRef.value?.querySelector<HTMLElement>('button:not([aria-disabled="true"])')
+  )
+}
+
+// A press on a locked row lands on the group behind it (`[aria-disabled]` takes no pointer), which
+// takes focus: Escape still returns it to the chip.
+useEscapeReturnsFocus(
+  open,
+  () => [panelRef.value, triggerWrapRef.value],
+  () => {
     restoreFocusOnClose = true
   }
-}
+)
+
+/**
+ * The retry key leaves with the error it answers. If it held focus, focus moves to the current row
+ * once the profiles are in, instead of falling to the page out of reach of the arrows.
+ */
+watch(
+  () => props.profilesError && props.profiles.length === 0,
+  (failed, wasFailed) => {
+    if (!wasFailed || failed || !retryRef.value || document.activeElement !== retryRef.value) return
+    void nextTick(() => currentRow()?.focus())
+  }
+)
 
 watch(open, (isOpen) => {
   if (isOpen) {
     restoreFocusOnClose = false
     view.value = 'main'
-    document.addEventListener('keydown', onDocumentKeydown, true)
     // Read again on every open: a profile enabled elsewhere must not need a restart to appear.
     emit('load-profiles')
     // On the current choice, so the arrows start from it.
-    focusWhenShown(
-      () =>
-        panelRef.value?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]') ??
-        panelRef.value?.querySelector<HTMLElement>('button:not([aria-disabled="true"])'),
-      () => open.value
-    )
+    focusWhenShown(currentRow, () => open.value)
     return
   }
-  document.removeEventListener('keydown', onDocumentKeydown, true)
   if (restoreFocusOnClose) {
     void nextTick(() => triggerWrapRef.value?.querySelector('button')?.focus())
   }
 })
-
-onBeforeUnmount(() => document.removeEventListener('keydown', onDocumentKeydown, true))
 </script>
 
 <template>
@@ -253,7 +257,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onDocumentKeydown,
           role="alert"
         >
           <span>{{ t('home.workspace.profile.loadFailed') }}</span>
-          <button class="HomeWorkspaceModeMenu-Link" type="button" @click="emit('load-profiles')">
+          <button
+            ref="retryRef"
+            class="HomeWorkspaceModeMenu-Link"
+            type="button"
+            @click="emit('load-profiles')"
+          >
             {{ t('home.workspace.retry') }}
           </button>
         </div>

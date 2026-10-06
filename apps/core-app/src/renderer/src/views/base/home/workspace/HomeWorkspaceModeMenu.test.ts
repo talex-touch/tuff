@@ -254,6 +254,24 @@ describe('HomeWorkspaceModeMenu', () => {
     expect(document.activeElement).toBe(elsewhere)
   })
 
+  it('hands focus to the current row when the retry key leaves with the error', async () => {
+    const menu = await openMenu({ profiles: [], profilesError: true })
+    const retry = menu.get('.HomeWorkspaceModeMenu-Link')
+    ;(retry.element as HTMLElement).focus()
+    await retry.trigger('click')
+    expect(menu.emitted('load-profiles')).toHaveLength(2)
+
+    // A retry that fails again keeps the key, and focus on it.
+    await menu.setProps({ profilesLoading: true })
+    await menu.setProps({ profilesLoading: false })
+    expect(document.activeElement).toBe(retry.element)
+
+    await menu.setProps({ profiles: [COORDINATOR], profilesError: false })
+    await nextTick()
+    expect(menu.find('.HomeWorkspaceModeMenu-Link').exists()).toBe(false)
+    expect(document.activeElement).toBe(rowNamed(menu, 'home.workspace.mode.chat').element)
+  })
+
   it('shows a skeleton row on the first read and the reason when there is nothing to run', async () => {
     const loading = await openMenu({ profiles: [], profilesLoading: true })
     expect(loading.find('.HomeWorkspaceModeMenu-Skeleton').exists()).toBe(true)

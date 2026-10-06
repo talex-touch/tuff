@@ -2,7 +2,8 @@
 /**
  * The permission chip and its menu (`home-composer` › 权限弹层): three rows with no second line,
  * 「完全允许」 confirmed in its own row by a second activation, and the reset row under 「自动审阅」.
- * TxDropdownMenu is stubbed to an in-place panel, as in the model menu's suite.
+ * TxDropdownMenu is stubbed to an in-place panel that, like the anchor, closes on Escape at the
+ * document.
  */
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
@@ -12,13 +13,18 @@ import HomePermissionMenu from './HomePermissionMenu.vue'
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 vi.mock('@talex-touch/tuffex/dropdown-menu', async () => {
-  const { defineComponent, h } = await import('vue')
+  const { defineComponent, h, onBeforeUnmount, onMounted } = await import('vue')
   return {
     TxDropdownMenu: defineComponent({
       name: 'TxDropdownMenu',
       props: { modelValue: { type: Boolean, default: false } },
       emits: ['update:modelValue'],
       setup(props, { slots, emit }) {
+        const onKeydown = (event: KeyboardEvent): void => {
+          if (event.key === 'Escape' && props.modelValue) emit('update:modelValue', false)
+        }
+        onMounted(() => document.addEventListener('keydown', onKeydown))
+        onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
         return () =>
           h('div', { class: 'dropdown-stub' }, [
             h(
@@ -145,5 +151,31 @@ describe('HomePermissionMenu', () => {
 
     expect(menu.emitted('reset')).toHaveLength(1)
     expect(panelOpen(menu)).toBe(false)
+  })
+
+  it('returns focus to the chip when Escape closes the menu, even after focus fell to the page', async () => {
+    const escape = async (): Promise<void> => {
+      ;(document.activeElement ?? document.body).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+      )
+      await nextTick()
+      await nextTick()
+    }
+    const menu = await openMenu('review')
+    await nextTick()
+    expect(menu.get('.dropdown-stub__panel').element.contains(document.activeElement)).toBe(true)
+    await escape()
+    expect(panelOpen(menu)).toBe(false)
+    expect(document.activeElement).toBe(menu.get('.ComposerChip').element)
+
+    // A press on a part of the panel that takes no focus leaves focus on the page.
+    await menu.get('.ComposerChip').trigger('click')
+    await nextTick()
+    await nextTick()
+    ;(document.activeElement as HTMLElement).blur()
+    expect(document.activeElement).toBe(document.body)
+    await escape()
+    expect(panelOpen(menu)).toBe(false)
+    expect(document.activeElement).toBe(menu.get('.ComposerChip').element)
   })
 })

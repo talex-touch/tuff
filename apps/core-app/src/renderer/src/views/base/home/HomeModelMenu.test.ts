@@ -698,6 +698,34 @@ describe('choosing', () => {
     expect(panel(menu).exists()).toBe(false)
     expect(document.activeElement).toBe(menu.find('.pill').element)
   })
+
+  it('still returns focus to the pill when Escape comes after focus fell to the page', async () => {
+    const menu = await openMenu()
+    ;(document.activeElement as HTMLElement).blur()
+    expect(document.activeElement).toBe(document.body)
+
+    key(document.body, 'Escape')
+    await menu.find('.pill').trigger('click')
+    await nextTick()
+
+    expect(panel(menu).exists()).toBe(false)
+    expect(document.activeElement).toBe(menu.find('.pill').element)
+  })
+
+  it('puts focus back in the search field when its clear key empties it', async () => {
+    const menu = await openMenu()
+    await search(menu, 'qwen')
+    const clear = menu.get('.HomeModelMenu-Search .tx-input__clear')
+    ;(clear.element as HTMLElement).focus()
+
+    // The key leaves with the query; focus must not leave with it.
+    await clear.trigger('click')
+    await nextTick()
+
+    const input = menu.get('.HomeModelMenu-Search input').element as HTMLInputElement
+    expect(input.value).toBe('')
+    expect(document.activeElement).toBe(input)
+  })
 })
 
 describe('reasoning effort row', () => {

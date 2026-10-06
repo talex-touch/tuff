@@ -32,6 +32,7 @@ import { useModelOptions } from '~/modules/conversation/useModelOptions'
 import { useRecentModels } from '~/modules/conversation/useRecentModels'
 import { modelFamilyIconFor } from '~/modules/intelligence/model-family-icons'
 import { providerIconForId } from '~/modules/intelligence/provider-icons'
+import { useEscapeReturnsFocus } from './escape-returns-focus'
 import { focusWhenShown } from './focus-when-shown'
 
 /**
@@ -397,6 +398,11 @@ function onSearchKeydown(event: KeyboardEvent): void {
   focusColumn('list', 'first')
 }
 
+/** The clear key takes itself away with the query: focus goes back to the field, not to the page. */
+function onSearchCleared(): void {
+  searchInput()?.focus()
+}
+
 function onRailKeydown(event: KeyboardEvent): void {
   const from = event.target as HTMLElement
   const steps: Record<string, number | 'start' | 'end'> = {
@@ -431,15 +437,18 @@ function onListKeydown(event: KeyboardEvent): void {
   }
 }
 
-/** The anchor closes on Escape by itself; this only marks that focus should return to the pill. */
-function onPanelKeydown(event: KeyboardEvent): void {
-  handsOn = true
-  if (event.key === 'Escape') restoreFocusOnClose = true
-}
-
+/** A key, a press or a wheel in the panel: the user has taken over this opening (`handsOn`). */
 function markHandsOn(): void {
   handsOn = true
 }
+
+useEscapeReturnsFocus(
+  open,
+  () => [panelRef.value, triggerWrapRef.value],
+  () => {
+    restoreFocusOnClose = true
+  }
+)
 
 /** Roving tabindex: the selected row, or the first one when none is selected, takes Tab. */
 function listTabIndex(choice: ModelChoice): 0 | -1 {
@@ -565,7 +574,7 @@ onBeforeUnmount(() => {
       class="HomeModelMenu"
       role="group"
       :aria-label="t('home.model')"
-      @keydown="onPanelKeydown"
+      @keydown="markHandsOn"
       @pointerdown="markHandsOn"
       @wheel.passive="markHandsOn"
     >
@@ -576,6 +585,7 @@ onBeforeUnmount(() => {
             :placeholder="t('home.modelSearch')"
             :aria-label="t('home.modelSearch')"
             clearable
+            @clear="onSearchCleared"
             @keydown="onSearchKeydown"
           />
         </div>

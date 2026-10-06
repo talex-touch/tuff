@@ -4,6 +4,7 @@ import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ComposerChip from './composer/ComposerChip.vue'
+import { useEscapeReturnsFocus } from './escape-returns-focus'
 import { focusWhenShown } from './focus-when-shown'
 
 /**
@@ -11,7 +12,8 @@ import { focusWhenShown } from './focus-when-shown'
  * checked — with each mode's sentence as the row's hover title instead of a second line
  * (`home-composer` › 权限弹层). The mode itself stays the caller's (an `appSetting` slice the
  * settings layer owns). Anchoring, outside-click, Escape and arrow traversal come from
- * TxDropdownMenu; opening focus is placed here, on the current mode.
+ * TxDropdownMenu; where focus starts (the current mode) and whether it returns to the chip are
+ * decided here.
  */
 const props = defineProps<{ mode: AgentToolsMode }>()
 
@@ -71,10 +73,13 @@ function requestReset(): void {
   emit('reset')
 }
 
-/** The anchor closes on Escape by itself; this only marks that focus should return to the chip. */
-function onPanelKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') restoreFocusOnClose = true
-}
+useEscapeReturnsFocus(
+  open,
+  () => [panelRef.value, triggerWrapRef.value],
+  () => {
+    restoreFocusOnClose = true
+  }
+)
 
 watch(open, (isOpen) => {
   // Every open starts plain: an abandoned confirmation is not a pending choice.
@@ -124,7 +129,7 @@ watch(open, (isOpen) => {
       </span>
     </template>
 
-    <div ref="panelRef" class="HomePermissionMenu" @keydown="onPanelKeydown">
+    <div ref="panelRef" class="HomePermissionMenu">
       <div class="HomePermissionMenu-Options" role="group" :aria-label="t('home.permissionMenu')">
         <button
           v-for="option in PERMISSION_MODES"
