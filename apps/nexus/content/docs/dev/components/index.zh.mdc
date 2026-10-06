@@ -108,7 +108,7 @@ code: |
 | 套件 | 分组 | 组件数 | 引入入口 |
 |------|------|--------|----------|
 | [基础套件](./base-suite.zh.mdc) | 通用 / 表单 / 布局 / 导航 / 数据展示 / 反馈 / 状态占位 | 94 | `@talex-touch/tuffex/base` |
-| [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 27 | `@talex-touch/tuffex/pro` |
+| [进阶套件](./pro-suite.zh.mdc) | 高级交互 / 视觉效果 / 底层原语 | 28 | `@talex-touch/tuffex/pro` |
 | [AI 套件](./ai-suite.zh.mdc) | 对话 / 智能体 / 推理与生成 / 上下文与洞察 | 34 | `@talex-touch/tuffex/ai` |
 | [数据套件](./data-suite.zh.mdc) | 图表 / 可视化 | 10 | `@talex-touch/tuffex/pro`（可视化 + 图表）+ `@talex-touch/tuffex/charts`（图表族入口） |
 | [流程套件](./flow-suite.zh.mdc) | 流程编排 | 1 | `@talex-touch/tuffex/ai` |
@@ -245,6 +245,7 @@ code: |
 - [SearchPanel 内联搜索面板](./search-panel.zh.mdc)
 - [MarkdownEditor Markdown 编辑器](./markdown-editor.zh.mdc)
 - [CodeEditor 代码编辑器](./code-editor.zh.mdc)
+- [Terminal 终端显示](./terminal.zh.mdc)
 - [VirtualList 虚拟列表](./virtual-list.zh.mdc)
 - [VersionCapsule 版本胶囊](./version-capsule.zh.mdc)
 

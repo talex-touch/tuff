@@ -41,6 +41,7 @@
 - [ ] Build Signature：OIDC + RSA 签名信任链增强（`>=2.5.0`）。
 - [ ] Nexus 支付多渠道 provider 抽象与回调联调。
 - [ ] TuffEx：源码包构建/测试/审计与 Nexus 展示门禁持续收敛。
+- [ ] Terminal：后续评估 Ghostty/libghostty Web/WASM 引擎接入 `TxTerminal`，重新核对上游能力、维护风险和终端兼容性。本轮仅交付 xterm.js 与 PTY，不嵌入原生 Ghostty 窗口，不添加 Ghostty 依赖或空实现。
 - [x] `@talex-touch/unplugin-export-plugin` CLI shim 已退场；仅保留 Vite/Webpack/Rollup/Esbuild/Nuxt 集成，`tuff` 为唯一 CLI。
 - [ ] 插件发布：package policy/security scan 与真实 `.tpex` 上传端到端证据。
 

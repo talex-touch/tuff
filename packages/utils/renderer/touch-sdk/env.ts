@@ -1,58 +1,46 @@
 import type { ITuffTransport } from '../../transport/index'
-import { Terminal } from './terminal'
+import type { TerminalSessionHandle } from '../../transport/sdk/domains/terminal'
+import { createTerminalSdk } from '../../transport/sdk/domains/terminal'
 
 export class EnvDetector {
   private static transport: ITuffTransport
 
-  public static init(transport: ITuffTransport) {
+  public static init(transport: ITuffTransport): void {
     this.transport = transport
   }
 
-  private static async checkCommand(
-    command: string,
-    versionArgs: string = '--version',
-    versionRegex: RegExp = /(\d+\.\d+\.\d+)/,
-  ): Promise<string | false> {
+  private static run(command: string, args: string[]): Promise<string | null> {
     if (!this.transport) {
       throw new Error('EnvDetector not initialized. Call EnvDetector.init(transport) first.')
     }
-    return new Promise((resolve) => {
-      const terminal = new Terminal(this.transport)
-      let output = ''
-      let resolved = false
-
-      const resolveOnce = (value: string | false) => {
-        if (!resolved) {
-          resolved = true
-          resolve(value)
-          // For child_process, there's no explicit disconnect/kill needed after it exits.
-          // The process lifecycle is managed by the OS once it's started and exits.
-        }
-      }
-
-      terminal.onData((data) => {
-        output += data
-        const match = output.match(versionRegex)
-        if (match && match[1]) {
-          resolveOnce(match[1])
-        }
-      })
-
-      terminal.onExit(() => {
-        const match = output.match(versionRegex)
-        resolveOnce(match && match[1] ? match[1] : false)
-      })
-
-      // Execute the command with arguments
-      terminal.exec(command, [versionArgs]).catch(() => {
-        resolveOnce(false)
-      })
-
-      // Timeout in case the command hangs or never returns
-      setTimeout(() => {
-        resolveOnce(false)
-      }, 2000)
+    const sdk = createTerminalSdk(this.transport)
+    const { promise, resolve } = Promise.withResolvers<string | null>()
+    const controller = new AbortController()
+    let output = ''
+    let finished = false
+    let creation: Promise<TerminalSessionHandle> | undefined
+    const finish = (value: string | null): void => {
+      if (finished) return
+      finished = true
+      clearTimeout(timeout)
+      // Also covers a creation reply arriving after the detection timeout.
+      controller.abort()
+      const disposed = creation?.then(session => session.close(), () => {}) ?? Promise.resolve()
+      void disposed.then(() => resolve(value), () => resolve(null))
+    }
+    const timeout = setTimeout(() => finish(null), 2000)
+    creation = sdk.create({ command, args }, {
+      signal: controller.signal,
+      onData: data => { output += data },
+      onExit: exit => finish(exit.exitCode === 0 ? output : null),
     })
+    void creation.catch(() => finish(null))
+    return promise
+  }
+
+  private static async checkCommand(command: string): Promise<string | false> {
+    const output = await this.run(command, ['--version'])
+    return output?.match(/(\d+\.\d+\.\d+)/)?.[1] ?? false
   }
 
   static async getNode(): Promise<string | false> {
@@ -68,39 +56,7 @@ export class EnvDetector {
   }
 
   static async getDegit(): Promise<boolean> {
-    if (!this.transport) {
-      throw new Error('EnvDetector not initialized. Call EnvDetector.init(transport) first.')
-    }
-    return new Promise((resolve) => {
-      const terminal = new Terminal(this.transport)
-      let receivedOutput = false
-      let resolved = false
-
-      const resolveOnce = (value: boolean) => {
-        if (!resolved) {
-          resolved = true
-          resolve(value)
-          // For child_process, there's no explicit disconnect/kill needed after it exits.
-        }
-      }
-
-      terminal.onData(() => {
-        receivedOutput = true
-        resolveOnce(true) // As soon as we get any output, we know it's there.
-      })
-
-      terminal.onExit(() => {
-        resolveOnce(receivedOutput)
-      })
-
-      // Execute degit with --help
-      terminal.exec('degit', ['--help']).catch(() => {
-        resolveOnce(false)
-      })
-
-      setTimeout(() => {
-        resolveOnce(receivedOutput)
-      }, 2000)
-    })
+    const output = await this.run('degit', ['--help'])
+    return output !== null && output.trim().length > 0
   }
 }

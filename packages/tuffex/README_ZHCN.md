@@ -85,7 +85,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## 组件梳理
 
-当前源码导出模块总数：**167**。
+当前源码导出模块总数：**168**。
 
 全部模块按三大套件划分，每个套件都有独立的分类入口：
 
@@ -111,7 +111,7 @@ import { TxPromptBar } from '@talex-touch/tuffex/ai'
 
 高级交互、可视化、视觉效果与底层原语，从 `@talex-touch/tuffex/pro` 引入。
 
-- `高级交互 (6)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `virtual-list`, `version-capsule`
+- `高级交互 (7)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `terminal`, `virtual-list`, `version-capsule`
 - `可视化 (5)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`
 - `视觉效果 (23)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `prism-glow`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `fusion-surface`, `liquid`, `flip-overlay`, `image-generation`, `metal-fx`, `voice-beam`
 - `底层原语 (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`

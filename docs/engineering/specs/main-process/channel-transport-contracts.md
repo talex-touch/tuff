@@ -20,12 +20,16 @@ transport.sendToWindow(windowId, event, payload): Promise<TRes>
 
 // Fire-and-forget: same envelope minus the sync block; no pending entry, no timer.
 transport.broadcastToWindow(windowId, event, payload): void
+
+// Fire-and-forget to the exact captured WebContents; optional host-issued plugin owner snapshot.
+// Returns false for a destroyed, foreign, unregistered or stale plugin recipient.
+transport.notifyTo(webContents, event, payload, plugin?): boolean
 ```
 
 ### 3. Contracts
 
 - **Notification events (`define<void, void>()` / no consumer of the response) MUST use
-  `broadcastToWindow`.** `sendTo`/`sendToWindow` are only for calls that read the reply.
+  `broadcastToWindow` or owner-directed `notifyTo`.** `sendTo`/`sendToWindow` are only for calls that read the reply.
 - Delivery target is identical either way: `broadcastToWindow` resolves
   `BrowserWindow.fromId(id).webContents` — the same object `sendTo(webContents, …)` took.
 - Renderer side needs no changes when switching: `__handle_main` dispatches non-reply
@@ -37,6 +41,29 @@ transport.broadcastToWindow(windowId, event, payload): void
   query never waits for an optional Port upgrade. Explicit environment allowlists
   remain supported; do not add the search session back to the default set merely
   because its output is streamed.
+- Session-owned output uses `notifyTo` with the concrete sender captured from the trusted
+  `HandlerContext`. It never selects the recipient by a numeric sender/window id or plugin name.
+  For plugin output the transport binds the host-issued identity to that exact sender before
+  dispatch, then rechecks the activation key, instance, generation and registered recipient at
+  delivery. Revocation, rotation or a foreign object with the same numeric id drops the output;
+  it never sends old output to a replacement activation. The channel uses the PLUGIN envelope
+  and its existing per-surface key masking, without a sync block or an RPC acknowledgement.
+- `terminal:session:data` and `terminal:session:exit` use that directed path. The SDK registers
+  both subscriptions before creating the PTY, preserves early events in FIFO order, and releases
+  subscriptions on exit, close, failure or cancellation. Renderer loss, navigation and module
+  disposal also terminate the main-owned PTY; reloading a renderer is not proof of sender destruction.
+- Cancellation does not depend on receiving a creation id. The SDK injects a private creation
+  token; main reserves the concrete trusted owner before asynchronous checks, then only spawns
+  after permission and business gates pass. The existing close/kill event accepts that token to
+  abort a pending reservation or close its associated PTY. Abort and create-send failure both
+  request cleanup, including a lost creation reply; a token is never an ownership credential.
+  Expected cancellation becomes `AbortError` only after cleanup succeeds. Failed close/kill
+  instead rejects `AggregateError` containing the original failure and cleanup error, with the
+  cleanup error as `cause`; callers must not treat that as successful or ordinary cancellation.
+- PTY close is an actual native-exit barrier. Closing prevents new write/resize, requests kill
+  once, retains the exit listener and native-session lease, then releases them after `onExit`.
+  Module destruction and typed close/kill await that barrier. Signal termination must not turn
+  a native `exitCode: 0` plus a positive signal into successful command completion.
 - Single-path delivery per envelope: main's stream runtime sends each chunk/end/error
   over the port when it still holds a confirmed record, otherwise over the bridge
   (`server-runtime.ts sendWithFallback`) — never both. The client runtime therefore
@@ -101,8 +128,16 @@ this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.shortcu
 Mock the transport as a **stable object** (a factory returning a fresh object per call
 makes call-order assertions silently vacuous — `window.test.ts` had this trap). Assert:
 broadcast called with (windowId, event, payload), `sendTo` never called, and relative
-ordering against sibling events (`window.test.ts` "broadcasts the shortcut intent…" is
-the model).
+ordering against sibling events (`window.test.ts` "broadcasts the shortcut intent…" is the model).
+
+Owner-directed notification regressions also cover a foreign WebContents object with the same
+numeric id, plugin activation rotation/revocation, and two plugin windows under the same name.
+Assert only the original concrete recipient gets the complete data and that no RPC pending entry
+or shared UIView broadcast is created (`packages/utils/__tests__/main-transport-identity.test.ts`).
+
+Terminal lifecycle regressions cover lost create acknowledgements, cancellation during permission
+or Provider/executable lookup, cross-owner token cancellation, full/early output and real-exit
+barriers. A kill request alone is not evidence of process cleanup or lease release.
 
 ### 7. Known remaining instance
 

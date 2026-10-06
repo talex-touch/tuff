@@ -342,13 +342,20 @@ This page maps `packages/utils/transport/sdk/domains/*` to main-process handlers
 
 | Event Name | Sender | Handler |
 | --- | --- | --- |
-| `terminal:create` | Renderer (`packages/utils/renderer/touch-sdk/terminal.ts`) | `TerminalModule.onInit -> create` (`apps/core-app/src/main/modules/terminal/terminal.manager.ts`) |
-| `terminal:write` | Renderer (`packages/utils/renderer/touch-sdk/terminal.ts`) | `TerminalModule.onInit -> write` (`apps/core-app/src/main/modules/terminal/terminal.manager.ts`) |
-| `terminal:kill` | Renderer (`packages/utils/renderer/touch-sdk/terminal.ts`) | `TerminalModule.onInit -> kill` (`apps/core-app/src/main/modules/terminal/terminal.manager.ts`) |
-| `terminal:data` | `TerminalModule.create -> transport.sendTo` (`apps/core-app/src/main/modules/terminal/terminal.manager.ts`) | Renderer (terminal output subscribers) |
-| `terminal:exit` | `TerminalModule.create -> transport.sendTo` (`apps/core-app/src/main/modules/terminal/terminal.manager.ts`) | Renderer (terminal exit subscribers) |
+| `terminal:session:create` | `createTerminalSdk.create` (`packages/utils/transport/sdk/domains/terminal.ts`) | `TerminalModule.create` (`apps/core-app/src/main/modules/terminal/index.ts`) → shared `PtySessionCore.create` |
+| `terminal:session:write` | `TerminalSessionHandle.write` | `TerminalModule.write` → shared PTY input |
+| `terminal:session:resize` | `TerminalSessionHandle.resize` | `TerminalModule.resize` → PTY rows/columns |
+| `terminal:session:close` | `TerminalSessionHandle.close` / SDK cancellation | `TerminalModule.close` → shared session disposal |
+| `terminal:session:data` | Shared PTY core → owner-bound notification | SDK data listener registered before creation |
+| `terminal:session:exit` | Shared PTY core → owner-bound notification | SDK exit listener; subscription cleanup |
 
-> Note: Plugin callers must declare `system.shell` permission to use `terminal:create`.  
+All controls require `system.shell` and trusted transport ownership before spawning or touching a PTY. The owner binds the concrete sender and current plugin activation, not payload fields. Missing and foreign IDs are rejected identically. Creation passes an executable and separate arguments, never an implicitly interpreted shell command.
+
+The shared core is `apps/core-app/src/main/modules/terminal/pty-session-core.ts`. It also owns AI CLI PTYs; the `local-ai-cli:terminal:*` business facade retains Provider/access/cwd/resume/lease gates. Output is complete and ordered. Close rejects further input, requests termination once and awaits native `onExit` before releasing listeners or the native-session lease. Signal termination preserves `signal`; a native zero code accompanied by a termination signal becomes `exitCode: null`, not a successful command result.
+
+The SDK issues an internal `creationToken` and main reserves its trusted owner before asynchronous permission or Provider checks. Abort or a failed/lost creation reply sends the same typed close/kill event with that token: it cancels an unstarted reservation or awaits the real exit of its associated PTY. Late replies cannot recreate a cancelled session. Tokens do not authorize ownership, and missing/foreign tokens are rejected identically. The AI business SDK accepts `terminal.create(request, { signal })`; its event names and Provider request fields remain unchanged.
+
+`TxTerminal` only displays output and emits input/size events; web or read-only log usage never starts a process. `EnvDetector` uses the domain SDK and cleans up on completion, failure or timeout.
 
 #### C12.3 Plugin Logs
 

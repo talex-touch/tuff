@@ -89,7 +89,7 @@ import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 
 ## Component Inventory
 
-Current source-of-truth export modules: **167**.
+Current source-of-truth export modules: **168**.
 
 Every module ships in exactly one of three suites, each exposed as its own category entry:
 
@@ -115,7 +115,7 @@ General, form, layout, navigation, data, feedback and status components. Import 
 
 Advanced interaction, visualization, effects and low-level primitives. Import from `@talex-touch/tuffex/pro`.
 
-- `Interaction (6)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `virtual-list`, `version-capsule`
+- `Interaction (7)`: `command-palette`, `search-panel`, `markdown-editor`, `code-editor`, `terminal`, `virtual-list`, `version-capsule`
 - `Visualization (5)`: `charts`, `spark-chart`, `allocation-bar`, `diff-table`, `signal-meter`
 - `Effects (23)`: `glass-surface`, `gradient-border`, `outline-border`, `border-beam`, `prism-glow`, `corner-overlay`, `gradual-blur`, `edge-fade-mask`, `glow-text`, `keyframe-stroke-text`, `tuff-logo-stroke`, `text-morph`, `icon-morph`, `text-transformer`, `transition`, `stagger`, `fusion`, `fusion-surface`, `liquid`, `flip-overlay`, `image-generation`, `metal-fx`, `voice-beam`
 - `Primitives (5)`: `base-surface`, `base-anchor`, `floating`, `auto-sizer`, `resize-box`

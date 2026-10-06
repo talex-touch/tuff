@@ -412,9 +412,11 @@ async function handleInstallDegit(): Promise<void> {
   await popperMention('', () =>
     createVNode(TerminalTemplate, {
       title: t('plugin.new.create.env.degitInstallingTitle'),
-      command: 'npm install -g degit'
+      command: 'npm',
+      args: ['install', '-g', 'degit']
     })
   )
+  await envCheck()
 }
 </script>
 

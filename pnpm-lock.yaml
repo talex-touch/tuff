@@ -376,12 +376,6 @@ importers:
       '@vueuse/core':
         specifier: catalog:frontend
         version: 14.4.0(vue@3.5.39(typescript@5.9.3))
-      '@xterm/addon-fit':
-        specifier: ^0.10.0
-        version: 0.10.0(@xterm/xterm@5.5.0)
-      '@xterm/xterm':
-        specifier: ^5.5.0
-        version: 5.5.0
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -1204,6 +1198,12 @@ importers:
       '@vueuse/core':
         specifier: ^14.4.0
         version: 14.4.0(vue@3.5.39(typescript@5.9.3))
+      '@xterm/addon-fit':
+        specifier: ^0.10.0
+        version: 0.10.0(@xterm/xterm@5.5.0)
+      '@xterm/xterm':
+        specifier: ^5.5.0
+        version: 5.5.0
       d3-array:
         specifier: ^3.2.4
         version: 3.2.4

@@ -15,7 +15,6 @@ import {
   QuickOpsEvents,
   StorageEvents,
   SyncEvents,
-  TerminalEvents,
   TuffEvents,
   UpdateEvents,
 } from '../transport/events'
@@ -358,19 +357,6 @@ describe('transport domain sdk mappings', () => {
     )
   })
 
-  it('terminal session events expose canonical names', () => {
-    expect(TerminalEvents.session.create.toEventName()).toBe(
-      'terminal:session:create',
-    )
-    expect(TerminalEvents.session.create).toMatchObject({
-      namespace: 'terminal',
-      module: 'session',
-      action: 'create',
-    })
-    expect(TerminalEvents.session.data.toEventName()).toBe(
-      'terminal:session:data',
-    )
-  })
 
   it('opener events expose canonical names', () => {
     expect(OpenerEvents.plugin.open.toEventName()).toBe('plugin:opener:open')
@@ -2407,6 +2393,8 @@ describe('local ai cli session sdk mappings', () => {
       context: [],
       projectId: 'p1',
       sessionRef: 'ref-1',
+      cols: 90,
+      rows: 27,
       nativeSessionId: 'native-abc',
       sessionFile: '/tmp/private-session.jsonl',
     }
@@ -2425,8 +2413,8 @@ describe('local ai cli session sdk mappings', () => {
     expect(terminal).toEqual({
       provider: 'pi',
       access: 'workspace-read',
-      cols: 0,
-      rows: 0,
+      cols: 90,
+      rows: 27,
       projectId: 'p1',
       sessionRef: 'ref-1',
     })
