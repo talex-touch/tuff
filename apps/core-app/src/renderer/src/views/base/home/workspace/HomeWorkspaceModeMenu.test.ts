@@ -2,7 +2,8 @@
 /**
  * The mode chip and its menu (`home-composer` › 对话与智能体弹层): one flat list of 「对话」 and the
  * enabled profiles, the profile switches one level down in 「管理智能体」, and the states around
- * them. TxDropdownMenu is stubbed to an in-place panel; TxSwitch and TxSkeleton are the real ones.
+ * them. TxDropdownMenu is stubbed to an in-place panel that, like the anchor, closes on Escape at the
+ * document; TxSwitch and TxSkeleton are the real ones.
  */
 import type { AiAgentProfile } from '@talex-touch/utils/types/ai-orchestrator'
 import { mount, type VueWrapper } from '@vue/test-utils'
@@ -13,13 +14,18 @@ import HomeWorkspaceModeMenu from './HomeWorkspaceModeMenu.vue'
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 vi.mock('@talex-touch/tuffex/dropdown-menu', async () => {
-  const { defineComponent, h } = await import('vue')
+  const { defineComponent, h, onBeforeUnmount, onMounted } = await import('vue')
   return {
     TxDropdownMenu: defineComponent({
       name: 'TxDropdownMenu',
       props: { modelValue: { type: Boolean, default: false } },
       emits: ['update:modelValue'],
       setup(props, { slots, emit }) {
+        const onKeydown = (event: KeyboardEvent): void => {
+          if (event.key === 'Escape' && props.modelValue) emit('update:modelValue', false)
+        }
+        onMounted(() => document.addEventListener('keydown', onKeydown))
+        onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
         return () =>
           h('div', { class: 'dropdown-stub' }, [
             h(
@@ -98,6 +104,15 @@ function rowNamed(menu: VueWrapper, name: string) {
     .find((row) => row.find('.HomeWorkspaceModeMenu-Name').text() === name)
   if (!found) throw new Error(`no row ${name}`)
   return found
+}
+
+/** Escape where focus is, as the keyboard sends it; the stubbed anchor closes at the document. */
+async function pressEscape(): Promise<void> {
+  ;(document.activeElement ?? document.body).dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+  )
+  await nextTick()
+  await nextTick()
 }
 
 describe('HomeWorkspaceModeMenu', () => {
@@ -182,6 +197,61 @@ describe('HomeWorkspaceModeMenu', () => {
     await menu.get('.ComposerChip').trigger('click')
     await nextTick()
     expect(menu.find('.HomeWorkspaceModeMenu-Back').exists()).toBe(false)
+  })
+
+  it('keeps the switch being saved enabled and in focus, and drops its repeat presses', async () => {
+    const menu = await openMenu()
+    await rowNamed(menu, 'home.workspace.profile.manage').trigger('click')
+    await nextTick()
+    const switches = () => menu.findAll('[role="switch"]')
+    ;(switches()[0]!.element as HTMLElement).focus()
+
+    await menu.setProps({ profileSaving: 'tuff-pi' })
+    // A disabled control drops focus to the page (Chromium's focus fixup; jsdom does not run it, so
+    // the attribute is what is asserted). The other switches wait out the save.
+    expect(switches()[0]!.attributes('disabled')).toBeUndefined()
+    expect(switches()[0]!.attributes('aria-busy')).toBe('true')
+    expect(switches()[1]!.attributes('disabled')).toBeDefined()
+    expect(document.activeElement).toBe(switches()[0]!.element)
+
+    await switches()[0]!.trigger('click')
+    expect(menu.emitted('toggle-profile')).toBeUndefined()
+
+    await menu.setProps({ profileSaving: null })
+    expect(switches()[0]!.attributes('aria-busy')).toBeUndefined()
+    await switches()[0]!.trigger('click')
+    expect(menu.emitted('toggle-profile')).toEqual([[COORDINATOR, false]])
+  })
+
+  it('returns focus to the chip when Escape closes the menu, even after focus fell to the page', async () => {
+    const menu = await openMenu()
+    await nextTick()
+    expect(document.activeElement).toBe(rowNamed(menu, 'home.workspace.mode.chat').element)
+    await pressEscape()
+    expect(menu.find('.dropdown-stub__panel').exists()).toBe(false)
+    expect(document.activeElement).toBe(menu.get('.ComposerChip').element)
+
+    // A press on a locked row lands on the group behind it, and focus leaves for the page.
+    await menu.setProps({ branchOnChange: true, locked: true })
+    await menu.get('.ComposerChip').trigger('click')
+    await nextTick()
+    await nextTick()
+    expect(document.activeElement).toBe(rowNamed(menu, 'home.workspace.mode.chat').element)
+    ;(document.activeElement as HTMLElement).blur()
+    expect(document.activeElement).toBe(document.body)
+    await pressEscape()
+    expect(menu.find('.dropdown-stub__panel').exists()).toBe(false)
+    expect(document.activeElement).toBe(menu.get('.ComposerChip').element)
+  })
+
+  it('leaves focus the user moved out of the menu where it is when Escape closes it', async () => {
+    const menu = await openMenu()
+    const elsewhere = document.body.appendChild(document.createElement('button'))
+    elsewhere.focus()
+
+    await pressEscape()
+    expect(menu.find('.dropdown-stub__panel').exists()).toBe(false)
+    expect(document.activeElement).toBe(elsewhere)
   })
 
   it('shows a skeleton row on the first read and the reason when there is nothing to run', async () => {

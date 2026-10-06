@@ -4,7 +4,7 @@ import type { AiAgentProfile } from '@talex-touch/utils/types/ai-orchestrator'
 import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ComposerChip from '../composer/ComposerChip.vue'
 import { focusWhenShown } from '../focus-when-shown'
@@ -108,14 +108,39 @@ function showView(next: 'main' | 'manage'): void {
   )
 }
 
-function onPanelKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') restoreFocusOnClose = true
+/**
+ * One save at a time. The switch being saved stays enabled — disabling the focused control drops
+ * focus to the page in the middle of a keyboard pass — so its repeat presses are dropped here.
+ */
+function toggleProfile(profile: AiAgentProfile, enabled: boolean): void {
+  if (props.profileSaving !== null) return
+  emit('toggle-profile', profile, enabled)
+}
+
+/**
+ * Escape returns focus to the chip when it was in the menu, or had already fallen to the page — a
+ * press on a locked row lands on the group behind it (`[aria-disabled]` takes no pointer), which
+ * takes focus. Focus the user moved elsewhere stays there. The anchor closes on Escape at the
+ * document, wherever focus is, so this listens there too, while the menu is open.
+ */
+function onDocumentKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') return
+  const active = document.activeElement
+  if (
+    !active ||
+    active === document.body ||
+    panelRef.value?.contains(active) ||
+    triggerWrapRef.value?.contains(active)
+  ) {
+    restoreFocusOnClose = true
+  }
 }
 
 watch(open, (isOpen) => {
   if (isOpen) {
     restoreFocusOnClose = false
     view.value = 'main'
+    document.addEventListener('keydown', onDocumentKeydown, true)
     // Read again on every open: a profile enabled elsewhere must not need a restart to appear.
     emit('load-profiles')
     // On the current choice, so the arrows start from it.
@@ -127,10 +152,13 @@ watch(open, (isOpen) => {
     )
     return
   }
+  document.removeEventListener('keydown', onDocumentKeydown, true)
   if (restoreFocusOnClose) {
     void nextTick(() => triggerWrapRef.value?.querySelector('button')?.focus())
   }
 })
+
+onBeforeUnmount(() => document.removeEventListener('keydown', onDocumentKeydown, true))
 </script>
 
 <template>
@@ -167,7 +195,7 @@ watch(open, (isOpen) => {
       </span>
     </template>
 
-    <div ref="panelRef" class="HomeWorkspaceModeMenu" @keydown="onPanelKeydown">
+    <div ref="panelRef" class="HomeWorkspaceModeMenu">
       <template v-if="view === 'main'">
         <div
           class="HomeWorkspaceModeMenu-Group"
@@ -306,7 +334,8 @@ watch(open, (isOpen) => {
               class="HomeWorkspaceModeMenu-Switch"
               size="small"
               :model-value="profile.enabled"
-              :disabled="profileSaving !== null"
+              :disabled="profileSaving !== null && profileSaving !== profile.id"
+              :aria-busy="profileSaving === profile.id || undefined"
               :aria-label="
                 t(
                   profile.enabled
@@ -315,7 +344,7 @@ watch(open, (isOpen) => {
                   { name: profile.name }
                 )
               "
-              @update:model-value="emit('toggle-profile', profile, $event)"
+              @update:model-value="toggleProfile(profile, $event)"
             />
           </div>
         </div>
