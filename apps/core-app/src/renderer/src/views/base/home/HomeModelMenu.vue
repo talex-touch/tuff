@@ -185,6 +185,11 @@ const query = ref('')
 const activeRail = ref<string>(RECENT)
 /** Set by a choice in the left column; until then the selection follows the data as it loads. */
 let railPinned = false
+/**
+ * The user has moved within this opening — a wheel, a pointer, a key. Options landing after that
+ * re-derive the selection but no longer scroll the columns under them.
+ */
+let handsOn = false
 /** The left column's selection when a search started, put back when it clears. */
 let railBeforeQuery: string | null = null
 
@@ -428,7 +433,12 @@ function onListKeydown(event: KeyboardEvent): void {
 
 /** The anchor closes on Escape by itself; this only marks that focus should return to the pill. */
 function onPanelKeydown(event: KeyboardEvent): void {
+  handsOn = true
   if (event.key === 'Escape') restoreFocusOnClose = true
+}
+
+function markHandsOn(): void {
+  handsOn = true
 }
 
 /** Roving tabindex: the selected row, or the first one when none is selected, takes Tab. */
@@ -445,6 +455,18 @@ function searchInput(): HTMLInputElement | null {
   return panelRef.value?.querySelector('.HomeModelMenu-Search input') ?? null
 }
 
+/** The pinned source and model, scrolled into view where they are not already. */
+function revealPinned(): void {
+  const panel = panelRef.value
+  if (!panel) return
+  panel
+    .querySelector<HTMLElement>('[data-home-model-rail-item][aria-selected="true"]')
+    ?.scrollIntoView({ block: 'nearest' })
+  panel
+    .querySelector<HTMLElement>('[data-home-model-option][aria-selected="true"]')
+    ?.scrollIntoView({ block: 'nearest' })
+}
+
 /**
  * Both columns start each opening at their top — the panel stays mounted between openings and
  * would otherwise come back scrolled the way the last one left it, 「自动选择」 out of sight — and
@@ -458,12 +480,7 @@ function revealSelection(): void {
   )) {
     column.scrollTop = 0
   }
-  panel
-    .querySelector<HTMLElement>('[data-home-model-rail-item][aria-selected="true"]')
-    ?.scrollIntoView({ block: 'nearest' })
-  panel
-    .querySelector<HTMLElement>('[data-home-model-option][aria-selected="true"]')
-    ?.scrollIntoView({ block: 'nearest' })
+  revealPinned()
 }
 
 function focusSearchWhenShown(): void {
@@ -493,6 +510,7 @@ watch(open, (isOpen) => {
     query.value = ''
     railBeforeQuery = null
     railPinned = false
+    handsOn = false
     activeRail.value = defaultRail()
     // Fetched again on every open: providers come and go while the app runs (a CLI installed after
     // launch, one enabled in settings). The rows already on screen stay while the refetch runs.
@@ -507,9 +525,14 @@ watch(open, (isOpen) => {
   }
 })
 
-/** Options that land after the panel opened re-derive the default, unless a click pinned one. */
+/**
+ * Options that land after the panel opened — the first load, a refresh that reorders the sources —
+ * re-derive the default, unless a click pinned one, and bring it into view as the opening did.
+ */
 watch(choices, () => {
-  if (open.value && !railPinned && !searching.value) activeRail.value = defaultRail()
+  if (!open.value || railPinned || searching.value) return
+  activeRail.value = defaultRail()
+  if (!handsOn) void nextTick(revealPinned)
 })
 
 onBeforeUnmount(() => {
@@ -543,6 +566,8 @@ onBeforeUnmount(() => {
       role="group"
       :aria-label="t('home.model')"
       @keydown="onPanelKeydown"
+      @pointerdown="markHandsOn"
+      @wheel.passive="markHandsOn"
     >
       <div class="HomeModelMenu-Head">
         <div class="HomeModelMenu-Search">
@@ -980,6 +1005,11 @@ onBeforeUnmount(() => {
 
   &.is-selected {
     background: var(--shell-surface-2);
+  }
+
+  // The tag shares the selected row's fill; cut it out of the panel colour instead.
+  &.is-selected .HomeModelMenu-Tag {
+    background: var(--shell-bg);
   }
 
   &:focus-visible {

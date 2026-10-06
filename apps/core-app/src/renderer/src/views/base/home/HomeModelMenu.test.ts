@@ -433,12 +433,62 @@ describe('opening', () => {
     await nextTick()
     offset.mockRestore()
 
-    expect(calls).toEqual([
+    // The refetch landing may reveal the same rows once more; the reset still comes first.
+    expect(calls.slice(0, 4)).toEqual([
       'rail scrollTop=0',
       'list scrollTop=0',
       expect.stringMatching(/^reveal codex/),
       expect.stringMatching(/^reveal gpt-6-astra/)
     ])
+    expect(calls.slice(4).every((call) => call.startsWith('reveal '))).toBe(true)
+  })
+
+  it('brings the pinned source into view when the options land after the opening', async () => {
+    resetAppSetting({ model: { ...PI_ASTRA }, favoriteModels: [] })
+    let land: (value: ProviderModelOption[]) => void = () => {}
+    mocks.getProviderModelOptions.mockReturnValue(
+      new Promise((done) => {
+        land = done
+      })
+    )
+    const menu = await mountMenu()
+    await menu.find('.pill').trigger('click')
+    await flushPromises()
+    const reveal = vi.mocked(Element.prototype.scrollIntoView)
+    reveal.mockClear()
+
+    land(providerOptions())
+    await flushPromises()
+    await nextTick()
+
+    expect(railText(menu)).toContain('*codex (2)')
+    expect(
+      reveal.mock.contexts.map((element) => (element as HTMLElement).textContent?.trim())
+    ).toEqual([expect.stringMatching(/^codex/), expect.stringMatching(/^gpt-6-astra/)])
+  })
+
+  it('leaves the columns where the user put them when the options land after that', async () => {
+    resetAppSetting({ model: { ...PI_ASTRA }, favoriteModels: [] })
+    let land: (value: ProviderModelOption[]) => void = () => {}
+    mocks.getProviderModelOptions.mockReturnValue(
+      new Promise((done) => {
+        land = done
+      })
+    )
+    const menu = await mountMenu()
+    await menu.find('.pill').trigger('click')
+    await flushPromises()
+    await menu.find('.HomeModelMenu').trigger('wheel')
+    const reveal = vi.mocked(Element.prototype.scrollIntoView)
+    reveal.mockClear()
+
+    land(providerOptions())
+    await flushPromises()
+    await nextTick()
+
+    // The selection still follows the data; only the scrolling holds back.
+    expect(railText(menu)).toContain('*codex (2)')
+    expect(reveal).not.toHaveBeenCalled()
   })
 })
 
