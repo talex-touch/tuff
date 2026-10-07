@@ -122,15 +122,27 @@ The fast `SearchIndexService` is reader-mode only: never pass it to
 on it. Request ids carry the lane (`search-index-read-<lane>-<n>`), as does the
 retire log.
 
-### 8. Bulk index deletes are O(table) per row — budget them
+### 8. 后台索引维护按可信 rowid 定位并向前台让路
 
-`DELETE FROM search_index WHERE provider = ? AND item_id = ?` scans the FTS content
-table on every call (both columns UNINDEXED): 500 rows ≈ 2 minutes on a 276k-row
-index. `FileProviderCleanupDeleteService` therefore budgets stale-row removal
-(`staleDeleteBudgetMs`, default 8s per pass) and logs what is left for the next boot;
-do not add another unbounded per-row delete loop on the startup path. The fix that
-lifts the budget is writer-side (delete by rowid via `search_index_meta`, or batch
-`item_id IN (…)` per page).
+`search_index_meta` 持久化 `(provider_id, item_id)` 对应的 `fts_rowid` 和完整检索文档
+`document_hash`。可信定位通过 FTS rowid 删除或替换；旧 profile 的缺失定位分页建立，
+重复身份、元数据缺失和 FTS 重建必须重新核验，不能按旧 rowid 删除别人的文档。
+图标和时间戳变化不重写相同 FTS；title、compact title、keywords、tags、path、content、
+type 变化必须更新，单独关键词权重变化仍更新关键词映射。
+
+`waitForIndexMaintenanceIdle()` 在 writer admission、事务和 source mutation lease 之前等待。
+执行中的 CoreBox、应用索引页和 DivisionBox 前台会话、近期输入及交互写入都会阻止新片；
+后台查询不冒充前台活动。成功、失败、超时、取消和关闭释放本次活动，不能仅靠两秒时间戳
+或 `AppTaskGate` 的任务计数判定空闲，也不能用等待超时强行准入。
+
+配置清理每片最多 64 行、每轮最多 16 页，整轮预算 1,500 ms，包含候选枚举、实际事务、
+FTS 可见性与发布。扫描缺失、孤儿候选和关键词维护同样分片，没有退出根的无限清理例外。
+每片发布后释放权限，再判断前台和取消状态；配置清理与工作队列交替时，只要任一仍有
+剩余工作就安排下一轮，空工作队列不能丢掉尚未完成的配置清理。
+
+只在提交与发布成功后推进恢复游标。暂停或重启恢复复核当前规则、额外监控根和观测版本；
+权限失败、离线卷及不完整扫描不授权缺失删除。读侧立即过滤已知失效或配置范围外结果，
+不等待整轮物理维护。实时 watch、主动重建和隐私清除不无限等待后台 idle。
 
 ### 9. Full scans checkpoint per top-level child
 

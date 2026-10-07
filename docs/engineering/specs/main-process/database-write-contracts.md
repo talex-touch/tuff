@@ -243,3 +243,38 @@ queue.enqueue(sourceId, itemId, sourceType, 'execute')
 await dbUtils.recordExecuteTransaction({ eventId, sourceId, itemId, sourceType, sessionId, timestamp, context })
 ```
 
+
+## Scenario: 有界索引维护、可信定位与删除回执（2026-10-06）
+
+### Scope / Trigger
+
+配置退出根、规则淘汰、完整扫描缺失、孤儿搜索候选、孤儿关键词和旧 profile 的 FTS 定位迁移。
+只维护索引及派生数据，不删除磁盘文件；继续沿用每个 SQLite 文件的唯一写者。
+
+### Signatures
+
+- `FileProviderMaintenanceService.runConfigurationCleanup(options)` 返回本轮真实删除数、完成状态及已发布游标。
+- `scheduleFileMaintenance()` 续跑持久工作；`cancelRun()` 中断当前等待/本轮并等待其结束，不销毁整个 Provider。
+- `SourceScopedIndexWriterRouter.runIndexMaintenanceSlice()` 使用当前 source 的实际 home 和有界请求。
+- `dbUtils.getFileIndexReadDb()` 是文件记录、恢复工作与游标的 live read home；不能改读 primary 来掩盖 split 未就绪。
+
+### Contracts
+
+- 先等待前台空闲，再申请 writer admission 和短 source lease。交互恢复时只允许当前短事务结束；每片提交、可见性和发布后释放权限。
+- Worker 空闲退休后的重新初始化可能跨越前台/取消边界。最终发送维护 RPC 前必须在 `ensureInitialized(signal)` 返回后复核 idle 和取消；接收端复用有界请求的共享取消标记，不以初始化前的准入结果授权迟到请求。
+- 配置清理每片最多 64 条、每轮最多 16 页并受 1,500 ms 整轮预算约束。清理轮与持久工作轮交替；空工作队列不能让尚未完成的配置清理失去下一轮。
+- `search_index_meta.fts_rowid` 和 `document_hash` 与完整入库文档同事务维护。迁移 `0053_search_index_document_locators`、primary 初始化及 search-home 初始化必须一致。
+- 已定位文档按主键/rowid 删除或替换；FTS 重建、错位 rowid、重复身份和缺失元数据走有界修复，不清空真实库或重扫磁盘。
+- 文件删除在同一 home 内原子维护 FTS、关键词、metadata 及派生记录，并保存实际提交回执。只发布成功提交，不把入队当完成；失败不推进恢复游标。
+- 旧库无 locator 的孤儿发现和映射完成后的新发现可以为同一 `(source, itemId)` 产生不同持久任务。每项仍复核当前版本与配置，授权删除按当前身份合并；真实提交和发布后退役该身份的全部对应任务，不能将重复身份交给 repository 后反复卡住同页。
+- 发布失败时保留回执。恢复只重放发布/ACK，不再次按路径物理删除；同路径新版本及不同 Provider 的同名 ID 必须保留。
+- 临时 seen-path 表和扫描子目录 checkpoint 不是删除授权。权限错误、离线卷、未完整完成或取消的扫描必须延后缺失删除；执行前再次复核当前配置、额外监控根和观测版本。
+- 实时 watch、主动重建和隐私清除不无限等待后台 idle，仍遵守唯一写者、短 lease、真实提交状态和取消协议。
+
+### Verification
+
+复用真实 libSQL 的文档/删除回归、前台会话生命周期、worker admission、扫描取消和 schema parity 检查。
+隔离 Electron 实测 split/primary 两种拓扑的 4,096 条合成积压、前台打断、空闲续跑、取消、退出重启和实际 watch delete/add。
+补充实机边界烟测覆盖真实 worker 退休/重建与受控初始化窗口：前台或取消到达后维护请求不发送；重复孤儿发现连同同页其他文档在 split/primary 都收敛。受控时序只用于复现竞态，不作为正常启动耗时或性能证据。
+核对 FTS、metadata、关键词最终收敛与磁盘文件保留；这些是功能及调度证据，不是生产大库性能 A/B。
+
