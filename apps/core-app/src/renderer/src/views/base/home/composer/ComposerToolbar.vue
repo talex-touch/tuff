@@ -3,7 +3,7 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import type { SendState } from './send-state'
 import type { DictationOutcome, DictationState } from './useComposerDictation'
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import HomeModelMenu from '../HomeModelMenu.vue'
 import HomePermissionMenu from '../HomePermissionMenu.vue'
@@ -11,28 +11,19 @@ import ComposerControl from './ComposerControl.vue'
 import ComposerMic from './ComposerMic.vue'
 import ComposerModelPill from './ComposerModelPill.vue'
 import ComposerSendIsland from './ComposerSendIsland.vue'
-import {
-  animateElement,
-  COMPOSER_MOTION,
-  EASE_IN,
-  EASE_OUT_STRONG,
-  entryFrame,
-  exitFrame,
-  prefersReducedMotion,
-  releaseCurve
-} from './composer-motion'
 import { isCapsuleSendState } from './send-state'
 
 /**
- * The composer's tool row as one family (task `09-26-composer-controls-redesign` §1): 32px
- * controls, no strokes, three materials — quiet (`+`, microphone), tonal (permission, model), solid
- * (send) — and one press.
+ * The composer's tool row (`home-composer` › 工具条与胶囊): attachments, permission and mode on the
+ * left; model, microphone and send on the right. 32px controls, no strokes; the chips are one quiet
+ * material.
  *
- * The row is laid out once. The microphone and the send key live in fixed 32×32 slots; their
- * capsules are absolutely positioned inside those slots and grow left over their neighbours —
- * the stop capsule over the microphone's slot, the dictation capsule over the model pill — so
- * nothing in the row reflows while they morph. The negative margins put every control's outer
- * edge 8px from the composer's, where a 16px radius is concentric with its 24px corner.
+ * The microphone and the send key live in fixed 32×32 slots, and the send key's stop capsule grows
+ * left over the microphone's slot while a reply runs, so nothing in the row reflows. While a
+ * dictation session runs (`home-composer` › 语音听写态) the row keeps only what the session needs:
+ * the left cluster and the model pill step out — hidden, inert, out of the tab order — and the left
+ * side shows the session's status instead. The negative margins put every control's outer edge 8px
+ * from the composer's, where a 16px radius is concentric with its 24px corner.
  */
 const props = withDefaults(
   defineProps<{
@@ -40,7 +31,6 @@ const props = withDefaults(
     model: { label: string; icon?: ITuffIcon; effort?: string }
     sendState: SendState
     micState: DictationState
-    micLevels: readonly number[]
     /** This build cannot capture audio: the entry is withheld instead of failing on press. */
     micBlocked?: boolean
     micElapsedMs?: number
@@ -59,19 +49,33 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { micYield } = COMPOSER_MOTION
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const islandRef = ref<InstanceType<typeof ComposerSendIsland> | null>(null)
-const modelSlotRef = ref<HTMLElement | null>(null)
-const micSlotRef = ref<HTMLElement | null>(null)
 
 /** The stop capsule covers the microphone's slot (the island says when). */
 const micYielded = ref(isCapsuleSendState(props.sendState))
-/** The dictation capsule covers the model pill (the microphone says when). */
-const modelYielded = ref(false)
-/** What the dictation capsule must span to cover the model pill; measured at the press. */
-const micCoverWidth = ref(0)
+
+const dictating = computed(() => props.micState !== 'idle')
+
+const timerText = computed(() => {
+  const seconds = Math.max(0, Math.floor(props.micElapsedMs / 1000))
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+})
+
+/** What a screen reader hears, once per state — never the ticking timer. */
+const liveStatus = computed(() => {
+  switch (props.micState) {
+    case 'starting':
+      return t('assistant.voicePanel.voicePreparing')
+    case 'listening':
+      return t('home.composer.dictationListening')
+    case 'finishing':
+      return t('home.composer.dictationFinishing')
+    default:
+      return props.micOutcome === 'inserted' ? t('home.composer.dictationInserted') : ''
+  }
+})
 
 function onFilePick(event: Event): void {
   const input = event.target as HTMLInputElement
@@ -79,68 +83,6 @@ function onFilePick(event: Event): void {
   // Clearing lets the same file be picked twice in a row.
   input.value = ''
 }
-
-/**
- * From the model slot's left edge to the microphone slot's right edge, in layout pixels (both slots
- * share the right cluster as offset parent, so a transform on the composer does not skew it). Read
- * once per session, at the press.
- */
-function measureCover(): void {
-  const model = modelSlotRef.value
-  const micSlot = micSlotRef.value
-  if (!model || !micSlot) return
-  micCoverWidth.value = Math.max(0, micSlot.offsetLeft + micSlot.offsetWidth - model.offsetLeft)
-}
-
-watch(
-  () => props.micState,
-  (state, previous) => {
-    if (previous === 'idle' && state !== 'idle') measureCover()
-  }
-)
-
-let modelAnimations: Animation[] = []
-
-/**
- * The model pill gives way under the dictation capsule on the microphone's yield numbers, each way
- * from the frame on screen (a session that failed at once reverses the yield mid-way).
- */
-watch(modelYielded, (yielded) => {
-  const el = modelSlotRef.value
-  const from = prefersReducedMotion()
-    ? null
-    : yielded
-      ? exitFrame(el, { opacity: 1, scale: 1 })
-      : entryFrame(el, { opacity: 0, scale: micYield.scale })
-  for (const animation of modelAnimations) animation.cancel()
-  modelAnimations = []
-  if (!el || !from) return
-  if (yielded) {
-    const out = animateElement(el, [from, { opacity: 0, scale: micYield.scale }], {
-      duration: micYield.outMs,
-      easing: EASE_IN
-    })
-    if (out) modelAnimations.push(out)
-    return
-  }
-  const curve = releaseCurve()
-  const back = [
-    animateElement(el, [{ scale: from.scale }, { scale: 1 }], {
-      duration: curve.duration,
-      easing: curve.easing
-    }),
-    animateElement(el, [{ opacity: from.opacity }, { opacity: 1 }], {
-      duration: micYield.backFadeMs,
-      easing: EASE_OUT_STRONG
-    })
-  ]
-  for (const animation of back) if (animation) modelAnimations.push(animation)
-})
-
-onBeforeUnmount(() => {
-  for (const animation of modelAnimations) animation.cancel()
-  modelAnimations = []
-})
 
 /** T3, at the press — `submit()` calls it right after its guard. */
 function launch(): void {
@@ -151,8 +93,12 @@ defineExpose({ launch })
 </script>
 
 <template>
-  <div class="ComposerToolbar">
-    <div class="ComposerToolbar-Left">
+  <div class="ComposerToolbar" :class="{ 'is-dictating': dictating }">
+    <div
+      class="ComposerToolbar-Left"
+      :inert="dictating || undefined"
+      :aria-hidden="dictating || undefined"
+    >
       <input
         ref="fileInputRef"
         type="file"
@@ -172,17 +118,38 @@ defineExpose({ launch })
         @reset="emit('reset-approvals')"
       />
       <!-- The host's execution controls: Chat / Agent and its profile, and the queue key while Main
-           is busy. Same 32px family, left of the model so the row reads "how" before "with what". -->
+           is busy. Left of the model so the row reads "how" before "with what". -->
       <slot name="mode" />
     </div>
 
+    <!-- The session's state where the left cluster was. Drawn for the eye only: the timer ticks
+         every second, so the screen reader gets the state alone, below. -->
+    <div class="ComposerToolbar-Status" :data-state="micState" aria-hidden="true">
+      <template v-if="micState === 'listening'">
+        <span class="ComposerToolbar-RecDot" />
+        <span>{{ t('home.composer.dictationListening') }}</span>
+        <span class="ComposerToolbar-Timer">{{ timerText }}</span>
+        <span class="ComposerToolbar-EscHint">· {{ t('home.composer.dictationEscHint') }}</span>
+      </template>
+      <template v-else-if="dictating">
+        <span class="ComposerToolbar-Spinner i-ri-loader-4-line" />
+        <span>{{
+          micState === 'finishing'
+            ? t('home.composer.dictationFinishing')
+            : t('assistant.voicePanel.voicePreparing')
+        }}</span>
+      </template>
+    </div>
+    <span class="ComposerToolbar-LiveStatus" role="status" aria-live="polite">{{
+      liveStatus
+    }}</span>
+
     <div class="ComposerToolbar-Right">
       <div
-        ref="modelSlotRef"
         class="ComposerToolbar-ModelSlot"
-        :class="{ 'is-yielded': modelYielded }"
-        :inert="modelYielded || undefined"
-        :aria-hidden="modelYielded || undefined"
+        :class="{ 'is-yielded': dictating }"
+        :inert="dictating || undefined"
+        :aria-hidden="dictating || undefined"
       >
         <HomeModelMenu placement="top-end">
           <template #trigger="{ open }">
@@ -199,19 +166,9 @@ defineExpose({ launch })
         Withheld, not disabled, when this build has no audio component: the slot is removed so the
         send key takes its place. A disabled button would pose a question the app already knows the
         answer to, and the status read that decided this is the same one a session would fail on.
-        Nothing measures this slot unless a session starts, and a blocked build never starts one.
       -->
-      <div v-if="!micBlocked" ref="micSlotRef" class="ComposerToolbar-MicSlot">
-        <ComposerMic
-          :state="micState"
-          :levels="micLevels"
-          :elapsed-ms="micElapsedMs"
-          :yielded="micYielded"
-          :cover-width="micCoverWidth"
-          :outcome="micOutcome"
-          @toggle="emit('mic')"
-          @cover="modelYielded = $event"
-        />
+      <div v-if="!micBlocked" class="ComposerToolbar-MicSlot">
+        <ComposerMic :state="micState" :yielded="micYielded" @toggle="emit('mic')" />
       </div>
       <div class="ComposerToolbar-SendSlot">
         <ComposerSendIsland
@@ -231,8 +188,10 @@ defineExpose({ launch })
 
 <style lang="scss" scoped>
 .ComposerToolbar {
-  // HomePermissionMenu's pill folds to an icon key through this container, not the viewport.
+  // HomePermissionMenu's and the mode menu's chips fold to icon keys through this container, not
+  // the viewport.
   container: home-composer-tools / inline-size;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -244,11 +203,11 @@ defineExpose({ launch })
 .ComposerToolbar-Left,
 .ComposerToolbar-Right {
   display: flex;
+  // The stop capsule's 72px is the microphone's 32 + this gap + the send key's 32.
   gap: 8px;
   align-items: center;
 }
 
-// The offset parent both slots measure against (`measureCover`).
 .ComposerToolbar-Right {
   position: relative;
 }
@@ -258,19 +217,81 @@ defineExpose({ launch })
   display: none;
 }
 
+// While dictating: gone from sight and the pointer (`inert` takes it out of focus).
+.ComposerToolbar.is-dictating .ComposerToolbar-Left,
+.ComposerToolbar-ModelSlot.is-yielded {
+  opacity: 0;
+  scale: 0.96;
+  pointer-events: none;
+}
+
+.ComposerToolbar-Left {
+  transform-origin: left center;
+}
+
 .ComposerToolbar-ModelSlot {
   flex: none;
   transform-origin: right center;
+}
 
-  // Under the dictation capsule: gone from sight and the pointer (`inert` takes it out of focus).
-  &.is-yielded {
-    opacity: 0;
-    scale: 0.85;
-    pointer-events: none;
+.ComposerToolbar-Status {
+  position: absolute;
+  top: 0;
+  left: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  height: 32px;
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-body);
+  white-space: nowrap;
+  // The glow rises behind this line at full voice, and muted ink drowned in it (the timer and the
+  // hint fell to ~1.3:1 at the peak). The whole line keeps the secondary ink, and a halo in the
+  // composer's own surface holds the glow off the letters; the hint stays smaller instead.
+  text-shadow:
+    0 0 3px var(--shell-bg),
+    0 0 8px var(--shell-bg),
+    0 0 14px var(--shell-bg);
+  opacity: 0;
+  pointer-events: none;
+
+  .ComposerToolbar.is-dictating & {
+    opacity: 1;
   }
 }
 
-// Fixed 32×32 at every state: the capsules inside grow over neighbours, never into the row.
+.ComposerToolbar-RecDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--shell-danger);
+}
+
+.ComposerToolbar-Timer {
+  font-variant-numeric: tabular-nums;
+}
+
+.ComposerToolbar-EscHint {
+  font-size: var(--shell-fs-sm);
+}
+
+.ComposerToolbar-Spinner {
+  width: 13px;
+  height: 13px;
+  color: var(--shell-text-muted);
+  font-size: 13px;
+}
+
+.ComposerToolbar-LiveStatus {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+// Fixed 32×32 at every state: the stop capsule grows over the microphone's slot, never into the row.
 .ComposerToolbar-MicSlot,
 .ComposerToolbar-SendSlot {
   position: relative;
@@ -279,12 +300,50 @@ defineExpose({ launch })
   height: 32px;
 }
 
-// Stacked so each capsule paints over the slot it covers.
+// Stacked so the capsule paints over the slot it covers.
 .ComposerToolbar-MicSlot {
   z-index: 1;
 }
 
 .ComposerToolbar-SendSlot {
   z-index: 2;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ComposerToolbar-Left,
+  .ComposerToolbar-ModelSlot {
+    transition:
+      opacity 160ms cubic-bezier(0.23, 1, 0.32, 1),
+      scale 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .ComposerToolbar-Status {
+    transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1) 80ms;
+  }
+
+  .ComposerToolbar-RecDot {
+    animation: composer-rec-breathe 1.4s ease-in-out infinite;
+  }
+
+  .ComposerToolbar-Spinner {
+    animation: composer-status-spin 0.9s linear infinite;
+  }
+}
+
+@keyframes composer-rec-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes composer-status-spin {
+  to {
+    rotate: 360deg;
+  }
 }
 </style>

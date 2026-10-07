@@ -1,9 +1,9 @@
 <script lang="ts">
 /**
- * The one menu the two pills may hold open between them — the old `openMenu` state machine's
- * invariant. Pointer flows keep it on their own (the primitive's outside-click closes the other
- * copy on pointerdown), but a keyboard activation of the other pill fires no pointerdown, so the
- * newly opening copy closes the previous one through this hand-off.
+ * The one model menu the two pills may hold open between them. Pointer flows keep it on their own
+ * (the anchor's outside-click closes the other copy on pointerdown), but a keyboard activation of the
+ * other pill fires no pointerdown, so the newly opening copy closes the previous one through this
+ * hand-off.
  */
 let closeActiveModelMenu: (() => void) | null = null
 </script>
@@ -13,48 +13,44 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import type { FilterChipItem } from '@talex-touch/tuffex/filter-chips'
 import type { IntelligenceReasoningLevel } from '@talex-touch/utils/intelligence/reasoning-effort'
 import type { ModelChoice } from '~/modules/conversation/useModelOptions'
-import { TxCardItem } from '@talex-touch/tuffex/card-item'
-import { TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxFilterChips } from '@talex-touch/tuffex/filter-chips'
 import { TxIcon } from '@talex-touch/tuffex/icon'
-import { TxKbd } from '@talex-touch/tuffex/kbd'
+import { TxPopover } from '@talex-touch/tuffex/popover'
 import { TxSearchInput } from '@talex-touch/tuffex/search-input'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
 import {
   normalizeReasoningEffortSetting,
   REASONING_EFFORT_SETTINGS
 } from '@talex-touch/utils/intelligence/reasoning-effort'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { matchesModelQuery, modelSubtitle } from '~/modules/conversation/model-display'
-import { reasoningLevelLabelKey } from '~/modules/conversation/reasoning-effort-display'
+import { useRouter } from 'vue-router'
 import { useHomeModelScope } from '~/modules/conversation/home-model-scope'
-import { useModelFavorites } from '~/modules/conversation/useModelFavorites'
+import { matchesModelQuery, sameModelRef } from '~/modules/conversation/model-display'
+import { reasoningLevelLabelKey } from '~/modules/conversation/reasoning-effort-display'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
+import { useRecentModels } from '~/modules/conversation/useRecentModels'
 import { modelFamilyIconFor } from '~/modules/intelligence/model-family-icons'
-import {
-  modelSourceIconFor,
-  modelSourceInitialFor
-} from '~/modules/intelligence/model-source-icons'
 import { providerIconForId } from '~/modules/intelligence/provider-icons'
-import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
-import {
-  MODEL_MENU_HOTKEY_COUNT,
-  modelMenuHotkeyIndex,
-  modelMenuHotkeyLabel
-} from './model-menu-hotkeys'
+import { useEscapeReturnsFocus } from './escape-returns-focus'
+import { focusWhenShown } from './focus-when-shown'
 
 /**
- * The picker behind both model pills. Each caller hands its pill in through the trigger slot and
- * this control owns the rest: anchoring, outside-click, Escape and arrow traversal come from
- * TxDropdownMenu; the channel filter strip, search, favourites, hotkeys and the shared selection
- * state are composed here. Rows are `menuitemradio` card items so the primitive's arrow keys walk
- * them; everything else in the panel is reached with Tab.
+ * The model popover behind both model pills (`home-composer` › 模型弹层): a search field and the
+ * settings key on top, two columns in the middle — where the models come from on the left, the
+ * models themselves on the right — and the reasoning effort pinned at the bottom. Only the columns
+ * scroll, so the search field and the effort row are always whole.
+ *
+ * Each caller hands its pill in through the `trigger` slot; this control owns the rest. The left
+ * column is a vertical tablist (a source selects what the right column lists, selection following
+ * focus); 「自动选择」 above it is an action, not a source. The right column is a listbox.
  */
 const props = withDefaults(defineProps<{ placement?: 'bottom-start' | 'top-end' }>(), {
   placement: 'bottom-start'
 })
 
 const { t } = useI18n()
+const router = useRouter()
 const { choices, loaded, ensureLoaded } = useModelOptions()
 /**
  * Whose choice the rows and the effort strip edit: the open conversation's own settings when Main
@@ -62,14 +58,238 @@ const { choices, loaded, ensureLoaded } = useModelOptions()
  */
 const { select, isSelected, resolvedChoice, effortSetting, effortRow, selectEffort } =
   useHomeModelScope()
-const { isFavorite, toggle: toggleFavorite } = useModelFavorites()
+const { recents, record } = useRecentModels()
+/**
+ * Routing is automatic. Not before the first list lands: until then a pinned model reads as
+ * unresolved, and the check would claim 「自动选择」 for a conversation that has a model.
+ */
+const autoSelected = computed(() => loaded.value && !resolvedChoice.value)
+/** Both pills keep their panel mounted, so the list's id has to be this instance's own. */
+const listId = `home-model-list-${useId()}`
+
+/** The left column's 「最近使用」 entry; every other entry is a `source:` key. */
+const RECENT = 'recent'
+
+/** `\u0000` joins the halves: a provider id may hold the `/` or `:` that would let two keys collide. */
+function sourceKeyOf(choice: Pick<ModelChoice, 'providerId' | 'source'>): string {
+  return `source:${choice.providerId}\u0000${choice.source ?? ''}`
+}
+
+/** `OMP (local CLI)` → `OMP`: the tag beside a row has no room for the qualifier. */
+function shortProviderName(name: string): string {
+  return name.replace(/\s*[（(][^（()）]*[)）]\s*$/, '') || name
+}
+
+interface SourceEntry {
+  kind: 'source'
+  key: string
+  providerId: string
+  channel: string | null
+  /** What the left column prints: the channel under its service, or the service itself. */
+  label: string
+  /** `OMP · codex` / `Ollama`: the row tag in 「最近使用」. */
+  tag: string
+  /** `OMP (local CLI) · codex`: the group heading over search results, and the entry's title. */
+  heading: string
+  icon: ITuffIcon | null
+  indent: boolean
+  count: number
+}
+
+interface GroupEntry {
+  kind: 'group'
+  key: string
+  label: string
+  /** The service's full name, where the label is the short one. */
+  title: string
+  icon: ITuffIcon
+}
+
+type RailEntry = SourceEntry | GroupEntry
+
+/**
+ * The left column, in the order the options arrived. A service whose ids carry a channel prefix
+ * (`codex/gpt-6-astra`) shows a heading with its channels indented under it; a service without one
+ * is a single entry. Derived from the rows, so a source never opens on nothing.
+ */
+const rail = computed<RailEntry[]>(() => {
+  const providers = new Map<
+    string,
+    { name: string; type: string; channels: Map<string | null, number> }
+  >()
+  for (const choice of choices.value) {
+    let provider = providers.get(choice.providerId)
+    if (!provider) {
+      provider = { name: choice.providerName, type: choice.providerType, channels: new Map() }
+      providers.set(choice.providerId, provider)
+    }
+    provider.channels.set(choice.source, (provider.channels.get(choice.source) ?? 0) + 1)
+  }
+  const shortCounts = new Map<string, number>()
+  for (const provider of providers.values()) {
+    const short = shortProviderName(provider.name)
+    shortCounts.set(short, (shortCounts.get(short) ?? 0) + 1)
+  }
+  const entries: RailEntry[] = []
+  for (const [providerId, provider] of providers) {
+    const icon = providerIconForId(providerId, provider.type)
+    const short = shortProviderName(provider.name)
+    // The column is narrow: `Claude Code (local CLI)` prints as `Claude Code` — unless another
+    // service would then print the same name. The full name stays in the title and the headings.
+    const name = shortCounts.get(short) === 1 ? short : provider.name
+    const channelled = [...provider.channels.keys()].some((channel) => channel !== null)
+    if (channelled) {
+      entries.push({
+        kind: 'group',
+        key: `group:${providerId}`,
+        label: name,
+        title: provider.name,
+        icon
+      })
+    }
+    for (const [channel, count] of provider.channels) {
+      entries.push({
+        kind: 'source',
+        key: sourceKeyOf({ providerId, source: channel }),
+        providerId,
+        channel,
+        label: channel ?? name,
+        tag: channel ? `${short} · ${channel}` : short,
+        heading: channel ? `${provider.name} · ${channel}` : provider.name,
+        icon: channelled ? null : icon,
+        indent: channelled,
+        count
+      })
+    }
+  }
+  return entries
+})
+
+const sources = computed(() =>
+  rail.value.filter((entry): entry is SourceEntry => entry.kind === 'source')
+)
+
+function sourceOf(choice: ModelChoice): SourceEntry | undefined {
+  const key = sourceKeyOf(choice)
+  return sources.value.find((entry) => entry.key === key)
+}
+
+/** 「最近使用」 resolved against what is on offer now; a pick whose provider is gone waits in storage. */
+const recentChoices = computed<ModelChoice[]>(() =>
+  recents.value
+    .map((ref) => choices.value.find((choice) => sameModelRef(choice, ref)))
+    .filter((choice): choice is ModelChoice => choice !== undefined)
+)
+
+const open = ref(false)
+const query = ref('')
+const activeRail = ref<string>(RECENT)
+/** Set by a choice in the left column; until then the selection follows the data as it loads. */
+let railPinned = false
+/**
+ * The user has moved within this opening — a wheel, a pointer, a key. Options landing after that
+ * re-derive the selection but no longer scroll the columns under them.
+ */
+let handsOn = false
+/** The left column's selection when a search started, put back when it clears. */
+let railBeforeQuery: string | null = null
+
+const triggerWrapRef = ref<HTMLElement | null>(null)
+const panelRef = ref<HTMLElement | null>(null)
+/**
+ * Focus goes back to the pill only when the menu closed from the keyboard or a choice — an outside
+ * click moved focus somewhere deliberate, and yanking it back would fight the user.
+ */
+let restoreFocusOnClose = false
+
+const trimmedQuery = computed(() => query.value.trim())
+const searching = computed(() => trimmedQuery.value.length > 0)
+
+/** Where the column opens: the pinned model's source, else 「最近使用」 when it has rows, else the first source. */
+function defaultRail(): string {
+  const resolved = resolvedChoice.value
+  const pinned = resolved ? sourceOf(resolved) : undefined
+  if (pinned) return pinned.key
+  if (recentChoices.value.length) return RECENT
+  return sources.value[0]?.key ?? RECENT
+}
+
+/** The selection, unless it names a source that has since gone; then the default. */
+const effectiveRail = computed(() => {
+  const key = activeRail.value
+  if (key === RECENT) return key
+  return sources.value.some((entry) => entry.key === key) ? key : defaultRail()
+})
+
+interface ListGroup {
+  key: string
+  /** Shown over the group only while searching across sources. */
+  heading: string | null
+  rows: { choice: ModelChoice; tag: string | null }[]
+}
+
+/** What the right column lists: the search across every source, 「最近使用」, or one source's models. */
+const listGroups = computed<ListGroup[]>(() => {
+  if (searching.value) {
+    const needle = trimmedQuery.value
+    const groups = new Map<string, ListGroup>()
+    for (const choice of choices.value) {
+      if (!matchesModelQuery(choice, needle)) continue
+      const source = sourceOf(choice)
+      const key = source?.key ?? sourceKeyOf(choice)
+      let group = groups.get(key)
+      if (!group) {
+        group = { key, heading: source?.heading ?? choice.providerName, rows: [] }
+        groups.set(key, group)
+      }
+      group.rows.push({ choice, tag: null })
+    }
+    return [...groups.values()]
+  }
+  if (effectiveRail.value === RECENT) {
+    return [
+      {
+        key: RECENT,
+        heading: null,
+        rows: recentChoices.value.map((choice) => ({
+          choice,
+          tag: sourceOf(choice)?.tag ?? shortProviderName(choice.providerName)
+        }))
+      }
+    ]
+  }
+  const key = effectiveRail.value
+  return [
+    {
+      key,
+      heading: null,
+      rows: choices.value
+        .filter((choice) => sourceKeyOf(choice) === key)
+        .map((choice) => ({ choice, tag: null }))
+    }
+  ]
+})
+
+const visibleRows = computed(() => listGroups.value.flatMap((group) => group.rows))
+
+/** The line shown instead of rows, or `null` when there are rows. Gated on `loaded`, never `loading`. */
+const listHint = computed<string | null>(() => {
+  if (!loaded.value || !choices.value.length || visibleRows.value.length) return null
+  if (searching.value) return t('home.modelNoResults')
+  return effectiveRail.value === RECENT ? t('home.modelRecentEmpty') : t('home.modelNoResults')
+})
+
+/** A row shows what the model is: the family's brand mark, the provider's icon when it names none. */
+function rowIcon(choice: ModelChoice): ITuffIcon {
+  return (
+    modelFamilyIconFor(choice.model) ?? providerIconForId(choice.providerId, choice.providerType)
+  )
+}
 
 /**
  * The effort row: 自动 · 低 · 中 · 高 · 极高, the scope's one choice shown against the model the next
- * send pins. Every level stays pickable on a route that takes one — a model that lacks a level rounds to
- * its nearest, and the note says to which — and the whole row goes inert, with its reason, on a
- * route that takes none. Disabled rather than hidden: this menu is where the model changes, and a row
- * that came and went with the selection would read as a setting that is sometimes lost.
+ * send pins. A model that lacks a level rounds to its nearest and the note says to which; the whole
+ * row goes inert, with its reason, on a route that takes none.
  */
 const effortChips = computed<FilterChipItem[]>(() =>
   REASONING_EFFORT_SETTINGS.map((value) => ({
@@ -108,320 +328,201 @@ const effortNote = computed<string | null>(() => {
   }
 })
 
-/** Read once: the platform does not change under a running renderer. */
-const isMac = getCurrentRendererPlatformState().isMac
-
-/**
- * Which rows the strip shows when there is no search. A tagged union rather than a string, so a
- * provider whose id happened to be `favorites` could not collide with the star filter.
- */
-type ModelFilter = { kind: 'favorites' } | { kind: 'provider'; providerId: string }
-
-const FAVORITES_FILTER: ModelFilter = { kind: 'favorites' }
-
-/**
- * Chip values are prefixed rather than raw, so a provider id can never be read as the star filter
- * — a provider literally named `favorites` still lands on `provider:favorites`.
- */
-const FAVORITES_CHIP = 'favorites'
-
-function providerChip(providerId: string): string {
-  return `provider:${providerId}`
-}
-
-/**
- * One group in the list: the channel a model was listed under (`codex/gpt-6-astra` → `codex`),
- * falling back to the provider for ids that carry no channel at all (`qwen2.5:3b`).
- *
- * The strip does not use this. Channels are what the list sorts rows into; the strip picks which
- * provider's rows are on screen. Tying the two together was tried and reverted: pi alone serves
- * eight channels here, and a tab each pushed the strip onto a second row while the list below it
- * had nothing left to group.
- */
-interface ModelBucket {
-  key: string
-  providerId: string
-  /** `null` when this provider's ids carry no channel prefix; the bucket is then the provider. */
-  source: string | null
-  label: string
-  /** `null` for a channel the icon table cannot place; `initial` is drawn instead. */
-  icon: ITuffIcon | null
-  initial: string
-}
-
-/**
- * `\u0000` joins the two halves, because both are free text: a provider id may hold the `/` or `:`
- * that would otherwise let `a/b` + `c` and `a` + `b/c` collide into one bucket. Neither a provider
- * id nor a channel name can hold a NUL. Written as an escape, never as the character itself — a
- * raw NUL in a source file is invisible in every editor and diff that would have to review it.
- */
-function bucketKeyOf(choice: ModelChoice): string {
-  return `${choice.providerId}\u0000${choice.source ?? ''}`
-}
-
-function bucketOf(choice: ModelChoice): ModelBucket {
-  const source = choice.source
-  return {
-    key: bucketKeyOf(choice),
-    providerId: choice.providerId,
-    source,
-    label: source ?? choice.providerName,
-    icon: source
-      ? modelSourceIconFor(source)
-      : providerIconForId(choice.providerId, choice.providerType),
-    initial: source ? modelSourceInitialFor(source) : ''
-  }
-}
-
-const open = ref(false)
-const query = ref('')
-const activeFilter = ref<ModelFilter>(FAVORITES_FILTER)
-/** Set by a click on the strip; until then the filter follows the data as it loads. */
-let filterPinned = false
-const triggerWrapRef = ref<HTMLElement | null>(null)
-const searchWrapRef = ref<HTMLElement | null>(null)
-/**
- * Focus goes back to the pill only when the menu closed from the keyboard or a selection —
- * an outside click moved focus somewhere deliberate, and yanking it back would fight the user.
- */
-let restoreFocusOnClose = false
-
-/**
- * One chip per provider that has something to pick, in the order the options arrived. Derived from
- * the rows rather than the raw option list, so a provider with no models is never a chip that
- * opens on nothing.
- */
-const providerFilters = computed(() => {
-  const seen = new Set<string>()
-  const providers: { providerId: string; providerName: string; providerType: string }[] = []
-  for (const choice of choices.value) {
-    if (seen.has(choice.providerId)) continue
-    seen.add(choice.providerId)
-    providers.push({
-      providerId: choice.providerId,
-      providerName: choice.providerName,
-      providerType: choice.providerType
-    })
-  }
-  return providers
-})
-
-/**
- * A row shows what the model is before who serves it: the family's brand mark (`qwen2.5:3b` →
- * Qwen, `codex/gpt-6-astra` → OpenAI), and the provider's icon only when the name names no
- * family. A tab and a group header show the bucket instead — there the channel is the subject.
- */
-function rowIcon(choice: ModelChoice): ITuffIcon {
-  return (
-    modelFamilyIconFor(choice.model) ?? providerIconForId(choice.providerId, choice.providerType)
-  )
-}
-
-/** Starred rows that resolve against the loaded choices, in list order. */
-const favoriteChoices = computed(() => choices.value.filter((choice) => isFavorite(choice)))
-
-const trimmedQuery = computed(() => query.value.trim())
-
-/**
- * Where the panel opens: the pinned model's provider, else the star filter when a favourite is
- * on offer, else the first provider. The star filter is the last resort only when there is no
- * provider at all.
- */
-function defaultFilter(): ModelFilter {
-  const resolved = resolvedChoice.value
-  if (resolved) return { kind: 'provider', providerId: resolved.providerId }
-  if (favoriteChoices.value.length) return FAVORITES_FILTER
-  const first = providerFilters.value[0]
-  return first ? { kind: 'provider', providerId: first.providerId } : FAVORITES_FILTER
-}
-
-/** The active filter, unless it names a provider that has since gone; then the default. */
-const effectiveFilter = computed<ModelFilter>(() => {
-  const chosen = activeFilter.value
-  if (chosen.kind === 'favorites') return chosen
-  const stillOffered = providerFilters.value.some(
-    (provider) => provider.providerId === chosen.providerId
-  )
-  return stillOffered ? chosen : defaultFilter()
-})
-
-const favoritesActive = computed(() => effectiveFilter.value.kind === 'favorites')
-
-/** The chip row is single-select, so the union collapses to one value and back. */
-const activeChip = computed<string>(() => {
-  const filter = effectiveFilter.value
-  return filter.kind === 'favorites' ? FAVORITES_CHIP : providerChip(filter.providerId)
-})
-
-function pickChip(value: string | number): void {
-  const chip = String(value)
-  if (chip === FAVORITES_CHIP) {
-    pickFilter(FAVORITES_FILTER)
-    return
-  }
-  pickFilter({ kind: 'provider', providerId: chip.slice('provider:'.length) })
-}
-
-/**
- * The star sits first and always, so it has a fixed place whatever the providers do. Every chip
- * has an icon, since the strip draws nothing else: the label goes to `aria-label` and the hover
- * title.
- */
-const filterChips = computed<FilterChipItem[]>(() => [
-  {
-    value: FAVORITES_CHIP,
-    label: t('home.modelFavorites'),
-    iconClass: favoritesActive.value ? 'i-ri-star-fill' : 'i-ri-star-line'
-  },
-  ...providerFilters.value.map((provider) => ({
-    value: providerChip(provider.providerId),
-    label: provider.providerName,
-    iconClass: providerIconForId(provider.providerId, provider.providerType).value
-  }))
-])
-
-/** A search runs across every provider and ignores the strip; the strip only applies without one. */
-const visibleChoices = computed<ModelChoice[]>(() => {
-  const needle = trimmedQuery.value
-  if (needle) return choices.value.filter((choice) => matchesModelQuery(choice, needle))
-  const filter = effectiveFilter.value
-  if (filter.kind === 'favorites') return favoriteChoices.value
-  return choices.value.filter((choice) => choice.providerId === filter.providerId)
-})
-
-/**
- * The same rows, cut into their buckets. `visibleChoices` stays the ordering truth and this is a
- * view of it, which is what keeps `startIndex` — and with it the ⌘1–9 chords — running unbroken
- * across the group boundaries instead of restarting at each header.
- */
-interface ModelGroup {
-  bucket: ModelBucket
-  choices: ModelChoice[]
-  /** Where this group's first row sits in `visibleChoices`; the chord index counts from here. */
-  startIndex: number
-}
-
-const visibleGroups = computed<ModelGroup[]>(() => {
-  const groups: ModelGroup[] = []
-  const byKey = new Map<string, ModelGroup>()
-  visibleChoices.value.forEach((choice, index) => {
-    const key = bucketKeyOf(choice)
-    const existing = byKey.get(key)
-    if (existing) {
-      existing.choices.push(choice)
-      return
-    }
-    const group: ModelGroup = { bucket: bucketOf(choice), choices: [choice], startIndex: index }
-    byKey.set(key, group)
-    groups.push(group)
-  })
-  return groups
-})
-
-/**
- * A header over the only group on screen names what the tab above it already says, so the single
- * group goes bare. Under a search — and under the star filter — the rows usually do span buckets,
- * and that is exactly where the header earns its line.
- */
-const showGroupHeaders = computed(() => visibleGroups.value.length > 1)
-
-/**
- * The line shown instead of the list, or `null` when there are rows. Gated on `loaded`, never on
- * `loading`: a reopen refetches over a list that is already on screen, and the rows stay while it
- * does. No skeleton: the row count is the data's to decide (design §7, the component-guidelines
- * exception), so a fixed `min-height` under the body holds the panel steady between this line and
- * the rows instead.
- */
-const emptyHint = computed<string | null>(() => {
-  if (!loaded.value) return t('home.modelLoading')
-  // Not an error: a machine with no configured provider legitimately has nothing to list.
-  if (!choices.value.length) return t('home.modelEmpty')
-  if (visibleChoices.value.length) return null
-  if (trimmedQuery.value) return t('home.modelNoResults')
-  return favoritesActive.value ? t('home.modelFavoritesEmpty') : t('home.modelNoResults')
-})
-
-function pickFilter(filter: ModelFilter): void {
-  filterPinned = true
-  activeFilter.value = filter
-}
-
-function choose(choice: ModelChoice | null): void {
-  select(choice)
+function close(): void {
   restoreFocusOnClose = true
   open.value = false
 }
 
-function searchInput(): HTMLInputElement | null {
-  return searchWrapRef.value?.querySelector('input') ?? null
+function choose(choice: ModelChoice | null): void {
+  select(choice)
+  if (choice) record(choice)
+  close()
 }
 
-/** Starring never selects and never closes; it is a side note on the row. */
-function toggleStar(choice: ModelChoice): void {
-  const removesFocusedRow = favoritesActive.value && !trimmedQuery.value && isFavorite(choice)
-  toggleFavorite(choice)
-  // Unstarring under the star filter unmounts the row that held focus; park it on the search
-  // field rather than let it fall to the document, where the next keystroke would go nowhere.
-  if (removesFocusedRow) void nextTick(() => searchInput()?.focus())
+function openSettings(): void {
+  open.value = false
+  void router.push('/setting/intelligence/channels')
 }
 
-/**
- * Escape is closed by the anchor itself; this only marks that focus should return to the pill.
- * The digit chords reach here from anywhere inside the panel — and only from there, so a closed
- * menu hears nothing. The panel owns the whole chord range while open: a digit past the last
- * row still does nothing else.
- */
-function onPanelKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
-    restoreFocusOnClose = true
-    return
-  }
-  const index = modelMenuHotkeyIndex(event, isMac)
-  if (index === null) return
+function pickRail(key: string): void {
+  railPinned = true
+  activeRail.value = key
+}
+
+// ---------------------------------------------------------------------------------------------
+// Keyboard: the search field hands ↓ to the list; ←/→ cross between the columns; each column
+// moves its own roving focus with ↑/↓/Home/End. Enter on a model picks it; the anchor owns Escape.
+// ---------------------------------------------------------------------------------------------
+
+function columnItems(column: 'rail' | 'list'): HTMLElement[] {
+  const selector = column === 'rail' ? '[data-home-model-rail-item]' : '[data-home-model-option]'
+  return Array.from(panelRef.value?.querySelectorAll<HTMLElement>(selector) ?? [])
+}
+
+function focusColumn(column: 'rail' | 'list', which: 'current' | 'first' = 'current'): void {
+  const items = columnItems(column)
+  if (!items.length) return
+  const current =
+    which === 'current'
+      ? items.find((item) => item.getAttribute('aria-selected') === 'true')
+      : undefined
+  const target = current ?? items[0]
+  target?.focus()
+  target?.scrollIntoView({ block: 'nearest' })
+}
+
+function moveWithin(
+  column: 'rail' | 'list',
+  from: HTMLElement,
+  step: number | 'start' | 'end'
+): void {
+  const items = columnItems(column)
+  if (!items.length) return
+  const index = items.indexOf(from)
+  const next =
+    step === 'start'
+      ? items[0]
+      : step === 'end'
+        ? items.at(-1)
+        : items[Math.min(items.length - 1, Math.max(0, index + step))]
+  if (!next) return
+  next.focus()
+  next.scrollIntoView({ block: 'nearest' })
+  // Selection follows focus in the left column: the right column shows what is focused.
+  if (column === 'rail') next.click()
+}
+
+function onSearchKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'ArrowDown') return
   event.preventDefault()
-  const choice = visibleChoices.value[index]
-  if (choice) choose(choice)
+  focusColumn('list', 'first')
+}
+
+/** The clear key takes itself away with the query: focus goes back to the field, not to the page. */
+function onSearchCleared(): void {
+  searchInput()?.focus()
+}
+
+function onRailKeydown(event: KeyboardEvent): void {
+  const from = event.target as HTMLElement
+  const steps: Record<string, number | 'start' | 'end'> = {
+    ArrowDown: 1,
+    ArrowUp: -1,
+    Home: 'start',
+    End: 'end'
+  }
+  if (event.key in steps) {
+    event.preventDefault()
+    moveWithin('rail', from, steps[event.key]!)
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    focusColumn('list')
+  }
+}
+
+function onListKeydown(event: KeyboardEvent): void {
+  const from = event.target as HTMLElement
+  const steps: Record<string, number | 'start' | 'end'> = {
+    ArrowDown: 1,
+    ArrowUp: -1,
+    Home: 'start',
+    End: 'end'
+  }
+  if (event.key in steps) {
+    event.preventDefault()
+    moveWithin('list', from, steps[event.key]!)
+  } else if (event.key === 'ArrowLeft' && !searching.value) {
+    event.preventDefault()
+    focusColumn('rail')
+  }
+}
+
+/** A key, a press or a wheel in the panel: the user has taken over this opening (`handsOn`). */
+function markHandsOn(): void {
+  handsOn = true
+}
+
+useEscapeReturnsFocus(
+  open,
+  () => [panelRef.value, triggerWrapRef.value],
+  () => {
+    restoreFocusOnClose = true
+  }
+)
+
+/** Roving tabindex: the selected row, or the first one when none is selected, takes Tab. */
+function listTabIndex(choice: ModelChoice): 0 | -1 {
+  const selectedVisible = visibleRows.value.some((row) => isSelected(row.choice))
+  if (selectedVisible) return isSelected(choice) ? 0 : -1
+  return visibleRows.value[0]?.choice === choice ? 0 : -1
+}
+
+/** Bumped on every opening and closing: a retry from an earlier opening stops at its next frame. */
+let focusRun = 0
+
+function searchInput(): HTMLInputElement | null {
+  return panelRef.value?.querySelector('.HomeModelMenu-Search input') ?? null
+}
+
+/** The pinned source and model, scrolled into view where they are not already. */
+function revealPinned(): void {
+  const panel = panelRef.value
+  if (!panel) return
+  panel
+    .querySelector<HTMLElement>('[data-home-model-rail-item][aria-selected="true"]')
+    ?.scrollIntoView({ block: 'nearest' })
+  panel
+    .querySelector<HTMLElement>('[data-home-model-option][aria-selected="true"]')
+    ?.scrollIntoView({ block: 'nearest' })
 }
 
 /**
- * The anchor keeps its panel at `visibility: hidden` until it has measured a position and the
- * entrance animation starts, a few frames after `open` flips — and a hidden element refuses
- * focus. Retry once per frame, bounded, until focus lands or the menu closes again. One run at a
- * time: a reopen supersedes the previous run's token.
+ * Both columns start each opening at their top — the panel stays mounted between openings and
+ * would otherwise come back scrolled the way the last one left it, 「自动选择」 out of sight — and
+ * then the pinned source and model scroll into view.
  */
-const FOCUS_RETRY_FRAMES = 30
-let focusRun = 0
+function revealSelection(): void {
+  const panel = panelRef.value
+  if (!panel) return
+  for (const column of panel.querySelectorAll<HTMLElement>(
+    '.HomeModelMenu-Rail, .HomeModelMenu-List'
+  )) {
+    column.scrollTop = 0
+  }
+  revealPinned()
+}
 
 function focusSearchWhenShown(): void {
   const run = ++focusRun
-  let attempts = 0
-  const attempt = (): void => {
-    if (run !== focusRun || !open.value) return
-    const input = searchInput()
-    input?.focus()
-    if (input && document.activeElement === input) return
-    if (++attempts < FOCUS_RETRY_FRAMES) requestAnimationFrame(attempt)
-  }
-  void nextTick(attempt)
+  focusWhenShown(searchInput, () => run === focusRun && open.value, revealSelection)
 }
 
 function closeSelf(): void {
   open.value = false
 }
 
+watch(searching, (isSearching) => {
+  if (isSearching) {
+    railBeforeQuery = activeRail.value
+    return
+  }
+  if (railBeforeQuery !== null) activeRail.value = railBeforeQuery
+  railBeforeQuery = null
+})
+
 watch(open, (isOpen) => {
   if (isOpen) {
     if (closeActiveModelMenu !== null && closeActiveModelMenu !== closeSelf) closeActiveModelMenu()
     closeActiveModelMenu = closeSelf
     restoreFocusOnClose = false
-    // A fresh look each time: the search is a one-off, and the filter follows what is pinned now.
+    // A fresh look each time: the search is a one-off, and the column follows what is pinned now.
     query.value = ''
-    filterPinned = false
-    activeFilter.value = defaultFilter()
-    // Fetched again on every open, not just the first: providers come and go while the app runs
-    // (a CLI installed after launch, one enabled in settings), and the list HomePage loaded at
-    // mount would otherwise stand for the whole session. The rows already on screen stay put
-    // while the refetch is in flight — only `loaded`, never `loading`, gates the loading line.
+    railBeforeQuery = null
+    railPinned = false
+    handsOn = false
+    activeRail.value = defaultRail()
+    // Fetched again on every open: providers come and go while the app runs (a CLI installed after
+    // launch, one enabled in settings). The rows already on screen stay while the refetch runs.
     void ensureLoaded({ refresh: true })
     focusSearchWhenShown()
     return
@@ -433,9 +534,14 @@ watch(open, (isOpen) => {
   }
 })
 
-/** Options that land after the panel opened re-derive the default, unless a click pinned one. */
+/**
+ * Options that land after the panel opened — the first load, a refresh that reorders the sources —
+ * re-derive the default, unless a click pinned one, and bring it into view as the opening did.
+ */
 watch(choices, () => {
-  if (open.value && !filterPinned) activeFilter.value = defaultFilter()
+  if (!open.value || railPinned || searching.value) return
+  activeRail.value = defaultRail()
+  if (!handsOn) void nextTick(revealPinned)
 })
 
 onBeforeUnmount(() => {
@@ -445,155 +551,243 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <TxDropdownMenu
+  <TxPopover
     v-model="open"
     :placement="props.placement"
-    :min-width="300"
-    :max-height="380"
+    :min-width="0"
+    :max-width="520"
+    :max-height="560"
+    :match-reference-width="false"
     :panel-radius="12"
-    :panel-padding="6"
+    :panel-padding="0"
     panel-background="pure"
-    initial-focus="none"
   >
-    <template #trigger>
+    <template #reference>
       <!-- display: contents — the wrapper exists only so closing can find the pill to refocus. -->
       <span ref="triggerWrapRef" class="HomeModelMenu-TriggerWrap">
         <slot name="trigger" :open="open" />
       </span>
     </template>
 
-    <!-- `group` so the label is announced: on a bare div `aria-label` is ignored. The radio rows
-         belong inside a group per ARIA menus; the strip and the search field ride along as the
-         panel's own controls, reached with Tab (design §4 rejected `tablist` inside a `menu`). -->
-    <div class="HomeModelMenu" role="group" :aria-label="t('home.model')" @keydown="onPanelKeydown">
-      <!-- Reasoning effort first, where the panel opens: the model list below scrolls, and a row
-           under it would scroll away with it. The same toolbar-of-toggles as the provider strip,
-           reached with Tab; the note is its one-line explanation when there is something to say. -->
-      <div class="HomeModelMenu-Effort" :class="{ 'is-disabled': effortRow.disabled }">
-        <span class="HomeModelMenu-EffortLabel" aria-hidden="true">
-          {{ t('home.reasoning.label') }}
-        </span>
-        <TxFilterChips
-          class="HomeModelMenu-EffortChips"
-          role="toolbar"
-          :aria-label="t('home.reasoning.label')"
-          :items="effortChips"
-          :model-value="effortSetting"
-          :disabled="effortRow.disabled"
-          @update:model-value="pickEffort"
-        />
+    <div
+      ref="panelRef"
+      class="HomeModelMenu"
+      role="group"
+      :aria-label="t('home.model')"
+      @keydown="markHandsOn"
+      @pointerdown="markHandsOn"
+      @wheel.passive="markHandsOn"
+    >
+      <div class="HomeModelMenu-Head">
+        <div class="HomeModelMenu-Search">
+          <TxSearchInput
+            v-model="query"
+            :placeholder="t('home.modelSearch')"
+            :aria-label="t('home.modelSearch')"
+            clearable
+            @clear="onSearchCleared"
+            @keydown="onSearchKeydown"
+          />
+        </div>
+        <button
+          class="HomeModelMenu-Settings"
+          type="button"
+          :aria-label="t('home.modelSettings')"
+          :title="t('home.modelSettings')"
+          @click="openSettings"
+        >
+          <span class="i-ri-equalizer-line" aria-hidden="true" />
+        </button>
       </div>
-      <p v-if="effortNote" class="HomeModelMenu-EffortNote">{{ effortNote }}</p>
-
-      <div class="HomeModelMenu-Divider" />
-
-      <!-- Filters, not tabs: `TxFilterChips` in its toolbar role, so the chips are `aria-pressed`
-           toggles and the arrow keys move focus without changing the filter. A `tablist` inside a
-           `menu` was rejected in the redesign; this keeps that call. Icon-only: three named chips
-           side by side read as one run-on sentence, and each chip still names itself through
-           `aria-label` and its hover title. The row never wraps — the chips scroll sideways —
-           which is what holds the panel's height still. -->
-      <TxFilterChips
-        class="HomeModelMenu-Filters"
-        role="toolbar"
-        icon-only
-        :aria-label="t('home.modelSources')"
-        :items="filterChips"
-        :model-value="activeChip"
-        @update:model-value="pickChip"
-      />
-
-      <div ref="searchWrapRef" class="HomeModelMenu-Search">
-        <TxSearchInput
-          v-model="query"
-          :placeholder="t('home.modelSearch')"
-          :aria-label="t('home.modelSearch')"
-          clearable
-        />
-      </div>
-
-      <!-- Auto stays on top and outside every filter: it is the way out of pinning, not a model. -->
-      <button
-        class="HomeModelMenu-Auto"
-        type="button"
-        role="menuitemradio"
-        :aria-checked="!resolvedChoice"
-        @click="choose(null)"
-      >
-        <span>{{ t('home.modelAuto') }}</span>
-        <span v-if="!resolvedChoice" class="i-ri-check-line HomeModelMenu-Check" />
-      </button>
-
-      <div class="HomeModelMenu-Divider" />
 
       <div class="HomeModelMenu-Body">
-        <p v-if="emptyHint" class="HomeModelMenu-Hint">{{ emptyHint }}</p>
-
-        <div v-else class="HomeModelMenu-List" role="group">
-          <!-- One block per bucket. The header is `aria-hidden` and unfocusable: the group's own
-               `aria-label` already announces the channel, and a focusable header would land in the
-               arrow traversal between two rows. -->
-          <div
-            v-for="group in visibleGroups"
-            :key="group.bucket.key"
-            class="HomeModelMenu-Group"
-            role="group"
-            :aria-label="group.bucket.label"
+        <!-- Left: 「自动选择」 (an action) above the sources (a tablist). Inert while searching:
+             a search runs across every source, so none of them is selected. -->
+        <div
+          class="HomeModelMenu-Rail"
+          :class="{ 'is-dimmed': searching }"
+          :inert="searching || undefined"
+        >
+          <button
+            class="HomeModelMenu-RailItem"
+            type="button"
+            :aria-pressed="autoSelected"
+            @click="choose(null)"
           >
-            <div v-if="showGroupHeaders" class="HomeModelMenu-GroupHeader" aria-hidden="true">
-              <TxIcon v-if="group.bucket.icon" :icon="group.bucket.icon" :size="12" />
-              <span v-else class="HomeModelMenu-GroupInitial">{{ group.bucket.initial }}</span>
-              <span class="HomeModelMenu-GroupName">{{ group.bucket.label }}</span>
-            </div>
+            <span class="i-ri-magic-line HomeModelMenu-RailIcon" aria-hidden="true" />
+            <span class="HomeModelMenu-RailLabel">{{ t('home.modelAuto') }}</span>
+            <span
+              v-if="autoSelected"
+              class="i-ri-check-line HomeModelMenu-RailCheck"
+              aria-hidden="true"
+            />
+          </button>
 
-            <!-- The star rides in the row's `right` slot rather than beside it: the row is a div,
-                 so a control may sit inside it, and the hover surface then covers the whole row
-                 instead of stopping short of the star. It still must neither select nor close, so
-                 its click is stopped before it reaches the row. Arrow keys walk the radios only. -->
-            <TxCardItem
-              v-for="(choice, index) in group.choices"
-              :key="`${choice.providerId} ${choice.model}`"
-              class="HomeModelMenu-Item"
-              role="menuitemradio"
-              :aria-checked="isSelected(choice)"
-              clickable
-              :active="isSelected(choice)"
-              @click="choose(choice)"
+          <div
+            class="HomeModelMenu-Tabs"
+            role="tablist"
+            aria-orientation="vertical"
+            :aria-label="t('home.modelSources')"
+            @keydown="onRailKeydown"
+          >
+            <button
+              class="HomeModelMenu-RailItem"
+              :class="{ 'is-active': effectiveRail === 'recent' }"
+              type="button"
+              role="tab"
+              data-home-model-rail-item
+              :aria-selected="effectiveRail === 'recent'"
+              :tabindex="effectiveRail === 'recent' ? 0 : -1"
+              :aria-controls="listId"
+              @click="pickRail('recent')"
             >
-              <template #avatar>
-                <TxIcon class="HomeModelMenu-Icon" :icon="rowIcon(choice)" :size="15" />
-              </template>
-              <template #title>{{ choice.displayName }}</template>
-              <template #subtitle>
-                {{ modelSubtitle(choice.providerName, choice.source) }}
-              </template>
-              <template #right>
-                <span v-if="isSelected(choice)" class="i-ri-check-line HomeModelMenu-Check" />
-                <TxKbd
-                  v-if="group.startIndex + index < MODEL_MENU_HOTKEY_COUNT"
-                  class="HomeModelMenu-Kbd"
+              <span class="i-ri-history-line HomeModelMenu-RailIcon" aria-hidden="true" />
+              <span class="HomeModelMenu-RailLabel">{{ t('home.modelRecent') }}</span>
+            </button>
+
+            <div class="HomeModelMenu-RailDivider" role="presentation" />
+
+            <template v-if="!loaded">
+              <div
+                v-for="row in 4"
+                :key="row"
+                class="HomeModelMenu-RailSkeleton"
+                role="presentation"
+                aria-hidden="true"
+              >
+                <TxSkeleton class="HomeModelMenu-SkeletonBar" :height="9" :radius="4" />
+              </div>
+            </template>
+
+            <template v-else>
+              <template v-for="entry in rail" :key="entry.key">
+                <div
+                  v-if="entry.kind === 'group'"
+                  class="HomeModelMenu-RailGroup"
+                  role="presentation"
+                  aria-hidden="true"
+                  :title="entry.title"
                 >
-                  {{ modelMenuHotkeyLabel(group.startIndex + index, isMac) }}
-                </TxKbd>
+                  <TxIcon :icon="entry.icon" :size="12" />
+                  <span>{{ entry.label }}</span>
+                </div>
+                <!-- The title names the service too: `codex` alone is under two of them. -->
                 <button
-                  class="HomeModelMenu-Star"
+                  v-else
+                  class="HomeModelMenu-RailItem"
+                  :class="{ 'is-active': effectiveRail === entry.key, 'is-indented': entry.indent }"
                   type="button"
-                  :aria-pressed="isFavorite(choice)"
-                  :aria-label="
-                    isFavorite(choice) ? t('home.modelUnfavorite') : t('home.modelFavorite')
-                  "
-                  :title="isFavorite(choice) ? t('home.modelUnfavorite') : t('home.modelFavorite')"
-                  @click.stop="toggleStar(choice)"
+                  role="tab"
+                  data-home-model-rail-item
+                  :title="entry.heading"
+                  :aria-selected="effectiveRail === entry.key"
+                  :tabindex="effectiveRail === entry.key ? 0 : -1"
+                  :aria-controls="listId"
+                  @click="pickRail(entry.key)"
                 >
-                  <span :class="isFavorite(choice) ? 'i-ri-star-fill' : 'i-ri-star-line'" />
+                  <TxIcon
+                    v-if="entry.icon"
+                    class="HomeModelMenu-RailIcon"
+                    :icon="entry.icon"
+                    :size="14"
+                  />
+                  <span class="HomeModelMenu-RailLabel">{{ entry.label }}</span>
+                  <span class="HomeModelMenu-RailCount">{{ entry.count }}</span>
                 </button>
               </template>
-            </TxCardItem>
+            </template>
           </div>
         </div>
+
+        <!-- Right: the models of the selected source, 「最近使用」, or the search across sources. -->
+        <div
+          :id="listId"
+          class="HomeModelMenu-List"
+          role="listbox"
+          :aria-label="t('home.modelList')"
+          :aria-busy="!loaded || undefined"
+          @keydown="onListKeydown"
+        >
+          <template v-if="!loaded">
+            <div
+              v-for="row in 5"
+              :key="row"
+              class="HomeModelMenu-RowSkeleton"
+              role="presentation"
+              aria-hidden="true"
+            >
+              <TxSkeleton class="HomeModelMenu-SkeletonDot" :width="15" :height="15" :radius="8" />
+              <TxSkeleton class="HomeModelMenu-SkeletonBar" :height="10" :radius="5" />
+            </div>
+          </template>
+
+          <div v-else-if="!choices.length" class="HomeModelMenu-Empty">
+            <p>{{ t('home.modelEmpty') }}</p>
+            <button class="HomeModelMenu-Link" type="button" @click="openSettings">
+              {{ t('home.modelOpenSettings') }}
+            </button>
+          </div>
+
+          <p v-else-if="listHint" class="HomeModelMenu-Hint">{{ listHint }}</p>
+
+          <template v-else>
+            <div
+              v-for="group in listGroups"
+              :key="group.key"
+              class="HomeModelMenu-Group"
+              role="group"
+              :aria-label="group.heading ?? undefined"
+            >
+              <div v-if="group.heading" class="HomeModelMenu-GroupHeading" aria-hidden="true">
+                {{ group.heading }}
+              </div>
+              <button
+                v-for="row in group.rows"
+                :key="`${row.choice.providerId} ${row.choice.model}`"
+                class="HomeModelMenu-Option"
+                :class="{ 'is-selected': isSelected(row.choice) }"
+                type="button"
+                role="option"
+                data-home-model-option
+                :aria-selected="isSelected(row.choice)"
+                :tabindex="listTabIndex(row.choice)"
+                :title="row.choice.model"
+                @click="choose(row.choice)"
+              >
+                <TxIcon class="HomeModelMenu-OptionIcon" :icon="rowIcon(row.choice)" :size="15" />
+                <span class="HomeModelMenu-OptionLabel">{{ row.choice.displayName }}</span>
+                <span v-if="row.tag" class="HomeModelMenu-Tag">{{ row.tag }}</span>
+                <span
+                  v-if="isSelected(row.choice)"
+                  class="i-ri-check-line HomeModelMenu-Check"
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Reasoning effort, pinned under the columns so it never scrolls away with a list. -->
+      <div class="HomeModelMenu-Foot">
+        <div class="HomeModelMenu-Effort" :class="{ 'is-disabled': effortRow.disabled }">
+          <span class="HomeModelMenu-EffortLabel" aria-hidden="true">
+            {{ t('home.reasoning.label') }}
+          </span>
+          <TxFilterChips
+            class="HomeModelMenu-EffortChips"
+            role="toolbar"
+            :aria-label="t('home.reasoning.label')"
+            :items="effortChips"
+            :model-value="effortSetting"
+            :disabled="effortRow.disabled"
+            @update:model-value="pickEffort"
+          />
+        </div>
+        <p v-if="effortNote" class="HomeModelMenu-EffortNote">{{ effortNote }}</p>
       </div>
     </div>
-  </TxDropdownMenu>
+  </TxPopover>
 </template>
 
 <style lang="scss" scoped>
@@ -602,42 +796,333 @@ onBeforeUnmount(() => {
 }
 
 /* Panel chrome (surface, border, shadow, placement) belongs to the primitive; this is content. */
+/*
+ * Never taller than the room the anchor gives the panel (`--tx-ba-max-height`, less the card's
+ * 1px top and bottom border): past it the card's body scrolls as a whole and carries the search
+ * field off the top. Inside that height the columns give way first; the search and the effort row
+ * stay whole.
+ */
 .HomeModelMenu {
   display: flex;
   flex-direction: column;
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(var(--tx-ba-max-height, 560px) - 2px);
+  color: var(--shell-text-primary);
+}
+
+.HomeModelMenu-Head {
+  display: flex;
   gap: 4px;
-}
-
-/*
- * The chip row draws its own chips; this only points the BUI tokens at the shell's, so a control
- * teleported onto the menu panel does not arrive in the docs site's palette. The row never wraps —
- * it scrolls sideways — which is what holds the panel's height still however many providers load.
- * The effort strip is the same primitive in the same panel, so it takes the same palette.
- */
-.HomeModelMenu-Filters,
-.HomeModelMenu-EffortChips {
-  --tx-bui-ink: var(--shell-text-primary);
-  --tx-bui-ink-2: var(--shell-text-muted);
-  --tx-bui-surface: var(--shell-surface-2);
-  --tx-bui-hover: var(--shell-surface);
-  --tx-bui-accent: var(--shell-primary);
-  --tx-bui-shadow-btn: none;
-}
-
-.HomeModelMenu-Filters {
-  margin-bottom: 2px;
-
-  /* simple-icons' π is drawn edge to edge — the path opens at `M0 0` and fills its whole 24px
-     box — while the star and the server keep a margin inside theirs. At the same rendered size
-     it reads a weight heavier than its neighbours, so it alone is scaled down to sit on the
-     same optical line. Keyed on the glyph, not the chip: the slot stays 30px like the others. */
-  :deep(.tx-bui-filter-chips__icon.i-simple-icons-pi) {
-    transform: scale(0.72);
-  }
+  align-items: center;
+  padding: 6px 6px 4px;
 }
 
 .HomeModelMenu-Search {
-  padding: 0 2px 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.HomeModelMenu-Settings {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-muted);
+  font-size: 15px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface);
+    color: var(--shell-text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: -2px;
+  }
+}
+
+/* The only part that scrolls: each column on its own, under a fixed height. */
+/* 316px when there is room; shorter in a short window, down to about four rows. */
+.HomeModelMenu-Body {
+  display: flex;
+  flex: 0 1 316px;
+  min-height: 132px;
+  border-top: 1px solid var(--shell-border);
+}
+
+.HomeModelMenu-Rail {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 1px;
+  width: 168px;
+  padding: 6px;
+  overflow-y: auto;
+  border-right: 1px solid var(--shell-border);
+
+  &.is-dimmed {
+    opacity: 0.45;
+  }
+}
+
+.HomeModelMenu-Tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.HomeModelMenu-RailItem {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-regular);
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--shell-fs-sm);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface);
+  }
+
+  &.is-active {
+    background: var(--shell-surface-2);
+    color: var(--shell-text-primary);
+    font-weight: 600;
+  }
+
+  &.is-indented {
+    padding-left: 24px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: -2px;
+  }
+}
+
+.HomeModelMenu-RailIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--shell-text-secondary);
+  font-size: 14px;
+}
+
+.HomeModelMenu-RailLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.HomeModelMenu-RailCount {
+  flex: none;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.HomeModelMenu-RailCheck {
+  flex: none;
+  color: var(--shell-primary);
+  font-size: 13px;
+}
+
+.HomeModelMenu-RailDivider {
+  margin: 4px 2px;
+  border-top: 1px solid var(--shell-border);
+}
+
+/* A label, not a tab: no hover, no hit area. */
+.HomeModelMenu-RailGroup {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px 8px 3px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.HomeModelMenu-List {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 6px;
+  overflow-y: auto;
+}
+
+.HomeModelMenu-Group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.HomeModelMenu-GroupHeading {
+  padding: 8px 9px 3px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-caption);
+
+  .HomeModelMenu-Group:first-child & {
+    padding-top: 2px;
+  }
+}
+
+.HomeModelMenu-Option {
+  display: flex;
+  flex: none;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  height: 32px;
+  padding: 0 9px;
+  border: none;
+  border-radius: var(--shell-radius-sm);
+  background: transparent;
+  color: var(--shell-text-primary);
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--shell-fs-body);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--shell-surface);
+  }
+
+  &.is-selected {
+    background: var(--shell-surface-2);
+  }
+
+  // The tag shares the selected row's fill; cut it out of the panel colour instead.
+  &.is-selected .HomeModelMenu-Tag {
+    background: var(--shell-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--shell-primary);
+    outline-offset: -2px;
+  }
+}
+
+.HomeModelMenu-OptionIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--shell-text-secondary);
+}
+
+.HomeModelMenu-OptionLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.HomeModelMenu-Tag {
+  flex: none;
+  max-width: 120px;
+  padding: 1px 6px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--shell-surface-2);
+  color: var(--shell-text-secondary);
+  font-size: var(--shell-fs-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.HomeModelMenu-Check {
+  flex: none;
+  color: var(--shell-primary);
+  font-size: 15px;
+}
+
+.HomeModelMenu-Hint,
+.HomeModelMenu-Empty {
+  margin: 0;
+  padding: 8px 9px;
+  color: var(--shell-text-muted);
+  font-size: var(--shell-fs-sm);
+  line-height: 1.5;
+
+  p {
+    margin: 0 0 6px;
+  }
+}
+
+.HomeModelMenu-Link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--shell-primary);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+/* Rows' own padding and line boxes, so loaded rows land where the bars were. */
+.HomeModelMenu-RailSkeleton,
+.HomeModelMenu-RowSkeleton {
+  --tx-skeleton-base-color: var(--shell-surface-2);
+
+  display: flex;
+  flex: none;
+  gap: 10px;
+  align-items: center;
+}
+
+.HomeModelMenu-RailSkeleton {
+  height: 30px;
+  padding: 0 8px 0 24px;
+}
+
+.HomeModelMenu-RowSkeleton {
+  height: 32px;
+  padding: 0 9px;
+}
+
+.HomeModelMenu-SkeletonDot {
+  flex: none;
+}
+
+.HomeModelMenu-SkeletonBar {
+  flex: 1;
+  max-width: 60%;
+}
+
+.HomeModelMenu-Foot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 9px 15px;
+  border-top: 1px solid var(--shell-border);
 }
 
 /*
@@ -652,7 +1137,6 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   min-width: 0;
-  padding: 2px 2px 0 9px;
 }
 
 .HomeModelMenu-EffortLabel {
@@ -666,235 +1150,25 @@ onBeforeUnmount(() => {
   }
 }
 
+/*
+ * The chip row draws its own chips; this only points the BUI tokens at the shell's, so a control
+ * teleported onto the panel does not arrive in the docs site's palette.
+ */
 .HomeModelMenu-EffortChips {
+  --tx-bui-ink: var(--shell-text-primary);
+  --tx-bui-ink-2: var(--shell-text-muted);
+  --tx-bui-surface: var(--shell-surface-2);
+  --tx-bui-hover: var(--shell-surface);
+  --tx-bui-accent: var(--shell-primary);
+  --tx-bui-shadow-btn: none;
+
   min-width: 0;
 }
 
 .HomeModelMenu-EffortNote {
   margin: 0;
-  padding: 0 9px 2px;
   color: var(--shell-text-muted);
   font-size: var(--shell-fs-caption);
   line-height: 1.35;
-}
-
-/*
- * The stand-in for a channel with no brand mark, in the group header. Sized in `em` off the
- * header's own font so it lines up with the 12px icons beside it, and weighted up because a single
- * letter at caption size reads as debris next to a filled glyph.
- */
-.HomeModelMenu-GroupInitial {
-  font-size: 0.85em;
-  font-weight: 600;
-  line-height: 1;
-}
-
-/*
- * The rows are `TxCardItem`s, so hover, selection, focus ring and disabled come from the primitive
- * and only the sizing and the two surface colours are set here.
- *
- * Those two colours have to be set. The primitive's defaults wash `--tx-bg-color-overlay` at 18%
- * over the row, and under the dark theme that token is `#1d1e1f` — a dark wash on this panel's own
- * `#1c1c1e` surface, which is the invisible hover this menu had before. The shell's semantic
- * surfaces are the ones that carry a contrast here, and they resolve inside the teleported panel
- * because they are declared on `:root`, unlike the `--tx-*` bridge, which stops at `.HomePage`.
- */
-.HomeModelMenu-Item {
-  --tx-card-item-padding: 6px 9px;
-  --tx-card-item-radius: var(--shell-radius-sm);
-  --tx-card-item-gap: 10px;
-  --tx-card-item-hover-bg: var(--shell-surface);
-  --tx-card-item-active-bg: var(--shell-surface-2);
-
-  align-items: center;
-  color: var(--shell-text-primary);
-  font-size: var(--shell-fs-body);
-
-  /* The primitive rings the active row in `primary 40%`, which on this panel reads as a second
-     focus ring beside the search field's real one. Selection here is the fill alone; the ring is
-     the keyboard's. */
-  &.tx-card-item--active {
-    border-color: transparent;
-  }
-
-  /* The row is one line of text over a caption; centring the icon and the trailing controls on it
-     reads better than the primitive's default top alignment, which is built for taller cards. */
-  :deep(.tx-card-item__top) {
-    align-items: center;
-  }
-
-  :deep(.tx-card-item__title) {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  :deep(.tx-card-item__subtitle) {
-    overflow: hidden;
-    color: var(--shell-text-muted);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: var(--shell-fs-caption);
-    line-height: 1.3;
-  }
-
-  :deep(.tx-card-item__right) {
-    display: flex;
-    gap: 2px;
-    align-items: center;
-  }
-}
-
-/* Auto is a plain button, not a row: it is the way out of pinning, not a model to select. */
-.HomeModelMenu-Auto {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: center;
-  width: 100%;
-  padding: 7px 9px;
-  border: none;
-  border-radius: var(--shell-radius-sm);
-  background: transparent;
-  color: var(--shell-text-primary);
-  text-align: left;
-  font-family: inherit;
-  font-size: var(--shell-fs-body);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--shell-surface);
-  }
-
-  &[aria-checked='true'] {
-    background: var(--shell-surface-2);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--shell-primary);
-    outline-offset: -2px;
-  }
-}
-
-.HomeModelMenu-Divider {
-  margin: 2px 2px 4px;
-  border-top: 1px solid var(--shell-border);
-}
-
-/* Four rows' worth, so loading → loaded → filtered does not move the panel's bottom edge. */
-.HomeModelMenu-Body {
-  min-height: 180px;
-}
-
-.HomeModelMenu-List {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.HomeModelMenu-Group {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-/*
- * A label, not a row: no hover, no hit area, and it must not read as something to click. The top
- * margin collapses on the first group so the list still starts flush under the divider.
- */
-.HomeModelMenu-GroupHeader {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin-top: 6px;
-  padding: 2px 9px;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-caption);
-
-  .HomeModelMenu-Group:first-child & {
-    margin-top: 0;
-  }
-}
-
-.HomeModelMenu-GroupName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.HomeModelMenu-Icon {
-  display: inline-flex;
-  flex: none;
-  color: var(--shell-text-secondary);
-}
-
-/*
- * The badge is a hint on a row that already has two controls, not a third one: TxKbd's keycap
- * relief (gradient fill, heavier bottom edge, drop shadow) reads as pressable and pulls the eye
- * off the model name. Flatten it onto the row's own surface; size and typography stay the
- * primitive's. Scoped through the row item so this outranks the primitive's own rule regardless
- * of stylesheet order.
- */
-.HomeModelMenu-Item .HomeModelMenu-Kbd {
-  flex: none;
-  border: 1px solid var(--shell-border);
-  /* The darker bottom edge is the keycap's one 3D cue; level it with the other three sides. */
-  border-bottom-color: var(--shell-border);
-  background: var(--shell-surface-2);
-  box-shadow: none;
-  color: var(--shell-text-muted);
-}
-
-.HomeModelMenu-Star {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: var(--shell-radius-sm);
-  background: transparent;
-  color: var(--shell-text-muted);
-  font-size: 14px;
-  cursor: pointer;
-  opacity: 0.55;
-  transition:
-    color 0.12s ease,
-    opacity 0.12s ease;
-
-  /* Quiet until the row is in play; a starred one stays lit as the state it is. */
-  .HomeModelMenu-Item:hover &,
-  .HomeModelMenu-Item:focus-within &,
-  &[aria-pressed='true'] {
-    opacity: 1;
-  }
-
-  &:hover {
-    color: var(--shell-text-primary);
-  }
-
-  &[aria-pressed='true'] {
-    color: var(--shell-primary);
-  }
-
-  &:focus-visible {
-    outline: 2px solid var(--shell-primary);
-    outline-offset: -2px;
-  }
-}
-
-.HomeModelMenu-Check {
-  flex: none;
-  font-size: 14px;
-  color: var(--shell-primary, #007aff);
-}
-
-.HomeModelMenu-Hint {
-  margin: 0;
-  padding: 8px 9px;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-sm);
 }
 </style>

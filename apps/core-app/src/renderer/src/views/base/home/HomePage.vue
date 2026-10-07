@@ -1,7 +1,6 @@
 <script lang="ts" name="HomePage" setup>
 import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
-import type { ITuffIcon } from '@talex-touch/utils'
 import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
 import type {
   FormFieldValue,
@@ -30,6 +29,7 @@ import { resetRemoteImagePolicy } from '@talex-touch/tuffex/stream-markdown'
 import { TxCodeBlock, TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
 import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
+import { TxVoiceBeam } from '@talex-touch/tuffex/voice-beam'
 import {
   CHART_RESULT_PREFIX,
   FORM_RESULT_PREFIX,
@@ -97,21 +97,22 @@ import { toHomeModelLimits } from '~/modules/conversation/workspace-panel'
 import { HOME_FEED_MAX_ITEMS } from '~/modules/home-push/feed'
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
 import { useHomePush } from '~/modules/home-push/useHomePush'
-import { modelFamilyIconFor } from '~/modules/intelligence/model-family-icons'
 import {
   resolveIntelligenceErrorRecovery,
   USAGE_LIMITS_ROUTE
 } from '~/modules/intelligence/ai-error-recovery'
-import { providerIconForId } from '~/modules/intelligence/provider-icons'
 import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
 import { appSetting } from '~/modules/storage/app-storage'
+import { resolvedTheme } from '~/modules/storage/theme-style'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { useProjectStore } from '~/stores/projects'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import ComposerToolbar from './composer/ComposerToolbar.vue'
 import { showDictationNotice } from './composer/dictation-notice'
+import { modelPillFace } from './composer/model-pill'
 import { deriveSendState, isAwaitingFirstToken } from './composer/send-state'
 import { useComposerDictation } from './composer/useComposerDictation'
+import { voiceGlowLobes } from './composer/voice-glow'
 import ComposerControl from './composer/ComposerControl.vue'
 import HomeSidePanel from './HomeSidePanel.vue'
 import HomeTopBar from './HomeTopBar.vue'
@@ -251,21 +252,10 @@ const panelOpen = ref(false)
  */
 const isHomeRoute = computed(() => route.path === '/home' || route.path.startsWith('/home/c/'))
 
-/**
- * Both pills read this: the pinned model's display name and provider icon when it resolves, the
- * routing label alone when it does not — auto keeps its text-only look.
- */
-const modelPill = computed<{ label: string; icon: ITuffIcon | undefined }>(() => {
-  const resolved = modelScope.resolvedChoice.value
-  return resolved
-    ? {
-        label: resolved.displayName,
-        icon:
-          modelFamilyIconFor(resolved.model) ??
-          providerIconForId(resolved.providerId, resolved.providerType)
-      }
-    : { label: t('home.modelName'), icon: undefined }
-})
+/** Both pills read this: the pinned model with its mark, or the routing label with the auto mark. */
+const modelPill = computed(() =>
+  modelPillFace(modelScope.resolvedChoice.value, t('home.modelName'))
+)
 
 /** The composer's pill adds the reasoning level the next send runs at; the top bar's does not. */
 const composerModel = computed(() => {
@@ -362,9 +352,36 @@ watch(isHomeRoute, (visible) => {
  * plain border: static emphasis that never changes state is paint the border already carries.
  *
  * The running state is deliberately excluded — while a response streams the composer wears the
- * living glow on its own pseudo-elements, and two effects on one box fight for the same edge.
+ * living glow on its own pseudo-elements, and two effects on one box fight for the same edge. So is
+ * dictation, which lights the box from below with the voice glow.
  */
-const composerBeamActive = computed(() => isEmpty.value && !isStreaming.value)
+const composerBeamActive = computed(
+  () => isEmpty.value && !isStreaming.value && !dictation.active.value
+)
+
+/**
+ * The dictation glow's level, sampled by TxVoiceBeam once per frame: the newest of the session's
+ * ~10 Hz level frames while it listens, silence otherwise. A getter, so the frames never re-render
+ * the page; the glow's own attack and release smooth between them.
+ */
+function dictationLevel(): number {
+  if (dictation.state.value !== 'listening') return 0
+  return dictation.levels.value.at(-1) ?? 0
+}
+
+/**
+ * The glow's lobes, read off the composer's live rim (`--home-live-stops`) once the box is mounted.
+ * Until then the beam keeps its own palette, which nothing shows: dictation starts in that box.
+ */
+const voiceGlowColors = ref<string[]>([])
+onMounted(() => {
+  const composer = composerRef.value
+  if (composer) {
+    voiceGlowColors.value = voiceGlowLobes(
+      getComputedStyle(composer).getPropertyValue('--home-live-stops')
+    )
+  }
+})
 
 /**
  * The opening message is the working title until the model summarises one (#969).
@@ -1686,6 +1703,35 @@ function selectProfile(profileId: string): void {
   else void workspace.configure({ profileId })
 }
 
+/**
+ * The mode menu lists profiles, not modes: picking one is picking Agent mode with that profile. Within
+ * Agent it is a profile change; from Chat it is a mode change, which a thread with history takes as a
+ * branch. Main's fork copies the thread's settings and replaces only the mode, so the profile the
+ * branch should run as is written to this thread first — inert here while it stays in Chat.
+ */
+async function selectAgentProfile(profileId: string): Promise<void> {
+  const current = workspace.settings.value
+  if (current.mode === 'agent') {
+    if (current.profileId !== profileId) selectProfile(profileId)
+    return
+  }
+  if (!workspace.state.value) {
+    workspace.setDraftProfile(profileId)
+    workspace.setDraftMode('agent')
+    return
+  }
+  if (!hasHistory.value) {
+    void workspace.configure({ mode: 'agent', profileId })
+    return
+  }
+  if (current.profileId !== profileId) {
+    await workspace.configure({ profileId })
+    // A refused write was already reported; branching now would run the profile the thread had.
+    if (workspace.settings.value.profileId !== profileId) return
+  }
+  void branchTo({ mode: 'agent' })
+}
+
 /** The waiting run's profile by name, when the list has it; the card falls back to its id. */
 const pendingRunProfileName = computed(() => {
   const profileId = workspace.state.value?.pendingRun?.profileId
@@ -2168,6 +2214,23 @@ onBeforeUnmount(disposeCommands)
                 @drop="onDrop"
                 @keydown="handleComposerKeydown"
               >
+                <!-- The dictation glow rides inside the box as an overlay rather than wrapping it:
+                     the beam's wrapper clips, and wrapping would cut the composer's own shadow and
+                     focus ring. 「正在识别」 gathers it into the travelling processing beam. -->
+                <TxVoiceBeam
+                  class="HomePage-VoiceGlow"
+                  :active="dictation.active.value"
+                  :level="dictationLevel"
+                  :processing="dictation.state.value === 'finishing'"
+                  :theme="resolvedTheme"
+                  :colors="voiceGlowColors"
+                  :border-radius="24"
+                  :scale="1.2"
+                  aria-hidden="true"
+                >
+                  <div class="HomePage-VoiceGlowHost" />
+                </TxVoiceBeam>
+
                 <TxAttachmentTray
                   v-if="pendingAttachments.length"
                   class="HomePage-ComposerTray"
@@ -2195,8 +2258,7 @@ onBeforeUnmount(disposeCommands)
                 />
 
                 <!-- One family of 32px controls (`composer/`); the send key is an island that grows
-                     into 「■ 停止」 and the microphone into the dictation capsule, neither moving a
-                     neighbour. -->
+                     into 「■ 停止」 over the microphone's slot without moving a neighbour. -->
                 <ComposerToolbar
                   ref="toolbarRef"
                   v-model:permission-mode="agentToolsMode"
@@ -2204,7 +2266,6 @@ onBeforeUnmount(disposeCommands)
                   :send-state="sendState"
                   :mic-state="dictation.state.value"
                   :mic-blocked="dictation.captureBlocked.value"
-                  :mic-levels="dictation.levels.value"
                   :mic-elapsed-ms="dictation.elapsedMs.value"
                   :mic-outcome="dictation.outcome.value"
                   @files="addFiles"
@@ -2223,8 +2284,8 @@ onBeforeUnmount(disposeCommands)
                       :profile-saving="workspace.profileSaving.value"
                       :branch-on-change="hasHistory"
                       :locked="workspace.busy.value || branching"
-                      @select-mode="selectMode"
-                      @select-profile="selectProfile"
+                      @select-chat="selectMode('chat')"
+                      @select-agent="selectAgentProfile"
                       @toggle-profile="workspace.setProfileEnabled"
                       @load-profiles="workspace.loadProfiles()"
                     />
@@ -3114,6 +3175,31 @@ onBeforeUnmount(disposeCommands)
     border-style: dashed;
     border-color: var(--shell-primary);
   }
+}
+
+/**
+ * The dictation glow (TuffEx `TxVoiceBeam`) as an overlay on the box: its wrapper clips to the
+ * composer's 24px corners and sits under everything the box holds. The beam's own stylesheet makes
+ * its wrapper `position: relative`; the child selector outranks that single attribute selector.
+ */
+.HomePage-Composer > .HomePage-VoiceGlow {
+  position: absolute;
+  inset: -1px;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.HomePage-VoiceGlowHost {
+  width: 100%;
+  height: 100%;
+}
+
+/* The box's content paints above the glow's layers. */
+.HomePage-Composer > .HomePage-ComposerTray,
+.HomePage-Composer > .HomePage-Input,
+.HomePage-Composer > .ComposerToolbar {
+  position: relative;
+  z-index: 1;
 }
 
 .HomePage-Input {
