@@ -83,7 +83,7 @@ const COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
 let activeScrollFrame: number | null = null
 let componentDocsMetadataTimer: ReturnType<typeof setTimeout> | null = null
 let componentDocsMetadataIdleId: number | null = null
-const prefetchedDocsMetadataTargets = new Set<string>()
+const prefetchedDocsRouteTargets = new Set<string>()
 const prefetchedDocsFullBodyTargets = new Set<string>()
 const pendingDocsFullBodyPrefetchTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingDocsFullBodyPrefetchIdleIds = new Map<string, number>()
@@ -781,14 +781,13 @@ function shouldPrefetchDocsTarget(path: string | null | undefined) {
   return Boolean(normalized?.startsWith('/docs/dev/components/'))
 }
 
-function prefetchDocsMetadataTarget(normalized: string, locale: 'en' | 'zh') {
+function prefetchDocsRouteTarget(normalized: string, locale: 'en' | 'zh') {
   const cacheKey = `${normalized}:${locale}`
-  if (prefetchedDocsMetadataTargets.has(cacheKey)) return
-  prefetchedDocsMetadataTargets.add(cacheKey)
+  if (prefetchedDocsRouteTargets.has(cacheKey)) return
+  prefetchedDocsRouteTargets.add(cacheKey)
 
   const routeTarget = toLocalizedDocsPath(normalized, locale)
   void preloadRouteComponents(routeTarget)
-  void requestDocsPage({ path: normalized, locale, body: '0' }).catch(() => {})
 }
 
 function scheduleDocsFullBodyPrefetch(normalized: string, locale: 'en' | 'zh') {
@@ -828,7 +827,7 @@ function prefetchDocsTarget(path: string | null | undefined) {
   if (!normalized) return
 
   const locale = docsLocale.value
-  prefetchDocsMetadataTarget(normalized, locale)
+  prefetchDocsRouteTarget(normalized, locale)
   scheduleDocsFullBodyPrefetch(normalized, locale)
 }
 

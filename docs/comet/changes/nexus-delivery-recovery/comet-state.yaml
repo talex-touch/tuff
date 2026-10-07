@@ -1,0 +1,101 @@
+schema: comet.native.v4
+name: nexus-delivery-recovery
+language: zh-CN
+phase: build
+status: active
+state_version: 3
+brief: brief.md
+document_constraints_version: 2
+shape_confirmation_hash: 6b493b95ffcfe41aac426133de2da42292fa61c0f6acdb254d31edb49ecde125
+spec_changes:
+  - capability: nexus-web-delivery
+    operation: create
+    source: specs/nexus-web-delivery/spec.md
+workspace:
+  isolation: worktree
+  change_branch: comet/nexus-delivery-recovery
+  target_branch: stage
+  finish: null
+loop:
+  stage: building
+  goal_cycle: 1
+  iteration: 1
+  attempt: 0
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: submit-builder-candidate
+acceptance:
+  - id: A1
+    source: brief.md
+    text: 概览和设备页使用现有 TuffEx 地图展示有效坐标、标签和数值，无坐标时显示本地化空态。点选事件仍能返回对应记录，页面不再请求
+      Leaflet/unpkg 或 OpenStreetMap 瓦片。
+    result: pending
+    reason: null
+  - id: A2
+    source: brief.md
+    text: 中英文 Developer、Concepts 和组件目录页均可直接访问、站内导航及前进后退。有效目录及其 index 拼写具有对应静态
+      HTML、JSON 和 Markdown，不再误报 Document not found；不存在的文档仍返回真实未找到结果。
+    result: pending
+    reason: null
+  - id: A3
+    source: brief.md
+    text: 文档 URL、正文、侧栏、目录、周边 UI 和 Demo
+      文案使用一致语言。中英往返、刷新及快速切换后以最后路由为准，链接保留语言，不展示未翻译键，不被浏览器或账户偏好切回另一种语言。
+    result: pending
+    reason: null
+  - id: A4
+    source: brief.md
+    text: 仅包含动态组件导入的模块不会提前加载这些组件的 CSS。激活组件时加载其样式及完整依赖，静态导入仍有正确样式，既有显式 CSS 导入不重复下载。
+    result: pending
+    reason: null
+  - id: A5
+    source: brief.md
+    text: Nexus 同一运行模式下的 TuffEx 自动注册、显式组件和工具模块来自同一套实现。生产预览的 Toast Demo 能展示提示，Overlay
+      共用层级管理，不出现 source/dist 分裂导致的交互失效。
+    result: pending
+    reason: null
+  - id: A6
+    source: brief.md
+    text: 未缓存的站内文档切换通过一个完整正文响应取得元数据和正文，不先等待 meta 请求再等待
+      body。已缓存页面复用结果，快速导航或切语言时旧响应不会覆盖新页面，失败保留明确错误和现有重试入口。
+    result: pending
+    reason: null
+  - id: A7
+    source: brief.md
+    text: 文档首屏只加载公共页面壳、本页组件和实际依赖，不加载其他文档的 Demo 或其重型依赖。滚动激活及重置本页 Demo
+      后交互、样式和语言仍正确，页面之间不会携带整份 Demo 注册表作为首屏依赖。
+    result: pending
+    reason: null
+  - id: A8
+    source: brief.md
+    text: 生产预渲染的中英文文档在禁用 JavaScript 时已有标题、正文和代码。恢复 JavaScript
+      后正文保留，首屏不重新请求正文；canonical、alternate、静态缓存规则和既有 URL 形态保持正确。
+    result: pending
+    reason: null
+  - id: A9
+    source: brief.md
+    text: 在真实浏览器回归地图、目录、语言、普通组件页及 Toast Demo。用同一构建模式和缓存条件比较优化前后请求数、CSS/JS
+      资源和串行等待，分别报告本地与线上边界，不把开发模块数量或历史部署问题当成当前生产收益。
+    result: pending
+    reason: null
+builder_handoff: null
+blockers: []
+verification: null
+history: []
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pending
+verification_report: null
+archived: false
+created_at: 2026-10-06T16:38:38.509Z

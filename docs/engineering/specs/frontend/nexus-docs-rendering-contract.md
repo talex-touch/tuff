@@ -10,12 +10,13 @@ production.
 
 **Anything that renders docs HTML fetches the body with it.** Server render and prerender
 must request `/api/docs/page` with `body=1`, and the hydrating client must send the same
-value. Splitting metadata from body is allowed only for client-side navigation, which
-runs through `loadActiveDocForRoute`.
+value. Client-side navigation also requests the complete static body response through
+`loadActiveDocForRoute`; it does not request metadata first or wait for an idle timer.
 
 This is enforced by `const DOCS_PAGE_RENDER_BODY_MODE = '1'`, which feeds both
 `currentDocsPageFetchKey` and the `useTypedFetch` query.
-`app/pages/docs/docs-page-performance.test.ts` pins it.
+Verify the HTML with JavaScript disabled and observe the actual navigation requests;
+source-string snapshots do not prove this boundary.
 
 ### Why it must not be re-split
 
@@ -70,19 +71,16 @@ Never leave the view unsettled: every exit from the body fetch clears `fullDocLo
 `isLoading`.
 
 3. **`startFullDocFetchForRoute` reads `activeDocFetchId`; it must not bump it.** It fires
-   from `onMounted`, which lands between `loadActiveDocForRoute`'s bump and its awaited
-   metadata response. Bumping made that response test stale, so `doc` was never assigned
-   and the page relied on the body fetch backfilling it through `settleFullDoc`. That hid
-   the problem until a body fetch failed — at which point the reader was told **"Document
-   not found"** for a document that exists, and the error state, which lives inside the
-   `viewState === 'content'` branch, could not render at all. Only a new navigation starts
-   a new generation.
+   from `onMounted`, which may run while the incoming complete-body request is pending.
+   Only a new navigation or an explicit retry starts a new generation. A transport failure
+   sets `fullDocError`; that state must remain in the content branch so its retry action
+   is visible even when no document record was received.
 
-### Known gap
+### Static misses and transport failures
 
-A document whose metadata resolves but whose body answers 204 still lands on the skeleton
-forever — `fullDocError` stays false because nothing rejected. Pre-existing; fixing it
-needs a third settled state (empty-body), not more retry.
+A missing static document settles as not-found. Production does not fall back to the
+query route: Pages excludes that route from the Worker. Other static-read failures remain
+errors, with the existing bounded retry. Development retains one query fallback.
 
 ---
 

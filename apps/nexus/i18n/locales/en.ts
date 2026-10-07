@@ -33,6 +33,10 @@ export default {
       switchToLight: 'Switch to light mode',
       switchToDark: 'Switch to dark mode',
     },
+    geoMap: {
+      empty: 'No geographic data',
+      failed: 'Could not load the map',
+    },
   },
   common: {
     collapse: 'Collapse',
@@ -510,6 +514,7 @@ export default {
     },
   },
   docs: {
+    verified: 'Verified',
     loading: 'Fetching document…',
     notFoundTitle: 'Document not found',
     notFoundDescription: 'We could not find content for this route yet. Head back to the docs overview.',

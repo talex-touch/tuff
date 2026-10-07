@@ -173,6 +173,7 @@ function onLeave(): void {
           :stroke="bubble.stroke"
           :stroke-width="bubble.strokeWidth / base.scaleFactor.value"
           :style="bubbleStyle(bubble)"
+          @pointerdown.stop
           @pointerenter="onEnter(bubble)"
           @pointerleave="onLeave"
           @click="emit('bubbleClick', bubble.row)"
