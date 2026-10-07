@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { type ComponentPublicInstance, computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { DEMO_LAZY_ROOT_MARGIN, shouldActivateDemo } from './demo-lazy'
-import { loadDemoRegistry } from './demo-registry-loader'
+import { loadDemoComponent } from './demo-component-loader'
 
 interface DemoWrapperProps {
   demo: string
@@ -124,11 +124,9 @@ function activateDemo() {
   if (!shouldActivateDemo({ demo: props.demo, isActive: isDemoActive.value }))
     return
 
-  // Start the registry download now rather than from inside the client renderer, so the
-  // renderer chunk and the registry chunk travel in parallel instead of one after the other.
-  // Measured in production each hop was a full round trip; this removes one from the chain.
+  // Fetch this demo in parallel with its renderer, without loading a global registry.
   if (import.meta.client)
-    void loadDemoRegistry().catch(() => {})
+    void loadDemoComponent(props.demo).catch(() => {})
 
   isDemoActive.value = true
   disconnectVisibilityObserver()

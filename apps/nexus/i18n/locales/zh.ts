@@ -33,6 +33,10 @@ export default {
       switchToLight: '切换到浅色模式',
       switchToDark: '切换到深色模式',
     },
+    geoMap: {
+      empty: '暂无地理位置数据',
+      failed: '地图加载失败',
+    },
   },
   common: {
     collapse: '收起',
@@ -509,6 +513,7 @@ export default {
     },
   },
   docs: {
+    verified: '已验证',
     loading: '正在获取文档…',
     notFoundTitle: '未找到文档',
     notFoundDescription: '当前路径暂未匹配到内容，请返回文档首页。',

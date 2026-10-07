@@ -9,7 +9,7 @@ import { TxStatusBadge } from '@talex-touch/tuffex/status-badge'
 import { useToast } from '~/composables/useToast'
 import { requestJson, useTypedFetch } from '~/utils/request'
 
-const LazyGeoLeafletMap = defineAsyncComponent(() => import('~/components/dashboard/GeoLeafletMap.client.vue'))
+const LazyGeoBubbleMap = defineAsyncComponent(() => import('~/components/dashboard/GeoBubbleMap.client.vue'))
 
 defineI18nRoute(false)
 
@@ -267,14 +267,7 @@ function formatLocation(device: DeviceItem): string {
   return pieces.length ? pieces.join(' · ') : t('dashboard.devices.locationUnknown', '位置未知')
 }
 
-function hasCoordinates(device: DeviceItem): boolean {
-  return Number.isFinite(device.lastLocation?.latitude) && Number.isFinite(device.lastLocation?.longitude)
-}
-
 function toggleMap(device: DeviceItem) {
-  if (!hasCoordinates(device)) {
-    return
-  }
   expandedMapDeviceId.value = expandedMapDeviceId.value === device.id ? null : device.id
 }
 
@@ -499,7 +492,7 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
                     </TxButton>
                   </template>
 
-                  <TxDropdownItem v-if="hasCoordinates(device)" @select="toggleMap(device)">
+                  <TxDropdownItem @select="toggleMap(device)">
                     <span class="DashboardDevices-MenuItem">
                       <span class="DashboardDevices-MenuIcon i-carbon-location" aria-hidden="true" />
                       <span>{{ expandedMapDeviceId === device.id ? t('common.collapse', '收起') : t('dashboard.devices.viewLocation', '查看位置') }}</span>
@@ -586,8 +579,8 @@ async function setTrusted(device: DeviceItem, trusted: boolean) {
             </div>
           </div>
 
-          <div v-if="expandedMapDeviceId === device.id && hasCoordinates(device)" class="DashboardDevices-Map">
-            <LazyGeoLeafletMap
+          <div v-if="expandedMapDeviceId === device.id" class="DashboardDevices-Map">
+            <LazyGeoBubbleMap
               :height="220"
               :points="[{
                 id: device.id,

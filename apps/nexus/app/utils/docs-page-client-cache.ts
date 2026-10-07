@@ -1,3 +1,4 @@
+import type { RequestErrorLike } from '~/utils/request'
 import { requestJson } from '~/utils/request'
 import { toStaticDocsPageJsonPath } from '#shared/utils/docs-page-json'
 import { canonicalDocsPageIdentity, normalizeDocsPagePath } from '#shared/utils/docs-path'
@@ -153,22 +154,23 @@ export function primeDocsPageRequestCache(input: DocsPageRequestInput, value: Do
 }
 
 /**
- * Reads the document from its prerendered static twin first and falls back to the Worker route
- * only when that read fails.
- *
- * The static file is what makes page-to-page navigation cheap: it is served by Cloudflare Pages
- * with the docs cache window, so it costs an edge hit rather than a Worker round trip (1–2 s
- * from CN). A document that is not on the prerender list (a route added between deploys, a dev
- * server with no prerender at all) answers 404 there, and the query route still knows how to
- * resolve it — including the development Markdown fallback — so the reader never sees the gap.
- * A rejected static read is retried exactly once through the query route, never looped.
+ * Production reads only its static twin: a 404 means missing content, while a
+ * transport failure remains an error. The query route is excluded from the
+ * Worker in production, so retrying it would turn a network failure into a 404.
+ * Development retains one query fallback for content not yet prerendered.
  */
 async function fetchDocsPageRecord(input: DocsPageRequestInput): Promise<DocsPageRecord> {
   const { path, locale, body } = input
   try {
     return await requestJson<DocsPageRecord>(toStaticDocsPageJsonPath(path, locale, body === '1' ? 'body' : 'meta'))
   }
-  catch {
+  catch (error) {
+    if (!import.meta.dev) {
+      const requestError = error as RequestErrorLike
+      if (requestError?.statusCode === 404 || requestError?.data?.statusCode === 404)
+        return null
+      throw error
+    }
     return await requestJson<DocsPageRecord>('/api/docs/page', {
       query: {
         path,

@@ -88,11 +88,10 @@ function readBarrelExports(barrel: string, followStar = true): string[] {
 export default defineNuxtModule({
   meta: { name: 'tuffex-components' },
   setup(_options, nuxt) {
-    const useTuffexSource = nuxt.options.dev !== true
-      || isTuffexSourceRequested(
-        nuxt.options.dev === true && process.env.NODE_ENV !== 'test',
-        process.env,
-      )
+    const useTuffexSource = isTuffexSourceRequested(
+      nuxt.options.dev === true && process.env.NODE_ENV !== 'test',
+      process.env,
+    )
     const componentSpecifierPrefix = useTuffexSource ? '@tuffex-components' : '@talex-touch/tuffex'
     const directories = readdirSync(COMPONENTS_SRC).filter((entry) => {
       if (AGGREGATE_DIRECTORIES.has(entry))

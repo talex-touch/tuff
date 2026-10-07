@@ -4,11 +4,20 @@
 
 ### 📦 组件变动 (Components)
 
-- **更新组件**: `transition`
+- **更新组件**: `charts`, `transition`
 
 ### ✨ 组件增强
 
 - 新增 `TxTransitionPush` 推入翻页过渡，用于层级导航（进入子页、返回上一页）：key 变化时新旧两页同时横向推入推出，`direction` 为 `forward` 时新页从行内结束方向进入、`back` 时反向，RTL 容器自动镜像；容器高度只在切换那一刻从旧页过渡到新页，结束后回到 `auto`；离场页固定在原位并设为 `inert`；中途打断从当前绘制的位置继续；`duration` 为 `0` 时直接替换，`prefers-reduced-motion: reduce` 时改为 120ms 原位淡入淡出、高度直接落定。新增 `before-enter`/`after-enter`/`after-leave` 事件与 `TransitionPushDirection`、`TxTransitionPushProps` 类型。
+
+### 组件修复
+
+- `TxBubbleMap` 开启 `roam` 后仍可点击气泡并返回对应数据行。气泡按下不再触发底图的指针捕获，底图拖拽和滚轮缩放保持可用。
+
+### 按需样式
+
+- 动态组件导入在激活时加载完整 CSS 依赖，不提前加入首屏静态样式。静态导入继续展开依赖闭包；显式样式去重只识别真实导入，不把注释或字符串误当成已加载样式。
+
 
 ## [0.6.3] - 2026-10-01
 

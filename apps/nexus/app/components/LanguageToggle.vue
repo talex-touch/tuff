@@ -2,6 +2,7 @@
 import { TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex/dropdown-menu'
 import { TxIconButton } from '@talex-touch/tuffex/button'
 import { computed, ref } from 'vue'
+import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 type SupportedLocale = 'zh' | 'en'
 
@@ -24,6 +25,7 @@ const languageOptions: LanguageOption[] = [
 
 const { locale, t } = useI18n()
 const { setManualLocale } = useLocaleOrchestrator()
+const route = useRoute()
 const isOpen = ref(false)
 
 const nextLocale = computed(() => (locale.value === 'zh' ? 'en' : 'zh'))
@@ -35,7 +37,15 @@ const triggerTitle = computed(() =>
 )
 
 async function selectLocale(option: LanguageOption) {
+  if (/^\/(?:en|zh)\/docs(?:\/|$)/.test(route.path)) {
+    await navigateTo({
+      path: toLocalizedDocsPath(route.path, option.code),
+      query: route.query,
+      hash: route.hash,
+    })
+  }
   await setManualLocale(option.code)
+  isOpen.value = false
 }
 
 </script>

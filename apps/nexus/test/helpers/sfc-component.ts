@@ -24,7 +24,11 @@ import type { Component } from 'vue'
 
 const NEXUS_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
-export async function loadSfcComponent(relativePath: string, modules: Record<string, unknown>): Promise<Component> {
+export async function loadSfcComponent(
+  relativePath: string,
+  modules: Record<string, unknown>,
+  options: { transformDynamicImports?: boolean } = {},
+): Promise<Component> {
   const filename = path.join(NEXUS_ROOT, relativePath)
   const { descriptor, errors } = parse(readFileSync(filename, 'utf8'), { filename })
   if (errors.length)
@@ -37,6 +41,9 @@ export async function loadSfcComponent(relativePath: string, modules: Record<str
     format: 'cjs',
     target: 'es2022',
     sourcefile: relativePath,
+    // Opt in when a mounted caller lazy-loads another supplied SFC. Keep the
+    // Promise boundary, but resolve its import through this fixture's modules.
+    supported: options.transformDynamicImports ? { 'dynamic-import': false } : undefined,
   })
 
   const module = { exports: {} as Record<string, unknown> }
