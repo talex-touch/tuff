@@ -35,7 +35,7 @@ This repository is a pnpm workspace monorepo. The **desktop app** is the core, w
 - `docs/`: engineering/PRD/analysis documents.
 - `scripts/`: CI and maintenance scripts.
 - `build/`: build config outputs (small set of files).
-- `.github/`, `.husky/`, `.comet/`, `.vscode/`: collaboration/tooling configs. Comet Native change records live under `docs/comet/`, and engineering contracts under `docs/engineering/specs/`.
+- `.github/`, `.husky/`, `.vscode/`: collaboration/tooling configs. Engineering contracts live under `docs/engineering/specs/`; `docs/comet/` preserves read-only requirements, specifications and verification records from the retired workflow.
 - Key files: `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `eslint.config.js`, `commitlint.config.cts`, `README.md`, `README.zh-CN.md`, `AGENTS.md`, `CLAUDE.md`.
 
 ## Subproject Details

@@ -129,10 +129,11 @@ code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  type AnchorAnimationType = 'transfer' | 'boom' | 'opacity' | 'none'
+  type AnchorAnimationType = 'expand' | 'transfer' | 'boom' | 'opacity' | 'none'
 
-  const modes: AnchorAnimationType[] = ['transfer', 'boom', 'opacity', 'none']
+  const modes: AnchorAnimationType[] = ['expand', 'transfer', 'boom', 'opacity', 'none']
   const open = ref<Record<AnchorAnimationType, boolean>>({
+    expand: false,
     transfer: false,
     boom: false,
     opacity: false,
@@ -140,12 +141,14 @@ code: |
   })
 
   function resolveAnimation(type: AnchorAnimationType) {
+    if (type === 'expand')
+      return { type }
+
     return {
       type,
       duration: type === 'none' ? 0 : 420,
       ease: type === 'transfer' ? 'back.out(2)' : 'power2.out',
       closeEase: type === 'transfer' ? 'power3.in' : 'power2.in',
-      scale: type === 'boom' ? 1.08 : undefined,
       blur: type === 'boom' ? 14 : undefined,
     }
   }
@@ -274,7 +277,7 @@ code: |
 
 ### Custom Animation
 
-Prefer the `animation` object for type, duration, and GSAP easing. `duration` / `ease` remain as compatibility fallbacks.
+Type, duration, and easing all go in the `animation` object; the component has no top-level `duration` / `ease` props.
 
 #### Custom Ease
 :::TuffDemoWrapper{demo="BaseAnchorCustomEaseDemo" code-lang="vue"}
@@ -364,17 +367,17 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `type` | `'transfer' \| 'boom' \| 'opacity' \| 'none' \| 'drip' \| 'bead'` | `'transfer'` | Animation type. `drip` and `bead` share one engine and bring their own timing table, ignoring the legacy `duration` / `ease` props. |
+| `type` | `'expand' \| 'transfer' \| 'boom' \| 'opacity' \| 'none' \| 'drip' \| 'bead'` | `'expand'` | Animation type. `drip` and `bead` share one engine and bring their own timing table. |
 | `closeType` | Same values as `type` | Same as `type` | Type used while closing. Omitting it keeps the run symmetric. `drip` / `bead` share one measured stage across both directions — including `usesBeadMotion`, which the template reads — so a liquid run must use the same type at both ends; a mismatched pair falls back to symmetric and warns in dev. |
 | `duration` | `number` | per type (expand 400 / classic 432 / liquid 260) | Enter duration in ms. |
-| `closeDuration` | `number` | `duration * 0.45` | Leave duration in ms. |
-| `ease` | `string` | per type (expand `spring(10, 0.6)` / classic `back.out(2)` / liquid `linear`) | Enter ease: GSAP string, `cubic-bezier(...)`, or `spring(omega, zeta)`. |
-| `closeEase` | `string` | `'power3.in'` | GSAP ease string for leave motion. |
-| `distance` | `number` | `30` | Transfer distance in px. |
-| `scale` | `number` | `1.08` | Boom enter initial / leave target scale. |
+| `closeDuration` | `number` | per close type (expand 240 / classic: open duration × 0.45 / liquid 150) | Leave duration in ms. |
+| `ease` | `string` | per type (expand `spring(10, 0.6)` / classic `back.out(2)` / liquid `linear`) | Enter ease: GSAP string, `cubic-bezier(...)`, or `spring(omega, zeta)`; the liquid types take only `linear` or `cubic-bezier(...)` (see below). |
+| `closeEase` | `string` | per close type (expand `power2.in` / classic `power3.in` / liquid `cubic-bezier(0.25, 0.46, 0.45, 0.94)`) | Leave ease; same forms as `ease`. |
+| `distance` | `number` | per type (expand 12 / transfer 30) | `expand` drift and `transfer` travel in px; the leave uses it too by default (see `exit`). |
+| `scale` | `number` | per type (expand 0.88 / boom 0.94 / transfer 0.92) | Enter initial scale; the leave returns to it by default (see `exit`). |
 | `blur` | `number` | `12` | Boom enter initial / leave target blur radius in px. |
-| `opacity` | `number` | `0` | Boom / opacity enter initial and leave target opacity. |
-| `exit` | `{ scale?, distance?, blur?, opacity? }` | See description | Geometry applied to the leave phase only. Each field falls back to the shared field of the same name when the caller set one, and to `closeType`'s own table otherwise. It is needed because `scale` means opposite things per type — `boom` comes in from above 1, `expand` grows out from below it — so one shared value is wrong at one end by construction. |
+| `opacity` | `number` | `0` | `expand` / `boom` / `opacity` enter initial and leave target opacity. |
+| `exit` | `{ scale?, distance?, blur?, opacity? }` | See description | Geometry applied to the leave phase only. Each field falls back to the shared field of the same name when the caller set one, and to `closeType`'s own table otherwise. It is needed because the types start from different scales and origins (`expand` at 0.88 around the anchored corner, `boom` at 0.94 around its centre), so when the open and the close are different types, a shared value written for the open would drive the close as well. |
 | `gooBlur` | `number` | `4.5` | `drip` / `bead` only. Goo `feGaussianBlur` stdDeviation. With `gooThreshold` this decides how wide a gap the neck survives. |
 | `gooThreshold` | `number` | `20` | `drip` / `bead` only. Alpha slope of the threshold colour matrix. |
 | `gooThresholdOffset` | `number` | `-9` | `drip` / `bead` only. Alpha offset of the threshold colour matrix. |
@@ -423,7 +426,8 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 - `maxHeight` is clamped by available viewport height. Use `unlimitedHeight` only for panels with their own scroll container.
 - Content past `maxHeight` scrolls in the card's body, not on `.tx-base-anchor__card` itself, which only clips. The panel background is painted by an absolutely positioned surface layer inside the card, and scrolling the card would carry that layer away with the content. Read the scroll position off the card's body rather than the card.
 - `surfaceMotionAdaptation` is an active hard-cut strategy: `auto` uses anchor motion state, `manual` forwards `panelCard.surfaceMoving`, and `off` forces `surfaceMoving=false`.
-- Prefer `animation` for new motion config. `duration` / `ease` are only compatibility fallbacks merged into animation defaults.
+- Motion is configured only through the `animation` object; the component has no top-level `duration` / `ease` props, and any field left out takes the type's own default.
+- The `showArrow` arrow is part of the panel: it sits on the panel's content layer, so whatever drift, scale, blur, or opacity that layer carries, the arrow carries too, and it stays hidden until the panel starts moving and after it has closed. Each animation type adds only its own beat: `expand` pokes it out of the edge once the panel has formed, overshooting a beat after the panel, and on close tucks it back in before the panel folds; `transfer` tucks it into the panel and pops it as the slide lands; `boom` pops it late and fast; `opacity` adds nothing and fades it with the panel.
 - `eager` mounts before first open; `keepAliveContent` preserves content after close. Use them for measured/stateful panels, not static copy.
 - `drip` / `bead` is defined on the vertical axis only. A `left*` / `right*` placement — including one produced by `flip` — degrades to the opacity path, keeping the same timings.
 - `drip` / `bead` paints its own opaque surface through the goo filter, so `TxCard` is not rendered and `panelBackground` / `panelShadow` / `panelVariant` do not apply. The four non-`pure` backgrounds all rely on `backdrop-filter`, which does not survive inside an SVG filter and would threshold into hard edges.
@@ -435,16 +439,18 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 ## Technologies
 
 - Reviewed against `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`, `base-anchor-motion.ts`, `types.ts`, and `base-anchor.test.ts`.
-- Existing tests cover uncontrolled toggling, controlled outside/Escape close paths, disabled blocking, close/toggle switches, floating attrs and reference classes, animation variants with legacy duration/ease fallbacks, and surface-motion adaptation strategies.
+- Existing tests cover uncontrolled toggling, controlled outside/Escape close paths, disabled blocking, close/toggle switches, floating attrs and reference classes, `animation` object variants, and surface-motion adaptation strategies.
 - Rejected design: letting `.tx-base-anchor__card` scroll itself with `overflow: auto`. That was the original wiring, but the card's surface layer is an absolutely positioned child of it, so its containing block scrolls with the card's content — every pixel the panel was scrolled left that much of its bottom painted on the page behind it. Panels with their own list scroller (select, search-select) never hit it; a dropdown-menu handing its whole body to the card did. The card now clips and the body scrolls, so the surface stays put.
+- Rejected design: the arrow as a direct child of the floating root, outside the clip. The clip's `visibility` never reached it, so it showed at full size for two or three frames before the panel started moving; a `:not(.is-open)` rule hid it on the first frame of a close, so its exit never showed; and under `expand` it held its final spot while the panel drifted 12px, its base sinking 15px into the panel and then lifting 1.3px off the edge at the overshoot. It is now a child of `.tx-base-anchor__content` and stays on the panel edge throughout. floating-ui's offsets land where they did: `transfer`'s bounce padding sits on the far edge, while the arrow is placed against the near edge and along the cross axis, which that padding never shifts.
 - `--tx-ba-max-height` is written only by the `size` middleware: `min(availableHeight, maxHeight)` in pixels, or `none` when unlimited. The root `:style` does not declare it — it used to bind `isUnlimitedHeight ? 'none' : undefined`, and Vue's style patcher turns an `undefined` custom property into `setProperty(name, '')`, so every re-render after a positioning pass deleted the value the middleware had just written and the panel always fell back to the 420px CSS default, overflowing past its trigger.
 - Accessibility note: `TxBaseAnchor` is positioning infrastructure only. The built primitive must provide menu/dialog/listbox roles, focus handling, and keyboard traversal appropriate to its content.
 - `drip` / `bead` coverage lives in `base-anchor-liquid.test.ts` (cubic-bezier solver, spring rejection, spec geometry at p=0 / 0.45 / 1, height-edge independence, item reveal) and in `base-anchor.test.ts` (single merged goo filter, erode-derived outline ring, shadow twin outside the filter, arrow/outline/card suppression, horizontal degradation, no gsap path).
+- The GSAP-driven types (`expand`, `transfer`, `boom`, `opacity`) resolve both their open and close eases through `resolveGsapEase` in `packages/tuffex/packages/utils/animation/easing.ts`: `spring(...)` and `cubic-bezier(...)` become progress functions handed to GSAP, and GSAP's own ease names pass through untouched. Only `expand` used to resolve them; the classic types handed the raw string to GSAP, which does not know either form and silently fell back to its default ease.
 - `drip` / `bead` is driven by a rAF loop rather than GSAP: the motion is specified as two CSS cubic-beziers, and every frame derives SVG geometry, the shadow twin, and per-item opacity from one progress scalar.
 - Browser support: `liquid` uses `filter: url(#…)`, which Safari and Firefox both support. Only `backdrop-filter: url(#…)` is restricted, and `liquid` does not use it — no fallback ladder is needed.
 
 - Component source: `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`.
 - Type contracts: `packages/tuffex/packages/components/src/base-anchor/src/types.ts` exports `BaseAnchorProps`, `BaseAnchorAnimationOptions`, and virtual-reference types.
-- **Verified coverage:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` verifies uncontrolled toggling, controlled outside/Escape closes, disabled behavior, close/toggle switches, floating attrs/reference classes, animation and legacy fallbacks, and surface-motion adaptation. `base-anchor-max-height.test.ts` verifies `--tx-ba-max-height` ownership: after the open settles and after a re-render the value is still the pixel value the middleware wrote (`none` for `unlimitedHeight`), and no empty write ever clears it.
+- **Verified coverage:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` verifies uncontrolled toggling, controlled outside/Escape closes, disabled behavior, close/toggle switches, floating attrs/reference classes, `animation` object variants, and surface-motion adaptation. `base-anchor-max-height.test.ts` verifies `--tx-ba-max-height` ownership: after the open settles and after a re-render the value is still the pixel value the middleware wrote (`none` for `unlimitedHeight`), and no empty write ever clears it.
 
 <TuffDocSourceLink />

@@ -1,6 +1,7 @@
 import type { TransitionPreset } from '../src/spring'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { easingFunction, resolveTransition, springSteps } from '../src/spring'
+import { resolveCssEase } from '../../../../utils/animation/easing'
+import { resolveTransition, springSteps } from '../src/spring'
 
 const PRESETS: TransitionPreset[] = ['snappy', 'smooth', 'bouncy']
 const FRAME = 1 / 60
@@ -21,7 +22,7 @@ describe('springSteps', () => {
   it('traces the curve resolveTransition compiles for the same preset, within 1%', () => {
     for (const preset of PRESETS) {
       const { duration, easing } = resolveTransition(preset)
-      const curve = easingFunction(easing)
+      const curve = resolveCssEase(easing)
       const seconds = duration / 1000
       let position = 0
       let velocity = 0

@@ -4,7 +4,7 @@ import {
   ShortcutType
 } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // global-shortcon.ts computes `isMacPlatform` at module scope, so the Option/Alt
 // spelling is fixed the moment it is imported -- a beforeAll pin would be too
@@ -30,6 +30,17 @@ const mainStorageMocks = vi.hoisted(() => ({
   getConfig: vi.fn(),
   saveConfig: vi.fn()
 }))
+
+const appSettingMocks = vi.hoisted(() => ({
+  config: {} as { betaFeatures?: Record<string, unknown>; tools?: Record<string, unknown> },
+  listeners: new Set<(config: unknown) => void>()
+}))
+
+beforeEach(() => {
+  appSettingMocks.config = {
+    betaFeatures: { screenshot: true, voiceDictation: true, voiceQuickEdit: true, omniPanel: true }
+  }
+})
 
 const noticeMocks = vi.hoisted(() => {
   // The one settings label this fake locale carries. Any other key without params comes back as
@@ -114,6 +125,12 @@ vi.mock('../core/eventbus/touch-event', () => ({
 }))
 
 vi.mock('./storage', () => ({
+  getMainConfig: () => appSettingMocks.config,
+  subscribeMainConfig: (_key: unknown, listener: (config: unknown) => void) => {
+    appSettingMocks.listeners.add(listener)
+    listener(appSettingMocks.config)
+    return () => appSettingMocks.listeners.delete(listener)
+  },
   useMainStorage: () => mainStorageMocks
 }))
 
@@ -149,6 +166,7 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
 
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { acceleratorsMatch } from '../../shared/accelerator-label'
+import { BETA_FEATURE_SHORTCUTS } from '../../shared/beta-features'
 import { shortconChangedEvent, shortconGetBindingEvent } from '../../shared/events/shortcut-binding'
 import { ShortcutModule } from './global-shortcon'
 import { pluginModule } from './plugin/plugin-module'
@@ -244,6 +262,132 @@ afterEach(() => {
   noticeMocks.t.mockClear()
   transportMocks.handlers.clear()
   transportMocks.broadcast.mockClear()
+  appSettingMocks.listeners.clear()
+})
+
+describe('ShortcutModule Beta feature gates', () => {
+  const liveModules: ShortcutModule[] = []
+  const dispatch = new Map<string, () => void>()
+
+  beforeEach(() => {
+    electronMocks.register.mockImplementation((key, callback) => {
+      if (dispatch.has(key)) return false
+      dispatch.set(key, callback)
+      return true
+    })
+    electronMocks.unregisterAll.mockImplementation(() => dispatch.clear())
+  })
+
+  afterEach(() => {
+    for (const module of liveModules.splice(0)) module.onDestroy()
+    dispatch.clear()
+    electronMocks.register.mockImplementation(() => true)
+    electronMocks.unregisterAll.mockImplementation(() => undefined)
+  })
+
+  function start() {
+    const module = new ShortcutModule()
+    liveModules.push(module)
+    module.onInit({ app: {}, runtime: { channel: {} } } as Parameters<ShortcutModule['onInit']>[0])
+    return module
+  }
+
+  function publishSettings() {
+    for (const listener of [...appSettingMocks.listeners]) listener(appSettingMocks.config)
+  }
+
+  it.each(Object.entries(BETA_FEATURE_SHORTCUTS))(
+    'a legacy enabled %s record without opt-in never holds CoreBox’s key',
+    (feature, id) => {
+      appSettingMocks.config = {}
+      const module = start()
+      const beta = vi.fn()
+      const corebox = vi.fn()
+      module.registerMainShortcut(id, 'Alt+Space', beta, { enabled: true })
+      module.registerMainShortcut('core.box.toggle', 'Alt+Space', corebox, { enabled: true })
+      expect(module.getShortcutBinding(id)).toEqual({ configured: 'Alt+Space', effective: null })
+      expect(module.getShortcutBinding('core.box.toggle').effective).toBe('Alt+Space')
+      dispatch.get('Alt+Space')?.()
+      expect(corebox).toHaveBeenCalledTimes(1)
+      expect(beta).not.toHaveBeenCalled()
+      expect(module.setAppShortcut(`app.test.${feature}`, 'Alt+Space', vi.fn())).toEqual({
+        ok: false,
+        reason: 'conflict',
+        holders: [{ id: 'core.box.toggle', label: 'core.box.toggle' }]
+      })
+    }
+  )
+
+  it.each(Object.entries(BETA_FEATURE_SHORTCUTS))(
+    'switching %s off immediately releases its key and switching it on restores the stored key',
+    (feature, id) => {
+      appSettingMocks.config = { betaFeatures: { [feature]: true } }
+      const module = start()
+      const beta = vi.fn()
+      const corebox = vi.fn()
+      module.registerMainShortcut(id, 'Alt+B', beta, { enabled: true })
+      module.registerMainShortcut('core.box.toggle', 'Alt+C', corebox, { enabled: true })
+      dispatch.get('Alt+B')?.()
+      expect(beta).toHaveBeenCalledTimes(1)
+      appSettingMocks.config.betaFeatures![feature] = false
+      publishSettings()
+      expect(module.getShortcutBinding(id)).toEqual({ configured: 'Alt+B', effective: null })
+      expect(dispatch.has('Alt+B')).toBe(false)
+      dispatch.get('Alt+C')?.()
+      expect(corebox).toHaveBeenCalledTimes(1)
+      expect(module.setAppShortcut('app.test.released', 'Alt+B', vi.fn())).toEqual({ ok: true })
+      module.unregisterMainShortcut('app.test.released')
+      appSettingMocks.config.betaFeatures![feature] = true
+      publishSettings()
+      expect(module.getShortcutBinding(id)).toEqual({ configured: 'Alt+B', effective: 'Alt+B' })
+      dispatch.get('Alt+B')?.()
+      expect(beta).toHaveBeenCalledTimes(2)
+    }
+  )
+
+  it.each(['true', 1, null, [], {}])('rejects an invalid feature opt-in (%j)', (flag) => {
+    appSettingMocks.config = { betaFeatures: { screenshot: flag } }
+    const module = start()
+    module.registerMainShortcut('screenshot.tool.start', 'Alt+S', vi.fn(), { enabled: true })
+    expect(module.getShortcutBinding('screenshot.tool.start')).toEqual({
+      configured: 'Alt+S',
+      effective: null
+    })
+    expect(dispatch.has('Alt+S')).toBe(false)
+  })
+
+  it('keeps CoreBox’s live key uninterrupted when an unrelated setting changes', () => {
+    const module = start()
+    const corebox = vi.fn()
+    module.registerMainShortcut('core.box.toggle', 'Alt+C', corebox, { enabled: true })
+    electronMocks.unregisterAll.mockClear()
+    appSettingMocks.config.tools = { autoHide: false }
+    publishSettings()
+    expect(electronMocks.unregisterAll).not.toHaveBeenCalled()
+    dispatch.get('Alt+C')?.()
+    expect(corebox).toHaveBeenCalledTimes(1)
+  })
+
+  it('deactivates and restores the mouse trigger when the OmniPanel feature changes', () => {
+    appSettingMocks.config = { betaFeatures: { omniPanel: true } }
+    const module = start()
+    const states: boolean[] = []
+    module.registerMainTrigger(
+      'core.omniPanel.mouseLongPress',
+      ShortcutTriggerKind.MOUSE_RIGHT_LONG_PRESS,
+      {
+        enabled: true,
+        onStateChange: (active) => states.push(active)
+      }
+    )
+    expect(states.at(-1)).toBe(true)
+    appSettingMocks.config.betaFeatures!.omniPanel = false
+    publishSettings()
+    expect(states.at(-1)).toBe(false)
+    appSettingMocks.config.betaFeatures!.omniPanel = true
+    publishSettings()
+    expect(states.at(-1)).toBe(true)
+  })
 })
 
 describe('ShortcutModule survives a malformed shortcut record', () => {

@@ -1,9 +1,9 @@
 # Search & Cross-Platform Audit Backlog
 
 > 迁移说明（2026-10-03）：本文是活审计，正文逐字保留自已冻结任务 `07-13-search-crossplatform-audit` 的
-> [`prd.md`](https://github.com/talex-touch/tuff/blob/cfda0a6cd1a13b5606c82d7d9d68112177d3fc9d/.trellis/tasks/07-13-search-crossplatform-audit/prd.md)。文中的「本任务」「子任务」指迁移前的 Trellis 任务，
+> [`prd.md`](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/07-13-search-crossplatform-audit/prd.md)。文中的「本任务」「子任务」指迁移前的 Trellis 任务，
 > 其冻结记录见 [backlog](../workflow/backlog.md#07-13-search-crossplatform-audit)，身份登记见
-> [retired-task-index.json](../workflow/retired-task-index.json)；新的修复以独立的 Comet Native 变更承接。
+> [retired-task-index.json](../workflow/retired-task-index.json)；新的修复先与用户确认范围和验收，核对现有 PRD、工程规格与真实运行证据，并与当前负责人确认交接。
 > 发现修复或失效时，直接在本文勾除并注明原因。
 
 > 定位：本任务是 **搜索系统 + 跨平台架构** 的最高层审计报告与问题 backlog。

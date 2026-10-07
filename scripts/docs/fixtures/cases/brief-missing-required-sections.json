@@ -1,6 +1,0 @@
-{
-  "caseBase": "valid-final-contract",
-  "files": {
-    "docs/comet/changes/docs-quality-change/brief.md": "# Outcome\n\nDocumentation gates keep checking live requirement records.\n\n# Scope\n\n- Live Comet briefs.\n\n## Non-goals\n\n- A second-level heading does not open a required section.\n\n## Acceptance examples\n\n- Neither does this one.\n"
-  }
-}

@@ -35,6 +35,12 @@ import { appSetting } from '~/modules/storage/app-storage'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { createRendererLogger } from '~/utils/renderer-log'
 import type { SaveState, ShortcutRowBase } from './components/shortcut-dialog.types'
+import {
+  BETA_FEATURE_SHORTCUTS,
+  isBetaFeatureEnabled,
+  isShortcutFeatureEnabled,
+  type BetaFeature
+} from '../../../../../shared/beta-features'
 
 const props = withDefaults(
   defineProps<{
@@ -51,8 +57,16 @@ const { rerun: rerunBeginnerGuide } = useBeginnerGuide()
 
 const shortcuts = ref<ShortcutWithStatus[] | null>(null)
 const systemShortcuts = computed(() =>
-  (shortcuts.value || []).filter((shortcut) => isSystemShortcut(shortcut))
+  (shortcuts.value || []).filter(
+    (shortcut) =>
+      isSystemShortcut(shortcut) &&
+      isShortcutFeatureEnabled(appSetting, shortcut.id) &&
+      (shortcut.id !== 'local-ai-cli.quick-open' || appSetting.localAiCli?.enabled === true)
+  )
 )
+const betaFeatures = Object.keys(BETA_FEATURE_SHORTCUTS) as BetaFeature[]
+const savingBetaFeatures = reactive(new Set<BetaFeature>())
+const showBetaFeatures = computed(() => appSetting.dev?.advancedSettings === true)
 const shortcutsLoading = computed(() => shortcuts.value === null)
 const shortcutsDialogVisible = ref(false)
 const shortcutsDialogSource = ref<HTMLElement | null>(null)
@@ -263,7 +277,7 @@ function ensureOmniPanelSettings(): void {
   if (!appSetting.omniPanel || typeof appSetting.omniPanel !== 'object') {
     appSetting.omniPanel = {
       enableShortcut: false,
-      enableMouseLongPress: true,
+      enableMouseLongPress: appSettingOriginData.omniPanel.enableMouseLongPress,
       mouseLongPressDurationMs: DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS,
       autoMountFirstFeatureOnPluginInstall:
         appSettingOriginData.omniPanel.autoMountFirstFeatureOnPluginInstall,
@@ -278,7 +292,7 @@ function ensureOmniPanelSettings(): void {
     appSetting.omniPanel.enableShortcut = false
   }
   if (appSetting.omniPanel.enableMouseLongPress === undefined) {
-    appSetting.omniPanel.enableMouseLongPress = true
+    appSetting.omniPanel.enableMouseLongPress = appSettingOriginData.omniPanel.enableMouseLongPress
   }
   appSetting.omniPanel.mouseLongPressDurationMs = normalizeSelectNumber(
     appSetting.omniPanel.mouseLongPressDurationMs,
@@ -368,7 +382,7 @@ const omniPanelMouseTriggerEnabled = computed(() => {
   const target = shortcuts.value?.find(
     (shortcut) => shortcut.id === 'core.omniPanel.mouseLongPress'
   )
-  if (!target) return true
+  if (!isBetaFeatureEnabled(appSetting, 'omniPanel') || !target) return false
   return isShortcutEnabled(target)
 })
 
@@ -483,6 +497,25 @@ async function updateShortcutEnabled(id: string, enabled: boolean): Promise<void
     }
   }
   await refreshShortcuts()
+}
+
+async function updateBetaFeature(feature: BetaFeature, enabled: boolean): Promise<void> {
+  if (!showBetaFeatures.value || savingBetaFeatures.has(feature)) return
+  savingBetaFeatures.add(feature)
+  try {
+    if (enabled) {
+      const success = await saveShortcut(BETA_FEATURE_SHORTCUTS[feature], { enabled: true })
+      if (!success || shortcutViewDisposed) return
+      if (feature === 'omniPanel' && appSetting.omniPanel) {
+        appSetting.omniPanel.enableShortcut = true
+      }
+    }
+    appSetting.betaFeatures ??= { ...appSettingOriginData.betaFeatures }
+    appSetting.betaFeatures[feature] = enabled
+    await refreshShortcuts()
+  } finally {
+    savingBetaFeatures.delete(feature)
+  }
 }
 
 function setRowSaveState(id: string, state: SaveState): void {
@@ -785,6 +818,7 @@ onBeforeUnmount(() => {
       :description="t('settingTools.autoContextDesc')"
     />
     <TuffBlockSwitch
+      v-if="showBetaFeatures"
       v-model="homeRecommendationsEnabled"
       :title="t('settingTools.homeRecommendations')"
       :description="t('settingTools.homeRecommendationsDesc')"
@@ -794,11 +828,33 @@ onBeforeUnmount(() => {
       </template>
     </TuffBlockSwitch>
     <TuffBlockSwitch
-      v-if="homeRecommendationsEnabled"
+      v-if="showBetaFeatures && homeRecommendationsEnabled"
       v-model="homeAiOpeningEnabled"
       :title="t('settingTools.homeAiOpening')"
       :description="t('settingTools.homeAiOpeningDesc')"
     />
+  </TuffGroupBlock>
+
+  <TuffGroupBlock
+    v-if="!props.advancedOnly && showBetaFeatures"
+    :name="t('settingTools.betaFeaturesTitle')"
+    :description="t('settingTools.betaFeaturesDesc')"
+    :collapsible="false"
+  >
+    <TuffBlockSwitch
+      v-for="feature in betaFeatures"
+      :key="feature"
+      :data-beta-feature="feature"
+      :model-value="isBetaFeatureEnabled(appSetting, feature)"
+      :disabled="shortcutsLoading || savingBetaFeatures.has(feature)"
+      :title="getShortcutLabel(BETA_FEATURE_SHORTCUTS[feature])"
+      :description="t('settingTools.betaFeatureEnableDesc')"
+      @update:model-value="updateBetaFeature(feature, $event)"
+    >
+      <template #tags>
+        <TuffBetaTag />
+      </template>
+    </TuffBlockSwitch>
   </TuffGroupBlock>
 
   <!-- Utilities group block -->

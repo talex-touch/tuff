@@ -1,6 +1,6 @@
 # Engineering Docs
 
-> 更新时间：2026-10-03
+> 更新时间：2026-10-06
 > 定位：工程规范、交接、审计和 curated evidence 入口。当前任务优先级见 [`../plan-prd/TODO.md`](../plan-prd/TODO.md)。
 
 ## 当前交接
@@ -11,6 +11,8 @@
 - [search-index split 写路径验收](./reports/search-index-split-write-acceptance.md)：应用级验收矩阵与执行记录（活报告）。
 
 交接文档中的 commit、worktree、并行修改和“未 push”描述是生成当日快照；执行前必须读取当前仓库状态，不把快照当实时事实。
+
+当前工作先与用户确认范围与验收，再核对现有 PRD、工程规格和真实运行证据，并与当前负责人确认交接。`docs/comet/` 只读保留退出前记录，不作为实时状态或执行入口。
 
 ## 工程规范
 
@@ -39,7 +41,7 @@
 
 ## 维护规则
 
-1. 新过程资料优先补到现有专题、当前 Comet 变更或 `reports/`，不在本目录根部堆叠临时 handoff。
+1. 新过程资料优先补到现有 PRD、工程规格、专题或 `reports/`，不在本目录根部堆叠临时 handoff。
 2. `reports/` 只提交摘要、manifest/checklist、严格验证输出和最终可复核 evidence。
 3. 调试日志、pid、完整 HAR、重复截图、Chromium profile 和 user-data 进入 ignored evidence 目录。
 4. Release notes 保留在根目录 `notes/`，因为发布 workflow 消费该路径。

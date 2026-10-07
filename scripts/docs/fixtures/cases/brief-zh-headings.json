@@ -1,6 +1,0 @@
-{
-  "caseBase": "valid-final-contract",
-  "files": {
-    "docs/comet/changes/docs-quality-change/brief.md": "# 目标\n\n迁移后文档门禁继续检查活跃需求记录。\n\n# 范围\n\n- 活跃的 Comet brief。\n\n# 非目标\n\n无\n\n# 验收示例\n\n- 缺少验收示例的 brief 无法通过文档检查。\n"
-  }
-}

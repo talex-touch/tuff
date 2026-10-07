@@ -16,10 +16,6 @@ const DEFAULT_CAP = 100
 const POSIX = value => value.split(path.sep).join('/')
 const MARKDOWN = /\.(?:md|mdc)$/i
 const SEMVER = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Z-]+(?:\.[0-9A-Z-]+)*)?(?:\+[0-9A-Z-]+(?:\.[0-9A-Z-]+)*)?$/i
-// A live Comet Native change keeps its requirement record here until Runtime archives it, which
-// moves the whole directory under docs/comet/archive/. Phase and acceptance state belong to Runtime
-// (comet-state.yaml); this verifier reads the brief's content and never the change's state.
-const LIVE_BRIEF = /^docs\/comet\/changes\/[^/]+\/brief\.md$/
 // execFileSync's default buffer (1 MiB) is within reach of `git ls-files -z` for this tree.
 // Overflowing throws in the middle of the listing, which reads as a broken tool, not a finding.
 const GIT_LIST_MAX_BUFFER = 64 * 1024 * 1024
@@ -73,7 +69,6 @@ export function scopeRegistry(repoRoot, files = repositoryFiles(repoRoot)) {
     markdownFiles: sorted.filter(file => MARKDOWN.test(file)),
     lintDocuments: sorted.filter(file => MARKDOWN.test(file) && !excludedMarkdownScope(file)),
     excludedMarkdown: sorted.filter(file => MARKDOWN.test(file) && excludedMarkdownScope(file)),
-    liveBriefs: sorted.filter(file => LIVE_BRIEF.test(file)),
   }
 }
 
@@ -202,115 +197,6 @@ export function checkAiDocs(repoRoot, scope, options = {}) {
   return verifyAiDocs(repoRoot).map(failure => diagnostic('DOC-AI-CONTRACT', failure.file, null, failure.message))
 }
 
-const PLACEHOLDER = /\b(?:TBD|TODO\s*:\s*(?:fill|complete|determine)|to be determined|\[placeholder\])\b|<evidence>|待定|待填写|待补充|占位符|请填写/gi
-// `matchAll` requires the global flag; `test` is broken by it. A /g regex advances lastIndex on
-// every `test`, so the same string alternates true/false across calls -- a section whose only
-// content is TBD reads as substantive on the second look. Worse, `matchAll` inherits whatever
-// lastIndex the previous `test` left behind, so it can skip the first placeholder in a string.
-// One source, two objects, no shared cursor.
-const PLACEHOLDER_TEST = new RegExp(PLACEHOLDER.source, 'i')
-// "None" is a real answer for what a change will not do, and no answer at all for what it is, what
-// it covers, or how it will be accepted. Comet Native draws the same line for its own briefs.
-const EXPLICIT_NONE = /^(?:none|n\/a|not applicable|nothing|无|暂无|没有|不适用)[.!。；;：:，,、\s-]*$/iu
-
-/**
- * The four sections every Comet Native brief carries, as Comet 0.4.4 writes them in either artifact
- * language. Acceptance examples is the load-bearing one: Runtime derives the change's acceptance
- * items from it, so a brief that leaves it empty is a change nobody can verify.
- */
-const BRIEF_SECTIONS = Object.freeze([
-  { name: 'Outcome', headings: ['outcome', '目标'], noneAllowed: false },
-  { name: 'Scope', headings: ['scope', '范围'], noneAllowed: false },
-  { name: 'Non-goals', headings: ['non-goals', '非目标'], noneAllowed: true },
-  { name: 'Acceptance examples', headings: ['acceptance examples', '验收示例'], noneAllowed: false },
-])
-
-function headingTitle(heading) {
-  const parts = []
-  walk(heading, (node) => {
-    if (node.type === 'text')
-      parts.push(node.value)
-  })
-  return parts.join('').replace(/\s+/g, ' ').trim().toLowerCase()
-}
-
-/** Top-level H1 sections in order; each runs to the next H1, so its subsections belong to it. */
-function briefSections(tree) {
-  const nodes = tree.children ?? []
-  const sections = []
-  for (let index = 0; index < nodes.length; index += 1) {
-    const heading = nodes[index]
-    if (heading.type !== 'heading' || heading.depth !== 1)
-      continue
-    let end = index + 1
-    while (end < nodes.length && !(nodes[end].type === 'heading' && nodes[end].depth === 1)) end += 1
-    sections.push({ heading, title: headingTitle(heading), body: nodes.slice(index + 1, end) })
-  }
-  return sections
-}
-
-/**
- * Prose a reader can act on. Headings, fenced code and HTML comments never count: a section holding
- * only a subsection title, a template fence or a commented-out draft says nothing. Inline code is
- * not a text node and does not count either.
- */
-function sectionHasSubstantiveContent(nodes, noneAllowed) {
-  const texts = []
-  for (const node of nodes) {
-    if (node.type === 'heading' || node.type === 'code')
-      continue
-    walk(node, (child) => {
-      if (child.type === 'text')
-        texts.push(child.value)
-    })
-  }
-  if (!texts.some(value => /[\p{L}\p{N}]/u.test(value) && !PLACEHOLDER_TEST.test(value)))
-    return false
-  return noneAllowed || !EXPLICIT_NONE.test(texts.join(' ').replace(/\s+/g, ' ').trim())
-}
-
-/**
- * The requirement record of every live Comet change has its four sections filled and no unresolved
- * placeholder. This is the old active-PRD rule moved to the record that replaced the PRD: nothing
- * reads Comet state, phase or acceptance results, which Runtime alone writes, and nothing is
- * allowlisted -- a placeholder that is meant literally goes in inline code. Archived changes,
- * specs, verification reports and historical handoffs are not live briefs and stay in ordinary
- * Markdown and link scope only.
- */
-export function checkLiveBriefs(repoRoot, scope) {
-  const diagnostics = []
-  for (const file of scope.liveBriefs) {
-    const text = readRepositoryText(repoRoot, file, diagnostics)
-    if (text === undefined)
-      continue
-    let tree
-    try {
-      tree = parseMarkdown(text)
-    }
-    catch (error) {
-      diagnostics.push(diagnostic('DOC-BRIEF-PARSE', file, null, error.message))
-      continue
-    }
-    const sections = briefSections(tree)
-    for (const required of BRIEF_SECTIONS) {
-      const matches = sections.filter(section => required.headings.includes(section.title))
-      if (matches.length === 0)
-        diagnostics.push(diagnostic('DOC-BRIEF-MISSING-SECTION', file, null, `missing required section "# ${required.name}" (zh-CN "# ${required.headings[1]}")`))
-      for (const section of matches) {
-        if (!sectionHasSubstantiveContent(section.body, required.noneAllowed))
-          diagnostics.push(diagnostic('DOC-BRIEF-EMPTY-SECTION', file, section.heading.position?.start, `required section "${required.name}" has no substantive content`))
-      }
-    }
-    walk(tree, (node) => {
-      if (node.type !== 'text' && node.type !== 'html')
-        return
-      for (const match of node.value.matchAll(new RegExp(PLACEHOLDER.source, 'gi')))
-        diagnostics.push(diagnostic('DOC-BRIEF-PLACEHOLDER', file, node.position?.start, `unresolved placeholder ${match[0]}`))
-    })
-  }
-  return diagnostics
-}
-
 const TASK_INDEX_RULES = Object.freeze({
   json: 'DOC-TASK-INDEX-JSON',
   shape: 'DOC-TASK-INDEX-SHAPE',
@@ -354,7 +240,6 @@ export function verifyDocs(repoRoot, options = {}) {
     ...checkMarkdownAndLinks(repoRoot, scope),
     ...checkReleaseNotes(repoRoot, scope),
     ...checkAiDocs(repoRoot, scope, { skipAiDocs: options.skipAiDocs === true }),
-    ...checkLiveBriefs(repoRoot, scope),
     ...checkRetiredTaskIndex(repoRoot, scope),
   ])
 }

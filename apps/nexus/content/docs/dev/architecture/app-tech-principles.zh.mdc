@@ -35,7 +35,7 @@
 - `docs/`：工程与产品文档、PRD、分析报告。
 - `scripts/`：CI/工具脚本与工程维护脚本。
 - `build/`：构建配置产物（少量文件）。
-- `.github/`、`.husky/`、`.comet/`、`.vscode/` 等：协作与工具链配置。Comet Native 变更记录位于 `docs/comet/`，工程约束位于 `docs/engineering/specs/`。
+- `.github/`、`.husky/`、`.vscode/` 等：协作与工具链配置。工程约束位于 `docs/engineering/specs/`；`docs/comet/` 只读保留退出前的需求、规格和验收记录。
 - 关键文件：`package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml`、`eslint.config.js`、`commitlint.config.cts`、`README.md`、`README.zh-CN.md`、`AGENTS.md`、`CLAUDE.md`。
 
 ## 子项目结构详解

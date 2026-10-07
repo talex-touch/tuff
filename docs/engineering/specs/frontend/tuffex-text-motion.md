@@ -30,19 +30,22 @@ The engine's shape, in the order a morph runs:
 
 ## The spring comes from `liquid/src/spring.ts`
 
-`engine/container.ts` and `engine/morph.ts` import `resolveTransition` and `easingFunction`
-from `packages/tuffex/packages/components/src/liquid/src/spring.ts`. Upstream torph shipped
-its own spring compiler and CSS-easing parser; both were dropped in the port.
+`engine/morph.ts` imports `resolveTransition` from
+`packages/tuffex/packages/components/src/liquid/src/spring.ts`, and `engine/container.ts` evaluates
+CSS easings with `resolveCssEase` from `packages/tuffex/packages/utils/animation/easing.ts` — the
+library's one CSS-easing evaluator, which `TxLiquid` calls too (until 2026-10-06 it was
+`easingFunction` in `liquid/src/spring.ts`). Upstream torph shipped its own spring compiler and
+CSS-easing parser; both were dropped in the port.
 
 This is deliberate, and it is the reason `TxTextMorph` and `TxLiquid` settle on the same curves.
 (`TxSlider`'s thumb left this compiler on 2026-09-06: it and Radio's indicator integrate the jelly
 spring per frame through `utils/animation/jelly.ts` / `utils/use-jelly-indicator.ts`, because their
 targets move under them, and the tabs family's glide integrates through `springSteps` (below); see
-component-guidelines "Sliding indicators ride `useJellyIndicator`".) Do not reintroduce a second spring compiler, and do not "tidy" the
+component-guidelines "Sliding indicators ride `useJellyIndicator`".) Do not reintroduce a second spring compiler or a second CSS-easing evaluator, and do not "tidy" the
 cross-directory import away — `liquid/src/spring.ts` is a leaf module with no Vue and no CSS,
 so importing it costs nothing.
 
-One deviation worth knowing: `easingFunction` never returns `null` (an unparsable spec
+One deviation worth knowing: `resolveCssEase` never returns `null` (an unparsable spec
 degrades to a clamped linear ramp) where upstream's `parseEasing` did. The `null` branches in
 `container.ts` are kept anyway so a future resolver change cannot fall through unnoticed.
 

@@ -2,7 +2,8 @@ import type { ComputedRef, Ref } from 'vue'
 import type { BaseAnchorAnimationOptions, BaseAnchorAnimationType, BaseAnchorExitGeometry } from './types'
 import { computed } from 'vue'
 import { hasWindow } from '../../../../utils/env'
-import { clamp01, createCubicBezier, LIQUID_DEFAULTS, liquidVelocityAt, parseCubicBezier, parseSpringEase, resolveLiquidEase } from './base-anchor-liquid'
+import { resolveGsapEase } from '../../../../utils/animation/easing'
+import { clamp01, LIQUID_DEFAULTS, liquidVelocityAt, resolveLiquidEase } from './base-anchor-liquid'
 
 type BaseAnchorSide = 'top' | 'bottom' | 'left' | 'right'
 type BaseAnchorAlignment = 'start' | 'end' | 'center'
@@ -118,8 +119,8 @@ const REFRACTION_CLOSE_PREPARE_MS = 180
  * its edges. The close accelerates out — replaying a spring backwards reads
  * as a stall, and exits should leave, not perform.
  *
- * Like liquid, expand must bypass the legacy `duration` / `ease` props: they
- * are always populated with transfer-era defaults and would re-time the spring.
+ * Like liquid, expand carries its own table instead of the shared classic
+ * one: the transfer-era duration and ease would re-time the spring.
  */
 const EXPAND_DEFAULTS = {
   duration: 400,
@@ -132,6 +133,21 @@ const EXPAND_DEFAULTS = {
   // curtain: the panel leaves at 88% and the spring carries it ~1% past full.
   scale: 0.88,
   distance: 12,
+} as const
+
+/**
+ * expand's arrow beat. The arrow sits on the panel (see TxBaseAnchor's
+ * template), so the drift and settle scale already carry it; this is only its
+ * own motion. It leaves the edge once the panel has formed and pokes out on
+ * the panel's spring, landing and overshooting a beat behind the body it
+ * points from — follow-through, the panel reaching for its trigger. The close
+ * runs the other way round: the arrow tucks in first, then the panel folds.
+ */
+const EXPAND_ARROW = {
+  /** Share of the open spent before the arrow leaves the panel edge. */
+  lag: 0.15,
+  /** Scale it grows from, about its base on the panel edge. */
+  seedScale: 0.2,
 } as const
 
 /**
@@ -275,8 +291,8 @@ function resolveExitGeometry(
   return {
     // Shared field first: an explicit `scale` is a statement about the whole
     // animation. Only when the caller said nothing does the close type's own
-    // table apply, which is what keeps `{ type: 'boom', closeType: 'expand' }`
-    // from closing with boom's above-1 scale.
+    // table apply, which is what lets `{ type: 'boom', closeType: 'expand' }`
+    // close on expand's 0.88 rather than boom's 0.94.
     scale: Math.max(0.01, exit.scale ?? animation.scale ?? closeTable.scale),
     distance: Math.max(0, exit.distance ?? animation.distance ?? closeTable.distance),
     blur: Math.max(0, exit.blur ?? animation.blur ?? DEFAULT_ANIMATION.blur),
@@ -652,22 +668,6 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
   }
 
   /**
-   * GSAP core cannot parse `spring(...)` or CSS `cubic-bezier(...)` strings,
-   * but it does accept a plain progress function — so expand's curves resolve
-   * through the kernel's spring and bezier builders. Everything else (gsap's
-   * own vocabulary) passes through untouched.
-   */
-  function resolveGsapEase(value: string): string | ((t: number) => number) {
-    const spring = parseSpringEase(value)
-    if (spring)
-      return spring
-    const points = parseCubicBezier(value)
-    if (!points)
-      return value
-    return createCubicBezier(points[0], points[1], points[2], points[3])
-  }
-
-  /**
    * Drive the liquid drop off a single progress scalar.
    *
    * This deliberately does not go through GSAP: the motion is specified as two
@@ -791,18 +791,19 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
   }
 
   /**
-   * Each type seeds its arrow in its own visual language: transfer tucks it
-   * toward the reference for the landing pop, expand buries it small at the
-   * anchor edge so the spring can grow it with the panel, boom holds it back
-   * for its zoom, opacity only fades.
+   * Each type seeds its arrow in its own visual language. The panel's motion
+   * already carries the arrow, so these only set up its extra beat: transfer
+   * tucks it into the panel for the landing pop, expand shrinks it onto the
+   * edge so the spring can grow it out, boom holds it back for its zoom.
+   * opacity has no beat of its own — the panel's fade is the arrow's fade.
    */
   function prepareArrowOpen(gsap: GsapRuntime, type: BaseAnchorAnimationType) {
     const arrowEl = options.arrowRef.value
     if (!options.showArrow.value || !arrowEl)
       return
 
-    const insetT = getArrowInsetTranslate()
     if (type === 'transfer') {
+      const insetT = getArrowInsetTranslate()
       gsap.set(arrowEl, {
         x: insetT.x,
         y: insetT.y,
@@ -813,42 +814,41 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       return
     }
 
-    if (type === 'expand') {
+    if (type === 'expand' || type === 'boom') {
       gsap.set(arrowEl, {
-        x: insetT.x * 0.6,
-        y: insetT.y * 0.6,
-        scale: 0.5,
+        x: 0,
+        y: 0,
+        scale: type === 'expand' ? EXPAND_ARROW.seedScale : 0.6,
         opacity: 0,
         willChange: 'transform,opacity',
       })
       return
     }
 
-    gsap.set(arrowEl, {
-      x: 0,
-      y: 0,
-      scale: type === 'boom' ? 0.6 : 1,
-      opacity: 0,
-      willChange: type === 'opacity' ? 'opacity' : 'transform,opacity',
-    })
+    // A run of another type may have been cut off mid-beat.
+    resetArrowElement()
   }
 
-  function addArrowOpenTween(timeline: GsapTimeline, type: BaseAnchorAnimationType, duration: number) {
+  function addArrowOpenTween(
+    timeline: GsapTimeline,
+    type: BaseAnchorAnimationType,
+    duration: number,
+    ease: ReturnType<typeof resolveGsapEase>,
+  ) {
     const arrowEl = options.arrowRef.value
-    if (!options.showArrow.value || !arrowEl || type === 'none')
+    if (!options.showArrow.value || !arrowEl || type === 'none' || type === 'opacity')
       return
 
     if (type === 'expand') {
-      // The arrow rides the panel's own spring for the full run: it grows,
-      // overshoots, and settles in phase with the body it points from.
+      // The panel's own spring, started late and ending with the panel, so
+      // the arrow's overshoot lands a beat after the body's.
+      const lag = duration * EXPAND_ARROW.lag
       timeline.to(arrowEl, {
-        x: 0,
-        y: 0,
         scale: 1,
         opacity: 1,
-        duration,
-        ease: resolveGsapEase(resolvedAnimation.value.ease),
-      }, 0)
+        duration: duration - lag,
+        ease,
+      }, lag)
       return
     }
 
@@ -865,15 +865,6 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       return
     }
 
-    if (type === 'opacity') {
-      timeline.to(arrowEl, {
-        opacity: 1,
-        duration,
-        ease: 'power2.out',
-      }, 0)
-      return
-    }
-
     // transfer: pop in right as the slide lands.
     const arrowDur = Math.min(0.16, Math.max(0.09, duration * 0.28))
     timeline.to(arrowEl, {
@@ -886,23 +877,25 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
     }, Math.max(0, duration - arrowDur * 0.85))
   }
 
+  /**
+   * The arrow leaves ahead of the panel that carries it: it tucks back onto
+   * the edge in the opening stretch of the close. transfer also pulls it into
+   * the panel, the way its landing pop came out, and only then lets the panel
+   * slide — so it reports that delay back to its caller.
+   */
   function addArrowCloseTween(gsap: GsapRuntime, timeline: GsapTimeline, type: BaseAnchorAnimationType, duration: number) {
     const arrowEl = options.arrowRef.value
-    if (!options.showArrow.value || !arrowEl || type === 'none')
+    if (!options.showArrow.value || !arrowEl || type === 'none' || type === 'opacity')
       return 0
 
     const arrowDur = Math.min(0.12, Math.max(0.07, duration * 0.4))
-    const insetT = type === 'transfer'
-      ? getArrowInsetTranslate()
-      : type === 'expand'
-        ? { x: getArrowInsetTranslate().x * 0.6, y: getArrowInsetTranslate().y * 0.6 }
-        : { x: 0, y: 0 }
+    const insetT = type === 'transfer' ? getArrowInsetTranslate() : { x: 0, y: 0 }
 
-    gsap.set(arrowEl, { willChange: type === 'opacity' ? 'opacity' : 'transform,opacity' })
+    gsap.set(arrowEl, { willChange: 'transform,opacity' })
     timeline.to(arrowEl, {
       x: insetT.x,
       y: insetT.y,
-      scale: type === 'transfer' ? 0.72 : type === 'expand' ? 0.5 : type === 'boom' ? 0.6 : 1,
+      scale: type === 'transfer' ? 0.72 : type === 'expand' ? EXPAND_ARROW.seedScale : 0.6,
       opacity: 0,
       duration: arrowDur,
       ease: 'power2.in',
@@ -958,9 +951,12 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       return
 
     const dur = durMs / 1000
-    // A liquid config that degraded to the opacity path still carries CSS
-    // cubic-bezier strings, which GSAP cannot parse.
-    const openEase = isLiquidFallback.value ? 'power2.out' : animation.ease
+    // Every type parses its ease the same way (see resolveGsapEase), so a
+    // spring or a CSS bezier runs as written instead of GSAP quietly swapping
+    // in its default. A liquid config that degraded to the opacity path keeps
+    // power2: its own curves shape the drop's raw progress (the open is
+    // deliberately linear) and would read flat on a plain fade.
+    const openEase = resolveGsapEase(isLiquidFallback.value ? 'power2.out' : animation.ease)
     clip.style.visibility = 'visible'
     // expand's clip bleeds past the box to keep the shadow, so it needs overflow visible.
     // The bled clip needs overflow: the bleed IS what keeps the bounce alive.
@@ -1008,7 +1004,6 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       // One eased progress drives everything: the tweens share the timeline
       // position, the duration, and the ease, so they cannot drift apart —
       // the coupling the reference capture shows.
-      const expandEase = resolveGsapEase(animation.ease)
       const driftT = getTranslate()
 
       // Natural height can only be read with the box overrides off — an
@@ -1086,7 +1081,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
         tl.to(heightState, {
           p: 1,
           duration: dur,
-          ease: expandEase,
+          ease: openEase,
           onUpdate() {
             writeBoxFrame(heightState.p)
           },
@@ -1099,7 +1094,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
         tl.to(clipState, {
           progress: 1,
           duration: dur,
-          ease: expandEase,
+          ease: openEase,
           onUpdate() {
             clip.style.clipPath = getExpandClipPath(clipState.progress)
           },
@@ -1111,13 +1106,13 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
         y: 0,
         scale: 1,
         duration: dur,
-        ease: expandEase,
+        ease: openEase,
       }, 0)
 
       tl.to(fadeTarget, {
         opacity: 1,
         duration: dur,
-        ease: expandEase,
+        ease: openEase,
       }, 0)
     }
     else if (type === 'boom') {
@@ -1146,7 +1141,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       }, 0)
     }
 
-    addArrowOpenTween(tl, type, dur)
+    addArrowOpenTween(tl, type, dur, openEase)
   }
 
   async function animateClose(currentRunId: number) {
@@ -1193,7 +1188,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
         return
 
       const dur = durMs / 1000
-      const resolvedCloseEase = isLiquidFallback.value ? 'power2.in' : animation.closeEase
+      const resolvedCloseEase = resolveGsapEase(isLiquidFallback.value ? 'power2.in' : animation.closeEase)
       clip.style.visibility = 'visible'
       clip.style.overflow = 'visible'
       clip.style.clipPath = type === 'transfer'
@@ -1218,7 +1213,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
         tl.to(content, {
           x: hiddenT.x,
           y: hiddenT.y,
-          scale: animation.scale,
+          scale: animation.exit.scale,
           duration: dur,
           ease: resolvedCloseEase,
         }, motionStart)
@@ -1235,7 +1230,6 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       else if (type === 'expand') {
         // Accelerate out, landing back on the seed drift/scale/opacity. Still
         // one coupled progress — just a shorter curve than the open.
-        const expandCloseEase = resolveGsapEase(animation.closeEase)
         const driftT = getTranslate(animation.exit.distance)
 
         // Read BEFORE applying the overrides: with the card at 100% the
@@ -1284,7 +1278,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
           tl.to(heightState, {
             p: 0,
             duration: dur,
-            ease: expandCloseEase,
+            ease: resolvedCloseEase,
             onUpdate() {
               writeBoxFrame(heightState.p)
             },
@@ -1295,7 +1289,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
           tl.to(clipState, {
             progress: 0,
             duration: dur,
-            ease: expandCloseEase,
+            ease: resolvedCloseEase,
             onUpdate() {
               clip.style.clipPath = getExpandClipPath(clipState.progress)
             },
@@ -1307,13 +1301,13 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
           y: driftT.y,
           scale: animation.exit.scale,
           duration: dur,
-          ease: expandCloseEase,
+          ease: resolvedCloseEase,
         }, motionStart)
 
         tl.to(fadeTarget, {
           opacity: animation.exit.opacity,
           duration: dur,
-          ease: expandCloseEase,
+          ease: resolvedCloseEase,
         }, motionStart)
       }
       else if (type === 'boom') {

@@ -158,7 +158,7 @@
       "system": "系统信息"
     },
     "advancedSettings": "高级设置",
-    "advancedSettingsDesc": "显示 CoreBox 自定义与壁纸细项，关闭后保留已有配置。",
+    "advancedSettingsDesc": "显示 Beta 功能开关、CoreBox 自定义与壁纸细项。Beta 功能仍需手动启用，关闭高级设置保留已有配置。",
     "developerMode": "开发者模式",
     "developerModeDesc": "显示内部插件与高级选项（谨慎使用）",
     "systemInfoPlaceholder": "系统信息仅在开发模式下可用"
@@ -439,6 +439,9 @@
     "dashboardDesc": "在 Nexus 查看详细的使用统计和趋势"
   },
   "settingTools": {
+    "betaFeaturesTitle": "实验功能",
+    "betaFeaturesDesc": "以下功能处于 Beta 阶段，默认关闭。手动开启后才会显示对应快捷键。",
+    "betaFeatureEnableDesc": "开启此 Beta 功能并启用快捷键；关闭后隐藏快捷键并停止触发，保留已有键位。",
     "autoContextGroupTitle": "上下文",
     "autoContextGroupDesc": "控制模型在对话中可以自动取用哪些本机信息。",
     "autoContext": "自动上下文",

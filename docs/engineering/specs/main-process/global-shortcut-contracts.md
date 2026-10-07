@@ -35,6 +35,24 @@ the rest of startup is real, but every OS registration pass is disabled and `ena
 override the process-level gate. This is a verification boundary only; production launches omit
 the variable.
 
+## Beta feature opt-in
+
+- `appSettingOriginData.betaFeatures` owns four opt-ins: `screenshot`, `voiceDictation`,
+  `voiceQuickEdit`, and `omniPanel`. All default to false; missing or invalid historical fields
+  use those canonical defaults. A stored enabled shortcut is not feature consent.
+- Settings → About → Advanced Settings reveals the Beta switches in Plugins & Tools. Turning
+  advanced visibility on does not enable a feature. Home recommendations also requires advanced
+  visibility to expose its existing opt-in control.
+- `shared/beta-features.ts` maps the primary shortcuts and OmniPanel's mouse trigger to their
+  feature. Settings hides their rows while the feature is off; enabled features retain disabled
+  shortcut rows so users can re-enable a binding. The local AI key follows its existing master switch.
+- `ShortcutModule` gates before conflict classification and listens to relevant APP_SETTING
+  changes. Turning a feature off releases its keys/triggers immediately, without erasing stored
+  accelerators or shortcut preferences. OmniPanel's native hooks follow effective registrations.
+- The screenshot tray entry and standalone start obey the screenshot opt-in. Plugin screenshot
+  capabilities remain separately permission-gated. Local AI's explicitly enabled panel entry
+  remains independent of the OmniPanel opt-in.
+
 ## Scenario: Defaults are declared once and migrate by value
 
 ### 1. Scope / Trigger

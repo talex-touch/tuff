@@ -149,7 +149,6 @@ code: |
       duration: type === 'none' ? 0 : 420,
       ease: type === 'transfer' ? 'back.out(2)' : 'power2.out',
       closeEase: type === 'transfer' ? 'power3.in' : 'power2.in',
-      scale: type === 'boom' ? 1.08 : undefined,
       blur: type === 'boom' ? 14 : undefined,
     }
   }
@@ -278,7 +277,7 @@ code: |
 
 ### 自定义动画
 
-推荐使用 `animation` 对象控制动画类型、时长和 GSAP 缓动函数。`duration` / `ease` 仍保留兼容，但新用法应写入 `animation`。
+动画类型、时长和缓动都写在 `animation` 对象里；组件没有顶层的 `duration` / `ease` prop。
 
 #### 弹性缓动
 :::TuffDemoWrapper{demo="BaseAnchorCustomEaseDemo" code-lang="vue"}
@@ -368,17 +367,17 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `type` | `'transfer' \| 'boom' \| 'opacity' \| 'none' \| 'drip' \| 'bead'` | `'transfer'` | 动画类型。`boom` 为聚焦缩放效果，不用于中文命名；`drip` 与 `bead` 共用一套引擎、自带时序表，不继承旧的 `duration` / `ease` prop |
+| `type` | `'expand' \| 'transfer' \| 'boom' \| 'opacity' \| 'none' \| 'drip' \| 'bead'` | `'expand'` | 动画类型。`boom` 为聚焦缩放效果，不用于中文命名；`drip` 与 `bead` 共用一套引擎、自带时序表 |
 | `closeType` | 同 `type` 的取值 | 同 `type` | 关闭阶段使用的动画类型。缺省时与 `type` 相同，因此不传即为对称播放。`drip` / `bead` 的两个方向共用同一套已测量的舞台（含模板读取的 `usesBeadMotion`），因此液态必须两端同型，混搭会回落为对称并在 dev 下告警 |
 | `duration` | `number` | 按类型（expand 400 / 经典 432 / 液态 260） | 打开动画时长 (ms) |
-| `closeDuration` | `number` | `duration * 0.45` | 关闭动画时长 (ms) |
-| `ease` | `string` | 按类型（expand `spring(10, 0.6)` / 经典 `back.out(2)` / 液态 `linear`） | 打开缓动：GSAP 字符串、`cubic-bezier(...)` 或 `spring(omega, zeta)` |
-| `closeEase` | `string` | `'power3.in'` | 关闭动画 GSAP 缓动 |
-| `distance` | `number` | `30` | `transfer` 位移距离 (px) |
-| `scale` | `number` | `1.08` | `boom` 打开初始/关闭结束缩放 |
+| `closeDuration` | `number` | 按关闭类型（expand 240 / 经典为打开时长 × 0.45 / 液态 150） | 关闭动画时长 (ms) |
+| `ease` | `string` | 按类型（expand `spring(10, 0.6)` / 经典 `back.out(2)` / 液态 `linear`） | 打开缓动：GSAP 字符串、`cubic-bezier(...)` 或 `spring(omega, zeta)`；液态只认 `linear` 与 `cubic-bezier(...)`（见下文） |
+| `closeEase` | `string` | 按关闭类型（expand `power2.in` / 经典 `power3.in` / 液态 `cubic-bezier(0.25, 0.46, 0.45, 0.94)`） | 关闭缓动，写法同 `ease` |
+| `distance` | `number` | 按类型（expand 12 / transfer 30） | `expand` 的漂移与 `transfer` 的位移距离 (px)，关闭默认也用这个值（见 `exit`） |
+| `scale` | `number` | 按类型（expand 0.88 / boom 0.94 / transfer 0.92） | 打开的初始缩放，关闭默认也收回到这个值（见 `exit`） |
 | `blur` | `number` | `12` | `boom` 打开初始/关闭结束模糊半径 (px) |
-| `opacity` | `number` | `0` | `boom` / `opacity` 打开初始与关闭结束透明度 |
-| `exit` | `{ scale?, distance?, blur?, opacity? }` | 见说明 | 仅作用于关闭阶段的几何覆盖。逐字段回落：先取同名共享字段（调用方显式写过的值），再取 `closeType` 自己的默认表。之所以需要它，是因为 `scale` 在不同类型下语义相反 —— `boom` 从大于 1 收进来，`expand` 从小于 1 长出去，两阶段共享一个值必然有一端是错的 |
+| `opacity` | `number` | `0` | `expand` / `boom` / `opacity` 打开初始与关闭结束透明度 |
+| `exit` | `{ scale?, distance?, blur?, opacity? }` | 见说明 | 仅作用于关闭阶段的几何覆盖。逐字段回落：先取同名共享字段（调用方显式写过的值），再取 `closeType` 自己的默认表。之所以需要它，是因为各类型的起始缩放和变换原点都不一样（`expand` 0.88、绕锚定的那一角，`boom` 0.94、绕中心），打开与关闭分属两种类型时，为打开写的共享值会连关闭一起驱动 |
 | `gooBlur` | `number` | `4.5` | 仅 `drip` / `bead`。goo 滤镜的 `feGaussianBlur` stdDeviation，与 `gooThreshold` 共同决定颈部能撑过多宽的间隙 |
 | `gooThreshold` | `number` | `20` | 仅 `drip` / `bead`。alpha 阈值矩阵的斜率 |
 | `gooThresholdOffset` | `number` | `-9` | 仅 `drip` / `bead`。alpha 阈值矩阵的偏移 |
@@ -427,7 +426,8 @@ code: |
 - `maxHeight` 会被视口剩余高度裁剪。只有面板内部自带滚动容器时才使用 `unlimitedHeight`。
 - 超出 `maxHeight` 时滚动的是卡片的 body，不是 `.tx-base-anchor__card` 本身——卡片只负责裁剪。面板背景由卡片内一个绝对定位的 surface 层绘制，让卡片自己滚会把这层背景一起滚走。面板内容需要滚动位置时，取的是卡片 body 而不是卡片。
 - `surfaceMotionAdaptation` 是真实策略：`auto` 使用 Anchor 内部运动态，`manual` 读取 `panelCard.surfaceMoving`，`off` 强制 `surfaceMoving=false`。
-- 新动画优先使用 `animation` 对象；`duration` / `ease` 仅作为兼容入口参与默认值合并。
+- 动画只通过 `animation` 对象配置，组件没有顶层的 `duration` / `ease` prop；没写的字段按类型取默认值。
+- `showArrow` 的箭头是面板的一部分：它挂在面板内容层上，内容层的位移、缩放、模糊和透明度都会带着它走；面板开始运动之前、收起之后，它都随面板一起隐藏。各动画类型只给它加自己那一拍：`expand` 等面板成形后才从边缘探出，回弹比面板晚一拍，关闭时先收回、再让面板折叠；`transfer` 先把它藏进面板，滑入落地时弹出；`boom` 晚而快地弹出；`opacity` 没有额外动作，只随面板淡入淡出。
 - `eager` 会在首次打开前挂载；`keepAliveContent` 会在关闭后保留内容状态。优先用于需要测量或保留表单状态的面板，不要滥用于静态文案。
 - `drip` / `bead` 只对纵向轴有定义。`left*` / `right*` 落位（包括 `flip` 翻出来的）会降级为 opacity 路径，时序保持不变。
 - `drip` / `bead` 通过 goo 滤镜自绘不透明表面，因此不渲染 `TxCard`，`panelBackground` / `panelShadow` / `panelVariant` 均不生效。四种非 `pure` 背景都依赖 `backdrop-filter`，它在 SVG 滤镜内不生效，且经 alpha 阈值会被切成硬边。
@@ -439,16 +439,18 @@ code: |
 ## 技术实现
 
 - 已核对 `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`、`base-anchor-motion.ts`、`types.ts` 与 `base-anchor.test.ts`。
-- 现有测试覆盖非受控切换、受控的外部点击/Escape 关闭路径、禁用阻断、关闭/切换开关、floating attrs 与 reference class、动画变体及旧版 duration/ease 兼容，以及 surface-motion adaptation 策略。
+- 现有测试覆盖非受控切换、受控的外部点击/Escape 关闭路径、禁用阻断、关闭/切换开关、floating attrs 与 reference class、`animation` 对象变体，以及 surface-motion adaptation 策略。
 - 被否掉的做法：让 `.tx-base-anchor__card` 自己 `overflow: auto`。它曾是默认写法，但卡片的 surface 层是它的绝对定位子元素，包含块随卡片内容一起滚动——面板往下滚多少像素，底部就有多少像素只剩页面背景。自带列表滚动容器的面板（select、search-select）碰不到，把整个 body 交给卡片的 dropdown-menu 会。现在卡片 `overflow: hidden`、body `overflow: auto`，surface 留在原地。
+- 被否掉的做法：把箭头放在 clip 外，作为浮层根节点的直接子元素。clip 的 `visibility` 管不到它，于是面板还没开始动，它就先以完整尺寸出现了两三帧；`:not(.is-open)` 规则在关闭的第一帧就把它藏掉，收回动画全程看不见；`expand` 时面板漂移 12px，箭头却钉在终点位置，底边先陷进面板 15px，回弹时又离开边缘 1.3px。现在它是 `.tx-base-anchor__content` 的子元素，全程贴着面板边缘。floating-ui 给出的偏移落点不变：`transfer` 的回弹内边距只加在远端，而箭头贴的是近端，横向偏移也不受它影响。
 - `--tx-ba-max-height` 只由 `size` middleware 写入：正常为 `min(availableHeight, maxHeight)` 的像素值，unlimited 时为 `none`。根节点 `:style` 不声明这个变量——它曾被绑定为 `isUnlimitedHeight ? 'none' : undefined`，而 Vue 的样式 patch 会把 `undefined` 写成 `setProperty(name, '')`，每次定位后的重渲染都删掉 middleware 刚写入的值，面板始终回落到 CSS 默认的 420px 并向下溢出触发元素。
 - 可访问性说明：`TxBaseAnchor` 只是定位基础设施。上层封装必须按内容类型提供 menu/dialog/listbox role、焦点管理与键盘导航。
 - `drip` / `bead` 的覆盖分布在 `base-anchor-liquid.test.ts`（cubic-bezier 求解、弹簧拒绝、p=0 / 0.45 / 1 的稿值几何、两条边的独立性、逐项揭示）与 `base-anchor.test.ts`（单一合并 goo 滤镜、腐蚀推导的轮廓环、滤镜外的阴影孪生、箭头/描边/卡片抑制、横向降级、不走 gsap）。
+- GSAP 驱动的类型（`expand`、`transfer`、`boom`、`opacity`）打开与关闭的缓动都经 `packages/tuffex/packages/utils/animation/easing.ts` 的 `resolveGsapEase` 解析：`spring(...)` 与 `cubic-bezier(...)` 转成进度函数交给 GSAP，GSAP 自己的缓动名原样透传。此前只有 `expand` 这样解析，经典类型把字符串原样交给 GSAP；GSAP 不认识这两种写法，会静默换成默认缓动，不报错。
 - `drip` / `bead` 由 rAF 循环驱动而非 GSAP：动效由两条 CSS cubic-bezier 定义，且每帧都要从单一进度标量派生 SVG 几何、阴影孪生与逐项透明度。
 - 浏览器支持：`liquid` 用的是 `filter: url(#…)`，Safari 与 Firefox 均支持。受限的只有 `backdrop-filter: url(#…)`，而 `liquid` 不使用它，因此不需要降级梯度。
 
 - Component source: `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`。
 - Type contracts: `packages/tuffex/packages/components/src/base-anchor/src/types.ts` 导出 `BaseAnchorProps`、`BaseAnchorAnimationOptions` 与虚拟 reference 类型。
-- **实测覆盖:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` 覆盖非受控切换、受控的外部点击/Escape 关闭、禁用行为、关闭/切换开关、floating attrs/reference class、动画及旧版兼容，以及 surface-motion adaptation。`base-anchor-max-height.test.ts` 覆盖 `--tx-ba-max-height` 的归属：面板打开稳定后与重渲染后都保持 middleware 写入的像素值（`unlimitedHeight` 时为 `none`），且没有任何空值写入将其清除。
+- **实测覆盖:** `packages/tuffex/packages/components/src/base-anchor/__tests__/base-anchor.test.ts` 覆盖非受控切换、受控的外部点击/Escape 关闭、禁用行为、关闭/切换开关、floating attrs/reference class、`animation` 对象变体，以及 surface-motion adaptation。`base-anchor-max-height.test.ts` 覆盖 `--tx-ba-max-height` 的归属：面板打开稳定后与重渲染后都保持 middleware 写入的像素值（`unlimitedHeight` 时为 `none`），且没有任何空值写入将其清除。
 
 <TuffDocSourceLink />

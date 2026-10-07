@@ -11,10 +11,8 @@ import { parseRetiredTaskIndex } from './lib/retired-task-index.mjs'
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const fixturesRoot = path.join(repoRoot, 'scripts', 'docs', 'fixtures')
 
-const LIVE_BRIEF = 'docs/comet/changes/docs-quality-change/brief.md'
 const REGISTRY = 'docs/engineering/workflow/retired-task-index.json'
 const HANDOFF = 'docs/engineering/workflow/handoffs/07-27-documentation-quality-gates/README.md'
-const BRIEF_RULES = ['DOC-BRIEF-EMPTY-SECTION', 'DOC-BRIEF-MISSING-SECTION', 'DOC-BRIEF-PARSE', 'DOC-BRIEF-PLACEHOLDER']
 
 function readFixture(name) {
   const fixtureRoot = path.join(fixturesRoot, name)
@@ -194,7 +192,7 @@ function caseProblems(result, fixtureCase) {
 describe('canonical documentation verifier fixtures', () => {
   it('accepts the aggregate valid fixture', () => {
     // The registry's sourcePaths name task files that do not exist in the fixture: provenance is
-    // recorded, not required. The handoff holds genuine unresolved planning text and is not a brief.
+    // recorded, not required. The handoff holds genuine unresolved planning text as preserved history.
     const result = runFixtureCase('valid-final-contract')
 
     assertDiagnosticShape(result)
@@ -252,18 +250,6 @@ describe('canonical documentation verifier fixtures', () => {
       absentRuleIds: ['DOC-LINK-UNTRACKED', 'DOC-LINK-INVALID'],
       absentPaths: ['docs/url-edges.md'],
     },
-    {
-      // A zh-CN brief carries the same four sections under Chinese headings; "无" is a real answer
-      // for Non-goals.
-      name: 'brief-zh-headings',
-      absentRuleIds: BRIEF_RULES,
-    },
-    {
-      // Archived briefs, a brief-named file deeper in a change, specs, verification reports and plan
-      // PRDs keep their unresolved text: only docs/comet/changes/<change>/brief.md is a live brief.
-      name: 'not-live-briefs',
-      absentRuleIds: BRIEF_RULES,
-    },
   ]
 
   for (const fixtureCase of passingCases) {
@@ -284,7 +270,7 @@ describe('canonical documentation verifier fixtures', () => {
       // other. Agent and platform instruction roots stay out of product-doc parsing.
       paths: ['.trellis/internal/poison.md', 'docs/INDEX.md', 'docs/link-edge.mdc'],
       absentPaths: [
-        '.agents/skills/comet/poison.md',
+        '.agents/skills/docs-quality/poison.md',
         '.claude/rules/poison.md',
         '.codex/rules/poison.md',
         '.github/poison.md',
@@ -338,30 +324,9 @@ describe('canonical documentation verifier fixtures', () => {
       absentMessages: ['missing '],
     },
     {
-      // Non-goals and Acceptance examples appear only as second-level headings, which do not open a
-      // required section; Outcome and Scope are present and filled.
-      name: 'brief-missing-required-sections',
-      ruleIds: ['DOC-BRIEF-MISSING-SECTION'],
-      absentRuleIds: ['DOC-BRIEF-EMPTY-SECTION', 'DOC-BRIEF-PLACEHOLDER'],
-      paths: [LIVE_BRIEF],
-      messages: ['Non-goals', 'Acceptance examples'],
-      absentMessages: ['Outcome', 'Scope'],
-    },
-    {
-      // Outcome holds only a fence, an HTML comment and inline code; Scope says "None.", which only
-      // Non-goals may say. Acceptance examples keeps its prose under a subsection, which belongs to it.
-      name: 'brief-section-substance',
-      ruleIds: ['DOC-BRIEF-EMPTY-SECTION'],
-      absentRuleIds: ['DOC-BRIEF-MISSING-SECTION', 'DOC-BRIEF-PLACEHOLDER'],
-      paths: [LIVE_BRIEF],
-      messages: ['Outcome', 'Scope'],
-      absentMessages: ['Non-goals', 'Acceptance examples'],
-    },
-    {
-      // A handoff is history, so its open planning text is not brief-checked, but its links are.
+      // A handoff is preserved history, but its links are checked like other product documentation.
       name: 'handoff-links-checked',
       ruleIds: ['DOC-LINK-UNTRACKED'],
-      absentRuleIds: BRIEF_RULES,
       paths: [HANDOFF],
     },
     {
@@ -397,19 +362,6 @@ describe('canonical documentation verifier fixtures', () => {
       assert.deepEqual(caseProblems(result, fixtureCase), [])
     })
   }
-
-  it('reports each unresolved placeholder in a live brief, whatever its phase, and nothing quoted', () => {
-    const result = runFixtureCase('brief-placeholders')
-
-    assertDiagnosticShape(result)
-    // TBD (line 5), TODO: fill (11), 待补充 (17) and <evidence> as inline HTML (23). Line 25 quotes
-    // `TBD` in inline code and uses the ordinary word "placeholder"; neither is unresolved work. The
-    // change's comet-state.yaml says Shape, and the verifier does not read workflow state.
-    assert.deepEqual(
-      result.diagnostics.map(diagnostic => `${diagnostic.ruleId} ${diagnostic.file}:${diagnostic.line}`),
-      [5, 11, 17, 23].map(line => `DOC-BRIEF-PLACEHOLDER ${LIVE_BRIEF}:${line}`),
-    )
-  })
 
   it('sorts diagnostics deterministically and renders capped totals', () => {
     const fixture = materializeFixtureCase('markdown-link-edges-and-scope-poison')

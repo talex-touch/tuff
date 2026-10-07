@@ -16,6 +16,8 @@ import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { BrowserWindow, globalShortcut } from 'electron'
+import { StorageList } from '@talex-touch/utils'
+import { isBetaFeatureEnabled, isShortcutFeatureEnabled } from '../../shared/beta-features'
 import { acceleratorLabel, acceleratorsMatch } from '../../shared/accelerator-label'
 import { shortconChangedEvent, shortconGetBindingEvent } from '../../shared/events/shortcut-binding'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
@@ -30,7 +32,7 @@ import {
   buildFeatureShortcutId,
   parseFeatureShortcutId
 } from './plugin/services/feature-shortcut-id'
-import { useMainStorage } from './storage'
+import { getMainConfig, subscribeMainConfig, useMainStorage } from './storage'
 
 const shortconLog = createLogger('GlobalShortcon')
 const shortconUpdateEvent = defineRawEvent<
@@ -261,6 +263,8 @@ export class ShortcutModule extends BaseModule {
   private isEnabled: boolean = !GLOBAL_SHORTCUT_REGISTRATION_DISABLED
   private disposeBeforeQuitListener: (() => void) | null = null
   private disposePluginStatusListener: (() => void) | null = null
+  private disposeAppSettingListener: (() => void) | null = null
+  private betaFeaturesSignature = 0
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   /** Ids of the shortcuts this launch has already told the user are left without a key. */
   private announcedNotices = new Set<string>()
@@ -290,7 +294,21 @@ export class ShortcutModule extends BaseModule {
     const runtime = resolveMainRuntime(ctx, 'ShortcutModule.onInit')
     this.transport = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
     this.setupIpcListeners(this.transport)
+    this.registerAppSettingListener()
     this.reregisterAllShortcuts()
+  }
+
+  private registerAppSettingListener(): void {
+    this.disposeAppSettingListener = subscribeMainConfig(StorageList.APP_SETTING, (settings) => {
+      const signature =
+        (isBetaFeatureEnabled(settings, 'screenshot') ? 1 : 0) |
+        (isBetaFeatureEnabled(settings, 'voiceDictation') ? 2 : 0) |
+        (isBetaFeatureEnabled(settings, 'voiceQuickEdit') ? 4 : 0) |
+        (isBetaFeatureEnabled(settings, 'omniPanel') ? 8 : 0)
+      if (signature === this.betaFeaturesSignature) return
+      this.betaFeaturesSignature = signature
+      this.reregisterAllShortcuts()
+    })
   }
 
   /**
@@ -643,9 +661,11 @@ export class ShortcutModule extends BaseModule {
    */
   private findAcceleratorHolders(id: string, accelerator: string): AppShortcutHolder[] {
     const holders: AppShortcutHolder[] = []
+    const settings = getMainConfig(StorageList.APP_SETTING)
     for (const shortcut of this.storage?.getAllShortcuts() ?? []) {
       if (shortcut.id === id) continue
       if (shortcut.meta?.enabled === false) continue
+      if (!isShortcutFeatureEnabled(settings, shortcut.id)) continue
       if (shortcut.type === ShortcutType.TRIGGER) continue
       if (shortcut.type === ShortcutType.MAIN && !mainCallbackRegistry.has(shortcut.id)) continue
       const owner = owningPlugin(shortcut)
@@ -953,11 +973,20 @@ export class ShortcutModule extends BaseModule {
     globalShortcut.unregisterAll()
 
     if (!this.isEnabled) {
+      const shortcuts = this.storage!.getAllShortcuts()
+      const statusMap = new Map<string, ShortcutStatus>()
+      for (const shortcut of shortcuts) {
+        statusMap.set(shortcut.id, { state: 'disabled', reason: 'disabled' })
+      }
+      this.shortcutStatusMap = statusMap
+      this.syncMainTriggerStates(statusMap)
+      this.publishBindings(shortcuts, statusMap)
       shortconLog.debug('Shortcuts globally disabled, skip registration')
       return
     }
 
     const allShortcuts = this.storage!.getAllShortcuts()
+    const settings = getMainConfig(StorageList.APP_SETTING)
     const normalizedMap = new Map<string, string>()
     const groupedByAccelerator = new Map<string, Shortcut[]>()
     const statusMap = new Map<string, ShortcutStatus>()
@@ -966,7 +995,7 @@ export class ShortcutModule extends BaseModule {
       // One malformed record must not abort classification: the loop runs after
       // unregisterAll(), so throwing here leaves every shortcut unregistered.
       try {
-        if (shortcut.meta?.enabled === false) {
+        if (shortcut.meta?.enabled === false || !isShortcutFeatureEnabled(settings, shortcut.id)) {
           statusMap.set(shortcut.id, { state: 'disabled', reason: 'disabled' })
           continue
         }
@@ -1208,17 +1237,19 @@ export class ShortcutModule extends BaseModule {
    * passes leave the visible snapshot unchanged, so only a change is published.
    */
   private publishBindings(shortcuts: Shortcut[], statusMap: Map<string, ShortcutStatus>): void {
-    const signature = JSON.stringify(
-      shortcuts.map((shortcut) => [
-        shortcut.id,
-        shortcut.accelerator,
-        this.resolveEffectiveAccelerator(shortcut, statusMap.get(shortcut.id)),
-        shortcut.type,
-        shortcut.meta?.enabled,
-        statusMap.get(shortcut.id),
-        this.resolveShortcutWarnings(shortcut)
-      ])
-    )
+    const signature =
+      `${this.betaFeaturesSignature}:` +
+      JSON.stringify(
+        shortcuts.map((shortcut) => [
+          shortcut.id,
+          shortcut.accelerator,
+          this.resolveEffectiveAccelerator(shortcut, statusMap.get(shortcut.id)),
+          shortcut.type,
+          shortcut.meta?.enabled,
+          statusMap.get(shortcut.id),
+          this.resolveShortcutWarnings(shortcut)
+        ])
+      )
     if (signature === this.bindingsSignature) return
     this.bindingsSignature = signature
 
@@ -1570,6 +1601,8 @@ export class ShortcutModule extends BaseModule {
     // runs; the passes they cause then only release those plugins' keys.
     this.disposePluginStatusListener?.()
     this.disposePluginStatusListener = null
+    this.disposeAppSettingListener?.()
+    this.disposeAppSettingListener = null
     globalShortcut.unregisterAll()
     mainCallbackRegistry.clear()
     mainTriggerRegistry.clear()
