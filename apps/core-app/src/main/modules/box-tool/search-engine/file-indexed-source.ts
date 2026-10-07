@@ -145,6 +145,7 @@ export function buildFileIndexedSource(): IndexedSource {
 
   return {
     descriptor,
+    mutationScheduling: { scan: 'sliced', reconcile: 'sliced' },
     getHealth: getFileIndexedSourceHealth,
     getRoots: async () => buildRoots(descriptor.id, fileProvider.getWatchedPaths()),
     getEvidence: async () => await fileProvider.getIndexedSourceEvidence(),
@@ -190,7 +191,6 @@ export function buildFileIndexedSource(): IndexedSource {
           { ...request, signal: controller.signal },
           {
             onRecordBatch: enqueue,
-            onDelta: request.onDelta,
             throwOnFailure: true,
             signal: controller.signal,
             mutationLeaseId: request.mutationLeaseId

@@ -432,6 +432,32 @@ export class SearchIndexStoreAdapter implements IndexStoreAdapter {
       throw new Error(`INDEX_STORE_DELTA_BATCH_SOURCE_MISMATCH:${sourceId}`)
     }
 
+    // Only contiguous homogeneous segments may share a commit. Moving every delete
+    // after every upsert would erase a file recreated later in the same batch.
+    const firstIsDelete = firstDelta.action === 'delete'
+    if (deltas.some((delta) => (delta.action === 'delete') !== firstIsDelete)) {
+      const ordered: IndexStoreDeltaBatchApplySummary = {
+        sourceId,
+        appliedDeltas: 0,
+        skippedDeltas: 0,
+        indexedItemCount: 0,
+        removedItemCount: 0
+      }
+      let start = 0
+      while (start < deltas.length) {
+        const deleting = deltas[start]!.action === 'delete'
+        let end = start + 1
+        while (end < deltas.length && (deltas[end]!.action === 'delete') === deleting) end += 1
+        const segment = await this.applyDeltas(deltas.slice(start, end))
+        ordered.appliedDeltas += segment.appliedDeltas
+        ordered.skippedDeltas += segment.skippedDeltas
+        ordered.indexedItemCount += segment.indexedItemCount
+        ordered.removedItemCount += segment.removedItemCount
+        start = end
+      }
+      return ordered
+    }
+
     const summaries = new Map<IndexedSourceDelta, IndexStoreDeltaApplySummary>()
     const upserts: Array<{
       delta: IndexedSourceDelta

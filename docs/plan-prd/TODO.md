@@ -1,12 +1,12 @@
 # Tuff 当前执行顺序
 
-> Authority: this document is the sole global execution-order source. Live work status, acceptance, blocker, and evidence are authoritative only in its Comet Native change under `docs/comet/changes/` (state written by the Comet Runtime). Work planned before the 2026-10-03 cutover is frozen in the [pre-cutover backlog](../engineering/workflow/backlog.md); a frozen task becomes active again only through a new change that re-confirms its scope.
+> Authority: this document is the sole global execution-order source. Confirm scope and acceptance with the user, then establish current status, blockers and handoff with the current owner using existing PRDs, engineering specifications and observed runtime evidence. Work planned before the 2026-10-03 cutover remains frozen in the [pre-cutover backlog](../engineering/workflow/backlog.md). `docs/comet/` preserves read-only pre-exit records and is not a source of live status or an execution entrypoint.
 
 ## Current order
 
-1. **Close verified release and runtime blockers.** The OTA, macOS release-evidence, and application-icon acceptance work is frozen in the [pre-cutover backlog](../engineering/workflow/backlog.md); resume each one through a new Comet change, using its frozen record, PRD and handoff as evidence. The OTA parent was concurrently owned at cutover; this document does not restate its volatile child status.
+1. **Close verified release and runtime blockers.** The OTA, macOS release-evidence, and application-icon acceptance work is frozen in the [pre-cutover backlog](../engineering/workflow/backlog.md); resume each one after confirming scope and acceptance with the user and handoff with the current owner, using its frozen record, PRD and evidence. The OTA parent was concurrently owned at cutover; this document does not restate its volatile child status.
 2. **Complete the search and cross-platform remediation.** The [living audit](../engineering/reports/search-crossplatform-audit.md) owns the backlog; Windows productionization and the [search-index split write-path migration](../engineering/workflow/backlog.md#07-28-migrate-search-index-split-write-paths) are frozen records. The default-on topology is reconciled; the isolated-profile runtime evidence is still owed (see the [split acceptance record](../engineering/reports/search-index-split-write-acceptance.md)), and `=0` stays the emergency rollback.
-3. **Continue remaining independently-owned work** in the order recorded here only after the preceding blocker lane is resolved; each change's Comet brief defines its scope and acceptance.
+3. **Continue remaining independently-owned work** in the order recorded here only after the preceding blocker lane is resolved; use user-agreed scope and acceptance, existing PRDs and engineering specifications, observed runtime evidence, and the current owner's handoff.
 
 ## Non-negotiable safety gates
 
@@ -16,9 +16,9 @@
 
 ## Work-state rules
 
-- Read live change state from Comet (`/comet`, or `mise exec -- comet` for the pinned CLI). Do not copy active counts, branch names, HEADs, dirty-worktree state, or implementation snapshots into this document.
-- A change is archived only through Comet Native after independent verification and an explicit archive confirmation. Frozen pre-cutover records are never completed or archived by editing the backlog.
-- Roadmaps, Comet briefs, frozen task records, change records, and topical TODOs may describe local scope or immutable history but must not define another global priority order.
+- Confirm live status with the current owner against the relevant existing PRD, engineering specification and observed evidence. Do not copy active counts, branch names, HEADs, dirty-worktree state, or implementation snapshots into this document.
+- Independently verify the agreed acceptance before recording completion and handing off. Frozen pre-cutover records are never completed or archived by editing the backlog.
+- Roadmaps, PRDs, engineering specifications, frozen task records, historical Comet records, and topical TODOs may describe local scope or immutable history but must not define another global priority order.
 
 ## Local and historical references
 

@@ -7,13 +7,6 @@
 .cursor/
 /.codex/*
 !/.codex/config.toml
-!/.codex/hooks.json
-!/.codex/hooks/
-/.codex/hooks/*
-!/.codex/hooks/comet-hook-router.mjs
-!/.codex/rules/
-/.codex/rules/*
-!/.codex/rules/comet*.md
 .pi/
 
 # ========================
@@ -163,14 +156,6 @@ test-results/
 !/.claude/hooks/
 /.claude/hooks/*
 !/.claude/hooks/statusline.py
-!/.claude/hooks/comet-hook-router.mjs
-!/.claude/rules/
-/.claude/rules/*
-!/.claude/rules/comet*.md
-!/.claude/skills/
-/.claude/skills/*
-!/.claude/skills/comet/
-!/.claude/skills/comet-*/
 
 # ========================
 # Docs / Local notes
@@ -230,31 +215,13 @@ apps/g-wggu5114-thisai-thisai-view-/
 # Vitest JUnit reports written by the App suites CI job
 test-reports/
 
-# Project Comet assets are portable; personal omp settings/skills remain local.
-/.omp/*
-!/.omp/hooks/
-/.omp/hooks/*
-!/.omp/hooks/pre/
-/.omp/hooks/pre/*
-!/.omp/hooks/pre/comet-hook-router.ts
-!/.omp/rules/
-/.omp/rules/*
-!/.omp/rules/comet*.mdc
-!/.omp/skills/
-/.omp/skills/*
-!/.omp/skills/comet/
-!/.omp/skills/comet-*/
+# Personal omp settings and skills remain local.
+/.omp/
 
-# Local workflow execution state and retired generators.
-/.comet/runtime/
-/.comet/current-change.json
+# Retired local workflow state and generators.
+/.comet/
 /.trellis/
 /.spec-workflow/
 
 # This task was explicitly local-only before the workflow cutover.
 /docs/engineering/workflow/handoffs/07-26-install-launch-v2-4-13-beta-23/
-# >>> Comet managed project state >>>
-!/.comet/
-/.comet/*
-!/.comet/config.yaml
-# <<< Comet managed project state <<<

@@ -2,43 +2,6 @@
   "env": {
     "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1"
   },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/skills/comet/scripts/comet-hook-router.mjs",
-              "--platform",
-              "claude",
-              "--project-root",
-              "${CLAUDE_PROJECT_DIR}"
-            ]
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/skills/comet/scripts/comet-hook-router.mjs",
-              "--platform",
-              "claude",
-              "--project-root",
-              "${CLAUDE_PROJECT_DIR}"
-            ]
-          }
-        ]
-      }
-    ]
-  },
   "enabledPlugins": {},
   "statusLine": {
     "type": "command",

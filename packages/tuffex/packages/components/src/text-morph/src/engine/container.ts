@@ -2,9 +2,10 @@
 // MIT License © lochie. Kept intentionally close to upstream so its fixes stay
 // diffable. The one substantive deviation is the easing layer: upstream shipped
 // its own `parseEasing`, and tuffex already has an equivalent in
-// `liquid/src/spring.ts`, so this imports that instead of carrying a second copy.
+// `utils/animation/easing.ts` (`resolveCssEase`), so this imports that instead
+// of carrying a second copy.
 
-import { easingFunction } from '../../../liquid/src/spring'
+import { resolveCssEase } from '../../../../../utils/animation/easing'
 import { animateElement, layoutSize } from './metrics'
 
 export type MorphEasingFn = (t: number) => number
@@ -18,14 +19,14 @@ export function slopeAt(easing: MorphEasingFn, t: number): number {
 }
 
 /**
- * `easingFunction` never returns null — an unparsable spec degrades to a clamped
+ * `resolveCssEase` never returns null — an unparsable spec degrades to a clamped
  * linear ramp — where upstream's `parseEasing` did. The `null` branches below are
  * therefore unreachable today, and are kept rather than pruned: what actually
  * bounds the carry is `CARRY_MAX` and the `k > 0` guard, and removing the null
  * path would let a future resolver change fall through unnoticed.
  */
 function parseEasing(ease: string): MorphEasingFn | null {
-  return easingFunction(ease)
+  return resolveCssEase(ease)
 }
 
 interface PendingTransition {

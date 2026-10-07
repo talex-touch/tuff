@@ -67,7 +67,8 @@ import {
 } from './recommendation/file-recommendation-source'
 import { recommendationExposureService } from './recommendation/recommendation-exposure-service'
 import { gatherAggregator } from './search-gather'
-import { markSearchActivity } from './search-activity'
+import { isIndexMaintenanceIdle } from './search-activity'
+import { IndexMaintenanceRunner } from './index-maintenance-runner'
 import { SearchIndexService } from './search-index-service'
 import { searchIndexCommitHub } from './search-index-commit-hub'
 import { SearchIndexCommitCoalescer } from './search-index-commit-coalescer'
@@ -204,6 +205,15 @@ export class SearchEngineCore
   })
   private dbUtils: DbUtils | null = null
   private indexWriterRouter: SourceScopedIndexWriterRouter | null = null
+  private readonly indexMaintenanceRunner = new IndexMaintenanceRunner({
+    sourceId: FILE_INDEXED_SOURCE_ID,
+    getWriter: () => this.indexWriterRouter,
+    isAllowed: () => !this.destroying && onboardingGate.evaluate().state === 'allowed',
+    onFailure: (error) =>
+      searchEngineLog.warn('Index maintenance slice failed; durable work remains pending', {
+        error
+      })
+  })
   private searchIndexService: SearchIndexService | null = null
   private searchIndexReadWorker: SearchIndexReadWorkerClient | null = null
   /**
@@ -284,8 +294,29 @@ export class SearchEngineCore
   }
 
   private limitFrontendItems(items: TuffItem[], limit = SEARCH_FRONTEND_ITEM_LIMIT): TuffItem[] {
-    const visibleItems = fileFilterService.filterSearchItems(items)
+    const visibleItems = this.filterCurrentFileScope(items)
     return visibleItems.length > limit ? visibleItems.slice(0, limit) : visibleItems
+  }
+
+  private filterCurrentFileScope(items: TuffItem[]): TuffItem[] {
+    const filtered = fileFilterService.filterSearchItems(items)
+    let accepted: TuffItem[] | null = null
+    for (let index = 0; index < filtered.length; index += 1) {
+      const item = filtered[index]
+      const original = item.meta?._originalSourceId
+      const sourceId = typeof original === 'string' ? original : item.source.id
+      const filePath = item.meta?.file?.path
+      if (
+        sourceId === FILE_INDEXED_SOURCE_ID &&
+        filePath &&
+        !fileProvider.isSearchPathAdmitted(filePath)
+      ) {
+        if (!accepted) accepted = filtered.slice(0, index)
+        continue
+      }
+      if (accepted) accepted.push(item)
+    }
+    return accepted ?? filtered
   }
 
   /**
@@ -949,7 +980,7 @@ export class SearchEngineCore
       try {
         const excludeIds = new Set(baseItems.map((item) => item.id))
         const recallCandidates = await fileProvider.semanticRecall(query, excludeIds, signal)
-        const recallItems = fileFilterService.filterSearchItems(recallCandidates)
+        const recallItems = this.filterCurrentFileScope(recallCandidates)
         if (recallItems.length === 0) return
         if (signal.aborted) return
         sendUpdateToFrontend(recallItems)
@@ -1013,7 +1044,6 @@ export class SearchEngineCore
   }
 
   private async executeSearch(query: TuffQuery, session: SearchSession): Promise<TuffSearchResult> {
-    markSearchActivity()
     const sessionId = session.id
     const pipelineDurations: SearchPipelineStageDurations = {
       parseDuration: 0,
@@ -1100,7 +1130,7 @@ export class SearchEngineCore
     if (cacheOutcome === 'hit' && cachedEntry) {
       this.cacheTelemetry.recordHit(cachedAgeMs, cachedEntry.result.duration)
       const cachedResult = materializeCachedSearchResult(cachedEntry.result, sessionId)
-      cachedResult.items = fileFilterService.filterSearchItems(cachedResult.items ?? [])
+      cachedResult.items = this.filterCurrentFileScope(cachedResult.items ?? [])
       const cachedItems = cachedResult.items.length
       this.logSearchTrace({
         event: 'first.result',
@@ -1149,9 +1179,7 @@ export class SearchEngineCore
           // than the database as it was before the action.
           await this.searchUsageService.flush()
           const recommendationResult = await this.recommendationEngine.recommend({ limit: 10 })
-          const recommendationItems = fileFilterService.filterSearchItems(
-            recommendationResult.items
-          )
+          const recommendationItems = this.filterCurrentFileScope(recommendationResult.items)
 
           searchLogger.logSearchPhase(
             'Recommendation',
@@ -2125,11 +2153,13 @@ export class SearchEngineCore
     instance.searchIndexReadWorker = new SearchIndexReadWorkerClient(
       databaseModule.getSearchDatabaseFilePath()
     )
+    const splitSearch = databaseModule.isSearchSplitEnabled()
     instance.searchIndexService = new SearchIndexService(searchDb, {
       logger: searchLogger,
-      initializationMode: 'reader',
-      readiness: searchIndexWriter,
-      readExecutor: instance.searchIndexReadWorker
+      initializationMode: splitSearch ? 'reader' : 'writer',
+      readiness: splitSearch ? searchIndexWriter : undefined,
+      readExecutor: instance.searchIndexReadWorker,
+      canRunMaintenance: isIndexMaintenanceIdle
     })
     instance.searchIndexService.preloadPinyin()
     // The fast lane skips preloadPinyin: pinyin is only used by the write path's prepareDocument,
@@ -2141,13 +2171,17 @@ export class SearchEngineCore
     instance.searchIndexFastService = new SearchIndexService(searchDb, {
       logger: searchLogger,
       initializationMode: 'reader',
-      readiness: searchIndexWriter,
+      readiness: splitSearch
+        ? searchIndexWriter
+        : {
+            waitUntilReady: async () => await instance.searchIndexService!.warmup()
+          },
       readExecutor: instance.searchIndexFastReadWorker
     })
     instance.indexWriterRouter = new SourceScopedIndexWriterRouter({
       runtime: searchIndexWriter,
       legacy: new LegacySearchIndexWriter(instance.searchIndexService),
-      defaultMode: 'runtime',
+      defaultMode: splitSearch ? 'runtime' : 'legacy',
       visibilityBarrier: {
         waitUntilReadable: async () => await instance.searchIndexService!.waitUntilReadable()
       }
@@ -2198,15 +2232,40 @@ export class SearchEngineCore
       invalidateRecommendations: () => instance.invalidateAppRecommendationPresentation()
     })
     fileProvider.setIndexedSourceRuntimeMutationDelegate({
-      withMutationLease: async (operation) =>
-        await indexingRuntime.withSourceMutationLease(FILE_INDEXED_SOURCE_ID, operation),
+      withMutationLease: async (operation, options) =>
+        await indexingRuntime.withSourceMutationLease(FILE_INDEXED_SOURCE_ID, operation, options),
+      publishFileDeletionCommit: async (commit) => {
+        if (commit.sourceId !== FILE_INDEXED_SOURCE_ID)
+          throw new Error('FILE_DELETE_COMMIT_SOURCE_MISMATCH')
+        if (commit.deletedRecords.length === 0) return
+        await indexingRuntime.withSourceMutationLease(
+          commit.sourceId,
+          async (leaseId) => {
+            const itemIds = commit.deletedRecords.flatMap((record) => [
+              record.itemId,
+              ...('legacyItemIds' in record ? (record.legacyItemIds ?? []) : [])
+            ])
+            await instance.indexWriterRouter!.publishExternalCommit(
+              commit.sourceId,
+              'remove',
+              Math.max(commit.deletedRecords.length, commit.removedIndexedItems),
+              itemIds
+            )
+            indexingRuntime.recordSourceCommittedRecords(
+              commit.sourceId,
+              leaseId,
+              commit.deletedRecords.length
+            )
+          },
+          { mutationLeaseId: commit.mutationLeaseId }
+        )
+      },
       applyBatch: async (batch) => await indexingRuntime.applySourceBatch(batch),
       applyBatchWithPersistence: async (batch, records) => {
         const result = await indexingRuntime.applySourceBatchWithPersistence(batch, records)
         if (!result) throw new Error(`INDEX_RUNTIME_FUSED_BATCH_EMPTY:${batch.sourceId}`)
         return result
       },
-      applyDelta: async (delta) => await indexingRuntime.applySourceDelta(delta),
       cleanupSource: async (sourceId, mutationLeaseId) =>
         await indexingRuntime.cleanupSource(sourceId, mutationLeaseId),
       countSource: async (sourceId, mutationLeaseId) =>
@@ -2227,6 +2286,7 @@ export class SearchEngineCore
         await instance.indexingRuntime!.resetSourceRuntimeState(FILE_INDEXED_SOURCE_ID, request)
     )
     instance.indexedSourceEventRouter.subscribe()
+    instance.indexMaintenanceRunner.start()
 
     // 初始化并启动使用统计汇总服务
     instance.usageSummaryService = new UsageSummaryService(instance.dbUtils, {
@@ -2483,6 +2543,7 @@ export class SearchEngineCore
 
   async destroy(): Promise<void> {
     this.destroying = true
+    this.indexMaintenanceRunner.stop()
     try {
       const runtime = this.indexingRuntime
       runtime?.beginShutdown()

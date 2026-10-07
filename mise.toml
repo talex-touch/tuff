@@ -1,7 +1,6 @@
 [tools]
 actionlint = "1.7.12"
 node = "26.0.0"
-"npm:@rpamis/comet" = "0.4.4"
 # Must match the root package.json `packageManager` field; a mismatch makes `pnpm self-update`
 # silently overwrite this managed install in place, leaving the dir name and binary disagreeing.
 pnpm = "11.24.0"

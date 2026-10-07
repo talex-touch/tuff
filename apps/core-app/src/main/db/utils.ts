@@ -315,20 +315,6 @@ function createDbUtilsInternal(
         db.update(schema.files).set(data).where(eq(schema.files.path, path)).returning()
       )
     },
-    /**
-     * @deprecated Use SearchIndexWorkerClient.removeFile() instead.
-     *
-     * Direct main-thread writes to the files table bypass the single-writer
-     * architecture and can cause SQLITE_BUSY under contention. The worker is
-     * now the sole writer for file-index domain (files, file_extensions,
-     * keyword_mappings).
-     *
-     * Migration: replace `dbUtils.removeFile(path)` with
-     * `searchIndexWorker.removeFile(path)`.
-     */
-    async removeFile(path: string) {
-      return runWrite(db.delete(schema.files).where(eq(schema.files.path, path)))
-    },
     async getAllFiles() {
       return readDb.select().from(schema.files)
     },

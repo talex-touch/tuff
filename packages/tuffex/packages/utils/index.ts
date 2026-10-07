@@ -1,5 +1,6 @@
 export * from './anchor-delay'
 export * from './animation/auto-resize'
+export * from './animation/easing'
 export * from './animation/flip'
 export * from './animation/jelly'
 export * from './animation/spring'

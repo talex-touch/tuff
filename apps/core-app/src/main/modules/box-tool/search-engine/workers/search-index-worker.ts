@@ -16,8 +16,12 @@ import type {
 import type {
   AbortProviderReplacementMessage,
   ApplyProviderItemsMessage,
+  ListPendingFileDeletionCommitsMessage,
+  AcknowledgeFileDeletionCommitsMessage,
   BeginProviderReplacementMessage,
   CleanupOrphanKeywordsMessage,
+  RunIndexMaintenanceSliceMessage,
+  AcknowledgeIndexMaintenanceCommitMessage,
   CommitProviderReplacementMessage,
   CountByProviderMessage,
   ExecWriteMessage,
@@ -29,7 +33,8 @@ import type {
   PersistEntriesMessage,
   RemoveByProviderMessage,
   RemoveFileExtensionsMessage,
-  RemoveFileMessage,
+  RemoveFileRecordsMessage,
+  RemoveMissingFileSearchRecordsMessage,
   RemoveProviderItemsMessage,
   ShutdownMessage,
   StageProviderReplacementItemsMessage,
@@ -46,11 +51,15 @@ import process from 'node:process'
 import { performance } from 'node:perf_hooks'
 import { parentPort } from 'node:worker_threads'
 import { type Client, createClient, type InValue } from '@libsql/client'
-import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from '../../../../db/schema'
 import { createLogger } from '../../../../utils/logger'
 import {
+  FILE_INDEX_PERSISTENCE_RETRY_LABELS,
+  listPendingFileDeletionCommitsInHome,
+  acknowledgeFileDeletionCommitsInHome,
+  removeFileRecordsInTransaction,
+  removeMissingFileSearchRecordsInTransaction,
   SqliteFileIndexPersistenceRepository,
   withFileIndexPersistenceRetry
 } from '../file-index-persistence-repository'
@@ -120,9 +129,14 @@ type WorkerRequest =
   | UpsertFilesMessage
   | UpdateFileMetadataMessage
   | UpsertScanProgressMessage
-  | RemoveFileMessage
+  | RemoveFileRecordsMessage
+  | RemoveMissingFileSearchRecordsMessage
+  | ListPendingFileDeletionCommitsMessage
+  | AcknowledgeFileDeletionCommitsMessage
   | RemoveFileExtensionsMessage
   | CleanupOrphanKeywordsMessage
+  | RunIndexMaintenanceSliceMessage
+  | AcknowledgeIndexMaintenanceCommitMessage
   | ShutdownMessage
   | ExecWriteMessage
   | WorkerMetricsRequest
@@ -184,24 +198,21 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         if (!filePersistenceRepository || !searchIndex) {
           throw new Error('Worker not initialized — send init first')
         }
-        // Both operations run on this worker's serialized queue. They remain separate domain
-        // transactions, but the main thread pays one message/clone boundary instead of two.
+        // Metadata, FTS and keyword mappings share one owner transaction and one IPC boundary.
         const operationStartedAt = performance.now()
         const cpuStartedAt = readWorkerCpuUsage()
-        const persistStartedAt = operationStartedAt
-        const persisted = await filePersistenceRepository.upsertFiles(message.records)
-        const persistDurationMs = performance.now() - persistStartedAt
-        const applyStartedAt = performance.now()
-        const summary = await searchIndex.applyProviderItems(
+        const summary = await searchIndex.persistAndApplyProviderItems(
+          message.records,
           message.providerId,
           message.items,
           message.legacyItemIds
         )
-        const applyDurationMs = performance.now() - applyStartedAt
+        const persistDurationMs = summary.persistDurationMs
+        const applyDurationMs = summary.applyDurationMs
         const cpuUsage = readWorkerCpuUsage(cpuStartedAt)
         const metrics = {
           requestedRows: message.records.length,
-          persistedRows: persisted.length,
+          persistedRows: summary.persistedCount,
           indexedItems: summary.indexedItems,
           removedItems: summary.removedItems,
           legacyItemIds: message.legacyItemIds.length,
@@ -214,7 +225,7 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
           meta: { operation: 'persist-and-apply', sourceId: message.providerId, ...metrics }
         })
         const result: PersistAndApplyProviderItemsResult = {
-          persistedCount: persisted.length,
+          persistedCount: summary.persistedCount,
           summary,
           metrics
         }
@@ -349,13 +360,127 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         break
       }
 
-      case 'removeFile': {
-        if (!filePersistenceRepository) {
+      case 'removeFileRecords': {
+        if (!db || !searchIndex || !client) {
           throw new Error('Worker not initialized — send init first')
         }
-        await filePersistenceRepository.removeFile(message.path)
-        searchIndexWorkerLog.debug('Removed file', { meta: { path: message.path } })
-        respond({ type: 'result', taskId })
+        const workerDb = db
+        const workerService = searchIndex
+        const cancellationState = message.cancellation ? new Int32Array(message.cancellation) : null
+        const result = await withFileIndexPersistenceRetry(
+          async () => {
+            if (cancellationState && Atomics.load(cancellationState, 0)) {
+              const error = new Error('FILE_INDEX_DELETE_CANCELLED')
+              error.name = 'FileIndexDeleteCancelledError'
+              throw error
+            }
+            return await workerDb.transaction(
+              async (tx) => {
+                if (cancellationState && Atomics.load(cancellationState, 0)) {
+                  const error = new Error('FILE_INDEX_DELETE_CANCELLED')
+                  error.name = 'FileIndexDeleteCancelledError'
+                  throw error
+                }
+                return await removeFileRecordsInTransaction(
+                  tx,
+                  workerService,
+                  message.sourceId,
+                  message.records
+                )
+              },
+              { behavior: 'immediate' }
+            )
+          },
+          FILE_INDEX_PERSISTENCE_RETRY_LABELS.removeFileRecords,
+          client
+        )
+        respond({ type: 'result', taskId, result })
+        break
+      }
+
+      case 'removeMissingFileSearchRecords': {
+        if (!db || !searchIndex || !client) {
+          throw new Error('Worker not initialized — send init first')
+        }
+        const workerDb = db
+        const workerService = searchIndex
+        const cancellationState = message.cancellation ? new Int32Array(message.cancellation) : null
+        const result = await withFileIndexPersistenceRetry(
+          async () => {
+            if (cancellationState && Atomics.load(cancellationState, 0)) {
+              const error = new Error('FILE_INDEX_DELETE_CANCELLED')
+              error.name = 'FileIndexDeleteCancelledError'
+              throw error
+            }
+            return await workerDb.transaction(
+              async (tx) => {
+                if (cancellationState && Atomics.load(cancellationState, 0)) {
+                  const error = new Error('FILE_INDEX_DELETE_CANCELLED')
+                  error.name = 'FileIndexDeleteCancelledError'
+                  throw error
+                }
+                return await removeMissingFileSearchRecordsInTransaction(
+                  tx,
+                  workerService,
+                  message.sourceId,
+                  message.records
+                )
+              },
+              { behavior: 'immediate' }
+            )
+          },
+          FILE_INDEX_PERSISTENCE_RETRY_LABELS.removeMissingFileSearchRecords,
+          client
+        )
+        respond({ type: 'result', taskId, result })
+        break
+      }
+
+      case 'listPendingFileDeletionCommits': {
+        if (!db || !client) throw new Error('Worker not initialized — send init first')
+        const workerDb = db
+        const cancellationState = message.cancellation ? new Int32Array(message.cancellation) : null
+        const result = await withFileIndexPersistenceRetry(
+          async () => {
+            if (cancellationState && Atomics.load(cancellationState, 0)) {
+              const error = new Error('FILE_INDEX_DELETE_CANCELLED')
+              error.name = 'FileIndexDeleteCancelledError'
+              throw error
+            }
+            return await listPendingFileDeletionCommitsInHome(
+              workerDb,
+              message.sourceId,
+              message.limit
+            )
+          },
+          FILE_INDEX_PERSISTENCE_RETRY_LABELS.listPendingFileDeletionCommits,
+          client
+        )
+        respond({ type: 'result', taskId, result })
+        break
+      }
+
+      case 'acknowledgeFileDeletionCommits': {
+        if (!db || !client) throw new Error('Worker not initialized — send init first')
+        const workerDb = db
+        const cancellationState = message.cancellation ? new Int32Array(message.cancellation) : null
+        const result = await withFileIndexPersistenceRetry(
+          async () => {
+            if (cancellationState && Atomics.load(cancellationState, 0)) {
+              const error = new Error('FILE_INDEX_DELETE_CANCELLED')
+              error.name = 'FileIndexDeleteCancelledError'
+              throw error
+            }
+            return await acknowledgeFileDeletionCommitsInHome(
+              workerDb,
+              message.sourceId,
+              message.commitIds
+            )
+          },
+          FILE_INDEX_PERSISTENCE_RETRY_LABELS.acknowledgeFileDeletionCommits,
+          client
+        )
+        respond({ type: 'result', taskId, result })
         break
       }
 
@@ -372,11 +497,33 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
       }
 
       case 'cleanupOrphanKeywords': {
-        if (!db) throw new Error('Worker not initialized — send init first')
-        const deletedCount = await handleCleanupOrphanKeywords(message)
+        if (!searchIndex) throw new Error('Worker not initialized — send init first')
+        const deletedCount = await searchIndex.cleanupOrphanKeywords(message.sourceId)
         respond({ type: 'result', taskId, result: deletedCount })
         break
       }
+
+      case 'runIndexMaintenanceSlice': {
+        if (!searchIndex) throw new Error('Worker not initialized — send init first')
+        const cancellationState = message.cancellation ? new Int32Array(message.cancellation) : null
+        if (cancellationState && Atomics.load(cancellationState, 0)) {
+          const error = new Error('FILE_INDEX_DELETE_CANCELLED')
+          error.name = 'FileIndexDeleteCancelledError'
+          throw error
+        }
+        respond({
+          type: 'result',
+          taskId,
+          result: await searchIndex.runIndexMaintenanceSlice(message.sourceId, message.limit)
+        })
+        break
+      }
+
+      case 'acknowledgeIndexMaintenanceCommit':
+        if (!searchIndex) throw new Error('Worker not initialized — send init first')
+        await searchIndex.acknowledgeIndexMaintenanceCommit(message.notification)
+        respond({ type: 'result', taskId })
+        break
 
       case 'shutdown':
         await handleShutdown()
@@ -518,34 +665,6 @@ async function handleInit(message: InitMessage): Promise<void> {
   searchIndexWorkerLog.info('Initialized', {
     meta: { dbPathLength: dbPath.length }
   })
-}
-
-/** Persist file content, embeddings, and progress rows in one transaction. */
-async function handleCleanupOrphanKeywords(message: CleanupOrphanKeywordsMessage): Promise<number> {
-  if (!db || !client) throw new Error('Worker not initialized')
-  const { sourceId } = message
-
-  const workerDb = db
-  const workerClient = client
-  const result = await withFileIndexPersistenceRetry(
-    async () => {
-      return await workerDb.run(sql`
-        DELETE FROM keyword_mappings
-        WHERE provider_id = ${sourceId}
-          AND item_id NOT IN (
-            SELECT item_id FROM search_index WHERE provider = ${sourceId}
-          )
-      `)
-    },
-    'worker.cleanupOrphanKeywords',
-    workerClient
-  )
-
-  const deletedCount = result.rowsAffected ?? 0
-  searchIndexWorkerLog.info('Cleaned orphan keywords', {
-    meta: { sourceId, deletedCount }
-  })
-  return deletedCount
 }
 
 // ---------- Communication ----------

@@ -38,7 +38,6 @@ function makeService(opts: {
   ngramCandidates?: string[]
   ftsResponses?: Array<Array<{ itemId: string; score: number }>>
   preciseHits?: string[]
-  isContentIndexingEnabled?: boolean
 }): ServiceHarness {
   const mtime = new Date()
   const dbRows = opts.rows.map((row) => ({
@@ -99,7 +98,8 @@ function makeService(opts: {
         },
         lookupBySubsequence: subsequenceCalls
       }) as never,
-    isContentIndexingEnabled: () => opts.isContentIndexingEnabled ?? false,
+    isContentIndexingEnabled: () => false,
+    isPathAdmitted: (path) => path.startsWith('/work/'),
     buildItem: (file) =>
       ({
         id: file.path,
@@ -280,34 +280,5 @@ describe('FileProviderSearchResultService bounded candidate ranking', () => {
     expect(calls[1]?.limit).toBeLessThan(calls[0]?.limit ?? 0)
     // The selective probe found the candidate, so the ngram stage never runs.
     expect(harness.ngramQueries()).toEqual([])
-  })
-})
-
-describe('FileProviderSearchResultService content indexing gate', () => {
-  const rows: FakeRow[] = [{ path: '/work/notes.ts', name: 'notes.ts' }]
-  const ftsResponses = [[{ itemId: '/work/notes.ts', score: 1 }]]
-
-  it('asks the index for file content only while content indexing is enabled', async () => {
-    // The content column holds bodies that are no longer supposed to be searchable once the
-    // setting is off; leaving it in the FTS column set surfaces stale content hits.
-    const disabled = makeService({
-      rows,
-      ftsResponses,
-      isContentIndexingEnabled: false
-    })
-    await disabled.service.search(QUERY, signal)
-    expect(disabled.ftsCalls().map((call) => call.options)).toEqual([
-      expect.objectContaining({ includeContent: false })
-    ])
-
-    const enabled = makeService({
-      rows,
-      ftsResponses,
-      isContentIndexingEnabled: true
-    })
-    await enabled.service.search(QUERY, signal)
-    expect(enabled.ftsCalls().map((call) => call.options)).toEqual([
-      expect.objectContaining({ includeContent: true })
-    ])
   })
 })

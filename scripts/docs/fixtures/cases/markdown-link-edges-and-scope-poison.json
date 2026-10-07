@@ -2,7 +2,7 @@
   "caseBase": "valid-final-contract",
   "files": {
     "AGENTS.md": "# Poison\n\n[Agent instructions must stay out of product-doc parsing](missing-agent-target.md).\n",
-    ".agents/skills/comet/poison.md": "# Poison\n\n[Shared skill prose must stay out of product-doc parsing](missing-skill-target.md).\n",
+    ".agents/skills/docs-quality/poison.md": "# Poison\n\n[Shared skill prose must stay out of product-doc parsing](missing-skill-target.md).\n",
     ".claude/rules/poison.md": "# Poison\n\n[Claude rules must stay out of product-doc parsing](missing-claude-target.md).\n",
     ".codex/rules/poison.md": "# Poison\n\n[Codex rules must stay out of product-doc parsing](missing-codex-target.md).\n",
     ".github/poison.md": "# Poison\n\n[Workflow prose must stay out of product-doc parsing](missing-workflow-target.md).\n",
@@ -18,7 +18,7 @@
     "docs/section/index.md": "# Section Index\n"
   },
   "trackedAdd": [
-    ".agents/skills/comet/poison.md",
+    ".agents/skills/docs-quality/poison.md",
     ".claude/rules/poison.md",
     ".codex/rules/poison.md",
     ".github/poison.md",

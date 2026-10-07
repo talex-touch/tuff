@@ -13,6 +13,13 @@
 - [ ] Runtime Safety：动态执行边界治理，优先评估算式 evaluator、单位公式 evaluator 与 widget runtime sandbox 的替换、审计和回归策略。
 - [ ] Storage：配置域 SQLite SoT 迁移与 fallback 回归补齐。
 - [ ] Quality：`quality:release` 被既有 lint debt 阻断的项分批清退或显式降权。
+- [ ] Composer：深色（非高对比）主题下，权限弹层「完全允许」第一次点击后出现的确认提示（11px，`--shell-danger` 叠在 danger-soft 行底上）对比度约 4.1:1，低于 WCAG AA 小字的 4.5:1。浅色约 4.6:1，两种高对比主题都达标。（`HomePermissionMenu.vue`；来源：2026-10-06 composer 改版验收）
+- [ ] TuffEx：TxSwitch 的 `.tuff-switch__track` 和 `__thumb` 用的是 `transition: all 0.25s`，`visibility` 也会参与过渡。开关放在会收起的锚点弹层里时，弹层的 clip 已经是 hidden，开关还会多显示约 250–500ms，留下残影（在 composer 的「管理智能体」视图里可以复现）。改为只过渡具体属性，并同步 Nexus 文档。（来源：2026-10-06 composer 改版验收）
+- [ ] Quality：`apps/core-app/scripts/coreapp-packaged-tool-confirmation-acceptance.ts` 及其测试仍在用 composer 改版删掉的选择器（`.HomePermissionMenu-Pill`、`.is-info`、ComposerChip 的 `tx-text-transformer` 层），其中模型菜单的选择器在改版前就已对不上。这份脚本不在 CI 里，下次跑打包验收前要先更新。（来源：2026-10-06 composer 改版验收）
+- [ ] Composer：顶栏模型胶囊（`HomeTopBar.vue`）的可访问名称是「选择模型与推理强度」，不包含可见的模型名，不满足 label-in-name。（来源：2026-10-06 composer 改版验收）
+- [ ] CoreApp：「智能 · 模型渠道」设置页（`IntelligenceChannelsPage` 的 `useKeyboardNavigation`）在 document 上挂了 keydown，会对 Space 和方向键调用 `preventDefault`。页面被 KeepAlive 缓存后监听不会卸载，切到别的页面后 Space 不能激活按钮、方向键也失效，要整页重载才恢复。模型弹层的设置键会直接进入这个页面。（来源：2026-10-06 composer 改版验收）
+- [ ] TuffEx：高对比主题下，获得焦点的 TxSearchInput 同时显示圆角外框和输入元素自身的矩形焦点框，形成双重焦点框。（来源：2026-10-06 composer 改版验收）
+- [ ] Composer：从有历史的对话里选 Agent profile 时，`selectAgentProfile`（`HomePage.vue`）会先把 profileId 写进源对话会话（mode 仍为 chat），再 fork。这是因为 Main 的 fork 只替换 mode；结果是源会话留下持久化的副作用，而且这段逻辑没有单测。（来源：2026-10-06 composer 改版验收）
 
 ## B. 插件与 View 生态
 

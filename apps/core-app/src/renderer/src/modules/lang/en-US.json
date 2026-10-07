@@ -158,7 +158,7 @@
       "system": "System"
     },
     "advancedSettings": "Advanced Settings",
-    "advancedSettingsDesc": "Show CoreBox customization and wallpaper details. Existing settings are kept when disabled.",
+    "advancedSettingsDesc": "Show Beta feature switches, CoreBox customization and wallpaper details. Beta features still require manual opt-in. Turning this off keeps existing settings.",
     "developerMode": "Developer Mode",
     "developerModeDesc": "Show internal plugins and advanced options (use with care)",
     "systemInfoPlaceholder": "System information is only available in development mode"
@@ -439,6 +439,9 @@
     "dashboardDesc": "View detailed usage stats and trends in Nexus"
   },
   "settingTools": {
+    "betaFeaturesTitle": "Experimental features",
+    "betaFeaturesDesc": "These Beta features are off by default. Their shortcuts appear only after you opt in.",
+    "betaFeatureEnableDesc": "Enable this Beta feature and its shortcut. Turning it off hides and disarms its shortcuts without clearing your key bindings.",
     "autoContextGroupTitle": "Context",
     "autoContextGroupDesc": "Controls which local information the model may reach for during a conversation.",
     "autoContext": "Auto Context",

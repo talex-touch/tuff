@@ -58,8 +58,8 @@ export const keywordMappings = sqliteTable('keyword_mappings', {
 })
 
 /**
- * 关键词索引元数据，用于避免重复写 keyword_mappings 热页。
- * 当 keyword_hash 未变化时可跳过关键词映射写入。
+ * 搜索文档元数据，保存 FTS rowid 定位和完整文档 hash。
+ * keyword_hash 独立用于避免重复写 keyword_mappings 热页。
  */
 export const searchIndexMeta = sqliteTable(
   'search_index_meta',
@@ -67,6 +67,8 @@ export const searchIndexMeta = sqliteTable(
     providerId: text('provider_id').notNull(),
     itemId: text('item_id').notNull(),
     keywordHash: text('keyword_hash').notNull(),
+    ftsRowId: integer('fts_rowid'),
+    documentHash: text('document_hash'),
     updatedAt: integer('updated_at', { mode: 'timestamp' })
       .notNull()
       .default(sql`(strftime('%s', 'now'))`)
@@ -74,6 +76,40 @@ export const searchIndexMeta = sqliteTable(
   (table) => ({
     pk: primaryKey({ columns: [table.providerId, table.itemId] }),
     updatedIdx: index('idx_search_index_meta_updated_at').on(table.updatedAt)
+  })
+)
+
+// Derived maintenance cursors advance with the corresponding single-writer transaction.
+export const searchIndexMaintenanceProgress = sqliteTable('search_index_maintenance_progress', {
+  task: text('task').primaryKey().notNull(),
+  cursor: integer('cursor').notNull().default(0)
+})
+
+// Actual deletions awaiting cache/reader acknowledgement; never replay physical deletion.
+export const searchIndexPendingCommits = sqliteTable(
+  'search_index_pending_commits',
+  {
+    commitId: text('commit_id').primaryKey().notNull(),
+    sourceId: text('source_id').notNull(),
+    deletedRecords: text('deleted_records').notNull(),
+    removedIndexedItems: integer('removed_indexed_items').notNull()
+  },
+  (table) => ({ sourceIdx: index('idx_search_index_pending_commits_source').on(table.sourceId) })
+)
+
+export const searchIndexFileMaintenance = sqliteTable(
+  'search_index_file_maintenance',
+  {
+    taskId: text('task_id').primaryKey().notNull(),
+    sourceId: text('source_id').notNull(),
+    reason: text('reason').notNull(),
+    filePath: text('file_path').notNull(),
+    expectedRecord: text('expected_record'),
+    cursor: integer('cursor').notNull().default(0)
+  },
+  (table) => ({
+    sourceIdx: index('idx_search_index_file_maintenance_source').on(table.sourceId),
+    reasonIdx: index('idx_search_index_file_maintenance_reason').on(table.sourceId, table.reason)
   })
 )
 

@@ -149,7 +149,7 @@ describe('base anchor animation phases', () => {
       expect(resolved.duration).toBe(300)
       expect(resolved.scale).toBe(0.9)
       // Untouched fields keep the expand table rather than falling back to the
-      // legacy transfer-era props.
+      // classic transfer-era table.
       expect(resolved.closeDuration).toBe(EXPAND_ERA.closeDuration)
       expect(resolved.ease).toBe(EXPAND_ERA.ease)
     })
@@ -188,9 +188,9 @@ describe('base anchor animation phases', () => {
     })
 
     it('overrides only the fields it names', () => {
-      // `scale` means opposite things per type — boom starts at 1.08 and shrinks
-      // in, expand starts below 1 and grows — so a composite that shares one
-      // value is wrong at one end by construction.
+      // The two phases of a composite belong to different types — boom's
+      // centred zoom in, expand's corner-anchored settle out — so the close
+      // needs a value of its own rather than the shared one.
       const resolved = resolve({
         type: 'boom',
         scale: 0.94,

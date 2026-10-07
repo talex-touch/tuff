@@ -55,6 +55,7 @@ import {
   omniPanelShowEvent
 } from '../../../shared/events/omni-panel'
 import { createDesktopContextCapsule } from '../../../shared/intelligence/desktop-context-capsule'
+import { isBetaFeatureEnabled } from '../../../shared/beta-features'
 import { OmniPanelWindowOption } from '../../config/default'
 import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { TouchWindow } from '../../core/touch-window'
@@ -419,6 +420,8 @@ export class OmniPanelModule extends BaseModule {
     this.registerBeforeQuitListener()
     this.registerShortcut(settings.enableShortcut)
     this.registerMouseLongPressTrigger(settings.enableMouseLongPress)
+    this.eventDisposers.push(shortcutModule.onBindingsChanged(() => this.syncShortcutHoldState()))
+    this.syncShortcutHoldState()
     this.notifyFeatureRefresh('init')
 
     omniPanelLog.info('Module initialized', {
@@ -653,8 +656,7 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private registerShortcut(enabled: boolean): void {
-    this.shortcutHoldEnabled = enabled
-    this.syncInputHookState()
+    this.shortcutHoldEnabled = false
     shortcutModule.registerMainShortcut(
       OMNI_PANEL_SHORTCUT_ID,
       'CommandOrControl+Shift+P',
@@ -666,8 +668,7 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private registerMouseLongPressTrigger(enabled: boolean): void {
-    this.mouseLongPressEnabled = enabled
-    this.syncInputHookState()
+    this.mouseLongPressEnabled = false
     shortcutModule.registerMainTrigger(
       OMNI_PANEL_MOUSE_TRIGGER_ID,
       ShortcutTriggerKind.MOUSE_RIGHT_LONG_PRESS,
@@ -682,10 +683,23 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private applyMouseLongPressSetting(enabled: boolean): void {
-    this.mouseLongPressEnabled = enabled
-    if (!enabled) {
+    this.mouseLongPressEnabled =
+      enabled && isBetaFeatureEnabled(getMainConfig(OMNI_PANEL_SETTING_KEY), 'omniPanel')
+    if (!this.mouseLongPressEnabled) {
       this.clearLongPressTimer()
       this.mouseDownPosition = null
+    }
+    this.syncInputHookState()
+  }
+
+  private syncShortcutHoldState(): void {
+    this.shortcutHoldEnabled =
+      isBetaFeatureEnabled(getMainConfig(OMNI_PANEL_SETTING_KEY), 'omniPanel') &&
+      shortcutModule.getEffectiveAccelerator(OMNI_PANEL_SHORTCUT_ID) !== null
+    if (!this.shortcutHoldEnabled) {
+      this.clearShortcutHoldTimer()
+      this.clearShortcutArmExpiryTimer()
+      this.resetShortcutHoldState()
     }
     this.syncInputHookState()
   }
@@ -954,7 +968,15 @@ export class OmniPanelModule extends BaseModule {
     this.notifyFeatureRefresh(reason)
   }
 
+  private isPanelEntryEnabled(source?: OmniPanelShowRequest['source']): boolean {
+    const settings = getMainConfig(OMNI_PANEL_SETTING_KEY)
+    return source === 'local-ai-shortcut'
+      ? settings.localAiCli?.enabled === true
+      : isBetaFeatureEnabled(settings, 'omniPanel')
+  }
+
   private async show(options?: OmniPanelShowRequest): Promise<void> {
+    if (!this.isPanelEntryEnabled(options?.source)) return
     const targetWindow = await this.ensureWindow()
     const normalizedSource = normalizeContextSource(options?.source)
     let text =
@@ -968,6 +990,7 @@ export class OmniPanelModule extends BaseModule {
 
     const capturedAt = Date.now()
     const capsule = await this.buildDesktopContextCapsule(text, normalizedSource.source, capturedAt)
+    if (!this.isPanelEntryEnabled(options?.source)) return
 
     this.positionWindowNearCursor(targetWindow)
     targetWindow.window.show()
@@ -984,6 +1007,7 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private async openCoreBoxContextActions(source: OmniPanelContextSource): Promise<void> {
+    if (!isBetaFeatureEnabled(getMainConfig(OMNI_PANEL_SETTING_KEY), 'omniPanel')) return
     const coreBoxWindow = getCoreBoxWindow()
     if (!coreBoxWindow || coreBoxWindow.window.isDestroyed() || !this.transport) {
       omniPanelLog.warn('CoreBox unavailable for explicit Context Actions trigger')
@@ -992,6 +1016,7 @@ export class OmniPanelModule extends BaseModule {
 
     const clipboardImage = clipboard.readImage()
     const captureResult = normalizeSelectionCaptureResult(await this.captureSelectionText())
+    if (!isBetaFeatureEnabled(getMainConfig(OMNI_PANEL_SETTING_KEY), 'omniPanel')) return
     const capturedAt = Date.now()
     const diagnostic = {
       supportLevel: captureResult.supportLevel,

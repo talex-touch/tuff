@@ -175,8 +175,13 @@
       "id": "search-history-and-usage",
       "classification": "behavioral-metadata",
       "owner": "SearchPrivacyDataOwner",
-      "storageLocations": ["primary/auxiliary database search detail tables including usage_execute_events", "in-memory search detail caches"],
-      "writers": ["Search completion/context/usage pipelines; accepted execution transactions keyed by opaque event ID"],
+      "storageLocations": [
+        "primary/auxiliary database search detail tables including usage_execute_events",
+        "in-memory search detail caches"
+      ],
+      "writers": [
+        "Search completion/context/usage pipelines; accepted execution transactions keyed by opaque event ID"
+      ],
       "readers": ["Search ranking, local recommendation behavior windows, and diagnostics"],
       "exportPolicy": "ordinary bounded allowlisted metadata export",
       "deletionPolicy": "typed category delete/retention; pins, source index, static embeddings, config, and task state survive",
@@ -189,6 +194,27 @@
         "apps/core-app/src/main/db/utils.ts#symbol=recordExecuteTransaction",
         "apps/core-app/src/main/db/utils.ts#symbol=getUsageBehaviorBatch",
         "docs/engineering/reports/sensitive-data-lifecycle-301/retention-surfaces.md#heading=3. Search detail, contextual behavior, and caches"
+      ]
+    },
+    {
+      "id": "search-index-maintenance",
+      "classification": "sensitive-device-metadata",
+      "owner": "FileProvider/IndexMaintenanceRunner/SearchIndexService",
+      "storageLocations": [
+        "current file-index home: search_index_meta, search_index_maintenance_progress, search_index_file_maintenance, search_index_pending_commits"
+      ],
+      "writers": ["existing worker sole writer when split-on; existing primary scheduler when split-off"],
+      "readers": ["bounded index maintenance and publication replay; current-scope file search admission"],
+      "exportPolicy": "local derived work only; never portable, synced or ordinary-exported; raw paths and expected-record payloads never included in telemetry",
+      "deletionPolicy": "source clear/index-data reset removes queued candidates and publication receipts through the same owner; acknowledged actual commits delete their exact receipt; physical replay never deletes files or a new document version",
+      "retentionPolicy": "until the current validated task commits and publishes, or explicit source/index-data reset; cursors advance only at committed boundaries",
+      "rendererExposure": "only existing committed-index and bounded diagnostics DTOs; no task payload, fingerprint or native path authority",
+      "portable": false,
+      "migrationStatus": "owner-bound",
+      "evidence": [
+        "apps/core-app/src/main/modules/box-tool/search-engine/search-index-document-store.ts#symbol=SearchIndexDocumentStore",
+        "apps/core-app/src/main/modules/box-tool/search-engine/index-maintenance-runner.ts#symbol=IndexMaintenanceRunner",
+        "apps/core-app/src/main/modules/box-tool/search-engine/file-index-persistence-repository.ts#symbol=removeFileRecordsInTransaction"
       ]
     },
     {
@@ -268,7 +294,12 @@
         "main-owned userData/conversation-attachments/<sha256(conversationId)> regular UUID image copies; original user files excluded",
         "Nexus sync payload/blob storage (device-key encrypted ciphertext)"
       ],
-      "writers": ["host-only typed Conversation/Agent Workspace/Review SDKs", "Main queue admission and bounded canonical message projection", "authorized file tool before/after review lifecycle", "main-owned encrypted sync apply"],
+      "writers": [
+        "host-only typed Conversation/Agent Workspace/Review SDKs",
+        "Main queue admission and bounded canonical message projection",
+        "authorized file tool before/after review lifecycle",
+        "main-owned encrypted sync apply"
+      ],
       "readers": ["host conversation UI", "main-owned encrypted sync collector"],
       "exportPolicy": "account/device cloud sync only as device-key encrypted per-conversation public content; outgoing and incoming metadata allowlists exclude native pointers, project roots, queue/runtime/approval authority, private attachment paths and previews, review snapshots and credentials; local workspace/review tables never portable or ordinary-exported; no plaintext logs, analytics, config or plugin storage",
       "deletionPolicy": "both local and sync deletion fence new admission, cancel and settle active execution, await rollback, then delete the root/tombstone in the existing primary writer transaction; FK cascade clears workspace/queue/receipt/attachment/review rows including private snapshot payloads; after commit remove only the Main-owned hashed attachment directory and regular UUID images; original project files, parent/other sessions and external native JSONL files are never deleted",

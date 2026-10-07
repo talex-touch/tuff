@@ -18,6 +18,23 @@ import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { createLogger } from '../../../utils/logger'
 import { AdaptiveBatchScheduler } from './adaptive-batch-scheduler'
+import {
+  SearchIndexDocumentStore,
+  buildSearchIndexDocumentHash,
+  type SearchIndexDocument,
+  type SearchIndexDocumentState,
+  type SearchIndexWriteTx
+} from './search-index-document-store'
+import {
+  SqliteFileIndexPersistenceRepository,
+  type UpsertFileRecord
+} from './file-index-persistence-repository'
+import {
+  IndexMaintenanceDeferredError,
+  indexMaintenanceContext,
+  type IndexMaintenanceNotification,
+  type IndexMaintenanceSlice
+} from './index-maintenance-context'
 
 const WORD_SPLIT_REGEX = /[\s\-_]+/g
 const PATH_SPLIT_REGEX = /[\\/]+/
@@ -105,18 +122,8 @@ export interface SearchIndexProviderReplacementSummary {
   indexedItems: number
 }
 
-interface PreparedIndexDocument {
-  itemId: string
-  providerId: string
-  type: string
-  title: string
-  titleCompact: string
-  keywords: string
-  tags: string
-  path: string
-  content: string
+interface PreparedIndexDocument extends SearchIndexDocument {
   keywordEntries: SearchIndexKeyword[]
-  keywordHash: string
 }
 
 interface StagedIndexDocumentRow {
@@ -128,11 +135,6 @@ interface ProviderReplacementOutcomeRow {
   removedItems: number
   indexedItems: number
 }
-
-type SearchIndexWriteTx = Pick<
-  LibSQLDatabase<typeof schema>,
-  'run' | 'all' | 'delete' | 'insert' | 'select'
->
 
 type SearchIndexLogAction = 'index' | 'remove' | 'removeByProvider'
 
@@ -166,6 +168,8 @@ export interface SearchIndexServiceOptions {
   initializationMode?: SearchIndexInitializationMode
   readiness?: SearchIndexReadinessGate
   readExecutor?: SearchIndexReadExecutor
+  /** Evaluated when a scheduled maintenance slice actually starts, never while holding a slot. */
+  canRunMaintenance?: () => boolean
 }
 
 export class SearchIndexService {
@@ -178,6 +182,9 @@ export class SearchIndexService {
   private readonly initializationMode: SearchIndexInitializationMode
   private readonly readiness?: SearchIndexReadinessGate
   private readonly readExecutor?: SearchIndexReadExecutor
+  private readonly documentStore: SearchIndexDocumentStore
+  private readonly canRunMaintenance?: () => boolean
+  private filePersistenceRepository: SqliteFileIndexPersistenceRepository | null = null
   private readonly zeroResultDiagnosticAt = new Map<string, number>()
   /**
    * Provider coverage is stable while this service owns the single writer: every indexed
@@ -212,6 +219,8 @@ export class SearchIndexService {
     this.initializationMode = options?.initializationMode ?? 'writer'
     this.readiness = options?.readiness
     this.readExecutor = options?.readExecutor
+    this.documentStore = new SearchIndexDocumentStore(db)
+    this.canRunMaintenance = options?.canRunMaintenance
   }
 
   async warmup(): Promise<void> {
@@ -406,8 +415,9 @@ export class SearchIndexService {
       const batchStart = performance.now()
       await this.scheduleWrite('search-index.indexBatch', () =>
         this.db.transaction(async (tx) => {
+          const states = await this.documentStore.loadDocuments(tx, batch, metaCoverageByProvider)
           for (const doc of batch) {
-            await this.applyDocument(tx, doc, metaCoverageByProvider.get(doc.providerId) === true)
+            await this.applyDocument(tx, doc, states.get(doc.providerId)!.get(doc.itemId)!)
           }
         })
       )
@@ -437,46 +447,27 @@ export class SearchIndexService {
     items: SearchIndexItem[],
     legacyItemIds: readonly string[] = []
   ): Promise<SearchIndexProviderReplacementSummary> {
-    if (items.some((item) => item.providerId !== providerId)) {
-      throw new Error(`SEARCH_INDEX_PROVIDER_MISMATCH:${providerId}`)
-    }
-    const currentItemIds = new Set(items.map((item) => item.itemId))
-    const retiredItemIds = [...new Set(legacyItemIds)].filter(
-      (itemId) => itemId.length > 0 && !currentItemIds.has(itemId)
+    const maintenance = indexMaintenanceContext.getStore() === true
+    const { documents: preparedDocs, retiredItemIds } = await this.prepareProviderDocuments(
+      providerId,
+      items,
+      legacyItemIds
     )
     const start = performance.now()
     await this.scheduleWrite('search-index.ensure', () => this.ensureInitialized())
-    const preparedDocs = await this.prepareDocuments(items)
     const removedItems = await this.scheduleWrite('search-index.applyProviderItems', async () => {
+      if (maintenance && this.canRunMaintenance?.() === false)
+        throw new IndexMaintenanceDeferredError()
       const metaCoverageComplete = await this.hasCompleteProviderMetaCoverage(providerId)
       return await this.db.transaction(async (tx) => {
-        let removed = 0
-        for (const itemId of retiredItemIds) {
-          const result = await tx.run(
-            sql`DELETE FROM search_index WHERE provider = ${providerId} AND item_id = ${itemId}`
-          )
-          removed += Number(result.rowsAffected ?? 0)
-          await tx
-            .delete(schema.keywordMappings)
-            .where(
-              and(
-                eq(schema.keywordMappings.providerId, providerId),
-                eq(schema.keywordMappings.itemId, itemId)
-              )
-            )
-          await tx
-            .delete(schema.searchIndexMeta)
-            .where(
-              and(
-                eq(schema.searchIndexMeta.providerId, providerId),
-                eq(schema.searchIndexMeta.itemId, itemId)
-              )
-            )
-        }
-        for (const doc of preparedDocs) {
-          await this.applyDocument(tx, doc, metaCoverageComplete)
-        }
-        return removed
+        const summary = await this.applyPreparedProviderItems(
+          tx,
+          providerId,
+          preparedDocs,
+          retiredItemIds,
+          metaCoverageComplete
+        )
+        return summary.removedItems
       })
     })
     this.recordOperationLog(
@@ -486,6 +477,86 @@ export class SearchIndexService {
       `provider=${providerId} retired=${String(removedItems)}`
     )
     return { removedItems, indexedItems: preparedDocs.length }
+  }
+
+  async persistAndApplyProviderItems(
+    records: UpsertFileRecord[],
+    providerId: string,
+    items: SearchIndexItem[],
+    legacyItemIds: readonly string[] = []
+  ): Promise<
+    SearchIndexProviderReplacementSummary & {
+      persistedCount: number
+      persistDurationMs: number
+      applyDurationMs: number
+    }
+  > {
+    const maintenance = indexMaintenanceContext.getStore() === true
+    const { documents, retiredItemIds } = await this.prepareProviderDocuments(
+      providerId,
+      items,
+      legacyItemIds
+    )
+    await this.scheduleWrite('search-index.ensure', () => this.ensureInitialized())
+    return await this.scheduleWrite('search-index.persist-and-apply', async () => {
+      if (maintenance && this.canRunMaintenance?.() === false)
+        throw new IndexMaintenanceDeferredError()
+      const coverage = await this.hasCompleteProviderMetaCoverage(providerId)
+      return await this.db.transaction(async (tx) => {
+        const persistStarted = performance.now()
+        const repository = (this.filePersistenceRepository ??=
+          new SqliteFileIndexPersistenceRepository(this.db))
+        const persisted = await repository.upsertFilesInTransaction(tx, records)
+        const persistDurationMs = performance.now() - persistStarted
+        const applyStarted = performance.now()
+        const summary = await this.applyPreparedProviderItems(
+          tx,
+          providerId,
+          documents,
+          retiredItemIds,
+          coverage
+        )
+        return {
+          ...summary,
+          persistedCount: persisted.length,
+          persistDurationMs,
+          applyDurationMs: performance.now() - applyStarted
+        }
+      })
+    })
+  }
+
+  private async prepareProviderDocuments(
+    providerId: string,
+    items: SearchIndexItem[],
+    legacyItemIds: readonly string[]
+  ): Promise<{ documents: PreparedIndexDocument[]; retiredItemIds: string[] }> {
+    if (items.some((item) => item.providerId !== providerId))
+      throw new Error(`SEARCH_INDEX_PROVIDER_MISMATCH:${providerId}`)
+    const current = new Set(items.map((item) => item.itemId))
+    const retiredItemIds = [...new Set(legacyItemIds)].filter(
+      (id) => id.length > 0 && !current.has(id)
+    )
+    return { documents: await this.prepareDocuments(items), retiredItemIds }
+  }
+
+  private async applyPreparedProviderItems(
+    tx: SearchIndexWriteTx,
+    providerId: string,
+    documents: PreparedIndexDocument[],
+    retiredItemIds: readonly string[],
+    coverage: boolean
+  ): Promise<SearchIndexProviderReplacementSummary> {
+    const removedItems = await this.documentStore.remove(tx, providerId, retiredItemIds, coverage)
+    const states = await this.documentStore.loadDocuments(
+      tx,
+      documents,
+      new Map([[providerId, coverage]])
+    )
+    for (const document of documents) {
+      await this.applyDocument(tx, document, states.get(providerId)!.get(document.itemId)!)
+    }
+    return { removedItems, indexedItems: documents.length }
   }
 
   async beginProviderReplacement(providerId: string, replacementId: string): Promise<void> {
@@ -582,15 +653,25 @@ export class SearchIndexService {
             LIMIT 50
           `)
           if (rows.length === 0) break
-          for (const row of rows) {
+          const documents = rows.map((row) => {
             const doc = JSON.parse(row.document) as PreparedIndexDocument
             if (doc.providerId !== providerId) {
               throw new Error(`SEARCH_INDEX_STAGED_PROVIDER_MISMATCH:${providerId}`)
             }
-            await this.applyDocument(tx, doc, true)
-            indexedItems += 1
-            lastSequence = row.sequence
+            if (typeof doc.documentHash !== 'string')
+              doc.documentHash = buildSearchIndexDocumentHash(doc)
+            return doc
+          })
+          const states = await this.documentStore.loadDocuments(
+            tx,
+            documents,
+            new Map([[providerId, true]])
+          )
+          for (const doc of documents) {
+            await this.applyDocument(tx, doc, states.get(providerId)!.get(doc.itemId)!)
           }
+          indexedItems += documents.length
+          lastSequence = rows[rows.length - 1].sequence
         }
         await tx.run(sql`
           DELETE FROM search_index_replacement_stage
@@ -651,34 +732,9 @@ export class SearchIndexService {
         'search-index.removeProviderBatch',
         async () => {
           await this.ensureInitialized()
-          return await this.db.transaction(async (tx) => {
-            let batchRemovedItems = 0
-            for (const itemId of batch) {
-              const result = await tx.run(
-                sql`DELETE FROM search_index WHERE provider = ${providerId} AND item_id = ${itemId}`
-              )
-              const rowsAffected = Number(result.rowsAffected ?? 0)
-              if (rowsAffected <= 0) continue
-              await tx
-                .delete(schema.keywordMappings)
-                .where(
-                  and(
-                    eq(schema.keywordMappings.providerId, providerId),
-                    eq(schema.keywordMappings.itemId, itemId)
-                  )
-                )
-              await tx
-                .delete(schema.searchIndexMeta)
-                .where(
-                  and(
-                    eq(schema.searchIndexMeta.providerId, providerId),
-                    eq(schema.searchIndexMeta.itemId, itemId)
-                  )
-                )
-              batchRemovedItems += rowsAffected
-            }
-            return batchRemovedItems
-          })
+          return await this.db.transaction(
+            async (tx) => await this.removeProviderItemsInTransaction(tx, providerId, batch)
+          )
         }
       )
       removedItems += removedInBatch
@@ -690,6 +746,71 @@ export class SearchIndexService {
       `provider=${providerId}`
     )
     return removedItems
+  }
+
+  /** The caller owns the transaction, so file rows and derived documents can commit together. */
+  async removeProviderItemsInTransaction(
+    tx: SearchIndexWriteTx,
+    providerId: string,
+    itemIds: readonly string[]
+  ): Promise<number> {
+    return await this.documentStore.remove(tx, providerId, itemIds, false)
+  }
+
+  async backfillDocumentLocators(limit = 64): Promise<{ processed: number; done: boolean }> {
+    return await this.scheduleWrite('search-index.document-locators', async () => {
+      if (this.canRunMaintenance?.() === false) return { processed: 0, done: false }
+      await this.ensureInitialized()
+      const result = await this.documentStore.backfill(limit)
+      if (result.done) this.providerMetaCoverageComplete.clear()
+      return result
+    })
+  }
+
+  async cleanupOrphanKeywords(sourceId: string, limit = 64): Promise<number> {
+    return await this.scheduleWrite('search-index.orphan-keywords', async () => {
+      if (this.canRunMaintenance?.() === false) return 0
+      await this.ensureInitialized()
+      return (await this.documentStore.cleanupOrphanKeywords(sourceId, limit)).removed
+    })
+  }
+
+  async runIndexMaintenanceSlice(sourceId: string, limit = 64): Promise<IndexMaintenanceSlice> {
+    return await this.scheduleWrite('search-index.maintenance-slice', async () => {
+      if (this.canRunMaintenance?.() === false) {
+        return { processed: 0, done: false, deferred: true, notifications: [] }
+      }
+      await this.ensureInitialized()
+      const pending = await this.documentStore.pendingMaintenanceNotifications()
+      if (pending.length > 0)
+        return { processed: 0, done: false, deferred: false, notifications: pending }
+      const mapping = await this.documentStore.backfill(limit)
+      if (mapping.done) this.providerMetaCoverageComplete.clear()
+      if (!mapping.done || mapping.processed > 0) {
+        return {
+          processed: mapping.processed,
+          done: false,
+          deferred: false,
+          notifications: await this.documentStore.pendingMaintenanceNotifications()
+        }
+      }
+      const keywords = await this.documentStore.cleanupOrphanKeywords(sourceId, limit)
+      return {
+        processed: keywords.processed,
+        done: keywords.done,
+        deferred: false,
+        notifications: await this.documentStore.pendingMaintenanceNotifications()
+      }
+    })
+  }
+
+  async acknowledgeIndexMaintenanceCommit(
+    notification: IndexMaintenanceNotification
+  ): Promise<void> {
+    await this.scheduleWrite('search-index.maintenance-ack', async () => {
+      await this.ensureInitialized()
+      await this.documentStore.acknowledgeMaintenanceNotification(notification)
+    })
   }
 
   /**
@@ -751,6 +872,16 @@ export class SearchIndexService {
         await tx
           .delete(schema.searchIndexMeta)
           .where(eq(schema.searchIndexMeta.providerId, providerId))
+        await tx
+          .delete(schema.searchIndexPendingCommits)
+          .where(eq(schema.searchIndexPendingCommits.sourceId, providerId))
+        await tx
+          .delete(schema.searchIndexFileMaintenance)
+          .where(eq(schema.searchIndexFileMaintenance.sourceId, providerId))
+        const pendingPrefix = `index-maintenance-commit/${encodeURIComponent(providerId)}/`
+        await tx.run(sql`DELETE FROM search_index_maintenance_progress
+          WHERE task=${`orphan-keywords:${JSON.stringify(providerId)}`}
+            OR (task >= ${pendingPrefix} AND task < ${`${pendingPrefix}￿`})`)
         return Number(result.rowsAffected ?? 0)
       })
     })
@@ -1103,8 +1234,8 @@ export class SearchIndexService {
   private async prepareSearchIndexSchema(): Promise<void> {
     const createdSearchIndex = await this.createSearchIndexTable()
     await this.createFileFtsTable()
-    await this.createSearchIndexMetaTable()
-    if (createdSearchIndex) await this.clearOrphanedSearchIndexMeta()
+    await this.documentStore.prepareSchema()
+    if (createdSearchIndex) await this.documentStore.reset()
     await this.createKeywordMappingIndexes()
     await this.createProviderReplacementTables()
   }
@@ -1166,16 +1297,6 @@ export class SearchIndexService {
       tokenize = 'unicode61 remove_diacritics 2'
     )`)
     return tableInfo.length === 0
-  }
-
-  /**
-   * A freshly created FTS table holds no documents, so every meta row that survived it (a repair
-   * that dropped the table, a profile whose FTS was lost) describes a document that no longer
-   * exists. Left behind, those rows would make {@link countByProviderViaMeta} report documents the
-   * index does not have once other providers repopulate it.
-   */
-  private async clearOrphanedSearchIndexMeta(): Promise<void> {
-    await this.db.run(sql`DELETE FROM search_index_meta`)
   }
 
   private async readSearchIndexColumns(): Promise<SearchIndexColumnInfo[]> {
@@ -1247,19 +1368,6 @@ export class SearchIndexService {
     )`)
   }
 
-  private async createSearchIndexMetaTable(): Promise<void> {
-    await this.db.run(sql`CREATE TABLE IF NOT EXISTS search_index_meta (
-      provider_id text NOT NULL,
-      item_id text NOT NULL,
-      keyword_hash text NOT NULL,
-      updated_at integer DEFAULT (strftime('%s', 'now')) NOT NULL,
-      PRIMARY KEY(provider_id, item_id)
-    )`)
-    await this.db.run(
-      sql`CREATE INDEX IF NOT EXISTS idx_search_index_meta_updated_at ON search_index_meta (updated_at)`
-    )
-  }
-
   private async createKeywordMappingIndexes(): Promise<void> {
     await this.db.run(
       sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)`
@@ -1273,55 +1381,20 @@ export class SearchIndexService {
     await this.db.run(
       sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_provider_item_keyword ON keyword_mappings(provider_id, item_id, keyword)`
     )
+    // SQLite's index rowid suffix keeps provider-scoped cursor pages ordered without a full sort.
+    await this.db.run(
+      sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_provider_cursor ON keyword_mappings(provider_id)`
+    )
   }
 
   private async applyDocument(
     tx: SearchIndexWriteTx,
     doc: PreparedIndexDocument,
-    metaCoverageComplete: boolean
+    state: SearchIndexDocumentState
   ): Promise<void> {
-    const existingKeywordHash = await this.readExistingKeywordHash(tx, doc)
-    const shouldUpdateKeywords = existingKeywordHash !== doc.keywordHash
-
-    // provider/item_id are UNINDEXED FTS5 columns. Scanning the growing content table before
-    // every cold insert makes a clean full scan O(N²). Complete meta coverage proves that a
-    // missing primary-keyed meta row also means the FTS document is new; legacy/incomplete
-    // profiles retain delete-before-insert until a provider replacement repairs coverage.
-    if (!metaCoverageComplete || existingKeywordHash !== undefined) {
-      await tx.run(
-        sql`DELETE FROM search_index WHERE provider = ${doc.providerId} AND item_id = ${doc.itemId}`
-      )
-    }
-
-    await tx.run(sql`
-      INSERT INTO search_index (
-        item_id,
-        provider,
-        type,
-        title,
-        title_compact,
-        keywords,
-        tags,
-        path,
-        content
-      ) VALUES (
-        ${doc.itemId},
-        ${doc.providerId},
-        ${doc.type},
-        ${doc.title},
-        ${doc.titleCompact},
-        ${doc.keywords},
-        ${doc.tags},
-        ${doc.path},
-        ${doc.content}
-      )
-    `)
-
-    if (shouldUpdateKeywords) {
-      await this.applyKeywordMappingsDelta(tx, doc)
-    }
-
-    await this.upsertSearchIndexMeta(tx, doc)
+    const shouldUpdateKeywords = state.meta?.keywordHash !== doc.keywordHash
+    await this.documentStore.apply(tx, doc, state)
+    if (shouldUpdateKeywords) await this.applyKeywordMappingsDelta(tx, doc)
   }
 
   private async resolveProviderMetaCoverage(
@@ -1356,24 +1429,6 @@ export class SearchIndexService {
     const complete = Number(rows[0]?.hasMissingMeta ?? 0) === 0
     this.providerMetaCoverageComplete.set(providerId, complete)
     return complete
-  }
-
-  private async readExistingKeywordHash(
-    tx: SearchIndexWriteTx,
-    doc: PreparedIndexDocument
-  ): Promise<string | undefined> {
-    const existingMeta = await tx
-      .select({ keywordHash: schema.searchIndexMeta.keywordHash })
-      .from(schema.searchIndexMeta)
-      .where(
-        and(
-          eq(schema.searchIndexMeta.providerId, doc.providerId),
-          eq(schema.searchIndexMeta.itemId, doc.itemId)
-        )
-      )
-      .limit(1)
-
-    return existingMeta[0]?.keywordHash
   }
 
   private async applyKeywordMappingsDelta(
@@ -1451,27 +1506,6 @@ export class SearchIndexService {
         }))
       )
     }
-  }
-
-  private async upsertSearchIndexMeta(
-    tx: SearchIndexWriteTx,
-    doc: PreparedIndexDocument
-  ): Promise<void> {
-    await tx
-      .insert(schema.searchIndexMeta)
-      .values({
-        providerId: doc.providerId,
-        itemId: doc.itemId,
-        keywordHash: doc.keywordHash,
-        updatedAt: new Date()
-      })
-      .onConflictDoUpdate({
-        target: [schema.searchIndexMeta.providerId, schema.searchIndexMeta.itemId],
-        set: {
-          keywordHash: doc.keywordHash,
-          updatedAt: new Date()
-        }
-      })
   }
 
   private toKeywordPriorityMap(entries: SearchIndexKeyword[]): Map<string, number> {
@@ -1669,7 +1703,7 @@ export class SearchIndexService {
     const keywordField = keywordEntries.map((entry) => entry.value).join(' ')
     const keywordHash = this.buildKeywordHash(allKeywordEntries)
 
-    return {
+    const document: PreparedIndexDocument = {
       itemId: item.itemId,
       providerId: item.providerId,
       type: item.type,
@@ -1680,8 +1714,11 @@ export class SearchIndexService {
       path: item.path?.toLowerCase() ?? '',
       content: item.content?.toLowerCase() ?? '',
       keywordEntries: allKeywordEntries,
-      keywordHash
+      keywordHash,
+      documentHash: ''
     }
+    document.documentHash = buildSearchIndexDocumentHash(document)
+    return document
   }
 
   private appendKeyword(store: Map<string, number>, keyword: string, priority: number): void {

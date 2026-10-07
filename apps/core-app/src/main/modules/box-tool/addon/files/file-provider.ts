@@ -61,6 +61,7 @@ import {
   IndexedSourceResetReasons,
   IndexedSourceScanReasons,
   mapIndexedFileSourceRecord,
+  mapIndexedWriteFullScanUpsertRecords,
   resolveIndexedWatchRootSet
 } from '@talex-touch/utils/search'
 import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm'
@@ -73,7 +74,6 @@ import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
 import { scheduleDbWrite } from '../../../../db/db-write'
 import {
   config as configSchema,
-  embeddings as embeddingsSchema,
   fileIndexProgress,
   files as filesSchema
 } from '../../../../db/schema'
@@ -109,11 +109,7 @@ import {
   sanitizeIndexedFileExtensions
 } from './file-asset-bridge'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
-import {
-  IndexedWriteDeleteExecutorService,
-  type IndexedWriteDeleteExecutorResult,
-  type IndexedWriteDeleteRecord
-} from '../../search-engine/indexing-write-delete-executor-service'
+import type { IndexedWriteDeleteExecutorResult } from '../../search-engine/indexing-write-delete-executor-service'
 import {
   IndexedWorkerPersistEntryMapperService,
   IndexedWriteInsertExecutorService,
@@ -121,6 +117,7 @@ import {
 } from '@talex-touch/utils/search'
 import type { FilePersistencePort, UpsertFileRecord } from '../../search-engine/search-index-writer'
 import { searchIndexWriter } from '../../search-engine/search-index-writer'
+import { waitForIndexMaintenanceIdle } from '../../search-engine/search-activity'
 import { isIndexingSourceMutationLeaseInvalidError } from '../../search-engine/indexing-source-mutation-gate'
 import {
   FileProviderProgressStateService,
@@ -184,7 +181,11 @@ import { FileProviderIndexSchedulerService } from './services/file-provider-inde
 import type { FileProviderIndexSchedulerFile } from './services/file-provider-index-scheduler-service'
 import { isIndexWorkerFileMissing } from './workers/index-worker-read-failure'
 import { FileProviderReconciliationInsertService } from './services/file-provider-reconciliation-insert-service'
-import { FileProviderCleanupDeleteService } from './services/file-provider-cleanup-delete-service'
+import {
+  FileProviderMaintenanceService,
+  FILE_MAINTENANCE_ROUND_BUDGET_MS,
+  FILE_MAINTENANCE_SLICE_SIZE
+} from './services/file-provider-maintenance-service'
 import {
   FileProviderFullScanInsertService,
   type FileProviderFullScanPersistResult
@@ -194,11 +195,10 @@ import {
   FileProviderFullScanCheckpointService,
   listScanChildDirectories
 } from './services/file-provider-full-scan-checkpoint-service'
-import { FileProviderReconciliationDeleteService } from './services/file-provider-reconciliation-delete-service'
 import { FileProviderReconciliationDiffService } from './services/file-provider-reconciliation-diff-service'
 import {
   FileProviderReconciliationRunService,
-  getMissingReconciliationDbFiles,
+  getReconciliationFileRecordsPage,
   type FileProviderReconciliationDbRecord
 } from './services/file-provider-reconciliation-run-service'
 import { FileProviderReconciliationUpdateService } from './services/file-provider-reconciliation-update-service'
@@ -220,7 +220,6 @@ import {
 import { resolveFileProviderBaseWatchPaths } from './file-provider-watch-paths'
 
 const fileProviderLog = getLogger('file-provider')
-const FILE_PROVIDER_STARTUP_READY_WAIT_MS = 3_000
 const FILE_EXTENSION_WRITE_MAX_QUEUE = 12
 const FILE_ICON_WRITE_MAX_QUEUE = 24
 /**
@@ -384,6 +383,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly cancelledIndexWorkerMutationLeases = new Set<string>()
   private manualRebuildPendingNotification = false
   private shuttingDown = false
+  private indexRunAbortController: AbortController | null = null
+  private indexRunSource: 'auto' | 'manual' | null = null
   private lastIntegritySnapshot: FileProviderIntegritySnapshot | null = null
   private indexedSourceRuntimeResetDelegate: FileIndexedSourceRuntimeResetDelegate | null = null
   private indexedSourceRuntimeMutationDelegate: FileIndexedSourceRuntimeMutationDelegate | null =
@@ -430,37 +431,25 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     typeof filesSchema.$inferInsert,
     typeof filesSchema.$inferSelect
   >
-  private readonly incrementalDeleteExecutor: IndexedWriteDeleteExecutorService<IndexedWriteDeleteRecord>
   private readonly incrementalPersistSnapshotService =
     new IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>()
   private readonly ftsWriteSnapshotService =
     new IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>()
   private readonly ftsDeleteSnapshotService =
     new IndexedWriteFlushSnapshotService<FileProviderRuntimeWriteSnapshot>()
-  private readonly cleanupDeleteService: FileProviderCleanupDeleteService<
-    IndexedWriteDeleteRecord,
-    FileIndexRunOptions | undefined
-  >
   private readonly fullScanCheckpointService: FileProviderFullScanCheckpointService
   private readonly fullScanRunService: FileProviderFullScanRunService<
     FileIndexRunOptions | undefined
   >
   private readonly fullScanInsertService: FileProviderFullScanInsertService<
-    typeof filesSchema.$inferSelect,
-    FileIndexRunOptions | undefined
-  >
-  private readonly reconciliationDeleteService: FileProviderReconciliationDeleteService<
-    IndexedWriteDeleteRecord,
     FileIndexRunOptions | undefined
   >
   private readonly reconciliationDiffService: FileProviderReconciliationDiffService
   private readonly reconciliationUpdateService: FileProviderReconciliationUpdateService<
     FileUpdateRecord,
-    typeof filesSchema.$inferSelect,
     FileIndexRunOptions | undefined
   >
   private readonly reconciliationInsertService: FileProviderReconciliationInsertService<
-    typeof filesSchema.$inferSelect,
     FileIndexRunOptions | undefined
   >
   private readonly reconciliationRunService: FileProviderReconciliationRunService<
@@ -476,38 +465,60 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   })
   private readonly assetService: FileProviderAssetService
   private readonly searchResultService: FileProviderSearchResultService
+  private readonly maintenanceService = new FileProviderMaintenanceService({
+    sourceId: this.id,
+    getDbUtils: () => this.dbUtils,
+    getSearchIndex: () => this.searchIndex,
+    getFilePersistencePort: () => this.requireFilePersistencePort(),
+    getRuntimeMutationDelegate: () => this.requireRuntimeMutationDelegate(),
+    isSplitEnabled: () => this.isSearchSplitEnabledNow(),
+    isShuttingDown: () => this.shuttingDown,
+    isInitializing: () => this.isInitializing !== null,
+    isWithinWatchRoots: (filePath) => this.isWithinWatchRoots(filePath),
+    normalizePath: (filePath) => this.normalizePath(filePath),
+    mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
+    onBaseCommitReady: () => this.enrichmentResumeService.resume('base-maintenance-commit'),
+    emitCleanupProgress: (current, total) => this.progressState.emit('cleanup', current, total),
+    logInfo: (message, metadata) => this.logInfo(message, metadata),
+    logDebug: (message, metadata) => this.logDebug(message, metadata),
+    logWarn: (message, error, metadata) => this.logWarn(message, error, metadata)
+  })
   private readonly pathNormalizationService = new FileProviderPathNormalizationService({
     getAppliedVersion: () => this.getPathNormalizationAppliedVersion(),
     setAppliedVersion: (version) => this.setPathNormalizationAppliedVersion(version),
     loadRowsPage: (afterId, limit) => this.loadPathNormalizationRowsPage(afterId, limit),
     loadRowsByPaths: (paths) => this.loadPathNormalizationRowsByPaths(paths),
     rewritePath: (rewrite) => this.rewriteFilePathToNormalizedForm(rewrite),
-    removeIndexedFile: async (filePath) => {
-      if (!(await this.ensureSearchIndexWorkerReady('file-index.path-normalization.remove'))) {
-        throw new Error('FILE_PERSISTENCE_PORT_UNAVAILABLE')
+    removeIndexedFile: async (deletion) => {
+      const rows = await this.maintenanceService.findIncrementalDeleteRecords([deletion.path])
+      if (rows.length === 0) return false
+      if (rows[0].id !== deletion.id) throw new Error('FILE_PATH_NORMALIZATION_VERSION_CHANGED')
+      const result = await this.maintenanceService.deleteFileRecords(rows, {
+        keptFileId: deletion.keptId
+      })
+      if (result.deferred || !result.deletedIds.includes(deletion.id)) {
+        throw new Error('FILE_PATH_NORMALIZATION_VERSION_CHANGED')
       }
-      await this.requireFilePersistencePort().removeFile(filePath)
-      await this.removeSearchIndexItems([filePath], 'file-index.path-normalization.remove')
+      return true
     },
     removeIndexEntry: (filePath) =>
-      this.removeSearchIndexItems([filePath], 'file-index.path-normalization.rekey'),
+      this.maintenanceService.enqueueOrphanSearchCandidates([filePath], 'path-rekey'),
     reindexRows: async (ids) => {
       if (!this.dbUtils || ids.length === 0) return
       const rows = await this.dbUtils
         .getFileIndexReadDb()
-        .select({
-          id: filesSchema.id,
-          path: filesSchema.path,
-          name: filesSchema.name,
-          displayName: filesSchema.displayName,
-          extension: filesSchema.extension,
-          size: filesSchema.size,
-          mtime: filesSchema.mtime,
-          ctime: filesSchema.ctime
-        })
+        .select()
         .from(filesSchema)
         .where(inArray(filesSchema.id, ids))
-      await this.scheduleIndexing(rows, 'path-normalization')
+      for (const chunk of chunkArray(rows, 10)) {
+        await this.maintenanceService.withFileMutationSlice(undefined, (mutationLeaseId) =>
+          this.requireRuntimeMutationDelegate().applyBatch({
+            sourceId: this.id,
+            mutationLeaseId,
+            records: chunk.map((record) => this.mapFileToIndexedSourceRecord(record))
+          })
+        )
+      }
     },
     yieldBetweenPages: async () => {
       await new Promise<void>((resolve) => setImmediate(resolve))
@@ -707,16 +718,37 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       ensureFileSystemWatchers: () => this.ensureFileSystemWatchers(),
       isWithinWatchRoots: (rawPath) => this.isWithinWatchRoots(rawPath),
       getWatchDepthForPath: resolveWatchDepthForPath,
-      incrementalWriteService: this.incrementalWriteService,
       mapFileToIndexedSourceRecord: (record) => this.mapFileToIndexedSourceRecord(record),
       scanDirectoryBatchesWithWorker: (dirPath, excludePathsSet, signal, onStats, options) =>
         this.scanDirectoryBatchesWithWorker(dirPath, excludePathsSet, signal, onStats, options),
       buildFileRecord: (rawPath, options) => this.buildFileRecord(rawPath, options),
-      handleIncrementalDeletes: (paths, applyRuntime) =>
-        this.handleIncrementalDeletes(paths, applyRuntime),
+      handleIncrementalDeletes: (paths, options) => this.handleIncrementalDeletes(paths, options),
       handleIncrementalAddsOrChanges: (entries, options) =>
         this.handleIncrementalAddsOrChanges(entries, options),
-      deleteReconciledRecords: (records) => this.deleteReconciledRecords(records)
+      deleteReconciledRecords: (records, options) =>
+        this.maintenanceService.deleteFileRecords(records, 'missing', options),
+      persistSubtreeRecords: (records, options) => this.persistSubtreeRecordBatch(records, options),
+      pathAbsenceEvidence: (filePath) => this.maintenanceService.getFileAbsenceEvidence(filePath),
+      isStaleIndexPath: (filePath) => this.maintenanceService.isStaleExcludedIndexPath(filePath),
+      canContinue: (options) => this.maintenanceService.canContinueFileMaintenance(options),
+      persistMissingScope: (scope) =>
+        this.maintenanceService.enqueueFileMaintenanceWork([
+          { reason: 'missing-root', filePath: scope }
+        ]),
+      getMissingCursor: (scope) =>
+        this.maintenanceService.getFileMaintenanceCursor(
+          this.maintenanceService.fileMaintenanceTaskId('missing-root', scope, null)
+        ),
+      saveMissingCursor: (scope, cursor) =>
+        this.maintenanceService.setFileMaintenanceCursor(
+          this.maintenanceService.fileMaintenanceTaskId('missing-root', scope, null),
+          cursor
+        ),
+      finishMissingScope: (scope) =>
+        this.maintenanceService.removeFileMaintenanceWork([
+          this.maintenanceService.fileMaintenanceTaskId('missing-root', scope, null)
+        ]),
+      resumeMaintenance: () => this.maintenanceService.scheduleFileMaintenance()
     })
     this.writeSideEffectService = new FileProviderWriteSideEffectService({
       processFileExtensions: (files) => this.processFileExtensions(files),
@@ -726,8 +758,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
     this.fileUpdateExecutor = new IndexedWriteUpdateExecutorService({
       waitBeforeChunk: async () => {
-        await appTaskGate.waitForIdle()
-        await dbWriteScheduler.waitForCapacity(4)
+        if (!this.isSearchSplitEnabledNow()) await dbWriteScheduler.waitForCapacity(4)
       },
       updateChunk: (records) => this.updateFileMetadataChunk(records),
       refreshUpdated: (records) => this.refreshFileUpdateRecords(records),
@@ -753,41 +784,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       },
       logDebug: (message, meta) => this.logDebug(message, meta),
       successMessage: 'Incremental index completed'
-    })
-    this.incrementalDeleteExecutor = new IndexedWriteDeleteExecutorService({
-      normalizePath: (rawPath) => path.normalize(rawPath),
-      findExisting: (paths) => this.findIncrementalDeleteRecords(paths),
-      deleteRecords: (records) => this.deleteIncrementalRecords(records),
-      logDebug: (message, meta) => this.logDebug(message, meta),
-      successMessage: 'Incremental remove completed'
-    })
-    this.cleanupDeleteService = new FileProviderCleanupDeleteService({
-      sourceId: this.id,
-      getIndexedFileRecordsPage: async (afterId, limit, runOptions) => {
-        runOptions?.signal?.throwIfAborted()
-        if (!this.dbUtils) return []
-        // Cleanup deletes are keyed by these ids — read the home the delete
-        // will target (worker-owned search file under the split).
-        return await this.dbUtils
-          .getFileIndexReadDb()
-          .select({ path: filesSchema.path, id: filesSchema.id })
-          .from(filesSchema)
-          .where(and(eq(filesSchema.type, 'file'), gt(filesSchema.id, afterId)))
-          .orderBy(filesSchema.id)
-          .limit(limit)
-      },
-      isWithinWatchRoots: (filePath) => this.isWithinWatchRoots(filePath),
-      isStaleIndexPath: (filePath) => this.isStaleExcludedIndexPath(filePath),
-      yieldAfterRead: async () => {
-        await new Promise<void>((resolve) => setImmediate(resolve))
-      },
-      deleteRecords: (records) => this.deleteCleanupRecords(records),
-      emitDelta: (delta, runOptions) => this.emitIndexedSourceDelta(delta, runOptions),
-      emitProgress: (current, total) => this.progressState.emit('cleanup', current, total),
-      now: () => performance.now(),
-      formatDuration,
-      logInfo: (message, meta) => this.logInfo(message, meta),
-      logDebug: (message, meta) => this.logDebug(message, meta)
     })
     this.fullScanCheckpointService = new FileProviderFullScanCheckpointService({
       listChildDirectories: (rootPath, excludePathsSet) =>
@@ -817,8 +813,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
     this.fullScanRunService = new FileProviderFullScanRunService({
       enterPerfContext: (label, metadata) => enterPerfContext(label, metadata),
-      scanDirectory: (rootPath, currentExcludePathsSet, runOptions) =>
-        this.scanDirectoryBatchesWithWorker(rootPath, currentExcludePathsSet, runOptions?.signal),
+      scanDirectory: (rootPath, currentExcludePathsSet, runOptions, onStats) =>
+        this.scanDirectoryBatchesWithWorker(
+          rootPath,
+          currentExcludePathsSet,
+          runOptions?.signal,
+          onStats
+        ),
       insertRecords: (rootPath, records, runOptions) =>
         this.fullScanInsertService.execute(rootPath, records, runOptions),
       emitProgress: (current, total) => this.progressState.emit('scanning', current, total),
@@ -831,31 +832,40 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       checkpoints: this.fullScanCheckpointService
     })
     this.fullScanInsertService = new FileProviderFullScanInsertService({
-      sourceId: this.id,
       getBatchSize: () => this.upsertBatchScheduler.currentSize,
       recordBatchDuration: (durationMs) => this.upsertBatchScheduler.recordDuration(durationMs),
-      waitForIdle: async () => {
-        await appTaskGate.waitForIdle()
+      waitForIdle: async (runOptions) => {
+        if (runOptions?.maintenance !== false) {
+          await waitForIndexMaintenanceIdle(runOptions?.signal ?? this.maintenanceService.signal)
+        }
       },
-      upsertFiles: (records, reason) => this.upsertSearchIndexFiles(records, reason),
       persistAndEmitBatch: (records, runOptions) =>
         this.persistAndPublishFullScanBatch(records, runOptions),
-      emitRecordBatch: (batch, runOptions) =>
-        this.emitIndexedSourceRecordBatchFromBatch(batch, runOptions),
-      mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
       emitProgress: (current, total) => this.progressState.emit('indexing', current, total),
-      sleep: async (durationMs) => {
-        await new Promise<void>((resolve) => setTimeout(resolve, durationMs))
+      sleep: async (durationMs, runOptions) => {
+        const signal = runOptions?.signal ?? this.maintenanceService.signal
+        signal.throwIfAborted()
+        await new Promise<void>((resolve, reject) => {
+          const finish = () => {
+            clearTimeout(timer)
+            signal.removeEventListener('abort', abort)
+          }
+          const abort = () => {
+            finish()
+            reject(signal.reason)
+          }
+          const timer = setTimeout(() => {
+            finish()
+            resolve()
+          }, durationMs)
+          signal.addEventListener('abort', abort, { once: true })
+          if (signal.aborted) abort()
+        })
       },
       now: () => performance.now(),
       formatDuration,
       logInfo: (message, meta) => this.logInfo(message, meta),
       logDebug: (message, meta) => this.logDebug(message, meta)
-    })
-    this.reconciliationDeleteService = new FileProviderReconciliationDeleteService({
-      sourceId: this.id,
-      deleteRecords: (records) => this.deleteReconciledRecords(records),
-      emitDelta: (delta, runOptions) => this.emitIndexedSourceDelta(delta, runOptions)
     })
     this.reconciliationDiffService = new FileProviderReconciliationDiffService({
       reconcileWithWorker: (diskFiles, dbFiles, reconciliationPaths) =>
@@ -863,44 +873,29 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       logWarn: (message, error, meta) => this.logWarn(message, error, meta)
     })
     this.reconciliationUpdateService = new FileProviderReconciliationUpdateService({
-      sourceId: this.id,
-      updateRecords: (records) => this._processFileUpdates(records, 10),
-      emitDelta: (delta, runOptions) => this.emitIndexedSourceDelta(delta, runOptions),
-      mapRecord: (record) => this.mapFileToIndexedSourceRecord(record)
+      persistAndPublish: (records, runOptions) => this.persistReconciledUpdates(records, runOptions)
     })
     this.reconciliationInsertService = new FileProviderReconciliationInsertService({
-      sourceId: this.id,
-      waitForIdle: async () => {
-        await appTaskGate.waitForIdle()
-      },
-      runQueue: (chunks, handler, options) => runAdaptiveTaskQueue(chunks, handler, options),
-      upsertFiles: (records, reason) => this.upsertSearchIndexFiles(records, reason),
-      emitRecordBatch: (batch, runOptions) =>
-        this.emitIndexedSourceRecordBatchFromBatch(batch, runOptions),
-      emitDelta: (delta, runOptions) => this.emitIndexedSourceDelta(delta, runOptions),
-      shouldEmitRecordBatch: (runOptions) => Boolean(runOptions?.onRecordBatch),
-      mapRecord: (record) => this.mapFileToIndexedSourceRecord(record),
-      emitProgress: (current, total) => this.progressState.emit('indexing', current, total),
-      now: () => performance.now(),
-      formatDuration,
-      logDebug: (message, meta) => this.logDebug(message, meta)
+      persistAndPublish: (records, runOptions) =>
+        this.persistAndPublishFullScanBatch(records, runOptions),
+      emitProgress: (current, total) => this.progressState.emit('indexing', current, total)
     })
     this.reconciliationRunService = new FileProviderReconciliationRunService({
       enterPerfContext: (label, metadata) => enterPerfContext(label, metadata),
-      waitForIdle: async () => {
-        await appTaskGate.waitForIdle()
+      waitForIdle: async (runOptions) => {
+        if (runOptions?.maintenance !== false) {
+          await waitForIndexMaintenanceIdle(runOptions?.signal ?? this.maintenanceService.signal)
+        }
       },
       assertActive: (runOptions) => runOptions?.signal?.throwIfAborted(),
-      prepareSeenPaths: (runOptions) => this.prepareReconciliationSeenPaths(runOptions),
-      recordSeenPaths: (paths, runOptions) => this.recordReconciliationSeenPaths(paths, runOptions),
       getDbFilesByPaths: (paths, runOptions) =>
         this.getReconciliationDbFilesByPaths(paths, runOptions),
-      getMissingDbFiles: (rootPath, afterId, limit, runOptions) =>
-        this.getMissingReconciliationDbFiles(rootPath, afterId, limit, runOptions),
-      countRootRows: (rootPath, runOptions) =>
-        this.countReconciliationRootRows(rootPath, runOptions),
+      hasRootRows: async (rootPath, runOptions) => {
+        runOptions?.signal?.throwIfAborted()
+        if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
+        return (await getReconciliationFileRecordsPage(this.dbUtils, rootPath, 0, 1)).length > 0
+      },
       getDeferralReason: () => this.resolveReconciliationDeferralReason(),
-      clearSeenPaths: (runOptions) => this.clearReconciliationSeenPaths(runOptions),
       scanDirectory: (rootPath, currentExcludePathsSet, runOptions, onStats) =>
         this.scanDirectoryBatchesWithWorker(
           rootPath,
@@ -910,8 +905,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         ),
       reconcile: (diskFiles, dbFiles, paths) =>
         this.reconciliationDiffService.reconcile(diskFiles, dbFiles, paths),
-      deleteRecords: (records, runOptions) =>
-        this.reconciliationDeleteService.execute(records, runOptions),
+      finishMissingScan: async (rootPath, runOptions, deadlineAt) => {
+        const taskId = this.maintenanceService.fileMaintenanceTaskId('missing-root', rootPath, null)
+        await this.maintenanceService.enqueueFileMaintenanceWork([
+          { reason: 'missing-root', filePath: rootPath }
+        ])
+        const result = await this.maintenanceService.runMissingFileMaintenance(taskId, rootPath, {
+          ...runOptions,
+          maintenanceDeadlineAt: Math.min(
+            runOptions?.maintenanceDeadlineAt ?? deadlineAt,
+            deadlineAt
+          )
+        })
+        if (!result.done) this.maintenanceService.scheduleFileMaintenance()
+        return result
+      },
       updateRecords: (records, runOptions) =>
         this.reconciliationUpdateService.execute(records, runOptions),
       insertRecords: (records, runOptions) =>
@@ -951,7 +959,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       isShuttingDown: () => this.shuttingDown,
       isEnabled: () => this.contentIndexPolicyService.isEnabled(),
       withMutationLease: async (operation) =>
-        await this.requireRuntimeMutationDelegate().withMutationLease(operation),
+        await this.requireRuntimeMutationDelegate().withMutationLease(operation, {
+          maintenance: true,
+          signal: this.maintenanceService.signal
+        }),
       scheduleIndexing: (files, reason, leaseId) => this.scheduleIndexing(files, reason, leaseId),
       waitForSearchIndexDrain: (reason, leaseId) => this.waitForSearchIndexDrain(reason, leaseId),
       yieldToEventLoop: async () => await new Promise<void>((resolve) => setImmediate(resolve)),
@@ -1005,11 +1016,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getDbUtils: () => this.dbUtils,
       getSearchIndex: () => this.searchIndex,
       isContentIndexingEnabled: () => this.contentIndexPolicyService.isEnabled(),
+      isPathAdmitted: (filePath) => this.isSearchPathAdmitted(filePath),
       buildItem: (file, extensions) => this.createFileSearchItem(file, extensions),
       normalizeItem: (item, file, extensions, reason) =>
         this.normalizeFileSearchItem(item, file, extensions, { reason }),
       sanitizeExtensions: sanitizeIndexedFileExtensions,
-      cleanupStaleCandidates: (paths) => this.cleanupStaleSearchCandidates(paths),
+      cleanupStaleCandidates: (paths) =>
+        this.maintenanceService.cleanupStaleSearchCandidates(paths),
       semanticSearch: (semanticQuery, limit) =>
         this.embeddingService?.semanticSearch(semanticQuery, limit) ?? Promise.resolve([]),
       logDebug: (message, meta) => this.logDebug(message, meta),
@@ -1096,6 +1109,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   public async prepareForSearchIndexShutdown(): Promise<void> {
     this.workerStatusService.stopDiagnostics()
     this.shuttingDown = true
+    const maintenanceDrain = this.maintenanceService.stop()
+    this.indexRunAbortController?.abort(new Error('FILE_PROVIDER_SHUTTING_DOWN'))
     // Content enrichment is durably marked pending before admission. Stop accepting work and
     // terminate its read-only worker now, rather than letting a parser/publication barrier consume
     // the app's entire quit budget. A later launch resumes every unfinished row.
@@ -1121,7 +1136,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     try {
       const producerDrains: Promise<void>[] = [
         this.awaitShutdownProducer(assetDrain, 'file-assets'),
-        this.awaitShutdownProducer(openerDrain, 'file-openers')
+        this.awaitShutdownProducer(openerDrain, 'file-openers'),
+        this.awaitShutdownProducer(maintenanceDrain, 'file-maintenance')
       ]
       if (this.isInitializing) {
         producerDrains.push(
@@ -1222,47 +1238,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return Boolean(this.initializationContext?.databaseManager.isSearchSplitEnabled())
   }
 
-  /**
-   * Compile the files+embeddings delete pair for a set of file ids. The
-   * builder connection is only used for SQL compilation — the statements
-   * execute on the search-index worker's connection (the sole writer of its
-   * file). Ids MUST come from the split-aware read home
-   * (`getFileIndexReadDb()`), never from the primary, so a primary row id can
-   * never address the wrong search-home row (2d.3 id-collision hazard).
-   */
-  private buildSearchIndexFileDeleteStatements(
-    fileIds: number[]
-  ): Array<{ sql: string; args: unknown[] }> {
-    const builder = this.dbUtils!.getDb()
-    const deleteFiles = builder.delete(filesSchema).where(inArray(filesSchema.id, fileIds)).toSQL()
-    const sourceIds = fileIds.map((id) => String(id))
-    const deleteEmbeddings = builder
-      .delete(embeddingsSchema)
-      .where(
-        and(eq(embeddingsSchema.sourceType, 'file'), inArray(embeddingsSchema.sourceId, sourceIds))
-      )
-      .toSQL()
-    return [
-      { sql: deleteFiles.sql, args: deleteFiles.params },
-      { sql: deleteEmbeddings.sql, args: deleteEmbeddings.params }
-    ]
-  }
-
-  /**
-   * Split-on delete path: forward the files+embeddings deletes to the
-   * search-index worker as ONE atomic batch. Never wrapped in
-   * `scheduleDbWrite` — the write executes on the worker connection, and
-   * holding the primary write lane across a cross-thread round trip is the
-   * head-of-line-blocking anti-pattern the scheduler work removed.
-   */
-  private async execSearchIndexFileDeletes(fileIds: number[]): Promise<void> {
-    if (fileIds.length === 0) return
-    await searchIndexWriter.execWrite(
-      this.buildSearchIndexFileDeleteStatements(fileIds),
-      'transaction'
-    )
-  }
-
   private requireRuntimeMutationDelegate(): FileIndexedSourceRuntimeMutationDelegate {
     if (!this.indexedSourceRuntimeMutationDelegate) {
       throw new Error('INDEXED_SOURCE_RUNTIME_MUTATION_DELEGATE_UNAVAILABLE')
@@ -1296,102 +1271,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
     }
     return ready
-  }
-
-  private async removeSearchIndexItems(itemIds: string[], reason: string): Promise<void> {
-    if (itemIds.length === 0) return
-    const delegate = this.requireRuntimeMutationDelegate()
-    await Promise.all(
-      itemIds.map(
-        async (itemId) =>
-          await delegate.applyDelta({
-            sourceId: this.id,
-            action: 'delete',
-            stableKey: itemId,
-            path: itemId,
-            reason
-          })
-      )
-    )
-  }
-
-  /**
-   * Queued side job (never the search hot path): a candidate id with no row is
-   * only evidence of a dead index entry once the filesystem agrees the file is
-   * gone. Anything that is merely unreadable — permission error, offline
-   * volume, transient IO — keeps its entry; only ENOENT removes.
-   */
-  private cleanupStaleSearchCandidates(itemIds: string[]): void {
-    if (itemIds.length === 0) return
-
-    void (async () => {
-      const missingIds: string[] = []
-      for (const itemId of itemIds) {
-        if (await this.isPathMissing(itemId)) missingIds.push(itemId)
-      }
-      if (missingIds.length === 0) return
-      if (!(await this.ensureSearchIndexWorkerReady('search.remove-stale-candidates'))) return
-      const persistence = this.requireFilePersistencePort()
-      for (const itemId of missingIds) await persistence.removeFile(itemId)
-      await this.removeSearchIndexItems(missingIds, 'search.remove-stale-candidates')
-      this.logDebug('Removed stale search candidates confirmed missing on disk', {
-        candidates: itemIds.length,
-        removed: missingIds.length
-      })
-    })().catch((error) => {
-      if (isSqliteBusyError(error)) {
-        this.logDebug('Stale search candidate cleanup deferred (db busy)', {
-          count: itemIds.length
-        })
-        return
-      }
-      this.logWarn('Failed to cleanup stale search candidates', error, { count: itemIds.length })
-    })
-  }
-
-  /** True only when the filesystem positively reports the path as absent. */
-  private async isPathMissing(filePath: string): Promise<boolean> {
-    try {
-      await fs.stat(filePath)
-      return false
-    } catch (error) {
-      return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
-    }
-  }
-
-  /**
-   * The only caller is the search result normalizer, and the "file is gone"
-   * signal it acts on is `fs.existsSync` — which is false for a revoked-TCC
-   * directory or an offline volume just as much as for a deleted file. Same
-   * rule as cleanupStaleSearchCandidates: only ENOENT may remove a row.
-   */
-  private cleanupStaleFileResult(file: typeof filesSchema.$inferSelect, reason: string): void {
-    void this.isPathMissing(file.path)
-      .then(async (missing) => {
-        if (!missing) {
-          this.logDebug('Stale file result cleanup skipped: path is not missing on disk', {
-            path: file.path,
-            reason
-          })
-          return
-        }
-        if (!(await this.ensureSearchIndexWorkerReady(`file-index.${reason}.cleanup`))) {
-          this.logDebug('Stale file result cleanup skipped: persistence port not ready', {
-            path: file.path,
-            reason
-          })
-          return
-        }
-        await this.requireFilePersistencePort().removeFile(file.path)
-        await this.removeSearchIndexItems([file.path], `file-index.${reason}.remove-search`)
-      })
-      .catch((error) => {
-        if (isSqliteBusyError(error)) {
-          this.logDebug('Stale file result cleanup deferred (db busy)', { path: file.path, reason })
-        } else {
-          this.logWarn('Failed to cleanup stale file result', error, { path: file.path, reason })
-        }
-      })
   }
 
   private cleanupStaleFileAsset(
@@ -1475,7 +1354,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
 
     if (!normalized.item) {
-      this.cleanupStaleFileResult(file, options.reason)
+      this.maintenanceService.cleanupStaleFileResult(file, options.reason)
       return null
     }
 
@@ -1515,6 +1394,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   public async resetIndexedSourceRuntimeState(
     request: IndexedSourceResetRequest
   ): Promise<IndexedSourceResetResult> {
+    if (
+      request.reason === IndexedSourceResetReasons.ManualRebuild ||
+      request.reason === IndexedSourceResetReasons.UserClear
+    ) {
+      await this.preemptBackgroundIndexing(request.reason === IndexedSourceResetReasons.UserClear)
+    }
     if (request.clearSearchIndex) {
       return await this.resetFileIndexRuntimeStateViaIndexedRuntime(request)
     }
@@ -1686,7 +1571,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .getFileIndexReadDb()
       .select()
       .from(filesSchema)
-      .where(gt(filesSchema.id, afterId))
+      .where(and(eq(filesSchema.type, 'file'), gt(filesSchema.id, afterId)))
       .orderBy(filesSchema.id)
       .limit(limit)
   }
@@ -1758,7 +1643,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         lastIndexedAt: filesSchema.lastIndexedAt
       })
       .from(filesSchema)
-      .where(gt(filesSchema.id, afterId))
+      .where(and(eq(filesSchema.type, 'file'), gt(filesSchema.id, afterId)))
       .orderBy(filesSchema.id)
       .limit(limit)
   }
@@ -1775,7 +1660,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         lastIndexedAt: filesSchema.lastIndexedAt
       })
       .from(filesSchema)
-      .where(inArray(filesSchema.path, paths))
+      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, paths)))
   }
 
   /**
@@ -1787,11 +1672,20 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     rewrite: FilePathNormalizationRewrite
   ): Promise<void> {
     if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
+    // Persist both sides of the rekey before metadata moves. A failed base
+    // publication can then recover from the canonical row without a disk scan.
+    await this.maintenanceService.enqueueOrphanSearchCandidates([rewrite.fromPath], 'path-rekey')
     const statement = this.dbUtils
       .getFileIndexReadDb()
       .update(filesSchema)
       .set({ path: rewrite.toPath })
-      .where(eq(filesSchema.id, rewrite.id))
+      .where(
+        and(
+          eq(filesSchema.id, rewrite.id),
+          eq(filesSchema.path, rewrite.fromPath),
+          eq(filesSchema.type, 'file')
+        )
+      )
       .toSQL()
     if (this.isSearchSplitEnabledNow()) {
       await searchIndexWriter.execWrite([{ sql: statement.sql, args: statement.params }], 'single')
@@ -1802,7 +1696,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await db
         .update(filesSchema)
         .set({ path: rewrite.toPath })
-        .where(eq(filesSchema.id, rewrite.id))
+        .where(
+          and(
+            eq(filesSchema.id, rewrite.id),
+            eq(filesSchema.path, rewrite.fromPath),
+            eq(filesSchema.type, 'file')
+          )
+        )
     })
   }
 
@@ -1852,38 +1752,29 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     options?: FileIndexRunOptions
   ): Promise<FileProviderFullScanPersistResult> {
     if (records.length === 0) return { insertedCount: 0 }
-
-    // Custom sinks are an explicit escape hatch used by tests/streaming callers. Preserve their
-    // existing two-step behavior; only the normal consumer path uses the fused worker request.
-    if (options?.onRecordBatch || options?.onDelta) {
-      const persisted = await this.upsertSearchIndexFiles(records, 'full-scan.upsert')
-      if (persisted.length > 0) {
-        await this.emitIndexedSourceRecordBatchFromBatch(
-          {
-            sourceId: this.id,
-            records: persisted.map((row) => this.mapFileToIndexedSourceRecord(row))
-          },
-          options
-        )
-      }
-      return { insertedCount: persisted.length }
-    }
-
-    const acceptedRecords = this.filterSearchIndexUpsertRecords(records)
-    if (acceptedRecords.length === 0) return { insertedCount: 0 }
-    if (!(await this.ensureSearchIndexWorkerReady('full-scan.fused'))) {
-      throw new Error('FILE_PERSISTENCE_PORT_UNAVAILABLE')
-    }
-    const mutation = this.requireRuntimeMutationDelegate().applyBatchWithPersistence
-    if (!mutation) throw new Error('FILE_INDEX_FUSED_WRITE_UNAVAILABLE')
-
-    const batch: IndexedSourceRecordBatch = {
-      sourceId: this.id,
-      records: acceptedRecords.map((record) => this.mapFileToIndexedSourceRecord(record))
-    }
+    if (records.length > 10) throw new Error('FILE_FULL_SCAN_SLICE_TOO_LARGE')
     const startedAt = performance.now()
     try {
-      const result = await mutation(batch, acceptedRecords)
+      const result = await this.maintenanceService.withFileMutationSlice(
+        options,
+        async (mutationLeaseId) => {
+          const acceptedRecords = this.filterSearchIndexUpsertRecords(records).filter(
+            (record) =>
+              this.isWithinWatchRoots(record.path) &&
+              !this.maintenanceService.isStaleExcludedIndexPath(record.path)
+          )
+          if (acceptedRecords.length === 0) return { persistedCount: 0, metrics: undefined }
+          const mutation = this.requireRuntimeMutationDelegate().applyBatchWithPersistence
+          return await mutation(
+            {
+              sourceId: this.id,
+              records: acceptedRecords.map((record) => this.mapFileToIndexedSourceRecord(record)),
+              mutationLeaseId
+            },
+            acceptedRecords
+          )
+        }
+      )
       const persistedCount = result.persistedCount
       const metrics = result.metrics
       recordRuntimeWriteSnapshot(this.ftsWriteSnapshotService, {
@@ -1893,7 +1784,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         metadata: {
           writeMode: 'fused',
           requestedRows: records.length,
-          acceptedRows: acceptedRecords.length,
           persistedRows: persistedCount,
           indexedItems: metrics?.indexedItems,
           removedItems: metrics?.removedItems,
@@ -1907,16 +1797,23 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           storeBoundary: 'file-persistence-fts'
         }
       })
+      // The source lease has ended. Backpressure from the stream consumer can
+      // delay traversal here, but cannot hold watch/reset behind a long lease.
+      await this.emitCommittedScanProgress(
+        persistedCount,
+        options,
+        records[records.length - 1].path
+      )
       return { insertedCount: persistedCount, workerCpuMicros: metrics?.workerCpuMicros }
     } catch (error) {
       recordRuntimeWriteFailureSnapshot(this.ftsWriteSnapshotService, {
         error,
         reason: 'full-scan.upsert.fused',
-        entries: acceptedRecords.length,
+        entries: records.length,
         metadata: {
           writeMode: 'fused',
           requestedRows: records.length,
-          acceptedRows: acceptedRecords.length,
+          acceptedRows: records.length,
           storeBoundary: 'file-persistence-fts'
         }
       })
@@ -1924,49 +1821,161 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private async upsertSearchIndexFiles(
-    records: UpsertFileRecord[],
-    reason: string
-  ): Promise<Array<typeof filesSchema.$inferSelect>> {
-    if (records.length === 0) return []
+  private async persistReconciledUpdates(
+    records: FileUpdateRecord[],
+    options?: FileIndexRunOptions
+  ): Promise<{ updatedCount: number }> {
+    if (records.length === 0 || !this.dbUtils) return { updatedCount: 0 }
+    const result = await this.maintenanceService.withFileMutationSlice(
+      options,
+      async (mutationLeaseId) => {
+        const rows = await this.dbUtils!.getFileIndexReadDb()
+          .select()
+          .from(filesSchema)
+          .where(
+            inArray(
+              filesSchema.id,
+              records.map((record) => record.id)
+            )
+          )
+        const byId = new Map(rows.map((row) => [row.id, row]))
+        const current = records.flatMap((record) => {
+          const existing = byId.get(record.id)
+          if (
+            !existing ||
+            existing.path !== record.path ||
+            !this.isWithinWatchRoots(record.path) ||
+            this.maintenanceService.isStaleExcludedIndexPath(record.path)
+          )
+            return []
+          return [{ ...existing, ...record, lastIndexedAt: new Date() }]
+        })
+        if (current.length === 0) return { persistedCount: 0 }
+        const mutation = this.requireRuntimeMutationDelegate().applyBatchWithPersistence
+        return await mutation(
+          {
+            sourceId: this.id,
+            records: current.map((record) => this.mapFileToIndexedSourceRecord(record)),
+            mutationLeaseId
+          },
+          current
+        )
+      }
+    )
+    await this.emitCommittedScanProgress(result.persistedCount, options)
+    return { updatedCount: result.persistedCount }
+  }
 
-    const acceptedRecords = this.filterSearchIndexUpsertRecords(records)
-    if (acceptedRecords.length === 0) return []
-    if (!(await this.ensureSearchIndexWorkerReady(reason))) {
-      throw new Error('FILE_PERSISTENCE_PORT_UNAVAILABLE')
+  private async persistSubtreeRecordBatch(
+    files: ScannedFileInfo[],
+    options: FileIndexRunOptions
+  ): Promise<{ added: number; changed: number }> {
+    const records = mapIndexedWriteFullScanUpsertRecords(files, { lastIndexedAt: new Date() })
+    let added = 0
+    let changed = 0
+    for (const chunk of chunkArray(records, 10)) {
+      const result = await this.maintenanceService.withFileMutationSlice(
+        options,
+        async (mutationLeaseId) => {
+          if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
+          const accepted = this.filterSearchIndexUpsertRecords(chunk).filter(
+            (record) =>
+              this.isWithinWatchRoots(record.path) &&
+              !this.maintenanceService.isStaleExcludedIndexPath(record.path)
+          )
+          if (accepted.length === 0) return { added: 0, changed: 0, persistedCount: 0 }
+          const rows = await this.dbUtils
+            .getFileIndexReadDb()
+            .select()
+            .from(filesSchema)
+            .where(
+              and(
+                eq(filesSchema.type, 'file'),
+                inArray(
+                  filesSchema.path,
+                  accepted.map((record) => record.path)
+                )
+              )
+            )
+          const plan = this.incrementalWritePlanner.plan({
+            records: accepted,
+            existingRows: rows,
+            manualPaths: new Set<string>(),
+            manualTotal: 0
+          })
+          const dirtyPaths = new Set([
+            ...plan.filesToInsert.map((record) => record.path),
+            ...plan.filesToUpdate.map((record) => record.path)
+          ])
+          const dirty = accepted.filter((record) => dirtyPaths.has(record.path))
+          if (dirty.length === 0) return { added: 0, changed: 0, persistedCount: 0 }
+          const existingByPath = new Map(rows.map((row) => [row.path, row]))
+          const mutation = this.requireRuntimeMutationDelegate().applyBatchWithPersistence
+          const committed = await mutation(
+            {
+              sourceId: this.id,
+              mutationLeaseId,
+              records: dirty.map((record) =>
+                this.mapFileToIndexedSourceRecord({
+                  ...existingByPath.get(record.path),
+                  ...record
+                })
+              )
+            },
+            dirty
+          )
+          return {
+            added: plan.filesToInsert.length,
+            changed: committed.persistedCount - plan.filesToInsert.length,
+            persistedCount: committed.persistedCount
+          }
+        }
+      )
+      added += result.added
+      changed += result.changed
+      await this.emitCommittedScanProgress(result.persistedCount, options)
     }
+    return { added, changed }
+  }
 
-    const startedAt = performance.now()
-    try {
-      const persisted = (await this.requireFilePersistencePort().upsertFiles(
-        acceptedRecords,
-        reason.startsWith('full-scan.') ? 'background' : 'normal'
-      )) as unknown as Array<typeof filesSchema.$inferSelect>
-      recordRuntimeWriteSnapshot(this.ftsWriteSnapshotService, {
-        entries: persisted.length,
-        reason,
-        durationMs: performance.now() - startedAt,
-        metadata: {
-          requestedRows: records.length,
-          acceptedRows: acceptedRecords.length,
-          persistedRows: persisted.length,
-          storeBoundary: 'file-persistence'
-        }
+  private async emitCommittedScanProgress(
+    committedRecordCount: number,
+    options?: FileIndexRunOptions,
+    cursor?: string
+  ): Promise<void> {
+    if (!options?.onRecordBatch || committedRecordCount === 0) return
+    const signal = options.signal
+    signal?.throwIfAborted()
+    const publication = Promise.resolve(
+      options.onRecordBatch({
+        sourceId: this.id,
+        records: [],
+        committedRecordCount,
+        cursor
       })
-      return persisted
-    } catch (error) {
-      recordRuntimeWriteFailureSnapshot(this.ftsWriteSnapshotService, {
-        error,
-        reason,
-        entries: acceptedRecords.length,
-        metadata: {
-          requestedRows: records.length,
-          acceptedRows: acceptedRecords.length,
-          storeBoundary: 'file-persistence'
-        }
-      })
-      throw error
+    )
+    if (!signal) {
+      await publication
+      return
     }
+    await new Promise<void>((resolve, reject) => {
+      const abort = () => {
+        signal.removeEventListener('abort', abort)
+        reject(signal.reason)
+      }
+      signal.addEventListener('abort', abort, { once: true })
+      void publication.then(
+        () => {
+          signal.removeEventListener('abort', abort)
+          resolve()
+        },
+        (error) => {
+          signal.removeEventListener('abort', abort)
+          reject(error)
+        }
+      )
+      if (signal.aborted) abort()
+    })
   }
 
   private mapFileToIndexedSourceRecord(file: IndexedFileSourceRecordRow): IndexedSourceRecord {
@@ -2082,27 +2091,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     options?: FileIndexRunOptions
   ): Promise<void> {
     if (batch.records.length === 0) return
-    if (options?.onRecordBatch) return options.onRecordBatch(batch)
-    await this.requireRuntimeMutationDelegate().applyBatch(batch)
-  }
-
-  private async emitIndexedSourceDelta(
-    delta: IndexedSourceDelta,
-    options?: FileIndexRunOptions
-  ): Promise<void> {
-    if (options?.onDelta) return options.onDelta(delta)
-    await this.requireRuntimeMutationDelegate().applyDelta(delta)
+    await this.maintenanceService.withFileMutationSlice(options, (mutationLeaseId) =>
+      this.requireRuntimeMutationDelegate().applyBatch({ ...batch, mutationLeaseId })
+    )
+    await this.emitCommittedScanProgress(batch.records.length, options, batch.cursor)
   }
 
   private syncWatchServiceState(): void {
     this.fileIndexSettings = this.watchService.getCurrentSettings()
     this.watchPaths = this.watchService.getWatchPaths()
     this.watchPathsRegistered = this.watchService.isWatchPathRegistered()
-  }
-
-  private applyWatchPaths(extraPaths: string[]): void {
-    this.watchService.applyWatchPaths(extraPaths)
-    this.syncWatchServiceState()
+    this.maintenanceService.updateConfiguration(this.watchPaths, this.fileIndexSettings.extraPaths)
   }
 
   private initializeBackgroundTaskService(): void {
@@ -2120,9 +2119,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.backgroundStartupPromise = new Promise<void>((resolve) => setImmediate(resolve))
       .then(async () => {
         if (this.shuttingDown) return
-        const becameIdle = await appTaskGate.waitForIdle(FILE_PROVIDER_STARTUP_READY_WAIT_MS)
+        await waitForIndexMaintenanceIdle(this.maintenanceService.signal)
         if (this.shuttingDown) return
-        this.logDebug('FileProvider background startup running', { becameIdle })
+        this.logDebug('FileProvider background startup running')
 
         const workerReady = await this.ensureSearchIndexWorkerReady('startup.background')
         if (this.shuttingDown) return
@@ -2136,6 +2135,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
         if (workerReady) {
           this.backgroundStartupReady = true
+          this.maintenanceService.scheduleFileMaintenance()
           // Layer-2 safety net for the split topology: if the (rebuildable)
           // search file holds zero index rows while watch roots exist, request
           // one Startup scan through the normal eligibility gate. Development
@@ -2234,6 +2234,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return false
     }
   }
+
+  private async preemptBackgroundIndexing(includeManual = false): Promise<void> {
+    const activeScan = includeManual || this.indexRunSource === 'auto' ? this.isInitializing : null
+    if (activeScan)
+      this.indexRunAbortController?.abort(new Error('FILE_INDEX_BACKGROUND_PREEMPTED'))
+    const maintenanceDrain = this.maintenanceService.cancelRun()
+    const pending: Promise<unknown>[] = []
+    if (activeScan) pending.push(activeScan)
+    pending.push(maintenanceDrain)
+    await Promise.allSettled(pending)
+  }
   private async startIndexing(
     source: 'auto' | 'manual',
     options?: FileIndexRunOptions
@@ -2246,21 +2257,30 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.initializationFailed = false
     this.initializationFailure = null
     this.progressState.resetRun()
-    const run = this._initialize(options)
+    const controller = new AbortController()
+    const signal = AbortSignal.any([
+      controller.signal,
+      this.maintenanceService.signal,
+      ...(options?.signal ? [options.signal] : [])
+    ])
+    const runOptions: FileIndexRunOptions = { ...options, signal, maintenance: source === 'auto' }
+    this.indexRunAbortController = controller
+    this.indexRunSource = source
+    const run = this._initialize(runOptions)
       .then(async (stats) => {
-        if (!options?.onRecordBatch && !options?.onDelta) {
+        if (!runOptions.onRecordBatch) {
           await this.drainIndexedSourceMutations(`indexing.${source}`)
         }
         this.initializationFailed = false
         this.logInfo(`File indexing ${source} run completed successfully`)
-        if (source === 'manual') this.notifyManualRebuildCompleted()
+        if (source === 'manual' && !stats.pending) this.notifyManualRebuildCompleted()
         return stats
       })
       .catch((error) => {
-        if (this.shuttingDown || options?.signal?.aborted) {
+        if (this.shuttingDown || signal.aborted) {
           this.initializationFailed = false
           this.initializationFailure = null
-          this.logDebug(`File indexing ${source} run cancelled during shutdown`)
+          this.logDebug(`File indexing ${source} run cancelled`)
           this.progressState.emit('idle', 0, 0)
           if (source === 'manual') this.manualRebuildPendingNotification = false
           if (options?.throwOnFailure) throw error
@@ -2290,6 +2310,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
       .finally(() => {
         if (this.isInitializing === run) this.isInitializing = null
+        if (this.indexRunAbortController === controller) {
+          this.indexRunAbortController = null
+          this.indexRunSource = null
+        }
+        if (!this.shuttingDown) this.maintenanceService.scheduleFileMaintenance()
       })
 
     this.isInitializing = run
@@ -2375,7 +2400,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     request: IndexedSourceScanRequest,
     options?: Pick<
       FileIndexRunOptions,
-      'onRecordBatch' | 'onDelta' | 'throwOnFailure' | 'signal' | 'mutationLeaseId'
+      'onRecordBatch' | 'throwOnFailure' | 'signal' | 'mutationLeaseId'
     >
   ): Promise<FileIndexedSourceScanResult> {
     if (this.shuttingDown) throw new Error('FILE_PROVIDER_SHUTTING_DOWN')
@@ -2388,19 +2413,21 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const batches: IndexedSourceRecordBatch[] = []
     await this.ensureFileSystemWatchers()
-    await this.startIndexing('auto', {
-      throwOnFailure: options?.throwOnFailure,
-      signal: options?.signal ?? request.signal,
-      mutationLeaseId: options?.mutationLeaseId ?? request.mutationLeaseId,
-      onRecordBatch: async (batch) => {
-        if (options?.onRecordBatch) {
-          await options.onRecordBatch(batch)
-        } else {
-          batches.push(batch)
+    await this.startIndexing(
+      request.reason === IndexedSourceScanReasons.ManualRebuild ? 'manual' : 'auto',
+      {
+        throwOnFailure: options?.throwOnFailure,
+        signal: options?.signal ?? request.signal,
+        mutationLeaseId: options?.mutationLeaseId ?? request.mutationLeaseId,
+        onRecordBatch: async (batch) => {
+          if (options?.onRecordBatch) {
+            await options.onRecordBatch(batch)
+          } else {
+            batches.push(batch)
+          }
         }
-      },
-      onDelta: options?.onDelta
-    })
+      }
+    )
     return {
       batches: options?.onRecordBatch
         ? []
@@ -2486,20 +2513,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   ): Promise<IndexedSourceReconcileResult> {
     if (this.shuttingDown) throw new Error('FILE_PROVIDER_SHUTTING_DOWN')
     if (request.reason === FILE_WATCH_SUBTREE_RECONCILE_REASON) {
+      for (const root of request.roots ?? [])
+        await this.maintenanceService.scheduleChangedFilterScope(root.path)
       return await this.watchSubtreeReconcileService.reconcile(request)
     }
     const startedAt = Date.now()
     await this.ensureFileSystemWatchers()
-    const deltas: IndexedSourceDelta[] = []
     const stats = await this.startIndexing('auto', {
       signal: request.signal,
       throwOnFailure: true,
       mutationLeaseId: request.mutationLeaseId,
-      onRecordBatch: request.onRecordBatch,
-      onDelta: async (delta) => {
-        if (request.onDelta) await request.onDelta(delta)
-        else deltas.push(delta)
-      }
+      onRecordBatch: request.onRecordBatch
     })
 
     return {
@@ -2509,7 +2533,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       deleted: stats.deleted,
       skipped: stats.skipped,
       errors: stats.errors,
-      deltas,
+      deltas: [],
       startedAt,
       completedAt: Date.now(),
       reason: request.reason ?? 'file-index-reconciliation'
@@ -2519,6 +2543,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   public async handleIndexedSourceWatchEvent(
     event: IndexedSourceWatchEvent
   ): Promise<IndexedSourceDelta[]> {
+    await this.maintenanceService.scheduleChangedFilterScope(event.path)
     return await this.watchSubtreeReconcileService.handleWatchEvent(event)
   }
 
@@ -2850,7 +2875,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
    * 手动触发重建索引（清空 scan_progress 强制全量扫描）
    */
   public async rebuildIndex(request?: FileIndexRebuildRequest): Promise<FileIndexRebuildResult> {
-    if (this.isInitializing) {
+    if (this.isInitializing && this.indexRunSource === 'manual') {
       return {
         success: false,
         reason: 'initializing'
@@ -2877,6 +2902,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         threshold: criticalThreshold
       }
     }
+    await this.preemptBackgroundIndexing()
 
     this.logInfo('Manual index rebuild triggered', {
       force,
@@ -2998,16 +3024,26 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const nextExtraPaths = [...this.fileIndexSettings.extraPaths, watchPath]
-    this.fileIndexSettings = { ...this.fileIndexSettings, extraPaths: nextExtraPaths }
-
     try {
-      saveMainConfig(StorageList.FILE_INDEX_SETTINGS, this.fileIndexSettings)
+      await this.watchService.updateFileIndexSettings({ extraPaths: nextExtraPaths })
+      this.syncWatchServiceState()
     } catch (error) {
-      this.logWarn('Failed to persist file index extra paths', error, { path: watchPath })
+      const report = operationalErrorService.report({
+        domain: 'file-index',
+        operation: 'add-watch-path',
+        error,
+        code: 'FILE_INDEX_SETTINGS_PERSIST_FAILED',
+        retryable: true,
+        userImpact: 'blocked'
+      })
+      return {
+        success: false,
+        status: 'error',
+        path: resolved,
+        errorCode: report.code,
+        reportId: report.id
+      }
     }
-
-    this.applyWatchPaths(this.fileIndexSettings.extraPaths)
-    this.syncWatchServiceState()
 
     if (this.watchPathsRegistered) {
       try {
@@ -3019,6 +3055,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await this.ensureFileSystemWatchers()
     }
 
+    await this.preemptBackgroundIndexing()
     if (!this.isInitializing) {
       void this.requireRuntimeMutationDelegate()
         .scanSource(IndexedSourceScanReasons.ManualRebuild)
@@ -3178,47 +3215,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  // The reconciliation seen-paths TEMP table is connection-local, and
-  // getMissingReconciliationDbFiles JOINs it against `files` — so the temp
-  // table and the files read must live on the SAME connection: the split-aware
-  // read home. TEMP-schema writes never touch the search file's main schema,
-  // so the worker's sole-writer invariant holds (split off → primary handle,
-  // byte-identical).
-  private async prepareReconciliationSeenPaths(options?: FileIndexRunOptions): Promise<void> {
-    options?.signal?.throwIfAborted()
-    if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
-    const db = this.dbUtils.getFileIndexReadDb()
-    await scheduleDbWrite('file-reconciliation.seen.prepare', async () => {
-      options?.signal?.throwIfAborted()
-      await db.run(sql`DROP TABLE IF EXISTS temp.file_reconciliation_seen_paths`)
-      await db.run(sql`
-        CREATE TEMP TABLE file_reconciliation_seen_paths (
-          path TEXT PRIMARY KEY NOT NULL
-        ) WITHOUT ROWID
-      `)
-    })
-  }
-
-  private async recordReconciliationSeenPaths(
-    paths: string[],
-    options?: FileIndexRunOptions
-  ): Promise<void> {
-    if (paths.length === 0) return
-    options?.signal?.throwIfAborted()
-    if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
-    const db = this.dbUtils.getFileIndexReadDb()
-    await scheduleDbWrite('file-reconciliation.seen.record', async () => {
-      options?.signal?.throwIfAborted()
-      await db.run(sql`
-        INSERT OR IGNORE INTO file_reconciliation_seen_paths (path)
-        VALUES ${sql.join(
-          paths.map((filePath) => sql`(${filePath})`),
-          sql`, `
-        )}
-      `)
-    })
-  }
-
   private async getReconciliationDbFilesByPaths(
     paths: string[],
     options?: FileIndexRunOptions
@@ -3229,67 +3225,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // Ids feed reconciliation update/delete records — same-home read (2d.3).
     return await this.dbUtils
       .getFileIndexReadDb()
-      .select({ id: filesSchema.id, path: filesSchema.path, mtime: filesSchema.mtime })
+      .select({
+        id: filesSchema.id,
+        path: filesSchema.path,
+        mtime: filesSchema.mtime,
+        ctime: filesSchema.ctime,
+        size: filesSchema.size,
+        lastIndexedAt: filesSchema.lastIndexedAt
+      })
       .from(filesSchema)
       .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, paths)))
-  }
-
-  private async getMissingReconciliationDbFiles(
-    rootPath: string,
-    afterId: number,
-    limit: number,
-    options?: FileIndexRunOptions
-  ): Promise<FileProviderReconciliationDbRecord[]> {
-    options?.signal?.throwIfAborted()
-    if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
-    return await getMissingReconciliationDbFiles(this.dbUtils, rootPath, afterId, limit)
-  }
-
-  /**
-   * Row census for the reconciliation deletion guard: how many rows the index
-   * holds under this root, and how many of them this round would delete. Reads
-   * the same connection as getMissingReconciliationDbFiles — the seen-paths
-   * TEMP table is connection-local, so `missing` here is exactly the set that
-   * paged deletion would walk.
-   */
-  private async countReconciliationRootRows(
-    rootPath: string,
-    options?: FileIndexRunOptions
-  ): Promise<{ total: number; missing: number }> {
-    options?.signal?.throwIfAborted()
-    if (!this.dbUtils) throw new Error('FILE_PROVIDER_PERSISTENCE_UNAVAILABLE')
-    const queryRoot = path.normalize(rootPath)
-    const descendantPrefix = queryRoot.endsWith(path.sep) ? queryRoot : `${queryRoot}${path.sep}`
-    const escapedPrefix = descendantPrefix
-      .replace(/!/g, '!!')
-      .replace(/%/g, '!%')
-      .replace(/_/g, '!_')
-    const rows = await this.dbUtils.getFileIndexReadDb().all<{
-      total: number
-      missing: number
-    }>(sql`
-        SELECT
-          COUNT(*) AS total,
-          SUM(
-            CASE WHEN NOT EXISTS (
-              SELECT 1
-              FROM file_reconciliation_seen_paths AS seen
-              WHERE seen.path = f.path
-            ) THEN 1 ELSE 0 END
-          ) AS missing
-        FROM files AS f
-        WHERE f.type = 'file'
-          AND (f.path = ${queryRoot} OR f.path LIKE ${`${escapedPrefix}%`} ESCAPE '!')
-      `)
-    return { total: Number(rows[0]?.total ?? 0), missing: Number(rows[0]?.missing ?? 0) }
-  }
-
-  private async clearReconciliationSeenPaths(_options?: FileIndexRunOptions): Promise<void> {
-    if (!this.dbUtils) return
-    const db = this.dbUtils.getFileIndexReadDb()
-    await scheduleDbWrite('file-reconciliation.seen.clear', async () => {
-      await db.run(sql`DROP TABLE IF EXISTS temp.file_reconciliation_seen_paths`)
-    })
   }
 
   private scheduleIndexing(
@@ -3318,7 +3263,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     mutationLeaseId?: string
   ): Promise<IndexedWorkerScheduleResult> {
     await this.markContentEnrichmentPending(files, mutationLeaseId)
-    if (!this.contentIndexPolicyService.isEnabled() || this.isInitializing) {
+    if (
+      !this.contentIndexPolicyService.isEnabled() ||
+      this.isInitializing ||
+      this.maintenanceService.isBaseMutationSliceActive
+    ) {
       return { accepted: 0, deferred: files.length }
     }
     if (this.shuttingDown && !this.isInitializing && !mutationLeaseId) {
@@ -3369,26 +3318,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return this.watchService.ownsWatchPath(rawPath)
   }
 
-  /**
-   * A row under a directory the traversal rules exclude today. Rows like that were admitted by an
-   * older rule set (the home-anchored `~/go/pkg` exclusion arrived after 222k of them were indexed
-   * on one profile) and the cleanup pass is the paged, yielding place to retire them. A path the
-   * user added explicitly is never stale: those roots are theirs to keep.
-   */
-  private isStaleExcludedIndexPath(filePath: string): boolean {
-    const parent = path.dirname(filePath)
-    if (!parent || parent === filePath) return false
-    const normalizedFile = this.normalizePath(filePath)
-    const underUserRoot = this.fileIndexSettings.extraPaths.some((extraPath) => {
-      const normalizedRoot = this.normalizePath(extraPath).replace(/[\\/]+$/, '')
-      return (
-        normalizedRoot.length > 0 &&
-        (normalizedFile === normalizedRoot || normalizedFile.startsWith(`${normalizedRoot}/`))
-      )
-    })
-    if (underUserRoot) return false
-    return fileFilterService.getTraversalExclusionReason(parent) !== null
+  /** Current file-source scope; native providers keep their own admission rules. */
+  public isSearchPathAdmitted(filePath: string): boolean {
+    return this.maintenanceService.isSearchPathAdmitted(filePath)
   }
+
   /**
    * Single ingress for every non-scan path that reaches the index: watcher
    * events and manual adds both land here, and macOS hands them over
@@ -3406,15 +3340,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private async prepareIncrementalFlush(): Promise<boolean> {
     if (this.shuttingDown) return false
-    if (this.isInitializing) {
-      try {
-        await this.isInitializing
-      } catch (error) {
-        this.logError('Initialization failed before processing increments.', error)
-        return false
-      }
-    }
-    if (this.shuttingDown) return false
 
     if (!this.dbUtils) {
       this.logWarn('flushIncrementalQueue skipped: dbUtils not ready.')
@@ -3425,128 +3350,42 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async processIncrementalEntries(entries: FileProviderIncrementalEntry[]): Promise<void> {
-    const deleted = entries
-      .filter(([, payload]) => payload.action === 'delete')
-      .map(([, payload]) => payload.rawPath)
-
-    const changedEntries = entries.filter(([, payload]) => payload.action !== 'delete') as Array<
-      [string, { action: 'add' | 'change'; rawPath: string; manual?: boolean }]
-    >
-
-    if (deleted.length > 0) {
-      await this.handleIncrementalDeletes(deleted)
-    }
-
-    if (changedEntries.length > 0) {
-      await this.handleIncrementalAddsOrChanges(changedEntries)
+    let offset = 0
+    while (offset < entries.length) {
+      const deleting = entries[offset][1].action === 'delete'
+      let end = offset + 1
+      while (
+        end < entries.length &&
+        end - offset < FILE_MAINTENANCE_SLICE_SIZE &&
+        (entries[end][1].action === 'delete') === deleting
+      )
+        end += 1
+      const chunk = entries.slice(offset, end)
+      if (deleting) await this.handleIncrementalDeletes(chunk.map(([, payload]) => payload.rawPath))
+      else await this.handleIncrementalAddsOrChanges(chunk as FileProviderIncrementalChangeEntry[])
+      offset = end
     }
   }
 
   private async handleIncrementalDeletes(
     paths: string[],
-    applyRuntime = true
-  ): Promise<IndexedWriteDeleteExecutorResult<IndexedWriteDeleteRecord>> {
-    if (!this.dbUtils) return { deleted: [], deletedIds: [], deletedPaths: [] }
-    const result = await this.incrementalDeleteExecutor.execute(paths)
-    if (applyRuntime && result.deletedPaths.length > 0) {
-      const delegate = this.requireRuntimeMutationDelegate()
-      await Promise.all(
-        result.deletedPaths.map(
-          async (filePath) =>
-            await delegate.applyDelta({
-              sourceId: this.id,
-              action: 'delete',
-              stableKey: filePath,
-              path: filePath,
-              reason: 'file-provider-incremental-delete'
-            })
-        )
-      )
+    options: FileIndexRunOptions = { maintenance: false }
+  ): Promise<IndexedWriteDeleteExecutorResult<FileProviderReconciliationDbRecord>> {
+    const deleted: FileProviderReconciliationDbRecord[] = []
+    for (const chunk of chunkArray(paths, FILE_MAINTENANCE_SLICE_SIZE)) {
+      options.signal?.throwIfAborted()
+      const records = await this.maintenanceService.findIncrementalDeleteRecords(chunk)
+      const result = await this.maintenanceService.deleteFileRecords(records, 'watch', {
+        ...options,
+        maintenance: false
+      })
+      deleted.push(...result.deleted)
     }
-    return result
-  }
-
-  private async findIncrementalDeleteRecords(paths: string[]): Promise<IndexedWriteDeleteRecord[]> {
-    if (!this.dbUtils || paths.length === 0) return []
-    // Ids feed the incremental delete — same-home read (2d.3).
-    return await this.dbUtils
-      .getFileIndexReadDb()
-      .select({ id: filesSchema.id, path: filesSchema.path })
-      .from(filesSchema)
-      .where(inArray(filesSchema.path, paths))
-  }
-
-  private async deleteIncrementalRecords(records: IndexedWriteDeleteRecord[]): Promise<void> {
-    if (!this.dbUtils || records.length === 0) return
-    const idsToDelete = records.map((file) => file.id)
-    if (this.isSearchSplitEnabledNow()) {
-      // Watch-event deletes target the worker-owned home; ids came from the
-      // split-aware read (findIncrementalDeleteRecords).
-      await this.execSearchIndexFileDeletes(idsToDelete)
-      return
+    return {
+      deleted,
+      deletedIds: deleted.map((record) => record.id),
+      deletedPaths: deleted.map((record) => record.path)
     }
-    const db = this.dbUtils.getDb()
-    await scheduleDbWrite('file-index.incremental.delete', async () => {
-      await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
-      await this.embeddingIndexService.deleteByFileIds(db, idsToDelete)
-    })
-  }
-
-  private async deleteCleanupRecords(records: IndexedWriteDeleteRecord[]): Promise<void> {
-    if (!this.dbUtils || records.length === 0) return
-    const idsToDelete = records.map((file) => file.id)
-    const pathsToDelete = records.map((file) => file.path)
-    if (this.isSearchSplitEnabledNow()) {
-      await this.execSearchIndexFileDeletes(idsToDelete)
-      // deletePaths resolves the split per call and forwards the
-      // scan_progress delete through the worker itself; the db argument is
-      // only used on the flag-off path.
-      await this.scanProgressService.deletePaths(this.dbUtils.getFileIndexReadDb(), pathsToDelete)
-      return
-    }
-    const db = this.dbUtils.getDb()
-    await scheduleDbWrite('file-index.cleanup.delete', async () => {
-      await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
-      await this.embeddingIndexService.deleteByFileIds(db, idsToDelete)
-      await this.scanProgressService.deletePaths(db, pathsToDelete)
-    })
-  }
-
-  private async deleteReconciledRecords(
-    records: IndexedWriteDeleteRecord[]
-  ): Promise<IndexedWriteDeleteExecutorResult<IndexedWriteDeleteRecord>> {
-    if (!this.dbUtils || records.length === 0) {
-      return { deleted: [], deletedIds: [], deletedPaths: [] }
-    }
-
-    return await new IndexedWriteDeleteExecutorService<IndexedWriteDeleteRecord>({
-      normalizePath: (rawPath) => path.normalize(rawPath),
-      findExisting: async () => [],
-      deleteRecords: async (resolvedRecords) => {
-        const idsToDelete = resolvedRecords.map((file) => file.id)
-        if (this.isSearchSplitEnabledNow()) {
-          for (const chunk of chunkArray(idsToDelete, 50)) {
-            await appTaskGate.waitForIdle()
-            // No dbWriteScheduler capacity gate here: the write executes on
-            // the worker connection, which serializes through its own
-            // admission gate — the primary queue depth is unrelated.
-            await this.execSearchIndexFileDeletes(chunk)
-          }
-          return
-        }
-        const db = this.dbUtils!.getDb()
-        for (const chunk of chunkArray(idsToDelete, 50)) {
-          await appTaskGate.waitForIdle()
-          await dbWriteScheduler.waitForCapacity(4)
-          await scheduleDbWrite('file-index.reconcile.delete', async () => {
-            await db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
-            await this.embeddingIndexService.deleteByFileIds(db, chunk)
-          })
-        }
-      },
-      logDebug: (message, meta) => this.logDebug(message, meta),
-      successMessage: 'Reconciliation remove completed'
-    }).executeExisting(records)
   }
 
   private async handleIncrementalAddsOrChanges(
@@ -3814,8 +3653,22 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     options?.signal?.throwIfAborted()
 
     // --- 1. Index Cleanup (FR-IX-4) ---
-    const cleanupResult = await this.cleanupDeleteService.execute(options)
+    if (
+      options?.maintenance !== false &&
+      !(await this.maintenanceService.replayPendingFileDeletionCommits({
+        ...options,
+        maintenanceDeadlineAt: performance.now() + FILE_MAINTENANCE_ROUND_BUDGET_MS
+      }))
+    ) {
+      stats.pending = true
+      this.maintenanceService.scheduleFileMaintenance()
+      this.progressState.emit('idle', 0, 0)
+      return stats
+    }
+    const cleanupResult = await this.maintenanceService.runConfigurationCleanup(options)
     stats.deleted += cleanupResult.deletedCount
+    stats.pending = !cleanupResult.done
+    if (!cleanupResult.done) this.maintenanceService.scheduleFileMaintenance()
     options?.signal?.throwIfAborted()
 
     // --- 2. Determine Scan Strategy (FR-IX-3: Resumable Indexing) ---
@@ -3832,6 +3685,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         excludePathsSet
       })
       stats.added += fullScanResult.added
+      if (fullScanResult.completedPaths.length < newPathsToScan.length) stats.pending = true
       for (const scannedPath of fullScanResult.completedPaths) {
         completedScanProgressPaths.add(scannedPath)
       }
@@ -3854,6 +3708,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       stats.changed += reconciliationResult.changed
       stats.deleted += reconciliationResult.deleted
       stats.skipped += reconciliationResult.skipped
+      if (reconciliationResult.completedPaths.length < reconciliationPaths.length)
+        stats.pending = true
       for (const reconciledPath of reconciliationResult.completedPaths) {
         completedScanProgressPaths.add(reconciledPath)
       }
@@ -3875,10 +3731,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    this.progressState.emit('completed', 1, 1)
-    this.logInfo('Index process complete', {
-      duration: formatDuration(performance.now() - initStart)
-    })
+    this.progressState.emit(
+      stats.pending ? 'idle' : 'completed',
+      stats.pending ? 0 : 1,
+      stats.pending ? 0 : 1
+    )
+    this.logInfo(
+      stats.pending ? 'Index round paused with durable remaining work' : 'Index process complete',
+      {
+        duration: formatDuration(performance.now() - initStart)
+      }
+    )
 
     // Schedule deferred thumbnail generation (low-priority, non-blocking)
     void this.assetService.generateMissingThumbnails()

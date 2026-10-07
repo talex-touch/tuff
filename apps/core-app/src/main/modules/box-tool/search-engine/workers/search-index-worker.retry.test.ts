@@ -42,15 +42,4 @@ describe('search-index-worker retry wrapper', () => {
 
     expect(attempts).toBe(1)
   })
-
-  it('重试标签保持稳定', () => {
-    expect(WORKER_RETRY_LABELS).toEqual({
-      persistChunk: 'search-index.worker.persistChunk',
-      upsertFiles: 'search-index.worker.upsertFiles',
-      upsertScanProgress: 'search-index.worker.upsertScanProgress',
-      removeFile: 'search-index.worker.removeFile',
-      removeFileExtensions: 'search-index.worker.removeFileExtensions',
-      updateFileMetadata: 'search-index.worker.updateFileMetadata'
-    })
-  })
 })

@@ -1,5 +1,8 @@
 import type { Client } from '@libsql/client'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type { SearchIndexService } from './search-index-service'
+import type { SearchIndexWriteTx } from './search-index-document-store'
+import { randomUUID } from 'node:crypto'
 import { and, eq, inArray, ne, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
@@ -16,12 +19,17 @@ const PERSIST_CHUNK_YIELD_MS = 30
 
 export const FILE_INDEX_METADATA_UPDATE_MAX_BATCH = 100
 export const FILE_INDEX_METADATA_INVALID_CODE = 'FILE_INDEX_METADATA_INVALID'
+export const FILE_INDEX_DELETE_MAX_BATCH = 64
+export const FILE_INDEX_DELETE_INVALID_CODE = 'FILE_INDEX_DELETE_INVALID'
 
 export const FILE_INDEX_PERSISTENCE_RETRY_LABELS = {
   persistChunk: 'search-index.worker.persistChunk',
   upsertFiles: 'search-index.worker.upsertFiles',
   upsertScanProgress: 'search-index.worker.upsertScanProgress',
-  removeFile: 'search-index.worker.removeFile',
+  removeFileRecords: 'search-index.worker.removeFileRecords',
+  removeMissingFileSearchRecords: 'search-index.worker.removeMissingFileSearchRecords',
+  listPendingFileDeletionCommits: 'search-index.worker.listPendingFileDeletionCommits',
+  acknowledgeFileDeletionCommits: 'search-index.worker.acknowledgeFileDeletionCommits',
   removeFileExtensions: 'search-index.worker.removeFileExtensions',
   updateFileMetadata: 'search-index.worker.updateFileMetadata'
 } as const
@@ -101,12 +109,72 @@ export interface FileMetadataUpdateSummary {
   missingFileIds: number[]
 }
 
+/** File timestamps use the integer-second representation stored by SQLite. */
+export interface ExpectedFileRecord {
+  id: number
+  path: string
+  mtime: number
+  ctime: number
+  size: number | null
+  lastIndexedAt: number
+  itemId: string
+  legacyItemIds?: readonly string[]
+}
+
+export interface ExpectedMissingFileSearchRecord {
+  itemId: string
+  path: string
+  ftsRowid: number | null
+  documentHash: string | null
+  /** Integer seconds from search_index_meta.updated_at. */
+  updatedAt: number
+}
+
+export interface FileRecordRemovalOptions {
+  maintenance?: boolean
+  signal?: AbortSignal
+  /** Rechecked in the main-side execution callback; never serialized to a worker. */
+  isStillCurrent?: () => boolean
+}
+
+/** Durable publication intent, committed atomically with the corresponding deletion. */
+export interface FileDeletionCommitReceipt {
+  commitId: string
+  sourceId: string
+  deletedRecords: Array<ExpectedFileRecord | ExpectedMissingFileSearchRecord>
+  removedIndexedItems: number
+}
+
+export interface RemoveFileRecordsResult {
+  deletedRecords: ExpectedFileRecord[]
+  removedIndexedItems: number
+  commitId: string | null
+  /** No transaction ran; the producer must release its lease before waiting again. */
+  deferred: boolean
+}
+
+export interface RemoveMissingFileSearchRecordsResult {
+  deletedRecords: ExpectedMissingFileSearchRecord[]
+  removedIndexedItems: number
+  commitId: string | null
+  deferred: boolean
+}
+
+export interface ListPendingFileDeletionCommitsResult {
+  commits: FileDeletionCommitReceipt[]
+  deferred: boolean
+}
+
+export interface AcknowledgeFileDeletionCommitsResult {
+  acknowledged: number
+  deferred: boolean
+}
+
 export interface FileIndexPersistenceRepository {
   persistEntries(entries: FilePersistenceEntry[]): Promise<PersistEntriesSummary>
   upsertFiles(records: UpsertFileRecord[]): Promise<Array<Record<string, unknown>>>
   updateFileMetadata(records: FileMetadataUpdateRecord[]): Promise<FileMetadataUpdateSummary>
   upsertScanProgress(paths: string[], lastScanned: string, sourceId?: string): Promise<number>
-  removeFile(path: string): Promise<void>
   removeFileExtensions(fileId: number, keys: string[]): Promise<void>
 }
 
@@ -182,47 +250,52 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
 
     return await this.withRetry(
       () =>
-        this.db.transaction(
-          async (tx) => {
-            const rows = await tx
-              .insert(schema.files)
-              .values(
-                records.map((record) => ({
-                  path: record.path,
-                  name: record.name,
-                  extension: record.extension ?? null,
-                  size: typeof record.size === 'number' ? record.size : null,
-                  mtime: toDate(record.mtime),
-                  ctime: toDate(record.ctime),
-                  lastIndexedAt: toDate(record.lastIndexedAt),
-                  isDir: record.isDir,
-                  type: record.type
-                }))
-              )
-              .onConflictDoUpdate({
-                target: schema.files.path,
-                set: {
-                  name: sql`excluded.name`,
-                  extension: sql`excluded.extension`,
-                  size: sql`excluded.size`,
-                  mtime: sql`excluded.mtime`,
-                  ctime: sql`excluded.ctime`,
-                  lastIndexedAt: sql`excluded.last_indexed_at`,
-                  isDir: sql`excluded.is_dir`,
-                  type: sql`excluded.type`
-                }
-              })
-              .returning()
-            await this.markPendingInTransaction(
-              tx,
-              rows.filter((row) => row.type === 'file').map((row) => row.id)
-            )
-            return rows as Array<Record<string, unknown>>
-          },
-          { behavior: 'immediate' }
-        ),
+        this.db.transaction(async (tx) => await this.upsertFilesInTransaction(tx, records), {
+          behavior: 'immediate'
+        }),
       FILE_INDEX_PERSISTENCE_RETRY_LABELS.upsertFiles
     )
+  }
+
+  async upsertFilesInTransaction(
+    tx: Pick<LibSQLDatabase<typeof schema>, 'insert' | 'update'>,
+    records: readonly UpsertFileRecord[]
+  ): Promise<Array<Record<string, unknown>>> {
+    if (records.length === 0) return []
+    const rows = await tx
+      .insert(schema.files)
+      .values(
+        records.map((record) => ({
+          path: record.path,
+          name: record.name,
+          extension: record.extension ?? null,
+          size: typeof record.size === 'number' ? record.size : null,
+          mtime: toDate(record.mtime),
+          ctime: toDate(record.ctime),
+          lastIndexedAt: toDate(record.lastIndexedAt),
+          isDir: record.isDir,
+          type: record.type
+        }))
+      )
+      .onConflictDoUpdate({
+        target: schema.files.path,
+        set: {
+          name: sql`excluded.name`,
+          extension: sql`excluded.extension`,
+          size: sql`excluded.size`,
+          mtime: sql`excluded.mtime`,
+          ctime: sql`excluded.ctime`,
+          lastIndexedAt: sql`excluded.last_indexed_at`,
+          isDir: sql`excluded.is_dir`,
+          type: sql`excluded.type`
+        }
+      })
+      .returning()
+    await this.markPendingInTransaction(
+      tx,
+      rows.filter((row) => row.type === 'file').map((row) => row.id)
+    )
+    return rows as Array<Record<string, unknown>>
   }
 
   private async markPendingInTransaction(
@@ -370,12 +443,6 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
       )
     }
     return normalizedUpsert.paths.length
-  }
-
-  async removeFile(path: string): Promise<void> {
-    await this.withRetry(async () => {
-      await this.db.delete(schema.files).where(eq(schema.files.path, path))
-    }, FILE_INDEX_PERSISTENCE_RETRY_LABELS.removeFile)
   }
 
   async removeFileExtensions(fileId: number, keys: string[]): Promise<void> {
@@ -526,6 +593,379 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
       FILE_INDEX_PERSISTENCE_RETRY_LABELS.persistChunk
     )
   }
+}
+
+interface StoredFileVersion {
+  id: number
+  path: string
+  mtime: number
+  ctime: number
+  size: number | null
+  lastIndexedAt: number
+}
+
+type TransactionalSearchItemRemover = Pick<SearchIndexService, 'removeProviderItemsInTransaction'>
+
+function fileDeleteInvalidError(reason: string): Error {
+  const error = new Error(`${FILE_INDEX_DELETE_INVALID_CODE}: ${reason}`)
+  error.name = 'FileIndexDeleteInvalidError'
+  return error
+}
+
+/** The caller owns the single-writer transaction and publishes only after it commits. */
+export async function removeFileRecordsInTransaction(
+  tx: SearchIndexWriteTx,
+  service: TransactionalSearchItemRemover,
+  sourceId: string,
+  records: readonly ExpectedFileRecord[]
+): Promise<RemoveFileRecordsResult> {
+  if (records.length > FILE_INDEX_DELETE_MAX_BATCH) {
+    throw fileDeleteInvalidError('batch-too-large')
+  }
+  const empty: RemoveFileRecordsResult = {
+    deletedRecords: [],
+    removedIndexedItems: 0,
+    commitId: null,
+    deferred: false
+  }
+  if (records.length === 0) return empty
+
+  const requestedIds = new Set<number>()
+  let requestedItemIds = 0
+  for (const record of records) {
+    if (!Number.isSafeInteger(record.id) || record.id <= 0 || requestedIds.has(record.id)) {
+      throw fileDeleteInvalidError('file-id-invalid-or-duplicate')
+    }
+    if (!record.path || !record.itemId) throw fileDeleteInvalidError('identity-missing')
+    if (
+      !Number.isSafeInteger(record.mtime) ||
+      !Number.isSafeInteger(record.ctime) ||
+      !Number.isSafeInteger(record.lastIndexedAt) ||
+      (record.size !== null && (!Number.isSafeInteger(record.size) || record.size < 0))
+    ) {
+      throw fileDeleteInvalidError('file-version-invalid')
+    }
+    if (record.legacyItemIds?.some((itemId) => !itemId)) {
+      throw fileDeleteInvalidError('legacy-item-id-missing')
+    }
+    requestedIds.add(record.id)
+    requestedItemIds += 1 + (record.legacyItemIds?.length ?? 0)
+  }
+  if (requestedItemIds > FILE_INDEX_DELETE_MAX_BATCH * 4) {
+    throw fileDeleteInvalidError('item-batch-too-large')
+  }
+
+  // Read raw timestamps: Drizzle's timestamp columns decode these values as Dates.
+  const currentRows = await tx.all<StoredFileVersion>(sql`
+    SELECT id, path, mtime, ctime, size, last_indexed_at AS lastIndexedAt
+    FROM files WHERE id IN (${sql.join(
+      [...requestedIds].map((id) => sql`${id}`),
+      sql`, `
+    )})
+      AND type = 'file'
+  `)
+  const currentById = new Map(currentRows.map((record) => [record.id, record]))
+  const matching = records.filter((expected) => {
+    const current = currentById.get(expected.id)
+    return (
+      current !== undefined &&
+      current.path === expected.path &&
+      current.mtime === expected.mtime &&
+      current.ctime === expected.ctime &&
+      current.size === expected.size &&
+      current.lastIndexedAt === expected.lastIndexedAt
+    )
+  })
+  if (matching.length === 0) return empty
+
+  const deletedRows = await tx
+    .delete(schema.files)
+    .where(
+      and(
+        inArray(
+          schema.files.id,
+          matching.map((record) => record.id)
+        ),
+        eq(schema.files.type, 'file')
+      )
+    )
+    .returning({ id: schema.files.id })
+  const deletedIds = new Set(deletedRows.map((record) => record.id))
+  const deletedRecords = matching.filter((record) => deletedIds.has(record.id))
+  if (deletedRecords.length === 0) return empty
+
+  const itemIds = new Set<string>()
+  const legacyPaths = new Map<string, Set<string>>()
+  const acceptedLegacyPaths = new Map<string, string>()
+  for (const record of deletedRecords) {
+    itemIds.add(record.itemId)
+    for (const itemId of record.legacyItemIds ?? []) {
+      if (itemId === record.itemId) continue
+      let paths = legacyPaths.get(itemId)
+      if (!paths) {
+        paths = new Set<string>()
+        legacyPaths.set(itemId, paths)
+      }
+      paths.add(record.path.toLowerCase())
+    }
+  }
+  if (legacyPaths.size > 0) {
+    // Keep the bounded metadata-PK lookup outermost, then probe FTS by trusted rowid.
+    // A numeric id read from another historical home is not deletion authorization.
+    const locatedAliases = await tx.all<{ itemId: string; path: string }>(sql`
+      SELECT metadata.item_id AS itemId, document.path AS path
+      FROM search_index_meta AS metadata
+      CROSS JOIN search_index AS document
+      WHERE metadata.provider_id = ${sourceId}
+        AND metadata.item_id IN (${sql.join(
+          [...legacyPaths.keys()].map((itemId) => sql`${itemId}`),
+          sql`, `
+        )})
+        AND metadata.fts_rowid IS NOT NULL
+        AND document.rowid = metadata.fts_rowid
+        AND document.provider = metadata.provider_id
+        AND document.item_id = metadata.item_id
+    `)
+    for (const alias of locatedAliases) {
+      if (legacyPaths.get(alias.itemId)?.has(alias.path)) {
+        itemIds.add(alias.itemId)
+        acceptedLegacyPaths.set(alias.itemId, alias.path)
+      }
+    }
+  }
+  for (let recordIndex = 0; recordIndex < deletedRecords.length; recordIndex += 1) {
+    const record = deletedRecords[recordIndex]
+    const legacyItemIds = record.legacyItemIds
+    if (!legacyItemIds?.length) continue
+    const storedPath = record.path.toLowerCase()
+    let acceptedLegacyIds: string[] | null = null
+    for (let index = 0; index < legacyItemIds.length; index += 1) {
+      const itemId = legacyItemIds[index]
+      if (itemId === record.itemId || acceptedLegacyPaths.get(itemId) !== storedPath) {
+        acceptedLegacyIds ??= legacyItemIds.slice(0, index)
+      } else if (acceptedLegacyIds !== null) {
+        acceptedLegacyIds.push(itemId)
+      }
+    }
+    if (acceptedLegacyIds !== null) {
+      deletedRecords[recordIndex] = { ...record, legacyItemIds: acceptedLegacyIds }
+    }
+  }
+  const removedIndexedItems = await service.removeProviderItemsInTransaction(tx, sourceId, [
+    ...itemIds
+  ])
+
+  // Explicit cleanup also covers older connections without foreign_keys enabled.
+  const fileIds = [...deletedIds]
+  await tx.delete(schema.fileExtensions).where(inArray(schema.fileExtensions.fileId, fileIds))
+  await tx.delete(schema.fileIndexProgress).where(inArray(schema.fileIndexProgress.fileId, fileIds))
+  await tx
+    .delete(schema.embeddings)
+    .where(
+      and(
+        eq(schema.embeddings.sourceType, 'file'),
+        inArray(schema.embeddings.sourceId, fileIds.map(String))
+      )
+    )
+
+  const progressShape = await resolveScanProgressSchemaShape(tx)
+  if (progressShape.tableExists) {
+    const paths = sql.join(
+      deletedRecords.map((record) => sql`${record.path}`),
+      sql`, `
+    )
+    await tx.run(
+      progressShape.sourceScoped
+        ? sql`DELETE FROM scan_progress WHERE source_id = ${sourceId} AND path IN (${paths})`
+        : sql`DELETE FROM scan_progress WHERE path IN (${paths})`
+    )
+  }
+  const commitId = randomUUID()
+  await tx.insert(schema.searchIndexPendingCommits).values({
+    commitId,
+    sourceId,
+    deletedRecords: JSON.stringify(deletedRecords),
+    removedIndexedItems
+  })
+  return { deletedRecords, removedIndexedItems, commitId, deferred: false }
+}
+
+/** Missing-file cleanup is authorized by both file absence and a trusted document version. */
+export async function removeMissingFileSearchRecordsInTransaction(
+  tx: SearchIndexWriteTx,
+  service: TransactionalSearchItemRemover,
+  sourceId: string,
+  records: readonly ExpectedMissingFileSearchRecord[]
+): Promise<RemoveMissingFileSearchRecordsResult> {
+  if (records.length > FILE_INDEX_DELETE_MAX_BATCH) {
+    throw fileDeleteInvalidError('batch-too-large')
+  }
+  const empty: RemoveMissingFileSearchRecordsResult = {
+    deletedRecords: [],
+    removedIndexedItems: 0,
+    commitId: null,
+    deferred: false
+  }
+  if (records.length === 0) return empty
+  const itemIds = new Set<string>()
+  for (const record of records) {
+    if (!record.path || !record.itemId || itemIds.has(record.itemId)) {
+      throw fileDeleteInvalidError('search-identity-invalid-or-duplicate')
+    }
+    if (
+      !Number.isSafeInteger(record.updatedAt) ||
+      (record.ftsRowid !== null &&
+        (!Number.isSafeInteger(record.ftsRowid) || record.ftsRowid <= 0)) ||
+      (record.documentHash !== null && typeof record.documentHash !== 'string')
+    ) {
+      throw fileDeleteInvalidError('search-version-invalid')
+    }
+    itemIds.add(record.itemId)
+  }
+  const locatedRecords = records.filter(
+    (record) => record.ftsRowid !== null && Boolean(record.documentHash)
+  )
+  if (locatedRecords.length === 0) return empty
+
+  const presentFiles = await tx.all<{ path: string }>(sql`
+    SELECT path FROM files
+    WHERE path IN (${sql.join(
+      locatedRecords.map((record) => sql`${record.path}`),
+      sql`, `
+    )})
+      AND type = 'file'
+  `)
+  const presentPaths = new Set(presentFiles.map((record) => record.path))
+  const metaRows = await tx.all<{
+    itemId: string
+    ftsRowid: number | null
+    documentHash: string | null
+    updatedAt: number
+  }>(sql`
+    SELECT item_id AS itemId, fts_rowid AS ftsRowid,
+      document_hash AS documentHash, updated_at AS updatedAt
+    FROM search_index_meta
+    WHERE provider_id = ${sourceId}
+      AND item_id IN (${sql.join(
+        locatedRecords.map((record) => sql`${record.itemId}`),
+        sql`, `
+      )})
+  `)
+  const currentMeta = new Map(metaRows.map((record) => [record.itemId, record]))
+  const indexedRows = await tx.all<{
+    ftsRowid: number
+    provider: string
+    itemId: string
+    path: string
+  }>(sql`
+    SELECT rowid AS ftsRowid, provider, item_id AS itemId, path FROM search_index
+    WHERE rowid IN (${sql.join(
+      locatedRecords.map((record) => sql`${record.ftsRowid}`),
+      sql`, `
+    )})
+  `)
+  const currentDocuments = new Map(indexedRows.map((record) => [record.ftsRowid, record]))
+  const deletedRecords = locatedRecords.filter((expected) => {
+    if (presentPaths.has(expected.path)) return false
+    const meta = currentMeta.get(expected.itemId)
+    const document =
+      expected.ftsRowid === null ? undefined : currentDocuments.get(expected.ftsRowid)
+    return (
+      meta !== undefined &&
+      document !== undefined &&
+      meta.ftsRowid === expected.ftsRowid &&
+      meta.documentHash === expected.documentHash &&
+      meta.updatedAt === expected.updatedAt &&
+      document.provider === sourceId &&
+      document.itemId === expected.itemId &&
+      document.path === expected.path.toLowerCase()
+    )
+  })
+  if (deletedRecords.length === 0) return empty
+  const removedIndexedItems = await service.removeProviderItemsInTransaction(
+    tx,
+    sourceId,
+    deletedRecords.map((record) => record.itemId)
+  )
+  const commitId = randomUUID()
+  await tx.insert(schema.searchIndexPendingCommits).values({
+    commitId,
+    sourceId,
+    deletedRecords: JSON.stringify(deletedRecords),
+    removedIndexedItems
+  })
+  return { deletedRecords, removedIndexedItems, commitId, deferred: false }
+}
+
+/** Reads only this source's oldest outstanding publication intents from the same live home. */
+export async function listPendingFileDeletionCommitsInHome(
+  db: Pick<SearchIndexWriteTx, 'all'>,
+  sourceId: string,
+  limit = FILE_INDEX_DELETE_MAX_BATCH
+): Promise<ListPendingFileDeletionCommitsResult> {
+  if (!Number.isSafeInteger(limit) || limit <= 0)
+    throw fileDeleteInvalidError('commit-limit-invalid')
+  const boundedLimit = Math.min(FILE_INDEX_DELETE_MAX_BATCH, limit)
+  const rows = await db.all<{
+    commitId: string
+    sourceId: string
+    deletedRecords: string
+    removedIndexedItems: number
+  }>(sql`
+    SELECT commit_id AS commitId, source_id AS sourceId,
+      deleted_records AS deletedRecords, removed_indexed_items AS removedIndexedItems
+    FROM search_index_pending_commits
+    WHERE source_id = ${sourceId}
+    ORDER BY rowid ASC LIMIT ${boundedLimit}
+  `)
+  const commits = rows.map((row): FileDeletionCommitReceipt => {
+    const deletedRecords: unknown = JSON.parse(row.deletedRecords)
+    if (
+      !Array.isArray(deletedRecords) ||
+      deletedRecords.length === 0 ||
+      deletedRecords.length > FILE_INDEX_DELETE_MAX_BATCH ||
+      deletedRecords.some(
+        (record) =>
+          !record ||
+          typeof record !== 'object' ||
+          typeof record.itemId !== 'string' ||
+          typeof record.path !== 'string'
+      ) ||
+      !Number.isSafeInteger(row.removedIndexedItems) ||
+      row.removedIndexedItems < 0
+    ) {
+      throw fileDeleteInvalidError('pending-commit-invalid')
+    }
+    return {
+      commitId: row.commitId,
+      sourceId: row.sourceId,
+      deletedRecords: deletedRecords as FileDeletionCommitReceipt['deletedRecords'],
+      removedIndexedItems: row.removedIndexedItems
+    }
+  })
+  return { commits, deferred: false }
+}
+
+/** Acknowledgement follows successful publication and never repeats the physical deletion. */
+export async function acknowledgeFileDeletionCommitsInHome(
+  db: Pick<SearchIndexWriteTx, 'delete'>,
+  sourceId: string,
+  commitIds: readonly string[]
+): Promise<AcknowledgeFileDeletionCommitsResult> {
+  if (commitIds.length > FILE_INDEX_DELETE_MAX_BATCH || commitIds.some((commitId) => !commitId)) {
+    throw fileDeleteInvalidError('commit-ids-invalid')
+  }
+  if (commitIds.length === 0) return { acknowledged: 0, deferred: false }
+  const acknowledgedRows = await db
+    .delete(schema.searchIndexPendingCommits)
+    .where(
+      and(
+        eq(schema.searchIndexPendingCommits.sourceId, sourceId),
+        inArray(schema.searchIndexPendingCommits.commitId, [...new Set(commitIds)])
+      )
+    )
+    .returning({ commitId: schema.searchIndexPendingCommits.commitId })
+  return { acknowledged: acknowledgedRows.length, deferred: false }
 }
 
 function toDate(value: Date | number | string): Date {

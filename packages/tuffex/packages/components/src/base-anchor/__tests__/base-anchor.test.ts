@@ -5,6 +5,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import gsap from 'gsap'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computed, defineComponent, nextTick, ref } from 'vue'
+import { createCubicBezier } from '../../../../utils/animation/easing'
 import { useBaseAnchorMotion } from '../src/base-anchor-motion'
 import TxBaseAnchor from '../src/TxBaseAnchor.vue'
 
@@ -280,6 +281,56 @@ describe('txBaseAnchor', () => {
     expect(gsap.set).toHaveBeenCalledWith(expect.any(HTMLElement), expect.objectContaining({ opacity: 0 }))
   })
 
+  it('resolves spring and bezier eases for the classic types too, opening and closing', async () => {
+    // Only expand used to parse these: transfer, boom and opacity handed the raw
+    // string to GSAP, which knows neither form and silently fell back to its
+    // default ease.
+    const contentEase = () => {
+      const call = lastTimeline()!.to.mock.calls.find(([target]) =>
+        target instanceof HTMLElement && target.classList.contains('tx-base-anchor__content'))
+      return (call?.[1] as { ease?: unknown } | undefined)?.ease
+    }
+    const closeCurve = createCubicBezier(0.4, 0, 1, 1)
+
+    for (const type of ['transfer', 'boom', 'opacity'] as const) {
+      const wrapper = mountAnchor({
+        props: {
+          animation: { type, ease: 'spring(10, 0.6)', closeEase: 'cubic-bezier(0.4, 0, 1, 1)' },
+          // refraction holds transfer's close back by a prepare beat; nothing here needs it
+          panelBackground: 'pure',
+        },
+      })
+
+      await wrapper.find('.tx-base-anchor__reference').trigger('click')
+      await nextTick()
+      await settleOpenTiming()
+      const open = contentEase() as (t: number) => number
+      expect(typeof open, `${type} open`).toBe('function')
+      const peak = Math.max(...Array.from({ length: 41 }, (_, i) => open(i / 40)))
+      expect(peak, `${type} open overshoots like the spring`).toBeGreaterThan(1.02)
+
+      await wrapper.find('.tx-base-anchor__reference').trigger('click')
+      await nextTick()
+      await settleOpenTiming()
+      const close = contentEase() as (t: number) => number
+      expect(typeof close, `${type} close`).toBe('function')
+      expect(close(0.5), `${type} close follows the bezier`).toBeCloseTo(closeCurve(0.5), 9)
+    }
+
+    // GSAP's own vocabulary still reaches GSAP untouched.
+    const native = mountAnchor({
+      props: { animation: { type: 'transfer', ease: 'back.out(2)', closeEase: 'power3.in' }, panelBackground: 'pure' },
+    })
+    await native.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+    await settleOpenTiming()
+    expect(contentEase()).toBe('back.out(2)')
+    await native.find('.tx-base-anchor__reference').trigger('click')
+    await nextTick()
+    await settleOpenTiming()
+    expect(contentEase()).toBe('power3.in')
+  })
+
   it('hard-cuts surface motion adaptation to auto, manual, and off strategies', () => {
     const auto = mountAnchor({
       props: {
@@ -458,7 +509,7 @@ describe('txBaseAnchor expand motion', () => {
   })
 
   it('resolves spring and bezier strings to functions; gsap vocabulary passes through', async () => {
-    // Default: spring(10, 0.72) is not gsap vocabulary — it must arrive as a
+    // Default: spring(10, 0.6) is not gsap vocabulary — it must arrive as a
     // function, and one that actually overshoots before landing on exactly 1.
     const spring = mountAnchor({ props: { animation: { type: 'expand' } } })
     await spring.find('.tx-base-anchor__reference').trigger('click')
@@ -492,7 +543,7 @@ describe('txBaseAnchor expand motion', () => {
     for (const call of nativeTo.mock.calls)
       expect((call[1] as { ease: unknown }).ease).toBe('back.out(2)')
 
-    // ...while CSS beziers resolve through the kernel's bezier engine.
+    // ...while CSS beziers resolve through the shared bezier engine in utils.
     const bezier = mountAnchor({
       props: { animation: { type: 'expand', ease: 'cubic-bezier(0.32, 0.72, 0, 1)' } },
     })

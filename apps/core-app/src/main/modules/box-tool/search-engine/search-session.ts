@@ -10,6 +10,7 @@ import type {
   CoreBoxSearchUpdatePayload
 } from '@talex-touch/utils/transport/events/types'
 import { getActivationKey } from './search-core-utils'
+import { beginForegroundSearchActivity, endForegroundSearchActivity } from './search-activity'
 
 export type SearchCallerKind =
   | 'core-box'
@@ -115,6 +116,7 @@ export class SearchSession {
   private snapshotPublished = false
   private terminalScheduled = false
   private stateValue: SearchSessionState = 'running'
+  private readonly foreground: boolean
 
   constructor(options: {
     caller: SearchCallerIdentity
@@ -134,6 +136,11 @@ export class SearchSession {
     this.completed = new Promise<void>((resolve) => {
       this.resolveCompleted = resolve
     })
+    this.foreground =
+      this.caller.kind === 'core-box' ||
+      this.caller.kind === 'application-index' ||
+      this.caller.kind === 'division-box'
+    if (this.foreground) beginForegroundSearchActivity(this.id)
 
     this.enqueueDelivery(() => this.sink.start?.(this.id))
   }
@@ -203,6 +210,7 @@ export class SearchSession {
     if (this.isTerminal || this.signal.aborted) return false
     if (caller && !this.owns(caller)) return false
     this.abortController.abort()
+    if (this.foreground) endForegroundSearchActivity(this.id)
     return true
   }
 
@@ -258,6 +266,7 @@ export class SearchSession {
     // of resetting. Once aborted, the only truthful terminal is a cancelled one.
     const cancelled = payload.cancelled === true || this.signal.aborted
     this.stateValue = cancelled ? 'cancelled' : 'completed'
+    if (this.foreground) endForegroundSearchActivity(this.id)
     // A normal completion carries no `cancelled` key on the wire; only add it when it is true.
     this.pendingTerminal = cancelled
       ? { ...payload, cancelled: true, searchId: this.id }
@@ -270,6 +279,7 @@ export class SearchSession {
     if (this.isTerminal) return false
 
     this.stateValue = 'failed'
+    if (this.foreground) endForegroundSearchActivity(this.id)
     const normalized = error instanceof Error ? error : new Error(String(error))
     const delivery = this.enqueueDelivery(() => this.sink.error?.(normalized))
     this.terminalScheduled = true

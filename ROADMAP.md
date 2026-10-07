@@ -2,7 +2,7 @@
 
 > 更新时间：2026-07-31（经全条目事实校准，校准记录见冻结任务 [`07-30-docs-roadmap-consolidation-cleanup`](docs/engineering/workflow/backlog.md#07-30-docs-roadmap-consolidation-cleanup) 的 `research/`）
 > 2026-10-03：工作流切换为 Comet Native，原「活跃任务」表改为冻结记录；各条产品状态未在本次切换中重新校准。
-> 定位：项目全貌一览。执行顺序见 [`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md)；进行中的变更由 Comet Native 管理（`docs/comet/changes/`，入口 `/comet`）；切换前的任务已冻结，见 [`docs/engineering/workflow/backlog.md`](docs/engineering/workflow/backlog.md)。本文不复制易漂移细节，只保留稳定入口与高层状态。
+> 定位：项目全貌一览。执行顺序见 [`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md)；当前工作以用户确认的范围与验收、现有 PRD、工程规格、真实运行证据和当前负责人交接为准；切换前的任务已冻结，见 [`docs/engineering/workflow/backlog.md`](docs/engineering/workflow/backlog.md)。`docs/comet/` 只读保留退出前记录，不作为实时状态。本文不复制易漂移细节，只保留稳定入口与高层状态。
 
 ## 🎯 当前版本：v2.4.14-beta.2
 
@@ -41,7 +41,7 @@
 
 1. **关闭已验证的 release 和 runtime blocker** — OTA、macOS release-evidence、application-icon acceptance
 2. **完成搜索和跨平台修复** — Windows Everything productionization、search-index split write-path migration（flag 自 `cd39bdbf6` / 2026-08-05 起默认 **on**）
-3. **继续其余独立工作** — 冻结任务先重新确认范围，再以新的 Comet 变更推进；范围与验收以变更 brief 为准
+3. **继续其余独立工作** — 冻结任务先与用户重新确认范围和验收，再核对现有 PRD、工程规格与真实运行证据，并与当前负责人确认交接
 
 ### 安全门禁（不可绕过）
 
@@ -53,7 +53,7 @@
 
 ## 🧊 迁移前冻结任务（部分，本表 16 个）
 
-2026-10-03 起项目工作流切换为 Comet Native。下表保留切换前活跃任务里的产品线索，**均已冻结，不是进行中的工作**：`冻结时状态` 是切换那一刻 `task.json` 的原值，备注是此前的产品状态摘要，二者之后都不再更新。恢复其中任何一项，先读冻结记录与交接证据，重新确认范围，再用 `/comet` 新建独立变更。父子任务缩进展示。
+2026-10-03 起项目工作流切换为 Comet Native。下表保留切换前活跃任务里的产品线索，**均已冻结，不是进行中的工作**：`冻结时状态` 是切换那一刻 `task.json` 的原值，备注是此前的产品状态摘要，二者之后都不再更新。恢复其中任何一项，先读冻结记录与交接证据，与用户重新确认范围和验收，再核对现有 PRD、工程规格与真实运行证据，并与当前负责人确认交接。父子任务缩进展示。
 
 > **这张表不是全集。** 冻结任务共 170 项（`in_progress` 99、`planning` 71），本表收录 16 项；每项的 owner、下一步、blocker 与证据见 [`docs/engineering/workflow/backlog.md`](docs/engineering/workflow/backlog.md)，全部旧任务（含已归档）的身份见 [`retired-task-index.json`](docs/engineering/workflow/retired-task-index.json)。已完成并归档的任务不列在这里。
 
@@ -138,7 +138,7 @@ talex-touch/
 |---------|--------|
 | 当前两周做什么 | [`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md) |
 | 产品路线图（R0-R9） | [`docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md`](docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md) |
-| 进行中的变更 | `docs/comet/changes/`（入口 `/comet`，状态由 Comet Runtime 维护） |
+| 当前工作与交接 | 用户确认的范围与验收、现有 PRD、工程规格、真实运行证据和当前负责人交接；入口见 [`docs/engineering/README.md`](docs/engineering/README.md) |
 | 冻结的迁移前任务 | [`docs/engineering/workflow/backlog.md`](docs/engineering/workflow/backlog.md) |
 | 已完成事实 | [`docs/plan-prd/01-project/CHANGES.md`](docs/plan-prd/01-project/CHANGES.md) |
 | AI 专题 | [`docs/plan-prd/TODO-AI.md`](docs/plan-prd/TODO-AI.md) |

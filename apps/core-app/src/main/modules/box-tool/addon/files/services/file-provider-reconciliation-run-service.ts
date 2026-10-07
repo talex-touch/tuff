@@ -6,7 +6,6 @@ import {
   mapIndexedWriteReconciliationDiskPayload,
   toIndexedWriteDate
 } from '@talex-touch/utils/search'
-import type { IndexedWriteDeleteRecord } from '../../../search-engine/indexing-write-delete-executor-service'
 import type {
   ReconcileDbFile,
   ReconcileDiskFile,
@@ -18,30 +17,27 @@ export interface FileProviderReconciliationDbRecord {
   id: number
   path: string
   mtime: Date | number | string | null
+  ctime: Date | number | string | null
+  size: number | null
+  lastIndexedAt: Date | number | string | null
 }
 
-export async function getMissingReconciliationDbFiles(
+/** This cursor walks persistent file records, not a connection-local seen-path table. */
+export async function getReconciliationFileRecordsPage(
   dbUtils: DbUtils,
   rootPath: string,
   afterId: number,
   limit: number
 ): Promise<FileProviderReconciliationDbRecord[]> {
-  const queryRoot = path.normalize(rootPath)
-  const descendantPrefix = queryRoot.endsWith(path.sep) ? queryRoot : `${queryRoot}${path.sep}`
-  const escapedPrefix = descendantPrefix.replace(/!/g, '!!').replace(/%/g, '!%').replace(/_/g, '!_')
+  const root = path.normalize(rootPath)
+  const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`
+  const escapedPrefix = prefix.replace(/!/g, '!!').replace(/%/g, '!%').replace(/_/g, '!_')
   return await dbUtils.getFileIndexReadDb().all<FileProviderReconciliationDbRecord>(sql`
-    SELECT f.id, f.path, f.mtime
-    FROM files AS f
-    WHERE f.type = 'file'
-      AND (f.path = ${queryRoot} OR f.path LIKE ${`${escapedPrefix}%`} ESCAPE '!')
-      AND f.id > ${afterId}
-      AND NOT EXISTS (
-        SELECT 1
-        FROM file_reconciliation_seen_paths AS seen
-        WHERE seen.path = f.path
-      )
-    ORDER BY f.id
-    LIMIT ${limit}
+    SELECT id, path, mtime, ctime, size, last_indexed_at AS lastIndexedAt
+    FROM files
+    WHERE type = 'file' AND id > ${afterId}
+      AND (path = ${root} OR path LIKE ${`${escapedPrefix}%`} ESCAPE '!')
+    ORDER BY id LIMIT ${Math.min(64, Math.max(1, limit))}
   `)
 }
 
@@ -65,95 +61,58 @@ export interface FileProviderReconciliationRunResult {
   completedPaths: string[]
 }
 
-/** What a root's scan produced, as reported by the scan itself. */
 export interface FileProviderReconciliationScanStats {
   entryCount: number
   errorCount: number
 }
 
-/** Row census for one reconciliation root, taken after its scan finished. */
-export interface FileProviderReconciliationRootRowCensus {
-  /** Indexed file rows under the root. */
-  total: number
-  /** Rows the scan never saw — i.e. the deletions this round would perform. */
-  missing: number
-}
-
 export type FileProviderReconciliationDeletionGuardDecision =
   | { allowed: true }
-  | { allowed: false; reason: 'empty-scan-with-db-rows' | 'scan-errors-with-mass-deletion' }
+  | { allowed: false; reason: 'empty-scan-with-db-rows' | 'scan-errors' | 'incomplete-scan' }
 
-/**
- * Deletion is the only irreversible half of reconciliation, and a scan that
- * "saw nothing" looks exactly like "the directory is empty". Both blocked cases
- * are unreadable-tree symptoms: revoked TCC permission, an unplugged volume, a
- * renamed root.
- *
- * - Zero scanned entries while the index still holds rows for the root: never
- *   trust it, whatever the error count says (a root that reads clean but empty
- *   still yields nothing to compare against).
- * - Scan errors present AND the round would remove more than half of the root:
- *   partial visibility, so the diff's "missing" set is not evidence of deletion.
- */
+/** Missing, failed or partial scan evidence cannot authorize any proportion of deletion. */
 export function evaluateReconciliationDeletionGuard(input: {
   scannedEntries: number
-  scanErrors: number
+  scanErrors: number | undefined
   dbRowCount: number
   plannedDeletions: number
 }): FileProviderReconciliationDeletionGuardDecision {
+  if (input.scanErrors === undefined) return { allowed: false, reason: 'incomplete-scan' }
+  if (input.scanErrors > 0) return { allowed: false, reason: 'scan-errors' }
   if (input.scannedEntries === 0 && input.dbRowCount > 0) {
     return { allowed: false, reason: 'empty-scan-with-db-rows' }
-  }
-  if (input.scanErrors > 0 && input.plannedDeletions * 2 > input.dbRowCount) {
-    return { allowed: false, reason: 'scan-errors-with-mass-deletion' }
   }
   return { allowed: true }
 }
 
 export interface FileProviderReconciliationRunDeps<TContext> {
   enterPerfContext: (label: string, metadata: Record<string, unknown>) => () => void
-  waitForIdle: () => Promise<void>
+  waitForIdle: (context: TContext) => Promise<void>
   assertActive: (context: TContext) => void
-  prepareSeenPaths: (context: TContext) => Promise<void>
-  recordSeenPaths: (paths: string[], context: TContext) => Promise<void>
   getDbFilesByPaths: (
     paths: string[],
     context: TContext
   ) => Promise<FileProviderReconciliationDbRecord[]>
-  getMissingDbFiles: (
-    rootPath: string,
-    afterId: number,
-    limit: number,
-    context: TContext
-  ) => Promise<FileProviderReconciliationDbRecord[]>
-  clearSeenPaths: (context: TContext) => Promise<void>
-  /**
-   * `onStats` fires only for a run the scanner completed; a run that aborts
-   * leaves the stats absent, which the deletion guard treats as "unknown".
-   */
   scanDirectory: (
     rootPath: string,
     excludePathsSet: Set<string> | undefined,
     context: TContext,
     onStats: (stats: FileProviderReconciliationScanStats) => void
   ) => AsyncIterable<ScannedFileInfo[]>
-  /** Row census under one root, read after its scan recorded the seen paths. */
-  countRootRows: (
-    rootPath: string,
-    context: TContext
-  ) => Promise<FileProviderReconciliationRootRowCensus>
-  /**
-   * Pre-flight for the whole round: a non-null reason stands the reconcile
-   * down without touching a single row (no progress recorded either, so the
-   * roots stay eligible for the next pass).
-   */
+  /** A LIMIT 1 existence query, never a second whole-root deletion census. */
+  hasRootRows: (rootPath: string, context: TContext) => Promise<boolean>
   getDeferralReason: () => string | null
   reconcile: (
     diskFiles: ReconcileDiskFile[],
     dbFiles: ReconcileDbFile[],
-    reconciliationPaths: string[]
+    paths: string[]
   ) => Promise<ReconcileResult>
-  deleteRecords: (records: IndexedWriteDeleteRecord[], context: TContext) => Promise<unknown>
+  /** Creates durable independent work and runs at most one budgeted round of it. */
+  finishMissingScan: (
+    rootPath: string,
+    context: TContext,
+    deadlineAt: number
+  ) => Promise<{ deletedCount: number; done: boolean }>
   updateRecords: (
     records: FileProviderReconciliationUpdateRecord[],
     context: TContext
@@ -166,12 +125,11 @@ export interface FileProviderReconciliationRunDeps<TContext> {
   yieldAfterDbRead: () => Promise<void>
   yieldAfterPathScan: () => Promise<void>
   now: () => number
+  roundBudgetMs?: number
   formatDuration: (durationMs: number) => string
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
 }
-
-const RECONCILIATION_PAGE_SIZE = 500
 
 export class FileProviderReconciliationRunService<TContext> {
   constructor(private readonly deps: FileProviderReconciliationRunDeps<TContext>) {}
@@ -181,157 +139,114 @@ export class FileProviderReconciliationRunService<TContext> {
     context: TContext,
     options?: { excludePathsSet?: Set<string> }
   ): Promise<FileProviderReconciliationRunResult> {
-    if (paths.length === 0) {
-      return { added: 0, changed: 0, deleted: 0, skipped: 0, completedPaths: [] }
+    const result: FileProviderReconciliationRunResult = {
+      added: 0,
+      changed: 0,
+      deleted: 0,
+      skipped: 0,
+      completedPaths: []
     }
-
+    if (paths.length === 0) return result
     const deferralReason = this.deps.getDeferralReason()
     if (deferralReason) {
-      this.deps.logWarn('Reconciliation round deferred', undefined, {
-        reason: deferralReason,
-        paths: paths.length
-      })
-      return { added: 0, changed: 0, deleted: 0, skipped: 0, completedPaths: [] }
+      this.deps.logWarn('Reconciliation round deferred', undefined, { reason: deferralReason })
+      return result
     }
-
-    const finishPerfContext = this.deps.enterPerfContext('FileProvider.reconciliation', {
+    const finish = this.deps.enterPerfContext('FileProvider.reconciliation', {
       paths: paths.length
     })
-    const reconciliationStart = this.deps.now()
-    let added = 0
-    let changed = 0
-    let deleted = 0
-    let skipped = 0
-    const completedPaths: string[] = []
-
+    const startedAt = this.deps.now()
+    const missingDeadlineAt = startedAt + Math.max(0, this.deps.roundBudgetMs ?? 1_500)
     try {
-      this.deps.logDebug('Starting reconciliation scan', {
-        count: paths.length,
-        sample: paths.slice(0, 3).join(', ')
-      })
       this.deps.emitProgress(0, paths.length)
-
       for (const rootPath of paths) {
         this.deps.assertActive(context)
-        await this.deps.waitForIdle()
-        await this.deps.prepareSeenPaths(context)
+        await this.deps.waitForIdle(context)
         let scannedEntries = 0
-        const scanStats: { value: FileProviderReconciliationScanStats | null } = { value: null }
-        try {
-          for await (const scannedFiles of this.deps.scanDirectory(
-            rootPath,
-            options?.excludePathsSet,
-            context,
-            (stats) => {
-              scanStats.value = stats
-            }
-          )) {
-            scannedEntries += scannedFiles.length
-            if (scannedFiles.length === 0) continue
-            const diskPayload = mapIndexedWriteReconciliationDiskPayload(scannedFiles)
-            const diskPaths = diskPayload.map((file) => file.path)
-            await this.deps.recordSeenPaths(diskPaths, context)
-            const dbFiles = await this.deps.getDbFilesByPaths(diskPaths, context)
-            await this.deps.yieldAfterDbRead()
-            const reconcileResult = await this.deps.reconcile(
-              diskPayload,
-              mapIndexedWriteReconciliationDbPayload(dbFiles),
-              [rootPath]
-            )
-
-            if (reconcileResult.deletedIds.length > 0) {
-              const deletedIdSet = new Set(reconcileResult.deletedIds)
-              const deletedRecords = dbFiles
-                .filter((file) => deletedIdSet.has(file.id))
-                .map((file) => ({ id: file.id, path: file.path }))
-              await this.deps.deleteRecords(deletedRecords, context)
-              deleted += deletedRecords.length
-            }
-
-            const filesToUpdate = reconcileResult.filesToUpdate.map((file) => ({
-              id: file.id,
-              path: file.path,
-              name: file.name,
-              extension: file.extension,
-              size: file.size,
-              mtime: toIndexedWriteDate(file.mtime),
-              ctime: toIndexedWriteDate(file.ctime),
-              type: 'file' as const,
-              isDir: false as const
-            }))
-            if (filesToUpdate.length > 0) {
-              const result = await this.deps.updateRecords(filesToUpdate, context)
-              changed += result.updatedCount
-            }
-            if (reconcileResult.filesToAdd.length > 0) {
-              const result = await this.deps.insertRecords(reconcileResult.filesToAdd, context)
-              added += result.insertedCount
-            }
-            skipped += Math.max(
-              0,
-              diskPayload.length -
-                reconcileResult.filesToAdd.length -
-                reconcileResult.filesToUpdate.length
-            )
-            await this.deps.yieldAfterPathScan()
+        const outcome: { stats: FileProviderReconciliationScanStats | null } = { stats: null }
+        for await (const scannedFiles of this.deps.scanDirectory(
+          rootPath,
+          options?.excludePathsSet,
+          context,
+          (stats) => {
+            outcome.stats = stats
           }
-
-          const census = await this.deps.countRootRows(rootPath, context)
-          const scanErrors = scanStats.value?.errorCount
-          const guard = evaluateReconciliationDeletionGuard({
-            scannedEntries,
-            scanErrors: scanErrors ?? 0,
-            dbRowCount: census.total,
-            plannedDeletions: census.missing
-          })
-          if (!guard.allowed) {
-            this.deps.logWarn('Reconciliation deletion skipped to protect the index', undefined, {
-              path: rootPath,
-              reason: guard.reason,
-              scannedEntries,
-              scanErrors: scanErrors ?? null,
-              dbRows: census.total,
-              plannedDeletions: census.missing
-            })
-          } else {
-            let afterId = 0
-            while (true) {
-              const missingFiles = await this.deps.getMissingDbFiles(
-                rootPath,
-                afterId,
-                RECONCILIATION_PAGE_SIZE,
-                context
-              )
-              if (missingFiles.length === 0) break
-              afterId = missingFiles[missingFiles.length - 1].id
-              await this.deps.deleteRecords(
-                missingFiles.map((file) => ({ id: file.id, path: file.path })),
-                context
-              )
-              deleted += missingFiles.length
-              await this.deps.yieldAfterDbRead()
-            }
+        )) {
+          this.deps.assertActive(context)
+          scannedEntries += scannedFiles.length
+          if (scannedFiles.length === 0) continue
+          const diskFiles = mapIndexedWriteReconciliationDiskPayload(scannedFiles)
+          const dbFiles = await this.deps.getDbFilesByPaths(
+            diskFiles.map((file) => file.path),
+            context
+          )
+          await this.deps.yieldAfterDbRead()
+          const diff = await this.deps.reconcile(
+            diskFiles,
+            mapIndexedWriteReconciliationDbPayload(dbFiles),
+            [rootPath]
+          )
+          // A disk batch proves existence only for its own paths. Never use the
+          // worker's per-batch deletedIds as whole-root absence evidence.
+          if (diff.filesToUpdate.length > 0) {
+            const updated = await this.deps.updateRecords(
+              diff.filesToUpdate.map((file) => ({
+                id: file.id,
+                path: file.path,
+                name: file.name,
+                extension: file.extension,
+                size: file.size,
+                mtime: toIndexedWriteDate(file.mtime),
+                ctime: toIndexedWriteDate(file.ctime),
+                type: 'file',
+                isDir: false
+              })),
+              context
+            )
+            result.changed += updated.updatedCount
           }
-        } finally {
-          await this.deps.clearSeenPaths(context).catch((error) => {
-            this.deps.logDebug('Failed to clear reconciliation seen-path staging', { error })
-          })
+          if (diff.filesToAdd.length > 0) {
+            const inserted = await this.deps.insertRecords(diff.filesToAdd, context)
+            result.added += inserted.insertedCount
+          }
+          result.skipped += Math.max(
+            0,
+            diskFiles.length - diff.filesToAdd.length - diff.filesToUpdate.length
+          )
+          await this.deps.yieldAfterPathScan()
         }
         this.deps.assertActive(context)
-
-        completedPaths.push(rootPath)
-        this.deps.emitProgress(completedPaths.length, paths.length)
+        const guard = evaluateReconciliationDeletionGuard({
+          scannedEntries,
+          scanErrors: outcome.stats?.errorCount,
+          dbRowCount:
+            scannedEntries === 0 && (await this.deps.hasRootRows(rootPath, context)) ? 1 : 0,
+          plannedDeletions: 0
+        })
+        if (!guard.allowed) {
+          this.deps.logWarn('Reconciliation deletion skipped to protect the index', undefined, {
+            path: rootPath,
+            reason: guard.reason,
+            scanErrors: outcome.stats?.errorCount ?? null
+          })
+          continue
+        }
+        const missing = await this.deps.finishMissingScan(rootPath, context, missingDeadlineAt)
+        result.deleted += missing.deletedCount
+        if (!missing.done) continue
+        this.deps.assertActive(context)
+        result.completedPaths.push(rootPath)
+        this.deps.emitProgress(result.completedPaths.length, paths.length)
       }
-
-      this.deps.logDebug('Reconciliation completed', {
-        duration: this.deps.formatDuration(this.deps.now() - reconciliationStart),
-        added,
-        updated: changed,
-        deleted
+      this.deps.logDebug('Reconciliation round completed', {
+        duration: this.deps.formatDuration(this.deps.now() - startedAt),
+        added: result.added,
+        updated: result.changed,
+        deleted: result.deleted
       })
-      return { added, changed, deleted, skipped, completedPaths }
+      return result
     } finally {
-      finishPerfContext()
+      finish()
     }
   }
 }

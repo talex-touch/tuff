@@ -90,7 +90,10 @@ export class WatchEventRouter {
               }
             }
 
-            const deltas = await (source.handleWatchEvent?.(event) ?? Promise.resolve([]))
+            const deltas = await (source.handleWatchEvent?.({
+              ...event,
+              mutationLeaseId: lease.id
+            }) ?? Promise.resolve([]))
             const storeResults = await Promise.all(
               deltas.map(async (delta) => {
                 if (delta.sourceId !== sourceId) {
@@ -118,7 +121,13 @@ export class WatchEventRouter {
             if (source.drainMutations) {
               await source.drainMutations({ leaseId: lease.id, reason: 'watch' })
             }
-            return { status: 'fulfilled' as const, sourceId, deltas, storeResults }
+            return {
+              status: 'fulfilled' as const,
+              sourceId,
+              deltas,
+              storeResults,
+              committedDeltas: this.sourceMutationGate.getCommittedRecordCount(sourceId, lease.id)
+            }
           })
         } catch (error) {
           return { status: 'rejected' as const, sourceId, error }
@@ -151,6 +160,12 @@ export class WatchEventRouter {
       if (result.status === 'fulfilled') {
         handledSources += 1
         deltas.push(...result.deltas)
+        if (result.committedDeltas > 0) {
+          appliedDeltas += result.committedDeltas
+          const summary = getDeltaSummary(result.sourceId)
+          summary.deltas += result.committedDeltas
+          summary.appliedDeltas += result.committedDeltas
+        }
         for (const storeResult of result.storeResults) {
           const summary = getDeltaSummary(storeResult.delta.sourceId)
           summary.deltas += 1

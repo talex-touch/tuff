@@ -1,4 +1,5 @@
 import type { TuffItem, TuffQuery } from '@talex-touch/utils'
+import type { Mock } from 'vitest'
 import { describe, expect, it, vi } from 'vitest'
 import {
   FileProviderSearchResultService,
@@ -14,7 +15,10 @@ interface FakeRow {
 function makeService(opts: {
   semanticMatches: Array<{ sourceId: string; score: number }>
   rows: FakeRow[]
-}): { service: FileProviderSearchResultService; semanticSearch: ReturnType<typeof vi.fn> } {
+  isPathAdmitted?: (path: string) => boolean
+  semanticReady?: Promise<void>
+  onSemanticQuery?: () => void
+}): { service: FileProviderSearchResultService; semanticSearch: Mock } {
   const dbRows = opts.rows.map((row) => ({
     file: {
       id: row.id,
@@ -40,7 +44,11 @@ function makeService(opts: {
     })
   })
 
-  const semanticSearch = vi.fn(async () => opts.semanticMatches)
+  const semanticSearch = vi.fn(async () => {
+    opts.onSemanticQuery?.()
+    await opts.semanticReady
+    return opts.semanticMatches
+  })
 
   const deps: FileProviderSearchResultServiceDeps = {
     providerId: 'files',
@@ -49,6 +57,8 @@ function makeService(opts: {
     getDbUtils: () => ({ getDb, getFileIndexReadDb: getDb }) as never,
     getSearchIndex: () => null,
     isContentIndexingEnabled: () => true,
+    isPathAdmitted:
+      opts.isPathAdmitted ?? ((path) => path.startsWith('/') && !path.endsWith('.itdb')),
     buildItem: (file) =>
       ({
         id: file.path,
@@ -172,5 +182,64 @@ describe('FileProviderSearchResultService.semanticRecall', () => {
 
     expect(result).toEqual([])
     expect(semanticSearch).not.toHaveBeenCalled()
+  })
+})
+
+describe('semantic recall current watch-root admission', () => {
+  it('does not expose an indexed semantic candidate outside the current root', async () => {
+    const { service } = makeService({
+      semanticMatches: [
+        { sourceId: '1', score: 0.9 },
+        { sourceId: '2', score: 0.8 }
+      ],
+      rows: [
+        { id: 1, path: '/current/report.txt' },
+        { id: 2, path: '/withdrawn/report.txt' }
+      ],
+      isPathAdmitted: (path) => path.startsWith('/current/')
+    })
+    const result = await service.semanticRecall(
+      { text: 'report' } as TuffQuery,
+      new Set(),
+      new AbortController().signal
+    )
+    expect(result.map((item) => item.id)).toEqual(['/current/report.txt'])
+  })
+
+  it('applies a root withdrawal that arrives while the semantic backend is still answering', async () => {
+    const queried = Promise.withResolvers<void>()
+    const answered = Promise.withResolvers<void>()
+    let admitted = true
+    const { service } = makeService({
+      semanticMatches: [{ sourceId: '1', score: 0.9 }],
+      rows: [{ id: 1, path: '/current/report.txt' }],
+      isPathAdmitted: (path) => admitted && path.startsWith('/current/'),
+      onSemanticQuery: () => queried.resolve(),
+      semanticReady: answered.promise
+    })
+    const operation = service.semanticRecall(
+      { text: 'report' } as TuffQuery,
+      new Set(),
+      new AbortController().signal
+    )
+    try {
+      await queried.promise
+      admitted = false
+      answered.resolve()
+      expect(await operation).toEqual([])
+      admitted = true
+      expect(
+        (
+          await service.semanticRecall(
+            { text: 'report' } as TuffQuery,
+            new Set(),
+            new AbortController().signal
+          )
+        ).map((item) => item.id)
+      ).toEqual(['/current/report.txt'])
+    } finally {
+      answered.resolve()
+      await operation
+    }
   })
 })

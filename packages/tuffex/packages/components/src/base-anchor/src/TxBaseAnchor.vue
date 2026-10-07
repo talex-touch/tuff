@@ -1043,16 +1043,6 @@ onBeforeUnmount(() => {
       :class="[floatingClass, { 'is-open': open, 'is-unlimited-height': isUnlimitedHeight, 'is-liquid': usesLiquidMotion }]"
       :style="[floatingStyle, floatingStyles, { zIndex }]"
     >
-      <span
-        v-if="props.showArrow && !usesLiquidMotion"
-        ref="arrowRef"
-        class="tx-base-anchor__arrow"
-        :data-side="side"
-        :data-bg="props.panelBackground"
-        :style="arrowStyle"
-        aria-hidden="true"
-      />
-
       <!--
         The trigger body and the panel share one goo filter so they read as a
         single body of water: the panel is torn off through a neck that thins and
@@ -1221,6 +1211,23 @@ onBeforeUnmount(() => {
           >
             <path class="tx-base-anchor__outline-path" :d="outlinePath" />
           </svg>
+          <!--
+            The arrow is part of the panel, so it lives on the content layer:
+            it rides every type's drift, scale, blur, and fade, and the clip's
+            visibility hides it until the motion starts and after it ends. As a
+            sibling of the clip it showed at full size before the panel did,
+            stood still while the panel drifted under it, and vanished the
+            moment a close began.
+          -->
+          <span
+            v-if="props.showArrow && !usesLiquidMotion"
+            ref="arrowRef"
+            class="tx-base-anchor__arrow"
+            :data-side="side"
+            :data-bg="props.panelBackground"
+            :style="arrowStyle"
+            aria-hidden="true"
+          />
         </div>
       </div>
     </div>
@@ -1289,11 +1296,6 @@ onBeforeUnmount(() => {
   background: transparent;
   overflow: hidden;
   z-index: 4;
-}
-
-.tx-base-anchor:not(.is-open) .tx-base-anchor__arrow {
-  opacity: 0;
-  visibility: hidden;
 }
 
 .tx-base-anchor__arrow[data-side='bottom'] {

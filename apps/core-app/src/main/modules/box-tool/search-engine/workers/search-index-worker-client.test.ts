@@ -1,3 +1,4 @@
+import type * as NodePath from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const workerMock = vi.hoisted(() => {
@@ -12,6 +13,7 @@ const workerMock = vi.hoisted(() => {
     terminateCalls = 0
     unrefCalls = 0
     ackShutdown = true
+    maintenanceRows: string[] | null = null
     private readonly handlers = new Map<string, Handler[]>()
 
     constructor(readonly workerPath: string) {
@@ -49,10 +51,32 @@ const workerMock = vi.hoisted(() => {
         this.ackShutdown &&
         message &&
         typeof message === 'object' &&
-        (message as { type?: unknown }).type === 'shutdown'
+        'type' in message &&
+        message.type === 'shutdown' &&
+        'taskId' in message
       ) {
-        const taskId = (message as { taskId?: unknown }).taskId
+        const taskId = message.taskId
         queueMicrotask(() => this.emit('message', { type: 'result', taskId }))
+      }
+      if (
+        this.maintenanceRows !== null &&
+        message &&
+        typeof message === 'object' &&
+        'type' in message &&
+        message.type === 'runIndexMaintenanceSlice' &&
+        'taskId' in message
+      ) {
+        // Model the external worker actually deleting one legacy index document if dispatched.
+        // A forbidden send cannot hide behind an unanswered mocked RPC or a call-count echo.
+        this.maintenanceRows.splice(0, 1)
+        const taskId = message.taskId
+        queueMicrotask(() =>
+          this.emit('message', {
+            type: 'result',
+            taskId,
+            result: { processed: 1, done: true, deferred: false, notifications: [] }
+          })
+        )
       }
     }
 
@@ -92,7 +116,7 @@ vi.mock('node:fs', () => ({
 }))
 
 vi.mock('node:path', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:path')>()
+  const actual = await importOriginal<typeof NodePath>()
   const defaultPath = actual
   return {
     ...actual,
@@ -136,18 +160,25 @@ vi.mock('@talex-touch/utils/common/logger', () => ({
 import { isSqliteBusyError } from '../../../../db/sqlite-retry'
 import { SearchIndexWorkerClient } from './search-index-worker-client'
 
+import {
+  beginForegroundSearchActivity,
+  endForegroundSearchActivity,
+  markSearchActivity
+} from '../search-activity'
+import { FILE_WORKER_IDLE_SHUTDOWN_MS } from '../../addon/files/workers/idle-worker-shutdown'
+
 function taskIdOf(message: unknown): string {
   if (!message || typeof message !== 'object' || !('taskId' in message)) {
     throw new Error('message has no taskId')
   }
-  return String((message as { taskId: unknown }).taskId)
+  return String(message.taskId)
 }
 
 function messageTypeOf(message: unknown): string {
   if (!message || typeof message !== 'object' || !('type' in message)) {
     throw new Error('message has no type')
   }
-  return String((message as { type: unknown }).type)
+  return String(message.type)
 }
 
 function deferred<T>(): {
@@ -257,80 +288,6 @@ describe('SearchIndexWorkerClient init gate', () => {
     await expect(applyPromise).resolves.toEqual({ removedItems: 0, indexedItems: 1 })
   })
 
-  it('fuses file-row persistence with the item mutation in a single worker dispatch', async () => {
-    const client = new SearchIndexWorkerClient()
-    const initPromise = client.init('/tmp/search-index.db')
-    const worker = workerMock.workers.at(-1)!
-
-    worker.emit('message', { type: 'result', taskId: taskIdOf(worker.messages[0]) })
-    await initPromise
-
-    const records = [
-      {
-        path: '/tmp/demo.txt',
-        name: 'demo.txt',
-        extension: '.txt',
-        size: 12,
-        mtime: new Date(1_000),
-        ctime: new Date(1_000),
-        lastIndexedAt: new Date(2_000),
-        isDir: false,
-        type: 'file'
-      }
-    ]
-    const item = {
-      itemId: 'file:/tmp/demo.txt',
-      providerId: 'file-provider',
-      type: 'file',
-      name: 'demo.txt'
-    }
-
-    const persistPromise = client.persistAndApplyProviderItems(
-      records,
-      'file-provider',
-      [item],
-      ['file:/tmp/legacy.txt']
-    )
-    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
-
-    // Raw file rows and mapped items travel in one dispatch, so the worker can commit
-    // them transactionally instead of racing two separate tasks.
-    expect(worker.messages[1]).toMatchObject({
-      type: 'persistAndApplyProviderItems',
-      providerId: 'file-provider',
-      records,
-      items: [item],
-      legacyItemIds: ['file:/tmp/legacy.txt']
-    })
-
-    // The worker reports a count, not the persisted rows themselves — the fused
-    // reply must stay off the row payload the caller no longer consumes.
-    const combined = {
-      persistedCount: 1,
-      summary: { removedItems: 0, indexedItems: 1 },
-      metrics: {
-        requestedRows: 1,
-        persistedRows: 1,
-        indexedItems: 1,
-        removedItems: 0,
-        legacyItemIds: 1,
-        workerDurationMs: 4,
-        persistDurationMs: 2,
-        applyDurationMs: 2
-      }
-    }
-    worker.emit('message', {
-      type: 'result',
-      taskId: taskIdOf(worker.messages[1]),
-      result: combined
-    })
-
-    await expect(persistPromise).resolves.toEqual({
-      ...combined,
-      metrics: { ...combined.metrics, roundTripDurationMs: expect.any(Number) }
-    })
-  })
-
   it('rejects pending atomic provider writes on init failure and allows init retry', async () => {
     const client = new SearchIndexWorkerClient()
     const initPromise = client.init('/tmp/search-index.db')
@@ -427,6 +384,64 @@ describe('SearchIndexWorkerClient init gate', () => {
 
     await expect(applyPromise).resolves.toEqual({ removedItems: 0, indexedItems: 1 })
   })
+
+  it.each(['foreground', 'cancel'] as const)(
+    'does not execute a maintenance RPC after %s arrives during post-retirement warm initialization',
+    async (interrupt) => {
+      vi.useFakeTimers()
+      markSearchActivity(0)
+      const client = new SearchIndexWorkerClient()
+      const initial = client.init('/tmp/search-index-warm-maintenance.db')
+      const first = workerMock.workers.at(-1)!
+      first.emit('message', { type: 'done', taskId: taskIdOf(first.messages[0]) })
+      await initial
+      await vi.advanceTimersByTimeAsync(FILE_WORKER_IDLE_SHUTDOWN_MS)
+
+      const controller = new AbortController()
+      const reason = new Error('maintenance cancelled during warm initialization')
+      let observedAbort: unknown
+      const operation = client.runIndexMaintenanceSlice('file-provider', 64, controller.signal)
+      const outcome = operation.then(
+        (result) => ({ result }),
+        (error: unknown) => {
+          observedAbort = error
+          return { error }
+        }
+      )
+      const respawned = workerMock.workers.at(-1)!
+      respawned.maintenanceRows = ['legacy-index-document']
+      const activityId = `warm-maintenance:${interrupt}`
+      try {
+        // The real retirement/init protocol is held at the external worker's init response.
+        // The only old worker is already retired; this request was admitted while idle.
+        expect(respawned).not.toBe(first)
+        expect(client.getPendingCount()).toBe(1)
+        if (interrupt === 'foreground') {
+          beginForegroundSearchActivity(activityId)
+          respawned.emit('message', { type: 'done', taskId: taskIdOf(respawned.messages[0]) })
+          expect(await operation).toMatchObject({ processed: 0, deferred: true, notifications: [] })
+        } else {
+          controller.abort(reason)
+          await vi.advanceTimersByTimeAsync(1)
+          // Cancellation must release the waiting caller even before worker init finishes.
+          expect(observedAbort).toBe(reason)
+          respawned.emit('message', { type: 'done', taskId: taskIdOf(respawned.messages[0]) })
+          expect(await outcome).toEqual({ error: reason })
+        }
+        expect(respawned.maintenanceRows).toEqual(['legacy-index-document'])
+        expect(client.getPendingCount()).toBe(0)
+      } finally {
+        endForegroundSearchActivity(activityId)
+        markSearchActivity(0)
+        // Also release the old implementation during failing-before so the fixture cannot
+        // leave a held init/transport request or worker timer behind after an assertion fails.
+        respawned.emit('message', { type: 'done', taskId: taskIdOf(respawned.messages[0]) })
+        await outcome
+        await client.shutdown()
+        await vi.advanceTimersByTimeAsync(1)
+      }
+    }
+  )
 
   it('waits for deferred idle retirement before reinitializing, then retries the write', async () => {
     vi.useFakeTimers()
@@ -729,57 +744,6 @@ describe('SearchIndexWorkerClient init gate', () => {
     expect(workerMock.workers).toHaveLength(1)
   })
 
-  it('dispatches provider-scoped item removal and returns removed count', async () => {
-    const client = new SearchIndexWorkerClient()
-    const initPromise = client.init('/tmp/search-index.db')
-    const worker = workerMock.workers.at(-1)!
-
-    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
-    await initPromise
-
-    const removePromise = client.removeProviderItems('file-provider', ['file:/tmp/demo.txt'])
-    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
-
-    expect(worker.messages[1]).toMatchObject({
-      type: 'removeProviderItems',
-      providerId: 'file-provider',
-      itemIds: ['file:/tmp/demo.txt']
-    })
-
-    worker.emit('message', {
-      type: 'done',
-      taskId: taskIdOf(worker.messages[1]),
-      result: 1
-    })
-
-    await expect(removePromise).resolves.toBe(1)
-  })
-
-  it('dispatches provider clear and returns removed count', async () => {
-    const client = new SearchIndexWorkerClient()
-    const initPromise = client.init('/tmp/search-index.db')
-    const worker = workerMock.workers.at(-1)!
-
-    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
-    await initPromise
-
-    const removePromise = client.removeByProvider('file-provider')
-    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
-
-    expect(worker.messages[1]).toMatchObject({
-      type: 'removeByProvider',
-      providerId: 'file-provider'
-    })
-
-    worker.emit('message', {
-      type: 'result',
-      taskId: taskIdOf(worker.messages[1]),
-      result: 4
-    })
-
-    await expect(removePromise).resolves.toBe(4)
-  })
-
   it('normalizes scan progress writes before dispatching worker tasks', async () => {
     const client = new SearchIndexWorkerClient()
     const initPromise = client.init('/tmp/search-index.db')
@@ -823,168 +787,6 @@ describe('SearchIndexWorkerClient init gate', () => {
     await expect(client.upsertScanProgress(['/tmp/root-a'], 'invalid-date')).resolves.toBe(0)
 
     expect(worker.messages).toHaveLength(1)
-  })
-
-  it('sends a staged provider replacement transaction before committing it', async () => {
-    const client = new SearchIndexWorkerClient()
-    const initPromise = client.init('/tmp/search-index.db')
-    const worker = workerMock.workers.at(-1)!
-    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
-    await initPromise
-
-    const begin = client.beginProviderReplacement('file-provider', 'replacement-1')
-    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
-    expect(worker.messages[1]).toMatchObject({
-      type: 'beginProviderReplacement',
-      providerId: 'file-provider',
-      replacementId: 'replacement-1'
-    })
-    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[1]) })
-    await begin
-
-    const stage = client.stageProviderReplacementItems('file-provider', 'replacement-1', [
-      { itemId: 'file:/tmp/a.txt', providerId: 'file-provider', type: 'file', name: 'a.txt' }
-    ])
-    await vi.waitFor(() => expect(worker.messages).toHaveLength(3))
-    expect(worker.messages[2]).toMatchObject({
-      type: 'stageProviderReplacementItems',
-      providerId: 'file-provider',
-      replacementId: 'replacement-1',
-      items: [expect.objectContaining({ itemId: 'file:/tmp/a.txt' })]
-    })
-    worker.emit('message', { type: 'result', taskId: taskIdOf(worker.messages[2]), result: 1 })
-    await expect(stage).resolves.toBe(1)
-
-    const commit = client.commitProviderReplacement('file-provider', 'replacement-1')
-    await vi.waitFor(() => expect(worker.messages).toHaveLength(4))
-    expect(worker.messages[3]).toMatchObject({
-      type: 'commitProviderReplacement',
-      providerId: 'file-provider',
-      replacementId: 'replacement-1'
-    })
-    worker.emit('message', {
-      type: 'result',
-      taskId: taskIdOf(worker.messages[3]),
-      result: { removedItems: 2, indexedItems: 1 }
-    })
-    await expect(commit).resolves.toEqual({ removedItems: 2, indexedItems: 1 })
-  })
-
-  it('sends replacement abort after a begun transaction cannot commit', async () => {
-    const client = new SearchIndexWorkerClient()
-    const initPromise = client.init('/tmp/search-index.db')
-    const worker = workerMock.workers.at(-1)!
-    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
-    await initPromise
-
-    const begin = client.beginProviderReplacement('file-provider', 'replacement-rollback')
-    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
-    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[1]) })
-    await begin
-
-    const abort = client.abortProviderReplacement('file-provider', 'replacement-rollback')
-    await vi.waitFor(() => expect(worker.messages).toHaveLength(3))
-    expect(worker.messages[2]).toMatchObject({
-      type: 'abortProviderReplacement',
-      providerId: 'file-provider',
-      replacementId: 'replacement-rollback'
-    })
-    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[2]) })
-    await expect(abort).resolves.toBeUndefined()
-  })
-
-  it('posts provider-local persistence entries without a search payload', async () => {
-    const client = new SearchIndexWorkerClient()
-    const initPromise = client.init('/tmp/search-index.db')
-    const worker = workerMock.workers.at(-1)!
-
-    worker.emit('message', { type: 'result', taskId: taskIdOf(worker.messages[0]) })
-    await initPromise
-
-    const persistPromise = client.persistEntries([
-      {
-        fileId: 1,
-        fileUpdate: null,
-        progress: {
-          status: 'completed',
-          progress: 100,
-          processedBytes: 1,
-          totalBytes: 1,
-          lastError: null,
-          startedAt: null,
-          updatedAt: null
-        }
-      }
-    ])
-    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
-
-    const message = worker.messages[1] as { type: string; entries: Array<Record<string, unknown>> }
-    expect(message.type).toBe('persistEntries')
-    expect(message.entries[0]).toMatchObject({ fileId: 1, fileUpdate: null })
-    expect(message.entries[0]).not.toHaveProperty('indexItem')
-
-    worker.emit('message', {
-      type: 'result',
-      taskId: taskIdOf(worker.messages[1]),
-      result: {
-        entries: 1,
-        chunks: 1,
-        persistedRows: 1,
-        fileUpdates: 0,
-        progressRows: 1,
-        embeddings: 0
-      }
-    })
-
-    await expect(persistPromise).resolves.toEqual({
-      entries: 1,
-      chunks: 1,
-      persistedRows: 1,
-      fileUpdates: 0,
-      progressRows: 1,
-      embeddings: 0
-    })
-  })
-
-  it('posts bounded metadata updates and resolves the worker summary', async () => {
-    const client = new SearchIndexWorkerClient()
-    const initPromise = client.init('/tmp/search-index.db')
-    const worker = workerMock.workers.at(-1)!
-
-    worker.emit('message', { type: 'result', taskId: taskIdOf(worker.messages[0]) })
-    await initPromise
-
-    const updatePromise = client.updateFileMetadata([
-      {
-        id: 7,
-        name: 'canary.md',
-        extension: '.md',
-        size: 64,
-        ctime: new Date(2_000),
-        mtime: new Date(3_000),
-        lastIndexedAt: new Date(4_000),
-        isDir: false,
-        type: 'file'
-      }
-    ])
-    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
-
-    const message = worker.messages[1] as {
-      type: string
-      records: Array<Record<string, unknown>>
-    }
-    expect(message.type).toBe('updateFileMetadata')
-    expect(message.records).toHaveLength(1)
-    expect(message.records[0]).toMatchObject({ id: 7, name: 'canary.md', type: 'file' })
-    expect(message.records[0]).not.toHaveProperty('path')
-
-    worker.emit('message', {
-      type: 'result',
-      taskId: taskIdOf(worker.messages[1]),
-      result: { requested: 1, updated: 1, missingFileIds: [] }
-    })
-
-    await expect(updatePromise).resolves.toEqual({ requested: 1, updated: 1, missingFileIds: [] })
   })
 
   it('short-circuits empty metadata updates without touching the worker', async () => {

@@ -7,12 +7,25 @@ import type {
   SearchIndexItem,
   SearchIndexProviderReplacementSummary
 } from '../search-index-service'
-import type { FilePersistenceEntry, UpsertFileRecord } from '../file-index-persistence-repository'
+import type {
+  ExpectedFileRecord,
+  ExpectedMissingFileSearchRecord,
+  FilePersistenceEntry,
+  UpsertFileRecord
+} from '../file-index-persistence-repository'
 import type { files } from '../../../../db/schema'
 import type { SerializedSearchIndexWorkerError } from './search-index-worker-error'
+import type { IndexMaintenanceNotification } from '../index-maintenance-context'
 
 export type {
   FilePersistenceEntry,
+  ExpectedFileRecord,
+  ExpectedMissingFileSearchRecord,
+  FileDeletionCommitReceipt,
+  ListPendingFileDeletionCommitsResult,
+  AcknowledgeFileDeletionCommitsResult,
+  RemoveFileRecordsResult,
+  RemoveMissingFileSearchRecordsResult,
   PersistEntriesSummary
 } from '../file-index-persistence-repository'
 
@@ -130,13 +143,37 @@ export interface PersistEntriesMessage {
 // New message types for single-writer architecture (Phase 1)
 // ============================================================================
 
-/**
- * Remove a file record from the files table.
- * Worker becomes the single writer for file-index domain.
- */
-export interface RemoveFileMessage {
-  type: 'removeFile'
-  path: string
+/** One bounded, version-fenced file/FTS/keyword deletion transaction. */
+export interface RemoveFileRecordsMessage {
+  type: 'removeFileRecords'
+  sourceId: string
+  records: readonly ExpectedFileRecord[]
+  /** Cancellation is checked only before starting a transaction, never during commit. */
+  cancellation?: SharedArrayBuffer
+  taskId: string
+}
+
+export interface RemoveMissingFileSearchRecordsMessage {
+  type: 'removeMissingFileSearchRecords'
+  sourceId: string
+  records: readonly ExpectedMissingFileSearchRecord[]
+  cancellation?: SharedArrayBuffer
+  taskId: string
+}
+
+export interface ListPendingFileDeletionCommitsMessage {
+  type: 'listPendingFileDeletionCommits'
+  sourceId: string
+  limit: number
+  cancellation?: SharedArrayBuffer
+  taskId: string
+}
+
+export interface AcknowledgeFileDeletionCommitsMessage {
+  type: 'acknowledgeFileDeletionCommits'
+  sourceId: string
+  commitIds: readonly string[]
+  cancellation?: SharedArrayBuffer
   taskId: string
 }
 
@@ -158,6 +195,20 @@ export interface RemoveFileExtensionsMessage {
 export interface CleanupOrphanKeywordsMessage {
   type: 'cleanupOrphanKeywords'
   sourceId: string
+  taskId: string
+}
+
+export interface RunIndexMaintenanceSliceMessage {
+  type: 'runIndexMaintenanceSlice'
+  sourceId: string
+  limit: number
+  cancellation?: SharedArrayBuffer
+  taskId: string
+}
+
+export interface AcknowledgeIndexMaintenanceCommitMessage {
+  type: 'acknowledgeIndexMaintenanceCommit'
+  notification: IndexMaintenanceNotification
   taskId: string
 }
 
@@ -210,11 +261,17 @@ export type SearchIndexWorkerMessage =
   | AbortProviderReplacementMessage
   | GetProviderReplacementOutcomeMessage
   | RemoveByProviderMessage
+  | RemoveProviderItemsMessage
   | CountByProviderMessage
   | PersistEntriesMessage
-  | RemoveFileMessage
+  | RemoveFileRecordsMessage
+  | RemoveMissingFileSearchRecordsMessage
+  | ListPendingFileDeletionCommitsMessage
+  | AcknowledgeFileDeletionCommitsMessage
   | RemoveFileExtensionsMessage
   | CleanupOrphanKeywordsMessage
+  | RunIndexMaintenanceSliceMessage
+  | AcknowledgeIndexMaintenanceCommitMessage
   | ShutdownMessage
   | ExecWriteMessage
 

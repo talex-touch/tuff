@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { performance } from 'node:perf_hooks'
 import type { CoreBoxSearchIndexCommitPayload } from '@talex-touch/utils/transport/events/types'
+import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type * as schema from '../../../db/schema'
 import type {
   SearchIndexItem,
   SearchIndexProviderReplacementSummary,
@@ -8,16 +10,37 @@ import type {
 } from './search-index-service'
 import type { WorkerStatusSnapshot } from '../addon/files/workers/worker-status'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
+import { scheduleDbWrite } from '../../../db/db-write'
 import { createLogger } from '../../../utils/logger'
 import { searchIndexCommitHub, type SearchIndexCommitHub } from './search-index-commit-hub'
 import { SearchIndexService } from './search-index-service'
 import type {
+  ExpectedFileRecord,
+  ExpectedMissingFileSearchRecord,
+  FileRecordRemovalOptions,
+  RemoveFileRecordsResult,
+  RemoveMissingFileSearchRecordsResult,
+  ListPendingFileDeletionCommitsResult,
+  AcknowledgeFileDeletionCommitsResult,
   FileMetadataUpdateRecord,
   FileMetadataUpdateSummary,
   FilePersistenceEntry,
   PersistEntriesSummary,
   UpsertFileRecord
 } from './file-index-persistence-repository'
+import {
+  removeFileRecordsInTransaction,
+  removeMissingFileSearchRecordsInTransaction,
+  listPendingFileDeletionCommitsInHome,
+  acknowledgeFileDeletionCommitsInHome
+} from './file-index-persistence-repository'
+import { isIndexMaintenanceIdle } from './search-activity'
+import {
+  IndexMaintenanceDeferredError,
+  indexMaintenanceContext,
+  type IndexMaintenanceNotification,
+  type IndexMaintenanceSlice
+} from './index-maintenance-context'
 import type {
   ExecWriteResult,
   PersistAndApplyProviderItemsMetrics
@@ -25,12 +48,21 @@ import type {
 import { SearchIndexWorkerClient } from './workers/search-index-worker-client'
 
 export type {
+  ExpectedFileRecord,
+  ExpectedMissingFileSearchRecord,
+  FileDeletionCommitReceipt,
+  FileRecordRemovalOptions,
+  RemoveFileRecordsResult,
+  RemoveMissingFileSearchRecordsResult,
+  ListPendingFileDeletionCommitsResult,
+  AcknowledgeFileDeletionCommitsResult,
   FileMetadataUpdateRecord,
   FileMetadataUpdateSummary,
   FilePersistenceEntry,
   PersistEntriesSummary,
   UpsertFileRecord
 } from './file-index-persistence-repository'
+export { FILE_INDEX_DELETE_MAX_BATCH } from './file-index-persistence-repository'
 
 const searchIndexWriterLog = createLogger('SearchIndex').child('Writer')
 /** Set for the duration of a `withPausedAdmission` operation, so its own writes bypass the gate. */
@@ -43,6 +75,8 @@ interface QueuedAdmission {
   priority: SearchIndexAdmissionPriority
   resolve: () => void
   reject: (error: Error) => void
+  signal?: AbortSignal
+  abort?: () => void
 }
 
 interface AdmissionIdleWaiter {
@@ -137,6 +171,15 @@ export interface SearchIndexPhysicalWriter {
   clearSource(sourceId: string): Promise<number>
   cleanupSource(sourceId: string): Promise<number>
   countSource(sourceId: string): Promise<number>
+  runIndexMaintenanceSlice?(
+    sourceId: string,
+    limit?: number,
+    signal?: AbortSignal
+  ): Promise<IndexMaintenanceSlice>
+  acknowledgeIndexMaintenanceCommit?(
+    notification: IndexMaintenanceNotification,
+    signal?: AbortSignal
+  ): Promise<void>
   drain(timeoutMs?: number): Promise<void>
   withPausedAdmission?<T>(
     reason: string,
@@ -199,11 +242,166 @@ export interface FilePersistencePort {
   ): Promise<Array<Record<string, unknown>>>
   updateFileMetadata(records: FileMetadataUpdateRecord[]): Promise<FileMetadataUpdateSummary>
   upsertScanProgress(paths: string[], lastScanned: string, sourceId?: string): Promise<number>
-  removeFile(path: string): Promise<void>
+  removeFileRecords(
+    sourceId: string,
+    records: readonly ExpectedFileRecord[],
+    options?: FileRecordRemovalOptions
+  ): Promise<RemoveFileRecordsResult>
+  removeMissingFileSearchRecords(
+    sourceId: string,
+    records: readonly ExpectedMissingFileSearchRecord[],
+    options?: FileRecordRemovalOptions
+  ): Promise<RemoveMissingFileSearchRecordsResult>
+  listPendingFileDeletionCommits(
+    sourceId: string,
+    limit?: number,
+    options?: FileRecordRemovalOptions
+  ): Promise<ListPendingFileDeletionCommitsResult>
+  acknowledgeFileDeletionCommits(
+    sourceId: string,
+    commitIds: readonly string[],
+    options?: FileRecordRemovalOptions
+  ): Promise<AcknowledgeFileDeletionCommitsResult>
   removeFileExtensions(fileId: number, keys: string[]): Promise<void>
   getStatus(): Promise<WorkerStatusSnapshot>
   hasPendingWork(): boolean
   drain(timeoutMs?: number): Promise<void>
+}
+
+async function schedulePrimaryFileRemoval<T extends { deferred: boolean }>(
+  label: string,
+  options: FileRecordRemovalOptions,
+  operation: () => Promise<T>,
+  deferredResult: T
+): Promise<T> {
+  let started = false
+  const scheduled = scheduleDbWrite(
+    label,
+    async () => {
+      options.signal?.throwIfAborted()
+      if (
+        options.isStillCurrent?.() === false ||
+        (options.maintenance && !isIndexMaintenanceIdle())
+      ) {
+        return deferredResult
+      }
+      started = true
+      return await operation()
+    },
+    { priority: options.maintenance ? 'background' : 'interactive' }
+  )
+  const { signal } = options
+  if (!signal) return await scheduled
+  return await new Promise<T>((resolve, reject) => {
+    const abort = (): void => {
+      // Once started, retain the real transaction outcome through result delivery.
+      if (started) return
+      signal.removeEventListener('abort', abort)
+      reject(signal.reason)
+    }
+    signal.addEventListener('abort', abort, { once: true })
+    void scheduled.then(
+      (result) => {
+        signal.removeEventListener('abort', abort)
+        resolve(result)
+      },
+      (error) => {
+        signal.removeEventListener('abort', abort)
+        reject(error)
+      }
+    )
+    if (signal.aborted) abort()
+  })
+}
+
+/** The shared-file topology writes through its primary scheduler, never a worker connection. */
+export async function removeFileRecordsInPrimaryHome(
+  db: LibSQLDatabase<typeof schema>,
+  service: SearchIndexService,
+  sourceId: string,
+  records: readonly ExpectedFileRecord[],
+  options: FileRecordRemovalOptions = {}
+): Promise<RemoveFileRecordsResult> {
+  options.signal?.throwIfAborted()
+  if (records.length === 0)
+    return { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: false }
+  if (options.isStillCurrent?.() === false || (options.maintenance && !isIndexMaintenanceIdle())) {
+    return { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: true }
+  }
+  await service.warmup()
+  return await schedulePrimaryFileRemoval(
+    'file-index.remove-file-records',
+    options,
+    async () =>
+      await db.transaction(
+        async (tx) => await removeFileRecordsInTransaction(tx, service, sourceId, records),
+        { behavior: 'immediate' }
+      ),
+    { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: true }
+  )
+}
+
+export async function removeMissingFileSearchRecordsInPrimaryHome(
+  db: LibSQLDatabase<typeof schema>,
+  service: SearchIndexService,
+  sourceId: string,
+  records: readonly ExpectedMissingFileSearchRecord[],
+  options: FileRecordRemovalOptions = {}
+): Promise<RemoveMissingFileSearchRecordsResult> {
+  options.signal?.throwIfAborted()
+  if (records.length === 0)
+    return { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: false }
+  if (options.isStillCurrent?.() === false || (options.maintenance && !isIndexMaintenanceIdle())) {
+    return { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: true }
+  }
+  await service.warmup()
+  return await schedulePrimaryFileRemoval(
+    'file-index.remove-missing-search-records',
+    options,
+    async () =>
+      await db.transaction(
+        async (tx) =>
+          await removeMissingFileSearchRecordsInTransaction(tx, service, sourceId, records),
+        { behavior: 'immediate' }
+      ),
+    { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: true }
+  )
+}
+
+export async function listPendingFileDeletionCommitsInPrimaryHome(
+  db: LibSQLDatabase<typeof schema>,
+  sourceId: string,
+  limit = 64,
+  options: FileRecordRemovalOptions = {}
+): Promise<ListPendingFileDeletionCommitsResult> {
+  options.signal?.throwIfAborted()
+  if (options.isStillCurrent?.() === false || (options.maintenance && !isIndexMaintenanceIdle())) {
+    return { commits: [], deferred: true }
+  }
+  return await schedulePrimaryFileRemoval(
+    'file-index.pending-deletions.list',
+    options,
+    async () => await listPendingFileDeletionCommitsInHome(db, sourceId, limit),
+    { commits: [], deferred: true }
+  )
+}
+
+export async function acknowledgeFileDeletionCommitsInPrimaryHome(
+  db: LibSQLDatabase<typeof schema>,
+  sourceId: string,
+  commitIds: readonly string[],
+  options: FileRecordRemovalOptions = {}
+): Promise<AcknowledgeFileDeletionCommitsResult> {
+  options.signal?.throwIfAborted()
+  if (options.isStillCurrent?.() === false || (options.maintenance && !isIndexMaintenanceIdle())) {
+    return { acknowledged: 0, deferred: true }
+  }
+  return await schedulePrimaryFileRemoval(
+    'file-index.pending-deletions.acknowledge',
+    options,
+    async () => await acknowledgeFileDeletionCommitsInHome(db, sourceId, commitIds),
+    { acknowledged: 0, deferred: true }
+  )
 }
 
 export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndexReadinessGate {
@@ -241,8 +439,14 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
         await this.withAdmission(
           async () => await this.client.upsertScanProgress(paths, lastScanned, sourceId)
         ),
-      removeFile: async (path) =>
-        await this.withAdmission(async () => await this.client.removeFile(path)),
+      removeFileRecords: async (sourceId, records, options) =>
+        await this.removeFileRecords(sourceId, records, options),
+      removeMissingFileSearchRecords: async (sourceId, records, options) =>
+        await this.removeMissingFileSearchRecords(sourceId, records, options),
+      listPendingFileDeletionCommits: async (sourceId, limit, options) =>
+        await this.listPendingFileDeletionCommits(sourceId, limit, options),
+      acknowledgeFileDeletionCommits: async (sourceId, commitIds, options) =>
+        await this.acknowledgeFileDeletionCommits(sourceId, commitIds, options),
       removeFileExtensions: async (fileId, keys) =>
         await this.withAdmission(async () => await this.client.removeFileExtensions(fileId, keys)),
       getStatus: async () => await this.client.getStatus(),
@@ -311,6 +515,9 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
   ): Promise<number> {
     if (items.length === 0 && legacyItemIds.length === 0) return 0
     return await this.withAdmission(async () => {
+      if (indexMaintenanceContext.getStore() === true && !isIndexMaintenanceIdle()) {
+        throw new IndexMaintenanceDeferredError()
+      }
       const summary = await this.client.applyProviderItems(sourceId, items, legacyItemIds)
       return summary.removedItems + summary.indexedItems
     })
@@ -325,6 +532,9 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
       return { persistedCount: 0, affectedItems: 0 }
     }
     return await this.withAdmission(async () => {
+      if (indexMaintenanceContext.getStore() === true && !isIndexMaintenanceIdle()) {
+        throw new IndexMaintenanceDeferredError()
+      }
       const result = await this.client.persistAndApplyProviderItems(
         records,
         sourceId,
@@ -376,13 +586,165 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
       async () => await this.client.removeProviderItems(sourceId, [...itemIds])
     )
   }
+  async removeFileRecords(
+    sourceId: string,
+    records: readonly ExpectedFileRecord[],
+    options: FileRecordRemovalOptions = {}
+  ): Promise<RemoveFileRecordsResult> {
+    options.signal?.throwIfAborted()
+    if (records.length === 0)
+      return { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: false }
+    if (
+      options.isStillCurrent?.() === false ||
+      (options.maintenance && !isIndexMaintenanceIdle())
+    ) {
+      return { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: true }
+    }
+    return await this.withAdmission(
+      async () => {
+        options.signal?.throwIfAborted()
+        if (
+          options.isStillCurrent?.() === false ||
+          (options.maintenance && !isIndexMaintenanceIdle())
+        ) {
+          return { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: true }
+        }
+        return await this.client.removeFileRecords(sourceId, records, options)
+      },
+      options.maintenance ? 'background' : 'normal',
+      options.signal
+    )
+  }
+
+  async removeMissingFileSearchRecords(
+    sourceId: string,
+    records: readonly ExpectedMissingFileSearchRecord[],
+    options: FileRecordRemovalOptions = {}
+  ): Promise<RemoveMissingFileSearchRecordsResult> {
+    options.signal?.throwIfAborted()
+    if (records.length === 0)
+      return { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: false }
+    if (
+      options.isStillCurrent?.() === false ||
+      (options.maintenance && !isIndexMaintenanceIdle())
+    ) {
+      return { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: true }
+    }
+    return await this.withAdmission(
+      async () => {
+        options.signal?.throwIfAborted()
+        if (
+          options.isStillCurrent?.() === false ||
+          (options.maintenance && !isIndexMaintenanceIdle())
+        ) {
+          return { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: true }
+        }
+        return await this.client.removeMissingFileSearchRecords(sourceId, records, options)
+      },
+      options.maintenance ? 'background' : 'normal',
+      options.signal
+    )
+  }
+
+  async listPendingFileDeletionCommits(
+    sourceId: string,
+    limit = 64,
+    options: FileRecordRemovalOptions = {}
+  ): Promise<ListPendingFileDeletionCommitsResult> {
+    options.signal?.throwIfAborted()
+    if (
+      options.isStillCurrent?.() === false ||
+      (options.maintenance && !isIndexMaintenanceIdle())
+    ) {
+      return { commits: [], deferred: true }
+    }
+    return await this.withAdmission(
+      async () => {
+        options.signal?.throwIfAborted()
+        if (
+          options.isStillCurrent?.() === false ||
+          (options.maintenance && !isIndexMaintenanceIdle())
+        ) {
+          return { commits: [], deferred: true }
+        }
+        return await this.client.listPendingFileDeletionCommits(sourceId, limit, options)
+      },
+      options.maintenance ? 'background' : 'normal',
+      options.signal
+    )
+  }
+
+  async acknowledgeFileDeletionCommits(
+    sourceId: string,
+    commitIds: readonly string[],
+    options: FileRecordRemovalOptions = {}
+  ): Promise<AcknowledgeFileDeletionCommitsResult> {
+    options.signal?.throwIfAborted()
+    if (
+      options.isStillCurrent?.() === false ||
+      (options.maintenance && !isIndexMaintenanceIdle())
+    ) {
+      return { acknowledged: 0, deferred: true }
+    }
+    return await this.withAdmission(
+      async () => {
+        options.signal?.throwIfAborted()
+        if (
+          options.isStillCurrent?.() === false ||
+          (options.maintenance && !isIndexMaintenanceIdle())
+        ) {
+          return { acknowledged: 0, deferred: true }
+        }
+        return await this.client.acknowledgeFileDeletionCommits(sourceId, commitIds, options)
+      },
+      options.maintenance ? 'background' : 'normal',
+      options.signal
+    )
+  }
 
   async clearSource(sourceId: string): Promise<number> {
     return await this.withAdmission(async () => await this.client.removeByProvider(sourceId))
   }
 
   async cleanupSource(sourceId: string): Promise<number> {
-    return await this.withAdmission(async () => await this.client.cleanupOrphanKeywords(sourceId))
+    return await this.withAdmission(async () => {
+      if (!isIndexMaintenanceIdle()) return 0
+      return await this.client.cleanupOrphanKeywords(sourceId)
+    }, 'background')
+  }
+
+  async runIndexMaintenanceSlice(
+    sourceId: string,
+    limit = 64,
+    signal?: AbortSignal
+  ): Promise<IndexMaintenanceSlice> {
+    signal?.throwIfAborted()
+    if (!isIndexMaintenanceIdle())
+      return { processed: 0, done: false, deferred: true, notifications: [] }
+    return await this.withAdmission(
+      async () => {
+        signal?.throwIfAborted()
+        if (!isIndexMaintenanceIdle())
+          return { processed: 0, done: false, deferred: true, notifications: [] }
+        return await this.client.runIndexMaintenanceSlice(sourceId, limit, signal)
+      },
+      'background',
+      signal
+    )
+  }
+
+  async acknowledgeIndexMaintenanceCommit(
+    notification: IndexMaintenanceNotification,
+    signal?: AbortSignal
+  ): Promise<void> {
+    await this.withAdmission(
+      async () => {
+        signal?.throwIfAborted()
+        await this.client.acknowledgeIndexMaintenanceCommit(notification)
+      },
+      'normal',
+      signal
+    )
   }
 
   async countSource(sourceId: string): Promise<number> {
@@ -475,14 +837,16 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
 
   private async withAdmission<T>(
     operation: () => Promise<T>,
-    priority: SearchIndexAdmissionPriority = 'normal'
+    priority: SearchIndexAdmissionPriority = 'normal',
+    signal?: AbortSignal
   ): Promise<T> {
     if (this.closed) throw new Error('SEARCH_INDEX_WRITER_CLOSED')
     const ownsPausedAdmission = pausedAdmissionScope.getStore() === true
-    await this.acquireAdmission(priority, ownsPausedAdmission)
+    await this.acquireAdmission(priority, ownsPausedAdmission, signal)
 
     try {
-      await this.waitUntilReady()
+      await this.waitForAdmissionPulse(this.waitUntilReady(), signal)
+      signal?.throwIfAborted()
       return await operation()
     } finally {
       this.releaseAdmission()
@@ -491,12 +855,14 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
 
   private async acquireAdmission(
     priority: SearchIndexAdmissionPriority,
-    bypassQueue: boolean
+    bypassQueue: boolean,
+    signal?: AbortSignal
   ): Promise<void> {
     while (true) {
+      signal?.throwIfAborted()
       if (this.closed) throw new Error('SEARCH_INDEX_WRITER_CLOSED')
       if (!bypassQueue && this.admissionGate) {
-        await this.admissionGate
+        await this.waitForAdmissionPulse(this.admissionGate, signal)
         continue
       }
 
@@ -510,21 +876,61 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
 
       if (this.canQueueAdmission(priority)) {
         await new Promise<void>((resolve, reject) => {
-          this.admissionQueue.push({ priority, resolve, reject })
+          const admission: QueuedAdmission = { priority, resolve, reject, signal }
+          if (signal) {
+            admission.abort = () => {
+              const index = this.admissionQueue.indexOf(admission)
+              if (index < 0) return
+              this.admissionQueue.splice(index, 1)
+              signal.removeEventListener('abort', admission.abort!)
+              if (priority === 'background') this.backgroundQueuedAdmissions -= 1
+              reject(signal.reason)
+              this.dispatchNextAdmission()
+              this.pulseCapacity()
+              this.notifyAdmissionIdleWaiters()
+            }
+          }
+          this.admissionQueue.push(admission)
           if (priority === 'background') this.backgroundQueuedAdmissions += 1
           this.notifyAdmissionIdleWaiters()
+          if (admission.abort) {
+            signal!.addEventListener('abort', admission.abort, { once: true })
+            if (signal!.aborted) admission.abort()
+          }
         })
         return
       }
 
       this.capacityWaiters += 1
       try {
-        await this.getCapacityPulse()
+        await this.waitForAdmissionPulse(this.getCapacityPulse(), signal)
       } finally {
         this.capacityWaiters -= 1
         this.notifyAdmissionIdleWaiters()
       }
     }
+  }
+
+  private async waitForAdmissionPulse(pulse: Promise<void>, signal?: AbortSignal): Promise<void> {
+    if (!signal) return await pulse
+    await new Promise<void>((resolve, reject) => {
+      const abort = (): void => {
+        signal.removeEventListener('abort', abort)
+        reject(signal.reason)
+      }
+      signal.addEventListener('abort', abort, { once: true })
+      void pulse.then(
+        () => {
+          signal.removeEventListener('abort', abort)
+          resolve()
+        },
+        (error) => {
+          signal.removeEventListener('abort', abort)
+          reject(error)
+        }
+      )
+      if (signal.aborted) abort()
+    })
   }
 
   private canQueueAdmission(priority: SearchIndexAdmissionPriority): boolean {
@@ -551,6 +957,7 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
     const index = normalIndex >= 0 ? normalIndex : 0
     const [next] = this.admissionQueue.splice(index, 1)
     if (!next) return
+    if (next.abort) next.signal?.removeEventListener('abort', next.abort)
     if (next.priority === 'background') this.backgroundQueuedAdmissions -= 1
     this.activeAdmissions += 1
     next.resolve()
@@ -559,7 +966,10 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
   private rejectQueuedAdmissions(error: Error): void {
     const queued = this.admissionQueue.splice(0)
     this.backgroundQueuedAdmissions = 0
-    for (const admission of queued) admission.reject(error)
+    for (const admission of queued) {
+      if (admission.abort) admission.signal?.removeEventListener('abort', admission.abort)
+      admission.reject(error)
+    }
     this.notifyAdmissionIdleWaiters()
   }
 
@@ -624,6 +1034,43 @@ export class LegacySearchIndexWriter implements SearchIndexPhysicalWriter {
     return summary.removedItems + summary.indexedItems
   }
 
+  async persistAndApplyProviderItems(
+    records: UpsertFileRecord[],
+    sourceId: string,
+    items: SearchIndexItem[],
+    legacyItemIds: readonly string[] = []
+  ): Promise<SearchIndexPersistAndApplyResult> {
+    const summary = await this.service.persistAndApplyProviderItems(
+      records,
+      sourceId,
+      items,
+      legacyItemIds
+    )
+    return {
+      persistedCount: summary.persistedCount,
+      affectedItems: summary.removedItems + summary.indexedItems
+    }
+  }
+
+  async runIndexMaintenanceSlice(
+    sourceId: string,
+    limit = 64,
+    signal?: AbortSignal
+  ): Promise<IndexMaintenanceSlice> {
+    signal?.throwIfAborted()
+    if (!isIndexMaintenanceIdle())
+      return { processed: 0, done: false, deferred: true, notifications: [] }
+    return await this.service.runIndexMaintenanceSlice(sourceId, limit)
+  }
+
+  async acknowledgeIndexMaintenanceCommit(
+    notification: IndexMaintenanceNotification,
+    signal?: AbortSignal
+  ): Promise<void> {
+    signal?.throwIfAborted()
+    await this.service.acknowledgeIndexMaintenanceCommit(notification)
+  }
+
   async beginSourceReplacement(sourceId: string, replacementId: string): Promise<void> {
     await this.service.beginProviderReplacement(sourceId, replacementId)
   }
@@ -655,8 +1102,8 @@ export class LegacySearchIndexWriter implements SearchIndexPhysicalWriter {
     return await this.service.removeByProvider(sourceId)
   }
 
-  async cleanupSource(_sourceId: string): Promise<number> {
-    return 0
+  async cleanupSource(sourceId: string): Promise<number> {
+    return await this.service.cleanupOrphanKeywords(sourceId)
   }
 
   async countSource(sourceId: string): Promise<number> {
@@ -787,6 +1234,28 @@ export class SourceScopedIndexWriterRouter implements SearchIndexMutationWriter 
     const writer = this.resolveWriter(sourceId)
     const affectedItems = await writer.removeProviderItems(sourceId, itemIds)
     return await this.publishCommit(sourceId, 'remove', writer.mode, affectedItems, itemIds)
+  }
+
+  async runIndexMaintenanceSlice(
+    sourceId: string,
+    limit = 64,
+    signal?: AbortSignal
+  ): Promise<IndexMaintenanceSlice> {
+    const writer = this.resolveWriter(sourceId)
+    if (!writer.runIndexMaintenanceSlice)
+      throw new Error(`INDEX_MAINTENANCE_WRITER_UNAVAILABLE:${writer.mode}`)
+    return await writer.runIndexMaintenanceSlice(sourceId, limit, signal)
+  }
+
+  async acknowledgeIndexMaintenanceCommit(
+    ownerSourceId: string,
+    notification: IndexMaintenanceNotification,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const writer = this.resolveWriter(ownerSourceId)
+    if (!writer.acknowledgeIndexMaintenanceCommit)
+      throw new Error(`INDEX_MAINTENANCE_ACK_UNAVAILABLE:${writer.mode}`)
+    await writer.acknowledgeIndexMaintenanceCommit(notification, signal)
   }
 
   async clearSource(sourceId: string): Promise<SearchIndexWriterCommit> {

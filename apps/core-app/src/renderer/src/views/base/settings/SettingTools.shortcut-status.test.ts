@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import type { ShortcutWithStatus } from '~/modules/channel/main/shortcon'
+import { BETA_FEATURE_SHORTCUTS } from '../../../../../shared/beta-features'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -19,6 +20,8 @@ const state = vi.hoisted(() => {
       coreBox: { customPlaceholder: '' },
       beginner: { init: true },
       dev: { advancedSettings: false },
+      betaFeatures: {} as Record<string, boolean> | undefined,
+      localAiCli: { enabled: true },
       tools: {
         autoPaste: { enable: true, time: 5 },
         autoHide: true,
@@ -95,7 +98,12 @@ const stubs = {
   TuffGroupBlock: { template: '<section><slot /></section>' },
   TuffBlockInput: { template: '<div><slot name="control" /></div>' },
   TuffBlockSlot: { template: '<div><slot /></div>' },
-  TuffBlockSwitch: { template: '<div />' },
+  TuffBlockSwitch: {
+    props: ['modelValue', 'disabled'],
+    emits: ['update:modelValue'],
+    template:
+      '<label><button type="button" :aria-checked="modelValue" :disabled="disabled" @click="$emit(\'update:modelValue\', !modelValue)" /></label>'
+  },
   TuffBlockSelect: { template: '<div><slot /></div>' },
   TxSelectItem: { template: '<span />' },
   TxInput: { template: '<input />' },
@@ -130,6 +138,10 @@ async function statusTexts(): Promise<Record<string, string>> {
 }
 
 beforeEach(() => {
+  state.appSetting.dev.advancedSettings = false
+  state.appSetting.betaFeatures = {}
+  state.appSetting.localAiCli.enabled = true
+  state.appSetting.omniPanel.enableShortcut = false
   state.getAll.mockReset()
   state.getAll.mockImplementation(async () => structuredClone(state.shortcuts))
   state.update.mockReset()
@@ -203,6 +215,7 @@ describe('SettingTools shortcut status', () => {
   })
 
   it('says a CoreBox default that lost an in-app conflict is in conflict', async () => {
+    state.appSetting.betaFeatures = { screenshot: true }
     state.shortcuts = [
       mainShortcut('screenshot.tool.start', 'Option+Space', { state: 'active' }),
       mainShortcut('core.box.toggle', 'Alt+Space', {
@@ -234,6 +247,122 @@ describe('SettingTools shortcut status', () => {
 
     expect(texts['local-ai-cli.quick-open']).toBe('settingTools.shortcutStatus.localAiCliOff')
     expect(texts['plugin.translate.toggle']).toBe('settingTools.shortcutStatus.runtimeMissing')
+  })
+})
+
+describe('SettingTools Beta feature access', () => {
+  beforeEach(() => {
+    state.shortcuts = [
+      mainShortcut('core.box.toggle', 'Alt+Space', { state: 'active' }),
+      ...Object.values(BETA_FEATURE_SHORTCUTS).map((id, index) =>
+        mainShortcut(id, `Alt+${index + 1}`, { state: 'active' })
+      )
+    ]
+  })
+
+  it.each([
+    undefined,
+    {},
+    { screenshot: 'true', voiceDictation: 1, voiceQuickEdit: null, omniPanel: [] }
+  ])('hides legacy enabled shortcut records without valid Beta opt-ins (%j)', async (flags) => {
+    state.appSetting.betaFeatures = flags as typeof state.appSetting.betaFeatures
+    expect(await statusTexts()).toEqual({ 'core.box.toggle': '' })
+  })
+
+  it.each([
+    { advanced: false, advancedOnly: false },
+    { advanced: true, advancedOnly: true }
+  ])('does not expose Beta controls for %j', async ({ advanced, advancedOnly }) => {
+    state.appSetting.dev.advancedSettings = advanced
+    const wrapper = mount(SettingTools, { props: { advancedOnly }, global: { stubs } })
+    await flushPromises()
+    expect(wrapper.findAll('[data-beta-feature]')).toHaveLength(0)
+  })
+
+  it.each(Object.entries(BETA_FEATURE_SHORTCUTS))(
+    'shows and hides %s shortcuts only after the explicit opt-in succeeds',
+    async (feature, id) => {
+      state.appSetting.dev.advancedSettings = true
+      state.appSetting.betaFeatures = { [feature]: false }
+      const shortcut = state.shortcuts.find((record) => record.id === id)!
+      shortcut.meta.enabled = false
+      shortcut.status = { state: 'disabled' }
+      const wrapper = mount(SettingTools, { global: { stubs } })
+      await flushPromises()
+      const control = wrapper.get(`[data-beta-feature="${feature}"] button`)
+      const save = deferred<boolean>()
+      state.update.mockImplementationOnce(async (savedId, _accelerator, enabled) => {
+        const success = await save.promise
+        if (success) {
+          const saved = state.shortcuts.find((record) => record.id === savedId)!
+          saved.meta.enabled = enabled === true
+          saved.status = { state: enabled === true ? 'active' : 'disabled' }
+        }
+        return success
+      })
+      await control.trigger('click')
+      expect(wrapper.find(`li[data-id="${id}"]`).exists()).toBe(false)
+      expect(control.attributes('disabled')).toBeDefined()
+      save.resolve(true)
+      await flushPromises()
+      expect(wrapper.get(`li[data-id="${id}"]`).text()).toBe('')
+      expect(control.attributes('aria-checked')).toBe('true')
+      const stored = structuredClone(state.shortcuts.find((shortcut) => shortcut.id === id))
+      await control.trigger('click')
+      await flushPromises()
+      expect(wrapper.find(`li[data-id="${id}"]`).exists()).toBe(false)
+      expect(state.shortcuts.find((shortcut) => shortcut.id === id)).toEqual(stored)
+      expect(wrapper.get('li[data-id="core.box.toggle"]').text()).toBe('')
+    }
+  )
+
+  it.each(['false', 'throw'] as const)(
+    'a failed feature opt-in (%s) leaves the shortcut hidden and the switch off',
+    async (failure) => {
+      state.appSetting.dev.advancedSettings = true
+      state.appSetting.betaFeatures = { screenshot: false }
+      if (failure === 'false') state.update.mockResolvedValueOnce(false)
+      else state.update.mockRejectedValueOnce(new Error('shortcut save failed'))
+      const wrapper = mount(SettingTools, { global: { stubs } })
+      await flushPromises()
+      const control = wrapper.get('[data-beta-feature="screenshot"] button')
+      await control.trigger('click')
+      await flushPromises()
+      expect(wrapper.find('li[data-id="screenshot.tool.start"]').exists()).toBe(false)
+      expect(control.attributes('aria-checked')).toBe('false')
+      expect(control.attributes('disabled')).toBeUndefined()
+    }
+  )
+
+  it('keeps an opted-in disabled shortcut editable so the user can restore it', async () => {
+    state.appSetting.betaFeatures = { screenshot: true }
+    state.shortcuts = [
+      {
+        ...mainShortcut('screenshot.tool.start', 'Alt+S', { state: 'disabled' }),
+        meta: { creationTime: 0, modificationTime: 0, author: 'system', enabled: false }
+      }
+    ]
+    const wrapper = await openLiveDialog()
+    expect(wrapper.get<HTMLInputElement>('.shortcut-key').element.value).toBe('Alt+S')
+    expect(wrapper.get('[role="switch"]').attributes('aria-checked')).toBe('false')
+    state.update.mockImplementation(async (_id, _accelerator, enabled) => {
+      state.shortcuts[0].meta.enabled = enabled!
+      state.shortcuts[0].status = { state: 'active' }
+      return true
+    })
+    await wrapper.get('[role="switch"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="switch"]').attributes('aria-checked')).toBe('true')
+    expect(wrapper.get<HTMLInputElement>('.shortcut-key').element.value).toBe('Alt+S')
+    expect(wrapper.get('.ShortcutDialog-StatusText').text()).toBe(
+      'settingTools.shortcutsDialog.saveSuccess'
+    )
+  })
+
+  it('hides local AI shortcuts unless the local AI feature is enabled', async () => {
+    state.appSetting.localAiCli.enabled = false
+    state.shortcuts.push(mainShortcut('local-ai-cli.quick-open', 'Alt+L', { state: 'active' }))
+    expect(await statusTexts()).toEqual({ 'core.box.toggle': '' })
   })
 })
 

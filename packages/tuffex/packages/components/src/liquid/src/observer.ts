@@ -1,9 +1,11 @@
 // Ported from liquid-gooey/src/observer.ts
 // (https://github.com/Jakubantalik/Libraries). MIT License © 2026 Jakub Antalik.
 // Framework-free module kept intentionally close to upstream; local deviations
-// are limited to strict-TS (noUncheckedIndexedAccess) hardening so upstream
-// fixes stay diffable.
+// are limited to strict-TS (noUncheckedIndexedAccess) hardening and upstream's
+// CSS-easing evaluator (`easingFn`), replaced by `resolveCssEase` from
+// utils/animation/easing, so upstream fixes stay diffable.
 
+import { resolveCssEase } from '../../../../utils/animation/easing'
 import { measureRadius } from './geometry'
 
 export interface BlendConfig {
@@ -94,7 +96,8 @@ export interface EvolveOptions {
   roundness?: number
   /** Corner-forming timeline: starts at the very beginning of the morph and
    *  runs droplet-round → target radius over `cornerDuration` ms with
-   *  `cornerEase` (a cubic-bezier(...) string, 'ease-in-out' or 'linear'),
+   *  `cornerEase` (any CSS easing: a cubic-bezier(...), a keyword or a
+   *  linear(...) list),
    *  after `cornerDelay` ms. No motion gating — tweak duration/easing and it
    *  behaves like a normal animation. Defaults 460 / 0 / smooth. */
   cornerDuration?: number
@@ -124,40 +127,6 @@ export const EVOLVE_DEFAULTS: Required<EvolveOptions> = {
   cornerEase: 'cubic-bezier(0.3, 1.05, 0.4, 1)',
   anticipation: 90,
   travel: 32,
-}
-
-const easeCache = new Map<string, (t: number) => number>()
-
-/** Evaluate a CSS timing function ('cubic-bezier(...)', 'ease-in-out',
- *  'linear') at progress t — lets the engine's corner timeline match the
- *  element's CSS transition exactly. */
-function easingFn(spec: string): (t: number) => number {
-  let fn = easeCache.get(spec)
-  if (fn) return fn
-  const m = /cubic-bezier\(([^)]+)\)/.exec(spec)
-  if (m) {
-    const [x1 = 0, y1 = 0, x2 = 0, y2 = 0] = m[1]!.split(',').map(Number)
-    fn = (t: number) => {
-      if (t <= 0) return 0
-      if (t >= 1) return 1
-      let lo = 0
-      let hi = 1
-      for (let i = 0; i < 24; i++) {
-        const mid = (lo + hi) / 2
-        const x = 3 * mid * (1 - mid) * (1 - mid) * x1 + 3 * mid * mid * (1 - mid) * x2 + mid ** 3
-        if (x < t) lo = mid
-        else hi = mid
-      }
-      const u = (lo + hi) / 2
-      return 3 * u * (1 - u) * (1 - u) * y1 + 3 * u * u * (1 - u) * y2 + u ** 3
-    }
-  } else if (spec === 'ease-in-out') {
-    fn = easingFn('cubic-bezier(0.42, 0, 0.58, 1)')
-  } else {
-    fn = (t: number) => Math.min(1, Math.max(0, t))
-  }
-  easeCache.set(spec, fn)
-  return fn
 }
 
 export interface MoveOptions {
@@ -1128,7 +1097,9 @@ export class ObserveEngine {
           1,
           Math.max(0, (now - item.cornerT0 - Math.max(0, eo.cornerDelay)) / Math.max(1, eo.cornerDuration)),
         )
-        const eased = easingFn(eo.cornerEase)(p)
+        // Evaluated in JS so the corner timeline matches the element's CSS
+        // transition exactly.
+        const eased = resolveCssEase(eo.cornerEase)(p)
         target01 = Math.min(1, Math.max(0, (1 - eased) * eo.roundness))
       }
       // Rate-limit the roundness so it GLIDES to the timeline value instead of

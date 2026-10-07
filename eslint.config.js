@@ -13,11 +13,6 @@ export default antfu(
       '.husky/**',
       '.kiro/**',
       '.serena/**',
-      // Vendored Comet bundles are installed from the pinned CLI, not maintained source.
-      '.agents/skills/comet*/**',
-      '.claude/skills/comet*/**',
-      '.omp/skills/comet*/**',
-      '.omp/hooks/pre/comet-hook-router.ts',
       // Frozen pre-cutover records retain their original research probes as evidence.
       'docs/engineering/workflow/handoffs/**',
       '**/.nuxt/**',

@@ -15,9 +15,10 @@ export type BaseAnchorAnimationType = 'transfer' | 'boom' | 'opacity' | 'none' |
  * Exit-phase geometry. Each field falls back to the shared field of the same
  * name when the caller set one, and to the close type's own table otherwise.
  *
- * This exists because `scale` means opposite things per type — `boom` starts
- * above 1 and shrinks in, `expand` starts below 1 and grows out — so a composite
- * that shared a single value would be wrong at one end by construction.
+ * This exists because the types do not share geometry — `expand` grows from
+ * 0.88 around the anchored corner with a 12px drift, `boom` from 0.94 at its
+ * centre through a blur — so in a composite run a shared value written for the
+ * open would drive the other type's close as well.
  */
 export interface BaseAnchorExitGeometry {
   scale?: number
@@ -44,9 +45,10 @@ export interface BaseAnchorAnimationOptions {
   closeEase?: string
   distance?: number
   /**
-   * `boom`: start scale of the zoom (default 1.08, shrinks in).
-   * `expand`: start scale of the settle (default 0.97, grows out) — the panel
-   * finishes growing around the corner facing the reference.
+   * Start scale of the open, and the scale the close returns to (see `exit`).
+   * `expand` (default 0.88) grows out around the corner facing the reference,
+   * `boom` (default 0.94) from its centre as the blur clears, and `transfer`
+   * (default 0.92) swings past 1 on its back ease before settling.
    */
   scale?: number
   blur?: number

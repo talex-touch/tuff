@@ -327,10 +327,11 @@ export class IndexingRuntime {
   /** The callback retains its source lease through admission, persistence and publication. */
   async withSourceMutationLease<T>(
     sourceId: string,
-    operation: (leaseId: string) => Promise<T>
+    operation: (leaseId: string) => Promise<T>,
+    options: { maintenance?: boolean; signal?: AbortSignal; mutationLeaseId?: string } = {}
   ): Promise<T> {
     const source = this.requireSource(sourceId)
-    return await this.sourceMutationGate.run(sourceId, async (lease) => {
+    const execute = async (lease: { id: string }): Promise<T> => {
       try {
         return await operation(lease.id)
       } catch (error) {
@@ -339,7 +340,22 @@ export class IndexingRuntime {
           .catch(() => undefined)
         throw error
       }
-    })
+    }
+    if (options.mutationLeaseId) {
+      return await this.sourceMutationGate.runWithinLease(
+        sourceId,
+        options.mutationLeaseId,
+        execute
+      )
+    }
+    return options.maintenance
+      ? await this.sourceMutationGate.runWhenIdle(sourceId, execute, options.signal)
+      : await this.sourceMutationGate.run(sourceId, execute, options.signal)
+  }
+
+  recordSourceCommittedRecords(sourceId: string, leaseId: string, count: number): void {
+    this.requireSource(sourceId)
+    this.sourceMutationGate.recordCommittedRecords(sourceId, leaseId, count)
   }
 
   async applySourceBatch(

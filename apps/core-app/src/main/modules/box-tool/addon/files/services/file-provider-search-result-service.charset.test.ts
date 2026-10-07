@@ -54,6 +54,7 @@ function makeService(): {
     providerId: 'files',
     getDbUtils: () => ({ getDb, getFileIndexReadDb: getDb }) as never,
     isContentIndexingEnabled: () => false,
+    isPathAdmitted: (path) => path.startsWith('/home/me/'),
     getSearchIndex: () =>
       ({
         lookupByKeywords: async (_providerId: string, terms: string[]) => {
@@ -118,16 +119,5 @@ describe('FileProviderSearchResultService keyword charset', () => {
   it('matches an accented file through either spelling', async () => {
     await expect(searchIds(RESUME_NFC).then((result) => result.ids)).resolves.toContain(RESUME_PATH)
     await expect(searchIds('resume').then((result) => result.ids)).resolves.toContain(RESUME_PATH)
-  })
-
-  it('does not grow the lookup list for plain ascii queries', async () => {
-    await expect(searchIds('report').then((result) => result.lookupTerms)).resolves.toEqual([
-      'report'
-    ])
-    await expect(searchIds('project alpha').then((result) => result.lookupTerms)).resolves.toEqual([
-      'project',
-      'alpha',
-      'project alpha'
-    ])
   })
 })

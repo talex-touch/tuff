@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Project StatusLine — Claude Code session metrics and the selected Comet Native change.
+Project StatusLine — Claude Code session metrics.
 
-Reads Claude Code session JSON from stdin and read-only Native status through the pinned CLI.
-Outputs a change line when selected, followed by model, context, branch, duration and rate limits.
+Reads Claude Code session JSON from stdin.
+Outputs model, context, branch, duration and rate limits.
 When COLUMNS (injected by Claude Code v2.1.153+) is too narrow for the info
 line, the rate-limit segments move to their own line via an explicit "\n".
 """
@@ -17,7 +17,6 @@ import subprocess
 import sys
 import time
 from datetime import datetime
-from pathlib import Path
 
 # Fix: Windows Python defaults to GBK encoding, which corrupts UTF-8
 # characters like the middle dot (·). Wrap stdout/stderr with UTF-8.
@@ -26,56 +25,6 @@ if sys.platform == "win32":
         reconfigure = getattr(stream, "reconfigure", None)
         if callable(reconfigure):
             reconfigure(encoding="utf-8", errors="replace")
-
-
-def _read_text(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8").strip()
-    except (FileNotFoundError, PermissionError, OSError):
-        return ""
-
-
-def _read_json(path: Path) -> dict:
-    text = _read_text(path)
-    if not text:
-        return {}
-    try:
-        return json.loads(text)
-    except (json.JSONDecodeError, ValueError):
-        return {}
-
-
-def _find_project_root() -> Path | None:
-    current = Path.cwd()
-    for parent in [current, *current.parents]:
-        if (parent / ".comet" / "config.yaml").is_file():
-            return parent
-    return None
-
-
-def _get_current_change(root: Path) -> dict | None:
-    selection = _read_json(root / ".comet" / "current-change.json")
-    name = selection.get("change")
-    if selection.get("workflow") != "native" or not isinstance(name, str) or not name:
-        return None
-    try:
-        result = subprocess.run(
-            ["mise", "exec", "npm:@rpamis/comet@0.4.4", "--", "comet", "native", "status", name, "--json"],
-            cwd=root, capture_output=True, text=True, timeout=3,
-        )
-        state = json.loads(result.stdout).get("data", {})
-    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError, ValueError):
-        return None
-    if state.get("name") != name:
-        return None
-    return {"title": name, "phase": state.get("phase", "unknown"), "status": state.get("status", "unknown")}
-
-
-def _count_active_changes(root: Path) -> int:
-    changes = root / "docs" / "comet" / "changes"
-    if not changes.is_dir():
-        return 0
-    return sum(1 for entry in changes.iterdir() if entry.is_dir() and (entry / "comet-state.yaml").is_file())
 
 
 def _get_git_branch() -> str:
@@ -180,11 +129,6 @@ def main() -> None:
 
     SEP = " \033[90m·\033[0m "
 
-    # --- Project Native state ---
-    root = _find_project_root()
-    change = _get_current_change(root) if root else None
-    change_count = _count_active_changes(root) if root else 0
-
     # --- CC session data ---
     model = cc_data.get("model", {}).get("display_name", "?")
     ctx_pct = int(cc_data.get("context_window", {}).get("used_percentage") or 0)
@@ -206,7 +150,7 @@ def main() -> None:
     else:
         ctx_color = "\033[32m"
 
-    # Build info line: model · ctx · branch · duration · changes [· rate limits]
+    # Build info line: model · ctx · branch · duration [· rate limits]
     parts = [
         model_label,
         f"ctx {ctx_color}{ctx_pct}%\033[0m",
@@ -214,9 +158,6 @@ def main() -> None:
     if branch:
         parts.append(f"\033[35m{branch}\033[0m")
     parts.append(duration)
-    if change_count:
-        parts.append(f"{change_count} change(s)")
-
     now = int(time.time())
     rate_limits = cc_data.get("rate_limits", {})
     rate_parts: list[str] = []
@@ -226,10 +167,6 @@ def main() -> None:
             rate_parts.append(part)
 
     info_line = SEP.join(parts + rate_parts)
-
-    # Output: selected change (only if available) + session information.
-    if change:
-        print(f"\033[36m[{change['phase']}]\033[0m {change['title']} \033[33m({change['status']})\033[0m")
 
     # Claude Code's status-bar height counts only "\n" characters, so a
     # visually wrapped long line misaligns rows. When the host provides a

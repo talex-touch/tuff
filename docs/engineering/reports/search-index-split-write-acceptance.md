@@ -1,11 +1,11 @@
 # Acceptance: search-index split application evidence
 
 > Migration note (2026-10-03): this living acceptance record is preserved verbatim from
-> [`acceptance.md`](https://github.com/talex-touch/tuff/blob/cfda0a6cd1a13b5606c82d7d9d68112177d3fc9d/.trellis/tasks/07-28-migrate-search-index-split-write-paths/acceptance.md)
+> [`acceptance.md`](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/07-28-migrate-search-index-split-write-paths/acceptance.md)
 > of the frozen task `07-28-migrate-search-index-split-write-paths`. "`prd.md` R3" below means that task's
-> [baseline PRD](https://github.com/talex-touch/tuff/blob/cfda0a6cd1a13b5606c82d7d9d68112177d3fc9d/.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md); its frozen
+> [baseline PRD](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md); its frozen
 > record is in the [backlog](../workflow/backlog.md#07-28-migrate-search-index-split-write-paths). Attach the
-> run report here; closing R3 belongs to a new Comet Native change, not to the frozen task.
+> run report here. The current owner closes R3 against user-agreed acceptance and observed application evidence; the frozen task remains read-only.
 
 Status: **harness ready, application run not yet executed.** Nothing below is claimed as observed
 except the three sections marked `[executed]`. `prd.md` R3 stays open until a run produces a report
