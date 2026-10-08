@@ -979,7 +979,7 @@ interface ProbeResult {
   evidence: EverythingCoreBoxUiEvidencePayload | null
 }
 
-function buildArtifactName(options: CliOptions, suffix: string): string {
+function buildArtifactName(suffix: string): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-')
   return `corebox-everything-${suffix}-${stamp}`
 }
@@ -1128,8 +1128,8 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
       const resultSource = sourceRead.available
         ? resolveCoreBoxResultSource(sourceRead.sources)
         : 'none'
-      const domName = `${buildArtifactName(options, mode)}-dom.json`
-      const screenshotName = `${buildArtifactName(options, mode)}.png`
+      const domName = `${buildArtifactName(mode)}-dom.json`
+      const screenshotName = `${buildArtifactName(mode)}.png`
       const domSummary = await withTarget(target, (send) =>
         evaluate<Record<string, unknown>>(send, buildDomSummaryExpression(), 15_000)
       )
@@ -1219,7 +1219,7 @@ async function runProbe(options: CliOptions): Promise<ProbeResult> {
         options.modeTimeoutMs + 20_000
       )
     )
-    const emptyScreenshot = `${buildArtifactName(options, 'empty')}.png`
+    const emptyScreenshot = `${buildArtifactName('empty')}.png`
     await withTarget(target, (send) =>
       captureScreenshot(send, path.join(outputDir, emptyScreenshot))
     )

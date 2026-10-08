@@ -48,6 +48,7 @@
     "scripts/coreapp-packaged-tool-confirmation-acceptance*.ts",
     "scripts/coreapp-visible-app-index-workbench-probe*.ts",
     "scripts/coreapp-packaged-login-recovery-probe*.ts",
+    "scripts/coreapp-packaged-corebox-everything-probe*.ts",
     "scripts/search-split-*.ts",
     "scripts/quickops-evidence-*.ts",
     "scripts/windows-acceptance-*.ts",

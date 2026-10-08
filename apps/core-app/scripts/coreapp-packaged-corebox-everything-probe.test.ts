@@ -125,7 +125,7 @@ function everythingStatus(
     enabled: true,
     available: over.available ?? true,
     backend: over.backend ?? 'sdk-napi',
-    health: 'ready',
+    health: 'healthy',
     healthReason: null,
     version: '1.4.1.1026',
     esPath: null,
