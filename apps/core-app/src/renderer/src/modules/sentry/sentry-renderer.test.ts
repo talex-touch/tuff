@@ -97,7 +97,7 @@ describe('renderer Sentry sanitizer keeps script URLs for main to normalise', as
           }
         ]
       }
-    } as never)
+    } as Sentry.Event)
     const value = event.exception?.values?.[0]
     expect(value?.value).toBe('STORAGE_SAVE_REJECTED')
     expect(value?.stacktrace?.frames?.map((frame) => frame.filename)).toEqual([
@@ -114,7 +114,7 @@ describe('renderer Sentry sanitizer keeps script URLs for main to normalise', as
   it('still redacts prose exception values', () => {
     const event = sanitizeRendererSentryEvent({
       exception: { values: [{ type: 'Error', value: 'Failed to open /Users/alice/private.txt' }] }
-    } as never)
+    } as Sentry.Event)
     expect(event.exception?.values?.[0]?.value).toBe('redacted')
   })
 })
