@@ -62,7 +62,7 @@ describe('QuickOps Flow and AI adapter audit', () => {
     const [moduleSource, flowBusSource, flowSelectorSource, policySource] = await Promise.all([
       readRepoFile('apps/core-app/src/main/modules/quick-ops/index.ts'),
       readRepoFile('apps/core-app/src/main/modules/flow-bus/flow-bus.ts'),
-      readRepoFile('apps/core-app/src/renderer/src/components/flow/FlowSelector.vue'),
+      readRepoFile('apps/core-app/src/renderer/src/modules/box/meta-actions/meta-flow-page.ts'),
       readRepoFile('apps/core-app/src/main/modules/quick-ops/quick-ops-developer-preview.ts')
     ])
 
@@ -120,7 +120,7 @@ describe('QuickOps Flow and AI adapter audit', () => {
     const [moduleSource, flowBusSource, flowSelectorSource, policySource] = await Promise.all([
       readRepoFile('apps/core-app/src/main/modules/quick-ops/index.ts'),
       readRepoFile('apps/core-app/src/main/modules/flow-bus/flow-bus.ts'),
-      readRepoFile('apps/core-app/src/renderer/src/components/flow/FlowSelector.vue'),
+      readRepoFile('apps/core-app/src/renderer/src/modules/box/meta-actions/meta-flow-page.ts'),
       readRepoFile('apps/core-app/src/main/modules/quick-ops/quick-ops-developer-preview.ts')
     ])
 

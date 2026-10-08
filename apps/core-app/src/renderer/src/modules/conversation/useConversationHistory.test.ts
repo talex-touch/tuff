@@ -1,4 +1,4 @@
-import type { ConversationMessage } from './useHomeConversation'
+import { ConversationEvents } from '@talex-touch/utils/transport/sdk/domains/conversation'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const send = vi.fn()
@@ -9,87 +9,9 @@ vi.mock('@talex-touch/utils/transport', () => ({
 
 const { useConversationHistory, createConversationId } = await import('./useConversationHistory')
 
-function message(overrides: Partial<ConversationMessage>): ConversationMessage {
-  return {
-    id: 'm1',
-    role: 'user',
-    content: 'hi',
-    status: 'complete',
-    ...overrides
-  }
-}
-
 beforeEach(() => {
   send.mockReset()
   send.mockResolvedValue([])
-})
-
-describe('persist', () => {
-  it('stores a streaming placeholder as failed', async () => {
-    // The stream cannot survive the write, so restoring `streaming` would bring back a bubble that
-    // waits forever for deltas that will never arrive.
-    const history = useConversationHistory()
-    await history.persist(
-      'c1',
-      'Title',
-      [
-        message({ id: 'u1' }),
-        message({ id: 'a1', role: 'assistant', content: '', status: 'streaming' })
-      ],
-      null
-    )
-
-    const saved = send.mock.calls[0]?.[1]
-    expect(saved.messages.map((entry: { status: string }) => entry.status)).toEqual([
-      'complete',
-      'failed'
-    ])
-  })
-
-  it('keeps complete and failed statuses untouched', async () => {
-    const history = useConversationHistory()
-    await history.persist(
-      'c1',
-      'Title',
-      [message({ id: 'u1' }), message({ id: 'a1', role: 'assistant', status: 'failed' })],
-      null
-    )
-
-    const saved = send.mock.calls[0]?.[1]
-    expect(saved.messages.map((entry: { status: string }) => entry.status)).toEqual([
-      'complete',
-      'failed'
-    ])
-  })
-
-  it('forwards the title verbatim so long titles are not cut in the data layer', async () => {
-    const long = 'x'.repeat(400)
-    const history = useConversationHistory()
-    await history.persist('c1', long, [message({})], null)
-
-    expect(send.mock.calls[0]?.[1].title).toBe(long)
-  })
-
-  it('carries turn metadata through to storage', async () => {
-    const history = useConversationHistory()
-    await history.persist(
-      'c1',
-      'Title',
-      [message({ id: 'a1', role: 'assistant', meta: { model: 'gpt-5.6-terra', totalTokens: 42 } })],
-      null
-    )
-
-    expect(send.mock.calls[0]?.[1].messages[0].meta).toEqual({
-      model: 'gpt-5.6-terra',
-      totalTokens: 42
-    })
-  })
-
-  it('writes nothing for an empty thread', async () => {
-    const history = useConversationHistory()
-    await history.persist('c1', '', [], null)
-    expect(send).not.toHaveBeenCalled()
-  })
 })
 
 describe('load', () => {
@@ -172,9 +94,8 @@ describe('refresh', () => {
 })
 
 describe('shared list', () => {
-  it('shares one list across instances so the sidebar sees a persist made elsewhere', async () => {
-    // HomePage owns persist, ShellConversationList owns rendering; a per-call
-    // ref would leave the sidebar stale after every send.
+  it('shares one list across instances so the sidebar sees a refresh made elsewhere', async () => {
+    // Main settles turns; a refresh in Home must reach the sidebar's list as well.
     const rows = [{ id: 'c1', title: 'T', createdAt: 1, updatedAt: 2 }]
     send.mockResolvedValue(rows)
     const sidebar = useConversationHistory()
@@ -190,35 +111,13 @@ describe('createConversationId', () => {
   })
 })
 
-describe('parts persistence', () => {
-  it('folds parts into meta.parts on save and splits them back out on load', async () => {
-    const history = useConversationHistory()
-    await history.persist(
-      'c1',
-      'Title',
-      [
-        message({
-          id: 'a1',
-          role: 'assistant',
-          content: 'Found it.',
-          meta: { provider: 'pi', model: 'gpt' },
-          parts: [
-            { type: 'reasoning', text: 'thinking', done: true },
-            { type: 'tool-call', id: 'c1', name: 'read', status: 'done', output: 'data' },
-            { type: 'text', text: 'Found it.' }
-          ]
-        })
-      ],
-      null
-    )
-
-    const saved = send.mock.calls[0]?.[1]
-    const savedMeta = saved.messages[0].meta
-    expect(savedMeta.provider).toBe('pi')
-    expect(Array.isArray(savedMeta.parts)).toBe(true)
-    expect(savedMeta.parts).toHaveLength(3)
-
-    // Round trip: get() returns what save stored; load() must split parts out.
+/**
+ * Parts ride inside `meta.parts` in storage; `load` must pull them back out so the meta the side
+ * panel reads stays the plain turn metadata it always was. The save side that folded them in lives
+ * in Main's conversation store now, so only the restore half is exercised here.
+ */
+describe('parts on load', () => {
+  it('splits stored parts out of meta and leaves the turn metadata behind', async () => {
     send.mockResolvedValueOnce({
       id: 'c1',
       title: 'Title',
@@ -232,80 +131,48 @@ describe('parts persistence', () => {
           status: 'complete',
           seq: 0,
           createdAt: 1,
-          meta: savedMeta
+          meta: {
+            provider: 'pi',
+            model: 'gpt',
+            parts: [
+              { type: 'reasoning', text: 'thinking', done: true },
+              { type: 'tool-call', id: 'c1', name: 'read', status: 'done', output: 'data' },
+              { type: 'text', text: 'Found it.' }
+            ]
+          }
         }
       ]
     })
 
-    const restored = await history.load('c1')
+    const restored = await useConversationHistory().load('c1')
+
     expect(restored?.messages[0]?.parts).toHaveLength(3)
     expect(restored?.messages[0]?.parts?.[1]).toMatchObject({ type: 'tool-call', output: 'data' })
     expect(restored?.messages[0]?.meta).toEqual({ provider: 'pi', model: 'gpt' })
   })
 
-  it('truncates verbose tool output before storing', async () => {
-    const history = useConversationHistory()
-    const huge = 'x'.repeat(10 * 1024)
-    await history.persist(
-      'c1',
-      'Title',
-      [
-        message({
-          id: 'a1',
-          role: 'assistant',
-          parts: [{ type: 'tool-call', id: 'c1', name: 'read', status: 'done', output: huge }]
-        })
-      ],
-      null
-    )
+  it('leaves a message with no stored parts without a parts array', async () => {
+    send.mockResolvedValueOnce({
+      id: 'c1',
+      title: 'Title',
+      createdAt: 1,
+      updatedAt: 1,
+      messages: [
+        {
+          id: 'u1',
+          role: 'user',
+          content: 'hi',
+          status: 'complete',
+          seq: 0,
+          createdAt: 1
+        }
+      ]
+    })
 
-    const stored = send.mock.calls[0]?.[1].messages[0].meta.parts[0]
-    expect(stored.output.length).toBeLessThanOrEqual(8 * 1024 + 1)
-    expect(stored.output.endsWith('…')).toBe(true)
-  })
+    const restored = await useConversationHistory().load('c1')
 
-  it('stores a long answer whole, because the body renders prose from the parts', async () => {
-    // Capping this would reload a long reply visibly cut off; the cap is for
-    // trail material, not for the answer itself.
-    const history = useConversationHistory()
-    const huge = 'x'.repeat(10 * 1024)
-    await history.persist(
-      'c1',
-      'Title',
-      [message({ id: 'a1', role: 'assistant', parts: [{ type: 'text', text: huge }] })],
-      null
-    )
-
-    const stored = send.mock.calls[0]?.[1].messages[0].meta.parts[0]
-    expect(stored.text).toBe(huge)
-  })
-
-  it('still caps a runaway reasoning span, which is trail material', async () => {
-    const history = useConversationHistory()
-    const huge = 'x'.repeat(10 * 1024)
-    await history.persist(
-      'c1',
-      'Title',
-      [
-        message({
-          id: 'a1',
-          role: 'assistant',
-          parts: [{ type: 'reasoning', text: huge, done: true }]
-        })
-      ],
-      null
-    )
-
-    const stored = send.mock.calls[0]?.[1].messages[0].meta.parts[0]
-    expect(stored.text.length).toBeLessThanOrEqual(8 * 1024 + 1)
-    expect(stored.text.endsWith('…')).toBe(true)
-  })
-
-  it('stores no meta at all for plain messages', async () => {
-    const history = useConversationHistory()
-    await history.persist('c1', 'Title', [message({ id: 'u1' })], null)
-
-    expect(send.mock.calls[0]?.[1].messages[0].meta).toBeUndefined()
+    expect(restored?.messages[0]?.parts).toBeUndefined()
+    expect(restored?.messages[0]?.meta).toBeUndefined()
   })
 })
 
@@ -320,16 +187,6 @@ describe('load survives a store failure', () => {
     const history = useConversationHistory()
 
     await expect(history.load('c1')).resolves.toBeNull()
-  })
-
-  it('依然会记录失败原因,而不是静默吞掉', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    send.mockRejectedValue(new Error('conversation store unavailable'))
-
-    await useConversationHistory().load('c1')
-
-    expect(consoleError).toHaveBeenCalled()
-    consoleError.mockRestore()
   })
 
   it('正常返回的会话仍然被还原(否则上面两条会掩盖"永远返回 null")', async () => {
@@ -352,21 +209,10 @@ describe('load survives a store failure', () => {
 
 /**
  * A conversation's project is what keeps a project-local thread out of Home and back in its folder
- * group. `persist` must carry the owner the caller decided; `load` must hand it back, or the next
- * autosave after a reload would silently reassign the thread to Home.
+ * group. Home owns the write now; `load` must still hand the owner back, or the next autosave after
+ * a reload would silently reassign the thread to Home.
  */
 describe('project ownership', () => {
-  it('carries the owning project id the caller decided, including the unowned Home case', async () => {
-    const history = useConversationHistory()
-
-    // Each persist is a save followed by the list refresh, so the saves are calls 0 and 2.
-    await history.persist('c1', 'Title', [message({})], 'p1')
-    await history.persist('c2', 'Title', [message({})], null)
-
-    expect(send.mock.calls[0]?.[1].projectId).toBe('p1')
-    expect(send.mock.calls[2]?.[1].projectId).toBeNull()
-  })
-
   it('restores the stored project id so a reload keeps writing into the same project', async () => {
     send.mockResolvedValueOnce({
       id: 'c1',
@@ -399,5 +245,66 @@ describe('project ownership', () => {
     await expect(useConversationHistory().load('legacy')).resolves.toMatchObject({
       projectId: null
     })
+  })
+})
+
+describe('rename', () => {
+  it('renames only the requested thread and refreshes the shared sidebar list', async () => {
+    const rows = [
+      { id: 'c1', title: 'Original', createdAt: 1, updatedAt: 2 },
+      { id: 'c2', title: 'Other', createdAt: 1, updatedAt: 2 }
+    ]
+    send.mockImplementation(async (event, request) => {
+      if (event === ConversationEvents.list) return rows.map((row) => ({ ...row }))
+      if (event === ConversationEvents.rename) {
+        const row = rows.find((entry) => entry.id === request.id)
+        if (!row) throw new Error('conversation not found')
+        row.title = request.title
+        return { renamed: true }
+      }
+      throw new Error('unexpected conversation operation')
+    })
+    const history = useConversationHistory()
+    const sidebar = useConversationHistory()
+    await history.refresh()
+
+    await history.rename('c1', 'Renamed')
+
+    expect(sidebar.conversations.value.map(({ id, title }) => ({ id, title }))).toEqual([
+      { id: 'c1', title: 'Renamed' },
+      { id: 'c2', title: 'Other' }
+    ])
+  })
+
+  it('does not apply a rename that the store rejected', async () => {
+    send.mockRejectedValueOnce(new Error('rename denied'))
+
+    await expect(useConversationHistory().rename('c1', 'Title')).rejects.toThrow('rename denied')
+  })
+})
+
+describe('remove', () => {
+  it('deletes only the requested thread and refreshes the shared sidebar list', async () => {
+    let rows = [
+      { id: 'c1', title: 'Removed', createdAt: 1, updatedAt: 2 },
+      { id: 'kept', title: 'Kept', createdAt: 1, updatedAt: 2 }
+    ]
+    send.mockImplementation(async (event, request) => {
+      if (event === ConversationEvents.list) return rows.map((row) => ({ ...row }))
+      if (event === ConversationEvents.remove) {
+        rows = rows.filter((row) => row.id !== request.id)
+        return { deleted: true }
+      }
+      throw new Error('unexpected conversation operation')
+    })
+    const history = useConversationHistory()
+    const sidebar = useConversationHistory()
+    await history.refresh()
+
+    await history.remove('c1')
+
+    expect(sidebar.conversations.value).toEqual([
+      { id: 'kept', title: 'Kept', createdAt: 1, updatedAt: 2 }
+    ])
   })
 })

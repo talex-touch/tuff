@@ -6,7 +6,7 @@ import WidgetFrame from './WidgetFrame.vue'
 
 // WidgetFrame calls useI18n() in setup, and mounting it without an installed
 // i18n instance throws 'Need to install with `app.use` function' before a single
-// assertion runs. Same stub shape FlowSelector.test.ts uses.
+// assertion runs. Same stub shape MetaOverlay.test.ts uses.
 //
 // t(key, fallback): with no catalogue loaded vue-i18n resolves to the fallback,
 // so mirror that rather than echoing the key back.

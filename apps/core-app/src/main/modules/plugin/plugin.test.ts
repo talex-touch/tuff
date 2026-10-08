@@ -19,6 +19,7 @@ import { intelligenceApiEvents } from '@talex-touch/utils/transport/sdk/domains/
 
 import fse from 'fs-extra'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { PluginRuntimeHostError } from './host/plugin-runtime-host'
@@ -2245,6 +2246,48 @@ describe('touchPlugin.setRuntime', () => {
       5,
       path.join(rootPath, 'modules', 'plugins', 'test-plugin', 'data', 'temp')
     )
+  })
+})
+
+describe('touchPlugin status', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('tells main-process modules about a status change, with the status it left, and only then', () => {
+    const emit = vi.spyOn(touchEventBus, 'emit')
+    const plugin = new TouchPlugin(
+      'test-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: true, address: 'http://localhost' },
+      '/tmp',
+      {},
+      { skipDataInit: true }
+    )
+    const statusEvents = () =>
+      emit.mock.calls
+        .filter(([name]) => name === TalexEvents.PLUGIN_STATUS_CHANGED)
+        .map(([, event]) => event)
+
+    plugin.status = PluginStatus.ENABLED
+    plugin.status = PluginStatus.ENABLED
+    plugin.status = PluginStatus.ACTIVE
+
+    expect(statusEvents()).toEqual([
+      expect.objectContaining({
+        pluginName: 'test-plugin',
+        status: PluginStatus.ENABLED,
+        previousStatus: PluginStatus.DISABLED
+      }),
+      expect.objectContaining({
+        pluginName: 'test-plugin',
+        status: PluginStatus.ACTIVE,
+        previousStatus: PluginStatus.ENABLED
+      })
+    ])
   })
 })
 

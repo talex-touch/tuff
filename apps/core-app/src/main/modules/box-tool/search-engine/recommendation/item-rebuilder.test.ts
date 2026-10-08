@@ -119,12 +119,8 @@ describe('ItemRebuilder', () => {
     // The lifetime count is a fact, but with no accepted execution the item has no dated proof of
     // a habit: it must not wear "常用" (R9).
     const meta = result[0]?.meta as Record<string, unknown>
-    const recommendation = meta.recommendation as {
-      source?: string
-      frequentEligible?: boolean
-    }
+    const recommendation = meta.recommendation as { source?: string }
     expect(recommendation.source).toBe('cold-start')
-    expect(recommendation.frequentEligible).toBe(false)
   })
 
   it('returns items in scored order across sources', async () => {
@@ -247,41 +243,6 @@ describe('ItemRebuilder', () => {
         variant: 'intelligent'
       }
     })
-  })
-
-  it('marks a rebuilt candidate grid-eligible only from dated behaviour, never from its label', async () => {
-    // The grid admits a tile by this flag, so it must be the scorer's threshold verdict rather
-    // than the reason label: a `frequent`-labelled row with no dated executions is not a habit.
-    register('app-provider', [appItem('/Applications/Demo.app')])
-    const rebuilder = new ItemRebuilder()
-
-    const eligible = (
-      await rebuilder.rebuildItems([
-        scoredApp('/Applications/Demo.app', 1, {
-          source: 'frequent',
-          behavior: {
-            executeCount: 12,
-            executeCount30: 5,
-            executeCount7: 2,
-            activeDays30: 3,
-            lastExecutedAt: Date.now(),
-            decayedExecuteScore30: 4,
-            hourDistribution30: Array.from({ length: 24 }, () => 0),
-            dayOfWeekDistribution30: Array.from({ length: 7 }, () => 0),
-            timeSlotDistribution30: { morning: 0, afternoon: 0, evening: 0, night: 0 }
-          }
-        })
-      ])
-    )[0]?.meta as Record<string, unknown>
-
-    const labelledOnly = (
-      await rebuilder.rebuildItems([scoredApp('/Applications/Demo.app', 1, { source: 'frequent' })])
-    )[0]?.meta as Record<string, unknown>
-
-    expect((eligible.recommendation as { frequentEligible?: boolean }).frequentEligible).toBe(true)
-    expect((labelledOnly.recommendation as { frequentEligible?: boolean }).frequentEligible).toBe(
-      false
-    )
   })
 
   it('reports last-executed evidence only from a dated execution ledger', async () => {

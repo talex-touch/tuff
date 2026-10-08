@@ -1,0 +1,21 @@
+{
+  "name": "@talex-touch/pi-desktop-reuse",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pinned PI-Desktop logic and explicitly licensed Tuff host adaptations",
+  "license": "LGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/talex-touch/tuff.git",
+    "directory": "packages/pi-desktop-reuse"
+  },
+  "exports": {
+    "./*": {
+      "types": "./src/*.ts",
+      "import": "./src/*.ts",
+      "default": "./src/*.ts"
+    }
+  },
+  "files": ["src", "LICENSE", "COPYING", "NOTICE", "sources.json", "BUILDING.md"]
+}

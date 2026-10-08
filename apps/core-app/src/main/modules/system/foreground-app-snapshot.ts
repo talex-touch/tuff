@@ -5,12 +5,8 @@ import { isSelfAppIdentity } from './self-app-identity'
 
 const snapshotLog = createLogger('ActiveApp').child('Snapshot')
 
-/**
- * How long a pre-open snapshot stays usable. Long enough to survive the
- * round trip of opening CoreBox, short enough that a stale app never poses as
- * the current context.
- */
-export const FOREGROUND_APP_SNAPSHOT_TTL_MS = 15_000
+/** Cold OS source queries complete asynchronously; stay below CoreBox's 400ms response budget. */
+const FOREGROUND_APP_CAPTURE_WAIT_MS = 300
 
 export interface ForegroundAppSnapshot {
   app: ActiveAppInfo
@@ -22,6 +18,18 @@ export interface ForegroundAppSnapshotDeps {
   queryActiveApp: () => Promise<ActiveAppInfo | null>
   isSelfApp: (info: ActiveAppInfo) => boolean
   now: () => number
+}
+
+/** A foreground app the OS already reported, so capturing it spawns nothing. */
+export interface InstantForegroundApp {
+  app: ActiveAppInfo
+  /** Settles with the display name when it was not known yet at read time. */
+  pendingName: Promise<string | null> | null
+}
+
+export interface InstantForegroundAppSource {
+  /** Null when the source has nothing to report; the store then queries the OS as before. */
+  readForegroundApp: () => InstantForegroundApp | null
 }
 
 /**
@@ -45,29 +53,37 @@ export function isSelfActiveApp(
   )
 }
 
-/**
- * Holds the app that was in the foreground before CoreBox opened.
- *
- * The capture is fire-and-forget (it must never delay `show()`): it asks the
- * active-app service, which answers from its own short-lived cache when warm
- * and otherwise queries the OS. A result that resolves too late — after focus
- * was stolen — reads as Touch and is dropped rather than stored.
- */
+/** Holds one source app for the whole CoreBox activation, until hide clears it. */
 export class ForegroundAppSnapshotStore {
   private snapshot: ForegroundAppSnapshot | null = null
-  private captureInFlight = false
+  private capturePending: Promise<void> | null = null
+  private generation = 0
+  private active = false
+  private instantSource: InstantForegroundAppSource | null = null
 
   constructor(private readonly deps: ForegroundAppSnapshotDeps) {}
 
-  capture(): void {
-    if (this.captureInFlight) return
-    this.captureInFlight = true
-    const requestedAt = this.deps.now()
+  get hasActiveSession(): boolean {
+    return this.active
+  }
 
-    void this.deps
+  /** The macOS activation tracker registers here; without a source, capture queries the OS. */
+  setInstantSource(source: InstantForegroundAppSource | null): void {
+    this.instantSource = source
+  }
+
+  capture(): void {
+    if (this.active) return
+    this.active = true
+    this.snapshot = null
+    const generation = ++this.generation
+    const requestedAt = this.deps.now()
+    if (this.captureInstant(generation, requestedAt)) return
+
+    this.capturePending = this.deps
       .queryActiveApp()
       .then((activeApp) => {
-        if (!activeApp) return
+        if (generation !== this.generation || !this.active || !activeApp) return
         if (this.deps.isSelfApp(activeApp)) {
           snapshotLog.debug('Skipped foreground snapshot resolving to Touch itself')
           return
@@ -78,19 +94,72 @@ export class ForegroundAppSnapshotStore {
         snapshotLog.debug('Failed to capture foreground app snapshot', { error })
       })
       .finally(() => {
-        this.captureInFlight = false
+        if (generation === this.generation) this.capturePending = null
       })
   }
 
-  /** The snapshot if it is younger than `maxAgeMs`, else null. */
-  get(maxAgeMs = FOREGROUND_APP_SNAPSHOT_TTL_MS): ForegroundAppSnapshot | null {
-    if (!this.snapshot) return null
-    if (this.deps.now() - this.snapshot.capturedAt >= maxAgeMs) return null
-    return this.snapshot
+  /**
+   * Takes the snapshot from what the OS already reported. The AppleScript query costs ~250 ms that
+   * CoreBox's first recommendation pass used to wait for; here only a display name that is not
+   * cached yet may still be pending, and it settles in one `lsappinfo` call.
+   */
+  private captureInstant(generation: number, requestedAt: number): boolean {
+    let instant: InstantForegroundApp | null = null
+    try {
+      instant = this.instantSource?.readForegroundApp() ?? null
+    } catch (error) {
+      snapshotLog.debug('Failed to read the instant foreground app', { error })
+    }
+    if (!instant) return false
+    if (this.deps.isSelfApp(instant.app)) {
+      snapshotLog.debug('Skipped foreground snapshot resolving to Touch itself')
+      return true
+    }
+
+    this.snapshot = { app: instant.app, capturedAt: requestedAt }
+    const { pendingName } = instant
+    if (!pendingName) return true
+    this.capturePending = pendingName
+      .then((name) => {
+        const snapshot = this.snapshot
+        if (generation !== this.generation || !this.active || !snapshot || !name) return
+        this.snapshot = { ...snapshot, app: { ...snapshot.app, displayName: name } }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (generation === this.generation) this.capturePending = null
+      })
+    return true
+  }
+
+  get(): ForegroundAppSnapshot | null {
+    return this.active ? this.snapshot : null
+  }
+
+  async resolve(maxWaitMs = FOREGROUND_APP_CAPTURE_WAIT_MS): Promise<ForegroundAppSnapshot | null> {
+    const generation = this.generation
+    const pending = this.capturePending
+    if (pending) {
+      let timer: NodeJS.Timeout | undefined
+      try {
+        await Promise.race([
+          pending,
+          new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, Math.max(0, maxWaitMs))
+          })
+        ])
+      } finally {
+        clearTimeout(timer)
+      }
+    }
+    return generation === this.generation ? this.get() : null
   }
 
   clear(): void {
+    this.generation += 1
+    this.active = false
     this.snapshot = null
+    this.capturePending = null
   }
 }
 
@@ -100,7 +169,7 @@ export const foregroundAppSnapshotStore = new ForegroundAppSnapshotStore({
   // service (and its icon/platform tooling) into their module graph.
   queryActiveApp: async () => {
     const { activeAppService } = await import('./active-app')
-    return await activeAppService.getActiveApp({ includeIcon: false })
+    return await activeAppService.getActiveApp({ includeIcon: false, forceRefresh: true })
   },
   isSelfApp: (info) => isSelfActiveApp(info),
   now: () => Date.now()

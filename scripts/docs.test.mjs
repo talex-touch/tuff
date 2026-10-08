@@ -1,85 +1,18 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { describe, it } from 'vitest'
+import { checkMarkdownAndLinks, renderDiagnostics, repositoryFiles, scopeRegistry, verifyDocs } from './docs/verify-docs.mjs'
+import { parseRetiredTaskIndex } from './lib/retired-task-index.mjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const fixturesRoot = path.join(repoRoot, 'scripts', 'docs', 'fixtures')
 
-const HARNESS_CANDIDATES = [
-  'scripts/docs/verifier.mjs',
-  'scripts/docs/verify-docs.mjs',
-  'scripts/docs/index.mjs',
-]
-
-const HARNESS_EXPORTS = [
-  'scopeRegistry/checkMarkdownAndLinks/checkTasks/checkReleaseNotes/checkPlaceholders',
-  'verifyDocumentationFixture',
-  'verifyDocsFixture',
-  'runDocumentationVerifier',
-  'runDocsVerifier',
-  'verifyDocumentation',
-  'verifyDocs',
-]
-
-async function loadVerifierHarness() {
-  const attempts = []
-
-  for (const relativePath of HARNESS_CANDIDATES) {
-    const absolutePath = path.join(repoRoot, relativePath)
-    if (!fs.existsSync(absolutePath)) {
-      attempts.push(`${relativePath}: missing`)
-      continue
-    }
-
-    const module = await import(pathToFileURL(absolutePath).href)
-    if (
-      typeof module.scopeRegistry === 'function'
-      && typeof module.checkMarkdownAndLinks === 'function'
-      && typeof module.checkTasks === 'function'
-      && typeof module.checkReleaseNotes === 'function'
-      && typeof module.checkPlaceholders === 'function'
-    ) {
-      return {
-        source: `${relativePath}#rule-exports`,
-        run: ({ fixtureRoot, trackedFiles, skipAiDocs = false }) => {
-          const scope = module.scopeRegistry(fixtureRoot, trackedFiles)
-          const diagnostics = [
-            ...module.checkMarkdownAndLinks(fixtureRoot, scope),
-            ...module.checkTasks(fixtureRoot, scope),
-            ...module.checkReleaseNotes(fixtureRoot, scope),
-            ...(typeof module.checkAiDocs === 'function' ? module.checkAiDocs(fixtureRoot, scope, { skipAiDocs }) : []),
-            ...module.checkPlaceholders(fixtureRoot, scope),
-          ].sort((a, b) =>
-            a.ruleId.localeCompare(b.ruleId)
-            || a.file.localeCompare(b.file)
-            || a.line - b.line
-            || a.column - b.column
-            || a.message.localeCompare(b.message),
-          )
-          return { exitCode: diagnostics.length ? 1 : 0, diagnostics }
-        },
-      }
-    }
-
-    for (const exportName of HARNESS_EXPORTS) {
-      if (typeof module[exportName] === 'function') {
-        return { run: module[exportName], source: `${relativePath}#${exportName}` }
-      }
-    }
-    attempts.push(`${relativePath}: no supported fixture verifier export`)
-  }
-
-  throw new Error(
-    [
-      'Canonical documentation verifier fixture harness is unavailable.',
-      `Looked for: ${attempts.join('; ')}`,
-      `Expected one of these function exports: ${HARNESS_EXPORTS.join(', ')}`,
-    ].join(' '),
-  )
-}
+const REGISTRY = 'docs/engineering/workflow/retired-task-index.json'
+const HANDOFF = 'docs/engineering/workflow/handoffs/07-27-documentation-quality-gates/README.md'
 
 function readFixture(name) {
   const fixtureRoot = path.join(fixturesRoot, name)
@@ -122,6 +55,8 @@ function materializeFixtureCase(name, seen = new Set()) {
     tracked = new Set(base.trackedFiles)
   }
 
+  // Removing a path from the declared file set leaves the file on disk: the verifier must judge the
+  // repository's file set, not whatever happens to be lying in the directory.
   for (const file of fixtureCase.trackedRemove ?? []) tracked.delete(file)
 
   for (const [file, content] of Object.entries(fixtureCase.files ?? {})) {
@@ -152,73 +87,36 @@ function materializeFixtureCase(name, seen = new Set()) {
   }
 }
 
-async function runFixture(name) {
-  const { run } = await loadVerifierHarness()
-  const fixture = readFixture(name)
-
-  const result = await run({
-    fixtureRoot: fixture.fixtureRoot,
-    repoRoot: fixture.fixtureRoot,
-    trackedFiles: fixture.trackedFiles,
-    skipAiDocs: fixture.skipAiDocs === true,
-    diagnosticLimit: 50,
-  })
-
-  return normalizeVerifierResult(result)
+/** The CLI's own composition, with the fixture's declared list standing in for git. */
+function verify({ fixtureRoot, trackedFiles, skipAiDocs = false }) {
+  const diagnostics = verifyDocs(fixtureRoot, { files: trackedFiles, skipAiDocs })
+  return { exitCode: diagnostics.length ? 1 : 0, diagnostics }
 }
 
-async function runMaterializedFixture(fixture) {
-  const { run } = await loadVerifierHarness()
-
-  const result = await run({
-    fixtureRoot: fixture.fixtureRoot,
-    repoRoot: fixture.fixtureRoot,
-    trackedFiles: fixture.trackedFiles,
-    skipAiDocs: fixture.skipAiDocs === true,
-    diagnosticLimit: 50,
-  })
-
-  return normalizeVerifierResult(result)
+function runFixture(name) {
+  return verify(readFixture(name))
 }
 
-async function runFixtureCase(name) {
+function runFixtureCase(name) {
   const fixture = materializeFixtureCase(name)
   try {
-    return await runMaterializedFixture(fixture)
+    return verify(fixture)
   }
   finally {
     fs.rmSync(fixture.fixtureRoot, { recursive: true, force: true })
   }
 }
 
-function normalizeVerifierResult(result) {
-  if (typeof result === 'number')
-    return { exitCode: result, diagnostics: [], stdout: '', stderr: '' }
-
-  const exitCode = Number(
-    result?.exitCode
-    ?? result?.code
-    ?? (result?.ok === true || result?.valid === true ? 0 : 1),
-  )
-
-  const diagnostics = Array.isArray(result?.diagnostics)
-    ? result.diagnostics
-    : Array.isArray(result?.errors)
-      ? result.errors
-      : []
-
-  return {
-    exitCode,
-    diagnostics,
-    stdout: String(result?.stdout ?? ''),
-    stderr: String(result?.stderr ?? ''),
-  }
+function diagnosticRuleIds(result) {
+  return result.diagnostics.map(diagnostic => diagnostic.ruleId)
 }
 
-function diagnosticRuleIds(result) {
-  return result.diagnostics
-    .map(diagnostic => diagnostic.ruleId ?? diagnostic.rule ?? diagnostic.code)
-    .filter(Boolean)
+function diagnosticPaths(result) {
+  return result.diagnostics.map(diagnostic => diagnostic.file)
+}
+
+function diagnosticMessages(result) {
+  return result.diagnostics.map(diagnostic => diagnostic.message)
 }
 
 function assertDiagnosticShape(result) {
@@ -233,26 +131,8 @@ function assertDiagnosticShape(result) {
   }
 }
 
-function diagnosticPaths(result) {
-  return result.diagnostics
-    .map(diagnostic => diagnostic.path ?? diagnostic.file ?? diagnostic.sourcePath)
-    .filter(Boolean)
-}
-
-function diagnosticMessages(result) {
-  return result.diagnostics
-    .map(diagnostic => diagnostic.message ?? '')
-    .filter(Boolean)
-}
-
 function diagnosticSortKey(diagnostic) {
-  return [
-    diagnostic.ruleId ?? diagnostic.rule ?? diagnostic.code ?? '',
-    diagnostic.file ?? diagnostic.path ?? diagnostic.sourcePath ?? '',
-    diagnostic.line ?? 0,
-    diagnostic.column ?? 0,
-    diagnostic.message ?? '',
-  ]
+  return [diagnostic.ruleId, diagnostic.file, diagnostic.line, diagnostic.column, diagnostic.message]
 }
 
 function snapshotFixtureFiles(name) {
@@ -274,48 +154,73 @@ function snapshotFixtureFiles(name) {
 }
 
 function renderedOutput(result) {
-  return [
-    result.stdout,
-    result.stderr,
-    ...result.diagnostics.map(diagnostic => JSON.stringify(diagnostic)),
-  ].join('\n')
+  return result.diagnostics.map(diagnostic => JSON.stringify(diagnostic)).join('\n')
 }
 
-async function loadVerifierModule() {
-  return import(pathToFileURL(path.join(repoRoot, 'scripts/docs/verify-docs.mjs')).href)
+function caseProblems(result, fixtureCase) {
+  const ruleIds = diagnosticRuleIds(result)
+  const paths = diagnosticPaths(result)
+  const messages = diagnosticMessages(result).join('\n')
+  const problems = []
+  for (const ruleId of fixtureCase.ruleIds ?? []) {
+    if (!ruleIds.includes(ruleId))
+      problems.push(`missing rule ${ruleId}; got ${ruleIds.join(', ')}`)
+  }
+  for (const ruleId of fixtureCase.absentRuleIds ?? []) {
+    if (ruleIds.includes(ruleId))
+      problems.push(`unexpected rule ${ruleId}; got ${ruleIds.join(', ')}`)
+  }
+  for (const expectedPath of fixtureCase.paths ?? []) {
+    if (!paths.includes(expectedPath))
+      problems.push(`missing path ${expectedPath}; got ${paths.join(', ')}`)
+  }
+  for (const absentPath of fixtureCase.absentPaths ?? []) {
+    if (paths.includes(absentPath))
+      problems.push(`unexpected path ${absentPath}; got ${paths.join(', ')}`)
+  }
+  for (const expectedMessage of fixtureCase.messages ?? []) {
+    if (!messages.includes(expectedMessage))
+      problems.push(`missing message ${expectedMessage}; got ${messages}`)
+  }
+  for (const absentMessage of fixtureCase.absentMessages ?? []) {
+    if (messages.includes(absentMessage))
+      problems.push(`unexpected message ${absentMessage}; got ${messages}`)
+  }
+  return problems
 }
 
 describe('canonical documentation verifier fixtures', () => {
-  it('accepts the aggregate valid fixture', async () => {
-    const result = await runFixtureCase('valid-final-contract')
+  it('accepts the aggregate valid fixture', () => {
+    // The registry's sourcePaths name task files that do not exist in the fixture: provenance is
+    // recorded, not required. The handoff holds genuine unresolved planning text as preserved history.
+    const result = runFixtureCase('valid-final-contract')
 
     assertDiagnosticShape(result)
     assert.equal(result.exitCode, 0)
     assert.deepEqual(result.diagnostics, [])
   })
 
-  it('keeps 2.4.13 release notes legacy-compatible', async () => {
-    const result = await runFixtureCase('release-notes-legacy-final-contract')
+  it('keeps 2.4.13 release notes legacy-compatible', () => {
+    const result = runFixtureCase('release-notes-legacy-final-contract')
 
     assertDiagnosticShape(result)
     assert.equal(result.exitCode, 0)
     assert.deepEqual(result.diagnostics, [])
   })
 
-  it('fails post-baseline release-note drift with stable rule IDs and paths', async () => {
-    const result = await runFixture('release-notes-post-baseline-invalid')
+  it('fails post-baseline release-note drift with stable rule IDs and paths', () => {
+    const result = runFixture('release-notes-post-baseline-invalid')
 
     assert.notEqual(result.exitCode, 0)
     assertDiagnosticShape(result)
 
     const ruleIds = diagnosticRuleIds(result)
-    assert.ok(ruleIds.length > 0, 'expected at least one diagnostic rule ID')
     assert.ok(
       ruleIds.every(ruleId => /^[A-Z][A-Z0-9.-]*$/i.test(ruleId)),
       `expected stable rule IDs, got: ${ruleIds.join(', ')}`,
     )
     assert.ok(
-      ruleIds.some(ruleId => /RELEASE|release.*note|note.*release/.test(ruleId)),
+      ruleIds.some(ruleId => ruleId.startsWith('DOC-RELEASE-')),
       `expected a release-note diagnostic rule ID, got: ${ruleIds.join(', ')}`,
     )
 
@@ -326,9 +231,9 @@ describe('canonical documentation verifier fixtures', () => {
     )
   })
 
-  it('renders identical diagnostics on repeated fixture runs', async () => {
-    const first = await runFixture('release-notes-post-baseline-invalid')
-    const second = await runFixture('release-notes-post-baseline-invalid')
+  it('renders identical diagnostics on repeated fixture runs', () => {
+    const first = runFixture('release-notes-post-baseline-invalid')
+    const second = runFixture('release-notes-post-baseline-invalid')
 
     assert.equal(first.exitCode, second.exitCode)
     assert.equal(renderedOutput(first), renderedOutput(second))
@@ -348,29 +253,12 @@ describe('canonical documentation verifier fixtures', () => {
   ]
 
   for (const fixtureCase of passingCases) {
-    it(`accepts ${fixtureCase.name}`, async () => {
-      const result = await runFixtureCase(fixtureCase.name)
+    it(`accepts ${fixtureCase.name}`, () => {
+      const result = runFixtureCase(fixtureCase.name)
 
       assertDiagnosticShape(result)
-      assert.equal(result.exitCode, 0)
-
-      const ruleIds = diagnosticRuleIds(result)
-      const paths = diagnosticPaths(result)
-      const messages = diagnosticMessages(result).join('\n')
-      const problems = []
-      for (const ruleId of fixtureCase.absentRuleIds ?? []) {
-        if (ruleIds.includes(ruleId))
-          problems.push(`unexpected rule ${ruleId}; got ${ruleIds.join(', ')}`)
-      }
-      for (const absentPath of fixtureCase.absentPaths ?? []) {
-        if (paths.includes(absentPath))
-          problems.push(`unexpected path ${absentPath}; got ${paths.join(', ')}`)
-      }
-      for (const absentMessage of fixtureCase.absentMessages ?? []) {
-        if (messages.includes(absentMessage))
-          problems.push(`unexpected message ${absentMessage}; got ${messages}`)
-      }
-      assert.deepEqual(problems, [])
+      assert.equal(result.exitCode, 0, renderedOutput(result))
+      assert.deepEqual(caseProblems(result, fixtureCase), [])
     })
   }
 
@@ -378,10 +266,15 @@ describe('canonical documentation verifier fixtures', () => {
     {
       name: 'markdown-link-edges-and-scope-poison',
       ruleIds: ['DOC-LINK-INVALID', 'DOC-LINK-UNTRACKED'],
-      paths: ['docs/INDEX.md', 'docs/link-edge.mdc'],
+      // The retired task tree has no exemption any more: a document left there is checked like any
+      // other. Agent and platform instruction roots stay out of product-doc parsing.
+      paths: ['.trellis/internal/poison.md', 'docs/INDEX.md', 'docs/link-edge.mdc'],
       absentPaths: [
+        '.agents/skills/docs-quality/poison.md',
+        '.claude/rules/poison.md',
+        '.codex/rules/poison.md',
         '.github/poison.md',
-        '.trellis/internal/poison.md',
+        '.omp/rules/poison.md',
         'AGENTS.md',
         'apps/nexus/examples/poison.md',
         'coverage/poison.md',
@@ -397,7 +290,6 @@ describe('canonical documentation verifier fixtures', () => {
       paths: ['docs/nul-byte.md', 'docs/nul-byte.mdc'],
       absentPaths: [
         '.github/nul-poison.md',
-        '.trellis/internal/nul-poison.md',
         'AGENTS.md',
         'coverage/nul-poison.md',
         'dist/nul-poison.md',
@@ -418,68 +310,6 @@ describe('canonical documentation verifier fixtures', () => {
       messages: ['Markdown must not contain NUL bytes'],
     },
     {
-      name: 'trellis-archive-layout-final-identity-completion-graph',
-      ruleIds: [
-        'DOC-TASK-ARCHIVE-META',
-        'DOC-TASK-ARCHIVE-NONCOMPLETED',
-        'DOC-TASK-GRAPH',
-        'DOC-TASK-IDENTITY',
-      ],
-      paths: [
-        '.trellis/tasks/archive/2026-07/final-child/task.json',
-        '.trellis/tasks/archive/2026-07/final-layout/task.json',
-        '.trellis/tasks/archive/2026-07/final-parent/task.json',
-      ],
-      messages: [
-        'archived task must be completed',
-        'archived task requires non-empty assignee and completedAt',
-        'task id must equal path identity final-child',
-        'child 07-28-final-child does not point to final-parent',
-      ],
-    },
-    {
-      name: 'trellis-malformed-task-roots-types',
-      ruleIds: ['DOC-TASK-TYPE'],
-      paths: [
-        '.trellis/tasks/array-root/task.json',
-        '.trellis/tasks/bad-status-parent-types/task.json',
-        '.trellis/tasks/null-root/task.json',
-        '.trellis/tasks/scalar-root/task.json',
-      ],
-      messages: [
-        'task JSON root must be an object',
-        'status must be one of completed, in_progress, planning, review',
-        'parent has an invalid type',
-      ],
-    },
-    {
-      name: 'prd-empty-sections-excluding-code',
-      ruleIds: ['DOC-PRD-EMPTY-SECTION'],
-      paths: ['.trellis/tasks/active-doc-task/prd.md'],
-      absentMessages: ['Code Fence Empty Section'],
-      messages: ['required template section has no substantive content'],
-    },
-    {
-      name: 'trellis-graph-meta-archive-todo',
-      ruleIds: [
-        'DOC-TASK-ACTIVE-COMPLETED',
-        'DOC-TASK-ARCHIVE-META',
-        'DOC-TASK-DUPLICATE-ID',
-        'DOC-TASK-GRAPH',
-        'DOC-TASK-JSON',
-        'DOC-TASK-META',
-        'DOC-TODO-TASK-REFERENCE',
-      ],
-      paths: [
-        '.trellis/tasks/archive/2026-07/incomplete-task/task.json',
-        '.trellis/tasks/active-doc-task/task.json',
-        '.trellis/tasks/completed-active/task.json',
-        '.trellis/tasks/invalid-json/task.json',
-        '.trellis/tasks/parent/task.json',
-        'docs/plan-prd/TODO.md',
-      ],
-    },
-    {
       name: 'release-version-mismatch',
       ruleIds: ['DOC-RELEASE-VERSION'],
       paths: ['package.json'],
@@ -494,60 +324,49 @@ describe('canonical documentation verifier fixtures', () => {
       absentMessages: ['missing '],
     },
     {
-      name: 'prd-placeholders-and-allowlist',
-      ruleIds: ['DOC-PRD-PLACEHOLDER'],
-      paths: [
-        '.trellis/tasks/active-doc-task/prd.md',
-        '.trellis/tasks/07-27-documentation-quality-gates/prd.md',
-      ],
-      messages: ['TBD', 'TODO: fill', '<evidence>', 'required template section has no substantive content'],
+      // A handoff is preserved history, but its links are checked like other product documentation.
+      name: 'handoff-links-checked',
+      ruleIds: ['DOC-LINK-UNTRACKED'],
+      paths: [HANDOFF],
+    },
+    {
+      // The registry is still on disk; it is no longer part of the repository's file set.
+      name: 'task-index-missing',
+      ruleIds: ['DOC-TASK-INDEX-MISSING'],
+      paths: [REGISTRY],
+    },
+    {
+      name: 'task-index-json',
+      ruleIds: ['DOC-TASK-INDEX-JSON'],
+      paths: [REGISTRY],
+    },
+    {
+      name: 'task-index-shape-and-duplicate',
+      ruleIds: ['DOC-TASK-INDEX-DUPLICATE', 'DOC-TASK-INDEX-SHAPE'],
+      paths: [REGISTRY],
+    },
+    {
+      // The declared handoff is still on disk but outside the file set, so it did not survive.
+      name: 'task-index-handoff-missing',
+      ruleIds: ['DOC-TASK-INDEX-HANDOFF'],
+      paths: [REGISTRY],
     },
   ]
 
   for (const fixtureCase of failingCases) {
-    it(`fails ${fixtureCase.name} with stable rule IDs and paths`, async () => {
-      const result = await runFixtureCase(fixtureCase.name)
+    it(`fails ${fixtureCase.name} with stable rule IDs and paths`, () => {
+      const result = runFixtureCase(fixtureCase.name)
 
       assert.notEqual(result.exitCode, 0)
       assertDiagnosticShape(result)
-
-      const ruleIds = diagnosticRuleIds(result)
-      const paths = diagnosticPaths(result)
-      const messages = diagnosticMessages(result).join('\n')
-      const problems = []
-      for (const ruleId of fixtureCase.ruleIds) {
-        if (!ruleIds.includes(ruleId))
-          problems.push(`missing rule ${ruleId}; got ${ruleIds.join(', ')}`)
-      }
-
-      for (const expectedPath of fixtureCase.paths) {
-        if (!paths.includes(expectedPath))
-          problems.push(`missing path ${expectedPath}; got ${paths.join(', ')}`)
-      }
-
-      for (const excludedPath of fixtureCase.absentPaths ?? []) {
-        if (paths.includes(excludedPath))
-          problems.push(`unexpected excluded poison path ${excludedPath}; got ${paths.join(', ')}`)
-      }
-
-      for (const expectedMessage of fixtureCase.messages ?? []) {
-        if (!messages.includes(expectedMessage))
-          problems.push(`missing message ${expectedMessage}; got ${messages}`)
-      }
-
-      for (const absentMessage of fixtureCase.absentMessages ?? []) {
-        if (messages.includes(absentMessage))
-          problems.push(`unexpected message ${absentMessage}; got ${messages}`)
-      }
-
-      assert.deepEqual(problems, [])
+      assert.deepEqual(caseProblems(result, fixtureCase), [])
     })
   }
 
-  it('sorts diagnostics deterministically and renders capped totals', async () => {
+  it('sorts diagnostics deterministically and renders capped totals', () => {
     const fixture = materializeFixtureCase('markdown-link-edges-and-scope-poison')
     try {
-      const result = await runMaterializedFixture(fixture)
+      const result = verify(fixture)
       const keys = result.diagnostics.map(diagnosticSortKey)
       assert.deepEqual(keys, [...keys].sort((a, b) => {
         for (let index = 0; index < a.length; index += 1) {
@@ -565,7 +384,6 @@ describe('canonical documentation verifier fixtures', () => {
         return 0
       }))
 
-      const { renderDiagnostics } = await loadVerifierModule()
       const output = renderDiagnostics(result.diagnostics, 2)
       assert.match(output, /docs:verify failed: shown 2\/\d+; totals /)
       for (const ruleId of new Set(diagnosticRuleIds(result))) {
@@ -579,10 +397,10 @@ describe('canonical documentation verifier fixtures', () => {
     }
   })
 
-  it('leaves source fixtures read-only and produces byte-identical repeated output', async () => {
+  it('leaves source fixtures read-only and produces byte-identical repeated output', () => {
     const before = snapshotFixtureFiles('valid-aggregate')
-    const first = await runFixtureCase('valid-final-contract')
-    const second = await runFixtureCase('valid-final-contract')
+    const first = runFixtureCase('valid-final-contract')
+    const second = runFixtureCase('valid-final-contract')
     const after = snapshotFixtureFiles('valid-aggregate')
 
     assert.deepEqual(after, before)
@@ -590,8 +408,7 @@ describe('canonical documentation verifier fixtures', () => {
     assert.equal(renderedOutput(first), renderedOutput(second))
   })
 
-  it('renders diagnostics with per-rule totals and round-robin caps', async () => {
-    const { renderDiagnostics } = await loadVerifierModule()
+  it('renders diagnostics with per-rule totals and round-robin caps', () => {
     const diagnostics = [
       { ruleId: 'DOC-ZETA', file: 'docs/zeta-1.md', line: 1, column: 1, message: 'zeta 1' },
       { ruleId: 'DOC-ALPHA', file: 'docs/alpha-2.md', line: 1, column: 1, message: 'alpha 2' },
@@ -611,49 +428,221 @@ describe('canonical documentation verifier fixtures', () => {
     )
     assert.equal(lines[5], 'docs:verify failed: shown 5/7; totals DOC-ALPHA=2, DOC-BETA=2, DOC-ZETA=3')
   })
+})
 
-  it('exports no production PRD placeholder self-allowlist entries', async () => {
-    const { PLACEHOLDER_ALLOWLIST = [] } = await loadVerifierModule()
+describe('retired task registry', () => {
+  const COMMIT = '0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c'
+  const frozen = () => ({
+    slug: '07-27-documentation-quality-gates',
+    id: 'documentation-quality-gates',
+    title: 'Documentation quality gates',
+    status: 'in_progress',
+    disposition: 'frozen',
+    sourcePath: '.trellis/tasks/07-27-documentation-quality-gates/task.json',
+    handoff: HANDOFF,
+  })
+  const historical = () => ({
+    slug: '07-20-completed-doc-task',
+    id: 'completed-doc-task',
+    title: 'Completed documentation task',
+    status: 'completed',
+    disposition: 'historical',
+    sourcePath: '.trellis/tasks/archive/2026-07/07-20-completed-doc-task/task.json',
+  })
+  /** A valid two-entry registry, edited in place or replaced by `edit`. */
+  const registryText = (edit = () => {}) => {
+    const value = { schemaVersion: 1, baselineCommit: COMMIT, tasks: [frozen(), historical()] }
+    const replaced = edit(value)
+    return JSON.stringify(replaced === undefined ? value : replaced)
+  }
+
+  it('accepts frozen active tasks, history from either archive root, nested archive duplicates and surviving handoffs', () => {
+    const tasks = [
+      frozen(),
+      historical(),
+      // The real archive nests a task inside its own directory: same slug, two sources.
+      { ...historical(), slug: '07-10-r9-2-compression-snapshot', id: 'r9-2-compression-snapshot', sourcePath: '.trellis/tasks/archive/2026-07/07-10-r9-2-compression-snapshot/task.json' },
+      { ...historical(), slug: '07-10-r9-2-compression-snapshot', id: 'r9-2-compression-snapshot', sourcePath: '.trellis/tasks/archive/2026-07/07-10-r9-2-compression-snapshot/07-10-r9-2-compression-snapshot/task.json' },
+      { ...historical(), slug: '07-05-legacy-archive-root', id: 'legacy-archive-root', sourcePath: '.trellis/archive/tasks/07-05-legacy-archive-root/task.json' },
+      // Status keeps whatever the old record said; a living report can be the surviving handoff.
+      { ...frozen(), slug: '07-13-search-crossplatform-audit', id: 'search-crossplatform-audit', status: 'review', sourcePath: '.trellis/tasks/07-13-search-crossplatform-audit/task.json', handoff: 'docs/engineering/reports/search-crossplatform-audit.md' },
+    ]
 
     assert.deepEqual(
-      PLACEHOLDER_ALLOWLIST
-        .filter(entry => /^\.trellis\/tasks\/[^/]+\/prd\.md$/.test(entry.path ?? ''))
-        .map(entry => entry.path)
-        .sort(),
-      [],
+      parseRetiredTaskIndex(JSON.stringify({ schemaVersion: 1, baselineCommit: COMMIT, tasks })),
+      { tasks, issues: [] },
     )
   })
 
-  it('rejects stale, broad, and unjustified placeholder allowlist shapes', async () => {
-    const { PLACEHOLDER_ALLOWLIST = [] } = await loadVerifierModule()
-    const fixture = materializeFixtureCase('valid-final-contract')
-    try {
-      const tracked = new Set(fixture.trackedFiles)
-      const invalidAllowlistCases = [
-        {
-          name: 'stale path',
-          invalid: entry => typeof entry.path === 'string' && !tracked.has(entry.path),
-        },
-        {
-          name: 'broad path',
-          invalid: entry => typeof entry.path !== 'string' || entry.path.includes('*') || !/^\.trellis\/tasks\/[^/]+\/prd\.md$/.test(entry.path),
-        },
-        {
-          name: 'missing rationale',
-          invalid: entry => typeof entry.rationale !== 'string' || entry.rationale.trim() === '',
-        },
-      ]
+  it('fails closed: one invalid entry withholds every entry', () => {
+    const result = parseRetiredTaskIndex(registryText((value) => {
+      value.tasks[1].title = ''
+    }))
 
-      for (const fixtureCase of invalidAllowlistCases) {
+    assert.deepEqual(result.tasks, [])
+    assert.deepEqual(result.issues.map(issue => [issue.code, issue.pointer]), [['shape', 'tasks[1].title']])
+  })
+
+  it('reports text that is not JSON as a json issue and vouches for nothing', () => {
+    const result = parseRetiredTaskIndex('{ "schemaVersion": 1, "tasks": [')
+
+    assert.deepEqual(result.tasks, [])
+    assert.deepEqual(result.issues.map(issue => issue.code), ['json'])
+  })
+
+  it('reports a repeated sourcePath as a duplicate', () => {
+    const result = parseRetiredTaskIndex(registryText((value) => {
+      value.tasks.push({ ...historical(), id: 'completed-doc-task-copy' })
+    }))
+
+    assert.deepEqual(result.tasks, [])
+    assert.deepEqual(result.issues.map(issue => [issue.code, issue.pointer]), [['duplicate', 'tasks[2].sourcePath']])
+  })
+
+  // Each edit breaks exactly one rule of a valid registry, so exactly one issue may come back.
+  const shapeCases = [
+    ['a root that is not an object', () => [], ''],
+    ['an unknown root field', (value) => {
+      value.generatedAt = '2026-10-03'
+    }, 'generatedAt'],
+    ['a schemaVersion other than the number 1', (value) => {
+      value.schemaVersion = '1'
+    }, 'schemaVersion'],
+    ['an abbreviated baseline commit', (value) => {
+      value.baselineCommit = COMMIT.slice(0, 9)
+    }, 'baselineCommit'],
+    ['an uppercase baseline commit', (value) => {
+      value.baselineCommit = COMMIT.toUpperCase()
+    }, 'baselineCommit'],
+    ['tasks that are not an array', (value) => {
+      value.tasks = {}
+    }, 'tasks'],
+    ['an empty task list', (value) => {
+      value.tasks = []
+    }, 'tasks'],
+    ['an entry that is not an object', (value) => {
+      value.tasks[1] = '07-20-completed-doc-task'
+    }, 'tasks[1]'],
+    ['an unknown entry field', (value) => {
+      value.tasks[1].notes = 'carried over'
+    }, 'tasks[1].notes'],
+    ...['slug', 'id', 'title', 'status', 'disposition', 'sourcePath'].map(key => [`a blank ${key}`, (value) => {
+      value.tasks[1][key] = ' '
+    }, `tasks[1].${key}`]),
+    ['a non-string id', (value) => {
+      value.tasks[1].id = 42
+    }, 'tasks[1].id'],
+    ['a disposition outside frozen and historical', (value) => {
+      value.tasks[1].disposition = 'completed'
+    }, 'tasks[1].disposition'],
+    ['an active task recorded as historical', (value) => {
+      value.tasks[0].disposition = 'historical'
+    }, 'tasks[0].disposition'],
+    ['an archived task recorded as frozen', (value) => {
+      value.tasks[1].disposition = 'frozen'
+    }, 'tasks[1].disposition'],
+    ['a slug that is not the task directory', (value) => {
+      value.tasks[1].slug = '07-20-renamed-task'
+    }, 'tasks[1].slug'],
+    ...[
+      ['outside the retired task roots', 'docs/tasks/07-20-completed-doc-task/task.json'],
+      ['that is not a task.json', '.trellis/tasks/archive/2026-07/07-20-completed-doc-task/prd.md'],
+      ['with a parent segment', '.trellis/tasks/archive/2026-07/../07-20-completed-doc-task/task.json'],
+      ['that is absolute', '/.trellis/tasks/archive/2026-07/07-20-completed-doc-task/task.json'],
+      ['with backslashes', '.trellis\\tasks\\archive\\2026-07\\07-20-completed-doc-task\\task.json'],
+      ['nested below an active task', '.trellis/tasks/07-27-documentation-quality-gates/07-20-completed-doc-task/task.json'],
+    ].map(([what, sourcePath]) => [`a sourcePath ${what}`, (value) => {
+      value.tasks[1].sourcePath = sourcePath
+    }, 'tasks[1].sourcePath']),
+    ...[
+      ['set to null', null],
+      ['left empty', ''],
+      ['inside the retired task tree', '.trellis/tasks/07-27-documentation-quality-gates/prd.md'],
+      ['in another task\'s handoff directory', 'docs/engineering/workflow/handoffs/07-20-completed-doc-task/README.md'],
+      ['at the handoff root itself', 'docs/engineering/workflow/handoffs/README.md'],
+      ['with a fragment', `${HANDOFF}#next-action`],
+      ['that is not Markdown', 'docs/engineering/workflow/handoffs/07-27-documentation-quality-gates/README.txt'],
+      ['that climbs out of its directory', 'docs/engineering/workflow/handoffs/07-27-documentation-quality-gates/../07-20-completed-doc-task/README.md'],
+    ].map(([what, handoff]) => [`a handoff ${what}`, (value) => {
+      value.tasks[0].handoff = handoff
+    }, 'tasks[0].handoff']),
+  ]
+
+  for (const [name, edit, pointer] of shapeCases) {
+    it(`rejects ${name}`, () => {
+      const result = parseRetiredTaskIndex(registryText(edit))
+
+      assert.deepEqual(result.tasks, [])
+      assert.deepEqual(result.issues.map(issue => [issue.code, issue.pointer]), [['shape', pointer]])
+    })
+  }
+})
+
+const GIT_LOCATION_VARIABLES = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_COMMON_DIR', 'GIT_NAMESPACE', 'GIT_PREFIX']
+
+/** Run inside a git hook (GIT_DIR, GIT_INDEX_FILE set), every git call here would hit this repository. */
+function withoutInheritedGitLocation(run) {
+  const saved = Object.fromEntries(GIT_LOCATION_VARIABLES.filter(key => key in process.env).map(key => [key, process.env[key]]))
+  for (const key of GIT_LOCATION_VARIABLES) delete process.env[key]
+  try {
+    return run()
+  }
+  finally {
+    Object.assign(process.env, saved)
+  }
+}
+
+describe('repository file set', () => {
+  it('sees untracked documents, drops unstaged deletions and ignored files, and never writes the index', () => {
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'docs-repository-files-'))
+    const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    const write = (file, content) => {
+      fs.mkdirSync(path.dirname(path.join(repo, file)), { recursive: true })
+      fs.writeFileSync(path.join(repo, file), content)
+    }
+    try {
+      withoutInheritedGitLocation(() => {
+        git('-c', 'init.defaultBranch=main', 'init', '-q')
+        // Keep the user's global hooks, excludes and caches out of a test about this repository.
+        fs.mkdirSync(path.join(repo, '.git', 'no-hooks'))
+        fs.writeFileSync(path.join(repo, '.git', 'no-global-excludes'), '')
+        git('config', 'core.hooksPath', path.join(repo, '.git', 'no-hooks'))
+        git('config', 'core.excludesFile', path.join(repo, '.git', 'no-global-excludes'))
+        git('config', 'core.untrackedCache', 'false')
+        git('config', 'core.fsmonitor', 'false')
+
+        write('.gitignore', 'docs/ignored.md\n')
+        write('README.md', '# Repo\n\nSee the [guide](docs/guide.md) and the [retired page](docs/retired.md).\n')
+        write('docs/guide.md', '# Guide\n')
+        write('docs/retired.md', '# Retired\n')
+        git('add', '-A')
+        git('-c', 'user.name=docs-verifier-test', '-c', 'user.email=docs-verifier-test@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-q', '--no-verify', '-m', 'baseline')
+
+        fs.rmSync(path.join(repo, 'docs/retired.md'))
+        write('docs/staged.md', '# Staged\n')
+        git('add', 'docs/staged.md')
+        write('docs/draft.md', '# Draft\n\nLinks to a [missing page](missing.md).\n')
+        write('docs/ignored.md', '# Ignored\n\nLinks to a [missing page](gone.md).\n')
+
+        const index = path.join(repo, '.git', 'index')
+        const indexBefore = fs.readFileSync(index)
+
+        const files = repositoryFiles(repo)
+        const diagnostics = checkMarkdownAndLinks(repo, scopeRegistry(repo, files))
+
+        // Tracked and staged files, plus the untracked draft; not the deletion, not the ignored file.
+        assert.deepEqual(files, ['.gitignore', 'README.md', 'docs/draft.md', 'docs/guide.md', 'docs/staged.md'])
+        // The draft is checked, the link to the deleted page fails, and the deleted page is never read.
         assert.deepEqual(
-          PLACEHOLDER_ALLOWLIST.filter(fixtureCase.invalid),
-          [],
-          `${fixtureCase.name} placeholder allowlist entries must be rejected`,
+          diagnostics.map(diagnostic => `${diagnostic.ruleId} ${diagnostic.file}`).sort(),
+          ['DOC-LINK-UNTRACKED README.md', 'DOC-LINK-UNTRACKED docs/draft.md'],
         )
-      }
+        // Other sessions stage work in a shared checkout; reading the file set must not touch the index.
+        assert.deepEqual(fs.readFileSync(index), indexBefore)
+      })
     }
     finally {
-      fs.rmSync(fixture.fixtureRoot, { recursive: true, force: true })
+      fs.rmSync(repo, { recursive: true, force: true })
     }
   })
 })

@@ -125,6 +125,20 @@ export interface AnchorDelayHandle {
    * by hover close by hover — click-opened ancestors are skipped.
    */
   requestCloseChain: () => void
+  /**
+   * Hold this anchor and every ancestor open while the pointer travels to its
+   * panel through the safe triangle (see `hover-intent.ts`). The path can cross
+   * out of an ancestor's panel on the way, which schedules that ancestor's close
+   * — and its close would take this panel down with it. A close that comes due
+   * during the hold is deferred, not dropped.
+   */
+  holdChain: () => void
+  /**
+   * End the hold. With `replay` (the pointer gave up) the deferred closes run
+   * now: those panels were left and never re-entered. Without it they are
+   * dropped, because the pointer arrived inside the chain.
+   */
+  releaseChain: (replay: boolean) => void
   isOpen: () => boolean
   dispose: () => void
 }
@@ -185,6 +199,8 @@ interface AnchorEntry {
   registration: AnchorDelayRegistration
   open: boolean
   timer: ReturnType<typeof setTimeout> | null
+  /** Its close came due while a hold covered it; settled when the hold ends. */
+  closeDeferred: boolean
 }
 
 function isDescendantOf(node: AnchorDelayNode, maybeAncestor: AnchorDelayNode): boolean {
@@ -222,6 +238,8 @@ export function createAnchorDelayService(
   const entries = new Set<AnchorEntry>()
   const warmUntil: Record<AnchorDelayLayer, number> = { hint: 0, menu: 0, dialog: 0 }
   const floatingEls = new Map<AnchorDelayNode, HTMLElement>()
+  /** Anchors whose pointer is in transit to their panel. Each holds itself and its ancestors. */
+  const holds = new Set<AnchorDelayNode>()
 
   function entryFor(node: AnchorDelayNode): AnchorEntry | null {
     for (const entry of entries) {
@@ -243,11 +261,30 @@ export function createAnchorDelayService(
     return result
   }
 
+  /** Also drops a deferred close: any newer decision about the anchor supersedes it. */
   function clearTimer(entry: AnchorEntry) {
     if (entry.timer != null) {
       clearTimeout(entry.timer)
       entry.timer = null
     }
+    entry.closeDeferred = false
+  }
+
+  function isHeld(entry: AnchorEntry): boolean {
+    for (const node of holds) {
+      if (node === entry.node || isDescendantOf(node, entry.node))
+        return true
+    }
+    return false
+  }
+
+  /** What a close timer runs when it fires. Explicit closes (`closeNow`, preemption) ignore holds. */
+  function closeUnlessHeld(entry: AnchorEntry) {
+    if (isHeld(entry)) {
+      entry.closeDeferred = true
+      return
+    }
+    applyClose(entry)
   }
 
   /**
@@ -385,7 +422,7 @@ export function createAnchorDelayService(
       layer: registration.layer,
       parent: registration.parent ?? null,
     }
-    const entry: AnchorEntry = { node, registration, open: false, timer: null }
+    const entry: AnchorEntry = { node, registration, open: false, timer: null, closeDeferred: false }
     entries.add(entry)
 
     return {
@@ -400,7 +437,7 @@ export function createAnchorDelayService(
         schedule(entry, resolveOpenDelay(entry), () => applyOpen(entry))
       },
       requestClose: () => {
-        schedule(entry, resolveCloseDelay(entry), () => applyClose(entry))
+        schedule(entry, resolveCloseDelay(entry), () => closeUnlessHeld(entry))
       },
       openNow: () => applyOpen(entry),
       closeNow: () => applyClose(entry),
@@ -411,16 +448,37 @@ export function createAnchorDelayService(
           clearTimer(ancestor)
       },
       requestCloseChain: () => {
-        schedule(entry, resolveCloseDelay(entry), () => applyClose(entry))
+        schedule(entry, resolveCloseDelay(entry), () => closeUnlessHeld(entry))
         for (const ancestor of ancestorEntries(entry.node)) {
           if (!ancestor.registration.hoverCloseable?.())
             continue
-          schedule(ancestor, resolveCloseDelay(ancestor), () => applyClose(ancestor))
+          schedule(ancestor, resolveCloseDelay(ancestor), () => closeUnlessHeld(ancestor))
+        }
+      },
+      holdChain: () => {
+        holds.add(node)
+      },
+      releaseChain: (replay) => {
+        if (!holds.delete(node))
+          return
+        for (const target of [entry, ...ancestorEntries(node)]) {
+          if (!target.closeDeferred)
+            continue
+          if (!replay) {
+            target.closeDeferred = false
+            continue
+          }
+          // Another transit still covers it; that one settles it.
+          if (isHeld(target))
+            continue
+          target.closeDeferred = false
+          applyClose(target)
         }
       },
       isOpen: () => entry.open,
       dispose: () => {
         clearTimer(entry)
+        holds.delete(node)
         entries.delete(entry)
         floatingEls.delete(node)
       },
@@ -481,6 +539,7 @@ export function createAnchorDelayService(
         clearTimer(entry)
       entries.clear()
       floatingEls.clear()
+      holds.clear()
       for (const layer of LAYERS)
         warmUntil[layer] = 0
       policy = clonePolicy(initialPolicy)

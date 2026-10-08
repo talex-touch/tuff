@@ -115,7 +115,7 @@ code: |
 - 组件源码：`packages/tuffex/packages/components/src/sensitive-input/src/TxSensitiveInput.vue`。
 - 类型：`packages/tuffex/packages/components/src/sensitive-input/src/types.ts`。
 - **实测覆盖:** `packages/tuffex/packages/components/src/sensitive-input/__tests__/sensitive-input.test.ts`（17 项）覆盖掩码默认态与其 ARIA 形状、点击与回车揭示、只读揭示路径、失焦与 Esc 重新掩码及焦点回收、眼睛/复制按钮的失焦豁免、禁用态、空状态编辑路径、外部到达与外部清空的值、带实时播报与确认时长的复制、被拒绝的剪贴板、由文案推导的错误态、文案本地化、无 label 时的可访问名、眼睛按钮切换，以及 expose 的方法。
-- 行为参考 [Kumo 的 SensitiveInput](https://kumo-ui.com/components/sensitive-input/)；它遵循的设计准则记录在 `.trellis/spec/frontend/tuffex-design-rules.md`。
+- 行为参考 [Kumo 的 SensitiveInput](https://kumo-ui.com/components/sensitive-input/)；它遵循的设计准则记录在 `docs/engineering/specs/frontend/tuffex-design-rules.md`。
 
 <TuffDocSourceLink />
 

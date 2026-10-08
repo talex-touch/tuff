@@ -90,6 +90,10 @@ export function useThumbJelly(host: ThumbJellyHost) {
   }
 
   function step(ts: number): void {
+    if (!host.isEnabled()) {
+      stop()
+      return
+    }
     const dt = Math.min((ts - (lastTs ?? ts)) / 1000, MAX_FRAME_S)
     lastTs = ts
 

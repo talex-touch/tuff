@@ -1,4 +1,5 @@
 import type { IntelligenceMcpProfile } from './intelligence-mcp-registry'
+import { delimiter } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const registryMocks = vi.hoisted(() => {
@@ -9,6 +10,8 @@ const registryMocks = vi.hoisted(() => {
   const mcpLog = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() }
   const getSecureStoreValue = vi.fn(async (..._args: unknown[]) => null)
   const isSecureStoreAvailable = vi.fn(() => false)
+  const findCommandInSearchRoots = vi.fn(async (_command: string): Promise<string | null> => null)
+  const existingDirectBinDirectories = vi.fn(async (): Promise<string[]> => [])
 
   class Client {
     onerror: ((error: unknown) => void) | undefined
@@ -66,6 +69,8 @@ const registryMocks = vi.hoisted(() => {
     mcpLog,
     getSecureStoreValue,
     isSecureStoreAvailable,
+    findCommandInSearchRoots,
+    existingDirectBinDirectories,
     reset
   }
 })
@@ -87,6 +92,13 @@ vi.mock('../../utils/logger', () => ({
 vi.mock('../../utils/secure-store', () => ({
   getSecureStoreValue: registryMocks.getSecureStoreValue,
   isSecureStoreAvailable: registryMocks.isSecureStoreAvailable
+}))
+
+// Where a bare command is found is the CLI lookup's business (its own suite runs it against real
+// directories); here it is an answer the registry is handed.
+vi.mock('./providers/cli/cli-executable', () => ({
+  findCommandInSearchRoots: registryMocks.findCommandInSearchRoots,
+  existingDirectBinDirectories: registryMocks.existingDirectBinDirectories
 }))
 
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
@@ -154,6 +166,8 @@ describe('IntelligenceMcpRegistry session lifecycle', () => {
     registryMocks.reset()
     registryMocks.getSecureStoreValue.mockResolvedValue(null)
     registryMocks.isSecureStoreAvailable.mockReturnValue(false)
+    registryMocks.findCommandInSearchRoots.mockResolvedValue(null)
+    registryMocks.existingDirectBinDirectories.mockResolvedValue([])
   })
 
   afterEach(async () => {
@@ -351,5 +365,90 @@ describe('IntelligenceMcpRegistry session lifecycle', () => {
     expect(registryMocks.mcpLog.warn).toHaveBeenCalledWith('MCP session close failed', {
       meta: { code: 'MCP_SERVER_UNAVAILABLE' }
     })
+  })
+})
+
+describe('IntelligenceMcpRegistry stdio launch', () => {
+  const registries: IntelligenceMcpRegistry[] = []
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    registryMocks.reset()
+    registryMocks.isSecureStoreAvailable.mockReturnValue(false)
+    registryMocks.findCommandInSearchRoots.mockResolvedValue(null)
+    registryMocks.existingDirectBinDirectories.mockResolvedValue([])
+  })
+
+  afterEach(async () => {
+    await Promise.all(registries.splice(0).map(async (registry) => await registry.closeAll()))
+  })
+
+  async function launch(profile: IntelligenceMcpProfile): Promise<Record<string, unknown>> {
+    const registry = new IntelligenceMcpRegistry()
+    registries.push(registry)
+    registry.registerProfile(profile)
+    await expect(registry.callTool(profile.id, 'status', {})).resolves.toBe('tool result')
+    return registryMocks.stdioTransports[0].options as Record<string, unknown>
+  }
+
+  it('runs a bare npx by the absolute path found, with its directory first on PATH', async () => {
+    registryMocks.findCommandInSearchRoots.mockImplementation(async (command) =>
+      command === 'npx' ? '/fake/mise/node/26.9.0/bin/npx' : null
+    )
+    registryMocks.existingDirectBinDirectories.mockResolvedValue([
+      '/fake/home/.local/bin',
+      '/fake/home/.bun/bin'
+    ])
+    const inheritedPath = process.env.PATH
+    // launchd's PATH, with one of the fixed bins already on it.
+    process.env.PATH = ['/usr/bin', '/bin', '/fake/home/.local/bin'].join(delimiter)
+    const profile: IntelligenceMcpProfile = {
+      id: 'npx-profile',
+      name: 'npx MCP',
+      transport: { type: 'stdio', command: 'npx', args: ['-y', 'some-server'] }
+    }
+
+    try {
+      const options = await launch(profile)
+
+      expect(options).toMatchObject({
+        command: '/fake/mise/node/26.9.0/bin/npx',
+        args: ['-y', 'some-server']
+      })
+      // Its own directory, where `node` sits for npx's shebang; then the inherited PATH as it was;
+      // then only the fixed bins it lacked.
+      expect((options.env as { PATH: string }).PATH.split(delimiter)).toEqual([
+        '/fake/mise/node/26.9.0/bin',
+        '/usr/bin',
+        '/bin',
+        '/fake/home/.local/bin',
+        '/fake/home/.bun/bin'
+      ])
+      // The stored profile is not rewritten.
+      expect(profile.transport).toMatchObject({ command: 'npx' })
+    } finally {
+      if (inheritedPath === undefined) delete process.env.PATH
+      else process.env.PATH = inheritedPath
+    }
+  })
+
+  it('leaves a profile that sets PATH itself exactly as configured', async () => {
+    registryMocks.findCommandInSearchRoots.mockResolvedValue('/fake/mise/node/26.9.0/bin/npx')
+
+    const options = await launch({
+      id: 'own-path',
+      name: 'Own PATH',
+      transport: { type: 'stdio', command: 'npx', env: { PATH: '/custom/bin' } }
+    })
+
+    expect(options).toMatchObject({ command: 'npx', env: { PATH: '/custom/bin' } })
+    expect(registryMocks.findCommandInSearchRoots).not.toHaveBeenCalled()
+  })
+
+  it('runs a command found nowhere exactly as configured', async () => {
+    const options = await launch(stdioProfile('mcp-nowhere'))
+
+    expect(options).toMatchObject({ command: 'mcp-nowhere', env: {} })
+    expect(options.env).not.toHaveProperty('PATH')
   })
 })

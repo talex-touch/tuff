@@ -222,7 +222,7 @@ code: |
 
 ## 概述
 
-- `trigger="click"` 时支持外部点击与 Escape 关闭；`trigger="hover"` 会使用打开/关闭延迟，避免鼠标移入面板时闪退。
+- `trigger="click"` 时支持外部点击与 Escape 关闭；`trigger="hover"` 使用打开/关闭延迟，指针去往面板的路上由悬停桥与安全三角兜住（规则见 Tooltip 的概述）：穿过 `offset` 间隙、停在面板内边距上、斜向经过旁边的 hover 触发器，面板都不会关闭或被抢走。
 - `keepAliveContent` 适合筛选器、短表单和带本地状态的说明面板；纯展示说明可以关闭以减少保留状态。
 - Popover 只放轻量内容；超过一屏、需要 footer 或多字段配置时升级为 Drawer。
 
@@ -234,6 +234,6 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`.
 - Types: `packages/tuffex/packages/components/src/popover/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts` 验证默认 BaseAnchor props 透传、offset 推导、hover 触发时序、禁用时关闭、全宽 reference class 与内容 side slot 参数。
+- **实测覆盖:** `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts` 验证默认 BaseAnchor props 透传、offset 推导、hover 触发时序、悬停区覆盖整个浮层（离开内容层进入卡片内边距不会关闭）、禁用时关闭、全宽 reference class 与内容 side slot 参数。
 
 <TuffDocSourceLink />

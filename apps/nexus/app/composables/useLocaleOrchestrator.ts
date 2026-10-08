@@ -68,6 +68,7 @@ export function useLocaleOrchestrator() {
   const composer = useI18n()
   const { locale, setLocale } = composer
   const route = useRoute()
+  const explicitDocsLocale = () => normalizeLocale(/^\/(en|zh)\/docs(?:\/|$)/.exec(route.path)?.[1])
   const { status } = useNexusAuth()
   const { getPreferredLocale, hasManualPreferredLocale, markManualPreferredLocale, markProfilePreferredLocale, persistPreferredLocale } = useLocalePreference()
   const initDone = useState<boolean>('nexus-locale-init-done', () => false)
@@ -164,6 +165,9 @@ export function useLocaleOrchestrator() {
     localeSetQueue = localeSetQueue
       .catch(() => {})
       .then(async () => {
+        const docsLocale = explicitDocsLocale()
+        if (docsLocale && docsLocale !== normalized)
+          return
         if (locale.value === normalized)
           return
 
@@ -271,6 +275,9 @@ export function useLocaleOrchestrator() {
     if (import.meta.server)
       return
 
+    if (explicitDocsLocale())
+      return
+
     if (input.status !== 'authenticated') {
       profileSyncKey.value = null
       return
@@ -289,6 +296,9 @@ export function useLocaleOrchestrator() {
         const profile = await fetchCurrentUserProfile()
         nextLocale = normalizeLocaleWithMetrics(profile?.locale ?? null, 'profile')
       }
+
+      if (explicitDocsLocale())
+        return
 
       const preferredLocale = normalizeLocaleWithMetrics(getPreferredLocale(), 'cookie')
       const hasManualPreference = manualPreferenceActive.value || hasManualPreferredLocale()

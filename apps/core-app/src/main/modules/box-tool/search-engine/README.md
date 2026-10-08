@@ -34,7 +34,7 @@ reconcile，并将记录写入 SQLite/FTS 搜索索引。
 「写路径迁移到一半」那个失败模式已经不存在了。
 
 这段先前写的是「当前默认关闭 …… 不应把该开关描述为生产默认能力」，那是
-翻转之前的状态。翻转时 `.trellis/spec/main-process/database-write-contracts.md`
+翻转之前的状态。翻转时 `docs/engineering/specs/main-process/database-write-contracts.md`
 和 `docs/plan-prd/TODO.md` 都更新了,这里漏了。
 
 ## 维护中的文档

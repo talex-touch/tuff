@@ -75,7 +75,7 @@ function createProvider(): IntelligenceProviderConfig {
     enabled: true,
     hasCredential: true,
     defaultModel: 'gpt-4o-mini',
-    models: ['gpt-4o-mini'],
+    models: [{ id: 'gpt-4o-mini' }],
     timeout: 30_000,
     priority: 1,
     rateLimit: {}

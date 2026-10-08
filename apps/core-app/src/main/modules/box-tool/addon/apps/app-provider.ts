@@ -352,6 +352,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private readonly isMac = process.platform === 'darwin'
   private processingPaths: Set<string> = new Set()
   private searchIndex: SearchIndexService | null = null
+  private maintenanceSearchIndex: SearchIndexService | null = null
   private appIndexSettings: AppIndexSettings = { ...DEFAULT_APP_INDEX_SETTINGS }
   private startupBackfillStarted = false
   /**
@@ -775,6 +776,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     // worker-owned search_index/keyword_mappings in search-index.db.
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
+    this.maintenanceSearchIndex = context.maintenanceSearchIndex
 
     this.loadAppIndexSettings()
     // Before any scan publishes a projection: `resolveAliasesForApp` folds this map in, so an
@@ -953,7 +955,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       reconcileState: this.maintenance.isFullSyncRegistered() ? 'scheduled' : 'idle',
       reason: health.healthy
         ? undefined
-        : `App index rows=${health.appCount}, searchIndexRows=${health.indexedItemCount}`,
+        : `App index rows=${health.appCount}, searchIndexRows=${health.indexedItemCount ?? 'unknown'}`,
       lastIndexedAt: this.volatileLastFullSyncTime ?? undefined
     }
   }
@@ -1635,10 +1637,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return this.sourceScanner.partitionDbApps(apps)
   }
 
-  private buildScannedAppsMap(scannedApps: ScannedAppInfo[]): Map<string, ScannedAppInfo> {
-    return this.sourceScanner.buildScannedAppsMap(scannedApps)
-  }
-
   private async loadScannedApps(options?: { forceRefresh?: boolean }): Promise<ScannedAppInfo[]> {
     return await this.sourceScanner.loadScannedApps(options)
   }
@@ -1656,35 +1654,34 @@ class AppProvider implements ISearchProvider<ProviderContext> {
    */
   private async getAppSearchIndexHealth(options?: { probeFilesystem?: boolean }): Promise<{
     appCount: number
-    indexedItemCount: number
-    healthy: boolean
+    indexedItemCount: number | null
+    healthy: boolean | null
     unindexedOnDisk?: number
   }> {
-    if (!this.dbUtils || !this.searchIndex) {
-      return { appCount: 0, indexedItemCount: 0, healthy: false }
+    const searchIndex =
+      options?.probeFilesystem === true ? this.maintenanceSearchIndex : this.searchIndex
+    if (!this.dbUtils || !searchIndex) {
+      return { appCount: 0, indexedItemCount: null, healthy: null }
     }
 
-    // The unprobed read is the routing/diagnostics health: it runs for app watch events and
-    // diagnostics polls, on the read worker CoreBox queries share, so it takes the meta-backed
-    // count. The probed read feeds the startup decisions that act on the answer (backfill or
-    // not), which keep the exact FTS count.
-    const searchIndex = this.searchIndex
+    // Routing/diagnostics stay meta-backed on the interactive reader. Startup decisions keep
+    // the exact FTS count on the existing maintenance reader, away from the fast search queue.
     const countIndexedItems = (
       options?.probeFilesystem === true
-        ? searchIndex.countByProvider(this.id)
+        ? searchIndex.countByProvider(this.id, this.startupProducerAbort.signal)
         : searchIndex.countByProviderViaMeta(this.id)
     ).catch((error) => {
       logApp('Failed to count app search index rows', LogStyle.warning, {
         error: error instanceof Error ? error.message : String(error)
       })
-      return 0
+      return null
     })
     const [apps, indexedItemCount] = await Promise.all([
       this.dbUtils.getFilesByType('app'),
       countIndexedItems
     ])
 
-    const countsHealthy = apps.length > 0 && indexedItemCount > 0
+    const countsHealthy = indexedItemCount === null ? null : apps.length > 0 && indexedItemCount > 0
     if (!countsHealthy || options?.probeFilesystem !== true) {
       return { appCount: apps.length, indexedItemCount, healthy: countsHealthy }
     }
@@ -2033,6 +2030,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (this.shuttingDown) return
 
       const health = await this.getAppSearchIndexHealth({ probeFilesystem: true })
+      if (health.healthy === null) return
       if (health.healthy) {
         appProviderLog.debug('App search index health check passed', { meta: health })
         return
@@ -2204,6 +2202,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         Date.now() - lastBackfillTime < STARTUP_BACKFILL_MIN_INTERVAL_DEV_MS
       ) {
         const health = await this.getAppSearchIndexHealth({ probeFilesystem: true })
+        if (health.healthy === null) {
+          return { allowed: false, reason: 'index-health-unavailable' }
+        }
         if (health.healthy) {
           return { allowed: false, reason: 'recent-backfill' }
         }
@@ -2326,7 +2327,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       precision: 2
     })
 
-    const scannedAppsMap = this.buildScannedAppsMap(scannedApps)
+    const scannedAppsMap = this.sourceScanner.buildScannedAppsMap(scannedApps)
     const existingIds = new Set(dbScannedAppsWithExtensions.map((app) => this.resolveDbAppKey(app)))
     const toAdd = scannedApps.filter((app) => {
       const uniqueId = this.resolveScannedAppKey(app)
@@ -2709,7 +2710,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       unit: 's',
       precision: 2
     })
-    const scannedAppsMap = this.buildScannedAppsMap(scannedApps)
+    const scannedAppsMap = this.sourceScanner.buildScannedAppsMap(scannedApps)
 
     const dbLoadStart = startTiming()
     const dbApps = await this.dbUtils!.getFilesByType('app')

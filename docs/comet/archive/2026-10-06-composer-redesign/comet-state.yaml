@@ -1,0 +1,766 @@
+schema: comet.native.v4
+name: composer-redesign
+language: zh-CN
+phase: archive
+status: done
+state_version: 14
+brief: brief.md
+document_constraints_version: 2
+shape_confirmation_hash: 520b0a8729c15fe1b523aff6e5e9e580f10b6e345890ecfa894ab6fe55c497fc
+spec_changes:
+  - capability: home-composer
+    operation: create
+    source: specs/home-composer/spec.md
+workspace:
+  isolation: worktree
+  change_branch: task/feat/composer-redesign
+  target_branch: stage
+  finish: merge
+loop:
+  stage: done
+  goal_cycle: 1
+  iteration: 3
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 2
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: "**A1｜工具条**：打开 `/home`，权限、模式、模型胶囊始终显示图标和文字，平时透明、悬停才出底色，没有彩色底和描边，也没有「权限
+      ·」「Agent ·」前缀；「完全允许」的图标和文字是警示色；工具条窄于 520px 时，文字胶囊折叠为图标，可访问名称仍含完整状态。"
+    result: passed
+    reason:
+      text: 真机（隔离 profile，我自己的探针 s1、s7）：静止态三枚胶囊都有 15px
+        图标和文字（权限「自动审阅」、模式「对话」、模型「opus」；自动选择时输入框和顶栏两枚模型胶囊都显示魔杖图标和「Tuff 智能」）；背景
+        rgba(0,0,0,0)、边框 0、无阴影、transition 0s；可见文字没有「权限 ·」「Agent ·」前缀，切到 profile
+        后模式胶囊只显示「Tuff Pi Coordinator」和机器人图标。悬停后第一帧即为 --shell-surface-2（深色
+        rgb(44,44,46)），悬停期间只有这一个取值，没有渐变。「完全允许」时图标和文字都是 --shell-danger（深色
+        rgb(224,101,92)、浅色 rgb(196,52,43)、深色高对比 rgb(253,164,175)、浅色高对比
+        rgb(180,35,24)）。打开右侧面板使工具条为 400px 后，四种主题下权限、模式胶囊都折叠成 32px
+        图标键并隐藏文字，可访问名称仍为「权限 · 自动审阅」「会话模式 · 对话」；完全允许时为「权限 ·
+        完全允许」，图标仍是警示色；模型胶囊保留文字。
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: "**A2｜换档不变形**：在任一弹层换档后，胶囊在同一帧显示新图标和新文字，没有模糊、宽度补间和底色过渡；按下反馈保留；弹层沿用全局 expand
+      展开。"
+    result: passed
+    reason:
+      text: 用 rAF 逐帧采样（s1）：权限「自动审阅→禁用」「禁用→完全允许」、模式「对话→Tuff Pi
+        Coordinator」、模型「opus→haiku」四次换档，标签和图标都在同一帧变为新值，前一帧仍是旧值；宽度从旧值直接跳到新值（93→67、67→93、67→158.29、88.37→91.27），没有中间宽度；filter
+        始终 none，opacity 始终 1，胶囊子树没有动画（模型胶囊只有弹层收起时箭头的
+        rotate）。完全允许的变色同帧完成，transition 为 0s。按下三枚胶囊都有 WAAPI scale 1→0.9、90ms
+        的反馈。三个弹层打开时是全局锚点的 translate3d+scale 弹簧，各约 49 个变化帧。减少动态效果下（s8），三个弹层打开时
+        transform 恒为 none，尺寸和位置不变，按下也没有缩放。
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: "**A3｜权限弹层**：三行只有图标、名称和当前项的勾，悬停显示原说明；「自动审阅」时末尾有「重置已记住的授权」；「完全允许」第一次点击只让该行\
+      变红，并提示「再点一次确认：之后所有工具调用都不再询问」，第二次点击才生效；关闭弹层后待确认状态取消。"
+    result: passed
+    reason:
+      text: 真机指针与键盘（s2、s6、s7）：当前为自动审阅时，三行「禁用 / 自动审阅 /
+        完全允许」各只有图标和一行名称，当前行有勾，完全允许行的图标为警示色；原说明放在各行的 title
+        里（例如「允许助手调用工具且不再征求同意——包括破坏性的 MCP
+        工具」）。分隔线下有「重置已记住的授权」，禁用和完全允许时没有这一行；点重置后弹层关闭，焦点回胶囊，并出现「已清除本会话记住的授权」。第一次点击（或按
+        Enter）「完全允许」时档位不变、弹层不关，该行变为 --shell-danger-soft
+        底，档位名下出现红色的「再点一次确认：之后所有工具调用都不再询问」，aria-describedby
+        指向这句提示，状态区同步播报；第二次才切换到完全允许并关闭弹层，焦点回到胶囊，胶囊变为警示色。待确认时按 Esc
+        关闭、点击外部关闭后重开，或者改选「禁用」（立即生效并关闭）后重开，该行都恢复为普通状态。四种主题下都观察到同样的表现。
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: "**A4｜模式弹层**：第一层只有「对话」和已启用的 profile，选 profile 即切到 Agent
+      并使用它；「管理智能体」进入二级视图，列出全部 profile 的摘要和启停开关，关掉的 profile
+      不再出现在第一层；已有历史时底部有一行分支提示；回复进行中不能切；无 profile、全部关闭、读取失败时各有文字和入口。"
+    result: passed
+    reason:
+      text: 真机（s3）：第一层只有「对话 ✓」「Tuff Pi Coordinator」和「管理智能体」，没有开关和摘要。「管理智能体」二级视图列出
+        profile 的摘要「pi-core · 10 个工具 · 运行前询问」和开关。用指针关掉开关后，经真实 orchestrator
+        保存，profiles:list 读回 default-pi:false；返回第一层只剩「对话」和「管理智能体」，并提示「所有 Agent
+        profile 均已关闭，在「管理智能体」里开启一个即可使用 Agent 模式。」；重开总是回到第一层；用键盘 Space 重新开启后，存储读回
+        true。在空白 Home 选这个 profile，胶囊变为机器人图标加「Tuff Pi Coordinator」，草稿设置为 agent +
+        default-pi；选「对话」可以切回。用 conversation:api:save
+        写入一个有两条历史的会话（没有调用模型）：底部显示「切换后在新分支里继续」；用键盘选 profile 后，真实 fork 出 agent +
+        default-pi 的新会话（2 条消息），胶囊显示 profile 名，焦点在胶囊上。用页面的 branching 标志驱动 locked
+        时，profile 行为 aria-disabled，方向键跳过它，提示改为「回复结束后才能切换」；用指针按锁定行没有任何变化，按 Esc
+        回到胶囊。关掉该会话正在使用的 profile 后，胶囊的图标和文字变为警示色，菜单里提示「此会话使用的 profile
+        已关闭或不存在，请另选一个。」。用页面内的 profiles:list 替身制造的状态：读取失败时显示「无法读取 Agent
+        profile。」和「重试」；没有 profile 时显示「还没有任何 Agent profile，Agent
+        模式无可运行的配置。」，入口是「管理智能体」；首次读取时显示骨架行。测试会话已删除，profile 已恢复为开启。
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: "**A5｜模型弹层结构**：输入框和顶栏的模型胶囊打开同一个双栏弹层；打开即见完整搜索框并获得焦点；左栏有自动选择、最近使用和按「服务 ·
+      渠道」排列的来源及模型数，右栏是所选来源的模型；只有双栏滚动，推理强度固定在底部；设置键打开「智能 ·
+      渠道」设置；没有筛选条、每行副标题、字母占位、★ 和 ⌘N。"
+    result: passed
+    reason:
+      text: "真机（s4、s4c、s9、s11、s7）：输入框和顶栏的模型胶囊打开同一个弹层，左栏内容一致。输入框的弹层在胶囊上方右对齐（弹层底 469
+        小于胶囊顶 477，右缘都是 952），顶栏的弹层在胶囊下方左对齐（左缘都是 280），宽
+        482。打开后搜索框完整可见并获得焦点。左栏依次是「自动选择」（动作，自动时带勾）、「最近使用」、分隔线、Claude Code 3、Codex
+        8，OMP 组头下的 ccs 2 / codex 5 / kimi 2 / m 2 / qwen 1，以及 Pi 组头下的 anthropic
+        16 / codex 4 / cpa 23 / kimi 2 / xai 4；逐个点选后，12 个来源的数量都与右栏行数一致，来源的 title
+        为「服务 · 渠道」。弹层卡片 scrollHeight 等于 clientHeight（414/414）；滚轮只滚动左栏（滚到
+        197）或右栏（滚到底 455），搜索框和底部「推理强度 自动/低/中/高/极高」始终完整；在 1100×680 的短窗里，卡片缩到
+        391px，仍不整块滚动。设置键会关闭弹层并进入 #/setting/intelligence/channels（智能 ·
+        模型渠道）。弹层里没有筛选条、副标题、字母占位（行图标都是图标组件，不含文字）、★ 和 ⌘ 键位。另外核对了：选了档位时胶囊显示「opus ·
+        高」；路线不支持推理强度时整排禁用，并说明「该模型不支持推理强度」；自动选择时说明生效条件。"
+      truncated: false
+  - id: A6
+    source: brief.md
+    text: "**A6｜来源、最近使用与搜索**：打开时停在当前模型的来源；「最近使用」记录最近选中的 5
+      个模型，最新的在前，重启后保留，行尾带来源标签；搜索跨来源出结果并按来源分组，左栏变淡，清空后恢复；方向键在两栏间移动，Enter
+      选中并关闭，Esc 关闭并把焦点还给胶囊；首次加载显示骨架。"
+    result: passed
+    reason:
+      text: 真机（s4、s4b、s6、r12）：打开时停在当前模型所在的来源（sonnet 停在 Claude Code，grok-4.3 停在
+        Pi·xai，远处的来源和已选行会滚动到可见位置）；自动选择且「最近使用」非空时停在「最近使用」。依次选中 6
+        个不同的模型后，「最近使用」是最新的 5 个，最新的在前，没有重复，最早选的 haiku 被挤出；选自动选择不计入。行尾标签依次为「Claude
+        Code」「Pi · cpa」「OMP · qwen」「OMP · kimi」「Codex」；main 进程存储和磁盘上的
+        app-setting.ini 都即时写入。搜索「qwen」跨来源出结果，按「OMP (local CLI) · m」「OMP (local
+        CLI) · qwen」分组，左栏 opacity 0.45 且 inert；搜索不区分大小写，按渠道名（ccs）和服务名（claude
+        code）也能匹配；没有匹配时显示「没有匹配的模型」；用 Backspace 或清除键清空后，左栏恢复搜索前的选中项（xai）。键盘：在搜索框按
+        ↓ 进入右栏，↑/↓/Home/End 移动，← 到左栏当前项，在左栏按 ↑/↓ 时右栏随之切换，→ 回到右栏，Enter
+        选中并关闭，焦点回到模型胶囊；在搜索框、左栏、右栏、推理强度和设置键上按 Esc，都会关闭弹层并回到胶囊；顶栏胶囊打开的弹层按 Esc
+        回到顶栏胶囊。首次加载骨架：左栏 4 行（30px）、右栏 5 行（32px），与真实行同高，并带
+        aria-busy；放行后出现真实行，并停在当前来源。这个骨架是挂起请求并重置 loaded 模拟出来的。「重启后保留」采用 builder
+        的重启前后读数（11:30:49 与 11:31:51 的列表一致），我核对了实例进程确实在 11:31:32 启动。
+      truncated: false
+  - id: A7
+    source: brief.md
+    text: "**A7｜听写态**：点麦克风后，输入框底部出现 `TxVoiceBeam`
+      辉光并随电平起伏；附件、权限、模式、排队键和模型隐藏且不可聚焦；左侧依次显示「正在准备麦克风...」「录音点 + 正在听写 + 计时 + Esc
+      取消」「正在识别」，「正在识别」时辉光收拢成往返扫动的光束；停止、结束并发送、Esc
+      取消的行为与现在一致；结束后辉光淡出、工具条恢复；听写期间空输入框的呼吸光不叠加；减少动态效果时，辉光只随声音大小变化，扫光停在中间。"
+    result: passed
+    reason:
+      text: 真机，识别器是页面内的替身（s5，普通动效和减少动态效果各跑一轮）。点麦克风后，TxVoiceBeam 覆盖层出现
+        data-active（absolute、z-index 0、pointer-events none），7 个瓣的颜色取自
+        --home-live-stops。左侧簇（附件、权限、模式，以及排队键所在的槽）和模型槽都是 opacity
+        0、inert、aria-hidden、pointer-events none；Tab
+        只经过「结束听写」「结束听写并发送」就离开输入框。左侧依次显示「正在准备麦克风...」「● 正在听写 0:01 · Esc
+        取消」「正在识别」，并通过状态区播报。听写中 --vb-level 随电平帧变化（0.505–0.883，共 38 个取值）；停止后出现
+        data-processing，--vb-cx 在 −193.8 到 152.4px 之间往返，麦克风键变为转圈且
+        aria-disabled。识别完成后文字留在输入框，辉光约 0.5 秒淡出，工具条恢复。按 Esc
+        取消后，草稿恢复为听写前的「原来的草稿」；用键盘 Enter 开始、Esc
+        取消，焦点留在麦克风键上。「结束听写并发送」会停止会话并提交识别出的文字（submit
+        在页面内被拦截，没有调用模型）。听写期间，空输入框的呼吸光 TxBorderBeam 不处于 active。减少动态效果下，电平仍在驱动（38
+        个取值），--vb-cx 和色相恒为 0，控件的隐藏与恢复没有过渡。
+      truncated: false
+  - id: A8
+    source: brief.md
+    text: "**A8｜真实应用**：在隔离 profile 的真实 Electron 中，以上行为在浅色、深色、高对比度、宽窄窗口、纯键盘操作（Tab
+      进入、Enter 打开、方向键、Esc 关闭并回焦）和减少动态效果下都可观察到。"
+    result: passed
+    reason:
+      text: 在隔离 profile 的真实 Electron 上核查（CDP 9341，渲染层由 dev server 提供，内容是候选 90671de15
+        的代码）。浅色、深色、深色高对比、浅色高对比四种主题（s7，每次切换主题后整页重载）下，工具条、完全允许的警示色、权限待确认、管理智能体、模型弹层和听写各状态都正确呈现，键盘焦点环可见（:focus-visible，2px
+        实线）。宽窗 1100px 和工具条 400px 的窄态下，胶囊会折叠，三个弹层都在窗口内，按 Esc 回到各自的胶囊；1100×680
+        的短窗下模型弹层完整。纯键盘（s6）：从输入框 Tab 到权限胶囊，按 Enter 打开并落在当前行，↑/↓/Home/End 移动，按 Esc
+        关闭并回到胶囊。Tab 到模式胶囊后按 Space 打开，↓ 到「管理智能体」按 Enter 进入二级，Tab 到开关，Shift+Tab
+        回到标题行，按 Enter 返回，按 Esc 回到胶囊。模型胶囊按 Enter 打开后输入查询，Tab 到清除键按 Enter 或 Space
+        清空，焦点留在搜索框，↓/←/↑/→ 在两栏间移动，按 Esc 回到胶囊。上一轮不通过的这条路径已修复，我复跑上一轮的
+        q6（r12）也通过。推理强度用方向键移动、按 Enter 选择，弹层不会关闭；按 Enter 选自动选择后，焦点回到胶囊。读取失败时 Tab
+        到「重试」按 Enter：仍然失败时焦点留在重试，成功后焦点交给当前行，方向键可用，按 Esc 回到胶囊（s3）。用指针按锁定行使焦点落到
+        body 后，按 Esc 仍回到胶囊。减少动态效果下（s8、s5），弹层不做位移与缩放，按下没有缩放，辉光只随声音变化，扫光停在中间。
+      truncated: false
+builder_handoff:
+  candidate_id: 4a1a9ed5-48c0-4d8d-98d8-7c9d6163105b
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:767d3a55-6dcf-4f85-b2b6-c084d79421e4
+  iteration: 3
+  summary:
+    text: 修复轮（iteration 3）。上一轮独立验收 A1–A7 通过，A8 不通过：模型弹层里输入查询、Tab 到搜索框的清除键再按
+      Enter，清除键随查询消失，焦点掉到页面，方向键失效，Esc 关闭后不回胶囊。这和第 4
+      轮的不通过属于同一类，所以本轮不再逐条修，而是系统处理。本地提交 90671de15：新增共用的
+      escape-returns-focus.ts，权限、模式、模型三个弹层都在打开期间于 document 捕获阶段判断
+      Esc，焦点在面板内、在胶囊上或已掉到页面时回焦，用户移到别处的焦点不动；清除键清空后焦点回到搜索框；模式弹层读取失败后，用键盘重试成功、重试键消失时，焦点交给当前项。处理
+      A8，并更新受影响的 A3、A4、A6 证据。开发期运行：home 目录单测 213 条（新增 4 条，5 个变异体负对照），7 个改动文件
+      eslint 零警告；新增真机场景 ev-a8-focus-sweep，用 Tab
+      走遍三个弹层内全部停留点，并覆盖清除键、重试和指针路径；收紧了偏松的 Esc 检查；隔离 profile 真机证据整轮重跑 92/92。未运行：完整
+      vitest / vue-tsc / eslint 计划（交给 Runtime）、含 TuffEx 预构建的 typecheck:web、Nexus
+      构建、全仓 lint。已知限制见 known_limits。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+  acceptance_review:
+    - id: A1
+      status: implemented-with-evidence
+      evidence:
+        - "实现：apps/core-app/src/renderer/src/views/base/home/composer/ComposerC\
+          hip.vue（图标 + 文字，无前缀，静止透明无描边，悬停才出底色；@container home-composer-tools
+          (max-width: 520px) 折叠为 32px 图标键）"
+        - 实现：apps/core-app/src/renderer/src/views/base/home/composer/ComposerToolbar.vue、apps/core-app/src/renderer/src/views/base/home/composer/ComposerModelPill.vue、apps/core-app/src/renderer/src/views/base/home/composer/model-pill.ts（自动选择时也显示图标
+          +
+          名称）、apps/core-app/src/renderer/src/views/base/home/HomePermissionMenu.vue（「完全允许」用警示色）
+        - 真机（深色）：/Users/talexdreamsoul/Workspace/docs/engineering/reports/composer-redesign/check-evidence.txt
+          中 A1 六项
+          PASS；a1-dark-rest.png、a1-dark-hover.png、a1-dark-full.png、a1-dark-auto.png；a1-a3-dark-observations.json、a1-auto-observations.json
+        - 窄窗：A8 三项「narrow toolbar folds chips, names kept」PASS（浅色 / 深色高对比 /
+          浅色高对比），a8-light-narrow.png、a8-dark-contrast-narrow.png、a8-light-contrast-narrow.png，可访问名称见
+          a8-*-observations.json
+        - 单测：ComposerChip.test.ts、HomePermissionMenu.test.ts（labels the chip
+          with the mode alone, in the alarm hue only on
+          「完全允许」）、HomeWorkspaceModeMenu.test.ts（names the chip after the mode or
+          the profile, never with a prefix）、model-pill.test.ts
+      note: 三颗胶囊统一走 ComposerChip：始终图标 + 文字，去掉「权限 ·」「Agent ·」前缀、彩色底和描边，悬停出 surface
+        底色；「完全允许」整颗用 danger 色；工具条宽度 ≤520px 时折叠为图标键，aria-label
+        保留完整状态。模型胶囊在自动选择时显示自动图标与名称。
+    - id: A2
+      status: implemented-with-evidence
+      evidence:
+        - 实现：apps/core-app/src/renderer/src/views/base/home/composer/ComposerChip.vue（删除宽度补间、模糊和底色过渡，保留按下反馈）、apps/core-app/src/renderer/src/views/base/home/composer/composer-motion.ts
+        - 真机：/Users/talexdreamsoul/Workspace/docs/engineering/reports/composer-redesign/check-evidence.txt
+          中 A2 五项 PASS；a2-expand-observations.json（同一帧内文字与宽度一起变化，无 blur /
+          opacity 补间，背景无 transition，弹层保留全局 expand）
+        - "单测：ComposerChip.test.ts（lands a new value in the same frame: nothing
+          waits on a timer and nothing tweens）、composer-style-contract.test.ts"
+      note: 换档时胶囊在同一帧换图标和文字，没有宽度补间、模糊或底色过渡；:active 按下反馈保留；三个弹层仍用全局 expand 展开。
+    - id: A3
+      status: implemented-with-evidence
+      evidence:
+        - 实现：apps/core-app/src/renderer/src/views/base/home/HomePermissionMenu.vue（三行只有图标、名称、当前项的勾，原说明移到
+          title；「自动审阅」时末尾有「重置已记住的授权」；「完全允许」两次确认，关闭即取消待确认）
+        - 第 6 轮（90671de15）：Esc 回焦改由共用的
+          apps/core-app/src/renderer/src/views/base/home/escape-returns-focus.ts
+          判断（焦点在面板内、在胶囊上或已经掉到页面时回到胶囊）；单测 HomePermissionMenu.test.ts 新增 returns
+          focus to the chip when Escape closes the menu, even after focus fell
+          to the page
+        - 真机：/Users/talexdreamsoul/Workspace/docs/engineering/reports/composer-redesign/check-evidence.txt
+          中 A3 六项
+          PASS；a3-dark-menu.png、a3-dark-armed.png、a1-a3-dark-observations.json；各主题
+          a8-*-permission-armed.png
+        - 单测：HomePermissionMenu.test.ts 六条（lists the three modes with no second
+          line… / takes 「完全允许」 only on the second activation of its own row /
+          drops a pending confirmation when the menu closes or another mode is
+          chosen / resets the remembered approvals from 「自动审阅」 and closes 等）
+      note: 权限弹层改为三行单行项，说明挪到悬停 title；第一次点「完全允许」只让该行变红并给出确认提示，第二次才生效；关闭弹层或改选其他档位即取消待确认。
+        第 6 轮起，焦点掉到页面之后（例如点了面板里不接焦点的部分）按 Esc 也会回到胶囊。
+    - id: A4
+      status: implemented-with-evidence
+      evidence:
+        - 实现：apps/core-app/src/renderer/src/views/base/home/workspace/HomeWorkspaceModeMenu.vue（第一层：对话
+          + 已启用 profile + 管理智能体；二级视图：摘要 + 启停开关；分支提示、回复中锁定、无 profile / 全关 /
+          读取失败的文字与入口；第 5 轮 389770b44：正在保存的开关保持可用并标
+          aria-busy，焦点不再因保存掉到页面）、apps/core-app/src/renderer/src/modules/conversation/useAgentWorkspace.ts（保存
+          profile 前
+          toRaw，开关能真实保存）、apps/core-app/src/renderer/src/views/base/home/HomePage.vue
+          selectAgentProfile
+        - 第 6
+          轮（90671de15）：读取失败后，键盘按下的「重试」随错误一起消失时，焦点交给当前项，不再掉到页面；再次失败则焦点留在重试键上。单测
+          HomeWorkspaceModeMenu.test.ts 新增 hands focus to the current row when
+          the retry key leaves with the error，真机见
+          a8-dark-focus-sweep-observations.json 的 retry
+        - 真机：/Users/talexdreamsoul/Workspace/docs/engineering/reports/composer-redesign/check-evidence.txt
+          中 A4 七项 PASS（含 switch off saves (real orchestrator)、a profile switched
+          off leaves the first view, with the reason，以及第 5 轮新增 switching a
+          profile by pointer keeps focus on the switch：a4-dark-observations.json
+          的 a4.manage.afterOff.active 为 role=switch，上一轮为
+          BODY）；a4-dark-menu.png、a4-dark-manage.png、a4-dark-all-off.png、a4-dark-menu-agent.png、a4-dark-agent-chip.png；a8-*-mode-manage.png
+        - 单测：HomeWorkspaceModeMenu.test.ts 十条（含 says a mode change continues in
+          a branch, and holds it while a reply runs / shows a skeleton row on
+          the first read and the reason when there is nothing to run / warns …
+          can no longer run，以及第 5 轮新增 keeps the switch being saved enabled and
+          in focus, and drops its repeat
+          presses）、useAgentWorkspace.profile-save.test.ts
+      note: 模式弹层第一层只列对话和已启用 profile，选 profile 即切 Agent 并使用它；启停开关放到「管理智能体」二级视图，关掉的
+        profile 不再出现在第一层。第 5 轮起，切换开关（键盘或指针）时焦点留在开关上。分支提示、回复中锁定、空 / 全关 /
+        读取失败状态由单测覆盖（见 known_limits）。 第 6 轮起，读取失败后用键盘重试成功时，焦点落在当前项上。
+    - id: A5
+      status: implemented-with-evidence
+      evidence:
+        - 实现：apps/core-app/src/renderer/src/views/base/home/HomeModelMenu.vue（TxPopover
+          承载双栏；只有 .HomeModelMenu-Rail / .HomeModelMenu-List
+          滚动，搜索框和推理强度固定；设置键关闭弹层并打开
+          /setting/intelligence/channels；没有筛选条、副标题、字母占位、★ 和 ⌘N）；删除
+          model-menu-hotkeys.ts、useModelFavorites.ts
+        - 第 4
+          轮（121504b1e）：选项在打开后才落地时，按新数据重算左栏并把已选来源和模型滚进视野；用户已在面板里滚动、按键或点按后只重算、不再滚动
+        - "真机：/Users/talexdreamsoul/Workspace/docs/engineering/reports/composer\
+          -redesign/check-evidence.txt 中 A5 十五项 PASS（含 h680/700/720/740
+          面板不滚动、重开时两栏回到顶部、options landing late: the pinned source and model come
+          into view、options landing after the user scrolled: the column stays
+          put）；a5-dark-model.png、a5-dark-model-header.png、a5-dark-model-680.png\
+          、a5-dark-model-680-note.png、a5-dark-model-rail-scrolled.png、a5-dark-r\
+          eopen-1/2/3-*.png、a5-dark-late-load-revealed.png、a5-dark-late-load-ha\
+          nds-on.png、a5-dark-settings-key.png 及对应 observations.json"
+        - 单测：HomeModelMenu.test.ts 33 条，含第 4 轮新增 brings the pinned source into
+          view when the options land after the opening、leaves the columns where
+          the user put them when the options land after that（两条都做过负对照：去掉修复后失败）
+      note: 输入框和顶栏两颗模型胶囊打开同一个双栏弹层：打开即聚焦完整搜索框；左栏为自动选择、最近使用和「服务 ·
+        渠道」来源及模型数，右栏为所选来源的模型；只有双栏滚动。
+    - id: A6
+      status: implemented-with-evidence
+      evidence:
+        - 实现：apps/core-app/src/renderer/src/views/base/home/HomeModelMenu.vue（defaultRail
+          停在当前模型的来源；最近使用行尾带来源标签，选中行标签底色改为 --shell-bg；跨来源搜索按来源分组，左栏变淡且
+          inert，清空后恢复；←/→/↑/↓/Enter/Esc；!loaded
+          时两栏骨架）、apps/core-app/src/renderer/src/modules/conversation/useRecentModels.ts（最多
+          5 个、去重、最新在前，存 appSetting.conversation）、conversation-settings.ts
+        - 第 6 轮（90671de15）：模型弹层的 Esc 回焦改由共用的 escape-returns-focus.ts
+          判断；搜索框清除键清空后焦点回到搜索框（接住 TxSearchInput 的 clear 事件）。单测
+          HomeModelMenu.test.ts 新增 still returns focus to the pill when Escape
+          comes after focus fell to the page、puts focus back in the search field
+          when its clear key empties it
+        - "真机：/Users/talexdreamsoul/Workspace/docs/engineering/reports/composer\
+          -redesign/check-evidence.txt 中 A6 十三项 PASS，含 recent survives a
+          restart, same order（a6-before-restart-observations.json →
+          a6-restart-observations.json，读 Main 存储）与 dark / light: the selected
+          Recent row keeps its tag outline（tagBackground ≠ rowBackground）"
+        - 截图：a6-dark-recent.png、a6-dark-search.png、a6-dark-keyboard.png、a6-dark-skeleton.png、a6-dark-recent-after-restart.png、a6-dark-recent-selected-tag.png、a6-light-recent-selected-tag.png
+        - 单测：useRecentModels.test.ts、HomeModelMenu.test.ts
+      note: 打开时左栏停在当前模型的来源；最近使用记录弹层里最近选中的 5 个模型，重启后保留；第 4 轮修复了选中行来源标签与行底同色、轮廓消失的问题。 第
+        6 轮起，用清除键清空搜索后焦点留在搜索框里，方向键仍可进入列表。
+    - id: A7
+      status: implemented-with-evidence
+      evidence:
+        - 实现：apps/core-app/src/renderer/src/views/base/home/HomePage.vue（composer
+          内部覆盖层挂 TxVoiceBeam，听写期间关闭 TxBorderBeam 呼吸光；辉光颜色在 onMounted 从
+          --home-live-stops
+          读取）、apps/core-app/src/renderer/src/views/base/home/composer/voice-glow.ts、apps/core-app/src/renderer/src/views/base/home/composer/ComposerToolbar.vue（听写期间附件
+          / 权限 / 模式 / 排队 / 模型隐藏且 inert；状态行用 halo
+          保证可读）、apps/core-app/src/renderer/src/views/base/home/composer/ComposerMic.vue
+        - 真机：/Users/talexdreamsoul/Workspace/docs/engineering/reports/composer-redesign/check-evidence.txt
+          中 A7 十五项 PASS（三段状态文字、隐藏控件不可聚焦且 Tab
+          跳过、辉光随电平、正在识别收拢为往返光束、空输入框呼吸光关闭、结束后淡出、Esc
+          取消恢复草稿、结束并发送发出已识别文字、减少动态效果下扫光居中、辉光颜色取自 token、窄窗峰值时状态行可读）
+        - 截图：a7-dark-starting.png、a7-dark-listening.png、a7-dark-listening-2.png、a7-dark-finishing.png、a7-dark-ended.png、a7-dark-after-send.png、a7-dark-reduced-*.png、a7-dark-narrow-peak.png、a7-light-narrow-peak.png、a7-dark-glow-from-token.png
+          及 observations.json
+        - 单测：ComposerToolbar.test.ts、ComposerMic.test.ts、voice-glow.test.ts
+      note: 听写时输入框底部出现 TxVoiceBeam 辉光并由 asrStream 电平帧驱动，其他控件隐藏且不可聚焦；正在识别时打开 processing
+        收拢为往返光束；颜色引用 --home-live-stops 而不是写死色值。录音与识别为注入模拟（见 known_limits）。
+    - id: A8
+      status: implemented-with-evidence
+      evidence:
+        - 第 6 轮修复（90671de15）：上一轮不通过的路径是模型弹层「输入 qwen → Tab 到搜索框的清除键 →
+          Enter」，清除键随查询一起消失，焦点掉到页面，方向键失效，Esc 关闭后不回焦。现在：(1) 新增
+          apps/core-app/src/renderer/src/views/base/home/escape-returns-focus.ts，权限、模式、模型三个弹层共用；弹层打开期间在
+          document 捕获阶段监听 Esc，焦点在面板内、在胶囊上或已掉到页面时回到胶囊，用户自己移到别处的焦点不动（模式弹层第 5
+          轮的内联实现改为调用它）；(2) 清除键清空后焦点回到搜索框；(3) 模式弹层「重试」成功、重试键消失时，焦点交给当前项
+        - 真机新场景
+          /Users/talexdreamsoul/Workspace/Projects/talex-touch.drafts/composer-redesign/verify/ev-a8-focus-sweep.mjs
+          → a8-dark-focus-sweep-observations.json：三个弹层用 Enter 打开后 Tab
+          走遍弹层内全部停留点（权限 3 个、模式 3 个、模型 6
+          个：搜索框、模型设置、自动选择、来源栏、模型列表、推理强度），每个停留点重新打开后按 Esc 都回到各自胶囊；清除键用 Enter 和
+          Space 各测一次，清空后焦点在搜索框、查询为空，↓ 进入列表，Esc
+          回到模型胶囊；模式弹层第一次读取失败时，重试仍失败则焦点留在「重试」，成功后焦点落到「对话」，↓ 到 Tuff Pi
+          Coordinator，Esc 回到模式胶囊；在权限弹层内边距、模型弹层「推理强度」标签上按下后焦点在 BODY，Esc 仍回到胶囊。截图
+          a8-dark-focus-model-cleared.png、a8-dark-focus-mode-retried.png
+        - "真机：/Users/talexdreamsoul/Workspace/docs/engineering/reports/composer\
+          -redesign/check-evidence.txt 中 A8 二十五项 PASS，总计 92/92。本轮新增四项：permission
+          / mode / model: Esc from every Tab stop inside the popover returns to
+          its chip；model: the clear key (Enter / Space) leaves focus in the
+          search field…；mode: a failed retry keeps focus on 重试…；pointer: a press
+          on a part that takes no focus, then Esc, returns to the
+          chip。另外按上一轮验收的意见收紧了「Esc closes and returns focus to the
+          chip」：原来只要求关闭且焦点没有 role，焦点掉到页面时也能通过；现在要求焦点是对应的胶囊（「权限 ·」「会话模式 ·」）。第 5
+          轮的 ev-a8-manage-keyboard（管理视图 Space 切开关、锁定行、Tab 出弹层）继续保留并通过"
+        - 单测：home 目录 17 个文件 213 条全部通过。本轮新增 4 条：HomeModelMenu.test.ts
+          两条（清除键回焦、焦点掉到页面后 Esc 回焦）、HomePermissionMenu.test.ts 一条（焦点掉到页面后 Esc
+          回焦）、HomeWorkspaceModeMenu.test.ts 一条（重试成功后焦点交给当前项）。另用 5 个变异体在 7
+          次定向运行中做负对照，每次都在目标断言处失败（焦点停在 body
+          而不是预期元素）：去掉重试交接、去掉清除键回焦、共用函数不认掉到页面的焦点（模式、模型、权限三处）、模型弹层不接共用函数、权限弹层不接共用函数
+        - 补充探查（未进 check-evidence）：模型弹层推理强度档位用键盘操作，方向键在档位间移动，Space
+          选中后焦点仍在档位上，胶囊显示「opus · 中」，Shift+Tab 能回到选中档位；Esc 回到胶囊；推理强度已复原为「自动」
+        - 环境：隔离 profile
+          /private/tmp/tuff-composer-verify/userdata（sentry-config.json 为
+          enabled:false，启动日志为 Sentry is disabled by configuration，没有
+          .dmp）；dev-electron-wrapper，CDP 9341，dev server
+          5391，关闭全局快捷键和原生音频；证据目录本轮清空后全部重新生成；运行记录见
+          final-pass.log、a6-restart.log、a5-settings.log
+      note: 以上行为在隔离 profile 的真实 Electron 中，经 CDP 在浅色、深色、两种高对比、宽窄窗口、纯键盘和减少动态效果下逐项观察。第 5
+        轮修复了「管理智能体」里切开关后焦点丢失的问题；第 6 轮把三个弹层的 Esc
+        回焦统一为共用判断，并从源头堵住清除键和重试键两条丢焦点的路径，用 Tab 巡游把三个弹层内所有停留点的 Esc 回焦都测了一遍。
+  checks:
+    - name:
+        text: core-app vitest：views/base/home（17 个文件 213 条）
+        truncated: false
+      result: passed
+      note:
+        text: 本轮新增 4 条；5 个变异体、7 次定向运行的负对照都在目标断言处失败
+        truncated: false
+    - name:
+        text: eslint（本轮 7 个改动文件，--max-warnings 0）
+        truncated: false
+      result: passed
+      note:
+        text: 另经 pre-commit 的 lint-staged
+        truncated: false
+    - name:
+        text: 真实应用证据 check-evidence.py（隔离 profile Electron + CDP）
+        truncated: false
+      result: passed
+      note:
+        text: 92/92，输出在
+          /Users/talexdreamsoul/Workspace/docs/engineering/reports/composer-redesign/check-evidence.txt
+        truncated: false
+    - name:
+        text: 完整 vitest / vue-tsc / eslint 计划
+        truncated: false
+      result: not-run
+      note:
+        text: 按 Comet 约定交给 Runtime 在冻结候选上执行
+        truncated: false
+    - name:
+        text: 含 TuffEx 预构建的 typecheck:web、Nexus 构建、全仓 lint
+        truncated: false
+      result: not-run
+      note:
+        text: TuffEx 与 Nexus 未改动
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: 听写没有用真实录音：隔离实例设了 TUFF_DISABLE_NATIVE_AUDIO=1，识别状态和电平帧由页面内替换的
+        transport（voice:api:get-recognition-status /
+        voice:api:asr-stream）注入。呈现、状态序列和键盘行为来自真实组件，真实麦克风和识别引擎没有参与（brief「验证预期」要求如实写明）。
+      truncated: false
+    - text: 「结束并发送」的发送被拦截：agent-workspace:api:submit 在页面内被拒绝，证据是拦下的载荷文本，没有调用任何模型或 CLI。
+      truncated: false
+    - text: A4 的分支提示、回复进行中锁定、无 profile 和读取失败状态只由 HomeWorkspaceModeMenu.test.ts
+        覆盖：真机上制造这些状态要真实发送消息或破坏 profile 存储，没有做。真机覆盖了第一层列表、管理视图、开关保存（真实
+        orchestrator）、关闭后从第一层消失、选 profile 切 Agent、回到对话。
+      truncated: false
+    - text: 首次加载骨架和「选项晚到」是模拟的：挂起 intelligence:api:get-provider-model-options，并把模块的
+        loaded 拨回首次状态（真实首载太快，抓不到）；放行后走真实请求。
+      truncated: false
+    - text: 选项晚到前，用户如果已在面板里滚动、按键或点按，选中项仍按新数据重算，但两栏不再滚动，已选来源可能在视野外（a5-dark-late-load-hands-on.png）。这是有意的取舍：不和用户抢滚动位置。
+      truncated: false
+    - text: 验证脚本缺陷（本轮发现并已修正）：ev-a5-a6 和 ev-a5-late-load 的挂起包装直接调用了未绑定的
+        send，放行时抛错、旧列表原样保留；而且 ev-a5-a6 之后，同一页面里所有经 transport
+        的请求都会失败（模型列表刷新按设计静默保留旧数据，所以之前几轮没有暴露）。重启前各轮的证据都带着这个缺陷。本轮改为
+        bind(t)，并在这两个场景后重载页面，清空证据目录后整轮重跑。
+      truncated: false
+    - text: 工作区经过一次重启恢复：2026-10-06 重启清空了 /private/tmp，原 worktree、提交和 Comet 记录一起丢失。代码从
+        Claude Code file-history 和会话记录重放恢复为 1208a7683；Comet 记录用 native new
+        重建，Shape 由用户重新确认。重建时为通过 workspace-isolation 检查，临时移开了 4 个与本需求无关的孤儿 change
+        目录，登记后原样放回。
+      truncated: false
+    - text: 崩溃上报：重启前，旧测试 profile 的一份主进程崩溃 minidump 已上传 Sentry（statusCode 200）。第 4 轮新建
+        profile 后，在第一个实例启动约 10 秒时才写入 sentry-config.json
+        {enabled:false}；服务订阅了这个配置，会立即关闭上报，但这 10
+        秒内是否发出过启动遥测，因日志已被重启覆盖而无法查证。此后每次启动日志都是 Sentry is disabled by
+        configuration，profile 里没有 .dmp。旧 profile 启动约 30 秒后主进程 SIGSEGV 的问题在新
+        profile 上没有复现，原因未查明。
+      truncated: false
+    - text: 旁路的既有问题，没有改：深色高对比度下 --shell-primary-soft 与 --shell-primary 对比度约 1.3:1（全局
+        token，本需求只在 ComposerMic 的 html.contrast 下改用 primary +
+        on-primary）；「模型渠道」设置页的文档级按键处理会吞掉之后的 Space
+        和方向键（证据脚本靠先跑键盘场景或重载规避）；TxDropdownMenu 的 initialFocus 在首帧因锚点
+        visibility:hidden 失效（CoreApp 用 focusWhenShown 规避，没有改 TuffEx）。
+      truncated: false
+    - text: TuffEx 没有改动：辉光直接复用已有的 TxVoiceBeam，所以没有 Nexus 文档和 demo 的同步改动。
+      truncated: false
+    - text: 窄窗折叠（≤520px）在浅色、深色高对比、浅色高对比三种主题下有截图和检查；普通深色主题只有听写态的窄窗截图（a7-dark-narrow-peak.png），折叠本身是同一条
+        @container 规则。
+      truncated: false
+    - text: 提交只在本地分支
+        task/feat/composer-redesign（1208a7683、121504b1e、389770b44、90671de15），没有推送；Comet
+        正式产物尚未提交（docs/comet/changes/composer-redesign/ 未跟踪）。
+      truncated: false
+    - text: "TuffEx 既有问题（本轮发现，未改）：TxSwitch 的 .tuff-switch__track 和 __thumb 用了
+        transition: all 0.25s，visibility 也在过渡之列。锚点弹层收起后 clip 已是
+        hidden，开关的轨道和滑块仍会可见约 250ms，在原位置留下一个开关残影（逐帧采样：253ms 时 clip 和按钮已
+        hidden，track 和 thumb 仍 visible；900ms 时全部
+        hidden）。本次只在从「管理智能体」视图关闭弹层时出现。按机制推断，基线里开关所在的下拉同样存在这个残影，但没有在基线上实测。根治应在
+        TuffEx 把 transition 改成具体属性，并同步 Nexus 文档。"
+      truncated: false
+    - text: '全局 accessibility.scss 有 [aria-disabled="true"], [disabled] {
+        pointer-events: none }：按下被锁定的行时，点击会穿到后面不接焦点的元素上，焦点掉到 body。第 6
+        轮起三个弹层都靠共用的 Esc 判断回焦，真机已验证权限和模型弹层的指针路径。焦点掉到页面后，方向键在弹层里不起作用，要先按 Esc，或者用
+        Tab 重新进入；这一条只影响指针操作。'
+      truncated: false
+    - text: 上一轮验收报告里的旁路问题，本轮没有处理：apps/core-app/scripts/coreapp-packaged-tool-confirmation-acceptance.ts
+        仍使用本次删除的选择器（.HomePermissionMenu-Pill、.is-info、ComposerChip 的
+        tx-text-transformer 层），再跑这份打包验收会失配（它不在 CI
+        中，模型菜单选择器在基线就已失配）；顶栏模型胶囊的可访问名称不含模型名（HomeTopBar.vue
+        未改，既有问题）；锚点弹层是非模态的，Tab 走完会离开弹层。
+      truncated: false
+    - text: 从有历史的对话选 profile 时，selectAgentProfile 先把 profileId 写进源会话（mode 仍为 chat），再
+        fork。这是因为 Main 的 fork 只替换 mode，属于有意设计，但会在源会话上留下持久化副作用；HomePage
+        里这段逻辑没有单测，只在上一轮验收中真机验证过一次。
+      truncated: false
+    - text: 上一轮验收报告里没有处理的风险：弹层是非模态的，Tab 走过最后一个控件会进入侧栏而弹层仍开着（锚点组件的既有行为，这时按
+        Esc，焦点留在用户移到的位置）；访问「模型渠道」设置页后 Space
+        和方向键被吞，重载才恢复（既有问题，模型弹层的设置键会直接进入这个页面）；高对比度下搜索框有圆角外框加输入框矩形框的双重焦点框（来自
+        TuffEx 的外观）。
+      truncated: false
+    - text: 从有历史的对话里选 profile 并 fork
+        到新会话后，焦点会落在哪里，本轮没有在真机上检查：那时页面要切到新会话，已经超出弹层自己的回焦范围。
+      truncated: false
+  known_limits_truncated: false
+  review: null
+  submitted_at: 2026-10-06T18:33:02.457Z
+blockers: []
+verification:
+  candidate_id: 4a1a9ed5-48c0-4d8d-98d8-7c9d6163105b
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:435b035b-de77-42d8-b82d-8543784e9099
+  iteration: 3
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks:
+    - id: vitest-composer
+      name:
+        text: core-app vitest（home / conversation / shortcuts / lang）
+        truncated: false
+      argv_display:
+        - text: node_modules/vitest/vitest.mjs
+          truncated: false
+        - text: run
+          truncated: false
+        - text: src/renderer/src/views/base/home
+          truncated: false
+        - text: src/renderer/src/modules/conversation
+          truncated: false
+        - text: src/renderer/src/modules/shortcuts
+          truncated: false
+        - text: src/renderer/src/modules/lang
+          truncated: false
+      argv_truncated: false
+      cwd_ref: apps/core-app
+      status: passed
+      exit_code: 0
+      duration_ms: 4135
+    - id: typecheck-web
+      name:
+        text: vue-tsc 渲染层类型检查
+        truncated: false
+      argv_display:
+        - text: node_modules/vue-tsc/bin/vue-tsc.js
+          truncated: false
+        - text: --noEmit
+          truncated: false
+        - text: -p
+          truncated: false
+        - text: "[REDACTED]"
+          truncated: false
+        - text: --composite
+          truncated: false
+        - text: "false"
+          truncated: false
+      argv_truncated: false
+      cwd_ref: apps/core-app
+      status: passed
+      exit_code: 0
+      duration_ms: 16150
+    - id: eslint-changed
+      name:
+        text: eslint（改动文件，零警告）
+        truncated: false
+      argv_display:
+        - text: node_modules/eslint/bin/eslint.js
+          truncated: false
+        - text: --max-warnings
+          truncated: false
+        - text: "0"
+          truncated: false
+        - text: src/renderer/src/modules/conversation/conversation-settings.ts
+          truncated: false
+        - text: src/renderer/src/modules/conversation/useAgentWorkspace.profile-save.test.ts
+          truncated: false
+        - text: src/renderer/src/modules/conversation/useAgentWorkspace.ts
+          truncated: false
+        - text: src/renderer/src/modules/conversation/useRecentModels.test.ts
+          truncated: false
+        - text: src/renderer/src/modules/conversation/useRecentModels.ts
+          truncated: false
+        - text: src/renderer/src/modules/shortcuts/shortcut-chord.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/HomeModelMenu.test.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/HomeModelMenu.vue
+          truncated: false
+        - text: src/renderer/src/views/base/home/HomePage.vue
+          truncated: false
+        - text: src/renderer/src/views/base/home/HomePermissionMenu.test.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/HomePermissionMenu.vue
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/ComposerChip.test.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/ComposerChip.vue
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/ComposerMic.test.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/ComposerMic.vue
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/ComposerModelPill.vue
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/ComposerToolbar.test.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/ComposerToolbar.vue
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/composer-motion.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/composer-style-contract.test.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/model-pill.test.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/model-pill.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/voice-glow.test.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/composer/voice-glow.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/escape-returns-focus.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/focus-when-shown.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/workspace/HomeWorkspaceModeMenu.test.ts
+          truncated: false
+        - text: src/renderer/src/views/base/home/workspace/HomeWorkspaceModeMenu.vue
+          truncated: false
+      argv_truncated: false
+      cwd_ref: apps/core-app
+      status: passed
+      exit_code: 0
+      duration_ms: 1639
+  summary:
+    text: 8 项全部通过。这是修复后的第 3 轮，我在隔离 profile 的真实 Electron（候选
+      90671de15）上用自己写的探针逐项复核，没有沿用前几轮的结论。上一轮 A8 的失败路径已经修复：模型搜索框的清除键用 Enter 或
+      Space 清空后，焦点留在搜索框，方向键可用，Esc 回到胶囊。模式弹层用键盘按「重试」成功后，焦点交给当前行。三个弹层里，焦点掉到页面后按
+      Esc
+      也会回到胶囊。四种主题、窄工具条、短窗、纯键盘和减少动态效果下的表现都符合规格。需要如实说明的限制：听写用的是识别器替身；首载骨架是模拟的；「重启后保留」没有亲自重启；锁定态和读取失败等状态用页面标志或替身制造。另有几处非阻断问题：弹层是非模态的，Tab
+      或 Shift+Tab 移出后按 Esc 不回胶囊；TxSwitch 残影；深色主题下确认提示的对比度约
+      4.1:1；顶栏胶囊的名称不含模型名。核查结束后，实例已恢复为 opus、推理强度自动、自动审阅、对话、profile
+      开启、无测试会话、右侧面板关闭、深色非高对比。
+    truncated: false
+  risks:
+    - text: A7 只用页面内的识别器替身验证：隔离实例设置了
+        TUFF_DISABLE_NATIVE_AUDIO=1，真实麦克风、主进程录音和识别引擎都没有参与。「结束并发送」的
+        agent-workspace:api:submit 在页面内被拦截，没有调用任何模型或 CLI。排队键的隐藏只按结构核对：它位于被 inert
+        的左侧簇里，没有制造 Main 忙且有草稿的真实状态。
+      truncated: false
+    - text: A6 的首次加载骨架是模拟的：挂起 get-provider-model-options 并重置 loaded。我尝试过不用替身：重载后 597ms
+        就点开弹层，第一帧已经有真实行，捕获不到真实首载的骨架。
+      truncated: false
+    - text: A6 的「重启后保留」我没有亲自重启（按要求不重启实例）。依据是 builder 的重启前后读数，以及吻合的进程启动时间；我自己核对了选中后
+        main 进程存储和磁盘上的 app-setting.ini 都即时写入。
+      truncated: false
+    - text: A4 的「回复进行中不能切」用页面 branching 标志驱动同一个 locked 属性观察，没有制造真实的 Main 忙碌。读取失败、无
+        profile、首读骨架都由页面内的 profiles:list 替身制造。分支提示和分支 fork 用
+        conversation:api:save 手工写入的会话验证（没有调用模型），测试会话已删除。从有历史的对话选 profile
+        时，源会话会被写入 profileId（mode 仍为 chat），这个持久化副作用本轮再次出现，属于有意设计，HomePage
+        里这段逻辑没有单测。
+      truncated: false
+    - text: 弹层是非模态的（锚点组件的既有行为）。在弹层里 Tab 过最后一项会进入侧栏「收起侧边栏」；在第一项按
+        Shift+Tab，焦点会跳到输入框的「发送」键。这两种情况下弹层都仍然开着，之后按 Esc
+        关闭，焦点留在用户移到的位置，不回到胶囊。实现有意这样处理，规格里「用键盘关闭时焦点回胶囊」没有单独写明这种情形。
+      truncated: false
+    - text: TuffEx TxSwitch 的残影（既有问题，本次未改）：从「管理智能体」视图关闭弹层后，开关的轨道和滑块会在原位置多显示一段时间。实测
+        clip 在 256ms 变为 hidden，track 到 497ms、thumb 到 747ms 才隐藏，330ms
+        截图里能看到一个完整的开关浮在输入框上。
+      truncated: false
+    - text: 深色（非高对比）主题下，「再点一次确认：之后所有工具调用都不再询问」这句提示（11px，--shell-danger 叠在 danger-soft
+        行底上）实测约 4.1:1，低于 WCAG AA 小字要求的 4.5:1。浅色约 4.6:1，浅色高对比约 5.4:1，深色高对比约
+        9.5:1。
+      truncated: false
+    - text: 两种高对比主题下，获得焦点的模型搜索框会同时显示圆角外框和输入元素自身的矩形焦点框，形成双重焦点框。这是外观问题，来自 TuffEx。
+      truncated: false
+    - text: 顶栏模型胶囊的可访问名称是「选择模型与推理强度」，不含可见的模型名，不满足 label-in-name。HomeTopBar.vue
+        本次未改动，属于既有问题。
+      truncated: false
+    - text: 访问「模型渠道」设置页后，它的文档级按键处理会吞掉 Space
+        和方向键，要整页重载才恢复（既有问题）。模型弹层的设置键会直接进入这个页面，所以用户回到 Home 后，弹层里的键盘操作会受影响。
+      truncated: false
+    - text: apps/core-app/scripts/coreapp-packaged-tool-confirmation-acceptance.ts
+        及其测试仍使用已删除的 .HomePermissionMenu-Pill / .is-info
+        选择器，再跑打包验收会失配。它不在本次验收范围内，builder 已记录。
+      truncated: false
+    - text: 模型选项加载完成前，已固定模型的胶囊暂时显示「Tuff 智能」和自动图标（在模拟首载时看到）。真实首载约 600ms
+        内完成，未解析时显示路由名称这一点是基线既有的逻辑。
+      truncated: false
+    - text: 主窗口最小宽度是 1100px（resizeTo(800,680) 后仍为 1100），所以「窄窗口」是打开右侧面板、让工具条变为 400px
+        来验证的；短窗只测到 1100×680。
+      truncated: false
+    - text: builder 证据脚本有几处偏松，我已用自己的探针补测：check-evidence 的「chips show icon +
+        text」对模型胶囊来说，展开箭头就能满足条件；「完全允许 in the alarm hue」只比较它与模式胶囊颜色不同，不查图标；「label
+        and width change in the same frame」不查图标；焦点扫描只向前 Tab，没有覆盖 Shift+Tab
+        和排在当前项之前的行。
+      truncated: false
+    - text: 检查覆盖：Runtime 绑定的 vitest（home、conversation、shortcuts、lang）、vue-tsc
+        渲染层和改动文件的 eslint 均已通过，我没有请求额外的 Runtime 检查。没有经 Runtime 执行的有：core-app 全量
+        vitest、含 TuffEx 预构建的 typecheck:web、Nexus 构建和全仓 lint（TuffEx 与 Nexus
+        未改动）。我只读核对过：改动文件里没有旧组件的 import（与 coreapp-ui-contract 门禁的规则一致），删除的模块和
+        i18n 键在 src 中没有残留引用。
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-10-06T19:07:50.145Z
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A8
+    summary:
+      text: 独立核查（只读）结论：A1–A7 通过，A8 不通过，整体 fail。我在隔离 profile 的真实 Electron 上用自己写的探针复核了
+        builder 的证据，并补测了深色窄态、模式和模型的逐帧换档、权限的键盘二次确认、有历史会话的真实分支、锁定态、读取失败/无
+        profile/首读骨架、减少动态效果下的弹层，以及听写态（识别器为页面内替身）。唯一的验收缺陷：在「管理智能体」里用键盘切换开关后焦点丢到
+        body，Esc 关闭弹层后不回到模式胶囊，不满足 A8 的「Esc
+        关闭并回焦」；该机制在基线已存在，但没有随新的二级视图处理。修复范围小，集中在 HomeWorkspaceModeMenu
+        的开关或回焦逻辑。核查结束后，实例已重载，状态已复原（opus、自动、自动审阅、对话、profile
+        开启、无测试会话），worktree、证据目录和 drafts 都没有写入。
+      truncated: false
+    completed_at: 2026-10-06T17:20:06.194Z
+  - goal_cycle: 1
+    iteration: 2
+    attempt: 1
+    outcome: fail
+    unresolved_ids:
+      - A8
+    summary:
+      text: 独立只读核查的结论：A1–A7 通过，A8 不通过，整体 fail。我在隔离 profile 的真实 Electron 上用自己写的探针（输出在
+        /private/tmp/tuff-composer-verify/verifier-r5）逐项复核。核查覆盖：三枚胶囊的静止、悬停、警示色和窄态；逐帧换档；权限二次确认（指针和键盘）；模式弹层的全部状态，包括有历史会话的真实
+        fork、锁定、读取失败、无 profile、骨架和两个 profile
+        的挂起保存；模型弹层的结构、来源、最近使用、搜索、键盘、设置键和矮窗；听写态（识别器为页面内替身）；四种主题与减少动态效果。上一轮的 A8
+        失败点（「管理智能体」切开关后焦点丢失、Esc 不回焦）已修复并在真机上确认。新发现的 A8
+        失败点在模型弹层：用键盘激活搜索框的清除键后焦点掉到 body，Esc 关闭弹层但不回到模型胶囊。机制与上一轮相同，基线已存在，修复范围很小（在
+        HomeModelMenu 沿用模式弹层的 Esc
+        兜底，或清空后把焦点放回输入框）。核查结束后实例已重载，状态已复原：深色、非高对比、opus、推理强度自动、自动审阅、对话、profile
+        开启、无测试会话、右侧面板关闭，最近使用的顺序和收藏都与核查前一致。worktree、证据目录和 drafts 都没有写入。
+      truncated: false
+    completed_at: 2026-10-06T18:14:48.837Z
+  - goal_cycle: 1
+    iteration: 3
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 8 项全部通过。这是修复后的第 3 轮，我在隔离 profile 的真实 Electron（候选
+        90671de15）上用自己写的探针逐项复核，没有沿用前几轮的结论。上一轮 A8 的失败路径已经修复：模型搜索框的清除键用 Enter 或
+        Space 清空后，焦点留在搜索框，方向键可用，Esc 回到胶囊。模式弹层用键盘按「重试」成功后，焦点交给当前行。三个弹层里，焦点掉到页面后按
+        Esc
+        也会回到胶囊。四种主题、窄工具条、短窗、纯键盘和减少动态效果下的表现都符合规格。需要如实说明的限制：听写用的是识别器替身；首载骨架是模拟的；「重启后保留」没有亲自重启；锁定态和读取失败等状态用页面标志或替身制造。另有几处非阻断问题：弹层是非模态的，Tab
+        或 Shift+Tab 移出后按 Esc 不回胶囊；TxSwitch 残影；深色主题下确认提示的对比度约
+        4.1:1；顶栏胶囊的名称不含模型名。核查结束后，实例已恢复为 opus、推理强度自动、自动审阅、对话、profile
+        开启、无测试会话、右侧面板关闭、深色非高对比。
+      truncated: false
+    completed_at: 2026-10-06T19:07:50.145Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-10-06T16:23:02.518Z

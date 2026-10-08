@@ -293,6 +293,15 @@ describe('app destination catalog invariants', () => {
     }
   })
 
+  it('opens Audit only as the way out of a refused call, never as a search door', () => {
+    const audit = getAppDestination('settings-audit')
+    expect(audit.route).toBe('/setting/intelligence/audit')
+    expect(audit.searchable).toBe(false)
+    expect([...audit.aliases.en, ...audit.aliases.zh, ...audit.aliases.pinyin]).toEqual([])
+    expect(resolveAppDestinationQuery('审计')).toBeNull()
+    expect(resolveAppDestinationQuery('audit')).toBeNull()
+  })
+
   it('gives every normalized alias a single owner across every alias group', () => {
     const owners = new Map<string, AppDestinationId>()
     const collisions: string[] = []
@@ -366,6 +375,7 @@ describe('app destination icon classes', () => {
       'i-ri-sparkling-2-line',
       'i-ri-links-line',
       'i-ri-mic-line',
+      'i-ri-file-chart-line',
       'i-ri-puzzle-line',
       'i-ri-apps-2-line',
       'i-ri-file-search-line',

@@ -1,5 +1,8 @@
 import type { IndexedSourceDiagnostics } from '@talex-touch/utils/search'
 import { describe, expect, it } from 'vitest'
+import { createI18n } from 'vue-i18n'
+import enUS from '~/modules/lang/en-US.json'
+import zhCN from '~/modules/lang/zh-CN.json'
 import {
   countIndexingSourcesNeedingAttention,
   formatIndexingSourceTimestamp,
@@ -596,6 +599,107 @@ describe('indexing source diagnostics display helpers', () => {
 
   it('returns null when source progress diagnostics are unavailable', () => {
     expect(resolveIndexingSourceProgressChip(buildSource())).toBeNull()
+  })
+
+  it('puts semantic indexing paused by the AI usage limit first, with the limit and its reset', () => {
+    const originalTimeZone = process.env.TZ
+    process.env.TZ = 'Asia/Shanghai'
+    const pausedUntil = Date.parse('2026-10-03T16:00:00.000Z')
+    const source = buildSource({
+      evidence: [
+        {
+          id: 'file-provider:index-backlog',
+          label: 'File index backlog',
+          status: 'ready',
+          reason: 'content-scheduler'
+        },
+        {
+          id: 'file-provider:embedding-pause',
+          label: 'File embedding',
+          status: 'degraded',
+          reason: 'USAGE_LIMIT_REACHED',
+          metadata: { limitKey: 'requestsPerDay', pausedUntil }
+        }
+      ]
+    })
+
+    try {
+      const chips = resolveIndexingSourceEvidenceChips(source, 2, 'zh-CN')
+      expect(chips[0]).toMatchObject({
+        id: 'file-provider:embedding-pause',
+        tone: 'warning',
+        labelKey: 'settings.settingFileIndex.sourceEvidenceChip.embeddingPause',
+        // The audit page's format, in the interface's language: no "10/4/2026, 12:00:00 AM".
+        // No translator handed in: the limit stays its stored key.
+        values: { limit: 'requestsPerDay', resumesAt: '10月4日 00:00' }
+      })
+      expect(resolveIndexingSourceEvidenceChips(source, 2, 'en-US')[0]?.values.resumesAt).toBe(
+        'Oct 4, 00:00'
+      )
+    } finally {
+      if (originalTimeZone === undefined) delete process.env.TZ
+      else process.env.TZ = originalTimeZone
+    }
+  })
+
+  it('names the limit that paused indexing the way Audit does, in both languages', () => {
+    const originalTimeZone = process.env.TZ
+    process.env.TZ = 'Asia/Shanghai'
+    const source = buildSource({
+      evidence: [
+        {
+          id: 'file-provider:embedding-pause',
+          label: 'File embedding',
+          status: 'degraded',
+          reason: 'USAGE_LIMIT_REACHED',
+          metadata: {
+            limitKey: 'requestsPerDay',
+            pausedUntil: Date.parse('2026-10-03T16:00:00.000Z')
+          }
+        }
+      ]
+    })
+    const chip = (locale: 'zh-CN' | 'en-US') => {
+      const i18n = createI18n({
+        legacy: false,
+        locale,
+        messages: { 'zh-CN': zhCN, 'en-US': enUS }
+      })
+      const t = i18n.global.t as unknown as (key: string, values?: object) => string
+      const [first] = resolveIndexingSourceEvidenceChips(source, 2, locale, t)
+      return first ? t(first.labelKey, first.values) : null
+    }
+
+    try {
+      expect(chip('zh-CN')).toBe(
+        '语义索引已暂停 · AI 用量上限「每日请求数」已用完 · 10月4日 00:00 后恢复'
+      )
+      expect(chip('en-US')).toBe(
+        'Semantic indexing paused · AI usage limit (Requests per day) reached · resumes Oct 4, 00:00'
+      )
+      // The name is Audit's own: the limits card shows the same words for the same key.
+      expect(chip('zh-CN')).toContain(zhCN.intelligenceAudit.limits.items.requestsPerDay)
+      expect(chip('zh-CN')).not.toContain('requestsPerDay')
+    } finally {
+      if (originalTimeZone === undefined) delete process.env.TZ
+      else process.env.TZ = originalTimeZone
+    }
+  })
+
+  it('shows a limit key this build does not name as stored', () => {
+    const source = buildSource({
+      evidence: [
+        {
+          id: 'file-provider:embedding-pause',
+          label: 'File embedding',
+          status: 'degraded',
+          reason: 'USAGE_LIMIT_REACHED',
+          metadata: { limitKey: 'requestsPerFortnight', pausedUntil: 1 }
+        }
+      ]
+    })
+    const [first] = resolveIndexingSourceEvidenceChips(source, 2, 'zh-CN', (key) => `t:${key}`)
+    expect(first?.values.limit).toBe('requestsPerFortnight')
   })
 
   it('builds an estimated progress chip with bounded percentage and ETA values', () => {

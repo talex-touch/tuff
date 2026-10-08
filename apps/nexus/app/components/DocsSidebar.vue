@@ -83,7 +83,7 @@ const COMPONENT_DOCS_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
 let activeScrollFrame: number | null = null
 let componentDocsMetadataTimer: ReturnType<typeof setTimeout> | null = null
 let componentDocsMetadataIdleId: number | null = null
-const prefetchedDocsMetadataTargets = new Set<string>()
+const prefetchedDocsRouteTargets = new Set<string>()
 const prefetchedDocsFullBodyTargets = new Set<string>()
 const pendingDocsFullBodyPrefetchTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingDocsFullBodyPrefetchIdleIds = new Map<string, number>()
@@ -244,6 +244,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/template-docs',
     // templates — AI apps
     '/docs/dev/components/template-agent-chat',
+    '/docs/dev/components/template-ai-answer',
     '/docs/dev/components/template-research',
     // templates — Data & flow
     '/docs/dev/components/template-dashboard',
@@ -359,8 +360,12 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/search-panel',
     '/docs/dev/components/markdown-editor',
     '/docs/dev/components/code-editor',
+    '/docs/dev/components/terminal',
     '/docs/dev/components/virtual-list',
     '/docs/dev/components/version-capsule',
+    '/docs/dev/components/motion-form',
+    '/docs/dev/components/motion-control',
+    '/docs/dev/components/motion-metric',
     // pro — Effects
     '/docs/dev/components/glass-surface',
     '/docs/dev/components/gradient-border',
@@ -374,6 +379,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/keyframe-stroke-text',
     '/docs/dev/components/tuff-logo-stroke',
     '/docs/dev/components/text-morph',
+    '/docs/dev/components/icon-morph',
     '/docs/dev/components/text-transformer',
     '/docs/dev/components/transition',
     '/docs/dev/components/stagger',
@@ -436,8 +442,10 @@ const SECTION_ORDER: Record<string, string[]> = {
     // data — Charts (the @talex-touch/tuffex/charts subpath; mirrors the kumo docs order)
     '/docs/dev/components/charts',
     '/docs/dev/components/chart-colors',
+    '/docs/dev/components/echart-charts',
     '/docs/dev/components/timeseries-chart',
     '/docs/dev/components/maps',
+    '/docs/dev/components/mono-chart',
     '/docs/dev/components/sankey-chart',
     '/docs/dev/components/custom-chart',
     // data — Visualization
@@ -449,6 +457,22 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/flow-suite',
     // flow — Flow
     '/docs/dev/components/flowchart',
+    // ── suite: motion — overview
+    '/docs/dev/components/motion-suite',
+    // motion — Buttons / Card Spreads / 3D Carousels / Loaders / Dither Charts
+    '/docs/dev/components/motion-button',
+    '/docs/dev/components/card-spread',
+    '/docs/dev/components/carousel-3d',
+    '/docs/dev/components/flip-book',
+    '/docs/dev/components/motion-loader',
+    '/docs/dev/components/dither-chart',
+    // motion — Text / Physics / Interaction / Toggles / Transitions
+    '/docs/dev/components/motion-text',
+    '/docs/dev/components/physics-motion',
+    '/docs/dev/components/motion-dock',
+    '/docs/dev/components/motion',
+    '/docs/dev/components/motion-toggle',
+    '/docs/dev/components/motion-transition',
   ],
   '/docs/dev/reference': [
     '/docs/dev/reference/index',
@@ -483,13 +507,11 @@ const SECTION_ORDER: Record<string, string[]> = {
   ],
 }
 
-// Component docs are split into seven suites (concepts / templates / base / pro /
-// ai / data / flow). Categories and their suite assignment mirror
-// scripts/recategorize-component-docs.py — keep the two files in sync. The
-// tuffex entry barrels stay base/pro/ai: 'data' and 'flow' are docs-level splits
-// (Visualization components and the chart family both import from the pro
-// barrel; the chart family also ships behind the @talex-touch/tuffex/charts
-// subpath, and the flow family ships from the ai barrel).
+// Component docs are split into eight suites (concepts / templates / base / pro /
+// ai / data / flow / motion). Categories follow the shared docs-suites taxonomy;
+// scripts/recategorize-component-docs.py assigns that taxonomy to every page.
+// Installation barrels remain base/pro/ai. Motion is a documentation grouping,
+// and the chart family also has the @talex-touch/tuffex/charts entry.
 type SuiteKey = DocsSuiteKey
 
 interface SuiteDef {
@@ -571,6 +593,12 @@ const SUITES = computed<SuiteDef[]>(() => [
     categories: suiteCategories('flow'),
     standalonePages: ['/docs/dev/components/flow-suite'],
   },
+  {
+    key: 'motion',
+    label: t('docsSidebar.suites.motion'),
+    categories: suiteCategories('motion'),
+    standalonePages: ['/docs/dev/components/motion-suite'],
+  },
 ])
 
 
@@ -636,6 +664,7 @@ const SUITE_ICONS: Partial<Record<SuiteKey, string>> = {
   ai: 'i-carbon-bot',
   data: 'i-carbon-chart-line-data',
   flow: 'i-carbon-flow',
+  motion: 'i-carbon-movement',
 }
 
 function suiteIcon(key: SuiteKey) {
@@ -779,14 +808,13 @@ function shouldPrefetchDocsTarget(path: string | null | undefined) {
   return Boolean(normalized?.startsWith('/docs/dev/components/'))
 }
 
-function prefetchDocsMetadataTarget(normalized: string, locale: 'en' | 'zh') {
+function prefetchDocsRouteTarget(normalized: string, locale: 'en' | 'zh') {
   const cacheKey = `${normalized}:${locale}`
-  if (prefetchedDocsMetadataTargets.has(cacheKey)) return
-  prefetchedDocsMetadataTargets.add(cacheKey)
+  if (prefetchedDocsRouteTargets.has(cacheKey)) return
+  prefetchedDocsRouteTargets.add(cacheKey)
 
   const routeTarget = toLocalizedDocsPath(normalized, locale)
   void preloadRouteComponents(routeTarget)
-  void requestDocsPage({ path: normalized, locale, body: '0' }).catch(() => {})
 }
 
 function scheduleDocsFullBodyPrefetch(normalized: string, locale: 'en' | 'zh') {
@@ -826,7 +854,7 @@ function prefetchDocsTarget(path: string | null | undefined) {
   if (!normalized) return
 
   const locale = docsLocale.value
-  prefetchDocsMetadataTarget(normalized, locale)
+  prefetchDocsRouteTarget(normalized, locale)
   scheduleDocsFullBodyPrefetch(normalized, locale)
 }
 
@@ -1637,7 +1665,7 @@ onBeforeUnmount(() => {
               ? isSectionExpanded(section)
               : normalizedRoutePath === (linkTarget(section) || '')
           "
-          :link="linkTarget(section) || undefined"
+          :link="linkTarget(section) ? localizedDocsPath(linkTarget(section)) : undefined"
           :list="section.children?.length || 0"
           @click="toggleSection(section)"
         >

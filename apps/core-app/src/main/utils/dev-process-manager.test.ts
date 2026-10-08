@@ -24,7 +24,7 @@ vi.mock('./logger', () => ({
   })
 }))
 
-import { DevProcessManager } from './dev-process-manager'
+import { DevProcessManager, GRACEFUL_SHUTDOWN_TIMEOUT_MS } from './dev-process-manager'
 
 describe('DevProcessManager', () => {
   beforeEach(() => {
@@ -54,7 +54,7 @@ describe('DevProcessManager', () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 
     manager.triggerGracefulShutdown()
-    await vi.advanceTimersByTimeAsync(5000)
+    await vi.advanceTimersByTimeAsync(GRACEFUL_SHUTDOWN_TIMEOUT_MS)
     await vi.advanceTimersByTimeAsync(300)
 
     expect(appMock.quit).toHaveBeenCalledTimes(1)

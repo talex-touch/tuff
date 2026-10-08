@@ -1,0 +1,11 @@
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/design.md", "reason": "Cross-child contracts: shared kit shape, nav end state, page migration definition of done, test and verification rules every child must follow"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/research/page-inventory.md", "reason": "Per-page inventory, duplication map, TuffEx coverage, giant-page split boundaries and the tests that pin current structure"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/research/visual-baseline-2026-10-02.md", "reason": "Real-browser baseline of every admin page; the defect list each migration must close"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/research/orphan-api-contracts.md", "reason": "Server contracts, auth and backend gaps for credits, plugin moderation, release evidence, risk, retention and emergency"}
+{"file": ".trellis/tasks/10-02-nexus-admin-console-overhaul/research/retired-ai-cleanup.md", "reason": "Dependency graph, verdict table and atomic deletion order for the retired AI admin code"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Ordered pre-development reading list and hard frontend rules (TuffEx-first, skeleton default, message catalogs)"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "AdminPageShell contract (:72-74), explicit imports (:70), Loading States (:311-341)"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Conventions for the new useAdmin* composables"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Where list, filter and query state lives for admin pages"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "SSR-safety, admin drawer request-generation rule (:118), per-workspace lint and verification"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "Shared working tree with other sessions: staging and verification without stash/checkout"}

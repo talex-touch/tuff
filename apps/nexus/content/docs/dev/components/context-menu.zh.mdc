@@ -180,7 +180,7 @@ code: |
 - 默认的 `activationFeedback=true` 会在关闭前先清空高亮 90ms、再用现有选中态确认 90ms，然后触发 `select` 并关闭；减少动态效果会自动跳过，宿主已有更强即时反馈时可在根、Panel 或单项关闭。
 - 破坏性操作使用 `danger` 明确表达风险；`color` 只用于设计系统中已有语义色。
 
-`TxContextMenuSubmenu` 在菜单里嵌套一层子面板，支持任意层级。悬停触发行展开，指针在父子面板之间移动不会误关；子面板里的条目选中后按根菜单的 `closeOnSelect` 关闭整条链。
+`TxContextMenuSubmenu` 在菜单里嵌套一层子面板，支持任意层级。悬停触发行展开，指针在父子面板之间移动不会误关，斜向穿过兄弟行去往子面板时也不会把它们展开；子面板里的条目选中后按根菜单的 `closeOnSelect` 关闭整条链。
 
 ### ContextMenuSubmenu
 :::TuffDemoWrapper{demo="ContextMenuContextMenuSubmenuDemo" code-lang="vue"}
@@ -369,7 +369,7 @@ code: |
 - 触发：`trigger` 支持 `contextmenu` / `click` / `both` / `manual`；`manual` 禁用组件内部触发，仅由 `v-model + x/y` 控制打开坐标，适合按钮点击、编辑器快捷键、画布节点菜单。
 - 关闭：默认 ESC、点击外部、选中条目都会关闭；`closeOnSelect=false` 的父级二级菜单行/多步操作保持即时选择且不闪烁。
 - 确认反馈：`activationFeedback` 默认开启，菜单项先清空当前 hover/focus 高亮，再复用 `TxCardItem` active 样式确认，最后触发业务动作并关闭；根配置会透传到嵌套子菜单，Panel/单项可覆盖，`prefers-reduced-motion: reduce` 不增加延迟。
-- 二级菜单：优先使用 `TxContextMenuSubmenu`，它自带悬停展开、键盘巡航、outside-click 豁免和整链关闭；`TxContextMenuPanel` 仍可手动嵌入 `TxPopover` / 自定义 Overlay 复用，此时 Teleport 出去的子面板要加 `outsideGuard`，否则父菜单会把子菜单点击当作外部点击而关闭。
+- 二级菜单：优先使用 `TxContextMenuSubmenu`，它自带悬停展开、安全三角（斜向去往子面板时途经的兄弟子菜单行不展开，停顿约 100ms 才切换）、键盘巡航、outside-click 豁免和整链关闭；`TxContextMenuPanel` 仍可手动嵌入 `TxPopover` / 自定义 Overlay 复用，此时 Teleport 出去的子面板要加 `outsideGuard`，否则父菜单会把子菜单点击当作外部点击而关闭。
 - 动画：动画直接走 `BaseAnchor`，支持 `transfer` / `boom` / `opacity` / `none`。
 
 ## 技术实现

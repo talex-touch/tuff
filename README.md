@@ -48,7 +48,7 @@ says which of the two was used.
 
 The latest stable build and the current pre-release are both listed on the [Releases page](https://github.com/talex-touch/tuff/releases); the in-development version is whatever the [root package manifest](./package.json) and [CoreApp package manifest](./apps/core-app/package.json) declare. Exact version numbers are deliberately not repeated in this README, so it cannot drift away from them.
 
-The `2.4.14` public-release gate is intentionally strict: macOS, Windows, and Linux must each pass real installation, N→N+1 update, startup health, and recovery evidence before release. Stable launch/search and individually verified official plugins are the initial public scope; AI and unfinished UI surfaces remain explicitly Beta or unavailable. See the [current stabilization plan](./docs/plan-prd/TODO.md) and the [cross-platform audit](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md).
+The `2.4.14` public-release gate is intentionally strict: macOS, Windows, and Linux must each pass real installation, N→N+1 update, startup health, and recovery evidence before release. Stable launch/search and individually verified official plugins are the initial public scope; AI and unfinished UI surfaces remain explicitly Beta or unavailable. See the [current stabilization plan](./docs/plan-prd/TODO.md) and the [cross-platform audit](./docs/engineering/reports/search-crossplatform-audit.md).
 
 A stable source version does not imply identical maturity on all three platforms: per-platform capability and fallback boundaries follow that platform's own acceptance evidence.
 

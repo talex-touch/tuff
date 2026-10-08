@@ -1,5 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
+import type {
+  ClipboardActionResult,
+  ClipboardApplyRequest
+} from '@talex-touch/utils/transport/events/types'
+import type { HandlerContext } from '@talex-touch/utils/transport/main'
+import type { ActiveAppInfo } from './system/active-app'
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
+import { readFile } from 'node:fs/promises'
+import * as schema from '../db/schema'
+import { createDbUtils } from '../db/utils'
+import { SearchUsageService } from './box-tool/search-engine/search-usage-service'
+import * as executeRecorder from './box-tool/search-engine/execute-recorder'
+import { resolveUsageIdentity } from './box-tool/search-engine/usage-identity'
+import { activeAppService } from './system/active-app'
+import { foregroundAppSnapshotStore } from './system/foreground-app-snapshot'
 
 const RETIRED_CLIPBOARD_EVENT_NAMES = [
   'clipboard:get-latest',
@@ -324,6 +340,7 @@ vi.mock('@sentry/electron/main', () => ({
 
 vi.mock('../db/db-write-scheduler', () => ({
   dbWriteScheduler: {
+    schedule: async (_label: string, operation: () => Promise<unknown>) => operation(),
     getStats: vi.fn(() => ({
       queued: 0,
       currentTaskLabel: null
@@ -442,6 +459,116 @@ afterEach(() => {
   clipboardRuntimeMocks.appTaskGate.waitForIdle.mockResolvedValue(true)
   clipboardRuntimeMocks.appTaskGate.isActive.mockReturnValue(false)
   clipboardRuntimeMocks.coreBoxWindowVisible = false
+})
+
+describe('ClipboardModule accepted apply origin', () => {
+  it.each([
+    { name: 'known pre-hide source', known: true, success: true },
+    { name: 'unknown pre-hide source', known: false, success: true },
+    { name: 'failed apply', known: true, success: false }
+  ])(
+    'persists only the $name instead of recapturing after automation',
+    async ({ known, success }) => {
+      const client = createClient({ url: ':memory:' })
+      const app = (bundleId: string): ActiveAppInfo => ({
+        bundleId,
+        identifier: bundleId,
+        displayName: bundleId,
+        processId: process.pid + 1,
+        executablePath: `/Applications/${bundleId}.app`,
+        platform: 'macos',
+        lastUpdated: 0,
+        windowTitle: null
+      })
+      const foreground = vi
+        .spyOn(activeAppService, 'getActiveApp')
+        .mockResolvedValue(known ? app('source.before-hide') : null)
+      const automation = vi
+        .spyOn(ClipboardAutopasteAutomation.prototype, 'handleApplyRequest')
+        .mockImplementation(async () => {
+          foregroundAppSnapshotStore.clear()
+          foreground.mockResolvedValue(app('source.after-hide'))
+          return { success }
+        })
+      let recorder: { mockRestore: () => void } | undefined
+      foregroundAppSnapshotStore.clear()
+      try {
+        for (const name of [
+          '0000_whole_mister_fear.sql',
+          '0005_orange_wiccan.sql',
+          '0007_remarkable_silver_sable.sql',
+          '0011_add_recommendation_tables.sql',
+          '0019_usage_trend_daily.sql',
+          '0051_usage_execute_events.sql'
+        ]) {
+          const migration = await readFile(
+            new URL(`../../../resources/db/migrations/${name}`, import.meta.url),
+            'utf8'
+          )
+          for (const statement of migration.split('--> statement-breakpoint')) {
+            if (statement.trim()) await client.execute(statement)
+          }
+        }
+        const dbUtils = createDbUtils(drizzle(client, { schema }))
+        const usage = new SearchUsageService({ getDbUtils: () => dbUtils })
+        // The accepted-recorder consumer is backed by the real usage service and transaction. The
+        // automation boundary above is the only fake: it models focus changing during native paste.
+        recorder = vi.spyOn(executeRecorder, 'recordAcceptedExecute').mockImplementation((record) =>
+          usage.recordExecute(
+            record.sessionId ?? null,
+            record.item,
+            resolveUsageIdentity(record.item).itemId,
+            {
+              eventId: record.eventId,
+              entryPoint: record.entryPoint,
+              previousApp: record.previousApp
+            }
+          )
+        )
+        const module = new ClipboardModule() as unknown as ClipboardModuleTestHandle
+        module.transportChannel = { keyManager: {} }
+        module.registerTransportHandlers()
+        const registered = clipboardRuntimeMocks.transportOn.mock.calls.find(
+          ([event]) => String(event) === ClipboardEvents.apply.toString()
+        )!
+        const apply = registered[1] as (
+          request: ClipboardApplyRequest,
+          context: HandlerContext
+        ) => Promise<ClipboardActionResult>
+
+        const result = await apply(
+          { id: 42, eventId: 'clipboard-apply-origin' },
+          {} as HandlerContext
+        )
+        const events = await dbUtils.getRecommendationHistory()
+
+        expect(result.success).toBe(success)
+        if (success) {
+          expect(events).toEqual([
+            {
+              sourceId: 'clipboard-history',
+              itemId: '42',
+              sourceType: 'history',
+              timestamp: expect.any(Number),
+              previousApp: known ? 'source.before-hide' : null,
+              previousAppName: null
+            }
+          ])
+        } else {
+          expect(events).toEqual([])
+          expect(
+            (await client.execute('SELECT COUNT(*) AS count FROM usage_execute_events')).rows
+          ).toEqual([{ count: 0 }])
+        }
+      } finally {
+        recorder?.mockRestore()
+        automation.mockRestore()
+        foreground.mockRestore()
+        foregroundAppSnapshotStore.clear()
+        client.close()
+      }
+    }
+  )
 })
 
 describe('ClipboardModule transport registration', () => {

@@ -21,6 +21,10 @@ import {
   uninstallSpeechModel
 } from './speech-model-service'
 import { ensureLocalAsrRoute } from '../ai/intelligence-config'
+import {
+  projectUsageLimitFailure,
+  toUsageLimitStreamFailure
+} from '../ai/intelligence-error-normalizer'
 import { withPermissionSafeApi } from '../../utils/safe-handler'
 import { withPermission } from '../permission/channel-guard'
 import { BaseModule } from '../abstract-base-module'
@@ -50,6 +54,16 @@ const MICROPHONE_SETTINGS_URL: Partial<Record<NodeJS.Platform, string>> = {
   win32: 'ms-settings:privacy-microphone'
 }
 const VOICE_PERMISSION = 'voice.dictation'
+
+/**
+ * The usage limit set in Audit refuses the recognition and speech these channels run. That refusal
+ * is the one failure they answer with its code: the app's own renderer gets which limit and when
+ * it resets (VoicePanel and the Home dictation notice say so), a plugin the code alone. Every other
+ * failure keeps the public sentence it had (`undefined`).
+ */
+function projectVoiceUsageLimit(error: unknown, context: HandlerContext) {
+  return projectUsageLimitFailure(error, { host: !context?.plugin })
+}
 
 /**
  * Voice module — infrastructure for speech capture + dictation sessions.
@@ -143,7 +157,10 @@ export class VoiceModule extends BaseModule<TalexEvents> {
         withPermissionSafeApi(
           { permissionId: VOICE_PERMISSION },
           (payload, context) => voiceService.dictate(payload, context),
-          { onError: (error) => voiceLog.error('Voice dictate failed:', { error }) }
+          {
+            onError: (error) => voiceLog.error('Voice dictate failed:', { error }),
+            projectError: (error, _payload, context) => projectVoiceUsageLimit(error, context)
+          }
         )
       )
     )
@@ -257,7 +274,10 @@ export class VoiceModule extends BaseModule<TalexEvents> {
         withPermissionSafeApi(
           { permissionId: VOICE_PERMISSION },
           (payload) => voiceService.retryLastFailure(payload),
-          { onError: (error) => voiceLog.error('Voice retry failed:', { error }) }
+          {
+            onError: (error) => voiceLog.error('Voice retry failed:', { error }),
+            projectError: (error, _payload, context) => projectVoiceUsageLimit(error, context)
+          }
         )
       )
     )
@@ -416,7 +436,10 @@ export class VoiceModule extends BaseModule<TalexEvents> {
         withPermissionSafeApi(
           { permissionId: VOICE_PERMISSION },
           (payload) => voiceService.speak(payload),
-          { onError: (error) => voiceLog.error('Voice speak failed:', { error }) }
+          {
+            onError: (error) => voiceLog.error('Voice speak failed:', { error }),
+            projectError: (error, _payload, context) => projectVoiceUsageLimit(error, context)
+          }
         )
       )
     )
@@ -442,7 +465,10 @@ export class VoiceModule extends BaseModule<TalexEvents> {
           )(payload, context as unknown as HandlerContext)
         } catch (error) {
           voiceLog.error('Voice asrStream failed:', { error })
-          context.error(error instanceof Error ? error : new Error(String(error)))
+          // A refusal by the usage limit tells the app which limit and when it resets, a plugin the
+          // code; any other failure goes out as it did.
+          const failure = toUsageLimitStreamFailure(error, { host: !context.plugin })
+          context.error(failure instanceof Error ? failure : new Error(String(failure)))
         }
       })
     )

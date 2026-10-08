@@ -214,6 +214,79 @@ describe('initSearchDatabase schema parity with the primary fixups', () => {
         "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_embeddings_source' LIMIT 1"
       )
       expect(perfIndex.rows).toHaveLength(1)
+      await searchClient!.execute(`INSERT INTO search_index_meta
+        (provider_id, item_id, keyword_hash, updated_at, fts_rowid, document_hash)
+        VALUES ('provider-a', 'shared', 'keyword-a', 111, 31, 'document-a'),
+               ('provider-b', 'shared', 'keyword-b', 222, 32, 'document-b')`)
+      await searchClient!.execute(
+        "DELETE FROM search_index_meta WHERE provider_id = 'provider-a' AND item_id = 'shared'"
+      )
+      expect(
+        (
+          await searchClient!.execute(`SELECT provider_id, item_id, fts_rowid, document_hash
+        FROM search_index_meta`)
+        ).rows
+      ).toEqual([
+        { provider_id: 'provider-b', item_id: 'shared', fts_rowid: 32, document_hash: 'document-b' }
+      ])
+      await searchClient!.execute(
+        "INSERT INTO search_index_maintenance_progress(task, cursor) VALUES ('locators', 32)"
+      )
+      expect(
+        (await searchClient!.execute('SELECT task, cursor FROM search_index_maintenance_progress'))
+          .rows
+      ).toEqual([{ task: 'locators', cursor: 32 }])
+      const expectedRecord = JSON.stringify({
+        id: 1,
+        path: '/root/a.txt',
+        mtime: 11,
+        ctime: 7,
+        size: 3,
+        lastIndexedAt: 13,
+        itemId: 'file:1'
+      })
+      const deletedRecords = `[${expectedRecord}]`
+      await searchClient!.execute({
+        sql: `INSERT INTO search_index_pending_commits(commit_id,source_id,deleted_records,removed_indexed_items)
+          VALUES ('commit-a','provider-a',?,1),('commit-b','provider-b',?,1)`,
+        args: [deletedRecords, deletedRecords]
+      })
+      await searchClient!.execute(
+        "DELETE FROM search_index_pending_commits WHERE source_id = 'provider-a' AND commit_id = 'commit-a'"
+      )
+      expect(
+        (
+          await searchClient!.execute(
+            'SELECT commit_id,source_id,deleted_records,removed_indexed_items FROM search_index_pending_commits'
+          )
+        ).rows
+      ).toEqual([
+        {
+          commit_id: 'commit-b',
+          source_id: 'provider-b',
+          deleted_records: deletedRecords,
+          removed_indexed_items: 1
+        }
+      ])
+      await searchClient!.execute({
+        sql: `INSERT INTO search_index_file_maintenance(task_id,source_id,reason,file_path,expected_record,cursor)
+          VALUES ('work-a','provider-a','missing-root','/root',NULL,64),
+                 ('work-b','provider-b','stale-file','/root/a.txt',?,7)`,
+        args: [expectedRecord]
+      })
+      await searchClient!.execute(
+        "UPDATE search_index_file_maintenance SET cursor = 65 WHERE source_id = 'provider-a' AND task_id = 'work-a'"
+      )
+      expect(
+        (
+          await searchClient!.execute(
+            'SELECT task_id,source_id,cursor,expected_record FROM search_index_file_maintenance ORDER BY task_id'
+          )
+        ).rows
+      ).toEqual([
+        { task_id: 'work-a', source_id: 'provider-a', cursor: 65, expected_record: null },
+        { task_id: 'work-b', source_id: 'provider-b', cursor: 7, expected_record: expectedRecord }
+      ])
     } finally {
       searchClient?.close()
     }

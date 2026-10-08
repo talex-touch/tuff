@@ -1,3 +1,4 @@
+import { sanitizeCoreBoxFocusRecord } from '@talex-touch/utils/core-box/focus-telemetry'
 /**
  * Final-sink canary tests for issue #476.
  *
@@ -24,6 +25,8 @@ const CONTEXT_CANARY = 'CANARY CONTEXT VALUE'
 const SPAN_CANARY = 'CANARY_SPAN_DESCRIPTION'
 const LOGENTRY_CANARY = 'CANARY_LOGENTRY_MESSAGE'
 const TRANSACTION_CANARY = 'CANARY_TRANSACTION_NAME'
+const FOCUS_SUMMON_CANARY = 'CANARY_FOCUS_SUMMON_SECRET'
+const FOCUS_PAYLOAD_CANARY = 'CANARY_FOCUS_PAYLOAD_TOKEN'
 
 const ALL_CANARIES = [
   SQL_CANARY,
@@ -37,7 +40,9 @@ const ALL_CANARIES = [
   CONTEXT_CANARY,
   SPAN_CANARY,
   LOGENTRY_CANARY,
-  TRANSACTION_CANARY
+  TRANSACTION_CANARY,
+  FOCUS_SUMMON_CANARY,
+  FOCUS_PAYLOAD_CANARY
 ]
 
 function expectNoCanary(payload: unknown): void {
@@ -49,6 +54,7 @@ function expectNoCanary(payload: unknown): void {
   expect(serialized).not.toContain('params:')
   expect(serialized).not.toContain('SQLITE_BUSY')
 }
+const PATH_BREADCRUMB = `${POSIX_PATH_CANARY} opened`
 
 function buildCanaryEvent() {
   return {
@@ -131,8 +137,6 @@ function buildCanaryEvent() {
     }
   } as never
 }
-
-const PATH_BREADCRUMB = `${POSIX_PATH_CANARY} opened`
 
 describe('main Sentry final sanitizer canary (issue #476)', () => {
   it('strips every canary from the serialized final event while keeping stable classification', () => {
@@ -220,7 +224,7 @@ describe('renderer Sentry final sanitizer canary (issue #476)', () => {
   })
 })
 
-describe('Nexus operational aggregate final payload canary (issue #476)', () => {
+describe('nexus operational aggregate final payload canary (issue #476)', () => {
   it('keeps only allowlisted stable primitives in the operational error event', () => {
     const sanitized = sanitizeNexusTelemetryEvent({
       eventType: 'error',
@@ -259,5 +263,71 @@ describe('Nexus operational aggregate final payload canary (issue #476)', () => 
       occurrenceCount: 3,
       rawCode: 5
     })
+  })
+})
+
+describe('coreBox focus telemetry canary (issue #476)', () => {
+  it('strict-validates corebox-focus records and rejects PII-bearing fields', () => {
+    const record = {
+      kind: 'corebox-focus',
+      summonId: FOCUS_SUMMON_CANARY,
+      sampleIndex: 1,
+      triggerSource: 'shortcut',
+      stage: 'sample',
+      status: 'success',
+      severity: 'info',
+      code: 'COREBOX_FOCUS_OK',
+      elapsedMs: 42,
+      plannedSampleCount: 10,
+      documentFocused: true,
+      inputPresent: true,
+      inputFocused: true,
+      expectedTarget: 'input',
+      expectedTargetPresent: true,
+      expectedTargetFocused: true,
+      windowAlive: true,
+      visible: true,
+      windowFocused: false,
+      webContentsFocused: false,
+      pluginActive: false,
+      pluginFocused: false,
+      metaVisible: false,
+      metaFocused: false,
+      note: FOCUS_PAYLOAD_CANARY
+    }
+
+    // Non-UUID summonId fails strict validation
+    expect(sanitizeCoreBoxFocusRecord(record)).toBeNull()
+
+    // With a valid UUID, PII fields are dropped but safe primitives survive
+    const valid = sanitizeCoreBoxFocusRecord({
+      ...record,
+      summonId: '123e4567-e89b-42d3-a456-426614174000'
+    })
+    expectNoCanary(valid)
+    expect(valid).toMatchObject({
+      kind: 'corebox-focus',
+      summonId: '123e4567-e89b-42d3-a456-426614174000',
+      sampleIndex: 1,
+      stage: 'sample',
+      status: 'success',
+      code: 'COREBOX_FOCUS_OK',
+      elapsedMs: 42,
+      plannedSampleCount: 10,
+      triggerSource: 'shortcut',
+      documentFocused: true,
+      inputPresent: true,
+      inputFocused: true,
+      expectedTarget: 'input',
+      expectedTargetPresent: true,
+      expectedTargetFocused: true
+    })
+    // False booleans are preserved as real native state
+    expect(valid?.windowFocused).toBe(false)
+    expect(valid?.webContentsFocused).toBe(false)
+    expect(valid?.pluginActive).toBe(false)
+    expect(valid?.metaVisible).toBe(false)
+    // Unknown PII deleted
+    expect(valid).not.toHaveProperty('note')
   })
 })

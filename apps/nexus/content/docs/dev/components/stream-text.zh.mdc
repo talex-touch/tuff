@@ -193,7 +193,7 @@ code: |
 
 - 组件源码：`packages/tuffex/packages/components/src/stream-text/src/TxStreamText.vue` 与 `TxStreamCaret.vue`；时钟在 `use-stream-pacer.ts`，分词在 `segment.ts`，预设时长在 `presets.ts`。
 - 显影 keyframes 与预设规则：`packages/tuffex/packages/components/style/mixins.scss` 中的 `stream-reveal-keyframes` 与 `stream-reveal-presets` mixin，由各流式组件共用；颜色 token 在 `style/variables.scss`。
-- **已测试行为：** `stream-text/__tests__/segment.test.ts`（7 条：中文按词且标点随词、空格、百分号与句号随词、括号与引号、emoji、还原原文、降级切分），`pacer.test.ts`（16 条：挂载时已有的内容、`appear` 时的进场、节奏、突发内容均匀摊开、滞后上限、收尾、停顿、停顿计时从源头开始算起、完整状态流转、落定、重播、跳过、不节流放出、回退、无时钟、销毁），`stream-text.test.ts`（18 条：挂载不进场、进场与落定、扣住尾词、源头静默或以标点收尾时放出尾词、光标、关闭时光标立即移除、状态事件、改写、引用、chip 后的空格、插槽、`reserve`、安全链接、协议相对地址、减弱动效、SSR、`appear`），`model.test.ts`（7 条：前若干个单位重建后恰好得到这些单位，覆盖样式与链接、引用、自定义片段、中文与 emoji，空白不进入词）与 `stream-text-style.test.ts`（10 条：动画只在未减弱动效时声明、预设 keyframes、TS 与 CSS 的预设表一致、代码变体不扫色带、块变体只有整块淡入、色带扫过、光标只在合成层动画、光标取 logo 配色、光标不占行内宽度、各主题 token 齐全）。
+- **已测试行为：** `stream-text/__tests__/segment.test.ts`（7 条：中文按词且标点随词、空格、百分号与句号随词、括号与引号、emoji、还原原文、降级切分），`pacer.test.ts`（16 条：挂载时已有的内容、`appear` 时的进场、节奏、突发内容均匀摊开、滞后上限、收尾、停顿、停顿计时从源头开始算起、完整状态流转、落定、重播、跳过、不节流放出、回退、无时钟、销毁），`stream-text.test.ts`（19 条：挂载不进场、进场与落定、扣住尾词、源头静默或以标点收尾时放出尾词、光标、关闭时光标立即移除、状态事件、改写、引用、chip 后的空格、行内代码或链接后的空格留在其外、插槽、`reserve`、安全链接、协议相对地址、减弱动效、SSR、`appear`），`model.test.ts`（7 条：前若干个单位重建后恰好得到这些单位，覆盖样式与链接、引用、自定义片段、中文与 emoji，空白不进入词）与 `stream-text-style.test.ts`（10 条：动画只在未减弱动效时声明、预设 keyframes、TS 与 CSS 的预设表一致、代码变体不扫色带、块变体只有整块淡入、色带扫过、光标只在合成层动画、光标取 logo 配色、光标不占行内宽度、各主题 token 齐全）。
 - 动效参考：kobra.systems 的 streaming text（透明度加三段色相扫，每词 180ms、每 16ms 一词，即现在的 `hue` 预设）与 Beautiful UI 的 streaming text（透明度加 4px 模糊，420ms，即现在的 `blur`）；默认的 `aurora` 把两者合在一起，用时 460ms。
 - 光标取材自 Tuff logo（`apps/nexus/public/logo.svg`）：外环化作一段旋转光弧，核心图形在其中呼吸。
 

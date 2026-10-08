@@ -1,0 +1,117 @@
+---
+title: "卡片展开"
+description: "内容驱动的九种展开几何与聚焦模糊链接，支持选择、邮票参数和键盘操作。"
+category: MotionCards
+status: beta
+since: 0.6.3
+tags: [motion, cards, spread]
+---
+
+## 概述
+
+`TxCardSpread` 使用调用方的卡片数据。每种布局保留独立坐标、层叠顺序和旋转支点。未控制展开状态时，悬停或键盘聚焦会展开卡片，按钮可以固定展开。`v-model:expanded` 直接控制布局。`v-model` 表示从 0 开始的当前项，与展开状态相互独立。
+
+## 用法
+
+### 全部来源布局
+
+:::TuffDemoWrapper{demo="CardSpreadDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxCardSpread } from '@talex-touch/tuffex/card-spread'
+  const selected = ref(0)
+  const items = [
+    { id: 'draft', title: '草稿' },
+    { id: 'review', title: '审阅' },
+    { id: 'ready', title: '就绪' },
+    { id: 'publish', title: '发布' },
+    { id: 'archive', title: '归档' },
+  ]
+  </script>
+  <template>
+    <TxCardSpread v-model="selected" :items="items" variant="card-stamp-arc"
+      :angle="25" :gap="180" :y-offset="40" colorful
+      expand-label="展开卡片" collapse-label="收起卡片" aria-label="卡片展开" />
+  </template>
+---
+:::
+
+演示展示九种展开和额外的 `focus-blur`。你可以按原始 ID 筛选，并用滑块修改邮票弧度、间距和垂直偏移。演示图片是自制内联 SVG，不包含上游素材。
+
+| 变体 | 几何与来源默认值 |
+| --- | --- |
+| `card-arc-5` | 底部中心支点；角度 30°、间距 70px，垂直停点为 `[10,-2,-10,-2,10]`。 |
+| `card-arc-7` | 七个独立弧线停点；角度 45°、间距 110px、偏移 30px。 |
+| `card-long-arc-5` | 更宽、更平的弧线；角度 15°、间距 140px、偏移 20px。 |
+| `card-linear-spread` | 仅水平位移；间距 90px。 |
+| `card-corner-fan` | 左下角支点；默认旋转从 −10° 到 +30°。 |
+| `card-stamp-arc` | 邮票虚线边缘；角度系数为 `[-1,-0.48,0,0.48,1]`，间距 180px、偏移 40px。 |
+| `card-cascade-stagger` | 中心支点；每级向右 14px、向上 28px、旋转 6°。收起时保留 2px 错位。 |
+| `card-scatter-spread` | 独立的发牌坐标和旋转角度，不替换成对称扇形。 |
+| `card-wheel-fan` | 支点在卡片下方 110% 处；旋转范围为 ±36°，垂直停点为 `[-8,-22,-28,-22,-8]`。 |
+| `focus-blur` | 保留额外 `FocusBlur` 行为：悬停或聚焦项清晰，其他项模糊、淡出，虚线括号按弹簧展开。 |
+
+五点与七点布局会按来源停点插值，支持其他卡片数量。缺少数据时不会生成额外卡片。
+
+### 最佳实践
+
+- 提供稳定的 `id` 和图片替代文本。`title` 同时作为选择控件的名称。
+- 应用需要控制展开状态时使用 `expanded`。省略这个属性可启用悬停、聚焦和固定展开按钮。
+- `angle`、`gap` 和 `yOffset` 对应邮票来源的弧度、展开间距和偏移。其他布局在省略参数时保留各自默认值。
+- 卡片插槽位于选择按钮内，请提供非交互内容。`focus-blur` 项有 `href` 时会渲染真实链接。
+- 宽布局在小屏幕上支持横向滚动。`size` 同时缩放卡片与几何坐标。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `items` | `MotionCardItem[]` | 必填 | 调用方内容；空数组只渲染 `#empty`。 |
+| `modelValue` | `number` | 内部 `0` | 从 0 开始的当前项。 |
+| `variant` | `CardSpreadVariant` | `card-arc-5` | 上表中的十个 ID；常量由 `CARD_SPREAD_VARIANTS` 导出。 |
+| `expanded` | `boolean` | 未设置 | 控制展开；未设置时启用悬停、聚焦和固定展开。 |
+| `angle` | `number` | 按变体 | 来源旋转角度，单位为度。 |
+| `gap` | `number` | 按变体 | 水平展开间距，单位为像素。 |
+| `yOffset` | `number` | 按变体 | 来源垂直偏移，单位为像素。 |
+| `hoverIntensity` | `number` | `1` | 位移与旋转的倍数，不改变卡片缩放。 |
+| `duration` | `number` | `500` | 过渡时长，单位为毫秒；时间曲线使用共享弹簧。 |
+| `colorful` | `boolean` | `false` | 使用主题色浅色卡片；单项 `color` 优先。 |
+| `blurAmount` | `number` | `4` | `focus-blur` 非当前项的模糊像素值。 |
+| `opacityAmount` | `number` | `0.4` | `focus-blur` 非当前项的不透明度。 |
+| `showBrackets` | `boolean` | `true` | 显示 `focus-blur` 聚焦括号。 |
+| `animated` | `boolean` | `true` | 只控制动效；关闭后仍可选择和展开。 |
+| `disabled` | `boolean` | `false` | 禁止选择、链接导航和固定展开。 |
+| `size` | `xs / sm / md / lg` | `md` | 卡片与几何缩放。 |
+| `ariaLabel` | `string` | `Card spread` | 分组的无障碍名称。 |
+| `expandLabel` | `string` | `Expand cards` | 可本地化的展开按钮文字。 |
+| `collapseLabel` | `string` | `Collapse cards` | 可本地化的固定展开或受控按钮文字。 |
+
+`MotionCardItem` 字段为 `id?: string | number`、`title?`、`description?`、`src?`、`alt?`、`date?`、`href?` 和 `color?: string`。图片和文字来自调用方数据。`color` 接受 CSS 颜色或主题变量表达式。
+
+### 事件
+
+| 事件 | 参数 | 含义 |
+| --- | --- | --- |
+| `update:modelValue` | `index: number` | 卡片、链接或键盘触发选择。 |
+| `update:expanded` | `expanded: boolean` | 固定展开按钮或 Escape 请求。 |
+| `select` | `item: MotionCardItem, index: number` | 当前调用方数据项。 |
+
+### 插槽与实例方法
+
+| API | 契约 |
+| --- | --- |
+| `#item` | `{ item, index, selected, expanded }`；替换内容，不改变卡片几何。 |
+| `#empty` | `items.length === 0` 时的空状态内容。 |
+| `select(index)` | 选择已有项；禁用时不执行。 |
+| `toggle()` | 切换固定展开或受控展开；禁用时不执行。 |
+
+左右方向键、Home 和 End 选择卡片，原生按钮支持 Enter 和 Space。Escape 释放固定展开，并发出受控收起请求。键盘聚焦展开卡片，并显示聚焦轮廓。
+
+## 技术实现
+
+来源为 Amicro 的 `CardArc5`、`CardArc7`、`CardLongArc5`、`CardLinearSpread`、`CardCornerFan`、`CardStampArc`、`CardCascadeStagger`、`CardScatterSpread`、`CardWheelFan` 和 `FocusBlur`。固定提交为 `43c29ce9cdd16459e3eab4992381b8d35b38776a`，采用 MIT，Copyright (c) 2026 SYED  SUBHAN UDDIN。
+
+变换使用已有共享弹簧编译器。`useMotionActivity` 在离屏、文档隐藏、KeepAlive 失活和减少动态效果时移除动效，内容与操作仍可用。组件不引入 React/Motion 运行时，也不包含外部演示素材。

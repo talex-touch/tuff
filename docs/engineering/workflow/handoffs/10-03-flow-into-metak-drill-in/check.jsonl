@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/main-process/corebox-meta-overlay-contracts.md", "reason": "核对窗口高度、panelState（含 blur）、Esc 归属与 IME 规则、交接代码是否删干净"}
+{"file": ".trellis/spec/main-process/channel-transport-contracts.md", "reason": "核对 ui.page 的发送方校验、通知语义、flow 载荷可克隆且 token 不进日志"}
+{"file": ".trellis/spec/frontend/corebox-results-contracts.md", "reason": "核对模糊受运动总闸控制、footer 底板与 footer 同步、canvas 布局不受影响"}
+{"file": ".trellis/spec/frontend/tuffex-design-rules.md", "reason": "核对 TxTransitionPush 的 token、缓动、减弱动效"}
+{"file": ".trellis/spec/frontend/tuffex-docs-sync.md", "reason": "核对 transition 文档中英文同步、demo 登记、CHANGELOG [Unreleased]"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对返回按钮语义与无障碍名称、离场页 inert、焦点落点"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "核对测试覆盖与门禁命令、lint 只看增量"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "核对新增可选字段的读取兜底（缺 blur 按 false、缺 flow 不派发）"}

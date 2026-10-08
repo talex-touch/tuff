@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import type { CoreBoxFocusTelemetryRecord } from '@talex-touch/utils/core-box/focus-diagnostics'
 
 const mocks = vi.hoisted(() => {
   const display = {
@@ -111,7 +112,10 @@ vi.mock('@talex-touch/utils/transport/events', () => ({
   CoreBoxEvents: {
     ui: {
       trigger: 'core-box:ui:trigger',
-      shortcutTriggered: 'core-box:ui:shortcut-triggered'
+      shortcutTriggered: 'core-box:ui:shortcut-triggered',
+      focusSession: 'core-box:ui:focus-session',
+      focusProbe: 'core-box:ui:focus-probe',
+      focusWindow: 'core-box:ui:focus-window'
     },
     input: {
       change: 'core-box:input:change'
@@ -233,6 +237,7 @@ vi.mock('./manager', () => ({
 
 vi.mock('./meta-overlay', () => ({
   metaOverlayManager: {
+    getFocusSnapshot: vi.fn(() => ({ visible: false, focused: false })),
     updateBounds: mocks.updateMetaOverlayBounds,
     init: vi.fn(),
     prewarm: mocks.prewarmMetaOverlay,
@@ -259,7 +264,13 @@ vi.mock('./web-contents-view-guard', () => ({
 }))
 
 vi.mock('../../system/foreground-app-snapshot', () => ({
-  captureForegroundAppSnapshot: mocks.captureForegroundAppSnapshot
+  captureForegroundAppSnapshot: mocks.captureForegroundAppSnapshot,
+  foregroundAppSnapshotStore: {
+    capture: mocks.captureForegroundAppSnapshot,
+    getSnapshot: vi.fn(() => null),
+    setSnapshot: vi.fn(),
+    clear: vi.fn()
+  }
 }))
 
 import { app } from 'electron'
@@ -270,7 +281,7 @@ function createHiddenCoreBoxWindow() {
   let visible = false
   return {
     id: 7,
-    webContents: { id: 8 },
+    webContents: { id: 8, isDestroyed: vi.fn(() => false), isFocused: vi.fn(() => false) },
     isDestroyed: vi.fn(() => false),
     isVisible: vi.fn(() => visible),
     isResizable: vi.fn(() => false),
@@ -307,7 +318,9 @@ function createCoreBoxTouchWindow() {
     on: vi.fn(),
     webContents: {
       id: 8,
-      on: vi.fn()
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isFocused: vi.fn(() => false)
     }
   }
 
@@ -330,6 +343,25 @@ function createShowOrderWindow(order: string[]) {
     order.push('show-inactive')
   })
   return window
+}
+
+/**
+ * The focus diagnostics emit into the CoreBox window logger; each call's second argument is the
+ * log meta whose `meta` field carries the diagnostic record. Extract those records so the
+ * consumer-visible behavior — "does the window expose a focus error?" — can be asserted without
+ * touching the Sentry sink the implementation imports lazily.
+ */
+function focusDiagnosticRecords(loggerSpy: Mock): CoreBoxFocusTelemetryRecord[] {
+  return loggerSpy.mock.calls
+    .map((call) => call[1])
+    .filter((call): call is { meta: CoreBoxFocusTelemetryRecord } =>
+      Boolean(call && typeof call === 'object' && 'meta' in call)
+    )
+    .map((call) => call.meta)
+}
+
+function focusDiagnosticCodes(loggerSpy: Mock): string[] {
+  return focusDiagnosticRecords(loggerSpy).map((record) => record.code)
 }
 
 describe('WindowManager CoreBox compact bounds', () => {
@@ -610,38 +642,6 @@ describe('WindowManager CoreBox compact bounds', () => {
     }
   })
 
-  it('broadcasts the shortcut intent instead of waiting for a renderer reply', () => {
-    vi.useFakeTimers()
-    try {
-      const manager = new WindowManager()
-      const order: string[] = []
-      mocks.transport.broadcastToWindow.mockImplementation((_windowId: number, event: string) => {
-        order.push(event)
-      })
-      const browserWindow = createShowOrderWindow(order)
-
-      manager.windows = [{ window: browserWindow } as unknown as WindowManager['windows'][number]]
-
-      manager.show(true)
-
-      expect(order).toEqual([
-        'core-box:ui:shortcut-triggered',
-        'show',
-        'core-box:ui:trigger',
-        'core-box:ui:shortcut-triggered'
-      ])
-      expect(mocks.transport.broadcastToWindow).toHaveBeenNthCalledWith(
-        1,
-        7,
-        'core-box:ui:shortcut-triggered',
-        undefined
-      )
-      expect(mocks.transport.sendTo).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('prewarms the meta overlay after the box window is revealed', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
@@ -836,6 +836,83 @@ describe('WindowManager CoreBox compact bounds', () => {
       success: true,
       data: { sessionId: 'division-session' }
     })
+  })
+
+  it('reports a focus request with no live window as focused:false, not success', () => {
+    const manager = new WindowManager()
+    manager.windows = []
+
+    // The IPC handler returns this boolean as `focused`; with no window there is nothing to focus,
+    // so the renderer must read false and never a fabricated true.
+    expect(manager.focusFromRenderer()).toBe(false)
+  })
+
+  it('reports focused:false when the window exists but did not take focus', () => {
+    const manager = new WindowManager()
+    const browserWindow = createHiddenCoreBoxWindow()
+    browserWindow.focus = vi.fn()
+    browserWindow.isFocused = vi.fn(() => false)
+    manager.windows = [{ window: browserWindow } as unknown as WindowManager['windows'][number]]
+
+    expect(manager.focusFromRenderer()).toBe(false)
+    expect(browserWindow.focus).toHaveBeenCalledOnce()
+  })
+
+  it('records the native focus-request failure and aborts the show when window.focus throws', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    try {
+      const manager = new WindowManager()
+      const browserWindow = createHiddenCoreBoxWindow()
+      browserWindow.focus = vi.fn(() => {
+        throw new Error('focus denied')
+      })
+      manager.windows = [{ window: browserWindow } as unknown as WindowManager['windows'][number]]
+
+      expect(() => manager.show(true)).toThrow('focus denied')
+
+      // Both the immediate native request and the show node must be pinned with the summon id,
+      // and the summon must be released so late probes cannot land on a box that never appeared.
+      const requestFailure = focusDiagnosticRecords(mocks.childLogger.error).find(
+        (record) =>
+          record.stage === 'native-focus' && record.code === 'COREBOX_FOCUS_REQUEST_FAILED'
+      )
+      expect(requestFailure).toBeDefined()
+      expect(typeof requestFailure?.summonId).toBe('string')
+      expect(focusDiagnosticCodes(mocks.childLogger.error)).toContain('COREBOX_FOCUS_SHOW_FAILED')
+      expect(manager.focusSummonId).toBeUndefined()
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('records the delayed native focus-request failure when the post-show focus throws', () => {
+    const manager = new WindowManager()
+    const browserWindow = createHiddenCoreBoxWindow()
+    browserWindow.isFocused = vi.fn(() => false)
+    let focusCalls = 0
+    browserWindow.focus = vi.fn(() => {
+      focusCalls++
+      throw new Error('delayed focus denied')
+    })
+    manager.windows = [{ window: browserWindow } as unknown as WindowManager['windows'][number]]
+
+    vi.useFakeTimers()
+    try {
+      // A non-focus show skips the immediate focus call, so only the 100ms delayed request runs.
+      manager.show(false)
+      expect(focusCalls).toBe(0)
+
+      expect(() => vi.advanceTimersByTime(100)).toThrow('delayed focus denied')
+
+      const requestFailure = focusDiagnosticRecords(mocks.childLogger.error).find(
+        (record) =>
+          record.stage === 'native-focus' && record.code === 'COREBOX_FOCUS_REQUEST_FAILED'
+      )
+      expect(requestFailure).toBeDefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('pins the detached DivisionBox window above ordinary application windows', async () => {

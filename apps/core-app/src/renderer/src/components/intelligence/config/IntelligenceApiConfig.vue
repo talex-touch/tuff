@@ -21,6 +21,7 @@ import {
   ProviderChannelType
 } from '~/modules/intelligence/provider-channel-type'
 import { snapshotIntelligenceProviderConfig } from '~/modules/intelligence/provider-config-snapshot'
+import { replaceDiscoveredModelIds } from '@talex-touch/utils/intelligence/model-binding'
 
 const props = defineProps<{
   modelValue: IntelligenceProviderConfig
@@ -446,8 +447,10 @@ async function fetchAvailableModels(provider: IntelligenceProviderConfig) {
       const models = result.models.filter((model) => typeof model === 'string' && model.trim())
       const defaultModel =
         props.modelValue.defaultModel?.trim() || provider.defaultModel?.trim() || models[0]
+      // The endpoint decides which ids exist; a model's alias, limits, thinking and image settings
+      // survive the refresh (an unlisted model the user configured is kept rather than dropped).
       intelligenceSettings.updateProvider(provider.id, {
-        models,
+        models: replaceDiscoveredModelIds(props.modelValue.models ?? [], models),
         ...(defaultModel ? { defaultModel } : {})
       })
       emits('testSuccess', models)

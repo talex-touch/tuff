@@ -1,7 +1,8 @@
 # Tuff 项目综合路线图
 
-> 更新时间：2026-07-31（经全条目事实校准，校准记录见 `.trellis/tasks/07-30-docs-roadmap-consolidation-cleanup/research/`）
-> 定位：项目全貌一览。实时任务优先级见 [`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md)，任务状态见 [`.trellis/tasks/`](.trellis/tasks/README.md)。本文不复制易漂移细节，只保留稳定入口与高层状态。
+> 更新时间：2026-07-31（经全条目事实校准，校准记录见冻结任务 [`07-30-docs-roadmap-consolidation-cleanup`](docs/engineering/workflow/backlog.md#07-30-docs-roadmap-consolidation-cleanup) 的 `research/`）
+> 2026-10-03：工作流切换为 Comet Native，原「活跃任务」表改为冻结记录；各条产品状态未在本次切换中重新校准。
+> 定位：项目全貌一览。执行顺序见 [`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md)；当前工作以用户确认的范围与验收、现有 PRD、工程规格、真实运行证据和当前负责人交接为准；切换前的任务已冻结，见 [`docs/engineering/workflow/backlog.md`](docs/engineering/workflow/backlog.md)。`docs/comet/` 只读保留退出前记录，不作为实时状态。本文不复制易漂移细节，只保留稳定入口与高层状态。
 
 ## 🎯 当前版本：v2.4.14-beta.2
 
@@ -40,7 +41,7 @@
 
 1. **关闭已验证的 release 和 runtime blocker** — OTA、macOS release-evidence、application-icon acceptance
 2. **完成搜索和跨平台修复** — Windows Everything productionization、search-index split write-path migration（flag 自 `cd39bdbf6` / 2026-08-05 起默认 **on**）
-3. **继续其余独立活跃任务** — 按 Trellis task-local PRD 定义的实现顺序
+3. **继续其余独立工作** — 冻结任务先与用户重新确认范围和验收，再核对现有 PRD、工程规格与真实运行证据，并与当前负责人确认交接
 
 ### 安全门禁（不可绕过）
 
@@ -50,38 +51,32 @@
 
 ---
 
-## 📁 活跃 Trellis 任务（部分，本表 17 个）
+## 🧊 迁移前冻结任务（部分，本表 16 个）
 
-优先级与状态以各任务 `task.json` / `prd.md` 为准。父子任务缩进展示。
+2026-10-03 起项目工作流切换为 Comet Native。下表保留切换前活跃任务里的产品线索，**均已冻结，不是进行中的工作**：`冻结时状态` 是切换那一刻 `task.json` 的原值，备注是此前的产品状态摘要，二者之后都不再更新。恢复其中任何一项，先读冻结记录与交接证据，与用户重新确认范围和验收，再核对现有 PRD、工程规格与真实运行证据，并与当前负责人确认交接。父子任务缩进展示。
 
-> **这张表不是全集。** `.trellis/tasks/` 下当前有 60 个带 `prd.md` 的活跃任务,本表收录 19 个。
-> 表内最新的一条是 `07-30`;`08-03` 及以后建立的 29 个任务**一条都没有**,`07-28`/`07-29`
-> 的 screenshot 系列也基本缺席。要看全集请直接列目录或跑 `task.py list`,不要以本表为准。
->
-> 先前的标题写作「活跃 Trellis 任务全景(24 个)」,那个「全景」在表停止更新后就不再成立
-> ——一个声称完整而实际只有四成的清单,比一个明说自己不完整的清单更容易误导。
+> **这张表不是全集。** 冻结任务共 170 项（`in_progress` 99、`planning` 71），本表收录 16 项；每项的 owner、下一步、blocker 与证据见 [`docs/engineering/workflow/backlog.md`](docs/engineering/workflow/backlog.md)，全部旧任务（含已归档）的身份见 [`retired-task-index.json`](docs/engineering/workflow/retired-task-index.json)。已完成并归档的任务不列在这里。
 
-| 任务 | 优先级 | 状态 |
+| 任务 | 优先级 | 冻结时状态 · 备注 |
 |------|--------|------|
-| [audit-search-system-architecture](.trellis/tasks/07-09-audit-search-system-architecture/prd.md) | **P0** | 🔄 planning [3/7]：搜索架构审计与整改父任务 |
-| └ [unify-search-provider-lifecycle](.trellis/tasks/07-09-unify-search-provider-lifecycle/prd.md) | P2 | planning |
-| [optimize-core-utility-plugins](.trellis/tasks/07-27-optimize-core-utility-plugins/prd.md) | P1 | 🔄 planning [0/3] |
-| ├ [optimize-intelligence-plugin](.trellis/tasks/07-27-optimize-intelligence-plugin/prd.md) | P1 | planning |
-| ├ [optimize-translation-plugin](.trellis/tasks/07-27-optimize-translation-plugin/prd.md) | P1 | planning |
-| └ [optimize-clipboard-plugin](.trellis/tasks/archive/2026-08/07-27-optimize-clipboard-plugin/prd.md) | P1 | planning |
-| [search-crossplatform-audit](.trellis/tasks/07-13-search-crossplatform-audit/prd.md) | P2 | 🔄 审计父任务 [1/3] |
-| ├ [windows-everything-productionization](.trellis/tasks/07-17-windows-everything-productionization/prd.md) | P1 | 🔴 backend gate passed，packaged UI manifest 开放 |
-| └ [migrate-search-index-split-write-paths](.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md) | P1 | flag 默认 on（`cd39bdbf6`），剩余 writer 归属待收口 |
-| [unify-ota-update-flow](.trellis/tasks/07-17-unify-ota-update-flow/prd.md) | P2 | 🔄 OTA lifecycle 落地 [4/6]；host acceptance 开放 |
-| ├ [ota-one-click-background-update](.trellis/tasks/07-22-ota-one-click-background-update/prd.md) | P2 | 🔄 in_progress |
-| └ [bilingual-whats-changed](.trellis/tasks/07-27-bilingual-whats-changed/prd.md) | P2 | 🔄 in_progress |
-| [harden-app-icon-self-healing](.trellis/tasks/07-24-harden-app-icon-self-healing/prd.md) | P2 | 🔄 real-profile evidence ready；N+1 release 开放 |
-| 本地安装记录（未纳入当前任务树） | P2 | 🔄 in_progress |
-| [fix-plugin-folder-button](.trellis/tasks/07-27-fix-plugin-folder-button/prd.md) | P2 | 🔄 in_progress |
-| [docs-roadmap-consolidation-cleanup](.trellis/tasks/07-30-docs-roadmap-consolidation-cleanup/prd.md) | P2 | 🔄 in_progress（本任务） |
-| [expose-plugin-search-sdk](.trellis/tasks/07-27-expose-plugin-search-sdk/prd.md) | P3 | planning |
+| [audit-search-system-architecture](docs/engineering/workflow/backlog.md#07-09-audit-search-system-architecture) | **P0** | 🧊 `planning` · [3/7]：搜索架构审计与整改父任务 |
+| └ [unify-search-provider-lifecycle](docs/engineering/workflow/backlog.md#07-09-unify-search-provider-lifecycle) | P2 | 🧊 `planning` |
+| [optimize-core-utility-plugins](docs/engineering/workflow/backlog.md#07-27-optimize-core-utility-plugins) | P1 | 🧊 `planning` · [0/3] |
+| ├ [optimize-intelligence-plugin](docs/engineering/workflow/backlog.md#07-27-optimize-intelligence-plugin) | P1 | 🧊 `planning` |
+| └ [optimize-translation-plugin](docs/engineering/workflow/backlog.md#07-27-optimize-translation-plugin) | P1 | 🧊 `planning` |
+| [search-crossplatform-audit](docs/engineering/workflow/backlog.md#07-13-search-crossplatform-audit) | P2 | 🧊 `planning` · 审计父任务 [1/3]；活审计见 [search-crossplatform-audit.md](docs/engineering/reports/search-crossplatform-audit.md) |
+| ├ [windows-everything-productionization](docs/engineering/workflow/backlog.md#07-17-windows-everything-productionization) | P1 | 🧊 `in_progress` · backend gate passed，packaged UI manifest 开放 |
+| └ [migrate-search-index-split-write-paths](docs/engineering/workflow/backlog.md#07-28-migrate-search-index-split-write-paths) | P1 | 🧊 `planning` · flag 默认 on（`cd39bdbf6`），剩余 writer 归属待收口 |
+| [unify-ota-update-flow](docs/engineering/workflow/backlog.md#07-17-unify-ota-update-flow) | P2 | 🧊 `planning` · OTA lifecycle 落地 [4/6]；host acceptance 开放 |
+| ├ [ota-one-click-background-update](docs/engineering/workflow/backlog.md#07-22-ota-one-click-background-update) | P2 | 🧊 `in_progress` |
+| └ [bilingual-whats-changed](docs/engineering/workflow/backlog.md#07-27-bilingual-whats-changed) | P2 | 🧊 `in_progress` |
+| [harden-app-icon-self-healing](docs/engineering/workflow/backlog.md#07-24-harden-app-icon-self-healing) | P2 | 🧊 `in_progress` · real-profile evidence ready；N+1 release 开放 |
+| [install-launch-v2-4-13-beta-23](docs/engineering/workflow/backlog.md#07-26-install-launch-v2-4-13-beta-23) | P2 | 🧊 `in_progress` · 本地安装记录，原未纳入版本控制；状态存疑，见冻结记录 |
+| [fix-plugin-folder-button](docs/engineering/workflow/backlog.md#07-27-fix-plugin-folder-button) | P2 | 🧊 `in_progress` |
+| [docs-roadmap-consolidation-cleanup](docs/engineering/workflow/backlog.md#07-30-docs-roadmap-consolidation-cleanup) | P2 | 🧊 `planning` · 2026-07-31 本路线图的校准任务 |
+| [expose-plugin-search-sdk](docs/engineering/workflow/backlog.md#07-27-expose-plugin-search-sdk) | P3 | 🧊 `planning` |
 
-完整列表 → `python3 .trellis/scripts/task.py list`
+完整冻结清单 → [`docs/engineering/workflow/backlog.md`](docs/engineering/workflow/backlog.md)
 
 ---
 
@@ -143,7 +138,8 @@ talex-touch/
 |---------|--------|
 | 当前两周做什么 | [`docs/plan-prd/TODO.md`](docs/plan-prd/TODO.md) |
 | 产品路线图（R0-R9） | [`docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md`](docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md) |
-| 实时任务状态 | [`.trellis/tasks/README.md`](.trellis/tasks/README.md) |
+| 当前工作与交接 | 用户确认的范围与验收、现有 PRD、工程规格、真实运行证据和当前负责人交接；入口见 [`docs/engineering/README.md`](docs/engineering/README.md) |
+| 冻结的迁移前任务 | [`docs/engineering/workflow/backlog.md`](docs/engineering/workflow/backlog.md) |
 | 已完成事实 | [`docs/plan-prd/01-project/CHANGES.md`](docs/plan-prd/01-project/CHANGES.md) |
 | AI 专题 | [`docs/plan-prd/TODO-AI.md`](docs/plan-prd/TODO-AI.md) |
 | 搜索/索引专题 | [`docs/plan-prd/TODO-R3.md`](docs/plan-prd/TODO-R3.md) |
@@ -171,7 +167,7 @@ talex-touch/
 | **CHANGES.md** | 1057 行，需按月归档 | 🟡 backlog 已记 |
 | **代码质量** | `quality:release` 被既有 lint debt 阻断 | 🟡 分批清退中 |
 
-完整审计 → [Search & Cross-Platform Audit](.trellis/tasks/07-13-search-crossplatform-audit/prd.md)
+完整审计 → [Search & Cross-Platform Audit](docs/engineering/reports/search-crossplatform-audit.md)
 
 ---
 

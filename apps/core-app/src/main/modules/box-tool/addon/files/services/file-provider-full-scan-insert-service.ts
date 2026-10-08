@@ -1,8 +1,4 @@
-import {
-  IndexedWriteRuntimeEmitterService,
-  takeIndexedWriteRecordChunk
-} from '@talex-touch/utils/search'
-import type { IndexedSourceRecord, IndexedSourceRecordBatch } from '@talex-touch/utils/search'
+import { takeIndexedWriteRecordChunk } from '@talex-touch/utils/search'
 import type { UpsertFileRecord } from '../../../search-engine/search-index-writer'
 
 export interface FileProviderFullScanInsertResult {
@@ -14,22 +10,12 @@ export interface FileProviderFullScanPersistResult {
   workerCpuMicros?: number
 }
 
-/**
- * A chunk slower than this means the write path is already behind, so the loop
- * parks for (at most) the chunk's own duration instead of hammering it.
- * Sits below the AIMD targetMs (300) so a chunk that already tripped congestion
- * control backs off exactly once.
- */
 const FULL_SCAN_CHUNK_BACKOFF_MS = 250
 const FULL_SCAN_CHUNK_BACKOFF_MAX_MS = 1_000
-/**
- * Full scans are background maintenance, not an interactive throughput benchmark. A short
- * cooperative park after every persisted chunk keeps the scanner's acknowledgement chain
- * backpressured, lowers sustained CPU/disk pressure, and gives renderer/IPC work regular gaps.
- */
 const FULL_SCAN_COOPERATIVE_PAUSE_MS = 250
 const FULL_SCAN_WORKER_CPU_TARGET = 0.35
 
+/** Retains the full-scan cooperative pause and measured worker-CPU backoff contract. */
 export function resolveFullScanPacingMs(batchMs: number, workerCpuMicros?: number): number {
   const cooperativeMs =
     batchMs >= FULL_SCAN_CHUNK_BACKOFF_MS
@@ -47,205 +33,62 @@ export function resolveFullScanPacingMs(batchMs: number, workerCpuMicros?: numbe
   return Math.max(cooperativeMs, Math.ceil(cpuBudgetMs))
 }
 
-export interface FileProviderFullScanInsertDeps<TInserted, TContext> {
-  sourceId: string
-  mapRecord: (record: TInserted) => IndexedSourceRecord
+export interface FileProviderFullScanInsertDeps<TContext> {
   getBatchSize: () => number
   recordBatchDuration: (durationMs: number) => void
-  waitForIdle: () => Promise<void>
-  upsertFiles: (records: UpsertFileRecord[], reason: string) => Promise<TInserted[]>
-  persistAndEmitBatch?: (
+  waitForIdle: (context: TContext) => Promise<void>
+  /** Includes persistence, FTS, reader visibility and publication within one short source lease. */
+  persistAndEmitBatch: (
     records: UpsertFileRecord[],
     context: TContext
   ) => Promise<FileProviderFullScanPersistResult>
-  emitRecordBatch: (batch: IndexedSourceRecordBatch, context: TContext) => Promise<void>
   emitProgress: (current: number, total: number) => void
-  sleep: (durationMs: number) => Promise<void>
+  sleep: (durationMs: number, context: TContext) => Promise<void>
   now: () => number
   formatDuration: (durationMs: number) => string
   logInfo: (message: string, meta?: Record<string, unknown>) => void
   logDebug: (message: string, meta?: Record<string, unknown>) => void
 }
 
-export class FileProviderFullScanInsertService<TInserted, TContext> {
-  private readonly getBatchSize: FileProviderFullScanInsertDeps<TInserted, TContext>['getBatchSize']
-  private readonly recordBatchDuration: FileProviderFullScanInsertDeps<
-    TInserted,
-    TContext
-  >['recordBatchDuration']
-  private readonly waitForIdle: FileProviderFullScanInsertDeps<TInserted, TContext>['waitForIdle']
-  private readonly upsertFiles: FileProviderFullScanInsertDeps<TInserted, TContext>['upsertFiles']
-  private readonly persistAndEmitBatch:
-    | FileProviderFullScanInsertDeps<TInserted, TContext>['persistAndEmitBatch']
-    | undefined
-  private readonly sleep: FileProviderFullScanInsertDeps<TInserted, TContext>['sleep']
-  private readonly now: FileProviderFullScanInsertDeps<TInserted, TContext>['now']
-  private readonly formatDuration: FileProviderFullScanInsertDeps<
-    TInserted,
-    TContext
-  >['formatDuration']
-  private readonly logInfo: FileProviderFullScanInsertDeps<TInserted, TContext>['logInfo']
-  private readonly logDebug: FileProviderFullScanInsertDeps<TInserted, TContext>['logDebug']
-  private readonly runtimeEmitter: IndexedWriteRuntimeEmitterService<TInserted, TContext>
-
-  constructor(deps: FileProviderFullScanInsertDeps<TInserted, TContext>) {
-    this.getBatchSize = deps.getBatchSize
-    this.recordBatchDuration = deps.recordBatchDuration
-    this.waitForIdle = deps.waitForIdle
-    this.upsertFiles = deps.upsertFiles
-    this.persistAndEmitBatch = deps.persistAndEmitBatch
-    this.sleep = deps.sleep
-    this.now = deps.now
-    this.formatDuration = deps.formatDuration
-    this.logInfo = deps.logInfo
-    this.logDebug = deps.logDebug
-    this.runtimeEmitter = new IndexedWriteRuntimeEmitterService({
-      sourceId: deps.sourceId,
-      mapRecord: deps.mapRecord,
-      emitRecordBatch: deps.emitRecordBatch,
-      emitProgress: deps.emitProgress
-    })
-  }
+export class FileProviderFullScanInsertService<TContext> {
+  constructor(private readonly deps: FileProviderFullScanInsertDeps<TContext>) {}
 
   async execute(
     rootPath: string,
     records: UpsertFileRecord[],
     context: TContext
   ): Promise<FileProviderFullScanInsertResult> {
-    if (records.length === 0) {
-      return { insertedCount: 0 }
-    }
-
-    this.logInfo('Preparing to index full-scan results', {
+    let insertedCount = 0
+    let offset = 0
+    if (records.length === 0) return { insertedCount }
+    this.deps.emitProgress(0, records.length)
+    this.deps.logInfo('Preparing to index full-scan results', {
       path: rootPath,
       files: records.length
     })
-
-    let insertedCount = 0
-    let indexedFiles = 0
-    let recordOffset = 0
-    type PendingChunk = {
-      chunk: UpsertFileRecord[]
-      result: Promise<{
-        inserted: TInserted[]
-        insertedCount: number
-        batchMs: number
-        waitForIdleMs: number
-        writeMs: number
-        published: boolean
-        workerCpuMicros?: number
-      }>
-    }
-
-    const startChunk = (chunk: UpsertFileRecord[]): PendingChunk => {
-      const result = (async () => {
-        const waitStartedAt = this.now()
-        await this.waitForIdle()
-        const waitForIdleMs = this.now() - waitStartedAt
-        const chunkStart = this.now()
-        const fused = this.persistAndEmitBatch
-        const inserted = fused ? [] : await this.upsertFiles(chunk, 'full-scan.upsert')
-        const fusedResult = fused ? await fused(chunk, context) : null
-        const chunkInsertedCount = fusedResult?.insertedCount ?? inserted.length
-        const workerCpuMicros = fusedResult?.workerCpuMicros
-        const writeMs = this.now() - chunkStart
-        return {
-          inserted,
-          insertedCount: chunkInsertedCount,
-          batchMs: writeMs,
-          waitForIdleMs,
-          writeMs,
-          published: Boolean(fused),
-          workerCpuMicros
-        }
-      })()
-      // The result is awaited by the next loop turn. Attach a rejection handler now so a
-      // fast worker failure during the current batch's publication cannot become unhandled.
-      void result.catch(() => undefined)
-      return { chunk, result }
-    }
-
-    const takeNextChunk = (): PendingChunk | null => {
-      if (recordOffset >= records.length) return null
+    while (offset < records.length) {
       const { chunk, nextOffset } = takeIndexedWriteRecordChunk(
         records,
-        recordOffset,
-        this.getBatchSize()
+        offset,
+        Math.min(10, this.deps.getBatchSize())
       )
-      recordOffset = nextOffset
-      return startChunk(chunk)
+      await this.deps.waitForIdle(context)
+      const startedAt = this.deps.now()
+      const result = await this.deps.persistAndEmitBatch(chunk, context)
+      const batchMs = this.deps.now() - startedAt
+      this.deps.recordBatchDuration(batchMs)
+      insertedCount += result.insertedCount
+      offset = nextOffset
+      this.deps.emitProgress(offset, records.length)
+      this.deps.logDebug('Full scan chunk committed and published', {
+        path: rootPath,
+        size: chunk.length,
+        duration: this.deps.formatDuration(batchMs)
+      })
+      // Publication has completed and the producer's source lease has ended.
+      // Pacing and idle waits never occupy that lease or the worker request slot.
+      await this.deps.sleep(resolveFullScanPacingMs(batchMs, result.workerCpuMicros), context)
     }
-
-    let pendingChunk: PendingChunk | null = null
-    this.runtimeEmitter.emitProgressSnapshot({
-      current: 0,
-      total: records.length
-    })
-
-    try {
-      while (pendingChunk || recordOffset < records.length) {
-        const currentChunk = pendingChunk ?? takeNextChunk()
-        pendingChunk = null
-        if (!currentChunk) break
-
-        const {
-          inserted,
-          insertedCount: chunkInsertedCount,
-          batchMs,
-          waitForIdleMs,
-          writeMs,
-          published,
-          workerCpuMicros
-        } = await currentChunk.result
-        this.recordBatchDuration(batchMs)
-
-        this.logDebug('Full scan chunk inserted', {
-          path: rootPath,
-          chunk: `batch(${currentChunk.chunk.length})`,
-          size: currentChunk.chunk.length,
-          mode: published ? 'fused' : 'legacy',
-          waitForIdleMs: Math.round(waitForIdleMs),
-          writeDurationMs: Math.round(writeMs),
-          duration: this.formatDuration(batchMs),
-          workerCpuMs:
-            typeof workerCpuMicros === 'number' ? Math.round(workerCpuMicros / 1_000) : undefined
-        })
-
-        if (!published) {
-          // Publication waits for the FTS writer and reader-visibility barrier. Start at most one
-          // next persistence operation after publication has been admitted, so its worker round
-          // trip can overlap that barrier without allowing a second FTS mutation to overtake it.
-          const shouldPrefetch =
-            batchMs < FULL_SCAN_CHUNK_BACKOFF_MS && recordOffset < records.length
-          try {
-            const emitPromise = this.runtimeEmitter.emitBatch(inserted, context)
-            if (shouldPrefetch) pendingChunk = takeNextChunk()
-            await emitPromise
-          } catch (error) {
-            if (pendingChunk) await pendingChunk.result.catch(() => undefined)
-            pendingChunk = null
-            throw error
-          }
-        }
-
-        indexedFiles += currentChunk.chunk.length
-        insertedCount += chunkInsertedCount
-        this.runtimeEmitter.emitProgressSnapshot({
-          current: indexedFiles,
-          total: records.length
-        })
-        // Full scans deliberately trade completion time for foreground responsiveness. The
-        // scanner cannot run far ahead because each 500-record scan batch waits for this write
-        // chain to acknowledge it, so this pause also bounds traversal pressure without another
-        // queue or an unbounded in-memory buffer. Slow chunks retain the existing proportional
-        // congestion backoff; fast chunks still yield a fixed 250ms window to interactive work.
-        const pacingMs = resolveFullScanPacingMs(batchMs, workerCpuMicros)
-        await this.sleep(pacingMs)
-      }
-    } finally {
-      if (pendingChunk) await pendingChunk.result.catch(() => undefined)
-    }
-
     return { insertedCount }
   }
 }

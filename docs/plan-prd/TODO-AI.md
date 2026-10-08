@@ -1,6 +1,6 @@
 # Tuff AI Stable TODO
 
-> 更新时间：2026-10-02
+> 更新时间：2026-10-03
 > 范围：Roadmap R2 / AI 2.5.0 Stable。主验收矩阵以 `04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md` 为准；全局执行顺序服从 [`TODO.md`](./TODO.md)，本文件不单独抢占稳定化窗口。
 
 ## 当前口径
@@ -14,8 +14,8 @@
 目标：复用现有 Capability / Provider 路由，把通过运行时探针的 macOS 系统能力作为机器本地 provider 自动注入；不把机器可用性持久化或同步到其他设备，也不建立第二套同名能力路由。
 
 - [ ] **原生 OCR / `vision.ocr`**：先确认现有 `local-system-ocr` 的实际底层引擎、语言覆盖、布局数据和取消语义；若未使用 Apple Vision，再评估以 Vision 文本识别作为 macOS provider。已有 provider 不重复注册。
-- [ ] **原生翻译 / `text.translate`**：评估 Apple Translation framework 的系统版本、语言对、语言包下载、用户授权/UI、取消和批量/流式结果。重点验证 `TranslationSession` 生命周期是否能满足当前后台 provider 合同；若必须依附前台视图，则做用户触发的原生操作入口，不伪装成随时可用的后台渠道。
-- [ ] **语言识别**：评估 `NLLanguageRecognizer` 作为翻译前置能力。默认只做内部路由辅助，不单独暴露渠道，除非出现独立消费场景。
+- [x] **原生翻译 / `text.translate`**：已接入 macOS 26+ 的后台 `TranslationSession(installedSource:target:)`。`local-system-translation` 仅在实际会话就绪后注入，复用 Swift 进程与语言对会话；translation 插件优先使用本地路由。macOS 27 真机中英互译、插件宿主、测试进程禁网、缺包、取消和超时恢复已通过。语言包由系统设置安装，不自动下载；macOS 26 真机与正式安装包验收未覆盖。
+- [x] **语言识别（翻译内部）**：已使用 `NLLanguageRecognizer` 自动识别源语言。简繁共用字短句按已安装的中文语言包提供识别提示；显式源语言不变。不新增独立渠道。
 - [ ] **原生语音识别 / `audio.stt`**：评估 Speech framework 的实时/批量、离线能力、语言覆盖、模型下载与权限恢复；只有真实流式延迟和稳定性达到现有语音会话要求时才进入渠道列表。
 - [ ] **OCR → 翻译组合**：允许复用 `vision.ocr` 与 `text.translate` 形成图片文字翻译降级链；不得把“提取文字后翻译”标成保留排版的 `image.translate.e2e`。
 

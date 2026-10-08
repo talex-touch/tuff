@@ -1,0 +1,5 @@
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/research/audit-data-layer.md", "reason": "data-layer facts behind the ledger, pricing and page requirements"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/research/quota-system.md", "reason": "quota facts behind the global limits requirements"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/research/memory-subpage-and-ia.md", "reason": "IA and memory facts behind the memory sub-page"}
+{"file": ".trellis/spec/guides/multi-session-collab-guide.md", "reason": "parallel dispatch and shared-file rules for the child waves"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "integration review across main, utils, renderer and plugin"}

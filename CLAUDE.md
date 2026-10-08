@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+@AGENTS.md
+
+## Project Workflow
+
+Follow the confirmed scope and engineering knowledge entry points in `AGENTS.md`. Check the current branch/worktree before writing and verify changed behavior in its actual runtime. Existing records under `docs/comet/` are read-only engineering history, not an active task lifecycle.
+
+Git commit, merge, push, PR creation, and publication require explicit user authorization.
+
 ## Development Commands
 
 ### Core Application Development
@@ -316,7 +324,7 @@ The two `regChannel` signatures are the trap: passing a `ChannelType` to the ren
 **TouchEventBus** provides application-wide event dispatching:
 
 ```typescript
-// String enum — 33 members total (apps/core-app/src/main/core/eventbus/touch-event.ts)
+// String enum — 36 members total (apps/core-app/src/main/core/eventbus/touch-event.ts)
 enum TalexEvents {
   BEFORE_APP_START = 'before-app-start',
   APP_START = 'app-start',

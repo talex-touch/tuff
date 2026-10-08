@@ -273,6 +273,41 @@ describe('FileSystemWatcherModule', () => {
     expect(watcherAdd).toHaveBeenCalledOnce()
   })
 
+  it('closes the native streams on BEFORE_QUIT_STOP_WATCHERS and lets onDestroy join that close', async () => {
+    const watcher = new FileSystemWatcherModule()
+    await watcher.onInit()
+    await watcher.addPath('/Users/demo', FILE_SCAN_MAX_DEPTH)
+    const registration = vi
+      .mocked(touchEventBus.on)
+      .mock.calls.find(([event]) => event === TalexEvents.BEFORE_QUIT_STOP_WATCHERS)
+    expect(registration).toBeTruthy()
+    let release: () => void = () => undefined
+    watcherClose.mockReturnValue(
+      new Promise<void>((resolve) => {
+        release = resolve
+      })
+    )
+
+    const stopping = (registration![1] as () => Promise<void>)()
+    const destroying = watcher.onDestroy()
+    let destroyed = false
+    void destroying.then(() => {
+      destroyed = true
+    })
+    await Promise.resolve()
+    expect(destroyed).toBe(false)
+    release()
+    await Promise.all([stopping, destroying])
+
+    expect(watcherClose).toHaveBeenCalledOnce()
+    expect(touchEventBus.off).toHaveBeenCalledWith(
+      TalexEvents.BEFORE_QUIT_STOP_WATCHERS,
+      expect.any(Function)
+    )
+    await watcher.addPath('/Users/demo/other', FILE_SCAN_MAX_DEPTH)
+    expect(watcherAdd).toHaveBeenCalledOnce()
+  })
+
   it('does not silently fall back to recursive traversal when native loading fails', async () => {
     const watcher = new FileSystemWatcherModule()
     watcherAdd.mockRejectedValueOnce(new Error('FSEVENTS_UNAVAILABLE'))

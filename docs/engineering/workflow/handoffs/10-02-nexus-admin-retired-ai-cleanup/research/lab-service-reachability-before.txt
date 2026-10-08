@@ -1,0 +1,104 @@
+file: apps/nexus/server/utils/tuffIntelligenceLabService.ts
+total lines: 5059
+top-level declarations: 131 (live 73, unreachable 58)
+live declaration lines: 1885; unreachable declaration lines: 2900
+roots: invokeIntelligenceCapability, streamIntelligenceCapability, listIntelligenceLabProviders, resolveIntelligenceProviderRuntimeContexts, probeIntelligenceLabProvider, NexusIntelligenceInvokePayload
+
+unreachable declarations:
+     86-88    (decl starts 88) export TypeAliasDeclaration IntelligenceLabActionType
+     88-100   (decl starts 90) export InterfaceDeclaration IntelligenceLabAction
+    100-111   (decl starts 102) export InterfaceDeclaration IntelligenceLabExecutionResult
+    198-204   (decl starts 200) TypeAliasDeclaration ProviderRequestError
+    213-219   (decl starts 215) export InterfaceDeclaration IntelligenceLabFollowUpPlan
+    219-235   (decl starts 221) export InterfaceDeclaration IntelligenceLabRuntimeMetrics
+    235-261   (decl starts 237) export InterfaceDeclaration IntelligenceLabStreamEvent
+    261-275   (decl starts 263) InterfaceDeclaration RuntimeCheckpointState
+    275-279   (decl starts 277) InterfaceDeclaration IntelligenceIntentAnalysis
+    279-284   (decl starts 281) InterfaceDeclaration IntelligenceActionNarrative
+    284-297   (decl starts 286) export InterfaceDeclaration IntelligenceLabSessionHistoryItem
+    297-311   (decl starts 299) export InterfaceDeclaration IntelligenceLabOrchestrationResult
+    311-313   (decl starts 313) FirstStatement PLANNER_MAX_ACTIONS
+    315-316   (decl starts 316) FirstStatement DEFAULT_HEARTBEAT_TIMEOUT_MS
+    316-317   (decl starts 317) FirstStatement STREAM_CONTRACT_VERSION
+    317-318   (decl starts 318) FirstStatement STREAM_ENGINE
+    354-355   (decl starts 355) FirstStatement SUPPORTED_CAPABILITY_IDS
+    355-366   (decl starts 356) FirstStatement AGENT_PROMPT_CAPABILITY
+    366-367   (decl starts 367) FirstStatement AGENT_PROMPT_DEFAULT_VERSION
+    367-368   (decl starts 368) FirstStatement promptBootstrapCache
+    401-453   (decl starts 403) FunctionDeclaration resolveAgentPromptInstruction
+    457-466   (decl starts 459) FunctionDeclaration formatTimezoneOffset
+    466-491   (decl starts 468) FunctionDeclaration buildSystemContextLines
+    491-505   (decl starts 493) FunctionDeclaration buildSystemPrompt
+    511-518   (decl starts 513) FunctionDeclaration numberFrom
+    642-661   (decl starts 644) FunctionDeclaration extractStatusBlockLines
+    661-723   (decl starts 663) FunctionDeclaration parsePlannedActions
+    723-738   (decl starts 725) FunctionDeclaration normalizeRiskLevel
+    738-767   (decl starts 740) FunctionDeclaration resolveRiskLevel
+    767-773   (decl starts 769) FunctionDeclaration requiresApproval
+    773-785   (decl starts 775) FirstStatement READ_ONLY_TOOL_HINTS
+    785-790   (decl starts 787) export FunctionDeclaration isReadOnlyTool
+    790-802   (decl starts 792) export FunctionDeclaration shouldContinueOnActionFailure
+    802-815   (decl starts 804) FunctionDeclaration withTimeout
+   2518-2613  (decl starts 2520) FunctionDeclaration analyzeIntentWithModel
+   2613-2718  (decl starts 2615) FunctionDeclaration explainActionNarrativesWithModel
+   2718-2800  (decl starts 2720) FunctionDeclaration summarizeActionResultWithModel
+   2819-2841  (decl starts 2821) export FunctionDeclaration heartbeatIntelligenceLabSession
+   2841-2875  (decl starts 2843) export FunctionDeclaration pauseIntelligenceLabSession
+   2875-2914  (decl starts 2877) export FunctionDeclaration listIntelligenceLabSessionHistory
+   2914-3016  (decl starts 2916) export FunctionDeclaration planIntelligenceLab
+   3016-3041  (decl starts 3018) export InterfaceDeclaration ExecuteIntelligenceLabHooks
+   3041-3330  (decl starts 3043) export FunctionDeclaration executeIntelligenceLab
+   3330-3415  (decl starts 3332) export FunctionDeclaration reflectIntelligenceLab
+   3415-3425  (decl starts 3417) FunctionDeclaration chunkForStream
+   3425-3433  (decl starts 3427) FunctionDeclaration safeParseJson
+   3433-3442  (decl starts 3435) FunctionDeclaration toRuntimeStatus
+   3442-3470  (decl starts 3444) FunctionDeclaration buildCheckpointState
+   3470-3517  (decl starts 3472) FunctionDeclaration normalizeRuntimeCheckpointState
+   3517-3541  (decl starts 3519) FunctionDeclaration computeActionStats
+   3541-3558  (decl starts 3543) FunctionDeclaration buildToolFailureDistribution
+   3558-3659  (decl starts 3559) export FunctionDeclaration buildFinalAssistantReplyWithModel
+   3659-3774  (decl starts 3661) export FunctionDeclaration generateIntelligenceLabFollowUp
+   3774-4936  (decl starts 3776) export FunctionDeclaration orchestrateIntelligenceLabStream
+   4936-4983  (decl starts 4938) export FunctionDeclaration approveIntelligenceLabTool
+   4983-5022  (decl starts 4985) export FunctionDeclaration sanitizeLabActions
+   5022-5055  (decl starts 5024) export FunctionDeclaration sanitizeExecutionResults
+   5055-5059  (decl starts 5057) export FunctionDeclaration normalizeLabMessages
+
+imports no longer used by live declarations: TuffIntelligenceApprovalTicket (@talex-touch/tuff-intelligence/light), normalizeCapabilityMessages (./tuffIntelligenceCapabilityMessages), getUserById (./authStore), resolvePromptTemplateFromRegistry (./intelligenceStore), savePromptBinding (./intelligenceStore), savePromptRecord (./intelligenceStore), appendRuntimeTraceEvent (./tuffIntelligenceRuntimeStore), getLatestRuntimeCheckpoint (./tuffIntelligenceRuntimeStore), getRuntimeSession (./tuffIntelligenceRuntimeStore), listRuntimeSessions (./tuffIntelligenceRuntimeStore), markRuntimeSessionPaused (./tuffIntelligenceRuntimeStore), saveRuntimeCheckpoint (./tuffIntelligenceRuntimeStore), shouldPauseByHeartbeat (./tuffIntelligenceRuntimeStore), touchRuntimeSessionHeartbeat (./tuffIntelligenceRuntimeStore), upsertRuntimeSession (./tuffIntelligenceRuntimeStore), RuntimeSessionState (./tuffIntelligenceRuntimeStore), RuntimeSessionRecord (./tuffIntelligenceRuntimeStore), TuffIntelligencePauseReason (./tuffIntelligenceRuntimeStore), TuffIntelligenceRuntimeStatus (./tuffIntelligenceRuntimeStore), normalizeLocaleCode (./locale), executeTool (./tuffIntelligenceLabTools), SUPPORTED_TOOL_IDS (./tuffIntelligenceLabTools), ToolExecutionContext (./tuffIntelligenceLabTools)
+
+exported names:
+  IntelligenceLabActionType (unreachable)
+  IntelligenceLabAction (unreachable)
+  IntelligenceLabExecutionResult (unreachable)
+  ResolvedProviderContext 
+  IntelligenceLabFollowUpPlan (unreachable)
+  IntelligenceLabRuntimeMetrics (unreachable)
+  IntelligenceLabStreamEvent (unreachable)
+  IntelligenceLabSessionHistoryItem (unreachable)
+  IntelligenceLabOrchestrationResult (unreachable)
+  isRetryableInvokeError 
+  isReadOnlyTool (unreachable)
+  shouldContinueOnActionFailure (unreachable)
+  resolveIntelligenceProviderRuntimeContexts 
+  probeIntelligenceLabProvider 
+  NexusIntelligenceInvokePayload 
+  NexusIntelligenceInvokeResult 
+  NexusIntelligenceStreamMeta 
+  NexusIntelligenceStreamHooks 
+  invokeIntelligenceCapability 
+  streamIntelligenceCapability 
+  listIntelligenceLabProviders 
+  heartbeatIntelligenceLabSession (unreachable)
+  pauseIntelligenceLabSession (unreachable)
+  listIntelligenceLabSessionHistory (unreachable)
+  planIntelligenceLab (unreachable)
+  ExecuteIntelligenceLabHooks (unreachable)
+  executeIntelligenceLab (unreachable)
+  reflectIntelligenceLab (unreachable)
+  buildFinalAssistantReplyWithModel (unreachable)
+  generateIntelligenceLabFollowUp (unreachable)
+  orchestrateIntelligenceLabStream (unreachable)
+  approveIntelligenceLabTool (unreachable)
+  sanitizeLabActions (unreachable)
+  sanitizeExecutionResults (unreachable)
+  normalizeLabMessages (unreachable)

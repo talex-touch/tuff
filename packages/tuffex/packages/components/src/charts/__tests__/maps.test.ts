@@ -1,6 +1,7 @@
 import type { MapGeoJson } from '../src/maps/src/types'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { toRaw } from 'vue'
 import { TxBubbleMap, TxChoroplethMap } from '../src/maps'
 import { DEFAULT_MAP_SCALE_VARS, rampColor, rampGradient } from '../src/maps/src/color'
 import {
@@ -159,6 +160,37 @@ describe('txBubbleMap', () => {
     await bubble.trigger('pointerleave')
     expect(wrapper.emitted('bubbleHover')![1]![0]).toBeUndefined()
     expect(wrapper.find('.tx-map__tooltip').exists()).toBe(false)
+  })
+
+  it('keeps bubble presses selectable without panning while background drags still move the map', async () => {
+    const wrapper = mountBubble({ roam: true, zoom: 2 })
+    try {
+      const bubble = wrapper.findAll('.tx-map__bubble')[1]!
+      const layer = wrapper.find('svg > g')
+      const initialTransform = layer.attributes('transform')
+
+      // jsdom has no pointer capture/retargeting; assert the visible drag
+      // boundary here, not a mocked setPointerCapture call count.
+      await bubble.trigger('pointerdown', { button: 0, clientX: 100, clientY: 80 })
+      await wrapper.trigger('pointermove', { clientX: 125, clientY: 95 })
+      expect(layer.attributes('transform')).toBe(initialTransform)
+      await bubble.trigger('pointerup', { clientX: 125, clientY: 95 })
+      await bubble.trigger('click')
+      expect(wrapper.emitted('bubbleClick')).toHaveLength(1)
+      expect(toRaw(wrapper.emitted('bubbleClick')![0]![0])).toBe(data[1])
+
+      await wrapper.find('.tx-map__land').trigger('pointerdown', { button: 0, clientX: 100, clientY: 80 })
+      await wrapper.trigger('pointermove', { clientX: 110, clientY: 85 })
+      await wrapper.trigger('pointermove', { clientX: 125, clientY: 95 })
+      expect(layer.attributes('transform')).toBe('translate(-175, -135) scale(2)')
+      await wrapper.trigger('pointerup', { clientX: 125, clientY: 95 })
+      await wrapper.trigger('pointermove', { clientX: 150, clientY: 110 })
+      expect(layer.attributes('transform')).toBe('translate(-175, -135) scale(2)')
+      expect(wrapper.emitted('bubbleClick')).toHaveLength(1)
+    }
+    finally {
+      wrapper.unmount()
+    }
   })
 
   it('supports explicit bubbleSize and style functions', () => {

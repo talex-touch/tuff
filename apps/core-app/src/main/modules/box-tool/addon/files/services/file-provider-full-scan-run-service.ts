@@ -1,5 +1,6 @@
 import type { UpsertFileRecord } from '../../../search-engine/search-index-writer'
 import type { ScannedFileInfo } from '../types'
+import type { FileScanRunStats } from '../workers/file-scan-worker-client'
 import type { FileProviderFullScanCheckpointService } from './file-provider-full-scan-checkpoint-service'
 import { mapIndexedWriteFullScanUpsertRecords } from '@talex-touch/utils/search'
 import { buildRootOnlyExcludePaths } from './file-provider-full-scan-checkpoint-service'
@@ -19,7 +20,8 @@ export interface FileProviderFullScanRunDeps<TContext> {
   scanDirectory: (
     rootPath: string,
     excludePathsSet: Set<string> | undefined,
-    context: TContext
+    context: TContext,
+    onStats: (stats: FileScanRunStats) => void
   ) => AsyncIterable<ScannedFileInfo[]>
   insertRecords: (
     rootPath: string,
@@ -89,6 +91,7 @@ export class FileProviderFullScanRunService<TContext> {
           ? await this.checkpoints.plan(rootPath, options?.excludePathsSet)
           : null
         let fileCount = 0
+        let rootComplete = true
         if (plan && plan.children.length > 0) {
           // Each child is a resumable unit: its records are inserted, then its checkpoint is
           // written, so a restart in the middle of the next child loses at most that child.
@@ -99,9 +102,11 @@ export class FileProviderFullScanRunService<TContext> {
             const result = await this.scanTree(child, rootPath, options?.excludePathsSet, context)
             fileCount += result.fileCount
             added += result.added
-            await this.checkpoints!.markChildCompleted(child)
-            done += 1
-            this.emitProgress(done, total)
+            if (result.completed) {
+              await this.checkpoints!.markChildCompleted(child)
+              done += 1
+              this.emitProgress(done, total)
+            } else rootComplete = false
           }
           // The root's own files last, with every child excluded so the walker descends nowhere.
           const rootOnly = await this.scanTree(
@@ -112,11 +117,13 @@ export class FileProviderFullScanRunService<TContext> {
           )
           fileCount += rootOnly.fileCount
           added += rootOnly.added
+          if (!rootOnly.completed) rootComplete = false
           checkpointsToClear.set(rootPath, plan.children)
         } else {
           const result = await this.scanTree(rootPath, rootPath, options?.excludePathsSet, context)
           fileCount += result.fileCount
           added += result.added
+          rootComplete = result.completed
         }
         this.logDebug('Directory scan completed', {
           path: rootPath,
@@ -125,9 +132,11 @@ export class FileProviderFullScanRunService<TContext> {
           duration: this.formatDuration(this.now() - pathScanStart)
         })
 
-        scannedPaths += 1
-        this.emitProgress(scannedPaths, paths.length)
-        completedPaths.push(rootPath)
+        if (rootComplete) {
+          scannedPaths += 1
+          this.emitProgress(scannedPaths, paths.length)
+          completedPaths.push(rootPath)
+        }
       }
 
       return { added, completedPaths, checkpointsToClear }
@@ -141,10 +150,18 @@ export class FileProviderFullScanRunService<TContext> {
     rootPath: string,
     excludePathsSet: Set<string> | undefined,
     context: TContext
-  ): Promise<{ fileCount: number; added: number }> {
+  ): Promise<{ fileCount: number; added: number; completed: boolean }> {
     let fileCount = 0
     let added = 0
-    for await (const diskFiles of this.scanDirectory(scanPath, excludePathsSet, context)) {
+    const outcome: { stats: FileScanRunStats | null } = { stats: null }
+    for await (const diskFiles of this.scanDirectory(
+      scanPath,
+      excludePathsSet,
+      context,
+      (stats) => {
+        outcome.stats = stats
+      }
+    )) {
       fileCount += diskFiles.length
       const records = mapIndexedWriteFullScanUpsertRecords(diskFiles, {
         lastIndexedAt: new Date()
@@ -155,6 +172,6 @@ export class FileProviderFullScanRunService<TContext> {
       }
       await this.yieldAfterScan()
     }
-    return { fileCount, added }
+    return { fileCount, added, completed: outcome.stats !== null && outcome.stats.errorCount === 0 }
   }
 }

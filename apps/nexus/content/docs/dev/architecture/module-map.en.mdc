@@ -50,7 +50,7 @@ code: |
 12. TuffDashboardModule → `apps/core-app/src/main/modules/system/tuff-dashboard.ts`
 13. FileSystemWatcherModule → `apps/core-app/src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts`
 14. FileProtocolModule → `apps/core-app/src/main/modules/file-protocol/index.ts`
-15. TerminalModule → `apps/core-app/src/main/modules/terminal/terminal.manager.ts`
+15. TerminalModule → `apps/core-app/src/main/modules/terminal/index.ts`; generic and AI CLI PTYs share `terminal/pty-session-core.ts`.
 
 :::TuffCodeBlock{lang="mermaid"}
 ---

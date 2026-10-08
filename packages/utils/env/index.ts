@@ -19,36 +19,6 @@ function getProcess(): any {
   return (globalThis as any)?.process
 }
 
-function readGlobalEnv(): Record<string, string | undefined> {
-  const g: any = globalThis as any
-  const fromGlobal = g.__TUFF_ENV && typeof g.__TUFF_ENV === 'object' ? g.__TUFF_ENV : null
-  const record: Record<string, string | undefined> = {}
-
-  if (fromGlobal) {
-    for (const [k, v] of Object.entries(fromGlobal)) {
-      if (typeof v === 'string') {
-        record[k] = v
-      }
-      else if (typeof v === 'number' || typeof v === 'boolean') {
-        record[k] = String(v)
-      }
-    }
-  }
-
-  const p: any = getProcess()
-  if (p && p.env && typeof p.env === 'object') {
-    for (const [k, v] of Object.entries(p.env)) {
-      if (typeof v === 'string') {
-        record[k] = v
-      }
-      else if (typeof v === 'number' || typeof v === 'boolean') {
-        record[k] = String(v)
-      }
-    }
-  }
-
-  return record
-}
 
 export function setRuntimeEnv(env: Record<string, string | undefined>): void {
   const g: any = globalThis as any
@@ -64,23 +34,45 @@ export function setRuntimeEnv(env: Record<string, string | undefined>): void {
   g.__TUFF_ENV = { ...(g.__TUFF_ENV || {}), ...normalized }
 }
 
+function normalizeEnvValue(value: unknown): string | undefined {
+  if (typeof value === 'string')
+    return value
+  if (typeof value === 'number' || typeof value === 'boolean')
+    return String(value)
+  return undefined
+}
+
+/** One key, without copying the whole environment: `process.env` wins over `__TUFF_ENV`. */
 export function getEnv(key: string): string | undefined {
-  return readGlobalEnv()[key]
+  const fromProcess = normalizeEnvValue(getProcess()?.env?.[key])
+  if (fromProcess !== undefined)
+    return fromProcess
+  const g: any = globalThis as any
+  const fromGlobal = g.__TUFF_ENV && typeof g.__TUFF_ENV === 'object' ? g.__TUFF_ENV[key] : undefined
+  return normalizeEnvValue(fromGlobal)
 }
 
 export function getEnvOrDefault(key: string, fallback: string): string {
   return getEnv(key) ?? fallback
 }
 
-export function getBooleanEnv(key: string, fallback = false): boolean {
-  const raw = getEnv(key)
-  if (raw === undefined)
+/**
+ * The one spelling of a boolean flag: `1`/`true`/`yes`/`on` (any case, trimmed) is on,
+ * `0`/`false`/`no`/`off` is off, anything else — including unset — is the fallback.
+ */
+export function parseBooleanFlag(value: string | undefined, fallback = false): boolean {
+  if (typeof value !== 'string')
     return fallback
-  if (raw === '1' || raw === 'true')
+  const normalized = value.trim().toLowerCase()
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on')
     return true
-  if (raw === '0' || raw === 'false')
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off')
     return false
   return fallback
+}
+
+export function getBooleanEnv(key: string, fallback = false): boolean {
+  return parseBooleanFlag(getEnv(key), fallback)
 }
 
 export function hasWindow(): boolean {

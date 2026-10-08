@@ -5,7 +5,8 @@
 .idea/
 .vscode-test/
 .cursor/
-.codex/
+/.codex/*
+!/.codex/config.toml
 .pi/
 
 # ========================
@@ -150,7 +151,11 @@ test-results/
 .wrangler*
 .golutra/
 .data&
-.claude*
+/.claude/*
+!/.claude/settings.json
+!/.claude/hooks/
+/.claude/hooks/*
+!/.claude/hooks/statusline.py
 
 # ========================
 # Docs / Local notes
@@ -210,5 +215,13 @@ apps/g-wggu5114-thisai-thisai-view-/
 # Vitest JUnit reports written by the App suites CI job
 test-reports/
 
-# Local agent config (omp skills / settings), per checkout — never committed
+# Personal omp settings and skills remain local.
 /.omp/
+
+# Retired local workflow state and generators.
+/.comet/
+/.trellis/
+/.spec-workflow/
+
+# This task was explicitly local-only before the workflow cutover.
+/docs/engineering/workflow/handoffs/07-26-install-launch-v2-4-13-beta-23/

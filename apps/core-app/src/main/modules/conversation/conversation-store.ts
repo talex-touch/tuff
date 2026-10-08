@@ -1,3 +1,4 @@
+import { portableMessageMeta } from '@talex-touch/pi-desktop-reuse/session-fork'
 import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import { scheduleDbWrite } from '../../db/db-write'
 import {
@@ -63,8 +64,22 @@ export function subscribeConversationMutations(
   return () => mutationListeners.delete(listener)
 }
 
-function emitConversationMutation(mutation: ConversationMutation): void {
+export function emitConversationMutation(mutation: ConversationMutation): void {
   for (const listener of mutationListeners) listener(mutation)
+}
+
+export interface ConversationMutationFence {
+  write: (id: string, operation: () => Promise<void>) => Promise<void>
+  remove: (id: string, operation: () => Promise<void>) => Promise<void>
+}
+
+let mutationFence: ConversationMutationFence | undefined
+
+export function registerConversationMutationFence(fence: ConversationMutationFence): () => void {
+  mutationFence = fence
+  return () => {
+    if (mutationFence === fence) mutationFence = undefined
+  }
 }
 
 function parseMeta(value: string | null): Record<string, unknown> | undefined {
@@ -86,73 +101,75 @@ async function writeConversationSnapshot(
   preserveLocalProject = false
 ): Promise<void> {
   const db = databaseModule.getDb()
-  await scheduleDbWrite(label, async () => {
-    await db.transaction(async (tx) => {
-      const projectId = preserveLocalProject
-        ? ((
-            await tx
-              .select({ projectId: conversations.projectId })
-              .from(conversations)
-              .where(eq(conversations.id, snapshot.id))
-          )[0]?.projectId ?? null)
-        : snapshot.projectId
-      await tx
-        .insert(conversations)
-        .values({
-          id: snapshot.id,
-          projectId,
-          title: snapshot.title,
-          createdAt: snapshot.createdAt,
-          updatedAt: snapshot.updatedAt
-        })
-        .onConflictDoUpdate({
-          target: conversations.id,
-          set: {
+  const write = () =>
+    scheduleDbWrite(label, async () => {
+      await db.transaction(async (tx) => {
+        const projectId = preserveLocalProject
+          ? ((
+              await tx
+                .select({ projectId: conversations.projectId })
+                .from(conversations)
+                .where(eq(conversations.id, snapshot.id))
+            )[0]?.projectId ?? null)
+          : snapshot.projectId
+        await tx
+          .insert(conversations)
+          .values({
+            id: snapshot.id,
             projectId,
             title: snapshot.title,
             createdAt: snapshot.createdAt,
             updatedAt: snapshot.updatedAt
-          }
-        })
-
-      await tx
-        .delete(conversationMessages)
-        .where(eq(conversationMessages.conversationId, snapshot.id))
-
-      if (snapshot.messages.length > 0) {
-        await tx.insert(conversationMessages).values(
-          snapshot.messages.map((message, index) => ({
-            id: message.id,
-            conversationId: snapshot.id,
-            role: message.role,
-            content: message.content,
-            status: message.status,
-            meta: message.meta ? JSON.stringify(message.meta) : null,
-            seq: index,
-            createdAt: message.createdAt
-          }))
-        )
-      }
-
-      if (notifySource === 'local') {
-        await tx
-          .insert(conversationSyncState)
-          .values({
-            conversationId: snapshot.id,
-            dirtyAt: snapshot.updatedAt,
-            deletedAt: null
           })
           .onConflictDoUpdate({
-            target: conversationSyncState.conversationId,
-            set: { dirtyAt: snapshot.updatedAt, deletedAt: null }
+            target: conversations.id,
+            set: {
+              projectId,
+              title: snapshot.title,
+              createdAt: snapshot.createdAt,
+              updatedAt: snapshot.updatedAt
+            }
           })
-      } else {
+
         await tx
-          .delete(conversationSyncState)
-          .where(eq(conversationSyncState.conversationId, snapshot.id))
-      }
+          .delete(conversationMessages)
+          .where(eq(conversationMessages.conversationId, snapshot.id))
+
+        if (snapshot.messages.length > 0) {
+          await tx.insert(conversationMessages).values(
+            snapshot.messages.map((message, index) => ({
+              id: message.id,
+              conversationId: snapshot.id,
+              role: message.role,
+              content: message.content,
+              status: message.status,
+              meta: message.meta ? JSON.stringify(message.meta) : null,
+              seq: index,
+              createdAt: message.createdAt
+            }))
+          )
+        }
+
+        if (notifySource === 'local') {
+          await tx
+            .insert(conversationSyncState)
+            .values({
+              conversationId: snapshot.id,
+              dirtyAt: snapshot.updatedAt,
+              deletedAt: null
+            })
+            .onConflictDoUpdate({
+              target: conversationSyncState.conversationId,
+              set: { dirtyAt: snapshot.updatedAt, deletedAt: null }
+            })
+        } else {
+          await tx
+            .delete(conversationSyncState)
+            .where(eq(conversationSyncState.conversationId, snapshot.id))
+        }
+      })
     })
-  })
+  await (mutationFence ? mutationFence.write(snapshot.id, write) : write())
 
   if (notifySource) {
     emitConversationMutation({
@@ -366,19 +383,21 @@ export async function saveConversation(input: SaveConversationInput): Promise<St
 export async function deleteConversation(id: string): Promise<{ deleted: boolean }> {
   const db = databaseModule.getDb()
   const deletedAt = Date.now()
-  await scheduleDbWrite('conversation.delete', async () => {
-    await db.transaction(async (tx) => {
-      await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
-      await tx.delete(conversations).where(eq(conversations.id, id))
-      await tx
-        .insert(conversationSyncState)
-        .values({ conversationId: id, dirtyAt: deletedAt, deletedAt })
-        .onConflictDoUpdate({
-          target: conversationSyncState.conversationId,
-          set: { dirtyAt: deletedAt, deletedAt }
-        })
+  const remove = () =>
+    scheduleDbWrite('conversation.delete', async () => {
+      await db.transaction(async (tx) => {
+        await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
+        await tx.delete(conversations).where(eq(conversations.id, id))
+        await tx
+          .insert(conversationSyncState)
+          .values({ conversationId: id, dirtyAt: deletedAt, deletedAt })
+          .onConflictDoUpdate({
+            target: conversationSyncState.conversationId,
+            set: { dirtyAt: deletedAt, deletedAt }
+          })
+      })
     })
-  })
+  await (mutationFence ? mutationFence.remove(id, remove) : remove())
   emitConversationMutation({
     type: 'delete',
     conversationId: id,
@@ -451,7 +470,13 @@ export function toConversationSyncSnapshot(
   conversation: ConversationWithMessages
 ): ConversationSyncSnapshot {
   const { projectId: _localProjectId, ...snapshot } = conversation
-  return snapshot
+  return {
+    ...snapshot,
+    messages: snapshot.messages.map((message) => ({
+      ...message,
+      meta: portableMessageMeta(message.meta)
+    }))
+  }
 }
 
 export async function applyConversationSyncSnapshot(
@@ -467,13 +492,15 @@ export async function applyConversationSyncSnapshot(
 
 export async function applyConversationSyncDeletion(id: string, deletedAt: number): Promise<void> {
   const db = databaseModule.getDb()
-  await scheduleDbWrite('conversation.sync-delete', async () => {
-    await db.transaction(async (tx) => {
-      await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
-      await tx.delete(conversations).where(eq(conversations.id, id))
-      await tx.delete(conversationSyncState).where(eq(conversationSyncState.conversationId, id))
+  const remove = () =>
+    scheduleDbWrite('conversation.sync-delete', async () => {
+      await db.transaction(async (tx) => {
+        await tx.delete(localAiCliSessions).where(eq(localAiCliSessions.conversationId, id))
+        await tx.delete(conversations).where(eq(conversations.id, id))
+        await tx.delete(conversationSyncState).where(eq(conversationSyncState.conversationId, id))
+      })
     })
-  })
+  await (mutationFence ? mutationFence.remove(id, remove) : remove())
   emitConversationMutation({
     type: 'delete',
     conversationId: id,
@@ -519,7 +546,7 @@ export function normalizeConversationSyncSnapshot(value: unknown): ConversationS
       role,
       content: candidate.content,
       status,
-      meta: isRecord(candidate.meta) ? candidate.meta : undefined,
+      meta: isRecord(candidate.meta) ? portableMessageMeta(candidate.meta) : undefined,
       seq: index,
       createdAt: candidate.createdAt
     })

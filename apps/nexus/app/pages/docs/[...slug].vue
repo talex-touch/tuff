@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { defineAsyncComponent, h, type FunctionalComponent } from 'vue'
 import DocHero from '~/components/docs/DocHero.vue'
+import ProseA from '~/components/content/ProseA.vue'
 import DocsProseHeading from '~/components/docs/DocsProseHeading.vue'
 import { appDescription, appName } from '~/constants'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
 import { cacheDocsFullBody, hasCachedDocsFullBody, isDocsPageRecordForRoute, readCachedDocsFullBody, requestDocsPage, resolveDocsFullBodyCacheKey } from '~/utils/docs-page-client-cache'
 import { buildDocOutlineFromBody, buildDocOutlineTree, type DocTocEntry } from '~/utils/docs-outline'
 import { buildDocsSeoHead, normalizeDocsSeoCanonicalPath } from '~/utils/docs-seo'
+import { DOCS_SOURCE_PATH_KEY } from '~/utils/docs-source-path'
 import { useTypedFetch } from '~/utils/request'
 import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
-const DOCS_FULL_BODY_IDLE_DELAY_MS = 180
-const DOCS_FULL_BODY_IDLE_TIMEOUT_MS = 1200
 // Two retries, then the reader gets an error with a retry button instead of a blank page.
 // The API behind this is dynamic and has been measured resetting connections on slow links,
 // so a single rejection is far more often a flaky hop than an answer.
@@ -21,7 +21,7 @@ const DOCS_PAGER_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
 const DOCS_DEFERRED_BODY_IDLE_TIMEOUT_MS = 3200
 const DOCS_DEFERRED_BODY_INTENT_EVENTS = ['scroll', 'wheel', 'keydown', 'touchstart'] as const
 const DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX = 'docs-current-page'
-const prefetchedDocMetadataTargets = new Set<string>()
+const prefetchedDocRouteTargets = new Set<string>()
 const prefetchedDocFullBodyTargets = new Set<string>()
 const pendingPagerFullBodyPrefetchTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingPagerFullBodyPrefetchIdleIds = new Map<string, number>()
@@ -55,7 +55,8 @@ const runtimeConfig = useRuntimeConfig()
 const seoOrigin = computed(
   () => (runtimeConfig.public.siteUrl as string | undefined) || requestUrl.origin,
 )
-const { t, setLocale } = useI18n()
+const { t } = useI18n()
+const { setLocaleSerial } = useLocaleOrchestrator()
 const activeRoutePath = ref(route.path)
 if (import.meta.client) {
   activeRoutePath.value = router.currentRoute.value.path || route.path
@@ -69,19 +70,18 @@ const isZhDocs = computed(() => docsLocale.value === 'zh')
 const localizedDocsPath = (path: string | null | undefined) => toLocalizedDocsPath(path, docsLocale.value)
 
 if (import.meta.server)
-  await setLocale(docsLocale.value)
+  await setLocaleSerial(docsLocale.value, 'browser')
 
 watch(
   docsLocale,
   (locale) => {
-    void setLocale(locale)
+    void setLocaleSerial(locale, 'browser')
   },
   { immediate: import.meta.client },
 )
 
 const { isAdmin } = useAccountRole()
 
-const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
 const docPath = computed(() => normalizeDocsPagePath(activeRoutePath.value))
 
 function shouldSplitDocsPageBody(path: string) {
@@ -91,13 +91,8 @@ function shouldSplitDocsPageBody(path: string) {
 
 const requestKey = computed(() => `doc:${docPath.value}:${docsLocale.value}`)
 const shouldSplitDocBody = computed(() => shouldSplitDocsPageBody(activeRoutePath.value))
-// Whatever renders the HTML asks for the body with it. A prerendered doc has to be
-// readable from its own markup, and splitting the request here made every page ship an
-// empty shell whose text arrived over a second round trip — seconds on a slow link, and
-// nothing at all on a failing one. Client-side navigation still fetches metadata first
-// and streams the body in afterwards; that path runs through loadActiveDocForRoute, not
-// this one, so it is unaffected. Hydration must send the same value the server sent, or
-// the payload key stops matching and the rendered body is discarded into a skeleton.
+// SSR and hydration share the complete-body key. SPA navigation uses the static
+// complete response too, without a metadata round trip or an idle timer.
 const DOCS_PAGE_RENDER_BODY_MODE = '1'
 const currentDocsPageFetchKey = computed(() => `${DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX}:${docPath.value}:${docsLocale.value}:${DOCS_PAGE_RENDER_BODY_MODE}`)
 const docsNavigationScope = computed(() => (docPath.value.includes('/docs/dev/components') ? 'components' : undefined))
@@ -109,9 +104,6 @@ function normalizeContentPath(path: string | null | undefined) {
   return normalizeDocsPagePath(path)
 }
 
-function stripCjk(value: string) {
-  return value.replace(CJK_PATTERN, '').replace(/\s{2,}/g, ' ').trim()
-}
 
 function fallbackTitleFromPath(path?: string) {
   if (!path)
@@ -126,12 +118,7 @@ function fallbackTitleFromPath(path?: string) {
 }
 
 function normalizeTitleForLocale(value: string, path?: string) {
-  if (docsLocale.value !== 'en')
-    return value
-  const stripped = stripCjk(value)
-  if (stripped)
-    return stripped
-  return fallbackTitleFromPath(path)
+  return value.trim() || fallbackTitleFromPath(path)
 }
 
 function formatRelativeTimeFromNow(date: Date, locale: string) {
@@ -148,13 +135,6 @@ function formatRelativeTimeFromNow(date: Date, locale: string) {
   return formatter.format(0, 'second')
 }
 
-function normalizeDescriptionForLocale(value?: string | null) {
-  if (!value)
-    return ''
-  if (docsLocale.value !== 'en')
-    return value
-  return stripCjk(value)
-}
 
 function toBoolean(value: unknown) {
   if (value === true)
@@ -190,7 +170,7 @@ const { data: docPayload, status } = await useTypedFetch<Record<string, any> | n
       body: DOCS_PAGE_RENDER_BODY_MODE,
     })),
     default: () => null,
-    immediate: import.meta.server || !shouldSplitDocBody.value,
+    immediate: import.meta.server,
     watch: false,
   },
 )
@@ -213,6 +193,13 @@ const fullDocError = ref(false)
 const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
 const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value ?? doc.value : doc.value))
 
+// `ProseA` resolves an author's relative content link (`./installation.zh.mdc`) against the
+// document being rendered: such a link is relative to the source file, not to the URL.
+provide(DOCS_SOURCE_PATH_KEY, computed(() => {
+  const path = renderDoc.value?.path ?? doc.value?.path
+  return typeof path === 'string' ? path : null
+}))
+
 // The loading skeleton reuses TxSkeleton without joining the first-paint TuffEx
 // import graph (docs-page-performance.test.ts guards this): async chunk only.
 const TxSkeleton = defineAsyncComponent(() => import('@talex-touch/tuffex/skeleton').then(m => m.TxSkeleton))
@@ -220,8 +207,6 @@ const TxSkeleton = defineAsyncComponent(() => import('@talex-touch/tuffex/skelet
 const isLoading = ref(!doc.value)
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLoading.value)
 let activeDocFetchId = 0
-let fullDocIdleId: number | null = null
-let fullDocTimer: ReturnType<typeof setTimeout> | null = null
 let fullDocRetryTimer: ReturnType<typeof setTimeout> | null = null
 let fullDocRetryResume: (() => void) | null = null
 
@@ -229,14 +214,6 @@ function clearFullDocFetchSchedule() {
   if (import.meta.server)
     return
 
-  if (fullDocIdleId !== null && 'cancelIdleCallback' in window) {
-    window.cancelIdleCallback(fullDocIdleId)
-    fullDocIdleId = null
-  }
-  if (fullDocTimer) {
-    clearTimeout(fullDocTimer)
-    fullDocTimer = null
-  }
   if (fullDocRetryTimer) {
     clearTimeout(fullDocRetryTimer)
     fullDocRetryTimer = null
@@ -332,32 +309,6 @@ async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' |
   }
 }
 
-function scheduleFullDocFetchForRoute(fetchId: number, path: string, locale: 'en' | 'zh') {
-  if (import.meta.server || !shouldSplitDocBody.value || fullDoc.value || fullDocLoading.value)
-    return
-
-  clearFullDocFetchSchedule()
-
-  const load = () => {
-    fullDocIdleId = null
-    fullDocTimer = null
-
-    if (isStaleDocFetch(fetchId, path, locale))
-      return
-
-    void loadFullDocForRoute(fetchId, path, locale)
-  }
-
-  fullDocTimer = setTimeout(() => {
-    fullDocTimer = null
-    if ('requestIdleCallback' in window) {
-      fullDocIdleId = window.requestIdleCallback(load, { timeout: DOCS_FULL_BODY_IDLE_TIMEOUT_MS })
-      return
-    }
-
-    load()
-  }, DOCS_FULL_BODY_IDLE_DELAY_MS)
-}
 
 function seedFullDocFromCurrentDoc() {
   if (!shouldSplitDocBody.value || !doc.value?.body)
@@ -374,34 +325,25 @@ function startFullDocFetchForRoute() {
   if (seedFullDocFromCurrentDoc())
     return
 
-  // Joins the navigation already in flight instead of starting a new generation. This runs
-  // from onMounted, which lands between loadActiveDocForRoute's own bump and its awaited
-  // metadata response — bumping here made that response test stale, so `doc` was never
-  // assigned and the page depended entirely on the body fetch to fill it in. When the body
-  // fetch then failed, the reader was told the document does not exist.
+  // Mount joins the incoming navigation generation instead of invalidating it.
   const fetchId = activeDocFetchId
-  scheduleFullDocFetchForRoute(fetchId, docPath.value, docsLocale.value)
+  void loadFullDocForRoute(fetchId, docPath.value, docsLocale.value)
 }
 
-// A reader who asked for the body already waited out the backoff, so this skips the idle
-// scheduling that the automatic path uses and requests immediately.
 function retryFullDocFetch() {
   if (import.meta.server || fullDocLoading.value)
     return
 
-  clearFullDocFetchSchedule()
-  const fetchId = ++activeDocFetchId
-  void loadFullDocForRoute(fetchId, docPath.value, docsLocale.value)
+  void loadActiveDocForRoute()
 }
 
-function prefetchDocMetadataForTarget(normalized: string, locale: 'en' | 'zh') {
+function prefetchDocRouteForTarget(normalized: string, locale: 'en' | 'zh') {
   const prefetchKey = `${normalized}:${locale}`
-  if (prefetchedDocMetadataTargets.has(prefetchKey))
+  if (prefetchedDocRouteTargets.has(prefetchKey))
     return
 
-  prefetchedDocMetadataTargets.add(prefetchKey)
+  prefetchedDocRouteTargets.add(prefetchKey)
   void preloadRouteComponents(toLocalizedDocsPath(normalized, locale))
-  void requestDocsPage({ path: normalized, locale, body: '0' }).catch(() => {})
 }
 
 function clearPagerFullBodyPrefetchSchedule(prefetchKey: string) {
@@ -473,7 +415,7 @@ function prefetchDocForPath(path: string | null | undefined) {
   const normalized = normalizeDocsPagePath(path)
   const locale = docsLocale.value
 
-  prefetchDocMetadataForTarget(normalized, locale)
+  prefetchDocRouteForTarget(normalized, locale)
   schedulePagerFullDocPrefetch(normalized, locale)
 }
 
@@ -504,7 +446,7 @@ async function loadActiveDocForRoute() {
     return
   }
 
-  // A document handed over by SSR stays on screen while the body streams in.
+  // Preserve the complete SSR document during hydration.
   const hasResolvedDoc = isDocsPageRecordForRoute(doc.value, path, locale)
   if (!hasResolvedDoc) {
     doc.value = null
@@ -513,8 +455,13 @@ async function loadActiveDocForRoute() {
   isLoading.value = !hasResolvedDoc
 
   try {
+    if (splitBody) {
+      if (!seedFullDocFromCurrentDoc())
+        await loadFullDocForRoute(fetchId, path, locale)
+      return
+    }
     if (!hasResolvedDoc) {
-      const nextDoc = await requestDocsPage({ path, locale, body: splitBody ? '0' : '1' })
+      const nextDoc = await requestDocsPage({ path, locale, body: '1' })
 
       if (isStaleDocFetch(fetchId, path, locale))
         return
@@ -523,15 +470,12 @@ async function loadActiveDocForRoute() {
     }
     isLoading.value = false
 
-    if (!splitBody || seedFullDocFromCurrentDoc())
-      return
-
-    scheduleFullDocFetchForRoute(fetchId, path, locale)
   }
   catch {
     if (!isStaleDocFetch(fetchId, path, locale)) {
       isLoading.value = false
       fullDocLoading.value = false
+      fullDocError.value = true
       clearFullDocFetchSchedule()
     }
   }
@@ -569,7 +513,7 @@ watch(
 const viewState = computed(() => {
   // Holding a document always wins over the loading flag, so a stale flag can never
   // strand the reader on a spinner while the content is sitting right there.
-  if (doc.value || renderDoc.value)
+  if (doc.value || renderDoc.value || fullDocError.value)
     return 'content'
   if (isLoading.value)
     return 'loading'
@@ -713,7 +657,7 @@ const docDisplayTitle = computed(() =>
 )
 
 const docDisplayDescription = computed(() =>
-  normalizeDescriptionForLocale(doc.value?.description ? String(doc.value.description) : ''),
+  doc.value?.description ? String(doc.value.description) : '',
 )
 
 const heroBreadcrumbs = computed(() => {
@@ -925,7 +869,7 @@ const heroUpdatedLabel = computed(() => {
     : `Updated ${heroUpdatedAgo}`
 })
 const isDocVerified = computed(() => toBoolean(docMeta.value?.verified))
-const heroVerifiedLabel = computed(() => (isDocVerified.value ? 'Verified' : ''))
+const heroVerifiedLabel = computed(() => (isDocVerified.value ? t('docs.verified') : ''))
 interface DocsProseHeadingProps {
   id?: string
 }
@@ -937,7 +881,11 @@ function createDocsProseHeading(tag: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'): F
   return heading
 }
 
+// `:prose="false"` renders native tags, so links are mapped back to `ProseA` on purpose:
+// as a bare `<a>`, every `/docs/...` link dropped the reader's locale (a Chinese reader
+// was switched to English) and `./installation.zh.mdc` went to the not-found page.
 const docsProseComponents = {
+  a: ProseA,
   h1: createDocsProseHeading('h1'),
   h2: createDocsProseHeading('h2'),
   h3: createDocsProseHeading('h3'),
@@ -1130,7 +1078,7 @@ const docSeoTitleText = computed(() => {
 
 const docSeoDescription = computed(() => {
   const rawDescription = docSeoMeta.value.description ?? docDisplayDescription.value
-  const description = normalizeDescriptionForLocale(rawDescription ? String(rawDescription) : '')
+  const description = rawDescription ? String(rawDescription) : ''
   if (description)
     return description
   return isZhDocs.value

@@ -16,25 +16,6 @@ function resolveRequest(): RequestLike {
   return $fetch as unknown as RequestLike
 }
 
-interface LocalizedText {
-  zh: string
-  en: string
-}
-
-interface DashboardUpdate {
-  id: string
-  type: 'news' | 'release' | 'announcement' | 'config' | 'data'
-  scope: 'web' | 'system' | 'both'
-  channels: string[]
-  releaseTag: string | null
-  title: LocalizedText
-  timestamp: string
-  summary: LocalizedText
-  tags: string[]
-  link: string
-  payloadUrl?: string | null
-}
-
 interface DashboardTeam {
   id: string
   name: string
@@ -77,11 +58,6 @@ interface DashboardTeam {
   invites: unknown[]
 }
 
-interface DashboardImage {
-  key: string
-  url: string
-}
-
 export function useDashboardPluginsData() {
   const request = resolveRequest()
   const state = useAsyncData(
@@ -108,19 +84,6 @@ export function useDashboardPluginsData() {
   }
 }
 
-export function useDashboardUpdatesData() {
-  const request = resolveRequest()
-  const state = useAsyncData('dashboard-updates', () =>
-    request<{ updates: DashboardUpdate[] }>('/api/dashboard/updates'))
-
-  const updates = computed(() => state.data.value?.updates ?? [])
-
-  return {
-    ...state,
-    updates,
-  }
-}
-
 export function useDashboardTeamData() {
   const request = resolveRequest()
   const state = useAsyncData('dashboard-team', () =>
@@ -131,26 +94,6 @@ export function useDashboardTeamData() {
   return {
     ...state,
     team,
-  }
-}
-
-export function useDashboardImagesData(options: { lazy?: boolean } = {}) {
-  const request = resolveRequest()
-  const state = useAsyncData(
-    'dashboard-images',
-    () => request<{ images: DashboardImage[], total: number }>('/api/images/list'),
-    {
-      lazy: options.lazy ?? true,
-    },
-  )
-
-  const images = computed(() => state.data.value?.images ?? [])
-  const total = computed(() => state.data.value?.total ?? 0)
-
-  return {
-    ...state,
-    images,
-    total,
   }
 }
 

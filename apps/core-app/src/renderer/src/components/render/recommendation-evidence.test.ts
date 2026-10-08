@@ -1,6 +1,10 @@
 import type { ComposerTranslation } from 'vue-i18n'
+import type { RecommendationEvidence } from '@talex-touch/utils'
 import { describe, expect, it } from 'vitest'
-import { formatRecommendationEvidence } from './recommendation-evidence'
+import {
+  formatRecommendationEvidence,
+  formatRecommendationEvidenceLabel
+} from './recommendation-evidence'
 
 /**
  * Renders `key(param=value, …)` so assertions read as "which fact was chosen,
@@ -124,5 +128,164 @@ describe('formatRecommendationEvidence', () => {
         NOW
       )
     ).toBe('corebox.evidence.peakHours(start=22,end=00)')
+  })
+})
+
+describe('contextual recommendation evidence', () => {
+  const sourceApp = (
+    executeCount: number,
+    activeDays: number
+  ): NonNullable<RecommendationEvidence['sourceApp']> => ({
+    bundleId: 'com.example.editor',
+    name: 'Editor',
+    executeCount,
+    activeDays,
+    totalExecutions: 20,
+    baselineExecuteCount: 10,
+    baselineTotalExecutions: 100
+  })
+
+  it.each([
+    { name: 'three uses over two days', count: 3, days: 2, fact: 'sourceAppUsed' },
+    { name: 'five uses over two days', count: 5, days: 2, fact: 'sourceAppUsed' },
+    { name: 'five uses over three days', count: 5, days: 3, fact: 'sourceAppHabit' }
+  ])('distinguishes a contextual use from a habit: $name', ({ count, days, fact }) => {
+    const evidence = { sourceApp: sourceApp(count, days) }
+    const description = formatRecommendationEvidence('app-context', evidence, t, NOW)
+    const label = formatRecommendationEvidenceLabel('app-context', evidence, t, NOW)
+
+    expect(description).toContain(`corebox.evidence.${fact}(`)
+    expect(description).toContain('app=Editor')
+    expect(label).toContain(`corebox.evidence.label.${fact}(`)
+    expect(label).toContain('app=Editor')
+    if (fact === 'sourceAppUsed') expect(description).toContain(`count=${count}`)
+  })
+
+  it.each([NaN, Infinity, 2.5, 6])('does not call invalid active days %s a habit', (days) => {
+    const evidence = { sourceApp: sourceApp(5, days) }
+
+    expect(formatRecommendationEvidence('app-context', evidence, t, NOW)).toContain(
+      'corebox.evidence.sourceAppUsed('
+    )
+    expect(formatRecommendationEvidenceLabel('app-context', evidence, t, NOW)).toContain(
+      'corebox.evidence.label.sourceAppUsed('
+    )
+  })
+
+  it.each([0, -1, NaN, Infinity, 1.5])(
+    'says nothing for an invalid source execution count %s',
+    (count) => {
+      const evidence = { sourceApp: sourceApp(count, 3) }
+
+      expect(formatRecommendationEvidence('app-context', evidence, t, NOW)).toBe('')
+      expect(formatRecommendationEvidenceLabel('app-context', evidence, t, NOW)).toBe('')
+    }
+  )
+
+  it('never joins a marginal peak range onto a source-app claim', () => {
+    const evidence = {
+      sourceApp: sourceApp(5, 3),
+      peakHourRange: { startHour: 8, endHour: 10 }
+    }
+
+    expect(formatRecommendationEvidence('app-context', evidence, t, NOW)).toContain(
+      'corebox.evidence.sourceAppHabit('
+    )
+    expect(formatRecommendationEvidenceLabel('app-context', evidence, t, NOW)).toContain(
+      'corebox.evidence.label.sourceAppHabit('
+    )
+  })
+
+  it.each([
+    { name: 'a proved joint habit', count: 5, days: 3, start: 8, end: 10, fact: 'sourceAppTime' },
+    {
+      name: 'too few joint executions',
+      count: 4,
+      days: 3,
+      start: 8,
+      end: 10,
+      fact: 'sourceAppHabit'
+    },
+    {
+      name: 'joint uses on too few dates',
+      count: 5,
+      days: 2,
+      start: 8,
+      end: 10,
+      fact: 'sourceAppHabit'
+    },
+    {
+      name: 'more joint executions than source executions',
+      count: 11,
+      days: 3,
+      start: 8,
+      end: 10,
+      fact: 'sourceAppHabit'
+    },
+    { name: 'invalid joint days', count: 5, days: NaN, start: 8, end: 10, fact: 'sourceAppHabit' },
+    { name: 'invalid hour', count: 5, days: 3, start: -1, end: 10, fact: 'sourceAppHabit' },
+    {
+      name: 'midnight-wrapping joint window',
+      count: 5,
+      days: 3,
+      start: 23,
+      end: 1,
+      fact: 'sourceAppTime'
+    }
+  ])('uses only real joint evidence: $name', ({ count, days, start, end, fact }) => {
+    const evidence = {
+      sourceApp: {
+        ...sourceApp(10, 4),
+        timeWindow: { startHour: start, endHour: end, executeCount: count, activeDays: days }
+      }
+    }
+    const description = formatRecommendationEvidence('app-context', evidence, t, NOW)
+    const label = formatRecommendationEvidenceLabel('app-context', evidence, t, NOW)
+
+    expect(description).toContain(`corebox.evidence.${fact}(`)
+    expect(label).toContain(`corebox.evidence.label.${fact}(`)
+    if (fact === 'sourceAppTime') {
+      expect(description).toContain(`start=${String(start).padStart(2, '0')}`)
+      expect(description).toContain(`end=${String(end).padStart(2, '0')}`)
+    }
+  })
+
+  it('keeps pins labelled as pins and never steals dedicated frequent/recent labels', () => {
+    const evidence = { sourceApp: sourceApp(10, 4) }
+
+    expect(formatRecommendationEvidenceLabel('pinned', evidence, t, NOW)).toBe('')
+    expect(formatRecommendationEvidenceLabel('frequent', evidence, t, NOW)).toBe('')
+    expect(formatRecommendationEvidenceLabel('recent', evidence, t, NOW)).toBe('')
+    expect(formatRecommendationEvidenceLabel('cold-start', evidence, t, NOW)).toContain(
+      'corebox.evidence.label.sourceAppHabit('
+    )
+  })
+
+  it.each([
+    { name: 'inclusive lower edge', offset: -HOUR, valid: true },
+    { name: 'inclusive upper edge', offset: HOUR, valid: true },
+    { name: 'one millisecond too early', offset: -HOUR - 1, valid: false },
+    { name: 'one millisecond too late', offset: HOUR + 1, valid: false },
+    { name: 'two days ago', offset: -DAY, valid: false },
+    { name: 'today', offset: DAY, valid: false },
+    { name: 'invalid timestamp', offset: NaN, valid: false }
+  ])('prints yesterday only for its actual local window: $name', ({ offset, valid }) => {
+    const now = new Date(2026, 9, 6, 9, 30).getTime()
+    const anchor = new Date(now)
+    anchor.setDate(anchor.getDate() - 1)
+    const timestamp = anchor.getTime() + offset
+    const evidence = { yesterday: { lastExecutedAt: timestamp, executeCount: 1 } }
+    const description = formatRecommendationEvidence('yesterday', evidence, t, now)
+    const label = formatRecommendationEvidenceLabel('yesterday', evidence, t, now)
+
+    if (valid) {
+      const executed = new Date(timestamp)
+      const time = `${String(executed.getHours()).padStart(2, '0')}:${String(executed.getMinutes()).padStart(2, '0')}`
+      expect(description).toBe(`corebox.evidence.yesterday(time=${time})`)
+      expect(label).toBe(`corebox.evidence.label.yesterday(time=${time})`)
+    } else {
+      expect(description).toBe('')
+      expect(label).toBe('')
+    }
   })
 })

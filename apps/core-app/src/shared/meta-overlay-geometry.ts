@@ -38,6 +38,16 @@ export const META_PANEL_ROW_HEIGHT = 32
 export const META_PANEL_SECTION_TITLE_HEIGHT = 24
 export const META_PANEL_SECTION_GAP = 4
 
+/**
+ * Height of the Flow page's confirmation view: header 40, padding 12, title 20 (13px on a 20px
+ * line), gap 4, up to four description lines of 12px at 1.5 (72), gap 12 (the column's 4 and the
+ * actions' 8), two rows of TxButton `sm` (26 each, 8 apart) and padding 12, so 232. The second
+ * button row is English's: its three labels wrap at this width, and its card measured 232px in the
+ * real window, the Chinese one, on one row, 162px. A longer description scrolls inside the card.
+ */
+export const META_FLOW_CONFIRM_PANEL_HEIGHT =
+  META_PANEL_ITEM_HEADER_HEIGHT + 12 + 20 + 4 + 4 * 18 + 12 + (26 + 8 + 26) + 12
+
 /** Top edge of the area the panel may occupy. */
 export const META_PANEL_TOP_INSET = META_PANEL_HEADER_RESERVE + META_PANEL_TOP_GAP
 

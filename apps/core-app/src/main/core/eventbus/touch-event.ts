@@ -5,6 +5,7 @@ import type {
   ITouchEvent,
   ITouchEventBus
 } from '@talex-touch/utils/eventbus'
+import type { PluginStatus } from '@talex-touch/utils/plugin'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
 
 import type { Event, NotificationResponse } from 'electron'
@@ -22,6 +23,10 @@ export enum TalexEvents {
 
   ALL_MODULES_LOADED = 'all-modules-loaded',
 
+  // First step of the quit flow, ahead of renderer quiesce and BEFORE_APP_QUIT: stop native
+  // file watchers whose streams must not outlive the Node environment
+  // (core/before-quit-stop-watchers.ts).
+  BEFORE_QUIT_STOP_WATCHERS = 'before-quit-stop-watchers',
   BEFORE_MODULES_UNLOAD = 'before-modules-unload',
   BEFORE_APP_QUIT = 'app-before-quit',
   WILL_QUIT = 'will-quit',
@@ -49,6 +54,9 @@ export enum TalexEvents {
   // Plugin Storage Event
   PLUGIN_STORAGE_UPDATED = 'plugin/storage-updated',
   PLUGIN_INSTALL_COMPLETED = 'plugin/install-completed',
+
+  // Plugin Status Event — a plugin's status changed (enabled, disabled, crashed, loaded…)
+  PLUGIN_STATUS_CHANGED = 'plugin/status-changed',
 
   // Clipboard Events
   CLIPBOARD_CHANGE = 'clipboard/change',
@@ -361,6 +369,22 @@ export class WindowAllClosedEvent implements ITouchEvent<TalexEvents> {
   constructor() {}
 }
 
+export class BeforeQuitStopWatchersEvent implements ITouchEvent<TalexEvents> {
+  /**
+   * Emitted first in the before-quit flow and again from the dev force-exit path; both go
+   * through one shared promise, so handlers run a single time per process.
+   *
+   * Handlers stop native event sources. An FSEvents stream keeps delivering into a threadsafe
+   * function that Node closes during environment teardown, and one late event trips the
+   * `fse_handle_events` CHECK in fsevents and aborts the process. Module unload would close the
+   * streams too, but it runs after every BEFORE_MODULES_UNLOAD listener and is the first thing
+   * the before-quit budget or the dev force-exit cuts off.
+   */
+  name: TalexEvents = TalexEvents.BEFORE_QUIT_STOP_WATCHERS
+
+  constructor() {}
+}
+
 export class OpenExternalUrlEvent implements ITouchEvent<TalexEvents> {
   /**
    * Called before creating a window a new window is requested by the renderer, e.g.
@@ -463,6 +487,19 @@ export class PluginStorageUpdatedEvent implements ITouchEvent<TalexEvents> {
   constructor(pluginName: string, fileName?: string) {
     this.pluginName = pluginName
     this.fileName = fileName
+  }
+}
+
+export class PluginStatusChangedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.PLUGIN_STATUS_CHANGED
+  pluginName: string
+  status: PluginStatus
+  previousStatus: PluginStatus
+
+  constructor(pluginName: string, status: PluginStatus, previousStatus: PluginStatus) {
+    this.pluginName = pluginName
+    this.status = status
+    this.previousStatus = previousStatus
   }
 }
 

@@ -1,13 +1,31 @@
 <script lang="ts" setup>
 import type { CapabilityTestResult } from './types'
+import { TxButton } from '@talex-touch/tuffex/button'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
+import {
+  isUsageLimitFailure,
+  resolveIntelligenceErrorRecovery
+} from '~/modules/intelligence/ai-error-recovery'
 
 const props = defineProps<{
   result: CapabilityTestResult
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const router = useRouter()
+
+/**
+ * A test the usage limit refused says so in the interface's language — that the limit set in
+ * Audit is used up, when it resets, and the way there — instead of main's English reason. Every
+ * other failure keeps the message it came with.
+ */
+const usageLimit = computed(() => {
+  const message = props.result.success ? '' : (props.result.message ?? '')
+  if (!message || !isUsageLimitFailure(message)) return null
+  return resolveIntelligenceErrorRecovery({ error: message }, t, locale.value)
+})
 
 const resultIcon = computed(() => {
   return props.result.success ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-filled'
@@ -45,7 +63,21 @@ const stabilityClass = computed(() => {
       </span>
     </div>
 
-    <div v-if="result.message" class="test-result__section">
+    <div v-if="usageLimit" class="test-result__section" data-testid="capability-test-usage-limit">
+      <p class="test-result__message">
+        {{ usageLimit.detail }}
+      </p>
+      <TxButton
+        v-if="usageLimit.action"
+        class="test-result__action"
+        size="sm"
+        data-testid="capability-test-open-usage-limits"
+        @click="router.push(usageLimit.action.path)"
+      >
+        {{ usageLimit.action.label }}
+      </TxButton>
+    </div>
+    <div v-else-if="result.message" class="test-result__section">
       <p class="test-result__message">
         {{ result.message }}
       </p>
@@ -185,6 +217,10 @@ const stabilityClass = computed(() => {
   font-size: 0.875rem;
   color: var(--tx-text-color-primary);
   line-height: 1.6;
+}
+
+.test-result__action {
+  margin-top: 0.75rem;
 }
 
 .test-result__meta-grid {

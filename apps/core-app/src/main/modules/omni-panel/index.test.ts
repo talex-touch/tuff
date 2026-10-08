@@ -1,8 +1,12 @@
 import type { IFeatureOmniTransfer, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { omniPanelRendererReadyEvent } from '../../../shared/events/omni-panel'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  omniPanelFeatureRefreshEvent,
+  omniPanelRendererReadyEvent,
+  omniPanelShowEvent
+} from '../../../shared/events/omni-panel'
 import { getMainConfig } from '../storage'
 import { OmniPanelModule } from './index'
 
@@ -48,6 +52,17 @@ const {
   saveMainConfigMock: vi.fn()
 }))
 
+const nativeHookState = vi.hoisted(() => ({
+  running: false,
+  start: vi.fn(),
+  stop: vi.fn()
+}))
+
+const shortcutState = vi.hoisted(() => ({
+  effective: null as string | null,
+  listeners: new Set<() => void>()
+}))
+
 vi.mock('node:module', () => ({
   createRequire: vi.fn(() =>
     vi.fn((moduleName: string) => {
@@ -56,8 +71,14 @@ vi.mock('node:module', () => ({
           uIOhook: {
             on: vi.fn(),
             off: vi.fn(),
-            start: vi.fn(),
-            stop: vi.fn(),
+            start: () => {
+              nativeHookState.running = true
+              nativeHookState.start()
+            },
+            stop: () => {
+              nativeHookState.running = false
+              nativeHookState.stop()
+            },
             removeAllListeners: vi.fn()
           },
           UiohookKey: {
@@ -67,7 +88,8 @@ vi.mock('node:module', () => ({
             Ctrl: 29,
             CtrlRight: 3613,
             Meta: 3675,
-            MetaRight: 3676
+            MetaRight: 3676,
+            Escape: 1
           }
         }
       }
@@ -158,6 +180,11 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
 
 vi.mock('../global-shortcon', () => ({
   shortcutModule: {
+    getEffectiveAccelerator: () => shortcutState.effective,
+    onBindingsChanged: (listener: () => void) => {
+      shortcutState.listeners.add(listener)
+      return () => shortcutState.listeners.delete(listener)
+    },
     registerMainShortcut: vi.fn(),
     registerMainTrigger: vi.fn(),
     unregisterMainShortcut: vi.fn(),
@@ -241,6 +268,22 @@ vi.mock('../../utils/logger', () => ({
   }))
 }))
 
+beforeEach(() => {
+  vi.mocked(getMainConfig).mockReturnValue({
+    betaFeatures: { omniPanel: true },
+    localAiCli: { enabled: true }
+  } as never)
+  shortcutState.effective = null
+  shortcutState.listeners.clear()
+  nativeHookState.running = false
+  getTuffTransportMainMock.mockReturnValue({
+    on: vi.fn(() => () => {}),
+    broadcast: vi.fn(),
+    sendTo: vi.fn(),
+    sendToWindow: vi.fn()
+  })
+})
+
 afterEach(() => {
   vi.clearAllMocks()
   touchWindowInstances.length = 0
@@ -264,6 +307,65 @@ function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
     })
   }
 }
+
+describe('omniPanel Beta runtime gates', () => {
+  it.each([undefined, false, 'true', 1])(
+    'does not open a panel or install a native hook for an invalid opt-in (%j)',
+    async (flag) => {
+      vi.mocked(getMainConfig).mockReturnValue({
+        betaFeatures: { omniPanel: flag },
+        omniPanel: { enableShortcut: true, enableMouseLongPress: true }
+      } as never)
+      shortcutState.effective = 'Alt+P'
+      const handlers = new Map<unknown, (payload: unknown) => Promise<void>>()
+      getTuffTransportMainMock.mockReturnValue({
+        on: vi.fn((event: unknown, handler: (payload: unknown) => Promise<void>) => {
+          handlers.set(event, handler)
+          return () => {}
+        }),
+        broadcast: vi.fn(),
+        sendTo: vi.fn(),
+        sendToWindow: vi.fn()
+      } as never)
+      const module = new OmniPanelModule()
+      try {
+        await module.onInit({} as never)
+        await handlers.get(omniPanelShowEvent)!({ captureSelection: false, source: 'shortcut' })
+        expect(touchWindowInstances).toHaveLength(0)
+        expect(nativeHookState.running).toBe(false)
+        expect(nativeHookState.start).not.toHaveBeenCalled()
+      } finally {
+        module.onDestroy({} as never)
+      }
+    }
+  )
+
+  it('stops and restarts the native hold hook as the effective key and feature gate change', async () => {
+    const config = {
+      betaFeatures: { omniPanel: true },
+      omniPanel: { enableShortcut: true, enableMouseLongPress: false }
+    }
+    vi.mocked(getMainConfig).mockReturnValue(config as never)
+    shortcutState.effective = 'Alt+P'
+    const module = new OmniPanelModule()
+    try {
+      await module.onInit({} as never)
+      expect(nativeHookState.running).toBe(true)
+      shortcutState.effective = null
+      for (const listener of [...shortcutState.listeners]) listener()
+      expect(nativeHookState.running).toBe(false)
+      shortcutState.effective = 'Alt+P'
+      for (const listener of [...shortcutState.listeners]) listener()
+      expect(nativeHookState.running).toBe(true)
+      config.betaFeatures.omniPanel = false
+      for (const listener of [...shortcutState.listeners]) listener()
+      expect(nativeHookState.running).toBe(false)
+    } finally {
+      module.onDestroy({} as never)
+    }
+    expect(nativeHookState.running).toBe(false)
+  })
+})
 
 describe('omniPanelModule registry initialization', () => {
   it('initializes builtin feature registry when empty', () => {
@@ -426,72 +528,6 @@ describe('omniPanelModule selection capture diagnostics', () => {
 })
 
 describe('omniPanelModule auto-mount', () => {
-  it('enables auto-mount by default while preserving explicit trigger and auto-mount values', () => {
-    const module = new OmniPanelModule() as unknown as {
-      getSettingsSnapshot: (setting: Record<string, unknown>) => {
-        enableShortcut: boolean
-        enableMouseLongPress: boolean
-        autoMountFirstFeatureOnPluginInstall: boolean
-      }
-    }
-
-    expect(module.getSettingsSnapshot({})).toMatchObject({
-      enableShortcut: false,
-      enableMouseLongPress: false,
-      autoMountFirstFeatureOnPluginInstall: true
-    })
-    expect(
-      module.getSettingsSnapshot({
-        omniPanel: {
-          enableShortcut: true,
-          enableMouseLongPress: true,
-          autoMountFirstFeatureOnPluginInstall: true
-        }
-      })
-    ).toMatchObject({
-      enableShortcut: true,
-      enableMouseLongPress: true,
-      autoMountFirstFeatureOnPluginInstall: true
-    })
-    expect(
-      module.getSettingsSnapshot({
-        omniPanel: {
-          autoMountFirstFeatureOnPluginInstall: false
-        }
-      })
-    ).toMatchObject({
-      autoMountFirstFeatureOnPluginInstall: false
-    })
-  })
-
-  it('preserves explicit false and uses the enabled default when persisting registry settings', () => {
-    const module = new OmniPanelModule() as unknown as {
-      featureRegistry: Array<Record<string, unknown>>
-      persistFeatureRegistry: () => void
-    }
-    module.featureRegistry = []
-
-    vi.mocked(getMainConfig).mockReturnValue({
-      omniPanel: { autoMountFirstFeatureOnPluginInstall: false }
-    } as never)
-    module.persistFeatureRegistry()
-    expect(saveMainConfigMock).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        omniPanel: expect.objectContaining({ autoMountFirstFeatureOnPluginInstall: false })
-      })
-    )
-
-    vi.mocked(getMainConfig).mockReturnValue({} as never)
-    module.persistFeatureRegistry()
-    expect(saveMainConfigMock).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        omniPanel: expect.objectContaining({ autoMountFirstFeatureOnPluginInstall: true })
-      })
-    )
-  })
-
   it('prioritizes declared omniTransfer features and dedupes repeated install events', async () => {
     const module = new OmniPanelModule() as unknown as {
       featureRegistry: Array<Record<string, unknown>>
@@ -583,6 +619,41 @@ describe('omniPanelModule hard-cut transport', () => {
     await module.onInit({} as never)
 
     expect(handlers.has(retiredEventName)).toBe(false)
+  })
+})
+
+describe('omniPanel feature refresh delivery', () => {
+  it('sends the refresh to the panel window, which the main-window broadcast never reaches', async () => {
+    const transport = {
+      on: vi.fn(() => () => {}),
+      broadcast: vi.fn(),
+      broadcastToWindow: vi.fn(),
+      sendTo: vi.fn(),
+      sendToWindow: vi.fn()
+    }
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+    const module = new OmniPanelModule() as unknown as {
+      onInit: (ctx: unknown) => Promise<void>
+      panelWindow: { window: { id: number; isDestroyed: () => boolean } } | null
+      requestFeatureRefresh: (reason: 'local-ai-cli') => void
+    }
+    await module.onInit({} as never)
+    // No panel yet: the init refresh goes nowhere else, and nothing throws.
+    expect(transport.broadcastToWindow).not.toHaveBeenCalled()
+
+    module.panelWindow = { window: { id: 9, isDestroyed: () => false } }
+    module.requestFeatureRefresh('local-ai-cli')
+
+    expect(transport.broadcastToWindow).toHaveBeenCalledExactlyOnceWith(
+      9,
+      omniPanelFeatureRefreshEvent,
+      { reason: 'local-ai-cli', updatedAt: expect.any(Number) }
+    )
+
+    transport.broadcastToWindow.mockClear()
+    module.panelWindow = { window: { id: 9, isDestroyed: () => true } }
+    expect(() => module.requestFeatureRefresh('local-ai-cli')).not.toThrow()
+    expect(transport.broadcastToWindow).not.toHaveBeenCalled()
   })
 })
 

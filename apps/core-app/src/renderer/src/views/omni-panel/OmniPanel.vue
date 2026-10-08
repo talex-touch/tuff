@@ -41,9 +41,13 @@ import { filterOmniPanelFeatures } from './filter-features'
 import { ensureValidFocusIndex, resolveFocusedItem, resolveNextFocusIndex } from './interaction'
 import { resolveOmniPanelSelectionRecovery } from './selection-recovery'
 import { resolveIntelligenceErrorRecovery } from '../../modules/intelligence/ai-error-recovery'
+import {
+  requestUsageLimitsPage,
+  resolveDetachedRecoveryAction
+} from '../../modules/intelligence/usage-limits-door'
 import { createRendererLogger } from '../../utils/renderer-log'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const transport = useTuffTransport()
 const intelligence = useIntelligenceSdk()
 const localAiCli = createLocalAiCliSdk(transport)
@@ -169,10 +173,35 @@ const aiPreviewErrorRecovery = computed(() =>
   aiPreview.value?.status === 'error'
     ? resolveIntelligenceErrorRecovery(
         { error: aiPreview.value.error, errorCode: aiPreview.value.errorCode },
-        t
+        t,
+        locale.value
       )
     : null
 )
+
+/**
+ * The way out the recovery names, when this window can take it: Audit lives in the main window,
+ * which main reveals and routes — the panel has its own renderer.
+ */
+const aiPreviewRecoveryAction = computed(() =>
+  resolveDetachedRecoveryAction(aiPreviewErrorRecovery.value)
+)
+const openingAiPreviewRecovery = ref(false)
+
+async function openAiPreviewRecovery(): Promise<void> {
+  if (!aiPreviewRecoveryAction.value || openingAiPreviewRecovery.value) return
+  openingAiPreviewRecovery.value = true
+  try {
+    if (!(await requestUsageLimitsPage(transport))) {
+      toast.error(t('corebox.omniPanel.openUsageLimitsFailed'))
+      return
+    }
+    // The panel floats over the app it was opened from; it steps aside for the page it opened.
+    await closePanel()
+  } finally {
+    openingAiPreviewRecovery.value = false
+  }
+}
 
 watch(
   () => filteredFeatures.value.length,
@@ -192,29 +221,39 @@ async function closePanel(): Promise<void> {
   previousFocusedElement?.focus?.()
 }
 
+/** The 「交给本机代理」 action this window adds to main's feature list. */
+function localAiActionFeature(): OmniPanelFeatureItemPayload {
+  const now = Date.now()
+  return {
+    id: LOCAL_AI_CLI_FEATURE_ID,
+    source: 'builtin',
+    target: 'system',
+    title: t('localAiCliPanel.actionTitle'),
+    subtitle: t('localAiCliPanel.actionSubtitle'),
+    icon: { type: 'class', value: 'i-ri-terminal-box-line' },
+    enabled: true,
+    order: -1,
+    updatedAt: now,
+    createdAt: now
+  }
+}
+
+/** Offered once the user has turned local agents on in Settings; off macOS, never. */
+async function isLocalAiActionOffered(): Promise<boolean> {
+  const localStatus = await localAiCli.getStatus()
+  return localStatus.betaAvailable && localStatus.enabled
+}
+
 async function loadFeatures(): Promise<void> {
-  loading.value = true
+  // Only the first load has nothing to show meanwhile: a refresh from main keeps the current list
+  // on screen until the new one arrives, rather than flashing the loading state while open.
+  loading.value = !hasLoadedFeatures.value
   try {
     const response = await transport.send(omniPanelFeatureListEvent)
     const payload = response as OmniPanelFeatureListResponse
     const nextFeatures = Array.isArray(payload?.features) ? [...payload.features] : []
     try {
-      const localStatus = await localAiCli.getStatus()
-      if (localStatus.betaAvailable) {
-        const now = Date.now()
-        nextFeatures.push({
-          id: LOCAL_AI_CLI_FEATURE_ID,
-          source: 'builtin',
-          target: 'system',
-          title: t('localAiCliPanel.actionTitle'),
-          subtitle: t('localAiCliPanel.actionSubtitle'),
-          icon: { type: 'class', value: 'i-ri-terminal-box-line' },
-          enabled: true,
-          order: -1,
-          updatedAt: now,
-          createdAt: now
-        })
-      }
+      if (await isLocalAiActionOffered()) nextFeatures.push(localAiActionFeature())
     } catch (error) {
       omniPanelLog.debug('Local AI CLI action is unavailable', error)
     }
@@ -227,6 +266,27 @@ async function loadFeatures(): Promise<void> {
     loading.value = false
     hasLoadedFeatures.value = true
   }
+}
+
+/**
+ * Re-reads whether the local agent action is offered as soon as a show pushes its context, adding
+ * or removing only that one action; main's feature refresh, which reaches this window too, then
+ * reads the whole list again.
+ */
+async function syncLocalAiAction(): Promise<void> {
+  if (!hasLoadedFeatures.value) return
+  let offered = false
+  try {
+    offered = await isLocalAiActionOffered()
+  } catch (error) {
+    omniPanelLog.debug('Local AI CLI action is unavailable', error)
+  }
+  const present = features.value.some((item) => item.id === LOCAL_AI_CLI_FEATURE_ID)
+  if (offered === present) return
+  features.value = offered
+    ? [...features.value, localAiActionFeature()]
+    : features.value.filter((item) => item.id !== LOCAL_AI_CLI_FEATURE_ID)
+  focusedIndex.value = ensureValidFocusIndex(focusedIndex.value, features.value.length)
 }
 
 function resolveExecuteErrorMessage(response?: OmniPanelFeatureExecuteResponse): string {
@@ -349,7 +409,9 @@ async function executeAiFeature(
       errorCode: normalizedError.errorCode
     }
     aiClipboardError.value = ''
-    toast.error(normalizedError.message)
+    // The recovery's own title, not the failure's text: main now says which code and why, in
+    // English, and the preview card under the toast already shows the reason and the way out.
+    toast.error(aiPreviewErrorRecovery.value?.title ?? normalizedError.message)
   } finally {
     executingId.value = null
   }
@@ -500,6 +562,7 @@ async function handleKeydown(event: KeyboardEvent): Promise<void> {
 
 const disposeContext = transport.on(omniPanelContextEvent, (payload) => {
   handleContext(payload as OmniPanelContextPayload)
+  void syncLocalAiAction()
 })
 
 const disposeFeatureRefresh = transport.on(omniPanelFeatureRefreshEvent, async () => {
@@ -600,6 +663,7 @@ onBeforeUnmount(() => {
         <span>{{ aiPreviewErrorRecovery?.detail }}</span>
         <small
           v-if="
+            !aiPreviewRecoveryAction &&
             aiPreviewErrorRecovery?.code !== 'unknown' &&
             aiPreview.error &&
             aiPreview.error !== aiPreviewErrorRecovery?.detail
@@ -607,6 +671,16 @@ onBeforeUnmount(() => {
         >
           {{ aiPreview.error }}
         </small>
+        <TxButton
+          v-if="aiPreviewRecoveryAction"
+          size="sm"
+          class="OmniPanelAiPreview__recovery"
+          :loading="openingAiPreviewRecovery"
+          data-testid="omni-panel-ai-recovery-action"
+          @click="openAiPreviewRecovery"
+        >
+          {{ aiPreviewRecoveryAction.label }}
+        </TxButton>
       </div>
       <pre v-else class="OmniPanelAiPreview__result">{{ aiPreview.resultText }}</pre>
       <div v-if="aiClipboardError" class="OmniPanelAiPreview__actionError">
@@ -843,6 +917,12 @@ onBeforeUnmount(() => {
   color: var(--tx-text-color-secondary);
   font-size: 9px;
   word-break: break-word;
+}
+
+/* The way out, under the reason it answers. */
+.OmniPanelAiPreview__recovery {
+  align-self: flex-start;
+  margin-top: 2px;
 }
 
 .OmniPanelAiPreview__actionError {

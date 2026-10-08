@@ -1,0 +1,6 @@
+{
+  "caseBase": "valid-final-contract",
+  "trackedRemove": [
+    "docs/engineering/workflow/retired-task-index.json"
+  ]
+}

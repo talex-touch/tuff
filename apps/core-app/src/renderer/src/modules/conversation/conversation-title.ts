@@ -6,10 +6,16 @@ import type {
 import { INTELLIGENCE_CONVERSATION_TITLE_OPERATION } from '@talex-touch/utils/types/intelligence'
 
 /**
+ * Stable usage-ledger caller of the title request (audit rebuild design §1.4). Safe to send: the
+ * request carries no Home surface marker, so the Pi native-session guard does not apply.
+ */
+const CONVERSATION_TITLE_CALLER = 'core.home.conversation-title'
+
+/**
  * Generates the short conversation title HomePage's working title stands in for (#969).
  *
- * The working title is the user's opening message verbatim, which a long prompt turns into a
- * top-bar and sidebar full of one paragraph. After the first turn settles, one low-stakes model
+ * The working title is a bounded prefix of the user's opening message. After the first turn
+ * settles, one low-stakes model
  * call summarises the exchange into a handful of characters; every failure path falls back to the
  * working title by returning null, silently — a conversation must never fail, stall or toast over
  * its own label.
@@ -51,8 +57,19 @@ export interface TitlePromptStrings {
 }
 
 function clip(value: string, max: number): string {
-  const points = [...value]
-  return points.length <= max ? value : `${points.slice(0, max).join('')}…`
+  let end = 0
+  let count = 0
+  for (const point of value) {
+    if (count === max) return `${value.slice(0, end)}…`
+    end += point.length
+    count += 1
+  }
+  return value
+}
+
+/** A display label only: the full first message remains the request and history authority. */
+export function createWorkingConversationTitle(text: string): string {
+  return clip(text.trim(), CONVERSATION_TITLE_MAX_CODEPOINTS)
 }
 
 /**
@@ -139,10 +156,8 @@ export function findTitleExchange(
 /**
  * The stored title, when it is a real one.
  *
- * `history.load` hands back whatever `persist` wrote. Before a title was ever generated that is the
- * working title — the opening message verbatim — and treating it as custom would freeze the label
- * and block generation forever. Only a stored title that *differs* from the opening message is
- * information.
+ * Before a title is generated, storage carries the bounded working title (or the full opening
+ * message on older installs). Neither is a custom label that should block later generation.
  */
 export function deriveRestoredTitle(
   storedTitle: string | null | undefined,
@@ -150,7 +165,11 @@ export function deriveRestoredTitle(
 ): string | null {
   const stored = storedTitle?.trim()
   if (!stored) return null
-  if (stored === firstUserContent?.trim()) return null
+  if (
+    stored === firstUserContent?.trim() ||
+    (firstUserContent && stored === createWorkingConversationTitle(firstUserContent))
+  )
+    return null
   return stored
 }
 
@@ -182,7 +201,10 @@ export async function generateConversationTitle(
       },
       {
         timeout: 10_000,
-        metadata: { operation: INTELLIGENCE_CONVERSATION_TITLE_OPERATION }
+        metadata: {
+          caller: CONVERSATION_TITLE_CALLER,
+          operation: INTELLIGENCE_CONVERSATION_TITLE_OPERATION
+        }
       }
     )
     return normalizeGeneratedTitle(result?.result ?? null)

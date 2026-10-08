@@ -2,21 +2,38 @@ export default {
     nexus: {
       hero: {
         eyebrow: 'Local-first. Private by design.',
-        titlePrefix: 'Your',
-        titleSubject: 'OS',
-        titleLead: 'Your OS,',
-        titleAccent: 'programmable.',
-        title: 'Your OS, programmable.',
+        titlePrefix: '',
+        titleSubject: 'Think it.',
+        titleLead: 'Think it.',
+        titleAccent: 'There it is.',
+        title: 'Think it. There it is.',
         copy: 'Tuff is the public entry for its own ecosystem: trusted releases, plugins, and developer docs while the desktop app stays light, fast, and extensible.',
-        subtitle: 'One entry point to search files, launch apps, and drive agents.',
         primaryCta: 'Get the current build',
         getPlatformVersion: 'Get {platform} version',
         secondaryCta: 'View developer docs',
         openSource: 'Free & open source',
-        hints: {
-          nav: 'navigate',
-          open: 'open',
-          actions: 'actions',
+        corebox: {
+          placeholder: 'Everything in Tuff.',
+          types: {
+            app: 'Application',
+            file: 'File',
+            system: 'System',
+          },
+          hints: {
+            open: 'Open',
+            execute: 'Execute',
+            actions: 'Actions',
+            quickRun: 'Quick Run',
+          },
+          scenes: {
+            fileSub: 'png • 2.1 MB • 2026/10/6 14:20 • Downloads',
+            webSearch: 'Web search',
+            webSearchSub: 'Search what you typed with your default engine',
+            translate: 'Translate',
+            translateSub: 'Translate the selected text or the clipboard',
+            translateMulti: 'Multi-source translate',
+            translateMultiSub: 'Translate with several services at once',
+          },
         },
         releases: {
           latest: 'Latest',
@@ -42,14 +59,6 @@ export default {
             stability: 'Stability is not fully verified; not recommended for production.',
             channel: 'For long-term stability, choose the stable Release channel.',
           },
-        },
-        results: {
-          app: 'Application',
-          web: 'Open in browser',
-          recent: 'Recent',
-          open: 'Open',
-          go: 'Go',
-          recentAction: 'Recent',
         },
       },
       product: {
@@ -274,10 +283,15 @@ export default {
         },
       },
     },
+      rail: {
+        label: 'Page sections',
+      },
       plugins: {
-        eyebrow: 'Plugins Center',
-        headline: 'Extend Tuff to your tools.',
-        subheadline: 'Connect Tuff to your tools and extend their capabilities.',
+        eyebrow: 'Plugins',
+        headline: 'One plugin, one more trick.',
+        subheadline: 'Pick a few from the store. They work the moment they are in.',
+        prev: 'Previous',
+        next: 'Next',
         extensions: {
           notion: {
             name: 'Notion',
@@ -302,6 +316,42 @@ export default {
           spotify: {
             name: 'Spotify',
             description: 'Score your focus sessions with adaptive soundtracks.',
+          },
+          json: {
+            name: 'JSON Formatter',
+            description: 'Messy JSON, tidied in one go.',
+            summon: 'json',
+            label: 'Line drawing of three stacked sieves; the one the pointer picks rises',
+          },
+          browser: {
+            name: 'Browser Open',
+            description: 'Paste a link, press Enter.',
+            summon: 'url',
+            label: 'Line drawing of a router whose antennas lean toward the pointer',
+          },
+          vscodeProjects: {
+            name: 'VS Code Projects',
+            description: 'Recent projects, one Enter away.',
+            summon: 'vscode',
+            label: 'Line drawing of a laptop whose lid follows the pointer',
+          },
+          image: {
+            name: 'Image',
+            description: 'Resize, compress, convert.',
+            summon: 'image',
+            label: 'Line drawing of a loupe the pointer drags across a sheet',
+          },
+          hosts: {
+            name: 'Hosts',
+            description: 'See the change before it lands.',
+            summon: 'hosts',
+            label: 'Line drawing of a padlock whose shackle springs open as the pointer nears',
+          },
+          aiSessions: {
+            name: 'AI Sessions',
+            description: 'Search local AI sessions, copy a redacted reference.',
+            summon: 'ai sessions',
+            label: 'Line drawing of a commit graph; the node under the pointer rises',
           },
         },
       },
@@ -664,27 +714,37 @@ export default {
       },
       faq: {
         eyebrow: 'FAQ',
-        headline: 'Questions, answered.',
+        kicker: 'FAQ',
+        headline: 'You might be wondering',
+        aside: {
+          title: 'Still stuck?',
+          docs: 'Read the docs',
+          github: 'Ask on GitHub',
+        },
         items: {
+          platforms: {
+            question: 'Which systems does it run on?',
+            answer: 'macOS (Apple silicon and Intel), Windows (x64), and Linux all have installers. On Linux, the .deb is the one to get.',
+          },
           access: {
-            question: 'How do I get access to the beta?',
-            answer: 'Join the Pioneer waitlist. We approve batches weekly and set up onboarding calls for teams.',
+            question: 'How do I get the beta?',
+            answer: 'Download a build marked beta from the Updates page or GitHub Releases; it stays on beta updates from then on. To go back to stable, switch in Settings → About → Update channel.',
           },
           privacy: {
-            question: 'How does Tuff handle my data?',
-            answer: 'Most processing runs locally. Cloud sync is encrypted with keys you control and optional by workspace.',
+            question: 'Where does my data live?',
+            answer: 'On your own computer, with secrets kept in the system keychain. Signing in turns sync on by default, and what syncs, such as settings and AI setup, is encrypted on your machine before upload. Crash reports and usage stats are on by default; both can be turned off in Settings.',
           },
           build: {
-            question: 'Do I need to code to build automations?',
-            answer: 'Not at all. FlowScript offers visual builders, while developers can drop down to code when needed.',
+            question: 'Can I automate without writing code?',
+            answer: 'Up to a point. Everyday automation comes from plugins and AI commands; the visual workflow builder is still in beta and not open by default.',
           },
           migration: {
-            question: 'Can we migrate our existing shortcuts?',
-            answer: 'Yes. Import from Raycast, Alfred, and custom scripts. Tuff converts them into typed commands.',
+            question: 'Can I bring my Raycast or Alfred setup?',
+            answer: 'There is no importer yet. Apps and files need no moving: they show up once Tuff is installed. Text you reuse can go into the snippet library.',
           },
           pricing: {
-            question: 'Will pricing stay free forever?',
-            answer: 'We will introduce paid tiers later, but Pioneer teams keep everything free through general availability.',
+            question: 'Does it cost anything?',
+            answer: 'It is free right now, and Tuff itself is open source. AI hosted by Tuff uses credits, with a free allowance every month; paid tiers may come after the stable release.',
           },
         },
       },
@@ -718,6 +778,93 @@ export default {
             copy: 'Skills, Computer Use, MiniApp, ACP, automation, and sandboxing are being merged in.',
           },
         },
+        copied: 'Copied',
+      },
+      showcase: {
+        eyebrow: 'Features',
+        headlineLead: 'One box. ',
+        headlineAccent: 'A lot done.',
+        subheadline: 'All of this ships with Tuff. No extra plugins to hunt for.',
+        items: {
+          launch: {
+            title: 'Open apps',
+            summon: '⌥ Space',
+            copy: 'Press ⌥Space and type two or three letters. Pinyin and abbreviations match too.',
+            label: 'Line drawing of a keyboard whose key under the pointer sinks',
+          },
+          files: {
+            title: 'Find files',
+            summon: 'report.pdf',
+            copy: 'Everything on Windows, Spotlight plus a local index on macOS. Results show up halfway through the name.',
+            label: 'Line drawing of a three-drawer cabinet whose picked drawer slides out',
+          },
+          clipboard: {
+            title: 'Clipboard history',
+            summon: 'clipboard-history',
+            copy: 'Text, images, and files stay, along with the app they were copied from.',
+            label: 'Line drawing of a tray of cards; the card under the pointer stands up',
+          },
+          translate: {
+            title: 'Translate',
+            summon: 'fy',
+            copy: 'Type fy to translate. fy-multi lines up Google, Bing, DeepL, and more side by side.',
+            label: 'Line drawing of a dish antenna that turns toward the pointer',
+          },
+          quickops: {
+            title: 'QuickOps',
+            summon: 'ops',
+            copy: 'Timers, pomodoro, keep-awake, port and IP checks, one command each.',
+            label: 'Line drawing of a dot-matrix display that glows where the pointer passes',
+          },
+          snippets: {
+            title: 'Snippets',
+            summon: 'snippet',
+            copy: 'Save text, code, and prompts as snippets, and search them up when you need them.',
+            label: 'Line drawing of a rack of blades; the ones near the pointer slide out',
+          },
+        },
+      },
+      designSystem: {
+        eyebrow: 'Design system',
+        kicker: 'TUFFEX DESIGN',
+        headlineLead: 'Design, ',
+        headlineAccent: 'by the book.',
+        figure: {
+          index: 'FIG. 01',
+          title: 'Layers',
+          label: 'Line drawing of an app window taken apart into four layers: surface, sidebar, card, and popover',
+        },
+        tokens: {
+          type: {
+            title: 'Type',
+            note: 'Inter · PingFang SC · weight 500',
+          },
+          color: {
+            title: 'Color',
+            note: 'Brand and semantic · dark values',
+          },
+          curve: {
+            title: 'Continuous curvature',
+            g1: 'G1 arc',
+            g2: 'G2 smooth',
+            note: 'Tuffex squircles keep curvature continuous: corners ease in from the straight edge and never snap. Move across to compare.',
+          },
+          motion: {
+            title: 'Motion',
+            note: '0.2s / 0.3s',
+            strong: 'Strong ease-out',
+            spring: 'Spring',
+          },
+        },
+        stats: {
+          title: 'Scale',
+          components: 'Components',
+          docs: 'Doc pages',
+          themes: 'Themes',
+          note: 'Docs in EN and ZH · light / dark / high contrast',
+        },
+        cta: 'Open Tuffex Design',
+        copyCommand: 'Copy install command',
         copied: 'Copied',
       },
       openFoundation: {

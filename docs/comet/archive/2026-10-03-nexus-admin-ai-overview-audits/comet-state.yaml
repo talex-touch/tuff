@@ -1,0 +1,851 @@
+schema: comet.native.v4
+name: nexus-admin-ai-overview-audits
+language: zh-CN
+phase: archive
+status: done
+state_version: 10
+brief: brief.md
+shape_confirmation_hash: 3e8da9cd182b272a2d57a5d64e05bb0cc930a7f184ecd24ad0e787adecab8535
+spec_changes:
+  - capability: nexus-admin-ai-services
+    operation: create
+    source: specs/nexus-admin-ai-services/spec.md
+  - capability: nexus-admin-resource
+    operation: create
+    source: specs/nexus-admin-resource/spec.md
+workspace:
+  isolation: worktree
+  change_branch: task/feat/nexus-admin-ai-overview-audits
+  target_branch: stage
+  finish: pull-request
+loop:
+  stage: done
+  goal_cycle: 1
+  iteration: 1
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: A1：中文进入 AI 概览，页面标题为「AI 概览」，与侧栏一致；英文为「AI
+      Overview」。页面正文里不再出现「智能概览」二级标题和它的副标题，也不再出现手写的跳动占位。
+    result: passed
+    reason:
+      text: intelligence-overview.vue:64 titles AdminPageShell with
+        dashboard.sections.menu.intelligenceOverview, the same key the rail uses
+        (AdminNav.vue:142; zh 「AI 概览」 dashboard.ts:769, en 「AI Overview」 :774).
+        git diff stage removes the ClientOnly animate-pulse fallback and the
+        panel h2/subtitle (overview.title/subtitle keys deleted). Screenshots
+        overview-{zh,en}-{light,dark}-{1280,1920}.png show the title equal to
+        the rail and no 「智能概览」 heading or pulse placeholder.
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: "A2：概览有四张指标卡：样本请求数、成功率、Token 消耗、平均延迟。 - 接口返回 `totalRequests: 1234,
+      successRate: 87, totalTokens: 1234567, avgLatency: 1850, sampleSize: 200`
+      时，四张卡依次显示「1,234」「87%」「1,234,567」「1,850 ms」。 - 「基于最近 200 条审计」只出现一次。 - 样本为 0
+      时，平均延迟显示「—」。"
+    result: passed
+    reason:
+      text: buildOverviewStatItems (admin-intelligence.ts:137-164) formats with
+        number, percent(rate/100) and latencyMs, and shows ADMIN_FORMAT_EMPTY
+        when sampleSize is 0. The sample hint appears only as the metrics
+        AdminSection description (intelligence-overview.vue:102,
+        overviewSampleHint :185-193). Tests 'formats the four cards as the spec
+        example says' (1,234 / 87% / 1,234,567 / 1,850 ms in en and zh), 'shows
+        — for the average latency when nothing was sampled' and 'names the
+        sample size once, in the block description, with grouping' pass
+        (re-run). Screenshots show 44 / 70% / 0 / 2,288 ms with a single 「基于最近
+        44 条审计数据」.
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: A3：概览的加载、刷新、失败三种状态可以区分： - 首次加载时，指标卡和列表显示同尺寸骨架； - 点「刷新」时，已有内容保留在屏幕上； -
+      overview 请求失败且屏幕上还没有数据时，显示本地化失败文案和「重试」，文案不含 `/api/` 路径，点「重试」成功后恢复内容； -
+      已有数据时刷新失败，保留原有内容，同时显示失败提示和「重试」。
+    result: passed
+    reason:
+      text: "useAdminResource splits loading from refreshing
+        (useAdminResource.ts:93-94). First load: AdminStatGrid draws 4
+        placeholders of TxStatCard's 112px box (AdminStatGrid.vue:26,70-80 vs
+        TxStatCard.vue:334), and IntelligenceTopList draws placeholder rows with
+        the real row class (IntelligenceTopList.vue:32-41). A refresh keeps
+        content because the grid's loading prop is bound to overview.loading
+        only (intelligence-overview.vue:103). resolveOverviewFailure
+        (admin-intelligence.ts:176-182) separates the first-load TxErrorState +
+        Retry (:77-85) from the refresh TxAlert + Retry over kept data
+        (:88-100). Tests 'tells a failed first load from a failed refresh,
+        through their retries' and 'shows the localized fallback for a transport
+        failure, never the API path' pass. overview-first-load-failure.png shows
+        概览加载失败 / 加载 AI 概览失败。/ 重试 with no /api/; overview-refresh-failure.png
+        shows the kept data under the notice. The skeleton was judged from CSS
+        and SSR tests because there is no capture."
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: A4：概览有四个 Top 列表：模型分布、服务渠道 Top、IP 热点、国家 / 地区。 - 每行显示名称和带千分位的次数； -
+      列表为空时显示「暂无数据」，与加载失败的提示不同； - 首次加载时显示行状骨架。
+    result: passed
+    reason:
+      text: buildOverviewTopLists (admin-intelligence.ts:228-260) builds models,
+        providers (new), ips and countries with format.number counts. Rows
+        truncate with the full name as title (IntelligenceTopList.vue:49-54). An
+        empty list shows TxEmptyState 「暂无数据」 (:42-48), while a load failure
+        shows the page-level TxErrorState with different text and style.
+        Placeholder rows show on first load. Tests 'builds the four lists in
+        order, the providers list included, with grouped counts' and 'leaves an
+        empty list empty…' pass, as do the component tests for skeleton rows and
+        the empty state. Screenshots show four lists, with 暂无数据 / No data for IP
+        and country.
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: A5：「用户消耗查询」： - 输入框有可见标签「用户 ID」，并通过 `for` 关联； - 输入为空时「查询」不可点；按 Enter
+      与点「查询」效果相同； - 有记录时显示请求数、Token 消耗、成功率、最近请求时间（`YYYY-MM-DD
+      HH:mm`，悬停可看完整时间）四张卡和模型分布； - 无记录时显示「该用户暂无 AI 调用记录」； - 失败时显示本地化文案，不含 ofetch
+      的 `[GET] "/api/…"` 原文，也不含服务端英文原文； - 快速连续查询两个用户，只显示后一次的结果。
+    result: passed
+    reason:
+      text: "IntelligenceUsageLookup.vue:67-83 is one form. AdminFormField renders
+        label for=useId, and TuffInput forwards id to the native input
+        (TxInput.vue inheritAttrs:false + v-bind inputAttrs). The button is
+        type=submit and disabled while the trimmed input is empty, so Enter
+        (implicit submit) and a click take the same path. useAdminResource runs
+        with immediate:false and request generations (:31-35).
+        fetchIntelligenceUsage (admin-intelligence.ts:293-314) rethrows
+        transport and ok:false failures without server text, so only the
+        localized fallback shows. resolveUsageLookupView covers the empty,
+        result and error states. Passing tests: component 'labels the user id
+        field through for/id, and cannot be sent while it is empty'; page tests
+        for ok:false, transport and H3 403 messages never shown, 'shows the
+        later of two quick lookups', the no-record state, and 'formats the four
+        cards, with the full time behind the last request' (title =
+        dateTimeTitle). The browser record covers for/id, disabled-when-empty,
+        Enter showing 4 / 0 / 75% / 2026-09-29 19:26 plus models, no-record, and
+        a localized failure on a blocked endpoint. overview-usage-result.png
+        shows the submitted id; the card values come from the recorded
+        measurement."
+      truncated: false
+  - id: A6
+    source: brief.md
+    text: A6：手动 IP 封禁区块行为不变： - `IntelligenceOverviewPanel.vue` 中属于该区块的代码行与 stage
+      上逐字节一致； - 风控开关关闭时仍显示「当前环境未启用风险控制能力」提示； - 区块仍位于概览内容之后。
+    result: passed
+    reason:
+      text: git diff stage --numstat on IntelligenceOverviewPanel.vue gives 0 added
+        and 288 deleted lines. The deleted hunks are only the file doc comment,
+        the overview/usage types, state and fetchers, formatAuditTime, the
+        overview onMounted branch and the overview/usage template. The IP-ban
+        state, ipBanAuthHeaders, isFeatureNotFoundError, the four request
+        functions, the IP-ban onMounted branch, the step-up input, the form, the
+        list and the unavailable notice remain (current lines 19-163 and
+        174-263), and every retained import is still used. The page renders the
+        panel last (intelligence-overview.vue:122). overview-*-1920.png and
+        overview-first-load-failure.png show 「当前环境未启用风险控制能力…」 after the overview
+        content.
+      truncated: false
+  - id: A7
+    source: brief.md
+    text: A7：中文进入 AI 调用审计，页面标题为「AI 调用审计」，与侧栏一致。 - 表格列依次为时间、服务渠道 / 模型、结果、延迟、接口、Trace；
+      - 时间为 `YYYY-MM-DD HH:mm`，悬停显示完整本地化时间；延迟为「1,850 ms」形式； - 结果列显示成功或失败徽标，并附
+      HTTP 状态码； - 1280px 视口下表格不横向溢出，单元格不折行，过长内容以省略号截断。
+    result: passed
+    reason:
+      text: intelligence-audits.vue:95 uses
+        dashboard.sections.menu.intelligenceAudits, the same key as
+        AdminNav.vue:152. Columns (:58-65) are time 148, provider/model auto,
+        result 120, latency 96, endpoint 200, trace 160 under table-layout
+        fixed. Time is tableDateTime with a dateTimeTitle tooltip (:147);
+        latency uses formatIntelligenceLatency ('1,850 ms'); the result is a
+        TxStatusBadge 「成功/失败 · code」 or 'OK/Fail · code', with the words in
+        aria-label/title. Cells are nowrap with ellipsis (:249-255).
+        audits-*-1280/1920.png show title = rail, single-line cells and
+        ellipses. The pre-fix en 'Failed · 503' badge overhung
+        (audits-result-cell-en.png). After the fix the recorded 1280 measurement
+        is 'Fail · 503' 105px with 3px spare, consistent with the screenshot
+        geometry, and zh is 100px (audits-zh-light-1280-after-fail-label.png).
+        Test 'puts the result in words beside its code on the badge' passes.
+      truncated: false
+  - id: A8
+    source: brief.md
+    text: A8：AI 调用审计的筛选与分页： - 筛选栏有「用户 ID」「服务渠道 ID」两个带标签的输入，输入停止约 300ms 后生效，并回到第 1 页；
+      - 每页条数可选 20 / 50 / 100； - 页码、每页条数和两个筛选都写进
+      URL，带这些参数打开链接时恢复同一页同一筛选，取默认值的参数不写进 URL； - 刷新时保留现有行； -
+      筛选为空与「没有任何记录」显示不同的空态。
+    result: passed
+    reason:
+      text: "Both filters are labelled AdminFilterFields with for/id
+        (intelligence-audits.vue:104-119). createIntelligenceAuditListOptions
+        (admin-intelligence.ts:440-458) feeds useAdminList with debounceKeys
+        userId/providerId (300 ms), page sizes 20/50/100, and defaults omitted
+        from the URL. Passing tests: 'applies a typed user id 300 ms after the
+        last keystroke, back on page 1', 'debounces the provider id the same
+        way', 'offers 20, 50 and 100 rows a page, and nothing else', 'writes
+        only what differs from the defaults into the URL', 'restores page, page
+        size and both filters from a shared link', the 'nothing matches' vs
+        'nothing yet' test, and the kit test 'keeps the rows during a refresh
+        instead of going back to the skeleton'. The browser record shows no
+        change at 150 ms, then the filter applied with ?userId=, ?page=2
+        working, a deep link restoring the input, and ?limit=50 showing 44 rows.
+        audits-filtered-empty.png shows 没有符合筛选的记录 + 清空筛选. Deviation (a) is
+        behaviour-equivalent."
+      truncated: false
+  - id: A9
+    source: brief.md
+    text: A9：点审计表格的任意一行，或聚焦行后按 Enter，打开只读详情抽屉，内容包括： - 完整时间； - 服务渠道名称、类型与 ID； - 模型、用户
+      ID、完整接口、状态码与结果、延迟、Trace ID； - 错误信息（有则显示）； -
+      metadata：逐项以「名称—值」展示，嵌套值也格式化，不出现整段 JSON 字符串； - 响应片段（有则以等宽块展示）。 - 抽屉可用 Esc
+      或关闭按钮关闭。
+    result: passed
+    reason:
+      text: clickable-rows plus @row-click (intelligence-audits.vue:139,144).
+        TxDataTable makes rows focusable, and Enter/Space emit rowClick
+        (TxDataTable.vue:433-440). The 520px TxDrawer with TxDescriptions
+        (:176-241) lists the full time, provider name, type label + raw type,
+        provider ID, model, user ID, full endpoint, result badge + HTTP status,
+        latency, trace ID, and the error when present. Metadata is itemised by
+        buildAuditMetadataEntries (admin-intelligence.ts:512-570), and the
+        snippet is a monospace pre. TxDrawer closes on Escape, mask or close
+        button by default. Tests 'lists every metadata field as label and value,
+        never as a JSON string' and 'keeps the response snippet for its own
+        monospace block' pass. audits-detail-drawer.png shows every field and
+        itemised metadata; audits-after-esc.png shows the drawer closed with the
+        row still focused.
+      truncated: false
+  - id: A10
+    source: brief.md
+    text: A10：服务渠道类型在中英文下都有可读名称，包括此前缺失的
+      `dashscope`、`tencent-cloud`、`exchange-rate`，不再显示 `intelligence.types.*`
+      原始键或空白；未知类型回落显示原值。
+    result: passed
+    reason:
+      text: "buildIntelligenceProviderTypeLabels (admin-intelligence.ts:33-45) names
+        the six IntelligenceProviderTypes plus dashscope, tencent-cloud and
+        exchange-rate, which covers all of PROVIDER_REGISTRY_VENDORS
+        (providerRegistryStore.ts:19). zh: 百炼 / DashScope, 腾讯云, 汇率; en:
+        DashScope / Model Studio, Tencent Cloud, Exchange rate. An unknown type
+        shows its raw value and a blank one shows — (:48-53). The labels are
+        used in the list's provider column, the drawer's type row and the
+        providers Top list. Tests 'names every provider type in both languages,
+        the three registry vendors included', 'shows an unknown type as itself,
+        and a missing one as a dash' and 'reads a provider type under its name
+        in the providers list' pass."
+      truncated: false
+  - id: A11
+    source: brief.md
+    text: "A11：`useAdminResource` 满足其规格： - 首次加载期间 `loading` 为真； - 刷新期间 `refreshing`
+      为真且保留 `data`； - 失败时 `error` 为本地化文案而非传输层原文； - 较新的调用胜出，较旧响应（含失败）不覆盖； -
+      `immediate: false` 时不自动请求。 - 有单测覆盖，并已登记在 `component-guidelines.md`
+      的后台组合件条目中。"
+    result: passed
+    reason:
+      text: "useAdminResource.ts:5-98 implements the spec interface:
+        loading/refreshing are derived from pending and data, failures go
+        through resolveAdminErrorMessage(cause, errorFallback()), each call is a
+        generation and only the newest writes, disposal drops in-flight results,
+        and immediate:false waits for refresh(). useAdminResource.test.ts has 13
+        tests covering every scenario, re-run green. The composable is
+        registered in the console-kit entry of
+        .trellis/spec/frontend/component-guidelines.md:73."
+      truncated: false
+  - id: A12
+    source: brief.md
+    text: A12：全量门禁通过： - `apps/nexus` 全量 vitest、Nexus typecheck、改动文件的包内 ESLint、`git
+      diff --check`； - i18n 守卫（键存在、后台覆盖）把新文件纳入扫描并通过； - 两页在真实浏览器（ego）中按 1280 /
+      1920 × 亮 / 暗 × 中 / 英各验一遍，截图存档，与基线对照：双重标题、英文日期、未格式化数字均已消失。
+    result: passed
+    reason:
+      text: "Runtime checks nexus-vitest-full, nexus-typecheck, nexus-eslint-changed
+        (all 17 changed ts/vue files) and git-diff-check passed. The untracked
+        files have no trailing whitespace and end with a newline. The i18n
+        guards now scan the new files: ADMIN_SURFACE adds
+        utils/admin-intelligence.ts and already covers pages/admin and
+        components/dashboard/intelligence, and i18n-key-existence scans
+        pages/admin and components/dashboard. Re-runs: the 6 changed test files
+        89/89 and test/guards 55/55. All 16 ego screenshots (2 pages × 1280/1920
+        × light/dark × zh/en) exist. Compared with the stage source (titles
+        tabs.overview/tabs.audits plus a panel h2, toLocaleString dates, raw {{
+        latency }}ms and counts), the double title, English dates and
+        unformatted numbers are all gone. The en audits shots predate the 'Fail'
+        label fix, which is covered by the recorded measurement."
+      truncated: false
+  - id: A13
+    source: specs/nexus-admin-ai-services/spec.md
+    text: AI 概览标题与侧栏一致 - WHEN 管理员以中文打开 `/admin/intelligence-overview` - THEN
+      页面标题为「AI 概览」，与侧栏选中项文字相同 - AND 正文中没有「智能概览」二级标题及其副标题，也没有 `ClientOnly`
+      的手写跳动占位 验收：A1
+    result: passed
+    reason:
+      text: "Same evidence as A1: intelligence-overview.vue:64 uses the rail key
+        dashboard.sections.menu.intelligenceOverview; the ClientOnly fallback
+        and the 「智能概览」 h2/subtitle were removed (git diff stage);
+        overview-zh-*-*.png show 「AI 概览」 matching the selected rail entry."
+      truncated: false
+  - id: A14
+    source: specs/nexus-admin-ai-services/spec.md
+    text: AI 调用审计标题与侧栏一致 - WHEN 管理员以中文打开 `/admin/intelligence-audits` - THEN
+      页面标题为「AI 调用审计」，与侧栏选中项文字相同；英文为「AI Call Audits」 验收：A7
+    result: passed
+    reason:
+      text: intelligence-audits.vue:95 uses
+        dashboard.sections.menu.intelligenceAudits, the same key as the rail
+        (AdminNav.vue:152). audits-zh-*.png show 「AI 调用审计」 and audits-en-*.png
+        show 'AI Call Audits', each matching the selected rail item.
+      truncated: false
+  - id: A15
+    source: specs/nexus-admin-ai-services/spec.md
+    text: "指标格式化 - WHEN overview 返回 `totalRequests: 1234, successRate: 87,
+      totalTokens: 1234567, avgLatency: 1850, sampleSize: 200` - THEN
+      四张卡依次显示「1,234」「87%」「1,234,567」「1,850 ms」 - AND 「基于最近 200 条审计」在页面上只出现一次 -
+      AND 当 `sampleSize` 为 0 时，平均延迟显示「—」 验收：A2"
+    result: passed
+    reason:
+      text: "Same as A2: test 'formats the four cards as the spec example says'
+        produces 1,234 / 87% / 1,234,567 / 1,850 ms; 'names the sample size
+        once, in the block description, with grouping' gives 「基于最近 200 条审计数据」,
+        rendered once as the metrics block description
+        (intelligence-overview.vue:102); 'shows — for the average latency when
+        nothing was sampled' passes."
+      truncated: false
+  - id: A16
+    source: specs/nexus-admin-ai-services/spec.md
+    text: 首次加载、刷新与失败可以区分 - WHEN 页面首次加载 overview - THEN 指标卡和四个 Top 列表显示与成品同尺寸的骨架 -
+      WHEN 用户点「刷新」 - THEN 已有指标和列表留在屏幕上，直到新数据到达 - WHEN 还没有数据时 overview 请求失败 -
+      THEN 区块显示本地化失败文案和「重试」，文案不含 `/api/`；点「重试」成功后显示内容 - WHEN 已有数据时刷新失败 - THEN
+      原有内容保留，同时显示失败提示和「重试」 验收：A3
+    result: passed
+    reason:
+      text: "Same as A3: same-size placeholders on first load (AdminStatGrid's 112px
+        placeholder box, IntelligenceTopList's same-class rows); a refresh keeps
+        content; a first failure shows TxErrorState with localized title,
+        fallback and Retry and no /api/, and retry restores the content (test
+        'tells a failed first load from a failed refresh, through their
+        retries', overview-first-load-failure.png, recorded 'after retry,
+        content returns'); a refresh failure keeps data under a TxAlert with
+        Retry (overview-refresh-failure.png). The server-message preference is
+        per the nexus-admin-resource spec; see risks."
+      truncated: false
+  - id: A17
+    source: specs/nexus-admin-ai-services/spec.md
+    text: 四个 Top 列表 - WHEN overview 返回四个非空列表 - THEN 页面显示模型分布、服务渠道 Top、IP 热点、国家 /
+      地区四个列表，次数带千分位 - WHEN 某个列表为空 - THEN 该列表显示「暂无数据」，其余列表照常显示 验收：A4
+    result: passed
+    reason:
+      text: "Same as A4: four lists in order with grouped counts (test 'builds the
+        four lists in order, the providers list included, with grouped counts'
+        gives 1,200 and 1,234); an empty list shows 「暂无数据」 while the other lists
+        render normally (test 'leaves an empty list empty…', and screenshots
+        where IP/国家 are empty and models/providers are filled)."
+      truncated: false
+  - id: A18
+    source: specs/nexus-admin-ai-services/spec.md
+    text: 查询一个用户 - WHEN 管理员在「用户 ID」输入框中输入一个用户 ID 并按 Enter - THEN 显示该用户的请求数、Token
+      消耗、成功率、最近请求时间四张卡和模型分布 - WHEN 输入一个没有调用记录的用户 ID 并查询 - THEN 显示「该用户暂无 AI 调用记录」
+      - WHEN 查询请求失败 - THEN 显示本地化失败文案，不含 `[GET] "/api/…"`，也不含服务端英文原文 - WHEN
+      连续快速查询两个不同的用户 - THEN 页面只显示后一次查询的结果 验收：A5
+    result: passed
+    reason:
+      text: "Same as A5: Enter submits the labelled form; the four cards (requests,
+        tokens, success rate, last request with a tableDateTime value and
+        dateTimeTitle tooltip) and the model list render (recorded 4 / 0 / 75% /
+        2026-09-29 19:26 plus models); a user with no calls gets the noRecords
+        state 「该用户暂无 AI 调用记录」; every failure shows only the localized fallback
+        (tests for ok:false, transport and H3 403); and 'shows the later of two
+        quick lookups' passes."
+      truncated: false
+  - id: A19
+    source: specs/nexus-admin-ai-services/spec.md
+    text: IP 封禁区块不变 - WHEN 对比 stage 与本分支的 `IntelligenceOverviewPanel.vue` - THEN 只出现
+      IP 封禁区块以外的删除，区块的行没有任何改动 - AND 风控开关关闭时，页面仍显示「当前环境未启用风险控制能力」提示，位置在概览内容之后
+      验收：A6
+    result: passed
+    reason:
+      text: git diff stage on IntelligenceOverviewPanel.vue contains deletions only (0
+        added, 288 removed), all outside the IP-ban block, so the block's lines
+        match stage byte for byte. With risk control off, the unavailable notice
+        renders after the overview and lookup content (overview-*-1920.png,
+        overview-first-load-failure.png; page order at
+        intelligence-overview.vue:118-122).
+      truncated: false
+  - id: A20
+    source: specs/nexus-admin-ai-services/spec.md
+    text: 列与格式 - WHEN 管理员打开 AI 调用审计 - THEN 表格列依次为时间、服务渠道 / 模型、结果、延迟、接口、Trace - AND
+      时间形如 `2026-10-03 06:21`，悬停显示完整本地化时间；延迟形如「1,850 ms」；结果列为成功或失败徽标并附状态码 - AND
+      在 1280px 视口下表格没有横向滚动，单元格不折行 验收：A7
+    result: passed
+    reason:
+      text: "Same as A7: columns are in the spec order
+        (intelligence-audits.vue:58-65); time looks like 2026-09-30 17:26 with a
+        dateTimeTitle tooltip; latency like 2,163 ms; the result badge shows a
+        word plus status code. At 1280 there is no horizontal scroll and every
+        cell stays on one line with ellipsis (audits-*-1280.png, recorded
+        per-combination measurements). The post-fix en badge fits: 105px with
+        3px spare."
+      truncated: false
+  - id: A21
+    source: specs/nexus-admin-ai-services/spec.md
+    text: 筛选、分页与深链 - WHEN 管理员在「用户 ID」中输入一个 ID 并停止输入 - THEN 约 300ms 后列表按该用户筛选，回到第 1
+      页，URL 带上 `userId` - WHEN 管理员把每页条数改为 50，再翻到第 2 页 - THEN URL 带上 `limit=50` 与
+      `page=2`；在新标签页打开这个链接，显示同一页、同一筛选 - WHEN 筛选后没有记录 - THEN
+      显示「没有符合筛选的记录」和「清空筛选」，与「还没有调用记录」不同 验收：A8
+    result: passed
+    reason:
+      text: "Same as A8: the 300 ms debounce returns to page 1 and writes ?userId=
+        (test, plus the browser record of no change at 150 ms then applied);
+        setLimit(50) then setPage(2) writes limit=50 and page=2, and a link with
+        those params restores the same page and filters (tests 'writes only what
+        differs from the defaults into the URL' and 'restores page, page size
+        and both filters from a shared link', recorded ?page=2 and deep-link
+        restore); the filtered empty state with 清空筛选 differs from 「还没有调用记录。」
+        (audits-filtered-empty.png, AdminTable filtered vs empty)."
+      truncated: false
+  - id: A22
+    source: specs/nexus-admin-ai-services/spec.md
+    text: 打开一条调用详情 - WHEN 管理员点一行，或聚焦一行后按 Enter - THEN 打开该记录的只读详情抽屉，列出完整时间、服务渠道名称 /
+      类型 / ID、模型、用户 ID、完整接口、状态码与结果、延迟、Trace ID - AND 有错误信息时显示错误信息；metadata
+      逐项列出，没有整段 JSON 字符串 - WHEN 按 Esc - THEN 抽屉关闭 验收：A9
+    result: passed
+    reason:
+      text: "Same as A9: clicking a row or pressing Enter on a focused row opens the
+        read-only TxDrawer (TxDataTable.vue:433-440, recorded click and Enter)
+        listing the full time, provider name/type/ID, model, user ID, endpoint,
+        status and result, latency, trace ID and the error; metadata is itemised
+        with no JSON (audits-detail-drawer.png, metadata test); Esc closes it
+        (audits-after-esc.png)."
+      truncated: false
+  - id: A23
+    source: specs/nexus-admin-ai-services/spec.md
+    text: 每种类型都有名称 - WHEN 审计记录的服务渠道类型为 `dashscope`、`tencent-cloud` 或 `exchange-rate`
+      - THEN 列表与详情中都显示该类型的可读名称，中英文都有 - WHEN 类型不在已知列表中 - THEN 显示原始类型值 验收：A10
+    result: passed
+    reason:
+      text: "Same as A10: dashscope, tencent-cloud and exchange-rate have zh/en names
+        in both route chunks and buildIntelligenceProviderTypeLabels, used in
+        the list (auditProviderName when the row has no name) and in the drawer
+        type row; an unknown type falls back to its raw value (tests 'names
+        every provider type in both languages…' and 'shows an unknown type as
+        itself, and a missing one as a dash')."
+      truncated: false
+  - id: A24
+    source: specs/nexus-admin-resource/spec.md
+    text: 首次加载与刷新 - WHEN 以默认选项创建，`fetch` 尚未返回 - THEN `loading` 为真，`refreshing`
+      为假，`data` 为 null - WHEN `fetch` 成功返回 - THEN `data` 为返回值，`loading`
+      为假，`error` 为 null - WHEN 调用 `refresh()` 且新请求尚未返回 - THEN `refreshing`
+      为真，`loading` 为假，`data` 仍是上一次的结果 验收：A11
+    result: passed
+    reason:
+      text: Tests 'is loading, not refreshing, until the first answer' and 'keeps the
+        data on screen while a refresh runs, then replaces it'
+        (useAdminResource.test.ts) pass. In code, pending starts as
+        ref(immediate) (useAdminResource.ts:48), loading = pending && data ===
+        null and refreshing = pending && data !== null (:93-94), and data is
+        replaced only on success (:62).
+      truncated: false
+  - id: A25
+    source: specs/nexus-admin-resource/spec.md
+    text: '失败后重试 - WHEN 首次请求以 ofetch 错误失败，错误信息为 `[GET] "/api/x": 500`，且没有服务端说明 -
+      THEN `error` 为 `errorFallback()` 的文案，不含 `/api/`；`data` 为 null - WHEN 再次调用
+      `refresh()` 且成功 - THEN `error` 为 null，`data` 为新结果 验收：A11'
+    result: passed
+    reason:
+      text: "Test 'shows the localized fallback, never the transport string, and
+        recovers on retry' passes: an ofetch-style error ([GET] /api/x: 500,
+        data null) yields errorFallback() with no /api/ and data null, and the
+        retry clears error and sets the new data. resolveAdminErrorMessage never
+        reads error.message (admin-request-error.ts:10-21)."
+      truncated: false
+  - id: A26
+    source: specs/nexus-admin-resource/spec.md
+    text: 旧响应不覆盖新结果 - WHEN 连续两次调用 `refresh()`，第二次请求先返回 B，第一次请求后返回 A - THEN `data` 为
+      B，A 被丢弃 - WHEN 第一次请求后来以失败告终 - THEN `error` 仍为 null，`data` 仍为 B 验收：A11
+    result: passed
+    reason:
+      text: "Tests 'keeps the newer result when an older request answers after it' and
+        'drops a late failure of an older request' pass: data stays B, error
+        stays null and refreshing is false. The generation guard is at
+        useAdminResource.ts:56-73."
+      truncated: false
+  - id: A27
+    source: specs/nexus-admin-resource/spec.md
+    text: "不自动请求 - WHEN 以 `immediate: false` 创建 - THEN `fetch` 未被调用，`loading` 为假 -
+      WHEN 调用 `refresh()` - THEN `fetch` 被调用一次，`loading` 在返回前为真 验收：A11"
+    result: passed
+    reason:
+      text: "Test 'sends nothing until the first refresh()' passes: fetch is not
+        called and loading is false after creation; refresh() calls fetch once
+        and loading is true before the answer. In code, immediate:false skips
+        the mount load (useAdminResource.ts:46-48,84-89)."
+      truncated: false
+builder_handoff:
+  candidate_id: 34f95544-8ce6-43d6-9813-90b462a5033d
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:c89bf016-cd62-4770-bc60-f153a26e72e7
+  iteration: 1
+  summary:
+    text: >-
+      5a 第 1 轮候选。
+
+      AI 概览（/admin/intelligence-overview）：
+
+      - AdminPageShell，标题为「AI 概览」，「刷新」在 #actions；删除 ClientOnly 占位与内层 h2 和副标题。
+
+      - overview 经新组合件 useAdminResource 加载，供四张 AdminStatGrid 卡（样本请求数、成功率、Token
+      消耗、平均延迟 ms，带千分位）和四个 Top 列表（模型、服务渠道（新）、IP、国家/地区；首屏为行状骨架，空时显示「暂无数据」）。
+
+      - 首次失败显示 TxErrorState 与「重试」；刷新失败保留数据并显示 TxAlert 与「重试」。
+
+      - 用户消耗查询：AdminFormField 带 for 标签，Enter 提交，immediate:false
+      只取最近一次查询；结果卡与模型分布；「该用户暂无 AI 调用记录」；任何失败都只显示本地化文案（本轮把传输层错误也剥掉服务端原文，并补测试和负控）。
+
+      - IntelligenceOverviewPanel.vue 只删不改：IP 封禁区块逐字节不变，git diff stage 为 288
+      行删除、0 行新增，并有脚本逐段证明。
+
+      AI 调用审计（/admin/intelligence-audits）：
+
+      - 标题为「AI 调用审计」。
+
+      - useAdminList + createIntelligenceAuditListOptions：userId 与 providerId 用
+      debounceKeys，300ms；20 / 50 / 100 每页；URL 同步。
+
+      - AdminTable 六列：时间 148、服务渠道/模型 自适应、结果 120（徽标「成功 · 200」/「OK · 200」/「Fail ·
+      503」）、延迟 96、接口 200、Trace 160。
+
+      - 点行或 Enter 打开 520px TxDrawer + TxDescriptions，主字段齐全，metadata 逐项展示（无整段
+      JSON），响应片段用等宽块。
+
+      - 两种空态。
+
+      - 删除不再被引用的 IntelligenceAuditsPanel.vue 与 8 个旧键。
+
+      其他：
+
+      - 补 dashscope、tencent-cloud、exchange-rate 的类型文案。
+
+      - 组合件新增 AdminStatItem.title；useAdminResource 与 title 已登记在
+      component-guidelines.md。
+
+      - ego（本机时区 America/Los_Angeles）两页 × 1280/1920 × 亮/暗 × 中/英共 16
+      组：标题等于侧栏、无横向溢出、无折行。真实鼠标与键盘验证了首次失败、刷新失败、重试、查询的四种状态、筛选防抖与
+      URL、翻页、深链、无匹配空态，以及详情抽屉的点击、Enter 打开与 Esc 关闭。截图在 /tmp/comet-5a/shots/。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+    - A9
+    - A10
+    - A11
+    - A12
+    - A13
+    - A14
+    - A15
+    - A16
+    - A17
+    - A18
+    - A19
+    - A20
+    - A21
+    - A22
+    - A23
+    - A24
+    - A25
+    - A26
+    - A27
+  checks:
+    - name:
+        text: targeted vitest (builder)
+        truncated: false
+      result: passed
+      note:
+        text: 14 个文件、146 个测试，含 i18n 键存在、后台覆盖、组件自动导入、单根、表单按钮、SFC 体积等守卫。useAdminResource 6
+          个变异、页面工具函数 5 个变异均被测试拦下，恢复后用 cmp 确认一致。
+        truncated: false
+    - name:
+        text: targeted vitest (after review fixes)
+        truncated: false
+      result: passed
+      note:
+        text: useAdminResource、两页行为、概览组件、kit 组件、i18n 覆盖与 test/guards，共 14 个文件、144
+          个测试。负控：用户查询把传输层错误原样抛出时，新测试失败；恢复后逐字节一致。
+        truncated: false
+    - name:
+        text: nexus typecheck
+        truncated: false
+      result: passed
+      note:
+        text: check-typecheck-plugin-resolution.mjs exit 0，0 个 error TS（复核修正后重跑）。
+        truncated: false
+    - name:
+        text: eslint changed files
+        truncated: false
+      result: passed
+      note:
+        text: 17 个改动或新增的 ts/vue 文件，包内配置，0 问题。
+        truncated: false
+    - name:
+        text: git diff --check
+        truncated: false
+      result: passed
+      note:
+        text: 相对 stage 干净；未跟踪文件也已检查行尾空白与末尾换行。
+        truncated: false
+    - name:
+        text: IP-ban block byte-identical
+        truncated: false
+      result: passed
+      note:
+        text: git diff stage -- IntelligenceOverviewPanel.vue 为 288 行删除、0 行新增；区块各段与
+          stage 逐字节一致。
+        truncated: false
+    - name:
+        text: ego browser verification
+        truncated: false
+      result: passed
+      note:
+        text: 两页 × 1280/1920 × 亮/暗 × 中/英共 16 组，以及失败、重试、查询、筛选、深链、空态、详情抽屉的交互。复核修正后复测 1280
+          结果徽标：en「Fail · 503」105px，右侧余 3px；zh「失败 · 503」100px，余 8px。
+        truncated: false
+    - name:
+        text: full vitest
+        truncated: false
+      result: not-run
+      note:
+        text: 按交接规则留给 Runtime / Verifier。
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: Spec「调用筛选与深链」写的是两字段「都使用 TxSearchInput 的内置防抖」。TxSearchInput 的防抖只作用于 remote
+        模式的 search 事件，v-model 即时更新。实现按组合件契约用 useAdminList debounceKeys（300ms），与
+        /admin/audits 试点一致。行为满足 A8 / A21：停止输入约 300ms 后生效，并回到第 1
+        页。独立复核认为这一偏离可以接受。
+      truncated: false
+    - text: brief 约束写「错误文案统一经 resolveAdminErrorMessage，绝不显示服务端英文原文」，而
+        nexus-admin-resource Spec 要求优先显示服务端的 data.message /
+        statusMessage。实现以更具体的 Spec 为准；A5 要求的用户查询一律显示本地化文案。
+      truncated: false
+    - text: AdminStatGrid 是 auto-fill 网格，1920 下四张指标卡右侧会留空，这是组合件本身的行为。
+      truncated: false
+    - text: IntelligenceOverviewPanel 改为页面静态 import，不再走 Lazy +
+        ClientOnly；后台布局本来就不在服务端渲染页面插槽。
+      truncated: false
+    - text: 改动之前就已无人引用的 i18n 键没有清理，不在本次范围。
+      truncated: false
+  known_limits_truncated: false
+  review:
+    status: passed
+    summary:
+      text: >-
+        独立只读复核（另一个执行者，只读工具、不起 dev server）。
+
+        - 结论：VERDICT passed。逐项核对了 useAdminResource 语义、IP
+        封禁区块只删不改且自洽、用户查询剥离服务端原文、审计列表参数与 URL、两种空态、详情抽屉与键盘操作、类型文案回落。
+
+        - 回归：被删面板与 8 个键没有残留引用；kit 新增的 title 对既有调用方无影响。
+
+        - 跑过：6 个改动测试文件 89 条；guards 8 个文件 55 条；相邻目录 48 个文件 556 条，全部通过。
+
+        - 提出的低级与细节意见在复核后已全部处理：英文失败徽标改为「Fail」，实测不再越界；删除放错位置的注释；接口改名
+        IntelligenceUsageAnswer，避免与组件同名；两处写死的「—」改用
+        ADMIN_FORMAT_EMPTY。处理后已重跑定向测试、ESLint 与 typecheck。
+      truncated: false
+    reviewer_execution_ref: agent:a3dedc5d7a937bf77
+  submitted_at: 2026-10-03T17:23:30.193Z
+blockers: []
+verification:
+  candidate_id: 34f95544-8ce6-43d6-9813-90b462a5033d
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:f9cb993a-883e-4014-9bf7-29daa973f8a6
+  iteration: 1
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks:
+    - id: nexus-vitest-full
+      name:
+        text: apps/nexus 全量 vitest（CI 同款命令）
+        truncated: false
+      argv_display:
+        - text: node_modules/vitest/vitest.mjs
+          truncated: false
+        - text: run
+          truncated: false
+      argv_truncated: false
+      cwd_ref: apps/nexus
+      status: passed
+      exit_code: 0
+      duration_ms: 16168
+    - id: nexus-typecheck
+      name:
+        text: Nexus typecheck（check-typecheck-plugin-resolution）
+        truncated: false
+      argv_display:
+        - text: -c
+          truncated: false
+        - text: PATH="$PWD/node_modules/.bin:$PATH" node
+            build/check-typecheck-plugin-resolution.mjs
+          truncated: false
+      argv_truncated: false
+      cwd_ref: apps/nexus
+      status: passed
+      exit_code: 0
+      duration_ms: 25321
+    - id: nexus-eslint-changed
+      name:
+        text: 改动文件 ESLint（包内配置）
+        truncated: false
+      argv_display:
+        - text: node_modules/eslint/bin/eslint.js
+          truncated: false
+        - text: --no-warn-ignored
+          truncated: false
+        - text: app/components/admin/admin-kit-components.test.ts
+          truncated: false
+        - text: app/components/admin/AdminStatGrid.vue
+          truncated: false
+        - text: app/components/dashboard/intelligence/intelligence-overview-components.test.ts
+          truncated: false
+        - text: app/components/dashboard/intelligence/IntelligenceOverviewPanel.vue
+          truncated: false
+        - text: app/components/dashboard/intelligence/IntelligenceTopList.vue
+          truncated: false
+        - text: app/components/dashboard/intelligence/IntelligenceUsageLookup.vue
+          truncated: false
+        - text: app/composables/useAdminResource.test.ts
+          truncated: false
+        - text: app/composables/useAdminResource.ts
+          truncated: false
+        - text: app/pages/admin/intelligence-audits-page-behavior.test.ts
+          truncated: false
+        - text: app/pages/admin/intelligence-audits.vue
+          truncated: false
+        - text: app/pages/admin/intelligence-overview-page-behavior.test.ts
+          truncated: false
+        - text: app/pages/admin/intelligence-overview.vue
+          truncated: false
+        - text: app/utils/admin-intelligence.ts
+          truncated: false
+        - text: app/utils/admin-kit.ts
+          truncated: false
+        - text: app/utils/dashboard-admin-i18n-coverage.test.ts
+          truncated: false
+        - text: i18n/locales/route/en/dashboard.ts
+          truncated: false
+        - text: i18n/locales/route/zh/dashboard.ts
+          truncated: false
+      argv_truncated: false
+      cwd_ref: apps/nexus
+      status: passed
+      exit_code: 0
+      duration_ms: 2273
+    - id: git-diff-check
+      name:
+        text: git diff --check（相对 stage）
+        truncated: false
+      argv_display:
+        - text: diff
+          truncated: false
+        - text: --check
+          truncated: false
+        - text: stage
+          truncated: false
+        - text: --
+          truncated: false
+        - text: apps/nexus
+          truncated: false
+        - text: .trellis
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 24
+  summary:
+    text: "All 27 acceptance items pass. Both AI pages now use the admin kit: titles
+      match the rail, numbers and times are formatted, loading, refresh and
+      failure look different, the audit table can be filtered and deep-linked
+      and opens a read-only drawer, and the IP-ban block was only deleted around
+      (0 added, 288 removed). useAdminResource meets its spec, has unit tests
+      and is registered in component-guidelines.md. The evidence is the four
+      runtime checks, my re-runs of the changed tests (89/89) and guards
+      (55/55), reading the code, and the 25 screenshots plus recorded
+      measurements. The three known deviations are acceptable on their merits;
+      residual risks are listed separately."
+    truncated: false
+  risks:
+    - text: Overview failures follow the nexus-admin-resource spec.
+        resolveAdminErrorMessage prefers the server's data.message or
+        statusMessage, so a real 401/403/500 shows English server text (for
+        example Nitro's 'Server Error' or 'Admin permission required.') as the
+        description under the localized title. The brief's blanket rule of never
+        showing server English is fully met only by the usage lookup. Every
+        useAdminList page in the kit behaves the same way, so this needs an
+        explicit decision for the kit.
+      truncated: false
+    - text: The English result badge 'Fail · 503' fits the 120px column with only
+        about 3px to spare (recorded 1280 measurement). There is no post-fix
+        English screenshot; the English audits shots predate the label fix.
+      truncated: false
+    - text: The first-load skeletons were never captured in a browser; they were
+        judged from CSS and SSR markup. List skeletons draw the API maximum
+        (8/6/8/8 rows), so a list's box shrinks when fewer rows arrive.
+      truncated: false
+    - text: The provider/model column has no enforced 220px floor under table-layout
+        fixed. It is about 251px at 1280 but narrows below about 1250px, which
+        is outside the acceptance scope.
+      truncated: false
+    - text: The evidence screenshots live only in /tmp/comet-5a/shots, which macOS
+        purges periodically, and there are no baseline images. Archive them in
+        the change's verification record.
+      truncated: false
+    - text: The IP-ban template comment, kept byte-identical, still says the overview
+        and usage blocks are 'above' in the same file. It stays stale until the
+        risk-control task (#11) moves the block.
+      truncated: false
+    - text: At 1920, AdminStatGrid's auto-fill grid leaves the right part of the
+        metrics row empty. This is the kit's own behaviour and is cosmetic.
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-10-03T17:48:36.439Z
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: "All 27 acceptance items pass. Both AI pages now use the admin kit: titles
+        match the rail, numbers and times are formatted, loading, refresh and
+        failure look different, the audit table can be filtered and deep-linked
+        and opens a read-only drawer, and the IP-ban block was only deleted
+        around (0 added, 288 removed). useAdminResource meets its spec, has unit
+        tests and is registered in component-guidelines.md. The evidence is the
+        four runtime checks, my re-runs of the changed tests (89/89) and guards
+        (55/55), reading the code, and the 25 screenshots plus recorded
+        measurements. The three known deviations are acceptable on their merits;
+        residual risks are listed separately."
+      truncated: false
+    completed_at: 2026-10-03T17:48:36.439Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-10-03T14:08:45.449Z

@@ -90,6 +90,10 @@ vi.mock('vue-i18n', () => ({
           'assistant.voicePanel.cancelSession': 'Cancel this session',
           'assistant.voicePanel.cancelled': 'Cancelled',
           'assistant.voicePanel.quotaExhausted': 'AI credits are used up — check Settings',
+          'assistant.voicePanel.usageLimitReached':
+            'Reached the AI usage limit you set in Audit — resets {time}',
+          'assistant.voicePanel.usageLimitReachedNoTime':
+            'Reached the AI usage limit you set in Audit',
           'assistant.voicePanel.serviceBusy': 'The service is busy. Try again shortly.',
           'assistant.voicePanel.holdToCancel': 'Hold to cancel',
           'assistant.voicePanel.stillWorking': 'Still transcribing…',
@@ -122,11 +126,14 @@ vi.mock('vue-i18n', () => ({
             'This system has no microphone settings pane to open',
           'assistant.voicePanel.stopAndTranscribe': 'Stop and transcribe'
         }[key] ?? key
-      )
+      ),
+    // The interface's language, which the usage-limit reset time is written in.
+    locale: { value: 'en-US' }
   })
 }))
 
 import VoicePanel from './VoicePanel.vue'
+import { formatUsageLimitResetTime } from '~/modules/intelligence/ai-error-recovery'
 
 type StreamCallbacks = {
   onData?: (event: VoiceAsrStreamEvent) => unknown
@@ -750,6 +757,28 @@ describe('VoicePanel session control', () => {
 
   it.each([
     ['quota', new Error('QUOTA_EXCEEDED'), 'AI credits are used up', 'voice-dock--warning'],
+    // The limit the user set in Audit is not Nexus credits: its own copy, with the reset time …
+    [
+      'usage limit',
+      Object.assign(
+        new Error(
+          '[USAGE_LIMIT_REACHED] Usage limit reached: requestsPerDay; resets at 2026-10-03T16:00:00.000Z'
+        ),
+        { code: 'USAGE_LIMIT_REACHED' }
+      ),
+      `Reached the AI usage limit you set in Audit — resets ${formatUsageLimitResetTime(
+        Date.parse('2026-10-03T16:00:00.000Z'),
+        'en-US'
+      )}`,
+      'voice-dock--warning'
+    ],
+    // … and still its own copy, without a time, when only the code arrives beside quota wording.
+    [
+      'usage limit (code only)',
+      Object.assign(new Error('quota exceeded'), { code: 'USAGE_LIMIT_REACHED' }),
+      'Reached the AI usage limit you set in Audit',
+      'voice-dock--warning'
+    ],
     [
       'missing ASR credential',
       new Error('VOICE_ASR_CREDENTIAL_UNAVAILABLE'),

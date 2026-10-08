@@ -1,5 +1,3 @@
-import { IndexedWriteRuntimeEmitterService } from '@talex-touch/utils/search'
-import type { IndexedSourceDelta } from '@talex-touch/utils/search'
 import type {
   IndexedWriteDeleteExecutorResult,
   IndexedWriteDeleteRecord
@@ -9,6 +7,7 @@ export interface FileProviderReconciliationDeleteResult<TRecord extends IndexedW
   deleted: TRecord[]
   deletedCount: number
   deletedPaths: string[]
+  deferred: boolean
 }
 
 export interface FileProviderReconciliationDeleteDeps<
@@ -16,44 +15,29 @@ export interface FileProviderReconciliationDeleteDeps<
   TContext
 > {
   sourceId: string
-  deleteRecords: (records: TRecord[]) => Promise<IndexedWriteDeleteExecutorResult<TRecord>>
-  emitDelta: (delta: IndexedSourceDelta, context: TContext) => Promise<void>
+  /** Owns atomic derived-data deletion and its one post-commit publication. */
+  deleteRecords: (
+    records: TRecord[],
+    context: TContext
+  ) => Promise<IndexedWriteDeleteExecutorResult<TRecord> & { deferred: boolean }>
 }
 
 export class FileProviderReconciliationDeleteService<
   TRecord extends IndexedWriteDeleteRecord,
   TContext
 > {
-  private readonly deleteRecords: FileProviderReconciliationDeleteDeps<
-    TRecord,
-    TContext
-  >['deleteRecords']
-  private readonly runtimeEmitter: IndexedWriteRuntimeEmitterService<TRecord, TContext>
-
-  constructor(deps: FileProviderReconciliationDeleteDeps<TRecord, TContext>) {
-    this.deleteRecords = deps.deleteRecords
-    this.runtimeEmitter = new IndexedWriteRuntimeEmitterService({
-      sourceId: deps.sourceId,
-      defaultDeltaReason: 'file-provider-reconciliation-delete',
-      emitDelta: deps.emitDelta
-    })
-  }
+  constructor(private readonly deps: FileProviderReconciliationDeleteDeps<TRecord, TContext>) {}
 
   async execute(
     records: TRecord[],
     context: TContext
   ): Promise<FileProviderReconciliationDeleteResult<TRecord>> {
-    if (records.length === 0) {
-      return { deleted: [], deletedCount: 0, deletedPaths: [] }
-    }
-
-    const deleteResult = await this.deleteRecords(records)
-    await this.runtimeEmitter.emitDeleteDeltas(deleteResult.deletedPaths, context)
-
+    const result = await this.deps.deleteRecords(records, context)
     return {
-      deleted: deleteResult.deleted,
-      deletedCount: deleteResult.deleted.length,
-      deletedPaths: deleteResult.deletedPaths
+      deleted: result.deleted,
+      deletedCount: result.deleted.length,
+      deletedPaths: result.deletedPaths,
+      deferred: result.deferred
     }
   }
 }

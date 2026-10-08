@@ -342,13 +342,20 @@
 
 | 事件名 | 发送端 | 处理端 |
 | --- | --- | --- |
-| `terminal:create` | 渲染器（`packages/utils/renderer/touch-sdk/terminal.ts`） | `TerminalModule.onInit -> create`（`apps/core-app/src/main/modules/terminal/terminal.manager.ts`） |
-| `terminal:write` | 渲染器（`packages/utils/renderer/touch-sdk/terminal.ts`） | `TerminalModule.onInit -> write`（`apps/core-app/src/main/modules/terminal/terminal.manager.ts`） |
-| `terminal:kill` | 渲染器（`packages/utils/renderer/touch-sdk/terminal.ts`） | `TerminalModule.onInit -> kill`（`apps/core-app/src/main/modules/terminal/terminal.manager.ts`） |
-| `terminal:data` | `TerminalModule.create -> transport.sendTo`（`apps/core-app/src/main/modules/terminal/terminal.manager.ts`） | 渲染器（终端输出订阅者） |
-| `terminal:exit` | `TerminalModule.create -> transport.sendTo`（`apps/core-app/src/main/modules/terminal/terminal.manager.ts`） | 渲染器（终端退出订阅者） |
+| `terminal:session:create` | `createTerminalSdk.create`（`packages/utils/transport/sdk/domains/terminal.ts`） | `TerminalModule.create`（`apps/core-app/src/main/modules/terminal/index.ts`）→ 共用 `PtySessionCore.create` |
+| `terminal:session:write` | `TerminalSessionHandle.write` | `TerminalModule.write` → PTY 输入 |
+| `terminal:session:resize` | `TerminalSessionHandle.resize` | `TerminalModule.resize` → PTY 行列 |
+| `terminal:session:close` | `TerminalSessionHandle.close` / SDK 取消 | `TerminalModule.close` → 共用会话清理 |
+| `terminal:session:data` | 共用 PTY 核心 → owner 定向通知 | 创建前注册的 SDK 输出订阅 |
+| `terminal:session:exit` | 共用 PTY 核心 → owner 定向通知 | SDK 退出订阅和订阅清理 |
 
-> 说明：插件侧调用 `terminal:create` 需声明 `system.shell` 权限。  
+所有控制操作都在启动或访问 PTY 前验证 `system.shell` 和可信 transport 身份。owner 绑定真实 sender 对象与当前插件 activation，不接受请求正文指定的归属。不存在的 ID 与其他 owner 的 ID 使用相同拒绝语义。创建接收可执行文件与独立参数，不隐式交给 shell 解释。
+
+共用核心位于 `apps/core-app/src/main/modules/terminal/pty-session-core.ts`，同时管理 AI CLI 的 PTY。`local-ai-cli:terminal:*` 业务入口保留 Provider、访问等级、cwd、恢复与 lease 门禁。输出完整且有序。关闭后拒绝新输入，只发送一次终止请求，并等待原生 `onExit`，随后才释放监听和原生会话 lease。信号退出保留 `signal`；原生零退出码伴随终止信号时，`exitCode` 转为 `null`，不表示命令执行成功。
+
+SDK 自动生成内部 `creationToken`。主进程在异步权限或 Provider 检查前记录 token 的可信 owner。取消或创建回执失败、丢失时，SDK 用同一 typed close/kill 事件按 token 收尾：未启动的记录被取消，已启动的 PTY 等待真实退出。迟到回执不能重建已取消会话。token 不授予归属权限，不存在与其他 owner 的 token 使用相同拒绝语义。AI 业务 SDK 支持 `terminal.create(request, { signal })`，原有事件名和 Provider 请求字段保持。
+
+`TxTerminal` 只负责显示输出和发送输入、尺寸事件。网页展示或只读日志不创建进程。`EnvDetector` 使用 domain SDK，在完成、失败或超时后清理资源。
 
 #### C12.3 Plugin Logs
 

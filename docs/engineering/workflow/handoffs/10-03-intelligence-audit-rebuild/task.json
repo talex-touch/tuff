@@ -1,0 +1,33 @@
+{
+  "id": "intelligence-audit-rebuild",
+  "name": "intelligence-audit-rebuild",
+  "title": "智能审计页按洞察页 shell 重做",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-10-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "stage",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "10-03-modelsdev-pricing",
+    "10-03-audit-usage-ledger",
+    "10-03-intelligence-usage-limits",
+    "10-03-insights-shell-kit",
+    "10-03-audit-insights-page",
+    "10-03-intelligence-memory-page"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

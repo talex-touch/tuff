@@ -270,6 +270,8 @@ describe('ContextActionsProvider execution', () => {
       }),
       expect.objectContaining({
         metadata: expect.objectContaining({
+          // Stable usage-ledger caller of every context action (AC-B5).
+          caller: 'core.corebox.context-action',
           entry: 'context-actions',
           actionId: CONTEXT_ACTION_IDS.QuickReview,
           inputType: 'text'

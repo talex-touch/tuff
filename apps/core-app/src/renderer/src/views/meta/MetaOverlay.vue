@@ -2,6 +2,9 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type {
   MetaActionExecuteRequest,
+  MetaFlowSelection,
+  MetaPageChangeRequest,
+  MetaPanelPage,
   MetaShowRequest
 } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type {
@@ -9,21 +12,37 @@ import type {
   MetaActionModel,
   MetaActionRow
 } from '~/modules/box/meta-actions/meta-action-model'
+import type { MetaFlowTargetRow } from '~/modules/box/meta-actions/meta-flow-page'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { TxKbd } from '@talex-touch/tuffex/kbd'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  shallowRef,
+  watch
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import MetaActionItem from '~/components/meta/MetaActionItem.vue'
+import MetaFlowConfirm from '~/components/meta/MetaFlowConfirm.vue'
 import MetaPanel from '~/components/meta/MetaPanel.vue'
+import MetaPanelFilter from '~/components/meta/MetaPanelFilter.vue'
+import MetaPanelList from '~/components/meta/MetaPanelList.vue'
 import { normalizeCoreBoxIcon } from '~/components/render/icon-color-mode'
 import { useMotionGate } from '~/modules/box/adapter/hooks/useMotionGate'
 import {
   buildMetaActionModel,
+  estimateMetaActionPanelHeight,
   isImeComposing,
   metaActionShortcutLabels,
   resolveMetaActionShortcut
 } from '~/modules/box/meta-actions/meta-action-model'
+import { META_FLOW_LIST_ID, useMetaFlowPage } from '~/modules/box/meta-actions/meta-flow-page'
 import {
   matchesMetaPanelQuery,
   normalizeMetaPanelQuery
@@ -31,12 +50,18 @@ import {
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import { shortcutChordLabel } from '~/modules/shortcuts/shortcut-chord'
 import { createRendererLogger } from '~/utils/renderer-log'
+import { COREBOX_FLOW_TRANSFER_ACTION_ID } from '../../../../shared/events/corebox-scenes'
 import { resolveMetaPanelCssVars } from '../../../../shared/meta-overlay-geometry'
 
 /**
  * The ⌘K action panel: a compact card anchored bottom-right, above the CoreBox footer's ⌘K hint
  * (or in the window corner when there is no footer), over a light dim of the launcher. The card
- * itself is `MetaPanel`; this view owns the dim, the anchor, the keyboard and the actions.
+ * itself is `MetaPanel`; this view owns the dim, the anchor, the keyboard and the pages.
+ *
+ * The card holds a stack of pages: the action list, the Flow targets its 流转 row pushes in, and
+ * the confirmation a target may ask for. ⌘⇧D opens the card straight on the Flow targets. Esc goes
+ * back a page, and closes the card from the page it opened on; main closes it itself there, and
+ * leaves Esc to this view while there is a page to go back to (`MetaOverlayEvents.ui.page`).
  *
  * It lives in the full-window transparent overlay view main keeps above the plugin view, so it
  * covers a plugin UI too. The dim is painted by this document: `backdrop-filter` cannot sample the
@@ -66,7 +91,27 @@ const item = shallowRef<TuffItem | null>(null)
 const request = shallowRef<MetaShowRequest | null>(null)
 const executingActionId = ref<string | null>(null)
 
-const panelRef = ref<InstanceType<typeof MetaPanel> | null>(null)
+/** The card's pages, the one on screen last. Every open starts over with one. */
+const pageStack = ref<MetaPanelPage[]>(['actions'])
+const page = computed(() => pageStack.value.at(-1) ?? 'actions')
+const canGoBack = computed(() => pageStack.value.length > 1)
+/** Which way the last page switch went, for the push. */
+const direction = ref<'forward' | 'back'>('forward')
+
+const flow = reactive(useMetaFlowPage({ transport, t }))
+// What the Flow page was opened from asked of the window: while its targets load, the page asks for
+// no less (`currentPageHeight`), so the card does not shrink only to grow again.
+const flowEntryHeight = ref(0)
+
+// Set once this view has asked main to close the card, until the card opens again. Closing is a
+// round trip; a consent reply landing in between belongs to a card the user already dismissed.
+let closeRequested = false
+
+const actionsListRef = ref<InstanceType<typeof MetaPanelList> | null>(null)
+const actionsFilterRef = ref<InstanceType<typeof MetaPanelFilter> | null>(null)
+const flowListRef = ref<InstanceType<typeof MetaPanelList> | null>(null)
+const flowFilterRef = ref<InstanceType<typeof MetaPanelFilter> | null>(null)
+const confirmRef = ref<InstanceType<typeof MetaFlowConfirm> | null>(null)
 // The overlay is a separate lightweight window, with one motion gate of its own.
 const { shouldAnimate } = useMotionGate()
 
@@ -139,8 +184,11 @@ const activeRowHighlighted = computed(
   () => activeRow.value !== null && !activeRow.value.row.disabled
 )
 
+const itemTitle = computed(() => item.value?.render?.basic?.title?.trim() ?? '')
+// The item names the card on every page; without a title, the page does.
 const headerTitle = computed(
-  () => item.value?.render?.basic?.title?.trim() || t('corebox.actions.title')
+  () =>
+    itemTitle.value || t(page.value === 'actions' ? 'corebox.actions.title' : 'flow.selectTarget')
 )
 const headerIcon = computed(() => normalizeCoreBoxIcon(item.value?.render?.basic?.icon))
 const toggleKeyLabel = shortcutChordLabel({ code: 'KeyK' }, isMac)
@@ -148,13 +196,27 @@ const toggleKeyLabel = shortcutChordLabel({ code: 'KeyK' }, isMac)
 /** Geometry the panel's CSS reads; the same numbers main grows the window with. */
 const overlayStyle = computed(() => resolveMetaPanelCssVars(request.value?.anchor))
 
+/** The action list's height, from every row: typing in the filter does not resize the window. */
+const actionsPanelHeight = computed(() => estimateMetaActionPanelHeight(model.value))
+
+/** The height the page on screen asks main for, as `desiredPanelHeight` is measured. */
+const currentPageHeight = computed(() => {
+  if (page.value === 'flow-confirm') return flow.confirmPanelHeight
+  if (page.value === 'flow') {
+    return flow.loading
+      ? Math.max(flow.listPanelHeight, flowEntryHeight.value)
+      : flow.listPanelHeight
+  }
+  return actionsPanelHeight.value
+})
+
 function firstSelectableIndex(): number {
   const found = flatRows.value.find((entry) => !entry.row.disabled)
   return found ? found.index : 0
 }
 
 function scrollActiveIntoView(): void {
-  panelRef.value?.scrollActiveIntoView()
+  actionsListRef.value?.scrollActiveIntoView()
 }
 
 function step(delta: number): void {
@@ -173,9 +235,104 @@ function step(delta: number): void {
 function hoverRow(index: number): void {
   const entry = flatRows.value[index]
   if (entry && !entry.row.disabled && index !== activeIndex.value) {
-    panelRef.value?.glideNext()
+    actionsListRef.value?.glideNext()
     activeIndex.value = index
   }
+}
+
+function hoverFlowRow(index: number): void {
+  if (flow.hover(index)) flowListRef.value?.glideNext()
+}
+
+/** Gives the page on screen focus: its filter, or the confirmation's primary button. */
+function focusCurrentPage(): void {
+  if (page.value === 'flow-confirm') confirmRef.value?.focusPrimary()
+  else if (page.value === 'flow') flowFilterRef.value?.focus()
+  else actionsFilterRef.value?.focus()
+}
+
+/**
+ * Brings the active row of a page the card went back to into view: the page is drawn anew, its
+ * list at the top, and the row the user left from may sit below the fold.
+ */
+function revealReturnedRow(): void {
+  if (page.value === 'flow') flowListRef.value?.scrollActiveIntoView()
+  else if (page.value === 'actions') actionsListRef.value?.scrollActiveIntoView()
+}
+
+/**
+ * Puts a page on top of the card. Focus moves at once, not after the push: the new page's filter
+ * takes typing while it is still sliding in.
+ */
+function pushPage(next: MetaPanelPage): void {
+  direction.value = 'forward'
+  pageStack.value = [...pageStack.value, next]
+  void nextTick(focusCurrentPage)
+}
+
+/** Goes back a page; from the page the card opened on, there is none, and it closes. */
+function popPage(): void {
+  if (pageStack.value.length <= 1) {
+    void handleClose()
+    return
+  }
+  const leaving = page.value
+  direction.value = 'back'
+  pageStack.value = pageStack.value.slice(0, -1)
+  // A consent check or a load still running belongs to the page that is going.
+  if (leaving === 'flow') flow.cancel()
+  void nextTick(() => {
+    focusCurrentPage()
+    revealReturnedRow()
+  })
+}
+
+/** The 流转 row: the Flow targets push in over the action list, in the same card. */
+function enterFlowPage(): void {
+  const current = item.value
+  if (!current || page.value !== 'actions') return
+  flowEntryHeight.value = actionsPanelHeight.value
+  // The action filter goes with its page; a composition it had open ended with it.
+  composing.value = false
+  flow.open(current)
+  pushPage('flow')
+}
+
+// What main was last told about the page on screen (`reportKey`), so it hears of each change once.
+let reportedPage = ''
+
+function reportKey(report: MetaPageChangeRequest): string {
+  return `${report.page}|${report.canGoBack}|${report.desiredPanelHeight ?? ''}`
+}
+
+const pageReport = computed<MetaPageChangeRequest>(() => ({
+  page: page.value,
+  canGoBack: canGoBack.value,
+  desiredPanelHeight: currentPageHeight.value
+}))
+
+// Main follows the card: it leaves Esc to this view while there is a page to go back to, blurs
+// CoreBox under a Flow page, and grows the window for a page that does not fit. An open needs no
+// report: the show request already said which page it starts on.
+watch(
+  pageReport,
+  (report) => {
+    if (!visible.value) return
+    const key = reportKey(report)
+    if (key === reportedPage) return
+    reportedPage = key
+    void transport.send(MetaOverlayEvents.ui.page, report).catch((error) => {
+      metaOverlayLog.error('Failed to report the panel page', error)
+    })
+  },
+  { flush: 'post' }
+)
+
+function resetPages(): void {
+  pageStack.value = ['actions']
+  direction.value = 'forward'
+  flowEntryHeight.value = 0
+  flow.reset()
 }
 
 // Listen for show/hide messages from main process via IPC
@@ -183,7 +340,19 @@ const unregShow = transport.on(MetaOverlayEvents.ui.show, (data: MetaShowRequest
   item.value = data.item
   request.value = data
   executingActionId.value = null
+  closeRequested = false
+  resetPages()
+  if (data.page === 'flow') {
+    // Straight on the Flow targets (⌘⇧D), with nothing to go back to.
+    pageStack.value = ['flow']
+    flowEntryHeight.value = data.desiredPanelHeight ?? 0
+    flow.open(data.item, data.flowTargets)
+  } else if (model.value.rows.some((row) => row.id === COREBOX_FLOW_TRANSFER_ACTION_ID)) {
+    // The 流转 row is there: have its targets ready by the time it is picked.
+    flow.prefetch(data.item)
+  }
   visible.value = true
+  reportedPage = reportKey(pageReport.value)
   return { accepted: true }
 })
 
@@ -193,6 +362,7 @@ const unregHide = transport.on(MetaOverlayEvents.ui.hide, () => {
   activeIndex.value = 0
   executingActionId.value = null
   composing.value = false
+  resetPages()
 })
 
 // Focus the filter when shown. `nextTick` rather than a timeout: the input exists as soon as the
@@ -202,7 +372,7 @@ watch(visible, async (newVisible) => {
   searchQuery.value = ''
   activeIndex.value = firstSelectableIndex()
   await nextTick()
-  panelRef.value?.focusFilter()
+  focusCurrentPage()
 })
 
 // A new request (a reopen, or a different item) starts on its primary row again.
@@ -215,6 +385,14 @@ watch(
   () => {
     activeIndex.value = firstSelectableIndex()
     void nextTick(scrollActiveIntoView)
+  }
+)
+
+// The Flow page moves its active row to the first target itself; this brings it into view.
+watch(
+  () => normalizeMetaPanelQuery(flow.query),
+  () => {
+    void nextTick(() => flowListRef.value?.scrollActiveIntoView())
   }
 )
 
@@ -232,25 +410,48 @@ function stop(event: KeyboardEvent): void {
   event.stopPropagation()
 }
 
+/** The filter of the page on screen is composing; the confirmation has none. */
+function isPageComposing(): boolean {
+  if (page.value === 'actions') return composing.value
+  if (page.value === 'flow') return flow.composing
+  return false
+}
+
 function handleKeyDown(event: KeyboardEvent): void {
   if (!visible.value) return
-  // The IME owns arrows and Enter while it composes: they pick candidates, not actions.
-  if (isImeComposing(event) || composing.value) return
+  // The IME owns arrows, Enter and Esc while it composes: they pick candidates, not actions.
+  if (isImeComposing(event) || isPageComposing()) return
 
   if (event.key === 'Escape') {
     stop(event)
-    void handleClose()
+    handleEscape()
     return
   }
 
-  // ⌘K closes the panel it opened. Not on auto-repeat: a held ⌘K keeps repeating into the panel
-  // once it has focus, and toggling on each repeat would flicker it open and shut.
+  // ⌘K closes the panel it opened, from any page. Not on auto-repeat: a held ⌘K keeps repeating
+  // into the panel once it has focus, and toggling on each repeat would flicker it open and shut.
   if (isPanelToggle(event)) {
     stop(event)
     if (!event.repeat) void handleClose()
     return
   }
 
+  if (page.value === 'flow') handleFlowKey(event)
+  else if (page.value === 'flow-confirm') handleConfirmKey(event)
+  else handleActionsKey(event)
+}
+
+function handleEscape(): void {
+  if (page.value === 'flow-confirm') {
+    // Once the grant is under way there is nothing left to deny.
+    if (flow.consentLoading) void handleClose()
+    else denyConsent()
+    return
+  }
+  popPage()
+}
+
+function handleActionsKey(event: KeyboardEvent): void {
   const bare = !event.metaKey && !event.ctrlKey && !event.altKey
   if (bare && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
     stop(event)
@@ -272,8 +473,97 @@ function handleKeyDown(event: KeyboardEvent): void {
   if (!event.repeat) handleActionExecute(row)
 }
 
+/**
+ * The Flow targets. No action chords here: ⌘⇧D, the 流转 row's own key, does nothing on the page it
+ * opens.
+ */
+function handleFlowKey(event: KeyboardEvent): void {
+  // The filter is the page's one focus stop; Tab would leave the card.
+  if (event.key === 'Tab') {
+    event.preventDefault()
+    return
+  }
+
+  const bare = !event.metaKey && !event.ctrlKey && !event.altKey
+  if (bare && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    stop(event)
+    if (flow.step(event.key === 'ArrowDown' ? 1 : -1)) {
+      void nextTick(() => flowListRef.value?.scrollActiveIntoView())
+    }
+    return
+  }
+
+  if (bare && !event.shiftKey && event.key === 'Enter') {
+    stop(event)
+    // A fresh press only. The Enter that picked 流转 can still be held down when this page opens,
+    // and its auto-repeat must not pick the first target.
+    if (!event.repeat && flow.activeRow) void selectFlowRow(flow.activeRow)
+  }
+}
+
+/** Tab moves between the buttons natively; past either end it wraps instead of leaving the card. */
+function keepFocusOnConfirmButtons(event: KeyboardEvent): void {
+  const buttons = (confirmRef.value?.buttons() ?? []).filter((button) => !button.disabled)
+  const position = buttons.findIndex((button) => button === document.activeElement)
+  const next = position + (event.shiftKey ? -1 : 1)
+  if (position >= 0 && next >= 0 && next < buttons.length) return
+  event.preventDefault()
+  const wrapped = event.shiftKey ? buttons.at(-1) : buttons[0]
+  wrapped?.focus()
+}
+
+function handleConfirmKey(event: KeyboardEvent): void {
+  if (event.key === 'Tab') {
+    keepFocusOnConfirmButtons(event)
+    return
+  }
+
+  const bare = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
+  if (bare && event.key === 'Enter') {
+    stop(event)
+    // The press that picked the target may still be held: its repeats must not also confirm it.
+    if (event.repeat) return
+    // Run explicitly: the default is prevented, and a button that has focus is the one meant.
+    const focused = confirmRef.value?.buttons().find((button) => button === document.activeElement)
+    if (focused) focused.click()
+    else void grantConsent(flow.primaryMode)
+  }
+}
+
+function handleBack(): void {
+  // The back button fades out once the card is on the page it opened on, and stays clickable while
+  // it does: the second click of a double click would take Esc's next step there and close the card.
+  if (!canGoBack.value) return
+  handleEscape()
+}
+
+async function selectFlowRow(row: MetaFlowTargetRow): Promise<void> {
+  const outcome = await flow.select(row)
+  if (!outcome || closeRequested) return
+  if (outcome.kind === 'dispatch') executeFlowTransfer(outcome.selection)
+  else pushPage('flow-confirm')
+}
+
+async function grantConsent(mode: 'once' | 'always'): Promise<void> {
+  const selection = await flow.grant(mode)
+  if (selection && !closeRequested) executeFlowTransfer(selection)
+}
+
+/** Back to the targets, with nothing granted and nothing sent. */
+function denyConsent(): void {
+  flow.deny()
+  popPage()
+}
+
 function handleActionExecute(row: MetaActionRow): void {
   if (executingActionId.value || row.disabled) {
+    return
+  }
+
+  // 流转 is a page of this card, not an action: the targets push in, and a target picked there
+  // sends the transfer (`executeFlowTransfer`).
+  if (row.id === COREBOX_FLOW_TRANSFER_ACTION_ID) {
+    enterFlowPage()
     return
   }
 
@@ -288,12 +578,29 @@ function handleActionExecute(row: MetaActionRow): void {
   // Dispatch is observed asynchronously, but the UI lock belongs only to this click. The legacy
   // channel may wait for its response timeout even after main has executed the action; holding
   // `executingActionId` for that whole period makes every action on a reopened panel inert.
-  const pending = transport.send(MetaOverlayEvents.action.execute, payload)
+  sendActionExecute(payload)
   searchQuery.value = ''
   activeIndex.value = 0
   executingActionId.value = null
+}
 
-  void pending
+/**
+ * Sends the transfer with the target picked on the Flow page. Main relays both to the CoreBox
+ * renderer, which builds the payload and dispatches it, then closes the card.
+ */
+function executeFlowTransfer(selection: MetaFlowSelection): void {
+  visible.value = false
+  sendActionExecute({
+    actionId: COREBOX_FLOW_TRANSFER_ACTION_ID,
+    itemId: item.value?.id ?? '',
+    item: item.value ?? undefined,
+    flow: selection
+  })
+}
+
+function sendActionExecute(payload: MetaActionExecuteRequest): void {
+  void transport
+    .send(MetaOverlayEvents.action.execute, payload)
     .then((response) => {
       if (response && response.success === false) {
         throw new Error(response.error || 'MetaOverlay action failed')
@@ -305,6 +612,7 @@ function handleActionExecute(row: MetaActionRow): void {
 }
 
 async function handleClose() {
+  closeRequested = true
   try {
     await transport.send(MetaOverlayEvents.ui.hide)
   } catch (error) {
@@ -345,6 +653,16 @@ onMounted(() => {
   announceReady()
 })
 
+/**
+ * The card leaves at once. Main hides this view in the same call that closes the panel, so a fade
+ * could never be seen: it stalled at its first frame in the hidden view (no frames, no
+ * `after-leave`) and kept the closed page in the DOM, which the next open showed for a frame
+ * before its own content landed — a Flow confirmation flashing up ahead of the action list.
+ */
+function endLeave(_el: Element, done: () => void): void {
+  done()
+}
+
 onBeforeUnmount(() => {
   rendererMounted = false
   if (readyRetryTimer) {
@@ -358,57 +676,165 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Transition name="meta-panel">
+  <Transition name="meta-panel" @leave="endLeave">
     <div v-if="visible" class="MetaOverlay" :style="overlayStyle" @click.self="handleClose">
       <MetaPanel
-        ref="panelRef"
-        v-model:query="searchQuery"
         :title="headerTitle"
         :icon="headerIcon"
-        :list-id="LIST_ID"
-        :list-label="t('corebox.actions.title')"
-        :placeholder="t('corebox.meta.searchPlaceholder')"
-        :active-index="activeIndex"
-        :active-descendant="activeRow?.domId"
-        :highlight="activeRowHighlighted"
-        :layout-key="sections"
         :should-animate="shouldAnimate"
-        @composition="composing = $event"
+        :page="page"
+        :direction="direction"
+        :can-go-back="canGoBack"
+        @back="handleBack"
       >
-        <div
-          v-for="section in sections"
-          :key="section.key"
-          class="MetaPanel-Section"
-          role="group"
-          :aria-labelledby="section.title ? section.titleId : undefined"
-        >
-          <div v-if="section.title" :id="section.titleId" class="MetaPanel-SectionTitle">
-            {{ section.title }}
-          </div>
-          <MetaActionItem
-            v-for="entry in section.rows"
-            :id="entry.domId"
-            :key="entry.row.id"
-            :data-meta-row-index="entry.index"
-            :label="entry.label"
-            :subtitle="entry.subtitle"
-            :glyph="'glyph' in entry.row.icon ? entry.row.icon.glyph : undefined"
-            :icon="'icon' in entry.row.icon ? entry.row.icon.icon : undefined"
-            :shortcuts="entry.shortcuts"
-            :active="entry.index === activeIndex"
-            :disabled="entry.row.disabled"
-            :danger="entry.row.danger"
-            @run="handleActionExecute(entry.row)"
-            @hover="hoverRow(entry.index)"
+        <template v-if="page !== 'actions' && itemTitle" #header-meta>
+          {{ t('flow.selectTarget') }}
+        </template>
+
+        <div v-if="page === 'actions'" key="actions" class="MetaPanel-Page">
+          <MetaPanelList
+            ref="actionsListRef"
+            :list-id="LIST_ID"
+            :list-label="t('corebox.actions.title')"
+            :active-index="activeIndex"
+            :highlight="activeRowHighlighted"
+            :layout-key="sections"
+            :should-animate="shouldAnimate"
+          >
+            <div
+              v-for="section in sections"
+              :key="section.key"
+              class="MetaPanel-Section"
+              role="group"
+              :aria-labelledby="section.title ? section.titleId : undefined"
+            >
+              <div v-if="section.title" :id="section.titleId" class="MetaPanel-SectionTitle">
+                {{ section.title }}
+              </div>
+              <MetaActionItem
+                v-for="entry in section.rows"
+                :id="entry.domId"
+                :key="entry.row.id"
+                :data-meta-row-index="entry.index"
+                :label="entry.label"
+                :subtitle="entry.subtitle"
+                :glyph="'glyph' in entry.row.icon ? entry.row.icon.glyph : undefined"
+                :icon="'icon' in entry.row.icon ? entry.row.icon.icon : undefined"
+                :shortcuts="entry.shortcuts"
+                :active="entry.index === activeIndex"
+                :disabled="entry.row.disabled"
+                :danger="entry.row.danger"
+                @run="handleActionExecute(entry.row)"
+                @hover="hoverRow(entry.index)"
+              />
+            </div>
+            <p v-if="flatRows.length === 0" class="MetaPanel-Empty">
+              {{ t('corebox.actions.empty') }}
+            </p>
+          </MetaPanelList>
+          <MetaPanelFilter
+            ref="actionsFilterRef"
+            v-model:query="searchQuery"
+            :list-id="LIST_ID"
+            :placeholder="t('corebox.meta.searchPlaceholder')"
+            :active-descendant="activeRow?.domId"
+            @composition="composing = $event"
+          >
+            <template #key>
+              <TxKbd class="MetaPanel-FilterKey">{{ toggleKeyLabel }}</TxKbd>
+            </template>
+          </MetaPanelFilter>
+        </div>
+
+        <div v-else-if="page === 'flow'" key="flow" class="MetaPanel-Page">
+          <MetaPanelList
+            ref="flowListRef"
+            :list-id="META_FLOW_LIST_ID"
+            :list-label="t('flow.selectTarget')"
+            :active-index="flow.activeIndex"
+            :highlight="flow.activeRowHighlighted"
+            :layout-key="flow.sections"
+            :should-animate="shouldAnimate"
+          >
+            <div
+              v-for="section in flow.sections"
+              :key="section.key"
+              class="MetaPanel-Section"
+              role="group"
+              :aria-labelledby="section.titleId"
+            >
+              <div :id="section.titleId" class="MetaPanel-SectionTitle">
+                {{ section.title }}
+              </div>
+              <MetaActionItem
+                v-for="row in section.rows"
+                :id="row.domId"
+                :key="row.target.fullId"
+                class="FlowTargetItem"
+                :data-meta-row-index="row.index"
+                :label="row.target.name"
+                :subtitle="row.subtitle"
+                :icon="row.icon"
+                :shortcuts="[]"
+                :active="row.index === flow.activeIndex"
+                :disabled="row.target.isEnabled === false"
+                @run="selectFlowRow(row)"
+                @hover="hoverFlowRow(row.index)"
+              >
+                <template v-if="row.target.requireConfirm" #trailing>
+                  <i
+                    class="FlowTargetItem-Confirm i-ri-shield-check-line"
+                    role="img"
+                    :aria-label="t('flow.requiresConfirmation')"
+                    :title="t('flow.requiresConfirmation')"
+                  />
+                </template>
+              </MetaActionItem>
+            </div>
+            <!-- Holds the one row the page was sized for while targets load; says so only after the
+                 deferral, so a fast answer never flashes it. -->
+            <p
+              v-if="flow.loading || (flow.showLoading && flow.flatRows.length === 0)"
+              class="MetaPanel-Empty MetaOverlay-FlowStatus"
+            >
+              <template v-if="flow.showLoading">
+                <TxSpinner :size="12" :label="t('common.loading')" />
+                <span aria-hidden="true">{{ t('common.loading') }}</span>
+              </template>
+            </p>
+            <p v-else-if="flow.flatRows.length === 0" class="MetaPanel-Empty">
+              {{ t('flow.noTargets') }}
+            </p>
+          </MetaPanelList>
+          <MetaPanelFilter
+            ref="flowFilterRef"
+            v-model:query="flow.query"
+            :list-id="META_FLOW_LIST_ID"
+            :placeholder="t('flow.searchTargets')"
+            :active-descendant="flow.activeRow?.domId"
+            @composition="flow.composing = $event"
+          >
+            <template #key>
+              <TxKbd class="MetaPanel-FilterKey">Esc</TxKbd>
+            </template>
+          </MetaPanelFilter>
+        </div>
+
+        <div v-else key="flow-confirm" class="MetaPanel-Page">
+          <MetaFlowConfirm
+            ref="confirmRef"
+            :title="flow.confirmTitle"
+            :description="flow.confirmDescription"
+            :deny-label="t('flow.consentDeny')"
+            :once-label="flow.onceLabel"
+            :show-once="flow.showAlwaysAction"
+            :primary-label="flow.primaryLabel"
+            :loading="flow.consentLoading"
+            @deny="denyConsent"
+            @once="grantConsent('once')"
+            @primary="grantConsent(flow.primaryMode)"
           />
         </div>
-        <p v-if="flatRows.length === 0" class="MetaPanel-Empty">
-          {{ t('corebox.actions.empty') }}
-        </p>
-
-        <template #filter-key>
-          <TxKbd class="MetaPanel-FilterKey">{{ toggleKeyLabel }}</TxKbd>
-        </template>
       </MetaPanel>
     </div>
   </Transition>
@@ -426,39 +852,46 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--tx-overlay-color) 20%, transparent);
 }
 
-.meta-panel-enter-active,
-.meta-panel-leave-active {
+.FlowTargetItem-Confirm {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  font-size: 14px;
+  color: var(--tx-text-color-secondary);
+}
+
+.MetaOverlay-FlowStatus {
+  gap: 8px;
+}
+
+// Entering only: the card leaves at once (`endLeave`).
+.meta-panel-enter-active {
   transition: opacity 0.12s ease-out;
 }
 
 // `.MetaPanel` is MetaPanel's root element, which carries this view's scope id as well as its own,
 // so these rules reach it.
-.meta-panel-enter-active .MetaPanel,
-.meta-panel-leave-active .MetaPanel {
+.meta-panel-enter-active .MetaPanel {
   transition:
     opacity 0.12s ease-out,
     transform 0.12s ease-out;
 }
 
-.meta-panel-enter-from,
-.meta-panel-leave-to {
+.meta-panel-enter-from {
   opacity: 0;
 }
 
-.meta-panel-enter-from .MetaPanel,
-.meta-panel-leave-to .MetaPanel {
+.meta-panel-enter-from .MetaPanel {
   opacity: 0;
   transform: translateY(4px) scale(0.98);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .meta-panel-enter-active .MetaPanel,
-  .meta-panel-leave-active .MetaPanel {
+  .meta-panel-enter-active .MetaPanel {
     transition: opacity 0.12s ease-out;
   }
 
-  .meta-panel-enter-from .MetaPanel,
-  .meta-panel-leave-to .MetaPanel {
+  .meta-panel-enter-from .MetaPanel {
     transform: none;
   }
 }

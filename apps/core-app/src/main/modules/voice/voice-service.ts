@@ -51,6 +51,7 @@ import {
   formatDictationText,
   resolveAppFormatProfile
 } from './app-context'
+import { readUsageLimitCause } from './buffered-stt-provider'
 import { getVoicePolishPrompt, wrapTranscription, type PolishContext } from './polish-prompt'
 import {
   getVoiceQuickEditPrompt,
@@ -1769,7 +1770,9 @@ export class VoiceService {
             code: event.code,
             retryable: event.retryable,
             requestId: event.requestId,
-            cause: event.message
+            // A usage-limit refusal keeps the SDK's error, so the channel can tell the app's own
+            // renderer which limit and when it resets; anything else keeps the event's sentence.
+            cause: readUsageLimitCause(event) ?? event.message
           })
           throw providerError
         }
@@ -1982,9 +1985,11 @@ export class VoiceService {
       for await (const event of connection.events) {
         throwIfCancelled(signal)
         if (event.type === 'error') {
+          const usageLimitCause = readUsageLimitCause(event)
           throw Object.assign(new Error(event.code || 'VOICE_ASR_RETRY_FAILED'), {
             code: event.code || 'VOICE_ASR_RETRY_FAILED',
-            retryable: event.retryable
+            retryable: event.retryable,
+            ...(usageLimitCause ? { cause: usageLimitCause } : {})
           })
         }
         if (event.type !== 'final' || !event.text.trim()) continue

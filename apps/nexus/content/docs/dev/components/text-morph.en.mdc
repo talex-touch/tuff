@@ -128,6 +128,7 @@ code: |
 ## Behaviour Contract
 
 - The whole value lives in one visually-hidden but readable `[tx-morph-sr]` node; every segment element is `aria-hidden`, so a screen reader announces the value once and never the fragments.
+- Current selectable segments preserve the original whitespace: ordinary spaces are not substituted with NBSP; actual NBSP, repeated spaces, tabs, line breaks and combining characters retain their input values. Old exiting fragments do not participate in selection, so copying does not mix in previous text. Segmentation, diffing and place-value matching still use the existing single engine.
 - Segments are created imperatively by the engine, so the component's styles are **not scoped** — containment comes from the `tx-morph-*` attribute names instead.
 - Vue stops rendering the children after mount: the engine owns them. The first-paint plain text exists only so hydration matches.
 - Under `prefers-reduced-motion: reduce` or `disabled` the value is written straight to `textContent` and the internal segment record is cleared, so re-enabling motion never FLIPs against elements that have already left the DOM.

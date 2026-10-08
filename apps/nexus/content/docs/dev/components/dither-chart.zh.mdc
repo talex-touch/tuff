@@ -1,0 +1,151 @@
+---
+title: DitherChart
+description: "由真实数据驱动的像素图表、有序抖动和SVG纹理，支持周期、图例和日期游标。"
+category: MotionCharts
+status: beta
+since: 0.6.3
+tags: [motion, chart, dither, canvas, svg]
+syncStatus: reviewed
+---
+
+## 用法
+
+`TxDitherChart` 位于现有 `@talex-touch/tuffex/charts` 入口，不另建图表包。传入真实 `series`、`nodes` 或 `cells`；空数据只显示空状态，不自动填充演示值。`periods` 接受带名称的完整数据快照，不通过倍率生成业务数据。
+
+### 遍历全部来源图形
+
+演示包含11个目录图表、8个额外图形与卡片、10种纹理、来源等价说明以及书页与指标组合。周期、系列过滤、仪表/存储/指标选择、悬停、键盘和范围输入都操作当前画面的数据。点击缩略图可进入对应完整图表。
+
+:::TuffDemoWrapper{demo="DitherChartDemo" code-lang="vue" title="抖动图表目录"}
+---
+code: |
+  <script setup lang="ts">
+  import type { DitherSeries } from '@talex-touch/tuffex/charts'
+  import { TxDitherChart } from '@talex-touch/tuffex/charts'
+
+  const series: DitherSeries[] = [
+    { id: 'mobile', label: '手机', value: 65 },
+    { id: 'desktop', label: '桌面', value: 25 },
+    { id: 'tablet', label: '平板', value: 10 },
+  ]
+  </script>
+
+  <template>
+    <TxDitherChart
+      variant="dither-device"
+      title="设备分布"
+      :series="series"
+      pattern="ordered"
+    />
+  </template>
+---
+:::
+
+### 数据与周期快照
+
+- 环图、设备、漏斗和计划卡片使用系列的 `value`；未传 `value` 时使用点值总和。
+- 堆叠、支付和柱图使用 `series[].data`。点的 `label` 是类别标识，同名类别会把不同支付渠道对齐到同一分支。
+- 增长、收入、成员和迷你图使用有序 `{ label, value }` 点。日期游标以点索引为准，组件内部不读取当前日期。
+- 半圆与径向仪表使用 `value / capacity`，容量默认100。存储条使用同样比例，并显示调用方提供的容量与单位。这些图例的点击是选择指标，而不是隐藏系列。
+- 气泡与散点使用 `nodes`，`x`、`y` 是0–100坐标。气泡的y轴向下增长，半径按逻辑CSS像素计算；散点的y轴向上增长，默认绘制较小的点簇。
+- 活动与时段矩阵使用显式、从0开始的 `row`、`column`。在线矩阵按输入顺序排列细状态条，容器变窄时换行；读取 `up`、`degraded`、`down`，未传状态时使用0–1数值。
+
+每个周期有 `id`、`label`，可选 `series`、`nodes`、`cells`。传入的集合替换对应基础集合；省略的集合沿用基础集合，显式空数组保持为空。所有受控模型都可省略，此时周期、过滤、选择、悬停与游标由组件本地维护。
+
+### 最佳实践
+
+- 为系列、节点和单元格提供稳定ID与有意义的标签。日期游标需要稳定的点顺序。`periods` 应传真实服务端快照，不在界面中制造业务成功或随机值。
+- `activeKeys` 控制可见系列，`selectedSeries` 控制仪表、存储或迷你图指标，二者含义不同。图例悬停/聚焦只高亮；点击、空格和Enter执行实际控制动作。
+- `compact` 只移除卡片文案、过滤器和图例，不更换图形或数据。紧凑图形需要独立操作时，在外部提供完整控制。
+- `color` 优先使用token，默认使用随主题变化的单色墨色梯度，hover不补间颜色。`formatValue` 负责货币、语言和单位；组件不虚构变化幅度、收入或服务状态。
+- `animated=false`、离屏、文档隐藏、KeepAlive失活和减少动态效果都会暂停逐帧循环，数据与操作仍可用。SVG纹理直接绘制真实几何，不运行Canvas动画循环。
+
+## API 参考
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 行为 |
+| --- | --- | --- | --- |
+| `variant` | `DitherChartVariant` | `dither-donut` | 下表19种独立图形之一。 |
+| `pattern` | `DitherPattern` | `pixel` | 像素shader、有序Bayer抖动或8种SVG纹理。 |
+| `series` | `readonly DitherSeries[]` | `[]` | 命名数值/点集合，不自动生成数据。 |
+| `nodes` | `readonly DitherNode[]` | `[]` | 气泡/散点的位置、半径和tooltip数值。 |
+| `cells` | `readonly DitherCell[]` | `[]` | 矩阵坐标、活动/在线数值。 |
+| `periods` | `readonly DitherPeriod[]` | `[]` | 调用方提供的命名数据快照。 |
+| `period` | `string` | 第一个周期ID | 可选受控周期模型。 |
+| `activeKeys` | `readonly string[]` | 全部系列/节点 | 可选受控可见性模型；`[]` 隐藏全部。 |
+| `selectedSeries` | `string` | 第一个可见系列 | 控制半圆/径向仪表、存储和迷你图的指标选择。 |
+| `hover` | `DitherHover \| null` | 本地悬停值 | 受控数据项，含 `id`、可选 `seriesId`、`label`、`value`。 |
+| `dateCursor` | `number \| null` | `null` | 受控点索引，可由指针、键盘和范围输入更新。 |
+| `title` | `string` | `''` | 标题与无障碍名称。 |
+| `description` | `string` | `''` | 说明与无障碍描述。 |
+| `labels` | `DitherChartLabels` | 英文标签 | `empty`、`period`、`series`、`chart`、`total`、`capacity`、`less`、`more`、`cursor`；传入本地化文案。 |
+| `height` | `number` | `180` | 绘图区CSS像素高度，至少32；宽度跟随容器。 |
+| `compact` | `boolean` | `false` | 只显示图形的缩略图。 |
+| `animated` | `boolean` | `true` | 活跃状态允许时播放数据插值和像素纹理。 |
+| `size` | `xs \| sm \| md \| lg` | `md` | 内边距与分组间隔。 |
+| `maxValue` | `number` | 按数据计算 | 柱图/面积图固定上界、矩阵强度上界、漏斗分母。 |
+| `showLegend` | `boolean` | `true` | 非紧凑模式显示命名系列控制。 |
+| `indicator` | `dot \| line \| dashed` | `dot` | 图例与tooltip标记结构。 |
+| `formatValue` | `(value, label, series?) => string` | 英文数值格式 + 传入单位 | 摘要、图例、容量与tooltip共用格式化函数。 |
+
+`DitherSeries`：`id`、`label`，可选 `value`、`capacity`、`data: readonly { label, value }[]`、`color`、`unit`、`change`。`change` 是调用方文案，不自动计算业务指标。`DitherNode`：`id`、`label`、`x`、`y`、`value`，可选 `radius`、`color`。`DitherCell`：`id`、`label`、`row`、`column`、`value`，可选 `status`。
+
+### 变体与纹理
+
+| 变体 | 固定来源渲染器 | 独立形态 |
+| --- | --- | --- |
+| `dither-donut` | `DitherDonutChart` | 圆角、有间隔的计划扇区与径向密度像素。 |
+| `dither-stacked` | `DitherStackedChart` | 区域渠道堆叠，支持渠道和分支高亮。 |
+| `dither-growth` | `DitherGrowthChart` | 像素面积、静态底网格与日期游标。 |
+| `dither-heatmap` | `ActivityHeatmap` | 居中的贡献日矩阵。 |
+| `dither-gauge` | `ServerGauge` | 细半圆轨道与所选指标填充。 |
+| `dither-traffic` | `TrafficBubble` | 带标签、漂浮的填充气泡簇。 |
+| `dither-funnel` | `DitherFunnelChart` | 左对齐、逐阶段缩减的条形。 |
+| `dither-device` | `DeviceUsageChart` | 连续设备环段，不等同于圆角计划扇区。 |
+| `dither-storage` | `StorageUsageChart` | 容量轨道与所选资源填充。 |
+| `dither-revenue` | `RevenueLineChart` | 实线折线与逐渐减弱的像素面积。 |
+| `dither-uptime` | `UptimeChart` | 会换行的细日期状态条。 |
+| `dither-bar` | `DitherBarChart` | 密度随高度变化的垂直柱。 |
+| `dither-radial` | `DitherRadialChart` | 完整目标进度环与中央百分比。 |
+| `dither-scatter` | `DitherScatterChart` | 小型点簇与连接趋势线。 |
+| `dither-heatmap-grid` | `DitherHeatmapGrid` | 完整日/时段强度矩阵。 |
+| `dither-sparkline-matrix` | `DitherSparklineMatrix` | 可选择的指标矩阵与像素面积。 |
+| `members-growth` | `MembersGrowthChart` | 成员摘要、较强底像素、日期与游标。 |
+| `payments` | `PaymentsChart` | 支付摘要、有间隔的圆角渠道与分支/渠道读数。 |
+| `plan-card` | `ChartCard` | 计划摘要、分布与数值/百分比明细。 |
+
+`DITHER_CHART_VARIANTS`、`DITHER_PATTERNS` 导出完整类型列表。纹理为 `pixel`、`ordered`、`dot`、`hatched`、`duotone`、`striped`、`dotted`、`area-gradient`、`primary-gradient`、`noise`。有序模式使用真实4×4 Bayer阈值矩阵；SVG模式分别使用不同 `<pattern>`、`<linearGradient>` 或裁切噪声filter，不是给同一种填充换名。
+
+### 事件与插槽
+
+| 事件 | 参数 |
+| --- | --- |
+| `update:period`、`period-change` | 周期ID。 |
+| `update:activeKeys` | 可见ID数组。 |
+| `update:selectedSeries` | 所选指标ID。 |
+| `update:hover` | `DitherHover \| null`。 |
+| `update:dateCursor` | 点索引或 `null`。 |
+| `select` | 指针点击或Enter/空格选中的数据项。 |
+
+插槽：`header({ total, period })`、`tooltip({ hover })`、`footer({ dataset })`。tooltip复用现有charts core上下文与 `TxChartTooltip` 定位。`dot`、`line`、`dashed` 保留不同标记结构。绘图区支持方向键、Home/End、Enter/空格和Escape；图例与周期使用原生按钮。
+
+### CSS 变量
+
+组件读取现有 `--tx-chart-categorical-1`、`--tx-chart-grid-line` 及TuffEx文字、表面和线条token。`--tx-dither-pad`、`--tx-dither-gap` 调整组件间距。Canvas颜色在数据/主题变化时解析，不在每帧读取；SVG定义使用实例稳定的Vue `useId()`。
+
+## 技术实现
+
+### 来源等价与运行时保护
+
+固定提交为 `43c29ce9cdd16459e3eab4992381b8d35b38776a`。已读取 `src/components/dither-charts`、`src/components/simple-comp` 两目录，包括非目录图形及pattern、图例、tooltip辅助源码。以下11对同字节：`ChartCard`、`DitherBarChart`、`DitherBook`、`DitherChartsGrid`、`DitherHeatmapGrid`、`DitherRadialChart`、`DitherScatterChart`、`DitherSparklineMatrix`、`MembersGrowthChart`、`PaymentsChart`、`SimpleCompExtracted`。
+
+另外11对**没有按同名静默合并**。它们的可见几何公式相同，但 `dither-charts` 给全部11项添加缓存的 `ResizeObserver` 尺寸与可见性/减少动态效果保护；活动、设备、漏斗、收入、半圆仪表、存储、气泡、在线图还限制DPR≤2，而环图、堆叠、增长在两个副本中已经限制DPR。漏斗、存储、在线图额外限制30fps。差异通过 `DITHER_SOURCE_DIFFERENCES` 与演示逐项记录。两来源共用受保护的运行方式，不重新引入每帧布局读取、隐藏后台循环或违背用户偏好的动效。
+
+Canvas后备尺寸响应resize与DPR变化。数据插值使用公共spring，几何未变化时缓存路径，颜色与布局读取不进入逐帧循环；失活和卸载释放计时器、监听器、observer与RAF。SSR以及SVG纹理选择也能显示真实SVG几何。不引入React、Motion、Recharts或ECharts渲染器。
+
+### 组合与归属
+
+`DitherChartsGrid` 对应可遍历的演示目录。独立 `Book`、`DitherBook` 归 `TxFlipBook`，不是图表别名。演示通过真实flip-book与 `plan-card`、`payments`、`members-growth` API组合原提取页面；页内容使用调用方自制图形，不分发上游第三方照片。
+
+图表和pattern移植保留MIT及 `Copyright (c) 2026 SYED  SUBHAN UDDIN`。提取组合的来源显式声明Apache-2.0，其衍生演示保留该头和Vue/TuffEx修改通知。真实运行与浏览器验收由集成负责人统一执行，本页不宣称已运行这些检查。

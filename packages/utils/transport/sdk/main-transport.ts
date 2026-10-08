@@ -20,6 +20,7 @@ import type {
   ITuffTransportMain,
   MainInvokeContext,
   PluginActivationIdentity,
+  PluginCallerIdentity,
   PluginInvokeContext,
   PluginKeyManager,
   PluginSecurityContext,
@@ -78,6 +79,7 @@ type MainChannelBridge = {
     type: BridgeChannelType,
     eventName: string,
     arg?: unknown,
+    plugin?: PluginActivationIdentity,
   ) => void;
   broadcastPlugin: (
     pluginName: string,
@@ -621,6 +623,7 @@ export class TuffMainTransport implements ITuffTransportMain {
     WebContents,
     () => void
   >();
+  private readonly notificationRecipients = new WeakMap<PluginCallerIdentity, WebContents>();
 
   constructor(
     private channel: MainChannelBridge,
@@ -772,6 +775,9 @@ export class TuffMainTransport implements ITuffTransportMain {
     const eventName = event.toEventName();
 
     const baseHandler = async (payload: TReq, context: HandlerContext) => {
+      if (isAuthoritativePluginContext(context.plugin)) {
+        this.notificationRecipients.set(context.plugin.identity, context.sender);
+      }
       try {
         return await handler(payload, context);
       } catch (error) {
@@ -1380,6 +1386,39 @@ export class TuffMainTransport implements ITuffTransportMain {
     );
   }
 
+  /** Owner-directed notification; never resolves a window or plugin recipient by numeric id/name. */
+  notifyTo<TReq>(
+    webContents: WebContents,
+    event: TuffEvent<TReq, void>,
+    payload: TReq,
+    plugin?: PluginSecurityContext,
+  ): boolean {
+    assertTuffEvent(event, "TuffMainTransport.notifyTo");
+    if (!webContents || webContents.isDestroyed()) return false;
+    let activation: PluginActivationIdentity | undefined;
+    if (plugin) {
+      if (!isAuthoritativePluginContext(plugin) ||
+          this.notificationRecipients.get(plugin.identity) !== webContents) return false;
+      activation = this.resolveActivation(this.keyManager.resolveIdentity?.(plugin.uniqueKey));
+      if (!activation || activation.name !== plugin.name ||
+          activation.pluginInstanceId !== plugin.identity.pluginInstanceId ||
+          activation.activationGeneration !== plugin.identity.activationGeneration ||
+          activation.key !== plugin.uniqueKey) return false;
+      const recipient = this.keyManager.resolveSenderIdentity?.(webContents);
+      if (!recipient && (plugin.identity.authority === "web-contents" ||
+                         plugin.identity.authority === "message-port")) return false;
+      if (recipient && !isSameActivation(recipient, activation)) return false;
+    } else if (this.keyManager.resolveSenderIdentity?.(webContents)) {
+      return false;
+    }
+    this.channel.broadcastTo(
+      { webContents } as Electron.BrowserWindow,
+      activation ? BRIDGE_CHANNEL.PLUGIN : BRIDGE_CHANNEL.MAIN,
+      event.toEventName(), payload, activation,
+    );
+    return true;
+  }
+
   /**
    * Sends a message to a plugin's renderer.
    */
@@ -1395,7 +1434,8 @@ export class TuffMainTransport implements ITuffTransportMain {
   }
 
   /**
-   * Broadcasts a message to all windows.
+   * Sends a message to the main window only (fire-and-forget), despite the name: CoreBox, the
+   * OmniPanel and other windows do not receive it. Reach those with `broadcastToWindow`.
    */
   broadcast<TReq>(event: TuffEvent<TReq, void>, payload: TReq): void {
     assertTuffEvent(event, "TuffMainTransport.broadcast");

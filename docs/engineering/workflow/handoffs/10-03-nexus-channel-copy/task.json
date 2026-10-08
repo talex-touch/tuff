@@ -1,0 +1,30 @@
+{
+  "id": "nexus-channel-copy",
+  "name": "nexus-channel-copy",
+  "title": "模型渠道 Nexus 详情文案与标签调整",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-10-03",
+  "completedAt": "2026-10-03",
+  "branch": null,
+  "base_branch": "stage",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "10-03-intelligence-settings-revamp",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "无。",
+    "evidence": "N1、N3–N6 已落地，N2 按决定维持 D1、未做。layout 下两个测试与 translation-coverage 通过（检查代理扩跑 19 个文件、115 个用例全绿）。vue-tsc tsconfig.web 退出码 0，并用故意写错的探针确认检查生效。core-app eslint delta 为 0，git diff --check 干净。隔离 dev 实例截图（中英、Nexus 与自定义渠道）存于 /tmp/nexus-channel-copy-verify/shots/。Nexus 已登录态未实拍：描述绑定已整体删除，两种状态都不会再显示描述。",
+    "nextAction": "已完成，等待归档。"
+  }
+}

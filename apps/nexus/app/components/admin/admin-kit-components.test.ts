@@ -13,6 +13,7 @@ import * as tuffexModal from '@talex-touch/tuffex/modal'
 import * as tuffexPagination from '@talex-touch/tuffex/pagination'
 import * as tuffexSkeleton from '@talex-touch/tuffex/skeleton'
 import * as tuffexStatCard from '@talex-touch/tuffex/stat-card'
+import * as adminFieldControl from '~/composables/useAdminFieldControl'
 import * as adminFormat from '~/composables/useAdminFormat'
 import * as adminRouteSkeleton from '~/composables/useAdminRouteSkeleton'
 import * as adminKit from '~/utils/admin-kit'
@@ -37,6 +38,7 @@ const MODULES: Record<string, unknown> = {
   '@talex-touch/tuffex/pagination': tuffexPagination,
   '@talex-touch/tuffex/skeleton': tuffexSkeleton,
   '@talex-touch/tuffex/stat-card': tuffexStatCard,
+  '~/composables/useAdminFieldControl': adminFieldControl,
   '~/composables/useAdminFormat': adminFormat,
   '~/composables/useAdminRouteSkeleton': adminRouteSkeleton,
   '~/utils/admin-kit': adminKit,
@@ -70,6 +72,7 @@ beforeAll(async () => {
   await load('AdminIdentity')
   await load('AdminFilterBar')
   await load('AdminFilterField')
+  await load('AdminFormField')
   await load('AdminStatGrid')
   await load('AdminTable')
   await load('AdminConfirmDialog')
@@ -162,6 +165,27 @@ describe('AdminTable', () => {
     const { html } = await render('AdminTable', { ...base, rows, total: 2 })
     expect(text(html)).toContain('dashboard.sections.adminKit.table.total:{"count":"2"}')
     expect(html).not.toContain('tx-pagination')
+  })
+
+  it('makes rows focusable only when they open something', async () => {
+    // `TxDataTable` turns a row into a tab stop that Enter and Space activate as
+    // soon as a `rowClick` listener exists, so the listener is only attached for
+    // `clickableRows` (the user and audit tables open a detail drawer).
+    const clickable = await render('AdminTable', { ...base, rows, total: 2, clickableRows: true })
+    const rowTags = clickable.html.match(/<tr class="tx-data-table__row[^"]*"[^>]*>/g) ?? []
+    expect(rowTags).toHaveLength(2)
+    for (const tag of rowTags) {
+      expect(tag).toContain('is-interactive')
+      expect(tag).toContain('tabindex="0"')
+    }
+
+    const plain = await render('AdminTable', { ...base, rows, total: 2 })
+    const plainTags = plain.html.match(/<tr class="tx-data-table__row[^"]*"[^>]*>/g) ?? []
+    expect(plainTags).toHaveLength(2)
+    for (const tag of plainTags) {
+      expect(tag).not.toContain('is-interactive')
+      expect(tag).not.toContain('tabindex')
+    }
   })
 
   it('forwards cell slots to the table', async () => {
@@ -273,6 +297,56 @@ describe('AdminFilterBar and AdminFilterField', () => {
   })
 })
 
+describe('AdminFormField', () => {
+  it('is a block field: label, control, then the hint, never a filter-row flex item', async () => {
+    const { html } = await render('AdminFormField', { label: 'Duration (days)', for: 'probe-days', hint: 'A whole number from 1 to 365' }, {
+      default: () => h('input', { id: 'probe-days' }),
+    })
+    expect(html).toMatch(/^<div class="AdminFormField"/)
+    expect(html).not.toContain('AdminFilterField')
+    expect(html).toMatch(/<label[^>]*for="probe-days"[^>]*>Duration \(days\)<\/label>/)
+    expect(html).not.toMatch(/<label[^>]*>[^<]*<input/)
+    const label = html.indexOf('AdminFormField-Label')
+    const control = html.indexOf('id="probe-days"')
+    const hint = html.indexOf('AdminFormField-Hint')
+    expect(label).toBeGreaterThan(-1)
+    expect(control).toBeGreaterThan(label)
+    expect(hint).toBeGreaterThan(control)
+    expect(text(html)).toContain('A whole number from 1 to 365')
+  })
+
+  it('gives the hint an id the control can be described by, and none without a hint', async () => {
+    let scope: { labelId?: string, hintId?: string | null } = {}
+    const withHint = await render('AdminFormField', { label: 'Count', hint: 'From 1 to 100' }, {
+      default: (slot: typeof scope) => {
+        scope = slot
+        return h('input')
+      },
+    })
+    expect(scope.hintId).toBeTruthy()
+    expect(withHint.html).toContain(`<p id="${scope.hintId}" class="AdminFormField-Hint"`)
+    expect(withHint.html).toMatch(new RegExp(`<span id="${scope.labelId}" class="AdminFormField-Label"`))
+
+    const without = await render('AdminFormField', { label: 'Count' }, {
+      default: (slot: typeof scope) => {
+        scope = slot
+        return h('input')
+      },
+    })
+    expect(scope.hintId).toBeNull()
+    expect(without.html).not.toContain('AdminFormField-Hint')
+  })
+
+  it('labels without `for` through a plain-text label, and marks the field invalid', async () => {
+    const { html } = await render('AdminFormField', { label: 'Plan', hint: 'Pick a plan', invalid: true }, {
+      default: () => h('div', { role: 'combobox' }),
+    })
+    expect(html).toMatch(/<span id="[^"]+" class="AdminFormField-Label"[^>]*>Plan<\/span>/)
+    expect(html).not.toContain('<label')
+    expect(html).toMatch(/^<div class="AdminFormField is-invalid"/)
+  })
+})
+
 describe('AdminStatGrid, AdminSection and AdminPageShell', () => {
   it('draws one placeholder per card while loading', async () => {
     const items = [
@@ -286,6 +360,18 @@ describe('AdminStatGrid, AdminSection and AdminPageShell', () => {
 
     const loaded = await render('AdminStatGrid', { items })
     expect(loaded.html.match(/class="tx-stat-card fake-background/g)).toHaveLength(3)
+  })
+
+  it('gives a card the tooltip its item carries, and no other card one', async () => {
+    const { html } = await render('AdminStatGrid', {
+      items: [
+        { key: 'requests', label: 'Requests', value: '12' },
+        { key: 'lastSeen', label: 'Last seen', value: '2026-10-03 06:21', title: 'Oct 3, 2026, 6:21:09 AM' },
+      ],
+    })
+    const titled = [...html.matchAll(/<div[^>]*\stitle="([^"]*)"[^>]*>/g)]
+    expect(titled.map(match => match[1])).toEqual(['Oct 3, 2026, 6:21:09 AM'])
+    expect(titled[0]![0]).toContain('tx-stat-card')
   })
 
   it('titles a section with an h2 that names the block', async () => {

@@ -58,10 +58,6 @@ vi.mock('@talex-touch/utils/transport', () => {
   }
 })
 
-vi.mock('@talex-touch/utils/transport/sdk/domains/local-ai-cli', () => ({
-  createLocalAiCliSdk: () => ({ getStatus: async () => ({ betaAvailable: false }) })
-}))
-
 vi.mock('~/components/render/addon/TuffItemAddon.vue', () => ({
   default: {
     name: 'TuffItemAddon',
@@ -156,18 +152,19 @@ vi.mock('../../modules/box/adapter/hooks/useClipboard', () => ({
 
 vi.mock('../../modules/box/adapter/hooks/useDetach', () => ({
   useDetach: () => ({
-    flowVisible: false,
-    flowSessionId: '',
-    flowPayload: undefined,
-    flowAnchor: 'corner',
-    closeFlowSelector: () => {},
-    dispatchFlow: () => {},
-    openFlowSelector: () => {}
+    detachFeature: async () => {},
+    detachUIMode: async () => {},
+    openFlowPanel: async () => {},
+    dispatchFlow: async () => {}
   })
 }))
 
 vi.mock('../../modules/box/adapter/hooks/useFocus', () => ({
-  useFocus: () => ({ focusInput: () => {}, focusWindowAndInput: async () => {} })
+  useFocus: () => ({
+    focusInput: () => {},
+    focusWindowAndInput: async () => {},
+    getSummonId: () => null
+  })
 }))
 
 vi.mock('../../modules/box/adapter/hooks/useKeyboard', () => ({
@@ -232,7 +229,6 @@ const stubs = {
     template: '<div class="normal-list-row" :data-id="item.id">{{ item.render.basic.title }}</div>'
   },
   DivisionBoxHeader: { template: '<div />' },
-  FlowSelector: { template: '<div />' },
   PrefixPart: { template: '<div />' },
   PreviewHistoryPanel: { template: '<div />' },
   TagSection: { template: '<div />' },

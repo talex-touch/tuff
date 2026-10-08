@@ -35,7 +35,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import * as schema from '../../../db/schema'
 import { nativeSessionLeaseRegistry } from '../../local-ai-cli/native-session-lease'
 import { setLocalAiCliWorkspaceRoot } from '../../local-ai-cli/workspace-root'
-import { PiCliProvider } from './pi-cli-provider'
+import { IntelligenceContextExecutionService } from '../intelligence-context-execution'
+import { ContextHygieneService } from '../intelligence-context-hygiene'
+import { markHomeChatInvoke } from '../intelligence-invoke-purpose'
+import { PiCliProvider, setPiToolRuntimeResolver } from './pi-cli-provider'
 import {
   CLAUDE_CLI_ORIGIN,
   CLAUDE_CLI_PROVIDER_ID,
@@ -51,10 +54,39 @@ const testDir = dirname(fileURLToPath(import.meta.url))
 const migrationsFolder = resolve(testDir, '../../../../../resources/db/migrations')
 
 let db: MainDatabase
+let execution: IntelligenceContextExecutionService
+
+const modelBoundary = vi.hoisted(() => {
+  // isolate:false must not reuse a provider or hygiene module holding another file's DB handle.
+  vi.resetModules()
+  return {
+    requests: [] as unknown[],
+    async invoke(_capabilityId: string, payload: unknown): Promise<never> {
+      modelBoundary.requests.push(payload)
+      throw new Error('Workspace context preparation must not invoke a model')
+    },
+    async *stream(_capabilityId: string, payload: unknown) {
+      modelBoundary.requests.push(payload)
+      throw new Error('Workspace context preparation must not stream a model')
+    }
+  }
+})
+
+// Node's Electron package has no Main app; resolve the real development extension from the app root.
+vi.mock('electron', () => {
+  const electronBoundary = {
+    app: {
+      isPackaged: false,
+      getAppPath: () => fileURLToPath(new URL('../../../../../', import.meta.url))
+    }
+  }
+  return { ...electronBoundary, default: electronBoundary }
+})
 
 vi.mock('../../database', () => ({
   databaseModule: {
-    getDb: () => db
+    getDb: () => db,
+    getClient: () => client
   }
 }))
 
@@ -62,6 +94,9 @@ vi.mock('../../database', () => ({
 vi.mock('../../../db/db-write', () => ({
   scheduleDbWrite: (_name: string, task: () => Promise<unknown>) => task()
 }))
+
+// The external model boundary is unavailable; context preparation and the Pi consumer stay real.
+vi.mock('../intelligence-sdk', () => ({ tuffIntelligence: modelBoundary }))
 
 const CONFIG: IntelligenceProviderConfig = {
   id: PI_CLI_PROVIDER_ID,
@@ -167,6 +202,20 @@ let caseDir: string
 let sessionRoot: string
 let workspaceRoot: string
 let projectRoot: string
+let previousEnvironment: Record<string, string | undefined>
+const CASE_ENVIRONMENT_KEYS = [
+  'PI_CODING_AGENT_SESSION_DIR',
+  'TUFF_STUB_SPAWN_LOG',
+  'TUFF_STUB_WAIT_FOR',
+  'TUFF_STUB_EMIT_ID',
+  'TUFF_STUB_SKIP_SESSION',
+  'TUFF_STUB_SILENT_OUTPUT',
+  'TUFF_STUB_VERSION',
+  'TUFF_STUB_EXIT_CODE',
+  'TUFF_STUB_DELTA',
+  'TUFF_CLAUDE_CLI_PATH',
+  'TMPDIR'
+] as const
 
 function provider(): PiCliProvider {
   return new PiCliProvider({ ...CONFIG })
@@ -343,27 +392,44 @@ beforeAll(async () => {
   const stubPath = join(fixtureRoot, 'pi-stub.js')
   await writeFile(stubPath, STUB_SOURCE, 'utf8')
   await chmod(stubPath, 0o755)
-  process.env.TUFF_PI_CLI_PATH = stubPath
+  vi.stubEnv('TUFF_PI_CLI_PATH', stubPath)
   resetPiExecutableCache()
 
   client = createClient({ url: `file:${join(fixtureRoot, 'chain.db')}` })
   db = drizzle(client, { schema })
   await migrate(db, { migrationsFolder })
+  await client.execute('PRAGMA foreign_keys = ON')
 })
 
 afterAll(async () => {
-  delete process.env.TUFF_PI_CLI_PATH
-  resetPiExecutableCache()
-  client.close()
-  await rm(fixtureRoot, { recursive: true, force: true })
+  vi.unstubAllEnvs()
+  resetAllCliExecutableCaches()
+  vi.restoreAllMocks()
+  vi.doUnmock('../../database')
+  vi.doUnmock('../../../db/db-write')
+  vi.doUnmock('../intelligence-sdk')
+  vi.doUnmock('electron')
+  vi.resetModules()
+  vi.resetConfig()
+  client?.close()
+  if (fixtureRoot) await rm(fixtureRoot, { recursive: true, force: true })
 })
 
 beforeEach(async () => {
+  previousEnvironment = Object.fromEntries(
+    CASE_ENVIRONMENT_KEYS.map((key) => [key, process.env[key]])
+  )
+  for (const key of CASE_ENVIRONMENT_KEYS) {
+    if (key !== 'TMPDIR' && key !== 'TUFF_CLAUDE_CLI_PATH') delete process.env[key]
+  }
+  modelBoundary.requests.length = 0
+  execution = new IntelligenceContextExecutionService(new ContextHygieneService(), modelBoundary)
   nativeSessionLeaseRegistry.clear()
   // One migrated chain is shared for speed, so each case starts from empty tables — pointer counts
   // and conversation lookups must not observe rows a previous case seeded.
   await client.execute('DELETE FROM local_ai_cli_sessions')
   await client.execute('DELETE FROM projects')
+  await client.execute('DELETE FROM intelligence_context_sessions')
   caseDir = await mkdtemp(join(fixtureRoot, 'case-'))
   sessionRoot = join(caseDir, 'pi-sessions')
   workspaceRoot = await realpath(await mkdtemp(join(caseDir, 'workspace-')))
@@ -374,18 +440,21 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  delete process.env.PI_CODING_AGENT_SESSION_DIR
-  delete process.env.TUFF_STUB_SPAWN_LOG
-  delete process.env.TUFF_STUB_WAIT_FOR
-  delete process.env.TUFF_STUB_EMIT_ID
-  delete process.env.TUFF_STUB_SKIP_SESSION
-  delete process.env.TUFF_STUB_SILENT_OUTPUT
-  delete process.env.TUFF_STUB_VERSION
-  delete process.env.TUFF_STUB_EXIT_CODE
-  delete process.env.TUFF_STUB_DELTA
-  setLocalAiCliWorkspaceRoot(null)
-  nativeSessionLeaseRegistry.clear()
-  await rm(caseDir, { recursive: true, force: true })
+  try {
+    expect(modelBoundary.requests).toEqual([])
+  } finally {
+    for (const key of CASE_ENVIRONMENT_KEYS) {
+      const previous = previousEnvironment?.[key]
+      if (previous === undefined) delete process.env[key]
+      else process.env[key] = previous
+    }
+    vi.restoreAllMocks()
+    setPiToolRuntimeResolver(null)
+    setLocalAiCliWorkspaceRoot(null)
+    nativeSessionLeaseRegistry.clear()
+    resetAllCliExecutableCaches()
+    if (caseDir) await rm(caseDir, { recursive: true, force: true })
+  }
 })
 
 const TURNS_ONE = [{ role: 'user' as const, content: 'Project smoke title\nPROMPT_BODY_CANARY' }]
@@ -396,12 +465,29 @@ const TURNS_TWO = [
 ]
 
 describe('PiCliProvider Home native sessions', () => {
-  it('creates one transcript on the first turn and continues it with the newest turn only', async () => {
+  it('creates and resumes the same native transcript after host context preparation, retaining scoped tools and host checkpoints', async () => {
     const conversationId = 'conv-fresh'
-
-    const firstChunks = await collect(
-      provider().chatStream({ messages: TURNS_ONE }, homeOptions(conversationId))
+    const options: IntelligenceInvokeOptions = {
+      ...homeOptions(conversationId),
+      modelPreference: ['cpa/gpt-6-astra']
+    }
+    setPiToolRuntimeResolver((origin) => {
+      if (origin.conversationId !== conversationId) return null
+      const tools =
+        origin.turnId === 'host-first'
+          ? ['tuff_render_form']
+          : origin.turnId === 'host-second'
+            ? ['tuff_render_chart']
+            : []
+      return { url: 'http://127.0.0.1:1', token: 'fixture-only', tools }
+    })
+    const first = await execution.prepareWorkspaceTurn(
+      { messages: TURNS_ONE },
+      markHomeChatInvoke(options, { conversationId, turnId: 'host-first' }),
+      { conversationId, turnId: 'host-first' }
     )
+
+    const firstChunks = await collect(provider().chatStream(first.payload, first.options))
     expect(firstChunks.some((chunk) => chunk.delta === 'answer')).toBe(true)
 
     const bound = await pointer(conversationId)
@@ -422,10 +508,18 @@ describe('PiCliProvider Home native sessions', () => {
     )
     // No pointer existed, so this one send seeds the visible history into the new transcript.
     expect(firstSpawn?.prompt).toContain('PROMPT_BODY_CANARY')
+    expect(firstSpawn?.argv).toContain('--model')
+    expect(firstSpawn?.argv[firstSpawn!.argv.indexOf('--model') + 1]).toBe('cpa/gpt-6-astra')
+    expect(firstSpawn?.argv).toContain('--tools')
+    expect(firstSpawn?.argv[firstSpawn!.argv.indexOf('--tools') + 1]).toBe('tuff_render_form')
+    expect(firstSpawn?.argv).not.toContain('--no-tools')
 
-    const secondChunks = await collect(
-      provider().chatStream({ messages: TURNS_TWO }, homeOptions(conversationId))
+    const second = await execution.prepareWorkspaceTurn(
+      { messages: TURNS_TWO },
+      markHomeChatInvoke(options, { conversationId, turnId: 'host-second' }),
+      { conversationId, turnId: 'host-second', sessionId: first.summary.sessionId }
     )
+    const secondChunks = await collect(provider().chatStream(second.payload, second.options))
     expect(secondChunks.some((chunk) => chunk.delta === 'answer')).toBe(true)
 
     const resumed = spawns()[1]
@@ -438,6 +532,9 @@ describe('PiCliProvider Home native sessions', () => {
     // The native transcript owns the earlier turns: the positional must be the newest user turn.
     expect(resumed?.prompt).toBe('third question')
     expect(resumed?.prompt).not.toContain('PRIOR_ASSISTANT_CANARY')
+    expect(resumed?.argv).toContain('--tools')
+    expect(resumed?.argv[resumed!.argv.indexOf('--tools') + 1]).toBe('tuff_render_chart')
+    expect(resumed?.argv).not.toContain('--no-tools')
 
     const advanced = await pointer(conversationId)
     expect(advanced?.id).toBe(bound?.id)
@@ -446,6 +543,85 @@ describe('PiCliProvider Home native sessions', () => {
     expect(advanced?.expectedHeadId).not.toBe(bound?.expectedHeadId)
 
     expectLeaseFree(bound!.nativeSessionId)
+
+    // The native transcript stays Pi-owned; the separate durable context checkpoint is host-owned.
+    expect(second.summary.sessionId).toBe(first.summary.sessionId)
+    const checkpoint = await client.execute({
+      sql: `SELECT c.session_id, c.type, s.owner,
+                   json_extract(s.metadata, '$.contextActorId') AS actor,
+                   json_extract(s.metadata, '$.contextActorType') AS actor_type
+            FROM intelligence_context_checkpoints c
+            JOIN intelligence_context_sessions s ON s.id = c.session_id
+            WHERE c.id = ?`,
+      args: [first.summary.checkpoint!.id]
+    })
+    expect(checkpoint.rows.map((row) => ({ ...row }))).toEqual([
+      {
+        session_id: first.summary.sessionId,
+        type: 'session_start',
+        owner: 'assistant',
+        actor: `workspace:${conversationId}`,
+        actor_type: 'host'
+      }
+    ])
+    const turns = await client.execute({
+      sql: `SELECT role, content FROM intelligence_context_turns WHERE session_id = ? ORDER BY content`,
+      args: [first.summary.sessionId!]
+    })
+    expect(turns.rows.map((row) => ({ ...row }))).toEqual([
+      { role: 'user', content: TURNS_ONE[0]!.content },
+      { role: 'user', content: 'third question' }
+    ])
+  })
+
+  it('refuses caller-authored Home turns after real context preparation without spawning or binding a native pointer', async () => {
+    // A gateway grant is available: removing caller during preparation must not unlock it.
+    setPiToolRuntimeResolver(() => ({
+      url: 'http://127.0.0.1:1',
+      token: 'fixture-only',
+      tools: ['tuff_render_form']
+    }))
+    for (const { name, caller } of [
+      { name: 'plugin impersonating Home', caller: 'plugin:fixture' },
+      { name: 'forged host actor', caller: 'workspace:conv-forged-host' }
+    ]) {
+      const conversationId = name === 'forged host actor' ? 'conv-forged-host' : 'conv-plugin'
+      const options = homeOptions(conversationId)
+      const prepared = await execution.prepareWorkspaceTurn(
+        { messages: TURNS_ONE },
+        { ...options, metadata: { ...options.metadata, caller } },
+        { conversationId, turnId: `${conversationId}-turn` }
+      )
+      const { chunks, error } = await collectError(
+        provider().chatStream(prepared.payload, prepared.options)
+      )
+      expect(error?.message, name).toBe('PI_NATIVE_SESSION_CONTEXT_INVALID')
+      expect(chunks, name).toEqual([])
+      expect(spawns(), name).toEqual([])
+      expect(await pointer(conversationId), name).toBeNull()
+    }
+    expect(await pointerCount()).toBe(0)
+  })
+
+  it('does not grant tools to an unmarked Home turn through context preparation despite an available gateway', async () => {
+    setPiToolRuntimeResolver(() => ({
+      url: 'http://127.0.0.1:1',
+      token: 'fixture-only',
+      tools: ['tuff_render_form']
+    }))
+    const conversationId = 'conv-unmarked'
+    const prepared = await execution.prepareWorkspaceTurn(
+      { messages: TURNS_ONE },
+      homeOptions(conversationId),
+      { conversationId, turnId: 'unmarked-turn' }
+    )
+    const chunks = await collect(provider().chatStream(prepared.payload, prepared.options))
+    expect(chunks.some((chunk) => chunk.delta === 'answer')).toBe(true)
+    const [spawn] = spawns()
+    expect(spawn?.argv).toContain('--no-tools')
+    expect(spawn?.argv).not.toContain('--tools')
+    expect(spawn?.prompt).toContain('PROMPT_BODY_CANARY')
+    expect((await pointer(conversationId))?.nativeSessionId).toBe(spawn?.sessionId)
   })
 
   it('runs a quick-invoke turn session-less and records no pointer', async () => {

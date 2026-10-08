@@ -1,14 +1,27 @@
 <script setup lang="ts">
 import type { FileUploaderFile } from '@talex-touch/tuffex/file-uploader'
-import { ref, watchEffect } from 'vue'
-import { useDashboardImagesData } from '~/composables/useDashboardData'
+import type { ImageResource } from '~/utils/admin-images'
+import { TxAlert } from '@talex-touch/tuffex/alert'
+import { TxButton, TxCopyButton, TxIconButton } from '@talex-touch/tuffex/button'
+import { TxEmptyState } from '@talex-touch/tuffex/empty-state'
+import { TxErrorState } from '@talex-touch/tuffex/error-state'
+import { TxFileUploader } from '@talex-touch/tuffex/file-uploader'
+import { TxSkeleton } from '@talex-touch/tuffex/skeleton'
+import { TxSpinner } from '@talex-touch/tuffex/spinner'
+import { computed, onMounted, ref } from 'vue'
+import AdminConfirmDialog from '~/components/admin/AdminConfirmDialog.vue'
 import AdminPageShell from '~/components/admin/AdminPageShell.vue'
+import AdminSection from '~/components/admin/AdminSection.vue'
+import { useAdminFormat } from '~/composables/useAdminFormat'
+import { useToast } from '~/composables/useToast'
+import {
+  createImageResourceList,
+  fetchImageResourcePage,
+  isPreviewableResource,
+  resourceAbsoluteUrl,
+} from '~/utils/admin-images'
+import { resolveAdminErrorMessage } from '~/utils/admin-request-error'
 import { requestJson } from '~/utils/request'
-
-interface DashboardImage {
-  key: string
-  url: string
-}
 
 definePageMeta({
   layout: 'admin',
@@ -21,253 +34,379 @@ definePageMeta({
 
 defineI18nRoute(false)
 
+// The administrator gate is the layout's (`useAdminGate`): this page only mounts
+// for an administrator, so it neither checks the role nor asks for data it
+// cannot have.
 const { t } = useI18n()
+const format = useAdminFormat()
+const toast = useToast()
+const origin = useRequestURL().origin
 
-const { isAdmin } = useAccountRole()
+// One page of the bucket at a time; "Load more" follows the listing's cursor.
+const resources = createImageResourceList(
+  cursor => fetchImageResourcePage(requestJson, cursor),
+  () => t('dashboard.sections.images.loadFailed', 'Resources could not be loaded.'),
+  () => t('dashboard.sections.images.loadMoreFailed', 'More resources could not be loaded.'),
+)
 
-const {
-  images,
-  pending: imagesPending,
-  refresh: refreshImages,
-  execute,
-} = useDashboardImagesData({ lazy: true })
-
-watchEffect(() => {
-  if (isAdmin.value)
-    execute()
+onMounted(() => {
+  void resources.reload()
 })
 
-const imageFiles = ref<FileUploaderFile[]>([])
-const imageUploading = ref(false)
-const imageError = ref<string | null>(null)
-const copiedImageKey = ref<string | null>(null)
+const PLACEHOLDER_CARDS = 8
 
-function isImageResource(key: string) {
-  return /\.(png|jpe?g|gif|webp|svg)$/i.test(key)
-}
+const showListFooter = computed(() =>
+  !resources.loading.value && !resources.error.value && resources.items.value.length > 0)
 
-async function handleImageUpload(files: FileUploaderFile[]) {
-  imageFiles.value = files
+const countLabel = computed(() => {
+  const count = format.number(resources.items.value.length)
+  return resources.truncated.value
+    ? t('dashboard.sections.images.loadedCount', { count })
+    : t('dashboard.sections.images.totalCount', { count })
+})
+
+// Upload: one file at a time, shown first in the grid once it is stored.
+const uploadFiles = ref<FileUploaderFile[]>([])
+const uploading = ref(false)
+const uploadError = ref<string | null>(null)
+
+async function handleUpload(files: FileUploaderFile[]) {
   const file = files[0]?.file
-  if (!file || !isAdmin.value)
+  if (!file || uploading.value)
     return
 
-  imageUploading.value = true
-  imageError.value = null
-
+  uploading.value = true
+  uploadError.value = null
   try {
     const formData = new FormData()
     formData.append('file', file)
-
-    await requestJson('/api/images/upload', {
+    const result = await requestJson<{ key?: unknown, url?: unknown }>('/api/images/upload', {
       method: 'POST',
       body: formData,
     })
-
-    await refreshImages()
-    imageFiles.value = []
+    uploadFiles.value = []
+    toast.success(t('dashboard.sections.images.uploadSuccess', 'Resource uploaded.'))
+    if (typeof result?.key === 'string' && typeof result?.url === 'string' && !resources.error.value)
+      resources.prepend({ key: result.key, url: result.url })
+    else
+      await resources.reload()
   }
   catch (error: unknown) {
-    imageError.value = error instanceof Error ? error.message : t('dashboard.sections.images.errors.unknown', 'Upload failed')
+    uploadError.value = resolveAdminErrorMessage(error, t('dashboard.sections.images.errors.uploadFailed', 'Upload failed.'))
   }
   finally {
-    imageUploading.value = false
+    uploading.value = false
   }
 }
 
-// Delete confirmation
-const deleteConfirmVisible = ref(false)
-const pendingDeleteKey = ref<string | null>(null)
-
-function requestDeleteImage(imageKey: string) {
-  if (!isAdmin.value)
-    return
-  pendingDeleteKey.value = imageKey
-  deleteConfirmVisible.value = true
+function onCopyFailed() {
+  toast.warning(t('dashboard.sections.images.errors.copyFailed', 'Copy failed'))
 }
 
-async function confirmDeleteImage(): Promise<boolean> {
-  if (!pendingDeleteKey.value)
-    return true
+// Delete, behind a confirmation.
+const deleteTarget = ref<ImageResource | null>(null)
+const deleteOpen = ref(false)
+const deleting = ref(false)
+
+function requestDelete(item: ImageResource) {
+  deleteTarget.value = item
+  deleteOpen.value = true
+}
+
+async function confirmDelete() {
+  const target = deleteTarget.value
+  if (!target || deleting.value)
+    return
+  deleting.value = true
   try {
-    await requestJson(`/api/images/${pendingDeleteKey.value}`, {
-      method: 'DELETE',
-    })
-    await refreshImages()
+    await requestJson(`/api/images/${encodeURIComponent(target.key)}`, { method: 'DELETE' })
+    resources.remove(target.key)
+    deleteOpen.value = false
+    toast.success(t('dashboard.sections.images.deleteSuccess', 'Resource deleted.'))
   }
   catch (error: unknown) {
-    imageError.value = error instanceof Error ? error.message : t('dashboard.sections.images.errors.unknown', 'Delete failed')
+    toast.warning(resolveAdminErrorMessage(error, t('dashboard.sections.images.errors.deleteFailed', 'Delete failed.')))
   }
   finally {
-    pendingDeleteKey.value = null
-  }
-  return true
-}
-
-function closeDeleteConfirm() {
-  deleteConfirmVisible.value = false
-  pendingDeleteKey.value = null
-}
-
-async function copyImageUrl(imageUrl: string, imageKey: string) {
-  if (!import.meta.client)
-    return
-
-  try {
-    const fullUrl = new URL(imageUrl, window.location.origin).href
-    await navigator.clipboard.writeText(fullUrl)
-    copiedImageKey.value = imageKey
-    setTimeout(() => {
-      copiedImageKey.value = null
-    }, 2000)
-  }
-  catch (error: unknown) {
-    imageError.value = error instanceof Error ? error.message : t('dashboard.sections.images.errors.copyFailed', 'Copy failed')
+    deleting.value = false
   }
 }
-
-watchEffect(() => {
-  if (!isAdmin.value) {
-    imageError.value = null
-    imageFiles.value = []
-  }
-})
 </script>
 
 <template>
-  <AdminPageShell :title="t('dashboard.sections.images.title', 'Resources')">
-    <section class="apple-card-lg p-6">
-    <div
-      v-if="!isAdmin"
-      class="mt-6 rounded-2xl border border-black/[0.06] bg-black/[0.02] p-6 text-sm text-black/70 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/70"
-    >
-      {{ t('dashboard.sections.images.adminOnly', 'Only administrators can manage shared resources.') }}
-    </div>
+  <AdminPageShell :title="t('dashboard.sections.menu.images', 'Asset Library')">
+    <template #actions>
+      <TxButton
+        variant="secondary"
+        size="sm"
+        :disabled="resources.loading.value || resources.refreshing.value"
+        @click="resources.reload()"
+      >
+        {{ t('common.refresh', 'Refresh') }}
+      </TxButton>
+    </template>
 
-    <div v-else class="mt-6">
-      <div class="rounded-2xl border border-black/[0.08] border-dashed bg-black/[0.02] p-4 text-sm text-black dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-white">
-        <div class="flex flex-col gap-4">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 class="text-sm font-semibold text-black dark:text-white">
-                {{ t('dashboard.sections.images.uploadTitle', 'Upload Resource') }}
-              </h3>
-              <p class="text-xs text-black/60 dark:text-white/70">
-                {{ t('dashboard.sections.images.uploadSubtitle', 'Upload assets to use in plugins and updates') }}
-              </p>
-            </div>
-          </div>
-
-          <div class="flex flex-col gap-3">
-            <label class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-white/60">
-              {{ t('dashboard.sections.images.selectFile', 'Select File') }}
-              <TxFileUploader
-                v-model="imageFiles"
-                :multiple="false"
-                :max="1"
-                accept="*/*"
-                :disabled="imageUploading"
-                :button-text="t('dashboard.sections.images.selectFile', 'Select File')"
-                :drop-text="t('dashboard.sections.images.selectFile', 'Select File')"
-                :hint-text="t('dashboard.sections.images.uploadSubtitle', 'Upload assets to use in plugins and updates')"
-                @change="handleImageUpload"
-              />
-            </label>
-
-            <p
-              v-if="imageError"
-              class="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-500/10 dark:text-red-200"
-            >
-              {{ imageError }}
-            </p>
-
-            <div
-              v-if="imageUploading"
-              class="flex items-center gap-2 text-xs text-black/60 dark:text-white/70"
-            >
-              <TxSpinner :size="16" />
-              {{ t('dashboard.sections.images.uploading', 'Uploading...') }}
-            </div>
-          </div>
+    <div class="ResourcePage">
+      <AdminSection :title="t('dashboard.sections.images.uploadTitle', 'Upload resource')">
+        <div class="ResourceUpload">
+          <TxFileUploader
+            v-model="uploadFiles"
+            :multiple="false"
+            :max="1"
+            accept="*/*"
+            :disabled="uploading"
+            :drop-text="t('dashboard.sections.images.dropText', 'Drop a file here')"
+            :hint-text="t('dashboard.sections.images.uploadSubtitle', 'PNG, JPEG, WebP, GIF, SVG, or other approved attachments up to 5 MB.')"
+            :button-text="t('dashboard.sections.images.selectFile', 'Select file')"
+            @change="handleUpload"
+          />
+          <p v-if="uploading" class="ResourceUpload-Status" role="status">
+            <TxSpinner :size="14" />
+            {{ t('dashboard.sections.images.uploading', 'Uploading...') }}
+          </p>
+          <TxAlert v-if="uploadError" type="error" :message="uploadError" closable @close="uploadError = null" />
         </div>
-      </div>
+      </AdminSection>
 
-      <div class="mt-6 space-y-4">
-        <div
-          v-if="imagesPending"
-          class="space-y-3 rounded-2xl border border-black/[0.08] border-dashed bg-black/[0.02] px-4 py-6 text-sm text-black/60 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-white/50"
-        >
-          <div class="flex items-center gap-3">
-            <TxSpinner :size="16" />
-            <span>{{ t('dashboard.sections.images.loading', 'Loading resources...') }}</span>
-          </div>
-          <div class="rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]">
-            <TxSkeleton :loading="true" :lines="2" />
-          </div>
-          <div class="rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]">
-            <TxSkeleton :loading="true" :lines="2" />
-          </div>
-        </div>
-
-        <div
-          v-else-if="!images.length"
-          class="rounded-2xl border border-black/[0.08] border-dashed bg-black/[0.02] px-4 py-6 text-sm text-black/60 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-white/50"
-        >
-          {{ t('dashboard.sections.images.empty', 'No resources uploaded yet') }}
-        </div>
-
-        <div
-          v-else
-          class="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
-        >
-          <article
-            v-for="image in images as DashboardImage[]"
-            :key="image.key"
-            class="group relative overflow-hidden rounded-2xl border border-black/[0.04] bg-black/[0.02] transition hover:border-black/[0.08] hover:shadow-lg dark:border-white/[0.06] dark:bg-white/[0.03]"
-          >
-            <div class="aspect-video w-full overflow-hidden bg-black/[0.03] dark:bg-white/[0.04] flex items-center justify-center">
-              <img
-                v-if="isImageResource(image.key)"
-                :src="image.url"
-                :alt="image.key"
-                class="h-full w-full object-cover transition group-hover:scale-105"
-                loading="lazy"
-              >
-              <span
-                v-else
-                class="i-carbon-document text-3xl text-black/30 transition group-hover:text-black/60 dark:text-white/30 dark:group-hover:text-white/60"
-              />
+      <AdminSection :title="t('dashboard.sections.images.listTitle', 'Uploaded resources')">
+        <ul v-if="resources.loading.value" class="ResourceGrid" aria-hidden="true">
+          <li v-for="index in PLACEHOLDER_CARDS" :key="index" class="ResourceCard">
+            <div class="ResourceCard-Preview">
+              <TxSkeleton class="ResourceCard-Placeholder" width="100%" height="100%" :radius="0" />
             </div>
-            <div class="p-4">
-              <p class="truncate font-mono text-xs text-black/60 dark:text-white/60">
-                {{ image.key }}
-              </p>
-              <div class="mt-3 flex items-center gap-2">
-                <TxButton variant="bare" block native-type="button" class="inline-flex flex-1 items-center justify-center gap-2 bg-black/[0.03] text-xs font-medium text-black transition hover:bg-black/[0.06] dark:bg-white/[0.06] dark:text-white" @click="copyImageUrl(image.url, image.key)">
-                  <span :class="copiedImageKey === image.key ? 'i-carbon-checkmark' : 'i-carbon-copy'" class="text-sm" />
-                  {{ copiedImageKey === image.key ? t('dashboard.sections.images.copied', 'Copied!') : t('dashboard.sections.images.copyUrl', 'Copy URL') }}
-                </TxButton>
-                <TxButton variant="bare" circle size="sm" native-type="button" class="inline-flex h-8 w-8 items-center justify-center bg-red-50 text-red-500 transition hover:text-red-600 dark:bg-red-500/10 dark:text-red-200" @click="requestDeleteImage(image.key)">
-                  <span class="i-carbon-trash-can text-sm" />
-                </TxButton>
+            <div class="ResourceCard-Body">
+              <div class="ResourceCard-Key is-placeholder">
+                <TxSkeleton :width="`${56 + (index * 7) % 30}%`" :height="10" :radius="4" />
+              </div>
+              <div class="ResourceCard-Actions">
+                <TxSkeleton :width="96" :height="30" :radius="8" />
+                <TxSkeleton :width="24" :height="24" :radius="4" />
               </div>
             </div>
-          </article>
-        </div>
-      </div>
-    </div>
-    </section>
+          </li>
+        </ul>
 
-  <!-- Delete Confirmation Dialog -->
-    <TxBottomDialog
-      v-if="deleteConfirmVisible"
+        <TxErrorState
+          v-else-if="resources.error.value"
+          size="small"
+          :title="t('dashboard.sections.adminKit.table.loadFailedTitle', 'Could not load this list')"
+          :description="resources.error.value"
+          :primary-action="{ label: t('common.retry', 'Retry'), variant: 'flat' }"
+          @primary="resources.reload()"
+        />
+
+        <TxEmptyState
+          v-else-if="!resources.items.value.length"
+          variant="no-data"
+          size="small"
+          :title="t('dashboard.sections.images.empty', 'No resources uploaded yet')"
+          description=""
+        />
+
+        <ul v-else class="ResourceGrid">
+          <li v-for="item in resources.items.value" :key="item.key" class="ResourceCard">
+            <div class="ResourceCard-Preview">
+              <img
+                v-if="isPreviewableResource(item.key)"
+                class="ResourceCard-Image"
+                :src="item.url"
+                alt=""
+                loading="lazy"
+              >
+              <span v-else class="ResourceCard-FileIcon i-carbon-document" aria-hidden="true" />
+            </div>
+            <div class="ResourceCard-Body">
+              <p class="ResourceCard-Key" :title="item.key">
+                {{ item.key }}
+              </p>
+              <div class="ResourceCard-Actions">
+                <TxCopyButton
+                  :text="resourceAbsoluteUrl(item.url, origin)"
+                  :copy-label="t('dashboard.sections.images.copyUrl', 'Copy URL')"
+                  :copied-label="t('dashboard.sections.images.copied', 'Copied!')"
+                  @error="onCopyFailed"
+                />
+                <TxIconButton
+                  size="xs"
+                  status="danger"
+                  icon="i-carbon-trash-can"
+                  :label="t('dashboard.sections.images.delete', 'Delete')"
+                  :title="t('dashboard.sections.images.delete', 'Delete')"
+                  @click="requestDelete(item)"
+                />
+              </div>
+            </div>
+          </li>
+        </ul>
+
+        <template v-if="showListFooter" #footer>
+          <div class="ResourceList-Footer">
+            <p class="ResourceList-Count">
+              {{ countLabel }}
+            </p>
+            <div v-if="resources.truncated.value" class="ResourceList-More">
+              <p v-if="resources.moreError.value" class="ResourceList-MoreError" role="alert">
+                {{ resources.moreError.value }}
+              </p>
+              <TxButton
+                variant="secondary"
+                size="sm"
+                :loading="resources.loadingMore.value"
+                :disabled="resources.refreshing.value"
+                @click="resources.loadMore()"
+              >
+                {{ t('dashboard.sections.images.loadMore', 'Load more') }}
+              </TxButton>
+            </div>
+          </div>
+        </template>
+      </AdminSection>
+    </div>
+
+    <AdminConfirmDialog
+      v-model:open="deleteOpen"
       :title="t('dashboard.sections.images.confirmDeleteTitle', 'Delete Resource')"
-      :message="t('dashboard.sections.images.confirmDelete', { key: pendingDeleteKey })"
-      :btns="[
-        { content: t('dashboard.sections.images.cancel', 'Cancel'), type: 'info', onClick: () => true },
-        { content: t('dashboard.sections.images.delete', 'Delete'), type: 'error', onClick: confirmDeleteImage },
-      ]"
-      :close="closeDeleteConfirm"
+      :description="deleteTarget ? t('dashboard.sections.images.confirmDelete', { key: deleteTarget.key }) : ''"
+      :confirm-label="t('dashboard.sections.images.delete', 'Delete')"
+      :cancel-label="t('dashboard.sections.images.cancel', 'Cancel')"
+      tone="danger"
+      :loading="deleting"
+      @confirm="confirmDelete"
     />
   </AdminPageShell>
 </template>
+
+<style scoped>
+.ResourcePage {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ResourceUpload {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ResourceUpload-Status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--tx-text-color-regular);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* The placeholder cards are built from the same boxes as the loaded ones, so the
+   grid keeps its shape when the listing lands. */
+.ResourceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ResourceCard {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--tx-border-color-lighter);
+  border-radius: 14px;
+  background: var(--tx-fill-color-lighter);
+}
+
+.ResourceCard-Preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--tx-fill-color-light);
+}
+
+.ResourceCard-Image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ResourceCard-FileIcon {
+  color: var(--tx-text-color-secondary);
+  font-size: 28px;
+}
+
+.ResourceCard-Body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.ResourceCard-Key {
+  height: 1lh;
+  margin: 0;
+  overflow: hidden;
+  color: var(--tx-text-color-regular);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The bar's width is a share of this box, so the box is a column that stretches
+   it full width rather than a row that would shrink it to nothing. */
+.ResourceCard-Key.is-placeholder {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.ResourceCard-Placeholder {
+  width: 100%;
+  height: 100%;
+}
+
+.ResourceCard-Actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 30px;
+}
+
+.ResourceList-Footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ResourceList-Count,
+.ResourceList-MoreError {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ResourceList-Count {
+  color: var(--tx-text-color-regular);
+}
+
+.ResourceList-MoreError {
+  color: var(--tx-color-danger);
+}
+
+.ResourceList-More {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+</style>

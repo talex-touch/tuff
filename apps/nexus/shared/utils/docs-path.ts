@@ -108,3 +108,41 @@ export function isDocsPath(path: string | null | undefined) {
 
   return DOCS_PATH_PATTERN.test(stripDocsLocalePrefix(path))
 }
+
+const RELATIVE_LINK_PATTERN = /^\.{1,2}\//
+const SOURCE_DOCUMENT_LINK_PATTERN = /\.(md|mdc)$/i
+
+/**
+ * The localized route an author's link into the content tree names: `./installation.zh.mdc`,
+ * `../button.en.md#props`. Such a link is relative to the source file, not to the URL —
+ * `/zh/docs/dev/components` is the document `docs/dev/components/index.zh.mdc`, so
+ * `./installation.zh.mdc` there means `/zh/docs/dev/components/installation`, where URL
+ * resolution would give `/zh/docs/dev/installation.zh.mdc`. Left as written, the links
+ * reached the router verbatim and every one of them landed on the not-found page.
+ *
+ * `sourcePath` is the document's own path as the docs API returns it
+ * (`/docs/dev/components/index.zh`). `null` when the href is not a relative link to a
+ * Markdown source, or there is no source to resolve it against.
+ */
+export function resolveDocsSourceLinkHref(
+  href: string | null | undefined,
+  sourcePath: string | null | undefined,
+  locale: DocsLocale,
+) {
+  if (!href || !sourcePath || !RELATIVE_LINK_PATTERN.test(href))
+    return null
+
+  const match = href.match(/^([^?#]*)([?#].*)?$/)
+  const target = match?.[1] ?? href
+  const suffix = match?.[2] ?? ''
+  if (!SOURCE_DOCUMENT_LINK_PATTERN.test(target))
+    return null
+
+  const source = stripDocsLocalePrefix(sourcePath.startsWith('/') ? sourcePath : `/${sourcePath}`)
+  const directory = source.slice(0, source.lastIndexOf('/') + 1) || '/'
+  const resolved = decodeURI(new URL(target, `https://docs.invalid${directory}`).pathname)
+  if (!isDocsPath(resolved))
+    return null
+
+  return `${toLocalizedDocsPath(resolved, locale)}${suffix}`
+}

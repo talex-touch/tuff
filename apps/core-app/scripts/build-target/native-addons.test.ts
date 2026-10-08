@@ -1,10 +1,12 @@
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -37,7 +39,6 @@ const WINDOWS_ADDONS = requiredNativeAddonNames('win')
 /** The two addons binding.gyp itself builds; everything else in build/Release came from Cargo. */
 const GYP_BUILT_ADDONS = ['tuff_native_ocr.node', 'tuff_native_everything.node']
 const AUDIO_ADDON = 'tuff_native_audio.node'
-const EVERYTHING_ADDON = 'tuff_native_everything.node'
 /** Present in the release dir but on no target's required list. */
 const UNREQUESTED_ADDON = 'tuff_native_unrequested.node'
 
@@ -144,19 +145,6 @@ describe('preserveRequiredNativeAddons', () => {
     expect(existsSync(path.join(backupDir, UNREQUESTED_ADDON))).toBe(false)
   })
 
-  it('keeps only the cross-platform addons when the target is mac', () => {
-    const fixture = createNativeAddonsFixture(WINDOWS_ADDONS)
-
-    const { backupDir, kept } = preserveRequiredNativeAddons({
-      projectRoot: fixture.projectRoot,
-      target: 'mac',
-      tempRoot: fixture.tempRoot
-    })
-
-    expect([...kept].sort()).toEqual([...requiredNativeAddonNames('mac')].sort())
-    expect(existsSync(path.join(backupDir, EVERYTHING_ADDON))).toBe(false)
-  })
-
   it('skips a required addon this run never built instead of throwing', () => {
     const fixture = createNativeAddonsFixture(['tuff_native_ocr.node'])
 
@@ -225,6 +213,43 @@ describe('a preservation that fails part way', () => {
 })
 
 describe('restorePreservedNativeAddons', () => {
+  it.skipIf(process.platform === 'win32')(
+    'preserves the mac translation helper contents and executable mode across a rebuild',
+    () => {
+      const helperName = 'tuff-native-translation'
+      const fixture = createNativeAddonsFixture(['tuff_native_ocr.node', AUDIO_ADDON, helperName])
+      const helperPath = path.join(fixture.releaseDir, helperName)
+      const helperContents = Buffer.from('#!/bin/sh\nprintf "translation-helper\\n"\n')
+      writeFileSync(helperPath, helperContents)
+      chmodSync(helperPath, 0o755)
+
+      const preserved = preserveRequiredNativeAddons({
+        projectRoot: fixture.projectRoot,
+        target: 'mac',
+        tempRoot: fixture.tempRoot
+      })
+
+      simulateInstallAppDepsRebuild(fixture.releaseDir, ['tuff_native_ocr.node'])
+      expect(existsSync(helperPath)).toBe(false)
+
+      const restored = restorePreservedNativeAddons({
+        projectRoot: fixture.projectRoot,
+        preserved
+      })
+
+      expect([...restored].sort()).toEqual([AUDIO_ADDON, helperName].sort())
+      expect(readFileSync(helperPath)).toEqual(helperContents)
+      expect(statSync(helperPath).mode & 0o777).toBe(0o755)
+      expect(readFileSync(path.join(fixture.releaseDir, AUDIO_ADDON), 'utf8')).toBe(
+        `cargo-built:${AUDIO_ADDON}\n`
+      )
+      expect(readFileSync(path.join(fixture.releaseDir, 'tuff_native_ocr.node'), 'utf8')).toBe(
+        'node-gyp-rebuilt:tuff_native_ocr.node\n'
+      )
+      expect(existsSync(preserved.backupDir)).toBe(false)
+    }
+  )
+
   it('puts back the addon the rebuild dropped and leaves the addons it rebuilt', () => {
     const fixture = createNativeAddonsFixture(WINDOWS_ADDONS)
     const preserved = preserveRequiredNativeAddons({

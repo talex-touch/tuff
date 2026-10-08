@@ -222,7 +222,7 @@ code: |
 
 ## Overview
 
-- With `trigger="click"`, outside-click and Escape closing are available; with `trigger="hover"`, open/close delays prevent flicker while entering the panel.
+- With `trigger="click"`, outside-click and Escape closing are available; with `trigger="hover"`, open/close delays apply, and the trip to the panel is covered by the hover bridge and the safe triangle (rules in Tooltip's Overview): crossing the `offset` gap, resting on the panel's padding, or passing another hover trigger diagonally neither closes the panel nor hands it away.
 - Use `keepAliveContent` for filters, short forms, and stateful explanation panels; disable it for pure display copy when state does not matter.
 - Popover should stay lightweight; upgrade to Drawer for one-screen-plus content, footer actions, or multi-field configuration.
 
@@ -234,6 +234,6 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`.
 - Types: `packages/tuffex/packages/components/src/popover/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts` verifies default BaseAnchor prop forwarding, offset derivation, hover trigger timing, disabled-close behavior, full-width reference classes, and content side slot props.
+- **Verified coverage:** `packages/tuffex/packages/components/src/popover/__tests__/popover.test.ts` verifies default BaseAnchor prop forwarding, offset derivation, hover trigger timing, the hover zone spanning the whole floating layer (leaving the content for the card padding does not close), disabled-close behavior, full-width reference classes, and content side slot props.
 
 <TuffDocSourceLink />

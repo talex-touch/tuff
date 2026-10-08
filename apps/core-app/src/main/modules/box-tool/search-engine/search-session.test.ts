@@ -1,10 +1,16 @@
 import type { TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createCachedSearchResultSnapshot,
   materializeCachedSearchResult,
   SearchSessionRegistry
 } from './search-session'
+import {
+  hasActiveForegroundSearches,
+  isIndexMaintenanceIdle,
+  markSearchActivity
+} from './search-activity'
+import type { SearchCallerKind, SearchSession } from './search-session'
 
 const query: TuffQuery = { text: 'session query', inputs: [] }
 const coreBoxCaller = { kind: 'core-box' as const, id: 'core-box:sender:1', senderId: 1 }
@@ -61,7 +67,7 @@ describe('SearchSessionRegistry', () => {
     expect(second.signal.aborted).toBe(true)
   })
 
-  it('keeps the request activation snapshot local and merges provider activation into it', () => {
+  it('keeps the request activation snapshot local and merges provider activation into it', async () => {
     const requestedActivations = [{ id: 'requested-provider', meta: { feature: 'requested' } }]
     const registry = new SearchSessionRegistry()
     const session = registry.create({
@@ -79,6 +85,9 @@ describe('SearchSessionRegistry', () => {
       { id: 'requested-provider', meta: { feature: 'requested' } },
       { id: 'result-provider', meta: { feature: 'result' } }
     ])
+    session.complete()
+    await session.publishSnapshot(createResult(session.id))
+    await session.completed
   })
 
   it('buffers pre-snapshot updates and publishes exactly one terminal completion in order', async () => {
@@ -192,11 +201,103 @@ describe('SearchSessionRegistry shutdown guard', () => {
       /shutting down/
     )
   })
+})
 
-  it('still accepts sessions before any destroy', () => {
-    // Control: the latch must not be set at construction.
+describe('SearchSession maintenance protection', () => {
+  const liveSessions: SearchSession[] = []
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
+    markSearchActivity(0)
+  })
+
+  afterEach(async () => {
+    for (const session of liveSessions.splice(0)) {
+      session.cancel()
+      session.complete()
+      await session.publishSnapshot(createResult(session.id))
+      await session.completed
+    }
+    markSearchActivity(0)
+    vi.useRealTimers()
+  })
+
+  it.each<SearchCallerKind>([
+    'core-box',
+    'application-index',
+    'division-box',
+    'background',
+    'ai-agent'
+  ])(
+    'only protects maintenance for foreground caller %s, including long-running searches',
+    async (kind) => {
+      const session = new SearchSessionRegistry().create({
+        caller: { kind, id: `maintenance:${kind}` },
+        query,
+        activations: []
+      })
+      liveSessions.push(session)
+      const foreground =
+        kind === 'core-box' || kind === 'application-index' || kind === 'division-box'
+      expect(hasActiveForegroundSearches()).toBe(foreground)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(isIndexMaintenanceIdle()).toBe(!foreground)
+      session.complete()
+      expect(isIndexMaintenanceIdle()).toBe(true)
+    }
+  )
+
+  it.each(['complete', 'fail', 'cancel'] as const)(
+    'releases foreground protection on %s before a blocked sink drains',
+    async (terminal) => {
+      const sinkEntered = Promise.withResolvers<void>()
+      const sinkRelease = Promise.withResolvers<void>()
+      const session = new SearchSessionRegistry().create({
+        caller: coreBoxCaller,
+        query,
+        activations: [],
+        sink: {
+          start: async () => {
+            sinkEntered.resolve()
+            await sinkRelease.promise
+          }
+        }
+      })
+      liveSessions.push(session)
+      await sinkEntered.promise
+      await vi.advanceTimersByTimeAsync(10_000)
+      let delivered = false
+      void session.completed.then(() => {
+        delivered = true
+      })
+      try {
+        expect(isIndexMaintenanceIdle()).toBe(false)
+        if (terminal === 'fail') session.fail(new Error('provider failed'))
+        else session[terminal]()
+        expect(isIndexMaintenanceIdle()).toBe(true)
+        expect(delivered).toBe(false)
+      } finally {
+        sinkRelease.resolve()
+      }
+    }
+  )
+
+  it('does not release a different active foreground session when cancelling one caller', async () => {
     const registry = new SearchSessionRegistry()
-
-    expect(() => registry.create({ caller: coreBoxCaller, query, activations: [] })).not.toThrow()
+    const first = registry.create({ caller: coreBoxCaller, query, activations: [] })
+    const second = registry.create({
+      caller: { kind: 'division-box', id: 'division:independent' },
+      query,
+      activations: []
+    })
+    liveSessions.push(first, second)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(first.cancel(second.caller)).toBe(false)
+    expect(first.signal.aborted).toBe(false)
+    first.cancel()
+    expect(isIndexMaintenanceIdle()).toBe(false)
+    second.cancel()
+    expect(isIndexMaintenanceIdle()).toBe(true)
   })
 })

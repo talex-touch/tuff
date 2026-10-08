@@ -57,6 +57,13 @@ function readBarrelExports(barrel: string, followStar = true): string[] {
 
   const names = new Set<string>()
 
+  // Chart leaf barrels also use `export const TxFoo = withInstall(...)`.
+  // Their star re-exports must register the same public names as brace exports.
+  for (const declaration of source.matchAll(/export\s+(?:const|let|var)\s+((?:Tx|Tuff)[A-Z][A-Za-z0-9]*)\b/g)) {
+    if (declaration[1])
+      names.add(declaration[1])
+  }
+
   for (const block of source.matchAll(/export\s*\{([^}]*)\}/g)) {
     for (const entry of (block[1] ?? '').split(',')) {
       const trimmed = entry.trim()
@@ -88,11 +95,10 @@ function readBarrelExports(barrel: string, followStar = true): string[] {
 export default defineNuxtModule({
   meta: { name: 'tuffex-components' },
   setup(_options, nuxt) {
-    const useTuffexSource = nuxt.options.dev !== true
-      || isTuffexSourceRequested(
-        nuxt.options.dev === true && process.env.NODE_ENV !== 'test',
-        process.env,
-      )
+    const useTuffexSource = isTuffexSourceRequested(
+      nuxt.options.dev === true && process.env.NODE_ENV !== 'test',
+      process.env,
+    )
     const componentSpecifierPrefix = useTuffexSource ? '@tuffex-components' : '@talex-touch/tuffex'
     const directories = readdirSync(COMPONENTS_SRC).filter((entry) => {
       if (AGGREGATE_DIRECTORIES.has(entry))

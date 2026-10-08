@@ -686,6 +686,14 @@ export interface ITuffTransportMain {
     payload: TReq,
   ) => Promise<TRes>
 
+  /** Notify one concrete recipient without an RPC acknowledgement. Stale plugin owners drop. */
+  notifyTo: <TReq>(
+    webContents: ElectronWebContents,
+    event: TuffEvent<TReq, void>,
+    payload: TReq,
+    plugin?: PluginSecurityContext,
+  ) => boolean
+
   /**
    * Sends a message to a plugin's renderer.
    *
@@ -703,7 +711,8 @@ export interface ITuffTransportMain {
   ) => Promise<TRes>
 
   /**
-   * Broadcasts a message to all windows.
+   * Sends a message to the main window only (fire-and-forget), despite the name: CoreBox, the
+   * OmniPanel and other windows do not receive it. Reach those with `broadcastToWindow`.
    *
    * @typeParam TReq - Request payload type
    * @param event - The TuffEvent to broadcast

@@ -99,28 +99,33 @@ success: true
 
 ## 3) Linux Provider 示例
 
-### 示例：Shell 脚本执行
+### 示例：显式 PTY 命令执行
 
 **输入**
-```
-command: "ls -la ~/Downloads"
+```ts
+const session = await createTerminalSdk(transport).create({
+  command: '/bin/ls',
+  args: ['-la', '/tmp'],
+  cols: 100,
+  rows: 30,
+}, { onData, onExit, signal })
 ```
 
 **流程**
-1. 解析 shell（`$SHELL` / `/bin/bash`）。
-2. 通过 `spawn` 执行脚本。
-
-**输出**
-```
-stdout: "...", stderr: ""
-```
+1. 主进程确认可信 sender、插件身份和 `system.shell` 权限。
+2. 共用 PTY 核心解析并核验可执行文件，以独立参数启动 `node-pty`。
+3. SDK 接收完整输出与真实退出状态。用户关闭或 signal 取消时收尾会话。
 
 **错误分支**
-- shell 不存在 → 返回错误并提示配置 shell。
-- 执行失败 → 返回 stderr 并标记失败。
+- 可执行文件或 PTY 不可用：创建失败，不返回可用会话。
+- 权限不足或 owner 不匹配：拒绝操作，不启动或触碰其他会话。
 
 **能力映射**
-- `TerminalModule`：`src/main/modules/terminal/terminal.manager.ts`
+- `TerminalModule`：`src/main/modules/terminal/index.ts`。
+- 共用 PTY 生命周期：`src/main/modules/terminal/pty-session-core.ts`。
+- domain SDK：`packages/utils/transport/sdk/domains/terminal.ts`。
+
+这个示例只在拥有主进程 transport 的受信任 Electron 调用方运行。网页 `TxTerminal` 只负责显示，不启动 shell。
 
 ---
 

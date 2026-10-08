@@ -1,5 +1,6 @@
 // src/db/schema.ts
 
+import type { SQL } from 'drizzle-orm'
 import { sql } from 'drizzle-orm'
 import {
   customType,
@@ -58,8 +59,8 @@ export const keywordMappings = sqliteTable('keyword_mappings', {
 })
 
 /**
- * 关键词索引元数据，用于避免重复写 keyword_mappings 热页。
- * 当 keyword_hash 未变化时可跳过关键词映射写入。
+ * 搜索文档元数据，保存 FTS rowid 定位和完整文档 hash。
+ * keyword_hash 独立用于避免重复写 keyword_mappings 热页。
  */
 export const searchIndexMeta = sqliteTable(
   'search_index_meta',
@@ -67,6 +68,8 @@ export const searchIndexMeta = sqliteTable(
     providerId: text('provider_id').notNull(),
     itemId: text('item_id').notNull(),
     keywordHash: text('keyword_hash').notNull(),
+    ftsRowId: integer('fts_rowid'),
+    documentHash: text('document_hash'),
     updatedAt: integer('updated_at', { mode: 'timestamp' })
       .notNull()
       .default(sql`(strftime('%s', 'now'))`)
@@ -74,6 +77,40 @@ export const searchIndexMeta = sqliteTable(
   (table) => ({
     pk: primaryKey({ columns: [table.providerId, table.itemId] }),
     updatedIdx: index('idx_search_index_meta_updated_at').on(table.updatedAt)
+  })
+)
+
+// Derived maintenance cursors advance with the corresponding single-writer transaction.
+export const searchIndexMaintenanceProgress = sqliteTable('search_index_maintenance_progress', {
+  task: text('task').primaryKey().notNull(),
+  cursor: integer('cursor').notNull().default(0)
+})
+
+// Actual deletions awaiting cache/reader acknowledgement; never replay physical deletion.
+export const searchIndexPendingCommits = sqliteTable(
+  'search_index_pending_commits',
+  {
+    commitId: text('commit_id').primaryKey().notNull(),
+    sourceId: text('source_id').notNull(),
+    deletedRecords: text('deleted_records').notNull(),
+    removedIndexedItems: integer('removed_indexed_items').notNull()
+  },
+  (table) => ({ sourceIdx: index('idx_search_index_pending_commits_source').on(table.sourceId) })
+)
+
+export const searchIndexFileMaintenance = sqliteTable(
+  'search_index_file_maintenance',
+  {
+    taskId: text('task_id').primaryKey().notNull(),
+    sourceId: text('source_id').notNull(),
+    reason: text('reason').notNull(),
+    filePath: text('file_path').notNull(),
+    expectedRecord: text('expected_record'),
+    cursor: integer('cursor').notNull().default(0)
+  },
+  (table) => ({
+    sourceIdx: index('idx_search_index_file_maintenance_source').on(table.sourceId),
+    reasonIdx: index('idx_search_index_file_maintenance_reason').on(table.sourceId, table.reason)
   })
 )
 
@@ -111,10 +148,41 @@ export const files = sqliteTable(
     // diagnostics poll. Without these the planner did a full SCAN of a 106k-row
     // table inside a 6 GB database — measured 8.1s per diagnostics request, which
     // is what made the IPC handler block for seconds (#index-stats-scan).
+    // A query that pairs the type with a more selective key filters with `fileTypeIs` instead.
     typeIdx: index('idx_files_type').on(table.type),
-    typeEmbeddingIdx: index('idx_files_type_embedding_status').on(table.type, table.embeddingStatus)
+    typeEmbeddingIdx: index('idx_files_type_embedding_status').on(
+      table.type,
+      table.embeddingStatus
+    ),
+    // `getRecentlyCreatedFiles` (the empty query's newly-added-file candidates) filters
+    // `is_dir = 0 AND ctime >= ?` and orders by ctime. Unindexed it was a SCAN plus a temp B-tree
+    // sort, run synchronously on the main thread: the first empty query after launch froze it for
+    // 6.6s in that step against a cold 5 GB file (2026-10-07).
+    isDirCtimeIdx: index('idx_files_is_dir_ctime').on(table.isDir, table.ctime),
+    // `file-provider-search-result-service` answers an extension query with
+    // `type = 'file' AND extension IN (…) ORDER BY mtime DESC LIMIT 50`. Through `idx_files_type`
+    // that fetched every file row: 5.4s cold on a 5 GB dev index, 1ms as a covering range here
+    // (2026-10-08). Created at runtime like its siblings; the index is 1.1 MB for 52k rows.
+    typeExtensionMtimeIdx: index('idx_files_type_extension_mtime').on(
+      table.type,
+      table.extension,
+      table.mtime
+    )
   })
 )
+
+/**
+ * `files.type = <type>` that the query planner cannot answer from `idx_files_type`.
+ *
+ * Nearly every row is `type = 'file'`, but with no table statistics SQLite guesses an equality on
+ * that index matches about ten rows. So a query that also carries a selective key — `path IN (…)`
+ * of ten paths or more, a `file_extensions` id range — was planned through it and visited every
+ * file row: 5.7s for one 500-path reconcile batch against a cold 5 GB index, 68ms by path
+ * (2026-10-07). The unary `+` only removes the term from index selection; the filter is unchanged.
+ */
+export function fileTypeIs(type: string): SQL {
+  return sql`+${files.type} = ${type}`
+}
 
 /**
  * 存储文件的扩展属性，如应用的 bundleId, icon 等
@@ -269,6 +337,24 @@ export const executeEvents = sqliteTable(
     sourceItemIdx: index('idx_usage_execute_events_source_item').on(table.sourceId, table.itemId),
     retainedIdx: index('idx_usage_execute_events_retained').on(table.timestamp, table.eventId),
     dayIdx: index('idx_usage_execute_events_day').on(table.day)
+  })
+)
+
+/**
+ * When each app was last the frontmost application, from OS activation events.
+ *
+ * Deliberately outside the accepted-execution ledger: switching to an app is evidence it was in
+ * use, not a launch, so this dates "last used" and the recency term but never a count, a habit or
+ * a time distribution. Keyed by the lower-cased bundle id the OS reports; one row per app.
+ */
+export const appForegroundActivity = sqliteTable(
+  'app_foreground_activity',
+  {
+    appKey: text('app_key').primaryKey(),
+    lastActiveAt: integer('last_active_at', { mode: 'timestamp' }).notNull()
+  },
+  (table) => ({
+    lastActiveIdx: index('idx_app_foreground_activity_last_active').on(table.lastActiveAt)
   })
 )
 
@@ -2043,5 +2129,110 @@ export const localAiCliSessions = sqliteTable(
       table.projectId,
       table.lastSeenAt
     )
+  })
+)
+
+/** Local execution authority is separate from portable conversation content. */
+export const conversationWorkspaces = sqliteTable('conversation_workspaces', {
+  conversationId: text('conversation_id')
+    .primaryKey()
+    .references(() => conversations.id, { onDelete: 'cascade' }),
+  settingsJson: text('settings_json').notNull(),
+  status: text('status').notNull().default('idle'),
+  queueHeld: integer('queue_held', { mode: 'boolean' }).notNull().default(false),
+  activeTurnId: text('active_turn_id'),
+  runId: text('run_id'),
+  contextJson: text('context_json'),
+  pendingRunJson: text('pending_run_json'),
+  revision: integer('revision').notNull().default(0),
+  updatedAt: integer('updated_at').notNull()
+})
+
+export const conversationQueuedInputs = sqliteTable(
+  'conversation_queued_inputs',
+  {
+    id: text('id').notNull(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    inputJson: text('input_json').notNull(),
+    inputHash: text('input_hash').notNull(),
+    priority: integer('priority'),
+    position: integer('position').notNull(),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.conversationId, table.id] }),
+    orderIdx: index('idx_conversation_queue_order').on(table.conversationId, table.position)
+  })
+)
+
+export const conversationWorkspaceReceipts = sqliteTable(
+  'conversation_workspace_receipts',
+  {
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    id: text('id').notNull(),
+    inputHash: text('input_hash').notNull(),
+    status: text('status').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({ pk: primaryKey({ columns: [table.conversationId, table.id] }) })
+)
+
+export const conversationAttachments = sqliteTable(
+  'conversation_attachments',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    relativePath: text('relative_path').notNull(),
+    mimeType: text('mime_type').notNull(),
+    name: text('name'),
+    size: integer('size').notNull(),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({ ownerIdx: index('idx_conversation_attachments_owner').on(table.conversationId) })
+)
+
+export const conversationMessageAttachments = sqliteTable(
+  'conversation_message_attachments',
+  {
+    conversationId: text('conversation_id').notNull(),
+    messageId: text('message_id').notNull(),
+    attachmentId: text('attachment_id')
+      .notNull()
+      .references(() => conversationAttachments.id, { onDelete: 'cascade' })
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.conversationId, table.messageId, table.attachmentId] }),
+    messageFk: foreignKey({
+      columns: [table.conversationId, table.messageId],
+      foreignColumns: [conversationMessages.conversationId, conversationMessages.id]
+    }).onDelete('cascade')
+  })
+)
+
+/** Public JSON is selected separately; snapshot bytes never enter list/get/fork projections. */
+export const conversationFileReviews = sqliteTable(
+  'conversation_file_reviews',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    runId: text('run_id').notNull(),
+    turnId: text('turn_id').notNull(),
+    projectId: text('project_id').notNull(),
+    publicJson: text('public_json').notNull(),
+    recordJson: text('record_json').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    ownerIdx: index('idx_conversation_file_reviews_owner').on(table.conversationId, table.createdAt)
   })
 )

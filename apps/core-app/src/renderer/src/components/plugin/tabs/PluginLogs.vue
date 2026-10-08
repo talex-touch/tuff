@@ -8,7 +8,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TxDrawer } from '@talex-touch/tuffex/drawer'
-import LogTerminal from '~/components/terminal/LogTerminal.vue'
+import { TxTerminal } from '@talex-touch/tuffex/terminal'
 import { usePluginLogManager } from '~/modules/hooks/usePluginLogManager'
 import { usePluginLogSessions } from '~/modules/hooks/usePluginLogSessions'
 
@@ -339,7 +339,12 @@ defineExpose({
   >
     <section class="plugin-logs-terminal">
       <div class="terminal-body">
-        <LogTerminal :logs="terminalLogs" :auto-scroll="isLiveStreaming" />
+        <TxTerminal
+          class="plugin-logs-view"
+          :lines="terminalLogs"
+          :auto-scroll="isLiveStreaming"
+          read-only
+        />
         <div v-if="isLoadingLogs" class="terminal-overlay loading">
           {{ loadingLabel }}
         </div>
@@ -901,7 +906,7 @@ defineExpose({
   background: transparent;
 }
 
-.LogTerminal-Container {
+.plugin-logs-view {
   box-sizing: border-box;
   width: 100%;
   height: 100%;
@@ -909,16 +914,6 @@ defineExpose({
   min-height: 0;
   border-radius: 0;
   overflow: hidden;
-  :deep(.xterm-viewport) {
-    background: transparent !important;
-    border-radius: 0;
-  }
-  :deep(.xterm-screen .xterm-rows) {
-    color: #e2e8f0 !important;
-  }
-  :deep(.xterm-cursor-block) {
-    border: 1px solid rgba(226, 232, 240, 0.65);
-  }
 }
 
 .history-panel {

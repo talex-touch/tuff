@@ -53,6 +53,8 @@ export const HOME_OPENING_MAX_CODEPOINTS = 160
 
 /** Streams only on the `chat` capability type — see `useHomeConversation`'s `CHAT_CAPABILITY_ID`. */
 const OPENING_CAPABILITY_ID = 'text.chat'
+/** Stable usage-ledger caller of the opening line (audit rebuild design §1.4). */
+const HOME_OPENING_CALLER = 'core.home.opening'
 const OPENING_TEMPERATURE = 0.7
 /**
  * A cost ceiling, not the length limit: `sanitizeOpeningText` ends the visible opening at a
@@ -280,6 +282,9 @@ function toOpeningPayload(request: HomeOpeningRequest): IntelligenceChatPayload 
  * nothing else of a chat turn: no surface marker, so main injects no skills and opens no native CLI
  * session (an opening happens before the conversation has an id), and no reasoning effort, so two
  * sentences of greeting run at the route's own default rather than at the composer's 「高」.
+ *
+ * `caller` is the stable usage-ledger id of the opening (audit rebuild design §1.4); it is safe to
+ * send here because the request carries no Home surface marker.
  */
 function toOpeningInvokeOptions(
   routing: ConversationRouting | undefined
@@ -288,7 +293,7 @@ function toOpeningInvokeOptions(
     ...(routing?.providerId ? { preferredProviderId: routing.providerId } : {}),
     ...(routing?.model ? { modelPreference: [routing.model] } : {}),
     timeout: HOME_OPENING_WAIT_MS,
-    metadata: { operation: INTELLIGENCE_HOME_OPENING_OPERATION }
+    metadata: { caller: HOME_OPENING_CALLER, operation: INTELLIGENCE_HOME_OPENING_OPERATION }
   }
 }
 

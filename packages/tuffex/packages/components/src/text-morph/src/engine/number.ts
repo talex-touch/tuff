@@ -112,7 +112,7 @@ export function segmentNumber(
   if (!prevSegments || prevSegments.length === 0)
     return simpleSegment(chars)
 
-  const oldChars = prevSegments.map(s => (s.string === '\u00A0' ? ' ' : s.string))
+  const oldChars = prevSegments.map(s => s.string)
 
   const matches = cursorIndex != null
     ? cursorMatch(oldChars, chars, cursorIndex, decimalChar)
@@ -126,17 +126,16 @@ export function segmentNumber(
   for (let i = 0; i < chars.length; i++) {
     const char = chars[i]!
     const kind = classifyKind(char)
-    const displayChar = char === ' ' ? '\u00A0' : char
 
     if (matches.has(i)) {
       const oldIdx = matches.get(i)!
-      result.push({ id: prevSegments[oldIdx]!.id, string: displayChar, kind })
+      result.push({ id: prevSegments[oldIdx]!.id, string: char, kind })
     }
     else {
       let id = mintId()
       while (usedIds.has(id)) id = mintId()
       usedIds.add(id)
-      result.push({ id, string: displayChar, kind })
+      result.push({ id, string: char, kind })
     }
   }
 
@@ -147,7 +146,7 @@ export function segmentNumber(
 function simpleSegment(chars: string[]): NumberSegment[] {
   return chars.map(char => ({
     id: mintId(),
-    string: char === ' ' ? '\u00A0' : char,
+    string: char,
     kind: classifyKind(char),
   }))
 }

@@ -33,6 +33,10 @@ export default {
       switchToLight: '切换到浅色模式',
       switchToDark: '切换到深色模式',
     },
+    geoMap: {
+      empty: '暂无地理位置数据',
+      failed: '地图加载失败',
+    },
   },
   common: {
     collapse: '收起',
@@ -509,6 +513,7 @@ export default {
     },
   },
   docs: {
+    verified: '已验证',
     loading: '正在获取文档…',
     notFoundTitle: '未找到文档',
     notFoundDescription: '当前路径暂未匹配到内容，请返回文档首页。',
@@ -581,6 +586,7 @@ export default {
       ai: '对话、智能体与推理',
       data: '图表与数据可视化',
       flow: '流程图与编排',
+      motion: '按钮、卡片与输入驱动动效',
     },
     suites: {
       concepts: '理念',
@@ -590,6 +596,7 @@ export default {
       ai: 'AI',
       data: '数据',
       flow: '流程',
+      motion: '动效',
     },
     categories: {
       templateApp: '应用框架',
@@ -613,6 +620,16 @@ export default {
       aiReasoning: '推理与生成',
       aiContext: '上下文与洞察',
       flow: '流程编排',
+      motionButtons: '按钮',
+      motionCards: '卡片展开',
+      motionCarousels: '3D 轮播',
+      motionLoaders: '加载动效',
+      motionCharts: '抖动图表',
+      motionText: '文字',
+      motionPhysics: '物理动效',
+      motionInteraction: '悬停、指针与滚动',
+      motionToggles: '切换控件',
+      motionTransitions: '转场',
       misc: '其他',
     },
     families: {

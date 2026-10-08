@@ -13,6 +13,7 @@ const fakes = vi.hoisted(() => ({
   fetchedProfileLocale: null as string | null,
   profileWrites: [] as Array<{ locale?: string | null }>,
   fetchStarted: null as (() => void) | null,
+  fetchGate: null as Promise<void> | null,
 }))
 vi.mock('#imports', () => ({
   useCookie: () => ({ value: null }),
@@ -23,7 +24,7 @@ vi.mock('#imports', () => ({
   }),
   useNexusAuth: () => ({ status: authStatus }),
   useRequestHeaders: () => ({}),
-  useRoute: () => ({ path: routePath }),
+  useRoute: () => ({ get path() { return routePath } }),
   useState: (key: string, init: () => unknown) => {
     const existing = nuxtState.get(key)
     if (existing)
@@ -55,6 +56,7 @@ vi.mock('~/composables/useLocalePreference', () => ({
 vi.mock('~/composables/useCurrentUserApi', () => ({
   fetchCurrentUserProfile: async () => {
     fakes.fetchStarted?.()
+    await fakes.fetchGate
     return fakes.fetchedProfileLocale === null
       ? null
       : { locale: fakes.fetchedProfileLocale }
@@ -82,6 +84,7 @@ function resetFakes() {
   fakes.fetchedProfileLocale = null
   fakes.profileWrites.length = 0
   fakes.fetchStarted = null
+  fakes.fetchGate = null
 }
 
 beforeEach(() => {
@@ -170,7 +173,8 @@ describe('locale contracts', () => {
     expect(fakes.profileWrites).toEqual([])
   })
 
-  it('serializes concurrent locale requests in invocation order', async () => {
+  it.each(['/settings', '/en/docs-preview', '/zh/docsish/guide'])('serializes concurrent locale requests in invocation order at %s', async (path) => {
+    routePath = path
     let signalFirstWrite!: () => void
     let releaseFirstWrite!: () => void
     const firstWriteStarted = new Promise<void>((resolve) => {
@@ -202,6 +206,119 @@ describe('locale contracts', () => {
 
     expect(localeWrites).toEqual(['zh', 'en'])
     expect(activeLocale.value).toBe('en')
+  })
+
+  it.each([
+    { docsPath: '/en/docs', docsLocale: 'en', staleLocale: 'zh' },
+    { docsPath: '/zh/docs/guide/start', docsLocale: 'zh', staleLocale: 'en' },
+  ] as const)('discards a queued $staleLocale request after navigation to $docsPath', async ({ docsPath, docsLocale, staleLocale }) => {
+    activeLocale.value = staleLocale
+    let signalFirstWrite!: () => void
+    let releaseFirstWrite!: () => void
+    const firstWriteStarted = new Promise<void>((resolve) => {
+      signalFirstWrite = resolve
+    })
+    const firstWriteGate = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve
+    })
+    const localeWrites: Locale[] = []
+    setLocale = async (locale) => {
+      localeWrites.push(locale)
+      if (locale === docsLocale) {
+        signalFirstWrite()
+        await firstWriteGate
+      }
+      activeLocale.value = locale
+    }
+
+    const locale = useLocaleOrchestrator()
+    const first = locale.setLocaleSerial(docsLocale, 'manual')
+    await firstWriteStarted
+    const stale = locale.setLocaleSerial(staleLocale, 'cookie')
+    routePath = docsPath
+    releaseFirstWrite()
+    const [, settledLocale] = await Promise.all([first, stale])
+
+    expect(localeWrites).toEqual([docsLocale])
+    expect(activeLocale.value).toBe(docsLocale)
+    expect(settledLocale).toBe(docsLocale)
+  })
+
+  it.each([
+    { docsPath: '/en/docs/guide/start', docsLocale: 'en', previousLocale: 'zh' },
+    { docsPath: '/zh/docs', docsLocale: 'zh', previousLocale: 'en' },
+  ] as const)('allows a locale request matching the explicit language at $docsPath', async ({ docsPath, docsLocale, previousLocale }) => {
+    routePath = docsPath
+    activeLocale.value = previousLocale
+
+    const settledLocale = await useLocaleOrchestrator().setLocaleSerial(docsLocale, 'manual')
+
+    expect(activeLocale.value).toBe(docsLocale)
+    expect(settledLocale).toBe(docsLocale)
+  })
+
+  it.each([
+    { docsPath: '/en/docs', docsLocale: 'en', profileLocale: 'zh', manual: false },
+    { docsPath: '/en/docs/guide/start', docsLocale: 'en', profileLocale: 'zh', manual: true },
+    { docsPath: '/zh/docs', docsLocale: 'zh', profileLocale: 'en', manual: false },
+    { docsPath: '/zh/docs/guide/start', docsLocale: 'zh', profileLocale: 'en', manual: true },
+  ] as const)('keeps profile synchronization from changing preferences at $docsPath (manual=$manual)', async ({ docsPath, docsLocale, profileLocale, manual }) => {
+    routePath = docsPath
+    activeLocale.value = docsLocale
+    authStatus.value = 'authenticated'
+    fakes.preferredLocale = docsLocale
+    fakes.hasManualPreference = manual
+
+    const locale = useLocaleOrchestrator()
+    await locale.syncFromProfileOnAuth({
+      status: 'authenticated',
+      userId: 'docs-reader',
+      profileLocale,
+    })
+
+    expect(activeLocale.value).toBe(docsLocale)
+    expect(locale.getSavedLocale()).toBe(docsLocale)
+    expect(fakes.preferenceWrites).toEqual([])
+    expect(fakes.profileWrites).toEqual([])
+    expect(fakes.profileMarks).toBe(0)
+  })
+
+  it.each([
+    { docsPath: '/en/docs/guide/start', docsLocale: 'en', manual: false },
+    { docsPath: '/en/docs', docsLocale: 'en', manual: true },
+    { docsPath: '/zh/docs/guide/start', docsLocale: 'zh', manual: false },
+    { docsPath: '/zh/docs', docsLocale: 'zh', manual: true },
+  ] as const)('ignores a profile arriving after navigation to $docsPath (manual=$manual)', async ({ docsPath, docsLocale, manual }) => {
+    authStatus.value = 'authenticated'
+    fakes.preferredLocale = 'en'
+    fakes.hasManualPreference = manual
+    fakes.fetchedProfileLocale = 'zh-CN'
+    let signalFetch!: () => void
+    let releaseFetch!: () => void
+    const fetchStarted = new Promise<void>((resolve) => {
+      signalFetch = resolve
+    })
+    fakes.fetchStarted = signalFetch
+    fakes.fetchGate = new Promise<void>((resolve) => {
+      releaseFetch = resolve
+    })
+
+    const locale = useLocaleOrchestrator()
+    const synchronization = locale.syncFromProfileOnAuth({
+      status: 'authenticated',
+      userId: 'navigating-reader',
+    })
+    await fetchStarted
+    routePath = docsPath
+    activeLocale.value = docsLocale
+    releaseFetch()
+    await synchronization
+
+    expect(activeLocale.value).toBe(docsLocale)
+    expect(locale.getSavedLocale()).toBe('en')
+    expect(fakes.preferenceWrites).toEqual([])
+    expect(fakes.profileWrites).toEqual([])
+    expect(fakes.profileMarks).toBe(0)
   })
 
   it('prefers an existing manual locale over a conflicting signed-in profile and saves the manual choice', async () => {

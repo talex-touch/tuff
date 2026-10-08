@@ -15,7 +15,6 @@ import {
   QuickOpsEvents,
   StorageEvents,
   SyncEvents,
-  TerminalEvents,
   TuffEvents,
   UpdateEvents,
 } from '../transport/events'
@@ -358,19 +357,6 @@ describe('transport domain sdk mappings', () => {
     )
   })
 
-  it('terminal session events expose canonical names', () => {
-    expect(TerminalEvents.session.create.toEventName()).toBe(
-      'terminal:session:create',
-    )
-    expect(TerminalEvents.session.create).toMatchObject({
-      namespace: 'terminal',
-      module: 'session',
-      action: 'create',
-    })
-    expect(TerminalEvents.session.data.toEventName()).toBe(
-      'terminal:session:data',
-    )
-  })
 
   it('opener events expose canonical names', () => {
     expect(OpenerEvents.plugin.open.toEventName()).toBe('plugin:opener:open')
@@ -1162,6 +1148,53 @@ describe('transport domain sdk mappings', () => {
     expect(transport.send.mock.calls[3]?.[0]?.toEventName?.()).toBe(
       'intelligence:api:get-quota',
     )
+  })
+
+  it('intelligence sdk sends the usage ledger reads through their host-only api events', async () => {
+    const transport = createTransportMock()
+    transport.send.mockResolvedValue({ ok: true, result: null })
+    const sdk = createIntelligenceSdk(transport as any)
+
+    await sdk.getUsageInsights({ range: '7d' })
+    await sdk.queryAuditLogs({ caller: null, limit: 1000, offset: 50 })
+    await sdk.queryAuditLogs()
+
+    expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:get-usage-insights',
+    )
+    expect(transport.send.mock.calls[0]?.[1]).toEqual({ range: '7d' })
+    expect(transport.send.mock.calls[1]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:query-audit-logs',
+    )
+    // Clamping is main's job; the SDK forwards the query unchanged, `null` included.
+    expect(transport.send.mock.calls[1]?.[1]).toEqual({ caller: null, limit: 1000, offset: 50 })
+    expect(transport.send.mock.calls[2]?.[1]).toEqual({})
+  })
+
+  it('intelligence sdk reads and replaces the global usage limits through host-only api events', async () => {
+    const transport = createTransportMock()
+    transport.send.mockResolvedValue({ ok: true, result: null })
+    const sdk = createIntelligenceSdk(transport as any)
+    const limits = {
+      requestsPerDay: 3,
+      requestsPerMonth: null,
+      tokensPerDay: null,
+      tokensPerMonth: null,
+      costUsdPerDay: null,
+      costUsdPerMonth: 2.5,
+    }
+
+    await sdk.getUsageLimits()
+    await sdk.setUsageLimits(limits)
+
+    expect(transport.send.mock.calls[0]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:get-usage-limits',
+    )
+    expect(transport.send.mock.calls[1]?.[0]?.toEventName?.()).toBe(
+      'intelligence:api:set-usage-limits',
+    )
+    // Validation is main's job; the SDK forwards the full limit set unchanged.
+    expect(transport.send.mock.calls[1]?.[1]).toEqual(limits)
   })
 
   it('intelligence sdk forwards explicit prompt fields through invoke and text.chat', async () => {
@@ -2360,6 +2393,8 @@ describe('local ai cli session sdk mappings', () => {
       context: [],
       projectId: 'p1',
       sessionRef: 'ref-1',
+      cols: 90,
+      rows: 27,
       nativeSessionId: 'native-abc',
       sessionFile: '/tmp/private-session.jsonl',
     }
@@ -2378,8 +2413,8 @@ describe('local ai cli session sdk mappings', () => {
     expect(terminal).toEqual({
       provider: 'pi',
       access: 'workspace-read',
-      cols: 0,
-      rows: 0,
+      cols: 90,
+      rows: 27,
       projectId: 'p1',
       sessionRef: 'ref-1',
     })

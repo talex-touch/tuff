@@ -43,6 +43,16 @@ export const RECOMMENDATION_BADGES: Record<ScoredItem['source'], RecommendationB
     icon: 'i-ri-time-line',
     variant: 'intelligent'
   },
+  yesterday: {
+    text: i18nMsg('coreBox.recommendation.badge.yesterday'),
+    icon: 'i-ri-history-line',
+    variant: 'intelligent'
+  },
+  'app-context': {
+    text: i18nMsg('coreBox.recommendation.badge.appContext'),
+    icon: 'i-ri-apps-2-line',
+    variant: 'intelligent'
+  },
   recent: {
     text: i18nMsg('coreBox.recommendation.badge.recent'),
     icon: 'i-ri-history-line',

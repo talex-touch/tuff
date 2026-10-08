@@ -282,6 +282,74 @@ export class IntelligenceContextExecutionService {
     private readonly assembler = new ContextMessageAssembler()
   ) {}
 
+  /** Main owns the supplied history; hygiene prepares only this turn's current-input package. */
+  async prepareWorkspaceTurn(
+    payload: IntelligenceChatPayload,
+    options: HostContextExecutionInvokeOptions,
+    identity: { conversationId: string; turnId: string; sessionId?: string }
+  ): Promise<PreparedContextExecution> {
+    throwIfContextCancelled(options.signal)
+    const currentIndex = payload.messages.findLastIndex((message) => message.role === 'user')
+    const current = payload.messages[currentIndex]
+    if (!current?.content.trim()) throw new Error('INVALID_CONTEXT_EXECUTION_REQUEST')
+    const actor: IntelligenceContextActor = {
+      id: `workspace:${identity.conversationId}`,
+      type: 'host'
+    }
+    const request: IntelligenceContextExecutionRequest = {
+      capabilityId: 'text.chat',
+      input: current.content,
+      payload,
+      options,
+      context: {
+        mode: identity.sessionId ? 'continue' : 'new',
+        owner: 'assistant',
+        sessionId: identity.sessionId,
+        scope: 'light',
+        traceId: identity.turnId
+      }
+    }
+    const prepared = await this.hygiene.prepareTurn({
+      owner: 'assistant',
+      sessionId: identity.sessionId,
+      input: current.content,
+      explicitScope: 'light',
+      continueSession: Boolean(identity.sessionId),
+      startNewSession: !identity.sessionId,
+      tokenBudget: DEFAULT_CONTEXT_TOKEN_BUDGET,
+      traceId: identity.turnId,
+      metadata: {
+        contextActorId: actor.id,
+        contextActorType: actor.type,
+        noHistory: true,
+        workspaceConversationId: identity.conversationId
+      }
+    })
+    throwIfContextCancelled(options.signal)
+    const contextPackage = await this.hygiene.revalidatePackageMemories(prepared.package)
+    throwIfContextCancelled(options.signal)
+    // Preserve Tuff history, native Pi authority, system instructions and safe attachments.
+    // Only replace the current input with the package's privacy-validated current input.
+    const assembled = this.assembler.assemble(contextPackage, { messages: [] })
+    const currentInput = assembled.messages.at(-1)!
+    const summary = safeContextSummary(request, contextPackage, prepared)
+    return {
+      payload: {
+        ...payload,
+        messages: payload.messages.map((message, index) =>
+          index === currentIndex ? { ...message, content: currentInput.content } : message
+        )
+      },
+      // Preparing a host-owned package must not reclassify the invocation as another caller.
+      // The hygiene actor is persisted above; native Home identity and its trusted symbol remain.
+      options: {
+        ...options,
+        metadata: { ...options.metadata, contextExecution: summary }
+      },
+      summary
+    }
+  }
+
   private validateRequest(
     request: IntelligenceContextExecutionRequest,
     actor: IntelligenceContextActor

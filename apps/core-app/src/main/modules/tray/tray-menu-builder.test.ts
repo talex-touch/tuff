@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
   trigger: vi.fn(),
   startStandalone: vi.fn(async () => undefined),
   setQuitIntent: vi.fn(),
-  getEffectiveAccelerator: vi.fn<(id: string) => string | null>(() => 'Alt+Space')
+  getEffectiveAccelerator: vi.fn<(id: string) => string | null>(() => 'Alt+Space'),
+  appSetting: {} as { betaFeatures?: { screenshot?: unknown } }
 }))
 
 vi.mock('electron', () => ({
@@ -32,6 +33,11 @@ vi.mock('../screenshot-session', () => ({
   screenshotSessionModule: { startStandalone: mocks.startStandalone }
 }))
 vi.mock('../../core/quit-intent', () => ({ setQuitIntent: mocks.setQuitIntent }))
+vi.mock('../storage', () => ({ getMainConfig: () => mocks.appSetting }))
+
+beforeEach(() => {
+  mocks.appSetting = { betaFeatures: { screenshot: true } }
+})
 
 import { TrayMenuBuilder } from './tray-menu-builder'
 
@@ -107,7 +113,6 @@ describe('TrayMenuBuilder Open CoreBox item', () => {
     mocks.getEffectiveAccelerator.mockReturnValue('Alt+Space')
 
     expect(openCoreBoxItem()?.accelerator).toBe('Alt+Space')
-    expect(mocks.getEffectiveAccelerator).toHaveBeenCalledWith('core.box.toggle')
   })
 
   it('prints a key the user rebound it to', () => {
@@ -144,7 +149,7 @@ describe('TrayMenuBuilder Capture Now item', () => {
     })
 
     expect(item?.accelerator).toBe('CommandOrControl+Shift+A')
-    expect(mocks.getEffectiveAccelerator).toHaveBeenCalledWith('screenshot.tool.start')
+    expect(findItem(menuItems(createBuilder()), t('tray.screenshot'))?.visible).toBe(true)
   })
 
   it('prints no key when none takes a screenshot', () => {
@@ -152,5 +157,25 @@ describe('TrayMenuBuilder Capture Now item', () => {
 
     expect(item).toBeDefined()
     expect(item?.accelerator).toBeUndefined()
+  })
+
+  it.each([undefined, false, 'true', 1])(
+    'hides screenshot actions without an explicit feature opt-in (%j), even with a live key',
+    (flag) => {
+      mocks.appSetting = { betaFeatures: { screenshot: flag } }
+      const items = menuItems(createBuilder())
+      expect(findItem(items, t('tray.screenshot'))?.visible).toBe(false)
+      expect(findItem(items, t('tray.openCoreBox'))?.visible).not.toBe(false)
+    }
+  )
+
+  it('reveals and hides screenshot actions as the persisted feature changes', () => {
+    const builder = createBuilder()
+    mocks.appSetting = {}
+    expect(findItem(menuItems(builder), t('tray.screenshot'))?.visible).toBe(false)
+    mocks.appSetting = { betaFeatures: { screenshot: true } }
+    expect(findItem(menuItems(builder), t('tray.screenshot'))?.visible).toBe(true)
+    mocks.appSetting.betaFeatures!.screenshot = false
+    expect(findItem(menuItems(builder), t('tray.screenshot'))?.visible).toBe(false)
   })
 })

@@ -60,7 +60,9 @@ vi.mock('./intelligence-audit-logger', () => ({
     log: vi.fn(),
     generateTraceId: () => 'trace-audit',
     generatePromptHash: () => 'prompt-hash'
-  }
+  },
+  // Usage is counted even with audit off, so the audit path (and its metadata projection) runs.
+  sanitizeIntelligenceAuditMetadata: () => undefined
 }))
 
 vi.mock('./agents', () => ({
@@ -243,7 +245,7 @@ describe('Nexus default provider invoke smoke', () => {
       name: 'Local Smoke',
       enabled: true,
       priority: 2,
-      models: ['local-model'],
+      models: [{ id: 'local-model' }],
       capabilities: ['text.chat']
     })
     setIntelligenceProviderManager(manager)

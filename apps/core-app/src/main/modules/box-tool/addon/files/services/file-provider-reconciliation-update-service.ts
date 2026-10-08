@@ -1,60 +1,24 @@
-import { IndexedWriteRuntimeEmitterService } from '@talex-touch/utils/search'
-import type { IndexedSourceDelta, IndexedSourceRecord } from '@talex-touch/utils/search'
-
-export interface FileProviderReconciliationUpdateResult<TUpdated> {
-  updated: TUpdated[]
+export interface FileProviderReconciliationUpdateResult {
   updatedCount: number
 }
 
-export interface FileProviderReconciliationUpdateDeps<
-  TUpdate,
-  TUpdated extends { path: string },
-  TContext
-> {
-  updateRecords: (records: TUpdate[]) => Promise<TUpdated[]>
-  emitDelta: (delta: IndexedSourceDelta, context: TContext) => Promise<void>
-  mapRecord: (record: TUpdated) => IndexedSourceRecord
-  sourceId: string
+export interface FileProviderReconciliationUpdateDeps<TUpdate, TContext> {
+  /** Publishes only after the metadata and search document committed together. */
+  persistAndPublish: (records: TUpdate[], context: TContext) => Promise<{ updatedCount: number }>
 }
 
-export class FileProviderReconciliationUpdateService<
-  TUpdate,
-  TUpdated extends { path: string },
-  TContext
-> {
-  private readonly updateRecords: FileProviderReconciliationUpdateDeps<
-    TUpdate,
-    TUpdated,
-    TContext
-  >['updateRecords']
-  private readonly runtimeEmitter: IndexedWriteRuntimeEmitterService<TUpdated, TContext>
-
-  constructor(deps: FileProviderReconciliationUpdateDeps<TUpdate, TUpdated, TContext>) {
-    this.updateRecords = deps.updateRecords
-    this.runtimeEmitter = new IndexedWriteRuntimeEmitterService({
-      sourceId: deps.sourceId,
-      mapRecord: deps.mapRecord,
-      defaultDeltaReason: 'file-provider-reconciliation-update',
-      emitDelta: deps.emitDelta
-    })
-  }
+export class FileProviderReconciliationUpdateService<TUpdate, TContext> {
+  constructor(private readonly deps: FileProviderReconciliationUpdateDeps<TUpdate, TContext>) {}
 
   async execute(
     records: TUpdate[],
     context: TContext
-  ): Promise<FileProviderReconciliationUpdateResult<TUpdated>> {
-    if (records.length === 0) {
-      return { updated: [], updatedCount: 0 }
+  ): Promise<FileProviderReconciliationUpdateResult> {
+    let updatedCount = 0
+    for (let offset = 0; offset < records.length; offset += 10) {
+      const result = await this.deps.persistAndPublish(records.slice(offset, offset + 10), context)
+      updatedCount += result.updatedCount
     }
-
-    const updated = await this.updateRecords(records)
-    await this.runtimeEmitter.emitDeltas(updated, context, {
-      action: 'change'
-    })
-
-    return {
-      updated,
-      updatedCount: records.length
-    }
+    return { updatedCount }
   }
 }

@@ -17,7 +17,7 @@ import type { CoreBoxSearchIndexCommitPayload } from '@talex-touch/utils/transpo
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
-import { TuffSearchResultBuilder, type TuffItem } from '@talex-touch/utils'
+import { StorageList, TuffSearchResultBuilder, type TuffItem } from '@talex-touch/utils'
 import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -37,7 +37,19 @@ import { perfMonitor } from '../../../utils/perf-monitor'
 import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { getSentryService } from '../../sentry'
-import { OnboardingGateError, onboardingGate } from '../../storage'
+import {
+  getMainConfig,
+  isMainStorageReady,
+  OnboardingGateError,
+  onboardingGate
+} from '../../storage'
+import {
+  describeDarwinRunningApps,
+  ForegroundAppActivityTracker,
+  subscribeDarwinForegroundActivations
+} from '../../system/foreground-app-activity'
+import { foregroundAppSnapshotStore } from '../../system/foreground-app-snapshot'
+import { resolveRecommendationContextSources } from './recommendation/context-provider'
 import { appProvider } from '../addon/apps/app-provider'
 import { conversationProvider } from '../addon/conversations/conversation-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
@@ -67,7 +79,8 @@ import {
 } from './recommendation/file-recommendation-source'
 import { recommendationExposureService } from './recommendation/recommendation-exposure-service'
 import { gatherAggregator } from './search-gather'
-import { markSearchActivity } from './search-activity'
+import { isIndexMaintenanceIdle } from './search-activity'
+import { IndexMaintenanceRunner } from './index-maintenance-runner'
 import { SearchIndexService } from './search-index-service'
 import { searchIndexCommitHub } from './search-index-commit-hub'
 import { SearchIndexCommitCoalescer } from './search-index-commit-coalescer'
@@ -88,6 +101,7 @@ import { SearchQueryOrchestrator } from './search-query-orchestrator'
 import { ProviderHealthService } from './provider-health-service'
 import { SearchUsageService } from './search-usage-service'
 import { setExecuteRecorder } from './execute-recorder'
+import { resolvePreviousAppContext, withPreviousAppContext } from './app-launch-recorder'
 import type { UsageEntryPoint } from './usage-entry-point'
 import { resolveUsageIdentity } from './usage-identity'
 import {
@@ -161,6 +175,20 @@ function hasConcreteActivationFeature(activation: IProviderActivate): boolean {
   return Boolean(meta && typeof meta === 'object' && 'feature' in meta && meta.feature)
 }
 
+/** Foreground recording follows the recommendation switches: 智能推荐 and 推荐分析：前台应用. */
+function isForegroundActivityTrackingEnabled(): boolean {
+  if (!isMainStorageReady()) return false
+  try {
+    const recommendation = getMainConfig(StorageList.APP_SETTING)?.recommendation
+    return (
+      recommendation?.enabled !== false &&
+      resolveRecommendationContextSources(recommendation?.contextSources).foregroundApp
+    )
+  } catch {
+    return false
+  }
+}
+
 interface SearchPipelineStageDurations {
   parseDuration: number
   providerAggregationDuration: number
@@ -204,6 +232,15 @@ export class SearchEngineCore
   })
   private dbUtils: DbUtils | null = null
   private indexWriterRouter: SourceScopedIndexWriterRouter | null = null
+  private readonly indexMaintenanceRunner = new IndexMaintenanceRunner({
+    sourceId: FILE_INDEXED_SOURCE_ID,
+    getWriter: () => this.indexWriterRouter,
+    isAllowed: () => !this.destroying && onboardingGate.evaluate().state === 'allowed',
+    onFailure: (error) =>
+      searchEngineLog.warn('Index maintenance slice failed; durable work remains pending', {
+        error
+      })
+  })
   private searchIndexService: SearchIndexService | null = null
   private searchIndexReadWorker: SearchIndexReadWorkerClient | null = null
   /**
@@ -217,6 +254,8 @@ export class SearchEngineCore
   private usageSummaryService: UsageSummaryService | null = null
   private queryCompletionService: QueryCompletionService | null = null
   private recommendationEngine: RecommendationEngine | null = null
+  /** Dates "last used" for apps reached by ⌘Tab or the Dock; see foreground-app-activity.ts. */
+  private foregroundActivity: ForegroundAppActivityTracker | null = null
   private timeStatsAggregator: TimeStatsAggregator | null = null
   private indexingRuntime: IndexingRuntime | null = null
   private readonly pollingService = PollingService.getInstance()
@@ -284,8 +323,29 @@ export class SearchEngineCore
   }
 
   private limitFrontendItems(items: TuffItem[], limit = SEARCH_FRONTEND_ITEM_LIMIT): TuffItem[] {
-    const visibleItems = fileFilterService.filterSearchItems(items)
+    const visibleItems = this.filterCurrentFileScope(items)
     return visibleItems.length > limit ? visibleItems.slice(0, limit) : visibleItems
+  }
+
+  private filterCurrentFileScope(items: TuffItem[]): TuffItem[] {
+    const filtered = fileFilterService.filterSearchItems(items)
+    let accepted: TuffItem[] | null = null
+    for (let index = 0; index < filtered.length; index += 1) {
+      const item = filtered[index]
+      const original = item.meta?._originalSourceId
+      const sourceId = typeof original === 'string' ? original : item.source.id
+      const filePath = item.meta?.file?.path
+      if (
+        sourceId === FILE_INDEXED_SOURCE_ID &&
+        filePath &&
+        !fileProvider.isSearchPathAdmitted(filePath)
+      ) {
+        if (!accepted) accepted = filtered.slice(0, index)
+        continue
+      }
+      if (accepted) accepted.push(item)
+    }
+    return accepted ?? filtered
   }
 
   /**
@@ -473,6 +533,8 @@ export class SearchEngineCore
 
   public async preparePrivacyRetentionCleanup(): Promise<void> {
     await this.searchUsageService.flush()
+    // Pending foreground instants land first, so the cutoff applies to them like every other row.
+    await this.foregroundActivity?.flush()
   }
 
   /**
@@ -489,6 +551,8 @@ export class SearchEngineCore
     this.searchUsageService.invalidateRetentionCaches()
     this.cacheTelemetry.recordInvalidation('privacy-cleanup', this.searchCache.size)
     this.searchCache.clear()
+    // Clears the in-memory instants synchronously, then reloads only what survived the cutoff.
+    void this.foregroundActivity?.resetFromStore()
     this.recommendationEngine?.invalidateCache()
   }
 
@@ -540,6 +604,30 @@ export class SearchEngineCore
       committedAt: Date.now(),
       recommendationsInvalidated: true
     })
+  }
+
+  /**
+   * Starts the OS foreground tracker the recommendation engine dates "last used" with, and hands
+   * CoreBox's source-app snapshot the app it already knows is in front. Inert off macOS; nothing is
+   * recorded while either recommendation switch is off.
+   */
+  private startForegroundActivityTracking(dbUtils: DbUtils): ForegroundAppActivityTracker {
+    void this.foregroundActivity?.stop()
+    const tracker = new ForegroundAppActivityTracker({
+      subscribe: subscribeDarwinForegroundActivations,
+      isEnabled: isForegroundActivityTrackingEnabled,
+      describe: describeDarwinRunningApps
+    })
+    foregroundAppSnapshotStore.setInstantSource(tracker)
+    void tracker
+      .start({
+        load: (since) => dbUtils.getAppForegroundActivity(since),
+        save: (entries) => dbUtils.saveAppForegroundActivity(entries)
+      })
+      .catch((error) => {
+        searchEngineLog.warn('Failed to start foreground app activity tracking', { error })
+      })
+    return tracker
   }
 
   private emitIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
@@ -949,7 +1037,7 @@ export class SearchEngineCore
       try {
         const excludeIds = new Set(baseItems.map((item) => item.id))
         const recallCandidates = await fileProvider.semanticRecall(query, excludeIds, signal)
-        const recallItems = fileFilterService.filterSearchItems(recallCandidates)
+        const recallItems = this.filterCurrentFileScope(recallCandidates)
         if (recallItems.length === 0) return
         if (signal.aborted) return
         sendUpdateToFrontend(recallItems)
@@ -988,7 +1076,8 @@ export class SearchEngineCore
       caller,
       query: requestQuery,
       activations,
-      sink: context?.sink
+      sink: context?.sink,
+      sourceAppContext: caller.kind === 'core-box' ? resolvePreviousAppContext() : undefined
     })
     const result = this.executeSearch(requestQuery, session)
       .then(async (initialResult) => {
@@ -1013,7 +1102,6 @@ export class SearchEngineCore
   }
 
   private async executeSearch(query: TuffQuery, session: SearchSession): Promise<TuffSearchResult> {
-    markSearchActivity()
     const sessionId = session.id
     const pipelineDurations: SearchPipelineStageDurations = {
       parseDuration: 0,
@@ -1100,7 +1188,7 @@ export class SearchEngineCore
     if (cacheOutcome === 'hit' && cachedEntry) {
       this.cacheTelemetry.recordHit(cachedAgeMs, cachedEntry.result.duration)
       const cachedResult = materializeCachedSearchResult(cachedEntry.result, sessionId)
-      cachedResult.items = fileFilterService.filterSearchItems(cachedResult.items ?? [])
+      cachedResult.items = this.filterCurrentFileScope(cachedResult.items ?? [])
       const cachedItems = cachedResult.items.length
       this.logSearchTrace({
         event: 'first.result',
@@ -1149,9 +1237,7 @@ export class SearchEngineCore
           // than the database as it was before the action.
           await this.searchUsageService.flush()
           const recommendationResult = await this.recommendationEngine.recommend({ limit: 10 })
-          const recommendationItems = fileFilterService.filterSearchItems(
-            recommendationResult.items
-          )
+          const recommendationItems = this.filterCurrentFileScope(recommendationResult.items)
 
           searchLogger.logSearchPhase(
             'Recommendation',
@@ -1825,6 +1911,17 @@ export class SearchEngineCore
     }
   }
 
+  private async withExecuteSourceApp<T>(
+    sessionId: string | undefined,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    const trace = sessionId ? this.sessionRegistry.getTrace(sessionId) : undefined
+    const sourceContext = trace?.sourceAppContext
+      ? await trace.sourceAppContext
+      : await resolvePreviousAppContext()
+    return withPreviousAppContext(sourceContext, operation)
+  }
+
   /**
    * Counts one accepted major action, whichever entry asked for it.
    *
@@ -2125,11 +2222,13 @@ export class SearchEngineCore
     instance.searchIndexReadWorker = new SearchIndexReadWorkerClient(
       databaseModule.getSearchDatabaseFilePath()
     )
+    const splitSearch = databaseModule.isSearchSplitEnabled()
     instance.searchIndexService = new SearchIndexService(searchDb, {
       logger: searchLogger,
-      initializationMode: 'reader',
-      readiness: searchIndexWriter,
-      readExecutor: instance.searchIndexReadWorker
+      initializationMode: splitSearch ? 'reader' : 'writer',
+      readiness: splitSearch ? searchIndexWriter : undefined,
+      readExecutor: instance.searchIndexReadWorker,
+      canRunMaintenance: isIndexMaintenanceIdle
     })
     instance.searchIndexService.preloadPinyin()
     // The fast lane skips preloadPinyin: pinyin is only used by the write path's prepareDocument,
@@ -2141,13 +2240,17 @@ export class SearchEngineCore
     instance.searchIndexFastService = new SearchIndexService(searchDb, {
       logger: searchLogger,
       initializationMode: 'reader',
-      readiness: searchIndexWriter,
+      readiness: splitSearch
+        ? searchIndexWriter
+        : {
+            waitUntilReady: async () => await instance.searchIndexService!.warmup()
+          },
       readExecutor: instance.searchIndexFastReadWorker
     })
     instance.indexWriterRouter = new SourceScopedIndexWriterRouter({
       runtime: searchIndexWriter,
       legacy: new LegacySearchIndexWriter(instance.searchIndexService),
-      defaultMode: 'runtime',
+      defaultMode: splitSearch ? 'runtime' : 'legacy',
       visibilityBarrier: {
         waitUntilReadable: async () => await instance.searchIndexService!.waitUntilReadable()
       }
@@ -2178,12 +2281,14 @@ export class SearchEngineCore
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.searchUsageService.initialize(db)
     searchEngineLog.debug('Initializing RecommendationEngine')
+    instance.foregroundActivity = instance.startForegroundActivityTracking(instance.dbUtils)
     // Second handle: app-catalog reads (primary db) for rebuilding app
     // recommendation items — the app catalog does not move into the search
     // file under the split. Split off → both handles read the primary.
     instance.recommendationEngine = new RecommendationEngine(
       instance.dbUtils,
-      createDbUtils(db, auxDb)
+      createDbUtils(db, auxDb),
+      instance.foregroundActivity
     )
     instance.timeStatsAggregator = new TimeStatsAggregator(instance.dbUtils)
     instance.indexingRuntime = indexingRuntime
@@ -2198,15 +2303,40 @@ export class SearchEngineCore
       invalidateRecommendations: () => instance.invalidateAppRecommendationPresentation()
     })
     fileProvider.setIndexedSourceRuntimeMutationDelegate({
-      withMutationLease: async (operation) =>
-        await indexingRuntime.withSourceMutationLease(FILE_INDEXED_SOURCE_ID, operation),
+      withMutationLease: async (operation, options) =>
+        await indexingRuntime.withSourceMutationLease(FILE_INDEXED_SOURCE_ID, operation, options),
+      publishFileDeletionCommit: async (commit) => {
+        if (commit.sourceId !== FILE_INDEXED_SOURCE_ID)
+          throw new Error('FILE_DELETE_COMMIT_SOURCE_MISMATCH')
+        if (commit.deletedRecords.length === 0) return
+        await indexingRuntime.withSourceMutationLease(
+          commit.sourceId,
+          async (leaseId) => {
+            const itemIds = commit.deletedRecords.flatMap((record) => [
+              record.itemId,
+              ...('legacyItemIds' in record ? (record.legacyItemIds ?? []) : [])
+            ])
+            await instance.indexWriterRouter!.publishExternalCommit(
+              commit.sourceId,
+              'remove',
+              Math.max(commit.deletedRecords.length, commit.removedIndexedItems),
+              itemIds
+            )
+            indexingRuntime.recordSourceCommittedRecords(
+              commit.sourceId,
+              leaseId,
+              commit.deletedRecords.length
+            )
+          },
+          { mutationLeaseId: commit.mutationLeaseId }
+        )
+      },
       applyBatch: async (batch) => await indexingRuntime.applySourceBatch(batch),
       applyBatchWithPersistence: async (batch, records) => {
         const result = await indexingRuntime.applySourceBatchWithPersistence(batch, records)
         if (!result) throw new Error(`INDEX_RUNTIME_FUSED_BATCH_EMPTY:${batch.sourceId}`)
         return result
       },
-      applyDelta: async (delta) => await indexingRuntime.applySourceDelta(delta),
       cleanupSource: async (sourceId, mutationLeaseId) =>
         await indexingRuntime.cleanupSource(sourceId, mutationLeaseId),
       countSource: async (sourceId, mutationLeaseId) =>
@@ -2227,6 +2357,7 @@ export class SearchEngineCore
         await instance.indexingRuntime!.resetSourceRuntimeState(FILE_INDEXED_SOURCE_ID, request)
     )
     instance.indexedSourceEventRouter.subscribe()
+    instance.indexMaintenanceRunner.start()
 
     // 初始化并启动使用统计汇总服务
     instance.usageSummaryService = new UsageSummaryService(instance.dbUtils, {
@@ -2254,82 +2385,84 @@ export class SearchEngineCore
       return instance.getSearchCacheTelemetry()
     })
 
-    transport.on(CoreBoxEvents.item.execute, async (payload) => {
+    transport.on(CoreBoxEvents.item.execute, (payload) => {
       const { item, searchResult, actionId } = payload as {
         item: TuffItem
         searchResult?: TuffSearchResult
         actionId?: string
         eventId?: string
       }
-      const provider = instance.providerRegistry.get(item.source.id)
+      return instance.withExecuteSourceApp(searchResult?.sessionId, async () => {
+        const provider = instance.providerRegistry.get(item.source.id)
 
-      // One user action, one id: the entry minted it (renderer) or this default does. It is
-      // reused verbatim for any retry/duplicate of the same action, and the database dedupes on it,
-      // so a second notification cannot add a second count.
-      const eventId =
-        typeof payload.eventId === 'string' && payload.eventId ? payload.eventId : randomUUID()
+        // One user action, one id: the entry minted it (renderer) or this default does. It is
+        // reused verbatim for any retry/duplicate of the same action, and the database dedupes on it,
+        // so a second notification cannot add a second count.
+        const eventId =
+          typeof payload.eventId === 'string' && payload.eventId ? payload.eventId : randomUUID()
 
-      // A source with no search provider (plugin recommendation candidates) still declares whether
-      // it can execute its own item. It is dispatched to instead of being dropped, and it reports
-      // acceptance; the count is recorded on the same path and under the same eventId as any other
-      // execute. The source never writes statistics itself.
-      if (!provider || !provider.onExecute) {
-        const sourceEntry = recommendationSourceRegistry.resolve(item.source.id)
-        if (!sourceEntry?.execute) {
+        // A source with no search provider (plugin recommendation candidates) still declares whether
+        // it can execute its own item. It is dispatched to instead of being dropped, and it reports
+        // acceptance; the count is recorded on the same path and under the same eventId as any other
+        // execute. The source never writes statistics itself.
+        if (!provider || !provider.onExecute) {
+          const sourceEntry = recommendationSourceRegistry.resolve(item.source.id)
+          if (!sourceEntry?.execute) {
+            return instance.getActivationState()
+          }
+
+          let outcome: IExecuteOutcome
+          try {
+            outcome = await sourceEntry.execute({ item, searchResult, actionId, eventId })
+          } catch (error) {
+            searchEngineLog.warn('Recommendation source execute failed', {
+              error,
+              meta: { sourceId: item.source.id, itemId: item.id }
+            })
+            return instance.getActivationState()
+          }
+
+          if (outcome.accepted) {
+            await instance.recordExecute(searchResult?.sessionId ?? null, item, eventId, {
+              entryPoint: 'recommendation'
+            })
+          }
+
+          if (outcome.activation) {
+            instance.activateProviders([outcome.activation])
+            if (!hasConcreteActivationFeature(outcome.activation)) {
+              const query: TuffQuery = { text: '' }
+              await instance.search(query)
+            }
+          }
+
           return instance.getActivationState()
         }
 
-        let outcome: IExecuteOutcome
-        try {
-          outcome = await sourceEntry.execute({ item, searchResult, actionId, eventId })
-        } catch (error) {
-          searchEngineLog.warn('Recommendation source execute failed', {
-            error,
-            meta: { sourceId: item.source.id, itemId: item.id }
-          })
-          return instance.getActivationState()
-        }
+        const activationResult = await provider.onExecute({ item, searchResult, actionId, eventId })
 
-        if (outcome.accepted) {
-          await instance.recordExecute(searchResult?.sessionId ?? null, item, eventId, {
-            entryPoint: 'recommendation'
-          })
-        }
+        if (activationResult) {
+          let activation: IProviderActivate
+          if (typeof activationResult === 'object') {
+            activation = activationResult
+          } else {
+            activation = {
+              id: provider.id,
+              name: provider.name,
+              icon: provider.icon,
+              meta: item.meta?.extension || {}
+            }
+          }
+          instance.activateProviders([activation])
 
-        if (outcome.activation) {
-          instance.activateProviders([outcome.activation])
-          if (!hasConcreteActivationFeature(outcome.activation)) {
+          if (!hasConcreteActivationFeature(activation)) {
             const query: TuffQuery = { text: '' }
             await instance.search(query)
           }
         }
 
         return instance.getActivationState()
-      }
-
-      const activationResult = await provider.onExecute({ item, searchResult, actionId, eventId })
-
-      if (activationResult) {
-        let activation: IProviderActivate
-        if (typeof activationResult === 'object') {
-          activation = activationResult
-        } else {
-          activation = {
-            id: provider.id,
-            name: provider.name,
-            icon: provider.icon,
-            meta: item.meta?.extension || {}
-          }
-        }
-        instance.activateProviders([activation])
-
-        if (!hasConcreteActivationFeature(activation)) {
-          const query: TuffQuery = { text: '' }
-          await instance.search(query)
-        }
-      }
-
-      return instance.getActivationState()
+      })
     })
 
     const handleGetRecommendations = async (data?: { limit?: number; forceRefresh?: boolean }) => {
@@ -2483,6 +2616,7 @@ export class SearchEngineCore
 
   async destroy(): Promise<void> {
     this.destroying = true
+    this.indexMaintenanceRunner.stop()
     try {
       const runtime = this.indexingRuntime
       runtime?.beginShutdown()
@@ -2615,6 +2749,11 @@ export class SearchEngineCore
       this.indexingRuntime = null
       this.indexWriterRouter = null
 
+      foregroundAppSnapshotStore.setInstantSource(null)
+      await this.foregroundActivity?.stop().catch((error) => {
+        searchEngineLog.error('Failed to flush foreground app activity on destroy', { error })
+      })
+      this.foregroundActivity = null
       await this.searchUsageService.flush().catch((error) => {
         searchEngineLog.error('Failed to flush usage stats queue on destroy', { error })
       })
@@ -2636,7 +2775,7 @@ const searchEngineCore = SearchEngineCore.getInstance()
 setExecuteRecorder((record) =>
   searchEngineCore.recordExecute(record.sessionId ?? null, record.item, record.eventId, {
     entryPoint: record.entryPoint,
-    previousApp: record.previousApp ?? null
+    previousApp: record.previousApp
   })
 )
 

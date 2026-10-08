@@ -13,6 +13,7 @@ import {
 } from '../../types/intelligence'
 import { createStorageDataProxy, createStorageProxy, TouchStorage } from './base-storage'
 import { getVoiceCapabilityRecommendedModels } from '../../intelligence/voice-asr'
+import { needsModelBindingMigration, normalizeModelBindings } from '../../intelligence/model-binding'
 
 // Re-export types for convenience
 export { IntelligenceProviderType }
@@ -63,7 +64,7 @@ const defaultIntelligenceData: IntelligenceStorageData = {
   capabilities: { ...DEFAULT_CAPABILITIES },
   promptRegistry: defaultPromptSchema.promptRegistry,
   promptBindings: defaultPromptSchema.promptBindings,
-  version: 4,
+  version: 5,
 }
 
 const INTELLIGENCE_STORAGE_KEY = `storage:${StorageList.IntelligenceConfig}`
@@ -256,7 +257,7 @@ export async function migrateIntelligenceSettings(): Promise<void> {
 
     const migratedGlobalConfig: IntelligenceGlobalConfig = {
       defaultStrategy: normalizedStrategy,
-      enableAudit: currentData.globalConfig?.enableAudit ?? false,
+      enableAudit: currentData.globalConfig?.enableAudit ?? DEFAULT_GLOBAL_CONFIG.enableAudit,
       enableCache: currentData.globalConfig?.enableCache ?? true,
       enableQuota: currentData.globalConfig?.enableQuota ?? DEFAULT_GLOBAL_CONFIG.enableQuota ?? true,
       cacheExpiration: currentData.globalConfig?.cacheExpiration ?? 3600,
@@ -301,6 +302,24 @@ export async function migrateIntelligenceSettings(): Promise<void> {
     intelligenceStorageLog.info('Migration to v4 complete')
   }
 
+  if ((intelligenceStorage.data.version ?? 0) < 5) {
+    intelligenceStorageLog.info('Migrating settings to version 5')
+    // Legacy `models: string[]` → bindings, once and losslessly: same ids in the same order, every
+    // other provider field (defaultModel, authRef, priority, metadata, capability routing) as is.
+    const data = intelligenceStorage.data
+    intelligenceStorage.applyData({
+      ...data,
+      providers: data.providers.map(provider =>
+        needsModelBindingMigration(provider.models)
+          ? { ...provider, models: normalizeModelBindings(provider.models) }
+          : provider,
+      ),
+      version: 5,
+    })
+    await intelligenceStorage.saveToRemote({ force: true })
+    intelligenceStorageLog.info('Migration to v5 complete')
+  }
+
   intelligenceStorageLog.info(`Final providers count: ${intelligenceStorage.data.providers.length}`)
   intelligenceStorageLog.info(`Final capabilities count: ${Object.keys(intelligenceStorage.data.capabilities).length}`)
 }
@@ -314,7 +333,7 @@ export async function resetIntelligenceConfig(): Promise<void> {
     capabilities: { ...DEFAULT_CAPABILITIES },
     promptRegistry: defaultPromptSchema.promptRegistry,
     promptBindings: defaultPromptSchema.promptBindings,
-    version: 4,
+    version: 5,
   })
 
   await intelligenceStorage.saveToRemote({ force: true })

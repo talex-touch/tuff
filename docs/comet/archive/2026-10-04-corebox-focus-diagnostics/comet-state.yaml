@@ -1,0 +1,524 @@
+schema: comet.native.v4
+name: corebox-focus-diagnostics
+language: zh-CN
+phase: archive
+status: done
+state_version: 13
+brief: brief.md
+document_constraints_version: 2
+shape_confirmation_hash: d71ff339443864391a791c56af669f4af1d8bcf5e3220f29ee124072e27f2aab
+spec_changes:
+  - capability: corebox-focus-diagnostics
+    operation: create
+    source: specs/corebox-focus-diagnostics/spec.md
+workspace:
+  isolation: worktree
+  change_branch: comet/corebox-focus-diagnostics
+  target_branch: task/chore/live-work-1003
+  finish: keep
+loop:
+  stage: done
+  goal_cycle: 1
+  iteration: 2
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 1
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: 召唤正常完成且未主动取消时，每个召唤 ID 恰有序号 1～10 的真实焦点检查。首次检查约在显示后 200 ms，后续间隔约 100
+      ms；冷创建、再次显示及不同召唤入口均可追踪，重复可见性通知不重复启动同一次检查。
+    result: passed
+    reason:
+      text: 独立核对完整brief/Spec与focus-diagnostics.ts:45-82,146-154、window.ts:478-503,583-615：每次生成UUID，冷创建continuation保留原ID，shown幂等，实际200ms首轮/100ms后续调度。正式当前候选focus-diagnostic-edge-smoke记录normal-and-duplicate-shown仅一次show与sample
+        1-10，真实timer首轮201ms；真实根URL http://127.0.0.1:9447/
+        的final-corebox-input-normal.json中06dbf7dd-6db1-4c4a-bc8e-2010613682a3恰有input成功样本1-10。final-exact-input-key.json的.BoxInput-Wrapper
+        input实际value=a且input/documentFocused=true；programmatic插件宿主5b4a2bf7也完成1-10。未用合法面板/插件代替搜索input主路径；实际事件循环抖动如实保留。
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: 每个检查包含原生窗口与渲染输入目标的状态，以及触发方式、预期目标、序号和相对耗时。详细日志关闭时仍逐次写日志；不存在窗口、输入目标缺失和检查超时不能记为已获得焦点。
+    result: passed
+    reason:
+      text: window.ts:124-140和useFocus.ts:35-60分别真实读取native窗口/WebContents与BoxInput.inputEl的isConnected、document.activeElement、document.hasFocus；样本含目标、序号、耗时和触发来源。window.ts:103-106逐次info/error，logger.ts:203-208,241-265详细关闭时普通info仍写持久日志。当前正式focus-request-boundaries为6文件115项passed，focus-diagnostic-edge-smoke实际调用当前工作区observer、使用真实timer，证明target-missing、renderer-timeout、window-missing、invalid-reply全部1-10为明确error且不伪造成功。真实正常/input-loss/window-loss原始记录均保留原生及渲染状态；原A2缺失执行证据现已具备，未重跑检查。
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: 任一有效检查缺少必需焦点，立即生成 `error` 日志和 Sentry 错误事件，不等待第 10
+      次或结束汇总。每个失败检查均保留，不被本功能的成功采样、阈值或去重窗口吞掉。
+    result: passed
+    reason:
+      text: focus-diagnostics.ts:180-192即时native/timeout错误，sample失败立即error；SentryService.recordCoreBoxFocus直接captureMessage(error)，未经过成功采样、聚合阈值或本功能去重。input-focus-loss.json中2ddaf7f7-c606-4934-b654-ea29c9e97c0b的1-10全为TARGET_NOT_FOCUSED/error；immediate-input-error.json首capture1791082062830及首HTTP200
+        1791082063059均早于complete1791082063737。fresh-window-loss.json中2db186cb-c2e7-484c-97ba-8bbc44ceab31窗口失焦不被inputFocused=true掩盖，每个1-10都有即时native
+        error及sample
+        error，首HTTP2001791091677658早于complete1791091677848。既有正式完整关联日志逐字段匹配每个失败安全状态及HTTP200/Nexus
+        accepted，全部失败序号保留。
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: 成功与失败检查、正常取消及结束汇总都进入 Nexus 和 Sentry。召唤 ID、检查序号和安全状态字段在最终脱敏事件及 Nexus
+      接收结果中仍可关联，不能只证明调用过上报 API。
+    result: passed
+    reason:
+      text: 独立阅读现有完整收件关联检查程序与正式日志d5f299ec-e598-4c3b-9315-32d5a44a9faa-focus-receipt-correlation-complete.log：对正常input、输入失焦、合法meta/flow/plugin、hidden取消/新召唤、窗口失焦的全部sample及complete/cancel，以解析后安全字段对象相等匹配Sentry
+        HTTP200与Nexus完全accepted批次，CORRELATION_MISSING=[]；相关路径在本轮未改，源码/输入/工作区仍匹配。本轮shutdown-clean-lifecycle.json真实beforeQuitSeen及willQuitSeen均true；新UUID2481f41e-047b-4260-8260-0110e7cf56e6的shutdown取消1-10与cancel汇总共11条逐项核对records、最终SDK
+        context、HTTP200 receipts及Nexus
+        metadata，kind/id/index/source/stage/status/severity/code/elapsedMs/plannedCount/reason及汇总0/0/10全部相等。Nexus实际HTTP200
+        ack
+        success=true,accepted=17,processed=17,rejected=0,dropped=0，完整17事件批含该11条。当前正式focus-clean-shutdown-correlation亦passed。未把JSON键顺序、flush=true、API调用或旧6470退出失败基线当收件通过。
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: 窗口创建、显示、即时或延迟原生焦点申请、输入焦点申请失败，以及检查超时，都有固定错误码和节点记录。原先静默忽略的焦点申请异常可追踪；焦点 IPC
+      不再无条件返回成功。
+    result: passed
+    reason:
+      text: 独立逐项检查window.ts:484-488 CREATE_FAILED与取消、556-581
+        SHOW_FAILED/即时REQUEST_FAILED、603-614延迟REQUEST_FAILED、193-205无窗口false/真实isFocused/FOCUS_FROM_RENDERER_FAILED；useFocus.ts:63-78,131-166输入申请失败固定INPUT_REQUEST_FAILED及安全状态，通过ipc.ts:306-313与window.ts:159-190显式消费、验证当前sender/summonId后记录。observer:156-169超时及无效回执固定错误码。正式115项检查实际覆盖window无窗口/未取得焦点false、即时与延迟focus抛错并保留节点错误；真实timer
+        edge-smoke覆盖renderer-timeout等此前未执行边界。创建/显示及renderer-input失败分支由本次完整源码和消费侧语义核对，不冒称额外真实Electron故障注入。焦点IPC不再无条件返回成功，原A5所缺native-request/timer执行证明已补齐。
+      truncated: false
+  - id: A6
+    source: brief.md
+    text: ⌘K
+      面板、插件视图和流转选择器正常取得焦点时，不因搜索框失焦误报。主动收起和退出应用有终止记录；连续召唤各自隔离，旧检查或旧渲染回执不能污染新一轮结果。
+    result: passed
+    reason:
+      text: meta-focus-owner.json的940e09c8全10次meta-overlay实际获得焦点时成功；genuine-plugin-ui-mode.json中5b4a2bf7通过真实host
+        enterUIMode，pluginActive/pluginFocused=true且1-10成功；flow-focus-owner.json中1ee0fead的1-7合法flow/window/document焦点成功，8-10窗口真实失焦正确error，不把后段失焦冒充合法成功。fresh-cancellation.json中482c首轮1成功后2-10为hidden取消、0/9汇总；48bb新ID独立10成功，传输各自完整。当前observer正式测试及真实timer
+        smoke证明superseded旧回执false、旧调度不污染新session、shutdown取消释放timer。本轮BEFORE_MODULES_UNLOAD由module-manager.ts:239-241经await
+        emitAsync分派；CoreBoxModule注册/解除监听，windowManager取消后await已有lazy
+        sink再await双通道flush，真实干净退出新UUID保留终止11条。
+      truncated: false
+  - id: A7
+    source: brief.md
+    text: 诊断上报关闭时继续写本地日志，但不向 Nexus 或 Sentry
+      发送新事件。匿名上报保留现有匿名规则；最终事件不包含输入文字、剪贴板、路径、窗口标题或其他应用清单。
+    result: passed
+    reason:
+      text: final-upload-disabled.json在enabled=false时仍有ad55721f-b71f-4b40-abe8-51fca52935dd本地input样本1-10与complete；既有完整真实关联检查确认该ID新事件没有Sentry/Nexus收件，未因其他旧批次Nexus计数增加而误判。recordCoreBoxFocus先isTelemetryEnabled，Nexus队列和flush沿原开关/离线通道；共享严格UUID/枚举/布尔/有限数值白名单与Sentry
+        beforeSend、Nexus客户端及服务端消费者均已核对。正式privacy canary与Sentry回归passed；实际SDK
+        context/Nexus
+        metadata无input文字a、剪贴板、路径、标题或应用清单。匿名规则仍由既有updateUserContext/resolveEffectiveAnonymous及Nexus
+        sanitizer控制，实际匿名批无userId；未新增旁路或放开通用隐私过滤。
+      truncated: false
+  - id: A8
+    source: brief.md
+    text: 在真实 Electron 中验证正常召唤的 10
+      次检查、窗口和输入分别失焦时的即时错误、合法焦点转移及快速收起再召唤。核对日志、最终脱敏载荷和实际传输结果；无法取得的远端收件证据明确标为未通过，不以源码或模拟调用替代。
+    result: passed
+    reason:
+      text: 独立完整覆盖A1-A8及全部Spec后复用当前适用真实Electron原始证据，而非Builder自查：根URL .BoxInput-Wrapper
+        input正常10次并实际读回a；输入与窗口分别失焦的即时error；合法⌘K、Flow、真实host插件边界；快速收起再召唤；新干净beforeQuit/willQuit退出。常规场景已有Runtime精确安全状态关联记录，退出场景本轮11条最终HTTP200/Nexus完全accepted且逐字段相等，无需额外request-checks。当前6项正式记录均绑定candidate40c4c8fd、同worktree及operation
+        c3238a01，status=passed/exit0；包括node/web types、6文件115项、真实timer
+        edge-smoke、clean shutdown correlation、scoped
+        lint，未自行重跑。旧6470退出失败、SDK关闭再启探索、无status/NetworkTimeoutError记录未计通过；非根因修复，未变规格或缩scope。
+      truncated: false
+builder_handoff:
+  candidate_id: 40c4c8fd-ce2a-46d9-8814-32ee57075879
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:5c7b52c8-f864-486d-9bf1-7929c7703008
+  iteration: 2
+  summary:
+    text: 修复真实退出收件缺失：在BEFORE_MODULES_UNLOAD中取消剩余焦点样本，等待已有惰性sink接受记录并并发排空SDK/Nexus。干净真实app.quit产生取消1～10及汇总11条，完整安全状态逐条关联Sentry
+      HTTP200及Nexus
+      accepted，missing=0。独立Tester已作者24个observer边界测试和4个窗口请求失败契约，父实际5文件103项通过；受影响CoreBox
+      lifecycle 12项通过。补充正式edge-smoke与退出收件关联计划，避免Verifier追加轮数上限阻断。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+  acceptance_review:
+    - id: A1
+      status: implemented-with-evidence
+      evidence:
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/normal-native-input.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/final-corebox-input-normal.json
+        - apps/core-app/src/main/modules/box-tool/core-box/window.test.ts
+      note: 正常召唤序号1～10；真实首轮204ms、末轮1111ms，显示只启动一次，冷创建保留nonce由现有窗口契约测试覆盖。
+    - id: A2
+      status: implemented-with-evidence
+      evidence:
+        - apps/core-app/src/main/modules/box-tool/core-box/focus-diagnostics.test.ts
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/repair-edge-smoke.log
+      note: 实际运行24个observer边界：死窗口不probe、未知native不能假成功、目标缺失/失焦/文档失焦、dispatch/无效回执/超时、旧nonce/取消/合法owner。独立作者的真实定时器edge-smoke开发期code0，正式Runtime将执行同一计划。
+    - id: A3
+      status: implemented-with-evidence
+      evidence:
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/immediate-input-error.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/input-focus-loss.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/fresh-window-loss.json
+      note: 输入失焦10个error序号全部保留，首次capture及HTTP200均早于complete；窗口失焦不被DOM
+        activeElement成功掩盖。
+    - id: A4
+      status: implemented-with-evidence
+      evidence:
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/shutdown-clean-lifecycle.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/shutdown-clean-correlation.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/deliveries.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/fresh-receipts-complete.json
+      note: 前轮失败的6470...退出轮保留，不当通过。修复后干净enabled
+        SDK的2481...实际退出轮10个cancelled样本+1取消汇总，11条均有HTTP200和fully accepted
+        Nexus批次且全部安全字段精确相等；beforeQuit/willQuit均真实发生，退出code0。
+    - id: A5
+      status: implemented-with-evidence
+      evidence:
+        - apps/core-app/src/main/modules/box-tool/core-box/window.test.ts
+        - apps/core-app/src/main/modules/box-tool/core-box/ipc.test.ts
+        - apps/core-app/src/main/modules/box-tool/core-box/focus-diagnostics.test.ts
+      note: 新增独立作者消费者边界：无窗口/焦点未取得均false；即时与延迟原生focus抛异常均记录固定码。observer检查dispatch异常和renderer
+        deadline均不成功；5文件103项开发期实际通过。全部纳入当前Runtime计划，未请求Verifier承担不完整候选。
+    - id: A6
+      status: implemented-with-evidence
+      evidence:
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/meta-focus-owner.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/flow-focus-owner.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/genuine-plugin-ui-mode.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/fresh-cancellation.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/actual-shutdown.log
+      note: 真实产品enterUIMode与真实插件Host/child
+        WebContents取得焦点时10/10成功；Flow搜索input失焦但面板合法获焦时不报错。主动收起取消9个剩余样本，新召唤10次独立；实际app.quit打印shutdown取消10次，不制造成功。
+    - id: A7
+      status: implemented-with-evidence
+      evidence:
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/final-upload-disabled.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/final-observations-latest.json
+        - apps/core-app/src/main/modules/sentry/telemetry-sanitizer.canary.test.ts
+      note: 关闭上报仍10个本地样本，按关闭后召唤ID无新的Sentry/Nexus焦点事件；历史在途请求不误算新上传。最终安全字段集合无文本/路径/剪贴板/标题/其他应用。Nexus匿名标记沿用既有规则。
+    - id: A8
+      status: implemented-with-evidence
+      evidence:
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/final-exact-input-key.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/final-corebox-input-normal.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/input-focus-loss.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/fresh-window-loss.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/genuine-plugin-ui-mode.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/fresh-receipts-complete.json
+        - /private/tmp/tuff-focus-runtime-20261004/evidence/actual-shutdown.log
+      note: 全部场景通过真实Electron/native
+        Window/CDP/产品IPC观察，不以mock替代；已观察并保留失败的传输尝试，最终可关联的成功收件覆盖所需场景。
+  checks:
+    - name:
+        text: Native-request/observer/Sentry/privacy suites
+        truncated: false
+      result: passed
+      note:
+        text: 五文件103项实际通过；另CoreBox lifecycle十二项通过。
+        truncated: false
+    - name:
+        text: 修改的shutdown源码Node类型与ESLint
+        truncated: false
+      result: passed
+      note:
+        text: 真实命令exit0；后续导入边界修复已通过CoreBox lifecycle回归，正式types将绑定最终候选。
+        truncated: false
+    - name:
+        text: Actual app.quit + dual transport
+        truncated: false
+      result: passed
+      note:
+        text: 取消1～10+summary共11条最终载荷逐条相等，两个通道有真实收件，正常exit0。
+        truncated: false
+    - name:
+        text: 既有CoreBox lifecycle import boundary
+        truncated: false
+      result: passed
+      note:
+        text: eager SDK依赖改回窗口已有sink的惰性边界，index.test.ts 12项实际通过。
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: 未修失焦根因，不增加抢焦点/重试/新设置；macOS arm64实际验证，其他平台保持原契约。
+      truncated: false
+    - text: 前轮SDK关闭再启失败等探索原始证据保留，不冒充通过；退出最终收件使用干净enabled生命周期。
+      truncated: false
+    - text: 本地stage全分支源码收敛仍需其余Native owner正式验收/用户结果接受，未把它们未完成代码盲并入stage。
+      truncated: false
+  known_limits_truncated: false
+  review: null
+  submitted_at: 2026-10-04T09:22:09.060Z
+blockers: []
+verification:
+  candidate_id: 40c4c8fd-ce2a-46d9-8814-32ee57075879
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:240b670d-42db-4d13-b5ec-be1c975f4602
+  iteration: 2
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks:
+    - id: node-typecheck
+      name:
+        text: Node类型检查
+        truncated: false
+      argv_display:
+        - text: npm_config_verify_deps_before_run=false
+          truncated: false
+        - text: pnpm_config_verify_deps_before_run=false
+          truncated: false
+        - text: /private/tmp/tuff-corebox-focus-diagnostics-20261003/node_modules/.bin/tsc
+          truncated: false
+        - text: --noEmit
+          truncated: false
+        - text: -p
+          truncated: false
+        - text: "[REDACTED]"
+          truncated: false
+        - text: --composite
+          truncated: false
+        - text: "false"
+          truncated: false
+      argv_truncated: false
+      cwd_ref: apps/core-app
+      status: passed
+      exit_code: 0
+      duration_ms: 15980
+    - id: web-typecheck
+      name:
+        text: Web类型检查
+        truncated: false
+      argv_display:
+        - text: npm_config_verify_deps_before_run=false
+          truncated: false
+        - text: pnpm_config_verify_deps_before_run=false
+          truncated: false
+        - text: /private/tmp/tuff-corebox-focus-diagnostics-20261003/apps/core-app/node_modules/.bin/vue-tsc
+          truncated: false
+        - text: --noEmit
+          truncated: false
+        - text: -p
+          truncated: false
+        - text: "[REDACTED]"
+          truncated: false
+        - text: --composite
+          truncated: false
+        - text: "false"
+          truncated: false
+      argv_truncated: false
+      cwd_ref: apps/core-app
+      status: passed
+      exit_code: 0
+      duration_ms: 16053
+    - id: focus-request-boundaries
+      name:
+        text: Observer、原生申请、IPC、生命周期和隐私回归
+        truncated: false
+      argv_display:
+        - text: npm_config_verify_deps_before_run=false
+          truncated: false
+        - text: pnpm_config_verify_deps_before_run=false
+          truncated: false
+        - text: /private/tmp/tuff-corebox-focus-diagnostics-20261003/apps/core-app/node_modules/.bin/vitest
+          truncated: false
+        - text: run
+          truncated: false
+        - text: src/main/modules/box-tool/core-box/focus-diagnostics.test.ts
+          truncated: false
+        - text: src/main/modules/box-tool/core-box/window.test.ts
+          truncated: false
+        - text: src/main/modules/box-tool/core-box/ipc.test.ts
+          truncated: false
+        - text: src/main/modules/box-tool/core-box/index.test.ts
+          truncated: false
+        - text: src/main/modules/sentry/telemetry-sanitizer.canary.test.ts
+          truncated: false
+        - text: src/main/modules/sentry/sentry-service.test.ts
+          truncated: false
+      argv_truncated: false
+      cwd_ref: apps/core-app
+      status: passed
+      exit_code: 0
+      duration_ms: 2148
+    - id: focus-diagnostic-edge-smoke
+      name:
+        text: 独立实际模块调度与缺失目标超时旧回执取消边界smoke
+        truncated: false
+      argv_display:
+        - text: --eval
+          truncated: false
+        - text: |
+            const assert = require("node:assert/strict");
+            const { CoreBoxFocusDiagnostics } = require("/private/tmp/tuff-corebox-focus-diagnostics-20261003/apps/core-app/src/main/modules/box-tool/core-box/focus-diagnostics.ts");
+            const delay = ms => new Promise(r => setTimeout(r, ms));
+            const native = { windowId: 2, windowAlive: true, visible: true, windowFocused: true, webContentsFocused: true, pluginActive: false, pluginFocused: false, metaVisible: false, metaFocused: false };
+            const response = q => ({...q,documentFocused:true,inputPresent:true,inputFocused:true,expectedTarget:"input",expectedTargetPresent:true,expectedTargetFocused:true});
+            async function run(name, state, reply, expectedCode) {
+             const rows=[]; let probes=0; let monitor;
+             monitor=new CoreBoxFocusDiagnostics({readNative:()=>state,dispatchProbe:q=>{probes++; const r=reply(q); if(r) assert.equal(monitor.receiveProbe(r),true)},emit:r=>rows.push(r)});
+             const id=monitor.start("programmatic"); monitor.shown(id); monitor.shown(id);
+             await delay(1550);
+             const samples=rows.filter(r=>r.stage==="sample");
+             assert.deepEqual(samples.map(r=>r.sampleIndex).sort((a,b)=>a-b),[1,2,3,4,5,6,7,8,9,10]);
+             assert.equal(rows.filter(r=>r.stage==="show").length,1);
+             assert.equal(rows.filter(r=>r.stage==="complete").length,1);
+             assert(samples.every(r=>r.code===expectedCode && r.severity===(expectedCode==="COREBOX_FOCUS_OK"?"info":"error")));
+             assert(samples[0].elapsedMs>=180);
+             assert.equal(monitor.receiveProbe(response({summonId:id,sampleIndex:1})),false);
+             if(!state.windowAlive) assert.equal(probes,0);
+             console.log(JSON.stringify({scenario:name,indices:samples.map(r=>r.sampleIndex),codes:[...new Set(samples.map(r=>r.code))],firstMs:samples[0].elapsedMs,complete:rows.find(r=>r.stage==="complete")}));
+            }
+            async function main(){
+             await Promise.all([
+              run("normal-and-duplicate-shown",native,response,"COREBOX_FOCUS_OK"),
+              run("target-missing",native,q=>({...response(q),inputPresent:false,inputFocused:false,expectedTargetPresent:false,expectedTargetFocused:false}),"COREBOX_FOCUS_TARGET_MISSING"),
+              run("renderer-timeout",native,q=>null,"COREBOX_FOCUS_RENDERER_TIMEOUT"),
+              run("window-missing",{...native,windowAlive:false,visible:false,windowFocused:false,webContentsFocused:false},response,"COREBOX_FOCUS_WINDOW_MISSING"),
+              run("invalid-reply",native,q=>({...response(q),expectedTarget:"invalid-target"}),"COREBOX_FOCUS_RENDERER_INVALID_REPLY")
+             ]);
+             const rows=[]; let monitor; let reply=false;
+             monitor=new CoreBoxFocusDiagnostics({readNative:()=>native,dispatchProbe:q=>{if(reply)monitor.receiveProbe(response(q))},emit:r=>rows.push(r)});
+             const old=monitor.start("shortcut"); monitor.shown(old); await delay(210);
+             const current=monitor.start("programmatic"); reply=true; monitor.shown(current);
+             assert.equal(monitor.receiveProbe(response({summonId:old,sampleIndex:1})),false);
+             await delay(1550);
+             assert(rows.filter(r=>r.summonId===old && r.stage==="sample").every(r=>r.status==="cancelled" && r.reason==="superseded"));
+             assert.equal(rows.filter(r=>r.summonId===current && r.stage==="sample" && r.status==="success").length,10);
+             const exiting=monitor.start("shortcut"); monitor.shown(exiting); monitor.cancel("shutdown");
+             assert.equal(rows.filter(r=>r.summonId===exiting && r.stage==="sample" && r.status==="cancelled" && r.reason==="shutdown").length,10);
+             assert.equal(monitor.receiveProbe(response({summonId:exiting,sampleIndex:1})),false);
+             console.log(JSON.stringify({scenario:"supersession-stale-reply-and-shutdown",old,current,exiting,staleReplyAccepted:false,shutdownCancelled:10}));
+            }
+            main().catch(e=>{console.error(e);process.exitCode=1});
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 3485
+    - id: focus-clean-shutdown-correlation
+      name:
+        text: 实际退出取消1～10及汇总完整HTTP200/Nexusaccepted
+        truncated: false
+      argv_display:
+        - text: -c
+          truncated: false
+        - text: |
+            import pathlib,json,re
+            root=pathlib.Path("/private/tmp/tuff-focus-runtime-20261004/evidence")
+            id="2481f41e-047b-4260-8260-0110e7cf56e6"
+            sentry=[]; nexus=[]
+            for path in sorted(root.glob("*.json")):
+             d=json.loads(path.read_bytes())
+             for x in d.get("sentryDeliveries",[]):
+              if x.get("context",{}).get("summonId")==id: sentry.append({"file":path.name,"statusCode":x.get("statusCode"),"context":x.get("context")})
+             for x in d.get("nexusDeliveries",[]):
+              if not x.get("events") or x.get("status")!=200: continue
+              es=json.loads(x["events"])["events"]; ack=json.loads(x.get("data","{}"))
+              if ack.get("accepted")!=len(es) or ack.get("rejected",0) or ack.get("dropped",0): continue
+              for e in es:
+               if e.get("metadata",{}).get("summonId")==id: nexus.append({"file":path.name,"metadata":e["metadata"]})
+            print("SHUTDOWN_SENTRY",json.dumps(sentry,separators=(",",":")))
+            print("SHUTDOWN_NEXUS_ACCEPTED",json.dumps(nexus,separators=(",",":")))
+            expected=set(range(1,11))
+            assert {x["metadata"]["sampleIndex"] for x in nexus if x["metadata"]["stage"]=="sample"}==expected
+            assert any(x["metadata"]["stage"]=="cancel" for x in nexus)
+            assert {x["context"]["sampleIndex"] for x in sentry if x.get("statusCode")==200 and x["context"]["stage"]=="sample"}==expected,"A4 shutdown cancellation has no Sentry HTTP200 receipt for 1-10"
+            assert any(x.get("statusCode")==200 and x["context"]["stage"]=="cancel" for x in sentry),"A4 shutdown cancellation summary has no Sentry HTTP200 receipt"
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 49
+    - id: focus-repair-lint
+      name:
+        text: 修复的焦点源码与边界测试 scoped lint
+        truncated: false
+      argv_display:
+        - text: npm_config_verify_deps_before_run=false
+          truncated: false
+        - text: pnpm_config_verify_deps_before_run=false
+          truncated: false
+        - text: /private/tmp/tuff-corebox-focus-diagnostics-20261003/node_modules/.bin/eslint
+          truncated: false
+        - text: --max-warnings
+          truncated: false
+        - text: "0"
+          truncated: false
+        - text: src/main/modules/box-tool/core-box/focus-diagnostics.test.ts
+          truncated: false
+        - text: src/main/modules/box-tool/core-box/window.test.ts
+          truncated: false
+        - text: src/main/modules/box-tool/core-box/index.ts
+          truncated: false
+        - text: src/main/modules/box-tool/core-box/window.ts
+          truncated: false
+        - text: src/main/modules/sentry/sentry-service.ts
+          truncated: false
+      argv_truncated: false
+      cwd_ref: apps/core-app
+      status: passed
+      exit_code: 0
+      duration_ms: 1374
+  summary:
+    text: 新独立Verifier本人已提交startup并获Runtime确认。只读完整核对brief、完整Spec、A1-A8、主/渲染/IPC/合法目标/生命周期/SDK/Nexus消费侧及正式Runtime证据，最后再参考Builder交接；本轮A1-A8全部passed。当前6项Runtime检查匹配并复用，没有重跑/安装/build/lint/tests/formatter或源码/测试/需求写入。新实际退出2481f41e-047b-4260-8260-0110e7cf56e6的取消1-10和汇总11条全部最终HTTP200及Nexus
+      accepted，安全状态逐项相等，旧失败退出未混用。原样新candidateId/verifierExecutionRef，提交完整final-result供父会话继续；未accept-result、archive、stage
+      merge或Git写入。
+    truncated: false
+  risks:
+    - text: 真实Electron证据适用于本次macOS arm64隔离profile；不宣称修复间歇失焦根因或已实测其他平台。
+      truncated: false
+    - text: 离线、上游配额、隐私限制与SDK/网络失败仍沿既有机制；旧6470退出失败与失败探索只保留作基线，不纳入本轮通过证据。
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-10-04T09:58:32.158Z
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 1
+    outcome: execution-error
+    unresolved_ids: []
+    summary:
+      text: 平台确认新的独立只读NativeFocusVerifier已启动且startup回执已被Runtime接受，但审阅过程中失败退出：Touch CPA
+        HTTP400
+        invalid_request_error，CodingPlan订阅无效或过期；未提交完整A1-A8结论。候选与三项Runtime已通过检查保留，不接受不完整验收，不修改实现。
+      truncated: false
+    completed_at: 2026-10-04T06:02:55.133Z
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 2
+    outcome: fail
+    unresolved_ids:
+      - A2
+      - A4
+      - A5
+    summary:
+      text: 新独立Verifier已亲自提交startup且Runtime确认。完整只读审阅A1-A8、brief、完整Spec、主/渲染/传输/脱敏消费边界及同候选Runtime记录后：A1/A3/A6/A7/A8
+        passed，A4 failed（实际退出远端收件缺失），A2/A5
+        blocked（所需边界检查被Runtime追加轮数上限拒绝未执行）。常规真实场景精确安全状态与最终HTTP200/Nexusaccepted关联检查通过；所有失败探索、脚本解析失败和未执行检查均明确保留。候选与任务身份原样，交回Runtime决定后续Build动作。
+      truncated: false
+    completed_at: 2026-10-04T06:23:50.327Z
+  - goal_cycle: 1
+    iteration: 2
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 新独立Verifier本人已提交startup并获Runtime确认。只读完整核对brief、完整Spec、A1-A8、主/渲染/IPC/合法目标/生命周期/SDK/Nexus消费侧及正式Runtime证据，最后再参考Builder交接；本轮A1-A8全部passed。当前6项Runtime检查匹配并复用，没有重跑/安装/build/lint/tests/formatter或源码/测试/需求写入。新实际退出2481f41e-047b-4260-8260-0110e7cf56e6的取消1-10和汇总11条全部最终HTTP200及Nexus
+        accepted，安全状态逐项相等，旧失败退出未混用。原样新candidateId/verifierExecutionRef，提交完整final-result供父会话继续；未accept-result、archive、stage
+        merge或Git写入。
+      truncated: false
+    completed_at: 2026-10-04T09:58:32.158Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-10-03T17:07:19.404Z

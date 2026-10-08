@@ -60,9 +60,16 @@ interface ProviderHealthCheckRow {
 export interface ListProviderHealthChecksOptions {
   providerId?: string
   capability?: string
-  status?: ProviderHealthStatus
+  /** One status, or several separated by commas (`degraded,unhealthy`): a check in any of them. */
+  status?: string
   page?: number
   limit?: number
+}
+
+interface HealthWhereOptions {
+  providerId?: string
+  capability?: string
+  statuses?: ProviderHealthStatus[]
 }
 
 export interface LatestProviderHealthChecksOptions {
@@ -188,7 +195,19 @@ function mapHealthRow(row: ProviderHealthCheckRow): ProviderHealthCheckEntry {
   }
 }
 
-function buildHealthWhere(options: ListProviderHealthChecksOptions) {
+/** `status` as one value or a comma-separated list. Every item must be a known status; an empty item is not one. */
+function readHealthStatuses(value: unknown): ProviderHealthStatus[] | undefined {
+  if (value == null)
+    return undefined
+  if (typeof value !== 'string')
+    throw createError({ statusCode: 400, statusMessage: 'status is invalid.' })
+  const statuses = new Set<ProviderHealthStatus>()
+  for (const item of value.split(','))
+    statuses.add(assertEnum(item.trim(), 'status', ['healthy', 'degraded', 'unhealthy'] as const)!)
+  return [...statuses]
+}
+
+function buildHealthWhere(options: HealthWhereOptions) {
   const conditions: string[] = []
   const values: string[] = []
 
@@ -200,9 +219,9 @@ function buildHealthWhere(options: ListProviderHealthChecksOptions) {
     conditions.push('capability = ?')
     values.push(options.capability)
   }
-  if (options.status) {
-    conditions.push('status = ?')
-    values.push(options.status)
+  if (options.statuses?.length) {
+    conditions.push(`status IN (${options.statuses.map(() => '?').join(', ')})`)
+    values.push(...options.statuses)
   }
 
   return {
@@ -270,12 +289,10 @@ export async function listProviderHealthChecks(
   const db = getD1Database(event)
   await ensureProviderHealthSchema(db)
 
-  const normalized: ListProviderHealthChecksOptions = {
+  const normalized: HealthWhereOptions = {
     providerId: readOptionalString(options.providerId, 'providerId', 180),
     capability: readOptionalString(options.capability, 'capability', 160),
-    status: assertEnum(options.status, 'status', ['healthy', 'degraded', 'unhealthy'] as const),
-    page: options.page,
-    limit: options.limit,
+    statuses: readHealthStatuses(options.status),
   }
   const { clause, values } = buildHealthWhere(normalized)
   const { page, limit, offset } = clampPagination(options.page, options.limit)

@@ -1,0 +1,30 @@
+{
+  "id": "flow-into-metak-drill-in",
+  "name": "flow-into-metak-drill-in",
+  "title": "流转并入 ⌘K 面板做二级页 + 流转页模糊背景",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-10-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "stage",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "blocker": "无代码阻塞。两件事等用户：一是 AC4（插件 UI 模式）真机验证要操作隔离实例，用户正在手动使用；二是 Nexus :3200 要不要重载来看 demo。",
+    "evidence": "第 1–7 步已完成，门禁全过：tuffex 3131/3131，nexus 1902/1902，core-app vitest 1425 例，两套 typecheck 均为 0。真机已验证 AC1、AC2、AC3、AC5、AC7（模糊部分）、AC8、AC11，以及闪旧页的修复。记录见 implement.md「验收记录」。",
+    "nextAction": "等 trellis-check 的全量审查结果，然后做第 9 步 spec 更新，再向 Orca 协调方报完成。提交由协调方负责。"
+  }
+}

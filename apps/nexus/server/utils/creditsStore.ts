@@ -690,19 +690,35 @@ export async function deleteTeam(event: H3Event, teamId: string): Promise<void> 
   `).bind(teamId).run()
 }
 
-async function ensureBalance(event: H3Event, scope: 'team' | 'user', scopeId: string): Promise<void> {
+/**
+ * The quota a user's month balance never goes below: the plan's personal
+ * allowance — for FREE, the boosted allowance once the profile was completed in
+ * an earlier month (`resolvePersonalQuota`).
+ *
+ * `ensureBalance` raises a user's balance to it on every read and write, and an
+ * administrator's deduction may not take the quota under it (`adjustUserCredits`).
+ * Both read it here: a deduction checked against a different number than the one
+ * the next read raises the balance back to "succeeds" and is then undone by that
+ * read, with its ledger row and audit left behind.
+ */
+async function resolveUserQuotaFloor(event: H3Event, userId: string, month: string): Promise<number> {
+  const plan = await resolvePlanForScope(event, 'user', userId)
+  const basePersonalQuota = resolveCreditAmount(PERSONAL_QUOTA_BY_PLAN[plan] ?? DEFAULT_PERSONAL_QUOTA)
+  return resolvePersonalQuota(event, userId, basePersonalQuota, month, plan)
+}
+
+/**
+ * Opens this month's balance for the scope and raises its quota to the scope's
+ * allowance — a user's quota floor (`resolveUserQuotaFloor`), a team's pool —
+ * which it returns.
+ */
+async function ensureBalance(event: H3Event, scope: 'team' | 'user', scopeId: string): Promise<number> {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
   const month = getMonthKey()
-  const plan = await resolvePlanForScope(event, scope, scopeId)
-  const teamQuota = scope === 'team'
-    ? await resolveTeamQuotaByPlan(event, scopeId, plan)
-    : DEFAULT_TEAM_QUOTA
-  const basePersonalQuota = resolveCreditAmount(PERSONAL_QUOTA_BY_PLAN[plan] ?? DEFAULT_PERSONAL_QUOTA)
-  const personalQuota = scope === 'user'
-    ? await resolvePersonalQuota(event, scopeId, basePersonalQuota, month, plan)
-    : basePersonalQuota
-  const quota = scope === 'team' ? teamQuota : personalQuota
+  const quota = scope === 'user'
+    ? await resolveUserQuotaFloor(event, scopeId, month)
+    : await resolveTeamQuotaByPlan(event, scopeId, await resolvePlanForScope(event, scope, scopeId))
   await db.prepare(`
     INSERT OR IGNORE INTO ${CREDIT_BALANCES_TABLE} (scope, scope_id, month, quota, used)
     VALUES (?, ?, ?, ?, 0)
@@ -712,6 +728,7 @@ async function ensureBalance(event: H3Event, scope: 'team' | 'user', scopeId: st
     SET quota = ?
     WHERE scope = ? AND scope_id = ? AND month = ? AND quota < ?
   `).bind(quota, scope, scopeId, month, quota).run()
+  return quota
 }
 
 async function resolveActiveCreditTeam(event: H3Event, userId: string) {
@@ -1030,6 +1047,74 @@ export interface CreditAdjustmentResult {
   createdAt: string
 }
 
+/**
+ * How far an administrator can lower a user's quota this month. The quota may
+ * not go under the plan's allowance (`planFloor`), which every read raises it
+ * back to, nor under the credits already used this month.
+ */
+export interface UserCreditAdjustLimits {
+  /** The plan's monthly allowance: `resolveUserQuotaFloor`. */
+  planFloor: number
+  /** Credits used this month. */
+  used: number
+  /** This month's quota. */
+  quota: number
+  /** `MAX(0, quota - MAX(planFloor, used))`: the most one deduction can take now. */
+  maxDeduct: number
+}
+
+/**
+ * A deduction refused because it would take the quota under its floor. Nothing
+ * was written: not the balance, not a ledger row. `limits` is read after the
+ * refusal, so it is what the next deduction is checked against.
+ */
+export class CreditDeductLimitError extends Error {
+  readonly errorCode = 'CREDITS_DEDUCT_LIMIT'
+
+  constructor(readonly limits: UserCreditAdjustLimits) {
+    super('Credit deduction exceeds the adjustable amount.')
+    this.name = 'CreditDeductLimitError'
+  }
+}
+
+function toUserCreditAdjustLimits(planFloor: number, quota: number, used: number): UserCreditAdjustLimits {
+  return {
+    planFloor,
+    used,
+    quota,
+    maxDeduct: Math.max(0, quota - Math.max(planFloor, used)),
+  }
+}
+
+/** This month's deduction limits for a user, with the month's balance opened (and raised to the floor) first. */
+export async function getUserCreditAdjustLimits(event: H3Event, userId: string): Promise<UserCreditAdjustLimits> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+  const planFloor = await ensureBalance(event, 'user', userId)
+  const balance = await db.prepare(`
+    SELECT quota, used FROM ${CREDIT_BALANCES_TABLE}
+    WHERE scope = 'user' AND scope_id = ? AND month = ?
+  `).bind(userId, getMonthKey()).first<{ quota?: number, used?: number }>()
+
+  return toUserCreditAdjustLimits(
+    planFloor,
+    resolveCreditAmount(balance?.quota ?? 0),
+    resolveCreditAmount(balance?.used ?? 0),
+  )
+}
+
+/**
+ * Raises or lowers a user's quota for this month and records the change in the
+ * ledger.
+ *
+ * A deduction may not take the quota under `MAX(planFloor, used)`
+ * (`UserCreditAdjustLimits`). The check is the `UPDATE`'s own condition, so two
+ * deductions running at once cannot both pass it, and one past the floor is
+ * refused whole with `CreditDeductLimitError` — never clamped, and nothing is
+ * written for it. Without the condition a deduction under the plan allowance was
+ * written, ledgered and audited, and the very next read (`ensureBalance`) raised
+ * the quota straight back, leaving a ledger the balance does not add up to.
+ */
 export async function adjustUserCredits(
   event: H3Event,
   userId: string,
@@ -1039,31 +1124,31 @@ export async function adjustUserCredits(
 ): Promise<CreditAdjustmentResult> {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
-  await ensureBalance(event, 'user', userId)
+  const planFloor = await ensureBalance(event, 'user', userId)
 
   const normalizedDelta = resolveCreditAmount(delta)
   if (!normalizedDelta)
     throw new Error('Invalid credit amount.')
 
   const month = getMonthKey()
-  const balance = await db.prepare(`
-    SELECT quota, used FROM ${CREDIT_BALANCES_TABLE}
-    WHERE scope = 'user' AND scope_id = ? AND month = ?
-  `).bind(userId, month).first<{ quota?: number; used?: number }>()
-
-  const currentQuota = resolveCreditAmount(balance?.quota ?? 0)
-  const currentUsed = resolveCreditAmount(balance?.used ?? 0)
-  const nextQuota = sumCredits(currentQuota, normalizedDelta)
-  if (nextQuota < 0)
-    throw new Error('User credits quota cannot be negative.')
-  if (nextQuota < currentUsed)
-    throw new Error('User credits quota cannot be less than used credits.')
-
-  await db.prepare(`
-    UPDATE ${CREDIT_BALANCES_TABLE}
-    SET quota = ?
-    WHERE scope = 'user' AND scope_id = ? AND month = ?
-  `).bind(nextQuota, userId, month).run()
+  const update = normalizedDelta > 0
+    ? db.prepare(`
+        UPDATE ${CREDIT_BALANCES_TABLE}
+        SET quota = quota + ?
+        WHERE scope = 'user' AND scope_id = ? AND month = ?
+      `).bind(normalizedDelta, userId, month)
+    : db.prepare(`
+        UPDATE ${CREDIT_BALANCES_TABLE}
+        SET quota = quota + ?
+        WHERE scope = 'user' AND scope_id = ? AND month = ?
+          AND quota + ? >= MAX(?, used)
+      `).bind(normalizedDelta, userId, month, normalizedDelta, planFloor)
+  const updated = await update.run()
+  if (((updated.meta as { changes?: number } | undefined)?.changes ?? 0) < 1) {
+    if (normalizedDelta < 0)
+      throw new CreditDeductLimitError(await getUserCreditAdjustLimits(event, userId))
+    throw new Error('Credit balance update failed.')
+  }
 
   const now = new Date().toISOString()
   const ledgerId = crypto.randomUUID()

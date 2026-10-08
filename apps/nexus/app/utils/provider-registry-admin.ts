@@ -379,16 +379,6 @@ export interface ObservabilityActionHint {
   detail: string | null
 }
 
-export interface ObservabilityEmptyState {
-  tone: 'muted' | 'warning' | 'success'
-  titleKey: string
-  titleFallback: string
-  detailKey: string
-  detailFallback: string
-  actionKey: string
-  actionFallback: string
-}
-
 export type ProviderObservabilityFilter = 'all' | 'attention' | 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
 export type SceneObservabilityFilter = 'all' | 'attention' | 'completed' | 'failed' | 'planned' | 'unknown'
 export type UsageLedgerFilter = 'all' | 'attention' | 'completed' | 'failed' | 'planned' | 'estimated'
@@ -879,129 +869,6 @@ export function resolveHealthCheckReason(entry: ProviderHealthCheckEntry) {
   return healthCheckReason(entry) || '-'
 }
 
-function usageLedgerNeedsAttention(entry: ProviderUsageLedgerEntry) {
-  return entry.status === 'failed'
-    || entry.status === 'planned'
-    || entry.estimated
-}
-
-export function filterUsageLedgerEntries(
-  entries: ProviderUsageLedgerEntry[],
-  filter: UsageLedgerFilter,
-) {
-  if (filter === 'all')
-    return entries
-
-  return entries.filter((entry) => {
-    if (filter === 'attention')
-      return usageLedgerNeedsAttention(entry)
-
-    if (filter === 'estimated')
-      return entry.estimated
-
-    return entry.status === filter
-  })
-}
-
-export function filterHealthCheckEntries(
-  entries: ProviderHealthCheckEntry[],
-  filter: HealthCheckFilter,
-) {
-  if (filter === 'all')
-    return entries
-
-  return entries.filter((entry) => {
-    if (filter === 'attention')
-      return entry.status !== 'healthy'
-
-    return entry.status === filter
-  })
-}
-
-export function resolveUsageLedgerEmptyState(
-  entries: ProviderUsageLedgerEntry[],
-  filter: UsageLedgerFilter,
-): ObservabilityEmptyState | null {
-  if (entries.length === 0) {
-    return {
-      tone: 'muted',
-      titleKey: 'dashboard.providerRegistry.usage.empty',
-      titleFallback: 'No scene run usage recorded yet.',
-      detailKey: 'dashboard.providerRegistry.usage.emptyDetail',
-      detailFallback: 'Run a scene dry-run or execute flow to seed usage, trace, and fallback evidence.',
-      actionKey: 'dashboard.providerRegistry.usage.emptyAction',
-      actionFallback: 'Run scene',
-    }
-  }
-
-  if (filterUsageLedgerEntries(entries, filter).length > 0)
-    return null
-
-  if (filter === 'attention') {
-    return {
-      tone: 'success',
-      titleKey: 'dashboard.providerRegistry.usage.emptyAttention',
-      titleFallback: 'No usage rows need attention',
-      detailKey: 'dashboard.providerRegistry.usage.emptyAttentionDetail',
-      detailFallback: 'No failed, planned, or estimated usage rows match this view.',
-      actionKey: 'dashboard.providerRegistry.usage.clearFilter',
-      actionFallback: 'Show all usage',
-    }
-  }
-
-  return {
-    tone: filter === 'failed' || filter === 'estimated' ? 'success' : 'muted',
-    titleKey: 'dashboard.providerRegistry.usage.emptyFiltered',
-    titleFallback: 'No usage rows match the selected filter.',
-    detailKey: 'dashboard.providerRegistry.usage.emptyFilteredDetail',
-    detailFallback: 'Switch filters or run a scene to refresh usage ledger evidence.',
-    actionKey: 'dashboard.providerRegistry.usage.clearFilter',
-    actionFallback: 'Show all usage',
-  }
-}
-
-export function resolveHealthCheckEmptyState(
-  entries: ProviderHealthCheckEntry[],
-  filter: HealthCheckFilter,
-): ObservabilityEmptyState | null {
-  if (entries.length === 0) {
-    return {
-      tone: 'muted',
-      titleKey: 'dashboard.providerRegistry.health.empty',
-      titleFallback: 'No provider health checks recorded yet.',
-      detailKey: 'dashboard.providerRegistry.health.emptyDetail',
-      detailFallback: 'Run a provider check to capture latency, request id, degraded reason, and failure diagnostics.',
-      actionKey: 'dashboard.providerRegistry.health.emptyAction',
-      actionFallback: 'Run provider check',
-    }
-  }
-
-  if (filterHealthCheckEntries(entries, filter).length > 0)
-    return null
-
-  if (filter === 'attention') {
-    return {
-      tone: 'success',
-      titleKey: 'dashboard.providerRegistry.health.emptyAttention',
-      titleFallback: 'No health checks need attention',
-      detailKey: 'dashboard.providerRegistry.health.emptyAttentionDetail',
-      detailFallback: 'No degraded or unhealthy health checks match this view.',
-      actionKey: 'dashboard.providerRegistry.health.clearFilter',
-      actionFallback: 'Show all health checks',
-    }
-  }
-
-  return {
-    tone: filter === 'degraded' || filter === 'unhealthy' ? 'success' : 'muted',
-    titleKey: 'dashboard.providerRegistry.health.emptyFiltered',
-    titleFallback: 'No health checks match the selected filter.',
-    detailKey: 'dashboard.providerRegistry.health.emptyFilteredDetail',
-    detailFallback: 'Switch filters or run provider checks to refresh health evidence.',
-    actionKey: 'dashboard.providerRegistry.health.clearFilter',
-    actionFallback: 'Show all health checks',
-  }
-}
-
 function providerNeedsAttention(summary: ProviderObservabilitySummary) {
   return summary.status === 'degraded'
     || summary.status === 'unhealthy'
@@ -1014,161 +881,32 @@ function sceneNeedsAttention(summary: SceneObservabilitySummary) {
     || summary.failedUsageCount > 0
 }
 
-export function filterProvidersByObservability(
-  providers: ProviderRegistryRecord[],
-  observabilityById: Record<string, ProviderObservabilitySummary>,
+/** One provider against one status filter; a provider with no evidence yet is `unknown`. */
+export function providerMatchesObservability(
+  summary: ProviderObservabilitySummary | undefined,
   filter: ProviderObservabilityFilter,
 ) {
   if (filter === 'all')
-    return providers
-
-  return providers.filter((provider) => {
-    const summary = observabilityById[provider.id] ?? {
-      latestHealth: null,
-      latestUsage: null,
-      status: 'unknown',
-    }
-
-    if (filter === 'attention')
-      return providerNeedsAttention(summary)
-
-    return summary.status === filter
-  })
+    return true
+  const resolved = summary ?? { latestHealth: null, latestUsage: null, status: 'unknown' as const }
+  if (filter === 'attention')
+    return providerNeedsAttention(resolved)
+  return resolved.status === filter
 }
 
-export function filterScenesByObservability(
-  scenes: SceneRegistryRecord[],
-  observabilityById: Record<string, SceneObservabilitySummary>,
+/** One scene against one latest-run filter; a scene that never ran is `unknown`. */
+export function sceneMatchesObservability(
+  summary: SceneObservabilitySummary | undefined,
   filter: SceneObservabilityFilter,
 ) {
   if (filter === 'all')
-    return scenes
-
-  return scenes.filter((scene) => {
-    const summary = observabilityById[scene.id] ?? {
-      latestUsage: null,
-      failedUsageCount: 0,
-      status: 'unknown',
-    }
-
-    if (filter === 'attention')
-      return sceneNeedsAttention(summary)
-
-    if (filter === 'failed')
-      return summary.status === 'failed' || summary.failedUsageCount > 0
-
-    return summary.status === filter
-  })
-}
-
-export function resolveProviderObservabilityEmptyState(
-  providers: ProviderRegistryRecord[],
-  observabilityById: Record<string, ProviderObservabilitySummary>,
-  filter: ProviderObservabilityFilter,
-): ObservabilityEmptyState | null {
-  if (providers.length === 0) {
-    return {
-      tone: 'muted',
-      titleKey: 'dashboard.providerRegistry.providers.empty',
-      titleFallback: 'No providers registered yet.',
-      detailKey: 'dashboard.providerRegistry.providers.emptyDetail',
-      detailFallback: 'Create a provider before checking health, usage, or scene bindings.',
-      actionKey: 'dashboard.providerRegistry.providers.emptyAction',
-      actionFallback: 'Create provider',
-    }
-  }
-
-  if (filterProvidersByObservability(providers, observabilityById, filter).length > 0)
-    return null
-
-  if (filter === 'attention') {
-    return {
-      tone: 'success',
-      titleKey: 'dashboard.providerRegistry.providers.emptyAttention',
-      titleFallback: 'No providers need attention',
-      detailKey: 'dashboard.providerRegistry.providers.emptyAttentionDetail',
-      detailFallback: 'No degraded, unhealthy, or failed-usage providers match this view.',
-      actionKey: 'dashboard.providerRegistry.providers.clearFilter',
-      actionFallback: 'Show all providers',
-    }
-  }
-
-  if (filter === 'unknown') {
-    return {
-      tone: 'warning',
-      titleKey: 'dashboard.providerRegistry.providers.emptyUnknown',
-      titleFallback: 'No providers without evidence',
-      detailKey: 'dashboard.providerRegistry.providers.emptyUnknownDetail',
-      detailFallback: 'Every provider in this set already has health or usage evidence.',
-      actionKey: 'dashboard.providerRegistry.providers.clearFilter',
-      actionFallback: 'Show all providers',
-    }
-  }
-
-  return {
-    tone: 'muted',
-    titleKey: 'dashboard.providerRegistry.providers.emptyFiltered',
-    titleFallback: 'No providers match the selected filter.',
-    detailKey: 'dashboard.providerRegistry.providers.emptyFilteredDetail',
-    detailFallback: 'Switch filters or run provider checks to refresh observability evidence.',
-    actionKey: 'dashboard.providerRegistry.providers.clearFilter',
-    actionFallback: 'Show all providers',
-  }
-}
-
-export function resolveSceneObservabilityEmptyState(
-  scenes: SceneRegistryRecord[],
-  observabilityById: Record<string, SceneObservabilitySummary>,
-  filter: SceneObservabilityFilter,
-): ObservabilityEmptyState | null {
-  if (scenes.length === 0) {
-    return {
-      tone: 'muted',
-      titleKey: 'dashboard.providerRegistry.scenes.empty',
-      titleFallback: 'No scenes configured yet.',
-      detailKey: 'dashboard.providerRegistry.scenes.emptyDetail',
-      detailFallback: 'Create a scene and bind provider capabilities before collecting run evidence.',
-      actionKey: 'dashboard.providerRegistry.scenes.emptyAction',
-      actionFallback: 'Create scene',
-    }
-  }
-
-  if (filterScenesByObservability(scenes, observabilityById, filter).length > 0)
-    return null
-
-  if (filter === 'attention') {
-    return {
-      tone: 'success',
-      titleKey: 'dashboard.providerRegistry.scenes.emptyAttention',
-      titleFallback: 'No scene runs need attention',
-      detailKey: 'dashboard.providerRegistry.scenes.emptyAttentionDetail',
-      detailFallback: 'No failed, unknown, or failed-history scenes match this view.',
-      actionKey: 'dashboard.providerRegistry.scenes.clearFilter',
-      actionFallback: 'Show all scenes',
-    }
-  }
-
-  if (filter === 'failed') {
-    return {
-      tone: 'success',
-      titleKey: 'dashboard.providerRegistry.scenes.emptyFailed',
-      titleFallback: 'No failed scene evidence',
-      detailKey: 'dashboard.providerRegistry.scenes.emptyFailedDetail',
-      detailFallback: 'No latest failures or failed-history scenes match this view.',
-      actionKey: 'dashboard.providerRegistry.scenes.clearFilter',
-      actionFallback: 'Show all scenes',
-    }
-  }
-
-  return {
-    tone: 'muted',
-    titleKey: 'dashboard.providerRegistry.scenes.emptyFiltered',
-    titleFallback: 'No scenes match the selected filter.',
-    detailKey: 'dashboard.providerRegistry.scenes.emptyFilteredDetail',
-    detailFallback: 'Switch filters or run a scene dry-run to refresh usage evidence.',
-    actionKey: 'dashboard.providerRegistry.scenes.clearFilter',
-    actionFallback: 'Show all scenes',
-  }
+    return true
+  const resolved = summary ?? { latestUsage: null, failedUsageCount: 0, status: 'unknown' as const }
+  if (filter === 'attention')
+    return sceneNeedsAttention(resolved)
+  if (filter === 'failed')
+    return resolved.status === 'failed' || resolved.failedUsageCount > 0
+  return resolved.status === filter
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1189,6 +927,42 @@ function isSceneRunResult(value: unknown): value is SceneRunResult {
     && Array.isArray(value.fallbackTrail)
     && Array.isArray(value.trace)
     && Array.isArray(value.usage)
+}
+
+/**
+ * A value the operator typed that a form cannot send: a field that is not JSON,
+ * a number out of range, a duplicated capability, a default model missing from
+ * the model list. `code` and `params` name it for a localized message
+ * (`dashboard.providerRegistry.validation.<code>`); `message` keeps the English
+ * sentence it has always had.
+ */
+export type ProviderRegistryInputErrorCode =
+  | 'json-invalid'
+  | 'json-not-object'
+  | 'capability-duplicated'
+  | 'number-non-negative'
+  | 'number-min'
+  | 'number-range'
+  | 'default-model-missing'
+
+export class ProviderRegistryInputError extends Error {
+  constructor(
+    readonly code: ProviderRegistryInputErrorCode,
+    readonly params: Record<string, string | number>,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'ProviderRegistryInputError'
+  }
+}
+
+function parseJsonText(text: string, field: string): unknown {
+  try {
+    return JSON.parse(text)
+  }
+  catch {
+    throw new ProviderRegistryInputError('json-invalid', { field }, `${field} is not valid JSON.`)
+  }
 }
 
 export function normalizeError(err: unknown, fallback: string) {
@@ -1236,9 +1010,9 @@ export function parseJsonObjectField(value: string, field: string): Record<strin
   const trimmed = value.trim()
   if (!trimmed)
     return null
-  const parsed = JSON.parse(trimmed)
+  const parsed = parseJsonText(trimmed, field)
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-    throw new Error(`${field} must be a JSON object.`)
+    throw new ProviderRegistryInputError('json-not-object', { field }, `${field} must be a JSON object.`)
   return parsed as Record<string, unknown>
 }
 
@@ -1277,7 +1051,11 @@ export function ensureUniqueCapabilities(capabilities: Array<{ capability: strin
   const seen = new Set<string>()
   for (const item of capabilities) {
     if (seen.has(item.capability)) {
-      throw new Error(`capability ${item.capability} is duplicated.`)
+      throw new ProviderRegistryInputError(
+        'capability-duplicated',
+        { capability: item.capability },
+        `capability ${item.capability} is duplicated.`,
+      )
     }
     seen.add(item.capability)
   }
@@ -1485,7 +1263,7 @@ export function parseOptionalNonNegativeNumber(value: string, field: string): nu
     return null
   const parsed = Number(trimmed)
   if (!Number.isFinite(parsed) || parsed < 0)
-    throw new Error(`${field} must be a non-negative number.`)
+    throw new ProviderRegistryInputError('number-non-negative', { field }, `${field} must be a non-negative number.`)
   return parsed
 }
 
@@ -1495,13 +1273,14 @@ export function parseBoundedNumber(value: string, field: string, min = 0, max?: 
     return undefined
   const parsed = Number(trimmed)
   if (!Number.isFinite(parsed) || parsed < min || (max !== undefined && parsed > max)) {
-    const range = max === undefined ? `greater than or equal to ${min}` : `between ${min} and ${max}`
-    throw new Error(`${field} must be a number ${range}.`)
+    if (max === undefined)
+      throw new ProviderRegistryInputError('number-min', { field, min }, `${field} must be a number greater than or equal to ${min}.`)
+    throw new ProviderRegistryInputError('number-range', { field, min, max }, `${field} must be a number between ${min} and ${max}.`)
   }
   return parsed
 }
 
-export function parseOptionalJson(value: string): unknown {
+export function parseOptionalJson(value: string, field = 'input'): unknown {
   const trimmed = value.trim()
-  return trimmed ? JSON.parse(trimmed) : undefined
+  return trimmed ? parseJsonText(trimmed, field) : undefined
 }

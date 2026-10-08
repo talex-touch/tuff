@@ -23,10 +23,23 @@ import type {
   ExecWriteResult,
   PersistAndApplyProviderItemsResult,
   ProviderReplacementOutcome,
+  RemoveFileRecordsMessage,
+  RemoveFileRecordsResult,
+  RemoveMissingFileSearchRecordsMessage,
+  RemoveMissingFileSearchRecordsResult,
+  ListPendingFileDeletionCommitsMessage,
+  ListPendingFileDeletionCommitsResult,
+  AcknowledgeFileDeletionCommitsMessage,
+  AcknowledgeFileDeletionCommitsResult,
+  RunIndexMaintenanceSliceMessage,
   WorkerErrorMessage as SearchIndexWorkerErrorMessage,
-  WorkerResultMessage
+  WorkerResultMessage,
+  VacuumResult
 } from './search-index-worker-types'
 import type {
+  ExpectedFileRecord,
+  ExpectedMissingFileSearchRecord,
+  FileRecordRemovalOptions,
   FileMetadataUpdateRecord,
   FileMetadataUpdateSummary,
   UpsertFileRecord
@@ -43,6 +56,11 @@ import {
 import { deserializeSearchIndexWorkerError } from './search-index-worker-error'
 import { normalizeScanProgressUpsert } from './search-index-worker-scan-progress'
 import { operationalErrorService } from '../../../observability'
+import { isIndexMaintenanceIdle } from '../search-activity'
+import type {
+  IndexMaintenanceNotification,
+  IndexMaintenanceSlice
+} from '../index-maintenance-context'
 
 const log = getLogger('search-index-worker')
 const DEFAULT_COMMIT_RESPONSE_TIMEOUT_MS = 60_000
@@ -522,18 +540,134 @@ export class SearchIndexWorkerClient {
       : normalizedUpsert.paths.length
   }
 
-  /**
-   * Phase 1: Remove a file record (single-writer architecture).
-   * Main thread delegates file-index writes to the worker to eliminate SQLITE_BUSY.
-   */
-  async removeFile(path: string): Promise<void> {
-    await this.ensureInitialized()
-    const taskId = this.generateTaskId('removeFile')
-    await this.sendAndWait(taskId, {
-      type: 'removeFile',
-      taskId,
-      path
-    })
+  async removeFileRecords(
+    sourceId: string,
+    records: readonly ExpectedFileRecord[],
+    options: FileRecordRemovalOptions = {}
+  ): Promise<RemoveFileRecordsResult> {
+    options.signal?.throwIfAborted()
+    if (records.length === 0) {
+      return { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: false }
+    }
+    const result = await this.sendCancellableRequest<RemoveFileRecordsResult>(
+      {
+        type: 'removeFileRecords',
+        taskId: this.generateTaskId('removeFileRecords'),
+        sourceId,
+        records
+      },
+      options
+    )
+    return result ?? { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: true }
+  }
+
+  async removeMissingFileSearchRecords(
+    sourceId: string,
+    records: readonly ExpectedMissingFileSearchRecord[],
+    options: FileRecordRemovalOptions = {}
+  ): Promise<RemoveMissingFileSearchRecordsResult> {
+    options.signal?.throwIfAborted()
+    if (records.length === 0) {
+      return { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: false }
+    }
+    const result = await this.sendCancellableRequest<RemoveMissingFileSearchRecordsResult>(
+      {
+        type: 'removeMissingFileSearchRecords',
+        taskId: this.generateTaskId('removeMissingFileSearchRecords'),
+        sourceId,
+        records
+      },
+      options
+    )
+    return result ?? { deletedRecords: [], removedIndexedItems: 0, commitId: null, deferred: true }
+  }
+
+  async listPendingFileDeletionCommits(
+    sourceId: string,
+    limit = 64,
+    options: FileRecordRemovalOptions = {}
+  ): Promise<ListPendingFileDeletionCommitsResult> {
+    const result = await this.sendCancellableRequest<ListPendingFileDeletionCommitsResult>(
+      {
+        type: 'listPendingFileDeletionCommits',
+        taskId: this.generateTaskId('listPendingFileDeletionCommits'),
+        sourceId,
+        limit
+      },
+      options
+    )
+    return result ?? { commits: [], deferred: true }
+  }
+
+  async acknowledgeFileDeletionCommits(
+    sourceId: string,
+    commitIds: readonly string[],
+    options: FileRecordRemovalOptions = {}
+  ): Promise<AcknowledgeFileDeletionCommitsResult> {
+    const result = await this.sendCancellableRequest<AcknowledgeFileDeletionCommitsResult>(
+      {
+        type: 'acknowledgeFileDeletionCommits',
+        taskId: this.generateTaskId('acknowledgeFileDeletionCommits'),
+        sourceId,
+        commitIds
+      },
+      options
+    )
+    return result ?? { acknowledged: 0, deferred: true }
+  }
+
+  private async sendCancellableRequest<T>(
+    message:
+      | RemoveFileRecordsMessage
+      | RemoveMissingFileSearchRecordsMessage
+      | ListPendingFileDeletionCommitsMessage
+      | AcknowledgeFileDeletionCommitsMessage
+      | RunIndexMaintenanceSliceMessage,
+    options: FileRecordRemovalOptions
+  ): Promise<T | null> {
+    const { signal } = options
+    signal?.throwIfAborted()
+    await this.ensureInitialized(signal)
+    signal?.throwIfAborted()
+    // Initialization/respawn may have outlived the writer's earlier idle check.
+    if (
+      options.isStillCurrent?.() === false ||
+      (options.maintenance && !isIndexMaintenanceIdle())
+    ) {
+      return null
+    }
+
+    const cancellation = signal ? new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT) : undefined
+    const cancellationState = cancellation ? new Int32Array(cancellation) : null
+    const abort = (): void => {
+      if (cancellationState) Atomics.store(cancellationState, 0, 1)
+    }
+    signal?.addEventListener('abort', abort, { once: true })
+    try {
+      signal?.throwIfAborted()
+      const result = await this.sendAndWaitWithResult<T>(message.taskId, {
+        ...message,
+        cancellation
+      })
+      if (result === undefined || result === null)
+        throw new Error(
+          message.type === 'runIndexMaintenanceSlice'
+            ? 'INDEX_MAINTENANCE_RESULT_MISSING'
+            : 'FILE_INDEX_DELETE_RESULT_MISSING'
+        )
+      return result
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.name === 'FileIndexDeleteCancelledError' &&
+        signal?.aborted
+      ) {
+        throw signal.reason
+      }
+      throw error
+    } finally {
+      signal?.removeEventListener('abort', abort)
+    }
   }
 
   /**
@@ -565,6 +699,47 @@ export class SearchIndexWorkerClient {
       sourceId
     })
     return result ?? 0
+  }
+
+  /** No timeout on purpose: a `VACUUM` of a multi-GB file legitimately takes minutes. */
+  async vacuum(reason: string): Promise<VacuumResult | null> {
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('vacuum')
+    const result = await this.sendAndWaitWithResult<VacuumResult>(taskId, {
+      type: 'vacuum',
+      taskId,
+      reason
+    })
+    return result ?? null
+  }
+
+  async runIndexMaintenanceSlice(
+    sourceId: string,
+    limit = 64,
+    signal?: AbortSignal
+  ): Promise<IndexMaintenanceSlice> {
+    const result = await this.sendCancellableRequest<IndexMaintenanceSlice>(
+      {
+        type: 'runIndexMaintenanceSlice',
+        taskId: this.generateTaskId('runIndexMaintenanceSlice'),
+        sourceId,
+        limit
+      },
+      { maintenance: true, signal }
+    )
+    return result ?? { processed: 0, done: false, deferred: true, notifications: [] }
+  }
+
+  async acknowledgeIndexMaintenanceCommit(
+    notification: IndexMaintenanceNotification
+  ): Promise<void> {
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('acknowledgeIndexMaintenanceCommit')
+    await this.sendAndWaitWithResult(taskId, {
+      type: 'acknowledgeIndexMaintenanceCommit',
+      taskId,
+      notification
+    })
   }
 
   /**
@@ -725,15 +900,32 @@ export class SearchIndexWorkerClient {
     }
   }
 
-  private async ensureInitialized(): Promise<void> {
+  private async ensureInitialized(signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
     this.assertTerminationConfirmed()
-    if (!this.initPromise && this.dbPath) {
-      await this.init(this.dbPath)
-    }
-    if (!this.initPromise) {
+    const initialization = this.initPromise ?? (this.dbPath ? this.init(this.dbPath) : null)
+    if (!initialization) {
       throw new Error('SearchIndexWorkerClient not initialized — call init(dbPath) first')
     }
-    await this.initPromise
+    if (!signal) return await initialization
+    await new Promise<void>((resolve, reject) => {
+      const abort = (): void => {
+        signal.removeEventListener('abort', abort)
+        reject(signal.reason)
+      }
+      signal.addEventListener('abort', abort, { once: true })
+      void initialization.then(
+        () => {
+          signal.removeEventListener('abort', abort)
+          resolve()
+        },
+        (error) => {
+          signal.removeEventListener('abort', abort)
+          reject(error)
+        }
+      )
+      if (signal.aborted) abort()
+    })
   }
 
   private ensureWorker(): Worker {

@@ -29,7 +29,8 @@ export interface LocalAiAgentChoice {
  * Where the submenu stands:
  * - `loading` — no answer yet;
  * - `ready` — the choices are known (some may be blocked);
- * - `none` — this build offers no local agents (the beta gate) or reported none;
+ * - `none` — no local agents to offer: this platform has none, the master switch in Settings is
+ *   off, or the main process reported none;
  * - `failed` — the read failed with nothing earlier to keep showing.
  */
 export type LocalAiAgentsPhase = 'loading' | 'ready' | 'none' | 'failed'
@@ -69,12 +70,13 @@ export function localAiAgentBlocker(
 }
 
 /**
- * The submenu's rows. Empty when the build has no local agents at all: the beta gate reports
- * every CLI as not installed, and listing four "not installed" rows would send the user off to
- * install something that still could not run.
+ * The submenu's rows. Empty when there is nothing the user has agreed to: off macOS every CLI
+ * reads as not installed, and listing four "not installed" rows would send the user off to
+ * install something that still could not run; with the master switch off, the entry waits for the
+ * user to turn local agents on in Settings.
  */
 export function localAiAgentChoices(status: LocalAiCliStatus): LocalAiAgentChoice[] {
-  if (!status.betaAvailable) return []
+  if (!status.betaAvailable || !status.enabled) return []
   return status.providers.filter(isProviderStatus).map((provider) => ({
     id: provider.id,
     label: provider.label,

@@ -20,6 +20,8 @@ export interface ShortcutStatus {
     | 'register-failed'
     | 'register-error'
     | 'invalid'
+    /** The record is kept but its owner has no callback registered (the owner is off). */
+    | 'runtime-missing'
     | 'disabled'
   conflictWith?: string[]
   warnings?: ShortcutWarning[]

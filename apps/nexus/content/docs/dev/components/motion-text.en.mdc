@@ -1,0 +1,238 @@
+---
+title: MotionText
+description: "45 source-mapped text effects, four registry reveals, scramble, inline caller media and interactive focus blur."
+category: MotionText
+status: beta
+since: 0.6.3
+tags: [motion, text, grapheme, hover, media, accessibility]
+syncStatus: reviewed
+verified: false
+---
+
+## Overview
+
+`TxMotionText` preserves the 45 original Amicro catalog IDs and seven independent registry/source additions. Each preset keeps its own direction, grouping, stagger, scale, blur, mask, 3D transform or continuous rhythm. `MOTION_TEXT_VARIANTS` provides typed names, groups, segmentation and fixed source references; `MOTION_TEXT_VARIANT_IDS` is the complete ID list.
+
+Entrance and decorative playback are separate from **value changes**. A mounted `TxTextMorph` owns every text update; there is no second diff engine and replay does not remount it. The original is exposed to screen readers once. Only one text layer is selectable: the decorative original during normal playback, the unchanged original during scramble, and the TextMorph layer at rest. Whitespace, newlines, emoji ZWJ sequences and combining marks are retained.
+
+## Usage
+
+### All source variants
+
+Select any of the 52 IDs in the live catalog, filter by group/name/ID, use Next to traverse them, edit multilingual text, or replay repeatedly. Hover presets respond to individual graphemes/words and support keyboard focus. Pause restores the complete readable text, including during typewriter and scramble playback.
+
+:::TuffDemoWrapper{demo="MotionTextDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { TxMotionText } from '@talex-touch/tuffex/motion-text'
+
+  const text = ref('Design motion, 设计动效 👩🏽‍💻 é')
+  const replayKey = ref(0)
+  </script>
+
+  <template>
+    <TxMotionText :text="text" variant="txt-blurup-word" :replay-key="replayKey" />
+    <TxButton @click="replayKey++">Replay</TxButton>
+    <!-- Updating text uses the already-mounted TextMorph engine. -->
+    <TxButton @click="text = 'A new value，仍保留完整文字'">Replace text</TxButton>
+  </template>
+---
+:::
+
+### Source interactions
+
+Scramble is real hover/focus-driven substitution, not a static title. It can reveal from the start, end or center using whole graphemes, and can use the original character pool or caller-supplied `characters`. Whitespace is never scrambled. `focus-blur` takes caller items: links remain native links and items without `href` are buttons emitting `select`. The hovered/focused item remains sharp while peers soften; focus brackets use the shared spring.
+
+```vue
+<TxMotionText
+  text="保留 👩🏽‍💻 和 é"
+  variant="scramble-hover"
+  sequential
+  reveal-direction="center"
+  :use-original-chars-only="false"
+  characters="ABC123✦"
+/>
+<TxMotionText
+  variant="focus-blur"
+  :items="[
+    { id: 'design', label: 'Design', href: '/design' },
+    { id: 'motion', label: 'Motion' },
+  ]"
+  @select="item => selectedId = item.id"
+/>
+```
+
+Inline media uses caller `mediaSrc`, image/video properties, or the `media` slot. With the default hover trigger, leaving both pointer and keyboard focus closes the media. `trigger="manual"` uses the exposed `animate()`/`reset()` methods; `trigger="in-view"` opens on visibility. Reduced motion reveals media immediately without a width/scale animation. Built-in and slotted videos pause when motion is inactive or the media closes; slotted media receives `active` and `open` for its own resource lifecycle.
+
+```vue
+<TxMotionText
+  variant="media-between-text"
+  first-text="Crafting"
+  second-text="experiences"
+  :media-src="imageUrl"
+  media-alt="Abstract texture"
+/>
+<TxMotionText variant="media-between-text" first-text="Your" second-text="media">
+  <template #media="{ active, open }">
+    <img :src="imageUrl" alt="Caller illustration">
+  </template>
+</TxMotionText>
+```
+
+### Best Practices
+
+- Keep `text`, media and items caller-owned. No demo business data is embedded in the component.
+- Keep the component mounted when replacing text. Use `replayKey` or `replay()` for decorative replay rather than keying the component by the value.
+- Use a valid `locale` for Chinese word segmentation. Grapheme effects never split a family emoji or a combining mark; without `Intl.Segmenter`, decorative grapheme playback keeps the whole value as a safe unit.
+- Hover effects are decoration, not action buttons. Use the native `focus-blur` items or a separate semantic control for navigation/actions.
+- Use `paused` to stop all owned animations, scramble timeouts and video playback. Ambient effects run only while mounted, intersecting, document-visible, enabled and not reduced, including across KeepAlive suspension.
+- The morph engine does not soft-wrap. Supply explicit newlines (`text-reveal` animates each line) or choose a wrapping text primitive for prose.
+- Tracking presets converge to natural body spacing. Glow crossfades two static shadow layers, and hover colors change immediately rather than tweening.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `text` | `string` | `''` | Original text for the catalog, registry and scramble effects. |
+| `variant` | `MotionTextVariant` | `'txt-dia'` | One of the 52 IDs below. |
+| `size` | `'xs' \| 'sm' \| 'md' \| 'lg'` | `'md'` | Token-controlled content sizing. |
+| `tag` | `'span' \| 'div' \| 'p' \| 'h1' \| 'h2' \| 'h3'` | `'span'` | Root semantic element. |
+| `locale` | `string` | `'en'` | Word/grapheme segmentation and TextMorph locale. |
+| `paused` | `boolean` | `false` | Cancel motion and show the complete readable value. |
+| `trigger` | `'in-view' \| 'hover' \| 'manual'` | Source-dependent | Entrances/ambient effects default to in-view; scramble/media to hover. Character/word hover and focus items retain their native interactions. |
+| `replayKey` | `string \| number` | — | Changing the key replays the effect without remounting TextMorph. |
+| `durationMs` | `number` | Source-dependent | Timed-effect duration in ms. A physical spring owns its settling duration. |
+| `staggerMs` | `number` | Source-dependent | Override each source unit delay in ms. |
+| `transition` | `Transition` | Source-dependent | Shared `'snappy' \| 'smooth' \| 'bouncy'`, `{ stiffness?, damping?, mass? }`, or `{ duration, ease? }`; overrides source timing. |
+| `initialBlur` | `number` | `8` | Registry blur-text blur radius, in pixels. |
+| `yOffset` | `number` | `15` | Registry character-stagger vertical start offset. |
+| `scrambleSpeed` | `number` | `40` | Milliseconds between scramble frames. |
+| `maxIterations` | `number` | `10` | Non-sequential scramble iterations. |
+| `sequential` | `boolean` | `false` | Reveal a growing set of whole graphemes per frame. |
+| `revealDirection` | `'start' \| 'end' \| 'center'` | `'start'` | Sequential scramble reveal direction. |
+| `useOriginalCharsOnly` | `boolean` | `true` | Pick replacements from the original non-whitespace graphemes. |
+| `characters` | `string` | Latin letters, digits and symbols | Custom replacement pool when original-only is false. |
+| `firstText` | `string` | `''` | Text preceding inline media. |
+| `secondText` | `string` | `''` | Text following inline media. |
+| `mediaSrc` | `string` | — | Caller image/video URL; no fabricated fallback. |
+| `mediaType` | `'image' \| 'video'` | `'image'` | Built-in media renderer. |
+| `mediaAlt` | `string` | `''` | Image alternative text / video accessible name. |
+| `mediaPoster` | `string` | `''` | Caller video poster. |
+| `mediaWidth` | `number` | `70` | Expanded inline media width in pixels. |
+| `mediaHeight` | `number` | `40` | Inline media height in pixels. |
+| `mediaAutoplay` | `boolean` | `true` | Request playback only while active and open; browser autoplay policy can reject it. |
+| `mediaLoop` | `boolean` | `true` | Loop built-in video only while active. |
+| `mediaMuted` | `boolean` | `true` | Built-in video muted state. |
+| `mediaPlaysinline` | `boolean` | `true` | Built-in video inline playback attribute. |
+| `items` | `readonly MotionTextItem[]` | `[]` | Focus items `{ id, label, href? }`. Stable IDs preserve mounted label engines. |
+| `blurAmount` | `number` | `4` | Blur radius for inactive focus items, in pixels. |
+| `opacityAmount` | `number` | `0.4` | Opacity of inactive focus items. |
+| `showBrackets` | `boolean` | `true` | Shared-spring focus brackets. |
+
+### Events
+
+| Event | Payload | Description |
+| --- | --- | --- |
+| `animation-start` | `MotionTextVariant` | Decorative playback or a text-value morph begins. |
+| `animation-complete` | `MotionTextVariant` | A finite playback/morph completes. Ambient loops do not periodically announce completion. |
+| `animation-cancel` | `MotionTextVariant` | A running finite playback/morph is interrupted. |
+| `select` | `MotionTextItem` | A focus item is activated. Native links keep their navigation behavior. |
+| `media-error` | `Event` | The caller image/video reports a real load error. |
+
+### Slots
+
+| Slot | Scope | Description |
+| --- | --- | --- |
+| `media` | `{ open: boolean, active: boolean }` | Replace the built-in image/video while retaining hover/manual/in-view geometry and activity control. |
+
+### Exposed Methods
+
+| Method | Description |
+| --- | --- |
+| `replay()` | Cancel the prior decorative run and replay; opens inline media. |
+| `animate()` | Same explicit playback/open action for the upstream ref-trigger contract. |
+| `reset()` | Cancel work, restore the original and close media; clears focus-item decoration. |
+
+`MotionTextProps`, `MotionTextItem`, `MotionTextVariant`, `MotionTextVariantInfo`, `MotionTextTrigger`, `MotionTextRevealDirection`, `MotionTextMediaSlotProps`, `MotionTextSlots`, `MotionTextExpose` and `TxMotionTextInstance` are exported from `@talex-touch/tuffex/motion-text`.
+
+### Variant catalogue
+
+| Original ID | Effect retained |
+| --- | --- |
+| `txt-dia` | Polygon mask reveal plus 8px blur, 850ms. |
+| `txt-blur` | Whole text 12px blur, 0.9→1 scale and fade, 700ms. |
+| `txt-shimmer` | Static clipped gradient with a 2s opacity shimmer. |
+| `txt-typewriter` | Whole-grapheme stepping over 1.2s with a moving blinking cursor. |
+| `txt-reveal` | Horizontal inset-mask reveal, 750ms. |
+| `txt-fade-char` | Grapheme fade, 300ms / 50ms stagger. |
+| `txt-fade-word` | Word fade, 400ms / 150ms stagger. |
+| `txt-fade-text` | Whole-text fade, 800ms. |
+| `txt-blurup-word` | Words rise 15px out of 8px blur, 500ms / 120ms. |
+| `txt-blurup-char` | Graphemes rise 15px out of 8px blur, 400ms / 40ms. |
+| `txt-stagger` | Words rise 20px with expo easing, 500ms / 100ms. |
+| `txt-slideup-char` | Masked graphemes from +100% Y, 400ms / 40ms. |
+| `txt-slideup-word` | Masked words from +100% Y, 500ms / 100ms. |
+| `txt-slideup-text` | Masked whole text from +100% Y, 600ms. |
+| `txt-slidedown-char` | Masked graphemes from −100% Y, 400ms / 40ms. |
+| `txt-slidedown-word` | Masked words from −100% Y, 500ms / 100ms. |
+| `txt-slideleft-char` | Graphemes from +40px X with fade, 400ms / 40ms. |
+| `txt-slideright-char` | Graphemes from −40px X with fade, 400ms / 40ms. |
+| `txt-dropin-char` | Graphemes drop 50px, spring 500/25, 40ms stagger. |
+| `txt-riseup-word` | Words rise 30px and scale 0.8→1, spring 400/22, 120ms stagger. |
+| `txt-bouncein-char` | Grapheme scale 0→1.3→1 and fade, 500ms / 50ms. |
+| `txt-scalein-char` | Grapheme scale 0→1, spring 450/22, 40ms stagger. |
+| `txt-scalein-word` | Word scale 0.4→1 and fade, 400ms / 120ms. |
+| `txt-scalein-text` | Whole-text scale 0.5→1 and fade, spring 400/25. |
+| `txt-zoomin-text` | Whole-text scale 0.2→1 and fade, 600ms. |
+| `txt-zoomout-text` | Whole-text scale 1.8→1 and fade, 600ms. |
+| `txt-flipy-char` | Grapheme Y-axis 90°→0° rotation, 500ms / 50ms. |
+| `txt-flipx-char` | Grapheme X-axis 90°→0° rotation, 500ms / 50ms. |
+| `txt-rotatein-char` | Grapheme −45°→0° plus 0.5→1 scale/fade, 400ms / 40ms. |
+| `txt-swing-word` | Top-origin word X rotation −90°→0°, spring 350/18, 120ms stagger. |
+| `txt-stretchx-char` | Grapheme X scale 2.5→1 and fade, 400ms / 40ms. |
+| `txt-stretchy-char` | Grapheme Y scale 2.5→1 and fade, 400ms / 40ms. |
+| `txt-skewx-char` | Grapheme X skew −30°→0° and fade, 400ms / 40ms. |
+| `txt-trackingin-text` | Wide 0.6em spread converges to natural spacing, 700ms. |
+| `txt-trackingout-text` | Tight −0.2em spread expands to natural spacing, 700ms. |
+| `txt-spring-text` | Per-grapheme hover lift −8px and scale 1.2, spring 500/15. |
+| `txt-hoverlift-char` | The source's same per-grapheme hover lift/scale trajectory. |
+| `txt-hoverlift-word` | Word hover lift −6px, spring 400/18. |
+| `txt-hoverscale-char` | Grapheme hover scale 1.4, spring 500/18. |
+| `txt-hoverscale-word` | Word hover scale 1.25, spring 400/20. |
+| `txt-float-char` | 0→−6px→0, 2s cycle / 100ms phase per grapheme. |
+| `txt-float-word` | 0→−8px→0, 2.4s cycle / 200ms phase per word. |
+| `txt-pulse-char` | 0.3→1→0.3 opacity, 1.5s cycle / 80ms phase. |
+| `txt-pulse-word` | 0.3→1→0.3 opacity, 1.8s cycle / 250ms phase. |
+| `txt-glow-text` | Crossfading 10px/25px ambient shadow layers, 2s cycle. |
+| `registry-blur-text` | Registry per-grapheme blur/fade, configurable radius, 500ms / 20ms. |
+| `character-stagger` | Registry per-grapheme rise/0.8 scale/fade, spring 300/18/0.8, 15ms stagger. |
+| `text-reveal` | Registry per-line +100% Y masked reveal, 800ms / 150ms. |
+| `word-reveal` | Registry words rise 15px and scale 0.9→1 with cubic easing, 500ms / 40ms. |
+| `scramble-hover` | Hover/focus scramble; iterative or start/end/center sequential reveal. |
+| `media-between-text` | Caller media expands/fades/scales between two morphing text values. |
+| `focus-blur` | Actual pointer/keyboard peer blur with native item activation and spring brackets. |
+
+### CSS Variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `--tx-motion-text-font-size` | Size-dependent | Inherited motion-text content size. |
+| `--tx-motion-text-line-height` | `1.5` (`lg`: `1.75`) | Content leading; large has more breathing room without enlarging body text. |
+| `--tx-motion-text-media-width` | `70px` | Inline width derived from `mediaWidth`. |
+| `--tx-motion-text-media-height` | `40px` | Inline height derived from `mediaHeight`. |
+
+Ink, glow, focus, surfaces and rings use the existing `--tx-*` theme tokens.
+
+## Technologies
+
+- Fixed upstream [Amicro](https://github.com/Subhan-code/Amicro--Micro-transitions-) commit `43c29ce9cdd16459e3eab4992381b8d35b38776a`; MIT, Copyright (c) 2026 SYED  SUBHAN UDDIN.
+- The 45 catalog rows map to `src/data/textAnimations.ts` and their individual `src/components/text/AnimatedText.tsx` branches. The four registry sources live in `registry/ui/text/`. Extra sources are `ScrambleHover.tsx`, `MediaBetweenText.tsx`, and both `FocusBlur.tsx` implementations. Exact ranges are exported in `MOTION_TEXT_VARIANTS` and shown by the demo.
+- Implementation: `motion-text/src/TxMotionText.vue`, source trajectories in `src/presets.ts`, typed API in `src/types.ts`. Decorative WAAPI resources and the single scramble timeout have an idempotent cancel boundary through `useMotionActivity`; value changes reuse `TxTextMorph`, word grouping reuses `stream-text/src/segment.ts`, and spring easing reuses `liquid/src/spring.ts`.
+- Typewriter is stepped by whole graphemes rather than cropping half a glyph. Spacing settles to natural body spacing. The two hover catalog IDs that share an upstream switch branch remain separately discoverable without pretending to have different source trajectories.
+- This page documents implementation behavior; integration/build/browser acceptance is performed by the owning workflow, not claimed by this page.
+
+<TuffDocSourceLink />

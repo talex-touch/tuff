@@ -8,14 +8,23 @@ import { appSetting } from '~/modules/storage/app-storage'
 import { sameModelRef } from './model-display'
 
 /**
- * The `conversation` block of `AppSetting` as the renderer reads and writes it. Both the model
- * picker and the favourites go through here so there is one place that knows the block can be
- * missing: hydration is a top-level shallow merge, so a profile written before the block existed,
- * or one whose block a hand edit mangled, reaches the renderer without it.
+ * The `conversation` block of `AppSetting` as the renderer reads and writes it. The model picker
+ * and its recent list go through here so there is one place that knows the block can be missing:
+ * hydration is a top-level shallow merge, so a profile written before the block existed, or one
+ * whose block a hand edit mangled, reaches the renderer without it.
  */
 export interface ConversationSettings {
   model: ModelRef | null
+  /**
+   * Starred rows of the retired model-menu star filter. Nothing reads or writes them any more; the
+   * stored list is kept untouched (`home-composer` › 模型弹层的结构).
+   */
   favoriteModels: ModelRef[]
+  /**
+   * The models most recently picked in the model menu, newest first (`useRecentModels`). Optional
+   * for the same reason as `reasoningEffort`: blocks written before it existed lack it.
+   */
+  recentModels?: ModelRef[]
   /**
    * Optional here although the defaults carry it: the same shallow merge leaves it out of every
    * block written before it existed, and absent reads as `auto`.
@@ -50,17 +59,17 @@ export function readPersistedModel(): ModelRef | null {
   return isModelRef(model) ? toModelRef(model) : null
 }
 
-/** The persisted favourites, minus entries that are not model refs and later duplicates. */
-export function readFavoriteModels(): ModelRef[] {
-  const stored = currentBlock()?.favoriteModels
+/** The persisted recent picks, newest first, minus entries that are not model refs and later duplicates. */
+export function readRecentModels(): ModelRef[] {
+  const stored = currentBlock()?.recentModels
   if (!Array.isArray(stored)) return []
-  const favorites: ModelRef[] = []
+  const recents: ModelRef[] = []
   for (const entry of stored) {
-    if (isModelRef(entry) && !favorites.some((known) => sameModelRef(known, entry))) {
-      favorites.push(toModelRef(entry))
+    if (isModelRef(entry) && !recents.some((known) => sameModelRef(known, entry))) {
+      recents.push(toModelRef(entry))
     }
   }
-  return favorites
+  return recents
 }
 
 /**
@@ -83,6 +92,7 @@ export function writableConversationSettings(): ConversationSettings {
     const created: Required<ConversationSettings> = {
       model: null,
       favoriteModels: [],
+      recentModels: [],
       reasoningEffort: DEFAULT_REASONING_EFFORT_SETTING
     }
     appSetting.conversation = created

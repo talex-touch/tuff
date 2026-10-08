@@ -101,7 +101,7 @@ code: |
 | `closeDelay` | `number` | 见 `layer` 预设（`hint` 为 `120`） | hover / focus 模式下的关闭延迟，最小按 `0` 处理。不传时由共享延迟服务按 `layer` 取值。 |
 | `maxHeight` | `number` | `320` | 面板最大高度，单位 px；`<= 0` 时不限制高度。`content` 插槽在默认 `320` 时不限制高度。 |
 | `referenceFullWidth` | `boolean` | `false` | 让 reference 包装层占满 `width: 100%`。 |
-| `interactive` | `boolean` | `false` | hover 模式下，鼠标进入浮层时保持 tooltip 打开。 |
+| `interactive` | `boolean` | `false` | hover 模式下，指针可以移进浮层而不关闭。开启后带悬停桥与安全三角，见概述。 |
 | `keepAliveContent` | `boolean` | `false` | 透传给 `TxBaseAnchor`，关闭后仍保留浮层内容挂载。 |
 | `closeOnClickOutside` | `boolean` | `trigger === 'click'` | 覆盖点击外部关闭行为；其次使用 anchor 配置，click 模式默认 `true`。 |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 覆盖点击 reference 切换行为；其次使用 anchor 配置，click 模式默认 `true`。 |
@@ -197,7 +197,8 @@ code: |
 
 - hover / focus 触发使用 `openDelay` / `closeDelay`；click 触发把切换与点击外部关闭交给 `TxBaseAnchor`。
 - `disabled=true` 会清理等待中的 timer，并强制 resolved 打开状态为 `false`。
-- `interactive=true` 只影响 hover 模式；鼠标进入浮层会清理关闭 timer，离开后重新安排关闭。
+- `interactive=true` 只影响 hover 模式。悬停区是整个浮层：面板外框（含卡片内边距）加上 reference 与面板之间的悬停桥。进入时清理关闭 timer（连同父层面板的），离开整个浮层后重新安排关闭。
+- 指针从 reference 朝面板离开时进入「途中」：只要它留在从离开点到面板朝向边的三角形（安全三角）里并持续移动，面板就不按 `closeDelay` 关闭，父层面板也不会因途中越出自己的边界而关闭，途经的其它 hover 触发器不会打开。停顿超过 100ms 或离开三角形即视为放弃，按原有 `closeDelay` 关闭，而停顿所在的那个触发器随即打开。从背向面板的那条边离开不进入途中，与过去一样按延迟关闭。纯提示（非 `interactive`）不受影响。
 - Tooltip 在浮层内容上设置 `role="tooltip"`，并暴露 `data-side` 方便按方向写样式。
 - 默认 anchor 动画为 `{ type: 'boom' }`（对称的聚焦缩放开合）；通过 `anchor.animation` 覆盖后完全以覆盖值为准。
 
@@ -205,7 +206,10 @@ code: |
 
 - **打开状态契约:** 当 `modelValue` 是 boolean 时 `TxTooltip` 受控，否则使用内部 `internalOpen`。打开/关闭会派发 `update:modelValue` 加 `open` 或 `close`；`disabled` 会阻止打开。
 - **Anchor 契约:** click trigger 默认把 `closeOnClickOutside` 和 `toggleOnReferenceClick` 设为 `true`；其它 trigger 除非 props 或 `anchor` 覆盖，否则不启用这两个行为。
-- **实测覆盖:** `tooltip.test.ts` 覆盖 keep-alive 默认值、boom 默认与 animation 透传、content slot 的 `side` 上下文，以及点击外部关闭覆盖行为。
+- **途中判定:** 几何与途中状态在 `packages/tuffex/packages/utils/hover-intent.ts`，只在途中挂一个 `pointermove` 监听；父层的延后关闭由 anchor-delay 服务的 `holdChain` / `releaseChain` 承担：途中到期的关闭先挂起，指针放弃时立即执行，抵达面板时丢弃。
+- 被否掉的做法：把浮层的悬停判定挂在卡片里的内容层上。卡片内边距（DropdownMenu 默认 8px）因此成了死区：从触发器到第一行要在 100ms 内穿过 `offset` 加内边距约 18px，指针停在面板边缘也会关闭。
+- 被否掉的做法：只靠拉长 `closeDelay` 宽限路程（FlatDropdown 默认的 600ms 就掩盖着这个问题）。时间再长也挡不住斜向路径：菜单层在已有菜单打开时 `openDelay` 为 0，经过相邻触发器的那一帧它就打开并抢占了原面板。
+- **实测覆盖:** `tooltip.test.ts` 覆盖 keep-alive 默认值、boom 默认与 animation 透传、content slot 的 `side` 上下文，以及点击外部关闭覆盖行为。`tooltip-hover-intent.test.ts` 在伪造的布局上走真实的 Popover → Tooltip 链：只有可交互的 hover 面板拿到悬停桥；朝面板移动的指针超过 `closeDelay` 仍不关闭、偏离后照常关闭；途经的相邻触发器不打开，停在上面才接手；抵达面板后不再关闭；从远端边离开照常关闭。
 
 - Component source: `packages/tuffex/packages/components/src/tooltip/src/TxTooltip.vue`。
 - Types: `packages/tuffex/packages/components/src/tooltip/src/types.ts`。

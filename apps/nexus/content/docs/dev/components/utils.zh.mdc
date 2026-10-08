@@ -74,6 +74,12 @@ SSR 安全地检测浏览器 API 是否可用，避免直接访问 `window` / `d
 | `useFlip(targetRef, opts?)` | `(ref, opts?) => UseFlipReturn` | 对元素做 FLIP 过渡（`TxFlipOverlay` 底层） |
 | `useAutoResize(targetRef, opts?)` | `(ref, opts?) => UseAutoResizeReturn` | 尺寸自适应测量与过渡（`TxAutoSizer` 底层） |
 | `stepSpring(position, velocity, target, spring, dt)` | `(position, velocity, target, spring, dt) => [number, number]` | 在自己的逐帧循环里让数值沿弹簧（`{ stiffness, damping, mass? }`，`dt` 以秒计）前进，换目标时保留速度；也是 `useJellyIndicator` glide 材质的 `integrate` |
+| `resolveGsapEase(value)` | `(value: string) => string \| ((t: number) => number)` | 缓动字符串交给 GSAP 之前先过一遍：`spring(...)` 与 `cubic-bezier(...)` 转成进度函数（GSAP 不认识这两种写法，会静默换成默认缓动），GSAP 自己的缓动名原样返回；`TxBaseAnchor` 的 GSAP 动效都走它 |
+| `resolveCssEase(spec)` | `(spec: string \| undefined \| null) => (t: number) => number` | 在 JS 里按 CSS 缓动求值：`cubic-bezier(...)`、等距的 `linear(...)` 列表，以及 `linear` / `ease` / `ease-in` / `ease-out` / `ease-in-out`；其他写法退化为钳制的线性，从不返回 `null`；按写法缓存，逐帧调用也不重复解析。`TxLiquid` 与 `TxTextMorph` 用它让脚本驱动的运动和 CSS 过渡走同一条曲线 |
+| `createSpringEase(omega?, zeta?)` | `(omega = 10, zeta = 0.72) => (t: number) => number` | 按时间线归一化的闭式欠阻尼弹簧曲线：从 0 出发、先冲过 1 再回落、终点恰为 1，阻尼越大冲得越少。和逐帧积分的 `stepSpring` 不同，它是可以直接当 `ease` 用的固定曲线 |
+| `parseSpringEase(value)` | `(value: string \| undefined \| null) => ((t: number) => number) \| null` | 解析 `spring` / `spring(omega)` / `spring(omega, zeta)`，其他写法返回 `null` |
+| `createCubicBezier(x1, y1, x2, y2)` | `(x1, y1, x2, y2) => (t: number) => number` | 与 CSS `cubic-bezier()` 等价的缓动函数；图表入口导出的 `cubicBezier` 就是它 |
+| `parseCubicBezier(value)` | `(value: string \| undefined \| null) => [number, number, number, number] \| null` | 解析 `cubic-bezier(...)` 字符串；GSAP 缓动名、关键字和弹簧写法都返回 `null`，x 控制点超出 [0, 1] 也返回 `null` |
 
 ### 安装辅助
 

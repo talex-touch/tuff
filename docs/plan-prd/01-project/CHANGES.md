@@ -1,7 +1,16 @@
 # 变更日志
 
-> 更新时间：2026-10-02
+> 更新时间：2026-10-05
 > 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-10-05
+
+### terminal: unify the frontend component and main-owned PTY lifecycle
+
+- 新增 TuffEx `TxTerminal`，网页和 Electron 共用 ANSI/Unicode 显示、只读日志、容器适配和宿主主题。组件仅在客户端加载 xterm.js，进程执行保留在主进程。
+- 通用终端与 AI CLI 复用真实 `node-pty` 会话核心和可信 owner；typed SDK 使用创建关联标识处理取消与丢失回执。关闭等待原生退出后才释放进程监听和原生会话 lease；插件输出按具体 sender 和当前 activation 定向通知。
+- 迁移 AI CLI、插件日志、环境检测和显式安装终端，删除旧管道 manager、touch-sdk `Terminal`、`InteractiveTerminal` 和 `LogTerminal`。只读日志不启动 shell，安装组件挂载不执行命令。Ghostty 仅进入长期待办。
+- 本机真实浏览器已覆盖输入、只读、日志切换/清空、主题、resize 和卸载。隔离 Electron 的生产 transport/module/preload 与真实 PTY 已覆盖 TTY、输入、Ctrl+C、进程 resize、完整 48,000 字符输出、跨窗口拒绝、关闭/窗口销毁清理及无副作用显式命令；Windows/Linux 运行验收未执行。
 
 ## 2026-10-02
 
@@ -66,7 +75,7 @@
 
 ### release: close exact beta.19 Gate E integrity evidence
 
-- Published `v2.4.13-beta.19` passed formal `gate-e --strict` with `result: pass` and exit code `0`; the exact source is the [published release gate contract](../../../.trellis/tasks/archive/2026-07/07-21-07-20-align-published-release-gates/prd.md).
+- Published `v2.4.13-beta.19` passed formal `gate-e --strict` with `result: pass` and exit code `0`; the exact source is the [published release gate contract](https://github.com/talex-touch/tuff/blob/0ca5b37b8c4a8e177b6dc0ac06f30e51c5ea748e/.trellis/tasks/archive/2026-07/07-21-07-20-align-published-release-gates/prd.md).
 - The gate observed remote bilingual notes, the three-platform preferred manifest/Nexus matrix, full GitHub inventory, download URLs, SHA-256, rollback/latest status, and the assets' configured `signatureUrl` payloads. The additional Linux DEB and its `.deb.sig` remained inventory-only rather than a second preferred artifact.
 - This production result is scoped to beta.19. Stable `v2.4.13`, CoreApp install-time pinned-key verification, and OTA lifecycle acceptance require their own evidence.
 

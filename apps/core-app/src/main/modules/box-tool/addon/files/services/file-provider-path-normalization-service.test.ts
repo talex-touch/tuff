@@ -5,6 +5,8 @@ import {
   planFilePathNormalization,
   shouldDeferReconciliationForPathNormalization,
   shouldRunPathNormalizationOnPlatform,
+  type FilePathNormalizationDeletion,
+  type FilePathNormalizationRewrite,
   type FilePathNormalizationRow
 } from './file-provider-path-normalization-service'
 
@@ -24,7 +26,7 @@ function buildDeps(overrides: Record<string, unknown> = {}) {
     loadRowsPage: vi.fn(async () => []),
     loadRowsByPaths: vi.fn(async () => []),
     rewritePath: vi.fn(async () => {}),
-    removeIndexedFile: vi.fn(async () => {}),
+    removeIndexedFile: vi.fn(async () => true),
     removeIndexEntry: vi.fn(async () => {}),
     reindexRows: vi.fn(async () => {}),
     yieldBetweenPages: vi.fn(async () => {}),
@@ -42,8 +44,6 @@ function pagedRows(...pages: FilePathNormalizationRow[][]) {
 
 describe('planFilePathNormalization', () => {
   it('rewrites a decomposed path when no composed twin exists', () => {
-    expect(NFC_PATH).not.toBe(NFD_PATH)
-
     const plan = planFilePathNormalization({
       rows: [row(1, NFD_PATH, new Date(1_000))],
       existingNormalizedRows: []
@@ -118,35 +118,112 @@ describe('FileProviderPathNormalizationService', () => {
     expect(deps.setAppliedVersion).not.toHaveBeenCalled()
   })
 
-  it('merges a duplicate, rekeys the index entry and records the version', async () => {
-    const deps = buildDeps({
-      loadRowsPage: pagedRows([
+  it.each([
+    { name: 'removing the stale twin itself', concurrentDelete: false, deleted: 1 },
+    {
+      name: 'a stale twin already removed by another operation',
+      concurrentDelete: true,
+      deleted: 0
+    }
+  ])(
+    'merges by observed loser/keeper identity and reports actual deletion for $name',
+    async ({ concurrentDelete, deleted }) => {
+      const entries = [
         row(1, NFD_PATH, new Date(9_000)),
+        row(2, NFC_PATH, new Date(5_000)),
         row(4, '/home/me/plain.txt', new Date(1_000))
-      ]),
-      loadRowsByPaths: vi.fn(async () => [row(2, NFC_PATH, new Date(5_000))])
-    })
-    const service = new FileProviderPathNormalizationService(deps)
+      ]
+      const store = new Map(entries.map((entry) => [entry.id, { ...entry }]))
+      const indexed = new Map(entries.map((entry) => [entry.path, entry.id]))
+      const rekeyWork = new Set<string>()
+      let applied: number | null = null
+      const deps = buildDeps({
+        getAppliedVersion: async () => applied,
+        setAppliedVersion: async (version: number) => {
+          applied = version
+        },
+        loadRowsPage: async (afterId: number, limit: number) =>
+          [...store.values()]
+            .filter((entry) => entry.id > afterId)
+            .sort((left, right) => left.id - right.id)
+            .slice(0, limit),
+        loadRowsByPaths: async (paths: string[]) =>
+          [...store.values()].filter((entry) => paths.includes(entry.path)),
+        removeIndexedFile: async (deletion: FilePathNormalizationDeletion) => {
+          if (concurrentDelete) {
+            store.delete(2)
+            indexed.delete(NFC_PATH)
+          }
+          const loser = store.get(deletion.id)
+          if (!loser) return false
+          const keeper = store.get(deletion.keptId)
+          if (
+            !keeper ||
+            loser.path !== deletion.path ||
+            keeper.path.normalize('NFC') !== loser.path.normalize('NFC')
+          ) {
+            throw new Error('normalization identity changed')
+          }
+          store.delete(loser.id)
+          indexed.delete(loser.path)
+          return true
+        },
+        rewritePath: async (rewrite: FilePathNormalizationRewrite) => {
+          if (
+            [...store.values()].some(
+              (entry) => entry.id !== rewrite.id && entry.path === rewrite.toPath
+            )
+          ) {
+            throw new Error('canonical metadata path is still owned')
+          }
+          const current = store.get(rewrite.id)!
+          store.set(rewrite.id, { ...current, path: rewrite.toPath })
+        },
+        removeIndexEntry: async (path: string) => {
+          rekeyWork.add(path)
+        },
+        reindexRows: async (ids: number[]) => {
+          for (const id of ids) indexed.set(store.get(id)!.path, id)
+        }
+      })
+      expect(await new FileProviderPathNormalizationService(deps).run()).toMatchObject({
+        status: 'completed',
+        scanned: 3,
+        rewritten: 1,
+        deleted,
+        failed: 0
+      })
+      expect([...store.values()].map((entry) => ({ id: entry.id, path: entry.path }))).toEqual([
+        { id: 1, path: NFC_PATH },
+        { id: 4, path: '/home/me/plain.txt' }
+      ])
+      expect(indexed.get(NFC_PATH)).toBe(1)
+      expect(indexed.get(NFD_PATH)).toBe(1)
+      expect([...rekeyWork]).toEqual([NFD_PATH])
+      expect(applied).toBe(FILE_PATH_NORMALIZATION_VERSION)
+    }
+  )
 
-    await expect(service.run()).resolves.toMatchObject({
-      status: 'completed',
-      scanned: 2,
-      rewritten: 1,
-      deleted: 1,
-      failed: 0
+  it('does not mark repair applied when loser deletion is rejected by the current writer or keeper fence', async () => {
+    let applied: number | null = null
+    const entries = [row(1, NFD_PATH, new Date(1_000)), row(2, NFC_PATH, new Date(5_000))]
+    const deps = buildDeps({
+      getAppliedVersion: async () => applied,
+      setAppliedVersion: async (version: number) => {
+        applied = version
+      },
+      loadRowsPage: pagedRows([entries[0]]),
+      loadRowsByPaths: async () => [entries[1]],
+      removeIndexedFile: async () => {
+        throw new Error('normalization writer deferred')
+      }
     })
-
-    // The stale twin goes through the existing removal API (item id = path).
-    expect(deps.removeIndexedFile).toHaveBeenCalledWith(NFC_PATH)
-    expect(deps.rewritePath).toHaveBeenCalledWith({
-      id: 1,
-      fromPath: NFD_PATH,
-      toPath: NFC_PATH
+    expect(await new FileProviderPathNormalizationService(deps).run()).toMatchObject({
+      deleted: 0,
+      rewritten: 0,
+      failed: 1
     })
-    // Index entries keyed by the replaced id are dropped, then re-indexed.
-    expect(deps.removeIndexEntry).toHaveBeenCalledWith(NFD_PATH)
-    expect(deps.reindexRows).toHaveBeenCalledWith([1])
-    expect(deps.setAppliedVersion).toHaveBeenCalledWith(FILE_PATH_NORMALIZATION_VERSION)
+    expect(applied).toBeNull()
   })
 
   it('leaves the version unrecorded when a row fails, so the next boot retries', async () => {

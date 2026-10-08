@@ -6,7 +6,7 @@
   },
   "author": "TalexDreamSoul<TalexDreamSoul@gmail.com>",
   "description": "TuffEx - Vue 3 UI source package for the Tuff ecosystem.",
-  "license": "MIT",
+  "license": "(MIT AND Apache-2.0 AND ISC)",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/talex-touch/tuff.git",
@@ -83,7 +83,10 @@
     "audit:changelog:self-test": "node ./scripts/audit-version-changelog.mjs --self-test"
   },
   "files": [
-    "dist"
+    "dist",
+    "AMICRO-LICENSE",
+    "AMICRO-APACHE-LICENSE",
+    "LUCIDE-LICENSE"
   ],
   "peerDependencies": {
     "echarts": "^6.1.0",
@@ -120,6 +123,8 @@
     "@types/three": "^0.186.0",
     "@vue/reactivity": "^3.5.27",
     "@vueuse/core": "^14.4.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
     "d3-array": "^3.2.4",
     "d3-geo": "^3.1.1",
     "d3-sankey": "^0.12.3",

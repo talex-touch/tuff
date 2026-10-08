@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Fails when a maintenance-audit report names a Trellis task that does not exist.
+ * Fails when a maintenance-audit report names a historical task that does not exist.
  *
  * The reports are written by hand, one per day, and #1107 was filed because a bullet was being
  * carried forward instead of re-derived: the same sentence about `DB_SEARCH_SPLIT_ENABLED`
@@ -8,17 +8,23 @@
  * days earlier.
  *
  * The 2026-08-12 report gave a worse example. Its task-records bullet named
- * `07-26-install-launch-v2-4-13-beta-23` as an in-progress task missing metadata. That directory
- * does not exist -- not under `.trellis/tasks`, not under the archive, nowhere. Two of the other
- * three tasks it named were wrong in different ways (one archived and completed, one with all
- * three fields present and updated the day before), and its count of non-completed tasks was 85
- * against an actual 53.
+ * `07-26-install-launch-v2-4-13-beta-23` as an in-progress task missing metadata. No such task was
+ * in the committed record -- not active, not archived, nowhere. Two of the other three tasks it
+ * named were wrong in different ways (one archived and completed, one with all three fields
+ * present and updated the day before), and its count of non-completed tasks was 85 against an
+ * actual 53.
  *
  * A report naming a task nobody can open is the cheapest possible signal that its author did not
- * query the tree, and it is a directory lookup to catch. That is all this does. The counts and the
- * prose are not checked -- a check that tried to parse "至少 X 项" out of two languages would fail
- * in ways nobody could act on, and the field-presence claim is already `docs:verify`'s
- * `DOC-TASK-META` rule, which reported 0 on the same day the bullet claimed otherwise.
+ * query the record, and it is a lookup to catch. That is all this does. The counts and the prose
+ * are not checked -- a check that tried to parse "至少 X 项" out of two languages would fail in ways
+ * nobody could act on. (The field-presence half of that bullet was answered by the task-metadata
+ * rule docs:verify ran at the time, which reported 0 on the same day.)
+ *
+ * The task tree those reports describe is retired. Its identities -- every active task, now
+ * frozen, and every archived one -- are kept in the retired task registry, read here through the
+ * same reader docs:verify validates it with. A missing, malformed or empty registry fails the
+ * check rather than passing it: an identity source that lists nothing would let every citation
+ * through, which is the silence this check exists to break.
  *
  * Reports dated on or before GATE_FROM are history and are left alone, which is #1107's fourth
  * acceptance criterion: corrections belong in new reports, not in rewritten ones.
@@ -27,10 +33,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { parseRetiredTaskIndex, RETIRED_TASK_INDEX_PATH } from './lib/retired-task-index.mjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const REPORT_DIR = 'docs/engineering/reports'
-const TASK_ROOT = '.trellis/tasks'
 
 /**
  * Reports up to and including this date predate the gate.
@@ -44,7 +50,7 @@ const GATE_FROM = '2026-08-12'
 const REPORT_NAME = /^maintenance-audit-(\d{4}-\d{2}-\d{2})\.md$/
 
 /**
- * A Trellis task slug as the reports write it: `MM-DD-some-name`, inside backticks.
+ * A historical task slug as the reports write it: `MM-DD-some-name`, inside backticks.
  *
  * Backticks are required rather than optional. Without them this matches dates, version fragments
  * and issue titles in running prose, and a check that reports a date as a missing task is one
@@ -52,40 +58,50 @@ const REPORT_NAME = /^maintenance-audit-(\d{4}-\d{2}-\d{2})\.md$/
  */
 const TASK_REFERENCE = /`(\d{2}-\d{2}-[a-z0-9][a-z0-9-]*)`/g
 
-/** Every task slug that exists, active or archived. */
-export function collectTaskSlugs(readDir) {
-  const slugs = new Set()
-  const walk = (dir, depth) => {
-    if (depth > 3)
-      return
-    for (const entry of readDir(dir)) {
-      if (!entry.isDirectory)
-        continue
-      if (entry.name === 'archive' || /^\d{4}-\d{2}$/.test(entry.name)) {
-        walk(path.posix.join(dir, entry.name), depth + 1)
-        continue
-      }
-      slugs.add(entry.name)
+/**
+ * Every task slug the retired task registry vouches for -- frozen and historical alike -- or the
+ * reasons it vouches for nothing.
+ *
+ * `readText` takes a repository-relative path and returns the file's text or throws. Fails closed:
+ * `slugs` is empty whenever `problems` is not, so an unreadable, malformed or empty registry can
+ * never be mistaken for one that merely does not list a cited task.
+ */
+export function registryTaskSlugs(readText) {
+  let text
+  try {
+    text = readText(RETIRED_TASK_INDEX_PATH)
+  }
+  catch (error) {
+    return {
+      slugs: new Set(),
+      problems: [`${RETIRED_TASK_INDEX_PATH} could not be read (${error instanceof Error ? error.message : String(error)})`],
     }
   }
-  walk(TASK_ROOT, 0)
-  return slugs
+  const { tasks, issues } = parseRetiredTaskIndex(text)
+  if (issues.length > 0)
+    return { slugs: new Set(), problems: issues.map(issue => `${RETIRED_TASK_INDEX_PATH}: ${issue.message}`) }
+  return { slugs: new Set(tasks.map(task => task.slug)), problems: [] }
 }
 
 export function referencedTasks(markdown) {
   return [...new Set([...markdown.matchAll(TASK_REFERENCE)].map(match => match[1]))]
 }
 
-/** Where the runtime boolean flags are declared, as `parseEnvBoolean('NAME', true)`. */
+/**
+ * Where the runtime boolean flags are declared, as `getBooleanEnv('NAME', true)` -- the shared
+ * parser from `@talex-touch/utils/env` since 4eaa57381 (2026-10-07). The former local helper,
+ * `parseEnvBoolean`, stays recognised so a report dated across the rename still re-derives.
+ */
 const FLAG_SOURCE = 'apps/core-app/src/main/db/runtime-flags.ts'
-const FLAG_DECLARATION = /parseEnvBoolean\(\s*'([A-Z][A-Z0-9_]*)'\s*,\s*(true|false)\s*\)/g
+const FLAG_DECLARATION = /(?:getBooleanEnv|parseEnvBoolean)\(\s*'([A-Z][A-Z0-9_]*)'\s*,\s*(true|false)\s*\)/g
 
 /**
  * Phrases asserting a default, in either language, mapped to what they assert.
  *
  * The vocabulary is deliberately the same as `packages/utils/__tests__/split-flag-docs.test.ts`,
- * which owns `docs/` and `.trellis/spec` and *excludes* `docs/engineering/reports/` on the grounds
- * that a dated report records what was true on its date and rewriting it falsifies the record.
+ * which owns `docs/` (engineering specs included) and *excludes* `docs/engineering/reports/` on
+ * the grounds that a dated report records what was true on its date and rewriting it falsifies the
+ * record.
  * That exclusion is right, and it is also the hole #1107 is about: the reports written *after* the
  * flip carried the stale claim forward. This closes it from the other side -- only reports dated
  * after GATE_FROM are read, so history stays untouched and the next report has to be re-derived.
@@ -176,9 +192,11 @@ function readDirEntries(dir) {
 }
 
 function main() {
-  const slugs = collectTaskSlugs(readDirEntries)
-  if (slugs.size === 0) {
-    console.error(`No task directories found under ${TASK_ROOT}. Refusing to report success.`)
+  const { slugs, problems } = registryTaskSlugs(relative => fs.readFileSync(path.join(repoRoot, relative), 'utf8'))
+  if (problems.length > 0) {
+    console.error('The retired task registry cannot vouch for any task identity. Refusing to report success:\n')
+    for (const problem of problems)
+      console.error(`  ${problem}`)
     return 1
   }
 
@@ -198,14 +216,14 @@ function main() {
 
   const missing = findMissingTasks(reports, slugs, readReport)
   if (missing.length > 0) {
-    console.error('Maintenance-audit report names a Trellis task that does not exist:\n')
+    console.error('Maintenance-audit report names a task the retired task registry does not list:\n')
     for (const entry of missing) {
       console.error(`  ${REPORT_DIR}/${entry.report}  ->  ${entry.slug}`)
     }
     console.error(
-      `\n${slugs.size} task slugs exist under ${TASK_ROOT} (including the archive). A report that`
-      + ' names one of these is describing something nobody can open, which means the claim around'
-      + ' it was carried rather than re-derived (#1107).',
+      `\n${slugs.size} task slugs are listed in ${RETIRED_TASK_INDEX_PATH}, active tasks frozen and`
+      + ' archived ones historical. A report that names anything else is describing something nobody'
+      + ' can open, which means the claim around it was carried rather than re-derived (#1107).',
     )
     return 1
   }
@@ -218,7 +236,7 @@ function main() {
   const flagDefaults = parseFlagDefaults(fs.readFileSync(flagSource, 'utf8'))
   if (flagDefaults.size === 0) {
     console.error(
-      `No parseEnvBoolean declarations found in ${FLAG_SOURCE}. An empty flag map asserts nothing,`
+      `No getBooleanEnv/parseEnvBoolean declarations found in ${FLAG_SOURCE}. An empty flag map asserts nothing,`
       + ' so this is an error rather than a pass.',
     )
     return 1
@@ -250,22 +268,51 @@ function main() {
 }
 
 function selfTest() {
-  const tree = {
-    '.trellis/tasks': [
-      { name: '08-01-live', isDirectory: true },
-      { name: 'archive', isDirectory: true },
-      { name: 'README.md', isDirectory: false },
-    ],
-    '.trellis/tasks/archive': [{ name: '2026-07', isDirectory: true }],
-    '.trellis/tasks/archive/2026-07': [{ name: '07-28-done', isDirectory: true }],
+  // Registry half. A reader that only answers for the registry path, the way the repository does.
+  const entry = (slug, sourcePath, disposition) => ({
+    slug,
+    id: slug.slice(6),
+    title: `Task ${slug}`,
+    status: disposition === 'frozen' ? 'in_progress' : 'completed',
+    disposition,
+    sourcePath,
+  })
+  const live = entry('08-01-live', '.trellis/tasks/08-01-live/task.json', 'frozen')
+  const done = entry('07-28-done', '.trellis/tasks/archive/2026-07/07-28-done/task.json', 'historical')
+  const registry = tasks => JSON.stringify({ schemaVersion: 1, baselineCommit: 'cfda0a6cd1a13b5606c82d7d9d68112177d3fc9d', tasks })
+  const reader = text => (relative) => {
+    if (relative !== RETIRED_TASK_INDEX_PATH)
+      throw new Error(`ENOENT: no such file, open '${relative}'`)
+    return text
   }
-  const slugs = collectTaskSlugs(dir => tree[dir] ?? [])
+  const known = registryTaskSlugs(reader(registry([live, done])))
+  const slugs = known.slugs
+  // "0/true" is the only acceptable answer from a source that cannot be trusted: nothing vouched
+  // for, and a reason to refuse success.
+  const vouches = (readText) => {
+    const result = registryTaskSlugs(readText)
+    return `${result.slugs.size}/${result.problems.length > 0}`
+  }
 
   const cases = [
-    { name: 'an active task is known', actual: slugs.has('08-01-live'), expected: true },
-    { name: 'an archived task is known too', actual: slugs.has('07-28-done'), expected: true },
-    { name: 'the archive folders are not slugs', actual: slugs.has('archive'), expected: false },
-    { name: 'a file is not a slug', actual: slugs.has('README.md'), expected: false },
+    { name: 'a frozen task from the registry is known', actual: slugs.has('08-01-live'), expected: true },
+    { name: 'a historical task from the registry is known too', actual: slugs.has('07-28-done'), expected: true },
+    { name: 'a well-formed registry raises no problem', actual: known.problems.length, expected: 0 },
+    {
+      name: 'a missing registry vouches for nothing and is a problem',
+      actual: vouches(() => {
+        throw new Error('ENOENT')
+      }),
+      expected: '0/true',
+    },
+    { name: 'a registry that is not JSON vouches for nothing', actual: vouches(reader('{ "tasks": [')), expected: '0/true' },
+    { name: 'an empty registry vouches for nothing', actual: vouches(reader(registry([]))), expected: '0/true' },
+    {
+      // Fail closed, not fail partial: the broken half is exactly what was supposed to vouch.
+      name: 'one malformed entry voids the whole registry, valid entries included',
+      actual: vouches(reader(registry([live, { ...done, title: '' }]))),
+      expected: '0/true',
+    },
     {
       name: 'a backticked slug is a reference',
       actual: referencedTasks('see `08-01-live` today')[0],
@@ -319,12 +366,14 @@ function selfTest() {
     },
   ]
 
-  // Flag-default half. The real declaration shape, plus a decoy that is not one.
+  // Flag-default half. Both declaration shapes (shared parser and the retired local helper),
+  // plus a decoy that is not one.
   const flagSource = [
-    'export const DB_AUX_ENABLED = parseEnvBoolean(\'TUFF_DB_AUX_ENABLED\', true)',
-    'export const DB_SEARCH_SPLIT_ENABLED = parseEnvBoolean(\'TUFF_DB_SEARCH_SPLIT_ENABLED\', true)',
+    'export const DB_AUX_ENABLED = getBooleanEnv(\'TUFF_DB_AUX_ENABLED\', true)',
+    'export const DB_SEARCH_SPLIT_ENABLED = getBooleanEnv(\'TUFF_DB_SEARCH_SPLIT_ENABLED\', true)',
     'export const LEGACY = parseEnvBoolean(\'TUFF_LEGACY\', false)',
     'function parseEnvBoolean(name: string, defaultValue: boolean): boolean {',
+    'export function getBooleanEnv(key: string, fallback = false): boolean {',
   ].join('\n')
   const flags = parseFlagDefaults(flagSource)
   const claim = text => findFlagClaims(['r.md'], flags, () => text)
@@ -333,6 +382,8 @@ function selfTest() {
     { name: 'a default-on flag is parsed', actual: flags.get('TUFF_DB_SEARCH_SPLIT_ENABLED'), expected: true },
     { name: 'a default-off flag is parsed', actual: flags.get('TUFF_LEGACY'), expected: false },
     { name: 'the helper signature is not a declaration', actual: flags.has('name'), expected: false },
+    { name: 'the shared parser signature is not a declaration either', actual: flags.has('key'), expected: false },
+    { name: 'both declaration spellings land in one map', actual: flags.size, expected: 3 },
     // The sentence from #1107, verbatim in shape: eight reports carried it after the flip.
     { name: 'the bullet that started #1107 is caught', actual: claim('- `DB_SEARCH_SPLIT_ENABLED` / `TUFF_DB_SEARCH_SPLIT_ENABLED` 默认关闭，但环境变量仍可启用').length, expected: 1 },
     { name: 'the exported short name alone is enough', actual: claim('`DB_SEARCH_SPLIT_ENABLED` 默认关闭').length, expected: 1 },

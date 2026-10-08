@@ -1,4 +1,5 @@
 <script lang="ts" name="IntelligenceList" setup>
+import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TuffListGroup } from '~/components/tuff/template/TuffListTemplate.vue'
@@ -6,27 +7,6 @@ import TuffListTemplate from '~/components/tuff/template/TuffListTemplate.vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { getProviderChannelType } from '~/modules/intelligence/provider-channel-type'
 import IntelligenceItem from './IntelligenceItem.vue'
-
-interface IntelligenceProviderConfig {
-  id: string
-  type: string
-  name: string
-  enabled: boolean
-  metadata?: Record<string, unknown>
-  apiKey?: string
-  authRef?: string
-  hasCredential?: boolean
-  baseUrl?: string
-  models?: string[]
-  defaultModel?: string
-  instructions?: string
-  timeout?: number
-  rateLimit?: {
-    requestsPerMinute?: number
-    tokensPerMinute?: number
-  }
-  priority?: number
-}
 
 const props = defineProps<{
   providers: IntelligenceProviderConfig[]

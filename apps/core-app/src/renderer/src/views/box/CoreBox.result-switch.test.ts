@@ -43,10 +43,6 @@ vi.mock('@talex-touch/utils/transport', () => ({
   })
 }))
 
-vi.mock('@talex-touch/utils/transport/sdk/domains/local-ai-cli', () => ({
-  createLocalAiCliSdk: () => ({ getStatus: async () => ({ betaAvailable: false }) })
-}))
-
 vi.mock('~/components/render/addon/TuffItemAddon.vue', async () => {
   const { watch } = await vi.importActual<typeof Vue>('vue')
   return {
@@ -168,18 +164,19 @@ vi.mock('../../modules/box/adapter/hooks/useClipboard', () => ({
 
 vi.mock('../../modules/box/adapter/hooks/useDetach', () => ({
   useDetach: () => ({
-    flowVisible: false,
-    flowSessionId: '',
-    flowPayload: undefined,
-    flowAnchor: 'corner',
-    closeFlowSelector: () => {},
-    dispatchFlow: () => {},
-    openFlowSelector: () => {}
+    detachFeature: async () => {},
+    detachUIMode: async () => {},
+    openFlowPanel: async () => {},
+    dispatchFlow: async () => {}
   })
 }))
 
 vi.mock('../../modules/box/adapter/hooks/useFocus', () => ({
-  useFocus: () => ({ focusInput: () => {}, focusWindowAndInput: async () => {} })
+  useFocus: () => ({
+    focusInput: () => {},
+    focusWindowAndInput: async () => {},
+    getSummonId: () => null
+  })
 }))
 
 vi.mock('../../modules/box/adapter/hooks/useKeyboard', () => ({
@@ -277,7 +274,6 @@ const stubs = {
     template: '<div class="normal-list-row">{{ item.render.basic.title }}</div>'
   },
   DivisionBoxHeader: { template: '<div />' },
-  FlowSelector: { template: '<div />' },
   PrefixPart: { template: '<div />' },
   PreviewHistoryPanel: { template: '<div />' },
   TagSection: { template: '<div />' },
@@ -591,6 +587,40 @@ describe('CoreBox preview pane', () => {
   }
 
   const closed = { compressed: false, type: 'none', item: 'none' }
+
+  it('previews a top-five file tile and keeps file selection coherent across the overflow-list boundary', async () => {
+    vi.useFakeTimers()
+    const results = [
+      fileItem('grid-file'),
+      item('app-1', 'App 1'),
+      item('app-2', 'App 2'),
+      item('app-3', 'App 3'),
+      item('app-4', 'App 4'),
+      fileItem('list-file')
+    ]
+    state.layout = {
+      mode: 'grid',
+      grid: { columns: 5 },
+      sections: [
+        { id: 'habitual', layout: 'grid', itemIds: results.slice(0, 5).map((entry) => entry.id) },
+        { id: 'proposed', layout: 'list', itemIds: results.slice(5).map((entry) => entry.id) }
+      ]
+    }
+    state.searchVal.value = ''
+    state.results.value = results
+    const coreBox = mountCoreBox()
+    await nextTick()
+
+    expect(paneState(coreBox)).toEqual({ compressed: true, type: 'preview', item: 'grid-file' })
+    await select(4)
+    await select(5)
+    expect(paneState(coreBox)).toEqual({ compressed: true, type: 'preview', item: 'list-file' })
+    expect(state.addonOpens).toBe(1)
+
+    await select(4)
+    coreBox.getComponent({ name: 'TuffItemAddon' }).vm.$emit('openItem')
+    expect(state.handleExecute.mock.calls.map(([entry]) => entry?.id)).toEqual(['list-file'])
+  })
 
   it('stays open across a mixed list and closes once the selection rests off files', async () => {
     vi.useFakeTimers()
@@ -938,6 +968,56 @@ describe('CoreBox list scroll anchoring', () => {
     expect(anchoring).toEqual([
       { selector: '.CoreBoxRes-Main > .scroll-area .item-list.item-list--flip', value: 'none' }
     ])
+  })
+})
+
+/**
+ * Under the ⌘K card's Flow page CoreBox blurs its own content. CSS alone draws it, so the rules are
+ * asserted in the compiled stylesheet: a `filter` on the header and the results (a backdrop filter
+ * in this transparent window would leave them sharp underneath), eased, and switched without easing
+ * when the motion gate is closed.
+ */
+describe('CoreBox blur under a Flow page', () => {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const sfcPath = resolve(here, 'CoreBox.vue')
+
+  /** The compiled stylesheet with comments dropped and whitespace collapsed to single spaces. */
+  function compiledCss(): string {
+    const blocks = [...readFileSync(sfcPath, 'utf8').matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
+    return blocks
+      .map(
+        ([, block]) =>
+          sass.compileString(block ?? '', { url: pathToFileURL(sfcPath), syntax: 'scss' }).css
+      )
+      .join('\n')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\s+/g, ' ')
+  }
+
+  const CONTENT = '.CoreBox-Wrapper > .CoreBox, .CoreBox-Wrapper > .CoreBoxRes'
+
+  it('blurs the header and the results with a filter, never a backdrop filter', () => {
+    const css = compiledCss()
+
+    expect(css).toContain(
+      '.CoreBox-Wrapper.CoreBox-Wrapper--meta-blur > .CoreBox, ' +
+        '.CoreBox-Wrapper.CoreBox-Wrapper--meta-blur > .CoreBoxRes { filter: blur(8px); }'
+    )
+    expect(css).not.toMatch(/meta-blur[^{]*\{[^}]*backdrop-filter/)
+  })
+
+  it('eases the blur in and out, and only switches it with the motion gate closed', () => {
+    const css = compiledCss()
+
+    expect(css).toContain(
+      `${CONTENT} { transition: filter 0.22s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1)); }`
+    )
+    expect(css).toContain(
+      `@media (prefers-reduced-motion: reduce) { ${CONTENT} { transition: none; } }`
+    )
+    expect(css).toMatch(
+      /html\[data-low-battery-motion=["']1["']\] \.CoreBox-Wrapper > \.CoreBox, html\[data-low-battery-motion=["']1["']\] \.CoreBox-Wrapper > \.CoreBoxRes \{ transition: none; \}/
+    )
   })
 })
 

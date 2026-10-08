@@ -11,7 +11,7 @@ verified: false
 
 ## Usage
 
-Hover the trigger to open. The panel stays alive for `closeDelay` ms after the pointer leaves, so you can travel into it. `close-on-content-click` dismisses the panel after any click inside.
+Hover the trigger to open. The gap between trigger and panel is covered by a hover bridge, and a pointer heading for the panel keeps it open through the safe triangle; once the pointer really leaves, the panel stays for `closeDelay` ms. `close-on-content-click` dismisses the panel after any click inside.
 
 ### FlatDropdown (basic)
 :::TuffDemoWrapper{demo="FlatDropdownBasicDemo" code-lang="vue"}
@@ -39,7 +39,7 @@ code: |
 ### Best Practices
 
 - Prefer `trigger="click"` for destructive or state-changing menus — hover-opened panels are easy to trip over on trackpads.
-- Keep `closeDelay` generous (the `600` default) for `hover`; a short delay makes diagonal pointer travel into the panel frustrating.
+- Diagonal travel into the panel is handled by the hover bridge and the safe triangle, not by `closeDelay`; `closeDelay` only decides how long the panel stays once the pointer really leaves (off the triangle, stopped, or out through the side facing away from the panel).
 - Set `teleport="false"` when the dropdown lives inside a container with its own stacking or clipping context and you need it to inherit that context. Note that inline rendering re-exposes the panel to ancestor `overflow: hidden`.
 - Use the `side` slot prop to flip your own decorations (arrows, shadows) when the panel flips above the trigger.
 - Do not rely on the panel being positioned synchronously after opening — placement is written back reactively, so measure in a `requestAnimationFrame` if you need absolute geometry.
@@ -88,7 +88,7 @@ code: |
 
 `trigger` decides how the panel is summoned:
 
-- `hover` (default) — opens on pointer enter / focus, closes after `closeDelay`.
+- `hover` (default) — opens on pointer enter / focus, closes after `closeDelay`; a trip towards the panel does not count as leaving.
 - `click` — toggles on click; `closeDelay` is not applied.
 - `manual` — the component never opens itself. Drive it with `v-model`.
 
@@ -113,7 +113,7 @@ Three independent dismissal paths, each separately switchable:
 
 | Prop | Default | Dismisses when |
 |---|---|---|
-| `closeOnClickOutside` | `true` | A click lands outside both trigger and panel |
+| `closeOnClickOutside` | `true` | A click lands outside the trigger, the panel and the hover bridge |
 | `closeOnEsc` | `true` | `Escape` is pressed |
 | `closeOnContentClick` | `false` | Any click inside the panel |
 
@@ -123,3 +123,6 @@ Three independent dismissal paths, each separately switchable:
 
 - Component: `packages/tuffex/packages/components/src/flat-dropdown/src/TxFlatDropdown.vue`
 - Types: `packages/tuffex/packages/components/src/flat-dropdown/src/types.ts`
+- The hover bridge and the safe triangle come from `packages/tuffex/packages/utils/hover-intent.ts`, shared with the anchor family. The bridge's geometry comes from the last middleware in the Floating UI chain; it renders as the panel's sibling with the same `position: fixed` and `z-index`, and enters and leaves like the panel.
+- Rejected design: the bridge as a child or pseudo-element of the panel. The panel's `transform` belongs to its scale-in and blur-out motion, and a host's `panelClass` may give the panel `overflow: hidden`, which would clip a hit area reaching outside the box.
+- **Verified coverage:** `packages/tuffex/packages/components/src/flat-dropdown/__tests__/flat-dropdown.test.ts` covers the hover bridge: rendered as the panel's sibling, a pointer resting on it keeps the panel open, a press on it is not an outside click, and `click` mode renders none.

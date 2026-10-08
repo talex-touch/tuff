@@ -1,33 +1,34 @@
-<!-- TRELLIS:START -->
-# Trellis Instructions
+# Project Engineering Instructions
 
-These instructions are for AI assistants working in this project.
+Work directly from the user's confirmed scope and the repository's engineering guides. Do not initialize a project task lifecycle or require a workflow CLI.
 
-This project is managed by Trellis. The working knowledge you need lives under `.trellis/`:
+## Workflow and Knowledge
 
-- `.trellis/workflow.md` — development phases, when to create tasks, skill routing
-- `.trellis/spec/` — package- and layer-scoped coding guidelines (read before writing code in a given layer)
-- `.trellis/workspace/` — per-developer journals and session traces
-- `.trellis/tasks/` — active and archived tasks (PRDs, research, jsonl context)
+- Read `docs/engineering/specs/frontend/index.md` or `docs/engineering/specs/main-process/index.md` before editing the corresponding layer, and follow the applicable checklists.
+- Shared engineering guides live under `docs/engineering/specs/guides/`; product plans remain under `docs/plan-prd/`.
+- `docs/comet/` preserves pre-exit requirements, specifications, verification evidence, and delivery records. Keep those records read-only; they do not define the current execution workflow or prove that a new change has passed acceptance.
+- Read `docs/engineering/workflow/backlog.md` and the relevant handoff before resuming frozen work. Confirm its current scope and acceptance criteria without changing the historical task record.
+- Check the current branch/worktree before writing and verify changed behavior in its actual runtime. Git commit, merge, push, PR creation, and release require explicit user authorization.
+- Preserve concurrent changes, engineering records, and user configuration. Do not copy local runtime/logs into formal artifacts.
 
-If a Trellis command is available on your platform (e.g. `/trellis:finish-work`, `/trellis:continue`), prefer it over manual steps. Not every platform exposes every command.
+Project Skill roots are `.omp/skills/`, `.claude/skills/`, and `.agents/skills/`; Codex-specific hooks and rules remain under `.codex/`.
 
-If you're using Codex or another agent-capable tool, additional project-scoped helpers may live in:
-- `.agents/skills/` — reusable Trellis skills
-- `.codex/agents/` — optional custom subagents
+## Shared-machine discipline
 
-Managed by Trellis. Edits outside this block are preserved; edits inside may be overwritten by a future `trellis update`.
+Several agents work in this checkout at once on the user's own workstation, next to the user's interactive `pnpm core:dev` instance. On 2026-10-07 that instance lagged 1–2s every few seconds for 28 minutes while agents ran `tsc`, `vitest` and extra Electron instances in parallel (load average 16 on 14 cores).
 
-<!-- TRELLIS:END -->
+- Run heavy jobs (`tsc`, `vitest`, builds, isolated Electron instances) with `nice -n 10`; the dev wrapper honours `TUFF_DEV_NICE=10` for isolated instances started through `scripts/dev-electron-wrapper.mjs`.
+- Before starting any Electron instance or crash harness, check that the user's dev instance is not running (an `Electron Helper` process whose `--user-data-dir` is the default `@talex-touch/core-app` profile, or a listener on the vite port 5173). If it is, do not start yours.
+- One isolated Electron instance per agent at a time; close it as soon as the evidence is captured.
 
 ## Standing Audits / Known Issues
 
 Before touching **search / file-indexing / cross-platform** code, read the living audit backlog — it tracks confirmed defects and prioritized risks with `file:line` references so you don't re-discover or re-introduce them:
 
-- **Search & cross-platform audit** → [`.trellis/tasks/07-13-search-crossplatform-audit/prd.md`](.trellis/tasks/07-13-search-crossplatform-audit/prd.md)
-  - 🔴 Confirmed defect: **B1** semantic search still a production no-op — the read path landed, but nothing ever writes the `embeddings` table (verified 2026-09-18: 0 embedding rows across 155,716 indexed files, no row ever reaching `completed`). **B2** completion weighting is fixed (`01546fdea`).
-  - 🟠 High risk: R1 Rust screenshot module not wired into the build; R2 macOS unsigned/arm64-only vs electron-updater; R3 large-dir scan/reconcile memory peaks.
+- **Search & cross-platform audit** → [`docs/engineering/reports/search-crossplatform-audit.md`](docs/engineering/reports/search-crossplatform-audit.md)
+  - **B1**: the main-process embedding writer is wired; real embedding Provider write/recall acceptance remains open. The 2026-09-18 zero-row measurement is a pre-fix baseline, not the current write-path status. **B2** completion weighting is fixed (`01546fdea`).
+  - **R1**: native screenshot/audio build contracts and audio release packaging were connected; screenshot packaged-runtime acceptance remains open. **R2** architecture policy and cross-platform release evidence remain unresolved. **R3** large-directory scan/reconcile memory peaks remain tracked.
   - 🟡/🟢 Arch debt & cleanup: R4–R9, C1–C6.
-  - Active fix: `.trellis/tasks/07-13-fix-ranking-dead-features/` — B2 done; B1 needs a main-process embeddings writer (a worker cannot reach the tuffIntelligence SDK).
+  - Resume B1 from its current audit evidence: prove configured Provider writes and semantic recall; do not reimplement the existing writer based on the old zero-row baseline.
 
-Keep this list current: when a finding is fixed or invalidated, check it off in the backlog `prd.md` with a reason.
+Keep this list current: when a finding is fixed or invalidated, check it off in the living audit with a reason.

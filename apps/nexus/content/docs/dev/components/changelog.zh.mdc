@@ -6,23 +6,33 @@ status: beta
 since: 0.3.4
 tags: [changelog, versions, lifecycle, since, tuffex]
 syncStatus: reviewed
-verified: true
+verified: false
 ---
 
 # 组件变更历程
 
-当前源码的全部 167 个导出组件均有明确的生命周期版本追溯（Since Version）。每次版本变更都由 `audit:changelog` 校验组件清单、变更详情和引入版本。
+当前源码的全部 181 个导出组件模块均有明确的 Since 版本。现有 charts 聚合模块还导出 MonoChart 和 DitherChart，它们属于该模块内的图表组件，不额外计作两个根模块。每次版本变更由 `audit:changelog` 校验模块清单、变更详情和引入版本。
 
 ## 版本概览
 
-当前源码版本为 **v0.6.3**，随 Tuff beta 测试，尚未独立发布 npm；最新 npm 发布版本仍为 **v0.6.2**。当前源码导出组件总数为 **167** 个。
+当前源码版本为 **v0.6.3**，随 Tuff beta 测试，尚未独立发布 npm；最新 npm 发布版本仍为 **v0.6.2**。当前源码导出 **181** 个组件模块。
 
 - **基础套件 (Base)**: 94 个日常通用、表单、布局与导航组件
-- **进阶套件 (Pro)**: 39 个高阶交互、动效与底层原语组件
+- **进阶套件（Pro）**：53 个高级交互、视觉效果、动效和底层原语模块
 - **AI 套件 (Ai)**: 34 个 AI 聊天、智能体、推理与上下文组件
 - **门禁保护**: 新版本发布若未包含版本章节、未声明变动组件或组件 Since 版本缺失，CI 与发布流程将自动拦截阻断
 
 ## 版本更新历程
+
+### Unreleased 未发布
+
+源码版本保持 0.6.3，下列新增能力不代表独立 npm 发版。
+
+- **Motion 文档套件**：八套件导航新增[动效套件](./motion-suite.zh.mdc)，包含可独立重置的实时标本，以及双语分类、侧栏、总览和演示注册。
+- **新增组件模块（14 个）**：[motion-button](./motion-button.zh.mdc)、[card-spread](./card-spread.zh.mdc)、[carousel-3d](./carousel-3d.zh.mdc)、[flip-book](./flip-book.zh.mdc)、[motion-loader](./motion-loader.zh.mdc)、[motion-text](./motion-text.zh.mdc)、[physics-motion](./physics-motion.zh.mdc)、[motion-dock](./motion-dock.zh.mdc)、[motion](./motion.zh.mdc)、[motion-toggle](./motion-toggle.zh.mdc)、[motion-transition](./motion-transition.zh.mdc)、[motion-form](./motion-form.zh.mdc)、[motion-control](./motion-control.zh.mdc)、[motion-metric](./motion-metric.zh.mdc)。
+- **现有 charts 模块新增**：Motion 中的 [dither-chart](./dither-chart.zh.mdc) 和 Data 中的 [mono-chart](./mono-chart.zh.mdc)，均从 `@talex-touch/tuffex/charts` 导出。
+- **安装边界**：保持 Base、Pro 和 AI 三套安装 barrel。Motion 只新增文档套件；合法的 `/motion` 单组件子路径引入 `TxMotion`，不是第四套安装 barrel。复合表单、控件和指标归 Pro，现有文档入口全部保留。
+- **来源行为**：标签、内容、条目、模型和数据由调用方驱动，保留原始命名展示与交互。持续动效共享可见性、减少动态效果和清理处理；spring 和文字值变化复用现有 TuffEx 引擎。改编保留 Amicro 的 MIT 署名和源文件级 Apache-2.0 声明。保留的 46 个 Lucide 图标另保留 ISC 及适用的 Feather-MIT 声明，不引入 React 或 Lucide 运行时依赖。
 
 ### 0.6.3 源码版本（2026-10-01）
 
@@ -122,9 +132,9 @@ TuffEx 独立包初始基线建立。
 
 ## 全组件引入版本索引
 
-下表列出当前源码全部 167 个导出组件的引入版本与所属套件；0.6.3 为源码版本，尚未独立发布 npm。
+下表列出当前源码全部 181 个组件模块的引入版本与安装 barrel。文档套件分类见[组件中心页](./index.zh.mdc)；0.6.3 为源码版本，尚未独立发布 npm。
 
-| 组件 (Slug) | 所属套件 | 引入版本 (Since) | 文档入口 |
+| 组件（Slug）| 安装 barrel | 引入版本（Since）| 文档入口 |
 |---|---|---|---|
 | `agent-screen` | ai | **0.6.0** | [查看文档](./agent-screen.zh.mdc) |
 | `agent-trace` | ai | **0.3.9** | [查看文档](./agent-trace.zh.mdc) |
@@ -146,6 +156,8 @@ TuffEx 独立包初始基线建立。
 | `button` | base | **0.3.4** | [查看文档](./button.zh.mdc) |
 | `card` | base | **0.3.4** | [查看文档](./card.zh.mdc) |
 | `card-item` | base | **0.3.4** | [查看文档](./card-item.zh.mdc) |
+| `card-spread` | pro | **0.6.3** | [查看文档](./card-spread.zh.mdc) |
+| `carousel-3d` | pro | **0.6.3** | [查看文档](./carousel-3d.zh.mdc) |
 | `cascader` | base | **0.3.4** | [查看文档](./cascader.zh.mdc) |
 | `cell-link` | base | **0.3.9** | [查看文档](./cell-link.zh.mdc) |
 | `chain-of-thought` | ai | **0.3.9** | [查看文档](./chain-of-thought.zh.mdc) |
@@ -183,6 +195,7 @@ TuffEx 独立包初始基线建立。
 | `flat-radio` | base | **0.3.4** | [查看文档](./flat-radio.zh.mdc) |
 | `flat-select` | base | **0.3.4** | [查看文档](./flat-select.zh.mdc) |
 | `flex` | base | **0.3.4** | [查看文档](./flex.zh.mdc) |
+| `flip-book` | pro | **0.6.3** | [查看文档](./flip-book.zh.mdc) |
 | `flip-overlay` | pro | **0.3.4** | [查看文档](./flip-overlay.zh.mdc) |
 | `floating` | pro | **0.3.4** | [查看文档](./floating.zh.mdc) |
 | `flowchart` | ai | **0.6.0** | [查看文档](./flowchart.zh.mdc) |
@@ -219,6 +232,16 @@ TuffEx 独立包初始基线建立。
 | `metal-fx` | pro | **0.6.2** | [查看文档](./metal-fx.zh.mdc) |
 | `modal` | base | **0.3.4** | [查看文档](./modal.zh.mdc) |
 | `mode-chip` | ai | **0.6.0** | [查看文档](./mode-chip.zh.mdc) |
+| `motion` | pro | **0.6.3** | [查看文档](./motion.zh.mdc) |
+| `motion-button` | pro | **0.6.3** | [查看文档](./motion-button.zh.mdc) |
+| `motion-control` | pro | **0.6.3** | [查看文档](./motion-control.zh.mdc) |
+| `motion-dock` | pro | **0.6.3** | [查看文档](./motion-dock.zh.mdc) |
+| `motion-form` | pro | **0.6.3** | [查看文档](./motion-form.zh.mdc) |
+| `motion-loader` | pro | **0.6.3** | [查看文档](./motion-loader.zh.mdc) |
+| `motion-metric` | pro | **0.6.3** | [查看文档](./motion-metric.zh.mdc) |
+| `motion-text` | pro | **0.6.3** | [查看文档](./motion-text.zh.mdc) |
+| `motion-toggle` | pro | **0.6.3** | [查看文档](./motion-toggle.zh.mdc) |
+| `motion-transition` | pro | **0.6.3** | [查看文档](./motion-transition.zh.mdc) |
 | `nav-bar` | base | **0.3.4** | [查看文档](./nav-bar.zh.mdc) |
 | `no-data` | base | **0.3.4** | [查看文档](./no-data.zh.mdc) |
 | `no-selection` | base | **0.3.4** | [查看文档](./no-selection.zh.mdc) |
@@ -227,6 +250,7 @@ TuffEx 独立包初始基线建立。
 | `outline-border` | pro | **0.3.4** | [查看文档](./outline-border.zh.mdc) |
 | `pagination` | base | **0.3.4** | [查看文档](./pagination.zh.mdc) |
 | `permission-state` | base | **0.3.4** | [查看文档](./permission-state.zh.mdc) |
+| `physics-motion` | pro | **0.6.3** | [查看文档](./physics-motion.zh.mdc) |
 | `picker` | base | **0.3.4** | [查看文档](./picker.zh.mdc) |
 | `popover` | base | **0.3.4** | [查看文档](./popover.zh.mdc) |
 | `prism-glow` | pro | **0.6.0** | [查看文档](./prism-glow.zh.mdc) |
@@ -293,6 +317,15 @@ TuffEx 独立包初始基线建立。
 | `virtual-list` | pro | **0.3.4** | [查看文档](./virtual-list.zh.mdc) |
 | `voice-beam` | pro | **0.6.2** | [查看文档](./voice-beam.zh.mdc) |
 | `working-indicator` | ai | **0.3.9** | [查看文档](./working-indicator.zh.mdc) |
+
+### Charts 模块新增
+
+这些公共图表组件在现有 `charts` 聚合模块内引入，使用 `@talex-touch/tuffex/charts` 入口，不增加根模块计数。
+
+| 图表组件 | 文档套件 | 引入版本 | 文档入口 |
+| --- | --- | --- | --- |
+| `dither-chart` | Motion | **0.6.3** | [查看文档](./dither-chart.zh.mdc) |
+| `mono-chart` | Data | **0.6.3** | [查看文档](./mono-chart.zh.mdc) |
 
 ## 版本门禁与规范
 

@@ -222,7 +222,8 @@ describe('appProvider rebuild maintenance', () => {
           getSearchDb: vi.fn(),
           isSearchSplitEnabled: vi.fn(() => false)
         },
-        searchIndex: {}
+        searchIndex: {},
+        maintenanceSearchIndex: {}
       } as unknown as Parameters<typeof appProvider.onLoad>[0])
 
       expect(touchEventBus.on).not.toHaveBeenCalledWith(
@@ -2929,6 +2930,7 @@ describe('appProvider rebuild maintenance', () => {
       const privateProvider = asPrivateProvider(appProvider)
       privateProvider.dbUtils = {}
       privateProvider.searchIndex = {}
+      privateProvider.maintenanceSearchIndex = {}
       privateProvider.appIndexSettings.startupBackfillEnabled = true
       privateProvider.getAppSearchIndexHealth = vi.fn(async () => ({
         healthy: false,
@@ -2958,6 +2960,7 @@ describe('appProvider rebuild maintenance', () => {
       const privateProvider = asPrivateProvider(appProvider)
       privateProvider.dbUtils = {}
       privateProvider.searchIndex = {}
+      privateProvider.maintenanceSearchIndex = {}
       privateProvider.appIndexSettings.startupBackfillEnabled = true
       privateProvider._shouldRunStartupBackfill = vi.fn(async () => ({ allowed: true }))
 
@@ -3138,6 +3141,7 @@ describe('appProvider rebuild maintenance', () => {
     const scan = createDeferred<void>()
     privateProvider.dbUtils = {}
     privateProvider.searchIndex = {}
+    privateProvider.maintenanceSearchIndex = {}
     privateProvider.isInitializing = scan.promise
     privateProvider.getAppSearchIndexHealth = vi.fn(async () => ({
       healthy: false,
@@ -3166,6 +3170,7 @@ describe('appProvider rebuild maintenance', () => {
     const privateProvider = asPrivateProvider(appProvider)
     privateProvider.dbUtils = {}
     privateProvider.searchIndex = {}
+    privateProvider.maintenanceSearchIndex = {}
     privateProvider.getAppSearchIndexHealth = vi.fn(async () => ({
       healthy: false,
       appCount: 228,
@@ -3185,6 +3190,7 @@ describe('appProvider rebuild maintenance', () => {
     const privateProvider = asPrivateProvider(appProvider)
     privateProvider.dbUtils = {}
     privateProvider.searchIndex = {}
+    privateProvider.maintenanceSearchIndex = {}
     privateProvider.getAppSearchIndexHealth = vi.fn(async () => ({
       healthy: false,
       appCount: 228,
@@ -3207,6 +3213,7 @@ describe('appProvider rebuild maintenance', () => {
     const privateProvider = asPrivateProvider(appProvider)
     privateProvider.dbUtils = {}
     privateProvider.searchIndex = {}
+    privateProvider.maintenanceSearchIndex = {}
     privateProvider.appIndexSettings.startupBackfillEnabled = false
     privateProvider.getAppSearchIndexHealth = vi.fn(async () => ({
       healthy: false,
@@ -3301,6 +3308,7 @@ describe('appProvider rebuild maintenance', () => {
     const stalledScan = createDeferred<void>()
     privateProvider.dbUtils = {}
     privateProvider.searchIndex = {}
+    privateProvider.maintenanceSearchIndex = {}
     privateProvider.isInitializing = stalledScan.promise
     privateProvider.getAppSearchIndexHealth = vi.fn(async () => ({
       healthy: false,

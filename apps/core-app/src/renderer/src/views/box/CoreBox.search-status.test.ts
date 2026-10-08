@@ -6,6 +6,7 @@ import type * as Vue from 'vue'
 import type { Ref } from 'vue'
 import { TxPrismGlow } from '@talex-touch/tuffex/prism-glow'
 import { TxStatusHint } from '@talex-touch/tuffex/status-hint'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { computed, defineComponent, h, nextTick, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -76,10 +77,6 @@ vi.mock('@talex-touch/utils/transport', () => {
     })
   }
 })
-
-vi.mock('@talex-touch/utils/transport/sdk/domains/local-ai-cli', () => ({
-  createLocalAiCliSdk: () => ({ getStatus: async () => ({ betaAvailable: false }) })
-}))
 
 vi.mock('~/components/render/addon/TuffItemAddon.vue', () => ({
   default: { name: 'TuffItemAddon', props: ['type', 'item'], template: '<aside />' }
@@ -180,18 +177,19 @@ vi.mock('../../modules/box/adapter/hooks/useClipboard', () => ({
 
 vi.mock('../../modules/box/adapter/hooks/useDetach', () => ({
   useDetach: () => ({
-    flowVisible: false,
-    flowSessionId: '',
-    flowPayload: undefined,
-    flowAnchor: 'corner',
-    closeFlowSelector: () => {},
-    dispatchFlow: () => {},
-    openFlowSelector: () => {}
+    detachFeature: async () => {},
+    detachUIMode: async () => {},
+    openFlowPanel: async () => {},
+    dispatchFlow: async () => {}
   })
 }))
 
 vi.mock('../../modules/box/adapter/hooks/useFocus', () => ({
-  useFocus: () => ({ focusInput: () => {}, focusWindowAndInput: async () => {} })
+  useFocus: () => ({
+    focusInput: () => {},
+    focusWindowAndInput: async () => {},
+    getSummonId: () => null
+  })
 }))
 
 vi.mock('../../modules/box/adapter/hooks/useKeyboard', () => ({
@@ -265,7 +263,6 @@ const stubs = {
     template: '<div class="normal-list-row" :data-id="item.id">{{ item.render.basic.title }}</div>'
   },
   DivisionBoxHeader: { template: '<div />' },
-  FlowSelector: { template: '<div />' },
   PrefixPart: { template: '<div />' },
   PreviewHistoryPanel: { template: '<div />' },
   TagSection: { template: '<div />' },
@@ -969,4 +966,45 @@ describe('CoreBox action feedback with the real footer', () => {
       expect(accessibleText(feedback)).toBe('已复制')
     }
   )
+})
+
+/**
+ * Main tells CoreBox what the ⌘K card covers it with (`CoreBoxEvents.metaOverlay.panelState`): the
+ * space a grown window added is painted, and CoreBox's own content goes out of focus while the card
+ * shows a Flow page. The blur itself is CSS on `CoreBox-Wrapper--meta-blur`, seen in the real
+ * window; this pins the switch.
+ */
+describe('CoreBox under the ⌘K card', () => {
+  function publishPanelState(payload: unknown): void {
+    const listener = state.listeners.get(CoreBoxEvents.metaOverlay.panelState.toEventName())
+    expect(listener, 'expected CoreBox to listen for the panel state').toBeTypeOf('function')
+    listener!(payload)
+  }
+
+  function wrapperClasses(coreBox: VueWrapper): string[] {
+    return coreBox.get('.CoreBox-Wrapper').classes()
+  }
+
+  it('goes out of focus while the card shows a Flow page, and back in focus after', async () => {
+    const coreBox = await openCoreBox()
+    expect(wrapperClasses(coreBox)).not.toContain('CoreBox-Wrapper--meta-blur')
+
+    publishPanelState({ visible: true, grown: true, blur: true })
+    await flush()
+    expect(wrapperClasses(coreBox)).toContain('CoreBox-Wrapper--meta-blur')
+    expect(wrapperClasses(coreBox)).toContain('CoreBox-Wrapper--meta-fill')
+
+    // Back to the action list: in focus again, the window the card grew still painted.
+    publishPanelState({ visible: true, grown: true, blur: false })
+    await flush()
+    expect(wrapperClasses(coreBox)).not.toContain('CoreBox-Wrapper--meta-blur')
+    expect(wrapperClasses(coreBox)).toContain('CoreBox-Wrapper--meta-fill')
+
+    publishPanelState({ visible: true, grown: false, blur: true })
+    await flush()
+    publishPanelState({ visible: false, grown: false, blur: false })
+    await flush()
+    expect(wrapperClasses(coreBox)).not.toContain('CoreBox-Wrapper--meta-blur')
+    expect(wrapperClasses(coreBox)).not.toContain('CoreBox-Wrapper--meta-fill')
+  })
 })

@@ -9,12 +9,14 @@ const labels = computed(() => (locale.value === 'zh'
       enabled: '已启用',
       updates: '待更新',
       disabled: '已停用',
+      meta: '包含已启用与已停用插件',
     }
   : {
       total: 'Total plugins',
       enabled: 'Enabled',
       updates: 'Pending updates',
       disabled: 'Disabled',
+      meta: 'Includes enabled and disabled plugins',
     }))
 </script>
 
@@ -23,6 +25,7 @@ const labels = computed(() => (locale.value === 'zh'
     <TxStatCard
       :value="2847"
       :label="labels.total"
+      :meta="labels.meta"
       icon-class="i-carbon-download text-[var(--tx-color-primary)]"
       clickable
     />

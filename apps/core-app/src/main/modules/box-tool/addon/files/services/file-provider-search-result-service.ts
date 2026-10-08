@@ -1,6 +1,5 @@
 import type { TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
 import { TuffSearchResultBuilder } from '@talex-touch/utils'
-import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import {
   buildSearchKeywordLookupTerms,
   collectSearchKeywordMatches,
@@ -8,7 +7,7 @@ import {
 } from '@talex-touch/utils/search'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import type { DbUtils } from '../../../../../db/utils'
-import { fileExtensions, files as filesSchema } from '../../../../../db/schema'
+import { fileExtensions, files as filesSchema, fileTypeIs } from '../../../../../db/schema'
 import type { SearchIndexService } from '../../../search-engine/search-index-service'
 import { searchLogger } from '../../../search-engine/search-logger'
 import { WHITELISTED_EXTENSIONS, getTypeTagsForExtension, type FileTypeTag } from '../constants'
@@ -34,6 +33,7 @@ export interface FileProviderSearchResultServiceDeps {
   getDbUtils: () => DbUtils | null
   getSearchIndex: () => SearchIndexService | null
   isContentIndexingEnabled: () => boolean
+  isPathAdmitted: (filePath: string) => boolean
   buildItem: (file: FileRecord, extensions: Record<string, string>) => TuffItem
   normalizeItem: (
     item: TuffItem,
@@ -308,7 +308,7 @@ export class FileProviderSearchResultService {
       })
       .from(filesSchema)
       .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
-      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.path, candidatePaths)))
+      .where(and(fileTypeIs('file'), inArray(filesSchema.path, candidatePaths)))
     if (signal.aborted) return this.empty(query)
     searchLogger.fileDataResults(rows.length, this.now() - dataFetchStart)
     this.deps.logDebug('Loaded candidate rows for scoring', {
@@ -566,16 +566,7 @@ export class FileProviderSearchResultService {
   ): Map<string, FileSearchEntry> {
     const files = new Map<string, FileSearchEntry>()
     for (const row of rows) {
-      if (
-        fileFilterService.getSearchExclusionReason({
-          path: row.file.path,
-          name: row.file.name,
-          extension: row.file.extension,
-          isDirectory: row.file.isDir
-        })
-      ) {
-        continue
-      }
+      if (!this.deps.isPathAdmitted(row.file.path)) continue
 
       const entry = files.get(row.file.path) ?? { file: row.file, extensions: {} }
       if (row.extensionKey && row.extensionValue) {

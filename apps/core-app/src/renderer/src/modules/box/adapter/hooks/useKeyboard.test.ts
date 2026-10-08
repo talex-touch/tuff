@@ -8,7 +8,9 @@ import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-over
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, ref } from 'vue'
 import { BoxMode } from '..'
+import { estimateFlowTargetsPanelHeight } from '../../meta-actions/meta-flow-page'
 import {
+  buildCoreBoxMetaShowRequest,
   clearCoreBoxAttachment,
   handleCoreBoxEscapeKey,
   hasCoreBoxAttachment,
@@ -878,6 +880,69 @@ describe('useKeyboard ⌘K request', () => {
   })
 })
 
+describe('buildCoreBoxMetaShowRequest Flow page', () => {
+  const targets = [
+    {
+      id: 'system-info',
+      fullId: 'quickops.system-info',
+      name: 'QuickOps System Info',
+      pluginId: 'quickops',
+      supportedTypes: ['json' as const],
+      hasFlowHandler: true,
+      isEnabled: true
+    },
+    {
+      id: 'stop-all',
+      fullId: 'quickops.stop-all',
+      name: 'QuickOps Stop All Sessions',
+      pluginId: 'quickops',
+      supportedTypes: ['json' as const],
+      hasFlowHandler: true,
+      isEnabled: true
+    },
+    {
+      id: 'airdrop',
+      fullId: 'system-share.airdrop',
+      name: 'AirDrop',
+      pluginId: 'system-share',
+      supportedTypes: ['json' as const],
+      hasFlowHandler: true,
+      isEnabled: true
+    }
+  ]
+
+  it('opens on the Flow page, sized for the targets rather than the action list', () => {
+    const request = buildCoreBoxMetaShowRequest(ACTION_APP_ITEM, {
+      footerShown: true,
+      page: 'flow',
+      flowTargets: targets
+    })
+
+    expect(request).toMatchObject({ page: 'flow', anchor: 'footer', flowTargets: targets })
+    // Three rows in two titled sections.
+    expect(request.desiredPanelHeight).toBe(estimateFlowTargetsPanelHeight(targets))
+    expect(request.desiredPanelHeight).toBe(40 + (6 * 2 + 3 * 32 + 2 * 24 + 4) + 40)
+    // The actions still ride along: the card can show them if it ever goes back.
+    expect(request.builtinActions.length).toBeGreaterThan(0)
+  })
+
+  it('sizes a Flow page with no targets for one row, and leaves the action list as it was', () => {
+    const empty = buildCoreBoxMetaShowRequest(ACTION_APP_ITEM, {
+      footerShown: false,
+      page: 'flow',
+      flowTargets: []
+    })
+    expect(empty).toMatchObject({ page: 'flow', anchor: 'corner', flowTargets: [] })
+    expect(empty.desiredPanelHeight).toBe(40 + (6 * 2 + 32) + 40)
+
+    const actions = buildCoreBoxMetaShowRequest(ACTION_APP_ITEM, { footerShown: false })
+    expect(actions.page).toBeUndefined()
+    expect(actions.flowTargets).toBeUndefined()
+    // Seven rows in three sections, two titled, as the ⌘K request above.
+    expect(actions.desiredPanelHeight).toBe(372)
+  })
+})
+
 describe('useKeyboard action shortcuts on the selected result', () => {
   beforeEach(() => {
     vi.stubGlobal('requestAnimationFrame', () => 0)
@@ -888,7 +953,6 @@ describe('useKeyboard action shortcuts on the selected result', () => {
     activeActionKeyHarness?.cleanup()
     activeActionKeyHarness = undefined
     document.body.classList.remove('core-box')
-    document.querySelectorAll('.FlowSelector').forEach((element) => element.remove())
     window.__coreboxHistoryVisible = undefined
     vi.unstubAllGlobals()
   })
@@ -996,14 +1060,8 @@ describe('useKeyboard action shortcuts on the selected result', () => {
     }
   })
 
-  it('stays out of the way of the Flow picker and the calculation history', () => {
+  it('stays out of the way of the calculation history', () => {
     activeActionKeyHarness = mountActionKeyHarness([ACTION_FILE_ITEM])
-
-    const flowSelector = document.createElement('div')
-    flowSelector.className = 'FlowSelector'
-    document.body.appendChild(flowSelector)
-    pressActionKey('KeyO')
-    flowSelector.remove()
 
     window.__coreboxHistoryVisible = true
     pressActionKey('KeyO')

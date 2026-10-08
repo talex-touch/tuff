@@ -20,6 +20,11 @@ import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
 import { ORB_STATES, TxThinkingOrb } from '@talex-touch/tuffex/thinking-orb'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getPreloadProcessInfo } from '~/modules/preload/process-info'
+import {
+  formatUsageLimitResetTime,
+  isUsageLimitFailure,
+  readUsageLimitResetsAt
+} from '~/modules/intelligence/ai-error-recovery'
 import { useI18n } from 'vue-i18n'
 
 /**
@@ -328,7 +333,7 @@ const emit = defineEmits<{
 }>()
 
 const transport = useTuffTransport()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const runtimeConfig = ref<AssistantRuntimeConfig>({
   enabled: false,
   language: 'zh',
@@ -1000,6 +1005,22 @@ function classifyFailure(error: unknown): Notice {
       tone: 'warning',
       icon: SETUP_ICON,
       action: 'asrSettings'
+    }
+  }
+
+  // The limit the user set in Audit comes before the quota rule: it is not Nexus credits, and it
+  // says when it resets. Retrying before then is refused the same way.
+  if (isUsageLimitFailure(haystack)) {
+    const resetsAt = readUsageLimitResetsAt(raw)
+    return {
+      message:
+        resetsAt === null
+          ? t('assistant.voicePanel.usageLimitReachedNoTime')
+          : t('assistant.voicePanel.usageLimitReached', {
+              time: formatUsageLimitResetTime(resetsAt, locale.value)
+            }),
+      tone: 'warning',
+      retry: false
     }
   }
 

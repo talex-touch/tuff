@@ -1,5 +1,7 @@
 <script lang="ts" name="IntelligenceItemRefactored" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
+import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import type {
   TuffItemBadge,
   TuffItemStatusDot
@@ -16,36 +18,6 @@ import {
   getProviderChannelType,
   isLocalCliProvider
 } from '~/modules/intelligence/provider-channel-type'
-
-enum IntelligenceProviderType {
-  OPENAI = 'openai',
-  ANTHROPIC = 'anthropic',
-  DEEPSEEK = 'deepseek',
-  SILICONFLOW = 'siliconflow',
-  LOCAL = 'local',
-  CUSTOM = 'custom'
-}
-
-interface IntelligenceProviderConfig {
-  id: string
-  type: string
-  name: string
-  enabled: boolean
-  metadata?: Record<string, unknown>
-  apiKey?: string
-  authRef?: string
-  hasCredential?: boolean
-  baseUrl?: string
-  models?: string[]
-  defaultModel?: string
-  instructions?: string
-  timeout?: number
-  rateLimit?: {
-    requestsPerMinute?: number
-    tokensPerMinute?: number
-  }
-  priority?: number
-}
 
 const props = defineProps<{
   provider: IntelligenceProviderConfig

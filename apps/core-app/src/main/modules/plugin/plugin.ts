@@ -170,6 +170,7 @@ import {
   createSafePluginOpenUrl,
   withPluginSdkapiPayload
 } from './plugin-safe-api'
+import { announcePluginStatus } from './plugin-status-notice'
 import * as privileges from '../../../shared/privileged-plugins'
 import {
   bundlePluginPreludeFromContent,
@@ -544,14 +545,9 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   set status(v: PluginStatus) {
+    const previous = this._status
     this._status = v
-
-    if (this.transport) {
-      this.transport.broadcast(PluginEvents.push.statusUpdated, {
-        plugin: this.name,
-        status: this._status
-      })
-    }
+    announcePluginStatus(this.transport, this.name, v, previous)
   }
 
   setLoadState(nextState: PluginLoadState, loadError?: PluginLoadError): void {

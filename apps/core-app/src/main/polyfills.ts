@@ -5,10 +5,19 @@ import { app } from 'electron'
 import fse from 'fs-extra'
 import * as log4js from 'log4js'
 import packageJson from '../../package.json'
+import { resolveStartupBenchmarkUserDataDir } from './core/acceptance-mode'
 
 globalThis.$pkg = packageJson
 
-if (!app.isPackaged) {
+const isolatedUserDataPath = resolveStartupBenchmarkUserDataDir()
+if (isolatedUserDataPath) {
+  const isolatedRoot = path.resolve(isolatedUserDataPath)
+  fse.ensureDirSync(isolatedRoot)
+  // Session paths are captured before precore runs; changing only userData there
+  // isolates SQLite but leaves Chromium writing the real dev profile.
+  app.setPath('userData', isolatedRoot)
+  app.setPath('sessionData', isolatedRoot)
+} else if (!app.isPackaged) {
   const devUserDataPath = path.join(app.getPath('appData'), `${packageJson.name}-dev`)
   if (app.getPath('userData') !== devUserDataPath) {
     app.setPath('userData', devUserDataPath)
@@ -26,9 +35,6 @@ const __dirname = path.dirname(__filename)
 
 globalThis.__filename = __filename
 globalThis.__dirname = __dirname
-
-process.env.DIST = path.join(__dirname, '..')
-process.env.PUBLIC = app.isPackaged ? process.env.DIST : path.join(process.env.DIST, '../public')
 
 const runtimeLogger = log4js.getLogger('runtime')
 

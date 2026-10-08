@@ -15,7 +15,7 @@ import type { StartupInfo } from '../shared/types/startup-info'
  * back rather than failing, and the call site cannot tell the difference.
  */
 import '@sentry/electron/preload'
-import { hasWindow } from '@talex-touch/utils/env'
+import { getBooleanEnv, hasWindow } from '@talex-touch/utils/env'
 import { PRELOAD_LOADING_CHANNEL } from '@talex-touch/utils/preload'
 import { isCoreBox, isMainWindow } from '@talex-touch/utils/renderer/hooks/arg-mapper'
 import { parseWindowArgs, resolveRendererWindowMode } from '@talex-touch/utils/renderer/window-role'
@@ -112,11 +112,7 @@ function parsePositiveIntegerEnv(name: string): number | undefined {
 }
 
 function isVisibleAuthEvidenceEnabled(): boolean {
-  const raw = process.env.TUFF_VISIBLE_EVIDENCE_AUTH?.trim().toLowerCase()
-  return (
-    (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') &&
-    process.env.TUFF_STARTUP_BENCHMARK_ONCE === '1'
-  )
+  return getBooleanEnv('TUFF_VISIBLE_EVIDENCE_AUTH') && getBooleanEnv('TUFF_STARTUP_BENCHMARK_ONCE')
 }
 
 const api: CoreAppPreloadAPI = {

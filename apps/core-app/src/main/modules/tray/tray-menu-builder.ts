@@ -7,6 +7,9 @@ import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app, Menu, shell } from 'electron'
+import { StorageList } from '@talex-touch/utils'
+import { isBetaFeatureEnabled } from '../../../shared/beta-features'
+import { getMainConfig } from '../storage'
 import { COREBOX_TOGGLE_SHORTCUT_ID } from '../../../shared/corebox-shortcut'
 import { t } from '../../utils/i18n-helper'
 import { setQuitIntent } from '../../core/quit-intent'
@@ -137,6 +140,7 @@ export class TrayMenuBuilder {
       },
       {
         label: t('tray.screenshot'),
+        visible: isBetaFeatureEnabled(getMainConfig(StorageList.APP_SETTING), 'screenshot'),
         submenu: [
           {
             label: t('tray.screenshotNow'),

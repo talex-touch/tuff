@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MapGeoJson } from '@talex-touch/tuffex/charts'
 import { TxBubbleMap } from '@talex-touch/tuffex/charts'
-import { onMounted, ref, shallowRef } from 'vue'
+import { computed, onMounted, ref, shallowRef } from 'vue'
 
 interface Colo { city: string, lon: number, lat: number, requests: number }
 
@@ -13,6 +13,11 @@ const WORLD_URL: string = '/geo/world-countries.geo.json'
 
 const world = shallowRef<MapGeoJson | null>(null)
 const failed = ref(false)
+const selected = shallowRef<Colo | null>(null)
+const { locale } = useI18n()
+const copy = computed(() => locale.value === 'zh'
+  ? { loading: '正在加载世界地图…', failed: '世界地图加载失败。', hint: '点击气泡查看城市，拖拽底图平移。', selected: '已选择', unit: '请求/秒' }
+  : { loading: 'Loading world GeoJSON…', failed: 'World GeoJSON failed to load.', hint: 'Select a bubble to inspect its city; drag the land to pan.', selected: 'Selected', unit: 'req/s' })
 
 const colos: Colo[] = [
   { city: 'San Jose', lon: -121.89, lat: 37.34, requests: 9200 },
@@ -40,7 +45,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="map-demo">
+  <div class="map-demo not-prose">
     <TxBubbleMap
       v-if="world"
       :geo-json="world"
@@ -50,10 +55,14 @@ onMounted(async () => {
       value="requests"
       name="city"
       roam
-      :value-format="(value: number) => `${value.toLocaleString()} req/s`"
+      :value-format="(value: number) => `${value.toLocaleString()} ${copy.unit}`"
+      @bubble-click="selected = $event"
     />
+    <p v-if="world" class="map-demo__selection" aria-live="polite">
+      {{ selected ? `${copy.selected}: ${selected.city}` : copy.hint }}
+    </p>
     <p v-else class="map-demo__placeholder">
-      {{ failed ? 'World GeoJSON failed to load.' : 'Loading world GeoJSON…' }}
+      {{ copy[failed ? 'failed' : 'loading'] }}
     </p>
   </div>
 </template>
@@ -61,6 +70,12 @@ onMounted(async () => {
 <style scoped>
 .map-demo {
   width: 100%;
+}
+
+.map-demo__selection {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--tx-chart-text-primary, #6b7280);
 }
 
 .map-demo__placeholder {

@@ -2891,6 +2891,24 @@ describe('CommonChannelModule open settings request', () => {
         Promise.resolve().then(() => openSettings!(undefined, { plugin: { name: 'hostile' } }))
       ).rejects.toThrow('HOST_ONLY_HANDLER')
       expect(open).toHaveBeenCalledTimes(2)
+
+      // The way out of a call the usage limit refused: the Audit page, never a caller's path.
+      open.mockClear()
+      const openUsageLimits = handlers.get(AppEvents.window.openUsageLimits.toEventName())
+      expect(openUsageLimits).toBeTypeOf('function')
+      open.mockReturnValue({ destinationId: 'settings-audit', status: 'queued' })
+      expect(openUsageLimits!({ path: '/setting/privacy' }, {})).toBe(true)
+      expect(open).toHaveBeenCalledExactlyOnceWith('settings-audit')
+      open.mockReturnValue({
+        destinationId: 'settings-audit',
+        status: 'unavailable',
+        reason: 'renderer-unavailable'
+      })
+      expect(openUsageLimits!(undefined, {})).toBe(false)
+      await expect(
+        Promise.resolve().then(() => openUsageLimits!(undefined, { plugin: { name: 'hostile' } }))
+      ).rejects.toThrow('HOST_ONLY_HANDLER')
+      expect(open).toHaveBeenCalledTimes(2)
     } finally {
       Reflect.deleteProperty(process, 'getCreationTime')
     }

@@ -24,6 +24,8 @@ const props = withDefaults(defineProps<{
 })
 
 const placeholderCount = computed(() => props.items.length || Math.max(1, Math.floor(props.skeletonCount)))
+/** One card with a meta line gives every card the line, so the figures stay level across the row. */
+const metaRow = computed(() => props.items.some(item => item.meta))
 </script>
 
 <template>
@@ -41,6 +43,10 @@ const placeholderCount = computed(() => props.items.length || Math.max(1, Math.f
       >
         <TxSkeleton width="48%" :height="28" :radius="8" />
         <TxSkeleton width="36%" :height="12" :radius="6" />
+        <template v-if="metaRow">
+          <TxSkeleton v-if="items[index - 1]?.meta" width="56%" :height="12" :radius="6" />
+          <span v-else class="AdminStatGrid-PlaceholderGap" />
+        </template>
       </div>
     </template>
     <template v-else>
@@ -48,11 +54,16 @@ const placeholderCount = computed(() => props.items.length || Math.max(1, Math.f
         v-for="item in items"
         :key="item.key"
         :label="item.label"
-        :value="item.value"
         :meta="item.meta"
+        :value="item.value"
+        :title="item.title"
         :icon-class="item.iconClass"
         :insight="item.insight"
-      />
+      >
+        <template v-if="metaRow && !item.meta" #meta>
+          <span aria-hidden="true">&nbsp;</span>
+        </template>
+      </TxStatCard>
     </template>
   </div>
 </template>
@@ -76,5 +87,10 @@ const placeholderCount = computed(() => props.items.length || Math.max(1, Math.f
   padding: 16px;
   border-radius: 16px;
   box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter);
+}
+
+
+.AdminStatGrid-PlaceholderGap {
+  height: 12px;
 }
 </style>

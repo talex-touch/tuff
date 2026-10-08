@@ -14,6 +14,8 @@ import {
 } from './intelligence-config'
 import { getIntelligenceProviderManager, providerSupportsCapability } from './intelligence-sdk'
 import { isNexusManagedProvider } from '@talex-touch/utils/intelligence/nexus-provider'
+import { providerModelIds } from '@talex-touch/utils/intelligence/model-binding'
+import { resolveProviderEffectiveModel } from './model-request-plan'
 import {
   getVoiceAsrMetadata,
   getVoiceCapabilityRecommendedModels
@@ -108,7 +110,7 @@ function resolveDeclaredModels(
   if (fallbackModels.length > 0) {
     return fallbackModels
   }
-  return normalizeStringList([...(provider.models ?? []), defaultModel])
+  return normalizeStringList([...providerModelIds(provider), defaultModel])
 }
 
 function resolveCapabilityModels(
@@ -183,6 +185,13 @@ export function getProviderModelOptions(
   const options = getCapabilityOptions(capabilityId)
   const allowedProviderIds = new Set(options.allowedProviderIds ?? [])
   const capabilityBindings = getEffectiveCapabilityRoutingConfig(capabilityId)?.providers ?? []
+  const systemTranslationProviderId =
+    capabilityId === 'text.translate'
+      ? capabilityBindings.find(
+          (binding) =>
+            binding.enabled !== false && binding.providerId === 'local-system-translation'
+        )?.providerId
+      : undefined
 
   return getIntelligenceProviderManager()
     .getEnabled()
@@ -230,6 +239,9 @@ export function getProviderModelOptions(
         providerName: normalizeString(provider.name) || provider.id,
         providerType: provider.type,
         models,
+        // The same resolution the request planner applies, so the picker cannot promise a window,
+        // effort or image input the request then does not get.
+        effectiveModels: models.map((model) => resolveProviderEffectiveModel(provider, model)),
         defaultModel,
         capabilities: normalizeStringList(provider.capabilities ?? []),
         available
@@ -238,6 +250,11 @@ export function getProviderModelOptions(
     .filter((provider) => provider.models.length > 0)
     .sort((a, b) => {
       if (a.available !== b.available) return a.available ? -1 : 1
+      if (systemTranslationProviderId) {
+        const aIsSystem = a.providerId === systemTranslationProviderId
+        const bIsSystem = b.providerId === systemTranslationProviderId
+        if (aIsSystem !== bIsSystem) return aIsSystem ? -1 : 1
+      }
       return a.providerName.localeCompare(b.providerName)
     })
 }

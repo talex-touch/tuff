@@ -92,7 +92,7 @@ const {
   onProgressUpdate
 } = useFileIndexMonitor()
 const settingFileIndexLog = createRendererLogger('SettingFileIndex')
-const { t, te } = useI18n()
+const { t, te, locale } = useI18n()
 const settingsSdk = useSettingsSdk()
 const router = useRouter()
 
@@ -1740,7 +1740,12 @@ async function triggerRebuild() {
           </div>
           <div class="source-diagnostics-row source-diagnostics-row--dialog">
             <span
-              v-for="evidence in resolveIndexingSourceEvidenceChips(selectedSourceDiagnostic)"
+              v-for="evidence in resolveIndexingSourceEvidenceChips(
+                selectedSourceDiagnostic,
+                2,
+                locale,
+                t
+              )"
               :key="evidence.id"
               class="source-diagnostic-chip source-evidence-chip"
               :class="`source-status-pill--${evidence.tone}`"

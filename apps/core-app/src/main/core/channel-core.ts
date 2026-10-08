@@ -957,7 +957,7 @@ class TouchChannel {
   }
 
   /**
-   * Broadcast a message without waiting for a response.
+   * Send a message to the main window without waiting for a response; no other window gets it.
    * Use for notification-style messages that don't need acknowledgment.
    * @deprecated Use `TuffMainTransport.broadcast()` instead.
    * This method will be removed in a future version.
@@ -975,7 +975,8 @@ class TouchChannel {
     win: Electron.BrowserWindow | WebContentsView | undefined,
     type: ChannelType,
     eventName: string,
-    arg: unknown
+    arg: unknown,
+    plugin?: PluginActivationIdentity
   ): void {
     const webContents = getWebContents(win)
 
@@ -985,11 +986,13 @@ class TouchChannel {
 
     const data = {
       code: DataCode.SUCCESS,
-      data: arg,
+      data: plugin ? { ...toRecord(arg), plugin: plugin.name } : arg,
       name: eventName,
+      ...(plugin ? { plugin: plugin.name } : {}),
       header: {
         status: 'request',
-        type
+        type,
+        ...(plugin ? { uniqueKey: plugin.key } : {})
       }
     } as RawStandardChannelData
 

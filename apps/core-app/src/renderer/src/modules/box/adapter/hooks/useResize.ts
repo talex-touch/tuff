@@ -12,17 +12,6 @@ interface UseResizeOptions {
   activeActivations: Ref<IProviderActivate[] | null>
   loading: Ref<boolean>
   recommendationPending?: Ref<boolean>
-  /**
-   * A height the window must not go below (CSS px, 0 for none): an in-page panel that needs more
-   * room than the results take, as the Flow picker does (`useFlowPanelRoom`).
-   */
-  floor?: Readonly<Ref<number>>
-  /**
-   * Written each time the height is worked out: whether `floor` is what holds the window up, above
-   * the height the results want. The space that adds has no surface of its own, so the panel's
-   * owner paints it (`useFlowPanelRoom`).
-   */
-  floorApplied?: Ref<boolean>
 }
 
 const SCROLLBAR_WIDTH_ESTIMATE = 12
@@ -141,14 +130,10 @@ function hasForceMaxActivation(activations: IProviderActivate[] | null | undefin
 }
 
 export function useResize(options: UseResizeOptions): void {
-  const { results, activeActivations, loading, recommendationPending, floor, floorApplied } =
-    options
+  const { results, activeActivations, loading, recommendationPending } = options
   const transport = useTuffTransport()
 
   let lastPayload: CoreBoxLayoutUpdateRequest | null = null
-  // The results' own height in `lastPayload`, before the floor. The streaming hold and a pending
-  // measurement fall back to it, so a panel's room never outlives the panel.
-  let lastContentHeight = 0
   let lastSentAt = 0
   let rafId = 0
   let pendingSource: string | null = null
@@ -174,7 +159,7 @@ export function useResize(options: UseResizeOptions): void {
     let height = measuredHeight
     if (measuredHeight < 0) {
       if (lastPayload) {
-        height = lastContentHeight
+        height = lastPayload.height
       } else if (forceMax) {
         height = MIN_HEIGHT
       } else {
@@ -192,19 +177,10 @@ export function useResize(options: UseResizeOptions): void {
       lastPayload &&
       lastPayload.resultCount > 0 &&
       resultCount > 0 &&
-      height < lastContentHeight
+      height < lastPayload.height
     ) {
-      height = lastContentHeight
+      height = lastPayload.height
     }
-
-    const contentHeight = height
-    const floorHeight = floor?.value ?? 0
-    if (floorHeight > height) {
-      height = Math.min(floorHeight, MAX_HEIGHT)
-    }
-    // Ahead of the dedupe below: a payload that repeats can still mean a different split between
-    // the results and the floor.
-    if (floorApplied) floorApplied.value = floorHeight > 0 && floorHeight > contentHeight
 
     const payload: CoreBoxLayoutUpdateRequest = {
       height,
@@ -230,7 +206,6 @@ export function useResize(options: UseResizeOptions): void {
     }
 
     lastPayload = payload
-    lastContentHeight = contentHeight
     transport.send(CoreBoxEvents.layout.update, payload).catch(() => {})
   }
 
@@ -361,17 +336,6 @@ export function useResize(options: UseResizeOptions): void {
       () => recommendationPending.value,
       () => {
         scheduleLayoutUpdate('recommendation:pending')
-      }
-    )
-  }
-
-  if (floor) {
-    // The panel is already on screen and drawn short until the window has room for it: send at
-    // once, outside the throttle that paces result measurements.
-    watch(
-      () => floor.value,
-      () => {
-        sendLayoutUpdate('panel:floor', { force: true })
       }
     )
   }

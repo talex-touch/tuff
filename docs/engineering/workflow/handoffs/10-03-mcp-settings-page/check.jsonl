@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. List candidates with `find .trellis/spec -name '*.md'` — note that `get_context.py --mode packages` reports layers only and omits spec/guides, which real manifests do cite. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "收尾校验"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对组件拆分、骨架屏、i18n"}
+{"file": ".trellis/tasks/10-03-mcp-settings-page/research/mcp-page.md", "reason": "核对拆分后安全契约、骨架、测试迁移是否齐全"}

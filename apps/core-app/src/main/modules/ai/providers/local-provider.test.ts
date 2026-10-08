@@ -33,7 +33,7 @@ function createProvider() {
     name: 'System OCR',
     enabled: true,
     priority: 0,
-    models: ['system-ocr'],
+    models: [{ id: 'system-ocr' }],
     capabilities: ['vision.ocr'],
     timeout: 30000,
     rateLimit: {}
@@ -211,7 +211,7 @@ describe('LocalProvider.chat', () => {
       priority: 3,
       baseUrl: 'http://localhost:11434/v1',
       defaultModel: 'llama3.1:8b',
-      models: ['llama3.1:8b']
+      models: [{ id: 'llama3.1:8b' }]
     })
 
     const chunks: IntelligenceStreamChunk[] = []
@@ -425,7 +425,7 @@ describe('LocalProvider.chat', () => {
       priority: 3,
       baseUrl: 'http://localhost:11434/v1',
       defaultModel: 'llama3.1:8b',
-      models: ['llama3.1:8b']
+      models: [{ id: 'llama3.1:8b' }]
     })
     const chunks: IntelligenceStreamChunk[] = []
 
@@ -479,7 +479,7 @@ describe('LocalProvider.chat', () => {
       priority: 3,
       baseUrl: 'http://localhost:11434/v1',
       defaultModel: 'llama3.1:8b',
-      models: ['llama3.1:8b']
+      models: [{ id: 'llama3.1:8b' }]
     })
     const chunks: IntelligenceStreamChunk[] = []
 
@@ -519,7 +519,7 @@ describe('LocalProvider.chat', () => {
       priority: 3,
       baseUrl: 'http://localhost:11434',
       defaultModel: 'llama3.1:8b',
-      models: ['llama3.1:8b']
+      models: [{ id: 'llama3.1:8b' }]
     })
 
     const result = await provider.chat(
@@ -600,7 +600,7 @@ describe('LocalProvider.chat', () => {
       priority: 3,
       baseUrl: 'http://localhost:11434',
       defaultModel: 'llama3.1:8b',
-      models: ['llama3.1:8b']
+      models: [{ id: 'llama3.1:8b' }]
     })
 
     await provider.chat(

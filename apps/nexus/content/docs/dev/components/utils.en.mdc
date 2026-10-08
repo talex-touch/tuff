@@ -74,6 +74,12 @@ Serially manages global dialogs by priority with lifecycle callbacks.
 | `useFlip(targetRef, opts?)` | `(ref, opts?) => UseFlipReturn` | Run a FLIP transition on an element (powers `TxFlipOverlay`) |
 | `useAutoResize(targetRef, opts?)` | `(ref, opts?) => UseAutoResizeReturn` | Measure and transition size changes (powers `TxAutoSizer`) |
 | `stepSpring(position, velocity, target, spring, dt)` | `(position, velocity, target, spring, dt) => [number, number]` | Step a value you animate from your own frame loop along a spring (`{ stiffness, damping, mass? }`, `dt` in seconds), keeping its velocity when the target moves; also the `integrate` for `useJellyIndicator`'s glide |
+| `resolveGsapEase(value)` | `(value: string) => string \| ((t: number) => number)` | Run an ease string through this before handing it to GSAP: `spring(...)` and `cubic-bezier(...)` become progress functions (GSAP knows neither form and silently falls back to its default ease), while GSAP's own names come back untouched; every GSAP-driven `TxBaseAnchor` motion goes through it |
+| `resolveCssEase(spec)` | `(spec: string \| undefined \| null) => (t: number) => number` | Evaluate a CSS timing function in JS: `cubic-bezier(...)`, an evenly spaced `linear(...)` list, and `linear` / `ease` / `ease-in` / `ease-out` / `ease-in-out`; anything else degrades to a clamped linear ramp, so it never returns `null`. Cached per spec, so a frame loop can call it every frame. `TxLiquid` and `TxTextMorph` use it to keep script-driven motion on the same curve as a CSS transition |
+| `createSpringEase(omega?, zeta?)` | `(omega = 10, zeta = 0.72) => (t: number) => number` | Closed-form underdamped spring normalised to the timeline: leaves 0, passes 1, settles back and lands on exactly 1; more damping, less overshoot. Unlike `stepSpring`, which integrates frame by frame, this is a fixed curve you can use directly as an `ease` |
+| `parseSpringEase(value)` | `(value: string \| undefined \| null) => ((t: number) => number) \| null` | Parse `spring` / `spring(omega)` / `spring(omega, zeta)`; anything else returns `null` |
+| `createCubicBezier(x1, y1, x2, y2)` | `(x1, y1, x2, y2) => (t: number) => number` | Timing function equivalent to CSS `cubic-bezier()`; the charts entry's `cubicBezier` is this same function |
+| `parseCubicBezier(value)` | `(value: string \| undefined \| null) => [number, number, number, number] \| null` | Parse a `cubic-bezier(...)` string; GSAP names, keywords and spring forms return `null`, as do x controls outside [0, 1] |
 
 ### Install helper
 

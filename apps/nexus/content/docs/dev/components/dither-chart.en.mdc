@@ -1,0 +1,151 @@
+---
+title: DitherChart
+description: "Data-driven pixel charts, ordered dithering and SVG patterns with periods, legends and date cursors."
+category: MotionCharts
+status: beta
+since: 0.6.3
+tags: [motion, chart, dither, canvas, svg]
+syncStatus: reviewed
+---
+
+## Usage
+
+`TxDitherChart` lives in the existing `@talex-touch/tuffex/charts` entry. It is not a second chart package. Pass real `series`, `nodes` or `cells`; an empty dataset renders an empty state rather than demonstration values. `periods` supplies complete named snapshots, not a multiplier that manufactures business data.
+
+### Explore every source geometry
+
+The demo contains all 11 catalog charts, all eight additional chart/card renderers, all ten texture modes, source-equivalence notes and the extracted book-plus-metrics composition. Periods, series filtering, gauge/storage/metric selection, hover, keyboard navigation and the range input operate on the displayed data. Gallery thumbnails can select each full chart.
+
+:::TuffDemoWrapper{demo="DitherChartDemo" code-lang="vue" title="Dither chart catalog"}
+---
+code: |
+  <script setup lang="ts">
+  import type { DitherSeries } from '@talex-touch/tuffex/charts'
+  import { TxDitherChart } from '@talex-touch/tuffex/charts'
+
+  const series: DitherSeries[] = [
+    { id: 'mobile', label: 'Mobile', value: 65 },
+    { id: 'desktop', label: 'Desktop', value: 25 },
+    { id: 'tablet', label: 'Tablet', value: 10 },
+  ]
+  </script>
+
+  <template>
+    <TxDitherChart
+      variant="dither-device"
+      title="Device distribution"
+      :series="series"
+      pattern="ordered"
+    />
+  </template>
+---
+:::
+
+### Data and period snapshots
+
+- Donut, device, funnel and plan-card use each series' `value`, or the sum of its points when `value` is absent.
+- Stacked, payments and bar use `series[].data`. Point labels identify categories, so matching labels align payment bands across branches.
+- Growth, revenue, members and sparkline use ordered points `{ label, value }`. The date cursor uses point indices; no current date is read internally.
+- Gauge and radial use `value / capacity`; capacity defaults to 100. Storage uses the same ratio and displays the supplied capacity and unit. Clicking these legends selects a metric instead of hiding it.
+- Traffic and scatter use `nodes`. `x` and `y` are 0–100 coordinates. Traffic's y axis grows downward and radius is in logical CSS pixels; scatter's y axis grows upward and defaults to small point clusters.
+- Activity and hourly matrices use explicit zero-based `row` and `column`. Uptime preserves input order, wraps narrow status bars to fit the measured width, and reads `up`, `degraded` or `down`; absent status uses the numeric 0–1 value.
+
+Each period has `id`, `label` and optional `series`, `nodes`, `cells`. A supplied collection replaces the corresponding base collection; an omitted collection retains the base collection, while an explicit empty array stays empty. Controlled models are optional. Without them, periods, filtering, selection, hover and cursor are local state.
+
+### Best Practices
+
+- Supply stable series/node/cell IDs and meaningful labels. Keep point order stable for the date cursor. Use `periods` for real server snapshots rather than hard-coded UI-side success or random values.
+- Use `activeKeys` to control visible series and `selectedSeries` to control gauge, storage or sparkline selection. The two models have different meanings. Legend hover/focus highlights without toggling visibility; click/Space/Enter performs the control's action.
+- `compact` removes card copy, filters and legends, not the geometry or data. Put full controls next to compact specimens if they must remain independently editable.
+- Use token-based `color` values. The default is a theme-following monochrome ink ramp; hover does not tween colour. `formatValue` owns currency, locale and units; no metric change, revenue or status is invented.
+- `animated=false`, off-screen state, hidden documents, KeepAlive deactivation and reduced motion suspend the frame loop. Values and controls remain usable. SVG texture modes render real geometry without a Canvas animation loop.
+
+## API Reference
+
+### Props
+
+| Prop | Type | Default | Behavior |
+| --- | --- | --- | --- |
+| `variant` | `DitherChartVariant` | `dither-donut` | One of the 19 independent geometries listed below. |
+| `pattern` | `DitherPattern` | `pixel` | Pixel shader, ordered Bayer dithering or one of eight SVG textures. |
+| `series` | `readonly DitherSeries[]` | `[]` | Named values/point collections; never populated internally. |
+| `nodes` | `readonly DitherNode[]` | `[]` | Positions, radii and tooltip values for traffic/scatter. |
+| `cells` | `readonly DitherCell[]` | `[]` | Matrix coordinates and activity/uptime values. |
+| `periods` | `readonly DitherPeriod[]` | `[]` | Consumer-provided named data snapshots. |
+| `period` | `string` | First period ID | Optional controlled period model. |
+| `activeKeys` | `readonly string[]` | All series/nodes | Optional controlled visibility model; `[]` hides everything. |
+| `selectedSeries` | `string` | First visible series | Controlled gauge/radial/storage/sparkline selection. |
+| `hover` | `DitherHover \| null` | Local hover | Controlled hovered datum with `id`, optional `seriesId`, `label`, `value`. |
+| `dateCursor` | `number \| null` | `null` | Controlled point index; pointer, keyboard and range input update it. |
+| `title` | `string` | `''` | Heading and accessible chart name. |
+| `description` | `string` | `''` | Supporting copy and accessible description. |
+| `labels` | `DitherChartLabels` | English labels | `empty`, `period`, `series`, `chart`, `total`, `capacity`, `less`, `more`, `cursor`; supply localized strings. |
+| `height` | `number` | `180` | Plot height in CSS pixels, at least 32. Width follows its container. |
+| `compact` | `boolean` | `false` | Geometry-only specimen. |
+| `animated` | `boolean` | `true` | Enables data interpolation and pixel texture motion when activity permits. |
+| `size` | `xs \| sm \| md \| lg` | `md` | Padding and grouping-gap vocabulary. |
+| `maxValue` | `number` | Derived from data | Fixed bound for bar/area and matrix intensity; funnel denominator. |
+| `showLegend` | `boolean` | `true` | Shows named series controls outside compact mode. |
+| `indicator` | `dot \| line \| dashed` | `dot` | Legend and tooltip marker structure. |
+| `formatValue` | `(value, label, series?) => string` | English numeric format + supplied unit | Shared summary, legend, capacity and tooltip formatter. |
+
+`DitherSeries`: `id`, `label`, optional `value`, `capacity`, `data: readonly { label, value }[]`, `color`, `unit`, `change`. `change` is consumer copy, not a computed business metric. `DitherNode`: `id`, `label`, `x`, `y`, `value`, optional `radius`, `color`. `DitherCell`: `id`, `label`, `row`, `column`, `value`, optional `status`.
+
+### Variants and textures
+
+| Variant | Fixed-source renderer | Independent form |
+| --- | --- | --- |
+| `dither-donut` | `DitherDonutChart` | Rounded, gapped distribution wedges and radial-density tiles. |
+| `dither-stacked` | `DitherStackedChart` | Regional channel stacks, band and branch hover. |
+| `dither-growth` | `DitherGrowthChart` | Tiled area, rest grid and date scrubber. |
+| `dither-heatmap` | `ActivityHeatmap` | Centered contribution-day grid. |
+| `dither-gauge` | `ServerGauge` | Thin semicircle track and metric fill. |
+| `dither-traffic` | `TrafficBubble` | Floating filled bubble clusters with labels. |
+| `dither-funnel` | `DitherFunnelChart` | Left-aligned decreasing stage bars. |
+| `dither-device` | `DeviceUsageChart` | Continuous device ring segments, separate from rounded plan wedges. |
+| `dither-storage` | `StorageUsageChart` | Capacity track and selected resource fill. |
+| `dither-revenue` | `RevenueLineChart` | Stroked polyline with fading pixel area. |
+| `dither-uptime` | `UptimeChart` | Wrapping narrow day-status bars. |
+| `dither-bar` | `DitherBarChart` | Vertical bars with height-dependent density. |
+| `dither-radial` | `DitherRadialChart` | Full circular target-progress ring and center percentage. |
+| `dither-scatter` | `DitherScatterChart` | Small point clusters and connecting trend. |
+| `dither-heatmap-grid` | `DitherHeatmapGrid` | Full day/hour intensity matrix. |
+| `dither-sparkline-matrix` | `DitherSparklineMatrix` | Selectable metric matrix and its tiled area. |
+| `members-growth` | `MembersGrowthChart` | Member summary, stronger rest tiles, dates and cursor. |
+| `payments` | `PaymentsChart` | Payment summary, separated rounded bands, branch/band readings. |
+| `plan-card` | `ChartCard` | Plan summary, distribution and value/percentage breakdown. |
+
+`DITHER_CHART_VARIANTS` and `DITHER_PATTERNS` export the complete typed lists. Textures are `pixel`, `ordered`, `dot`, `hatched`, `duotone`, `striped`, `dotted`, `area-gradient`, `primary-gradient`, `noise`. Ordered mode uses a real 4×4 Bayer threshold matrix; the SVG modes use distinct `<pattern>`, `<linearGradient>` or a clipped noise filter, not renamed identical fills.
+
+### Events and slots
+
+| Event | Payload |
+| --- | --- |
+| `update:period`, `period-change` | Period ID. |
+| `update:activeKeys` | Visible IDs. |
+| `update:selectedSeries` | Selected metric ID. |
+| `update:hover` | `DitherHover \| null`. |
+| `update:dateCursor` | Point index or `null`. |
+| `select` | Selected datum from pointer click or Enter/Space. |
+
+Slots: `header({ total, period })`, `tooltip({ hover })`, `footer({ dataset })`. The tooltip reuses the existing charts-core context and `TxChartTooltip` placement. `dot`, `line` and `dashed` indicators retain separate markup. The stage supports arrows, Home/End, Enter/Space and Escape; legends and period controls are native buttons.
+
+### CSS variables
+
+The component reads the existing `--tx-chart-categorical-1`, `--tx-chart-grid-line` and TuffEx ink/surface/border tokens. `--tx-dither-pad` and `--tx-dither-gap` control local spacing. Canvas colours are resolved when data/theme changes, not on every frame; SVG definitions use instance-stable Vue `useId()` identifiers.
+
+## Technologies
+
+### Source equivalence and runtime protection
+
+The fixed commit is `43c29ce9cdd16459e3eab4992381b8d35b38776a`. Both `src/components/dither-charts` and `src/components/simple-comp` were reviewed, including non-catalog renderers and pattern/legend/tooltip helpers. The following 11 pairs are byte-identical: `ChartCard`, `DitherBarChart`, `DitherBook`, `DitherChartsGrid`, `DitherHeatmapGrid`, `DitherRadialChart`, `DitherScatterChart`, `DitherSparklineMatrix`, `MembersGrowthChart`, `PaymentsChart`, `SimpleCompExtracted`.
+
+The other 11 pairs are **not** silently identified by name. Their visible geometry formulas are equivalent, but `dither-charts` adds cached `ResizeObserver` dimensions and visibility/reduced-motion guards to all 11; its activity/device/funnel/revenue/gauge/storage/traffic/uptime copies also cap DPR at 2, while donut/stacked/growth already capped it in both copies. Funnel/storage/uptime add 30fps throttling. Those differences remain explicitly exported in `DITHER_SOURCE_DIFFERENCES` and the demo. The port keeps the protected execution model for both origins rather than bringing back per-frame layout reads, hidden loops or motion against the user's preference.
+
+Canvas backing dimensions react to resize and DPR changes. Data interpolation uses the shared spring, paths are cached between geometry changes, colour probes and layout reads stay outside the frame loop, and timers/listeners/observers/RAF release on suspension or unmount. Static SVG geometry is also available during SSR and while choosing SVG textures. No React, Motion, Recharts or ECharts renderer is introduced.
+
+### Composition and attribution
+
+`DitherChartsGrid` becomes the traversable demo catalog. The standalone `Book` and `DitherBook` belong to `TxFlipBook`, not a chart alias. The extracted page is composed in this demo from the real flip-book and `plan-card`, `payments`, `members-growth` APIs; it contains consumer-authored page artwork instead of upstream third-party photographs.
+
+Chart and pattern adaptations retain MIT and `Copyright (c) 2026 SYED  SUBHAN UDDIN`. The extracted composition's source explicitly declares Apache-2.0; its derived demo keeps that header and a Vue/TuffEx modification notice. Runtime/browser acceptance is performed by the integration owner; this page does not claim those checks have already run.

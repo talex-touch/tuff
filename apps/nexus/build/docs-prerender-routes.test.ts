@@ -100,6 +100,28 @@ describe('docs prerender routes', () => {
     ])
   })
 
+  it('prerenders a JSON twin for a directory route as well as its index document', () => {
+    const root = mkdtempSync(join(tmpdir(), 'nexus-docs-page-api-index-routes-'))
+    const docsDir = join(root, 'content/docs/dev/components')
+    mkdirSync(docsDir, { recursive: true })
+    writeFileSync(join(root, 'content/docs/index.en.mdc'), '# Docs')
+    writeFileSync(join(docsDir, 'index.zh.mdc'), '# 组件')
+    writeFileSync(join(docsDir, 'tabs.en.mdc'), '# Tabs')
+
+    // Client-side navigation asks for the twin of the route it is on, and the index document
+    // is navigated to as `/docs/dev/components`. With only the `/index` twin, and the query
+    // route kept off the Worker by `/api/docs/page/*`, "Developer" and "Concepts Overview"
+    // rendered "Document not found" after every client-side navigation. The docs root's two
+    // spellings already share `index.json`, so it is listed once.
+    const expected = ['en', 'zh'].flatMap(locale => ['meta', 'body'].flatMap(mode => [
+      `/api/docs/page/${locale}/${mode}/index.json`,
+      `/api/docs/page/${locale}/${mode}/dev/components.json`,
+      `/api/docs/page/${locale}/${mode}/dev/components/index.json`,
+      `/api/docs/page/${locale}/${mode}/dev/components/tabs.json`,
+    ]))
+    expect([...createDocsPageApiPrerenderRoutes(root)].sort()).toEqual(expected.sort())
+  })
+
   it('prerenders a raw-Markdown twin of every docs page, including directory indexes', () => {
     const root = mkdtempSync(join(tmpdir(), 'nexus-docs-markdown-routes-'))
     const docsDir = join(root, 'content/docs/dev/components')
@@ -219,14 +241,22 @@ describe('docs prerender routes', () => {
       '/en/docs/dev/components',
       '/zh/docs/dev/components',
     ]))
-    // One JSON twin per docs route per mode; none may carry a query string, which is what
-    // made the earlier prerender attempt unbuildable on Pages.
-    expect(evidence.docsPageApiRoutes.length).toBe(evidence.docsRoutes.length * 2)
+    // One JSON twin per docs route per mode, plus the canonical spelling of every directory
+    // index below the root (`dev/components.json` beside `dev/components/index.json`) — the
+    // route client-side navigation actually asks for. None may carry a query string, which is
+    // what made the earlier prerender attempt unbuildable on Pages.
+    const directoryIndexRoutes = evidence.docsRoutes.filter(route => /\/index$/.test(route) && !/^\/(?:en|zh)\/docs\/index$/.test(route))
+    expect(directoryIndexRoutes.length).toBeGreaterThan(0)
+    expect(evidence.docsPageApiRoutes.length).toBe((evidence.docsRoutes.length + directoryIndexRoutes.length) * 2)
     expect(evidence.docsPageApiRoutes.some(route => route.includes('?'))).toBe(false)
     expect(evidence.docsPageApiRoutes).toEqual(expect.arrayContaining([
       '/api/docs/page/en/body/dev/components/tabs.json',
       '/api/docs/page/zh/meta/dev/components/tabs.json',
       '/api/docs/page/en/body/index.json',
+      '/api/docs/page/zh/meta/dev.json',
+      '/api/docs/page/en/body/dev.json',
+      '/api/docs/page/zh/meta/dev/components.json',
+      '/api/docs/page/en/body/dev/components.json',
     ]))
     // Every real docs page must ship its source alongside it, and every page named as release
     // evidence must have one or that URL 404s in production. The count exceeds the page count

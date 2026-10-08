@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  findCommandInSearchRoots,
   getResolvedCliExecutable,
   resetCliExecutableCache,
   resolveCliExecutable
@@ -29,7 +30,15 @@ const LOOKUP = {
   envOverride: 'TUFF_PROBE_CLI_PATH'
 } as const
 
-const ENV_KEYS = ['PATH', 'HOME', 'USERPROFILE', LOOKUP.envOverride, 'TUFF_PI_CLI_PATH'] as const
+const ENV_KEYS = [
+  'PATH',
+  'HOME',
+  'USERPROFILE',
+  'FNM_DIR',
+  'XDG_DATA_HOME',
+  LOOKUP.envOverride,
+  'TUFF_PI_CLI_PATH'
+] as const
 
 let workDir: string
 let binDir: string
@@ -51,6 +60,8 @@ beforeEach(async () => {
   process.env.PATH = binDir
   process.env.HOME = workDir
   process.env.USERPROFILE = workDir
+  delete process.env.FNM_DIR
+  delete process.env.XDG_DATA_HOME
   delete process.env[LOOKUP.envOverride]
   delete process.env.TUFF_PI_CLI_PATH
   resetCliExecutableCache()
@@ -107,6 +118,58 @@ describe('resolveCliExecutable', () => {
     await expect(resolveCliExecutable(LOOKUP)).resolves.toMatchObject({ path: newest })
   })
 
+  it('orders versions by number and skips alias and short-name directories', async () => {
+    // A string sort puts `24.9.0` before `24.18.0`, and `lts` / `latest` before every number.
+    const mise = join(workDir, '.local', 'share', 'mise', 'installs', 'node')
+    await writeExecutable(join(mise, '24.9.0', 'bin'), LOOKUP.command)
+    const newest = await writeExecutable(join(mise, '24.18.0', 'bin'), LOOKUP.command)
+    await writeExecutable(join(mise, 'latest', 'bin'), LOOKUP.command)
+    await writeExecutable(join(mise, 'lts', 'bin'), LOOKUP.command)
+    await writeExecutable(join(mise, '24', 'bin'), LOOKUP.command)
+    await writeExecutable(join(mise, '24.18', 'bin'), LOOKUP.command)
+
+    await expect(resolveCliExecutable(LOOKUP)).resolves.toMatchObject({ path: newest })
+  })
+
+  it("reads nvm's v-prefixed version directories by number too", async () => {
+    const nvm = join(workDir, '.nvm', 'versions', 'node')
+    await writeExecutable(join(nvm, 'v20.9.0', 'bin'), LOOKUP.command)
+    const newest = await writeExecutable(join(nvm, 'v20.10.0', 'bin'), LOOKUP.command)
+
+    await expect(resolveCliExecutable(LOOKUP)).resolves.toMatchObject({ path: newest })
+  })
+
+  it.each([
+    { root: '$FNM_DIR', env: { FNM_DIR: 'custom-fnm' }, dir: ['custom-fnm'] },
+    { root: 'the legacy ~/.fnm', dir: ['.fnm'] },
+    {
+      root: "macOS's Application Support",
+      dir: ['Library', 'Application Support', 'fnm'],
+      platform: 'darwin'
+    },
+    { root: '$XDG_DATA_HOME', env: { XDG_DATA_HOME: 'xdg-data' }, dir: ['xdg-data', 'fnm'] },
+    { root: '~/.local/share', dir: ['.local', 'share', 'fnm'] }
+  ])(
+    "finds fnm's install under $root, in installation/bin, newest first",
+    async ({ env, dir, platform }) => {
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+      if (platform) Object.defineProperty(process, 'platform', { value: platform })
+      for (const [key, value] of Object.entries(env ?? {})) process.env[key] = join(workDir, value)
+      try {
+        const versions = join(workDir, ...dir, 'node-versions')
+        await writeExecutable(join(versions, 'v22.9.0', 'installation', 'bin'), LOOKUP.command)
+        const newest = await writeExecutable(
+          join(versions, 'v22.10.0', 'installation', 'bin'),
+          LOOKUP.command
+        )
+
+        await expect(resolveCliExecutable(LOOKUP)).resolves.toMatchObject({ path: newest })
+      } finally {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  )
+
   it('reports absence as null when neither name exists', async () => {
     await expect(resolveCliExecutable(LOOKUP)).resolves.toBeNull()
   })
@@ -138,6 +201,15 @@ describe('resolveCliExecutable', () => {
       await expect(resolveCliExecutable(LOOKUP)).resolves.toBeNull()
     })
 
+    it('counts a directory as absent too', async () => {
+      await writeExecutable(binDir, LOOKUP.command)
+      const bundle = join(workDir, 'Probe.app')
+      await mkdir(bundle)
+      process.env[LOOKUP.envOverride] = bundle
+
+      await expect(resolveCliExecutable(LOOKUP)).resolves.toBeNull()
+    })
+
     it('reads the form off the file name when it points at the alias', async () => {
       const pinned = await writeExecutable(join(workDir, 'pinned'), 'tuff-probe-fallback')
       process.env[LOOKUP.envOverride] = pinned
@@ -145,6 +217,55 @@ describe('resolveCliExecutable', () => {
       await expect(resolveCliExecutable(LOOKUP)).resolves.toMatchObject({
         command: 'tuff-probe-fallback',
         form: 'fallback'
+      })
+    })
+  })
+
+  describe('settings override', () => {
+    it('wins over PATH, and yields to the environment override', async () => {
+      await writeExecutable(binDir, LOOKUP.command)
+      const picked = await writeExecutable(join(workDir, 'picked'), 'anything')
+
+      await expect(resolveCliExecutable(LOOKUP, { settingsOverride: picked })).resolves.toEqual({
+        path: picked,
+        command: LOOKUP.command,
+        form: 'primary'
+      })
+
+      resetCliExecutableCache()
+      const pinned = await writeExecutable(join(workDir, 'pinned'), 'anything')
+      process.env[LOOKUP.envOverride] = pinned
+      await expect(
+        resolveCliExecutable(LOOKUP, { settingsOverride: picked })
+      ).resolves.toMatchObject({ path: pinned })
+    })
+
+    it('is skipped once it is not executable: the search goes on and says so', async () => {
+      // Unlike the environment override, a pick in Settings is not a test pin: the program moved
+      // or was uninstalled, and the CLI the user still has should keep working.
+      const onPath = await writeExecutable(binDir, LOOKUP.command)
+
+      await expect(
+        resolveCliExecutable(LOOKUP, { settingsOverride: join(workDir, 'moved-away') })
+      ).resolves.toEqual({
+        path: onPath,
+        command: LOOKUP.command,
+        form: 'primary',
+        settingsOverrideRejected: true
+      })
+    })
+
+    it('refuses a directory, such as the app bundle picked instead of the program in it', async () => {
+      // On a directory X_OK means "may enter": access() alone took `Claude.app` for the CLI.
+      const onPath = await writeExecutable(binDir, LOOKUP.command)
+      const bundle = join(workDir, 'Probe.app')
+      await mkdir(bundle)
+
+      await expect(resolveCliExecutable(LOOKUP, { settingsOverride: bundle })).resolves.toEqual({
+        path: onPath,
+        command: LOOKUP.command,
+        form: 'primary',
+        settingsOverrideRejected: true
       })
     })
   })
@@ -189,6 +310,33 @@ describe('resolveCliExecutable', () => {
       expect(getResolvedCliExecutable(LOOKUP.command)).toMatchObject({ path })
       expect(getResolvedCliExecutable(other.command)).toBeNull()
     })
+  })
+})
+
+describe('findCommandInSearchRoots', () => {
+  it('finds a bare command in the version-manager roots, PATH first, and null when absent', async () => {
+    const mise = join(workDir, '.local', 'share', 'mise', 'installs', 'node')
+    const inRoot = await writeExecutable(join(mise, '26.9.0', 'bin'), 'tuff-probe-npx')
+
+    await expect(findCommandInSearchRoots('tuff-probe-npx')).resolves.toBe(inRoot)
+
+    resetCliExecutableCache()
+    const onPath = await writeExecutable(binDir, 'tuff-probe-npx')
+    await expect(findCommandInSearchRoots('tuff-probe-npx')).resolves.toBe(onPath)
+    await expect(findCommandInSearchRoots('tuff-probe-missing')).resolves.toBeNull()
+  })
+
+  it('looks again after a miss, and lets go of a remembered hit that is gone', async () => {
+    await expect(findCommandInSearchRoots('tuff-probe-npx')).resolves.toBeNull()
+    // Installed after the first look: found without a reset.
+    const onPath = await writeExecutable(binDir, 'tuff-probe-npx')
+    await expect(findCommandInSearchRoots('tuff-probe-npx')).resolves.toBe(onPath)
+
+    // Removed since (a version manager dropping that Node): the next look finds what is left.
+    await rm(onPath)
+    const mise = join(workDir, '.local', 'share', 'mise', 'installs', 'node')
+    const inRoot = await writeExecutable(join(mise, '26.9.0', 'bin'), 'tuff-probe-npx')
+    await expect(findCommandInSearchRoots('tuff-probe-npx')).resolves.toBe(inRoot)
   })
 })
 

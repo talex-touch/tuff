@@ -199,6 +199,18 @@ export class DbWriteScheduler {
   // for both lanes keeps enqueue order comparable across the scheduler.
   private sequence = 0
 
+  /** Maintenance yields to user writes, including those parked for busy backoff. */
+  hasInteractiveWrites(): boolean {
+    for (let index = 0; index < 2; index += 1) {
+      const lane = index === 0 ? this.lanes.primary : this.lanes.aux
+      if (lane.currentTaskPriority === 'interactive') return true
+      for (const task of lane.queue) {
+        if (task.priority === 'interactive') return true
+      }
+    }
+    return false
+  }
+
   private laneStates(): LaneState[] {
     return [this.lanes.primary, this.lanes.aux]
   }

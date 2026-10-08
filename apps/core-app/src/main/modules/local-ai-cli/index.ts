@@ -1,5 +1,6 @@
 import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
+import type { TuffEvent } from '@talex-touch/utils/transport'
 import type {
   LocalAiCliErrorCode,
   LocalAiCliPasteBackRequest,
@@ -8,17 +9,22 @@ import type {
   LocalAiCliProviderStatus,
   LocalAiCliSessionSummary,
   LocalAiCliStartRequest,
+  LocalAiCliStatus,
+  LocalAiCliStatusRequest,
   LocalAiCliTaskChunk,
-  LocalAiCliTerminalCreateRequest,
-  LocalAiCliTerminalExit
+  LocalAiCliTerminalCreateRequest
 } from '@talex-touch/utils/transport/events/local-ai-cli'
-import type { HandlerContext, StreamContext } from '@talex-touch/utils/transport/main'
+import type {
+  HandlerContext,
+  ITuffTransportMain,
+  StreamContext
+} from '@talex-touch/utils/transport/main'
 import type { WebContents } from 'electron'
-import type { IPty } from 'node-pty'
 import type { ChildProcess } from 'node:child_process'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { PiEntriesSnapshot, PiSessionFileCapture } from './pi-native-session'
 import type { StoredLocalAiCliSession } from './session-store'
+import type { PtySessionOwner } from '../terminal/pty-session-core'
 import { randomUUID } from 'node:crypto'
 import { mkdir, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -34,7 +40,7 @@ import {
   normalizeLocalAiCliTerminalCreateRequest
 } from '@talex-touch/utils/transport/events/local-ai-cli'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { BrowserWindow, clipboard, dialog } from 'electron'
+import { clipboard, dialog } from 'electron'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
 import {
@@ -42,26 +48,31 @@ import {
   type AppDestinationRuntime
 } from '../app-destination/app-destination-navigation'
 import { BaseModule } from '../abstract-base-module'
+import { withExecutableDirOnPath } from '../ai/providers/cli/cli-executable'
 import { shortcutModule } from '../global-shortcon'
 import { omniPanelModule } from '../omni-panel'
 import { getAutoPasteCapabilityPatch } from '../platform/capability-adapter'
 import { getProject, touchProject } from '../project/project-store'
-import { getMainConfig, saveMainConfig } from '../storage'
+import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { activeAppService } from '../system/active-app'
 import { sendPlatformShortcut } from '../system/desktop-shortcut'
+import { ptySessionCore, watchPtyOwner } from '../terminal/pty-session-core'
 import { LocalAiCliApprovalBroker } from './approval-broker'
 import {
+  refreshLocalAiCliExecutables,
   resolveAllLocalAiCliProviderStatuses,
   resolveLocalAiCliProviderStatus
 } from './executable-resolver'
 import { nativeSessionLeaseRegistry } from './native-session-lease'
-import { isNativeSessionMissingError } from './native-session-errors'
-import { scanNativeSessionsForProject } from './native-session-discovery'
+import { isNativeSessionMissingError, isPiSessionNotFoundError } from './native-session-errors'
+import { hasPiSessionFileNamedFor, scanNativeSessionsForProject } from './native-session-discovery'
 import {
   capturePiSessionFile,
+  isPiSessionFileUnwritten,
   parsePiEntriesResponse,
   parsePiStateResponse,
-  verifyPiSessionAppend
+  verifyPiSessionAppend,
+  verifyPiSessionFirstWrite
 } from './pi-native-session'
 import {
   createLocalAiCliResumeArgs,
@@ -88,23 +99,13 @@ const DEFAULT_ROWS = 30
 const LOCAL_AI_CLI_SHORTCUT_ID = 'local-ai-cli.quick-open'
 const LOCAL_AI_CLI_SHORTCUT_OWNER = 'core-app:local-ai-cli'
 
-type MainTransport = ReturnType<typeof getTuffTransportMain>
+type MainTransport = ITuffTransportMain
 
 interface TaskProcessSession {
   process?: ChildProcess
   abortController?: AbortController
   releaseLease?: () => void
   done?: Promise<void>
-}
-
-interface TerminalSession {
-  ownerId: number
-  process: IPty
-  dataSubscription: { dispose: () => void }
-  exitSubscription: { dispose: () => void }
-  sender: WebContents
-  senderDestroyed: () => void
-  releaseLease?: () => void
 }
 
 interface LocalAiCliExecution {
@@ -116,16 +117,66 @@ interface LocalAiCliExecution {
 interface PiRunState {
   beforeEntries: PiEntriesSnapshot
   capturedHead: string | null
-  file: PiSessionFileCapture
+  /**
+   * The session file as it stood before the prompt, or `null` for a new session pi has not written
+   * yet: pi writes that file whole with its first reply, so it is checked from its header once the
+   * run is over ({@link verifyPiSessionFirstWrite}).
+   */
+  file: PiSessionFileCapture | null
   verificationRequested: boolean
 }
 
-function isLocalAiCliBetaAvailable(): boolean {
-  return process.platform === 'darwin' && process.env.TUFF_ENABLE_LOCAL_AI_CLI === '1'
+/**
+ * Local agents are a macOS Beta: Windows and Linux show no entry until discovery, PTY, process-tree
+ * cleanup and a real-machine acceptance exist there (08-04 R23). On macOS the Settings section is
+ * always there; every other entry — ⌘⇧L, the CoreBox button, the omni-panel action, the project
+ * menu group, the execution handlers — also waits for the user's master switch,
+ * `localAiCli.enabled` (08-04 R15: consent is a setting, never an environment variable).
+ */
+function isLocalAiCliPlatformSupported(): boolean {
+  return process.platform === 'darwin'
 }
 
 function readSettings(): AppSetting {
   return getMainConfig(StorageList.APP_SETTING) as AppSetting
+}
+
+/** The 「选择程序」 picks, one per CLI, in a form two snapshots can be compared by. */
+function executableOverrides(
+  settings: AppSetting['localAiCli']
+): Record<LocalAiCliProviderId, string> {
+  return Object.fromEntries(
+    LOCAL_AI_CLI_PROVIDERS.map((provider) => [
+      provider.id,
+      settings.providers[provider.id]?.executableOverride?.trim() ?? ''
+    ])
+  ) as Record<LocalAiCliProviderId, string>
+}
+
+/**
+ * A provider as reported while the master switch is off to a caller that did not ask for detail:
+ * nothing was looked for or run, so `installed: false` here says nothing about the machine, and
+ * the issue says so instead of claiming the CLI is unavailable.
+ */
+function unprobedProviderStatus(
+  providerId: LocalAiCliProviderId,
+  settings: AppSetting['localAiCli']
+): LocalAiCliProviderStatus {
+  return {
+    id: providerId,
+    label: getLocalAiCliProviderDefinition(providerId).label,
+    enabled: settings.providers[providerId]?.enabled === true,
+    installed: false,
+    issueCode: 'NOT_PROBED',
+    capabilities: {
+      taskRead: false,
+      taskWriteApproval: false,
+      terminalRead: false,
+      terminalWriteApproval: false,
+      taskResume: false,
+      terminalResume: false
+    }
+  }
 }
 
 function assertHostContext(
@@ -234,7 +285,9 @@ function taskFailureCode(error: unknown): LocalAiCliErrorCode {
   ) {
     return message
   }
-  return message === 'PROCESS_START_FAILED' ? 'PROCESS_START_FAILED' : 'PROTOCOL_INVALID'
+  return message === 'PROCESS_START_FAILED' || message === 'PROCESS_EXITED'
+    ? message
+    : 'PROTOCOL_INVALID'
 }
 
 export class LocalAiCliModule extends BaseModule {
@@ -246,10 +299,16 @@ export class LocalAiCliModule extends BaseModule {
   private readonly disposers: Array<() => void> = []
   private readonly approvals = new LocalAiCliApprovalBroker()
   private readonly taskProcesses = new Map<string, TaskProcessSession>()
-  private readonly terminalSessions = new Map<string, TerminalSession>()
+  private terminalLifecycle = new AbortController()
   private readonly nativeSessionLeases = nativeSessionLeaseRegistry
   private workspacePath = ''
   private pendingPanelReturnUntil = 0
+  /** Whether ⌘⇧L is registered: it follows the master switch, not just the platform. */
+  private quickOpenShortcutRegistered = false
+  /** The master switch last seen, to tell an open OmniPanel it flipped; `null` before the first read. */
+  private lastMasterSwitch: boolean | null = null
+  /** The picks last seen, to notice one being cleared; `null` until the first settings read. */
+  private lastExecutableOverrides: Record<LocalAiCliProviderId, string> | null = null
 
   constructor() {
     super(LocalAiCliModule.key, { create: true })
@@ -261,21 +320,70 @@ export class LocalAiCliModule extends BaseModule {
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)
+    this.terminalLifecycle = new AbortController()
     this.destinationRuntime = runtime.app
     this.workspacePath = join(this.requireDirPath(ctx), 'workspace')
     await mkdir(this.workspacePath, { recursive: true })
     setLocalAiCliWorkspaceRoot(this.workspacePath)
     this.registerHandlers()
-    if (isLocalAiCliBetaAvailable()) {
-      shortcutModule.registerMainShortcut(
-        LOCAL_AI_CLI_SHORTCUT_ID,
-        'CommandOrControl+Shift+L',
-        () => {
-          void omniPanelModule.showLocalAi()
-        },
-        { owner: LOCAL_AI_CLI_SHORTCUT_OWNER, enabled: true }
+    if (isLocalAiCliPlatformSupported()) {
+      // Read once here as well as through the subscription: the subscription only replays a
+      // value the store has already loaded.
+      this.applySettings(readSettings().localAiCli)
+      this.disposers.push(
+        subscribeMainConfig(StorageList.APP_SETTING, (settings) => {
+          this.applySettings(settings.localAiCli)
+        })
       )
     }
+  }
+
+  /**
+   * Follows the settings: ⌘⇧L exists only while the master switch is on (registered when it turns
+   * on, unregistered when it turns off), and a 「选择程序」 pick that is cleared sends the lookups
+   * back to the search, which may have changed since they were memoised. A new pick needs no
+   * refresh here: it is its own memo key, and `locate` refreshes after writing it.
+   */
+  private applySettings(settings: AppSetting['localAiCli'] | undefined): void {
+    if (!settings) return
+    const enabled = settings.enabled === true
+    this.syncQuickOpenShortcut(enabled)
+    // The panel's 「交给本机代理」 follows the switch too; an open panel reads its actions again.
+    if (this.lastMasterSwitch !== null && this.lastMasterSwitch !== enabled) {
+      omniPanelModule.requestFeatureRefresh('local-ai-cli')
+    }
+    this.lastMasterSwitch = enabled
+
+    const overrides = executableOverrides(settings)
+    const previous = this.lastExecutableOverrides
+    this.lastExecutableOverrides = overrides
+    const cleared =
+      previous !== null &&
+      LOCAL_AI_CLI_PROVIDERS.some((provider) => previous[provider.id] && !overrides[provider.id])
+    if (cleared) {
+      void refreshLocalAiCliExecutables(settings).catch((error) => {
+        localAiCliLog.warn('Local AI CLI re-probe after a cleared executable pick failed', {
+          error
+        })
+      })
+    }
+  }
+
+  private syncQuickOpenShortcut(enabled: boolean): void {
+    if (enabled === this.quickOpenShortcutRegistered) return
+    this.quickOpenShortcutRegistered = enabled
+    if (!enabled) {
+      shortcutModule.unregisterMainShortcut(LOCAL_AI_CLI_SHORTCUT_ID)
+      return
+    }
+    shortcutModule.registerMainShortcut(
+      LOCAL_AI_CLI_SHORTCUT_ID,
+      'CommandOrControl+Shift+L',
+      () => {
+        void omniPanelModule.showLocalAi()
+      },
+      { owner: LOCAL_AI_CLI_SHORTCUT_OWNER, enabled: true }
+    )
   }
 
   private registerHandlers(): void {
@@ -286,9 +394,12 @@ export class LocalAiCliModule extends BaseModule {
       subscribeLocalAiCliSessionMutations((mutation) => {
         transport.broadcast(LocalAiCliEvents.session.changed, mutation)
       }),
-      transport.on(LocalAiCliEvents.status.get, async (_payload, context) => {
+      transport.on(LocalAiCliEvents.status.get, async (payload, context) => {
         assertHostContext(context)
-        return await this.getStatus()
+        return await this.getStatus({
+          detail: payload?.detail === true,
+          refresh: payload?.refresh === true
+        })
       }),
       transport.on(LocalAiCliEvents.status.locate, async (payload, context) => {
         assertHostContext(context)
@@ -369,18 +480,28 @@ export class LocalAiCliModule extends BaseModule {
         return await this.createTerminal(payload, ownerId, context.sender as WebContents)
       }),
       transport.on(LocalAiCliEvents.terminal.write, (payload, context) => {
-        this.writeTerminal(payload?.sessionId, payload?.data, assertHostContext(context))
+        this.writeTerminal(
+          payload?.sessionId,
+          payload?.data,
+          assertHostContext(context),
+          context.sender as WebContents
+        )
       }),
       transport.on(LocalAiCliEvents.terminal.resize, (payload, context) => {
         this.resizeTerminal(
           payload?.sessionId,
           payload?.cols,
           payload?.rows,
-          assertHostContext(context)
+          assertHostContext(context),
+          context.sender as WebContents
         )
       }),
       transport.on(LocalAiCliEvents.terminal.kill, (payload, context) => {
-        this.killTerminal(payload?.sessionId, assertHostContext(context))
+        const ownerId = assertHostContext(context)
+        const sender = context.sender as WebContents
+        return payload?.sessionId !== undefined
+          ? this.killTerminal(payload.sessionId, ownerId, sender)
+          : this.cancelTerminalCreation(payload?.creationToken, ownerId, sender)
       })
     )
   }
@@ -397,7 +518,7 @@ export class LocalAiCliModule extends BaseModule {
   }
 
   private async returnToPanel(): Promise<boolean> {
-    if (!isLocalAiCliBetaAvailable() || Date.now() > this.pendingPanelReturnUntil) {
+    if (!isLocalAiCliPlatformSupported() || Date.now() > this.pendingPanelReturnUntil) {
       this.pendingPanelReturnUntil = 0
       return false
     }
@@ -411,9 +532,17 @@ export class LocalAiCliModule extends BaseModule {
     return true
   }
 
-  private async getStatus() {
+  /**
+   * Answered from the memoised lookups unless `refresh` asks to probe again (「重新探测」): CoreBox,
+   * the omni panel and every project menu read this, and none of them should start four CLI
+   * processes to do it. Off macOS nothing is probed at all. With the master switch off those
+   * readers need only `enabled`, and a CLI's `--version` is still a third-party program run before
+   * the user agreed to any: then only `detail` probes, which Settings asks for, as the place where
+   * the user decides.
+   */
+  private async getStatus(request: LocalAiCliStatusRequest = {}): Promise<LocalAiCliStatus> {
     const settings = readSettings().localAiCli
-    if (!isLocalAiCliBetaAvailable()) {
+    if (!isLocalAiCliPlatformSupported()) {
       return {
         betaAvailable: false,
         enabled: false,
@@ -435,6 +564,17 @@ export class LocalAiCliModule extends BaseModule {
         }))
       }
     }
+    if (!settings.enabled && request.detail !== true && request.refresh !== true) {
+      return {
+        betaAvailable: true,
+        enabled: false,
+        defaultProvider: settings.defaultProvider,
+        providers: LOCAL_AI_CLI_PROVIDERS.map((provider) =>
+          unprobedProviderStatus(provider.id, settings)
+        )
+      }
+    }
+    if (request.refresh === true) await refreshLocalAiCliExecutables(settings)
     return {
       betaAvailable: true,
       enabled: settings.enabled,
@@ -444,12 +584,15 @@ export class LocalAiCliModule extends BaseModule {
   }
 
   private async locateProvider(provider: unknown): Promise<LocalAiCliProviderStatus> {
-    if (!isLocalAiCliBetaAvailable()) throw new Error('LOCAL_AI_CLI_BETA_UNAVAILABLE')
+    if (!isLocalAiCliPlatformSupported()) throw new Error('LOCAL_AI_CLI_BETA_UNAVAILABLE')
     const definition = LOCAL_AI_CLI_PROVIDERS.find((candidate) => candidate.id === provider)
     if (!definition) throw new Error('LOCAL_AI_CLI_PROVIDER_INVALID')
     const result = await dialog.showOpenDialog({
       title: `Locate ${definition.label}`,
-      properties: ['openFile']
+      // An app bundle is a directory, never the CLI: open it like a folder rather than return it.
+      // The pick is used as found, so a symlink must stay one: a mise shim resolved to its
+      // target is mise itself, which no CLI's version check accepts.
+      properties: ['openFile', 'treatPackageAsDirectory', 'noResolveAliases']
     })
     if (result.canceled || result.filePaths.length !== 1) {
       throw new Error('LOCAL_AI_CLI_LOCATE_CANCELLED')
@@ -458,6 +601,9 @@ export class LocalAiCliModule extends BaseModule {
     const nextSettings = structuredClone(appSettings)
     nextSettings.localAiCli.providers[definition.id].executableOverride = result.filePaths[0]!
     await saveMainConfig(StorageList.APP_SETTING, nextSettings)
+    // The pick is used as chosen, never resolved through its links (a shim dispatches on the name
+    // it was run by). Probing again also hands the chat providers the same pick.
+    await refreshLocalAiCliExecutables(nextSettings.localAiCli)
     return await resolveLocalAiCliProviderStatus(definition.id, nextSettings.localAiCli)
   }
 
@@ -465,7 +611,7 @@ export class LocalAiCliModule extends BaseModule {
     providerId: LocalAiCliProviderId,
     access: LocalAiCliTerminalCreateRequest['access']
   ): Promise<LocalAiCliProviderStatus> {
-    if (!isLocalAiCliBetaAvailable()) throw new Error('LOCAL_AI_CLI_BETA_UNAVAILABLE')
+    if (!isLocalAiCliPlatformSupported()) throw new Error('LOCAL_AI_CLI_BETA_UNAVAILABLE')
     const settings = readSettings().localAiCli
     if (!settings.enabled) throw new Error('LOCAL_AI_CLI_FEATURE_DISABLED')
     if (!settings.providers[providerId]?.enabled) {
@@ -614,6 +760,9 @@ export class LocalAiCliModule extends BaseModule {
           cwd: execution.cwd,
           ...(pointer ? { resume: pointer.nativeSessionId } : {}),
           pathToClaudeCodeExecutable: executablePath,
+          // Replaces the SDK's default `{ ...process.env }`: an npm-installed claude is a node
+          // script, and the SDK resolves its interpreter from this PATH.
+          env: withExecutableDirOnPath(sanitizedChildEnv(), executablePath),
           includePartialMessages: true,
           maxTurns: 1,
           tools,
@@ -762,7 +911,7 @@ export class LocalAiCliModule extends BaseModule {
     try {
       child = spawnSafe(status.executablePath!, spec.args, {
         cwd: execution.cwd,
-        env: sanitizedChildEnv(),
+        env: withExecutableDirOnPath(sanitizedChildEnv(), status.executablePath!),
         stdio: ['pipe', 'pipe', 'pipe']
       })
     } catch {
@@ -787,6 +936,7 @@ export class LocalAiCliModule extends BaseModule {
     let finalized = false
     let piState: { sessionId: string; sessionFile: string } | null = null
     let piRun: PiRunState | null = null
+    let piAttemptFailed = false
     let ompResumeAwaitingConfirmation = false
     let protocolChain = Promise.resolve()
     let settleTask!: () => void
@@ -877,6 +1027,7 @@ export class LocalAiCliModule extends BaseModule {
 
     const handleProtocolLine = async (line: string): Promise<void> => {
       if (!line.trim()) return
+      if (spec.protocol === 'pi-rpc' && (context.isCancelled() || completionReady)) return
       let nativeEvent: Record<string, unknown>
       try {
         const parsed = JSON.parse(line)
@@ -905,11 +1056,11 @@ export class LocalAiCliModule extends BaseModule {
           if (pointer && entries.leafId !== pointer.expectedHeadId) {
             await markConflictAndThrow()
           }
-          const file = await capturePiSessionFile(
-            piState.sessionFile,
-            piState.sessionId,
-            execution.cwd
-          )
+          // Only a new task may find no file yet; a stored session's file is captured as it is.
+          const file =
+            !pointer && (await isPiSessionFileUnwritten(piState.sessionFile))
+              ? null
+              : await capturePiSessionFile(piState.sessionFile, piState.sessionId, execution.cwd)
           await publishNativeSession(piState.sessionId, entries.leafId)
           piRun = {
             beforeEntries: entries,
@@ -922,12 +1073,22 @@ export class LocalAiCliModule extends BaseModule {
           return
         }
         if (entries && piRun?.verificationRequested) {
-          const finalHead = await verifyPiSessionAppend({
-            capture: piRun.file,
-            capturedHead: piRun.capturedHead,
-            beforeEntryIds: new Set(piRun.beforeEntries.entries.map((entry) => entry.id)),
-            post: entries
-          })
+          if (!piState) throw new Error('PROTOCOL_INVALID')
+          const finalHead = piRun.file
+            ? await verifyPiSessionAppend({
+                capture: piRun.file,
+                capturedHead: piRun.capturedHead,
+                beforeEntryIds: new Set(piRun.beforeEntries.entries.map((entry) => entry.id)),
+                post: entries
+              })
+            : await verifyPiSessionFirstWrite({
+                sessionFile: piState.sessionFile,
+                nativeSessionId: piState.sessionId,
+                projectRoot: execution.cwd,
+                before: piRun.beforeEntries,
+                post: entries
+              })
+          if (context.isCancelled()) return
           if (!pointer) throw new Error('PROTOCOL_INVALID')
           await this.touchNativeSession(pointer, finalHead)
           completionReady = true
@@ -1118,6 +1279,23 @@ export class LocalAiCliModule extends BaseModule {
       }
 
       const decoded = decodeLocalAiCliEvent(request.provider, nativeEvent)
+      if (
+        spec.protocol === 'pi-rpc' &&
+        nativeEvent.type === 'message_end' &&
+        asObject(nativeEvent.message)?.role === 'assistant'
+      ) {
+        piAttemptFailed = decoded.failed === true
+      }
+      if (
+        spec.protocol === 'pi-rpc' &&
+        decoded.completed &&
+        (decoded.failed || piAttemptFailed) &&
+        !piRun?.verificationRequested
+      ) {
+        protocolFailure = new Error('PROCESS_EXITED')
+        child.kill()
+        return
+      }
       if (decoded.delta) {
         completeText += decoded.delta
         context.emit({ type: 'text-delta', callId, text: decoded.delta })
@@ -1126,7 +1304,10 @@ export class LocalAiCliModule extends BaseModule {
       if (decoded.completed && spec.terminateOnComplete && completeText.trim()) {
         if (!pointer) throw new Error('PROTOCOL_INVALID')
         if (spec.protocol === 'pi-rpc') {
-          if (!piRun || piRun.verificationRequested) throw new Error('PROTOCOL_INVALID')
+          // pi ends a run twice, `agent_end` and then `agent_settled`, and the second arrives ahead
+          // of the `get_entries` answer: the run is already being verified.
+          if (piRun?.verificationRequested) return
+          if (!piRun) throw new Error('PROTOCOL_INVALID')
           piRun.verificationRequested = true
           writeProtocol({
             id: 'tuff-after',
@@ -1168,15 +1349,21 @@ export class LocalAiCliModule extends BaseModule {
         stdoutBuffer = ''
       }
       await protocolChain
-      if (
-        !protocolFailure &&
-        pointer &&
-        !completionReady &&
-        stderrText &&
-        isNativeSessionMissingError(new Error(stderrText))
-      ) {
-        await markLocalAiCliSessionState(pointer.id, 'missing')
-        protocolFailure = new Error('NATIVE_SESSION_MISSING')
+      if (!protocolFailure && pointer && !completionReady && stderrText) {
+        if (isNativeSessionMissingError(new Error(stderrText))) {
+          await markLocalAiCliSessionState(pointer.id, 'missing')
+          protocolFailure = new Error('NATIVE_SESSION_MISSING')
+        } else if (spec.protocol === 'pi-rpc' && isPiSessionNotFoundError(stderrText)) {
+          // pi finds a `--session` by the id in each file's header, so a file still named for it
+          // was edited or replaced; only no file at all is a missing session.
+          const replaced = await hasPiSessionFileNamedFor(pointer.nativeSessionId).catch(
+            () => false
+          )
+          await markLocalAiCliSessionState(pointer.id, replaced ? 'conflict' : 'missing')
+          protocolFailure = new Error(
+            replaced ? 'NATIVE_SESSION_CONFLICT' : 'NATIVE_SESSION_MISSING'
+          )
+        }
       }
       this.approvals.cancelCall(callId)
       this.taskProcesses.delete(callId)
@@ -1241,7 +1428,7 @@ export class LocalAiCliModule extends BaseModule {
   }
 
   private async pasteBack(payload: LocalAiCliPasteBackRequest): Promise<LocalAiCliPasteBackResult> {
-    if (!isLocalAiCliBetaAvailable() || !readSettings().localAiCli.enabled) {
+    if (!isLocalAiCliPlatformSupported() || !readSettings().localAiCli.enabled) {
       return { success: false, reason: 'target-unavailable' }
     }
     const text =
@@ -1292,125 +1479,164 @@ export class LocalAiCliModule extends BaseModule {
     ownerId: number,
     sender: WebContents
   ): Promise<{ sessionId: string }> {
+    const owner = this.terminalOwner(ownerId, sender)
     const request = normalizeLocalAiCliTerminalCreateRequest(rawRequest)
-    const provider = getLocalAiCliProviderDefinition(request.provider).id
-    const status = await this.requireRunnableProvider(provider, request.access)
-    const execution = await this.resolveLocalAiCliExecution(request)
-    if (request.access === 'workspace-write' && !status.capabilities.terminalWriteApproval) {
-      throw new Error('LOCAL_AI_CLI_WRITE_APPROVAL_UNAVAILABLE')
-    }
-    if (execution.pointer && !status.capabilities.terminalResume) {
-      throw new Error('PROVIDER_RESUME_UNSUPPORTED')
-    }
-    const releaseLease = execution.pointer ? this.acquirePointerLease(execution.pointer) : undefined
-    const pty = await import('node-pty')
-    const sessionId = randomUUID()
-    let process: IPty
+    const creation = ptySessionCore.reserveCreate(
+      owner,
+      request.creationToken ?? randomUUID(),
+      this.terminalLifecycle.signal
+    )
+    const watcher = watchPtyOwner(sender, creation.signal)
+    let releaseLease: (() => void) | undefined
     try {
-      process = pty.spawn(
-        status.executablePath!,
-        terminalArgs(provider, request.access, execution.pointer?.nativeSessionId),
-        {
-          name: 'xterm-256color',
-          cols: terminalSize(request.cols, DEFAULT_COLS, LOCAL_AI_CLI_LIMITS.terminalCols),
-          rows: terminalSize(request.rows, DEFAULT_ROWS, LOCAL_AI_CLI_LIMITS.terminalRows),
-          cwd: execution.cwd,
-          env: sanitizedChildEnv()
+      const provider = getLocalAiCliProviderDefinition(request.provider).id
+      const status = await this.requireRunnableProvider(provider, request.access)
+      if (watcher.signal.aborted) throw new Error('TERMINAL_CREATE_CANCELLED')
+      const execution = await this.resolveLocalAiCliExecution(request)
+      if (request.access === 'workspace-write' && !status.capabilities.terminalWriteApproval) {
+        throw new Error('LOCAL_AI_CLI_WRITE_APPROVAL_UNAVAILABLE')
+      }
+      if (execution.pointer && !status.capabilities.terminalResume) {
+        throw new Error('PROVIDER_RESUME_UNSUPPORTED')
+      }
+      if (watcher.signal.aborted) throw new Error('TERMINAL_CREATE_CANCELLED')
+      if (execution.pointer) {
+        const release = this.acquirePointerLease(execution.pointer)
+        let released = false
+        releaseLease = () => {
+          if (released) return
+          released = true
+          release()
         }
-      )
+        ptySessionCore.setCreationDisposer(creation, releaseLease)
+      }
+      const { id } = await ptySessionCore.create({
+        owner,
+        command: status.executablePath!,
+        args: terminalArgs(provider, request.access, execution.pointer?.nativeSessionId),
+        cols: terminalSize(request.cols, DEFAULT_COLS, LOCAL_AI_CLI_LIMITS.terminalCols),
+        rows: terminalSize(request.rows, DEFAULT_ROWS, LOCAL_AI_CLI_LIMITS.terminalRows),
+        cwd: execution.cwd,
+        env: sanitizedChildEnv(),
+        signal: watcher.signal,
+        creation,
+        onDispose: releaseLease,
+        onData: (sessionId, data) =>
+          this.sendTerminalEvent(sender, LocalAiCliEvents.terminal.data, {
+            sessionId,
+            data
+          }),
+        onExit: (sessionId, exit) =>
+          this.sendTerminalEvent(sender, LocalAiCliEvents.terminal.exit, {
+            sessionId,
+            ...exit
+          })
+      })
+      if (execution.pointer) await this.touchNativeSession(execution.pointer)
+      return { sessionId: id }
     } catch (error) {
+      await ptySessionCore.cancelCreation(creation.token, owner)
       releaseLease?.()
       throw error
+    } finally {
+      watcher.dispose()
+      ptySessionCore.discardCreate(creation)
     }
-
-    const targetWindowId = BrowserWindow.fromWebContents(sender)?.id
-    const dataSubscription = process.onData((data: string) => {
-      if (sender.isDestroyed() || !this.transport || targetWindowId === undefined) return
-      this.transport.broadcastToWindow(targetWindowId, LocalAiCliEvents.terminal.data, {
-        sessionId,
-        data: data.slice(0, LOCAL_AI_CLI_LIMITS.terminalChunkChars)
-      })
-    })
-    const exitSubscription = process.onExit(
-      ({ exitCode, signal }: { exitCode: number; signal?: number }) => {
-        this.disposeTerminalSession(sessionId)
-        if (sender.isDestroyed() || !this.transport || targetWindowId === undefined) return
-        const payload: LocalAiCliTerminalExit = {
-          sessionId,
-          exitCode,
-          ...(typeof signal === 'number' ? { signal } : {})
-        }
-        this.transport.broadcastToWindow(targetWindowId, LocalAiCliEvents.terminal.exit, payload)
-      }
-    )
-    const senderDestroyed = (): void => {
-      process.kill()
-      this.disposeTerminalSession(sessionId)
-    }
-    sender.once('destroyed', senderDestroyed)
-    this.terminalSessions.set(sessionId, {
-      ownerId,
-      process,
-      dataSubscription,
-      exitSubscription,
-      sender,
-      senderDestroyed,
-      releaseLease
-    })
-    if (execution.pointer) {
-      try {
-        await this.touchNativeSession(execution.pointer)
-      } catch (error) {
-        process.kill()
-        this.disposeTerminalSession(sessionId)
-        throw error
-      }
-    }
-    return { sessionId }
   }
 
-  private requireTerminalSession(sessionId: unknown, ownerId: number): TerminalSession {
+  private terminalOwner(ownerId: number, sender: WebContents): PtySessionOwner {
+    if (!sender || sender.id !== ownerId || sender.isDestroyed()) {
+      throw new Error('LOCAL_AI_CLI_HOST_ONLY')
+    }
+    return { scope: 'local-ai-cli', sender }
+  }
+
+  private sendTerminalEvent<T extends { sessionId: string }>(
+    sender: WebContents,
+    event: TuffEvent<T, void>,
+    payload: T
+  ): void {
+    if (sender.isDestroyed() || !this.transport) return
+    try {
+      this.transport.notifyTo(sender, event, payload)
+    } catch {
+      localAiCliLog.debug('Terminal delivery failed', { meta: { sessionId: payload.sessionId } })
+    }
+  }
+
+  private writeTerminal(
+    sessionId: unknown,
+    data: unknown,
+    ownerId: number,
+    sender: WebContents
+  ): void {
     if (typeof sessionId !== 'string') throw new Error('LOCAL_AI_CLI_TERMINAL_INVALID')
-    const session = this.terminalSessions.get(sessionId)
-    if (!session || session.ownerId !== ownerId) {
-      throw new Error('LOCAL_AI_CLI_TERMINAL_NOT_FOUND')
-    }
-    return session
-  }
-
-  private writeTerminal(sessionId: unknown, data: unknown, ownerId: number): void {
-    const session = this.requireTerminalSession(sessionId, ownerId)
     if (typeof data !== 'string' || data.length > LOCAL_AI_CLI_LIMITS.terminalInputChars) {
       throw new Error('LOCAL_AI_CLI_TERMINAL_INPUT_INVALID')
     }
-    session.process.write(data)
-  }
-
-  private resizeTerminal(sessionId: unknown, cols: unknown, rows: unknown, ownerId: number): void {
-    const session = this.requireTerminalSession(sessionId, ownerId)
-    session.process.resize(
-      terminalSize(cols, DEFAULT_COLS, LOCAL_AI_CLI_LIMITS.terminalCols),
-      terminalSize(rows, DEFAULT_ROWS, LOCAL_AI_CLI_LIMITS.terminalRows)
+    this.controlTerminal(() =>
+      ptySessionCore.write(sessionId, this.terminalOwner(ownerId, sender), data)
     )
   }
 
-  private killTerminal(sessionId: unknown, ownerId: number): void {
-    const session = this.requireTerminalSession(sessionId, ownerId)
-    session.process.kill()
-    this.disposeTerminalSession(sessionId as string)
+  private resizeTerminal(
+    sessionId: unknown,
+    cols: unknown,
+    rows: unknown,
+    ownerId: number,
+    sender: WebContents
+  ): void {
+    if (typeof sessionId !== 'string') throw new Error('LOCAL_AI_CLI_TERMINAL_INVALID')
+    this.controlTerminal(() =>
+      ptySessionCore.resize(
+        sessionId,
+        this.terminalOwner(ownerId, sender),
+        terminalSize(cols, DEFAULT_COLS, LOCAL_AI_CLI_LIMITS.terminalCols),
+        terminalSize(rows, DEFAULT_ROWS, LOCAL_AI_CLI_LIMITS.terminalRows)
+      )
+    )
   }
 
-  private disposeTerminalSession(sessionId: string): void {
-    const session = this.terminalSessions.get(sessionId)
-    if (!session) return
-    session.dataSubscription.dispose()
-    session.sender.removeListener('destroyed', session.senderDestroyed)
-    session.releaseLease?.()
-    this.terminalSessions.delete(sessionId)
+  private async killTerminal(
+    sessionId: unknown,
+    ownerId: number,
+    sender: WebContents
+  ): Promise<void> {
+    if (typeof sessionId !== 'string') throw new Error('LOCAL_AI_CLI_TERMINAL_INVALID')
+    if (!(await ptySessionCore.close(sessionId, this.terminalOwner(ownerId, sender)))) {
+      throw new Error('LOCAL_AI_CLI_TERMINAL_NOT_FOUND')
+    }
+  }
+
+  private async cancelTerminalCreation(
+    token: unknown,
+    ownerId: number,
+    sender: WebContents
+  ): Promise<void> {
+    if (typeof token !== 'string') throw new Error('LOCAL_AI_CLI_TERMINAL_INVALID')
+    if (!(await ptySessionCore.cancelCreation(token, this.terminalOwner(ownerId, sender)))) {
+      throw new Error('LOCAL_AI_CLI_TERMINAL_NOT_FOUND')
+    }
+  }
+
+  private controlTerminal(run: () => void): void {
+    try {
+      run()
+    } catch (error) {
+      if (error instanceof Error && error.message === 'TERMINAL_SESSION_NOT_FOUND') {
+        throw new Error('LOCAL_AI_CLI_TERMINAL_NOT_FOUND')
+      }
+      throw error
+    }
   }
 
   async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
+    this.terminalLifecycle.abort()
+    await ptySessionCore.closeScope('local-ai-cli')
     shortcutModule.unregisterMainShortcut(LOCAL_AI_CLI_SHORTCUT_ID)
+    this.quickOpenShortcutRegistered = false
+    this.lastMasterSwitch = null
+    this.lastExecutableOverrides = null
     this.approvals.destroy()
     for (const dispose of this.disposers.splice(0)) dispose()
     const taskCompletions: Promise<void>[] = []
@@ -1422,10 +1648,7 @@ export class LocalAiCliModule extends BaseModule {
     }
     await Promise.allSettled(taskCompletions)
     this.taskProcesses.clear()
-    for (const [sessionId, session] of this.terminalSessions) {
-      session.process.kill()
-      this.disposeTerminalSession(sessionId)
-    }
+    // PTY listeners, sender watches and native leases have already converged in the shared core.
     setLocalAiCliWorkspaceRoot(null)
     this.transport = null
     this.destinationRuntime = null

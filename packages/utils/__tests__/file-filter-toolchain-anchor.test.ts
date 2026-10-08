@@ -37,7 +37,7 @@ describe('home-anchored toolchain caches', () => {
 })
 
 /**
- * X3 from `.trellis/tasks/09-26-corebox-refresh-churn/research/root-cause.md`: `DEV_PATHS` were
+ * X3 from retired task 09-26-corebox-refresh-churn, research/root-cause.md: `DEV_PATHS` were
  * substrings, so `layout/` matched `/out\//` and `about/` matched `/bout\//`-style suffixes. The
  * probe there found real user files silently dropped. Anchoring to a path segment keeps the
  * intended `dist/`, `build/`, `out/` directories excluded while `layout/` and `about/` survive.

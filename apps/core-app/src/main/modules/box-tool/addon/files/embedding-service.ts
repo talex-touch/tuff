@@ -7,6 +7,7 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { embeddings as embeddingsSchema } from '../../../../db/schema'
 import { scheduleDbWrite } from '../../../../db/db-write'
 import { tuffIntelligence } from '../../../ai/intelligence-sdk'
+import { onUsageLimitsChanged, readUsageLimitInfo } from '../../../ai/usage-ledger/usage-limits'
 import { enterPerfContext } from '../../../../utils/perf-context'
 
 const logger = getLogger('EmbeddingService')
@@ -16,6 +17,13 @@ const MAX_TEXT_LENGTH = 8000
 const BATCH_SIZE = 5
 const EMBEDDING_CACHE_TTL = 30 * 60 * 1000 // 30 min
 const SEMANTIC_SEARCH_SCAN_LIMIT = 1000
+/**
+ * Stable usage-ledger caller for every file-content embedding, the availability probe included
+ * (audit rebuild design §1.4). A fresh object per call: options travel by reference.
+ */
+function filesEmbeddingOptions(): { metadata: { caller: string } } {
+  return { metadata: { caller: 'core.files.embedding' } }
+}
 
 interface EmbeddingSearchResult {
   sourceId: string
@@ -53,11 +61,75 @@ interface CompilableQuery {
   toSQL(): { sql: string; params: unknown[] }
 }
 
+/**
+ * File embedding is paused because the user's global AI usage limit is reached (usage-limits task
+ * C5). Until `pausedUntil` nothing is sent: batches stop, the availability probe is skipped, and
+ * semantic search answers without a query embedding. Read by the file-index diagnostics.
+ */
+export interface EmbeddingUsageLimitPause {
+  reason: 'USAGE_LIMIT_REACHED'
+  /** Which limit (`requestsPerDay`, `costUsdPerMonth`, …). */
+  limitKey: string
+  /** The limit's local reset time; embedding resumes with the first call after it. */
+  pausedUntil: number
+}
+
+/** What one `indexFileOutcome` call did; `paused` files count as skipped. */
+type IndexFileOutcome = 'done' | 'paused'
+
 export class EmbeddingService {
   private available: boolean | null = null
   private queryCache = new Map<string, CachedEmbedding>()
+  private usageLimitPause: EmbeddingUsageLimitPause | null = null
 
-  constructor(private readonly routing: EmbeddingDbRouting) {}
+  constructor(private readonly routing: EmbeddingDbRouting) {
+    // Raising or clearing the limit is the user saying "go on": the pause lifts now, not at the
+    // reset time. If a limit still binds, the next call is refused before any provider work and
+    // pauses again — one refusal, no loop.
+    onUsageLimitsChanged(() => this.liftUsageLimitPause())
+  }
+
+  /** Lifts a usage-limit pause because the limits changed; a no-op when none is held. */
+  private liftUsageLimitPause(): void {
+    if (!this.usageLimitPause) return
+    this.usageLimitPause = null
+    logger.info('File embedding resumes: the AI usage limits changed')
+  }
+
+  /** The usage-limit pause in force, or null; a pause whose reset time has passed is lifted here. */
+  getUsageLimitPause(now: number = Date.now()): EmbeddingUsageLimitPause | null {
+    const pause = this.usageLimitPause
+    if (!pause) return null
+    if (now >= pause.pausedUntil) {
+      this.usageLimitPause = null
+      logger.info('File embedding resumes: the AI usage limit has reset')
+      return null
+    }
+    return { ...pause }
+  }
+
+  /**
+   * True when `error` is the usage-limit refusal, which pauses embedding until the limit resets:
+   * logged once per pause, never retried. Any other failure is left to the caller.
+   */
+  private pauseOnUsageLimit(error: unknown): boolean {
+    const info = readUsageLimitInfo(error)
+    if (!info) return false
+    const current = this.usageLimitPause
+    this.usageLimitPause = {
+      reason: 'USAGE_LIMIT_REACHED',
+      limitKey: info.key,
+      pausedUntil: Math.max(current?.pausedUntil ?? 0, info.resetsAt)
+    }
+    if (!current) {
+      logger.warn(
+        `File embedding paused: AI usage limit ${info.key} reached; resumes after ${new Date(
+          this.usageLimitPause.pausedUntil
+        ).toISOString()}`
+      )
+    }
+    return true
+  }
 
   /**
    * Mirror of dbUtils' split-aware runWrite (db/utils.ts): split on → compile
@@ -93,17 +165,24 @@ export class EmbeddingService {
    * Caches the result to avoid repeated probing.
    */
   async isAvailable(): Promise<boolean> {
+    // Paused by the usage limit: unavailable until the reset, without probing (a probe is a call).
+    if (this.getUsageLimitPause()) return false
     if (this.available !== null) return this.available
 
     try {
       const disposeCheck = enterPerfContext('Embedding.isAvailable', { textLength: 4 })
       try {
-        const result = await tuffIntelligence.embedding.generate({ text: 'test' })
+        const result = await tuffIntelligence.embedding.generate(
+          { text: 'test' },
+          filesEmbeddingOptions()
+        )
         this.available = Array.isArray(result?.result) && result.result.length > 0
       } finally {
         disposeCheck()
       }
-    } catch {
+    } catch (error) {
+      // Not cached: the limit says nothing about whether embedding works once it resets.
+      if (this.pauseOnUsageLimit(error)) return false
       this.available = false
     }
 
@@ -121,8 +200,12 @@ export class EmbeddingService {
    * Skips if content hash hasn't changed.
    */
   async indexFile(fileId: string, content: string): Promise<void> {
-    if (!(await this.isAvailable())) return
-    if (!content?.trim()) return
+    await this.indexFileOutcome(fileId, content)
+  }
+
+  private async indexFileOutcome(fileId: string, content: string): Promise<IndexFileOutcome> {
+    if (!(await this.isAvailable())) return this.usageLimitPause ? 'paused' : 'done'
+    if (!content?.trim()) return 'done'
 
     const truncated = content.slice(0, MAX_TEXT_LENGTH)
     const contentHash = this.hashContent(truncated)
@@ -138,11 +221,14 @@ export class EmbeddingService {
       .limit(1)
 
     if (existing.length > 0 && existing[0].contentHash === contentHash) {
-      return // Content unchanged, skip
+      return 'done' // Content unchanged, skip
     }
 
     try {
-      const result = await tuffIntelligence.embedding.generate({ text: truncated })
+      const result = await tuffIntelligence.embedding.generate(
+        { text: truncated },
+        filesEmbeddingOptions()
+      )
       const vector = result.result
 
       // Upsert: delete old then insert new (one atomic transaction on the
@@ -170,8 +256,11 @@ export class EmbeddingService {
         'transaction'
       )
     } catch (err) {
+      // The usage limit pauses embedding instead of failing file after file into the log.
+      if (this.pauseOnUsageLimit(err)) return 'paused'
       logger.warn(`Failed to index embedding for file ${fileId}: ${err}`)
     }
+    return 'done'
   }
 
   /**
@@ -190,14 +279,16 @@ export class EmbeddingService {
     let failed = 0
 
     for (let i = 0; i < files.length; i += BATCH_SIZE) {
+      // Paused by the usage limit: the rest of the run waits for the reset — no retry loop.
+      if (this.getUsageLimitPause()) break
       const batch = files.slice(i, i + BATCH_SIZE)
       const results = await Promise.allSettled(
-        batch.map(({ fileId, content }) => this.indexFile(fileId, content))
+        batch.map(({ fileId, content }) => this.indexFileOutcome(fileId, content))
       )
 
       for (const r of results) {
-        if (r.status === 'fulfilled') indexed++
-        else failed++
+        if (r.status === 'rejected') failed++
+        else if (r.value === 'done') indexed++
       }
     }
 
@@ -312,7 +403,10 @@ export class EmbeddingService {
     }
 
     try {
-      const result = await tuffIntelligence.embedding.generate({ text: query })
+      const result = await tuffIntelligence.embedding.generate(
+        { text: query },
+        filesEmbeddingOptions()
+      )
       const vector = result.result
 
       this.queryCache.set(cacheKey, { vector, timestamp: Date.now() })
@@ -329,6 +423,7 @@ export class EmbeddingService {
 
       return vector
     } catch (err) {
+      if (this.pauseOnUsageLimit(err)) return null
       logger.warn(`Failed to generate query embedding: ${err}`)
       return null
     }

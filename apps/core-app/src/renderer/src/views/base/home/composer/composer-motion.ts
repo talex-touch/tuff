@@ -65,17 +65,15 @@ export const COMPOSER_MOTION = {
   stopFold: { ms: 120, toScale: 0.6 },
   /**
    * T3 ③ / T5 ④: the microphone yielding its slot to the stop capsule, and coming back once the
-   * capsule has left it. The model pill yields to the dictation capsule on the same numbers.
+   * capsule has left it.
    */
   micYield: { outMs: 120, scale: 0.85, backDelayMs: 160, backFadeMs: 160 },
   /**
    * Colour changes run only while `.is-morphing` is on (reaching CSS as `--composer-tone-ms`).
-   * T1 / T2 recolour the circle; T3 / T5 take the key between primary and ink; a chip recolours
-   * with TxModeChip's 240ms.
+   * T1 / T2 recolour the circle; T3 / T5 take the key between primary and ink. The chips never
+   * morph (`home-composer` › 换档不做变形动画).
    */
-  tone: { circleMs: 180, islandMs: 200, chipMs: 240 },
-  /** = TxModeChip: the icon leads, the old label is gone in ~80ms, the new one sharpens over 280. */
-  chip: { labelDelayMs: 50, labelFadeMs: 280, labelBlurPx: 6, widthMs: 300 },
+  tone: { circleMs: 180, islandMs: 200 },
   /** T4: the stop square ticks once when the first token lands. */
   firstTokenTick: { scale: 1.06, ms: 240 },
   /**
@@ -84,19 +82,8 @@ export const COMPOSER_MOTION = {
    */
   ring: { turnMs: 2400, breatheMs: 1400, settleMs: 300 },
   mic: {
-    /** Level frames kept for the dictation capsule's waveform (≈10 Hz, so 2.4s of history). */
+    /** Level frames kept for the session (≈10 Hz, so 2.4s of history); the voice glow reads the newest. */
     levelHistory: 24,
-    /** One bar plus its gap, px: the waveform shows as many bars as the capsule has room for. */
-    barStride: 4.5,
-    /**
-     * D10-f: the capsule grows left over the model pill it covers, measured at the press, and is
-     * exactly that wide; this is its width when nothing was measured, the waveform-plus-timer size.
-     */
-    capsuleMinPx: 96,
-    /** Room the `m:ss` timer takes in the capsule, px. */
-    timerPx: 30,
-    /** The capsule's content opens once the key has some width to show it in. */
-    contentDelayMs: 100,
     /** Neither `ready` nor a level frame by then: the microphone is not answering. */
     captureWatchdogMs: 2000
   },
@@ -106,7 +93,6 @@ export const COMPOSER_MOTION = {
 
 let morph: ResolvedTransition | null = null
 let release: ResolvedTransition | null = null
-let snappy: ResolvedTransition | null = null
 
 /** Resolved on first use, never at import: the compiler probes `CSS.supports` for `linear()`. */
 export function morphCurve(): ResolvedTransition {
@@ -117,12 +103,6 @@ export function morphCurve(): ResolvedTransition {
 export function releaseCurve(): ResolvedTransition {
   release ??= resolveTransition(RELEASE_SPRING)
   return release
-}
-
-/** The library's `snappy` preset: 400ms, 1.4% overshoot. */
-export function snappyCurve(): ResolvedTransition {
-  snappy ??= resolveTransition('snappy')
-  return snappy
 }
 
 export function prefersReducedMotion(): boolean {

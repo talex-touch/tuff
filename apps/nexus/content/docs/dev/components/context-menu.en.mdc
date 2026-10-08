@@ -169,7 +169,7 @@ The default is `anchorMode="pointer"`, so the menu follows the mouse coordinates
 <TxContextMenu anchor-mode="reference" />
 ```
 
-`TxContextMenuSubmenu` nests another panel inside the menu, at any depth. Hovering the trigger row expands it; pointer travel between the parent and child panels never closes the chain by mistake, and selecting an item inside the child closes the whole chain following the root menu's `closeOnSelect`.
+`TxContextMenuSubmenu` nests another panel inside the menu, at any depth. Hovering the trigger row expands it; pointer travel between the parent and child panels never closes the chain by mistake, nor does a diagonal path across sibling rows expand them, and selecting an item inside the child closes the whole chain following the root menu's `closeOnSelect`.
 
 ### ContextMenuSubmenu
 :::TuffDemoWrapper{demo="ContextMenuContextMenuSubmenuDemo" code-lang="vue"}
@@ -369,7 +369,7 @@ code: |
 - Trigger: `trigger` supports `contextmenu` / `click` / `both` / `manual`; `manual` disables internal event handling and opens only through `v-model + x/y`, for button clicks, editor shortcuts, and canvas node menus.
 - Close: Escape, outside click, and item selection close by default; `closeOnSelect=false` parent-submenu or multi-step rows select immediately without blinking.
 - Confirmation: `activationFeedback` is enabled by default. The item clears its current hover/focus highlight, reuses `TxCardItem`'s active style to confirm, then runs the business action and closes. Root configuration reaches nested submenus, panels/items may override it, and `prefers-reduced-motion: reduce` adds no delay.
-- Submenus: prefer `TxContextMenuSubmenu` — it ships hover expansion, keyboard traversal, outside-click exemption, and whole-chain close; `TxContextMenuPanel` can still be embedded manually in `TxPopover` / a custom overlay, in which case a teleported child panel must set `outsideGuard`, otherwise the parent treats the submenu click as an outside click and closes.
+- Submenus: prefer `TxContextMenuSubmenu` — it ships hover expansion, the safe triangle (sibling submenu rows crossed on a diagonal path to the child panel do not expand; resting on one for about 100ms switches to it), keyboard traversal, outside-click exemption, and whole-chain close; `TxContextMenuPanel` can still be embedded manually in `TxPopover` / a custom overlay, in which case a teleported child panel must set `outsideGuard`, otherwise the parent treats the submenu click as an outside click and closes.
 - Animation: handled directly by `BaseAnchor` — `transfer` / `boom` / `opacity` / `none`.
 
 ## Technologies

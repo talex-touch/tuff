@@ -10,7 +10,7 @@ import { createLogger } from '../../../../utils/logger'
 const contextProviderLog = createLogger('RecommendationEngine').child('ContextProvider')
 const execFileAsync = promisify(execFile)
 
-interface RecommendationContextSources {
+export interface RecommendationContextSources {
   time: boolean
   foregroundApp: boolean
   clipboard: boolean
@@ -69,6 +69,26 @@ const FOCUS_CONTEXT_TTL_MS = 30 * 1000
 /** Upper bound on the `defaults` read, so a blocked cfprefsd degrades instead of hanging. */
 const FOCUS_CONTEXT_TIMEOUT_MS = 500
 
+/**
+ * The 推荐分析 switches as stored in App Settings: every source is on unless it was explicitly
+ * turned off, and a missing or malformed block means the defaults. The one place this mapping
+ * lives — the foreground tracker's recording gate reads it too.
+ */
+export function resolveRecommendationContextSources(raw: unknown): RecommendationContextSources {
+  if (!raw || typeof raw !== 'object') return DEFAULT_CONTEXT_SOURCES
+  const sources = raw as Partial<Record<keyof RecommendationContextSources, unknown>>
+  return {
+    time: sources.time !== false,
+    foregroundApp: sources.foregroundApp !== false,
+    clipboard: sources.clipboard !== false,
+    selection: sources.selection !== false,
+    network: sources.network !== false,
+    focus: sources.focus !== false,
+    power: sources.power !== false,
+    location: sources.location !== false
+  }
+}
+
 export function hashContextContent(content: string): string {
   return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16)
 }
@@ -97,6 +117,7 @@ export class ContextProvider {
 
     return {
       time: sources.time ? this.getTimeContext() : NEUTRAL_TIME_CONTEXT,
+      timeAvailable: sources.time,
       clipboard,
       selection,
       foregroundApp,
@@ -312,9 +333,10 @@ export class ContextProvider {
       const { foregroundAppSnapshotStore, isSelfActiveApp } =
         await import('../../../system/foreground-app-snapshot')
 
-      const snapshot = foregroundAppSnapshotStore.get()
+      const hasActivation = foregroundAppSnapshotStore.hasActiveSession
+      const snapshot = await foregroundAppSnapshotStore.resolve()
       let activeApp = snapshot?.app ?? null
-      if (!activeApp) {
+      if (!activeApp && !hasActivation) {
         const { activeAppService } = await import('../../../system/active-app')
         activeApp = await activeAppService.getActiveApp({
           includeIcon: false
@@ -358,22 +380,9 @@ export class ContextProvider {
     }
 
     try {
-      const settings = getMainConfig(StorageList.APP_SETTING)
-      const raw = settings?.recommendation?.contextSources
-      if (!raw || typeof raw !== 'object') {
-        return DEFAULT_CONTEXT_SOURCES
-      }
-
-      return {
-        time: raw.time !== false,
-        foregroundApp: raw.foregroundApp !== false,
-        clipboard: raw.clipboard !== false,
-        selection: raw.selection !== false,
-        network: raw.network !== false,
-        focus: raw.focus !== false,
-        power: raw.power !== false,
-        location: raw.location !== false
-      }
+      return resolveRecommendationContextSources(
+        getMainConfig(StorageList.APP_SETTING)?.recommendation?.contextSources
+      )
     } catch (error) {
       contextProviderLog.debug('Failed to load recommendation context settings', {
         meta: { reason: error instanceof Error ? error.message : String(error) }
@@ -606,18 +615,18 @@ export class ContextProvider {
   }
 
   /**
-   * Generates cache key from context signal.
-   *
-   * @remarks
-   * Only SLOW-MOVING context belongs here (time slot, workday/weekend, online
-   * flag). Volatile signals — clipboard, selection, foreground app, battery,
-   * power mode, DND, network identity — are deliberately absent: with them in
-   * the key the 15-min background refresh warmed a key the user's own request
-   * could never hit, so every visible request recomputed from scratch. They
-   * are re-applied per request by the engine's volatile re-rank stage instead.
+   * Learned recall depends on the source app and the local clock window. Clipboard,
+   * selection and transient system-state matches remain uncached per-request effects.
    */
   generateCacheKey(context: ContextSignal): string {
-    const parts: string[] = [context.time.timeSlot, resolveDayType(context.time.dayOfWeek)]
+    const now = new Date()
+    const parts: string[] = [
+      context.time.timeSlot,
+      resolveDayType(context.time.dayOfWeek),
+      `clock:${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}:${context.time.hourOfDay}:${now.getMinutes()}`,
+      `time:${context.timeAvailable === false ? 'off' : 'on'}`,
+      `source:${context.foregroundApp?.bundleId.toLowerCase() || 'none'}`
+    ]
 
     if (context.systemState) {
       parts.push(`net:${context.systemState.isOnline ? '1' : '0'}`)

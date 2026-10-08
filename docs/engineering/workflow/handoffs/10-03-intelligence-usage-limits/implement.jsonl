@@ -1,0 +1,8 @@
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/design.md", "reason": "parent design §3 (limits storage, enforcement, error code, status) and §1 ledger it reads"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/prd.md", "reason": "requirements R-C1–R-C6, R-G3, decisions D9/D11, quota background anchors"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/research/quota-system.md", "reason": "existing quota manager caches, setQuota pitfalls, renderer quota copy, Nexus credits distinction"}
+{"file": ".trellis/tasks/10-03-audit-usage-ledger/design.md", "reason": "global bucket, pending deltas, getUsageInsights shape this child fills"}
+{"file": ".trellis/spec/frontend/plugin-runtime-security.md", "reason": "host-only control plane; plugins only receive canonical codes"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "shared error-code union and typed transport changes"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "i18n rules for the new recovery copy"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "error code crosses main, utils, renderer and plugin"}

@@ -53,7 +53,8 @@ export function registerMcpServerAdminChannels(transport: ITuffTransportMain): (
   const cleanups = [
     transport.on(McpServerEvents.probe, async (payload, context) => {
       assertHostOwned(context)
-      return await mcpServerAdmin.probe(payload.itemId)
+      const profileId = typeof payload?.profileId === 'string' ? payload.profileId : undefined
+      return await mcpServerAdmin.probe(payload.itemId, profileId)
     }),
     transport.on(McpServerEvents.upsertManual, async (payload, context) => {
       assertHostOwned(context)

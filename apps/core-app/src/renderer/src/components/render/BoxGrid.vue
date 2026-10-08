@@ -1,13 +1,10 @@
 <script setup lang="ts">
 import type { TuffContainerLayout, TuffItem, TuffSection } from '@talex-touch/utils'
-import { TxKbd } from '@talex-touch/tuffex/kbd'
 import { useElementSize } from '@vueuse/core'
 import type { ComponentPublicInstance } from 'vue'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
-import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
-import { shortcutChordLabel } from '~/modules/shortcuts/shortcut-chord'
 import {
   CORE_BOX_GRID_COMPACT_TILE_MIN_WIDTH,
   CORE_BOX_GRID_TILE_MIN_WIDTH,
@@ -117,23 +114,6 @@ const sectionsData = computed<SectionData[]>(() => {
 
 const hasSections = computed(() => sectionsData.value.length > 0)
 
-// Guidance belongs to the recommendation surface, not the result pool or keyboard indices.
-const showHabitualEmptyState = computed(
-  () =>
-    sectionsData.value.some(({ section }) => section.id === 'proposed') &&
-    !sectionsData.value.some(({ section }) => section.id === 'habitual')
-)
-
-/**
- * The key the guidance teaches: it opens the action panel, whose "Pin to Recommendations" row the
- * guidance names. Labelled the way the panel labels its own toggle key, so it reads Ctrl+K off
- * macOS.
- */
-const actionPanelKeyLabel = shortcutChordLabel(
-  { code: 'KeyK' },
-  getCurrentRendererPlatformState().isMac
-)
-
 function getQuickKey(index: number): string {
   if (index > 9) return ''
   const key = index === 9 ? 0 : index + 1
@@ -177,42 +157,6 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
     slide.
   -->
   <div ref="containerRef" class="BoxGridContainer">
-    <section
-      v-if="showHabitualEmptyState"
-      class="BoxGridWrapper"
-      :aria-label="t('coreBox.sections.habitual')"
-    >
-      <div class="BoxGridTitle" data-flip-key="title:habitual" data-flip="move">
-        {{ t('coreBox.sections.habitual') }}
-      </div>
-      <!--
-        Empty slots on the real grid's own tracks: the same `.BoxGrid` box, padding, column count
-        and gap, so each slot sits where a habitual tile will land. Decoration only: hidden from
-        assistive tech, never registered, no quick key, and no FLIP key, so it lands in place.
-      -->
-      <div
-        class="BoxGrid BoxGridGhost p-4"
-        :class="[`size-${gridConfig.itemSize}`, { 'is-compact': compact }]"
-        :style="{
-          '--grid-cols': visibleColumns,
-          '--grid-gap': `${gridConfig.gap}px`
-        }"
-        aria-hidden="true"
-      >
-        <span v-for="column in visibleColumns" :key="column" class="BoxGridGhost-Tile">
-          <span class="BoxGridGhost-Icon" />
-          <span class="BoxGridGhost-Title"><span class="BoxGridGhost-Bar" /></span>
-        </span>
-      </div>
-      <p class="BoxGridHabitualHint">
-        <span class="BoxGridHabitualHint-Text">{{ t('coreBox.sections.habitualEmptyTitle') }}</span>
-        <span class="BoxGridHabitualHint-Separator" aria-hidden="true">·</span>
-        <span class="BoxGridHabitualHint-Action">
-          <TxKbd>{{ actionPanelKeyLabel }}</TxKbd>
-          <span>{{ t('corebox.actions.pin') }}</span>
-        </span>
-      </p>
-    </section>
     <!-- Multiple sections mode -->
     <template v-if="hasSections">
       <div
@@ -397,114 +341,6 @@ function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
 
   &.size-large {
     --item-icon-size: 48px;
-  }
-}
-
-// Empty habitual slots: a BoxGridItem's box (16px radius, 8px inset, a 36px icon over an 11px
-// label) as a dashed outline with two static fills. Static on purpose: this is guidance, not a
-// loading state, so nothing here shimmers or animates.
-.BoxGridGhost {
-  // The two shades, tuned together in both themes. Tints of the ink rather than fill tokens:
-  // CoreBox has no opaque surface (a 75% `--tx-fill-color` mask over the window material), and an
-  // ink tint darkens the light theme and lightens the dark one over whatever shows through.
-  --box-grid-ghost-line: color-mix(in srgb, var(--tx-text-color-primary) 16%, transparent);
-  --box-grid-ghost-fill: color-mix(in srgb, var(--tx-text-color-primary) 5%, transparent);
-
-  // The guidance below belongs to the slots, so it sits closer to them than to the next title.
-  padding-bottom: 8px;
-}
-
-.BoxGridGhost-Tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 0.5rem;
-  border: 1px dashed var(--box-grid-ghost-line);
-  border-radius: 16px;
-}
-
-.BoxGridGhost-Icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--box-grid-ghost-fill);
-}
-
-// The real title's line box (11px at 1.2, 4px under the icon), so a slot is as tall as a tile
-// without a badge.
-.BoxGridGhost-Title {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 1lh;
-  margin-top: 4px;
-  font-size: 11px;
-  line-height: 1.2;
-}
-
-.BoxGridGhost-Bar {
-  width: 55%;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--box-grid-ghost-fill);
-}
-
-// A compact BoxGridItem's shape: the 6px inset, the icon scaled rather than resized, no label.
-.BoxGridGhost.is-compact {
-  .BoxGridGhost-Tile {
-    padding: 6px;
-  }
-
-  .BoxGridGhost-Icon {
-    transform: scale(0.78);
-  }
-
-  .BoxGridGhost-Title {
-    display: none;
-  }
-}
-
-// One line under the slots: what will appear there, then how to put something there now. The 16px
-// side margins match the grid's own padding, so the line never runs past the slots.
-.BoxGridHabitualHint {
-  container: box-grid-habitual-hint / inline-size;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 4px 6px;
-  margin: 0 16px 12px;
-  font-size: 12px;
-  line-height: 1.5;
-  text-align: center;
-  color: var(--tx-text-color-secondary);
-}
-
-.BoxGridHabitualHint-Separator {
-  color: var(--tx-text-color-placeholder);
-}
-
-.BoxGridHabitualHint-Action {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-// Too narrow for one line (the preview pane's 40% column, a narrow window): the two parts take a
-// line each, centred, instead of wrapping with the separator dangling at a line end. 480px clears
-// the longest line today (English with Ctrl+K, 428px measured in Chromium) and stays well under
-// the full results column (680px). Longer copy still wraps rather than overflows: the line is a
-// wrapping flex row.
-@container box-grid-habitual-hint (max-width: 480px) {
-  .BoxGridHabitualHint-Text {
-    flex-basis: 100%;
-  }
-
-  .BoxGridHabitualHint-Separator {
-    display: none;
   }
 }
 </style>

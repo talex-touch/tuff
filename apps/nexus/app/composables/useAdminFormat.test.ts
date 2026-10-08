@@ -32,6 +32,35 @@ describe('createAdminFormat', () => {
     expect(formatFor('zh').tableDateTime(SAMPLE.toISOString())).toBe('2026-09-30 20:46')
   })
 
+  it('prints a calendar day without its clock', () => {
+    // An update published "on" a day is stored at UTC midnight, so its clock
+    // only ever printed the reader's offset ("08:00" in UTC+8).
+    expect(formatFor('en').tableDate(SAMPLE)).toBe('2026-09-30')
+    expect(formatFor('zh').tableDate(SAMPLE.getTime())).toBe('2026-09-30')
+    // The local calendar day, the same one tableDateTime prints, at both ends of it.
+    expect(formatFor('en').tableDate(new Date(2026, 9, 3, 0, 0, 0))).toBe('2026-10-03')
+    expect(formatFor('en').tableDate(new Date(2026, 9, 2, 23, 59, 59))).toBe('2026-10-02')
+    expect(formatFor('en').tableDate(SAMPLE)).toBe(formatFor('en').tableDateTime(SAMPLE).slice(0, 10))
+  })
+
+  it('reads a date-only value in UTC when asked', () => {
+    // A manual update picked for 2026-09-26 is stored at UTC midnight. In Los
+    // Angeles its local day is 2026-09-25; the UTC reading is the picked day in
+    // every zone, so these hold wherever the suite runs.
+    const stored = '2026-09-26T00:00:00.000Z'
+    expect(formatFor('en').tableDate(stored, { timeZone: 'UTC' })).toBe('2026-09-26')
+    expect(formatFor('en').tableDate('2026-09-26T23:59:59.999Z', { timeZone: 'UTC' })).toBe('2026-09-26')
+    expect(formatFor('en').date(stored, { timeZone: 'UTC' })).toBe('Sep 26, 2026')
+    expect(formatFor('zh').date(stored, { timeZone: 'UTC' })).toBe('2026年9月26日')
+    expect(formatFor('en').tableDate(null, { timeZone: 'UTC' })).toBe(ADMIN_FORMAT_EMPTY)
+    expect(formatFor('en').date('not a date', { timeZone: 'UTC' })).toBe(ADMIN_FORMAT_EMPTY)
+    // Without the option it stays the local day, as before.
+    const local = new Date(stored)
+    expect(formatFor('en').tableDate(stored)).toBe(
+      `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`,
+    )
+  })
+
   it('keeps the full localized time for the tooltip', () => {
     expect(formatFor('en').dateTimeTitle(SAMPLE)).toMatch(/^Sep 30, 2026, 8:46:05\sPM$/)
     expect(formatFor('zh').dateTimeTitle(SAMPLE)).toBe('2026年9月30日 20:46:05')
@@ -77,6 +106,7 @@ describe('createAdminFormat', () => {
     const format = formatFor('en')
     for (const value of [null, undefined, '', 'not a date']) {
       expect(format.tableDateTime(value)).toBe(ADMIN_FORMAT_EMPTY)
+      expect(format.tableDate(value)).toBe(ADMIN_FORMAT_EMPTY)
       expect(format.dateTimeTitle(value)).toBe(ADMIN_FORMAT_EMPTY)
       expect(format.date(value)).toBe(ADMIN_FORMAT_EMPTY)
       expect(format.relative(value)).toBe(ADMIN_FORMAT_EMPTY)

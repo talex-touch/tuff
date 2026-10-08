@@ -24,12 +24,14 @@ import {
   SubscriptionStatus
 } from '@talex-touch/utils/account'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { getBooleanEnv } from '@talex-touch/utils/env'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { AccountEvents, AuthEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { randomUUID, createHash } from 'node:crypto'
 import os from 'node:os'
 import { shell } from 'electron'
+import { isVisibleEvidenceHookEnabled } from '../../core/acceptance-mode'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import {
   type SecureStoreHealth,
@@ -370,17 +372,8 @@ async function dropCredentialIssuedByAnotherOrigin(): Promise<void> {
   })
 }
 
-function isTruthyEnvFlag(value: string | undefined): boolean {
-  if (!value) return false
-  const normalized = value.trim().toLowerCase()
-  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
-}
-
 function isVisibleAuthEvidenceMode(): boolean {
-  return (
-    isTruthyEnvFlag(process.env[VISIBLE_AUTH_EVIDENCE_FLAG]) &&
-    (isTruthyEnvFlag(process.env.TUFF_STARTUP_BENCHMARK_ONCE) || process.env.NODE_ENV === 'test')
-  )
+  return isVisibleEvidenceHookEnabled(VISIBLE_AUTH_EVIDENCE_FLAG)
 }
 
 function parsePositiveIntegerEnv(name: string, fallback: number): number {
@@ -424,10 +417,7 @@ function resolveVisibleAuthEvidenceDeviceStart(): DeviceAuthStartResponse | null
 }
 
 function shouldForceVisibleAuthBrowserOpenFailure(): boolean {
-  return (
-    isVisibleAuthEvidenceMode() &&
-    isTruthyEnvFlag(process.env[VISIBLE_AUTH_EVIDENCE_BROWSER_OPEN_FAIL])
-  )
+  return isVisibleAuthEvidenceMode() && getBooleanEnv(VISIBLE_AUTH_EVIDENCE_BROWSER_OPEN_FAIL)
 }
 
 async function openAuthUrlExternally(authorizeUrl: string): Promise<void> {

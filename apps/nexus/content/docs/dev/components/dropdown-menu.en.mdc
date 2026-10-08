@@ -29,7 +29,7 @@ code: |
 ---
 :::
 
-`TxDropdownSubmenu` nests another panel inside the menu, at any depth. Hovering the trigger row expands it; pointer travel between the parent and child panels never closes the chain by mistake, and selecting a `TxDropdownItem` inside the child closes the whole chain following the root menu's `closeOnSelect`.
+`TxDropdownSubmenu` nests another panel inside the menu, at any depth. Hovering the trigger row expands it; pointer travel between the parent and child panels never closes the chain by mistake, nor does a diagonal path across sibling rows expand them, and selecting a `TxDropdownItem` inside the child closes the whole chain following the root menu's `closeOnSelect`.
 
 ### DropdownSubmenu
 :::TuffDemoWrapper{demo="DropdownMenuDropdownSubmenuDemo" code-lang="vue"}
@@ -269,6 +269,7 @@ code: |
 - `TxDropdownItem` emits `select` with no payload; attach business context in the handler that renders the item.
 - The `TxDropdownSubmenu` trigger row is a `role="menuitem"`: `ArrowRight` / `Enter` expand the child panel and focus its first item, and `ArrowLeft` inside the child panel collapses it and returns focus to the trigger row.
 - Pointer travel from parent panel into the child panel never closes the parent; clicks inside the child panel don't count as outside-clicks for the parent, and closing the parent (including preemption by another menu) cascades to its children.
+- A diagonal path from the trigger row to the child panel rides the safe triangle: sibling submenu rows it crosses do not expand and the open child panel stays; resting on a sibling row for about 100ms switches to it. The 4px gap between the panels is covered by the hover bridge.
 
 ## Technologies
 

@@ -19,3 +19,13 @@ verified: false
 ## 概述
 
 数据套件负责把数字变成图形，汇集了 Tuffex 在这件事上的全部能力。**可视化**（SparkChart、AllocationBar、DiffTable、SignalMeter）是轻量内联数据展示；**图表**是完整的图表家族，经 `@talex-touch/tuffex/charts` 子路径引入——与 kumo 同构的 API 面、Vue 直渲 SVG、不依赖 echarts。两者都在主包内，运行时经 `@talex-touch/tuffex/pro` 入口引入；按族整体引入图表时用 `@talex-touch/tuffex/charts`。图表家族从《[Charts 图表](./charts.zh.mdc)》开始看；当版面放不下一张完整图表时，用可视化组件。整套图表按 ECharts 的默认时序播放动画——1000ms 入场、500ms 数据更新、300ms 状态切换——并在 `prefers-reduced-motion: reduce` 下一律直接落到终帧。
+
+### 单色图表
+
+[MonoChart 单色图表](./mono-chart.zh.mdc) 新增三十个原始单色图表变体和来源 GitHub 活动展示。按变体传入实际序列、分类、点、矩阵、蜡烛、区间或图数据。原生选择器更新受控的序列模式、布局、曲线、时间范围和线条显示。`TxMonoChart` 从 `@talex-touch/tuffex/charts` 引入，位于现有 charts 模块内。
+
+### Motion 中的抖动图表
+
+[DitherChart 抖动图表](./dither-chart.zh.mdc) 将图表结构与动态抖动展示结合，因此放在[动效套件](./motion-suite.zh.mdc)。它使用相同的现有 charts 边界和 `--tx-chart-*` 主题变量，不新增独立图表包。
+
+这些新增能力在当前源码中标记 `since: 0.6.3`，随 Tuff beta 测试，尚未独立发布 npm。

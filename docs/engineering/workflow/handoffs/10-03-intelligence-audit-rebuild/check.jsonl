@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/prd.md", "reason": "cross-child acceptance AC-1–AC-23 for the integration review"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "repo-wide quality gates"}
+{"file": ".trellis/spec/frontend/privacy-data-lifecycle.md", "reason": "verify inventory and lifecycle updates at integration"}

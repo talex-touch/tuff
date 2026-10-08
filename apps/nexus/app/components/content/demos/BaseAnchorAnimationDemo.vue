@@ -67,7 +67,6 @@ function resolveAnimation(type: AnchorAnimationType) {
     duration: type === 'none' ? 0 : 420,
     ease: type === 'transfer' ? 'back.out(2)' : 'power2.out',
     closeEase: type === 'transfer' ? 'power3.in' : 'power2.in',
-    scale: type === 'boom' ? 1.08 : undefined,
     blur: type === 'boom' ? 14 : undefined,
   }
 }

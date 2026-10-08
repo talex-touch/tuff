@@ -38,6 +38,7 @@ code: |
 - 单位说明放在相邻文案中，并用 `formatValue` / `tooltipFormatter` 处理 `%`、`ms` 或配额单位，不要把单位塞进 `modelValue`。
 - 用户拖动期间保持 `min`、`max` 和 `step` 稳定；中途改变范围计算会让 thumb 跳动。
 - `tooltipTilt` / jelly 动效适合探索式调参界面，不适合高密度企业表单。
+- 缓存或不可见的容器可传 `active=false` 暂停观测、全局指针追踪和持续动效；不要把减少动态效果或关闭装饰动效等同于停用布局，原生 range 的值与键盘语义仍由调用方保有。
 - 定制胶囊尺寸改 `--tx-slider-surface-width` / `--tx-slider-surface-size`，不要单独覆盖 `--tx-slider-thumb-size`：默认路径下它跟随胶囊宽，单独改小会让命中区窄于胶囊、两端出轨道。不想要拖钮时先传 `thumbSurface=false` 再把它归零。
 
 ## API 参考
@@ -51,6 +52,7 @@ code: |
 | `max` | `number` | `100` | 最大值 |
 | `step` | `number` | `1` | 步长 |
 | `disabled` | `boolean` | `false` | 禁用 |
+| `active` | `boolean` | `true` | 暂停外部观测、全局追踪与持续动效，不改变 `disabled` 或业务值；恢复时重读布局 |
 | `showValue` | `boolean` | `false` | 右侧显示当前值 |
 | `formatValue` | `(value: number) => string` | - | 格式化显示值 |
 | `thumbSurface` | `boolean` | `true` | 常驻的胶囊拖钮，整体借自 Radio 按钮组的滑动指示条：同样 28px 高的胶囊、同样的 88% 浮层底色、发丝描边与顶部高光，拖拽时同一套果冻形变（按下鼓起、快拖拉伸、反向 / 到头 / 快放时拍扁）。原生 thumb 只保留命中区。传 `false` 得到扁平圆钮 |
@@ -200,7 +202,8 @@ code: |
 - `formatValue` 控制右侧展示值；未传 `tooltipFormatter` 时也作为 tooltip 文本。
 - tooltip 显示遵循 `tooltipTrigger`：`drag`、`hover` 或 `always`；`showTooltip=false` 会完全禁用。
 - 负数 `tooltipMotionDuration` 与 `tooltipMotionBlurPx` 会分别夹到 `0ms` 与 `0px`。
-- 组件卸载时会清理全局 pointer 监听。
+- `active=false`、KeepAlive 失活和卸载都会停止果冻/tooltip 帧任务、移除全局 pointer 监听并断开尺寸观察；恢复后按当前布局重新建立一次观测。
+- 减少动态效果偏好动态生效：按住期间切换也会停止形变，保留原生 range 输入与静态读数。
 
 ## 技术实现
 

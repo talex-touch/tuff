@@ -1,7 +1,7 @@
 import { createError, getQuery } from 'h3'
 import { requireAdmin } from '../../../../utils/auth'
 import { getUserById } from '../../../../utils/authStore'
-import { getCreditSummary, listCreditLedgerByUsers } from '../../../../utils/creditsStore'
+import { getCreditSummary, getUserCreditAdjustLimits, listCreditLedgerByUsers } from '../../../../utils/creditsStore'
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
@@ -18,9 +18,10 @@ export default defineEventHandler(async (event) => {
   const page = Math.max(1, Number(query.page) || 1)
   const limit = Math.min(100, Math.max(1, Number(query.limit) || 10))
 
-  const [summary, ledger] = await Promise.all([
+  const [summary, ledger, limits] = await Promise.all([
     getCreditSummary(event, id),
     listCreditLedgerByUsers(event, [id], { page, limit }),
+    getUserCreditAdjustLimits(event, id),
   ])
 
   return {
@@ -31,6 +32,8 @@ export default defineEventHandler(async (event) => {
       status: targetUser.status,
     },
     summary,
+    // How far a deduction can go this month, for the drawer's amount field.
+    limits,
     ledger: {
       entries: ledger.entries,
       pagination: {

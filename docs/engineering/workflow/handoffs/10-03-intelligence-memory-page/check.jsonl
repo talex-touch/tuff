@@ -1,0 +1,4 @@
+{"file": ".trellis/tasks/10-03-intelligence-memory-page/prd.md", "reason": "acceptance AC-M1–AC-M6 to verify"}
+{"file": ".trellis/tasks/10-03-intelligence-audit-rebuild/design.md", "reason": "parent §6 contract"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "verify skeletons, semantics and copy"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "repo-wide quality gates"}

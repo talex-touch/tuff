@@ -38,6 +38,7 @@ code: |
 - Always show surrounding copy for units. Use `formatValue` / `tooltipFormatter` for `%`, `ms`, or quota units instead of adding unit text into `modelValue`.
 - Keep `min`, `max`, and `step` stable while the user is dragging; changing range math mid-drag can make the thumb jump.
 - Use `tooltipTilt` / jelly motion for exploratory tuning surfaces, not dense enterprise forms where motion may distract.
+- Cached or invisible hosts may pass `active=false` to suspend observation, global pointer tracking and ongoing motion. Keep reduced/decorative motion separate from layout presence so the native range value and keyboard semantics remain available.
 - Resize the pill through `--tx-slider-surface-width` / `--tx-slider-surface-size`, not by overriding `--tx-slider-thumb-size` on its own: on the default path it follows the pill width, and shrinking it alone leaves the hit area narrower than the pill and pushes the pill past the track ends. To remove the thumb entirely, pass `thumbSurface=false` first and zero it there.
 
 ## API Reference
@@ -51,6 +52,7 @@ code: |
 | `max` | `number` | `100` | Maximum range value forwarded to the native range input. |
 | `step` | `number` | `1` | Step size forwarded to the native range input. |
 | `disabled` | `boolean` | `false` | Disables the native range input and suppresses tooltip display. |
+| `active` | `boolean` | `true` | Suspends external observers, global tracking and ongoing motion without changing `disabled` or the value; resamples layout on resume. |
 | `showValue` | `boolean` | `false` | Renders the formatted current value beside the slider. |
 | `formatValue` | `(value: number) => string` | - | Formats the visible side value; also feeds tooltip text when `tooltipFormatter` is absent. |
 | `thumbSurface` | `boolean` | `true` | Always-visible capsule thumb, borrowed whole from the sliding indicator of a Radio button group: the same 28px-tall capsule, the same 88% overlay fill, hairline rim and top highlight, and the same jelly while dragging (a pop on grab, stretch with speed, a squash on a reversal, at the track ends and on a fast release). The native thumb is reduced to a hit area. Pass `false` for a flat disc. |
@@ -200,7 +202,8 @@ code: |
 - `formatValue` controls the visible side value and is also used for tooltip text when `tooltipFormatter` is absent.
 - Tooltip visibility follows `tooltipTrigger`: `drag`, `hover`, or `always`; `showTooltip=false` disables it.
 - Negative `tooltipMotionDuration` and `tooltipMotionBlurPx` values are clamped to `0ms` and `0px`.
-- Global pointer listeners are cleaned up on unmount.
+- `active=false`, KeepAlive deactivation and unmount stop jelly/tooltip frame work, detach global pointer listeners and disconnect size observers. Resumption establishes one fresh observation against the current layout.
+- Reduced-motion preference changes take effect during a held gesture too: deformation stops while native range input and static readouts remain available.
 
 ## Technologies
 

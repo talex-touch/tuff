@@ -1,5 +1,10 @@
 import { DEFAULT_FILE_INDEX_CONTENT_SETTINGS } from '@talex-touch/utils/transport/events/types'
-export const FILE_CONTENT_INDEX_POLICY_VERSION = 1
+/**
+ * Bumped to 2 on 2026-10-08: a dev profile that had content indexing off since version 1 still
+ * carried 623 MB of `files.content` plus the same text in `search_index`, so the startup
+ * reconcile has to clear once more (and compact the file afterwards).
+ */
+export const FILE_CONTENT_INDEX_POLICY_VERSION = 2
 
 export interface FileIndexSettings {
   autoScanEnabled: boolean

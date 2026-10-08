@@ -3,7 +3,7 @@ import type { CSSProperties, Slots } from 'vue'
 import type { DrawerDirection, DrawerEmits, DrawerProps } from './types'
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, useSlots, watch } from 'vue'
 import TxDivider from '../../divider/src/TxDivider.vue'
-import { useZIndexAllocator } from '../../../../utils/z-index-manager'
+import { isTopmostModalDialog, useZIndexAllocator } from '../../../../utils/z-index-manager'
 
 // Resolved in setup: inject is only valid here, while allocation happens later.
 const zIndexAllocator = useZIndexAllocator()
@@ -160,9 +160,10 @@ function trapFocus(event: KeyboardEvent): void {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
-  if (!display.value) {
+  if (!display.value || event.defaultPrevented || (event.key !== 'Tab' && event.key !== 'Escape'))
     return
-  }
+  if (!isTopmostModalDialog(drawerRef.value))
+    return
   if (event.key === 'Tab') {
     trapFocus(event)
     return

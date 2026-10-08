@@ -4,16 +4,20 @@ import type {
   ShortcutMeta
 } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import type { ShortcutBinding } from '../../shared/events/shortcut-binding'
+import type { PluginStatusChangedEvent } from '../core/eventbus/touch-event'
 import process from 'node:process'
 import {
   ShortcutTriggerKind,
   ShortcutType
 } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import ShortcutStorage from '@talex-touch/utils/common/storage/shortcut-storage'
+import { PluginStatus } from '@talex-touch/utils/plugin'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { BrowserWindow, globalShortcut } from 'electron'
+import { StorageList } from '@talex-touch/utils'
+import { isBetaFeatureEnabled, isShortcutFeatureEnabled } from '../../shared/beta-features'
 import { acceleratorLabel, acceleratorsMatch } from '../../shared/accelerator-label'
 import { shortconChangedEvent, shortconGetBindingEvent } from '../../shared/events/shortcut-binding'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
@@ -28,7 +32,7 @@ import {
   buildFeatureShortcutId,
   parseFeatureShortcutId
 } from './plugin/services/feature-shortcut-id'
-import { useMainStorage } from './storage'
+import { getMainConfig, subscribeMainConfig, useMainStorage } from './storage'
 
 const shortconLog = createLogger('GlobalShortcon')
 const shortconUpdateEvent = defineRawEvent<
@@ -210,6 +214,46 @@ function renameMacOnlyModifiers(accelerator: string): string | null {
   return [...renamed, key].join('+')
 }
 
+/** How long plugin status changes are gathered before one pass: plugins load one after another. */
+const PLUGIN_STATUS_SETTLE_MS = 100
+
+/**
+ * Whether a plugin in this status runs, by the verdict CoreBox and feature shortcuts use
+ * (`PluginFeaturesAdapter.isPluginActive`, `triggerFeatureShortcut`): a key is live exactly when
+ * the plugin can handle it. ENABLED and ACTIVE both run; CoreBox moves a plugin between them as
+ * its view opens and closes.
+ */
+function isRunningStatus(status: PluginStatus | undefined): boolean {
+  return status === PluginStatus.ENABLED || status === PluginStatus.ACTIVE
+}
+
+/**
+ * The plugin a shortcut does nothing without, found the way its trigger finds it, or `null` for a
+ * system record:
+ *
+ * - a feature binding: the plugin key its id names, as `triggerFeatureShortcut` looks it up;
+ * - a key the plugin registered itself: its author, the manifest name `sendToPlugin` delivers to.
+ *   That is the plugin's key too, unless its folder is named otherwise.
+ *
+ * `undefined` is a plugin that is not loaded, or no longer installed.
+ */
+function owningPlugin(shortcut: Shortcut): { status: PluginStatus } | null | undefined {
+  const plugins = pluginModule.pluginManager?.plugins
+  if (shortcut.type === ShortcutType.FEATURE) {
+    const target = parseFeatureShortcutId(shortcut.id)
+    return target ? plugins?.get(target.pluginName) : null
+  }
+  if (shortcut.type === ShortcutType.RENDERER) {
+    const author = shortcut.meta?.author
+    if (!author || author === SYSTEM_SHORTCUT_AUTHOR) return null
+    return (
+      plugins?.get(author) ??
+      [...(plugins?.values() ?? [])].find((plugin) => plugin.name === author)
+    )
+  }
+  return null
+}
+
 export class ShortcutModule extends BaseModule {
   static key: symbol = Symbol.for('Shortcut')
   name: ModuleKey = ShortcutModule.key
@@ -218,11 +262,14 @@ export class ShortcutModule extends BaseModule {
   private shortcutStatusMap = new Map<string, ShortcutStatus>()
   private isEnabled: boolean = !GLOBAL_SHORTCUT_REGISTRATION_DISABLED
   private disposeBeforeQuitListener: (() => void) | null = null
+  private disposePluginStatusListener: (() => void) | null = null
+  private disposeAppSettingListener: (() => void) | null = null
+  private betaFeaturesSignature = 0
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   /** Ids of the shortcuts this launch has already told the user are left without a key. */
   private announcedNotices = new Set<string>()
   private bindingListeners = new Set<() => void>()
-  /** Stored and effective key of every shortcut after the last pass, to publish only changes. */
+  /** Last visible binding/status snapshot, to publish only user-visible changes. */
   private bindingsSignature = ''
 
   constructor() {
@@ -243,10 +290,25 @@ export class ShortcutModule extends BaseModule {
     }
     this.renameRecordedMacModifiers()
     this.registerBeforeQuitTeardownListener()
+    this.registerPluginStatusListener()
     const runtime = resolveMainRuntime(ctx, 'ShortcutModule.onInit')
     this.transport = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
     this.setupIpcListeners(this.transport)
+    this.registerAppSettingListener()
     this.reregisterAllShortcuts()
+  }
+
+  private registerAppSettingListener(): void {
+    this.disposeAppSettingListener = subscribeMainConfig(StorageList.APP_SETTING, (settings) => {
+      const signature =
+        (isBetaFeatureEnabled(settings, 'screenshot') ? 1 : 0) |
+        (isBetaFeatureEnabled(settings, 'voiceDictation') ? 2 : 0) |
+        (isBetaFeatureEnabled(settings, 'voiceQuickEdit') ? 4 : 0) |
+        (isBetaFeatureEnabled(settings, 'omniPanel') ? 8 : 0)
+      if (signature === this.betaFeaturesSignature) return
+      this.betaFeaturesSignature = signature
+      this.reregisterAllShortcuts()
+    })
   }
 
   /**
@@ -273,13 +335,6 @@ export class ShortcutModule extends BaseModule {
         storage.updateShortcutAccelerator(shortcut.id, renamed)
         shortconLog.info(`Renamed ${shortcut.id}: ${shortcut.accelerator} -> ${renamed}`)
       } catch (error) {
-        // The store sets a value before saving it, so a failed save leaves the new one in memory.
-        // Put the old one back; that sets first too, so it holds even if its own save fails.
-        try {
-          storage.updateShortcutAccelerator(shortcut.id, shortcut.accelerator)
-        } catch {
-          // Already restored in memory; see above.
-        }
         shortconLog.warn(`Could not rename ${shortcut.id}; kept ${shortcut.accelerator}`, {
           error
         })
@@ -556,14 +611,9 @@ export class ShortcutModule extends BaseModule {
     const previousCallback = mainCallbackRegistry.get(id)?.callback
     const previous = this.storage!.getShortcutById(id)
 
-    mainCallbackRegistry.set(id, { callback })
-
     const existing = this.storage!.getShortcutById(id)
     if (existing) {
-      if (existing.accelerator !== normalized) {
-        this.storage!.updateShortcutAccelerator(id, normalized)
-      }
-      this.storage!.updateShortcutEnabled(id, true)
+      this.storage!.updateShortcutAccelerator(id, normalized, true)
     } else {
       this.storage!.addShortcut({
         id,
@@ -577,6 +627,7 @@ export class ShortcutModule extends BaseModule {
         }
       })
     }
+    mainCallbackRegistry.set(id, { callback })
 
     this.reregisterAllShortcuts()
 
@@ -610,11 +661,15 @@ export class ShortcutModule extends BaseModule {
    */
   private findAcceleratorHolders(id: string, accelerator: string): AppShortcutHolder[] {
     const holders: AppShortcutHolder[] = []
+    const settings = getMainConfig(StorageList.APP_SETTING)
     for (const shortcut of this.storage?.getAllShortcuts() ?? []) {
       if (shortcut.id === id) continue
       if (shortcut.meta?.enabled === false) continue
+      if (!isShortcutFeatureEnabled(settings, shortcut.id)) continue
       if (shortcut.type === ShortcutType.TRIGGER) continue
       if (shortcut.type === ShortcutType.MAIN && !mainCallbackRegistry.has(shortcut.id)) continue
+      const owner = owningPlugin(shortcut)
+      if (owner !== null && !isRunningStatus(owner?.status)) continue
 
       const held = this.normalizeAccelerator(shortcut.accelerator)
       if (!held || !acceleratorsMatch(held, accelerator, process.platform)) continue
@@ -642,8 +697,11 @@ export class ShortcutModule extends BaseModule {
     }
 
     if (previous) {
-      this.storage!.updateShortcutAccelerator(id, previous.accelerator)
-      this.storage!.updateShortcutEnabled(id, previous.meta?.enabled ?? true)
+      this.storage!.updateShortcutAccelerator(
+        id,
+        previous.accelerator,
+        previous.meta?.enabled ?? true
+      )
     } else {
       // Nothing was bound before, so the attempted accelerator is left in the store for no key
       // that fires.
@@ -687,8 +745,8 @@ export class ShortcutModule extends BaseModule {
   }
 
   /**
-   * Called after a registration pass that changed a stored or effective key, for in-process
-   * surfaces that bake a key into a native object (the tray menu). Returns the unsubscribe.
+   * Called after a registration pass changes a binding or status, for in-process surfaces that
+   * bake a key into a native object (the tray menu). Returns the unsubscribe.
    */
   onBindingsChanged(listener: () => void): () => void {
     this.bindingListeners.add(listener)
@@ -806,8 +864,7 @@ export class ShortcutModule extends BaseModule {
     }
 
     if (existing) {
-      this.storage!.updateShortcutAccelerator(id, normalized)
-      this.storage!.updateShortcutEnabled(id, true)
+      this.storage!.updateShortcutAccelerator(id, normalized, true)
     } else {
       this.storage!.addShortcut({
         id,
@@ -855,11 +912,9 @@ export class ShortcutModule extends BaseModule {
   updateShortcut(id: string, newAccelerator?: string, enabled?: boolean): boolean {
     let updated = false
     if (typeof newAccelerator === 'string' && newAccelerator.trim().length > 0) {
-      updated = this.storage!.updateShortcutAccelerator(id, newAccelerator)
-    }
-    if (typeof enabled === 'boolean') {
-      const enabledUpdated = this.storage!.updateShortcutEnabled(id, enabled)
-      updated = updated || enabledUpdated
+      updated = this.storage!.updateShortcutAccelerator(id, newAccelerator, enabled)
+    } else if (typeof enabled === 'boolean') {
+      updated = this.storage!.updateShortcutEnabled(id, enabled)
     }
     if (updated) {
       this.reregisterAllShortcuts()
@@ -918,11 +973,20 @@ export class ShortcutModule extends BaseModule {
     globalShortcut.unregisterAll()
 
     if (!this.isEnabled) {
+      const shortcuts = this.storage!.getAllShortcuts()
+      const statusMap = new Map<string, ShortcutStatus>()
+      for (const shortcut of shortcuts) {
+        statusMap.set(shortcut.id, { state: 'disabled', reason: 'disabled' })
+      }
+      this.shortcutStatusMap = statusMap
+      this.syncMainTriggerStates(statusMap)
+      this.publishBindings(shortcuts, statusMap)
       shortconLog.debug('Shortcuts globally disabled, skip registration')
       return
     }
 
     const allShortcuts = this.storage!.getAllShortcuts()
+    const settings = getMainConfig(StorageList.APP_SETTING)
     const normalizedMap = new Map<string, string>()
     const groupedByAccelerator = new Map<string, Shortcut[]>()
     const statusMap = new Map<string, ShortcutStatus>()
@@ -931,7 +995,7 @@ export class ShortcutModule extends BaseModule {
       // One malformed record must not abort classification: the loop runs after
       // unregisterAll(), so throwing here leaves every shortcut unregistered.
       try {
-        if (shortcut.meta?.enabled === false) {
+        if (shortcut.meta?.enabled === false || !isShortcutFeatureEnabled(settings, shortcut.id)) {
           statusMap.set(shortcut.id, { state: 'disabled', reason: 'disabled' })
           continue
         }
@@ -968,6 +1032,14 @@ export class ShortcutModule extends BaseModule {
         }
 
         if (shortcut.type === ShortcutType.MAIN && !mainCallbackRegistry.has(shortcut.id)) {
+          statusMap.set(shortcut.id, { state: 'unavailable', reason: 'runtime-missing' })
+          continue
+        }
+
+        // A plugin's key does nothing while the plugin is not running, so it is not held either,
+        // and it takes no part in conflicts.
+        const owner = owningPlugin(shortcut)
+        if (owner !== null && !isRunningStatus(owner?.status)) {
           statusMap.set(shortcut.id, { state: 'unavailable', reason: 'runtime-missing' })
           continue
         }
@@ -1161,17 +1233,23 @@ export class ShortcutModule extends BaseModule {
   }
 
   /**
-   * Tells in-process listeners and every window that a key changed. Most passes change nothing a
-   * surface prints (each module registering at startup runs one), so only a change is published.
+   * Tells in-process listeners and every window that a binding or status changed. Most startup
+   * passes leave the visible snapshot unchanged, so only a change is published.
    */
   private publishBindings(shortcuts: Shortcut[], statusMap: Map<string, ShortcutStatus>): void {
-    const signature = JSON.stringify(
-      shortcuts.map((shortcut) => [
-        shortcut.id,
-        shortcut.accelerator,
-        this.resolveEffectiveAccelerator(shortcut, statusMap.get(shortcut.id))
-      ])
-    )
+    const signature =
+      `${this.betaFeaturesSignature}:` +
+      JSON.stringify(
+        shortcuts.map((shortcut) => [
+          shortcut.id,
+          shortcut.accelerator,
+          this.resolveEffectiveAccelerator(shortcut, statusMap.get(shortcut.id)),
+          shortcut.type,
+          shortcut.meta?.enabled,
+          statusMap.get(shortcut.id),
+          this.resolveShortcutWarnings(shortcut)
+        ])
+      )
     if (signature === this.bindingsSignature) return
     this.bindingsSignature = signature
 
@@ -1477,6 +1555,34 @@ export class ShortcutModule extends BaseModule {
     return token.charAt(0).toUpperCase() + token.slice(1)
   }
 
+  /**
+   * A plugin's shortcuts are registered only while it runs, so a plugin starting or stopping sends
+   * the shortcuts through another pass. Moving between ENABLED and ACTIVE does not: the plugin runs
+   * either way, and CoreBox does it every time a plugin view opens or closes. Changes are gathered
+   * first: each pass unregisters and registers every key, and plugins load one after another.
+   */
+  private registerPluginStatusListener(): void {
+    if (this.disposePluginStatusListener) {
+      return
+    }
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const handler = (event: unknown) => {
+      const change = event as Partial<PluginStatusChangedEvent>
+      if (isRunningStatus(change.previousStatus) === isRunningStatus(change.status)) return
+      if (timer) return
+      timer = setTimeout(() => {
+        timer = null
+        this.reregisterAllShortcuts()
+      }, PLUGIN_STATUS_SETTLE_MS)
+    }
+    touchEventBus.on(TalexEvents.PLUGIN_STATUS_CHANGED, handler)
+    this.disposePluginStatusListener = () => {
+      touchEventBus.off(TalexEvents.PLUGIN_STATUS_CHANGED, handler)
+      if (timer) clearTimeout(timer)
+      timer = null
+    }
+  }
+
   private registerBeforeQuitTeardownListener(): void {
     if (this.disposeBeforeQuitListener) {
       return
@@ -1491,6 +1597,12 @@ export class ShortcutModule extends BaseModule {
   }
 
   private teardownRuntimeRegistrations(): void {
+    // From here no plugin status change registers keys. On quit, plugins can stop before this
+    // runs; the passes they cause then only release those plugins' keys.
+    this.disposePluginStatusListener?.()
+    this.disposePluginStatusListener = null
+    this.disposeAppSettingListener?.()
+    this.disposeAppSettingListener = null
     globalShortcut.unregisterAll()
     mainCallbackRegistry.clear()
     mainTriggerRegistry.clear()

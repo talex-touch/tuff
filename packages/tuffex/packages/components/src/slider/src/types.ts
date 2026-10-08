@@ -4,6 +4,8 @@ export interface SliderProps {
   max?: number
   step?: number
   disabled?: boolean
+  /** Suspend observers, global tracking and motion without changing the value or disabled state. */
+  active?: boolean
   /**
    * Accessible label for the range input. The visual root is a wrapper `<div>`,
    * so a fallthrough `aria-label` lands on the wrapper instead of the control —

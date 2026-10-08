@@ -1,7 +1,6 @@
 <script lang="ts" name="HomePage" setup>
 import type { AiAttachment, AiToolCallPart } from '@talex-touch/tuffex/ai-elements'
 import type { TxConversationStreamInstance } from '@talex-touch/tuffex/conversation-stream'
-import type { ITuffIcon } from '@talex-touch/utils'
 import type { ToolChartSpec } from '~/components/intelligence/ToolChartCard.vue'
 import type {
   FormFieldValue,
@@ -11,6 +10,11 @@ import type {
 import type { AgentToolsMode } from '~/modules/conversation/useAgentTools'
 import type { MessageSegment } from '~/modules/conversation/chain-steps'
 import type { ConversationMessage } from '~/modules/conversation/useHomeConversation'
+import type {
+  ConversationWorkspaceMode,
+  WorkspaceSubmitDisposition
+} from '@talex-touch/utils/transport/sdk/domains/agent-workspace'
+import type { AgentWorkspaceError } from '~/modules/conversation/useAgentWorkspace'
 import type { HomeOpeningPhase, HomeOpeningSource } from '~/modules/home-push/opening'
 import { TxAttachmentTray } from '@talex-touch/tuffex/attachment-tray'
 import { TxBorderBeam } from '@talex-touch/tuffex/border-beam'
@@ -25,6 +29,7 @@ import { resetRemoteImagePolicy } from '@talex-touch/tuffex/stream-markdown'
 import { TxCodeBlock, TxStreamMarkdown } from '@talex-touch/tuffex/stream-markdown'
 import { TxToolCallCard } from '@talex-touch/tuffex/tool-call-card'
 import { TxToolConfirmation } from '@talex-touch/tuffex/tool-confirmation'
+import { TxVoiceBeam } from '@talex-touch/tuffex/voice-beam'
 import {
   CHART_RESULT_PREFIX,
   FORM_RESULT_PREFIX,
@@ -58,6 +63,7 @@ import {
   useSendChoreography
 } from '~/composables/useSendChoreography'
 import {
+  createWorkingConversationTitle,
   deriveRestoredTitle,
   findTitleExchange,
   generateConversationTitle,
@@ -65,7 +71,8 @@ import {
 } from '~/modules/conversation/conversation-title'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
-  CONVERSATION_ERROR_PROVIDER_UNAVAILABLE
+  CONVERSATION_ERROR_PROVIDER_UNAVAILABLE,
+  CONVERSATION_ERROR_USAGE_LIMIT_REACHED
 } from '~/modules/conversation/conversation-error-display'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { useAgentTools } from '~/modules/conversation/useAgentTools'
@@ -74,35 +81,51 @@ import {
   useConversationHistory
 } from '~/modules/conversation/useConversationHistory'
 import { useHomeConversation } from '~/modules/conversation/useHomeConversation'
+import {
+  AgentWorkspaceRequestError,
+  toAgentWorkspaceError,
+  useAgentWorkspace,
+  WORKSPACE_QUEUE_LIMIT
+} from '~/modules/conversation/useAgentWorkspace'
+import { provideHomeModelScope } from '~/modules/conversation/home-model-scope'
 import { useModelOptions } from '~/modules/conversation/useModelOptions'
 import { reasoningLevelLabelKey } from '~/modules/conversation/reasoning-effort-display'
 import { useReasoningEffort } from '~/modules/conversation/useReasoningEffort'
+import { initialReasoningSettingForNewSession } from '@talex-touch/utils/intelligence/model-binding'
+import { buildActivityTurns, toGatewayApproval } from '~/modules/conversation/workspace-activity'
+import { toHomeModelLimits } from '~/modules/conversation/workspace-panel'
 import { HOME_FEED_MAX_ITEMS } from '~/modules/home-push/feed'
 import { createOpeningLeadNote } from '~/modules/home-push/opening'
 import { useHomePush } from '~/modules/home-push/useHomePush'
-import { modelFamilyIconFor } from '~/modules/intelligence/model-family-icons'
-import { providerIconForId } from '~/modules/intelligence/provider-icons'
+import {
+  resolveIntelligenceErrorRecovery,
+  USAGE_LIMITS_ROUTE
+} from '~/modules/intelligence/ai-error-recovery'
 import { registerMainWindowCommandHandlers } from '~/modules/shortcuts/main-window-shortcuts'
 import { appSetting } from '~/modules/storage/app-storage'
+import { resolvedTheme } from '~/modules/storage/theme-style'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { useProjectStore } from '~/stores/projects'
 import { getCurrentRendererPlatformState } from '~/modules/platform/renderer-platform'
 import ComposerToolbar from './composer/ComposerToolbar.vue'
 import { showDictationNotice } from './composer/dictation-notice'
+import { modelPillFace } from './composer/model-pill'
 import { deriveSendState, isAwaitingFirstToken } from './composer/send-state'
 import { useComposerDictation } from './composer/useComposerDictation'
+import { voiceGlowLobes } from './composer/voice-glow'
+import ComposerControl from './composer/ComposerControl.vue'
 import HomeSidePanel from './HomeSidePanel.vue'
 import HomeTopBar from './HomeTopBar.vue'
+import HomeRunApproval from './workspace/HomeRunApproval.vue'
+import HomeWorkspaceModeMenu from './workspace/HomeWorkspaceModeMenu.vue'
+import HomeWorkspaceQueue from './workspace/HomeWorkspaceQueue.vue'
 
 /**
- * Home empty state from artboard `JVvAr`, plus the in-place conversation from task
- * `08-04-home-conversation` R1.
- *
- * The empty state and the message stream share one route and one composer node — swapping the
- * composer between two branches would drop input focus on the very first send. Conversation state
- * lives in memory only; persistence, `/home/c/:id` and the sidebar history land in R2/R3.
+ * The empty state and message stream share one composer node, preserving focus across the first
+ * send. Main owns execution, durable history and queues; this page owns only the current view,
+ * draft and the navigation-scoped effects of asynchronous submissions.
  */
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const MAX_INPUT_HEIGHT = 200
 
@@ -144,15 +167,15 @@ const router = useRouter()
 const route = useRoute()
 
 const {
-  resolvedChoice: resolvedModel,
+  resolvedChoice: globalResolvedModel,
   routing: modelRouting,
   ensureLoaded: ensureModelOptionsLoaded
 } = useModelOptions()
 /**
- * The reasoning effort: one global setting, read at every send, and the level the composer's model
- * pill shows for the model the next send pins (`pillLevel`: nothing on auto, D11-a).
+ * The global reasoning default: what a conversation is created with. Once Main holds the thread, its
+ * own setting rules (`modelScope`).
  */
-const { setting: reasoningEffortSetting, pillLevel: reasoningPillLevel } = useReasoningEffort()
+const { setting: reasoningEffortSetting } = useReasoningEffort()
 /**
  * Loaded at mount rather than on first menu open, so the persisted selection resolves — and
  * the pill stops saying auto — before the user reaches for it.
@@ -161,23 +184,64 @@ onMounted(() => {
   void ensureModelOptionsLoaded()
 })
 
-const conversation = useHomeConversation({
-  // A getter, not a snapshot: switching model mid-conversation must apply to the next send.
-  routing: () => modelRouting.value,
-  // Likewise for Auto Context, which the settings page owns — each send reads its current value.
-  autoContext: () => autoContext.value,
-  identity: () => {
-    const id = conversationId.value
-    if (!id) throw new Error('HOME_CONVERSATION_ID_MISSING')
-    return { conversationId: id, projectId: projectId.value }
-  },
-  // Read per send like routing, so a level picked mid-conversation applies to the next message; the
-  // non-streaming fallback carries the same value.
-  reasoningEffort: () => reasoningEffortSetting.value,
-  // The Home opening, once it is the thread's first message, reaches the model on every turn as
-  // this system note (`toProviderMessages`), worded in the reader's locale.
-  leadNote: createOpeningLeadNote(t)
+/**
+ * Allocated on the first send, so an untouched home screen never creates a conversation.
+ * Reactive because it also keys the stream instance: old stored threads share counter-style
+ * message ids, and one keep-alive'd stream carrying its height cache across them laid thread B out
+ * with thread A's measurements. Draft → creation does not change it (the id is minted at send
+ * time), so the key flips only on real thread switches.
+ */
+const conversationId = ref<string | null>(null)
+const projectId = ref<string | null>(null)
+/**
+ * The opening as the greeting shows it. `submit` pins it for the one flush between taking the lead
+ * and the greeting's leave: `takeLead` drops an opening still being written, and the greeting should
+ * fade out with the words the reader saw rather than lose them a frame before it goes.
+ */
+const openingHold = shallowRef<{
+  phase: HomeOpeningPhase
+  text: string
+  source: HomeOpeningSource | null
+} | null>(null)
+
+/**
+ * The Main-owned workspace behind Home (A2, A5–A7): execution, history and pending inputs live in
+ * Main; this page mirrors them and sends requests. The project a thread is created with is the one
+ * Main validates and keeps — switching the sidebar's project later never re-roots it.
+ */
+const workspace = useAgentWorkspace({
+  conversationId: () => conversationId.value,
+  projectId: () => projectId.value,
+  // The opening message is the working title until a generated one replaces it (#969).
+  title: createWorkingConversationTitle,
+  defaults: () => ({
+    providerId: modelRouting.value.providerId,
+    model: modelRouting.value.model,
+    // A stored choice — `auto` included — is the user's and stands. Only a profile that never
+    // stored one takes the pinned model's explicit default, and none leaves it on auto (A4).
+    reasoningEffort:
+      appSetting.conversation?.reasoningEffort === undefined
+        ? (initialReasoningSettingForNewSession(globalResolvedModel.value?.binding) ??
+          reasoningEffortSetting.value)
+        : reasoningEffortSetting.value,
+    autoContext: autoContext.value
+  }),
+  // The Home opening reaches the model on every turn as this system note, worded in the reader's
+  // locale.
+  leadNote: createOpeningLeadNote(t),
+  onError: (failure, action) => reportWorkspaceError(failure, action)
 })
+
+/**
+ * Both model pills edit the open thread's own selection once Main holds it, and the global default
+ * on a blank Home — never the other way round (A5).
+ */
+const modelScope = provideHomeModelScope({
+  settings: () => workspace.sessionModel.value,
+  configure: (patch) => void workspace.configure(patch)
+})
+
+const conversation = useHomeConversation({ workspace: () => workspace.adapter })
 const { isCompacting, isEmpty, isStreaming, lastTurn, messages } = conversation
 
 const panelOpen = ref(false)
@@ -188,27 +252,16 @@ const panelOpen = ref(false)
  */
 const isHomeRoute = computed(() => route.path === '/home' || route.path.startsWith('/home/c/'))
 
-/**
- * Both pills read this: the pinned model's display name and provider icon when it resolves, the
- * routing label alone when it does not — auto keeps its text-only look.
- */
-const modelPill = computed<{ label: string; icon: ITuffIcon | undefined }>(() => {
-  const resolved = resolvedModel.value
-  return resolved
-    ? {
-        label: resolved.displayName,
-        icon:
-          modelFamilyIconFor(resolved.model) ??
-          providerIconForId(resolved.providerId, resolved.providerType)
-      }
-    : { label: t('home.modelName'), icon: undefined }
-})
+/** Both pills read this: the pinned model with its mark, or the routing label with the auto mark. */
+const modelPill = computed(() =>
+  modelPillFace(modelScope.resolvedChoice.value, t('home.modelName'))
+)
 
 /** The composer's pill adds the reasoning level the next send runs at; the top bar's does not. */
-const composerModel = computed(() => ({
-  ...modelPill.value,
-  effort: reasoningPillLevel.value ? t(reasoningLevelLabelKey(reasoningPillLevel.value)) : undefined
-}))
+const composerModel = computed(() => {
+  const level = modelScope.pillLevel.value
+  return { ...modelPill.value, effort: level ? t(reasoningLevelLabelKey(level)) : undefined }
+})
 
 /** Only macOS and Windows have a microphone pane to open; elsewhere the notice stands alone. */
 const micSettingsAvailable = (() => {
@@ -231,18 +284,40 @@ const dictation = useComposerDictation({
       kind,
       {
         t,
+        locale: locale.value,
         openRecognitionSettings: () => void router.push('/setting/intelligence/capabilities'),
         openMicrophoneSettings: micSettingsAvailable
           ? () => void dictation.openMicrophoneSettings()
-          : undefined
+          : undefined,
+        openUsageLimits: () => void router.push(USAGE_LIMITS_ROUTE)
       },
       detail
     )
 })
 
+/**
+ * A send in flight to Main: the draft stays put until Main has it, and a second press in that window
+ * must not send it twice.
+ */
+const sending = ref(false)
+const pageSubmissionSequence = createLatestOnly()
+
 // A plain send waits for dictation to finish; while it runs the send key means 「结束并发送」 (D10-d).
+// A running reply does not block it: Main takes the message as a pending input (A6).
 const canSend = computed(
-  () => draft.value.trim().length > 0 && !isStreaming.value && !dictation.active.value
+  () =>
+    draft.value.trim().length > 0 &&
+    isHomeRoute.value &&
+    (typeof route.params.id !== 'string' || route.params.id === conversationId.value) &&
+    !dictation.active.value &&
+    !sending.value &&
+    !workspace.loading.value &&
+    !workspace.loadError.value
+)
+
+/** Main is busy and the draft would join its queue rather than start a turn. */
+const sendQueues = computed(
+  () => workspace.busy.value || (workspace.state.value?.queue.length ?? 0) > 0
 )
 
 /** The send key's face (`composer/send-state.ts`), derived from state this page already owns. */
@@ -251,7 +326,7 @@ const sendState = computed(() =>
     hasText: draft.value.trim().length > 0,
     streaming: isStreaming.value,
     awaitingFirstToken: isAwaitingFirstToken(messages.value.at(-1)),
-    blocked: Boolean(agentTools.pending.value),
+    blocked: Boolean(agentTools.pending.value) || Boolean(workspace.state.value?.pendingRun),
     dictating: dictation.active.value
   })
 )
@@ -263,7 +338,10 @@ watch(isStreaming, (streaming) => {
   if (streaming) void dictation.stop()
 })
 watch(isHomeRoute, (visible) => {
-  if (!visible) void dictation.stop()
+  if (!visible) {
+    invalidatePageSubmission()
+    void dictation.stop()
+  }
 })
 
 /**
@@ -274,9 +352,36 @@ watch(isHomeRoute, (visible) => {
  * plain border: static emphasis that never changes state is paint the border already carries.
  *
  * The running state is deliberately excluded — while a response streams the composer wears the
- * living glow on its own pseudo-elements, and two effects on one box fight for the same edge.
+ * living glow on its own pseudo-elements, and two effects on one box fight for the same edge. So is
+ * dictation, which lights the box from below with the voice glow.
  */
-const composerBeamActive = computed(() => isEmpty.value && !isStreaming.value)
+const composerBeamActive = computed(
+  () => isEmpty.value && !isStreaming.value && !dictation.active.value
+)
+
+/**
+ * The dictation glow's level, sampled by TxVoiceBeam once per frame: the newest of the session's
+ * ~10 Hz level frames while it listens, silence otherwise. A getter, so the frames never re-render
+ * the page; the glow's own attack and release smooth between them.
+ */
+function dictationLevel(): number {
+  if (dictation.state.value !== 'listening') return 0
+  return dictation.levels.value.at(-1) ?? 0
+}
+
+/**
+ * The glow's lobes, read off the composer's live rim (`--home-live-stops`) once the box is mounted.
+ * Until then the beam keeps its own palette, which nothing shows: dictation starts in that box.
+ */
+const voiceGlowColors = ref<string[]>([])
+onMounted(() => {
+  const composer = composerRef.value
+  if (composer) {
+    voiceGlowColors.value = voiceGlowLobes(
+      getComputedStyle(composer).getPropertyValue('--home-live-stops')
+    )
+  }
+})
 
 /**
  * The opening message is the working title until the model summarises one (#969).
@@ -293,21 +398,6 @@ const generatedTitle = ref<string | null>(null)
  */
 let titleInFlightFor: string | null = null
 const titleSequence = createLatestOnly()
-
-/**
- * Every conversation-store write goes through here, in order.
- *
- * The settled-turn watcher and the title upgrade both persist, and the SDK does not promise write
- * ordering — a title upgrade holding an older message snapshot could land after a newer settled
- * turn and shrink the stored thread. Chaining makes the order the call order, and each writer
- * re-reads live state inside its queued turn so nothing stale is captured.
- */
-let persistChain: Promise<void> = Promise.resolve()
-function enqueuePersist(write: () => Promise<void>): Promise<void> {
-  const next = persistChain.then(write, write)
-  persistChain = next.catch(() => {})
-  return next
-}
 
 const firstUserContent = computed(
   () => messages.value.find((message) => message.role === 'user')?.content
@@ -580,16 +670,22 @@ const formDrafts = new Map<string, Record<string, FormFieldValue>>()
 /**
  * A form submission continues the conversation as a plain user message: the
  * model reads it like any other turn, so the loop needs no second channel.
+ * Main marks the answered call in the same write, so a reloaded thread does not
+ * re-offer a spent form; the local lock covers the moment until it lands.
  */
 function submitForm(tool: AiToolCallPart, values: Record<string, unknown>): void {
   submittedForms.add(tool.id)
-  // On the part itself so it persists with the thread: a reloaded
-  // conversation must not re-offer a form that was already answered.
-  tool.submitted = true
   formDrafts.delete(tool.id)
   const lines = Object.entries(values).map(([key, value]) => `${key}: ${String(value)}`)
   draft.value = ''
-  void conversation.send(`【${t('home.formSubmitted')}】\n${lines.join('\n')}`)
+  void workspace
+    .submit(`【${t('home.formSubmitted')}】\n${lines.join('\n')}`, undefined, {
+      answersToolCallId: tool.id
+    })
+    .catch((error: unknown) => {
+      submittedForms.delete(tool.id)
+      reportSubmitError(error)
+    })
 }
 
 /**
@@ -683,8 +779,126 @@ function pinLeavingHead(head: LeavingHead | null): void {
   head.el.classList.add('is-leaving')
 }
 
+/**
+ * Only images reach the model; a file in the tray never had bytes on this surface. Said once the
+ * send has landed, so the reader knows which part of the message stayed behind.
+ */
+function warnUnsentAttachments(attachments: AiAttachment[] | undefined): void {
+  if (attachments?.some((attachment) => attachment.kind !== 'image')) {
+    toast.info(t('home.attachmentNotSent'))
+  }
+}
+
+function workspaceErrorText(failure: AgentWorkspaceError): string {
+  return t(`home.workspace.error.${failure.code === 'unknown' ? 'unknown' : failure.code}`)
+}
+
+/** A workspace call the reader made failed: say what Main said, in their language. */
+function reportWorkspaceError(failure: AgentWorkspaceError, action: string): void {
+  homeLog.warn(`Workspace ${action} rejected`, failure.detail)
+  toast.error(
+    workspaceErrorText(failure),
+    failure.code === 'unknown' && failure.detail ? { description: failure.detail } : undefined
+  )
+}
+
+function reportSubmitError(error: unknown): void {
+  const failure =
+    error instanceof AgentWorkspaceRequestError ? error.failure : toAgentWorkspaceError(error)
+  reportWorkspaceError(failure, 'submit')
+}
+
+/**
+ * Agent mode runs on one of the orchestrator's own enabled profiles; without one Main would refuse
+ * the turn, so the press stops here with the reason instead of sending.
+ */
+function agentProfileMissing(): boolean {
+  const settings = workspace.settings.value
+  if (settings.mode !== 'agent') return false
+  const profile = workspace.profiles.value.find((entry) => entry.id === settings.profileId)
+  return !profile?.enabled
+}
+
+function invalidatePageSubmission(): void {
+  pageSubmissionSequence.claim()
+  sending.value = false
+  choreographedSend = false
+  openingHold.value = null
+  lifting.value = false
+  choreography.invalidate()
+}
+
+/**
+ * A send while Main is busy (or holds pending inputs) joins Main's queue. The draft stays in the
+ * composer until Main has persisted it — a rejected input, the full queue included, is never shown
+ * as queued and never lost (A6).
+ */
+async function enqueueDraft(): Promise<void> {
+  if ((workspace.state.value?.queue.length ?? 0) >= WORKSPACE_QUEUE_LIMIT) {
+    toast.error(t('home.workspace.queue.full', { max: WORKSPACE_QUEUE_LIMIT }))
+    return
+  }
+  const isCurrentSend = pageSubmissionSequence.claim()
+  const idAtSend = conversationId.value
+  const pathAtSend = route.fullPath
+  const ownsPage = () =>
+    isCurrentSend() &&
+    isHomeRoute.value &&
+    conversationId.value === idAtSend &&
+    route.fullPath === pathAtSend
+  const text = draft.value
+  const attachments =
+    pendingAttachments.value.length > 0 ? [...pendingAttachments.value] : undefined
+  sending.value = true
+  try {
+    await workspace.submit(text, attachments)
+  } catch (error) {
+    if (ownsPage()) reportSubmitError(error)
+    return
+  } finally {
+    if (isCurrentSend()) sending.value = false
+  }
+  if (!ownsPage()) return
+  // Typing on while Main answered is the reader's next draft, not this one.
+  if (draft.value === text) draft.value = ''
+  pendingAttachments.value = pendingAttachments.value.filter(
+    (attachment) => !attachments?.includes(attachment)
+  )
+  await nextTick()
+  if (!ownsPage()) return
+  collapseDraft(true)
+  warnUnsentAttachments(attachments)
+}
+
 async function submit(): Promise<void> {
   if (!canSend.value) return
+  if (agentProfileMissing()) {
+    toast.error(t('home.workspace.profile.required'))
+    return
+  }
+  // Images reach a model only when its binding and adapter accept them; Main refuses the same
+  // send, so the draft stays put here instead of being lifted and handed back.
+  const imageGate = modelScope.resolvedChoice.value?.binding.imageInput
+  if (
+    imageGate &&
+    !imageGate.accepted &&
+    pendingAttachments.value.some((item) => item.kind === 'image')
+  ) {
+    toast.error(t('home.workspace.imagesUnsupported'))
+    return
+  }
+  if (sendQueues.value) {
+    await enqueueDraft()
+    return
+  }
+  const isCurrentSend = pageSubmissionSequence.claim()
+  const pathAtSend = route.fullPath
+  let idAtSend = conversationId.value
+  const ownsPage = () =>
+    isCurrentSend() &&
+    isHomeRoute.value &&
+    conversationId.value === idAtSend &&
+    (route.fullPath === pathAtSend || (idAtSend !== null && route.params.id === idAtSend))
   // The send key launches with the press — a click, Enter and the shortcut all pass here — so its
   // arrow leaves with the lifted message and the stop capsule grows as the reply starts.
   toolbarRef.value?.launch()
@@ -723,7 +937,7 @@ async function submit(): Promise<void> {
       draftGhost: draftGhostRef.value,
       opening,
       onClear: () => {
-        lifting.value = false
+        if (isCurrentSend()) lifting.value = false
       }
     })
     lifting.value = lift !== null
@@ -732,13 +946,17 @@ async function submit(): Promise<void> {
   // Ownership moves to the message: the tray empties, the bubbles keep the object URLs alive.
   pendingAttachments.value = []
   await nextTick()
+  if (!ownsPage()) return
   collapseDraft(lift !== null)
 
-  // Allocated here rather than at setup so an untouched home screen never claims an id.
+  // Allocated here rather than at setup so an untouched home screen never claims an id; Main
+  // creates the conversation with it in the same call that takes the message.
+  const minted = conversationId.value === null
   conversationId.value ??= createConversationId()
+  idAtSend = conversationId.value
 
   // Claim the incoming batch before it exists: the length watcher fires
-  // during `send`'s flush, so the flag must already be up.
+  // in the flush that applies Main's reply, so the flag must already be up.
   choreographedSend = true
 
   // FLIP: the composer travels from centre stage to the bottom dock. Measured
@@ -747,18 +965,58 @@ async function submit(): Promise<void> {
   const first = composerEl?.getBoundingClientRect()
   const head = measureLeavingHead()
 
-  const turn = conversation.send(text, attachments, { lead })
-  // Appended in the same flush as the user's message, as the thread's first row.
+  sending.value = true
+  let disposition: WorkspaceSubmitDisposition
+  try {
+    disposition = await workspace.submit(text, attachments, { lead })
+  } catch (error) {
+    if (!ownsPage()) return
+    // Rejection belongs to this view only. A stale completion cannot restore its
+    // draft or release a minted id after the user chose another conversation.
+    choreographedSend = false
+    openingHold.value = null
+    lift?.cancel()
+    lifting.value = false
+    if (!draft.value) draft.value = text
+    pendingAttachments.value = [...(attachments ?? []), ...pendingAttachments.value]
+    if (minted) {
+      conversationId.value = null
+      idAtSend = null
+    }
+    await nextTick()
+    if (!ownsPage()) return
+    autoGrow()
+    reportSubmitError(error)
+    return
+  } finally {
+    if (isCurrentSend()) sending.value = false
+  }
+  if (minted) void history.refresh()
+  if (!ownsPage()) return
+  warnUnsentAttachments(attachments)
+  // Landing on the conversation's own URL is what lets the sidebar and a reload return to it.
+  if (route.params.id !== idAtSend) void router.replace(`/home/c/${idAtSend}`)
+
+  if (disposition !== 'started') {
+    // Main took it as a pending input after all (a turn began in between): it is a queue row now,
+    // not a bubble, so nothing flies.
+    choreographedSend = false
+    openingHold.value = null
+    lift?.cancel()
+    return
+  }
+
+  // Main's reply carried the thread with this message on it; the lead is its first row.
   const firstRow = messages.value[0]
   const leadId = lead && firstRow?.role === 'assistant' ? firstRow.id : undefined
   // Sending from a scrolled-up position still lands you on your own message —
   // the stream only auto-follows readers already at the bottom.
   await nextTick()
+  if (!ownsPage()) return
 
-  // If send() bailed on its own streaming guard nothing was appended, the
-  // watcher never consumed the claim, and a latched claim would steal the
-  // next batch's entrance. Clearing after the flush is free in the normal
-  // path — the watcher already consumed it.
+  // If nothing was appended the watcher never consumed the claim, and a latched claim would steal
+  // the next batch's entrance. Clearing after the flush is free in the normal path — the watcher
+  // already consumed it.
   choreographedSend = false
   // The greeting left in that flush, keeping the opening it showed; nothing is left to hold.
   openingHold.value = null
@@ -792,7 +1050,6 @@ async function submit(): Promise<void> {
     // Only reachable when the preference flipped mid-send: put the lifted text down.
     lift?.cancel()
     streamRef.value?.scrollToBottom()
-    await turn
     return
   }
 
@@ -821,7 +1078,6 @@ async function submit(): Promise<void> {
       choreography.scheduleForCurrentSend(reveal, FLIGHT_IMPACT_MS + 80)
     }
   }
-  await turn
 }
 
 /**
@@ -859,7 +1115,29 @@ function handleComposerKeydown(event: KeyboardEvent): void {
 function resolveErrorTitle(code: string | undefined): string {
   if (code === CONVERSATION_ERROR_PROVIDER_UNAVAILABLE) return t('home.error.noProvider')
   if (code === CONVERSATION_ERROR_EMPTY_RESPONSE) return t('home.error.empty')
+  if (code === 'WORKSPACE_TURN_INTERRUPTED')
+    return t('home.workspace.error.WORKSPACE_TURN_INTERRUPTED')
   return t('home.error.generic')
+}
+
+/**
+ * A turn the usage limit refused, read as the user's own limit rather than a fault: its own title,
+ * the reset time in local words instead of main's English sentence, and the way to the limits in
+ * place of a retry that would only be refused again until then.
+ */
+function resolveUsageLimitFailure(
+  error: { code: string; detail: string } | undefined
+): ReturnType<typeof resolveIntelligenceErrorRecovery> | null {
+  if (error?.code !== CONVERSATION_ERROR_USAGE_LIMIT_REACHED) return null
+  return resolveIntelligenceErrorRecovery(
+    { errorCode: error.code, error: error.detail },
+    t,
+    locale.value
+  )
+}
+
+function openUsageLimits(): void {
+  void router.push(USAGE_LIMITS_ROUTE)
 }
 
 /**
@@ -1024,16 +1302,6 @@ const homeLog = createRendererLogger('HomeConversation')
 const history = useConversationHistory()
 const projectStore = useProjectStore()
 
-/**
- * Allocated on the first send, so an untouched home screen never writes an
- * empty row. Reactive because it also keys the stream instance: old stored
- * threads share counter-style message ids, and one keep-alive'd stream
- * carrying its height cache across them laid thread B out with thread A's
- * measurements. Draft → first persist does not change it (the id is minted
- * at send time), so the key flips only on real thread switches.
- */
-const conversationId = ref<string | null>(null)
-const projectId = ref<string | null>(null)
 const currentProject = computed(() =>
   projectId.value ? (projectStore.projects.find((p) => p.id === projectId.value) ?? null) : null
 )
@@ -1081,9 +1349,9 @@ watch(conversationId, () => dictation.cancel({ restore: false }))
 const restoreSequence = createLatestOnly()
 
 async function resetBlankConversation(nextProjectId: string | null): Promise<void> {
+  invalidatePageSubmission()
   conversationId.value = null
   projectId.value = nextProjectId
-  choreography.invalidate()
   const composerEl = composerRef.value
   const first = composerEl?.getBoundingClientRect()
   conversation.reset()
@@ -1114,13 +1382,14 @@ watch(
       return
     }
     if (target === conversationId.value) return
+    invalidatePageSubmission()
 
-    const restored = await history.load(target)
+    // The record (title, project) and Main's workspace state are read together, so the thread is
+    // on screen in the same update that switches to it.
+    const [restored] = await Promise.all([history.load(target), workspace.prefetch(target)])
     // A newer navigation started while this load was in flight; it owns the view now.
     if (!isCurrentRestore()) return
     if (!restored) return
-    conversationId.value = target
-    projectId.value = restored.projectId
     // Opening a thread from the blank home docks the composer — the same
     // journey as a first send, so it gets the same measured spring instead
     // of teleporting. Thread-to-thread hops measure ~0 and stay still.
@@ -1131,7 +1400,9 @@ watch(
     // that is leaving. Not before the same-thread return above: a first send's own navigation to its
     // new id passes through here and must leave its lift alone.
     choreography.invalidate()
-    conversation.restore(restored.messages)
+    // The workspace mirror follows the id: Main's history replaces the stage in the next flush.
+    conversationId.value = target
+    projectId.value = restored.projectId
     // A stored title that differs from the opening message is a real one; the working-title
     // persist writes the opening message back, and treating that as custom would block
     // generation forever.
@@ -1226,16 +1497,6 @@ const {
   choose: choosePush
 } = push
 
-/**
- * The opening as the greeting shows it. `submit` pins it for the one flush between taking the lead
- * and the greeting's leave: `takeLead` drops an opening still being written, and the greeting should
- * fade out with the words the reader saw rather than lose them a frame before it goes.
- */
-const openingHold = shallowRef<{
-  phase: HomeOpeningPhase
-  text: string
-  source: HomeOpeningSource | null
-} | null>(null)
 const openingPhase = computed(() => openingHold.value?.phase ?? push.opening.phase.value)
 const openingText = computed(() => openingHold.value?.text ?? push.opening.text.value)
 /** Keys the text: the model's opening taking the template's place is a swap, not an edit. */
@@ -1279,10 +1540,11 @@ const pushSlotStyle = computed(() => {
 })
 
 /**
- * Fire-and-forget: the settled-turn persist above already wrote the working title, so the thread is
- * durable before the summary call even starts, and a second persist upgrades the label when the
- * call lands. Claimed against `titleSequence` so switching threads mid-call drops the result
- * instead of stamping it onto the wrong conversation.
+ * Fire-and-forget: Main created the conversation with its working title, so the thread is durable
+ * before the summary call even starts, and a rename upgrades the label when the call lands. A rename
+ * carries no messages, so however late it lands it cannot shrink the history Main holds. Claimed
+ * against `titleSequence` so switching threads mid-call drops the result instead of stamping it onto
+ * the wrong conversation.
  */
 function maybeGenerateTitle(): void {
   // The first reply to the user — never the Home opening a thread can start with, which would
@@ -1316,14 +1578,9 @@ function maybeGenerateTitle(): void {
       )
       if (!title || !isCurrent() || conversationId.value !== idAtStart) return
       generatedTitle.value = title
-      // Queued behind any settled-turn write, and the messages are read inside the queued turn:
-      // however late this lands, it stores the thread as it is then, never a shrunken snapshot.
-      await enqueuePersist(async () => {
-        if (conversationId.value !== idAtStart) return
-        await history.persist(idAtStart, title, messages.value, projectId.value)
-      })
+      await history.rename(idAtStart, title)
     } catch (error) {
-      // The working title is already on screen and persisted; a label upgrade may fail silently.
+      // The working title is already on screen and stored; a label upgrade may fail silently.
       homeLog.warn('Conversation title generation failed', String(error))
     } finally {
       if (titleInFlightFor === idAtStart) titleInFlightFor = null
@@ -1332,37 +1589,168 @@ function maybeGenerateTitle(): void {
 }
 
 /**
- * Writes after every settled turn.
- *
- * Keyed on the streaming flag rather than on content: saving per delta would issue a full-thread
- * rewrite for every token.
+ * Once Main settles a turn the title may be generated. Main persisted the turn itself — this page
+ * never writes the thread back, so a stale window can no longer overwrite what Main recorded.
  */
 watch(
-  () => isStreaming.value,
-  async (streaming, wasStreaming) => {
-    if (streaming || !wasStreaming || !conversationId.value) return
-    try {
-      await enqueuePersist(async () => {
-        if (!conversationId.value) return
-        await history.persist(
-          conversationId.value,
-          conversationTitle.value ?? '',
-          messages.value,
-          projectId.value
-        )
-      })
-      // Landing on the conversation's own URL is what lets the sidebar and a reload return to it.
-      if (route.params.id !== conversationId.value) {
-        await router.replace(`/home/c/${conversationId.value}`)
-      }
-      maybeGenerateTitle()
-    } catch (error) {
-      // A watcher rejection is an unhandled promise nobody sees, and losing a thread silently is
-      // worse than losing it loudly — the conversation stays on screen either way.
-      homeLog.error('Failed to persist conversation', error)
-    }
+  () => workspace.busy.value,
+  (busy, wasBusy) => {
+    if (busy || !wasBusy || !conversationId.value) return
+    maybeGenerateTitle()
+    // The sidebar's order and timestamps follow the turn that just ended.
+    void history.refresh()
   }
 )
+
+// ============================================================================
+// Workspace: mode, profile, branches, approvals
+// ============================================================================
+
+const hasHistory = computed(() => messages.value.length > 0)
+
+/** Where the first user message sits: anything before it is the Home opening, not a reply. */
+const firstUserIndex = computed(() =>
+  messages.value.findIndex((message) => message.role === 'user')
+)
+
+/** Profiles are read when Agent mode is in view; the menu reads them again on every open. */
+watch(
+  () => workspace.settings.value.mode,
+  (mode) => {
+    if (mode === 'agent') void workspace.loadProfiles()
+  },
+  { immediate: true }
+)
+
+/** The first enabled profile, as the orchestrator lists them — the menu shows which one it is. */
+function firstEnabledProfileId(): string | undefined {
+  return workspace.profiles.value.find((profile) => profile.enabled)?.id
+}
+
+/** A blank Agent Home starts on a real enabled profile once the list is known, never a placeholder. */
+watch(
+  () => [workspace.profiles.value, workspace.settings.value.mode] as const,
+  ([, mode]) => {
+    if (workspace.state.value || mode !== 'agent' || workspace.settings.value.profileId) return
+    const fallback = firstEnabledProfileId()
+    if (fallback) workspace.setDraftProfile(fallback)
+  }
+)
+
+const branching = ref(false)
+/**
+ * The branch request that may still move the page. A newer branch, or the reader opening another
+ * thread meanwhile, takes that right away: a branch that lands late is announced, never navigated to.
+ */
+const branchSequence = createLatestOnly()
+
+async function branchTo(request: {
+  messageId?: string
+  mode?: ConversationWorkspaceMode
+}): Promise<void> {
+  const origin = conversationId.value
+  if (!origin || branching.value) return
+  const ownsNavigation = branchSequence.claim()
+  branching.value = true
+  try {
+    const child = await workspace.fork(request)
+    void history.refresh()
+    if (ownsNavigation() && conversationId.value === origin && route.params.id === origin) {
+      await router.push(`/home/c/${child}`)
+    } else {
+      toast.success(t('home.workspace.fork.createdElsewhere'))
+    }
+  } catch (error) {
+    reportSubmitError(error)
+  } finally {
+    branching.value = false
+  }
+}
+
+/** A finished reply after the opening can anchor a branch; one still running cannot. */
+function canBranchFrom(message: ConversationMessage, index: number): boolean {
+  return (
+    message.role === 'assistant' &&
+    message.status === 'complete' &&
+    firstUserIndex.value !== -1 &&
+    index > firstUserIndex.value &&
+    !workspace.busy.value
+  )
+}
+
+/**
+ * Chat and Agent are different execution authorities. A thread with history keeps its own and the
+ * switch continues in a new branch; an empty one, or a blank Home, just changes what it will run as.
+ */
+function selectMode(mode: ConversationWorkspaceMode): void {
+  if (!workspace.state.value) {
+    workspace.setDraftMode(mode)
+    return
+  }
+  if (hasHistory.value) {
+    void branchTo({ mode })
+    return
+  }
+  void workspace.configure({
+    mode,
+    profileId:
+      mode === 'agent' ? (workspace.settings.value.profileId ?? firstEnabledProfileId()) : undefined
+  })
+}
+
+function selectProfile(profileId: string): void {
+  if (!workspace.state.value) workspace.setDraftProfile(profileId)
+  else void workspace.configure({ profileId })
+}
+
+/**
+ * The mode menu lists profiles, not modes: picking one is picking Agent mode with that profile. Within
+ * Agent it is a profile change; from Chat it is a mode change, which a thread with history takes as a
+ * branch. Main's fork copies the thread's settings and replaces only the mode, so the profile the
+ * branch should run as is written to this thread first — inert here while it stays in Chat.
+ */
+async function selectAgentProfile(profileId: string): Promise<void> {
+  const current = workspace.settings.value
+  if (current.mode === 'agent') {
+    if (current.profileId !== profileId) selectProfile(profileId)
+    return
+  }
+  if (!workspace.state.value) {
+    workspace.setDraftProfile(profileId)
+    workspace.setDraftMode('agent')
+    return
+  }
+  if (!hasHistory.value) {
+    void workspace.configure({ mode: 'agent', profileId })
+    return
+  }
+  if (current.profileId !== profileId) {
+    await workspace.configure({ profileId })
+    // A refused write was already reported; branching now would run the profile the thread had.
+    if (workspace.settings.value.profileId !== profileId) return
+  }
+  void branchTo({ mode: 'agent' })
+}
+
+/** The waiting run's profile by name, when the list has it; the card falls back to its id. */
+const pendingRunProfileName = computed(() => {
+  const profileId = workspace.state.value?.pendingRun?.profileId
+  return workspace.profiles.value.find((profile) => profile.id === profileId)?.name
+})
+
+/** The gateway's requests as this conversation sees them: its own, another's, or external. */
+const gatewayApprovals = computed(() =>
+  [agentTools.pending.value, ...agentTools.queued.value]
+    .filter((request) => request !== null)
+    .map((request) => toGatewayApproval(request, conversationId.value))
+)
+
+const pendingGatewayOrigin = computed(() => gatewayApprovals.value[0]?.origin)
+
+const activityTurns = computed(() => buildActivityTurns(messages.value))
+
+/** The routed model's own limits from its effective binding; auto routing knows none. */
+const modelLimits = computed(() => toHomeModelLimits(modelScope.resolvedChoice.value?.binding))
 
 // ============================================================================
 // Command layer
@@ -1422,7 +1810,10 @@ onBeforeUnmount(disposeCommands)
       :message-count="messages.length"
       :project-name="currentProject?.name"
       :project-path="currentProject?.rootPath"
+      :can-branch="hasHistory && !workspace.busy.value && !branching"
+      :branching="branching"
       @toggle-panel="panelOpen = !panelOpen"
+      @branch="branchTo({})"
     />
 
     <div class="HomePage-Split">
@@ -1494,17 +1885,6 @@ onBeforeUnmount(disposeCommands)
                       <div class="HomePage-UserBubble">
                         {{ message.content }}
                       </div>
-                      <!-- Only for what stayed local: a non-image attachment, or an image whose
-                           bytes were already gone by the time the turn was sent. -->
-                      <p
-                        v-if="
-                          (message.attachments?.length ?? 0) >
-                          (message.modelAttachments?.length ?? 0)
-                        "
-                        class="HomePage-AttachHint"
-                      >
-                        {{ t('home.attachmentNotSent') }}
-                      </p>
                       <TxMessageActions
                         class="HomePage-MsgActions is-resting"
                         :appear="false"
@@ -1642,7 +2022,38 @@ onBeforeUnmount(disposeCommands)
                         <span>{{ t('home.compacting') }}</span>
                       </p>
 
-                      <div v-if="message.status === 'failed'" class="HomePage-Error" role="alert">
+                      <div
+                        v-if="
+                          message.status === 'failed' && resolveUsageLimitFailure(message.error)
+                        "
+                        class="HomePage-Error is-usage-limit"
+                        role="alert"
+                        data-testid="home-usage-limit-error"
+                      >
+                        <span class="i-ri-timer-line HomePage-ErrorIcon" />
+                        <div class="HomePage-ErrorBody">
+                          <p class="HomePage-ErrorTitle">
+                            {{ resolveUsageLimitFailure(message.error)?.title }}
+                          </p>
+                          <p class="HomePage-ErrorDetail">
+                            {{ resolveUsageLimitFailure(message.error)?.detail }}
+                          </p>
+                        </div>
+                        <button
+                          class="HomePage-RetryBtn"
+                          type="button"
+                          data-testid="home-open-usage-limits"
+                          @click="openUsageLimits"
+                        >
+                          {{ resolveUsageLimitFailure(message.error)?.action?.label }}
+                        </button>
+                      </div>
+
+                      <div
+                        v-else-if="message.status === 'failed'"
+                        class="HomePage-Error"
+                        role="alert"
+                      >
                         <span class="i-ri-error-warning-line HomePage-ErrorIcon" />
                         <div class="HomePage-ErrorBody">
                           <p class="HomePage-ErrorTitle">
@@ -1687,7 +2098,19 @@ onBeforeUnmount(disposeCommands)
                         :stop-speak-label="t('home.speakStop')"
                         @regenerate="conversation.retry()"
                         @speak="toggleSpeak(message)"
-                      />
+                      >
+                        <button
+                          v-if="canBranchFrom(message, index)"
+                          class="tx-message-actions__btn"
+                          type="button"
+                          :disabled="branching"
+                          :title="t('home.workspace.fork.fromHere')"
+                          :aria-label="t('home.workspace.fork.fromHere')"
+                          @click="branchTo({ messageId: message.id })"
+                        >
+                          <span class="i-ri-git-branch-line" aria-hidden="true" />
+                        </button>
+                      </TxMessageActions>
                     </template>
                   </div>
                 </div>
@@ -1712,9 +2135,39 @@ onBeforeUnmount(disposeCommands)
           </TxModal>
 
           <div ref="composerGroupRef" class="HomePage-ComposerGroup">
+            <!-- Main could not read this thread: nothing below is its state, so say so and offer
+                 the read again rather than an empty stage that looks like a new conversation. -->
+            <div v-if="workspace.loadError.value" class="HomePage-WorkspaceAlert" role="alert">
+              <span class="i-ri-error-warning-line HomePage-ErrorIcon" aria-hidden="true" />
+              <p class="HomePage-WorkspaceAlertText">
+                {{ workspaceErrorText(workspace.loadError.value) }}
+              </p>
+              <button class="HomePage-RetryBtn" type="button" @click="workspace.reload()">
+                {{ t('home.workspace.retry') }}
+              </button>
+            </div>
+
+            <!-- An agent run waiting on the run gate (run id), apart from the tool gate below. -->
+            <HomeRunApproval
+              v-if="workspace.state.value?.pendingRun"
+              :run="workspace.state.value.pendingRun"
+              :profile-name="pendingRunProfileName"
+              :deciding="workspace.runDecision.value"
+              @approve="workspace.approveRun()"
+              @reject="workspace.rejectRun()"
+            />
+
             <!-- The agent cannot continue until this is answered. Keeping the card in the measured
                  composer stack reserves its full height while the transcript still scrolls behind it. -->
             <div v-if="agentTools.pending.value" class="HomePage-ConfirmSlot">
+              <!-- Main attributed the request to its turn; one it could not is not this thread's. -->
+              <p
+                v-if="pendingGatewayOrigin && pendingGatewayOrigin !== 'current'"
+                class="HomePage-ConfirmOrigin"
+              >
+                <span class="i-ri-information-line" aria-hidden="true" />
+                <span>{{ t(`home.workspace.gateway.originNote.${pendingGatewayOrigin}`) }}</span>
+              </p>
               <TxToolConfirmation
                 :tool-name="agentTools.pending.value.tool"
                 :summary="agentTools.pending.value.summary"
@@ -1727,6 +2180,18 @@ onBeforeUnmount(disposeCommands)
                 @deny="agentTools.deny($event.remember)"
               />
             </div>
+
+            <HomeWorkspaceQueue
+              v-if="workspace.state.value && workspace.queue.value.length > 0"
+              :items="workspace.queue.value"
+              :status="workspace.state.value.status"
+              :held="workspace.state.value.queueHeld"
+              :limit="WORKSPACE_QUEUE_LIMIT"
+              :pending="workspace.queuePending.value"
+              :resuming="workspace.resuming.value"
+              @action="workspace.queueAction"
+              @resume="workspace.resume()"
+            />
 
             <!-- The beam wraps rather than decorates: it draws on the composer's own edge, and
                  reads that edge's 24px radius off the element in its slot. -->
@@ -1749,6 +2214,23 @@ onBeforeUnmount(disposeCommands)
                 @drop="onDrop"
                 @keydown="handleComposerKeydown"
               >
+                <!-- The dictation glow rides inside the box as an overlay rather than wrapping it:
+                     the beam's wrapper clips, and wrapping would cut the composer's own shadow and
+                     focus ring. 「正在识别」 gathers it into the travelling processing beam. -->
+                <TxVoiceBeam
+                  class="HomePage-VoiceGlow"
+                  :active="dictation.active.value"
+                  :level="dictationLevel"
+                  :processing="dictation.state.value === 'finishing'"
+                  :theme="resolvedTheme"
+                  :colors="voiceGlowColors"
+                  :border-radius="24"
+                  :scale="1.2"
+                  aria-hidden="true"
+                >
+                  <div class="HomePage-VoiceGlowHost" />
+                </TxVoiceBeam>
+
                 <TxAttachmentTray
                   v-if="pendingAttachments.length"
                   class="HomePage-ComposerTray"
@@ -1776,8 +2258,7 @@ onBeforeUnmount(disposeCommands)
                 />
 
                 <!-- One family of 32px controls (`composer/`); the send key is an island that grows
-                     into 「■ 停止」 and the microphone into the dictation capsule, neither moving a
-                     neighbour. -->
+                     into 「■ 停止」 over the microphone's slot without moving a neighbour. -->
                 <ComposerToolbar
                   ref="toolbarRef"
                   v-model:permission-mode="agentToolsMode"
@@ -1785,7 +2266,6 @@ onBeforeUnmount(disposeCommands)
                   :send-state="sendState"
                   :mic-state="dictation.state.value"
                   :mic-blocked="dictation.captureBlocked.value"
-                  :mic-levels="dictation.levels.value"
                   :mic-elapsed-ms="dictation.elapsedMs.value"
                   :mic-outcome="dictation.outcome.value"
                   @files="addFiles"
@@ -1793,7 +2273,34 @@ onBeforeUnmount(disposeCommands)
                   @stop="conversation.stop()"
                   @mic="dictation.toggle()"
                   @reset-approvals="resetRememberedApprovals"
-                />
+                >
+                  <template #mode>
+                    <HomeWorkspaceModeMenu
+                      :mode="workspace.settings.value.mode"
+                      :profile-id="workspace.settings.value.profileId"
+                      :profiles="workspace.profiles.value"
+                      :profiles-loading="workspace.profilesLoading.value"
+                      :profiles-error="workspace.profilesError.value"
+                      :profile-saving="workspace.profileSaving.value"
+                      :branch-on-change="hasHistory"
+                      :locked="workspace.busy.value || branching"
+                      @select-chat="selectMode('chat')"
+                      @select-agent="selectAgentProfile"
+                      @toggle-profile="workspace.setProfileEnabled"
+                      @load-profiles="workspace.loadProfiles()"
+                    />
+                    <!-- While Main is busy a send queues; the key says so before it is pressed. -->
+                    <ComposerControl
+                      v-if="sendQueues && draft.trim().length > 0"
+                      :label="t('home.workspace.queue.add')"
+                      :title="t('home.workspace.queue.addHint')"
+                      :disabled="!canSend"
+                      @click="pressSend"
+                    >
+                      <span class="i-ri-play-list-add-line" />
+                    </ComposerControl>
+                  </template>
+                </ComposerToolbar>
 
                 <!-- A wrapped draft as it sat, fading out while the lifted bubble's own lines fade in
                      (~140ms); empty otherwise. -->
@@ -1842,7 +2349,18 @@ onBeforeUnmount(disposeCommands)
       -->
       <Transition name="home-panel">
         <div v-if="panelOpen" class="HomePage-PanelSlot">
-          <HomeSidePanel :messages="messages" @locate="streamRef?.scrollToIndex($event)" />
+          <HomeSidePanel
+            :messages="messages"
+            :conversation-id="conversationId"
+            :context="workspace.state.value?.context"
+            :turn="lastTurn"
+            :activity-turns="activityTurns"
+            :limits="modelLimits"
+            :gateway="gatewayApprovals"
+            :pending-run="workspace.state.value?.pendingRun"
+            :loading="workspace.loading.value"
+            @locate="streamRef?.scrollToIndex($event)"
+          />
         </div>
       </Transition>
     </div>
@@ -1917,6 +2435,7 @@ onBeforeUnmount(disposeCommands)
   flex-direction: column;
   width: 100%;
   height: 100%;
+  container-type: inline-size;
   // The top bar is pinned, so the page itself never scrolls — the body below it owns the overflow.
   overflow: hidden;
 
@@ -1945,6 +2464,26 @@ onBeforeUnmount(disposeCommands)
   // Clips the fixed-width panel while the slot narrows, which is what keeps the rows from
   // re-wrapping on every frame of the animation.
   overflow: hidden;
+}
+
+@container (max-width: 720px) {
+  .HomePage-Split {
+    flex-direction: column;
+  }
+
+  .HomePage-PanelSlot {
+    --home-panel-width: 100%;
+    width: 100%;
+    height: min(35vh, 300px);
+    min-height: 160px;
+    border-top: 1px solid var(--shell-border);
+  }
+
+  .HomePage-PanelSlot :deep(.HomeSidePanel) {
+    min-width: 0;
+    height: 100%;
+    border-left: 0;
+  }
 }
 
 /**
@@ -2218,6 +2757,41 @@ onBeforeUnmount(disposeCommands)
  * The blocking card stays in the floating composer stack instead of the transcript. Its height is
  * measured as real layout, so it remains reachable without covering the last running tool row.
  */
+.HomePage-WorkspaceAlert {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: var(--home-chat-lane-width);
+  min-width: 0;
+  padding: 10px 14px;
+  border-radius: var(--shell-radius-lg);
+  background: var(--shell-danger-soft);
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+.HomePage-WorkspaceAlertText {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--shell-danger);
+  font-size: var(--shell-fs-body);
+  line-height: 1.5;
+}
+
+/* Who asked: shown above the tool card when Main did not attribute the call to this thread. */
+.HomePage-ConfirmOrigin {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 0 0 6px;
+  padding: 6px 10px;
+  border-radius: var(--shell-radius-sm);
+  background: var(--shell-warning-soft);
+  color: var(--shell-text-regular);
+  font-size: var(--shell-fs-caption);
+}
+
 .HomePage-ConfirmSlot {
   width: var(--home-chat-lane-width);
   min-width: 0;
@@ -2266,12 +2840,6 @@ onBeforeUnmount(disposeCommands)
 .HomePage-PayloadCode {
   max-height: 420px;
   overflow: auto;
-}
-
-.HomePage-AttachHint {
-  margin: 0;
-  color: var(--shell-text-muted);
-  font-size: var(--shell-fs-sm);
 }
 
 .HomePage-UserBubble {
@@ -2431,6 +2999,28 @@ onBeforeUnmount(disposeCommands)
   }
 }
 
+/*
+ * A limit the user set is not a fault: the same block in the warning tone, whose button leads to
+ * the limits instead of retrying a turn that would be refused again.
+ */
+.HomePage-Error.is-usage-limit {
+  background: var(--shell-warning-soft);
+
+  .HomePage-ErrorIcon,
+  .HomePage-ErrorTitle {
+    color: var(--shell-warning);
+  }
+
+  .HomePage-RetryBtn {
+    border-color: var(--shell-warning-border, var(--shell-warning));
+    color: var(--shell-warning);
+
+    &:hover {
+      background: color-mix(in srgb, var(--shell-warning) 12%, transparent);
+    }
+  }
+}
+
 .HomePage-ComposerGroup {
   // Between the composer and the push card on the empty stage; the card's leave pins it there.
   --home-card-gap: 12px;
@@ -2585,6 +3175,31 @@ onBeforeUnmount(disposeCommands)
     border-style: dashed;
     border-color: var(--shell-primary);
   }
+}
+
+/**
+ * The dictation glow (TuffEx `TxVoiceBeam`) as an overlay on the box: its wrapper clips to the
+ * composer's 24px corners and sits under everything the box holds. The beam's own stylesheet makes
+ * its wrapper `position: relative`; the child selector outranks that single attribute selector.
+ */
+.HomePage-Composer > .HomePage-VoiceGlow {
+  position: absolute;
+  inset: -1px;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.HomePage-VoiceGlowHost {
+  width: 100%;
+  height: 100%;
+}
+
+/* The box's content paints above the glow's layers. */
+.HomePage-Composer > .HomePage-ComposerTray,
+.HomePage-Composer > .HomePage-Input,
+.HomePage-Composer > .ComposerToolbar {
+  position: relative;
+  z-index: 1;
 }
 
 .HomePage-Input {

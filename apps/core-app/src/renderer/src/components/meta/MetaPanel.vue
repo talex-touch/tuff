@@ -1,186 +1,146 @@
 <script setup lang="ts">
 import type { ITuffIcon } from '@talex-touch/utils'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
-import { useResizeObserver } from '@vueuse/core'
+import { TxTransitionPush } from '@talex-touch/tuffex/transition'
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 /**
- * The card of the ⌘K panels: a header naming the item, a grouped list under one hover plate, and
- * the filter field at the bottom. `views/meta/MetaOverlay.vue` draws the action panel with it, and
- * `components/flow/FlowSelector.vue` the Flow picker.
+ * The card of the ⌘K panel (`views/meta/MetaOverlay.vue`): a header naming the item, over one page
+ * at a time — the action list, the Flow targets, the Flow confirmation. A page pushes in from the
+ * inline end and goes back the other way, under a header and a card that stay where they are; the
+ * card's height follows the pages, eased only while they switch (`TxTransitionPush`).
  *
  * The owner keeps what is its own: the dim the card sits on, where it is anchored (the custom
- * properties of `resolveMetaPanelCssVars`, set on the owner's root), the keyboard, and the rows.
- * It renders the list's contents into the default slot with this card's class names
- * (`MetaPanel-Section`, `MetaPanel-SectionTitle`, `MetaPanel-Empty`) and marks every row with
- * `data-meta-row-index`, its position in the flattened list. That content carries the owner's
- * scope id, not this one, so the styles below reach it through `:deep()` from the list.
+ * properties of `resolveMetaPanelCssVars`, set on the owner's root), the keyboard, and the pages.
+ * It renders the current page into the default slot as one keyed root with the class
+ * `MetaPanel-Page`, built from `MetaPanelList` and `MetaPanelFilter` (or the confirmation). That
+ * content carries the owner's scope id, not this one, so the styles below reach it through
+ * `:deep()`.
  */
 
-const props = withDefaults(
-  defineProps<{
-    /** Header text, and the dialog's accessible name. */
-    title: string
-    icon: ITuffIcon
-    listId: string
-    /** The listbox's accessible name. */
-    listLabel: string
-    placeholder: string
-    /** `data-meta-row-index` of the active row. */
-    activeIndex: number
-    /** DOM id of the active row, for the filter's `aria-activedescendant`. */
-    activeDescendant?: string
-    /** Whether the active row can carry the plate: it exists and is not disabled. */
-    highlight: boolean
-    /** Changes whenever the rows do, so the plate is measured again. */
-    layoutKey: unknown
-    /**
-     * The owner window's motion gate (`useMotionGate().shouldAnimate`). Passed in, not called
-     * here: a window has one gate, and a second call would be a second writer of the low-battery
-     * attribute.
-     */
-    shouldAnimate: () => boolean
-    /** `body` replaces the list and the filter with the `body` slot, under the same header. */
-    view?: 'list' | 'body'
-  }>(),
-  { view: 'list' }
-)
-
-const emit = defineEmits<{
-  /** IME composition in the filter field started (`true`) or ended (`false`). */
-  (e: 'composition', composing: boolean): void
+const props = defineProps<{
+  /** Header text, and the dialog's accessible name. */
+  title: string
+  icon: ITuffIcon
+  /**
+   * The owner window's motion gate (`useMotionGate().shouldAnimate`). Passed in, not called
+   * here: a window has one gate, and a second call would be a second writer of the low-battery
+   * attribute.
+   */
+  shouldAnimate: () => boolean
+  /** Key of the page on screen. */
+  page: string
+  /** Which way the next page switch goes: `forward` pushes in, `back` returns. */
+  direction: 'forward' | 'back'
+  /** Draws the back button: there is a page to go back to. */
+  canGoBack: boolean
 }>()
 
-const query = defineModel<string>('query', { required: true })
+const emit = defineEmits<{
+  /** The back button was pressed. */
+  (e: 'back'): void
+}>()
 
-const inputRef = ref<HTMLInputElement>()
-const listRef = ref<HTMLElement>()
-const indicatorRef = ref<HTMLElement>()
-const hasFollowHighlight = ref(false)
-// Set by `glideNext()`; the watch below spends it on its next run.
-let glidePending = false
+const { t } = useI18n()
 
-function activeRowElement(): HTMLElement | null {
-  return (
-    listRef.value?.querySelector<HTMLElement>(`[data-meta-row-index="${props.activeIndex}"]`) ??
-    null
+/**
+ * How long a page switch slides, and the header's fades and glide below with it. With the motion
+ * gate closed it is 0: the page is swapped in place.
+ */
+const PAGE_SWITCH_MS = 220
+/** The curve the pages slide on, given to `TxTransitionPush` too, so the header moves with them. */
+const PAGE_SWITCH_EASING = 'cubic-bezier(0.23, 1, 0.32, 1)'
+
+const headerIconRef = ref<{ $el?: unknown } | null>(null)
+const headerTitleRef = ref<HTMLElement | null>(null)
+let leadLeft: number | null = null
+let leadAnimations: Animation[] = []
+
+/** The icon and the title: the pair the back button pushes along. */
+function headerLead(): HTMLElement[] {
+  return [headerIconRef.value?.$el, headerTitleRef.value].filter(
+    (el): el is HTMLElement => el instanceof HTMLElement
   )
 }
 
-function syncHighlight(glide: boolean): void {
-  const list = listRef.value
-  const indicator = indicatorRef.value
-  const row = activeRowElement()
-  hasFollowHighlight.value = false
-  if (!list || !indicator || !row || !props.highlight) {
-    if (indicator) indicator.style.opacity = '0'
-    return
-  }
-
-  const listRect = list.getBoundingClientRect()
-  const rowRect = row.getBoundingClientRect()
-  if (listRect.width <= 0 || listRect.height <= 0 || rowRect.height <= 0) {
-    indicator.style.opacity = '0'
-    return
-  }
-  // Panel entrance scales visually; the plate is measured in the scroller's layout pixels.
-  const scaleX = list.offsetWidth > 0 ? listRect.width / list.offsetWidth : 1
-  const scaleY = list.offsetHeight > 0 ? listRect.height / list.offsetHeight : 1
-  const x = (rowRect.left - listRect.left) / scaleX - list.clientLeft + list.scrollLeft
-  const y = (rowRect.top - listRect.top) / scaleY - list.clientTop + list.scrollTop
-  // The PromptBar menu uses a compositor clock too. Native views may starve JS RAF while
-  // inactive; one transform target per selection keeps hover motion on wall-clock time.
-  indicator.classList.toggle('is-following-pointer', glide && props.shouldAnimate())
-  indicator.style.width = `${rowRect.width / scaleX}px`
-  indicator.style.height = `${rowRect.height / scaleY}px`
-  indicator.style.transform = `translate3d(${x}px, ${y}px, 0)`
-  indicator.style.opacity = '1'
-  hasFollowHighlight.value = true
-}
-
+/**
+ * The icon and the title glide when the back button comes or goes. The button joins the row as the
+ * switch starts and leaves it at once (out of flow while it fades), so the pair beside it lands in
+ * its new place in one frame; read on both sides of the patch, it eases there with the page instead.
+ * Read mid-glide, the first position is where the pair is drawn, so a quick back-and-forth turns
+ * around in place.
+ */
 watch(
-  [
-    () => props.activeIndex,
-    () => props.layoutKey,
-    () => props.highlight,
-    listRef,
-    indicatorRef,
-    () => props.shouldAnimate()
-  ],
+  () => props.canGoBack,
   () => {
-    const glide = glidePending
-    glidePending = false
-    syncHighlight(glide)
+    leadLeft = headerTitleRef.value?.getBoundingClientRect().left ?? null
+  },
+  { flush: 'pre' }
+)
+watch(
+  () => props.canGoBack,
+  () => {
+    const first = leadLeft
+    leadLeft = null
+    // Dropped before the last position is read, which must be the layout's, not the old glide's.
+    for (const animation of leadAnimations) animation.cancel()
+    leadAnimations = []
+    const title = headerTitleRef.value
+    if (first === null || !title || !props.shouldAnimate()) return
+    const dx = first - title.getBoundingClientRect().left
+    if (Math.abs(dx) < 0.5) return
+    leadAnimations = headerLead()
+      .filter((el) => typeof el.animate === 'function')
+      .map((el) =>
+        el.animate([{ translate: `${dx}px 0` }, { translate: '0 0' }], {
+          duration: PAGE_SWITCH_MS,
+          easing: PAGE_SWITCH_EASING
+        })
+      )
   },
   { flush: 'post' }
 )
-useResizeObserver(listRef, () => syncHighlight(false))
-
-/** Focuses the filter field; the owner calls it once the card is on screen. */
-function focusFilter(): void {
-  inputRef.value?.focus()
-}
-
-/**
- * Lets the plate's next move glide instead of landing. The owner calls it right before a pointer
- * hover changes `activeIndex`; keyboard steps, filtering, the first show and resizes never do, so
- * they land in place.
- */
-function glideNext(): void {
-  glidePending = true
-}
-
-/** Brings the active row into view, after a keyboard step or a new filter. */
-function scrollActiveIntoView(): void {
-  // Instant: a smooth scroll would trail behind a held arrow key.
-  activeRowElement()?.scrollIntoView?.({ block: 'nearest', behavior: 'instant' })
-}
-
-defineExpose({ focusFilter, glideNext, scrollActiveIntoView })
 </script>
 
 <template>
-  <section class="MetaPanel" role="dialog" aria-modal="true" :aria-label="title">
+  <section
+    class="MetaPanel"
+    role="dialog"
+    aria-modal="true"
+    :aria-label="title"
+    :data-page="props.page"
+  >
     <header class="MetaPanel-Header">
-      <TuffIcon :icon="icon" :size="16" class="MetaPanel-HeaderIcon" />
-      <span class="MetaPanel-HeaderTitle" :title="title">{{ title }}</span>
-      <slot name="header-meta" />
+      <Transition name="meta-panel-header">
+        <button
+          v-if="canGoBack"
+          type="button"
+          class="MetaPanel-Back"
+          :aria-label="t('layout.back')"
+          :title="t('layout.back')"
+          @click="emit('back')"
+        >
+          <i class="MetaPanel-BackIcon i-ri-arrow-left-s-line" aria-hidden="true" />
+        </button>
+      </Transition>
+      <TuffIcon ref="headerIconRef" :icon="icon" :size="16" class="MetaPanel-HeaderIcon" />
+      <span ref="headerTitleRef" class="MetaPanel-HeaderTitle" :title="title">{{ title }}</span>
+      <Transition name="meta-panel-header">
+        <span v-if="$slots['header-meta']" class="MetaPanel-HeaderMeta">
+          <slot name="header-meta" />
+        </span>
+      </Transition>
     </header>
 
-    <slot v-if="view === 'body'" name="body" />
-    <template v-else>
-      <div
-        :id="listId"
-        ref="listRef"
-        class="MetaPanel-List"
-        :class="{ 'has-follow-highlight': hasFollowHighlight }"
-        role="listbox"
-        :aria-label="listLabel"
-      >
-        <slot />
-        <div ref="indicatorRef" class="MetaPanel-Highlight" aria-hidden="true" />
-      </div>
-
-      <footer class="MetaPanel-Filter">
-        <i class="MetaPanel-FilterIcon i-ri-search-line" aria-hidden="true" />
-        <input
-          ref="inputRef"
-          v-model="query"
-          type="text"
-          class="SearchInput"
-          role="combobox"
-          aria-autocomplete="list"
-          aria-expanded="true"
-          :aria-controls="listId"
-          :aria-activedescendant="activeDescendant"
-          :aria-label="placeholder"
-          :placeholder="placeholder"
-          @compositionstart="emit('composition', true)"
-          @compositionend="emit('composition', false)"
-        />
-        <slot name="filter-key" />
-      </footer>
-    </template>
+    <TxTransitionPush
+      class="MetaPanel-Body"
+      :direction="direction"
+      :duration="shouldAnimate() ? PAGE_SWITCH_MS : 0"
+      :easing="PAGE_SWITCH_EASING"
+    >
+      <slot />
+    </TxTransitionPush>
   </section>
 </template>
 
@@ -208,6 +168,7 @@ defineExpose({ focusFilter, glideNext, scrollActiveIntoView })
 }
 
 .MetaPanel-Header {
+  position: relative;
   display: flex;
   flex: none;
   align-items: center;
@@ -216,6 +177,40 @@ defineExpose({ focusFilter, glideNext, scrollActiveIntoView })
   height: var(--meta-header-height);
   padding: 0 12px;
   border-bottom: 1px solid var(--tx-border-color-lighter);
+}
+
+.MetaPanel-Back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  // Pulls the chevron's own side bearing to the header's edge.
+  margin-left: -4px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--tx-text-color-secondary);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--tx-fill-color);
+    color: var(--tx-text-color-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--tx-color-primary);
+    outline-offset: 1px;
+  }
+}
+
+.MetaPanel-BackIcon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
 }
 
 .MetaPanel-HeaderIcon {
@@ -232,102 +227,58 @@ defineExpose({ focusFilter, glideNext, scrollActiveIntoView })
   text-overflow: ellipsis;
 }
 
-.MetaPanel-List {
-  position: relative;
-  isolation: isolate;
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: var(--meta-list-padding);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.MetaPanel-Highlight {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 0;
-  border-radius: 6px;
-  background: var(--tx-fill-color);
-  opacity: 0;
-  pointer-events: none;
-
-  &.is-following-pointer {
-    transition: transform 220ms var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
-  }
-}
-
-.MetaPanel-List :deep(.MetaPanel-Section) {
-  position: relative;
-  z-index: 1;
-}
-
-.MetaPanel-List.has-follow-highlight :deep(.MetaActionItem.is-active) {
-  background: transparent;
-}
-
-.MetaPanel-List :deep(.MetaPanel-Section + .MetaPanel-Section) {
-  margin-top: var(--meta-section-gap);
-}
-
-.MetaPanel-List :deep(.MetaPanel-SectionTitle) {
-  display: flex;
-  align-items: flex-end;
-  box-sizing: border-box;
-  height: var(--meta-section-title-height);
-  padding: 0 10px 4px;
-  color: var(--tx-text-color-secondary);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-}
-
-.MetaPanel-List :deep(.MetaPanel-Empty) {
-  display: flex;
-  align-items: center;
-  height: var(--meta-row-height);
-  margin: 0;
-  padding: 0 10px;
+.MetaPanel-HeaderMeta {
+  flex: none;
+  margin-left: auto;
   color: var(--tx-text-color-secondary);
   font-size: 12px;
+  white-space: nowrap;
 }
 
-.MetaPanel-Filter {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  box-sizing: border-box;
-  height: var(--meta-filter-height);
-  padding: 0 8px 0 12px;
-  border-top: 1px solid var(--tx-border-color-lighter);
+// The back button and the page name fade while the page under them pushes. Out of the row as
+// they leave, so the title moves once, as the switch starts (the glide above eases it), and not
+// again when the fade ends.
+.meta-panel-header-enter-active,
+.meta-panel-header-leave-active {
+  transition: opacity 0.22s var(--tx-ease-out-strong, cubic-bezier(0.23, 1, 0.32, 1));
 }
 
-.MetaPanel-FilterIcon {
-  flex: none;
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  font-size: 14px;
-  color: var(--tx-text-color-secondary);
+.meta-panel-header-enter-from,
+.meta-panel-header-leave-to {
+  opacity: 0;
 }
 
-.SearchInput {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
-  color: var(--tx-text-color-primary);
-  font: inherit;
-  font-size: 13px;
+.MetaPanel-Back.meta-panel-header-leave-active {
+  position: absolute;
+  left: 12px;
+}
 
-  &::placeholder {
-    color: var(--tx-text-color-placeholder);
+.MetaPanel-HeaderMeta.meta-panel-header-leave-active {
+  position: absolute;
+  right: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meta-panel-header-enter-active,
+  .meta-panel-header-leave-active {
+    transition: none;
   }
 }
 
-.MetaPanel-Filter :deep(.MetaPanel-FilterKey) {
-  flex: none;
+// The pages lay out as the list did: the card caps its height, and the page's list scrolls inside
+// it. A column here, not TxTransitionPush's flow root, so a capped card squeezes the page instead
+// of cutting it off.
+.MetaPanel-Body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.MetaPanel-Body :deep(.MetaPanel-Page) {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
 }
 </style>

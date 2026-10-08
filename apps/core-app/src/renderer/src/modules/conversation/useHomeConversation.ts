@@ -30,6 +30,7 @@ import { computed, getCurrentScope, onScopeDispose, ref, toRaw } from 'vue'
 import { toModelAttachments } from './attachment-payload'
 import {
   CONVERSATION_ERROR_EMPTY_RESPONSE,
+  isGovernanceFailure,
   resolveConversationError
 } from './conversation-error-display'
 
@@ -85,8 +86,8 @@ export interface ConversationMessage {
   error?: ConversationError
   meta?: ConversationTurnMeta
   /**
-   * What the bubble renders: display URLs owned by the composer, never stored (`toSaveRequest`
-   * maps fields explicitly) and never sent as-is — an object URL means nothing outside this window.
+   * Display URLs owned by the composer or issued for Main-managed attachment copies.
+   * Object URLs are never used as durable references or sent unchanged across processes.
    */
   attachments?: AiAttachment[]
   /**
@@ -130,9 +131,27 @@ export interface ConversationIntelligenceSdk {
   }
 }
 
+/** A projection of Main-owned state; submitting never starts a renderer-owned turn. */
+export interface WorkspaceConversationAdapter {
+  readonly messages: ConversationMessage[]
+  readonly isStreaming: boolean
+  readonly isCompacting: boolean
+  send: (
+    text: string,
+    attachments?: AiAttachment[],
+    options?: ConversationSendOptions
+  ) => Promise<void>
+  stop: () => void
+  retry: () => Promise<void>
+  reset?: () => void
+  restore?: (messages: ConversationMessage[]) => void
+}
+
 export interface UseHomeConversationOptions {
   /** Injectable for tests; defaults to the renderer intelligence SDK. */
   sdk?: ConversationIntelligenceSdk
+  /** Home uses the durable workspace authority; absence preserves standalone SDK consumers. */
+  workspace?: () => WorkspaceConversationAdapter | undefined
   /** Read at send time, not at setup, so changing the model mid-conversation takes effect. */
   routing?: () => ConversationRouting | undefined
   /**
@@ -206,6 +225,11 @@ export function useHomeConversation(
     }
     // The surface marker rides every turn, pinned model or not: it is what tells main this is a
     // user conversation rather than a capability test running on the same `text.chat` id.
+    //
+    // Deliberately no `caller`: main counts these turns as `core.home.conversation` from the
+    // surface marker (`resolveUsageCaller` in `intelligence-sdk.ts`). A Home-surface request that
+    // names a caller is refused by the Pi native-session guard (`resolveHomeSessionContext` in
+    // `providers/pi-cli-provider.ts`), which is how a plugin is kept from impersonating Home.
     return {
       ...(routing?.providerId ? { preferredProviderId: routing.providerId } : {}),
       ...(routing?.model ? { modelPreference: [routing.model] } : {}),
@@ -633,7 +657,9 @@ export function useHomeConversation(
       },
       onError: (error) => {
         if (settled) return
-        if (hasProviderActivity || nativePiSessionStarted) {
+        // A refusal (the usage limit, credits, sign-in, permission) answers the same without
+        // streaming: a second request would only be refused again, so the stream's own words stand.
+        if (hasProviderActivity || nativePiSessionStarted || isGovernanceFailure(error)) {
           fail(error)
           return
         }
@@ -664,7 +690,7 @@ export function useHomeConversation(
       // `stream()` rejects when the stream never starts (no stream-capable transport, handshake
       // failure). A defensive activity check also prevents a non-conforming transport from
       // triggering a second billable request after invoking a handler before rejecting.
-      if (hasProviderActivity || nativePiSessionStarted) fail(error)
+      if (hasProviderActivity || nativePiSessionStarted || isGovernanceFailure(error)) fail(error)
       else await fallback(error)
       return
     }
@@ -677,6 +703,12 @@ export function useHomeConversation(
     attachments?: AiAttachment[],
     sendOptions: ConversationSendOptions = {}
   ): Promise<void> {
+    if (options.workspace) {
+      const workspace = options.workspace()
+      if (!workspace) throw new Error('CONVERSATION_WORKSPACE_UNAVAILABLE')
+      await workspace.send(rawText, attachments, sendOptions)
+      return
+    }
     const text = rawText.trim()
     if (!text || streaming.value) return
 
@@ -714,6 +746,12 @@ export function useHomeConversation(
   }
 
   async function retry(): Promise<void> {
+    if (options.workspace) {
+      const workspace = options.workspace()
+      if (!workspace) throw new Error('CONVERSATION_WORKSPACE_UNAVAILABLE')
+      await workspace.retry()
+      return
+    }
     if (streaming.value) return
 
     const last = messages.value[messages.value.length - 1]
@@ -728,6 +766,10 @@ export function useHomeConversation(
   }
 
   function stop(): void {
+    if (options.workspace) {
+      options.workspace()?.stop()
+      return
+    }
     activeTurn?.cancel()
   }
 
@@ -754,11 +796,21 @@ export function useHomeConversation(
   }
 
   function reset(): void {
+    if (options.workspace) {
+      options.workspace()?.reset?.()
+      messages.value = []
+      return
+    }
     discardActiveTurn()
     messages.value = []
   }
 
   function restore(restored: ConversationMessage[]): void {
+    if (options.workspace) {
+      options.workspace()?.restore?.(restored)
+      messages.value = restored.map((message) => ({ ...message }))
+      return
+    }
     discardActiveTurn()
     messages.value = restored.map((message) => ({ ...message }))
   }
@@ -772,14 +824,16 @@ export function useHomeConversation(
     })
   }
 
+  const visibleMessages = computed(() => options.workspace?.()?.messages ?? messages.value)
+
   return {
-    messages: computed(() => messages.value),
-    isStreaming: computed(() => streaming.value),
-    isEmpty: computed(() => messages.value.length === 0),
-    isCompacting: computed(() => compacting.value),
+    messages: visibleMessages,
+    isStreaming: computed(() => options.workspace?.()?.isStreaming ?? streaming.value),
+    isEmpty: computed(() => visibleMessages.value.length === 0),
+    isCompacting: computed(() => options.workspace?.()?.isCompacting ?? compacting.value),
     lastTurn: computed(() => {
-      for (let index = messages.value.length - 1; index >= 0; index -= 1) {
-        const message = messages.value[index]
+      for (let index = visibleMessages.value.length - 1; index >= 0; index -= 1) {
+        const message = visibleMessages.value[index]
         if (message?.role === 'assistant' && message.meta) return message.meta
       }
       return undefined
