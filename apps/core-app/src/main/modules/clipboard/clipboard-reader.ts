@@ -15,6 +15,16 @@ import { clipboard, nativeImage } from 'electron'
  * thread (a large image could freeze the loop for seconds). The native reader
  * moves the pasteboard read onto `@crosscopy`'s native background thread.
  */
+export interface ClipboardImageRead {
+  image: NativeImage
+  /**
+   * The PNG bytes the OS already holds for this image, when the source can hand them over.
+   * The capture pipeline persists them as-is instead of re-encoding: `NativeImage.toPNG()`
+   * is synchronous on the main thread and cost 1.4s for one 2000x1360 screenshot (2026-10-08).
+   */
+  png: Buffer | null
+}
+
 export interface ClipboardReader {
   readonly kind: 'native' | 'electron'
   readText(): Promise<string>
@@ -22,6 +32,25 @@ export interface ClipboardReader {
   readFiles(): Promise<string[]>
   /** Resolves to `null` when the clipboard holds no decodable image. */
   readImage(): Promise<NativeImage | null>
+  /** Like `readImage`, plus the already-encoded PNG bytes when the source has them. */
+  readImageWithEncoded?(): Promise<ClipboardImageRead | null>
+}
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+/** True when `buffer` starts with the PNG file signature. */
+export function isPngBuffer(buffer: Buffer): boolean {
+  return (
+    buffer.length > PNG_SIGNATURE.length &&
+    buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+  )
+}
+
+/** Pasteboard formats under which the platform exposes raw PNG bytes. */
+function resolveNativePngFormats(platform: NodeJS.Platform): string[] {
+  if (platform === 'darwin') return ['public.png']
+  if (platform === 'win32') return ['PNG']
+  return ['image/png']
 }
 
 /**
@@ -86,11 +115,18 @@ export class NativeClipboardReader implements ClipboardReader {
   }
 
   async readImage(): Promise<NativeImage | null> {
+    return (await this.readImageWithEncoded())?.image ?? null
+  }
+
+  /** `getImageBinary` is documented as PNG bytes; the signature check keeps that an observation. */
+  async readImageWithEncoded(): Promise<ClipboardImageRead | null> {
     try {
       const bytes = await this.module.getImageBinary?.()
       if (!bytes || bytes.length === 0) return null
-      const image = nativeImage.createFromBuffer(Buffer.from(bytes))
-      return image.isEmpty() ? null : image
+      const buffer = Buffer.from(bytes)
+      const image = nativeImage.createFromBuffer(buffer)
+      if (image.isEmpty()) return null
+      return { image, png: isPngBuffer(buffer) ? buffer : null }
     } catch {
       return null
     }
@@ -128,5 +164,24 @@ export class ElectronClipboardReader implements ClipboardReader {
   async readImage(): Promise<NativeImage | null> {
     const image = clipboard.readImage()
     return image.isEmpty() ? null : image
+  }
+
+  async readImageWithEncoded(): Promise<ClipboardImageRead | null> {
+    const image = await this.readImage()
+    if (!image) return null
+    return { image, png: this.readNativePng() }
+  }
+
+  /** Raw PNG straight off the pasteboard, or `null` when the OS holds the image another way. */
+  private readNativePng(): Buffer | null {
+    for (const format of resolveNativePngFormats(process.platform)) {
+      try {
+        const buffer = clipboard.readBuffer(format)
+        if (isPngBuffer(buffer)) return buffer
+      } catch {
+        // A format the clipboard does not hold right now; try the next spelling.
+      }
+    }
+    return null
   }
 }

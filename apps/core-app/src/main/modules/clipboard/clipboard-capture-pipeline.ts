@@ -169,6 +169,7 @@ export class ClipboardCapturePipeline {
     let prefetchedHtml: string | undefined
     let prefetchedFiles: string[] | undefined
     let prefetchedImage: NativeImage | null | undefined
+    let prefetchedPng: Buffer | null = null
 
     const readPrefetchedText = async (): Promise<string> => {
       if (prefetchedText !== undefined) return prefetchedText
@@ -200,9 +201,12 @@ export class ClipboardCapturePipeline {
         prefetchedImage = null
         return prefetchedImage
       }
-      prefetchedImage = await trackPhaseAsync(phaseDurations, 'clipboard.readImage', () =>
-        reader.readImage()
-      )
+      prefetchedImage = await trackPhaseAsync(phaseDurations, 'clipboard.readImage', async () => {
+        if (!reader.readImageWithEncoded) return await reader.readImage()
+        const read = await reader.readImageWithEncoded()
+        prefetchedPng = read?.png ?? null
+        return read?.image ?? null
+      })
       return prefetchedImage
     }
 
@@ -262,6 +266,7 @@ export class ClipboardCapturePipeline {
       const imageItem = await this.tryBuildImageItem({
         helper,
         image: cachedImage,
+        encodedPng: prefetchedPng,
         force: shouldCaptureCoreBoxBaselineImage,
         phaseDurations,
         metaEntries
@@ -415,12 +420,15 @@ export class ClipboardCapturePipeline {
   private async tryBuildImageItem({
     helper,
     image,
+    encodedPng,
     force,
     phaseDurations,
     metaEntries
   }: {
     helper: ClipboardHelper
     image: NativeImage
+    /** PNG bytes the reader already had for `image`; skips the main-thread re-encode. */
+    encodedPng?: Buffer | null
     force?: boolean
     phaseDurations: ClipboardPhaseDurations
     metaEntries: ClipboardMetaEntry[]
@@ -448,7 +456,9 @@ export class ClipboardCapturePipeline {
         })
     )
 
-    const png = trackPhase(phaseDurations, 'image.encodePng', () => image.toPNG())
+    const png = encodedPng
+      ? trackPhase(phaseDurations, 'image.reusePng', () => encodedPng)
+      : trackPhase(phaseDurations, 'image.encodePng', () => image.toPNG())
     const stored = await trackPhaseAsync(phaseDurations, 'image.persistTempFile', async () => {
       return await this.options.imagePersistence.createClipboardImageFile(png)
     })

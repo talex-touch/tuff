@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   readText: vi.fn(() => 'electron-text'),
   readHTML: vi.fn(() => '<b>electron</b>'),
   readImage: vi.fn((): { isEmpty: () => boolean } => ({ isEmpty: () => true })),
+  readBuffer: vi.fn((_format: string): Buffer => Buffer.alloc(0)),
   createFromBuffer: vi.fn((buffer: Buffer) => ({ isEmpty: () => buffer.length === 0 }))
 }))
 
@@ -11,7 +12,8 @@ vi.mock('electron', () => ({
   clipboard: {
     readText: mocks.readText,
     readHTML: mocks.readHTML,
-    readImage: mocks.readImage
+    readImage: mocks.readImage,
+    readBuffer: mocks.readBuffer
   },
   nativeImage: {
     createFromBuffer: mocks.createFromBuffer
@@ -21,8 +23,11 @@ vi.mock('electron', () => ({
 import {
   ElectronClipboardReader,
   NativeClipboardReader,
-  hasNativeReaderApi
+  hasNativeReaderApi,
+  isPngBuffer
 } from './clipboard-reader'
+
+const PNG_BYTES = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]
 
 describe('hasNativeReaderApi', () => {
   it('is true only when every async getter is present', () => {
@@ -71,6 +76,20 @@ describe('NativeClipboardReader', () => {
     await expect(noImage.readImage()).resolves.toBeNull()
   })
 
+  it('hands the native PNG bytes over without re-encoding, and only when they are PNG', async () => {
+    const png = new NativeClipboardReader({ getImageBinary: async () => PNG_BYTES })
+    const read = await png.readImageWithEncoded()
+    expect(read?.image).not.toBeNull()
+    expect(read?.png).toEqual(Buffer.from(PNG_BYTES))
+
+    const notPng = new NativeClipboardReader({ getImageBinary: async () => [1, 2, 3, 4] })
+    await expect(notPng.readImageWithEncoded()).resolves.toEqual({
+      image: expect.anything(),
+      png: null
+    })
+    expect(isPngBuffer(Buffer.from([1, 2, 3, 4]))).toBe(false)
+  })
+
   it('degrades to empty values when a native getter throws', async () => {
     const reader = new NativeClipboardReader({
       getText: async () => {
@@ -111,5 +130,23 @@ describe('ElectronClipboardReader', () => {
     const image = { isEmpty: () => false }
     mocks.readImage.mockReturnValueOnce(image)
     await expect(reader.readImage()).resolves.toBe(image)
+  })
+
+  it('reads the raw PNG off the pasteboard when the OS has one', async () => {
+    const reader = new ElectronClipboardReader({ readFiles: () => [] })
+    const image = { isEmpty: () => false }
+    mocks.readImage.mockReturnValueOnce(image)
+    mocks.readBuffer.mockReturnValueOnce(Buffer.from(PNG_BYTES))
+
+    await expect(reader.readImageWithEncoded()).resolves.toEqual({
+      image,
+      png: Buffer.from(PNG_BYTES)
+    })
+
+    mocks.readImage.mockReturnValueOnce(image)
+    mocks.readBuffer.mockImplementationOnce(() => {
+      throw new Error('format not available')
+    })
+    await expect(reader.readImageWithEncoded()).resolves.toEqual({ image, png: null })
   })
 })
