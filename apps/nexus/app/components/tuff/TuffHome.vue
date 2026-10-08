@@ -11,7 +11,6 @@ const TuffLandingInstantPreview = defineAsyncComponent(() => import('./landing/T
 const TuffLandingBuiltForYou = defineAsyncComponent(() => import('./landing/TuffLandingBuiltForYou.vue'))
 const TuffLandingFeatures = defineAsyncComponent(() => import('./landing/TuffLandingFeatures.vue'))
 const TuffLandingEcosystem = defineAsyncComponent(() => import('./landing/TuffLandingEcosystem.vue'))
-const TuffLandingIntegrations = defineAsyncComponent(() => import('./landing/TuffLandingIntegrations.vue'))
 const TuffLandingCommunity = defineAsyncComponent(() => import('./landing/TuffLandingCommunity.vue'))
 const TuffLandingFaq = defineAsyncComponent(() => import('./landing/TuffLandingFaq.vue'))
 const TuffLandingWaitlist = defineAsyncComponent(() => import('./landing/TuffLandingWaitlist.vue'))
@@ -27,7 +26,6 @@ const {
   builtForYouSectionRef,
   featuresSectionRef,
   ecosystemSectionRef,
-  integrationsSectionRef,
   communitySectionRef,
   faqSectionRef,
   waitlistSectionRef,
@@ -127,15 +125,6 @@ useHead({
         data-smooth-section
       >
         <TuffLandingEcosystem />
-      </section>
-
-      <section
-        id="integrations"
-        ref="integrationsSectionRef"
-        class="TuffHome-SmoothSection"
-        data-smooth-section
-      >
-        <TuffLandingIntegrations />
       </section>
 
       <section

@@ -2,21 +2,38 @@ export default {
     nexus: {
       hero: {
         eyebrow: 'Local-first. Private by design.',
-        titlePrefix: 'Your',
-        titleSubject: 'OS',
-        titleLead: 'Your OS,',
-        titleAccent: 'programmable.',
-        title: 'Your OS, programmable.',
+        titlePrefix: '',
+        titleSubject: 'Think it.',
+        titleLead: 'Think it.',
+        titleAccent: 'There it is.',
+        title: 'Think it. There it is.',
         copy: 'Tuff is the public entry for its own ecosystem: trusted releases, plugins, and developer docs while the desktop app stays light, fast, and extensible.',
-        subtitle: 'One entry point to search files, launch apps, and drive agents.',
         primaryCta: 'Get the current build',
         getPlatformVersion: 'Get {platform} version',
         secondaryCta: 'View developer docs',
         openSource: 'Free & open source',
-        hints: {
-          nav: 'navigate',
-          open: 'open',
-          actions: 'actions',
+        corebox: {
+          placeholder: 'Everything in Tuff.',
+          types: {
+            app: 'Application',
+            file: 'File',
+            system: 'System',
+          },
+          hints: {
+            open: 'Open',
+            execute: 'Execute',
+            actions: 'Actions',
+            quickRun: 'Quick Run',
+          },
+          scenes: {
+            fileSub: 'png • 2.1 MB • 2026/10/6 14:20 • Downloads',
+            webSearch: 'Web search',
+            webSearchSub: 'Search what you typed with your default engine',
+            translate: 'Translate',
+            translateSub: 'Translate the selected text or the clipboard',
+            translateMulti: 'Multi-source translate',
+            translateMultiSub: 'Translate with several services at once',
+          },
         },
         releases: {
           latest: 'Latest',
@@ -42,14 +59,6 @@ export default {
             stability: 'Stability is not fully verified; not recommended for production.',
             channel: 'For long-term stability, choose the stable Release channel.',
           },
-        },
-        results: {
-          app: 'Application',
-          web: 'Open in browser',
-          recent: 'Recent',
-          open: 'Open',
-          go: 'Go',
-          recentAction: 'Recent',
         },
       },
       product: {

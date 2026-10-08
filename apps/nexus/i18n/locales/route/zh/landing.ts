@@ -2,21 +2,38 @@ export default {
     nexus: {
       hero: {
         eyebrow: '本地优先，隐私内建。',
-        titlePrefix: '你的',
-        titleSubject: 'OS',
-        titleLead: '你的 OS，',
-        titleAccent: '可 随心创作',
-        title: '你的 OS，可 随心创作',
+        titlePrefix: '',
+        titleSubject: '想到，',
+        titleLead: '想到，',
+        titleAccent: '就在眼前。',
+        title: '想到，就在眼前。',
         copy: 'Tuff 的公开入口：承载可信发布、插件生态和开发文档，让桌面端保持轻、快、可扩展。',
-        subtitle: '一个入口，搜索文件、启动应用、驱动 Agent。',
         primaryCta: '获取当前版本',
         getPlatformVersion: '获取 {platform} 版本',
         secondaryCta: '查看开发文档',
         openSource: '免费开源',
-        hints: {
-          nav: '导航',
-          open: '打开',
-          actions: '操作',
+        corebox: {
+          placeholder: 'Everything in Tuff.',
+          types: {
+            app: '应用',
+            file: '文件',
+            system: '系统',
+          },
+          hints: {
+            open: '打开',
+            execute: '执行',
+            actions: '操作',
+            quickRun: '快速执行',
+          },
+          scenes: {
+            fileSub: 'png • 2.1 MB • 2026/10/6 14:20 • 下载',
+            webSearch: '网页搜索',
+            webSearchSub: '使用默认搜索引擎搜索输入内容',
+            translate: '翻译',
+            translateSub: '翻译选中的文本或剪贴板内容',
+            translateMulti: '多源翻译',
+            translateMultiSub: '同时使用多个翻译源进行翻译',
+          },
         },
         releases: {
           latest: '最新',
@@ -42,14 +59,6 @@ export default {
             stability: '稳定性未经完整验证，不建议用于生产环境。',
             channel: '如需长期稳定，请选择 Release 稳定版通道。',
           },
-        },
-        results: {
-          app: '应用程序',
-          web: '在浏览器打开',
-          recent: '最近打开',
-          open: '打开',
-          go: '前往',
-          recentAction: '最近',
         },
       },
       product: {
