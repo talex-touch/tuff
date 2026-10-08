@@ -4,13 +4,14 @@ import { getUserById } from '../../../../utils/authStore'
 import { getPluginById, getPluginVersionEligibility, listPluginVersions } from '../../../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const auth = await requireAuth(event)
+  const { userId } = auth
   const id = event.context.params?.id
 
   if (!id)
     throw createError({ statusCode: 400, statusMessage: 'Plugin id is required.' })
 
-  const user = await getUserById(event, userId)
+  const user = auth.user ?? await getUserById(event, userId)
   const isAdmin = user?.role === 'admin'
   const viewerOrgIds: string[] = []
 

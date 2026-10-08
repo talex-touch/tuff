@@ -104,16 +104,24 @@ export async function executeRiskActorUnblock(event: H3Event, payload: RiskActor
     throw createError({ statusCode: 400, statusMessage: 'No actor to unblock.' })
   }
 
-  const results: Array<{ actor: string, success: boolean }> = []
-  for (const actor of actors) {
-    const success = await unblockIp(event, actor)
-    await upsertIpBan(event, {
-      ip: actor,
-      enabled: false,
-      reason: payload.reason ?? null,
-    })
-    results.push({ actor, success })
-  }
+  // The actors are independent, and so are an actor's two writes: they all go out at once instead of
+  // three round trips per actor one after another (a 50-actor unblock was 150). Every actor is
+  // attempted before a failure is reported, where the loop stopped at the first one.
+  const settled = await Promise.allSettled(actors.map(async (actor) => {
+    const [success] = await Promise.all([
+      unblockIp(event, actor),
+      upsertIpBan(event, {
+        ip: actor,
+        enabled: false,
+        reason: payload.reason ?? null,
+      }),
+    ])
+    return { actor, success }
+  }))
+  const failure = settled.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+  if (failure)
+    throw failure.reason
+  const results = settled.map(result => (result as PromiseFulfilledResult<{ actor: string, success: boolean }>).value)
 
   const successCount = results.filter(item => item.success).length
   return {

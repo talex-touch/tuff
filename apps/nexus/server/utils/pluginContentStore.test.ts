@@ -120,6 +120,16 @@ class MockD1Database {
     if (sql.includes('COUNT(*) as total'))
       return { total: this.filterRows(sql, args).length }
 
+    if (sql.includes('UPDATE store_plugin_content_packages') && sql.includes('RETURNING')) {
+      const [id, updatedAt] = args
+      const current = this.rows.get(String(id))
+      if (!current || current.status !== 'published' || !['public', 'unlisted'].includes(current.visibility))
+        return null
+      const next = { ...current, install_count: current.install_count + 1, updated_at: String(updatedAt) }
+      this.rows.set(String(id), next)
+      return next
+    }
+
     if (sql.includes('WHERE id = ?1'))
       return this.rows.get(String(args[0])) ?? null
 

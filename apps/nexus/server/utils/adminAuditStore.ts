@@ -3,56 +3,42 @@ import type { H3Event } from 'h3'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const AUDITS_TABLE = 'admin_audits'
-
-let adminAuditSchemaInitialized = false
 
 function getD1Database(event: H3Event): D1Database | null {
   const bindings = readCloudflareBindings(event)
   return bindings?.DB ?? null
 }
 
+const ADMIN_AUDIT_SCHEMA = defineD1Schema('admin-audit', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${AUDITS_TABLE} (
+        id TEXT PRIMARY KEY,
+        admin_user_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        target_type TEXT,
+        target_id TEXT,
+        target_label TEXT,
+        metadata TEXT,
+        ip TEXT,
+        user_agent TEXT,
+        created_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_audits_admin_id
+      ON ${AUDITS_TABLE}(admin_user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_audits_action
+      ON ${AUDITS_TABLE}(action)`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_audits_target
+      ON ${AUDITS_TABLE}(target_type, target_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_admin_audits_created_at
+      ON ${AUDITS_TABLE}(created_at)`,
+  ],
+})
+
 async function ensureSchema(db: D1Database) {
-  if (adminAuditSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${AUDITS_TABLE} (
-      id TEXT PRIMARY KEY,
-      admin_user_id TEXT NOT NULL,
-      action TEXT NOT NULL,
-      target_type TEXT,
-      target_id TEXT,
-      target_label TEXT,
-      metadata TEXT,
-      ip TEXT,
-      user_agent TEXT,
-      created_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_admin_audits_admin_id
-    ON ${AUDITS_TABLE}(admin_user_id);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_admin_audits_action
-    ON ${AUDITS_TABLE}(action);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_admin_audits_target
-    ON ${AUDITS_TABLE}(target_type, target_id);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_admin_audits_created_at
-    ON ${AUDITS_TABLE}(created_at);
-  `).run()
-
-  adminAuditSchemaInitialized = true
+  await ensureD1Schema(db, ADMIN_AUDIT_SCHEMA)
 }
 
 // Recording provenance must never be the thing that fails the mutation it is

@@ -4,6 +4,7 @@ import type { ProviderRegistryRecord } from './providerRegistryStore'
 import type { SceneRegistryRecord, SceneStrategyBindingInput } from './sceneRegistryStore'
 import { createProviderRegistryEntry, listProviderRegistryEntries, updateProviderRegistryEntry } from './providerRegistryStore'
 import { createSceneRegistryEntry, getSceneRegistryEntry, updateSceneRegistryEntry } from './sceneRegistryStore'
+import { readCloudflareBindings } from './cloudflare'
 import {
   isKnownSceneCapabilityAdapterKey,
   normalizeSceneCapabilityAdapterKey,
@@ -443,4 +444,30 @@ export async function ensureDefaultProviderSceneSeed(event: H3Event): Promise<Pr
     updatedScreenshotScene: scene.updated,
     createdCanonicalScenes,
   }
+}
+
+/**
+ * How long an isolate trusts the seed it last ran for a lookup that missed a scene: the registry
+ * caches' window, within which other isolates see registry edits too.
+ */
+const SEED_FOR_MISS_INTERVAL_MS = 30_000
+
+/** When the seed for a missed lookup last finished, per database. A run in flight does not count. */
+const seedForMissFinishedAt = new WeakMap<object, number>()
+
+/**
+ * The seed, for a lookup that missed a `nexus.intelligence.*` scene, at most once per isolate within
+ * `SEED_FOR_MISS_INTERVAL_MS`. A capability no system provider serves never gets a scene, so every
+ * invoke for it re-ran the whole seed (the provider list, the screenshot scene, a lookup per
+ * canonical capability) before answering 409. A provider added meanwhile gets its scene on the first
+ * miss after the window, or at once through the dashboard's seed action.
+ */
+export async function ensureDefaultProviderSceneSeedForMiss(event: H3Event): Promise<void> {
+  const db = readCloudflareBindings(event)?.DB
+  const finishedAt = db ? seedForMissFinishedAt.get(db) : undefined
+  if (finishedAt !== undefined && Date.now() - finishedAt < SEED_FOR_MISS_INTERVAL_MS)
+    return
+  await ensureDefaultProviderSceneSeed(event)
+  if (db)
+    seedForMissFinishedAt.set(db, Date.now())
 }

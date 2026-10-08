@@ -2,22 +2,18 @@ import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const DEVICE_ATTEST_TABLE = 'auth_device_attestations'
-
-let deviceAttestSchemaInitialized = false
 
 function getD1Database(event: H3Event): D1Database | null {
   const bindings = readCloudflareBindings(event)
   return bindings?.DB ?? null
 }
 
-async function ensureDeviceAttestSchema(db: D1Database) {
-  if (deviceAttestSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DEVICE_ATTEST_TABLE} (
+const DEVICE_ATTEST_SCHEMA = defineD1Schema('device-attestations', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${DEVICE_ATTEST_TABLE} (
       user_id TEXT NOT NULL,
       device_id TEXT NOT NULL,
       machine_code_hash TEXT NOT NULL,
@@ -25,19 +21,15 @@ async function ensureDeviceAttestSchema(db: D1Database) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       PRIMARY KEY (user_id, device_id)
-    );
-  `).run()
+    )`,
+  ],
+  columns: [
+    { table: DEVICE_ATTEST_TABLE, columns: [{ name: 'fingerprint_hash', ddl: 'fingerprint_hash TEXT' }] },
+  ],
+})
 
-  const columns = await db.prepare(`PRAGMA table_info(${DEVICE_ATTEST_TABLE});`).all<{ name: string }>()
-  const hasFingerprintColumn = (columns.results || []).some(column => column.name === 'fingerprint_hash')
-  if (!hasFingerprintColumn) {
-    await db.prepare(`
-      ALTER TABLE ${DEVICE_ATTEST_TABLE}
-      ADD COLUMN fingerprint_hash TEXT;
-    `).run()
-  }
-
-  deviceAttestSchemaInitialized = true
+async function ensureDeviceAttestSchema(db: D1Database) {
+  await ensureD1Schema(db, DEVICE_ATTEST_SCHEMA)
 }
 
 export async function upsertDeviceAttestation(

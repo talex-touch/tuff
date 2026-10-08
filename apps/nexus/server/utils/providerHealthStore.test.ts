@@ -104,6 +104,17 @@ class MockD1Database {
   all(sql: string, args: any[]) {
     if (!sql.includes('FROM provider_health_checks'))
       return []
+    // Each requested provider's latest check: the ids are a JSON array, the capability (if any) next.
+    if (sql.includes('json_each(?1)')) {
+      const providerIds = JSON.parse(String(args[0])) as string[]
+      const capability = sql.includes('capability = ?2') ? String(args[1]) : null
+      return providerIds
+        .map(providerId => [...this.rows.values()]
+          .filter(row => row.provider_id === providerId && (!capability || row.capability === capability))
+          .sort((a, b) => b.checked_at.localeCompare(a.checked_at))[0])
+        .filter(Boolean)
+        .sort((a, b) => b!.checked_at.localeCompare(a!.checked_at))
+    }
     if (!sql.includes('LIMIT'))
       return this.filterRows(sql, args)
     const limit = Number(args.at(-2) ?? 50)

@@ -22,8 +22,8 @@ export default defineEventHandler(async (event) => {
   if (!slug) {
     throw createError({ statusCode: 400, statusMessage: 'Plugin slug is required.' })
   }
-
-  const { userId } = await requireAuth(event)
+  const auth = await requireAuth(event)
+  const { userId } = auth
   const body = await readBody<{ rating?: number, title?: string, content?: string }>(event)
   const ratingValue = Math.round(Number(body?.rating))
 
@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
   }
 
-  const user = await getUserById(event, userId)
+  const user = auth.user ?? await getUserById(event, userId)
   if (!user) {
     throw createError({ statusCode: 401, statusMessage: 'User not found.' })
   }

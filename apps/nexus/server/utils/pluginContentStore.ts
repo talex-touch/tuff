@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const PLUGIN_CONTENT_TABLE = 'store_plugin_content_packages'
 const PLUGIN_CONTENT_KEY = 'store:pluginContentPackages'
@@ -21,8 +22,6 @@ const MAX_LIMIT = 100
 
 const VISIBILITIES: PluginContentVisibility[] = ['private', 'unlisted', 'team', 'public']
 const STATUSES: PluginContentStatus[] = ['draft', 'pending', 'published', 'rejected']
-
-let contentSchemaInitialized = false
 
 interface D1PluginContentRow {
   id: string
@@ -80,47 +79,37 @@ function mapContentRow(row: D1PluginContentRow): PluginContentPackage {
   }
 }
 
+const PLUGIN_CONTENT_SCHEMA = defineD1Schema('plugin-content', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${PLUGIN_CONTENT_TABLE} (
+        id TEXT PRIMARY KEY,
+        plugin_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        summary TEXT,
+        schema_version INTEGER NOT NULL,
+        visibility TEXT NOT NULL,
+        manifest_json TEXT NOT NULL,
+        content_ref TEXT,
+        content_inline_json TEXT,
+        created_by TEXT NOT NULL,
+        status TEXT NOT NULL,
+        install_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        published_at TEXT
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_CONTENT_TABLE}_plugin_kind
+      ON ${PLUGIN_CONTENT_TABLE}(plugin_id, kind)`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_CONTENT_TABLE}_visibility_status
+      ON ${PLUGIN_CONTENT_TABLE}(visibility, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_CONTENT_TABLE}_created_by
+      ON ${PLUGIN_CONTENT_TABLE}(created_by)`,
+  ],
+})
+
 async function ensurePluginContentSchema(db: D1Database): Promise<void> {
-  if (contentSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${PLUGIN_CONTENT_TABLE} (
-      id TEXT PRIMARY KEY,
-      plugin_id TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      title TEXT NOT NULL,
-      summary TEXT,
-      schema_version INTEGER NOT NULL,
-      visibility TEXT NOT NULL,
-      manifest_json TEXT NOT NULL,
-      content_ref TEXT,
-      content_inline_json TEXT,
-      created_by TEXT NOT NULL,
-      status TEXT NOT NULL,
-      install_count INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      published_at TEXT
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_${PLUGIN_CONTENT_TABLE}_plugin_kind
-    ON ${PLUGIN_CONTENT_TABLE}(plugin_id, kind);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_${PLUGIN_CONTENT_TABLE}_visibility_status
-    ON ${PLUGIN_CONTENT_TABLE}(visibility, status);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_${PLUGIN_CONTENT_TABLE}_created_by
-    ON ${PLUGIN_CONTENT_TABLE}(created_by);
-  `).run()
-
-  contentSchemaInitialized = true
+  await ensureD1Schema(db, PLUGIN_CONTENT_SCHEMA)
 }
 
 async function readStoredContentPackages(): Promise<PluginContentPackage[]> {
@@ -410,16 +399,18 @@ export async function installPluginContentPackage(
 
   if (db) {
     await ensurePluginContentSchema(db)
-    const existing = await getPluginContentPackage(event, id)
-    if (!existing)
-      return null
-    await db.prepare(`
+    // One statement: only a package anyone may read (`canReadPackage` without a viewer) is counted,
+    // and the counted row comes back. It was a read, the update, and a second read.
+    const row = await db.prepare(`
       UPDATE ${PLUGIN_CONTENT_TABLE}
       SET install_count = install_count + 1,
           updated_at = ?2
-      WHERE id = ?1;
-    `).bind(id, now).run()
-    return getPluginContentPackage(event, id)
+      WHERE id = ?1
+        AND status = 'published'
+        AND visibility IN ('public', 'unlisted')
+      RETURNING *;
+    `).bind(id, now).first<D1PluginContentRow>()
+    return row ? mapContentRow(row) : null
   }
 
   const items = await readStoredContentPackages()

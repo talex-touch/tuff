@@ -175,7 +175,8 @@ async function ensureSession(): Promise<boolean> {
 }
 
 async function loadProfile() {
-  const profile = await fetchCurrentUserProfile()
+  // Decides whether a long-lived grant is on offer: a passkey or a link added a moment ago counts.
+  const profile = await fetchCurrentUserProfile({ force: true })
   const passkeyCount = profile?.passkeyCount ?? 0
   const hasEmailLink = profile?.emailState === 'verified'
   const linkedProviders = profile?.linkedProviders ?? []

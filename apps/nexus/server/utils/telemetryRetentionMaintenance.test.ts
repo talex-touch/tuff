@@ -1,290 +1,173 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { D1Database } from '@cloudflare/workers-types'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createSqliteD1, type SqliteD1Database, type SqliteD1Statement } from '../../test/helpers/d1-sqlite'
 import { runTelemetryRetentionMaintenanceIfDue } from './telemetryRetentionMaintenance'
 
-interface TimedRow {
-  id: string
-  created_at: string
-  occurred_at?: string
-  event_type?: string
-  scope?: string
-  action?: string
-}
+/**
+ * Retention maintenance against real SQLite: the lease, the rollups and the deletes are the store's
+ * own statements, so a rollup that double counts or a claim that lets two runs in is caught here
+ * rather than agreed with by a fake.
+ */
 
-interface DailyStatRow {
-  date: string
-  stat_type: string
-  stat_key: string
-  value: number
-}
-
-interface MaintenanceStateRow {
-  key: string
-  status: string
-  next_run_at: string | null
-  lock_expires_at: string | null
-  last_result_json?: string | null
-}
-
-class MockStatement {
-  private args: any[] = []
-
-  constructor(
-    private readonly db: MockD1Database,
-    private readonly sql: string,
-  ) {}
-
-  bind(...args: any[]) {
-    this.args = args
-    return this
-  }
-
-  async run() {
-    return this.db.run(this.sql, this.args)
-  }
-
-  async first<T = any>() {
-    return this.db.first(this.sql, this.args) as T
-  }
-}
-
-class MockD1Database {
-  telemetryRows: TimedRow[] = []
-  governanceRows: TimedRow[] = []
-  dailyStats = new Map<string, DailyStatRow>()
-  maintenanceState = new Map<string, MaintenanceStateRow>()
-
-  prepare(sql: string) {
-    return new MockStatement(this, sql)
-  }
-
-  run(sql: string, args: any[]) {
-    if (sql.includes('CREATE TABLE'))
-      return { meta: { changes: 0 } }
-
-    if (sql.includes('INSERT INTO nexus_maintenance_state')) {
-      const [key, nextRunAt] = args
-      if (!this.maintenanceState.has(String(key))) {
-        this.maintenanceState.set(String(key), {
-          key: String(key),
-          status: 'idle',
-          next_run_at: String(nextRunAt),
-          lock_expires_at: null,
-        })
-        return { meta: { changes: 1 } }
-      }
-      return { meta: { changes: 0 } }
-    }
-
-    if (sql.includes('UPDATE nexus_maintenance_state') && sql.includes("status = 'running'")) {
-      const [nowIso, lockExpiresAt, key] = args
-      const row = this.maintenanceState.get(String(key))
-      if (!row)
-        return { meta: { changes: 0 } }
-      const isLocked = row.status === 'running' && row.lock_expires_at && row.lock_expires_at > String(nowIso)
-      const isDue = !row.next_run_at || row.next_run_at <= String(nowIso)
-      if (isLocked || !isDue)
-        return { meta: { changes: 0 } }
-      row.status = 'running'
-      row.lock_expires_at = String(lockExpiresAt)
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('UPDATE nexus_maintenance_state') && sql.includes("status = 'succeeded'")) {
-      const [nowIso, nextRunAt, resultJson, key] = args
-      const row = this.maintenanceState.get(String(key))
-      if (!row)
-        return { meta: { changes: 0 } }
-      row.status = 'succeeded'
-      row.next_run_at = String(nextRunAt)
-      row.lock_expires_at = null
-      row.last_result_json = String(resultJson)
-      void nowIso
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('UPDATE nexus_maintenance_state') && sql.includes("status = 'failed'")) {
-      const [nextRunAt, _message, _nowIso, key] = args
-      const row = this.maintenanceState.get(String(key))
-      if (!row)
-        return { meta: { changes: 0 } }
-      row.status = 'failed'
-      row.next_run_at = String(nextRunAt)
-      row.lock_expires_at = null
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('INSERT INTO daily_stats') && sql.includes("'total_events'")) {
-      const cutoff = String(args[0])
-      const counts = new Map<string, number>()
-      for (const row of this.telemetryRows.filter(item => item.created_at < cutoff)) {
-        const date = row.created_at.slice(0, 10)
-        counts.set(date, (counts.get(date) ?? 0) + 1)
-      }
-      for (const [date, value] of counts)
-        this.putDailyStat(date, 'total_events', '', value)
-      return { meta: { changes: counts.size } }
-    }
-
-    if (sql.includes('INSERT INTO daily_stats') && sql.includes("'events_by_type'")) {
-      const cutoff = String(args[0])
-      const counts = new Map<string, number>()
-      for (const row of this.telemetryRows.filter(item => item.created_at < cutoff)) {
-        const key = `${row.created_at.slice(0, 10)}:${row.event_type ?? ''}`
-        counts.set(key, (counts.get(key) ?? 0) + 1)
-      }
-      for (const [key, value] of counts) {
-        const [date, eventType] = key.split(':')
-        this.putDailyStat(String(date), 'events_by_type', String(eventType), value)
-      }
-      return { meta: { changes: counts.size } }
-    }
-
-    if (sql.includes('INSERT INTO daily_stats') && sql.includes("'governance_total_events'")) {
-      const cutoff = String(args[0])
-      const counts = new Map<string, number>()
-      for (const row of this.governanceRows.filter(item => String(item.occurred_at) < cutoff)) {
-        const date = String(row.occurred_at).slice(0, 10)
-        counts.set(date, (counts.get(date) ?? 0) + 1)
-      }
-      for (const [date, value] of counts)
-        this.putDailyStat(date, 'governance_total_events', '', value)
-      return { meta: { changes: counts.size } }
-    }
-
-    if (sql.includes('INSERT INTO daily_stats') && sql.includes("'governance_scope'")) {
-      const cutoff = String(args[0])
-      for (const row of this.governanceRows.filter(item => String(item.occurred_at) < cutoff))
-        this.incrementDailyStat(String(row.occurred_at).slice(0, 10), 'governance_scope', row.scope ?? '', 1)
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('INSERT INTO daily_stats') && sql.includes("'governance_action'")) {
-      const cutoff = String(args[0])
-      for (const row of this.governanceRows.filter(item => String(item.occurred_at) < cutoff))
-        this.incrementDailyStat(String(row.occurred_at).slice(0, 10), 'governance_action', row.action ?? '', 1)
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('INSERT INTO daily_stats') && sql.includes("'governance_scope_action'")) {
-      const cutoff = String(args[0])
-      for (const row of this.governanceRows.filter(item => String(item.occurred_at) < cutoff))
-        this.incrementDailyStat(String(row.occurred_at).slice(0, 10), 'governance_scope_action', `${row.scope ?? ''}:${row.action ?? ''}`, 1)
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('DELETE FROM telemetry_events')) {
-      const cutoff = String(args[0])
-      const limit = Number(args[1])
-      const deleteIds = this.telemetryRows
-        .filter(row => row.created_at < cutoff)
-        .sort((a, b) => a.created_at.localeCompare(b.created_at))
-        .slice(0, limit)
-        .map(row => row.id)
-      this.telemetryRows = this.telemetryRows.filter(row => !deleteIds.includes(row.id))
-      return { meta: { changes: deleteIds.length } }
-    }
-
-    if (sql.includes('DELETE FROM platform_governance_events')) {
-      const cutoff = String(args[0])
-      const limit = Number(args[1])
-      const deleteIds = this.governanceRows
-        .filter(row => String(row.occurred_at) < cutoff)
-        .sort((a, b) => String(a.occurred_at).localeCompare(String(b.occurred_at)))
-        .slice(0, limit)
-        .map(row => row.id)
-      this.governanceRows = this.governanceRows.filter(row => !deleteIds.includes(row.id))
-      return { meta: { changes: deleteIds.length } }
-    }
-
-    return { meta: { changes: 0 } }
-  }
-
-  first(sql: string, args: any[]) {
-    if (sql.includes('FROM nexus_maintenance_state'))
-      return this.maintenanceState.get(String(args[0])) ?? null
-
-    const cutoff = String(args[0])
-    if (sql.includes('FROM telemetry_events'))
-      return { count: this.telemetryRows.filter(row => row.created_at < cutoff).length }
-    if (sql.includes('FROM platform_governance_events'))
-      return { count: this.governanceRows.filter(row => String(row.occurred_at) < cutoff).length }
-    return null
-  }
-
-  private putDailyStat(date: string, statType: string, statKey: string, value: number) {
-    const key = `${date}:${statType}:${statKey}`
-    if (!this.dailyStats.has(key)) {
-      this.dailyStats.set(key, {
-        date,
-        stat_type: statType,
-        stat_key: statKey,
-        value,
-      })
-    }
-  }
-
-  private incrementDailyStat(date: string, statType: string, statKey: string, value: number) {
-    const key = `${date}:${statType}:${statKey}`
-    const current = this.dailyStats.get(key)?.value ?? 0
-    this.dailyStats.set(key, { date, stat_type: statType, stat_key: statKey, value: current + value })
-  }
-}
+const SOURCE_DDL = `
+  CREATE TABLE telemetry_events (
+    id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_telemetry_created_at ON telemetry_events(created_at);
+  CREATE TABLE platform_governance_events (
+    id TEXT PRIMARY KEY,
+    scope TEXT NOT NULL,
+    action TEXT NOT NULL,
+    occurred_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_platform_governance_events_occurred_at ON platform_governance_events(occurred_at);
+`
 
 const now = new Date('2026-06-15T00:00:00.000Z')
 
+/** Counts round trips: one per statement run on its own, one per batch. */
+function countingD1(sqlite: SqliteD1Database) {
+  let roundTrips = 0
+  const wrap = (statement: SqliteD1Statement): SqliteD1Statement => new Proxy(statement, {
+    get(target, property, receiver) {
+      if (property === 'bind')
+        return (...values: unknown[]) => wrap(target.bind(...values))
+      if (property === 'first' || property === 'all' || property === 'run') {
+        return (...args: unknown[]) => {
+          roundTrips += 1
+          return (target as any)[property](...args)
+        }
+      }
+      return Reflect.get(target, property, receiver)
+    },
+  })
+  const db = {
+    prepare: (sql: string) => wrap(sqlite.prepare(sql)),
+    batch: async (statements: SqliteD1Statement[]) => {
+      roundTrips += 1
+      return sqlite.batch(statements)
+    },
+  }
+  return { db: db as unknown as D1Database, roundTrips: () => roundTrips }
+}
+
+function insertTelemetry(sqlite: SqliteD1Database, rows: Array<[id: string, type: string, createdAt: string]>) {
+  const insert = sqlite.sqlite.prepare('INSERT INTO telemetry_events (id, event_type, created_at) VALUES (?, ?, ?)')
+  sqlite.sqlite.exec('BEGIN')
+  for (const row of rows)
+    insert.run(...row)
+  sqlite.sqlite.exec('COMMIT')
+}
+
+function insertGovernance(sqlite: SqliteD1Database, rows: Array<[id: string, scope: string, action: string, occurredAt: string]>) {
+  const insert = sqlite.sqlite.prepare('INSERT INTO platform_governance_events (id, scope, action, occurred_at, created_at) VALUES (?, ?, ?, ?, ?)')
+  for (const [id, scope, action, occurredAt] of rows)
+    insert.run(id, scope, action, occurredAt, occurredAt)
+}
+
+function ids(sqlite: SqliteD1Database, table: string): string[] {
+  return (sqlite.sqlite.prepare(`SELECT id FROM ${table} ORDER BY id`).all() as Array<{ id: string }>).map(row => row.id)
+}
+
+function stat(sqlite: SqliteD1Database, date: string, type: string, key = ''): number | undefined {
+  const row = sqlite.sqlite.prepare('SELECT value FROM daily_stats WHERE date = ? AND stat_type = ? AND stat_key = ?').get(date, type, key) as { value: number } | undefined
+  return row?.value
+}
+
 describe('telemetryRetentionMaintenance', () => {
-  let db: MockD1Database
+  let sqlite: SqliteD1Database
 
   beforeEach(() => {
-    vi.useRealTimers()
-    db = new MockD1Database()
-    db.telemetryRows = [
-      { id: 't1', created_at: '2026-05-01T00:00:00.000Z', event_type: 'performance' },
-      { id: 't2', created_at: '2026-05-10T00:00:00.000Z', event_type: 'search' },
-      { id: 't3', created_at: '2026-06-10T00:00:00.000Z', event_type: 'visit' },
-    ]
-    db.governanceRows = [
-      { id: 'g1', created_at: '2026-04-01T00:00:00.000Z', occurred_at: '2026-04-01T00:00:00.000Z', scope: 'app', action: 'visit' },
-      { id: 'g2', created_at: '2026-04-20T00:00:00.000Z', occurred_at: '2026-04-20T00:00:00.000Z', scope: 'plugin', action: 'install' },
-      { id: 'g3', created_at: '2026-06-10T00:00:00.000Z', occurred_at: '2026-06-10T00:00:00.000Z', scope: 'app', action: 'search' },
-    ]
+    sqlite = createSqliteD1()
+    sqlite.sqlite.exec(SOURCE_DDL)
+    insertTelemetry(sqlite, [
+      ['t1', 'performance', '2026-05-01T00:00:00.000Z'],
+      ['t2', 'search', '2026-05-10T00:00:00.000Z'],
+      ['t3', 'visit', '2026-06-10T00:00:00.000Z'],
+    ])
+    insertGovernance(sqlite, [
+      ['g1', 'app', 'visit', '2026-04-01T00:00:00.000Z'],
+      ['g2', 'plugin', 'install', '2026-04-20T00:00:00.000Z'],
+      ['g2b', 'plugin', 'install', '2026-04-20T08:00:00.000Z'],
+      ['g2c', 'plugin', 'update', '2026-04-20T09:00:00.000Z'],
+      ['g3', 'app', 'search', '2026-06-10T00:00:00.000Z'],
+    ])
   })
 
   it('claims due maintenance, compresses old detail rows, and schedules the next regular check', async () => {
-    const result = await runTelemetryRetentionMaintenanceIfDue(db as any, { now })
+    const result = await runTelemetryRetentionMaintenanceIfDue(createSqliteD1Facade(sqlite), { now })
 
     expect(result.status).toBe('completed')
     expect(result.nextRunAt).toBe('2026-06-15T06:00:00.000Z')
-    expect(db.telemetryRows.map(row => row.id)).toEqual(['t3'])
-    expect(db.governanceRows.map(row => row.id)).toEqual(['g3'])
-    expect(db.dailyStats.get('2026-05-01:total_events:')?.value).toBe(1)
-    expect(db.dailyStats.get('2026-05-10:events_by_type:search')?.value).toBe(1)
-    expect(db.dailyStats.get('2026-04-01:governance_total_events:')?.value).toBe(1)
-    expect(db.dailyStats.get('2026-04-20:governance_scope:plugin')?.value).toBe(1)
-    expect(db.dailyStats.get('2026-04-01:governance_action:visit')?.value).toBe(1)
-    expect(db.dailyStats.get('2026-04-20:governance_scope_action:plugin:install')?.value).toBe(1)
+    expect(ids(sqlite, 'telemetry_events')).toEqual(['t3'])
+    expect(ids(sqlite, 'platform_governance_events')).toEqual(['g3'])
+    expect(stat(sqlite, '2026-05-01', 'total_events')).toBe(1)
+    expect(stat(sqlite, '2026-05-10', 'events_by_type', 'search')).toBe(1)
+    expect(stat(sqlite, '2026-04-01', 'governance_total_events')).toBe(1)
+    expect(stat(sqlite, '2026-04-20', 'governance_total_events')).toBe(3)
+    expect(stat(sqlite, '2026-04-20', 'governance_scope', 'plugin')).toBe(3)
+    expect(stat(sqlite, '2026-04-01', 'governance_action', 'visit')).toBe(1)
+    expect(stat(sqlite, '2026-04-20', 'governance_action', 'install')).toBe(2)
+    expect(stat(sqlite, '2026-04-20', 'governance_scope_action', 'plugin:install')).toBe(2)
+    expect(stat(sqlite, '2026-04-20', 'governance_scope_action', 'plugin:update')).toBe(1)
+    // Nothing from inside the retention window was rolled up.
+    expect(stat(sqlite, '2026-06-10', 'total_events')).toBeUndefined()
+    expect(stat(sqlite, '2026-06-10', 'governance_total_events')).toBeUndefined()
   })
 
-  it('skips when the maintenance state is not due', async () => {
-    await runTelemetryRetentionMaintenanceIfDue(db as any, { now })
+  it('keeps governance events as long as the longest enabled quota window counts them', async () => {
+    sqlite.sqlite.exec(`
+      CREATE TABLE platform_governance_configs (config_type TEXT NOT NULL, enabled INTEGER NOT NULL, limits_json TEXT);
+      INSERT INTO platform_governance_configs VALUES ('intelligence_provider_quota', 1, '{"windowDays":70,"maxRequests":10}');
+      INSERT INTO platform_governance_configs VALUES ('intelligence_provider_quota', 0, '{"windowDays":365}');
+    `)
+    insertGovernance(sqlite, [['g4', 'intelligence', 'provider.request', '2026-04-10T00:00:00.000Z']])
 
-    const skipped = await runTelemetryRetentionMaintenanceIfDue(db as any, { now })
+    await runTelemetryRetentionMaintenanceIfDue(createSqliteD1Facade(sqlite), { now })
 
+    // The enabled quota counts 70 days: what is 56 and 66 days old stays, 75 days old goes; the
+    // disabled 365-day quota counts nothing.
+    expect(ids(sqlite, 'platform_governance_events')).toEqual(['g2', 'g2b', 'g2c', 'g3', 'g4'])
+  })
+
+  it('skips when the maintenance state is not due, in one round trip', async () => {
+    await runTelemetryRetentionMaintenanceIfDue(createSqliteD1Facade(sqlite), { now })
+
+    const counting = countingD1(sqlite)
+    const warm = await runTelemetryRetentionMaintenanceIfDue(counting.db, { now })
+    expect(warm.status).toBe('skipped')
+    const afterSchema = counting.roundTrips()
+
+    const skipped = await runTelemetryRetentionMaintenanceIfDue(counting.db, { now })
     expect(skipped).toEqual({
       status: 'skipped',
       reason: 'not_due_or_locked',
       nextRunAt: '2026-06-15T06:00:00.000Z',
     })
+    expect(counting.roundTrips() - afterSchema).toBe(1)
+  })
+
+  it('lets only one of two concurrent checks run', async () => {
+    const db = createSqliteD1Facade(sqlite)
+    const results = await Promise.all([
+      runTelemetryRetentionMaintenanceIfDue(db, { now }),
+      runTelemetryRetentionMaintenanceIfDue(db, { now }),
+    ])
+    expect(results.map(result => result.status).sort()).toEqual(['completed', 'skipped'])
   })
 
   it('schedules a short retry when a cleanup batch leaves backlog', async () => {
-    db.telemetryRows = Array.from({ length: 10002 }, (_, index) => ({
-      id: `t${index}`,
-      created_at: index === 10001 ? '2026-06-10T00:00:00.000Z' : '2026-05-01T00:00:00.000Z',
-      event_type: 'search',
-    }))
+    sqlite.sqlite.exec('DELETE FROM telemetry_events')
+    insertTelemetry(sqlite, Array.from({ length: 10002 }, (_, index): [string, string, string] => [
+      `t${String(index).padStart(5, '0')}`,
+      'search',
+      index === 10001 ? '2026-06-10T00:00:00.000Z' : '2026-05-01T00:00:00.000Z',
+    ]))
 
-    const result = await runTelemetryRetentionMaintenanceIfDue(db as any, { now })
+    const result = await runTelemetryRetentionMaintenanceIfDue(createSqliteD1Facade(sqlite), { now })
 
     expect(result.status).toBe('completed')
     expect(result.nextRunAt).toBe('2026-06-15T00:05:00.000Z')
@@ -294,5 +177,12 @@ describe('telemetryRetentionMaintenance', () => {
       deleted: 10000,
       remainingAfterBatch: 1,
     }))
+    // The day was rolled up from all of its rows before any were deleted.
+    expect(stat(sqlite, '2026-05-01', 'total_events')).toBe(10001)
   })
 })
+
+/** The store takes the binding's type; the shim has the same surface. */
+function createSqliteD1Facade(sqlite: SqliteD1Database): D1Database {
+  return sqlite as unknown as D1Database
+}

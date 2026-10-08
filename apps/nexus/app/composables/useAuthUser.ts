@@ -18,20 +18,25 @@ export function useAuthUser(options: AuthUserOptions = {}) {
   const isAuthenticated = computed(() => status.value === 'authenticated')
   const shouldFetchOnAuth = computed(() => options.fetchOnAuth === undefined || toValue(options.fetchOnAuth))
 
-  const fetchUser = async () => {
+  /**
+   * Every mount of this composable reads the profile, and `fetchCurrentUserProfile` answers those
+   * reads from one shared request or a recent answer. `refresh` is for callers that just changed
+   * something the profile shows (their role, linked accounts, passkeys) and must see it: it asks again.
+   */
+  const fetchUser = async (force = false) => {
     if (!isAuthenticated.value) {
       userState.value = null
       pendingState.value = false
       return
     }
-    if (pendingState.value)
+    if (pendingState.value && !force)
       return
 
     pendingState.value = true
     errorState.value = null
 
     try {
-      const data = await fetchCurrentUserProfile()
+      const data = await fetchCurrentUserProfile({ force })
       userState.value = data ?? null
     }
     catch (error: any) {
@@ -66,7 +71,7 @@ export function useAuthUser(options: AuthUserOptions = {}) {
     user: computed(() => userState.value),
     pending: computed(() => pendingState.value),
     error: computed(() => errorState.value),
-    refresh: fetchUser,
+    refresh: () => fetchUser(true),
     status,
     isAuthenticated,
   }

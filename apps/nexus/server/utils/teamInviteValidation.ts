@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
 import type { SubscriptionPlan } from './subscriptionStore'
 import type { TeamInvite } from './teamStore'
+import type { AuthUser } from './authStore'
 import type { TeamRecord } from './creditsStore'
 import { createError } from 'h3'
 import { addTeamMember, countTeamMembers, getTeamById, isUserTeamMember, listUserTeams } from './creditsStore'
@@ -61,11 +62,18 @@ async function resolveInviteByReference(
     : await getInviteByCode(event, inviteRef)
 }
 
+/**
+ * Whether `userId` may join through an invite. Reads run in three parallel stages (the invite; its
+ * team; then the owner's plan, the seat count, the caller's row, teams and membership together)
+ * where they ran one after another, eight round trips per invite. The quota read needs the plan, so
+ * it follows it. `currentUser` saves the user read when the caller already has the row.
+ */
 export async function validateInviteForUser(
   event: H3Event,
   userId: string,
   inviteRef: string,
   refType: 'code' | 'id' = 'code',
+  currentUserRow?: AuthUser | null,
 ): Promise<InviteValidationResult> {
   const invite = await resolveInviteByReference(event, inviteRef, refType)
   if (!invite) {
@@ -77,8 +85,14 @@ export async function validateInviteForUser(
     throw createError({ statusCode: 404, statusMessage: 'Team not found' })
   }
 
-  const ownerPlan = (await getUserSubscription(event, team.ownerUserId)).plan
-  const seatsUsed = await countTeamMembers(event, team.id)
+  const [ownerSubscription, seatsUsed, userRow, userTeams, alreadyMember] = await Promise.all([
+    getUserSubscription(event, team.ownerUserId),
+    countTeamMembers(event, team.id),
+    currentUserRow !== undefined ? Promise.resolve(currentUserRow) : getUserById(event, userId),
+    listUserTeams(event, userId),
+    isUserTeamMember(event, team.id, userId),
+  ])
+  const ownerPlan = ownerSubscription.plan
   const quota = await getTeamQuota(event, team.id, ownerPlan)
   const seatsLimit = quota.seatsLimit
 
@@ -108,7 +122,7 @@ export async function validateInviteForUser(
     return fail('used_up')
   }
 
-  const currentUser = await getUserById(event, userId)
+  const currentUser = userRow
   if (!currentUser) {
     throw createError({ statusCode: 404, statusMessage: 'User not found' })
   }
@@ -121,7 +135,6 @@ export async function validateInviteForUser(
     }
   }
 
-  const userTeams = await listUserTeams(event, userId)
   const organizationTeam = userTeams.find(item => item.type === 'organization')
   if (organizationTeam) {
     if (organizationTeam.id === team.id) {
@@ -131,7 +144,6 @@ export async function validateInviteForUser(
     return fail('already_member')
   }
 
-  const alreadyMember = await isUserTeamMember(event, team.id, userId)
   if (alreadyMember) {
     return fail('already_member')
   }

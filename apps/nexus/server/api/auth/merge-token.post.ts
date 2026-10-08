@@ -5,8 +5,9 @@ import { createLoginToken, getUserById } from '../../utils/authStore'
 const MERGE_TOKEN_TTL_MS = 1000 * 60 * 10
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireSessionAuth(event)
-  const user = await getUserById(event, userId)
+  const auth = await requireSessionAuth(event)
+  const { userId } = auth
+  const user = auth.user ?? await getUserById(event, userId)
   if (!user || user.status !== 'active') {
     throw createError({ statusCode: 403, statusMessage: 'Account disabled.' })
   }

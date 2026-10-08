@@ -13,7 +13,7 @@ const authMocks = vi.hoisted(() => ({
 
 const auditMocks = vi.hoisted(() => ({ logAdminAudit: vi.fn() }))
 
-const subscriptionMocks = vi.hoisted(() => ({ createActivationCode: vi.fn() }))
+const subscriptionMocks = vi.hoisted(() => ({ createActivationCodes: vi.fn() }))
 const docCommentMocks = vi.hoisted(() => ({
   deleteComment: vi.fn(),
   ensureCommentsSchema: vi.fn(),
@@ -88,7 +88,8 @@ describe('admin mutations record an audit entry', () => {
   it('logs activation code generation with its redeemable reach', async () => {
     h3Mocks.readBody.mockResolvedValue({ plan: 'PRO', durationDays: 30, count: 2, maxUses: 5, expiresInDays: 90 })
     let seq = 0
-    subscriptionMocks.createActivationCode.mockImplementation(async () => ({ id: `code_${++seq}` }))
+    subscriptionMocks.createActivationCodes.mockImplementation(async (_event: unknown, _input: unknown, count: number) =>
+      Array.from({ length: count }, () => ({ id: `code_${++seq}` })))
 
     await generateCodes({})
 
@@ -113,7 +114,7 @@ describe('admin mutations record an audit entry', () => {
 
     await expect(generateCodes({})).rejects.toMatchObject({ statusCode: 400 })
     expect(auditMocks.logAdminAudit).not.toHaveBeenCalled()
-    expect(subscriptionMocks.createActivationCode).not.toHaveBeenCalled()
+    expect(subscriptionMocks.createActivationCodes).not.toHaveBeenCalled()
   })
 
   it('logs doc comment deletion with the comment owner', async () => {

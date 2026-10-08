@@ -14,6 +14,7 @@ import {
 } from "@talex-touch/utils/intelligence/reasoning-effort";
 import { buildCapabilityMessages } from "./tuffIntelligenceCapabilityMessages";
 import { createError, type H3Event } from "h3";
+import { runAfterResponse } from "./afterResponse";
 import { consumeCredits, releaseConsumedCredits } from "./creditsStore";
 import {
   computeCreditCharge,
@@ -86,6 +87,12 @@ interface InvokeModelOptions {
   allowedProviderIds?: string[];
   /** Output cap handed to the provider, when the caller declared one. */
   maxTokens?: number;
+  /**
+   * Candidates the caller already resolved. The capability entry points resolve them before taking
+   * the credit hold, so a capability with no usable provider is refused without a reserve-and-refund
+   * round trip pair.
+   */
+  resolvedContexts?: ResolvedProviderContext[];
   /**
    * Reasoning depth the client asked for. Resolved per upstream context against the shared table
    * (`@talex-touch/utils/intelligence/reasoning-effort`); absent sends nothing, as before.
@@ -429,13 +436,16 @@ async function resolveProviderCandidates(
     return provider.id === options.providerId;
   });
 
+  // Every candidate's credential is read side by side; they were read one after another, a round
+  // trip per candidate before the first provider could be called.
+  const apiKeys = await Promise.all(candidates.map(candidate => resolveRegistryApiKey(event, candidate.provider)));
   const contexts: ResolvedProviderContext[] = [];
-  for (const candidate of candidates) {
+  for (const [index, candidate] of candidates.entries()) {
     const provider = toRuntimeProviderRecord(candidate.provider, userId, candidate.binding.priority);
     const model = candidate.model ?? provider.defaultModel ?? provider.models[0];
     if (!model)
       continue;
-    const apiKey = await resolveRegistryApiKey(event, candidate.provider);
+    const apiKey = apiKeys[index] ?? null;
     if (candidate.provider.authType !== "none" && !apiKey)
       continue;
     contexts.push({
@@ -473,7 +483,7 @@ async function invokeModel(
     messages: IntelligenceMessage[];
   },
 ): Promise<InvokeModelWithFallbackResult> {
-  const contexts = await resolveProviderCandidates(event, userId, {
+  const contexts = payload.resolvedContexts ?? await resolveProviderCandidates(event, userId, {
     capabilityId: payload.capabilityId,
     providerId: payload.providerId,
     model: payload.model,
@@ -515,7 +525,18 @@ async function invokeModel(
           payload.reasoningEffort,
         );
         if (context.auditEnabled) {
-          await createAudit(event, {
+          // The success audit is a record, not part of the answer: written after the response
+          // instead of holding the caller for another round trip.
+          const auditMetadata = {
+            source: payload.source || "intelligence-agent",
+            stage: payload.stage || "invoke",
+            sessionId: payload.sessionId,
+            attempt: index + 1,
+            providerAttempt,
+            fallbackCount,
+            retryCount,
+          };
+          runAfterResponse(event, "intelligence invoke audit", () => createAudit(event, {
             userId,
             providerId: context.provider.id,
             providerType: context.provider.type,
@@ -525,16 +546,8 @@ async function invokeModel(
             latency: result.latency,
             success: true,
             traceId: result.traceId,
-            metadata: {
-              source: payload.source || "intelligence-agent",
-              stage: payload.stage || "invoke",
-              sessionId: payload.sessionId,
-              attempt: index + 1,
-              providerAttempt,
-              fallbackCount,
-              retryCount,
-            },
-          });
+            metadata: auditMetadata,
+          }));
         }
         return {
           result,
@@ -638,7 +651,7 @@ async function invokeModelStream(
   payload: InvokeModelOptions & { messages: IntelligenceMessage[] },
   hooks: NexusIntelligenceStreamHooks & { capabilityId: string },
 ): Promise<InvokeModelWithFallbackResult> {
-  const contexts = await resolveProviderCandidates(event, userId, {
+  const contexts = payload.resolvedContexts ?? await resolveProviderCandidates(event, userId, {
     capabilityId: payload.capabilityId,
     providerId: payload.providerId,
     model: payload.model,
@@ -1225,17 +1238,17 @@ async function recordIntelligenceInvokeUsageLedger(
     output: null,
   };
 
-  let entries: Awaited<ReturnType<typeof recordProviderUsageLedger>> = [];
-  try {
-    entries = await recordProviderUsageLedger(event, run);
-  } catch (error) {
+  // The ledger rows (their ids go into the response) and the governance usage event are
+  // independent writes: one round trip of latency for both instead of two.
+  const ledgerWrite = recordProviderUsageLedger(event, run).catch((error) => {
     console.warn(
       "[tuffIntelligenceLabService] Failed to record intelligence invoke usage ledger",
       error,
     );
-  }
+    return [] as Awaited<ReturnType<typeof recordProviderUsageLedger>>;
+  });
 
-  try {
+  const governanceWrite = (async () => {
     await recordPlatformGovernanceEvent(event, {
       scope: "intelligence",
       action: "provider.usage",
@@ -1258,12 +1271,14 @@ async function recordIntelligenceInvokeUsageLedger(
         unsettledCredits: invocation.metadata.billing?.unsettledCredits ?? 0,
       },
     });
-  } catch (error) {
+  })().catch((error) => {
     console.warn(
       "[tuffIntelligenceLabService] Failed to record intelligence invoke governance usage",
       error,
     );
-  }
+  });
+
+  const [entries] = await Promise.all([ledgerWrite, governanceWrite]);
   return entries.map((entry) => entry.id);
 }
 
@@ -1467,6 +1482,10 @@ async function releaseIntelligenceInvokeCredits(
     },
     {
       idempotencyKey: `intelligence-invoke-release:${traceId ?? reservation.reserveId}`,
+      // The hold's own row decides the team and month: released by "now", a hold taken just before
+      // midnight on the last day of a month was refunded into the next month's balance, where the
+      // release failed and the credits stayed held. It also spares re-resolving the team.
+      reservationLedgerId: reservation.ledgerId,
     },
   );
 }
@@ -1882,6 +1901,9 @@ export async function invokeIntelligenceCapability(
     capabilityId,
     normalizedRequest.payload,
   );
+  // Resolve the providers before the hold: a capability nothing can serve is refused here, not
+  // after reserving credits and refunding them.
+  const resolvedContexts = await resolveProviderCandidates(event, userId, { capabilityId, timeoutMs });
   const { reservation, invocation } = await withInvokeReservation(
     event,
     userId,
@@ -1893,6 +1915,7 @@ export async function invokeIntelligenceCapability(
       reservation,
       invocation: await invokeModel(event, userId, {
         capabilityId,
+        resolvedContexts,
         timeoutMs,
         maxTokens: readDeclaredOutputTokens(options),
         // Chat only: every other capability is sent no reasoning parameter.
@@ -1983,6 +2006,8 @@ export async function streamIntelligenceCapability(
     capabilityId,
     normalizedRequest.payload,
   );
+  // Providers first, as in invokeIntelligenceCapability: no hold for a call nothing can serve.
+  const resolvedContexts = await resolveProviderCandidates(event, userId, { capabilityId, timeoutMs });
   const { reservation, invocation } = await withInvokeReservation(
     event,
     userId,
@@ -1997,6 +2022,7 @@ export async function streamIntelligenceCapability(
         userId,
         {
           capabilityId,
+          resolvedContexts,
           timeoutMs,
           maxTokens: readDeclaredOutputTokens(options),
           reasoningEffort: normalizeReasoningEffort(options.reasoningEffort),

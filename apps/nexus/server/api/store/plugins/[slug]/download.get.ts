@@ -1,5 +1,7 @@
+import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
-import { createError, sendRedirect } from 'h3'
+import { createError, send, setResponseHeader } from 'h3'
+import { runAfterResponse } from '../../../../utils/afterResponse'
 import { getPluginPackage } from '../../../../utils/pluginPackageStorage'
 import {
   blockPluginVersionAdmission,
@@ -102,48 +104,49 @@ export default defineEventHandler(async (event) => {
   )
   // endregion
 
-  // Track install count (fire and forget to avoid blocking redirect)
-  incrementPluginInstalls(event, plugin.id).catch(() => {})
+  // Counted after the response: the download no longer waits for three writes, and on a Worker an
+  // unawaited write could be cut off with the request and the install lost.
   const geo = resolveRequestGeo(event)
-  recordPlatformGovernanceEvent(event, {
-    scope: 'plugin',
-    action: 'download',
-    resourceType: 'plugin',
-    resourceId: plugin.id,
-    channel: targetVersion.channel,
-    unit: 'download',
-    quantity: 1,
-    metadata: {
-      slug: plugin.slug,
-      version: targetVersion.version,
-      artifactType: plugin.artifactType,
-      packageSize: targetVersion.packageSize,
-      countryCode: geo.countryCode,
-      regionCode: geo.regionCode,
-      timezone: geo.timezone,
-    },
-  }).catch(() => {})
-  recordPlatformGovernanceEvent(event, {
-    scope: 'plugin',
-    action: 'install',
-    resourceType: 'plugin',
-    resourceId: plugin.id,
-    channel: targetVersion.channel,
-    unit: 'install',
-    quantity: 1,
-    metadata: {
-      slug: plugin.slug,
-      version: targetVersion.version,
-      artifactType: plugin.artifactType,
-      packageSize: targetVersion.packageSize,
-      countryCode: geo.countryCode,
-      regionCode: geo.regionCode,
-      timezone: geo.timezone,
-    },
-  }).catch(() => {})
+  const eventMetadata = {
+    slug: plugin.slug,
+    version: targetVersion.version,
+    artifactType: plugin.artifactType,
+    packageSize: targetVersion.packageSize,
+    countryCode: geo.countryCode,
+    regionCode: geo.regionCode,
+    timezone: geo.timezone,
+  }
+  runAfterResponse(event, 'plugin download accounting', () => Promise.all([
+    incrementPluginInstalls(event, plugin.id),
+    recordPlatformGovernanceEvent(event, {
+      scope: 'plugin',
+      action: 'download',
+      resourceType: 'plugin',
+      resourceId: plugin.id,
+      channel: targetVersion.channel,
+      unit: 'download',
+      quantity: 1,
+      metadata: eventMetadata,
+    }),
+    recordPlatformGovernanceEvent(event, {
+      scope: 'plugin',
+      action: 'install',
+      resourceType: 'plugin',
+      resourceId: plugin.id,
+      channel: targetVersion.channel,
+      unit: 'install',
+      quantity: 1,
+      metadata: eventMetadata,
+    }),
+  ]))
 
-  const packageUrl = audience === 'beta'
-    ? `${targetVersion.packageUrl}?channel=BETA`
-    : targetVersion.packageUrl
-  return sendRedirect(event, packageUrl, 302)
+  // The bytes just verified are the answer. This used to redirect to `/api/plugins/assets/:key`,
+  // which looked the version up again and read the whole package from storage a second time; the
+  // response carries the headers that route sends.
+  const buffer = Buffer.isBuffer(artifact.data) ? artifact.data : Buffer.from(artifactBytes)
+  setResponseHeader(event, 'Content-Type', artifact.contentType || 'application/octet-stream')
+  setResponseHeader(event, 'Content-Length', buffer.length)
+  setResponseHeader(event, 'Cache-Control', 'private, max-age=0, must-revalidate')
+  setResponseHeader(event, 'Content-Disposition', `attachment; filename="${targetVersion.version}.tpex"`)
+  return send(event, buffer)
 })

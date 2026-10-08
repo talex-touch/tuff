@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import type { H3Event } from 'h3'
 import {
+  getOrInitQuota,
+  getSyncBlob,
   getSyncSession,
   handshakeSyncSession,
   pullSyncItemsV1,
@@ -192,8 +194,12 @@ class MockD1Database {
   }
 
   async batch(statements: MockStatement[]): Promise<MockResult[]> {
-    this.batchCalls += 1
-    this.executedStatementCount += statements.length
+    // The schema gate's own batches (they create or record `nexus_schema_state`) bootstrap the
+    // tables; they are not the push's work, which is what the counters measure.
+    if (!statements.some(statement => statement.sql.includes('nexus_schema_state'))) {
+      this.batchCalls += 1
+      this.executedStatementCount += statements.length
+    }
     const snapshot = this.takeSnapshot()
     const isAtomicWriteBatch = statements.some(statement => statement.sql.includes('INSERT OR IGNORE INTO sync_oplog_v1'))
 
@@ -217,6 +223,8 @@ class MockD1Database {
   }
 
   first<T>(sql: string, args: unknown[]): T | null {
+    if (sql.includes('RETURNING'))
+      return (this.execute(sql, args).results?.[0] ?? null) as T | null
     const result = this.firstResult(sql, args)
     return result as T | null
   }
@@ -226,7 +234,48 @@ class MockD1Database {
     return result as T[]
   }
 
+  /** The item ids of a pull page: the subquery the pull's statements share. */
+  private pageItemIds(userId: unknown, cursor: unknown, limit: unknown): Set<string> {
+    return new Set((this.allResult('FROM sync_oplog_v1', [userId, cursor, limit]) as Array<{ item_id: string }>).map(row => row.item_id))
+  }
+
   private execute(sql: string, args: unknown[]): MockResult {
+    if (sql.includes('FROM sync_items_v1') && sql.includes('item_id IN (SELECT item_id FROM')) {
+      const [userId, cursor, limit] = args
+      const itemIds = this.pageItemIds(userId, cursor, limit)
+      return { results: Array.from(this.items.values()).filter(row => row.user_id === String(userId) && itemIds.has(row.item_id)) }
+    }
+
+    if (sql.includes('UPDATE sync_sessions_v1') && sql.includes('last_pull_at = ?5')) {
+      const [userId, cursor, limit, fallbackCursor, pullAt, deviceId] = args
+      const session = this.sessions.get(`${String(userId)}:${String(deviceId)}`)
+      if (!session)
+        return { meta: { changes: 0 } }
+      const page = this.allResult('FROM sync_oplog_v1', [userId, cursor, limit]) as Array<{ cursor: number }>
+      session.last_cursor = page.length ? Math.max(...page.map(row => row.cursor)) : Number(fallbackCursor)
+      session.last_pull_at = String(pullAt)
+      session.last_error_code = null
+      return { meta: { changes: 1 } }
+    }
+
+    if (sql.includes('INSERT INTO sync_sessions_v1') && sql.includes('RETURNING last_cursor')) {
+      const [userId, deviceId, syncToken, expiresAt] = args
+      const key = `${String(userId)}:${String(deviceId)}`
+      const existing = this.sessions.get(key)
+      const lastCursor = this.getCursor(String(userId))
+      this.sessions.set(key, {
+        user_id: String(userId),
+        device_id: String(deviceId),
+        sync_token: String(syncToken),
+        expires_at: String(expiresAt),
+        last_cursor: lastCursor,
+        last_push_at: existing?.last_push_at ?? null,
+        last_pull_at: existing?.last_pull_at ?? null,
+        last_error_code: existing?.last_error_code ?? null,
+      })
+      return { results: [{ last_cursor: lastCursor }], meta: { changes: 1 } }
+    }
+
     if (sql.includes('SELECT item_id, updated_at, updated_by_device_id, payload_size, deleted_at') && sql.includes('json_each')) {
       const [itemIdsJson, userId] = args
       const rows = decodeStringValues(itemIdsJson)
@@ -442,10 +491,21 @@ class MockD1Database {
       return { meta: { changes: 1 } }
     }
 
+    // A read inside a batch answers as `first` or `all` would on its own.
+    if (/^\s*SELECT\b/i.test(sql)) {
+      const row = this.firstResult(sql, args)
+      return { results: row ? [row] : this.allResult(sql, args), meta: { changes: 0 } }
+    }
+
     return { meta: { changes: 0 } }
   }
 
   private firstResult(sql: string, args: unknown[]): unknown {
+    if (sql.includes('SELECT object_key, sha256, size_bytes, content_type') && sql.includes('sync_blobs_v1')) {
+      const [userId, blobId] = args
+      return this.blobs.get(`${String(userId)}:${String(blobId)}`) ?? null
+    }
+
     if (sql.includes('SELECT updated_at') && sql.includes('sync_items_v1')) {
       const [userId, itemId] = args
       const row = this.items.get(`${String(userId)}:${String(itemId)}`)
@@ -570,6 +630,8 @@ class MockR2Bucket {
     this.objects.set(key, value)
   }
 
+  bufferedReads = 0
+
   async get(key: string) {
     const value = this.objects.get(key)
 
@@ -579,7 +641,11 @@ class MockR2Bucket {
     return {
       size: value.byteLength,
       httpMetadata: {},
-      arrayBuffer: async () => value.slice().buffer,
+      body: new Response(value.slice()).body,
+      arrayBuffer: async () => {
+        this.bufferedReads += 1
+        return value.slice().buffer
+      },
       text: async () => new TextDecoder().decode(value),
     }
   }
@@ -799,8 +865,65 @@ describe('syncStoreV1 push', () => {
     expect(db.items.size).toBe(1001)
     expect(db.oplog.size).toBe(1001)
     expect(db.quotas.get('user-1')).toMatchObject({ used_storage_bytes: 1001, used_objects: 1001 })
+    // The quota read (device count and quota row, one batch), the preload, and the atomic write.
+    expect(db.batchCalls).toBe(3)
+    expect(db.executedStatementCount).toBeLessThan(18)
+  })
+
+  it('checks against the quota the handler already read instead of reading it again', async () => {
+    const db = new MockD1Database()
+    const event = createEvent(db)
+    // What the handler does first: it reads (and on first use creates) the quota.
+    const quota = await getOrInitQuota(event, 'user-1')
+    db.batchCalls = 0
+    const item: SyncItemInput = {
+      item_id: 'note-q',
+      type: 'note',
+      schema_version: 1,
+      payload_enc: 'enc',
+      payload_ref: null,
+      meta_plain: null,
+      payload_size: 12,
+      updated_at: '2026-02-04T00:00:00.000Z',
+      deleted_at: null,
+      op_seq: 1,
+      op_hash: 'hash-q',
+      op_type: 'upsert',
+    }
+
+    const result = await pushSyncItemsV1(event, 'user-1', 'device-1', [item], { quota })
+
+    expect(result).toMatchObject({ ackCursor: 1, appliedObjectsDelta: 1 })
+    // The preload and the atomic write; the quota read (a batch of its own) is the handler's.
     expect(db.batchCalls).toBe(2)
-    expect(db.executedStatementCount).toBeLessThan(16)
+  })
+
+  it('rejects against the quota the handler read when the push would exceed it', async () => {
+    const db = new MockD1Database()
+    const event = createEvent(db)
+    const quota = {
+      plan_tier: 'FREE' as const,
+      limits: { storage_limit_bytes: 1_000_000, object_limit: 0, item_limit: 100_000, device_limit: 3 },
+      usage: { used_storage_bytes: 0, used_objects: 0, used_devices: 1 },
+    }
+
+    const result = await pushSyncItemsV1(event, 'user-1', 'device-1', [{
+      item_id: 'note-over',
+      type: 'note',
+      schema_version: 1,
+      payload_enc: 'enc',
+      payload_ref: null,
+      meta_plain: null,
+      payload_size: 12,
+      updated_at: '2026-02-04T00:00:00.000Z',
+      deleted_at: null,
+      op_seq: 1,
+      op_hash: 'hash-over',
+      op_type: 'upsert',
+    }], { quota })
+
+    expect(result).toMatchObject({ errorCode: 'QUOTA_OBJECT_EXCEEDED' })
+    expect(db.items.size).toBe(0)
   })
 
   it('records conflicts when server has newer updated_at', async () => {
@@ -1009,6 +1132,25 @@ describe('syncStoreV1 flow', () => {
     expect(bucket.objects.has(result.objectKey)).toBe(true)
     expect(result.storageChannel).toBe('r2')
     expect(result.storageProvider).toBe('cloudflare-r2')
+  })
+
+  it('streams a blob back to its owner without reading it into memory', async () => {
+    const db = new MockD1Database()
+    const bucket = new MockR2Bucket()
+    const event = createEvent(db, bucket)
+    const data = new TextEncoder().encode('hello blob')
+    const uploaded = await uploadSyncBlob(event, 'user-1', {
+      size: data.length,
+      type: 'text/plain',
+      arrayBuffer: async () => data.buffer,
+    } as File)
+
+    const blob = await getSyncBlob(event, 'user-1', uploaded.blobId)
+
+    expect(blob).toMatchObject({ byteLength: data.length, contentType: 'text/plain' })
+    expect(await new Response(blob!.body).text()).toBe('hello blob')
+    expect(bucket.bufferedReads).toBe(0)
+    await expect(getSyncBlob(event, 'user-2', uploaded.blobId)).resolves.toBeNull()
   })
 
   it('retries transient R2 blob writes and returns recovered upload metadata', async () => {

@@ -77,6 +77,8 @@ export async function runPreviewDeployment({
     throw new PreviewDeployError(PREVIEW_DEPLOY_ERROR_CODES.targetChanged, 'Preview deployment target is invalid.', 78)
   }
 
+  // Sentry tells Preview events apart from production by this (see `sentryEnvironment` in nuxt.config).
+  env.NUXT_PUBLIC_SENTRY_ENVIRONMENT ??= 'preview'
   execute(['run', 'build'])
 
   const final = await preflight()

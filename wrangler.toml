@@ -3,9 +3,18 @@ compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat", "enable_nodejs_http_modules", "no_nodejs_compat_v2"]
 pages_build_output_dir = "apps/nexus/dist"
 
+# Smart Placement: run the Functions Worker next to what it calls most. Every API request makes
+# several D1 round trips to the primary in APAC; served from LAX/AMS (where CN traffic lands) each one
+# cost 150–250 ms, placed beside D1 a few. Verify with the `cf-placement` response header.
+[placement]
+mode = "smart"
+
 [env.production]
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat", "enable_nodejs_http_modules", "no_nodejs_compat_v2"]
+
+[env.production.placement]
+mode = "smart"
 
 [[env.production.d1_databases]]
 binding = "DB"
@@ -38,10 +47,16 @@ EXCHANGE_RATE_TTL_MS = "28800000"
 EXCHANGE_RATE_TIMEOUT_MS = "10000"
 EXCHANGE_RATE_HISTORY_RETENTION_DAYS = "0"
 EXCHANGE_RATE_STORE_RATE_ROWS = "true"
+# `Server-Timing: d1;desc="N round trips";dur=…` on responses (server/plugins/d1-server-timing.ts).
+NEXUS_SERVER_TIMING = "1"
 
 [env.preview]
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat", "enable_nodejs_http_modules", "no_nodejs_compat_v2"]
+
+[env.preview.placement]
+mode = "smart"
+
 [[env.preview.d1_databases]]
 binding = "DB"
 database_name = "tuff-nexus-dev"
@@ -62,6 +77,7 @@ ADMIN_CF_ACCESS_CLIENT_ID = ""
 ADMIN_OOB_MTLS_ENABLED = "false"
 ADMIN_OOB_MTLS_FINGERPRINTS = ""
 ADMIN_DEFAULT_DEFENSE_MODE = "NORMAL"
+NEXUS_SERVER_TIMING = "1"
 
 [[env.preview.r2_buckets]]
 binding = "R2"

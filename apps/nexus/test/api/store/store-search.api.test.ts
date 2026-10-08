@@ -189,6 +189,7 @@ describe('/api/store/search', () => {
       limit: 25,
       offset: 5,
       audience: 'public',
+      includeReadme: false,
     })
     expect(result).toEqual({
       plugins: [
@@ -281,6 +282,7 @@ describe('/api/store/search', () => {
       limit: 10,
       offset: 0,
       audience: 'beta',
+      includeReadme: false,
     })
     expect(result).toMatchObject({
       plugins: [
@@ -314,6 +316,8 @@ describe('/api/store/search', () => {
       limit: 10,
       offset: 2,
       audience: 'public',
+      // The full form is the only one that carries readme text.
+      includeReadme: true,
     })
     expect(result).toMatchObject({ total: 1, limit: 10, offset: 2 })
     expect(result.plugins[0].versions).toHaveLength(2)
@@ -352,6 +356,7 @@ describe('/api/store/search', () => {
       limit: 100,
       offset: 0,
       audience: 'public',
+      includeReadme: false,
     })
     expect(result).toEqual({
       plugins: [],

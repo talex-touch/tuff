@@ -10,6 +10,12 @@ import { requestJson } from '~/utils/request'
 
 const FLUSH_INTERVAL_MS = 15_000
 const ACTIVE_WINDOW_MS = 20_000
+/**
+ * A page nobody has scrolled, clicked, typed in or moved the pointer over for this long counts as left
+ * alone: its time stops counting and its reports stop until someone comes back. A docs tab left open on
+ * a second screen used to report every 15 s for as long as it stayed open — a write to D1 each time.
+ */
+const IDLE_STOP_MS = 3 * 60_000
 const SECTION_BUCKETS = 20
 const MAX_ACTIONS_PER_FLUSH = 80
 const MAX_HEAT_BUCKETS_PER_FLUSH = 200
@@ -316,7 +322,8 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
       return
     }
 
-    const elapsed = now - lastTickAt
+    // Time past the idle limit is not reading time: it counts only up to the limit.
+    const elapsed = Math.min(now, lastInteractionAt + IDLE_STOP_MS) - lastTickAt
     lastTickAt = now
 
     if (elapsed <= 0 || document.hidden)
@@ -342,8 +349,17 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
     section.buckets.set(bucket, current)
   }
 
+  function isIdle(now = Date.now()) {
+    return now - lastInteractionAt > IDLE_STOP_MS
+  }
+
   function markInteraction() {
-    lastInteractionAt = Date.now()
+    const now = Date.now()
+    // Back after the idle limit: settle the time before it, so the gap is not counted as reading.
+    if (isIdle(now))
+      applyElapsed(now)
+    lastInteractionAt = now
+    resumeTimer()
   }
 
   function resolveSectionTitle(sectionId?: string) {
@@ -758,7 +774,17 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
 
     flushTimer = setInterval(() => {
       void flush('interval')
+      // That flush reported the time up to the idle limit; nothing more until someone is back.
+      if (isIdle())
+        stopTimer()
     }, FLUSH_INTERVAL_MS)
+  }
+
+  /** Restarts reporting stopped by idling or a hidden tab, for a page that is still being tracked. */
+  function resumeTimer() {
+    if (!import.meta.client || flushTimer || !isEnabled.value || !hasSession.value || document.hidden)
+      return
+    startTimer()
   }
 
   function stopTimer() {
@@ -783,10 +809,15 @@ export function useDocEngagementTracker(options: UseDocEngagementTrackerOptions)
       }, { passive: true })
 
       useEventListener(document, 'visibilitychange', () => {
-        if (document.hidden)
+        if (document.hidden) {
           void flush('visibility-hidden')
-        else
-          markInteraction()
+          // A hidden page counts no time, so it has nothing to report until it is shown again.
+          stopTimer()
+          return
+        }
+        // Nor is the time it spent hidden reading time.
+        lastTickAt = Date.now()
+        markInteraction()
       })
 
       useEventListener(window, 'pagehide', () => {

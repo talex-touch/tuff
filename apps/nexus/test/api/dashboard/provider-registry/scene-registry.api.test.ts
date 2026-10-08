@@ -57,6 +57,11 @@ class MockStatement {
   async all<T = any>() {
     return { results: this.db.all(this.sql, this.args) as T[] }
   }
+
+  /** What `batch` runs: rows for a read, the write's result otherwise. */
+  async execute() {
+    return /^\s*(?:SELECT|WITH|PRAGMA)\b/i.test(this.sql) ? this.all() : this.run()
+  }
 }
 
 class MockD1Database {
@@ -65,6 +70,14 @@ class MockD1Database {
 
   prepare(sql: string) {
     return new MockStatement(this, sql)
+  }
+
+  /** In order, like D1's batch (without its rollback, which these tests do not exercise). */
+  async batch(statements: MockStatement[]) {
+    const results = []
+    for (const statement of statements)
+      results.push(await statement.execute())
+    return results
   }
 
   run(sql: string, args: any[]) {
@@ -191,12 +204,12 @@ class MockD1Database {
   }
 
   all(sql: string, args: any[]) {
-    if (sql.includes('FROM scene_registry')) {
-      return this.filterScenes(sql, args)
-    }
-
     if (sql.includes('FROM scene_strategy_bindings')) {
       return this.filterBindings(sql, args)
+    }
+
+    if (sql.includes('FROM scene_registry')) {
+      return this.filterScenes(sql, args)
     }
 
     return []
@@ -218,7 +231,12 @@ class MockD1Database {
   private filterBindings(sql: string, args: any[]) {
     let rows = [...this.bindings.values()]
 
-    if (sql.includes('scene_id IN')) {
+    // The bindings of the scenes a listing selects: the subquery repeats the listing's filter.
+    if (sql.includes('scene_id IN (SELECT id FROM scene_registry')) {
+      const sceneIds = new Set(this.filterScenes(sql, args).map(scene => scene.id))
+      rows = rows.filter(row => sceneIds.has(row.scene_id))
+    }
+    else if (sql.includes('scene_id IN')) {
       const sceneIds = new Set(args.map(String))
       rows = rows.filter(row => sceneIds.has(row.scene_id))
     }

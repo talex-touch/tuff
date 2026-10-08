@@ -1,8 +1,12 @@
-import { IncomingMessage, ServerResponse } from 'node:http'
-import { Socket } from 'node:net'
-import { H3Event, type H3Event as H3EventType } from 'h3'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { releaseConsumedCredits } from './creditsStore'
+import type { H3Event } from 'h3'
+import type { SqliteD1Database } from '../../test/helpers/d1-sqlite'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createSqliteD1 } from '../../test/helpers/d1-sqlite'
+
+/**
+ * Releases of held credits against real SQLite: one release per business key, into the team and
+ * month that took the hold, and legacy release rows replayable exactly once.
+ */
 
 const subscriptionMocks = vi.hoisted(() => ({
   getUserSubscription: vi.fn(),
@@ -14,245 +18,73 @@ const teamMocks = vi.hoisted(() => ({
 vi.mock('./subscriptionStore', () => subscriptionMocks)
 vi.mock('./teamStore', () => teamMocks)
 
-interface Balance {
-  quota: number
-  used: number
+const AUTH_DDL = `
+  CREATE TABLE auth_users (
+    id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT, email_verified TEXT,
+    email_state TEXT NOT NULL DEFAULT 'unverified', role TEXT NOT NULL DEFAULT 'user',
+    status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL
+  );
+  CREATE TABLE auth_accounts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, provider TEXT NOT NULL, provider_account_id TEXT NOT NULL, created_at TEXT NOT NULL);
+  CREATE TABLE auth_passkeys (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, credential_id TEXT NOT NULL UNIQUE, public_key TEXT NOT NULL, created_at TEXT NOT NULL);
+`
+
+let store: typeof import('./creditsStore')
+let d1: SqliteD1Database
+let event: H3Event
+
+function used(scope: 'team' | 'user', scopeId: string, month: string): number | undefined {
+  const row = d1.sqlite.prepare('SELECT used FROM credit_balances WHERE scope = ? AND scope_id = ? AND month = ?').get(scope, scopeId, month) as { used: number } | undefined
+  return row === undefined ? undefined : Number(row.used)
 }
 
-interface LedgerEntry {
-  id: string
-  scopeId: string
-  delta: number
-  reason: string
-  createdAt: string
-  metadata: string
-  idempotencyKey: string | null
-  idempotencyHash: string | null
+function releases() {
+  return d1.sqlite.prepare(`SELECT id, scope_id FROM credit_ledger WHERE reason = 'asr-reservation-release'`).all() as Array<{ id: string, scope_id: string }>
 }
 
-class ReleaseStatement {
-  readonly args: unknown[] = []
-
-  constructor(
-    private readonly database: ReleaseDatabase,
-    readonly sql: string,
-  ) {}
-
-  bind(...args: unknown[]) {
-    this.args.splice(0, this.args.length, ...args)
-    return this
-  }
-
-  async run() {
-    return this.database.execute(this.sql, this.args)
-  }
-
-  async first<T>() {
-    return this.database.first<T>(this.sql, this.args)
-  }
-
-  async all<T>() {
-    return { results: this.database.all<T>(this.sql, this.args) }
-  }
+function insertLedger(row: { id: string, scopeId: string, delta: number, reason: string, createdAt: string, metadata: string }) {
+  d1.sqlite.prepare(`INSERT INTO credit_ledger (id, scope, scope_id, delta, reason, created_at, metadata) VALUES (?, 'team', ?, ?, ?, ?, ?)`)
+    .run(row.id, row.scopeId, row.delta, row.reason, row.createdAt, row.metadata)
 }
 
-class ReleaseDatabase {
-  private readonly initialUsed: number
-  private readonly teams = new Map<string, { ownerUserId: string }>()
-  private readonly members = new Map<string, { teamId: string, userId: string, joinedAt: string }>()
-  readonly balances = new Map<string, Balance>()
-  readonly ledger = new Map<string, LedgerEntry>()
-
-  constructor(initialUsed: number) {
-    this.initialUsed = initialUsed
-  }
-
-  prepare(sql: string) {
-    return new ReleaseStatement(this, sql)
-  }
-
-  async batch(statements: ReleaseStatement[]) {
-    return statements.map(statement => this.execute(statement.sql, statement.args))
-  }
-
-  execute(sql: string, args: unknown[]) {
-    if (/(CREATE|ALTER)\s+(TABLE|INDEX)|PRAGMA/i.test(sql))
-      return { meta: { changes: 0 } }
-
-    if (sql.includes('INSERT OR IGNORE INTO teams')) {
-      const [id, , ownerUserId] = args
-      this.teams.set(String(id), { ownerUserId: String(ownerUserId) })
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('INSERT OR IGNORE INTO team_members')) {
-      const [teamId, userId, joinedAt] = args
-      this.members.set(`${teamId}:${userId}`, {
-        teamId: String(teamId),
-        userId: String(userId),
-        joinedAt: String(joinedAt),
-      })
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('INSERT OR IGNORE INTO credit_balances')) {
-      const [scope, scopeId, month, quota] = args
-      const key = this.balanceKey(scope, scopeId, month)
-      if (!this.balances.has(key))
-        this.balances.set(key, { quota: Number(quota), used: this.initialUsed })
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('UPDATE credit_balances') && sql.includes('SET quota = ?'))
-      return { meta: { changes: 1 } }
-
-    if (sql.includes('INSERT INTO credit_ledger') && sql.includes('SELECT')) {
-      const [
-        id,
-        teamId,
-        delta,
-        reason,
-        createdAt,
-        metadata,
-        idempotencyKey,
-        idempotencyHash,
-        checkedTeamId,
-        teamMonth,
-        amount,
-        checkedUserId,
-        userMonth,
-        userAmount,
-      ] = args
-      const team = this.balances.get(this.balanceKey('team', checkedTeamId, teamMonth))
-      const user = this.balances.get(this.balanceKey('user', checkedUserId, userMonth))
-      if (!team || !user || team.used < Number(amount) || user.used < Number(userAmount))
-        return { meta: { changes: 0 } }
-      this.ledger.set(String(id), {
-        id: String(id),
-        scopeId: String(teamId),
-        delta: Number(delta),
-        reason: String(reason),
-        createdAt: String(createdAt),
-        metadata: String(metadata),
-        idempotencyKey: idempotencyKey == null ? null : String(idempotencyKey),
-        idempotencyHash: idempotencyHash == null ? null : String(idempotencyHash),
-      })
-      return { meta: { changes: 1 } }
-    }
-
-    if (sql.includes('UPDATE credit_balances') && sql.includes('SET used = used - ?')) {
-      const [amount, scopeId, month, minimumUsed, ledgerId] = args
-      if (!this.ledger.has(String(ledgerId)))
-        return { meta: { changes: 0 } }
-      const scope = sql.includes("scope = 'team'") ? 'team' : 'user'
-      const balance = this.balances.get(this.balanceKey(scope, scopeId, month))
-      if (!balance || balance.used < Number(minimumUsed))
-        return { meta: { changes: 0 } }
-      balance.used -= Number(amount)
-      return { meta: { changes: 1 } }
-    }
-
-    return { meta: { changes: 1 } }
-  }
-
-  first<T>(sql: string, args: unknown[]): T | null
-  first(sql: string, args: unknown[]): unknown {
-    if (sql.includes('SELECT owner_user_id FROM teams')) {
-      const team = this.teams.get(String(args[0]))
-      return team ? { owner_user_id: team.ownerUserId } : null
-    }
-
-    if (sql.includes('SELECT scope_id, delta, created_at, metadata')) {
-      const entry = this.ledger.get(String(args[0]))
-      if (!entry) return null
-      return {
-        scope_id: entry.scopeId,
-        delta: entry.delta,
-        created_at: entry.createdAt,
-        metadata: entry.metadata,
-      }
-    }
-
-    if (sql.includes('SELECT id, delta, created_at, metadata, idempotency_hash')) {
-      const [teamId, reason, idempotencyKey] = args
-      for (const entry of this.ledger.values()) {
-        if (entry.scopeId === teamId && entry.reason === reason && entry.idempotencyKey === idempotencyKey) {
-          return {
-            id: entry.id,
-            delta: entry.delta,
-            created_at: entry.createdAt,
-            metadata: entry.metadata,
-            idempotency_hash: entry.idempotencyHash,
-          }
-        }
-      }
-    }
-
-    return null
-  }
-
-  all<T>(sql: string, args: unknown[]): T[]
-  all(sql: string, _args: unknown[]): unknown[] {
-    if (sql.includes('PRAGMA table_info'))
-      return [{ name: 'idempotency_key' }, { name: 'idempotency_hash' }]
-
-    if (sql.includes('FROM team_members')) {
-      return [...this.members.values()].map(member => ({
-        id: member.teamId,
-        name: 'Personal',
-        type: 'personal',
-        owner_user_id: member.userId,
-        role: 'owner',
-        joined_at: member.joinedAt,
-        created_at: member.joinedAt,
-      }))
-    }
-
-    return []
-  }
-
-  balance(scope: 'team' | 'user', scopeId: string, month: string): Balance | undefined {
-    return this.balances.get(this.balanceKey(scope, scopeId, month))
-  }
-
-  private balanceKey(scope: unknown, scopeId: unknown, month: unknown) {
-    return `${scope}:${scopeId}:${month}`
-  }
+function setUsed(scope: 'team' | 'user', scopeId: string, month: string, value: number) {
+  d1.sqlite.prepare(`
+    INSERT INTO credit_balances (scope, scope_id, month, quota, used) VALUES (?, ?, ?, 100000, ?)
+    ON CONFLICT(scope, scope_id, month) DO UPDATE SET used = excluded.used
+  `).run(scope, scopeId, month, value)
 }
 
-function createEvent(database: ReleaseDatabase): H3EventType {
-  const request = new IncomingMessage(new Socket())
-  const response = new ServerResponse(request)
-  const event = new H3Event(request, response)
-  event.context.cloudflare = { env: { DB: database } }
-  return event
-}
+beforeEach(async () => {
+  vi.resetModules()
+  store = await import('./creditsStore')
+  d1 = createSqliteD1()
+  d1.sqlite.exec(AUTH_DDL)
+  d1.sqlite.prepare(`INSERT INTO auth_users (id, email, created_at) VALUES ('user_1', 'u1@example.com', '2026-01-01T00:00:00.000Z')`).run()
+  event = { context: { cloudflare: { env: { DB: d1 } } } } as unknown as H3Event
+  subscriptionMocks.getUserSubscription.mockReset().mockResolvedValue({ plan: 'PRO' })
+  teamMocks.getTeamQuota.mockReset()
+  // Creates the credit tables.
+  await store.getCreditSummary(event, 'user_1')
+})
+
+afterEach(() => {
+  d1.close()
+})
 
 describe('releaseConsumedCredits reservation idempotency', () => {
-  beforeEach(() => {
-    subscriptionMocks.getUserSubscription.mockReset()
-    subscriptionMocks.getUserSubscription.mockResolvedValue({ plan: 'PRO' })
-    teamMocks.getTeamQuota.mockReset()
-  })
-
   it('releases a reservation once from both held balances when retried with its business key', async () => {
-    const database = new ReleaseDatabase(13)
-    const event = createEvent(database)
+    const month = new Date().toISOString().slice(0, 7)
+    setUsed('team', 'team_user_1', month, 13)
+    setUsed('user', 'user_1', month, 13)
     const idempotencyKey = 'asr-release:request-1:0'
 
-    const first = await releaseConsumedCredits(event, 'user_1', 7, 'asr-reservation-release', {
-      requestId: 'request-1',
-    }, { idempotencyKey })
-    const second = await releaseConsumedCredits(event, 'user_1', 7, 'asr-reservation-release', {
-      requestId: 'request-1',
-    }, { idempotencyKey })
+    const first = await store.releaseConsumedCredits(event, 'user_1', 7, 'asr-reservation-release', { requestId: 'request-1' }, { idempotencyKey })
+    const second = await store.releaseConsumedCredits(event, 'user_1', 7, 'asr-reservation-release', { requestId: 'request-1' }, { idempotencyKey })
 
-    const month = first.createdAt.slice(0, 7)
     expect(second.ledgerId).toBe(first.ledgerId)
     expect(second.amount).toBe(7)
-    expect([...database.ledger.values()]).toHaveLength(1)
-    expect(database.balance('team', 'team_user_1', month)?.used).toBe(6)
-    expect(database.balance('user', 'user_1', month)?.used).toBe(6)
+    expect(releases()).toHaveLength(1)
+    expect(used('team', 'team_user_1', month)).toBe(6)
+    expect(used('user', 'user_1', month)).toBe(6)
   })
 
   /**
@@ -260,51 +92,37 @@ describe('releaseConsumedCredits reservation idempotency', () => {
    * credit a bucket the hold never touched — and leave the original team short.
    */
   it('releases against the reservation ledger’s original team and month even after the active team changes', async () => {
-    const database = new ReleaseDatabase(0)
-    const event = createEvent(database)
     const reservationId = 'ledger_reservation_1'
     const reservationMonth = '2026-08'
-
-    database.ledger.set(reservationId, {
+    insertLedger({
       id: reservationId,
       scopeId: 'team_original',
       delta: -10,
       reason: 'asr-reservation',
       createdAt: '2026-08-05T00:00:00.000Z',
       metadata: JSON.stringify({ userId: 'user_1' }),
-      idempotencyKey: null,
-      idempotencyHash: null,
     })
-    database.balances.set('team:team_original:2026-08', { quota: 100, used: 10 })
-    database.balances.set('user:user_1:2026-08', { quota: 100, used: 10 })
+    setUsed('team', 'team_original', reservationMonth, 10)
+    setUsed('user', 'user_1', reservationMonth, 10)
     // The team active *now* is a different bucket; a naive release would use it (and the
     // current month) instead of the ledger that actually took the hold.
     const activeMonth = new Date().toISOString().slice(0, 7)
-    database.balances.set(`team:team_user_1:${activeMonth}`, { quota: 100, used: 4 })
-    database.balances.set(`user:user_1:${activeMonth}`, { quota: 100, used: 4 })
+    setUsed('team', 'team_user_1', activeMonth, 4)
+    setUsed('user', 'user_1', activeMonth, 4)
 
-    const options = {
-      idempotencyKey: 'asr-release:request-1:0',
-      reservationLedgerId: reservationId,
-    }
-    const first = await releaseConsumedCredits(event, 'user_1', 10, 'asr-reservation-release', {
-      requestId: 'request-1',
-    }, options)
-    const second = await releaseConsumedCredits(event, 'user_1', 10, 'asr-reservation-release', {
-      requestId: 'request-1',
-    }, options)
+    const options = { idempotencyKey: 'asr-release:request-1:0', reservationLedgerId: reservationId }
+    const first = await store.releaseConsumedCredits(event, 'user_1', 10, 'asr-reservation-release', { requestId: 'request-1' }, options)
+    const second = await store.releaseConsumedCredits(event, 'user_1', 10, 'asr-reservation-release', { requestId: 'request-1' }, options)
 
     expect(first.teamId).toBe('team_original')
-    expect(database.balance('team', 'team_original', reservationMonth)?.used).toBe(0)
-    expect(database.balance('user', 'user_1', reservationMonth)?.used).toBe(0)
-    expect(database.balance('team', 'team_user_1', activeMonth)?.used).toBe(4)
-    expect(database.balance('user', 'user_1', activeMonth)?.used).toBe(4)
+    expect(used('team', 'team_original', reservationMonth)).toBe(0)
+    expect(used('user', 'user_1', reservationMonth)).toBe(0)
+    expect(used('team', 'team_user_1', activeMonth)).toBe(4)
+    expect(used('user', 'user_1', activeMonth)).toBe(4)
 
     // A retry with the same business key collapses onto the one release entry, not a second refund.
     expect(second.ledgerId).toBe(first.ledgerId)
-    const releases = [...database.ledger.values()].filter(entry => entry.reason === 'asr-reservation-release')
-    expect(releases).toHaveLength(1)
-    expect(releases[0]?.scopeId).toBe('team_original')
+    expect(releases()).toEqual([{ id: first.ledgerId, scope_id: 'team_original' }])
   })
 
   /**
@@ -313,66 +131,38 @@ describe('releaseConsumedCredits reservation idempotency', () => {
    * replayable exactly once, or a retried release either double-refunds or strands the hold.
    */
   it('accepts a legacy release entry whose metadata predates the reservation ledger, then rejects altered replays', async () => {
-    const database = new ReleaseDatabase(13)
-    const event = createEvent(database)
     const idempotencyKey = 'asr-release:request-1:0'
     const month = new Date().toISOString().slice(0, 7)
+    setUsed('team', 'team_user_1', month, 13)
+    setUsed('user', 'user_1', month, 13)
     const reservationId = 'ledger_reservation_legacy'
-    database.ledger.set(reservationId, {
+    insertLedger({
       id: reservationId,
       scopeId: 'team_user_1',
       delta: -7,
       reason: 'asr-reservation',
       createdAt: `${month}-05T00:00:00.000Z`,
       metadata: JSON.stringify({ userId: 'user_1' }),
-      idempotencyKey: null,
-      idempotencyHash: null,
     })
 
     // The old release path: no reservation option, so the hash covers metadata without a ledger.
-    const legacy = await releaseConsumedCredits(
-      event,
-      'user_1',
-      7,
-      'asr-reservation-release',
-      { requestId: 'request-1' },
-      { idempotencyKey },
-    )
+    const legacy = await store.releaseConsumedCredits(event, 'user_1', 7, 'asr-reservation-release', { requestId: 'request-1' }, { idempotencyKey })
     // The current path replays the same release while pointing at the reservation ledger.
-    const replayed = await releaseConsumedCredits(
-      event,
-      'user_1',
-      7,
-      'asr-reservation-release',
-      { requestId: 'request-1' },
-      { idempotencyKey, reservationLedgerId: reservationId },
-    )
+    const replayed = await store.releaseConsumedCredits(event, 'user_1', 7, 'asr-reservation-release', { requestId: 'request-1' }, { idempotencyKey, reservationLedgerId: reservationId })
 
     expect(replayed.ledgerId).toBe(legacy.ledgerId)
-    expect([...database.ledger.values()].filter(entry => entry.reason === 'asr-reservation-release')).toHaveLength(1)
-    expect(database.balance('team', 'team_user_1', month)?.used).toBe(6)
-    expect(database.balance('user', 'user_1', month)?.used).toBe(6)
+    expect(releases()).toHaveLength(1)
+    expect(used('team', 'team_user_1', month)).toBe(6)
+    expect(used('user', 'user_1', month)).toBe(6)
 
     // Same business key, different money: not the same release.
-    await expect(releaseConsumedCredits(
-      event,
-      'user_1',
-      6,
-      'asr-reservation-release',
-      { requestId: 'request-1' },
-      { idempotencyKey, reservationLedgerId: reservationId },
-    )).rejects.toThrow('Credit idempotency conflict.')
+    await expect(store.releaseConsumedCredits(event, 'user_1', 6, 'asr-reservation-release', { requestId: 'request-1' }, { idempotencyKey, reservationLedgerId: reservationId }))
+      .rejects.toThrow('Credit idempotency conflict.')
     // Same key and amount, different request: still not the same release.
-    await expect(releaseConsumedCredits(
-      event,
-      'user_1',
-      7,
-      'asr-reservation-release',
-      { requestId: 'request-2' },
-      { idempotencyKey, reservationLedgerId: reservationId },
-    )).rejects.toThrow('Credit idempotency conflict.')
+    await expect(store.releaseConsumedCredits(event, 'user_1', 7, 'asr-reservation-release', { requestId: 'request-2' }, { idempotencyKey, reservationLedgerId: reservationId }))
+      .rejects.toThrow('Credit idempotency conflict.')
 
-    expect([...database.ledger.values()].filter(entry => entry.reason === 'asr-reservation-release')).toHaveLength(1)
-    expect(database.balance('team', 'team_user_1', month)?.used).toBe(6)
+    expect(releases()).toHaveLength(1)
+    expect(used('team', 'team_user_1', month)).toBe(6)
   })
 })

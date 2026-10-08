@@ -82,8 +82,6 @@ async function fetchViewCount() {
 onMounted(() => {
   window.addEventListener('docs:action', handleDocsAction)
   scheduleRefresh()
-  if (props.isAdmin)
-    void fetchViewCount()
 })
 
 onBeforeUnmount(() => {
@@ -99,6 +97,7 @@ watch(
   },
 )
 
+// Also the first read for an administrator: a second one at mount used to ask for the same count again.
 watch(
   () => [props.docPath, props.isAdmin] as const,
   () => {

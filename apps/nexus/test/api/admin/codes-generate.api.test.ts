@@ -5,7 +5,7 @@ const authMocks = vi.hoisted(() => ({
 }))
 
 const subscriptionMocks = vi.hoisted(() => ({
-  createActivationCode: vi.fn(),
+  createActivationCodes: vi.fn(),
 }))
 
 const bodyMock = vi.hoisted(() => ({ readBody: vi.fn() }))
@@ -39,13 +39,14 @@ describe('/api/admin/codes/generate input validation', () => {
     vi.clearAllMocks()
     auditMocks.logAdminAudit.mockResolvedValue(undefined)
     authMocks.requireAdmin.mockResolvedValue({ userId: 'admin_1', user: { role: 'admin' } })
-    subscriptionMocks.createActivationCode.mockImplementation(async (_event: any, input: any) => ({
-      id: 'code_1',
-      code: 'TUFF-PRO-TEST',
-      ...input,
-      uses: 0,
-      status: 'active',
-    }))
+    subscriptionMocks.createActivationCodes.mockImplementation(async (_event: any, input: any, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        id: `code_${index + 1}`,
+        code: 'TUFF-PRO-TEST',
+        ...input,
+        uses: 0,
+        status: 'active',
+      })))
   })
 
   it('rejects a negative maxUses instead of persisting it', async () => {
@@ -55,7 +56,7 @@ describe('/api/admin/codes/generate input validation', () => {
       statusCode: 400,
       statusMessage: 'Max uses must be between 1 and 1000',
     })
-    expect(subscriptionMocks.createActivationCode).not.toHaveBeenCalled()
+    expect(subscriptionMocks.createActivationCodes).not.toHaveBeenCalled()
   })
 
   it('rejects a maxUses above the bound the admin form advertises', async () => {
@@ -65,7 +66,7 @@ describe('/api/admin/codes/generate input validation', () => {
       statusCode: 400,
       statusMessage: 'Max uses must be between 1 and 1000',
     })
-    expect(subscriptionMocks.createActivationCode).not.toHaveBeenCalled()
+    expect(subscriptionMocks.createActivationCodes).not.toHaveBeenCalled()
   })
 
   it('rejects a negative expiresInDays that would mint an already-expired code', async () => {
@@ -75,7 +76,7 @@ describe('/api/admin/codes/generate input validation', () => {
       statusCode: 400,
       statusMessage: 'Expiry must be between 1 and 365 days',
     })
-    expect(subscriptionMocks.createActivationCode).not.toHaveBeenCalled()
+    expect(subscriptionMocks.createActivationCodes).not.toHaveBeenCalled()
   })
 
   it('rejects an expiresInDays large enough to overflow the expiry Date', async () => {
@@ -85,7 +86,7 @@ describe('/api/admin/codes/generate input validation', () => {
       statusCode: 400,
       statusMessage: 'Expiry must be between 1 and 365 days',
     })
-    expect(subscriptionMocks.createActivationCode).not.toHaveBeenCalled()
+    expect(subscriptionMocks.createActivationCodes).not.toHaveBeenCalled()
   })
 
   it('still accepts the values the admin form submits', async () => {
@@ -94,14 +95,16 @@ describe('/api/admin/codes/generate input validation', () => {
     const result = await handler({})
 
     expect(result.success).toBe(true)
-    expect(subscriptionMocks.createActivationCode).toHaveBeenCalledTimes(2)
-    expect(subscriptionMocks.createActivationCode).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+    // Both codes in one call: the store writes them in one batch.
+    expect(subscriptionMocks.createActivationCodes).toHaveBeenCalledTimes(1)
+    expect(subscriptionMocks.createActivationCodes).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       plan: 'PRO',
       durationDays: 30,
       maxUses: 1,
       expiresInDays: 90,
       createdBy: 'admin_1',
-    }))
+    }), 2)
+    expect(result.codes).toHaveLength(2)
     // One entry for the batch, not one per code.
     expect(auditMocks.logAdminAudit).toHaveBeenCalledTimes(1)
     expect(auditMocks.logAdminAudit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
@@ -116,9 +119,9 @@ describe('/api/admin/codes/generate input validation', () => {
     const result = await handler({})
 
     expect(result.success).toBe(true)
-    expect(subscriptionMocks.createActivationCode).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+    expect(subscriptionMocks.createActivationCodes).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       maxUses: 1,
       expiresInDays: undefined,
-    }))
+    }), 1)
   })
 })

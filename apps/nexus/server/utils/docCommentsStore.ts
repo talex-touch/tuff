@@ -1,10 +1,9 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const DOC_COMMENTS_TABLE = 'doc_comments'
-
-let schemaInitialized = false
 
 export interface DocComment {
   id: string
@@ -28,24 +27,23 @@ export function getD1Database(event: H3Event): D1Database | null {
   return bindings?.DB ?? null
 }
 
+const DOC_COMMENTS_SCHEMA = defineD1Schema('doc-comments', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${DOC_COMMENTS_TABLE} (
+        id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        user_name TEXT,
+        user_image TEXT,
+        content TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_doc_comments_path ON ${DOC_COMMENTS_TABLE} (path, created_at DESC)`,
+  ],
+})
+
 export async function ensureCommentsSchema(db: D1Database) {
-  if (schemaInitialized)
-    return
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${DOC_COMMENTS_TABLE} (
-      id TEXT PRIMARY KEY,
-      path TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      user_name TEXT,
-      user_image TEXT,
-      content TEXT NOT NULL,
-      created_at INTEGER NOT NULL
-    );
-  `).run()
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_doc_comments_path ON ${DOC_COMMENTS_TABLE} (path, created_at DESC);
-  `).run()
-  schemaInitialized = true
+  await ensureD1Schema(db, DOC_COMMENTS_SCHEMA)
 }
 
 function mapRow(row: any): DocComment {

@@ -138,7 +138,8 @@ class MockD1Database {
     }
 
     if (sql.includes('FROM release_evidence_items') && sql.includes('run_id IN')) {
-      const runIds = new Set(args.map(String))
+      // The run ids arrive as one JSON array (`json_each`).
+      const runIds = new Set((JSON.parse(String(args[0])) as unknown[]).map(String))
       return [...this.items.values()].filter(row => runIds.has(row.run_id))
     }
 

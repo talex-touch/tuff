@@ -14,10 +14,8 @@ export function usePolicyMarkdown(baseName: string) {
   const { data } = useAsyncData(
     () => requestKey.value,
     async () => {
-      const response = await fetchContentApi<PolicyContentResponse>('/api/content/policy', {
-        name: baseName,
-        locale: normalizedLocale.value,
-      })
+      // The prerendered static twin (`/api/content/policy/<name>/<locale>`): no Worker, no database.
+      const response = await fetchContentApi<PolicyContentResponse>(`/api/content/policy/${baseName}/${normalizedLocale.value}`, {})
       return response.doc
     },
     { watch: [normalizedLocale] },

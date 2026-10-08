@@ -4,7 +4,8 @@ import { createError } from 'h3'
 import { randomUUID } from 'node:crypto'
 import { useRuntimeConfig } from '#imports'
 import type { ExchangeRateSnapshot } from './exchangeRateStore'
-import { cleanupHistory, getLatestSnapshot, listRateHistory, listSnapshotHistory, saveSnapshotWithRates } from './exchangeRateStore'
+import { claimSnapshotRefresh, cleanupHistory, getLatestSnapshot, listRateHistory, listSnapshotHistory, saveSnapshotWithRates } from './exchangeRateStore'
+import { runAfterResponse } from './afterResponse'
 import { recordTelemetryMessages } from './messageStore'
 
 const USD_BASE = 'USD'
@@ -227,12 +228,16 @@ export async function getUsdRates(event: H3Event): Promise<{ snapshot: ExchangeR
 
   if (cached && isSnapshotFresh(cached, config.ttlMs, now))
     return { snapshot: cached, source: 'cache' }
+  // One request refreshes a stale snapshot; the others answer with it meanwhile.
+  if (cached && !(await claimSnapshotRefresh(event, USD_BASE, now)))
+    return { snapshot: cached, source: 'cache' }
 
   const { payload, fetchedAt } = await requestUsdRates(event, config)
   const snapshot = buildSnapshot(payload, fetchedAt)
   await saveSnapshotWithRates(event, snapshot, { storeRateRows: config.storeRateRows })
   if (config.historyRetentionDays > 0) {
-    await cleanupHistory(event, { retentionDays: config.historyRetentionDays, baseCurrency: USD_BASE })
+    runAfterResponse(event, 'exchange-rate history cleanup', () =>
+      cleanupHistory(event, { retentionDays: config.historyRetentionDays, baseCurrency: USD_BASE }))
   }
   return { snapshot, source: 'live' }
 }

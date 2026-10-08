@@ -1,6 +1,12 @@
 import { createError, send, setResponseHeader } from 'h3'
 import { requireAuth } from '../../../utils/auth'
-import { readSpeechCatalog, SpeechCatalogUnavailableError } from '../../../utils/speechCatalogStore'
+import { openEdgeCache } from '../../../utils/edgeCache'
+import {
+  readSpeechCatalog,
+  SPEECH_CATALOG_CACHE_MS,
+  SPEECH_MODEL_CATALOG_SOURCE,
+  SpeechCatalogUnavailableError,
+} from '../../../utils/speechCatalogStore'
 
 /**
  * `GET /api/v1/speech/models`
@@ -15,9 +21,17 @@ import { readSpeechCatalog, SpeechCatalogUnavailableError } from '../../../utils
  *
  * An upstream that cannot be read is a 502, not an empty catalog: "nothing is installable" and
  * "we could not check" are different answers and a client must not confuse them.
+ *
+ * The catalog is the same for every caller, so after the sign-in check it is shared through the
+ * colo's edge cache for as long as an isolate keeps its own copy: a new isolate answers from there
+ * instead of reading the catalog and every descriptor from upstream again.
  */
 export default defineEventHandler(async (event) => {
   await requireAuth(event)
+
+  const edge = await openEdgeCache(event, { name: 'v1/speech/models', params: { source: SPEECH_MODEL_CATALOG_SOURCE } })
+  if (edge?.hit)
+    return edge.hit
 
   let catalog: Awaited<ReturnType<typeof readSpeechCatalog>>
   try {
@@ -29,6 +43,17 @@ export default defineEventHandler(async (event) => {
         statusMessage: `Speech model catalog is unavailable: ${error.message}`,
       })
     throw error
+  }
+
+  if (edge) {
+    return edge.store({
+      body: catalog.bytes,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'x-content-sha256': catalog.sha256,
+        'cache-control': 'private, max-age=300',
+      },
+    }, SPEECH_CATALOG_CACHE_MS / 1000)
   }
 
   setResponseHeader(event, 'content-type', 'application/json; charset=utf-8')

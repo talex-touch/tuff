@@ -1,17 +1,16 @@
 import type { H3Event } from 'h3'
 import type { SubscriptionPlan } from './subscriptionStore'
 import type { TeamMemberRole, TeamRecord } from './creditsStore'
-import type { TeamQuota } from './teamStore'
 import { createError } from 'h3'
 import {
-  countTeamMembers,
-  ensurePersonalTeam,
-  getTeamById,
-  getUserRoleInTeam,
+  ensureCreditsTables,
   listUserTeams,
+  preparePersonalTeamStatements,
+  prepareTeamMemberCountQuery,
+  requireDatabase,
 } from './creditsStore'
-import { getUserSubscription } from './subscriptionStore'
-import { getTeamQuota, updateTeamSeats } from './teamStore'
+import { ensureSubscriptionTables, mapLatestActivation, prepareLatestActivationQuery } from './subscriptionStore'
+import { type D1QuotaRow, ensureTeamTables, planTeamQuota, prepareTeamQuotaQuery, prepareTeamSeatsUpdate, type TeamQuota } from './teamStore'
 
 export interface TeamPermissions {
   canInvite: boolean
@@ -83,37 +82,58 @@ function resolveActiveTeam(userId: string, teams: Awaited<ReturnType<typeof list
   return teams.find(team => team.id === `team_${userId}`) || teams[0] || null
 }
 
+/**
+ * The caller's active team and everything the team endpoints derive from it, in two round trips in
+ * the steady state and no writes: the user's teams, then one batch for the owner's plan, the quota
+ * row and the member count. It was eight sequential statements, two of them writes on every call
+ * (the personal team's `INSERT OR IGNORE`s), plus a team read and a role read that the team list
+ * already answers. Writes happen only when something is missing or stale: the personal team, a
+ * quota row that rolled over to a new week or changed plan, a seat count that drifted.
+ */
 export async function resolveActiveTeamContext(
   event: H3Event,
   userId: string,
 ): Promise<ActiveTeamContext> {
-  await ensurePersonalTeam(event, userId)
+  const db = requireDatabase(event)
+  await Promise.all([ensureCreditsTables(db), ensureSubscriptionTables(db), ensureTeamTables(db)])
 
-  const teams = await listUserTeams(event, userId)
+  let teams = await listUserTeams(event, userId)
+  if (!teams.some(team => team.id === `team_${userId}`)) {
+    await db.batch(preparePersonalTeamStatements(db, userId))
+    teams = await listUserTeams(event, userId)
+  }
+
   const active = resolveActiveTeam(userId, teams)
   if (!active) {
     throw createError({ statusCode: 404, statusMessage: 'Team not found' })
   }
 
-  const team = await getTeamById(event, active.id)
-  if (!team) {
-    throw createError({ statusCode: 404, statusMessage: 'Team not found' })
-  }
-
-  const role = (await getUserRoleInTeam(event, team.id, userId)) || active.role
+  const { role, joinedAt: _joinedAt, ...team } = active
   if (!role) {
     throw createError({ statusCode: 403, statusMessage: 'Not a team member' })
   }
 
-  const ownerSubscription = await getUserSubscription(event, team.ownerUserId)
-  const ownerPlan = ownerSubscription.plan
-  const quota = await getTeamQuota(event, team.id, ownerPlan)
-  const seatsUsed = await countTeamMembers(event, team.id)
+  const [subscriptionResult, quotaResult, countResult] = await db.batch([
+    prepareLatestActivationQuery(db, team.ownerUserId),
+    prepareTeamQuotaQuery(db, team.id),
+    prepareTeamMemberCountQuery(db, team.id),
+  ])
+  const ownerPlan = mapLatestActivation(subscriptionResult?.results?.[0] as Parameters<typeof mapLatestActivation>[0]).plan
+  const { quota, write: quotaWrite } = planTeamQuota(
+    db,
+    team.id,
+    (quotaResult?.results?.[0] as D1QuotaRow | undefined) ?? null,
+    ownerPlan,
+  )
+  const seatsUsed = Number((countResult?.results?.[0] as { total?: number | string } | undefined)?.total ?? 0)
 
+  const writes = quotaWrite ? [quotaWrite] : []
   if (quota.seatsUsed !== seatsUsed) {
-    await updateTeamSeats(event, team.id, seatsUsed)
+    writes.push(prepareTeamSeatsUpdate(db, team.id, seatsUsed))
     quota.seatsUsed = seatsUsed
   }
+  if (writes.length)
+    await db.batch(writes)
 
   const collaborationEnabled = isCollaborationPlan(ownerPlan)
   const permissions = buildPermissions(team, role, collaborationEnabled)

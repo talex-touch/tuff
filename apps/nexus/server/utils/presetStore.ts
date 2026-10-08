@@ -4,9 +4,10 @@ import type { H3Event } from 'h3'
 import { appSettingOriginData } from '@talex-touch/utils'
 import { createHash } from 'node:crypto'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
+import { runAfterResponse } from './afterResponse'
 
 const PRESET_TABLE = 'app_presets'
-let schemaInitialized = false
 
 export type PresetChannel = 'stable' | 'beta'
 
@@ -186,37 +187,33 @@ function getD1Database(event: H3Event): D1Database | null {
   return bindings?.DB ?? null
 }
 
+const PRESET_SCHEMA = defineD1Schema('presets', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${PRESET_TABLE} (
+        id TEXT PRIMARY KEY,
+        slug TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        description TEXT,
+        channel TEXT NOT NULL DEFAULT 'beta',
+        status TEXT NOT NULL DEFAULT 'draft',
+        tags TEXT,
+        preview_url TEXT,
+        payload_json TEXT,
+        payload_ref TEXT,
+        sha256 TEXT,
+        compat_min TEXT,
+        compat_max TEXT,
+        download_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_presets_status_channel ON ${PRESET_TABLE}(status, channel)`,
+    `CREATE INDEX IF NOT EXISTS idx_presets_updated_at ON ${PRESET_TABLE}(updated_at)`,
+  ],
+})
+
 async function ensurePresetSchema(db: D1Database) {
-  if (schemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${PRESET_TABLE} (
-      id TEXT PRIMARY KEY,
-      slug TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL,
-      description TEXT,
-      channel TEXT NOT NULL DEFAULT 'beta',
-      status TEXT NOT NULL DEFAULT 'draft',
-      tags TEXT,
-      preview_url TEXT,
-      payload_json TEXT,
-      payload_ref TEXT,
-      sha256 TEXT,
-      compat_min TEXT,
-      compat_max TEXT,
-      download_count INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(
-    `CREATE INDEX IF NOT EXISTS idx_presets_status_channel ON ${PRESET_TABLE}(status, channel);`,
-  ).run()
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_presets_updated_at ON ${PRESET_TABLE}(updated_at);`).run()
-
-  schemaInitialized = true
+  await ensureD1Schema(db, PRESET_SCHEMA)
 }
 
 function parsePayload(raw: string | null): PresetExportData | null {
@@ -318,7 +315,6 @@ export async function downloadPublishedPreset(
     }
 
     row.downloadCount += 1
-    row.updatedAt = new Date().toISOString()
 
     const summary = mapMemoryToSummary(row)
     const preset = enrichPayload(row.payload, summary)
@@ -352,10 +348,12 @@ export async function downloadPublishedPreset(
   const preset = enrichPayload(payload, summary)
   const sha = row.sha256 || sha256Hex(stableSerialize(preset))
 
-  await db
-    .prepare(`UPDATE ${PRESET_TABLE} SET download_count = download_count + 1, updated_at = ?2 WHERE id = ?1`)
-    .bind(id, new Date().toISOString())
-    .run()
+  // Counted after the response, and as a download only: bumping `updated_at` moved the preset to the
+  // top of the recently-updated list on every download.
+  runAfterResponse(event, 'preset download count', () => db
+    .prepare(`UPDATE ${PRESET_TABLE} SET download_count = download_count + 1 WHERE id = ?1`)
+    .bind(id)
+    .run())
 
   return {
     summary,

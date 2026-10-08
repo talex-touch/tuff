@@ -1,15 +1,14 @@
-import type { D1Database } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import type { SubscriptionPlan } from './subscriptionStore'
 import { randomInt, randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const INVITES_TABLE = 'team_invites'
 const TEAM_QUOTA_TABLE = 'team_quotas'
 const TEAM_MEMBER_USAGE_TABLE = 'team_member_usage'
-
-let teamSchemaInitialized = false
 
 // Plan-based configuration
 export const PLAN_CONFIG = {
@@ -74,62 +73,56 @@ function getD1Database(event: H3Event): D1Database | null {
   return bindings?.DB ?? null
 }
 
+const TEAM_SCHEMA = defineD1Schema('teams', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${INVITES_TABLE} (
+        id TEXT PRIMARY KEY,
+        code TEXT UNIQUE NOT NULL,
+        organization_id TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        email TEXT,
+        role TEXT NOT NULL DEFAULT 'member',
+        max_uses INTEGER NOT NULL DEFAULT 1,
+        uses INTEGER NOT NULL DEFAULT 0,
+        expires_at TEXT,
+        created_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending'
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_invites_org ON ${INVITES_TABLE}(organization_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_invites_code ON ${INVITES_TABLE}(code)`,
+    `CREATE TABLE IF NOT EXISTS ${TEAM_QUOTA_TABLE} (
+        organization_id TEXT PRIMARY KEY,
+        plan TEXT NOT NULL DEFAULT 'FREE',
+        ai_requests_used INTEGER NOT NULL DEFAULT 0,
+        ai_requests_limit INTEGER NOT NULL DEFAULT 100,
+        ai_tokens_used INTEGER NOT NULL DEFAULT 0,
+        ai_tokens_limit INTEGER NOT NULL DEFAULT 50000,
+        seats_used INTEGER NOT NULL DEFAULT 1,
+        seats_limit INTEGER NOT NULL DEFAULT 3,
+        week_start_date TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )`,
+    `CREATE TABLE IF NOT EXISTS ${TEAM_MEMBER_USAGE_TABLE} (
+        organization_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        ai_requests_used INTEGER NOT NULL DEFAULT 0,
+        ai_tokens_used INTEGER NOT NULL DEFAULT 0,
+        week_start_date TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (organization_id, user_id)
+      )`,
+    // Invites are matched by email on every personal team page; `lower(email)` could use no index.
+    `CREATE INDEX IF NOT EXISTS idx_invites_email_status ON ${INVITES_TABLE}(email, status)`,
+  ],
+  // Emails are written lower-case (createInvite normalises them); this brings older rows in line so
+  // the lookups can compare the column directly.
+  backfills: [
+    `UPDATE ${INVITES_TABLE} SET email = LOWER(email) WHERE email IS NOT NULL AND email <> LOWER(email)`,
+  ],
+})
+
 async function ensureTeamSchema(db: D1Database) {
-  if (teamSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${INVITES_TABLE} (
-      id TEXT PRIMARY KEY,
-      code TEXT UNIQUE NOT NULL,
-      organization_id TEXT NOT NULL,
-      created_by TEXT NOT NULL,
-      email TEXT,
-      role TEXT NOT NULL DEFAULT 'member',
-      max_uses INTEGER NOT NULL DEFAULT 1,
-      uses INTEGER NOT NULL DEFAULT 0,
-      expires_at TEXT,
-      created_at TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending'
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_invites_org ON ${INVITES_TABLE}(organization_id);
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_invites_code ON ${INVITES_TABLE}(code);
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${TEAM_QUOTA_TABLE} (
-      organization_id TEXT PRIMARY KEY,
-      plan TEXT NOT NULL DEFAULT 'FREE',
-      ai_requests_used INTEGER NOT NULL DEFAULT 0,
-      ai_requests_limit INTEGER NOT NULL DEFAULT 100,
-      ai_tokens_used INTEGER NOT NULL DEFAULT 0,
-      ai_tokens_limit INTEGER NOT NULL DEFAULT 50000,
-      seats_used INTEGER NOT NULL DEFAULT 1,
-      seats_limit INTEGER NOT NULL DEFAULT 3,
-      week_start_date TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${TEAM_MEMBER_USAGE_TABLE} (
-      organization_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      ai_requests_used INTEGER NOT NULL DEFAULT 0,
-      ai_tokens_used INTEGER NOT NULL DEFAULT 0,
-      week_start_date TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (organization_id, user_id)
-    );
-  `).run()
-
-  teamSchemaInitialized = true
+  await ensureD1Schema(db, TEAM_SCHEMA)
 }
 
 function getWeekStartDate(): string {
@@ -269,6 +262,37 @@ export async function listInvites(
   return (results ?? []).map(mapInviteRow)
 }
 
+export interface PendingInviteWithTeam extends TeamInvite {
+  teamName: string | null
+}
+
+/**
+ * Pending invites for an email with each inviting team's name, in one query: the team page looked
+ * each team up separately. `teams` is owned by creditsStore.
+ */
+export async function listPendingInvitesWithTeamsForEmail(
+  event: H3Event,
+  email: string,
+): Promise<PendingInviteWithTeam[]> {
+  const db = getD1Database(event)
+  const normalizedEmail = normalizeEmail(email)
+  if (!db || !normalizedEmail)
+    return []
+
+  await ensureTeamSchema(db)
+
+  const { results } = await db.prepare(`
+    SELECT i.*, t.name AS team_name
+    FROM ${INVITES_TABLE} i
+    LEFT JOIN teams t ON t.id = i.organization_id
+    WHERE i.email = ?1
+      AND i.status = 'pending'
+    ORDER BY i.created_at DESC;
+  `).bind(normalizedEmail).all<D1InviteRow & { team_name: string | null }>()
+
+  return (results ?? []).map(row => ({ ...mapInviteRow(row), teamName: row.team_name ?? null }))
+}
+
 export async function listPendingInvitesForEmail(
   event: H3Event,
   email: string,
@@ -287,7 +311,7 @@ export async function listPendingInvitesForEmail(
 
   const { results } = await db.prepare(`
     SELECT * FROM ${INVITES_TABLE}
-    WHERE lower(email) = ?1
+    WHERE email = ?1
       AND status = 'pending'
     ORDER BY created_at DESC;
   `).bind(normalizedEmail).all<D1InviteRow>()
@@ -351,14 +375,14 @@ export async function hasInviteForEmail(
   const query = organizationId
     ? `
     SELECT id FROM ${INVITES_TABLE}
-    WHERE lower(email) = ?1
+    WHERE email = ?1
       AND organization_id = ?2
       AND status = 'pending'
     LIMIT 1;
   `
     : `
     SELECT id FROM ${INVITES_TABLE}
-    WHERE lower(email) = ?1
+    WHERE email = ?1
       AND status = 'pending'
     LIMIT 1;
   `
@@ -472,7 +496,7 @@ export async function deleteInvite(
 
 // Team Quota Functions
 
-interface D1QuotaRow {
+export interface D1QuotaRow {
   organization_id: string
   plan: string
   ai_requests_used: number
@@ -492,6 +516,9 @@ export interface TeamMemberUsage {
   aiTokensUsed: number
   weekStartDate: string
   updatedAt: string
+  /** From the member's user row, read in the same query. */
+  name?: string | null
+  email?: string | null
 }
 
 interface D1MemberUsageRow {
@@ -529,22 +556,26 @@ function mapQuotaRow(row: D1QuotaRow): TeamQuota {
   }
 }
 
-export async function getTeamQuota(
-  event: H3Event,
-  organizationId: string,
-  ownerPlan?: SubscriptionPlan,
-): Promise<TeamQuota> {
-  const db = getD1Database(event)
-  if (!db) {
-    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-  }
-
-  await ensureTeamSchema(db)
-
-  const currentWeek = getWeekStartDate()
-  const row = await db.prepare(`
+/** The statement that reads a team's quota row; `planTeamQuota` turns its result into the quota. */
+export function prepareTeamQuotaQuery(db: D1Database, organizationId: string): D1PreparedStatement {
+  return db.prepare(`
     SELECT * FROM ${TEAM_QUOTA_TABLE} WHERE organization_id = ?1;
-  `).bind(organizationId).first<D1QuotaRow>()
+  `).bind(organizationId)
+}
+
+/**
+ * The quota a team has now, from its stored row (or none), and the write that brings the row up to
+ * date when the week rolled over, the owner's plan limits changed, or no row exists yet. Planning is
+ * separate from reading so a caller can fetch the row alongside its other reads and write only when
+ * something changed.
+ */
+export function planTeamQuota(
+  db: D1Database,
+  organizationId: string,
+  row: D1QuotaRow | null,
+  ownerPlan?: SubscriptionPlan,
+): { quota: TeamQuota, write: D1PreparedStatement | null } {
+  const currentWeek = getWeekStartDate()
 
   if (row) {
     const plan = (ownerPlan || row.plan) as SubscriptionPlan
@@ -555,13 +586,28 @@ export async function getTeamQuota(
       || row.ai_tokens_limit !== config.aiTokens
       || row.seats_limit !== config.seats
 
-    if (weekChanged || limitsChanged) {
-      const nextRequestsUsed = weekChanged ? 0 : row.ai_requests_used
-      const nextTokensUsed = weekChanged ? 0 : row.ai_tokens_used
-      const nextWeekStartDate = weekChanged ? currentWeek : row.week_start_date
-      const updatedAt = new Date().toISOString()
+    if (!weekChanged && !limitsChanged)
+      return { quota: mapQuotaRow(row), write: null }
 
-      await db.prepare(`
+    const nextRequestsUsed = weekChanged ? 0 : row.ai_requests_used
+    const nextTokensUsed = weekChanged ? 0 : row.ai_tokens_used
+    const nextWeekStartDate = weekChanged ? currentWeek : row.week_start_date
+    const updatedAt = new Date().toISOString()
+
+    return {
+      quota: {
+        organizationId,
+        plan,
+        aiRequestsUsed: nextRequestsUsed,
+        aiRequestsLimit: config.aiRequests,
+        aiTokensUsed: nextTokensUsed,
+        aiTokensLimit: config.aiTokens,
+        seatsUsed: row.seats_used,
+        seatsLimit: config.seats,
+        weekStartDate: nextWeekStartDate,
+        updatedAt,
+      },
+      write: db.prepare(`
         UPDATE ${TEAM_QUOTA_TABLE}
         SET ai_requests_used = ?1, ai_tokens_used = ?2,
             week_start_date = ?3, updated_at = ?4,
@@ -577,61 +623,81 @@ export async function getTeamQuota(
         config.aiTokens,
         config.seats,
         organizationId,
-      ).run()
-
-      return {
-        organizationId,
-        plan,
-        aiRequestsUsed: nextRequestsUsed,
-        aiRequestsLimit: config.aiRequests,
-        aiTokensUsed: nextTokensUsed,
-        aiTokensLimit: config.aiTokens,
-        seatsUsed: row.seats_used,
-        seatsLimit: config.seats,
-        weekStartDate: nextWeekStartDate,
-        updatedAt,
-      }
+      ),
     }
-
-    return mapQuotaRow(row)
   }
 
-  // Create new quota record
+  // Create new quota record. Two first requests for a team can both get here; the loser's insert is
+  // a no-op rather than a UNIQUE error (it used to answer 500).
   const plan = ownerPlan || 'FREE'
   const config = getPlanConfig(plan)
   const now = new Date().toISOString()
 
-  await db.prepare(`
-    INSERT INTO ${TEAM_QUOTA_TABLE} (
-      organization_id, plan, ai_requests_used, ai_requests_limit,
-      ai_tokens_used, ai_tokens_limit, seats_used, seats_limit,
-      week_start_date, updated_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);
-  `).bind(
-    organizationId,
-    plan,
-    0,
-    config.aiRequests,
-    0,
-    config.aiTokens,
-    1,
-    config.seats,
-    currentWeek,
-    now,
-  ).run()
-
   return {
-    organizationId,
-    plan,
-    aiRequestsUsed: 0,
-    aiRequestsLimit: config.aiRequests,
-    aiTokensUsed: 0,
-    aiTokensLimit: config.aiTokens,
-    seatsUsed: 1,
-    seatsLimit: config.seats,
-    weekStartDate: currentWeek,
-    updatedAt: now,
+    quota: {
+      organizationId,
+      plan,
+      aiRequestsUsed: 0,
+      aiRequestsLimit: config.aiRequests,
+      aiTokensUsed: 0,
+      aiTokensLimit: config.aiTokens,
+      seatsUsed: 1,
+      seatsLimit: config.seats,
+      weekStartDate: currentWeek,
+      updatedAt: now,
+    },
+    write: db.prepare(`
+      INSERT INTO ${TEAM_QUOTA_TABLE} (
+        organization_id, plan, ai_requests_used, ai_requests_limit,
+        ai_tokens_used, ai_tokens_limit, seats_used, seats_limit,
+        week_start_date, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+      ON CONFLICT(organization_id) DO NOTHING;
+    `).bind(
+      organizationId,
+      plan,
+      0,
+      config.aiRequests,
+      0,
+      config.aiTokens,
+      1,
+      config.seats,
+      currentWeek,
+      now,
+    ),
   }
+}
+
+export async function getTeamQuota(
+  event: H3Event,
+  organizationId: string,
+  ownerPlan?: SubscriptionPlan,
+): Promise<TeamQuota> {
+  const db = getD1Database(event)
+  if (!db) {
+    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+  }
+
+  await ensureTeamSchema(db)
+
+  const row = await prepareTeamQuotaQuery(db, organizationId).first<D1QuotaRow>()
+  const { quota, write } = planTeamQuota(db, organizationId, row ?? null, ownerPlan)
+  if (write)
+    await write.run()
+  return quota
+}
+
+/** The statement that records a team's seat count, for a caller batching it with other writes. */
+export function prepareTeamSeatsUpdate(db: D1Database, organizationId: string, seatsUsed: number): D1PreparedStatement {
+  return db.prepare(`
+    UPDATE ${TEAM_QUOTA_TABLE}
+    SET seats_used = ?1, updated_at = ?2
+    WHERE organization_id = ?3;
+  `).bind(seatsUsed, new Date().toISOString(), organizationId)
+}
+
+export async function ensureTeamTables(db: D1Database): Promise<void> {
+  await ensureTeamSchema(db)
 }
 
 export async function updateTeamQuotaUsage(
@@ -787,27 +853,25 @@ export async function listTeamMemberUsage(
   const currentWeek = getWeekStartDate()
   const now = new Date().toISOString()
 
-  await db.prepare(`
-    UPDATE ${TEAM_MEMBER_USAGE_TABLE}
-    SET ai_requests_used = 0, ai_tokens_used = 0, week_start_date = ?1, updated_at = ?2
-    WHERE organization_id = ?3 AND week_start_date != ?1;
-  `).bind(currentWeek, now, organizationId).run()
+  // The weekly reset and the read in one round trip, the members' names and emails joined in (the
+  // handler read each user separately). `auth_users` is owned by authStore.
+  const [, result] = await db.batch([
+    db.prepare(`
+      UPDATE ${TEAM_MEMBER_USAGE_TABLE}
+      SET ai_requests_used = 0, ai_tokens_used = 0, week_start_date = ?1, updated_at = ?2
+      WHERE organization_id = ?3 AND week_start_date != ?1;
+    `).bind(currentWeek, now, organizationId),
+    db.prepare(`
+      SELECT m.*, u.name AS user_name, u.email AS user_email
+      FROM ${TEAM_MEMBER_USAGE_TABLE} m
+      LEFT JOIN auth_users u ON u.id = m.user_id
+      WHERE m.organization_id = ?1 AND (?2 IS NULL OR m.user_id = ?2)
+      ORDER BY m.updated_at DESC;
+    `).bind(organizationId, userId ?? null),
+  ])
 
-  if (userId) {
-    const row = await db.prepare(`
-      SELECT * FROM ${TEAM_MEMBER_USAGE_TABLE}
-      WHERE organization_id = ?1 AND user_id = ?2;
-    `).bind(organizationId, userId).first<D1MemberUsageRow>()
-    return row ? [mapMemberUsageRow(row)] : []
-  }
-
-  const result = await db.prepare(`
-    SELECT * FROM ${TEAM_MEMBER_USAGE_TABLE}
-    WHERE organization_id = ?1
-    ORDER BY updated_at DESC;
-  `).bind(organizationId).all<D1MemberUsageRow>()
-
-  return (result.results ?? []).map(mapMemberUsageRow)
+  return ((result?.results ?? []) as Array<D1MemberUsageRow & { user_name?: string | null, user_email?: string | null }>)
+    .map(row => ({ ...mapMemberUsageRow(row), name: row.user_name ?? null, email: row.user_email ?? null }))
 }
 
 export async function addTeamMemberUsage(

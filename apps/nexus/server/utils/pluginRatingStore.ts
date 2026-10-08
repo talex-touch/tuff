@@ -2,13 +2,13 @@ import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
+import { defineD1Schema, ensureD1Schema } from './d1Schema'
 
 const PLUGIN_RATINGS_TABLE = 'store_plugin_ratings'
 const LEGACY_PLUGIN_RATINGS_TABLE = 'market_plugin_ratings'
 const PLUGIN_RATINGS_KEY = 'store:pluginRatings'
 const LEGACY_PLUGIN_RATINGS_KEY = ['market', 'pluginRatings'].join(':')
 
-let ratingSchemaInitialized = false
 
 interface StoredPluginRating {
   pluginId: string
@@ -28,28 +28,24 @@ function getD1Database(event: H3Event): D1Database | null {
   return bindings?.DB ?? null
 }
 
+const PLUGIN_RATING_SCHEMA = defineD1Schema('plugin-ratings', {
+  statements: [
+    `CREATE TABLE IF NOT EXISTS ${PLUGIN_RATINGS_TABLE} (
+        plugin_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        rating INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (plugin_id, user_id)
+      )`,
+    `CREATE INDEX IF NOT EXISTS idx_${PLUGIN_RATINGS_TABLE}_plugin_id
+      ON ${PLUGIN_RATINGS_TABLE}(plugin_id)`,
+  ],
+  migrate: { id: 'copy-legacy-plugin-ratings', run: migrateLegacyPluginRatingsTable },
+})
+
 async function ensurePluginRatingSchema(db: D1Database): Promise<void> {
-  if (ratingSchemaInitialized)
-    return
-
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${PLUGIN_RATINGS_TABLE} (
-      plugin_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      rating INTEGER NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (plugin_id, user_id)
-    );
-  `).run()
-
-  await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_${PLUGIN_RATINGS_TABLE}_plugin_id
-    ON ${PLUGIN_RATINGS_TABLE}(plugin_id);
-  `).run()
-
-  await migrateLegacyPluginRatingsTable(db)
-  ratingSchemaInitialized = true
+  await ensureD1Schema(db, PLUGIN_RATING_SCHEMA)
 }
 
 async function tableExists(db: D1Database, tableName: string): Promise<boolean> {
